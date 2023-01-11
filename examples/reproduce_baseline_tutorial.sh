@@ -92,7 +92,7 @@ python -m watch.mlops.schedule_evaluation \
     --devices="0," --queue_size=1 \
     --backend=tmux --queue_name "baseline-queue" \
     --pipeline=bas \
-    --run=1
+    --run=0
 
 
 ### NOTE:

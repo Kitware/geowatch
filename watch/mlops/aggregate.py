@@ -82,9 +82,11 @@ def main(cmdline=True, **kwargs):
 
     agg = eval_type_to_aggregator.get('bas_poly_eval', None)
     if agg is not None:
+        ...
         model_col = 'bas_poly_eval.params.bas_pxl.package_fpath'
         metric_col = 'bas_poly_eval.metrics.bas_faa_f1'
         table = agg.table
+        agg.report_best(top_k=10)
         # table = table[~table[model_col].isnull()]
         for region_id, region_table in table.groupby('region_id'):
             print(f' --- region_id={region_id} --- ')
@@ -162,9 +164,17 @@ def build_tables(config):
                 config_ = json.loads(job_config_fpath.read_text())
             else:
                 config_ = {}
+
+            region_ids = result['json_info']['region_ids']
+            if True:
+                # Munge data to get the region ids we expect
+                import re
+                region_pat = re.compile(r'[A-Z][A-Z]_R\d\d\d')
+                region_ids = ','.join(list(region_pat.findall(region_ids)))
+
             index = {
                 'type': out_node.key,
-                'region_id': result['json_info']['region_ids'],
+                'region_id': region_ids,
             }
             metrics = smart_result_parser._add_prefix(node_name + '.metrics.', result['metrics'])
             params = smart_result_parser._add_prefix(node_name + '.params.', config_)
@@ -224,6 +234,7 @@ def build_aggregators(eval_type_to_results):
     eval_type_to_aggregator = {}
     for key, results in eval_type_to_results.items():
         agg = Aggregator(results, type=key)
+        agg.build()
         eval_type_to_aggregator[key] = agg
         # TODO : nicer replacement of long paths for params
         # metrics['sc_poly_eval.metrics.sc_macro_f1']
@@ -237,7 +248,6 @@ class Aggregator:
         agg.metrics = results['metrics']
         agg.params = results['params']
         agg.index = results['index']
-        agg.build()
 
     def build(agg):
         if agg.type == 'bas_poly_eval':
@@ -248,8 +258,20 @@ class Aggregator:
             _primary_metrics_suffixes = [
                 'sc_macro_f1', 'bas_faa_f1'
             ]
+        elif agg.type == 'bas_pxl_eval':
+            _primary_metrics_suffixes = [
+                'bas_pxl_eval.metrics.salient_AP',
+                'bas_pxl_eval.metrics.salient_APUC',
+                'bas_pxl_eval.metrics.salient_AUC',
+            ]
+        elif agg.type == 'sc_pxl_eval':
+            _primary_metrics_suffixes = [
+                'bas_pxl_eval.metrics.coi_mAP',
+                'bas_pxl_eval.metrics.coi_mAPUC',
+                'bas_pxl_eval.metrics.coi_mAUC',
+            ]
         else:
-            raise NotImplementedError
+            raise NotImplementedError(agg.type)
 
         agg.primary_metric_cols = pandas_suffix_columns(
             agg.metrics, _primary_metrics_suffixes)
@@ -291,11 +313,11 @@ class Aggregator:
         analysis.results
         analysis.analysis()
 
-    def report_best(agg):
+    def report_best(agg, top_k=3):
         import rich
         for region_id, group in agg.region_to_tables.items():
             metric_group = group['metrics']
-            top_idxs = pandas_argmaxima(metric_group, agg.primary_metric_cols, k=3)
+            top_idxs = pandas_argmaxima(metric_group, agg.primary_metric_cols, k=top_k)
             top_idxs = top_idxs[::-1]
 
             top_metrics = metric_group.loc[top_idxs][agg.primary_metric_cols]
@@ -318,7 +340,6 @@ class Aggregator:
         effective_params = params.copy()
 
         HACK_FIX_JUNK_PARAMS = True
-
         if HACK_FIX_JUNK_PARAMS:
             junk_suffixes = ['space_basale']
             junk_cols = pandas_suffix_columns(effective_params, junk_suffixes)
@@ -409,42 +430,47 @@ class Aggregator:
 
         macro_key = f'macro_{len(regions_of_interest):02d}_{ub.hash_data(sorted(regions_of_interest))[0:6]}'
 
+        sum_cols = [
+            'bas_poly_eval.metrics.bas_tp',
+            'bas_poly_eval.metrics.bas_fp',
+            'bas_poly_eval.metrics.bas_fn',
+            'bas_poly_eval.metrics.bas_ntrue',
+            'bas_poly_eval.metrics.bas_npred',
+        ]
+        mean_cols = [
+            'bas_poly_eval.metrics.bas_ppv',
+            'bas_poly_eval.metrics.bas_tpr',
+            'bas_poly_eval.metrics.bas_ffpa',
+            'bas_poly_eval.metrics.bas_f1',
+            'bas_poly_eval.metrics.bas_space_FAR',
+            'bas_poly_eval.metrics.bas_time_FAR',
+            'bas_poly_eval.metrics.bas_image_FAR',
+            'bas_poly_eval.metrics.bas_faa_f1',
+            'bas_poly_eval.metrics.sc_macro_f1',
+            'bas_poly_eval.metrics.macro_f1_siteprep',
+            'bas_poly_eval.metrics.macro_f1_active',
+            'bas_poly_eval.metrics.sc_micro_f1',
+        ]
+        agg_id_cols = [
+            'region_id',
+        ] + agg.test_dset_cols
+
+        if len(comparable_groups) > 0:
+            group = comparable_groups[0]
+            map_cols = [c for c in group.columns if 'metrics' in c and c.endswith(('AP', 'AUC', 'APUC'))]
+            mean_cols.extend(map_cols)
+
         def macro_aggregate(group):
-            sum_cols = [
-                'bas_poly_eval.metrics.bas_tp',
-                'bas_poly_eval.metrics.bas_fp',
-                'bas_poly_eval.metrics.bas_fn',
-                'bas_poly_eval.metrics.bas_ntrue',
-                'bas_poly_eval.metrics.bas_npred',
-            ]
-            mean_cols = [
-                'bas_poly_eval.metrics.bas_ppv',
-                'bas_poly_eval.metrics.bas_tpr',
-                'bas_poly_eval.metrics.bas_ffpa',
-                'bas_poly_eval.metrics.bas_f1',
-                'bas_poly_eval.metrics.bas_space_FAR',
-                'bas_poly_eval.metrics.bas_time_FAR',
-                'bas_poly_eval.metrics.bas_image_FAR',
-                'bas_poly_eval.metrics.bas_faa_f1',
-                'bas_poly_eval.metrics.sc_macro_f1',
-                'bas_poly_eval.metrics.macro_f1_siteprep',
-                'bas_poly_eval.metrics.macro_f1_active',
-                'bas_poly_eval.metrics.sc_micro_f1',
-            ]
-            agg_id_cols = [
-                'bas_poly_eval.params.bas_pxl.test_dataset',
-                'region_id',
-            ]
             other_cols = group.columns.difference(mean_cols).difference(sum_cols).difference(agg_id_cols)
             group[other_cols]
 
             for c in mean_cols:
                 pass
 
-            sum_df = group[sum_cols]
-            mean_df = group[mean_cols]
+            aggid_df = group[group.columns.intersection(agg_id_cols)]
+            sum_df = group[group.columns.intersection(sum_cols)]
+            mean_df = group[group.columns.intersection(mean_cols)]
             other_df = group[other_cols]
-            aggid_df = group[agg_id_cols]
 
             if len(aggid_df) == 1:
                 aggid_row = aggid_df.iloc[0]
@@ -557,8 +583,9 @@ class Aggregator:
 
 
 def bas_poly_eval_confusion_analysis(eval_fpath):
-
     eval_fpath.parent / '.pred'
+    bas_poly_dpath = list((eval_fpath.parent / '.pred/bas_poly').glob('*'))[0]
+    pred_sites_fpath = bas_poly_dpath / 'sites_manifest.json'
 
     info = smart_result_parser.load_eval_trk_poly(eval_fpath)
     bas_row = info['json_info']['best_bas_rows']['data'][0]
@@ -573,217 +600,182 @@ def bas_poly_eval_confusion_analysis(eval_fpath):
     assign_fpath1 = assign_fpaths1[0]
     assign_fpath2 = assign_fpaths2[0]
 
+    import watch
+    dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+    true_site_dpath = dvc_dpath / 'annotations/site_models'
+    true_region_dpath = dvc_dpath / 'annotations/region_models'
+
+    from watch.utils import util_gis
+
+    ### Assign a confusion label to each truth and predicted annotation
+    # Note to get the confusion, the metrics cant be run with the sequestered
+    # flag.
+    performer_id = 'kit'
     assign1 = pd.read_csv(assign_fpath1)
     assign2 = pd.read_csv(assign_fpath2)
 
-    pred_sites_fpath = list((eval_fpath.parent / '.pred/bas_poly').glob('*'))[0] / 'sites_manifest.json'
-    from watch.utils import util_gis
+    true_confusion_rows = []
+    pred_confusion_rows = []
+    site_to_status = {}
+    from watch import heuristics
+    for row in assign1.to_dict('records'):
+        true_site = row['truth site'].split('_te_')[0]
+        pred_sites = []
+        truth_status = row['site type']
+        site_to_status[true_site] = truth_status
+        if isinstance(row['matched site models'], str):
+            for name in row['matched site models'].split(','):
+                pred_site = name.strip().split(f'_{performer_id}_')[0]
+                pred_sites.append(pred_site)
+        has_positive_match = len(pred_sites)
+        true_cfsn = heuristics.iarpa_assign_truth_confusion(truth_status, has_positive_match)
+        true_confusion_rows.append({
+            'true_site': true_site,
+            'pred_sites': pred_sites,
+            'true_cfsn': true_cfsn,
+        })
+
+    for row in assign2.to_dict('records'):
+        pred_site = row['site model'].split(f'_{performer_id}_')[0]
+        true_sites = []
+        truth_match_statuses = []
+        if isinstance(row['matched truth sites'], str):
+            for name in row['matched truth sites'].split(','):
+                true_site = name.strip().split('_te_')[0]
+                truth_match_statuses.append(site_to_status[true_site])
+                true_sites.append(true_site)
+        pred_cfsn = heuristics.iarpa_assign_pred_confusion(truth_match_statuses)
+        pred_confusion_rows.append({
+            'pred_site': pred_site,
+            'true_sites': true_sites,
+            'pred_cfsn': pred_cfsn,
+        })
+
+    pred_to_row = {r['pred_site']: r for r in pred_confusion_rows}
+    confusion_vectors = []
+    for true_row in true_confusion_rows:
+        if len(true_row['pred_sites']):
+            for pred in true_row['pred_sites']:
+                pred_row = pred_to_row[pred]
+                pred_cfsn = pred_row['pred_cfsn']
+                confusion_vectors.append({
+                    'true_site': true_row['true_site'],
+                    'true_cfsn': true_row['true_cfsn'],
+                    'pred_site': pred,
+                    'pred_cfsn': pred_cfsn,
+                    'num_other_true': len(true_row['pred_sites']) - 1,
+                    'num_other_pred': len(pred_row['true_sites']) - 1,
+                })
+        else:
+            confusion_vectors.append({
+                'true_site': true_row['true_site'],
+                'true_cfsn': true_row['true_cfsn'],
+                'pred_site': None,
+                'pred_cfsn': None,
+                'num_other_true': 0,
+                'num_other_pred': 0,
+            })
+
+    for pred_row in pred_confusion_rows:
+        if not pred_row['true_sites']:
+            confusion_vectors.append({
+                'pred_site': pred_row['pred_site'],
+                'pred_cfsn': pred_row['pred_cfsn'],
+                'true_site': None,
+                'true_cfsn': None,
+                'num_other_true': 0,
+                'num_other_pred': 0,
+            })
+
+    # Add the confusion info as misc data in new site files and reproject them
+    # onto the truth for visualization.
     pred_site_fpaths = list(util_gis.coerce_geojson_paths(pred_sites_fpath))
+    # rm_files = list(true_region_dpath.glob(region_id + '*.geojson'))
+    gt_files = list(true_site_dpath.glob(region_id + '*.geojson'))
+    sm_files = pred_site_fpaths
+    true_site_infos = list(util_gis.coerce_geojson_datas(gt_files, format='json'))
+    pred_site_infos = list(util_gis.coerce_geojson_datas(sm_files, format='json'))
 
-    if 0:
-        # Annoying
-        import watch
-        dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-        true_site_dpath = dvc_dpath / 'annotations/site_models'
-        true_region_dpath = dvc_dpath / 'annotations/region_models'
+    id_to_true_data = {ub.Path(d['fpath']).stem: d for d in true_site_infos}
+    id_to_pred_data = {ub.Path(d['fpath']).stem: d for d in pred_site_infos}
 
-        import tempfile
-        output_dir = tempfile.mkdtemp()
+    for true_row in true_confusion_rows:
+        info = id_to_true_data[true_row['true_site']]
+        true_row['cfsn_color'] = heuristics.IARPA_CONFUSION_COLORS.get(true_row['true_cfsn'])
+        for feat in info['data']['features']:
+            if 'misc_info' in feat['properties']:
+                feat['properties']['misc_info'].update(true_row)
+            else:
+                feat['properties']['misc_info'] = true_row.copy()
 
-        rm_files = list(true_region_dpath.glob(region_id + '*.geojson'))
-        gt_files = list(true_site_dpath.glob(region_id + '*.geojson'))
-        sm_files = pred_site_fpaths
+    for pred_row in pred_confusion_rows:
+        info = id_to_pred_data[pred_row['pred_site']]
+        pred_row['cfsn_color'] = heuristics.IARPA_CONFUSION_COLORS.get(pred_row['pred_cfsn'])
+        for feat in info['data']['features']:
+            if 'misc_info' in feat['properties']:
+                feat['properties']['misc_info'].update(pred_row)
+            else:
+                feat['properties']['misc_info'] = pred_row.copy()
 
-        id_to_true_path = {p.stem: p for p in gt_files}
-        id_to_pred_path = {p.stem: p for p in map(ub.Path, sm_files)}
+    from watch.cli import project_annotations
+    import kwcoco
+    src_fpath = bas_poly_dpath / 'poly.kwcoco.json'
+    dst_fpath = bas_poly_dpath / 'poly_toviz.kwcoco.json'
+    src_dset = kwcoco.CocoDataset(src_fpath)
+    dst_dset = src_dset.copy()
+    dst_dset.fpath = dst_fpath
+    cmdline = 0
 
-        crs = 4326
-        image_dir = None
-        cache_dir = None
-        parallel = False
-        name = 'crall-demo'
-        sequestered_id = None
-        metric_name = 'iou'
-        sequestered_id = 'seq'
+    true_site_infos2 = list(util_gis.coerce_geojson_datas(true_site_infos, format='dataframe', allow_raw=True))
+    pred_site_infos2 = list(util_gis.coerce_geojson_datas(pred_site_infos, format='dataframe', allow_raw=True))
 
-        from iarpa_smart_metrics.evaluation import Evaluation
-        evaluation = Evaluation(
-            gt_files, sm_files, metric_name, rm_files[0], tau, rho, crs,
-            image_dir, cache_dir, output_dir, parallel, num_processes=None,
-            name=name, sequestered_id=sequestered_id)
+    for info in true_site_infos2:
+        site_df = info['data']
+        project_annotations.validate_site_dataframe(site_df)
 
-        evaluation.compare_stacks()
-
-        activity_type = 'overall'
-        evaluation.update_gt_statuses(activity_type)
-        evaluation.bas_dir = f"{output_dir}/{activity_type}/bas"
-        ub.ensuredir(evaluation.bas_dir)
-
-        # broad area search
-        evaluation.associate_stacks(
-            viz_associate_metrics=False,
-            viz_detection_table=False,
-        )
-
-        self = evaluation
-        thresholds = [("rho", self.rhos), ("tau", self.taus)]
-        table_threshold_name, table_thresholds = thresholds.pop(thresholds.index(min(thresholds, key=lambda x: len(x[1]))))
-        row_threshold_name, row_thresholds = thresholds[0]
-        row_threshold = row_thresholds[0]
-        table_threshold = table_thresholds[0]
-        scoreboard = self.build_scoreboard(table_threshold_name, table_threshold, row_threshold_name, row_thresholds, viz_detection_table=False)
-
-        confusions = tne_associate_hack(self, table_threshold_name, table_threshold, row_threshold_name, row_threshold)
-
-        for confusion_type, pairs in confusions.items():
-            for true_id, pred_id in pairs:
-                true_path = None if true_id is None else id_to_true_path[true_id]
-                pred_path = None if pred_id is None else id_to_pred_path[pred_id]
-
-        confusions['fps']
-
-        id_to_true_path
-
-    for info in pred_sites:
-        tne_associate_hack(self, table_threshold_name, table_threshold, row_threshold_name, row_threshold)
-        pass
-
-
-def tne_associate_hack(self, table_threshold_name, table_threshold, row_threshold_name, row_threshold):
-    from collections import defaultdict
-    # from iarpa_smart_metrics.evaluation import GeometryUtil, unary_union, MultiPolygon, Polygon
-    # build up 1 row at a time
-    # get tau and rho
-    use_iot = True
-    thresholds = [(table_threshold_name, table_threshold), (row_threshold_name, row_threshold)]
-    tau = next(iter([tup[1] for tup in thresholds if tup[0] == "tau"]), self.default_tau)
-    rho = next(iter([tup[1] for tup in thresholds if tup[0] == "rho"]), self.default_rho)
-    min_area = next(iter([tup[1] for tup in thresholds if tup[0] == "Min Area"]), self.default_min_area)
-
-    # return the best results
-    detections = defaultdict(list)
-    iot_detections = defaultdict(list)
-    attempted_iot = []  # a list of truth sites not initially detected by IoU, but potentially detected by IoT
-
-    # filter proposals by minimum area
-    big_sm_ids = set()
-    for sm_id in self.sm_stacks:
-        for site in self.sm_stacks[sm_id].sites:
-            if self.sm_stacks[site].area * 1e6 < min_area:
-                break
-        else:
-            big_sm_ids.add(sm_id)
-    proposals = {sm_id: [] for sm_id in big_sm_ids}
-
-    site_types = defaultdict(set)
-    matched_pairs = []
-    tp, fp, fn, tn = 0, 0, 0, 0
-    # tp_exact, tp_over, tp_under, tp_under_iou, tp_under_iot, = 0, 0, 0, 0, 0
-
-    confusions = dict(
-        tps=[],
-        fps=[],
-        fns=[],
-        tns=[],
+    dst_dset.clear_annotations()
+    common_kwargs = ub.udict(
+        clear_existing=False,
+        src=dst_dset,
+        dst='return',
+        workers=0,
     )
+    true_kwargs = common_kwargs | ub.udict(
+        role='truth_confusion',
+        # propogate_strategy=False,
+        # propogate_strategy=False,
+        site_models=true_site_infos2,
+        # viz_dpath=(bas_poly_dpath / '_true_projection'),
+    )
+    kwargs = true_kwargs
+    pred_kwargs = common_kwargs | ub.udict(
+        role='pred_confusion',
+        site_models=pred_site_infos2,
+        # viz_dpath=(bas_poly_dpath / '_pred_projection'),
+    )
+    # I don't know why this isn't in-place. Maybe it is a scriptconfig thing?
+    repr1 = str(dst_dset.annots())
+    print(f'repr1={repr1}')
+    dst_dset = project_annotations.main(cmdline=cmdline, **true_kwargs)
+    repr2 = str(dst_dset.annots())
+    print(f'repr1={repr1}')
+    print(f'repr2={repr2}')
+    pred_kwargs['src'] = dst_dset
+    dst_dset = project_annotations.main(cmdline=cmdline, **pred_kwargs)
+    repr3 = str(dst_dset.annots())
+    print(f'repr1={repr1}')
+    print(f'repr2={repr2}')
+    print(f'repr3={repr3}')
 
-    for gt_id, sm_ids in self.stack_comparisons.items():
+    set(dst_dset.annots().lookup('role', None))
 
-        # sort the valid proposals by the number of sites they are composed of (prioritize combined site stacks)
-        for sm_id in sorted(list(set(sm_ids) & big_sm_ids), key=lambda sm_id: len(self.sm_stacks[sm_id].sites), reverse=True):
-
-            # for each dataframe, calculate the % detected
-            df = self.stack_comparisons[gt_id][sm_id]
-
-            # get the similarity scores from the comparison table
-            scores = df[self.metric_name]
-
-            # each cell is the % of detected slices between ground truth site m (column)
-            matched = len(list(filter(lambda x: x >= tau, scores))) / len(scores)
-            if matched >= rho:
-                detections[gt_id].append((sm_id, matched))
-
-            # attempt to detect with IoT
-            iot_scores = df["iot"]
-            matched = len(list(filter(lambda x: x >= 0.5, iot_scores))) / len(iot_scores)
-            if matched >= rho:
-                iot_detections[gt_id].append((sm_id, matched))
-
-        gt_stack = self.gt_stacks[gt_id]
-
-        if not detections[gt_id] and use_iot:
-            detections[gt_id] = iot_detections[gt_id]
-            attempted_iot.append(gt_id)
-        if detections[gt_id]:
-            sm_id, sm_match_score = max(detections[gt_id], key=lambda x: x[1])
-
-            matched_pairs.append((gt_id, sm_id))
-            sm_match_stack = self.sm_stacks[sm_id]
-            for sub_sm_id in sm_match_stack.sites:
-                proposals[sub_sm_id].append(gt_id)
-                site_types[gt_stack.status].add(sub_sm_id)
-
-            if gt_stack.status in ["positive_annotated", "positive_annotated_static", "positive_partial", "positive_pending"]:
-                confusions['tps'].append((gt_id, sm_id))
-                tp += 1
-            elif gt_stack.status in ["positive_excluded", "negative", "negative_unbounded"]:
-                confusions['fps'].append((gt_id, sm_id))
-                fp += 1
-
-        else:
-            if gt_stack.status in ["positive_annotated", "positive_annotated_static", "positive_partial", "positive_pending"]:
-                confusions['fns'].append((gt_id, None))
-                fn += 1
-            elif gt_stack.status in ["positive_excluded", "negative", "negative_unbounded"]:
-                confusions['tns'].append((gt_id, None))
-                tn += 1
-
-    for sm_id, gt_ids in proposals.items():
-        # only include stacks with a single site model
-        if not gt_ids and len(self.sm_stacks[sm_id].sites) == 1:
-            fp += 1
-            confusions['fps'].append((None, sm_id))
-            site_types["true_negative"].add(sm_id)
-
-    for k, vs in confusions.items():
-        new = []
-        for v1, v2 in vs:
-            if v1 is not None:
-                v1 = v1.split('_te_')[0]
-            if v2 is not None:
-                v2 = v2.split('_kit_')[0]
-            new.append((v1, v2))
-        confusions[k] = new
-    return confusions
-    # proposal_area, fp_area = 0, 0
-    # proposal_areas, nonneg_areas = [], []
-    # for sm_id, gt_ids in proposals.items():
-    #     # only include stacks with a single site model
-    #     if len(self.sm_stacks[sm_id].sites) == 1:
-    #         try:
-    #             proposal_areas.append(self.sm_stacks[sm_id].polygon_union)
-    #         except Exception as e:
-    #             proposal_areas.append(self.sm_stacks[sm_id].polygons[0])
-    #         for gt_id in gt_ids:
-    #             gt_stack = self.gt_stacks[gt_id]
-    #             if gt_stack.status not in ["positive_excluded", "negative", "negative_unbounded"]:
-    #                 nonneg_areas.append(gt_stack.check_unary_union(self.sm_stacks[sm_id]))
-    # if proposal_areas:
-    #     union_proposal_area = unary_union(proposal_areas)
-    #     if type(union_proposal_area) == Polygon:
-    #         union_proposal_area = MultiPolygon([union_proposal_area])
-    #     proposal_area = GeometryUtil.compute_region_area(union_proposal_area)
-    #     if nonneg_areas:
-    #         union_nonneg_area = unary_union(nonneg_areas)
-    #         if type(union_nonneg_area) == Polygon:
-    #             union_nonneg_area = MultiPolygon([union_nonneg_area])
-    #         fp_area = GeometryUtil.compute_region_area(union_proposal_area.difference(union_nonneg_area))
-
-    # for sm_id, gt_ids in proposals.items():
-    #     # only include stacks with a single site model
-    #     if not gt_ids and len(self.sm_stacks[sm_id].sites) == 1:
-    #         fp += 1
-    #         site_types["true_negative"].add(sm_id)
+    from watch.cli import coco_visualize_videos
+    kwargs = dict(
+        src=dst_dset,
+        smart=True,
+        role_order=['truth_confusion', 'pred_confusion']
+    )
+    coco_visualize_videos.main(cmdline=cmdline, **kwargs)
 
 
 def plot_examples():

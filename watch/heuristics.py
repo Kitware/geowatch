@@ -27,20 +27,165 @@ import ubelt as ub
 # NOTE: A "Status" is not a category.
 # It indicates what sort of annotation detail is available.
 HUERISTIC_STATUS_DATA = [
+    {'name': 'seen',                      'color': 'cyan'},
+    {'name': 'train',                     'color': 'cyan'},
+
+    {'name': 'ignore',                    'color': 'lightsalmon'},
+
+    # Note: 'colors for these status labels are undefined, using neutral gray
+    {'name': 'negative',                  'color': 'gray'},
+    {'name': 'negative_unbounded',        'color': 'gray'},
+
+    {'name': 'positive_excluded',         'color': 'gray'},
+
+    {'name': 'positive_annotated',        'color': 'black'},
     {'name': 'positive_annotated_static', 'color': 'black'},
-    {'name': 'positive_annotated', 'color': 'black'},
-    {'name': 'positive_partial', 'color': 'black'},
-    {'name': 'positive_pending', 'color': 'black'},
-    {'name': 'positive_unbounded', 'color': 'darkviolet'},
-    {'name': 'ignore', 'color': 'lightsalmon'},
-    {'name': 'seen', 'color': 'cyan'},
-    {'name': 'train', 'color': 'cyan'},
-    # Note: colors for these status labels are undefined, using neutral gray
-    {'name': 'positive_excluded', 'color': 'gray'},
-    {'name': 'negative', 'color': 'gray'},
-    {'name': 'negative_unbounded', 'color': 'gray'},
+    {'name': 'positive_partial',          'color': 'black'},
+    {'name': 'positive_pending',          'color': 'black'},
+
+    {'name': 'positive_unbounded',        'color': 'darkviolet'},
+
     # TODO? Add alias of pending for "positive_pending"? For QFabric?
+
+    {'name': 'system_confirmed',        'color': 'kitware_blue'},
 ]
+
+
+# "Positive Match Confusion" is the label the truth is given when it has some
+# match in our set of positive predictions.  Denote what type of confusion a
+# truth status incurs when it is matched.
+PHASE_STATUS_TO_MATCHED_CONFUSION = {
+    'seen'                      : 'gt_seen',
+    'train'                     : 'gt_seen',
+
+    'ignore'                    : 'gt_ignore',
+
+    'negative'                  : 'gt_false_pos',
+    'negative_unbounded'        : 'gt_false_pos',
+
+    'positive_excluded'         : 'gt_false_pos',
+
+    'positive_annotated'        : 'gt_true_pos',
+    'positive_annotated_static' : 'gt_true_pos',
+    'positive_partial'          : 'gt_true_pos',
+    'positive_pending'          : 'gt_true_pos',
+
+    'positive_unbounded'        : 'gt_positive_unbounded',
+
+}
+
+# Mapping of annotation status to the kwcoco category name
+# Used in project annotations
+PHASE_STATUS_TO_KWCOCO_CATNAME = {
+    'seen'                     : None,
+    'train'                    : None,
+
+    'ignore'                    : 'ignore',
+
+    'negative'                  : 'negative',
+    'negative_unbounded'        : 'negative',
+
+    'positive_annotated'        : None,  # This must have a category already do not map
+    'positive_annotated_static' : None,  # This must have a category already do not map
+    'positive_excluded'         : 'ignore',    # This is positive, but is not "big" enough
+    'positive_partial'          : 'positive',  # Does not have phase labels
+    'positive_pending'          : 'positive',  # Does not have phase labels
+
+    'positive_unbounded'        : 'positive',  # Start or end date might not be defined
+}
+
+IARPA_STATUS_TO_INFO = {row['name']: row for row in HUERISTIC_STATUS_DATA}
+
+# update HUERISTIC_STATUS_DATA
+for name, row in IARPA_STATUS_TO_INFO.items():
+    if name in PHASE_STATUS_TO_KWCOCO_CATNAME:
+        row['kwcoco_catname'] = PHASE_STATUS_TO_KWCOCO_CATNAME[name]
+
+for name, row in IARPA_STATUS_TO_INFO.items():
+    if name in PHASE_STATUS_TO_MATCHED_CONFUSION:
+        row['positive_match_confusion'] = PHASE_STATUS_TO_MATCHED_CONFUSION[name]
+
+
+if 0:
+    import pandas as pd
+    print(pd.DataFrame(HUERISTIC_STATUS_DATA).to_string())
+
+
+IARPA_REAL_STATUS = {
+    'positive': ["positive_annotated", "positive_annotated_static", "positive_partial", "positive_pending"],
+    'negative': ["positive_excluded", "negative", "negative_unbounded"],
+    'ignore': 'ignore',
+}
+
+
+IARPA_CONFUSION_COLORS = {}
+IARPA_CONFUSION_COLORS['gt_true_pos'] = 'lime'
+IARPA_CONFUSION_COLORS['gt_false_pos'] = 'red'
+IARPA_CONFUSION_COLORS['gt_false_neg'] = 'black'
+IARPA_CONFUSION_COLORS['gt_positive_unbounded'] = "darkviolet"
+IARPA_CONFUSION_COLORS['gt_ignore'] = "lightsalmon"
+IARPA_CONFUSION_COLORS['gt_seen'] = "gray"
+IARPA_CONFUSION_COLORS['sm_pos_match'] = "orange"
+IARPA_CONFUSION_COLORS['sm_partially_wrong'] = "aquamarine"
+IARPA_CONFUSION_COLORS['sm_completely_wrong'] = "magenta"
+
+
+def iarpa_assign_truth_confusion(truth_status, has_positive_match):
+    """
+    Example:
+        >>> from watch.heuristics import *  # NOQA
+        >>> rows = []
+        >>> for truth_status in IARPA_STATUS_TO_INFO.keys():
+        >>>     for has_positive_match in [0, 1]:
+        >>>         gt_cfsn = iarpa_assign_truth_confusion(truth_status, has_positive_match)
+        >>>         rows.append({
+        >>>             'truth_status': truth_status,
+        >>>             'has_positive_match': has_positive_match,
+        >>>             'confusion': gt_cfsn,
+        >>>         })
+        >>> print(pd.DataFrame(rows).to_string())
+    """
+    gt_cfsn = None
+    if has_positive_match:
+        gt_cfsn = IARPA_STATUS_TO_INFO[truth_status]['positive_match_confusion']
+    else:
+        if truth_status in ["positive_unbounded"]:
+            gt_cfsn = 'gt_positive_unbounded'
+        elif truth_status in ["ignore"]:
+            gt_cfsn = 'gt_ignore'
+        elif truth_status in ['seen', 'train']:
+            gt_cfsn = 'gt_seen'
+    return gt_cfsn
+
+
+def iarpa_assign_pred_confusion(truth_match_statuses):
+    """
+    Example:
+        >>> from watch.heuristics import *  # NOQA
+        >>> import itertools as it
+        >>> truth_match_statuses = {'positive_partial', 'positive_excluded'}
+        >>> for combo in it.combinations(IARPA_STATUS_TO_INFO, 2):
+        >>>     truth_match_statuses = combo
+        >>>     pred_cfsn = iarpa_assign_pred_confusion(truth_match_statuses)
+        >>>     print(f'{pred_cfsn=} for {truth_match_statuses}')
+    """
+    pred_cfsn = None
+    if not truth_match_statuses:
+        pred_cfsn = 'sm_completely_wrong'
+
+    truth_cfsns = {
+        IARPA_STATUS_TO_INFO[s]['positive_match_confusion']
+        for s in truth_match_statuses
+    }
+    if 'gt_true_pos' in truth_cfsns:
+        if 'gt_false_pos' in truth_cfsns:
+            pred_cfsn = 'sm_partially_wrong'
+        else:
+            pred_cfsn = 'sm_pos_match'
+    elif 'gt_false_pos' in truth_cfsns:
+        pred_cfsn = 'sm_completely_wrong'
+
+    return pred_cfsn
 
 
 # metrics-and-test-framework/evaluation.py:1684
@@ -395,21 +540,6 @@ HUERISTIC_COMBINABLE_CHANNELS = [
     ub.oset(['matseg_1', 'matseg_2', 'matseg_3']),  # hack
     # ub.oset(['snow_or_ice_field', 'built_up', 'grassland']),  # hack
 ]
-
-
-# Mapping of annotation status to the kwcoco category name
-# Used in project annotations
-PHASE_STATUS_TO_KWCOCO_CATNAME = {
-    'ignore': 'ignore',
-    'negative': 'negative',
-    'negative_unbounded': 'negative',
-    'positive_excluded': 'ignore',  # This is positive, but is not "big" enough
-    'positive_unbounded': 'positive',  # Start or end date might not be defined
-    'positive_pending': 'positive',  # Does not have phase labels
-    'positive_partial': 'positive',  # Does not have phase labels
-    'positive_annotated': None,  # This must have a category already do not map
-    'positive_annotated_static': None,  # This must have a category already do not map
-}
 
 CONFUSION_COLOR_SCHEME = {
     'TN': 'black',

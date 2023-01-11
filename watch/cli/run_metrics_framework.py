@@ -1346,7 +1346,7 @@ def main(cmdline=True, **kwargs):
             '--name', name,
             '--serial',
             # '--no-db',
-            '--sequestered_id', 'seq',  # default None broken on autogen branch
+            # '--sequestered_id', 'seq',  # default None broken on autogen branch
         ]
         run_eval_command += viz_flags
         # run metrics framework
@@ -1412,16 +1412,7 @@ def iarpa_bas_color_legend():
         kwplot.imshow(img)
     """
     import kwplot
-    colors = {}
-    colors['gt_true_pos'] = 'lime'
-    colors['gt_false_pos'] = 'red'
-    colors['gt_false_neg'] = 'black'
-    colors['gt_positive_unbounded'] = "darkviolet"
-    colors['gt_ignore'] = "lightsalmon"
-    colors['gt_seen'] = "gray"
-    colors['sm_pos_match'] = "orange"
-    colors['sm_partially_wrong'] = "aquamarine"
-    colors['sm_completely_wrong'] = "magenta"
+    colors = watch.heuristics.IARPA_CONFUSION_COLORS
     img = kwplot.make_legend_img(colors)
     return img
 

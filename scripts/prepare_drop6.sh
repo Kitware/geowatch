@@ -68,16 +68,16 @@ print('total = {}'.format(xd.byte_str(total_size)))
 
 "
 
-add_dvc_data(){
-    # TODO: before doing this, remember to change the bundle name
-    DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=hdd)
-    cd "$DATA_DVC_DPATH"
-    git add Drop6
-    cd "$DATA_DVC_DPATH/Drop6"
-    python -m watch.cli.prepare_splits data.kwcoco.json --cache=0 --run=1
-    7z a splits.zip data*.kwcoco.json imganns-*.kwcoco.json
-    dvc add -- */L8 */S2 */WV *.zip && dvc push -r horologic -R . && git commit -am "Add Drop6 ACC-2" && git push 
-}
+#add_dvc_data(){
+#    # TODO: before doing this, remember to change the bundle name
+#    DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=hdd)
+#    cd "$DATA_DVC_DPATH"
+#    git add Drop6
+#    cd "$DATA_DVC_DPATH/Drop6"
+#    python -m watch.cli.prepare_splits data.kwcoco.json --cache=0 --run=1
+#    7z a splits.zip data*.kwcoco.json imganns-*.kwcoco.json
+#    dvc add -- */L8 */S2 */WV *.zip && dvc push -r horologic -R . && git commit -am "Add Drop6 ACC-2" && git push 
+#}
 
 
 
@@ -143,6 +143,28 @@ python -m watch.cli.prepare_ta2_dataset \
 
     #--hack_lazy=True
 
+
+poc_util_grab_array(){
+    # This would be nice if I could reliably use my utils... but I cant quite
+    # yet.
+    mkdir -p "$HOME"/.local/bashutil/
+    SCRIPT_FPATH="$HOME"/.local/bashutil/erotemic_utils.sh
+    if type ipfs; then
+        ipfs get QmZhnyMsQotTWRzUyxpNsMJGC1SqPC2XZVkrNCtyYG37x5 -o "$SCRIPT_FPATH"
+    else
+        curl https://raw.githubusercontent.com/Erotemic/local/b8015365f5a70417dc665fa2ddfa2c4e8b696841/init/utils.sh > "$SCRIPT_FPATH"
+    fi
+    # sha256sum should be ca92c9e0cc2f40db93a8261b531a1bfd56db948f29e69c71f9c1949b845b6f71
+    source "$HOME"/.local/bashutil/erotemic_utils.sh
+
+    ls_array IMAGE_ZIP_FPATHS "*/*.zip"
+    ls_array SPLIT_ZIP_FPATHS "splits.zip"
+    bash_array_repr "${IMAGE_ZIP_FPATHS[@]}"
+    bash_array_repr "${SPLIT_ZIP_FPATHS[@]}"
+    ZIP_FPATHS=( "${IMAGE_ZIP_FPATHS[@]}" "${SPLIT_ZIP_FPATHS[@]}" )
+    bash_array_repr "${ZIP_FPATHS[@]}"
+}
+
 dvc_add(){
     python -m watch.cli.prepare_splits data.kwcoco.json --cache=0 --run=1
 
@@ -157,13 +179,16 @@ dvc_add(){
         done
     done
 
+    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+    cd "$DVC_DATA_DPATH"
+    ln -s Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2 Drop6
 
-    # Cd into the bundle we want to add
-    ls -- */L8
-    ls -- */S2
-    ls -- */*.json
+    cd Drop6
+    ZIP_FPATHS=(*/*.zip *.zip)
+    echo "${ZIP_FPATHS[@]}"
 
-    dvc add -- */PD */WV */S2 viz512_anns && dvc push -r aws -R . && git commit -am "Add Drop4 SC Images" && git push  && \
-    dvc add -- *.zip && dvc push -r aws -R . && git commit -am "Add Drop4 SC Annots" && git push 
-    #dvc add -- */L8 */S2 && dvc push -r aws -R . && git commit -am "Add Drop4" && git push 
+    dvc add "${ZIP_FPATHS[@]}" -vv && \
+    dvc push -r aws "${ZIP_FPATHS[@]}" -vv && \
+    git commit -am "Add Drop6 ACC-2" &&  \
+    git push
 }
