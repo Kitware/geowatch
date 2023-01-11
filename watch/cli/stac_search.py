@@ -247,8 +247,6 @@ class StacSearcher:
 
         daterange = [start, end]
 
-        import xdev
-        xdev.embed()
         search = catalog.search(
             collections=collections,
             datetime=daterange,
