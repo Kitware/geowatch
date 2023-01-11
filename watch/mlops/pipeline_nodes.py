@@ -351,7 +351,7 @@ class PipelineDAG:
                     if _has_jq():
                         command = '\n'.join([
                             f'mkdir -p {job_config_fpath.parent} && \\',
-                            f"printf '{json_text}' | jq > {job_config_fpath}",
+                            f"printf '{json_text}' | jq . > {job_config_fpath}",
                         ])
                     else:
                         command = '\n'.join([
