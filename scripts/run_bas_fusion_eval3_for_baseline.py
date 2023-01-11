@@ -238,7 +238,7 @@ def run_bas_fusion_for_baseline(
       "time_span": "auto",
       "time_sampling": "auto",
       "time_steps": "auto",
-      "chip_dims": "auto",
+      "chip_dims": "256,256",
       "set_cover_algo": null,
       "resample_invalid_frames": 3,
       "observable_threshold": 0.2,
