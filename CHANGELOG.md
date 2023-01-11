@@ -13,6 +13,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Add `smartwatch visualize` option `--role_order` for showing different annotation roles on different channel stacks.
 * Experimental new logic in `smartwatch project` for keyframe propagation / interpolation.
 
+### Fixed
+* Switched scriptconfig objects to use "data=kwargs" rather than "default=kwargs" to avoid a copy issue.
+* `find_dvc_dpath` no longer is impacted by environment variables.
+
 
 ## Version 0.3.8 - Target 2022-12-31
 
