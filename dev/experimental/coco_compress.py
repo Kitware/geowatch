@@ -54,9 +54,16 @@ def main(cmdline=1, **kwargs):
         dset.dataset['info'] = fixed_infos
 
     if config.fix_resolution:
+        num_fixed = 0
         for video in dset.dataset['videos']:
             if 'target_gsd' in video and 'resolution' not in video:
+                num_fixed += 1
                 video['resolution'] = '{} GSD'.format(video['target_gsd'])
+        print(f'Converted target_gsd -> resolution: {num_fixed}')
+
+    if 0:
+        for image in dset.dataset['images']:
+            ...
 
     dset.fpath = config.dst
     dset.dump()
@@ -90,6 +97,7 @@ def schedule_problem_fixes():
         queue.submit(f'python ~/code/watch/dev/experimental/coco_compress.py --src {fpath} --dst {fpath}')
 
     queue.run()
+
 
 
 if __name__ == '__main__':

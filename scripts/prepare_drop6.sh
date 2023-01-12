@@ -178,9 +178,10 @@ dvc_add(){
         for dpath in */"$sensor"; do
           echo "  * dpath=$dpath"
           7z a "$dpath".zip "$dpath"
-          -v100m
         done
     done
+    #-v100m
+    # 7z a deprecated_archive_2023-01-12.zip deprecated -mx9
 
     du -sh */*.zip
 
