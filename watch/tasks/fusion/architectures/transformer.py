@@ -40,8 +40,6 @@ Notes:
     pip install performer-pytorch  <- this one
 """
 
-from watch.tasks.fusion.fit import coerce_initializer
-
 from functools import wraps
 
 import torch
@@ -53,8 +51,6 @@ from einops import rearrange, repeat
 
 import ubelt as ub  # NOQA
 import math
-
-# from watch.tasks.fusion.fit import coerce_initializer
 
 try:
     import xdev
@@ -1220,8 +1216,10 @@ class MM_VITEncoderDecoder(nn.Module, BackboneEncoderDecoder):
         )
 
     def initialize_from_pretrained(self, fpath):
-        initializer = coerce_initializer(fpath)
-        info = initializer.forward(self, verbose=0)  # NOQA
+        # FIXME: Having this import here breaks torch.package
+        # initializer = coerce_initializer(fpath)
+        # info = initializer.forward(self, verbose=0)  # NOQA
+        pass
 
     def forward(self, x, mask=None, queries=None):
         # orig_shape = x.shape
