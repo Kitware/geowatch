@@ -957,6 +957,8 @@ def pandas_argmaxima(data, columns, k=1):
             requested columns.
 
     Example:
+        >>> from watch.mlops.aggregate import *  # NOQA
+        >>> import numpy as np
         >>> data = pd.DataFrame({k: np.random.rand(10) for k in 'abcde'})
         >>> columns = ['b', 'd', 'e']
         >>> k = 1

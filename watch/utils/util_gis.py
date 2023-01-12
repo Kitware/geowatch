@@ -1103,6 +1103,7 @@ def crs_geojson_to_gdf(geometry, crs_info=None):
     Example:
         >>> from watch.gis.geotiff import *  # NOQA
         >>> from watch.utils.util_gis import *  # NOQA
+        >>> import kwimage
         >>> from watch.demo.dummy_demodata import dummy_rpc_geotiff_fpath
         >>> gpath_or_ref = gpath = dummy_rpc_geotiff_fpath()
         >>> info = geotiff_crs_info(gpath)
