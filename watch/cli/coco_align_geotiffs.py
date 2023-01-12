@@ -1511,21 +1511,24 @@ class SimpleDataCube(object):
                 unserializable = list(util_json.find_json_unserializable(new_img))
                 if unserializable:
                     print('new_img = {}'.format(ub.repr2(new_img, nl=1)))
-                    raise AssertionError('unserializable(gid={}) = {}'.format(new_gid, ub.repr2(unserializable, nl=0)))
+                    raise AssertionError('unserializable(gid={}) = {}'.format(
+                        new_gid, ub.repr2(unserializable, nl=0)))
 
             for new_aid in sub_new_aids:
                 new_ann = new_dset.index.anns[new_aid]
                 unserializable = list(util_json.find_json_unserializable(new_ann))
                 if unserializable:
                     print('new_ann = {}'.format(ub.repr2(new_ann, nl=1)))
-                    raise AssertionError('unserializable(aid={}) = {}'.format(new_aid, ub.repr2(unserializable, nl=1)))
+                    raise AssertionError('unserializable(aid={}) = {}'.format(
+                        new_aid, ub.repr2(unserializable, nl=1)))
 
             for new_vidid in [new_vidid]:
                 new_video = new_dset.index.videos[new_vidid]
                 unserializable = list(util_json.find_json_unserializable(new_video))
                 if unserializable:
                     print('new_video = {}'.format(ub.repr2(new_video, nl=1)))
-                    raise AssertionError('unserializable(vidid={}) = {}'.format(new_vidid, ub.repr2(unserializable, nl=1)))
+                    raise AssertionError('unserializable(vidid={}) = {}'.format(
+                        new_vidid, ub.repr2(unserializable, nl=1)))
 
         # unserializable = list(util_json.find_json_unserializable(new_dset.dataset))
         # if unserializable:

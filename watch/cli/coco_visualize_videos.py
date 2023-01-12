@@ -1182,7 +1182,8 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
         print('raw_canvas.shape = {!r}'.format(raw_canvas.shape))
         print('chan_list = {!r}'.format(chan_list))
         try:
-            chan_stats = kwarray.stats_dict(raw_canvas, axis=2, nan=True)
+            # chan_stats = kwarray.stats_dict(raw_canvas, axis=2, nan=True)
+            chan_stats = kwarray.stats_dict(raw_canvas, axis=(0, 1), nan=True)
             print('chan_stats = {}'.format(ub.repr2(chan_stats, nl=1)))
         except Exception as ex:
             print(f'ex={ex}')
@@ -1229,6 +1230,9 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
         # raw_canvas = kwarray.atleast_nd(raw_canvas, n=3)
         # raw_canvas = raw_canvas[:, :, None]
 
+    if verbose > 100:
+        print('chan normalizer part')
+
     if chan_to_normalizer is None:
         dmax = np.nanmax(raw_canvas)
         # dmin = canvas.min()
@@ -1264,8 +1268,14 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
             new_parts.append(p)
         canvas = np.stack(new_parts, axis=2)
 
+    if verbose > 100:
+        print('after normalizer part')
+
     _kw = ub.compatible({'on_value': 0.3}, kwimage.fill_nans_with_checkers)
     canvas = kwimage.fill_nans_with_checkers(canvas, **_kw)
+
+    if verbose > 100:
+        print('after checkers part')
 
     # Do the channels correspond to classes with known colors?
     chan_names = chan_row['chan'].to_list()
@@ -1280,16 +1290,28 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
         else:
             channel_colors.append(None)
 
+    if verbose > 100:
+        print('after channel colors part')
+
     if any(c is not None for c in channel_colors):
         # This flag makes it so 1 channel outputs always use cmap.
         # not sure if I like that or not, probably needs to be configurable
         _flag = kwimage.num_channels(canvas) != 1
         if _flag:
+            if verbose > 100:
+                print('do perchannel_colorize')
+                print(f'channel_colors={channel_colors}')
             canvas = util_kwimage.perchannel_colorize(canvas, channel_colors=channel_colors)
+            if verbose > 100:
+                print('finished perchannel_colorize')
             canvas = canvas[..., 0:3]
+            if verbose > 100:
+                print('finished channel color part')
 
     if cmap is not None:
         if kwimage.num_channels(canvas) == 1:
+            if verbose > 100:
+                print('doing 1 channel cmap')
             import matplotlib as mpl
             import matplotlib.cm  # NOQA
             cmap_ = mpl.cm.get_cmap(cmap)
@@ -1297,6 +1319,9 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
             if len(canvas.shape) == 3:
                 canvas = canvas[..., 0]
                 canvas = cmap_(canvas)[..., 0:3].astype(np.float32)
+
+    if verbose > 100:
+        print('after cmap part')
 
     canvas = util_kwimage.ensure_false_color(canvas)
     canvas = kwimage.ensure_uint255(canvas)
@@ -1338,6 +1363,9 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
     img_stack_item = None
     ann_stack_item = None
 
+    if verbose > 100:
+        print('before canvas parts')
+
     if draw_imgs_alone or stack_imgs:
         img_canvas = kwimage.ensure_uint255(canvas, copy=True)
         if stack_imgs:
@@ -1378,14 +1406,19 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
                 requested_role_to_dets = role_to_dets
 
             for role_dets in requested_role_to_dets.values():
+                # TODO: better role handling
                 colors = role_dets.data['colors']
                 draw_on_kwargs['labels'] = True
+                if verbose > 100:
+                    print('About to draw dets on a canvas')
                 ann_canvas = role_dets.draw_on(
                     ann_canvas,
-                    color=colors,
-                    ssegkw={'fill': False, 'border': True, 'edgecolor': colors},
-                    # color='classes',
+                    # color=colors,
+                    # ssegkw={'fill': False, 'border': True, 'edgecolor': colors},
+                    color='classes',
                     **draw_on_kwargs)
+                if verbose > 100:
+                    print('That seemed to work')
 
         if stack_anns:
             if ann_canvas is None:
@@ -1407,11 +1440,14 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
                 ann_canvas = kwimage.stack_images([ann_header, ann_canvas])
             kwimage.imwrite(view_ann_fpath, ann_canvas)
 
+    if verbose > 100:
+        print('returning canvases')
     return img_stack_item, ann_stack_item
 
 
 if __name__ == '__main__':
     """
+    xdoctest ~/code/watch/watch/cli/coco_align_geotiffs.py main:0 2> error.txt 1> output.txt
 
     DVC_DPATH=$(smartwatch_dvc)
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15
@@ -1429,3 +1465,54 @@ if __name__ == '__main__':
         python ~/code/watch/watch/cli/coco_visualize_videos.py
     """
     main(cmdline=True)
+
+
+def demo():
+    import watch
+    import kwimage
+
+    if 1:
+        coco_dset = watch.coerce_kwcoco('watch-msi', heatmap=True, geodata=True)
+
+    chosen_video = coco_dset.videos().objs[0]
+    video_id = chosen_video['id']
+    images_for_video = coco_dset.images(video_id=video_id)
+
+    resolution = '10GSD'
+
+    def get_annots_in_requested_space(coco_img, space='video', resolution=None):
+        """
+        This is slightly less than ideal in terms of API, but it will work for
+        now.
+        """
+        # Build transform from image to requested space
+        warp_vid_from_img = coco_img._warp_vid_from_img
+        scale = coco_img._scalefactor_for_resolution(space='video',
+                                                     resolution=resolution,
+                                                     RESOLUTION_KEY='target_gsd')
+        warp_req_from_vid = kwimage.Affine.scale(scale)
+        warp_req_from_img = warp_req_from_vid @ warp_vid_from_img
+
+        # Get annotations in "Image Space"
+        annots = coco_img.dset.annots(image_id=coco_img.img['id'])
+        imgspace_dets = annots.detections
+        reqspace_dets = imgspace_dets.warp(warp_req_from_img)
+        return reqspace_dets
+
+    frame_data_list = []
+    frame_truth_list = []
+
+    for coco_img in images_for_video.coco_images:
+        # Get the image data in "requested space"
+        delayed = coco_img.delay('salient', space='video', resolution=resolution, RESOLUTION_KEY='target_gsd')
+        detections = get_annots_in_requested_space(coco_img, space='video', resolution=resolution)
+
+        frame_data = delayed.finalize()
+
+        h, w = frame_data.shape[0:2]
+
+        # TODO: filter by class or whatever you want here
+        truth_canvas = np.zeros((h, w))
+        detections.data['segmentations'].fill(truth_canvas, value=1)
+        frame_truth_list.append(truth_canvas)
+        frame_data_list.append(frame_data)
