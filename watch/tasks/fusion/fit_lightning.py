@@ -1,6 +1,6 @@
 from watch.tasks.fusion.datamodules.kwcoco_datamodule import KWCocoVideoDataModule
 # Import models for the CLI registry
-from watch.tasks.fusion.methods import * # NOQA
+from watch.tasks.fusion.methods import *  # NOQA
 import pytorch_lightning as pl
 
 """

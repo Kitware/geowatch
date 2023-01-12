@@ -34,6 +34,7 @@ class AnimateConfig(scfg.DataConfig):
         number of frames per second
         '''))
 
+
 __config__ = AnimateConfig
 
 

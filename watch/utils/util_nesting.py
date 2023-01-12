@@ -7,6 +7,7 @@ def debug_shapes(data):
     # Ported from netharn _debug_inbatch_shapes
     print('len(inbatch) = {}'.format(len(data)))
     extensions = ub.util_format.FormatterExtensions()
+
     @extensions.register((torch.Tensor, np.ndarray))
     def format_shape(data, **kwargs):
         return ub.repr2(dict(type=str(type(data).__name__), shape=data.shape), nl=0, sv=1)

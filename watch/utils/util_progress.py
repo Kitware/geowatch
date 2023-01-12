@@ -8,6 +8,7 @@ class RichProgIter:
     """
     Ducktypes ProgIter
     """
+
     def __init__(self, prog_manager, iterable, total=None, desc=None,
                  transient=False):
         from rich.progress import Progress

@@ -303,6 +303,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
         varied = varied_values(longparams, min_variations=2, dropna=False)
         relevant = longparams[longparams.columns.intersection(varied)]
         from watch.utils import slugify_ext
+
         def pandas_preformat(item):
             if isinstance(item, str):
                 return slugify_ext.smart_truncate(item, max_length=16, trunc_loc=0)

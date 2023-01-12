@@ -809,14 +809,32 @@ def coerce_geojson_datas(arg, format='dataframe', allow_raw=False, workers=0,
     if format not in {'json', 'dataframe'}:
         raise KeyError(format)
 
+    def is_iterable_sequence(item, strok=False):
+        """
+        Check if it is a non-string, non-mapping type of iterable.
+        """
+        if ub.iterable(item, strok=strok):
+            if hasattr(item, 'keys'):
+                return False
+            else:
+                return True
+        else:
+            return True
+
     if allow_raw:
         # Normally the function assumes we are only inputing things that are
         # coercable to paths, and then to geojson. But sometimes we might want
         # to pass around that data directly. In this case, grab those items
         # first, and then resolve the rest of them.
+
+        if is_iterable_sequence(arg):
+            iterable_arg = arg
+        else:
+            iterable_arg = [arg]
+
         raw_items = []
         other_items = []
-        for item in ([arg] if not isinstance(arg, list) else arg):
+        for item in iterable_arg:
             was_raw, item = _coerce_raw_geojson(item, format)
             if was_raw:
                 raw_items.append(item)

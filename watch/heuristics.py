@@ -27,27 +27,27 @@ import ubelt as ub
 # NOTE: A "Status" is not a category.
 # It indicates what sort of annotation detail is available.
 HUERISTIC_STATUS_DATA = [
-    {'name': 'seen',                      'color': 'cyan'},
-    {'name': 'train',                     'color': 'cyan'},
+    {'name': 'seen', 'color': 'cyan'},
+    {'name': 'train', 'color': 'cyan'},
 
-    {'name': 'ignore',                    'color': 'lightsalmon'},
+    {'name': 'ignore', 'color': 'lightsalmon'},
 
     # Note: 'colors for these status labels are undefined, using neutral gray
-    {'name': 'negative',                  'color': 'gray'},
-    {'name': 'negative_unbounded',        'color': 'gray'},
+    {'name': 'negative', 'color': 'gray'},
+    {'name': 'negative_unbounded', 'color': 'gray'},
 
-    {'name': 'positive_excluded',         'color': 'gray'},
+    {'name': 'positive_excluded', 'color': 'gray'},
 
-    {'name': 'positive_annotated',        'color': 'black'},
+    {'name': 'positive_annotated', 'color': 'black'},
     {'name': 'positive_annotated_static', 'color': 'black'},
-    {'name': 'positive_partial',          'color': 'black'},
-    {'name': 'positive_pending',          'color': 'black'},
+    {'name': 'positive_partial', 'color': 'black'},
+    {'name': 'positive_pending', 'color': 'black'},
 
-    {'name': 'positive_unbounded',        'color': 'darkviolet'},
+    {'name': 'positive_unbounded', 'color': 'darkviolet'},
 
     # TODO? Add alias of pending for "positive_pending"? For QFabric?
 
-    {'name': 'system_confirmed',        'color': 'kitware_blue'},
+    {'name': 'system_confirmed', 'color': 'kitware_blue'},
 ]
 
 
@@ -119,6 +119,7 @@ IARPA_REAL_STATUS = {
 
 
 IARPA_CONFUSION_COLORS = {}
+IARPA_CONFUSION_COLORS['gt_true_neg'] = 'darkgreen'  # no IARPA color for this, make one up.
 IARPA_CONFUSION_COLORS['gt_true_pos'] = 'lime'
 IARPA_CONFUSION_COLORS['gt_false_pos'] = 'red'
 IARPA_CONFUSION_COLORS['gt_false_neg'] = 'black'
@@ -155,6 +156,11 @@ def iarpa_assign_truth_confusion(truth_status, has_positive_match):
             gt_cfsn = 'gt_ignore'
         elif truth_status in ['seen', 'train']:
             gt_cfsn = 'gt_seen'
+        elif truth_status in IARPA_REAL_STATUS['negative']:
+            gt_cfsn = 'gt_true_neg'
+        elif truth_status in IARPA_REAL_STATUS['positive']:
+            gt_cfsn = 'gt_false_neg'
+
     return gt_cfsn
 
 

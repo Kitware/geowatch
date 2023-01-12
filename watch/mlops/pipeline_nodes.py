@@ -557,6 +557,7 @@ class memoize_configured_method(object):
     """
     ubelt memoize_method but uses a special cache name
     """
+
     def __init__(self, func):
         self._func = func
         self._cache_name = '_cache__' + func.__name__

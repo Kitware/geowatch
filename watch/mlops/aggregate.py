@@ -579,7 +579,7 @@ class Aggregator:
         agg.index.iloc[index]
 
         agg.results['param_types'][index]
-        eval_fpath = agg.results['fpaths'][index]
+        eval_fpath = agg.results['fpaths'][index]  # NOQA
 
 
 def bas_poly_eval_confusion_analysis(eval_fpath):
@@ -603,7 +603,7 @@ def bas_poly_eval_confusion_analysis(eval_fpath):
     import watch
     dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
     true_site_dpath = dvc_dpath / 'annotations/site_models'
-    true_region_dpath = dvc_dpath / 'annotations/region_models'
+    # true_region_dpath = dvc_dpath / 'annotations/region_models'
 
     from watch.utils import util_gis
 
@@ -619,73 +619,123 @@ def bas_poly_eval_confusion_analysis(eval_fpath):
     site_to_status = {}
     from watch import heuristics
     for row in assign1.to_dict('records'):
-        true_site = row['truth site'].split('_te_')[0]
-        pred_sites = []
+        true_site_id = row['truth site'].split('_te_')[0]
+        pred_site_ids = []
         truth_status = row['site type']
-        site_to_status[true_site] = truth_status
+        site_to_status[true_site_id] = truth_status
         if isinstance(row['matched site models'], str):
             for name in row['matched site models'].split(','):
-                pred_site = name.strip().split(f'_{performer_id}_')[0]
-                pred_sites.append(pred_site)
-        has_positive_match = len(pred_sites)
+                pred_site_id = name.strip().split(f'_{performer_id}_')[0]
+                pred_site_ids.append(pred_site_id)
+        has_positive_match = len(pred_site_ids)
         true_cfsn = heuristics.iarpa_assign_truth_confusion(truth_status, has_positive_match)
         true_confusion_rows.append({
-            'true_site': true_site,
-            'pred_sites': pred_sites,
-            'true_cfsn': true_cfsn,
+            'true_site_id': true_site_id,
+            'pred_site_ids': pred_site_ids,
+            'true_confusion': true_cfsn,
+            'role': 'true_confusion',
         })
 
     for row in assign2.to_dict('records'):
-        pred_site = row['site model'].split(f'_{performer_id}_')[0]
-        true_sites = []
+        pred_site_id = row['site model'].split(f'_{performer_id}_')[0]
+        true_site_ids = []
         truth_match_statuses = []
         if isinstance(row['matched truth sites'], str):
             for name in row['matched truth sites'].split(','):
-                true_site = name.strip().split('_te_')[0]
-                truth_match_statuses.append(site_to_status[true_site])
-                true_sites.append(true_site)
+                true_site_id = name.strip().split('_te_')[0]
+                truth_match_statuses.append(site_to_status[true_site_id])
+                true_site_ids.append(true_site_id)
         pred_cfsn = heuristics.iarpa_assign_pred_confusion(truth_match_statuses)
         pred_confusion_rows.append({
-            'pred_site': pred_site,
-            'true_sites': true_sites,
-            'pred_cfsn': pred_cfsn,
+            'pred_site_id': pred_site_id,
+            'true_site_ids': true_site_ids,
+            'pred_confusion': pred_cfsn,
+            'role': 'pred_confusion',
         })
 
-    pred_to_row = {r['pred_site']: r for r in pred_confusion_rows}
-    confusion_vectors = []
     for true_row in true_confusion_rows:
-        if len(true_row['pred_sites']):
-            for pred in true_row['pred_sites']:
-                pred_row = pred_to_row[pred]
-                pred_cfsn = pred_row['pred_cfsn']
-                confusion_vectors.append({
-                    'true_site': true_row['true_site'],
-                    'true_cfsn': true_row['true_cfsn'],
-                    'pred_site': pred,
-                    'pred_cfsn': pred_cfsn,
-                    'num_other_true': len(true_row['pred_sites']) - 1,
-                    'num_other_pred': len(pred_row['true_sites']) - 1,
-                })
-        else:
-            confusion_vectors.append({
-                'true_site': true_row['true_site'],
-                'true_cfsn': true_row['true_cfsn'],
-                'pred_site': None,
-                'pred_cfsn': None,
-                'num_other_true': 0,
-                'num_other_pred': 0,
-            })
+        true_row['confusion_color'] = heuristics.IARPA_CONFUSION_COLORS.get(true_row['true_confusion'])
+        true_row['role'] = 'true_confusion'
 
     for pred_row in pred_confusion_rows:
-        if not pred_row['true_sites']:
-            confusion_vectors.append({
-                'pred_site': pred_row['pred_site'],
-                'pred_cfsn': pred_row['pred_cfsn'],
-                'true_site': None,
-                'true_cfsn': None,
-                'num_other_true': 0,
-                'num_other_pred': 0,
-            })
+        pred_row['confusion_color'] = heuristics.IARPA_CONFUSION_COLORS.get(pred_row['pred_confusion'])
+        pred_row['role'] = 'true_confusion'
+
+    """
+    True Confusion Spec
+    -------------------
+
+    "misc_info":  {
+        "true_site_id": str,          # redundant site id information,
+        "pred_site_ids": List[str],   # the matching predicted site ids,
+        "true_confusion": str,        # the type of true confusion assigned by T&E
+        "confusion_color": str,       # a named color coercable via kwimage.Color.coerce
+        "role": "true_confusion",     # constant
+    }
+
+    Predicted Confusion Spec
+    -------------------
+
+    "misc_info":  {
+        "pred_site_id": str,          # redundant site id information,
+        "true_site_ids": List[str],   # the matching predicted site ids,
+        "pred_confusion": str,        # the type of predicted confusion assigned by T&E
+        "confusion_color": str,       # a named color coercable via kwimage.Color.coerce
+        "role": "pred_confusion",     # constant
+    }
+
+    # The possible confusion codes and the corresponding confusion_color they
+    # will be assigned is.
+    IARPA_CONFUSION_COLORS = {}
+    IARPA_CONFUSION_COLORS['gt_true_neg'] = 'darkgreen'  # no IARPA color for this, make one up.
+    IARPA_CONFUSION_COLORS['gt_true_pos'] = 'lime'
+    IARPA_CONFUSION_COLORS['gt_false_pos'] = 'red'
+    IARPA_CONFUSION_COLORS['gt_false_neg'] = 'black'
+    IARPA_CONFUSION_COLORS['gt_positive_unbounded'] = "darkviolet"
+    IARPA_CONFUSION_COLORS['gt_ignore'] = "lightsalmon"
+    IARPA_CONFUSION_COLORS['gt_seen'] = "gray"
+    IARPA_CONFUSION_COLORS['sm_pos_match'] = "orange"
+    IARPA_CONFUSION_COLORS['sm_partially_wrong'] = "aquamarine"
+    IARPA_CONFUSION_COLORS['sm_completely_wrong'] = "magenta"
+    """
+
+    # confusion vectors -- unused
+    if 0:
+        pred_to_row = {r['pred_site_id']: r for r in pred_confusion_rows}
+        confusion_vectors = []
+        for true_row in true_confusion_rows:
+            if len(true_row['pred_site_ids']):
+                for pred_site_id in true_row['pred_site_ids']:
+                    pred_row = pred_to_row[pred_site_id]
+                    confusion_vectors.append({
+                        'true_site_id': true_row['true_site_id'],
+                        'true_confusion': true_row['true_confusion'],
+                        'pred_site_id': pred_site_id,
+                        'pred_confusion': pred_row['pred_confusion'],
+                        'num_other_true': len(true_row['pred_site_ids']) - 1,
+                        'num_other_pred': len(pred_row['true_site_ids']) - 1,
+                    })
+            else:
+                confusion_vectors.append({
+                    'true_site_id': true_row['true_site_id'],
+                    'true_confusion': true_row['true_confusion'],
+                    'pred_site_id': None,
+                    'pred_confusion': None,
+                    'num_other_true': 0,
+                    'num_other_pred': 0,
+                })
+
+        for pred_row in pred_confusion_rows:
+            if not pred_row['true_site_ids']:
+                confusion_vectors.append({
+                    'pred_site_id': pred_row['pred_site_id'],
+                    'pred_confusion': pred_row['pred_confusion'],
+                    'true_site_id': None,
+                    'true_confusion': None,
+                    'num_other_true': 0,
+                    'num_other_pred': 0,
+                })
+    # /confusion vectors -- unused
 
     # Add the confusion info as misc data in new site files and reproject them
     # onto the truth for visualization.
@@ -700,8 +750,7 @@ def bas_poly_eval_confusion_analysis(eval_fpath):
     id_to_pred_data = {ub.Path(d['fpath']).stem: d for d in pred_site_infos}
 
     for true_row in true_confusion_rows:
-        info = id_to_true_data[true_row['true_site']]
-        true_row['cfsn_color'] = heuristics.IARPA_CONFUSION_COLORS.get(true_row['true_cfsn'])
+        info = id_to_true_data[true_row['true_site_id']]
         for feat in info['data']['features']:
             if 'misc_info' in feat['properties']:
                 feat['properties']['misc_info'].update(true_row)
@@ -709,14 +758,49 @@ def bas_poly_eval_confusion_analysis(eval_fpath):
                 feat['properties']['misc_info'] = true_row.copy()
 
     for pred_row in pred_confusion_rows:
-        info = id_to_pred_data[pred_row['pred_site']]
-        pred_row['cfsn_color'] = heuristics.IARPA_CONFUSION_COLORS.get(pred_row['pred_cfsn'])
+        info = id_to_pred_data[pred_row['pred_site_id']]
         for feat in info['data']['features']:
             if 'misc_info' in feat['properties']:
                 feat['properties']['misc_info'].update(pred_row)
             else:
                 feat['properties']['misc_info'] = pred_row.copy()
 
+    # Check misc info is populated correctly and add role to site model
+    for pred_site_id, pred_site in id_to_pred_data.items():
+        for feat in pred_site['data']['features']:
+            props = feat['properties']
+
+            import kwimage
+            geom = kwimage.MultiPolygon.coerce(feat['geometry']).to_shapely()
+            simple_geom = geom.simplify(0.0002)  # Hack, should do this properly in the tracker
+            new_geom = kwimage.MultiPolygon.coerce(simple_geom).to_geojson()
+            feat['geometry'] = new_geom
+            misc_info = props['misc_info']
+            print('misc_info = {}'.format(ub.urepr(misc_info, nl=1)))
+
+    for true_site_id, true_site in id_to_true_data.items():
+        for feat in true_site['data']['features']:
+            props = feat['properties']
+            assert 'misc_info' in props
+            misc_info = props['misc_info']
+            print('misc_info = {}'.format(ub.urepr(misc_info, nl=1)))
+
+    cfsn_dpath = bas_poly_dpath / 'confusion_sites'
+    true_cfsn_dpath = (cfsn_dpath / 'true').ensuredir()
+    pred_cfsn_dpath = (cfsn_dpath / 'pred').ensuredir()
+
+    # Dump confusion site models to disk
+    for pred_site_id, pred_site in id_to_pred_data.items():
+        fpath = pred_cfsn_dpath / (pred_site_id + '.geojson')
+        text = json.dumps(pred_site['data'], indent='    ')
+        fpath.write_text(text)
+
+    for true_site_id, true_site in id_to_true_data.items():
+        fpath = true_cfsn_dpath / (true_site_id + '.geojson')
+        text = json.dumps(true_site['data'], indent='    ')
+        fpath.write_text(text)
+
+    # Project confusion site models onto kwcoco for visualization
     from watch.cli import project_annotations
     import kwcoco
     src_fpath = bas_poly_dpath / 'poly.kwcoco.json'
@@ -726,8 +810,13 @@ def bas_poly_eval_confusion_analysis(eval_fpath):
     dst_dset.fpath = dst_fpath
     cmdline = 0
 
-    true_site_infos2 = list(util_gis.coerce_geojson_datas(true_site_infos, format='dataframe', allow_raw=True))
-    pred_site_infos2 = list(util_gis.coerce_geojson_datas(pred_site_infos, format='dataframe', allow_raw=True))
+    true_site_infos2 = list(util_gis.coerce_geojson_datas(
+        id_to_true_data.values(), format='dataframe', allow_raw=True))
+    pred_site_infos2 = list(util_gis.coerce_geojson_datas(
+        id_to_pred_data.values(), format='dataframe', allow_raw=True))
+
+    for info in pred_site_infos2:
+        site_df = info['data']
 
     for info in true_site_infos2:
         site_df = info['data']
@@ -769,11 +858,15 @@ def bas_poly_eval_confusion_analysis(eval_fpath):
 
     set(dst_dset.annots().lookup('role', None))
 
+    dst_dset.annots().take([0, 1, 2])
+
     from watch.cli import coco_visualize_videos
     kwargs = dict(
         src=dst_dset,
         smart=True,
         role_order=['truth_confusion', 'pred_confusion'],
+        resolution='5 GSD',
+        workers=0,
     )
     coco_visualize_videos.main(cmdline=cmdline, **kwargs)
 

@@ -2498,6 +2498,7 @@ def _coerce_ndsampler(data):
 class FailedSample(Exception):
     ...
 
+
 # Backwards compat
 sample_video_spacetime_targets = spacetime_grid_builder.sample_video_spacetime_targets
 

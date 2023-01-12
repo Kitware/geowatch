@@ -1151,6 +1151,7 @@ class SimpleDataCube(object):
             from kwcoco.util.util_json import find_json_unserializable
             from datetime import datetime as datetime_cls
             issues = list(find_json_unserializable(video_props))
+
             def normalize_timestamp(ts):
                 if isinstance(ts, datetime_cls):
                     return ts.isoformat()

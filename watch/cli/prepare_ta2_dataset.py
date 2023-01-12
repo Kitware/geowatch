@@ -117,7 +117,7 @@ class PrepareTA2Config(scfg.Config):
         # '--requester_pays'
         'requester_pays': scfg.Value(0, help='if True, turn on requester_pays in ingress. Needed for official L1/L2 catalogs.'),
 
-        'debug': scfg.Value(False, isflag=1,  help='if enabled, turns on debug visualizations'),
+        'debug': scfg.Value(False, isflag=1, help='if enabled, turns on debug visualizations'),
         'select_images': scfg.Value(False, help='if enabled only uses select images'),
 
         'cache': scfg.Value(1, isflag=1, help='If 1 or 0 globally enable/disable caching. If a comma separated list of strings, only cache those stages'),
@@ -161,6 +161,7 @@ class PrepareTA2Config(scfg.Config):
             existing and construct the aligned kwcoco dataset as normal.
             ''')),
     }
+
 
 __config__ = PrepareTA2Config
 
@@ -837,6 +838,7 @@ def main(cmdline=False, **kwargs):
 
         # This logic will exist in cmd-queue itself
         other_session_handler = config['other_session_handler']
+
         def handle_other_sessions(other_session_handler):
             if other_session_handler == 'auto':
                 from cmd_queue.tmux_queue import has_stdin

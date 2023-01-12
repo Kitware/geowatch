@@ -130,5 +130,6 @@ def main():
 
     pd.DataFrame(all_scores).to_csv(preds_dir / "f1_scores.csv")
 
+
 if __name__ == "__main__":
     main()

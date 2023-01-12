@@ -1250,6 +1250,7 @@ def keyframe_interpolate(image_times, key_infos):
 
 def plot_poc_keyframe_interpolate(image_times, key_times, key_assignment):
     """
+    Helper to visualize the keyframe interpolation algorithm.
     """
     import kwplot
     import matplotlib as mpl

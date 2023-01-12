@@ -951,9 +951,28 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
     role_to_anns = {'none' if k is None else k.lower(): v for k, v in role_to_anns.items()}
 
     role_to_dets = ub.udict()
+
     for role, role_anns in role_to_anns.items():
+        colors = []
+        # Determine the color for each annotation
+        for ann in role_anns:
+            color = 'kitware_red'
+            cid = ann['category_id']
+            cat = coco_dset.cats[cid]
+            color = cat.get('color', color)
+            # temporary hack
+            if 'misc_info' in ann:
+                misc_info = ann['misc_info']
+                if isinstance(misc_info, dict):
+                    color = misc_info.get('confusion_color', color)
+            if color is None:
+                # color = 'kitware_red'
+                color = 'white'
+            colors.append(color)
+
         role_dets = kwimage.Detections.from_coco_annots(role_anns, dset=coco_dset)
         role_dets = role_dets.warp(warp_viz_from_img)
+        role_dets.data['colors'] = colors
         role_to_dets[role] = role_dets
 
     # TODO: asset space
@@ -1358,8 +1377,14 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
                 requested_role_to_dets = role_to_dets
 
             for role_dets in requested_role_to_dets.values():
+                colors = role_dets.data['colors']
+                draw_on_kwargs['labels'] = True
                 ann_canvas = role_dets.draw_on(
-                    ann_canvas, color='classes', **draw_on_kwargs)
+                    ann_canvas,
+                    color=colors,
+                    ssegkw={'fill': False, 'border': True, 'edgecolor': colors},
+                    # color='classes',
+                    **draw_on_kwargs)
 
         if stack_anns:
             if ann_canvas is None:

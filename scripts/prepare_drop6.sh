@@ -40,7 +40,7 @@ python -m watch.cli.prepare_ta2_dataset \
     --warp_tries=1 \
     --asset_timeout="1hour" \
     --image_timeout="1hour" \
-    --backend=tmux --run=1 
+    --backend=tmux --run=1
 
 #--hack_lazy=True
 
@@ -76,7 +76,7 @@ print('total = {}'.format(xd.byte_str(total_size)))
 #    cd "$DATA_DVC_DPATH/Drop6"
 #    python -m watch.cli.prepare_splits data.kwcoco.json --cache=0 --run=1
 #    7z a splits.zip data*.kwcoco.json imganns-*.kwcoco.json
-#    dvc add -- */L8 */S2 */WV *.zip && dvc push -r horologic -R . && git commit -am "Add Drop6 ACC-2" && git push 
+#    dvc add -- */L8 */S2 */WV *.zip && dvc push -r horologic -R . && git commit -am "Add Drop6 ACC-2" && git push
 #}
 
 
@@ -139,7 +139,7 @@ python -m watch.cli.prepare_ta2_dataset \
     --warp_tries=1 \
     --asset_timeout="1hour" \
     --image_timeout="1hour" \
-    --backend=tmux --run=1 
+    --backend=tmux --run=1
 
     #--hack_lazy=True
 
@@ -168,7 +168,9 @@ poc_util_grab_array(){
 dvc_add(){
     python -m watch.cli.prepare_splits data.kwcoco.json --cache=0 --run=1
 
-    7z a splits.zip data*.kwcoco.json img*.kwcoco.json 
+    7z a splits.zip data*.kwcoco.json img*.kwcoco.json
+
+    du -shL AE_C002/L8.zip PE_C001/PD.zip US_R001/WV.zip US_R006/L8.zip AE_R001/L8.zip LT_R001/L8.zip US_R006/S2.zip PE_C001/L8.zip PE_R001/PD.zip US_C011/WV.zip KR_R001/S2.zip BR_R002/S2.zip BR_R005/PD.zip AE_R001/S2.zip KR_R001/L8.zip US_C012/S2.zip PE_C001/WV.zip AE_C003/WV.zip BR_R004/S2.zip AE_C003/S2.zip AE_C002/WV.zip | sort -h
 
     SENSORS=("L8" "S2" "WV" "PD")
     for sensor in "${SENSORS[@]}"; do
@@ -176,8 +178,11 @@ dvc_add(){
         for dpath in */"$sensor"; do
           echo "  * dpath=$dpath"
           7z a "$dpath".zip "$dpath"
+          -v100m
         done
     done
+
+    du -sh */*.zip
 
     DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
     cd "$DVC_DATA_DPATH"

@@ -38,6 +38,7 @@ class Initializer(object):
     """
     Base class for all netharn initializers
     """
+
     def __call__(self, model, *args, **kwargs):
         return self.forward(model, *args, **kwargs)
 
@@ -159,6 +160,7 @@ class NoOp(Initializer):
         >>> assert old_state == new_state
         >>> assert self.history() is None
     """
+
     def forward(self, model):
         return
 
@@ -179,6 +181,7 @@ class Orthogonal(Initializer):
         >>> layer = torch.nn.modules.Conv2d(3, 3, 3)
         >>> self(layer)
     """
+
     def __init__(self, gain=1):
         self.gain = gain
 
@@ -204,6 +207,7 @@ class KaimingUniform(Initializer):
         >>> layer = torch.nn.modules.Conv2d(3, 3, 3)
         >>> self(layer)
     """
+
     def __init__(self, param=0, mode='fan_in'):
         self.a = param
         self.mode = mode
@@ -229,6 +233,7 @@ class KaimingNormal(Initializer):
         >>> layer = torch.nn.modules.Conv2d(3, 3, 3)
         >>> self(layer)
     """
+
     def __init__(self, param=0, mode='fan_in'):
         self.a = param
         self.mode = mode

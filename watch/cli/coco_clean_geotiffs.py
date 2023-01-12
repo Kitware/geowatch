@@ -777,6 +777,7 @@ def draw_asset_summary(coco_img, asset_summary):
         kwplot.imshow(canvas)
     return canvas
 
+
 if __name__ == '__main__':
     """
     CommandLine:

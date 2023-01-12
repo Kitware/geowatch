@@ -407,6 +407,7 @@ class DotDictDataFrame(pd.DataFrame):
         >>> # Test glob
         >>> assert set(self.find_columns('*metri*')) == {'node1.metrics.ap', 'node2.metrics.ap'}
     """
+
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
         self.__dict__['_trie_cache'] = {}
