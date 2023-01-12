@@ -133,7 +133,8 @@ def schedule_problem_fixes():
 
     total_mb = df['size_mb'].sum()
     print(f'total_mb={total_mb}')
-    shrink_candidates = df[df['size_mb'] > 300]
+    shrink_candidates = df
+    # shrink_candidates = df[df['size_mb'] > 300]
 
     import cmd_queue
     queue = cmd_queue.Queue.create(backend='tmux', size=2)

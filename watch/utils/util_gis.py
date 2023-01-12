@@ -1141,7 +1141,10 @@ def crs_geojson_to_gdf(geometry, crs_info=None):
     # kwimage.
     kw_geom = kwimage.structs.segmentation._coerce_coco_segmentation(geometry)
     # sh_geom = kwimage.MultiPolygon.from_geojson(geometry).to_shapely()
-    if geos_crs_info['auth'] == ('EPSG', '4326'):
+    auth = geos_crs_info['auth']
+    if isinstance(auth, tuple):
+        auth = list(auth)
+    if auth == ['EPSG', '4326']:
         # TODO:
         # - [ ] Handle general axis_mapping issues
         if geos_crs_info['axis_mapping'] != 'OAMS_TRADITIONAL_GIS_ORDER':

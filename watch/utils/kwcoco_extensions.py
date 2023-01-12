@@ -1724,6 +1724,7 @@ def _recompute_auxiliary_transforms(img):
         'geos_corners',
         'wld_crs_info',
         'width', 'height',
+        'wgs84_to_wld',
         'wld_to_pxl',
     }))
     if 'width' not in img and 'height' not in img:
