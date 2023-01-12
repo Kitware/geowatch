@@ -62,7 +62,15 @@ def main(cmdline=1, **kwargs):
         print(f'Converted target_gsd -> resolution: {num_fixed}')
 
     if 0:
-        for image in dset.dataset['images']:
+        from kwcoco.coco_image import CocoImage
+        for img in dset.dataset['images']:
+            coco_img = CocoImage(img)
+            base = coco_img.primary_asset()
+            if 'geos_corners' in base and 'geos_corners' not in img:
+                img['geos_corners'] = base['geos_corners']
+            base = coco_img.primary_asset()
+            for aux in image['auxiliary']:
+                pass
             ...
 
     dset.fpath = config.dst

@@ -291,9 +291,9 @@ def main(cmdline=True, **kw):
         >>>     meta['filename_meta']['acquisition_date'])
         >>> date_captured = dt.strftime('%Y/%m/%d')
         >>> gid = coco_dset.add_image(file_name=fpath, date_captured=date_captured)
-        >>> dummy_poly = kwimage.Polygon(exterior=meta['wgs84_corners'])
+        >>> dummy_poly = kwimage.Polygon.from_geojson(meta['geos_corners'])
         >>> dummy_poly = dummy_poly.scale(0.3, about='center')
-        >>> sseg_geos = dummy_poly.swap_axes().to_geojson()
+        >>> sseg_geos = dummy_poly.to_geojson()
         >>> # NOTE: script is not always robust to missing annotation
         >>> # information like segmentation and bad bbox, but for this
         >>> # test config it is
@@ -336,9 +336,9 @@ def main(cmdline=True, **kw):
         >>>     meta['filename_meta']['acquisition_date'])
         >>> date_captured = dt.strftime('%Y/%m/%d')
         >>> gid = coco_dset.add_image(file_name=fpath, date_captured=date_captured)
-        >>> dummy_poly = kwimage.Polygon(exterior=meta['wgs84_corners'])
+        >>> dummy_poly = kwimage.Polygon.from_geojson(meta['geos_corners'])
         >>> dummy_poly = dummy_poly.scale(0.3, about='center')
-        >>> sseg_geos = dummy_poly.swap_axes().to_geojson()
+        >>> sseg_geos = dummy_poly.to_geojson()
         >>> # NOTE: script is not always robust to missing annotation
         >>> # information like segmentation and bad bbox, but for this
         >>> # test config it is
@@ -768,9 +768,9 @@ class SimpleDataCube(object):
             gid = coco_dset.add_image(file_name=fpath,
                                       date_captured=date_captured,
                                       sensor_coarse='L8')
-            img_poly = kwimage.Polygon(exterior=meta['wgs84_corners'])
+            img_poly = kwimage.Polygon.from_geojson(meta['geos_corners'])
             ann_poly = img_poly.scale(0.1, about='center')
-            sseg_geos = ann_poly.swap_axes().to_geojson()
+            sseg_geos = ann_poly.to_geojson()
             coco_dset.add_annotation(
                 image_id=gid, bbox=[0, 0, 0, 0], segmentation_geos=sseg_geos)
 
@@ -1249,12 +1249,10 @@ class SimpleDataCube(object):
                         else:
                             # If the valid_utm region does not exist, do we at
                             # least have corners?
-                            utm_corners = coco_img.img.get('utm_corners', None)
-                            if utm_corners is not None:
-                                this_utm_crs = coco_img.img['utm_crs_info']['auth']
-                                sh_valid_region_utm = kwimage.Polygon(exterior=utm_corners).to_shapely()
-                                valid_region_utm = gpd.GeoDataFrame({'geometry': [sh_valid_region_utm]}, crs=this_utm_crs)
-                                valid_region_local = valid_region_utm.to_crs(local_epsg)
+                            geos_corners = coco_img.img.get('geos_corners', None)
+                            if geos_corners is not None:
+                                corners_gdf = util_gis.crs_geojson_to_gdf(geos_corners)
+                                valid_region_local = corners_gdf.to_crs(local_epsg)
                                 sh_valid_region_local = valid_region_local.geometry.iloc[0]
                                 isect_area = sh_valid_region_local.intersection(sh_space_region_local).area
                                 other_area = sh_space_region_local.area

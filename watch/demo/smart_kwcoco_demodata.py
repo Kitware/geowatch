@@ -89,13 +89,20 @@ def demo_smart_raw_kwcoco():
         raw_coco_dset.add_image(**img)
 
         # Add random annotations on each image
+        expected_geos_crs_info = {
+            'axis_mapping': 'OAMS_TRADITIONAL_GIS_ORDER',
+            'auth': ('EPSG', '4326')
+        }
         for img in raw_coco_dset.imgs.values():
-            utm_corners = kwimage.Polygon(exterior=img['utm_corners']).to_shapely()
+            geos_crs_info = img['geos_corners']['properties']['crs_info']
+            assert geos_crs_info == expected_geos_crs_info
+            goes_corners = kwimage.Polygon.coerce(img['geos_corners']).to_shapely()
             utm_gdf = gpd.GeoDataFrame(
-                {'geometry': [utm_corners]},
-                geometry='geometry', crs=img['utm_crs_info']['auth'])
-            wgs_corners = utm_gdf.to_crs('wgs84').geometry.iloc[0]
-            corner_poly = kwimage.Polygon.from_shapely(wgs_corners)
+                {'geometry': [goes_corners]},
+                geometry='geometry', crs=geos_crs_info['auth'])
+            # img['utm_crs_info']['auth'])
+            crs_corners = utm_gdf.to_crs('crs84').geometry.iloc[0]
+            corner_poly = kwimage.Polygon.from_shapely(crs_corners)
 
             # Create a dummy annotation which is a scaled down version of the corner points
             dummy_sseg_geos = corner_poly.scale(0.02, about='center')

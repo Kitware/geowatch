@@ -958,8 +958,9 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         for ann in role_anns:
             color = 'kitware_red'
             cid = ann['category_id']
-            cat = coco_dset.cats[cid]
-            color = cat.get('color', color)
+            if cid is not None:
+                cat = coco_dset.cats[cid]
+                color = cat.get('color', color)
             # temporary hack
             if 'misc_info' in ann:
                 misc_info = ann['misc_info']

@@ -135,6 +135,7 @@ def iarpa_assign_truth_confusion(truth_status, has_positive_match):
     """
     Example:
         >>> from watch.heuristics import *  # NOQA
+        >>> import pandas as pd
         >>> rows = []
         >>> for truth_status in IARPA_STATUS_TO_INFO.keys():
         >>>     for has_positive_match in [0, 1]:
@@ -148,7 +149,7 @@ def iarpa_assign_truth_confusion(truth_status, has_positive_match):
     """
     gt_cfsn = None
     if has_positive_match:
-        gt_cfsn = IARPA_STATUS_TO_INFO[truth_status]['positive_match_confusion']
+        gt_cfsn = IARPA_STATUS_TO_INFO[truth_status].get('positive_match_confusion', None)
     else:
         if truth_status in ["positive_unbounded"]:
             gt_cfsn = 'gt_positive_unbounded'
@@ -180,7 +181,7 @@ def iarpa_assign_pred_confusion(truth_match_statuses):
         pred_cfsn = 'sm_completely_wrong'
 
     truth_cfsns = {
-        IARPA_STATUS_TO_INFO[s]['positive_match_confusion']
+        IARPA_STATUS_TO_INFO[s].get('positive_match_confusion', None)
         for s in truth_match_statuses
     }
     if 'gt_true_pos' in truth_cfsns:
