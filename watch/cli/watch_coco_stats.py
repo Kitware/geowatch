@@ -206,8 +206,8 @@ def coco_watch_stats(dset):
 
     import pandas as pd
     video_summary = pd.DataFrame(video_summary_rows)
-    video_summary = video_summary.drop(video_summary.columns & [
-        'valid_region_geos', 'wld_crs_info', 'valid_region'], axis=1)
+    video_summary = video_summary.drop(video_summary.columns.intersection([
+        'valid_region_geos', 'wld_crs_info', 'valid_region']), axis=1)
     rich.print(video_summary)
 
     # coco_dset = dset
