@@ -985,9 +985,9 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
 
         Example:
             >>> from watch.tasks import fusion
-            >>> from watch.tasks.fusion.architectures.transformer import MM_VITEncoder
+            >>> from watch.tasks.fusion.architectures.transformer import MM_VITEncoderDecoder
             >>> position_encoder = fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3)
-            >>> backbone = MM_VITEncoder(
+            >>> backbone = MM_VITEncoderDecoder(
             >>>     dim=position_encoder.output_dim + 16,
             >>>     queries_dim=position_encoder.output_dim,
             >>>     logits_dim=16,
