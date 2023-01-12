@@ -66,7 +66,7 @@ def main(cmdline=True, **kwargs):
     """
     config = AggregateEvluationConfig.legacy(cmdline=cmdline, data=kwargs)
     cacher = ub.Cacher(
-        'table_cacher', appname='watch', depends=dict(config),
+        'table_cacher', appname='watch/mlops/aggregate', depends=dict(config),
         enabled=0,
     )
     tables = cacher.tryload()

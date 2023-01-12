@@ -100,7 +100,6 @@ def demo_smart_raw_kwcoco():
             utm_gdf = gpd.GeoDataFrame(
                 {'geometry': [goes_corners]},
                 geometry='geometry', crs=geos_crs_info['auth'])
-            # img['utm_crs_info']['auth'])
             crs_corners = utm_gdf.to_crs('crs84').geometry.iloc[0]
             corner_poly = kwimage.Polygon.from_shapely(crs_corners)
 
@@ -318,7 +317,6 @@ def hack_seed_geometadata_in_dset(coco_dset, force=False, rng=None):
         if force or not format_info['has_geotransform']:
 
             utm_box, utm_crs_info = _random_utm_box(rng=rng)
-
             auth = utm_crs_info['auth']
             assert auth[0] == 'EPSG'
             epsg_int = int(auth[1])

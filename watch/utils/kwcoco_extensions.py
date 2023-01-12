@@ -558,12 +558,9 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
 
                 geos_corners = info['geos_corners']
                 wld_crs_info = ub.dict_diff(info['wld_crs_info'], {'type'})
-                utm_crs_info = ub.dict_diff(info['utm_crs_info'], {'type'})
                 obj.update({
                     'geos_corners': geos_corners,  # always in geojson
-                    'utm_corners': info['utm_corners'].data.tolist(),
                     'wld_crs_info': wld_crs_info,
-                    'utm_crs_info': utm_crs_info,
                 })
                 obj['band_metas'] = info['band_metas']
                 obj['is_rpc'] = info['is_rpc']
@@ -1725,11 +1722,8 @@ def _recompute_auxiliary_transforms(img):
     warp_wld_to_img = warp_img_to_wld.inv()
     img.update(ub.dict_isect(base, {
         'geos_corners',
-        # 'utm_corners',
         'wld_crs_info',
-        # 'utm_crs_info',
         'width', 'height',
-        # 'wgs84_to_wld',
         'wld_to_pxl',
     }))
     if 'width' not in img and 'height' not in img:

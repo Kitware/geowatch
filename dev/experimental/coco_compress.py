@@ -10,8 +10,8 @@ class CocoCompressConfig(scfg.DataConfig):
     TODO: separate into a general fixup step for kwcoco proper and one for
     SMART WATCH.
     """
-    src = scfg.Value(None, nargs='+', help='one or more input kwcoco paths', position=1)
-    dst = scfg.Value(None, help='output kwcoco dataset path')
+    src = scfg.Value(None, help='input kwcoco path', position=1)
+    dst = scfg.Value(None, help='output kwcoco dataset path', position=2)
 
     fix_duplicate_infos = scfg.Value(True, help='Finds and removes duplicate info items')
     fix_resolution = scfg.Value(True, help='Ensures target_gsd is matched by resolution')
@@ -32,6 +32,18 @@ def main(cmdline=1, **kwargs):
         >>>     dst=dst_fpath,
         >>> )
         >>> main(cmdline=cmdline, **kwargs)
+
+    Ignore:
+        import sys, ubelt
+        sys.path.append(ubelt.expandpath('~/code/watch/dev/experimental'))
+        from coco_compress import *  # NOQA
+        cmdline = 0
+        src_fpath = ub.Path('data_vali_split1.kwcoco.json').expand()
+        kwargs = dict(
+            src=src_fpath,
+            dst=src_fpath,
+        )
+
     """
     config = CocoCompressConfig.legacy(cmdline=cmdline, data=kwargs)
     print('config = ' + ub.urepr(dict(config), nl=1))
@@ -63,15 +75,33 @@ def main(cmdline=1, **kwargs):
 
     if 0:
         from kwcoco.coco_image import CocoImage
+        num_removed_deprecated_fields = 0
+        num_missing_base_geos_corners = 0
+
         for img in dset.dataset['images']:
             coco_img = CocoImage(img)
-            base = coco_img.primary_asset()
-            if 'geos_corners' in base and 'geos_corners' not in img:
-                img['geos_corners'] = base['geos_corners']
-            base = coco_img.primary_asset()
-            for aux in image['auxiliary']:
-                pass
-            ...
+            deprecated_fields = {
+                'wgs84_corners',
+                'wgs84_crs_info',
+                'utm_corners',
+                'utm_crs_info',
+            }
+            assert 'geos_corners' in coco_img.img
+            if 'geos_corners' not in img:
+                primary = coco_img.primary_asset()
+                assert False, 'should not happen?'
+                if 'geos_corners' in primary:
+                    num_missing_base_geos_corners += 1
+                    # img['geos_corners'] = primary['geos_corners']
+
+            for obj in ub.flatten([coco_img.iter_asset_objs(), [coco_img.img]]):
+                for key in deprecated_fields:
+                    if key in obj:
+                        num_removed_deprecated_fields += 1
+                        obj.pop(key)
+
+        print(f'num_missing_base_geos_corners={num_missing_base_geos_corners}')
+        print(f'num_removed_deprecated_fields={num_removed_deprecated_fields}')
 
     dset.fpath = config.dst
     dset.dump()
@@ -82,9 +112,11 @@ def schedule_problem_fixes():
     # sub_dpaths = dpath.ls()
 
     # dpath = ub.Path('~/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_testsc').expand()
-    dpath = ub.Path('~/remote/toothbrush/data/dvc-repos/smart_expt_dvc/').expand()
+    # dpath = ub.Path('~/remote/toothbrush/data/dvc-repos/smart_expt_dvc/').expand()
+    # possible_kwcoco_fpaths = list(dpath.glob('*/*/flat/*/*/*.kwcoco.json'))
+    dpath = ub.Path('.')
+    possible_kwcoco_fpaths = list(dpath.glob('*.kwcoco.json'))
 
-    possible_kwcoco_fpaths = list(dpath.glob('*/*/flat/*/*/*.kwcoco.json'))
     candidate_rows = []
     for src_fpath in possible_kwcoco_fpaths:
         num_megabytes = src_fpath.stat().st_size // (2 ** 20)
@@ -94,9 +126,13 @@ def schedule_problem_fixes():
 
     import pandas as pd
     df = pd.DataFrame(candidate_rows)
+    df = df.sort_values('size_mb')
+
+    import rich
+    rich.print(df.to_string())
+
     total_mb = df['size_mb'].sum()
     print(f'total_mb={total_mb}')
-    df = df.sort_values('size_mb')
     shrink_candidates = df[df['size_mb'] > 300]
 
     import cmd_queue
@@ -105,7 +141,6 @@ def schedule_problem_fixes():
         queue.submit(f'python ~/code/watch/dev/experimental/coco_compress.py --src {fpath} --dst {fpath}')
 
     queue.run()
-
 
 
 if __name__ == '__main__':

@@ -18,6 +18,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * `find_dvc_dpath` no longer is impacted by environment variables.
 
 
+### Deprecated
+* Add WATCH fields no longer populates `wgs84_corners`, `wgs84_crs_info`,
+  `utm_corners`, and `utm_crs_info`, which are redundant with `geos_corners`.
+
+
 ## Version 0.3.8 - Target 2022-12-31
 
 ### Added

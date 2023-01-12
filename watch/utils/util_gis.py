@@ -1088,6 +1088,9 @@ def crs_geojson_to_gdf(geometry, crs_info=None):
     """
     TODO: fix the name and scope of this function.
 
+    The idea is to convert one of our CRS aware geojson geometries to a
+    GeoDataFrame for manipulation.
+
     Args:
         geometry :
             This is a geojson geometry object with that has a crs_info object
@@ -1153,7 +1156,9 @@ def crs_geojson_to_gdf(geometry, crs_info=None):
         from pyproj import CRS
         crs = CRS.from_user_input(geos_crs_info['auth'])
         if geos_crs_info['axis_mapping'] != 'OAMS_AUTHORITY_COMPLIANT':
-            raise NotImplementedError('Non-CRS84 should be authority compliant')
+            raise NotImplementedError(
+                f'Non-CRS84 should be authority compliant. Got: {geos_crs_info}'
+            )
     sh_geom = kw_geom.to_shapely()
     gdf = gpd.GeoDataFrame({'geometry': [sh_geom]}, crs=crs)
     return gdf
