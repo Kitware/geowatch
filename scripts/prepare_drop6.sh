@@ -168,7 +168,7 @@ poc_util_grab_array(){
 dvc_add(){
     python -m watch.cli.prepare_splits data.kwcoco.json --cache=0 --run=1
 
-    7z a splits.zip data*.kwcoco.json img*.kwcoco.json
+    7z a splits2.zip data*.kwcoco.json img*.kwcoco.json -mx9
 
     du -shL AE_C002/L8.zip PE_C001/PD.zip US_R001/WV.zip US_R006/L8.zip AE_R001/L8.zip LT_R001/L8.zip US_R006/S2.zip PE_C001/L8.zip PE_R001/PD.zip US_C011/WV.zip KR_R001/S2.zip BR_R002/S2.zip BR_R005/PD.zip AE_R001/S2.zip KR_R001/L8.zip US_C012/S2.zip PE_C001/WV.zip AE_C003/WV.zip BR_R004/S2.zip AE_C003/S2.zip AE_C002/WV.zip | sort -h
 

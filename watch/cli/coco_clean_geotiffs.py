@@ -574,7 +574,8 @@ def fix_geotiff_ondisk(asset_summary, correct_nodata_value=-9999):
         >>> poly = kwimage.Polygon.random().scale(imdata.shape[0:2][::-1])
         >>> imdata = poly.draw_on(imdata, color='black')
         >>> imdata = imdata.astype(np.int16)
-        >>> imdata = poly.fill(imdata, value=(0, 0, 0), pixels_are='areas')
+        >>> #imdata = poly.fill(imdata, value=(0, 0, 0), pixels_are='areas')
+        >>> imdata = poly.fill(imdata, value=0, pixels_are='areas')
         >>> imdata[:256, :256, 0] = 0
         >>> write_demo_geotiff(img_fpath=fpath1, imdata=imdata)
         >>> fpath1.copy(fpath2)
