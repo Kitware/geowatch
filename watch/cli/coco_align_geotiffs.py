@@ -791,7 +791,7 @@ class SimpleDataCube(object):
                         'model_content': 'annotation',
                         'sites': [],
                     },
-                    'geometry': img_poly.scale(0.2, about='center').swap_axes().to_geojson(),
+                    'geometry': img_poly.scale(0.2, about='center').to_geojson(),
                 })
 
         kwcoco_extensions.coco_populate_geo_heuristics(
@@ -1805,6 +1805,7 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
     new_anns = []
     geo_poly_list = []
     for ann in anns:
+        # FIXME: there might be an issue in subsequent usage here.
         # Q: WHAT FORMAT ARE THESE COORDINATES IN?
         # A: I'm fairly sure these coordinates are all Traditional-WGS84-Lon-Lat
         # We convert them to authority compliant WGS84 (lat-lon)
