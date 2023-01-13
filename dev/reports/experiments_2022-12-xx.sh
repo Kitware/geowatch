@@ -76,9 +76,10 @@ python -m watch.mlops.schedule_evaluation \
             bas_pxl.test_dataset:
                 - $DVC_DATA_DPATH/Drop4-BAS/data_vali_KR_R001_uky_invariants.kwcoco.json
                 - $DVC_DATA_DPATH/Drop4-BAS/data_vali_KR_R002_uky_invariants.kwcoco.json
-                - $DVC_DATA_DPATH/Drop4-BAS/data_vali_US_R007_uky_invariants.kwcoco.json
                 - $DVC_DATA_DPATH/Drop4-BAS/data_train_BR_R002_uky_invariants.kwcoco.json
-                #- $DVC_DATA_DPATH/Drop4-BAS/data_train_AE_R001_uky_invariants.kwcoco.json
+                - $DVC_DATA_DPATH/Drop4-BAS/data_train_AE_R001_uky_invariants.kwcoco.json
+                #- $DVC_DATA_DPATH/Drop4-BAS/data_vali_US_R007_uky_invariants.kwcoco.json
+
                 #- $DVC_DATA_DPATH/Drop4-BAS/data_vali_KR_R001.kwcoco.json
                 #- $DVC_DATA_DPATH/Drop4-BAS/data_vali_KR_R002.kwcoco.json
                 #- $DVC_DATA_DPATH/Drop4-BAS/data_vali_US_R007.kwcoco.json
@@ -87,7 +88,7 @@ python -m watch.mlops.schedule_evaluation \
             bas_pxl.chip_overlap: 0.3
             bas_pxl.chip_dims:
                 - auto
-                - 256,256
+                #- 256,256
             bas_pxl.time_span: auto
             bas_pxl.time_sampling: auto
             bas_poly.thresh:
@@ -116,9 +117,9 @@ python -m watch.mlops.schedule_evaluation \
                 #- 0.45
                 #- 0.5
             bas_poly.moving_window_size: 
-                #- null
+                - null
                 #- 100
-                - 200
+                #- 200
             bas_pxl.enabled: 1
             bas_poly.enabled: 1
             bas_poly_eval.enabled: 1
