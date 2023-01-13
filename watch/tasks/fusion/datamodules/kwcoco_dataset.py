@@ -2149,7 +2149,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             Build an intermediate summary to display to the user while this is
             running.
             """
-            if mprog.use_rich:
+            if pman.backend == 'rich':
                 stat_lines = ['Current Estimated Dataset Statistics: ']
                 if with_intensity:
                     input_stats = current_input_stats()
@@ -2165,7 +2165,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     stat_lines.append('Unique Video Samples: {}'.format(len(video_id_histogram)))
                 info_text = '\n'.join(stat_lines).strip()
                 if info_text:
-                    mprog.update_info(info_text)
+                    pman.update_info(info_text)
             else:
                 if with_class:
                     intermediate = ub.sorted_vals(ub.dzip(classes, total_freq), reverse=True)
@@ -2189,13 +2189,14 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 prog.set_postfix_str(text)
 
         from watch.utils import util_progress
-        USE_RICH_UPDATES = 1
-        mprog = util_progress.MultiProgress(use_rich=USE_RICH_UPDATES)
+        from watch.utils import util_environ
+        USE_RICH_UPDATES = util_environ.envflag('USE_RICH_UPDATES', 1)
+        pman = util_progress.ProgressManager(
+            backend='rich' if USE_RICH_UPDATES else 'progiter')
         # TODO: we can compute the intensity histogram more efficiently by
         # only doing it for unique channels (which might be duplicated)
-
-        with mprog:
-            prog = mprog.progiter(loader, desc='estimate dataset stats', verbose=1)
+        with pman:
+            prog = pman.progiter(loader, desc='estimate dataset stats', verbose=1)
             iter_ = iter(prog)
 
             for batch_items in iter_:

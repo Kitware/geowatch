@@ -100,6 +100,31 @@ def main(cmdline=True, **kwargs):
                     model_name = '?'
                 print(score, model_name)
 
+        agg_best = agg.report_best()
+
+        params_of_interest = ['414d0b37']
+
+        model_of_interest = 'package_epoch0_step41'
+        flags = agg.effective_params[agg.model_cols[0]] == model_of_interest
+        agg.effective_table[agg.model_cols + agg.primary_metric_cols + agg.display_metric_cols].sort_values(agg.primary_metric_cols)
+        subagg = agg.compress(flags)
+        subagg.effective_table[agg.model_cols + agg.primary_metric_cols + agg.display_metric_cols].sort_values(agg.primary_metric_cols)
+        # subagg.report_best(top_k=10)
+
+        rois = {'BR_R002', 'KR_R001', 'KR_R002', 'AE_R001'}
+        macro_results = subagg.build_macro_averaged_comparable_tables(rois)
+        top_idxs = macro_results['metrics'].sort_values(subagg.primary_metric_cols).index[0:3]
+        top_param_hashids = macro_results['index']['param_hashid'].iloc[top_idxs]
+        flags = kwarray.isect_flags(subagg.index['param_hashid'].values, top_param_hashids)
+
+        final_agg = subagg.compress(flags)
+        macro_results = final_agg.build_macro_averaged_comparable_tables(rois)
+        # top_idx = macro_results['metrics'].sort_values(subagg.primary_metric_cols).index[0]
+        final_scores = final_agg.report_best()
+
+        # region_id_to_summary = subagg.report_best()
+        # region_id_to_summary['macro_02_19bfe3']
+
     plot_tables()
 
     plot_examples()  # TODO
@@ -107,6 +132,7 @@ def main(cmdline=True, **kwargs):
 
 def build_tables(config):
     import pandas as pd
+    from watch.utils import util_progress
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
     dag = smart_pipeline.make_smart_pipeline(config['pipeline'])
     dag.print_graphs()
@@ -130,9 +156,31 @@ def build_tables(config):
          'result_loader': smart_result_parser.load_eval_act_poly},
     ]
 
+    # pman = util_progress.ProgressManager(backend='rich')
+    # eval_node_prog = pman(node_eval_infos, desc='load node type')
+    # for node_eval_info in eval_node_prog:
+    #     node_name = node_eval_info['name']
+    #     eval_node_prog.set_postfix_str(node_name)
+    #     out_key = node_eval_info['out_key']
+    #     result_loader_fn = node_eval_info['result_loader']
+    #     if node_name not in dag.nodes:
+    #         continue
+    #     node = dag.nodes[node_name]
+    #     out_node = node.outputs[out_key]
+    #     fpaths = out_node_matching_fpaths(out_node)
+    #     fpath_prog = pman(fpaths, desc=f'loading node {node_name} results')
+    #     for fpath in fpath_prog:
+    #         import time
+    #         time.sleep(0.1)
+
+    pman = util_progress.ProgressManager(backend='rich')
+    pman.begin()
     eval_type_to_results = {}
-    for node_eval_info in node_eval_infos:
+    eval_node_prog = pman(node_eval_infos, desc='load node type')
+
+    for node_eval_info in eval_node_prog:
         node_name = node_eval_info['name']
+        eval_node_prog.set_postfix_str(node_name)
         out_key = node_eval_info['out_key']
         result_loader_fn = node_eval_info['result_loader']
 
@@ -155,7 +203,7 @@ def build_tables(config):
             'fpaths': [],
             # 'json_info': [],
         }
-        for fpath in ub.ProgIter(fpaths, desc='loading'):
+        for fpath in pman(fpaths, desc=f'loading node {node_name} results'):
             result = result_loader_fn(fpath)
 
             # TODO: better way to get config
@@ -199,6 +247,7 @@ def build_tables(config):
             'param_types': cols['param_types'],
         }
         eval_type_to_results[node_name] = results
+    pman.stop()
 
     return eval_type_to_results
 
@@ -249,10 +298,33 @@ class Aggregator:
         agg.params = results['params']
         agg.index = results['index']
 
+    def compress(agg, flags):
+        import pandas as pd
+        new_results = {}
+        for key, val in agg.results.items():
+            if isinstance(val, list):
+                new_results[key] = ub.compress(val, flags)
+            elif isinstance(val, pd.DataFrame):
+                new_results[key] = val[flags]
+            else:
+                new_results[key] = val
+        new_agg = Aggregator(new_results, agg.type)
+        new_agg.build()
+        return new_agg
+
     def build(agg):
+        _display_metrics_suffixes = []
         if agg.type == 'bas_poly_eval':
+            _display_metrics_suffixes = [
+                'bas_poly_eval.metrics.bas_tp',
+                'bas_poly_eval.metrics.bas_fp',
+                'bas_poly_eval.metrics.bas_fn',
+                'bas_poly_eval.metrics.bas_f1',
+                'bas_poly_eval.metrics.bas_ffpa',
+            ]
             _primary_metrics_suffixes = [
-                'bas_faa_f1'
+                # 'bas_faa_f1'
+                'bas_poly_eval.metrics.bas_faa_f1',
             ]
         elif agg.type == 'sc_poly_eval':
             _primary_metrics_suffixes = [
@@ -273,8 +345,11 @@ class Aggregator:
         else:
             raise NotImplementedError(agg.type)
 
-        agg.primary_metric_cols = pandas_suffix_columns(
+        agg.primary_metric_cols = pandas_suffix_columns(  # fixme sorting
             agg.metrics, _primary_metrics_suffixes)
+
+        agg.display_metric_cols = pandas_suffix_columns(  # fixme sorting
+            agg.metrics, _display_metrics_suffixes)
 
         _model_suffixes = ['package_fpath']
         agg.model_cols = pandas_suffix_columns(
@@ -290,6 +365,8 @@ class Aggregator:
         agg.hashid_to_params = ub.udict(hashid_to_params)
         agg.mappings = mappings
         agg.effective_params = effective_params
+
+        agg.effective_table = pd.concat([agg.metrics, agg.index, agg.effective_params], axis=1)
 
         agg.macro_key_to_regions = {}
         agg.region_to_tables = {}
@@ -315,21 +392,36 @@ class Aggregator:
 
     def report_best(agg, top_k=3):
         import rich
+        region_id_to_summary = {}
+        big_param_lut = {}
+        summary_strings = []
         for region_id, group in agg.region_to_tables.items():
             metric_group = group['metrics']
+            metric_group = metric_group.sort_values(agg.primary_metric_cols)
+
             top_idxs = pandas_argmaxima(metric_group, agg.primary_metric_cols, k=top_k)
             top_idxs = top_idxs[::-1]
 
-            top_metrics = metric_group.loc[top_idxs][agg.primary_metric_cols]
-            top_metrics = top_metrics[agg.primary_metric_cols]
+            top_metrics = metric_group.loc[top_idxs][agg.primary_metric_cols + agg.display_metric_cols]
+            # top_metrics = top_metrics[agg.primary_metric_cols + agg.display_metric_cols]
             top_indexes = group['index'].loc[top_idxs]
             # top_params = group['effective_params'].loc[top_idxs].drop(agg.test_dset_cols, axis=1)
             param_lut = agg.hashid_to_params.subdict(top_indexes['param_hashid'])
             # hashed_params, param_lut = pandas_hashed_rows(top_params, hashed_colname='param_hashid')
+            big_param_lut.update(param_lut)
             summary_table = pd.concat([top_indexes, top_metrics], axis=1)
+            region_id_to_summary[region_id] = summary_table
 
-            rich.print('param_lut = {}'.format(ub.urepr(param_lut, nl=2)))
-            rich.print(summary_table.to_string())
+            summary_strings.append(summary_table.to_string())
+
+        ordered_idxs = group['index'].loc[metric_group.index]
+        show_param_lut = ub.udict(big_param_lut).subdict(list(ub.oset(ordered_idxs['param_hashid']) & big_param_lut))
+
+        rich.print('param_lut = {}'.format(ub.urepr(show_param_lut, nl=2)))
+        for s in summary_strings:
+            rich.print(s)
+
+        return region_id_to_summary
 
     def build_effective_params(agg):
         """
@@ -410,15 +502,19 @@ class Aggregator:
         print('region_to_num_compatible = {}'.format(ub.urepr(region_to_num_compatible, nl=1)))
         return macro_compatible
 
-    def build_macro_averaged_comparable_tables(agg):
+    def build_macro_averaged_comparable_tables(agg, rois=None):
 
         macro_compatible = agg.find_macro_comparable()
 
         # Given a specific group of regions,
-        # Get all measurements that can be averaged over the chosen regions
-        # regions_of_interest = {'BR_R002', 'KR_R001', 'KR_R002', 'US_R007'}
-        # regions_of_interest = {'KR_R001', 'KR_R002', 'BR_R002'}
-        regions_of_interest = {'KR_R001', 'KR_R002'}
+        if rois is None:
+            # Get all measurements that can be averaged over the chosen regions
+            # regions_of_interest = {'BR_R002', 'KR_R001', 'KR_R002', 'US_R007'}
+            regions_of_interest = {'BR_R002', 'KR_R001', 'KR_R002', 'AE_R001'}
+            # regions_of_interest = {'KR_R001', 'KR_R002', 'BR_R002'}
+            # regions_of_interest = {'KR_R001', 'KR_R002'}
+        else:
+            regions_of_interest = rois
         comparable_groups = []
         for key in macro_compatible.keys():
             avail = (key & regions_of_interest)
@@ -515,6 +611,7 @@ class Aggregator:
             macro_key: regions_of_interest,
         }
         agg.region_to_tables[macro_key] = macro_results
+        return macro_results
 
     def macro_analysis(agg):
         from watch.utils import result_analysis
@@ -894,6 +991,11 @@ def plot_tables(agg):
         'sc_poly_eval.metrics.sc_micro_f1',
 
         'bas_poly_eval.metrics.bas_faa_f1',
+        'bas_poly_eval.metrics.bas_tp',
+        'bas_poly_eval.metrics.bas_fp',
+        'bas_poly_eval.metrics.bas_fn',
+        'bas_poly_eval.metrics.bas_f1',
+        'bas_poly_eval.metrics.bas_ffpa',
 
         'bas_pxl_eval.metrics.salient_AP',
         # 'sc_pxl_eval.metrics.coi_mAP',

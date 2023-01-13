@@ -210,7 +210,7 @@ def main(cmdline=1, **kwargs):
     coco_imgs = coco_dset.images().coco_images
 
     from watch.utils import util_progress
-    mprog = util_progress.MultiProgress(use_rich=1)
+    mprog = util_progress.ProgressManager(backend='rich')
     with mprog:
         mprog.update_info('Looking for geotiff issues')
 

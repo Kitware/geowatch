@@ -465,7 +465,7 @@ def check_processed_regions():
     rows = []
 
     from watch.utils import util_progress
-    mprog = util_progress.MultiProgress()
+    mprog = util_progress.ProgressManager()
     with mprog:
         region_iter = None
         # Check that planet items exist
