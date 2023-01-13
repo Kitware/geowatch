@@ -984,6 +984,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             >>>             assert frame_pred.shape[1:] == frame[task_key].shape, f"{frame_pred.shape} should equal {frame[task_key].shape} for task '{task_key}'"
 
         Example:
+            >>> # xdoctest: +REQUIRES(module:mmseg)
             >>> from watch.tasks import fusion
             >>> from watch.tasks.fusion.architectures.transformer import MM_VITEncoderDecoder
             >>> position_encoder = fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3)
