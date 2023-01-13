@@ -34,6 +34,7 @@ from watch.mlops import smart_result_parser
 import json
 from watch.utils.util_param_grid import DotDictDataFrame
 from watch.utils import slugify_ext
+from watch.utils import util_parallel
 from typing import Dict, Any
 import pandas as pd
 
@@ -44,6 +45,7 @@ class AggregateEvluationConfig(scfg.DataConfig):
     """
     root_dpath = scfg.Value('auto', help='Where do dump all results. If "auto", uses <expt_dvc_dpath>/dag_runs')
     pipeline = scfg.Value('joint_bas_sc', help='the name of the pipeline to run')
+    io_workers = scfg.Value('avail', help='number of processes to load results')
 
 
 def main(cmdline=True, **kwargs):
@@ -61,10 +63,15 @@ def main(cmdline=True, **kwargs):
         >>>     # 'root_dpath': expt_dvc_dpath / '_testsc',
         >>>     #'pipeline': 'sc',
         >>> }
+
+        config = AggregateEvluationConfig.legacy(cmdline=cmdline, data=kwargs)
+        eval_type_to_results = build_tables(config)
+
         >>> ## Execute
         >>> main(cmdline=cmdline, **kwargs)
     """
     config = AggregateEvluationConfig.legacy(cmdline=cmdline, data=kwargs)
+
     cacher = ub.Cacher(
         'table_cacher', appname='watch/mlops/aggregate', depends=dict(config),
         enabled=0,
@@ -138,6 +145,9 @@ def build_tables(config):
     dag.print_graphs()
     dag.configure(config=None, root_dpath=config['root_dpath'])
 
+    io_workers = util_parallel.coerce_num_workers(config.io_workers)
+    print(f'io_workers={io_workers}')
+
     # patterns = {
     #     'bas_pxl_id': '*',
     #     'bas_poly_id': '*',
@@ -173,83 +183,117 @@ def build_tables(config):
     #         import time
     #         time.sleep(0.1)
 
+    from concurrent.futures import as_completed
     pman = util_progress.ProgressManager(backend='rich')
-    pman.begin()
-    eval_type_to_results = {}
-    eval_node_prog = pman(node_eval_infos, desc='load node type')
+    with pman:
+        eval_type_to_results = {}
+        eval_node_prog = pman.progiter(node_eval_infos, desc='Loading node results')
 
-    for node_eval_info in eval_node_prog:
-        node_name = node_eval_info['name']
-        eval_node_prog.set_postfix_str(node_name)
-        out_key = node_eval_info['out_key']
-        result_loader_fn = node_eval_info['result_loader']
+        for node_eval_info in eval_node_prog:
+            node_name = node_eval_info['name']
+            out_key = node_eval_info['out_key']
+            # result_loader_fn = node_eval_info['result_loader']
 
-        if node_name not in dag.nodes:
-            continue
+            if node_name not in dag.nodes:
+                continue
 
-        node = dag.nodes[node_name]
-        out_node = node.outputs[out_key]
+            node = dag.nodes[node_name]
+            out_node = node.outputs[out_key]
+            out_node_key = out_node.key
 
-        fpaths = out_node_matching_fpaths(out_node)
+            fpaths = out_node_matching_fpaths(out_node)
 
-        # Pattern match
-        # node.template_out_paths[out_node.name]
+            # Pattern match
+            # node.template_out_paths[out_node.name]
 
-        cols = {
-            'metrics': [],
-            'index': [],
-            'params': [],
-            'param_types': [],
-            'fpaths': [],
-            # 'json_info': [],
-        }
-        for fpath in pman(fpaths, desc=f'loading node {node_name} results'):
-            result = result_loader_fn(fpath)
-
-            # TODO: better way to get config
-            job_config_fpath = fpath.parent / 'job_config.json'
-            if job_config_fpath.exists():
-                config_ = json.loads(job_config_fpath.read_text())
-            else:
-                config_ = {}
-
-            region_ids = result['json_info']['region_ids']
-            if True:
-                # Munge data to get the region ids we expect
-                import re
-                region_pat = re.compile(r'[A-Z][A-Z]_R\d\d\d')
-                region_ids = ','.join(list(region_pat.findall(region_ids)))
-
-            index = {
-                'type': out_node.key,
-                'region_id': region_ids,
+            cols = {
+                'metrics': [],
+                'index': [],
+                'params': [],
+                'param_types': [],
+                'fpaths': [],
+                # 'json_info': [],
             }
-            metrics = smart_result_parser._add_prefix(node_name + '.metrics.', result['metrics'])
-            params = smart_result_parser._add_prefix(node_name + '.params.', config_)
+            executor = ub.Executor(mode='process', max_workers=io_workers)
+            jobs = []
+            submit_prog = pman.progiter(
+                fpaths, desc=f'  * submit load jobs: {node_name}',
+                transient=True)
+            for fpath in submit_prog:
+                job = executor.submit(load_result_worker, fpath, node_name,
+                                      out_node_key)
+                jobs.append(job)
 
-            if config_:
-                cols['metrics'].append(metrics)
-                cols['params'].append(params)
-                cols['index'].append(index)
-                cols['param_types'].append(result['param_types'])
-                cols['fpaths'].append(fpath)
-                # cols['json_info'].append(result['json_info'])
+            num_ignored = 0
+            job_iter = as_completed(jobs)
+            del jobs
+            collect_prog = pman.progiter(
+                job_iter, total=len(fpaths),
+                desc=f'  * loading node results: {node_name}')
+            for job in collect_prog:
+                job.result()
+                fpath, index, metrics, params, param_types = job.result()
+                if params:
+                    cols['metrics'].append(metrics)
+                    cols['params'].append(params)
+                    cols['index'].append(index)
+                    cols['param_types'].append(param_types)
+                    cols['fpaths'].append(fpath)
+                    # cols['json_info'].append(result['json_info'])
+                else:
+                    num_ignored += 1
 
-        params = pd.DataFrame(cols['params'])
-        trunc_params, mappings = truncate_dataframe_items(params)
-        results = {
-            'mappings': mappings,
-            'fpaths': cols['fpaths'],
-            'index': pd.DataFrame(cols['index']),
-            'metrics': pd.DataFrame(cols['metrics']),
-            'params': pd.DataFrame(cols['params']),
-            'trunc_params': trunc_params,
-            'param_types': cols['param_types'],
-        }
-        eval_type_to_results[node_name] = results
-    pman.stop()
+            params = pd.DataFrame(cols['params'])
+            trunc_params, mappings = truncate_dataframe_items(params)
+            results = {
+                'mappings': mappings,
+                'fpaths': cols['fpaths'],
+                'index': pd.DataFrame(cols['index']),
+                'metrics': pd.DataFrame(cols['metrics']),
+                'params': pd.DataFrame(cols['params']),
+                'trunc_params': trunc_params,
+                'param_types': cols['param_types'],
+            }
+            eval_type_to_results[node_name] = results
 
     return eval_type_to_results
+
+
+def load_result_worker(fpath, node_name, out_node_key):
+
+    if node_name == 'bas_pxl_eval':
+        result_loader_fn = smart_result_parser.load_pxl_eval
+    elif node_name == 'bas_poly_eval':
+        result_loader_fn = smart_result_parser.load_eval_trk_poly
+    elif node_name == 'sc_poly_eval':
+        result_loader_fn = smart_result_parser.load_eval_act_poly
+    else:
+        raise KeyError(node_name)
+
+    result = result_loader_fn(fpath)
+
+    # TODO: better way to get config
+    job_config_fpath = fpath.parent / 'job_config.json'
+    if job_config_fpath.exists():
+        config_ = json.loads(job_config_fpath.read_text())
+    else:
+        config_ = {}
+
+    region_ids = result['json_info']['region_ids']
+    if True:
+        # Munge data to get the region ids we expect
+        import re
+        region_pat = re.compile(r'[A-Z][A-Z]_R\d\d\d')
+        region_ids = ','.join(list(region_pat.findall(region_ids)))
+
+    index = {
+        'type': out_node_key,
+        'region_id': region_ids,
+    }
+    metrics = smart_result_parser._add_prefix(node_name + '.metrics.', result['metrics'])
+    params = smart_result_parser._add_prefix(node_name + '.params.', config_)
+    param_types = result['param_types']
+    return fpath, index, metrics, params, param_types
 
 
 def truncate_dataframe_items(params):
