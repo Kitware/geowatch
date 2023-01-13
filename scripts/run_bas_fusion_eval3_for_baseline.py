@@ -228,22 +228,10 @@ def run_bas_fusion_for_baseline(
 
     predict_config = json.loads("""
 {
-      "channels": "auto",
-      "tta_fliprot": 0,
-      "tta_time": 0,
       "chip_overlap": 0.3,
-      "input_space_scale": "auto",
-      "window_space_scale": "auto",
-      "output_space_scale": "auto",
+      "chip_dims": "auto",
       "time_span": "auto",
-      "time_sampling": "auto",
-      "time_steps": "auto",
-      "chip_dims": "256,256",
-      "set_cover_algo": null,
-      "resample_invalid_frames": 3,
-      "observable_threshold": 0.2,
-      "mask_low_quality": true,
-      "drop_unused_frames": true
+      "time_sampling": "auto"
 }
     """)
 
@@ -309,8 +297,7 @@ def run_bas_fusion_for_baseline(
 
     bas_tracking_config = {
         "thresh": bas_thresh,
-        "moving_window_size": None,
-        "max_area_behavior": 'ignore'}
+        "moving_window_size": float('nan')}
 
     tracked_bas_kwcoco_path = '_tracked'.join(
         os.path.splitext(bas_fusion_kwcoco_path))
