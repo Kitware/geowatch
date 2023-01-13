@@ -19,7 +19,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 
 ### Deprecated
-* Add WATCH fields no longer populates `wgs84_corners`, `wgs84_crs_info`,
+* `add_watch_fields` no longer populates `wgs84_corners`, `wgs84_crs_info`,
   `utm_corners`, and `utm_crs_info`, which are redundant with `geos_corners`.
 
 

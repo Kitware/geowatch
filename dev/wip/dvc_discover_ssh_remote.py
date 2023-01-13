@@ -53,35 +53,56 @@ def git_default_push_remote_name():
 def dvc_discover_ssh_remote(host, remote=None, forward_ssh_agent=False,
                             dry=False, force=False):
     cwd = _getcwd()
+    cwd = ub.Path(cwd)
     relcwd = relpath(cwd, expanduser('~'))
-    remote_cwd = relcwd
-    # Build one command to execute on the remote
-    remote_parts = [
-        'cd {remote_cwd}',
-    ]
-    remote_parts.append('dvc cache dir')
 
-    ssh_flags = []
-    if forward_ssh_agent:
-        ssh_flags += ['-A']
-    ssh_flags = ' '.join(ssh_flags)
+    # Build a list of places where the remote is likely to be located.
+    candidate_remote_cwds = []
+    candidate_remote_cwds.append(relcwd)
 
-    remote_part = ' && '.join(remote_parts)
-    sync_command = 'ssh {ssh_flags} {host} "' + remote_part + '"'
+    # TODO: look at symlinks relative to home and try those but resolved?
 
-    kw = dict(
-        host=host,
-        remote_cwd=remote_cwd,
-        ssh_flags=ssh_flags
-    )
-    command = sync_command.format(**kw)
-    print(command)
-    info = ub.cmd(command)
-    remote_cache_dir = info['out'].strip()
+    candidate_remote_cwds.append(cwd)
+    candidate_remote_cwds.append(cwd.resolve())
+
+    remote_cache_dir = None
+
+    for remote_cwd in candidate_remote_cwds:
+        # Build one command to execute on the remote
+        remote_parts = [
+            'cd {remote_cwd}',
+        ]
+        remote_parts.append('dvc cache dir')
+        ssh_flags = []
+        if forward_ssh_agent:
+            ssh_flags += ['-A']
+        ssh_flags = ' '.join(ssh_flags)
+
+        remote_part = ' && '.join(remote_parts)
+        command_template = 'ssh {ssh_flags} {host} "' + remote_part + '"'
+        kw = dict(
+            host=host,
+            remote_cwd=remote_cwd,
+            ssh_flags=ssh_flags
+        )
+        command = command_template.format(**kw)
+        print(command)
+        info = ub.cmd(command, verbose=3)
+        if info['ret'] == 0:
+            remote_cache_dir = info['out'].strip()
+            break
+        else:
+            print('Warning: Unable to find candidate DVC repo on the remote')
+
+    if remote_cache_dir is None:
+        raise Exception('No candidates were found')
 
     local_command = f'dvc remote add --local {host} ssh://{host}{remote_cache_dir}'
-    # /media/joncrall/raid/home/joncrall/data/dvc-repos/smart_watch_dvc/.dvc/cache
-    ub.cmd(local_command, verbose=3)
+    if not dry:
+        # /media/joncrall/raid/home/joncrall/data/dvc-repos/smart_watch_dvc/.dvc/cache
+        ub.cmd(local_command, verbose=3)
+    else:
+        print(local_command)
 
 
 def main():
@@ -98,7 +119,6 @@ def main():
 
     parser.set_defaults(
         dry=False,
-        message='wip [skip ci]',
     )
     args = parser.parse_args()
     ns = args.__dict__.copy()
@@ -108,7 +128,13 @@ def main():
 
 if __name__ == '__main__':
     r"""
+    Ignore:
+        dvc remote add --local ooo ssh://ooo/data/joncrall/dvc-repos/smart_data_dvc/.dvc/cache
+
     CommandLine:
         python -m dvc_discover_ssh_remote namek --dry
+
+        python ~/code/watch/dev/wip/dvc_discover_ssh_remote.py ooo
+        python ~/code/watch/dev/wip/dvc_discover_ssh_remote.py namek
     """
     main()
