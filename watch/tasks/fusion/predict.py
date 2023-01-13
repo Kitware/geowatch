@@ -489,7 +489,7 @@ def predict(cmdline=False, **kwargs):
         >>> from watch.tasks.fusion.predict import *  # NOQA
         >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
         >>> disable_lightning_hardware_warnings()
-        
+
         >>> args = None
         >>> cmdline = False
         >>> devices = None
@@ -497,11 +497,15 @@ def predict(cmdline=False, **kwargs):
         >>> results_path = ub.ensuredir((test_dpath, 'predict'))
         >>> ub.delete(results_path)
         >>> ub.ensuredir(results_path)
-        
 
+
+        >>> import kwcoco
+        >>> train_dset = kwcoco.CocoDataset.demo('special:vidshapes8-multispectral-multisensor', num_frames=5, gsize=(128, 128))
+        >>> test_dset = kwcoco.CocoDataset.demo('special:vidshapes8-multispectral-multisensor', num_frames=5, gsize=(128, 128))
         >>> datamodule = datamodules.kwcoco_video_data.KWCocoVideoDataModule(
-        >>>     train_dataset='special:vidshapes8-multispectral-multisensor', 
-        >>>     #test_dataset='special:vidshapes8-multispectral-multisensor', chip_size=32,
+        >>>     train_dataset=train_dset, #'special:vidshapes8-multispectral-multisensor',
+        >>>     test_dataset=test_dset, #'special:vidshapes8-multispectral-multisensor',
+        >>>     chip_size=32,
         >>>     channels="r|g|b",
         >>>     batch_size=1, time_steps=3, num_workers=2, normalize_inputs=10)
         >>> datamodule.setup('fit')
@@ -509,7 +513,7 @@ def predict(cmdline=False, **kwargs):
         >>> dataset_stats = datamodule.torch_datasets['train'].cached_dataset_stats(num=3)
         >>> classes = datamodule.torch_datasets['train'].classes
         >>> print("classes = ", classes)
-        
+
         >>> from watch.tasks.fusion import methods
         >>> from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
         >>> position_encoder = methods.heterogeneous.ScaleAgnostictPositionalEncoder(3)
@@ -529,6 +533,7 @@ def predict(cmdline=False, **kwargs):
         >>>     position_encoder=position_encoder,
         >>>     backbone=backbone,
         >>>     decoder="trans_conv",
+        >>>     token_width=16,
         >>>     global_change_weight=1, global_class_weight=1, global_saliency_weight=1,
         >>>     dataset_stats=dataset_stats, input_sensorchan=datamodule.input_sensorchan)
         >>> print("model.heads.keys = ", model.heads.keys())
@@ -538,7 +543,7 @@ def predict(cmdline=False, **kwargs):
         >>> model.save_package(package_fpath)
         >>> # package_fpath = fit_model(**fit_kwargs)
         >>> assert ub.Path(package_fpath).exists()
-        
+
         >>> # Predict via that model
         >>> test_dset = datamodule.train_dataset
         >>> predict_kwargs = kwargs = {
@@ -552,7 +557,7 @@ def predict(cmdline=False, **kwargs):
         >>>     'devices': devices,
         >>> }
         >>> result_dataset = predict(**kwargs)
-        
+
         >>> dset = result_dataset
         >>> dset.dataset['info'][-1]['properties']['config']['time_sampling']
         >>> # Check that the result format looks correct
