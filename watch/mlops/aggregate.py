@@ -73,6 +73,7 @@ def main(cmdline=True, **kwargs):
     config = AggregateEvluationConfig.legacy(cmdline=cmdline, data=kwargs)
 
     cacher = ub.Cacher(
+        # Caching may be important depending on how much data we need to load
         'table_cacher', appname='watch/mlops/aggregate', depends=dict(config),
         enabled=0,
     )
@@ -83,6 +84,10 @@ def main(cmdline=True, **kwargs):
 
     eval_type_to_aggregator = build_aggregators(eval_type_to_results)
 
+    custom_analysis(eval_type_to_aggregator)
+
+
+def custom_analysis(eval_type_to_aggregator):
     agg = eval_type_to_aggregator.get('sc_poly_eval', None)
     if agg is not None:
         agg.analyze()
@@ -90,50 +95,66 @@ def main(cmdline=True, **kwargs):
     agg = eval_type_to_aggregator.get('bas_poly_eval', None)
     if agg is not None:
         ...
-        model_col = 'bas_poly_eval.params.bas_pxl.package_fpath'
-        metric_col = 'bas_poly_eval.metrics.bas_faa_f1'
-        table = agg.table
-        agg.report_best(top_k=10)
-        # table = table[~table[model_col].isnull()]
-        for region_id, region_table in table.groupby('region_id'):
-            print(f' --- region_id={region_id} --- ')
-            region_table = region_table.sort_values(metric_col)
-            for _, row in region_table.iterrows():
-                score = row[metric_col]
-                try:
-                    model_name = ub.Path(row[model_col]).name
-                except Exception:
-                    continue
-                    model_name = '?'
-                print(score, model_name)
+        _ = agg.report_best(top_k=10)
 
-        agg_best = agg.report_best()
-
-        params_of_interest = ['414d0b37']
-
-        model_of_interest = 'package_epoch0_step41'
-        flags = agg.effective_params[agg.model_cols[0]] == model_of_interest
-        agg.effective_table[agg.model_cols + agg.primary_metric_cols + agg.display_metric_cols].sort_values(agg.primary_metric_cols)
-        subagg = agg.compress(flags)
-        subagg.effective_table[agg.model_cols + agg.primary_metric_cols + agg.display_metric_cols].sort_values(agg.primary_metric_cols)
-        # subagg.report_best(top_k=10)
-
+        # rois = {'BR_R002', 'KR_R001', 'KR_R002', 'AE_R001', 'US_R007'}
+        # rois = {'KR_R001', 'KR_R002'}
+        # rois = {'KR_R001', 'KR_R002', 'US_R007'}
         rois = {'BR_R002', 'KR_R001', 'KR_R002', 'AE_R001'}
-        macro_results = subagg.build_macro_averaged_comparable_tables(rois)
-        top_idxs = macro_results['metrics'].sort_values(subagg.primary_metric_cols).index[0:3]
-        top_param_hashids = macro_results['index']['param_hashid'].iloc[top_idxs]
-        flags = kwarray.isect_flags(subagg.index['param_hashid'].values, top_param_hashids)
+        _ = agg.build_macro_table(rois)
+        agg_best = agg.report_best(top_k=3)
+        params_of_interest = ub.oset(ub.flatten([
+            v['param_hashid'].to_list() for v in reversed(agg_best.values())]))
 
-        final_agg = subagg.compress(flags)
-        macro_results = final_agg.build_macro_averaged_comparable_tables(rois)
-        # top_idx = macro_results['metrics'].sort_values(subagg.primary_metric_cols).index[0]
-        final_scores = final_agg.report_best()
+        # params_of_interest = ['414d0b37']
+        params_of_interest = ['ab43161b']
+        # params_of_interest = ['34bed2b3']
+        # params_of_interest = ['8ac5594b']
+
+        subagg1 = agg.filterto(param_hashids=params_of_interest)
+        _ = subagg1.build_macro_table({'KR_R001', 'KR_R002'})
+        _ = subagg1.build_macro_table(rois)
+        agg1_best = subagg1.report_best(top_k=1)
+        params_of_interest1 = ub.oset(ub.flatten([
+            v['param_hashid'].to_list() for v in reversed(agg1_best.values())]))
+
+        models_of_interest = agg.filterto(param_hashids=params_of_interest1).effective_params[agg.model_cols[0]].unique()
+
+        # model_of_interest =
+        # models_of_interest = [
+        #     'package_epoch0_step41',
+        #     'Drop4_BAS_15GSD_BGRNSH_invar_V8_epoch=16-step=8704',
+        #     'Drop4_BAS_2022_12_15GSD_BGRN_V10_epoch=0-step=4305',
+        #     'Drop4_BAS_2022_12_15GSD_BGRN_V5_epoch=1-step=77702-v1',
+        # ]
+        subagg2 = agg.filterto(models=models_of_interest)
+        # _ = subagg2.build_macro_table({'KR_R001', 'KR_R002'})
+        _ = subagg2.build_macro_table(rois)
+        subagg2.macro_analysis()
+        # _ = subagg2.build_macro_table('max')
+        # _ = subagg2.build_macro_table({'KR_R001', 'KR_R002', 'US_R007'})
+        # _ = subagg2.build_macro_table({'KR_R001', 'KR_R002'})
+        # _ = subagg2.build_macro_table({'AE_R001'})
+        # _ = subagg2.build_macro_table({'BR_R002'})
+        # _ = subagg2.build_macro_table({'US_R007'})
+        # _ = subagg2.build_macro_table({'KR_R002'})
+        # subagg2.macro_analysis()
+        _ = subagg2.report_best()
+
+        # rois = {'BR_R002', 'KR_R001', 'KR_R002', 'AE_R001'}
+        # macro_results = subagg.build_macro_table(rois)
+        # top_idxs = macro_results['metrics'].sort_values(subagg.primary_metric_cols).index[0:3]
+        # top_param_hashids = macro_results['index']['param_hashid'].iloc[top_idxs]
+        # flags = kwarray.isect_flags(subagg.index['param_hashid'].values, top_param_hashids)
+        # final_agg = subagg.compress(flags)
+        # macro_results = final_agg.build_macro_table(rois)
+        # # top_idx = macro_results['metrics'].sort_values(subagg.primary_metric_cols).index[0]
+        # final_scores = final_agg.report_best()
 
         # region_id_to_summary = subagg.report_best()
         # region_id_to_summary['macro_02_19bfe3']
 
     plot_tables()
-
     plot_examples()  # TODO
 
 
@@ -342,6 +363,23 @@ class Aggregator:
         agg.params = results['params']
         agg.index = results['index']
 
+    def filterto(agg, models=None, param_hashids=None):
+        import numpy as np
+        final_flags = 1
+        if param_hashids is not None:
+            flags = kwarray.isect_flags(agg.index['param_hashid'].values, param_hashids)
+            final_flags = np.logical_and(final_flags, flags)
+
+        if models is not None:
+            flags = kwarray.isect_flags(agg.effective_params[agg.model_cols[0]].values, models)
+            final_flags = np.logical_and(final_flags, flags)
+
+        if isinstance(final_flags, int):
+            new_agg = agg
+        else:
+            new_agg = agg.compress(final_flags)
+        return new_agg
+
     def compress(agg, flags):
         import pandas as pd
         new_results = {}
@@ -349,7 +387,7 @@ class Aggregator:
             if isinstance(val, list):
                 new_results[key] = ub.compress(val, flags)
             elif isinstance(val, pd.DataFrame):
-                new_results[key] = val[flags]
+                new_results[key] = val[flags].copy()
             else:
                 new_results[key] = val
         new_agg = Aggregator(new_results, agg.type)
@@ -421,14 +459,59 @@ class Aggregator:
                 'index': agg.index.loc[idx_group.index],
                 'effective_params': agg.effective_params.loc[idx_group.index],
             }
+        agg.macro_compatible = agg.find_macro_comparable()
+        # agg.build_macro_table()
 
-        agg.build_macro_averaged_comparable_tables()
+    def macro_analysis(agg):
+        from watch.utils import result_analysis
+
+        macro_keys = list(agg.macro_key_to_regions.keys())
+        if len(macro_keys) == 0:
+            raise Exception('Build a macro result first')
+
+        region_id = macro_keys[-1]
+        regions_of_interest = agg.macro_key_to_regions[region_id]
+        tables = agg.region_to_tables[region_id]
+
+        effective_params = tables['effective_params']
+        metrics = tables['metrics']
+        index = tables['index']
+
+        table = pd.concat([index, effective_params, metrics], axis=1)
+        table = table.fillna('None')
+
+        main_metric = agg.primary_metric_cols[0]
+
+        results = []
+        for idx, row in enumerate(table.to_dict('records')):
+            row = ub.udict(row)
+            row_metrics = row & set(metrics.keys())
+            row_params = row & set(effective_params.keys())
+            result = result_analysis.Result(str(idx), row_params, row_metrics)
+            results.append(result)
+
+        analysis = result_analysis.ResultAnalysis(
+            results, metrics=[main_metric],
+            metric_objectives={main_metric: 'max'}
+        )
+        # self = analysis
+        analysis.analysis()
+        analysis.report()
+
+        model_cols = agg.model_cols
+        import kwplot
+        sns = kwplot.autosns()
+        sns = kwplot.autosns()
+        plt = kwplot.autoplt()
+        kwplot.figure()
+        x = 'bas_poly_eval.params.bas_poly.thresh'
+        sns.lineplot(data=table, x=x, y=main_metric, hue=model_cols[0], style=model_cols[0])
+        ax = plt.gca()
+        ax.set_title(f'BAS Macro Average over {regions_of_interest}')
 
     def analyze(agg):
         from watch.utils import result_analysis
-        metrics_of_interest = [
-            'sc_poly_eval.metrics.sc_macro_f1',
-        ]
+        metrics_of_interest = agg.primary_metric_cols
         analysis = result_analysis.ResultAnalysis(
             agg.results, metrics=metrics_of_interest)
         analysis.results
@@ -438,13 +521,12 @@ class Aggregator:
         import rich
         region_id_to_summary = {}
         big_param_lut = {}
-        summary_strings = []
+        region_id_to_ntotal = {}
         for region_id, group in agg.region_to_tables.items():
             metric_group = group['metrics']
             metric_group = metric_group.sort_values(agg.primary_metric_cols)
 
             top_idxs = pandas_argmaxima(metric_group, agg.primary_metric_cols, k=top_k)
-            top_idxs = top_idxs[::-1]
 
             top_metrics = metric_group.loc[top_idxs][agg.primary_metric_cols + agg.display_metric_cols]
             # top_metrics = top_metrics[agg.primary_metric_cols + agg.display_metric_cols]
@@ -455,15 +537,42 @@ class Aggregator:
             big_param_lut.update(param_lut)
             summary_table = pd.concat([top_indexes, top_metrics], axis=1)
             region_id_to_summary[region_id] = summary_table
+            region_id_to_ntotal[region_id] = len(metric_group)
 
-            summary_strings.append(summary_table.to_string())
+        # In reverse order (so they correspond with last region table)
+        # get a unique list of all params reported in the top k sorted
+        # to be easy to reference with the topk tables.
+        # Do initial sorting to the best config from the last table
+        # is first. Sort by table first, and then score.
+        param_hashid_order = ub.oset()
+        for summary_table in reversed(region_id_to_summary.values()):
+            param_hashids = summary_table['param_hashid'].values
+            param_hashid_order.update(param_hashids)
 
-        ordered_idxs = group['index'].loc[metric_group.index]
-        show_param_lut = ub.udict(big_param_lut).subdict(list(ub.oset(ordered_idxs['param_hashid']) & big_param_lut))
+        param_hashid_order = param_hashid_order[::-1]
+        show_param_lut = ub.udict(big_param_lut).subdict(param_hashid_order)
 
-        rich.print('param_lut = {}'.format(ub.urepr(show_param_lut, nl=2)))
-        for s in summary_strings:
-            rich.print(s)
+        rich.print('Parameter LUT: {}'.format(ub.urepr(show_param_lut, nl=2)))
+
+        # Check for a common special case that we can make more concise output for
+        only_one_top_item = all(len(t) == 1 for t in region_id_to_summary.values())
+        only_one_source_item = all(n == 1 for n in region_id_to_ntotal.values())
+
+        if only_one_source_item and only_one_top_item:
+            justone = pd.concat(list(region_id_to_summary.values()), axis=0)
+            submacro = ub.udict(agg.macro_key_to_regions) & justone['region_id'].values
+            if submacro:
+                print('Macro Regions LUT: ' +  ub.urepr(submacro, nl=1))
+            rich.print(justone)
+        else:
+            for region_id, summary_table in region_id_to_summary.items():
+                ntotal = region_id_to_ntotal[region_id]
+                if region_id in agg.macro_key_to_regions:
+                    macro_regions = agg.macro_key_to_regions[region_id]
+                    rich.print(f'Top {len(summary_table)} / {ntotal} for {region_id} = {macro_regions}')
+                else:
+                    rich.print(f'Top {len(summary_table)} / {ntotal} for {region_id}')
+                rich.print(summary_table.iloc[::-1].to_string())
 
         return region_id_to_summary
 
@@ -519,7 +628,7 @@ class Aggregator:
             new_hashids.loc[group.index] = hashid
 
         # Update the index with an effective parameter hashid
-        agg.index['param_hashid'] = new_hashids
+        agg.index.loc[new_hashids.index, 'param_hashid'] = new_hashids
 
         return effective_params, mappings, hashid_to_params
 
@@ -542,13 +651,12 @@ class Aggregator:
             for group, num in macro_compatible_num.items():
                 if region_id in group:
                     region_to_num_compatible[region_id] += num
-        print('macro_compatible_num = {}'.format(ub.urepr(macro_compatible_num, nl=1)))
-        print('region_to_num_compatible = {}'.format(ub.urepr(region_to_num_compatible, nl=1)))
+        # print('macro_compatible_num = {}'.format(ub.urepr(macro_compatible_num, nl=1)))
+        # print('region_to_num_compatible = {}'.format(ub.urepr(region_to_num_compatible, nl=1)))
         return macro_compatible
 
-    def build_macro_averaged_comparable_tables(agg, rois=None):
-
-        macro_compatible = agg.find_macro_comparable()
+    def build_macro_table(agg, rois=None):
+        macro_compatible = agg.macro_compatible
 
         # Given a specific group of regions,
         if rois is None:
@@ -557,6 +665,9 @@ class Aggregator:
             regions_of_interest = {'BR_R002', 'KR_R001', 'KR_R002', 'AE_R001'}
             # regions_of_interest = {'KR_R001', 'KR_R002', 'BR_R002'}
             # regions_of_interest = {'KR_R001', 'KR_R002'}
+        elif isinstance(rois, str):
+            if rois == 'max':
+                regions_of_interest = ub.argmax(macro_compatible, key=len)
         else:
             regions_of_interest = rois
         comparable_groups = []
@@ -651,53 +762,11 @@ class Aggregator:
             'params': macro_df[agg.effective_params.columns],  # fixme, use real
             'metrics': macro_df[agg.metrics.columns],
         }
-        agg.macro_key_to_regions = {
-            macro_key: regions_of_interest,
-        }
+        agg.region_to_tables.pop(macro_key, None)
+        agg.macro_key_to_regions.pop(macro_key, None)
+        agg.macro_key_to_regions[macro_key] = regions_of_interest
         agg.region_to_tables[macro_key] = macro_results
         return macro_results
-
-    def macro_analysis(agg):
-        from watch.utils import result_analysis
-        results = []
-
-        region_id = ub.peek(agg.macro_key_to_regions.keys())
-        regions_of_interest = agg.macro_key_to_regions[region_id]
-        tables = agg.region_to_tables[region_id]
-
-        effective_params = tables['effective_params']
-        metrics = tables['metrics']
-        index = tables['index']
-
-        table = pd.concat([index, effective_params, metrics], axis=1)
-        table = table.fillna('None')
-
-        main_metric = agg.primary_metric_cols[0]
-
-        for idx, row in enumerate(table.to_dict('records')):
-            row = ub.udict(row)
-            row_metrics = row & set(metrics.keys())
-            row_params = row & set(effective_params.keys())
-            result = result_analysis.Result(str(idx), row_metrics, row_params)
-            results.append(result)
-
-        analysis = result_analysis.ResultAnalysis(
-            results, metrics=[main_metric],
-            metric_objectives={main_metric: 'max'}
-        )
-        analysis.analysis()
-        analysis.report()
-
-        model_cols = agg.model_cols
-        import kwplot
-        sns = kwplot.autosns()
-        sns = kwplot.autosns()
-        plt = kwplot.autoplt()
-        kwplot.figure()
-        x = 'bas_poly_eval.params.bas_poly.thresh'
-        sns.lineplot(data=table, x=x, y=main_metric, hue=model_cols[0], style=model_cols[0])
-        ax = plt.gca()
-        ax.set_title(f'BAS Macro Average over {regions_of_interest}')
 
     def visualize_cases(agg):
         region_id = 'macro_02_19bfe3'

@@ -1407,7 +1407,7 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
 
             for role_dets in requested_role_to_dets.values():
                 # TODO: better role handling
-                colors = role_dets.data['colors']
+                # colors = role_dets.data['colors']
                 draw_on_kwargs['labels'] = True
                 if verbose > 100:
                     print('About to draw dets on a canvas')
