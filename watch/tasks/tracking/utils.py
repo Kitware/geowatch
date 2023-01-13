@@ -1,7 +1,6 @@
 import kwimage
 import numpy as np
 import kwcoco
-from rasterio import features
 import shapely.geometry
 import ubelt as ub
 import pandas as pd
@@ -460,38 +459,28 @@ def score_poly(poly, probs, threshold=None, use_rasterio=True):
     # TODO standard coerce fns between kwimage, shapely, and __geo_interface__
     if not isinstance(poly, (kwimage.Polygon, kwimage.MultiPolygon)):
         poly = kwimage.MultiPolygon.from_shapely(poly)  # 2.4% of runtime
-    if 0:
-        # naive computation across the whole image
-        poly_mask = poly.to_mask(probs.shape).numpy().data
-        rel_mask, rel_probs = poly_mask, probs
-    else:
-        # First compute the valid bounds of the polygon
-        # And create a mask for only the valid region of the polygon
-        box = poly.bounding_box().quantize().to_xywh()
-        # Ensure box is inside probs
-        ymax, xmax = probs.shape[:2]
-        box = box.clip(0, 0, xmax, ymax).to_xywh()
-        if box.area[0][0] == 0:
-            warnings.warn(
-                'warning: scoring a polygon against an img with no overlap!')
-            return 0
-        x, y, w, h = box.data[0]
-        if use_rasterio:  # rasterio inverse
-            rel_poly = poly.translate((0.5 - x, 0.5 - y))
-            # TODO verify this works with shapely polys too
-            # or implement geo_interface in kwimage
-            # https://shapely.readthedocs.io/en/stable/manual.html#python-geo-interface
-            # 95% of runtime... would batch be faster?
-            rel_mask = features.rasterize([rel_poly.to_geojson()],
-                                          out_shape=(h, w))
-        else:  # kwimage inverse
-            rel_poly = poly.translate((-x, -y))
-            rel_mask = rel_poly.to_mask((h, w)).data
-        # Slice out the corresponding region of probabilities
-        rel_probs = probs[y:y + h, x:x + w]
-        # hacking to solve a bug: sometimes shape of rel_probs is x,y,1
-        if len(rel_probs.shape) == 3:
-            rel_probs = rel_probs[:, :, 0]
+
+    # First compute the valid bounds of the polygon
+    # And create a mask for only the valid region of the polygon
+    box = poly.bounding_box().quantize().to_xywh()
+    # Ensure box is inside probs
+    ymax, xmax = probs.shape[:2]
+    box = box.clip(0, 0, xmax, ymax).to_xywh()
+    if box.area[0][0] == 0:
+        warnings.warn(
+            'warning: scoring a polygon against an img with no overlap!')
+        return 0
+    x, y, w, h = box.data[0]
+    pixels_are = 'areas' if use_rasterio else 'points'
+    # kwimage inverse
+    # 95% of runtime... would batch be faster?
+    rel_poly = poly.translate((-x, -y))
+    rel_mask = rel_poly.to_mask((h, w), pixels_are=pixels_are).data
+    # Slice out the corresponding region of probabilities
+    rel_probs = probs[y:y + h, x:x + w]
+    # hacking to solve a bug: sometimes shape of rel_probs is x,y,1
+    if len(rel_probs.shape) == 3:
+        rel_probs = rel_probs[:, :, 0]
 
     # handle nans
     # TODO figure out np.ma to reduce redundancy
@@ -544,15 +533,17 @@ def mask_to_polygons(probs,
         >>> thresh = 0.5
         >>> polys = mask_to_polygons(probs, thresh, scored=True)
         >>> score1, poly1 = list(polys)[0]
-        >>> # xdoctest: +IGNORE_WANT
+        >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
         >>> kwplot.autompl()
         >>> kwplot.imshow(probs > 0.5)
 
-    Ignore:
+    Example:
         >>> from watch.tasks.tracking.utils import mask_to_polygons
         >>> import kwimage
-        >>> probs = kwimage.Heatmap.random(dims=(128, 128)
+        >>> import kwarray
+        >>> rng = kwarray.ensure_rng(1043462368)
+        >>> probs = kwimage.Heatmap.random(dims=(256, 256), rng=rng,
         >>>                                 ).data['class_probs'][0]
         >>> thresh = 0.5
         >>> polys1 = list(mask_to_polygons(
@@ -563,12 +554,25 @@ def mask_to_polygons(probs,
         >>>             probs, thresh, scored=1, use_rasterio=0))
         >>> polys4 = list(mask_to_polygons(
         >>>             probs, thresh, scored=1, use_rasterio=1))
-        >>> # xdoctest: +IGNORE_WANT
+        >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
         >>> kwplot.autompl()
-        >>> kwplot.imshow(probs > 0.5)
-        >>> for score, poly in polys:
-        >>>     poly.draw()
+        >>> plt = kwplot.autoplt()
+        >>> pnum_ = kwplot.PlotNums(nSubplots=4)
+        >>> kwplot.imshow(probs, pnum=pnum_(), title='pixels_are=points, scored=0')
+        >>> for poly in polys1:
+        >>>     poly.draw(facecolor='none', edgecolor='kitware_blue', alpha=0.5, linewidth=8)
+        >>> kwplot.imshow(probs, pnum=pnum_(), title='pixels_are=areas, scored=0')
+        >>> for poly in polys2:
+        >>>     poly.draw(facecolor='none', edgecolor='kitware_green', alpha=0.5, linewidth=8)
+        >>> kwplot.imshow(probs, pnum=pnum_(), title='pixels_are=points, scored=1')
+        >>> for score, poly in polys3:
+        >>>     poly.draw(facecolor='none', edgecolor='kitware_blue', alpha=0.5, linewidth=8)
+        >>>     plt.text(*poly.centroid, f'{score:0.2f}', color='orange', fontdict={'size': 'large', 'weight': 'bold'})
+        >>> kwplot.imshow(probs, pnum=pnum_(), title='pixels_are=areas, scored=1')
+        >>> for score, poly in polys4:
+        >>>     poly.draw(facecolor='none', edgecolor='kitware_green', alpha=0.5, linewidth=8)
+        >>>     plt.text(*poly.centroid, f'{score:0.2f}', color='orange', fontdict={'size': 'large', 'weight': 'bold'})
     """
     # Threshold scores
     if thresh_hysteresis is None:
@@ -579,6 +583,8 @@ def mask_to_polygons(probs,
         label_img = ndm_label(mask)[0]
         selected = np.unique(np.extract(seeds, label_img))
         binary_mask = np.isin(label_img, selected).astype(np.uint8)
+
+    pixels_are = 'areas' if use_rasterio else 'points'
     if bounds is not None:
         try:  # is this a shapely or geojson object?
             # asShape is being deprecated:
@@ -586,27 +592,12 @@ def mask_to_polygons(probs,
             bounds = shapely.geometry.shape(bounds)
         except ValueError:  # is this a kwimage object?
             bounds = bounds.to_shapely()
-        if use_rasterio:
-            # TODO needed?
-            # x, y order for shapely
-            bounds = shapely.affinity.translate(bounds, 0.5, 0.5)
-            # TODO investigate all_touched option
-            bounds_mask = features.rasterize([bounds],
-                                             dtype=np.uint8,
-                                             out_shape=binary_mask.shape[:2])
-        else:
-            bounds_mask = kwimage.Polygon.from_shapely(bounds).to_mask(
-                probs.shape).numpy().data.astype(np.uint8)
+        bounds_mask = kwimage.Polygon.from_shapely(bounds).to_mask(
+            probs.shape, pixels_are=pixels_are).numpy().data.astype(np.uint8)
         binary_mask *= bounds_mask
 
-    if use_rasterio:
-        shapes = features.shapes(binary_mask)
-        polygons = [
-            kwimage.Polygon.from_geojson(s).translate((-0.5, -0.5))
-            for s, v in shapes if v
-        ]
-    else:
-        polygons = kwimage.Mask(binary_mask, 'c_mask').to_multi_polygon()
+    polygons = kwimage.Mask(
+        binary_mask, 'c_mask').to_multi_polygon(pixels_are=pixels_are)
 
     if scored:
         for poly in polygons:
