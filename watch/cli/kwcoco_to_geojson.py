@@ -153,6 +153,7 @@ class KWCocoToGeoJSONConfig(scfg.DataConfig):
 
             Valid params for each track_fn are: {_trackfn_details_docs}
             '''), group='track')
+    viz_out_dir = scfg.Value(None)
     site_summary = scfg.Value(None, help=ub.paragraph(
             '''
             A filepath glob or json blob containing either a
@@ -1194,7 +1195,7 @@ def main(args=None, **kwargs):
     """
     coco_dset = watch.tasks.tracking.normalize.run_tracking_pipeline(
         coco_dset, track_fn=track_fn, gt_dset=gt_dset,
-        **track_kwargs)
+        viz_out_dir=args.viz_out_dir, **track_kwargs)
 
     # Measure how long tracking takes
     proc_context.stop()

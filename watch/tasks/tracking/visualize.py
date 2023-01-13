@@ -111,11 +111,10 @@ def get_heatmap(dset, gid, key):
 
 def visualize_videos(pred_dset,
                      true_dset,
-                     out_dir='./_assets',
+                     out_dir,
                      hide_axis=False,
                      coco_dset_sc=None):
     import matplotlib.pyplot as plt
-    os.makedirs(out_dir, exist_ok=True)
     for vidid, _ in pred_dset.index.videos.items():
         gids = pred_dset.index.vidid_to_gids[vidid]
 

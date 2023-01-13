@@ -314,7 +314,7 @@ def gpd_compute_scores(gdf,
         gid = getattr(grp, 'name', None)
         if gid is None:
             for thr in thrs:
-                grp[[(k, thr) for k in keys]] = 0
+                grp[[(k, thr) for k in ks]] = 0
         else:
             heatmaps = []
             keys = list(set().union(itertools.chain.from_iterable(ks.values())))
@@ -363,6 +363,7 @@ def gpd_compute_scores(gdf,
 
     else:  # 95% runtime
         grouped = gdf.groupby('gid', group_keys=False)
+        # import xdev; xdev.embed()
         gdf = grouped.apply(compute_scores, thrs=thrs, ks=ks)
 
     # fill nan scores from nodata pxls
@@ -611,6 +612,7 @@ def _validate_keys(key, bg_key):
 @profile
 def build_heatmaps(sub_dset: kwcoco.CocoDataset,
                    gids: List[int],
+                   # TODO debug List
                    keys: Union[List[str], Dict[str, List[str]]],
                    missing='fill',
                    skipped='interpolate',

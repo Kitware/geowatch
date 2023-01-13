@@ -28,6 +28,8 @@ try:
 except Exception:
     profile = ub.identity
 
+VIZ_DPATH = None
+
 #
 # --- aggregation functions for heatmaps ---
 #
@@ -156,6 +158,16 @@ def probs(heatmaps, norm_ord, morph_kernel, thresh):
 
     hard_probs = kwimage.morphology(probs > thresh, 'dilate', morph_kernel)
     modulated_probs = probs * hard_probs
+
+    if VIZ_DPATH is not None:
+        kwimage.imwrite(VIZ_DPATH / '0.png', (probs * 255).astype(np.uint8))
+        kwimage.imwrite(VIZ_DPATH / '0.tiff', probs)
+
+        kwimage.imwrite(VIZ_DPATH / '1.png', (hard_probs * 255).astype(np.uint8))
+        kwimage.imwrite(VIZ_DPATH / '1.tiff', hard_probs)
+
+        kwimage.imwrite(VIZ_DPATH / '2.png', (modulated_probs * 255).astype(np.uint8))
+        kwimage.imwrite(VIZ_DPATH / '2.tiff', modulated_probs)
 
     return modulated_probs
 
@@ -618,9 +630,9 @@ def time_aggregated_polys(
     ks = {'fg': key, 'bg': bg_key}
 
     # 95% of runtime
-    # _TRACKS = gpd_compute_scores(_TRACKS, sub_dset, thrs, ks, USE_DASK=False)
+    _TRACKS = gpd_compute_scores(_TRACKS, sub_dset, thrs, ks, USE_DASK=False)
     # 63% of runtime
-    _TRACKS = gpd_compute_scores(_TRACKS, sub_dset, thrs, ks, USE_DASK=True)
+    # _TRACKS = gpd_compute_scores(_TRACKS, sub_dset, thrs, ks, USE_DASK=True)
     # dask could unsort
     _TRACKS = gpd_sort_by_gid(_TRACKS.reset_index(), sorted_gids)
 
@@ -760,11 +772,22 @@ def heatmaps_to_polys(heatmaps, bounds, agg_fn, thresh, morph_kernel,
 
     _agg_fn = AGG_FN_REGISTRY[agg_fn]
 
+    viz_n_window = 0
+
     def _process_1_step(heatmaps):
+        nonlocal viz_n_window
+        global VIZ_DPATH
+        if VIZ_DPATH is not None:
+            VIZ_DPATH = (VIZ_DPATH / f'heatmaps_{viz_n_window}').mkdir(exist_ok=True)
+
         aggregated = _agg_fn(heatmaps,
                              thresh=thresh,
                              morph_kernel=morph_kernel,
                              norm_ord=norm_ord)
+
+        if VIZ_DPATH is not None:
+            VIZ_DPATH = VIZ_DPATH.parent
+            viz_n_window += 1
 
         polygons = list(
             mask_to_polygons(aggregated,
@@ -1091,6 +1114,7 @@ class TimeAggregatedBAS(NewTrackFunction):
     max_area_behavior: str = 'drop'
     polygon_simplify_tolerance: Union[None, float] = None
     resolution: Optional[str] = None
+    viz_out_dir: Optional[ub.Path] = None
 
     inner_window_size : Optional[str] = None
     inner_agg_fn : Optional[str] = None
@@ -1100,6 +1124,20 @@ class TimeAggregatedBAS(NewTrackFunction):
         _resolve_arg_values(self)
 
     def create_tracks(self, sub_dset):
+
+        global VIZ_DPATH
+        VIZ_DPATH = self.viz_out_dir
+        # HACK
+        # TypeError: Object of type Path is not JSON serializable
+        # it should be!
+        self.viz_out_dir = None
+
+        if VIZ_DPATH is not None:
+            from dataclasses import asdict
+            import json
+            with open(VIZ_DPATH / 'track_fn.json', 'w') as f:
+                json.dump(asdict(self), f, indent=2)
+
         aggkw = ub.compatible(self.__dict__, time_aggregated_polys)
         tracks = time_aggregated_polys(sub_dset, **aggkw)
         return tracks

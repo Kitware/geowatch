@@ -623,8 +623,7 @@ def normalize(
         coco_dset,
         track_fn,
         gt_dset=None,
-        viz_sc_bounds=False,
-        viz_videos=False,
+        viz_out_dir=None,
         use_viterbi=False,
         # t_probs=None,  # for viterbi
         # e_probs=None,  # for viterbi
@@ -686,7 +685,13 @@ def normalize(
     if DEBUG_JSON_SERIALIZABLE:
         from watch.utils.util_json import debug_json_unserializable
 
-    viz_out_dir = ub.Path('_assets/tracking_visualization')
+    if viz_out_dir is not None:
+        try:
+            viz_out_dir = ub.Path(viz_out_dir)
+        except TypeError:
+            viz_out_dir = ub.Path('_assets/tracking_visualization')
+            print(f'setting default {viz_out_dir=}')
+        viz_out_dir.mkdir(parents=True, exist_ok=True)
 
     def _normalize_annots(coco_dset):
         print(f'coco_dset.n_anns={coco_dset.n_annots}')
@@ -718,7 +723,7 @@ def normalize(
     if DEBUG_JSON_SERIALIZABLE:
         debug_json_unserializable(coco_dset.dataset, 'Before apply_per_video: ')
 
-    tracker: TrackFunction = track_fn(**track_kwargs)
+    tracker: TrackFunction = track_fn(**track_kwargs, viz_out_dir=viz_out_dir)
     print('track_kwargs = {}'.format(ub.repr2(track_kwargs, nl=1)))
     print('{} {}'.format(tracker.__class__.__name__, ub.repr2(tracker.__dict__, nl=1)))
     out_dset = tracker.apply_per_video(coco_dset)
@@ -735,7 +740,7 @@ def normalize(
     out_dset = dedupe_tracks(out_dset)
     out_dset = add_track_index(out_dset)
 
-    if viz_sc_bounds:
+    if viz_out_dir is not None:
         from watch.tasks.tracking.visualize import keys_to_score_sc, viz_track_scores
         from watch.heuristics import SITE_SUMMARY_CNAME
         track_cats = [SITE_SUMMARY_CNAME] + sorted(set(out_dset.annots().cnames))
@@ -773,19 +778,15 @@ def normalize(
     if DEBUG_JSON_SERIALIZABLE:
         debug_json_unserializable(out_dset.dataset, 'Output of normalize: ')
 
-    if viz_videos:
-        # TODO: Remove this option, have the user call visualize videos on the
-        # output if they want that. However, what we DO want is a way to dump
-        # and visualize the data the tracker is using to make decisions.
-        # It would be even nicer if there was some way to aggregate that with
-        # smartwatch visualize video
-
+    if viz_out_dir is not None and gt_dset is not None:
         # visualize predicted sites with true sites
+        # TODO needs a refactor
         from .visualize import visualize_videos
         visualize_videos(out_dset,
                          gt_dset,
                          viz_out_dir,
                          coco_dset_sc=track_kwargs.get('coco_dset_sc'))
+
     return out_dset
 
 
