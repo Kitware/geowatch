@@ -236,43 +236,26 @@ test_full_strict/conda-linux:
     needs: []
 
 
-## We are going to completely disable this because build and upload effectively does it.
-#build_docker_strict:
+# Failing on main, and hasn't been used in awhile (as of 2022-01-13), just
+# disable it.
+#build_docker_and_upload_strict:
 #  <<:
 #    *common_template_docker
 #  rules:
 #    - <<: *if-merged-into-default
-#    #- <<: *if-merge-request
 #  stage:
 #    docker
 #  script:
 #    - docker build --build-arg BUILD_STRICT=1 -t $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG .
 #    - docker run --rm $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG /bin/bash -c "source /opt/conda/etc/profile.d/conda.sh && conda activate watch && cd /watch && python run_tests.py watch tests scripts"
+#    # Pushing container only if merging into default branch (i.e. "master")
+#    - echo "docker push $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG"
+#    - docker push $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG
 #  image:
 #    docker:19.03.12
 #  variables:
 #    IMAGE_TAG: latest
 #  needs: []
-
-
-build_docker_and_upload_strict:
-  <<:
-    *common_template_docker
-  rules:
-    - <<: *if-merged-into-default
-  stage:
-    docker
-  script:
-    - docker build --build-arg BUILD_STRICT=1 -t $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG .
-    - docker run --rm $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG /bin/bash -c "source /opt/conda/etc/profile.d/conda.sh && conda activate watch && cd /watch && python run_tests.py watch tests scripts"
-    # Pushing container only if merging into default branch (i.e. "master")
-    - echo "docker push $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG"
-    - docker push $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG
-  image:
-    docker:19.03.12
-  variables:
-    IMAGE_TAG: latest
-  needs: []
 
 
 .__local_docker_heredoc__:
