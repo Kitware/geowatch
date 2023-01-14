@@ -48,7 +48,7 @@ class WatchCocoStats(scfg.Config):
         config = WatchCocoStats(kw, cmdline=cmdline)
 
         fpaths = config['src']
-        rich.print('config = {}'.format(ub.repr2(config, nl=1, sort=0)))
+        rich.print('config = {}'.format(ub.repr2(dict(config), nl=1, sort=0)))
 
         if isinstance(fpaths, str):
             if ',' in fpaths:
@@ -91,14 +91,15 @@ class WatchCocoStats(scfg.Config):
         import math
         all_sensors = sorted(all_sensors)
         if video_sensor_rows:
-            video_sensor_df = pd.DataFrame(video_sensor_rows)
-            piv = video_sensor_df.pivot(index=['name', 'dset'], columns=[], values=all_sensors)
-            piv = piv.sort_index()
-            piv = piv.astype(object)
-            piv = piv.applymap(lambda x: None if math.isnan(x) else int(x))
-            piv['total'] = piv.sum(axis=1)
-            print('Per-Video Sensor Frequency')
-            rich.print(piv.to_string(float_format='%0.0f'))
+            if config['with_video_info']:
+                video_sensor_df = pd.DataFrame(video_sensor_rows)
+                piv = video_sensor_df.pivot(index=['name', 'dset'], columns=[], values=all_sensors)
+                piv = piv.sort_index()
+                piv = piv.astype(object)
+                piv = piv.applymap(lambda x: None if math.isnan(x) else int(x))
+                piv['total'] = piv.sum(axis=1)
+                print('Per-Video Sensor Frequency')
+                rich.print(piv.to_string(float_format='%0.0f'))
         else:
             print('No per-video stats')
 
