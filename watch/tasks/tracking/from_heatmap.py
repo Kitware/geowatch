@@ -12,6 +12,7 @@ import numpy as np
 import ubelt as ub
 import geopandas as gpd
 import itertools
+import math
 from typing import Iterable, Tuple, Union, Optional, Literal
 from dataclasses import dataclass
 from shapely.ops import unary_union
@@ -577,6 +578,9 @@ def heatmaps_to_polys(heatmaps, bounds, agg_fn, thresh, morph_kernel,
                              thresh_hysteresis=thresh_hysteresis,
                              bounds=bounds))
         return polygons
+
+    if isinstance(moving_window_size, float) and math.isnan(moving_window_size):
+        moving_window_size = None
 
     # calculate number of moving-window steps, based on window_size and number
     # of heatmaps
