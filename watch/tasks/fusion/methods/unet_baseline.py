@@ -18,7 +18,7 @@ from watch.tasks.fusion.methods.watch_module_mixins import WatchModuleMixins
 from watch.tasks.fusion.architectures import unet_blur
 
 import numpy as np
-from typing import  Dict, Any
+from typing import Dict, Any
 
 try:
     import xdev
@@ -415,19 +415,19 @@ class UNetBaseline(pl.LightningModule, WatchModuleMixins):
 
     def encode_frame(self, processed_frame):
         return {
-            key: self.sensor_channel_tokenizers[key](data["data"][None])[0] # shape=[C, H, W]
+            key: self.sensor_channel_tokenizers[key](data["data"][None])[0]  # shape=[C, H, W]
             for key, data in processed_frame.items()
             if key in self.sensor_channel_tokenizers.keys()
-        } # length = num_modes
+        }  # length = num_modes
 
     def encode_example(self, processed_example):
         return torch.stack([
             torch.stack(
-                list(frame.values()), # shape=[num_modes, C, H, W]
+                list(frame.values()),  # shape=[num_modes, C, H, W]
                 dim=0,
-            ).mean(dim=0) # shape=[C, H, W]
+            ).mean(dim=0)  # shape=[C, H, W]
             for frame in map(self.encode_frame, processed_example)
-        ], dim=1) # shape=[C, num_frames, H, W]
+        ], dim=1)  # shape=[C, num_frames, H, W]
 
     def encode_batch(self, processed_batch):
         encoded_examples = list(map(self.encode_example, processed_batch))
@@ -442,10 +442,10 @@ class UNetBaseline(pl.LightningModule, WatchModuleMixins):
                 ex,
                 # F.pad pairs padding values IN REVERSE ORDER, below is correct
                 (
-                    0, 0, #W-ex.shape[3],
-                    0, 0, #H-ex.shape[2],
+                    0, 0,  # W-ex.shape[3],
+                    0, 0,  # H-ex.shape[2],
                     0, T - ex.shape[1],
-                    0, 0, #C-ex.shape[0],
+                    0, 0,  # C-ex.shape[0],
                 ),
                 mode="constant", value=0,
             )

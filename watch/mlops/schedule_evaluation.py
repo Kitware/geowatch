@@ -247,9 +247,6 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
     root_dpath = ub.Path(config['root_dpath'])
 
-    # Expand paramater search grid
-    all_param_grid = expand_param_grid(config['params'])
-
     # Load the requested pipeline
     dag = smart_pipeline.make_smart_pipeline(config['pipeline'])
     dag.print_graphs()
@@ -281,9 +278,15 @@ def schedule_evaluation(cmdline=False, **kwargs):
     if virtualenv_cmd:
         queue.add_header_command(virtualenv_cmd)
 
-    max_configs = config['max_configs']
-    if max_configs is not None:
-        all_param_grid = all_param_grid[0:max_configs]
+    # Expand paramater search grid
+    if config['params'] is not None:
+        all_param_grid = expand_param_grid(config['params'])
+
+        max_configs = config['max_configs']
+        if max_configs is not None:
+            all_param_grid = all_param_grid[0:max_configs]
+    else:
+        all_param_grid = []
 
     # Configure a DAG for each row.
     for row_config in ub.ProgIter(all_param_grid, desc='configure dags', verbose=3):
@@ -300,6 +303,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
         varied = varied_values(longparams, min_variations=2, dropna=False)
         relevant = longparams[longparams.columns.intersection(varied)]
         from watch.utils import slugify_ext
+
         def pandas_preformat(item):
             if isinstance(item, str):
                 return slugify_ext.smart_truncate(item, max_length=16, trunc_loc=0)
@@ -327,6 +331,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
     # RUN
     if config['run']:
         # ub.cmd('bash ' + str(driver_fpath), verbose=3, check=True)
+        ub.ensuredir(dag.root_dpath)
         queue.run(
             block=True,
             # not in cmd_queue 0.1.2?

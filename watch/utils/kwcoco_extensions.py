@@ -556,25 +556,11 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
                 obj_to_wld = kwimage.Affine.coerce(hack_aff)
                 # cv2.getAffineTransform(utm_corners, pxl_corners)
 
-                wgs84_crs_info = ub.dict_diff(info['wgs84_crs_info'], {'type'})
-                if wgs84_crs_info['axis_mapping'] == 'OAMS_AUTHORITY_COMPLIANT':
-                    geos_corners = kwimage.Polygon.coerce(info['wgs84_corners']).swap_axes().to_geojson()
-                else:
-                    geos_corners = kwimage.Polygon.coerce(info['wgs84_corners']).to_geojson()
-                geos_crs_info = {
-                    'axis_mapping': 'OAMS_TRADITIONAL_GIS_ORDER',
-                    'auth': ('EPSG', '4326')
-                }
-                geos_corners['properties'] = {'crs_info': geos_crs_info}
-
+                geos_corners = info['geos_corners']
                 wld_crs_info = ub.dict_diff(info['wld_crs_info'], {'type'})
-                utm_crs_info = ub.dict_diff(info['utm_crs_info'], {'type'})
                 obj.update({
                     'geos_corners': geos_corners,  # always in geojson
-                    'wgs84_corners': info['wgs84_corners'].data.tolist(),
-                    'utm_corners': info['utm_corners'].data.tolist(),
                     'wld_crs_info': wld_crs_info,
-                    'utm_crs_info': utm_crs_info,
                 })
                 obj['band_metas'] = info['band_metas']
                 obj['is_rpc'] = info['is_rpc']
@@ -681,12 +667,12 @@ def _coerce_overwrite(overwrite):
 #     if dem_hint == 'ignore':
 #         metakw['elevation'] = 0
 
-#     # only need rpc info, wgs84_corners, and and warps
+#     # only need rpc info, geos_corners, and and warps
 #     keys_of_interest = {
 #         'rpc_transform',
 #         'is_rpc',
 #         'wgs84_to_wld',
-#         'wgs84_corners',
+#         'geos_corners',
 #         'wld_to_pxl',
 #     }
 
@@ -1735,8 +1721,10 @@ def _recompute_auxiliary_transforms(img):
 
     warp_wld_to_img = warp_img_to_wld.inv()
     img.update(ub.dict_isect(base, {
-        'utm_corners', 'wld_crs_info', 'utm_crs_info',
-        'width', 'height', 'wgs84_to_wld',
+        'geos_corners',
+        'wld_crs_info',
+        'width', 'height',
+        'wgs84_to_wld',
         'wld_to_pxl',
     }))
     if 'width' not in img and 'height' not in img:
@@ -1934,7 +1922,7 @@ def warp_annot_segmentations_from_geos(coco_dset):
 #     df_input = []
 #     for gid, img in coco_dset.index.imgs.items():
 #         info  = img['geotiff_metadata']
-#         kw_img_poly = kwimage.Polygon(exterior=info['wgs84_corners'])
+#         kw_img_poly = kwimage.Polygon(exterior=info['geos_corners'])
 #         sh_img_poly = kw_img_poly.to_shapely()
 #         df_input.append({
 #             'gid': gid,

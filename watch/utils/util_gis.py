@@ -809,14 +809,32 @@ def coerce_geojson_datas(arg, format='dataframe', allow_raw=False, workers=0,
     if format not in {'json', 'dataframe'}:
         raise KeyError(format)
 
+    def is_iterable_sequence(item, strok=False):
+        """
+        Check if it is a non-string, non-mapping type of iterable.
+        """
+        if ub.iterable(item, strok=strok):
+            if hasattr(item, 'keys'):
+                return False
+            else:
+                return True
+        else:
+            return True
+
     if allow_raw:
         # Normally the function assumes we are only inputing things that are
         # coercable to paths, and then to geojson. But sometimes we might want
         # to pass around that data directly. In this case, grab those items
         # first, and then resolve the rest of them.
+
+        if is_iterable_sequence(arg):
+            iterable_arg = arg
+        else:
+            iterable_arg = [arg]
+
         raw_items = []
         other_items = []
-        for item in ([arg] if not isinstance(arg, list) else arg):
+        for item in iterable_arg:
             was_raw, item = _coerce_raw_geojson(item, format)
             if was_raw:
                 raw_items.append(item)
@@ -1064,3 +1082,86 @@ def load_geojson_datas(geojson_fpaths, format='dataframe', workers=0,
             'format': format,
         }
         yield info
+
+
+def crs_geojson_to_gdf(geometry, crs_info=None):
+    """
+    TODO: fix the name and scope of this function.
+
+    The idea is to convert one of our CRS aware geojson geometries to a
+    GeoDataFrame for manipulation.
+
+    Args:
+        geometry :
+            This is a geojson geometry object with that has a crs_info object
+            in its properties.
+
+        crs_info (Dict | None):
+            if the geojson does not have a crs_info in its properties you
+            can specify it here.
+
+    Returns:
+        gpd.GeoDataFrame
+
+    Example:
+        >>> from watch.gis.geotiff import *  # NOQA
+        >>> from watch.utils.util_gis import *  # NOQA
+        >>> import kwimage
+        >>> from watch.demo.dummy_demodata import dummy_rpc_geotiff_fpath
+        >>> gpath_or_ref = gpath = dummy_rpc_geotiff_fpath()
+        >>> info = geotiff_crs_info(gpath)
+        >>> # Case 1: Traditional CRS84 Geojson
+        >>> geometry = info['geos_corners']
+        >>> gdf = crs_geojson_to_gdf(geometry)
+        >>> assert gdf.crs.axis_info[0].name == 'Geodetic longitude'
+        >>> assert gdf.crs.axis_info[1].name == 'Geodetic latitude'
+        >>> # Case 2: Authority Compliant WGS84 Geojson
+        >>> wgs84_poly = kwimage.Polygon.coerce(info['wgs84_corners'])
+        >>> wgs84_geometry = wgs84_poly.to_geojson()
+        >>> wgs84_geometry['properties'] = {'crs_info': info['wgs84_crs_info']}
+        >>> crs84_gdf = crs_geojson_to_gdf(wgs84_geometry)
+        >>> assert crs84_gdf.crs.axis_info[0].name == 'Geodetic longitude'
+        >>> assert crs84_gdf.crs.axis_info[1].name == 'Geodetic latitude'
+        >>> # Case 3: UTM
+        >>> utm_poly = kwimage.Polygon.coerce(info['utm_corners'])
+        >>> utm_geometry = utm_poly.to_geojson()
+        >>> utm_geometry['properties'] = {'crs_info': info['utm_crs_info']}
+        >>> utm_gdf = crs_geojson_to_gdf(utm_geometry)
+        >>> assert utm_gdf.crs.axis_info[0].name == 'Easting'
+        >>> assert utm_gdf.crs.axis_info[1].name == 'Northing'
+    """
+    import kwimage
+    import geopandas as gpd
+    geos_crs_info = geometry['properties'].get('crs_info', None)
+    if geos_crs_info is None:
+        geos_crs_info = crs_info
+    if geos_crs_info is None:
+        raise Exception("we need crs_info")
+    # TODO: better way to get generic Polygon / Multipolygon from shaley in
+    # kwimage.
+    kw_geom = kwimage.structs.segmentation._coerce_coco_segmentation(geometry)
+    # sh_geom = kwimage.MultiPolygon.from_geojson(geometry).to_shapely()
+    auth = geos_crs_info['auth']
+    if isinstance(auth, tuple):
+        auth = list(auth)
+    if auth == ['EPSG', '4326']:
+        # TODO:
+        # - [ ] Handle general axis_mapping issues
+        if geos_crs_info['axis_mapping'] != 'OAMS_TRADITIONAL_GIS_ORDER':
+            if geos_crs_info['axis_mapping'] == 'OAMS_AUTHORITY_COMPLIANT':
+                kw_geom = kw_geom.swap_axes()
+            else:
+                raise NotImplementedError(
+                    'geojson should be in traditional order. i.e. crs84'
+                )
+        crs = get_crs84()
+    else:
+        from pyproj import CRS
+        crs = CRS.from_user_input(geos_crs_info['auth'])
+        if geos_crs_info['axis_mapping'] != 'OAMS_AUTHORITY_COMPLIANT':
+            raise NotImplementedError(
+                f'Non-CRS84 should be authority compliant. Got: {geos_crs_info}'
+            )
+    sh_geom = kw_geom.to_shapely()
+    gdf = gpd.GeoDataFrame({'geometry': [sh_geom]}, crs=crs)
+    return gdf

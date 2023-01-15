@@ -210,7 +210,7 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             not
             ''')),
 
-        'include_sensors': scfg.Value(None, help='if specified can be comma separated valid sensors'),
+        'include_sensors': scfg.Value(None, help='if specified can be comma separated valid sensors. NOTE: this should be specified via a sensorchan speci in channels instead'),
 
         'exclude_sensors': scfg.Value(None, type=str, help=ub.paragraph(
             '''
@@ -278,11 +278,6 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             (an ILP solution). If None is passed, set cover is not computed.
             The 'exact' method requires the pulp package (and can be very slow
             so it is generally not recommended).
-            ''')),
-
-        'temporal_dropout': scfg.Value(0.0, type=float, help=ub.paragraph(
-            '''
-            Drops frames in a fraction of training batches
             ''')),
 
         'time_sampling': scfg.Value('contiguous', type=str, help=ub.paragraph(
@@ -367,7 +362,36 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             '''
             If true, will cache the spacetime grid to make multiple
             runs quicker.
-            '''))
+            ''')),
+
+        ### Augmentation
+        ### TODO: these should likely become a nested jsonargparse
+        ### style config for a more general "augmentation scheme".
+
+        'augment_space_shift_rate': scfg.Value(0.9, help=ub.paragraph(
+            '''
+            In fit mode, perform translation augmentations this fraction of the
+            time.
+            ''')),
+
+        'augment_space_xflip': scfg.Value(True, help=ub.paragraph(
+            '''In fit mode, if true, perform random x-flips''')),
+
+        'augment_space_yflip': scfg.Value(True, help=ub.paragraph(
+            '''In fit mode, if true, perform random y-flips''')),
+
+        'augment_space_rot': scfg.Value(True, help=ub.paragraph(
+            '''In fit mode, if true, perform random 90 degree rotations''')),
+
+        'augment_time_resample_rate': scfg.Value(0.8, help=ub.paragraph(
+            '''
+            In fit mode, perform temporal jitter this fraction of the time.
+            ''')),
+
+        'temporal_dropout': scfg.Value(0.0, type=float, help=ub.paragraph(
+            '''
+            Drops frames in a fraction of training batches
+            ''')),
     }
 
     def normalize(self):
@@ -2125,11 +2149,12 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             Build an intermediate summary to display to the user while this is
             running.
             """
-            if mprog.use_rich:
+            if pman.backend == 'rich':
                 stat_lines = ['Current Estimated Dataset Statistics: ']
                 if with_intensity:
                     input_stats = current_input_stats()
-                    intensity_info_text = 'Spectra Stats: ' + ub.urepr(input_stats, with_dtype=False, precision=4)
+                    input_stats2 = {sc: {k: v.ravel() for k, v in stats.items()} for sc, stats in input_stats.items()}
+                    intensity_info_text = 'Spectra Stats: ' + ub.urepr(input_stats2, with_dtype=False, precision=4)
                     stat_lines.append(intensity_info_text)
                 if with_class:
                     class_stats = ub.sorted_vals(ub.dzip(classes, total_freq), reverse=True)
@@ -2140,7 +2165,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     stat_lines.append('Unique Video Samples: {}'.format(len(video_id_histogram)))
                 info_text = '\n'.join(stat_lines).strip()
                 if info_text:
-                    mprog.update_info(info_text)
+                    pman.update_info(info_text)
             else:
                 if with_class:
                     intermediate = ub.sorted_vals(ub.dzip(classes, total_freq), reverse=True)
@@ -2164,13 +2189,14 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 prog.set_postfix_str(text)
 
         from watch.utils import util_progress
-        USE_RICH_UPDATES = 1
-        mprog = util_progress.MultiProgress(use_rich=USE_RICH_UPDATES)
+        from watch.utils import util_environ
+        USE_RICH_UPDATES = util_environ.envflag('USE_RICH_UPDATES', 1)
+        pman = util_progress.ProgressManager(
+            backend='rich' if USE_RICH_UPDATES else 'progiter')
         # TODO: we can compute the intensity histogram more efficiently by
         # only doing it for unique channels (which might be duplicated)
-
-        with mprog:
-            prog = mprog.progiter(loader, desc='estimate dataset stats', verbose=1)
+        with pman:
+            prog = pman.progiter(loader, desc='estimate dataset stats', verbose=1)
             iter_ = iter(prog)
 
             for batch_items in iter_:
@@ -2472,6 +2498,7 @@ def _coerce_ndsampler(data):
 
 class FailedSample(Exception):
     ...
+
 
 # Backwards compat
 sample_video_spacetime_targets = spacetime_grid_builder.sample_video_spacetime_targets

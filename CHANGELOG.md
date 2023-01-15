@@ -8,10 +8,19 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 * Add new CLI tool: `smartwatch coco_clean_geotiffs` to fix NODATA values directly in geotiffs
-* New `util_prog.py` with experimental `MultiProgress` class to generalize ProgIter and rich.
+* New `util_prog.py` with experimental `ProgressManager` class to generalize ProgIter and rich.
 * Add `smartwatch visualize` option `--resolution` to specify the resolution to output the visualization at (e.g. "10GSD")
 * Add `smartwatch visualize` option `--role_order` for showing different annotation roles on different channel stacks.
 * Experimental new logic in `smartwatch project` for keyframe propagation / interpolation.
+
+### Fixed
+* Switched scriptconfig objects to use "data=kwargs" rather than "default=kwargs" to avoid a copy issue.
+* `find_dvc_dpath` no longer is impacted by environment variables.
+
+
+### Deprecated
+* `add_watch_fields` no longer populates `wgs84_corners`, `wgs84_crs_info`,
+  `utm_corners`, and `utm_crs_info`, which are redundant with `geos_corners`.
 
 
 ## Version 0.3.8 - Target 2022-12-31

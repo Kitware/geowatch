@@ -114,6 +114,7 @@ class PerterbModel:
         >>> kwplot.imshow(legend, pnum=pnum_())
         >>> kwplot.show_if_requested()
     """
+
     def __init__(self, noise=0.0, performer_id='alice', rng=None, **kwargs):
         self.rng = rng
         self.performer_id = performer_id

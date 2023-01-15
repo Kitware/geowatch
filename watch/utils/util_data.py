@@ -244,9 +244,12 @@ class DataRegistry:
                 -float('inf'))[::-1]
         return results
 
-    def find(self, on_error="raise", envvar='DVC_DPATH', **kwargs):
+    def find(self, on_error="raise", envvar=None, **kwargs):
         name = kwargs.get('name', None)
-        environ_dvc_dpath = os.environ.get(envvar, "")
+        if envvar is not None:
+            environ_dvc_dpath = os.environ.get(envvar, "")
+        else:
+            environ_dvc_dpath = None
         if environ_dvc_dpath and name is None:
             results = [ub.Path(environ_dvc_dpath)]
         else:

@@ -291,9 +291,9 @@ def main(cmdline=True, **kw):
         >>>     meta['filename_meta']['acquisition_date'])
         >>> date_captured = dt.strftime('%Y/%m/%d')
         >>> gid = coco_dset.add_image(file_name=fpath, date_captured=date_captured)
-        >>> dummy_poly = kwimage.Polygon(exterior=meta['wgs84_corners'])
+        >>> dummy_poly = kwimage.Polygon.from_geojson(meta['geos_corners'])
         >>> dummy_poly = dummy_poly.scale(0.3, about='center')
-        >>> sseg_geos = dummy_poly.swap_axes().to_geojson()
+        >>> sseg_geos = dummy_poly.to_geojson()
         >>> # NOTE: script is not always robust to missing annotation
         >>> # information like segmentation and bad bbox, but for this
         >>> # test config it is
@@ -336,9 +336,9 @@ def main(cmdline=True, **kw):
         >>>     meta['filename_meta']['acquisition_date'])
         >>> date_captured = dt.strftime('%Y/%m/%d')
         >>> gid = coco_dset.add_image(file_name=fpath, date_captured=date_captured)
-        >>> dummy_poly = kwimage.Polygon(exterior=meta['wgs84_corners'])
+        >>> dummy_poly = kwimage.Polygon.from_geojson(meta['geos_corners'])
         >>> dummy_poly = dummy_poly.scale(0.3, about='center')
-        >>> sseg_geos = dummy_poly.swap_axes().to_geojson()
+        >>> sseg_geos = dummy_poly.to_geojson()
         >>> # NOTE: script is not always robust to missing annotation
         >>> # information like segmentation and bad bbox, but for this
         >>> # test config it is
@@ -512,15 +512,24 @@ def main(cmdline=True, **kw):
         parts = []
         for info in infos:
             df = info['data']
+            type_to_subdf = dict(list(df.groupby('type')))
             if config['site_summary']:
-                df = df[df['type'] == 'site_summary']
+                if 'site' in type_to_subdf:
+                    # This is a site model
+                    df = type_to_subdf['site']
+                elif 'site_summary' in type_to_subdf:
+                    # This is a region model
+                    df = type_to_subdf['site_summary']
             else:
-                if df.iloc[0]['type'] == 'site':
-                    df = df[df['type'] == 'site']
-                else:
-                    df = df[df['type'] == 'region']
+                if 'site' in type_to_subdf:
+                    # This is a site model
+                    df = type_to_subdf['site']
+                elif 'region' in type_to_subdf:
+                    # This is a region model
+                    df = type_to_subdf['region']
             parts.append(df)
         region_df = pd.concat(parts)
+        print(f'Loaded {len(region_df)} regions to crop')
 
     # Load the dataset and extract geotiff metadata from each image.
     coco_dset = kwcoco.CocoDataset.coerce(src_fpath)
@@ -759,9 +768,9 @@ class SimpleDataCube(object):
             gid = coco_dset.add_image(file_name=fpath,
                                       date_captured=date_captured,
                                       sensor_coarse='L8')
-            img_poly = kwimage.Polygon(exterior=meta['wgs84_corners'])
+            img_poly = kwimage.Polygon.from_geojson(meta['geos_corners'])
             ann_poly = img_poly.scale(0.1, about='center')
-            sseg_geos = ann_poly.swap_axes().to_geojson()
+            sseg_geos = ann_poly.to_geojson()
             coco_dset.add_annotation(
                 image_id=gid, bbox=[0, 0, 0, 0], segmentation_geos=sseg_geos)
 
@@ -782,7 +791,7 @@ class SimpleDataCube(object):
                         'model_content': 'annotation',
                         'sites': [],
                     },
-                    'geometry': img_poly.scale(0.2, about='center').swap_axes().to_geojson(),
+                    'geometry': img_poly.scale(0.2, about='center').to_geojson(),
                 })
 
         kwcoco_extensions.coco_populate_geo_heuristics(
@@ -1142,6 +1151,7 @@ class SimpleDataCube(object):
             from kwcoco.util.util_json import find_json_unserializable
             from datetime import datetime as datetime_cls
             issues = list(find_json_unserializable(video_props))
+
             def normalize_timestamp(ts):
                 if isinstance(ts, datetime_cls):
                     return ts.isoformat()
@@ -1239,12 +1249,10 @@ class SimpleDataCube(object):
                         else:
                             # If the valid_utm region does not exist, do we at
                             # least have corners?
-                            utm_corners = coco_img.img.get('utm_corners', None)
-                            if utm_corners is not None:
-                                this_utm_crs = coco_img.img['utm_crs_info']['auth']
-                                sh_valid_region_utm = kwimage.Polygon(exterior=utm_corners).to_shapely()
-                                valid_region_utm = gpd.GeoDataFrame({'geometry': [sh_valid_region_utm]}, crs=this_utm_crs)
-                                valid_region_local = valid_region_utm.to_crs(local_epsg)
+                            geos_corners = coco_img.img.get('geos_corners', None)
+                            if geos_corners is not None:
+                                corners_gdf = util_gis.crs_geojson_to_gdf(geos_corners)
+                                valid_region_local = corners_gdf.to_crs(local_epsg)
                                 sh_valid_region_local = valid_region_local.geometry.iloc[0]
                                 isect_area = sh_valid_region_local.intersection(sh_space_region_local).area
                                 other_area = sh_space_region_local.area
@@ -1503,21 +1511,24 @@ class SimpleDataCube(object):
                 unserializable = list(util_json.find_json_unserializable(new_img))
                 if unserializable:
                     print('new_img = {}'.format(ub.repr2(new_img, nl=1)))
-                    raise AssertionError('unserializable(gid={}) = {}'.format(new_gid, ub.repr2(unserializable, nl=0)))
+                    raise AssertionError('unserializable(gid={}) = {}'.format(
+                        new_gid, ub.repr2(unserializable, nl=0)))
 
             for new_aid in sub_new_aids:
                 new_ann = new_dset.index.anns[new_aid]
                 unserializable = list(util_json.find_json_unserializable(new_ann))
                 if unserializable:
                     print('new_ann = {}'.format(ub.repr2(new_ann, nl=1)))
-                    raise AssertionError('unserializable(aid={}) = {}'.format(new_aid, ub.repr2(unserializable, nl=1)))
+                    raise AssertionError('unserializable(aid={}) = {}'.format(
+                        new_aid, ub.repr2(unserializable, nl=1)))
 
             for new_vidid in [new_vidid]:
                 new_video = new_dset.index.videos[new_vidid]
                 unserializable = list(util_json.find_json_unserializable(new_video))
                 if unserializable:
                     print('new_video = {}'.format(ub.repr2(new_video, nl=1)))
-                    raise AssertionError('unserializable(vidid={}) = {}'.format(new_vidid, ub.repr2(unserializable, nl=1)))
+                    raise AssertionError('unserializable(vidid={}) = {}'.format(
+                        new_vidid, ub.repr2(unserializable, nl=1)))
 
         # unserializable = list(util_json.find_json_unserializable(new_dset.dataset))
         # if unserializable:
@@ -1794,6 +1805,7 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
     new_anns = []
     geo_poly_list = []
     for ann in anns:
+        # FIXME: there might be an issue in subsequent usage here.
         # Q: WHAT FORMAT ARE THESE COORDINATES IN?
         # A: I'm fairly sure these coordinates are all Traditional-WGS84-Lon-Lat
         # We convert them to authority compliant WGS84 (lat-lon)

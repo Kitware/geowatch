@@ -757,7 +757,7 @@ def fixup_samples(coco_dset, sample_grid):
             main_time_sampler_index = time_sampler.gid_to_index[main_gid]
 
             partial_tr = ub.udict({
-                'main_idx':  main_time_sampler_index,
+                'main_idx': main_time_sampler_index,
                 'video_id': vidid,
                 'vidid': vidid,
                 'gids': list(map(int, sample_gids)),

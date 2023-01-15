@@ -1,20 +1,14 @@
 import argparse
-import sys
-from dateutil.parser import isoparse, parse
-import os
 import json
-import re
-
-import pystac
-from osgeo import gdal
-import ubelt as ub
-import kwimage
 import kwcoco
+import os
+import pystac
+import re
+import sys
+import ubelt as ub
 
-import watch
 from watch.utils import util_bands
-from watch.utils import kwcoco_extensions
-
+from watch.utils import util_time
 from os.path import basename, dirname, join
 
 try:
@@ -295,6 +289,7 @@ def _determine_wv_channels(asset_name, asset_dict):
     if eo_band_names:
         channels = '|'.join(eo_band_names)
     else:
+        from osgeo import gdal
         bands = gdal.Info(asset_href, format='json')['bands']
 
         # the channel names are the same for all WV, just the
@@ -429,52 +424,9 @@ def make_coco_aux_from_stac_asset(asset_name,
         'file_name': file_name,
         'channels': channels,
     })
-
     if populate_watch_fields:
-        # TODO: we could remove this, we usually handle this as a secondary
-        # step.
-
-        # Largely a copy-paste of
-        # `watch.gis.geotiff.geotiff_metadata(asset_href)` without
-        # attempting to parse metadata from the filename / path
-        infos = {}
-        try:
-            ref = gdal.Open(asset_href, gdal.GA_ReadOnly)
-            if ref is None:
-                msg = gdal.GetLastErrorMsg()
-                # gdal.GetLastErrorType()
-                # gdal.GetLastErrorNo()
-                print("* Warning * Couldn't open asset_href '{}' with "
-                      "GDAL:".format(asset_href))
-                print(msg)
-                return None
-
-            infos['crs'] = watch.gis.geotiff.geotiff_crs_info(
-                ref, force_affine=force_affine)
-            infos['header'] = watch.gis.geotiff.geotiff_header_info(ref)
-        finally:
-            ref = None
-
-        # Combine sensor candidates
-        sensor_candidates = list(ub.flatten([
-            v.get('sensor_candidates', []) for v in infos.values()]))
-        info = ub.dict_union(*infos.values())
-        info['sensor_candidates'] = sensor_candidates
-        warp_pxl_to_wld = kwimage.Affine.coerce(info['pxl_to_wld'])
-        height, width = info['img_shape']
-        wld_crs_info = ub.dict_diff(info['wld_crs_info'], {'type'})
-        utm_crs_info = ub.dict_diff(info['utm_crs_info'], {'type'})
-        img.update({
-            'width': width,
-            'height': height,
-            'num_bands': info['num_bands'],
-            'approx_meter_gsd': info['approx_meter_gsd'],
-            'warp_pxl_to_wld': warp_pxl_to_wld,
-            'utm_corners': info['utm_corners'].data.tolist(),
-            'wld_crs_info': wld_crs_info,
-            'utm_crs_info': utm_crs_info,
-        })
-
+        raise NotImplementedError('REMOVED: use coco_add_watch_feilds '
+                                  'as a secondary step instead')
     return img
 
 
@@ -482,8 +434,12 @@ def make_coco_aux_from_stac_asset(asset_name,
 def _stac_item_to_kwcoco_image(stac_item,
                                assume_relative=False,
                                from_collated=False,
-                               populate_watch_fields=True,
+                               populate_watch_fields=False,
                                verbose=0):
+
+    if populate_watch_fields:
+        raise NotImplementedError('REMOVED: use coco_add_watch_feilds '
+                                  'as a secondary step instead')
     stac_item_dict = stac_item.to_dict()
 
     platform = stac_item_dict['properties']['platform']
@@ -521,36 +477,13 @@ def _stac_item_to_kwcoco_image(stac_item,
               "STAC Item '{}', skipping!".format(stac_item.id))
         return None
 
-    # Choose a base image canvas and the relationship between auxiliary images
-    if populate_watch_fields:
-        idx = ub.argmax(auxiliary, lambda x: (x['width'] * x['height']))
-        base = auxiliary[idx]
-        warp_img_to_wld = base['warp_pxl_to_wld']
-        warp_wld_to_img = warp_img_to_wld.inv()
-        img['warp_img_to_wld'] = warp_img_to_wld.concise()
-        img['warp_to_wld'] = warp_img_to_wld.concise()
-        img['approx_meter_gsd'] = base['approx_meter_gsd']
-        img.update(ub.dict_isect(base,
-                                 {'utm_corners', 'wld_crs_info', 'utm_crs_info'}))
-
-        for aux in auxiliary:
-            aux.pop('utm_corners', None)
-            aux.pop('utm_crs_info', None)
-            aux.pop('wld_crs_info', None)
-            aux['warp_to_wld'] = aux['warp_pxl_to_wld'].concise()
-            warp_aux_to_img = warp_wld_to_img @ aux.pop('warp_pxl_to_wld')
-            aux['warp_aux_to_img'] = warp_aux_to_img.concise()
-
-        img['width'] = base['width']
-        img['height'] = base['height']
-
     if len(auxiliary) == 0:
         img['failed'] = stac_item
 
     img['auxiliary'] = auxiliary
     img['stac_properties'] = stac_item_dict['properties']
     date = stac_item_dict['properties']['datetime']
-    date = isoparse(date).isoformat()
+    date = util_time.coerce_datetime(date).isoformat()
     img['date_captured'] = date
 
     sensor_coarse = SENSOR_COARSE_MAPPING[platform]
@@ -568,6 +501,10 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
                        from_collated=False,
                        ignore_duplicates=False,
                        verbose=1):
+
+    if populate_watch_fields:
+        raise NotImplementedError('REMOVED: use coco_add_watch_feilds '
+                                  'as a secondary step instead')
 
     from watch.utils.lightning_ext import util_globals
     jobs = util_globals.coerce_num_workers(jobs)
@@ -655,22 +592,6 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
                         Did you append to the same input list multiple times?
                         '''))
                     raise
-
-    if populate_watch_fields:
-        video_id = output_dset.add_video(name=ub.hash_data(catalog.to_dict()))
-
-        ordered_images = sorted(
-            output_dset.images().objs,
-            key=lambda obj: parse(obj['date_captured']))
-
-        for i, img in enumerate(ordered_images):
-            img['frame_index'] = i
-            img['video_id'] = video_id
-
-        output_dset.index.build(output_dset)
-
-        kwcoco_extensions.coco_populate_geo_video_stats(
-            output_dset, video_id, target_gsd=10.0)
 
     with open(outpath, 'w') as f:
         json.dump(output_dset.dataset, f, indent=2)

@@ -310,21 +310,23 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box=None, blocksize=256,
     Example:
         >>> from watch.utils.util_gdal import *  # NOQA
         >>> from watch.utils.util_gdal import _demo_geoimg_with_nodata
+        >>> from watch.utils import util_gis
         >>> from watch.gis import geotiff
         >>> in_fpath = ub.Path(_demo_geoimg_with_nodata())
         >>> info = geotiff.geotiff_crs_info(in_fpath)
-
+        >>> gdf = util_gis.crs_geojson_to_gdf(info['geos_corners'])
+        >>> gdf = gdf.to_crs(4326) # not really wgs84, this is crs84
         >>> # Test CRS84 cropping
-        >>> wgs84_poly = kwimage.Polygon(exterior=info['wgs84_corners'])
-        >>> assert info['wgs84_crs_info']['axis_mapping'] == 'OAMS_AUTHORITY_COMPLIANT'
-        >>> crs84_epsg = int(info['wgs84_crs_info']['auth'][1])
-        >>> crs84_space_box = wgs84_poly.scale(0.5, about='center').to_boxes().transpose()
+        >>> crs84_poly = kwimage.Polygon.coerce(gdf['geometry'].iloc[0])
+        >>> crs84_epsg = gdf.crs.to_epsg()
+        >>> crs84_space_box = crs84_poly.scale(0.5, about='center').to_boxes()
         >>> crs84_out_fpath = ub.augpath(in_fpath, prefix='_crs84_crop')
         >>> gdal_single_warp(in_fpath, crs84_out_fpath, local_epsg=crs84_epsg, space_box=crs84_space_box)
 
         >>> # Test UTM cropping
-        >>> utm_poly = kwimage.Polygon(exterior=info['utm_corners'])
-        >>> utm_epsg = int(info['utm_crs_info']['auth'][1])
+        >>> utm_gdf = util_gis.project_gdf_to_local_utm(gdf)
+        >>> utm_poly = kwimage.Polygon.coerce(utm_gdf['geometry'].iloc[0])
+        >>> utm_epsg = utm_gdf.crs.to_epsg()
         >>> utm_space_box = utm_poly.scale(0.5, about='center').to_boxes()
         >>> utm_out_fpath = ub.augpath(in_fpath, prefix='_utmcrop')
         >>> gdal_single_warp(in_fpath, utm_out_fpath, local_epsg=utm_epsg, space_box=utm_space_box, box_epsg=utm_epsg)

@@ -441,6 +441,7 @@ class MultiscaleMask:
         >>> #kwplot.set_figtitle
 
     """
+
     def __init__(self):
         self.mask = None
         self._fraction = None

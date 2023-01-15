@@ -106,7 +106,7 @@ class Plotter:
             humanized_scatterplot(plotter.human_mapping, plot_type='line',
                                   data=melted, ax=ax, legend=0, **plotkw)
             humanized_scatterplot(plotter.human_mapping, plot_type='scatter',
-                                  data=melted, ax=ax, legend=legend,  s=80,
+                                  data=melted, ax=ax, legend=legend, s=80,
                                   **plotkw)
             if len(metrics) == 1:
                 ax.set_ylabel(metrics[0])

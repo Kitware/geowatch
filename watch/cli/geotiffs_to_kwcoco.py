@@ -39,7 +39,7 @@ def main(**kwargs):
         dset1 = kwcoco.CocoDataset(ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc/drop0/drop0.kwcoco.json'))
         dset2 = kwcoco.CocoDataset(ub.expandpath('$HOME/data/grab_tiles_out/fels/data.kwcoco.json'))
     """
-    config = KWCocoFromGeotiffConfig(default=kwargs, cmdline=True)
+    config = KWCocoFromGeotiffConfig(data=kwargs, cmdline=True)
     geotiff_dpath = config['geotiff_dpath']
     dst = config['dst']
 
@@ -182,7 +182,7 @@ def make_coco_img_from_geotiff(tiff_fpath, name=None, force_affine=True,
         'num_bands': info['num_bands'],
         'approx_meter_gsd': info['approx_meter_gsd'],
         'warp_pxl_to_wld': warp_pxl_from_wld,
-        'utm_corners': info['utm_corners'].data.tolist(),
+        'geos_corners': info['geos_corners'],
         'wld_crs_info': wld_crs_info,
         'utm_crs_info': utm_crs_info,
     })
@@ -221,14 +221,10 @@ def make_coco_img_from_auxiliary_dicts(auxiliary, name):
     warp_wld_from_img = base['warp_pxl_to_wld']
     warp_img_from_wld = warp_wld_from_img.inv()
     img['warp_img_to_wld'] = warp_wld_from_img.concise()
-    img.update(ub.dict_isect(base, {'utm_corners', 'wld_crs_info', 'utm_crs_info'}))
-
-    # img[' = aux.pop('utm_corners')
-    # aux.pop('utm_crs_info')
-    # aux.pop('wld_crs_info')
+    img.update(ub.dict_isect(base, {'geos_corners', 'wld_crs_info', 'utm_crs_info'}))
 
     for aux in auxiliary:
-        aux.pop('utm_corners')
+        aux.pop('geos_corners')
         aux.pop('utm_crs_info')
         aux.pop('wld_crs_info')
         warp_wld_from_aux = aux.pop('warp_pxl_to_wld')

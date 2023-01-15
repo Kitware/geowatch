@@ -312,11 +312,11 @@ def make_track_kwcoco_manifest(dst, dst_bundle_dpath, tid_to_assets,
                 obj['warp_to_wld'] = kwimage.Affine.coerce(obj['warp_to_wld']).concise()
             if 'wld_to_pxl' in obj:
                 obj['wld_to_pxl'] = kwimage.Affine.coerce(obj['wld_to_pxl']).concise()
-            obj.pop('wgs84_to_wld', None)
-            obj.pop('valid_region_utm', None)
-            obj.pop('utm_corners', None)
-            obj.pop('wgs84_corners', None)
-            obj.pop('utm_crs_info', None)
+            # obj.pop('wgs84_to_wld', None)
+            # obj.pop('valid_region_utm', None)
+            # obj.pop('utm_corners', None)
+            # obj.pop('wgs84_corners', None)
+            # obj.pop('utm_crs_info', None)
         new_img.update(ensure_json_serializable(new_img))
 
     # Make the asset order consistent by channel

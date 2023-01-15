@@ -66,7 +66,7 @@ def main(cmdline=False, **kwargs):
 
     """
     import geojson
-    config = MergeRegionModelConfig(default=kwargs, cmdline=cmdline)
+    config = MergeRegionModelConfig(data=kwargs, cmdline=cmdline)
     # print('config = {}'.format(ub.repr2(dict(config), nl=1)))
 
     json_paths = config['src']

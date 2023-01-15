@@ -59,12 +59,16 @@ def _submit_split_jobs(base_fpath, queue, depends=[]):
     splits = {
         # 'nowv': base_fpath.augment(suffix='_nowv', multidot=True),
 
-        'train': base_fpath.augment(suffix='_train', multidot=True),
+        'train_split1': base_fpath.augment(suffix='_train_split1', multidot=True),
+        'train_split2': base_fpath.augment(suffix='_train_split2', multidot=True),
+        'train_split3': base_fpath.augment(suffix='_train_split3', multidot=True),
         # 'nowv_train': base_fpath.augment(suffix='_nowv_train', multidot=True),
         # 'wv_train': base_fpath.augment(suffix='_wv_train', multidot=True),
         # 's2_wv_train': base_fpath.augment(suffix='_s2_wv_train', multidot=True),
 
-        'vali': base_fpath.augment(suffix='_vali', multidot=True),
+        'vali_split1': base_fpath.augment(suffix='_vali_split1', multidot=True),
+        'vali_split2': base_fpath.augment(suffix='_vali_split2', multidot=True),
+        'vali_split3': base_fpath.augment(suffix='_vali_split3', multidot=True),
         # 'nowv_vali': base_fpath.augment(suffix='_nowv_vali', multidot=True),
         # 'wv_vali': base_fpath.augment(suffix='_wv_vali', multidot=True),
         # 's2_wv_vali': base_fpath.augment(suffix='_s2_wv_vali', multidot=True),
@@ -73,38 +77,51 @@ def _submit_split_jobs(base_fpath, queue, depends=[]):
     ignore_regions = {
         'CN_C001',
     }
-    vali_regions = {
-        'KR_R001',
-        'KR_R002',
-        'US_R007',
+    vali_regions_splits = {
+        'split1': {
+            'KR_R001',
+            'KR_R002',
+            'US_R007',
+        },
+        'split2': {
+            'BR_R002',
+        },
+        'split3': {
+            'AE_R001',
+        },
     }
 
     # train_region_selector = '(' + ' or '.join(['(.name ==  "{}")'.format(n) for n in (ignore_regions | vali_regions)]) + ') | not'
     # vali_region_selector = ' or '.join(['(.name ==  "{}")'.format(n) for n in (vali_regions)])
 
-    train_region_selector = '(' + ' or '.join(['(.name | startswith("{}"))'.format(n) for n in (ignore_regions | vali_regions)]) + ') | not'
-    vali_region_selector = ' or '.join(['(.name | startswith("{}"))'.format(n) for n in (vali_regions)])
+    for split, vali_regions in vali_regions_splits.items():
 
-    split_jobs = {}
-    # Perform train/validation splits with and without worldview
-    command = ub.codeblock(
-        fr'''
-        python -m kwcoco subset \
-            --src {base_fpath} \
-            --dst {splits['train']} \
-            --select_videos '{train_region_selector}'
-        ''')
-    split_jobs['train'] = queue.submit(command, begin=1, depends=depends)
+        train_key = f'train_{split}'
+        vali_key = f'vali_{split}'
 
-    # Perform vali/validation splits with and without worldview
-    command = ub.codeblock(
-        fr'''
-        python -m kwcoco subset \
-            --src {base_fpath} \
-            --dst {splits['vali']} \
-            --select_videos '{vali_region_selector}'
-        ''')
-    split_jobs['vali'] = queue.submit(command, depends=depends)
+        train_region_selector = '(' + ' or '.join(['(.name | startswith("{}"))'.format(n) for n in (ignore_regions | vali_regions)]) + ') | not'
+        vali_region_selector = ' or '.join(['(.name | startswith("{}"))'.format(n) for n in (vali_regions)])
+
+        split_jobs = {}
+        # Perform train/validation splits with and without worldview
+        command = ub.codeblock(
+            fr'''
+            python -m kwcoco subset \
+                --src {base_fpath} \
+                --dst {splits[train_key]} \
+                --select_videos '{train_region_selector}'
+            ''')
+        split_jobs['train'] = queue.submit(command, begin=1, depends=depends)
+
+        # Perform vali/validation splits with and without worldview
+        command = ub.codeblock(
+            fr'''
+            python -m kwcoco subset \
+                --src {base_fpath} \
+                --dst {splits[vali_key]} \
+                --select_videos '{vali_region_selector}'
+            ''')
+        split_jobs['vali'] = queue.submit(command, depends=depends)
     return queue
 
 

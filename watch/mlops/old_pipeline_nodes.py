@@ -250,6 +250,7 @@ def resolve_package_paths(model_globstr, expt_dvc_dpath):
             # Warn the user if they gave a bad model globstr (this is just one
             # of the many potential ways things could go wrong)
             glob_path = ub.Path(model_globstr)
+
             def _concrete_glob_part(path):
                 " Find the resolved part of the glob path "
                 concrete_parts = []

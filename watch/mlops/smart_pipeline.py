@@ -542,9 +542,12 @@ class SiteCropping(ProcessNode):
     }
 
     algo_params = {
-        'include_channels': 'red|green|blue|cloudmask',  # fixme: not a good default
+        # 'include_channels': 'red|green|blue|cloudmask',  # fixme: not a good default
+        'include_channels': None,
         'exclude_sensors': 'L8',  # fixme: not a good default
         'target_gsd': 4,
+        # 'context_factor': 2.0,
+        'context_factor': 1.5,
         'force_nodata': -9999,
         'rpc_align_method': 'orthorectify',
     }
@@ -678,24 +681,27 @@ def sc_nodes():
     return nodes
 
 
-def joint_bas_sc_nodes(crops=True):
+def joint_bas_sc_nodes(with_bas=True, crops=True):
     nodes = {}
-    nodes.update(bas_nodes())
+
+    if with_bas:
+        nodes.update(bas_nodes())
 
     if crops:
         nodes['sitecrop'] = SiteCropping()
 
-        # outputs['site_summaries_fpath'].connect(
-        nodes['bas_poly'].connect(
-            nodes['sitecrop'],
-            param_mapping={
-                'site_summaries_fpath': 'regions',
-            }
-        )
+        if with_bas:
+            # outputs['site_summaries_fpath'].connect(
+            nodes['bas_poly'].connect(
+                nodes['sitecrop'],
+                param_mapping={
+                    'site_summaries_fpath': 'regions',
+                }
+            )
 
-        nodes['bas_pxl'].inputs['test_dataset'].connect(
-            nodes['sitecrop'].inputs['crop_src_fpath']
-        )
+            nodes['bas_pxl'].inputs['test_dataset'].connect(
+                nodes['sitecrop'].inputs['crop_src_fpath']
+            )
 
     if 1:
         nodes.update(sc_nodes())
@@ -708,13 +714,15 @@ def joint_bas_sc_nodes(crops=True):
                 }
             )
         else:
-            nodes['bas_pxl'].inputs['test_dataset'].connect(
-                nodes['sc_pxl'].inputs['test_dataset']
-            )
+            if with_bas:
+                nodes['bas_pxl'].inputs['test_dataset'].connect(
+                    nodes['sc_pxl'].inputs['test_dataset']
+                )
 
-        nodes['bas_poly'].outputs['site_summaries_fpath'].connect(
-            nodes['sc_poly'].inputs['site_summary']
-        )
+        if with_bas:
+            nodes['bas_poly'].outputs['site_summaries_fpath'].connect(
+                nodes['sc_poly'].inputs['site_summary']
+            )
     return nodes
 
 
@@ -727,6 +735,7 @@ def make_smart_pipeline(name):
     node_makers = {
         'joint_bas_sc': partial(joint_bas_sc_nodes, crops=True),
         'joint_bas_sc_nocrop': partial(joint_bas_sc_nodes, crops=False),
+        'crop_sc': partial(joint_bas_sc_nodes, with_bas=False, crops=True),
         'sc': sc_nodes,
         'bas': bas_nodes,
     }

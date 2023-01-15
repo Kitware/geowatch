@@ -104,7 +104,7 @@ class CocoVisualizeConfig(scfg.Config):
         'draw_imgs': scfg.Value(True, isflag=True),
         'draw_anns': scfg.Value('auto', isflag=True, help='auto means only draw anns if they exist'),
 
-        'draw_valid_region': scfg.Value(True, help='if True, draw the valid region if it exists'),
+        'draw_valid_region': scfg.Value(False, help='if True, draw the valid region if it exists'),
 
         'cmap': scfg.Value('viridis', help='colormap for single channel data'),
 
@@ -234,7 +234,7 @@ def main(cmdline=True, **kwargs):
     """
     from watch.utils.lightning_ext import util_globals
     from watch.utils import kwcoco_extensions
-    config = CocoVisualizeConfig(default=kwargs, cmdline=cmdline and {'strict': True})
+    config = CocoVisualizeConfig(data=kwargs, cmdline=cmdline and {'strict': True})
     space = config['space']
     channels = config['channels']
     print('config = {}'.format(ub.repr2(dict(config), nl=2)))
@@ -248,6 +248,8 @@ def main(cmdline=True, **kwargs):
             config['stack'] = 'only'
         if config['channels'] is None:
             channels = config['channels'] = 'auto'
+        # if config['draw_valid_region'] is None:
+        #     config['draw_valid_region'] = False
 
     if config['stack'] == 'auto':
         config['stack'] = False
@@ -949,9 +951,32 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
     role_to_anns = {'none' if k is None else k.lower(): v for k, v in role_to_anns.items()}
 
     role_to_dets = ub.udict()
+
     for role, role_anns in role_to_anns.items():
+        colors = []
+        # Determine the color for each annotation
+        for ann in role_anns:
+            color = 'kitware_red'
+            cid = ann['category_id']
+            if cid is not None:
+                cat = coco_dset.cats[cid]
+                color = cat.get('color', color)
+            if 0:
+                # todo better role support
+                # temporary hack
+                if 'misc_info' in ann:
+                    misc_info = ann['misc_info']
+                    if isinstance(misc_info, dict):
+                        color = misc_info.get('confusion_color', color)
+            if color is None:
+                # color = 'kitware_red'
+                # color = 'kitware_lightgray'
+                color = 'white'
+            colors.append(color)
+
         role_dets = kwimage.Detections.from_coco_annots(role_anns, dset=coco_dset)
         role_dets = role_dets.warp(warp_viz_from_img)
+        role_dets.data['colors'] = colors
         role_to_dets[role] = role_dets
 
     # TODO: asset space
@@ -1026,7 +1051,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
     # TODO: user should need to specify this.
     max_stacks = len(chan_groups)
     if role_order is not None:
-        role_order = ['truth', 'none']
+        # role_order = ['truth', 'none']
         requested_slots = {}
         for role in role_to_anns.keys():
             try:
@@ -1038,6 +1063,9 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
     else:
         # If unspecified draw all roles on the first part
         stack_idx_to_roles = {0: list(role_to_anns.keys())}
+    # print(f'role_to_anns={role_to_anns}')
+    # print(f'role_order={role_order}')
+    # print(f'stack_idx_to_roles={stack_idx_to_roles}')
 
     for stack_idx, chan_row in enumerate(chan_groups):
         request_roles = stack_idx_to_roles.get(stack_idx, [])
@@ -1157,7 +1185,8 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
         print('raw_canvas.shape = {!r}'.format(raw_canvas.shape))
         print('chan_list = {!r}'.format(chan_list))
         try:
-            chan_stats = kwarray.stats_dict(raw_canvas, axis=2, nan=True)
+            # chan_stats = kwarray.stats_dict(raw_canvas, axis=2, nan=True)
+            chan_stats = kwarray.stats_dict(raw_canvas, axis=(0, 1), nan=True)
             print('chan_stats = {}'.format(ub.repr2(chan_stats, nl=1)))
         except Exception as ex:
             print(f'ex={ex}')
@@ -1204,6 +1233,9 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
         # raw_canvas = kwarray.atleast_nd(raw_canvas, n=3)
         # raw_canvas = raw_canvas[:, :, None]
 
+    if verbose > 100:
+        print('chan normalizer part')
+
     if chan_to_normalizer is None:
         dmax = np.nanmax(raw_canvas)
         # dmin = canvas.min()
@@ -1239,8 +1271,14 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
             new_parts.append(p)
         canvas = np.stack(new_parts, axis=2)
 
+    if verbose > 100:
+        print('after normalizer part')
+
     _kw = ub.compatible({'on_value': 0.3}, kwimage.fill_nans_with_checkers)
     canvas = kwimage.fill_nans_with_checkers(canvas, **_kw)
+
+    if verbose > 100:
+        print('after checkers part')
 
     # Do the channels correspond to classes with known colors?
     chan_names = chan_row['chan'].to_list()
@@ -1255,16 +1293,28 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
         else:
             channel_colors.append(None)
 
+    if verbose > 100:
+        print('after channel colors part')
+
     if any(c is not None for c in channel_colors):
         # This flag makes it so 1 channel outputs always use cmap.
         # not sure if I like that or not, probably needs to be configurable
         _flag = kwimage.num_channels(canvas) != 1
         if _flag:
+            if verbose > 100:
+                print('do perchannel_colorize')
+                print(f'channel_colors={channel_colors}')
             canvas = util_kwimage.perchannel_colorize(canvas, channel_colors=channel_colors)
+            if verbose > 100:
+                print('finished perchannel_colorize')
             canvas = canvas[..., 0:3]
+            if verbose > 100:
+                print('finished channel color part')
 
     if cmap is not None:
         if kwimage.num_channels(canvas) == 1:
+            if verbose > 100:
+                print('doing 1 channel cmap')
             import matplotlib as mpl
             import matplotlib.cm  # NOQA
             cmap_ = mpl.cm.get_cmap(cmap)
@@ -1272,6 +1322,9 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
             if len(canvas.shape) == 3:
                 canvas = canvas[..., 0]
                 canvas = cmap_(canvas)[..., 0:3].astype(np.float32)
+
+    if verbose > 100:
+        print('after cmap part')
 
     canvas = util_kwimage.ensure_false_color(canvas)
     canvas = kwimage.ensure_uint255(canvas)
@@ -1313,6 +1366,9 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
     img_stack_item = None
     ann_stack_item = None
 
+    if verbose > 100:
+        print('before canvas parts')
+
     if draw_imgs_alone or stack_imgs:
         img_canvas = kwimage.ensure_uint255(canvas, copy=True)
         if stack_imgs:
@@ -1353,8 +1409,19 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
                 requested_role_to_dets = role_to_dets
 
             for role_dets in requested_role_to_dets.values():
+                # TODO: better role handling
+                colors = role_dets.data['colors']
+                draw_on_kwargs['labels'] = True
+                if verbose > 100:
+                    print('About to draw dets on a canvas')
                 ann_canvas = role_dets.draw_on(
-                    ann_canvas, color='classes', **draw_on_kwargs)
+                    ann_canvas,
+                    color=colors,
+                    ssegkw={'fill': False, 'border': True, 'edgecolor': colors},
+                    # color='classes',
+                    **draw_on_kwargs)
+                if verbose > 100:
+                    print('That seemed to work')
 
         if stack_anns:
             if ann_canvas is None:
@@ -1376,11 +1443,14 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
                 ann_canvas = kwimage.stack_images([ann_header, ann_canvas])
             kwimage.imwrite(view_ann_fpath, ann_canvas)
 
+    if verbose > 100:
+        print('returning canvases')
     return img_stack_item, ann_stack_item
 
 
 if __name__ == '__main__':
     """
+    xdoctest ~/code/watch/watch/cli/coco_align_geotiffs.py main:0 2> error.txt 1> output.txt
 
     DVC_DPATH=$(smartwatch_dvc)
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15

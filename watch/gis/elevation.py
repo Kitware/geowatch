@@ -164,27 +164,28 @@ class DEM_Collection(ElevationDatabase):
     """
     def __init__(dems, dem_paths):
         from watch.gis.geotiff import geotiff_crs_info
-        import kwimage
+        from watch.utils import util_gis
         dem_infos = []
         for dem_fpath in dem_paths:
             dem_info = geotiff_crs_info(dem_fpath)
             dem_infos.append(dem_info)
 
-        dem_polys = []
+        dem_crs84_polys = []
         for info in dem_infos:
-            kw_poly = kwimage.Polygon(exterior=info['wgs84_corners'])
-            sh_poly = kw_poly.to_shapely()
-            dem_polys.append(sh_poly)
+            gdf = util_gis.crs_geojson_to_gdf(info['geos_corners'])
+            gdf_crs84 = gdf.to_crs(util_gis.get_crs84())
+            sh_poly = gdf_crs84['geometry'].iloc[0]
+            dem_crs84_polys.append(sh_poly)
 
         dems.dem_paths = dem_paths
         dems.dem_infos = dem_infos
-        dems.dem_polys = dem_polys
+        dems.dem_crs84_polys = dem_crs84_polys
 
     def find_reference_fpath(dems, lat, lon):
         import shapely
 
-        query = shapely.geometry.Point(lat, lon)
-        flags = [poly.contains(query) for poly in dems.dem_polys]
+        crs84_query = shapely.geometry.Point(lon, lat)
+        flags = [poly.contains(crs84_query) for poly in dems.dem_crs84_polys]
         idxs = np.where(flags)[0]
         assert len(idxs) == 1
 

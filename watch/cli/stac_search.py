@@ -273,7 +273,7 @@ class StacSearcher:
         dates_found = [item.datetime for item in items]
         if dates_found:
             min_date_found = min(dates_found).date().isoformat()
-            max_date_found = min(dates_found).date().isoformat()
+            max_date_found = max(dates_found).date().isoformat()
             self.logger.info(f'Search found {len(items)} items for {collections} between {min_date_found} and {max_date_found}')
         else:
             self.logger.warning(f'Search found {len(items)} items for {collections}')

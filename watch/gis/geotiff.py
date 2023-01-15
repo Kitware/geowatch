@@ -452,6 +452,20 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
             'axis_mapping': wgs84_axis_mapping,
         }
 
+        # Convert to the more general geos corners
+        wgs84_crs_info = ub.dict_diff(wgs84_crs_info, {'type'})
+        if wgs84_crs_info['axis_mapping'] == 'OAMS_AUTHORITY_COMPLIANT':
+            geos_corners = kwimage.Polygon.coerce(
+                wgs84_corners).swap_axes().to_geojson()
+        else:
+            geos_corners = kwimage.Polygon.coerce(
+                wgs84_corners).to_geojson()
+        geos_crs_info = {
+            'axis_mapping': 'OAMS_TRADITIONAL_GIS_ORDER',
+            'auth': ('EPSG', '4326')
+        }
+        geos_corners['properties'] = {'crs_info': geos_crs_info}
+
     info.update({
         'is_rpc': is_rpc,
 
@@ -468,6 +482,7 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         'utm_corners': utm_corners,
         'wld_corners': wld_corners,
         'wgs84_corners': wgs84_corners,
+        'geos_corners': geos_corners,
 
         # TODO: we changed the internal names to the "_from_" varaint but we
         # are keeping the "_to_" variant in this interface for now In the

@@ -127,6 +127,11 @@ from watch.monkey import monkey_numpy  # NOQA
 monkey_numpy.patch_numpy_dtypes()
 
 
+if 'hard-to-inspect-key' in vars():
+    # Defined to hack jon's editor into autocompleting this.
+    find_dvc_dpath = None
+
+
 __devnotes__ = """
 
 # Command to autogenerate lazy imports for this file

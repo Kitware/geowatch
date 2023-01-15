@@ -274,6 +274,7 @@ class PipelineDAG:
 
             node.will_exist = ((node.enabled and ancestors_will_exist) or
                                node.does_exist)
+            print(f'Checking {node_name}, will_exist={node.will_exist}')
 
             if node.will_exist and node.enabled:
                 pred_node_procids = [n.process_id for n in pred_nodes
@@ -350,7 +351,7 @@ class PipelineDAG:
                     if _has_jq():
                         command = '\n'.join([
                             f'mkdir -p {job_config_fpath.parent} && \\',
-                            f"printf '{json_text}' | jq > {job_config_fpath}",
+                            f"printf '{json_text}' | jq . > {job_config_fpath}",
                         ])
                     else:
                         command = '\n'.join([
@@ -376,6 +377,7 @@ class PipelineDAG:
                             node_job.depends.append(_job)
                     pass
 
+        print(f'queue={queue}')
         return queue
 
 
@@ -555,6 +557,7 @@ class memoize_configured_method(object):
     """
     ubelt memoize_method but uses a special cache name
     """
+
     def __init__(self, func):
         self._func = func
         self._cache_name = '_cache__' + func.__name__

@@ -42,6 +42,7 @@ import numpy as np
 import scriptconfig as scfg
 import io
 import warnings
+import math
 from watch.utils import kwcoco_extensions
 from watch.utils import util_kwplot
 from watch.utils import util_time
@@ -137,7 +138,7 @@ def main(cmdline=False, **kwargs):
     """
     import geopandas as gpd  # NOQA
     from watch.utils import util_gis
-    config = ProjectAnnotationsConfig(default=kwargs, cmdline=cmdline)
+    config = ProjectAnnotationsConfig(data=kwargs, cmdline=cmdline)
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
 
     output_fpath = config['dst']
@@ -167,7 +168,7 @@ def main(cmdline=False, **kwargs):
         'HACK_HANDLE_DUPLICATE_SITE_ROWS', default=True)
 
     site_model_infos = list(util_gis.coerce_geojson_datas(
-        config['site_models'], desc='load site models'))
+        config['site_models'], desc='load site models', allow_raw=True))
 
     sites = []
     for info in site_model_infos:
@@ -185,7 +186,8 @@ def main(cmdline=False, **kwargs):
     regions = []
     if config['region_models'] is not None:
         region_model_infos = list(util_gis.coerce_geojson_datas(
-            config['region_models'], desc='load geojson region-models'))
+            config['region_models'], desc='load geojson region-models',
+            allow_raw=True))
         for info in region_model_infos:
             gdf = info['data']
             regions.append(gdf)
@@ -213,9 +215,10 @@ def main(cmdline=False, **kwargs):
         coco_dset.add_annotation(**ann)
     kwcoco_extensions.warp_annot_segmentations_from_geos(coco_dset)
 
-    coco_dset.fpath = output_fpath
-    print('dump coco_dset.fpath = {!r}'.format(coco_dset.fpath))
-    coco_dset.dump(coco_dset.fpath)
+    if output_fpath != 'return':
+        # print('dump coco_dset.fpath = {!r}'.format(coco_dset.fpath))
+        coco_dset.fpath = output_fpath
+        coco_dset.dump(coco_dset.fpath)
 
     if viz_dpath == 'auto':
         viz_dpath = (ub.Path(coco_dset.fpath).parent / '_viz_project_anns')
@@ -238,22 +241,29 @@ def main(cmdline=False, **kwargs):
             fig.tight_layout()
             fig.savefig(plot_fpath)
 
+    if output_fpath == 'return':
+        return coco_dset
+
 
 def check_sitemodel_assumptions(sites):
     """
     For debugging and checking assumptions about site models
     """
-    for site_df in ub.ProgIter(sites, desc='checking site assumptions'):
-        first = site_df.iloc[0]
-        rest = site_df.iloc[1:]
-        assert first['type'] == 'site', (
-            f'first row must have type of site, got {first["type"]}')
-        assert first['region_id'] is not None, (
-            f'first row must have a region id. Got {first["region_id"]}')
-        assert rest['type'].apply(lambda x: x == 'observation').all(), (
-            f'rest of row must have type observation. Instead got: {rest["type"].unique()}')
-        assert rest['region_id'].apply(lambda x: x is None).all(), (
-            f'rest of row must have region_id=None. Instead got {rest["region_id"].unique()}')
+    try:
+        for site_df in ub.ProgIter(sites, desc='checking site assumptions'):
+            first = site_df.iloc[0]
+            rest = site_df.iloc[1:]
+            assert first['type'] == 'site', (
+                f'first row must have type of site, got {first["type"]}')
+            assert first['region_id'] is not None, (
+                f'first row must have a region id. Got {first["region_id"]}')
+            assert rest['type'].apply(lambda x: x == 'observation').all(), (
+                f'rest of row must have type observation. Instead got: {rest["type"].unique()}')
+            # assert rest['region_id'].apply(lambda x: x is None).all(), (
+            #     f'rest of row must have region_id=None. Instead got {rest["region_id"].unique()}')
+    except AssertionError:
+        print(site_df)
+        raise
 
 
 def separate_region_model_types(regions):
@@ -448,6 +458,9 @@ def expand_site_models_with_site_summaries(sites, regions):
     if VERYVERBOSE:
         print('AFTER (sitesummary) region_id_to_num_sites = {}'.format(ub.repr2(region_id_to_num_sites, nl=1)))
 
+    def is_nonish(x):
+        return x is None or isinstance(x, float) and math.isnan(x)
+
     # Fix out of order observations
     FIX_OBS_ORDER = True
     if FIX_OBS_ORDER:
@@ -460,6 +473,15 @@ def expand_site_models_with_site_summaries(sites, regions):
                 obs_rows = site_gdf[is_obs]
                 site_rows = site_gdf[~is_obs]
                 obs_rows = obs_rows.iloc[obs_rows['observation_date'].argsort()]
+
+                assert not is_nonish(site_rows['status'])
+                if obs_rows['observation_date'].apply(is_nonish).any():
+                    obs_rows.loc[obs_rows['observation_date'].apply(is_nonish).values, 'observation_date'] = DUMMY_END_DATE
+                assert not obs_rows['observation_date'].apply(is_nonish).any()
+
+                # raise Exception
+                # site_gdf
+
                 site_gdf = pd.concat([site_rows.reset_index(), obs_rows.reset_index()], axis=0).reset_index()
                 _sites.append(site_gdf)
             new_region_id_to_sites[region_id] = _sites
@@ -620,11 +642,17 @@ def validate_site_dataframe(site_df):
     assert first['region_id'] is not None, 'first row must have a region id'
     assert rest['type'].apply(lambda x: x == 'observation').all(), (
         'rest of row must have type observation')
-    assert rest['region_id'].apply(lambda x: x is None).all(), (
-        'rest of row must have region_id=None')
+    # assert rest['region_id'].apply(lambda x: x is None).all(), (
+    #     'rest of row must have region_id=None')
 
     site_start_date = first['start_date'] or dummy_start_date
     site_end_date = first['end_date'] or dummy_end_date
+    import math
+    if isinstance(site_end_date, float) and math.isnan(site_end_date):
+        site_end_date = dummy_end_date
+    if isinstance(site_start_date, float) and math.isnan(site_start_date):
+        site_start_date = dummy_start_date
+
     site_start_datetime = util_time.coerce_datetime(site_start_date)
     site_end_datetime = util_time.coerce_datetime(site_end_date)
 
@@ -1004,6 +1032,10 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy,
         assert site_row_datetime is not None
 
         catname = site_row['current_phase']
+
+        if isinstance(catname, float) and math.isnan(catname):
+            catname = None
+
         if catname is None:
             # Based on the status choose a kwcoco category name
             # using the watch heuristics
@@ -1218,6 +1250,7 @@ def keyframe_interpolate(image_times, key_infos):
 
 def plot_poc_keyframe_interpolate(image_times, key_times, key_assignment):
     """
+    Helper to visualize the keyframe interpolation algorithm.
     """
     import kwplot
     import matplotlib as mpl
@@ -1286,7 +1319,7 @@ def plot_poc_keyframe_interpolate(image_times, key_times, key_assignment):
 
 def coerce_datetime2(data):
     """ Is this a monad 🦋 ? """
-    return None if data is None else util_time.coerce_datetime(data)
+    return None if data is None or (isinstance(data, float) and math.isnan(data)) else util_time.coerce_datetime(data)
 
 
 def plot_image_and_site_times(coco_dset, region_image_dates, drawable_region_sites, region_id, ax=None):

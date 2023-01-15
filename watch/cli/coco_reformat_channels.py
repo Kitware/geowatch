@@ -66,7 +66,7 @@ def main(cmdline=False, **kwargs):
         >>> #new_pred2 = new_coco_img.delay('salient').finalize(dequantize=False)
         >>> #assert new_pred2.dtype.kind == 'i'
     """
-    config = CocoReformatChannels(default=kwargs, cmdline=cmdline)
+    config = CocoReformatChannels(data=kwargs, cmdline=cmdline)
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
     dset = kwcoco.CocoDataset.coerce(config['src'])
 

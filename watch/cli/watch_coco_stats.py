@@ -37,6 +37,9 @@ class WatchCocoStats(scfg.Config):
                     special:vidshapes8
                     special:vidshapes8-msi
                 '''), position=1),
+
+        'with_video_info': scfg.Value(
+            False, isflag=True, help='Show more per-video details')
     }
 
     @classmethod
@@ -45,7 +48,7 @@ class WatchCocoStats(scfg.Config):
         config = WatchCocoStats(kw, cmdline=cmdline)
 
         fpaths = config['src']
-        rich.print('config = {}'.format(ub.repr2(config, nl=1, sort=0)))
+        rich.print('config = {}'.format(ub.repr2(dict(config), nl=1, sort=0)))
 
         if isinstance(fpaths, str):
             if ',' in fpaths:
@@ -61,7 +64,8 @@ class WatchCocoStats(scfg.Config):
             print('\n--- Single Dataset Stats ---')
             dset = watch.demo.coerce_kwcoco(fpath)
             print('dset = {!r}'.format(dset))
-            stat_info = coco_watch_stats(dset)
+            stat_info = coco_watch_stats(
+                dset, with_video_info=config['with_video_info'])
 
             collatable = {
                 'dset': stat_info['dset'],
@@ -87,14 +91,15 @@ class WatchCocoStats(scfg.Config):
         import math
         all_sensors = sorted(all_sensors)
         if video_sensor_rows:
-            video_sensor_df = pd.DataFrame(video_sensor_rows)
-            piv = video_sensor_df.pivot(index=['name', 'dset'], columns=[], values=all_sensors)
-            piv = piv.sort_index()
-            piv = piv.astype(object)
-            piv = piv.applymap(lambda x: None if math.isnan(x) else int(x))
-            piv['total'] = piv.sum(axis=1)
-            print('Per-Video Sensor Frequency')
-            rich.print(piv.to_string(float_format='%0.0f'))
+            if config['with_video_info']:
+                video_sensor_df = pd.DataFrame(video_sensor_rows)
+                piv = video_sensor_df.pivot(index=['name', 'dset'], columns=[], values=all_sensors)
+                piv = piv.sort_index()
+                piv = piv.astype(object)
+                piv = piv.applymap(lambda x: None if math.isnan(x) else int(x))
+                piv['total'] = piv.sum(axis=1)
+                print('Per-Video Sensor Frequency')
+                rich.print(piv.to_string(float_format='%0.0f'))
         else:
             print('No per-video stats')
 
@@ -129,7 +134,7 @@ class WatchCocoStats(scfg.Config):
             pass
 
 
-def coco_watch_stats(dset):
+def coco_watch_stats(dset, with_video_info=False):
     """
     Args:
         dset (kwcoco.CocoDataset)
@@ -182,7 +187,9 @@ def coco_watch_stats(dset):
         vid_info_str = ub.repr2(video_info, nl=-1, sort=False)
         vid_info_str = util_truncate.smart_truncate(
             vid_info_str, max_length=512, trunc_loc=0.6)
-        print('video_info = {}'.format(vid_info_str))
+
+        if with_video_info:
+            print('video_info = {}'.format(vid_info_str))
         all_sensor_entries.extend(avail_sensors)
         # video_summary_rows.append(ub.dict_diff(video_info, {'sensor_freq', 'warp_wld_to_vid'}))
         video_summary_rows.append(video_info - {'warp_wld_to_vid'})
@@ -206,8 +213,8 @@ def coco_watch_stats(dset):
 
     import pandas as pd
     video_summary = pd.DataFrame(video_summary_rows)
-    video_summary = video_summary.drop(video_summary.columns & [
-        'valid_region_geos', 'wld_crs_info', 'valid_region'], axis=1)
+    video_summary = video_summary.drop(video_summary.columns.intersection([
+        'valid_region_geos', 'wld_crs_info', 'valid_region']), axis=1)
     rich.print(video_summary)
 
     # coco_dset = dset
