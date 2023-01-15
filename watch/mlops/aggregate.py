@@ -525,10 +525,11 @@ class Aggregator:
         region_id_to_ntotal = {}
 
         def shorten(summary_table):
+            import ubelt as ub
             from watch.utils.util_stringalgo import shortest_unique_suffixes
-            cols = [c for c in summary_table.columns]
-            dotted = [c for c in cols if '.' in c]
-            shortest_unique_suffixes(dotted)
+            old_cols = summary_table.columns
+            new_cols = shortest_unique_suffixes(old_cols, sep='.')
+            mapping = ub.dzip(new_cols, old_cols)
 
             pass
 
