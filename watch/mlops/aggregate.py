@@ -618,7 +618,7 @@ class Aggregator:
         def shorten(summary_table):
             import ubelt as ub
             # fixme
-            from watch.utils.lightning_ext.util_stringalgo import shortest_unique_suffixes
+            from watch.utils.util_stringalgo import shortest_unique_suffixes
             old_cols = summary_table.columns
             new_cols = shortest_unique_suffixes(old_cols, sep='.')
             mapping = ub.dzip(old_cols, new_cols)
