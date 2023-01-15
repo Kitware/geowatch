@@ -92,24 +92,44 @@ def custom_analysis(eval_type_to_aggregator):
     if agg is not None:
         agg.analyze()
 
-    agg = eval_type_to_aggregator.get('bas_poly_eval', None)
-    if agg is not None:
+    agg0 = eval_type_to_aggregator.get('bas_poly_eval', None)
+    if agg0 is not None:
         ...
-        n_to_keys = ub.group_items(agg.macro_compatible, key=len)
+        agg = agg0
+        n_to_keys = ub.group_items(agg0.macro_compatible, key=len)
 
         chosen_macro_rois = []
         for n, keys in sorted(n_to_keys.items()):
             if n > 1:
-                chosen = max(keys, key=lambda k: (len(agg.macro_compatible[k]), k))
+                chosen = max(keys, key=lambda k: (len(agg0.macro_compatible[k]), k))
                 chosen_macro_rois.append(chosen)
         print('chosen_macro_rois = {}'.format(ub.repr2(chosen_macro_rois, nl=1)))
         for chosen in ub.ProgIter(chosen_macro_rois, desc='build macro ave'):
-            agg.build_macro_table(chosen)
+            agg0.build_macro_table(chosen)
 
-        agg_best = agg.report_best(top_k=10)
+        agg_best = agg0.report_best(top_k=10)
 
         params_of_interest = ub.oset(ub.flatten([
             v['param_hashid'].to_list() for v in reversed(agg_best.values())]))
+
+        n1 = len(params_of_interest)
+        n2 = len(agg0.index['param_hashid'])
+        print(f'Restrict to {n1} / {n2} top parameters')
+
+        subagg1 = agg0.filterto(param_hashids=params_of_interest)
+        for chosen in chosen_macro_rois:
+            subagg1.build_macro_table(chosen)
+        agg1_best = subagg1.report_best(top_k=1)
+
+        params_of_interest1 = [list(agg1_best.values())[-1]['param_hashid'].iloc[0]]
+        n1 = len(params_of_interest1)
+        n2 = len(agg0.index['param_hashid'])
+        print(f'Restrict to {n1} / {n2} top parameters')
+        subagg2 = agg0.filterto(param_hashids=params_of_interest1)
+        for chosen in chosen_macro_rois:
+            subagg2.build_macro_table(chosen)
+        agg2_best = subagg2.report_best(top_k=1)
+        agg2_best
 
         # rois = {'BR_R002', 'KR_R001', 'KR_R002', 'AE_R001', 'US_R007'}
         # rois = {'KR_R001', 'KR_R002'}
@@ -121,17 +141,6 @@ def custom_analysis(eval_type_to_aggregator):
         # params_of_interest = ['34bed2b3']
         # params_of_interest = ['8ac5594b']
 
-        subagg1 = agg.filterto(param_hashids=params_of_interest)
-        for chosen in chosen_macro_rois:
-            subagg1.build_macro_table(chosen)
-
-        # _ = subagg1.build_macro_table(rois)
-        agg1_best = subagg1.report_best(top_k=1)
-        params_of_interest1 = ub.oset(ub.flatten([
-            v['param_hashid'].to_list() for v in reversed(agg1_best.values())]))
-
-        models_of_interest = agg.filterto(param_hashids=params_of_interest1).effective_params[agg.model_cols[0]].unique()
-
         # model_of_interest =
         # models_of_interest = [
         #     'package_epoch0_step41',
@@ -139,10 +148,10 @@ def custom_analysis(eval_type_to_aggregator):
         #     'Drop4_BAS_2022_12_15GSD_BGRN_V10_epoch=0-step=4305',
         #     'Drop4_BAS_2022_12_15GSD_BGRN_V5_epoch=1-step=77702-v1',
         # ]
-        subagg2 = agg.filterto(models=models_of_interest)
+        # subagg2 = agg.filterto(models=params_of_interest1)
         # _ = subagg2.build_macro_table({'KR_R001', 'KR_R002'})
-        _ = subagg2.build_macro_table(rois)
-        subagg2.macro_analysis()
+        # _ = subagg2.build_macro_table(rois)
+        # subagg2.macro_analysis()
         # _ = subagg2.build_macro_table('max')
         # _ = subagg2.build_macro_table({'KR_R001', 'KR_R002', 'US_R007'})
         # _ = subagg2.build_macro_table({'KR_R001', 'KR_R002'})
@@ -151,7 +160,7 @@ def custom_analysis(eval_type_to_aggregator):
         # _ = subagg2.build_macro_table({'US_R007'})
         # _ = subagg2.build_macro_table({'KR_R002'})
         # subagg2.macro_analysis()
-        _ = subagg2.report_best()
+        # _ = subagg2.report_best()
 
         # rois = {'BR_R002', 'KR_R001', 'KR_R002', 'AE_R001'}
         # macro_results = subagg.build_macro_table(rois)
@@ -162,7 +171,6 @@ def custom_analysis(eval_type_to_aggregator):
         # macro_results = final_agg.build_macro_table(rois)
         # # top_idx = macro_results['metrics'].sort_values(subagg.primary_metric_cols).index[0]
         # final_scores = final_agg.report_best()
-
         # region_id_to_summary = subagg.report_best()
         # region_id_to_summary['macro_02_19bfe3']
 
@@ -587,6 +595,13 @@ class Aggregator:
             if submacro:
                 print('Macro Regions LUT: ' +  ub.urepr(submacro, nl=1))
             rich.print(justone)
+        elif only_one_top_item:
+            justone = pd.concat(list(region_id_to_summary.values()), axis=0)
+            # submacro = ub.udict(agg.macro_key_to_regions) & justone['region_id'].values
+            # if submacro:
+            #     print('Macro Regions LUT: ' +  ub.urepr(submacro, nl=1))
+            rich.print(justone)
+            rich.print('agg.macro_key_to_regions = {}'.format(ub.repr2(agg.macro_key_to_regions, nl=1)))
         else:
             for region_id, summary_table in region_id_to_summary.items():
                 ntotal = region_id_to_ntotal[region_id]
@@ -1103,6 +1118,10 @@ def bas_poly_eval_confusion_analysis(eval_fpath):
     )
     coco_visualize_videos.main(cmdline=cmdline, **kwargs)
 
+    # TODO:
+    # Run coco_align on the different sites or groups of sites to
+    # split them by category and inspect them individually.
+
 
 def plot_examples():
     pass
@@ -1222,7 +1241,7 @@ def pandas_suffix_columns(data, suffixes):
 
 
 def hash_param(row):
-    param_hashid = ub.hash_data(row, base=26)[0:8]
+    param_hashid = ub.hash_data(row, base=26)[0:12]
     return param_hashid
 
 
