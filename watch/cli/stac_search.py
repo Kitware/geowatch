@@ -264,8 +264,6 @@ class StacSearcher:
             max_items=None,
             query=query)
 
-        status = {'num_results': 0}
-
         # Found features
         try:
             items_gen = search.items()
@@ -279,8 +277,6 @@ class StacSearcher:
                 print('available_collections = {}'.format(ub.repr2(available_collections, nl=1)))
                 pass
             raise
-
-        status['num_results'] = len(items)
 
         features = [d.to_dict() for d in items]
 
@@ -412,8 +408,6 @@ def main(cmdline=True, **kwargs):
             raise ValueError('Missing stac search parameters')
         search_json = args.search_json
 
-        # Might be reasonable to parallize this, but will need locks around
-        # writes to the same file, or write to separate files and then combine
         overall_status = {
             'regions_with_results': 0,
             'regions_without_results': 0,
@@ -450,7 +444,6 @@ def main(cmdline=True, **kwargs):
                         else:
                             overall_status['regions_without_results'] += 1
 
-                    # logger.info('overall_status = {}'.format(ub.urepr(overall_status, nl=2)))
                     pman.update_info('overall_status = {}'.format(ub.urepr(overall_status, nl=2)))
 
                     for item in area_features:
