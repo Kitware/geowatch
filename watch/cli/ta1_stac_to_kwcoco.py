@@ -544,7 +544,7 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
                 # stac_dict['geometry']
                 sensor = stac_dict['properties'].get(
                     'constellation', stac_dict['properties'].get('platform', None))
-                sensor_to_one_item[sensor] = stac_item
+                sensor_to_one_item[sensor] = stac_dict
             print('sensor_to_one_item = {}'.format(ub.urepr(sensor_to_one_item, nl=True)))
 
         # Sumamrize items before processing
