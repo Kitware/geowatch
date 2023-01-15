@@ -201,6 +201,8 @@ class StacSearchConfig(scfg.Config):
 
         'allow_failure': scfg.Value(False, isflag=True, help='if True keeps running if one region fails'),
 
+        'query_workers': scfg.Value(0, help='The number of queries to run in parallel'),
+
         'cloud_cover': scfg.Value(10, help='maximum cloud cover percentage (only used if search_json is "auto")'),
         'sensors': scfg.Value("L2", help='(only used if search_json is "auto")'),
         'api_key': scfg.Value('env:SMART_STAC_API_KEY', help='The API key or where to get it (only used if search_json is "auto")'),
@@ -225,14 +227,10 @@ class StacSearcher:
         >>> end = '2020-05-04'
         >>> query = {}
         >>> headers = {}
-        >>> outfile = ub.Path(tempfile.mktemp())
         >>> self = StacSearcher()
-        >>> self.by_geometry(provider, geom, collections, start_date, end_date,
-        >>>                  outfile, query, headers)
-        >>> results_text = outfile.read_text()
-        >>> for result in [r for r in results_text.split('\n') if r]:
-        >>>     item = json.loads(result)
-        >>>     print('item = {}'.format(ub.repr2(item, nl=-1)))
+        >>> features = self.by_geometry(provider, geom, collections, start_date, end_date,
+        >>>                  query, headers)
+        >>> print('features = {}'.format(ub.urepr(features, nl=1)))
     """
 
     def __init__(self, logger=None):
@@ -240,19 +238,33 @@ class StacSearcher:
             logger = util_logging.PrintLogger(verbose=1)
         self.logger = logger
 
-    def by_geometry(self, provider, geom, collections, start, end, outfile,
-                    query, headers, max_products_per_region=None):
-        self.logger.info('Processing ' + provider)
-        catalog = pystac_client.Client.open(provider, headers=headers)
+    def by_geometry(self, provider, geom, collections, start, end,
+                    query, headers, max_products_per_region=None, verbose=1):
+        if verbose:
+            self.logger.info('Processing ' + provider)
+        # hack: is there a better way to declare (i.e. in the
+        # stac_search_builder) that the sign inplace is required to access the
+        # planetary computer data?
+        client_kwargs = {}
+        if 'planetarycomputer' in provider:
+            import planetary_computer as pc
+            client_kwargs['modifier'] = pc.sign_inplace
+
+        catalog = pystac_client.Client.open(provider, headers=headers,
+                                            **client_kwargs)
 
         daterange = [start, end]
 
+        if verbose:
+            self.logger.info(f'Query {collections} between {start} and {end}')
         search = catalog.search(
             collections=collections,
             datetime=daterange,
             intersects=geom,
             max_items=None,
             query=query)
+
+        status = {'num_results': 0}
 
         # Found features
         try:
@@ -268,15 +280,18 @@ class StacSearcher:
                 pass
             raise
 
+        status['num_results'] = len(items)
+
         features = [d.to_dict() for d in items]
 
         dates_found = [item.datetime for item in items]
-        if dates_found:
-            min_date_found = min(dates_found).date().isoformat()
-            max_date_found = max(dates_found).date().isoformat()
-            self.logger.info(f'Search found {len(items)} items for {collections} between {min_date_found} and {max_date_found}')
-        else:
-            self.logger.warning(f'Search found {len(items)} items for {collections}')
+        if verbose:
+            if dates_found:
+                min_date_found = min(dates_found).date().isoformat()
+                max_date_found = max(dates_found).date().isoformat()
+                self.logger.info(f'Search found {len(items)} items for {collections} between {min_date_found} and {max_date_found}')
+            else:
+                self.logger.warning(f'Search found {len(items)} items for {collections}')
 
         if max_products_per_region and max_products_per_region < len(features):
             # Filter to a max number of items per region for testing
@@ -296,12 +311,9 @@ class StacSearcher:
             take_idxs = sampler.sample(rng=rng)
 
             features = list(ub.take(features, take_idxs))
-            self.logger.info(f'Filtered to {len(features)} items')
-
-        with open(outfile, 'a') as the_file:
-            for item in features:
-                the_file.write(json.dumps(item) + '\n')
-        self.logger.info(f'Saved STAC results to: {outfile}')
+            if verbose:
+                self.logger.info(f'Filtered to {len(features)} items')
+        return features
 
     def by_id(self, provider, collections, stac_id, outfile, query, headers):
         raise NotImplementedError
@@ -402,12 +414,47 @@ def main(cmdline=True, **kwargs):
 
         # Might be reasonable to parallize this, but will need locks around
         # writes to the same file, or write to separate files and then combine
-        for region_fpath in region_file_fpaths:
-            try:
-                area_query(region_fpath, search_json, searcher, temp_dir, dest_path, config, logger)
-            except Exception:
-                if not args.allow_failure:
-                    raise
+        overall_status = {
+            'regions_with_results': 0,
+            'regions_without_results': 0,
+            'regions_with_errors': 0,
+            'total_regions': len(region_file_fpaths),
+        }
+
+        query_workers = config['query_workers']
+        pool = ub.JobPool(mode='thread', max_workers=query_workers)
+
+        from watch.utils import util_progress
+        pman = util_progress.ProgressManager(
+            backend='rich' if query_workers > 0 else 'progiter')
+        with pman:
+            for region_fpath in pman(region_file_fpaths, desc='submit query jobs'):
+                pool.submit(area_query, region_fpath, search_json, searcher,
+                            temp_dir, config, logger,
+                            verbose=(query_workers == 0))
+
+            with open(dest_path, 'a') as the_file:
+                for job in pman(pool.as_completed(),
+                                total=len(region_file_fpaths),
+                                desc='collect query jobs', verbose=3):
+                    try:
+                        area_features = job.result()
+                    except Exception:
+                        overall_status['regions_without_results'] += 1
+                        overall_status['regions_with_errors'] += 1
+                        if not args.allow_failure:
+                            raise
+                    else:
+                        if len(area_features):
+                            overall_status['regions_with_results'] += 1
+                        else:
+                            overall_status['regions_without_results'] += 1
+
+                    # logger.info('overall_status = {}'.format(ub.urepr(overall_status, nl=2)))
+                    pman.update_info('overall_status = {}'.format(ub.urepr(overall_status, nl=2)))
+
+                    for item in area_features:
+                        the_file.write(json.dumps(item) + '\n')
     else:
         id_query(searcher, logger, dest_path, temp_dir, args)
 
@@ -443,8 +490,9 @@ def _auto_search_params_from_region(r_file_loc, config):
     return search_params
 
 
-def area_query(region_fpath, search_json, searcher, temp_dir, dest_path, config, logger):
-    logger.info(f'Query region file: {region_fpath}')
+def area_query(region_fpath, search_json, searcher, temp_dir, config, logger, verbose=1):
+    if verbose:
+        logger.info(f'Query region file: {region_fpath}')
 
     if str(region_fpath).startswith('s3://'):
         r_file_loc = util_s3.get_file_from_s3(region_fpath, temp_dir)
@@ -479,20 +527,32 @@ def area_query(region_fpath, search_json, searcher, temp_dir, dest_path, config,
     geom = geom_shape(regions[0]['geometry'])
 
     searches = search_params['stac_search']
-    logger.info(f'Performing {len(searches)} geometry stac searches')
+    if verbose:
+        logger.info(f'Performing {len(searches)} geometry stac searches')
 
+    area_features = []
     for s in search_params['stac_search']:
-        searcher.by_geometry(
+        features = searcher.by_geometry(
             provider=s['endpoint'],
             geom=geom,
             collections=s['collections'],
             start=s['start_date'],
             end=s['end_date'],
-            outfile=dest_path,
             query=s.get('query', {}),
             headers=s.get('headers', {}),
-            max_products_per_region=max_products_per_region
+            max_products_per_region=max_products_per_region,
+            verbose=verbose,
         )
+        area_features.extend(features)
+
+    if verbose:
+        total_results = len(area_features)
+        if total_results:
+            logger.info(f'Total results for region: {total_results}')
+        else:
+            logger.warning(f'Total results for region: {total_results}')
+
+    return area_features
 
 
 def id_query(searcher, logger, dest_path, temp_dir, args):

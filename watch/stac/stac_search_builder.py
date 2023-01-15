@@ -228,6 +228,14 @@ _PUBLIC_L2_PRODUCTS = {
 }
 
 
+# https://www.drivendata.org/competitions/143/tick-tick-bloom/page/650/#sentinel-2-1
+# https://planetarycomputer.microsoft.com/dataset/landsat-c2-l2
+_PUBLIC_L2_PRODUCTS['planetarycomputer'] = {
+    'collections': ['landsat-c2-l2', 'sentinel-2-l2a'],
+    "endpoint": "https://planetarycomputer.microsoft.com/api/stac/v1",
+}
+
+
 _PUBLIC_ARD_PRODUCTS = {
     # https://stacindex.org/catalogs/usgs-landsat-collection-2-api#/
     # Surface Reflectance
