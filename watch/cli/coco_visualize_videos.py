@@ -124,6 +124,7 @@ class CocoVisualizeConfig(scfg.Config):
             ''')),
 
         'only_boxes': scfg.Value(False, isflag=True, help='If false, draws full annotation - which can be time consuming if there are a lot'),
+        'draw_labels': scfg.Value(True, help='if True draw text labels on polygons'),
 
         # TODO: better support for this
         # TODO: use the kwcoco_video_data, has good logic for this
@@ -445,8 +446,8 @@ def main(cmdline=True, **kwargs):
         common_kw = ub.udict(config) & {
             'resolution', 'draw_header', 'draw_chancode', 'skip_aggressive',
             'stack', 'min_dim', 'min_dim', 'verbose', 'only_boxes',
-            'fixed_normalization_scheme',
-            'any3', 'cmap', 'role_order',
+            'draw_labels', 'fixed_normalization_scheme', 'any3', 'cmap',
+            'role_order',
         }
 
         if config['zoom_to_tracks']:
@@ -855,6 +856,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                any3=True, dset_idstr='',
                                skip_missing=False,
                                only_boxes=1,
+                               draw_labels=1,
                                cmap='viridis',
                                max_dim=None,
                                min_dim=None,
@@ -1074,7 +1076,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                 coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
                 delayed, chan_row, finalize_opts, verbose, skip_missing,
                 skip_aggressive, chan_to_normalizer, cmap, header_lines,
-                valid_image_poly, draw_imgs, draw_anns, only_boxes,
+                valid_image_poly, draw_imgs, draw_anns, only_boxes, draw_labels,
                 role_to_dets, valid_video_poly, stack, draw_header, stack_idx,
                 request_roles)
             if stack:
@@ -1154,8 +1156,8 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
                     delayed, chan_row, finalize_opts, verbose, skip_missing,
                     skip_aggressive, chan_to_normalizer, cmap, header_lines,
                     valid_image_poly, draw_imgs, draw_anns, only_boxes,
-                    role_to_dets, valid_video_poly, stack, draw_header,
-                    stack_idx, request_roles):
+                    draw_labels, role_to_dets, valid_video_poly, stack,
+                    draw_header, stack_idx, request_roles):
     from watch.utils import util_kwimage
     chan_pname = chan_row['pname']
     chan_group_obj = chan_row['chan']
@@ -1411,7 +1413,7 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
             for role_dets in requested_role_to_dets.values():
                 # TODO: better role handling
                 colors = role_dets.data['colors']
-                draw_on_kwargs['labels'] = True
+                draw_on_kwargs['labels'] = draw_labels
                 if verbose > 100:
                     print('About to draw dets on a canvas')
                 ann_canvas = role_dets.draw_on(

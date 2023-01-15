@@ -84,7 +84,7 @@ def main(cmdline=True, **kwargs):
 
     eval_type_to_aggregator = build_aggregators(eval_type_to_results)
 
-    custom_analysis(eval_type_to_aggregator)
+    custom_analysis(eval_type_to_aggregator, config)
 
 
 def generic_analysis(agg0, macro_groups=None, selector=None):
@@ -131,11 +131,12 @@ def generic_analysis(agg0, macro_groups=None, selector=None):
     for chosen in chosen_macro_rois:
         subagg2.build_macro_table(chosen)
     agg2_best = subagg2.report_best(top_k=1)  # NOQA
-    to_visualize_fpaths = list(subagg2.results['fpaths'])
-    return to_visualize_fpaths
+    return subagg2
 
 
-def custom_analysis(eval_type_to_aggregator):
+def custom_analysis(eval_type_to_aggregator, config):
+
+    aggregate_dpath = ub.Path(config['root_dpath'] / 'aggregate')
 
     macro_groups = [
         {'KR_R001', 'KR_R002'},
@@ -147,10 +148,18 @@ def custom_analysis(eval_type_to_aggregator):
 
     agg0 = eval_type_to_aggregator.get('bas_poly_eval', None)
     if agg0 is not None:
-        to_visualize_fpaths = generic_analysis(agg0, macro_groups, selector)
-        for eval_fpath in to_visualize_fpaths:
+        agg_group_dpath = aggregate_dpath / ('bas_poly_agg_' + ub.timestamp())
+        agg_group_dpath = agg_group_dpath.ensuredir()
+
+        subagg2 = generic_analysis(agg0, macro_groups, selector)
+        to_visualize_fpaths = list(subagg2.results['fpaths'])
+        # make a analysis link to the final product
+        for eval_fpath in to_visualize_fpaths[::-1]:
+            print((eval_fpath.parent / 'job_config.json').read_text())
             print(f'eval_fpath={eval_fpath}')
-            bas_poly_eval_confusion_analysis(eval_fpath)
+            eval_dpath = bas_poly_eval_confusion_analysis(eval_fpath)
+            # TODO: use the region_id.
+            ub.symlink(real_path=eval_dpath, link_path=agg_group_dpath / eval_dpath.name)
 
         # rois = {'BR_R002', 'KR_R001', 'KR_R002', 'AE_R001', 'US_R007'}
         # rois = {'KR_R001', 'KR_R002'}
@@ -436,7 +445,7 @@ class Aggregator:
         new_results = {}
         for key, val in agg.results.items():
             if isinstance(val, list):
-                new_results[key] = ub.compress(val, flags)
+                new_results[key] = list(ub.compress(val, flags))
             elif isinstance(val, pd.DataFrame):
                 new_results[key] = val[flags].copy()
             else:
@@ -893,11 +902,17 @@ def bas_poly_eval_confusion_analysis(eval_fpath):
     assign1 = pd.read_csv(assign_fpath1)
     assign2 = pd.read_csv(assign_fpath2)
 
-    if any('_seq_' in m for m in assign2['site model'] if m):
-        raise AssertionError
-
-    # fixme: if there are "seq" in the site names, we need to fix those old
+    # hack: if there are "seq" in the site names, we need to fix those old
     # files by reinvoking.
+    if any('_seq_' in m for m in assign2['site model'] if m):
+        invoke_fpath = eval_fpath.parent / 'invoke.sh'
+        info = ub.cmd(f'bash {invoke_fpath}', verbose=3)
+
+        assign1 = pd.read_csv(assign_fpath1)
+        assign2 = pd.read_csv(assign_fpath2)
+        if any('_seq_' in m for m in assign2['site model'] if m):
+            raise AssertionError
+
     true_confusion_rows = []
     pred_confusion_rows = []
     site_to_status = {}
@@ -1141,18 +1156,22 @@ def bas_poly_eval_confusion_analysis(eval_fpath):
     print(f'repr3={repr3}')
 
     set(dst_dset.annots().lookup('role', None))
-
-    dst_dset.annots().take([0, 1, 2])
+    # dst_dset.annots().take([0, 1, 2])
 
     from watch.cli import coco_visualize_videos
     kwargs = dict(
         src=dst_dset,
         smart=True,
         role_order=['truth_confusion', 'pred_confusion'],
-        resolution='5 GSD',
-        workers=0,
+        resolution='10 GSD',
+        # workers=0,
+        workers='avail',
+        draw_labels=False,
     )
     coco_visualize_videos.main(cmdline=cmdline, **kwargs)
+
+    eval_dpath = ub.Path(dst_dset.fpath).parent
+    return eval_dpath
 
     # TODO:
     # Run coco_align on the different sites or groups of sites to
