@@ -415,10 +415,11 @@ def main(cmdline=True, **kwargs):
             'total_regions': len(region_file_fpaths),
         }
 
-        query_workers = config['query_workers']
+        from watch.utils import util_progress
+        from watch.utils import util_parallel
+        query_workers = util_parallel.coerce_num_workers(config['query_workers'])
         pool = ub.JobPool(mode='thread', max_workers=query_workers)
 
-        from watch.utils import util_progress
         pman = util_progress.ProgressManager(
             backend='rich' if query_workers > 0 else 'progiter')
         with pman:
