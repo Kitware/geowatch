@@ -530,7 +530,6 @@ class Aggregator:
             old_cols = summary_table.columns
             new_cols = shortest_unique_suffixes(old_cols, sep='.')
             mapping = ub.dzip(new_cols, old_cols)
-
             pass
 
         for region_id, group in agg.region_to_tables.items():
