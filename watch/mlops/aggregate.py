@@ -526,11 +526,13 @@ class Aggregator:
 
         def shorten(summary_table):
             import ubelt as ub
-            from watch.utils.util_stringalgo import shortest_unique_suffixes
+            # fixme
+            from watch.utils.lightning_ext.util_stringalgo import shortest_unique_suffixes
             old_cols = summary_table.columns
             new_cols = shortest_unique_suffixes(old_cols, sep='.')
-            mapping = ub.dzip(new_cols, old_cols)
-            pass
+            mapping = ub.dzip(old_cols, new_cols)
+            summary_table = summary_table.rename(columns=mapping)
+            return summary_table
 
         for region_id, group in agg.region_to_tables.items():
             metric_group = group['metrics']
@@ -546,7 +548,7 @@ class Aggregator:
             # hashed_params, param_lut = pandas_hashed_rows(top_params, hashed_colname='param_hashid')
             big_param_lut.update(param_lut)
             summary_table = pd.concat([top_indexes, top_metrics], axis=1)
-            region_id_to_summary[region_id] = summary_table
+            region_id_to_summary[region_id] = shorten(summary_table)
             region_id_to_ntotal[region_id] = len(metric_group)
 
         # In reverse order (so they correspond with last region table)
