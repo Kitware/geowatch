@@ -87,49 +87,80 @@ def main(cmdline=True, **kwargs):
     custom_analysis(eval_type_to_aggregator)
 
 
-def custom_analysis(eval_type_to_aggregator):
-    agg = eval_type_to_aggregator.get('sc_poly_eval', None)
-    if agg is not None:
-        agg.analyze()
+def generic_analysis(agg0, macro_groups=None, selector=None):
 
-    agg0 = eval_type_to_aggregator.get('bas_poly_eval', None)
-    if agg0 is not None:
-        ...
-        agg = agg0
+    if macro_groups is None:
         n_to_keys = ub.group_items(agg0.macro_compatible, key=len)
-
         chosen_macro_rois = []
         for n, keys in sorted(n_to_keys.items()):
             if n > 1:
                 chosen = max(keys, key=lambda k: (len(agg0.macro_compatible[k]), k))
                 chosen_macro_rois.append(chosen)
-        print('chosen_macro_rois = {}'.format(ub.repr2(chosen_macro_rois, nl=1)))
-        for chosen in ub.ProgIter(chosen_macro_rois, desc='build macro ave'):
-            agg0.build_macro_table(chosen)
+    else:
+        chosen_macro_rois = macro_groups
 
-        agg_best = agg0.report_best(top_k=10)
+    if selector is None:
+        selector = chosen_macro_rois[-1]
 
-        params_of_interest = ub.oset(ub.flatten([
-            v['param_hashid'].to_list() for v in reversed(agg_best.values())]))
+    print('chosen_macro_rois = {}'.format(ub.repr2(chosen_macro_rois, nl=1)))
+    for chosen in ub.ProgIter(chosen_macro_rois, desc='build macro ave'):
+        agg0.build_macro_table(chosen)
 
-        n1 = len(params_of_interest)
-        n2 = len(agg0.index['param_hashid'])
-        print(f'Restrict to {n1} / {n2} top parameters')
+    agg_best = agg0.report_best(top_k=10)
 
-        subagg1 = agg0.filterto(param_hashids=params_of_interest)
-        for chosen in chosen_macro_rois:
-            subagg1.build_macro_table(chosen)
-        agg1_best = subagg1.report_best(top_k=1)
+    params_of_interest = ub.oset(ub.flatten([
+        v['param_hashid'].to_list() for v in reversed(agg_best.values())]))
 
-        params_of_interest1 = [list(agg1_best.values())[-1]['param_hashid'].iloc[0]]
-        n1 = len(params_of_interest1)
-        n2 = len(agg0.index['param_hashid'])
-        print(f'Restrict to {n1} / {n2} top parameters')
-        subagg2 = agg0.filterto(param_hashids=params_of_interest1)
-        for chosen in chosen_macro_rois:
-            subagg2.build_macro_table(chosen)
-        agg2_best = subagg2.report_best(top_k=1)
-        agg2_best
+    n1 = len(params_of_interest)
+    n2 = len(agg0.index['param_hashid'])
+    print(f'Restrict to {n1} / {n2} top parameters')
+
+    subagg1 = agg0.filterto(param_hashids=params_of_interest)
+    for chosen in chosen_macro_rois:
+        subagg1.build_macro_table(chosen)
+    agg1_best = subagg1.report_best(top_k=1)
+
+    param_hashid = agg1_best[hash_regions(selector)]['param_hashid'].iloc[0]
+    params_of_interest1 = [param_hashid]
+    # params_of_interest1 = [list(agg1_best.values())[-1]['param_hashid'].iloc[0]]
+
+    n1 = len(params_of_interest1)
+    n2 = len(agg0.index['param_hashid'])
+    print(f'Restrict to {n1} / {n2} top parameters')
+    subagg2 = agg0.filterto(param_hashids=params_of_interest1)
+    for chosen in chosen_macro_rois:
+        subagg2.build_macro_table(chosen)
+    agg2_best = subagg2.report_best(top_k=1)  # NOQA
+    to_visualize_fpaths = list(subagg2.results['fpaths'])
+    return to_visualize_fpaths
+
+
+def custom_analysis(eval_type_to_aggregator):
+
+    macro_groups = [
+        {'KR_R001', 'KR_R002'},
+        {'KR_R001', 'KR_R002', 'US_R007'},
+        {'BR_R002', 'KR_R001', 'KR_R002', 'AE_R001'},
+        {'BR_R002', 'KR_R001', 'KR_R002', 'AE_R001', 'US_R007'},
+    ]
+    selector = {'BR_R002', 'KR_R001', 'KR_R002', 'AE_R001'}
+
+    agg0 = eval_type_to_aggregator.get('bas_pxl_eval')
+    if agg0 is not None:
+        # agg[agg.primary_metric_cols]
+        generic_analysis(agg0, macro_groups, selector)
+
+    agg0 = eval_type_to_aggregator.get('sc_poly_eval', None)
+    if agg0 is not None:
+        ...
+        # agg0.analyze()
+
+    agg0 = eval_type_to_aggregator.get('bas_poly_eval', None)
+    if agg0 is not None:
+        to_visualize_fpaths = generic_analysis(agg0, macro_groups, selector)
+        for eval_fpath in to_visualize_fpaths:
+            print(f'eval_fpath={eval_fpath}')
+            bas_poly_eval_confusion_analysis(eval_fpath)
 
         # rois = {'BR_R002', 'KR_R001', 'KR_R002', 'AE_R001', 'US_R007'}
         # rois = {'KR_R001', 'KR_R002'}
@@ -862,6 +893,11 @@ def bas_poly_eval_confusion_analysis(eval_fpath):
     assign1 = pd.read_csv(assign_fpath1)
     assign2 = pd.read_csv(assign_fpath2)
 
+    if any('_seq_' in m for m in assign2['site model'] if m):
+        raise AssertionError
+
+    # fixme: if there are "seq" in the site names, we need to fix those old
+    # files by reinvoking.
     true_confusion_rows = []
     pred_confusion_rows = []
     site_to_status = {}
@@ -1075,7 +1111,7 @@ def bas_poly_eval_confusion_analysis(eval_fpath):
         clear_existing=False,
         src=dst_dset,
         dst='return',
-        workers=0,
+        workers=2,
     )
     true_kwargs = common_kwargs | ub.udict(
         role='truth_confusion',

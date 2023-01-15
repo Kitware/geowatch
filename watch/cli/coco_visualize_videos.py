@@ -961,13 +961,16 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             if cid is not None:
                 cat = coco_dset.cats[cid]
                 color = cat.get('color', color)
-            # temporary hack
-            if 'misc_info' in ann:
-                misc_info = ann['misc_info']
-                if isinstance(misc_info, dict):
-                    color = misc_info.get('confusion_color', color)
+            if 0:
+                # todo better role support
+                # temporary hack
+                if 'misc_info' in ann:
+                    misc_info = ann['misc_info']
+                    if isinstance(misc_info, dict):
+                        color = misc_info.get('confusion_color', color)
             if color is None:
                 # color = 'kitware_red'
+                # color = 'kitware_lightgray'
                 color = 'white'
             colors.append(color)
 
@@ -1407,15 +1410,15 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
 
             for role_dets in requested_role_to_dets.values():
                 # TODO: better role handling
-                # colors = role_dets.data['colors']
+                colors = role_dets.data['colors']
                 draw_on_kwargs['labels'] = True
                 if verbose > 100:
                     print('About to draw dets on a canvas')
                 ann_canvas = role_dets.draw_on(
                     ann_canvas,
-                    # color=colors,
-                    # ssegkw={'fill': False, 'border': True, 'edgecolor': colors},
-                    color='classes',
+                    color=colors,
+                    ssegkw={'fill': False, 'border': True, 'edgecolor': colors},
+                    # color='classes',
                     **draw_on_kwargs)
                 if verbose > 100:
                     print('That seemed to work')
