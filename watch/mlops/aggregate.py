@@ -702,7 +702,7 @@ class Aggregator:
                     flags = kwarray.isect_flags(group['region_id'], avail)
                     comparable_groups.append(group[flags])
 
-        macro_key = f'macro_{len(regions_of_interest):02d}_{ub.hash_data(sorted(regions_of_interest))[0:6]}'
+        macro_key = hash_regions(regions_of_interest)
 
         sum_cols = [
             'bas_poly_eval.metrics.bas_tp',
@@ -750,7 +750,7 @@ class Aggregator:
                 aggid_row = aggid_df.iloc[0]
             else:
                 aggid_row = pd.Series({
-                    k: f'macro_{len(v):02d}_{ub.hash_data(sorted(v.to_list()))[0:6]}'
+                    k: hash_regions(v)
                     for k, v in aggid_df.T.iterrows()
                 })
             aggid_row['macro_size'] = len(aggid_df)
