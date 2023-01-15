@@ -68,8 +68,12 @@ SUPPORTED_COARSE_PLATFORMS = {
     'PD': {'PlanetScope', 'dove', 'PD'},  # Planet
 }
 
-PLATFORM_LOWER_TO_PLATFORM_STANDARD_CASE = {
-    v.lower(): v
+
+def normalize_str(s):
+    return s.lower().replace('-', '_')
+
+PLATFORM_NORMALIZED_TO_PLATFORM_STANDARD_CASE = {
+    normalize_str(v): v
     for vs in SUPPORTED_COARSE_PLATFORMS.values()
     for v in vs
 }
@@ -454,7 +458,7 @@ def _stac_item_to_kwcoco_image(stac_item,
             platform = 'PD'
 
     # Convet to standard case
-    platform = PLATFORM_LOWER_TO_PLATFORM_STANDARD_CASE.get(platform.lower(), platform)
+    platform = PLATFORM_NORMALIZED_TO_PLATFORM_STANDARD_CASE.get(normalize_str(platform), platform)
 
     if platform not in SUPPORTED_PLATFORMS:
         print("* Warning * platform '{}' not supported, not adding to "
