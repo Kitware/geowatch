@@ -95,6 +95,7 @@ def custom_analysis(eval_type_to_aggregator):
     agg = eval_type_to_aggregator.get('bas_poly_eval', None)
     if agg is not None:
         ...
+        agg.build_macro_table()
         _ = agg.report_best(top_k=10)
 
         # rois = {'BR_R002', 'KR_R001', 'KR_R002', 'AE_R001', 'US_R007'}
@@ -517,11 +518,20 @@ class Aggregator:
         analysis.results
         analysis.analysis()
 
-    def report_best(agg, top_k=3):
+    def report_best(agg, top_k=3, shorten=True):
         import rich
         region_id_to_summary = {}
         big_param_lut = {}
         region_id_to_ntotal = {}
+
+        def shorten(summary_table):
+            from watch.utils.util_stringalgo import shortest_unique_suffixes
+            cols = [c for c in summary_table.columns]
+            dotted = [c for c in cols if '.' in c]
+            shortest_unique_suffixes(dotted)
+
+            pass
+
         for region_id, group in agg.region_to_tables.items():
             metric_group = group['metrics']
             metric_group = metric_group.sort_values(agg.primary_metric_cols)
