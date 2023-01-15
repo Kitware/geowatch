@@ -87,54 +87,9 @@ def main(cmdline=True, **kwargs):
     custom_analysis(eval_type_to_aggregator, config)
 
 
-def generic_analysis(agg0, macro_groups=None, selector=None):
-
-    if macro_groups is None:
-        n_to_keys = ub.group_items(agg0.macro_compatible, key=len)
-        chosen_macro_rois = []
-        for n, keys in sorted(n_to_keys.items()):
-            if n > 1:
-                chosen = max(keys, key=lambda k: (len(agg0.macro_compatible[k]), k))
-                chosen_macro_rois.append(chosen)
-    else:
-        chosen_macro_rois = macro_groups
-
-    if selector is None:
-        selector = chosen_macro_rois[-1]
-
-    print('chosen_macro_rois = {}'.format(ub.repr2(chosen_macro_rois, nl=1)))
-    for chosen in ub.ProgIter(chosen_macro_rois, desc='build macro ave'):
-        agg0.build_macro_table(chosen)
-
-    agg_best = agg0.report_best(top_k=10)
-
-    params_of_interest = ub.oset(ub.flatten([
-        v['param_hashid'].to_list() for v in reversed(agg_best.values())]))
-
-    n1 = len(params_of_interest)
-    n2 = len(agg0.index['param_hashid'])
-    print(f'Restrict to {n1} / {n2} top parameters')
-
-    subagg1 = agg0.filterto(param_hashids=params_of_interest)
-    for chosen in chosen_macro_rois:
-        subagg1.build_macro_table(chosen)
-    agg1_best = subagg1.report_best(top_k=1)
-
-    param_hashid = agg1_best[hash_regions(selector)]['param_hashid'].iloc[0]
-    params_of_interest1 = [param_hashid]
-    # params_of_interest1 = [list(agg1_best.values())[-1]['param_hashid'].iloc[0]]
-
-    n1 = len(params_of_interest1)
-    n2 = len(agg0.index['param_hashid'])
-    print(f'Restrict to {n1} / {n2} top parameters')
-    subagg2 = agg0.filterto(param_hashids=params_of_interest1)
-    for chosen in chosen_macro_rois:
-        subagg2.build_macro_table(chosen)
-    agg2_best = subagg2.report_best(top_k=1)  # NOQA
-    return subagg2
-
-
 def custom_analysis(eval_type_to_aggregator, config):
+
+    timestamp = ub.timestamp()
 
     aggregate_dpath = ub.Path(config['root_dpath'] / 'aggregate')
 
@@ -148,15 +103,17 @@ def custom_analysis(eval_type_to_aggregator, config):
 
     agg0 = eval_type_to_aggregator.get('bas_poly_eval', None)
     if agg0 is not None:
-        agg_group_dpath = aggregate_dpath / ('bas_poly_agg_' + ub.timestamp())
-        agg_group_dpath = agg_group_dpath.ensuredir()
 
         subagg2 = generic_analysis(agg0, macro_groups, selector)
-        to_visualize_fpaths = list(subagg2.results['fpaths'])
+
+        to_visualize_fpaths = list(subagg2.results['fpaths']['fpath'])
+        agg_group_dpath = aggregate_dpath / ('bas_poly_agg_' + timestamp)
+        agg_group_dpath = agg_group_dpath.ensuredir()
         # make a analysis link to the final product
         for eval_fpath in to_visualize_fpaths[::-1]:
             print((eval_fpath.parent / 'job_config.json').read_text())
             print(f'eval_fpath={eval_fpath}')
+            ub.symlink(real_path=eval_fpath.parent, link_path=agg_group_dpath / eval_fpath.parent.name)
             eval_dpath = bas_poly_eval_confusion_analysis(eval_fpath)
             # TODO: use the region_id.
             ub.symlink(real_path=eval_dpath, link_path=agg_group_dpath / eval_dpath.name)
@@ -218,6 +175,77 @@ def custom_analysis(eval_type_to_aggregator, config):
     plot_examples()  # TODO
 
 
+def generic_analysis(agg0, macro_groups=None, selector=None):
+
+    HACK_DEDUPLICATE = 1
+    if HACK_DEDUPLICATE:
+        # There are some circumstances where we can have duplicates region / param
+        # hash ids due to munging of the param fields. In this case they should
+        # have the same or similar results. Hack to deduplicate them.
+        ideally_unique = list(map(ub.hash_data, agg0.index[['region_id', 'param_hashid']].to_dict('records')))
+        dupxs = ub.find_duplicates(ideally_unique)
+        remove_idxs = []
+        for k, dup_idxs in dupxs.items():
+            # dup_df = agg0.metrics.iloc[dup_idxs]
+            mtimes = [ub.Path(fpath).stat().st_mtime for fpath in agg0.results['fpaths'].iloc[dup_idxs]['fpath']]
+            keep_idx = dup_idxs[ub.argmax(mtimes)]
+            remove_idxs.extend(set(dup_idxs) - {keep_idx})
+
+            # is_safe_cols = {
+            #     k: ub.allsame(vs, eq=nan_eq)
+            #     for k, vs in dup_df.T.iterrows()}
+            ...
+        flags = ~kwarray.boolmask(remove_idxs, shape=len(agg0.index.index))
+        print(f'hack to remove {len(remove_idxs)} / {len(agg0.index.index)} duplicates')
+        agg0_ = agg0.compress(flags)
+    else:
+        agg0_ = agg0
+
+    if macro_groups is None:
+        n_to_keys = ub.group_items(agg0_.macro_compatible, key=len)
+        chosen_macro_rois = []
+        for n, keys in sorted(n_to_keys.items()):
+            if n > 1:
+                chosen = max(keys, key=lambda k: (len(agg0_.macro_compatible[k]), k))
+                chosen_macro_rois.append(chosen)
+    else:
+        chosen_macro_rois = macro_groups
+
+    if selector is None:
+        selector = chosen_macro_rois[-1]
+
+    print('chosen_macro_rois = {}'.format(ub.repr2(chosen_macro_rois, nl=1)))
+    for chosen in ub.ProgIter(chosen_macro_rois, desc='build macro ave'):
+        agg0_.build_macro_table(chosen)
+
+    agg_best = agg0_.report_best(top_k=10)
+
+    params_of_interest = ub.oset(ub.flatten([
+        v['param_hashid'].to_list() for v in reversed(agg_best.values())]))
+
+    n1 = len(params_of_interest)
+    n2 = len(agg0_.index['param_hashid'])
+    print(f'Restrict to {n1} / {n2} top parameters')
+
+    subagg1 = agg0_.filterto(param_hashids=params_of_interest)
+    for chosen in chosen_macro_rois:
+        subagg1.build_macro_table(chosen)
+    agg1_best = subagg1.report_best(top_k=1)
+
+    param_hashid = agg1_best[hash_regions(selector)]['param_hashid'].iloc[0]
+    params_of_interest1 = [param_hashid]
+    # params_of_interest1 = [list(agg1_best.values())[-1]['param_hashid'].iloc[0]]
+
+    n1 = len(params_of_interest1)
+    n2 = len(agg0_.index['param_hashid'])
+    print(f'Restrict to {n1} / {n2} top parameters')
+    subagg2 = agg0_.filterto(param_hashids=params_of_interest1)
+    for chosen in chosen_macro_rois:
+        subagg2.build_macro_table(chosen)
+    agg2_best = subagg2.report_best(top_k=1)  # NOQA
+    return subagg2
+
+
 def build_tables(config):
     import pandas as pd
     from watch.utils import util_progress
@@ -241,10 +269,10 @@ def build_tables(config):
     node_eval_infos = [
         {'name': 'bas_pxl_eval', 'out_key': 'eval_pxl_fpath',
          'result_loader': smart_result_parser.load_pxl_eval},
-        {'name': 'bas_poly_eval', 'out_key': 'eval_fpath',
-         'result_loader': smart_result_parser.load_eval_trk_poly},
         {'name': 'sc_poly_eval', 'out_key': 'eval_fpath',
          'result_loader': smart_result_parser.load_eval_act_poly},
+        {'name': 'bas_poly_eval', 'out_key': 'eval_fpath',
+         'result_loader': smart_result_parser.load_eval_trk_poly},
     ]
 
     # pman = util_progress.ProgressManager(backend='rich')
@@ -328,12 +356,12 @@ def build_tables(config):
             trunc_params, mappings = truncate_dataframe_items(params)
             results = {
                 'mappings': mappings,
-                'fpaths': cols['fpaths'],
+                'fpaths': pd.DataFrame(cols['fpaths'], columns=['fpath']),
                 'index': pd.DataFrame(cols['index']),
                 'metrics': pd.DataFrame(cols['metrics']),
                 'params': pd.DataFrame(cols['params']),
                 'trunc_params': trunc_params,
-                'param_types': cols['param_types'],
+                'param_types': pd.DataFrame(cols['param_types']),
             }
             eval_type_to_results[node_name] = results
 
@@ -373,7 +401,11 @@ def load_result_worker(fpath, node_name, out_node_key):
     }
     metrics = smart_result_parser._add_prefix(node_name + '.metrics.', result['metrics'])
     params = smart_result_parser._add_prefix(node_name + '.params.', config_)
+    # These are the old way of loading params, but they are also
+    # the resolved params, which we should take into account
     param_types = result['param_types']
+    param_types = ub.udict.union({}, *list(param_types.values()))
+
     return fpath, index, metrics, params, param_types
 
 
@@ -1074,15 +1106,15 @@ def bas_poly_eval_confusion_analysis(eval_fpath):
             simple_geom = geom.simplify(0.0002)  # Hack, should do this properly in the tracker
             new_geom = kwimage.MultiPolygon.coerce(simple_geom).to_geojson()
             feat['geometry'] = new_geom
-            misc_info = props['misc_info']
-            print('misc_info = {}'.format(ub.urepr(misc_info, nl=1)))
+            # misc_info = props['misc_info']
+            # print('misc_info = {}'.format(ub.urepr(misc_info, nl=1)))
 
     for true_site_id, true_site in id_to_true_data.items():
         for feat in true_site['data']['features']:
             props = feat['properties']
             assert 'misc_info' in props
-            misc_info = props['misc_info']
-            print('misc_info = {}'.format(ub.urepr(misc_info, nl=1)))
+            # misc_info = props['misc_info']
+            # print('misc_info = {}'.format(ub.urepr(misc_info, nl=1)))
 
     cfsn_dpath = bas_poly_dpath / 'confusion_sites'
     true_cfsn_dpath = (cfsn_dpath / 'true').ensuredir()

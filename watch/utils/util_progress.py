@@ -43,13 +43,14 @@ class RichProgIter:
 
         unhandled = {
             'eta_window', 'clearline', 'adjust', 'time_thresh', 'show_times',
-            'show_wall', 'enabled', 'stream', 'chunksize', 'rel_adjust_limit',
+            'show_wall', 'stream', 'chunksize', 'rel_adjust_limit',
         }
         kwargs = ub.udict(kwargs) - unhandled
 
         from rich.progress import Progress as richProgress
         self.prog_manager: richProgress = prog_manager
         self.iterable = iterable
+        self.enabled = enabled
         if total is None:
             try:
                 total = len(iterable)
@@ -62,33 +63,39 @@ class RichProgIter:
         self.extra = None
 
     def __iter__(self):
-        for item in self.iterable:
-            yield item
-            self.prog_manager.update(self.task_id, advance=1)
-        if self.total is None:
-            task = self.prog_manager._tasks[self.task_id]
-            self.prog_manager.update(self.task_id, total=task.completed)
-        if self.transient:
-            self.remove()
+        if not self.enabled:
+            yield from self.iterable
+        else:
+            for item in self.iterable:
+                yield item
+                self.prog_manager.update(self.task_id, advance=1)
+            if self.total is None:
+                task = self.prog_manager._tasks[self.task_id]
+                self.prog_manager.update(self.task_id, total=task.completed)
+            if self.transient:
+                self.remove()
 
     def remove(self):
         """
-        Remove this progress bar
+        Remove this progress task from its rich manager
         """
-        self.prog_manager.remove_task(self.task_id)
+        if self.enabled:
+            self.prog_manager.remove_task(self.task_id)
 
     def update_info(self, text):
-        # FIXME: remove circular reference
-        self.prog_manager.pman.update_info(text)
+        if self.enabled:
+            # FIXME: remove circular reference
+            self.prog_manager.pman.update_info(text)
 
     def set_postfix_str(self, text, refresh=True):
         self.extra = text
         parts = [self.desc]
         if self.extra is not None:
             parts.append(self.extra)
-        description = ' '.join(parts)
-        self.prog_manager.update(self.task_id, description=description,
-                                 refresh=refresh)
+        if self.enabled:
+            description = ' '.join(parts)
+            self.prog_manager.update(self.task_id, description=description,
+                                     refresh=refresh)
 
 
 class ProgressManager:
@@ -154,6 +161,7 @@ class ProgressManager:
         >>> basis = {
         >>>     'with_info': [0, 1],
         >>>     'backend': ['progiter', 'rich'],
+        >>>     'enabled': [0, 1],
         >>>     #'with_info': [1],
         >>> }
         >>> grid = list(ub.named_product(basis))
@@ -163,7 +171,7 @@ class ProgressManager:
         >>>     grid_prog.ensure_newline()
         >>>     grid_prog.update_info(f'Running grid test {ub.urepr(item, nl=1)}')
         >>>     print('\n\n')
-        >>>     self = ProgressManager(backend=item['backend'])
+        >>>     self = ProgressManager(backend=item['backend'], enabled=item['enabled'])
         >>>     with self:
         >>>         outer_prog = self.progiter(range(N_outer), desc='outer loop')
         >>>         for i in outer_prog:
@@ -181,11 +189,13 @@ class ProgressManager:
         >>>             )
         >>>             for j in self.progiter(iter(range(N_inner)), **inner_kwargs):
         >>>                 time.sleep(delay)
+        >>>     grid_prog.update_info(f'Finished test item')
     """
 
     def __init__(self, backend='rich', **kwargs):
         self.backend = backend
         self.sub_progs = []
+        self.enabled = kwargs.get('enabled', True)
         # Default arguments for new progiters
         self.default_progkw = ub.udict({
             'time_thresh': 2.0,
@@ -278,8 +288,10 @@ class ProgressManager:
 
     def __enter__(self):
         if self.backend == 'rich':
-            return self.live_context.__enter__()
+            if self.enabled:
+                return self.live_context.__enter__()
 
     def __exit__(self, *args, **kw):
         if self.backend == 'rich':
-            return self.live_context.__exit__(*args, **kw)
+            if self.enabled:
+                return self.live_context.__exit__(*args, **kw)
