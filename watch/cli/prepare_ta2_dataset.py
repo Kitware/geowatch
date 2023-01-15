@@ -339,7 +339,7 @@ def main(cmdline=False, **kwargs):
                             --cloud_cover "{config['cloud_cover']}" \
                             --sensors "{config['sensors']}" \
                             --api_key "{config['api_key']}" \
-                            --query_workers = "{config['query_workers']}" \
+                            --query_workers "{config['query_workers']}" \
                             --max_products_per_region "{config['max_products_per_region']}" \
                             --append_mode=False \
                             --mode area \
