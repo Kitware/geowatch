@@ -145,16 +145,6 @@ def custom_analysis(eval_type_to_aggregator):
     ]
     selector = {'BR_R002', 'KR_R001', 'KR_R002', 'AE_R001'}
 
-    agg0 = eval_type_to_aggregator.get('bas_pxl_eval')
-    if agg0 is not None:
-        # agg[agg.primary_metric_cols]
-        generic_analysis(agg0, macro_groups, selector)
-
-    agg0 = eval_type_to_aggregator.get('sc_poly_eval', None)
-    if agg0 is not None:
-        ...
-        # agg0.analyze()
-
     agg0 = eval_type_to_aggregator.get('bas_poly_eval', None)
     if agg0 is not None:
         to_visualize_fpaths = generic_analysis(agg0, macro_groups, selector)
@@ -204,6 +194,16 @@ def custom_analysis(eval_type_to_aggregator):
         # final_scores = final_agg.report_best()
         # region_id_to_summary = subagg.report_best()
         # region_id_to_summary['macro_02_19bfe3']
+
+    agg0 = eval_type_to_aggregator.get('bas_pxl_eval')
+    if agg0 is not None:
+        # agg[agg.primary_metric_cols]
+        generic_analysis(agg0, macro_groups, selector)
+
+    agg0 = eval_type_to_aggregator.get('sc_poly_eval', None)
+    if agg0 is not None:
+        ...
+        # agg0.analyze()
 
     plot_tables()
     plot_examples()  # TODO
