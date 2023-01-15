@@ -418,6 +418,7 @@ def main(cmdline=True, **kwargs):
         from watch.utils import util_progress
         from watch.utils import util_parallel
         query_workers = util_parallel.coerce_num_workers(config['query_workers'])
+        print(f'query_workers={query_workers}')
         pool = ub.JobPool(mode='thread', max_workers=query_workers)
 
         pman = util_progress.ProgressManager(
