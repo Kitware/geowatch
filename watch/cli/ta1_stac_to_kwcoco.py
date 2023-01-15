@@ -68,6 +68,12 @@ SUPPORTED_COARSE_PLATFORMS = {
     'PD': {'PlanetScope', 'dove', 'PD'},  # Planet
 }
 
+PLATFORM_LOWER_TO_PLATFORM_STANDARD_CASE = {
+    v.lower(): v
+    for vs in SUPPORTED_COARSE_PLATFORMS.values()
+    for v in vs
+}
+
 SUPPORTED_PLATFORMS = set.union(
     *SUPPORTED_COARSE_PLATFORMS.values(),
     set(SUPPORTED_COARSE_PLATFORMS.keys()))
@@ -446,6 +452,9 @@ def _stac_item_to_kwcoco_image(stac_item,
     if 'constellation' in stac_item_dict['properties']:
         if stac_item_dict['properties']['constellation'] == 'dove':
             platform = 'PD'
+
+    # Convet to standard case
+    platform = PLATFORM_LOWER_TO_PLATFORM_STANDARD_CASE.get(platform.lower(), platform)
 
     if platform not in SUPPORTED_PLATFORMS:
         print("* Warning * platform '{}' not supported, not adding to "
