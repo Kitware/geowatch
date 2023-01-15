@@ -95,14 +95,25 @@ def custom_analysis(eval_type_to_aggregator):
     agg = eval_type_to_aggregator.get('bas_poly_eval', None)
     if agg is not None:
         ...
-        agg.build_macro_table()
+        n_to_keys = ub.group_items(agg.macro_compatible, key=len)
+
+        chosen_macro_rois = []
+        for n, keys in sorted(n_to_keys.items()):
+            if n > 1:
+                chosen = max(keys, key=lambda k: (len(agg.macro_compatible[k]), k))
+                chosen_macro_rois.append(chosen)
+        print('chosen_macro_rois = {}'.format(ub.repr2(chosen_macro_rois, nl=1)))
+        for chosen in ub.ProgIter(chosen_macro_rois, desc='build macro ave'):
+            agg.build_macro_table(chosen)
+
         _ = agg.report_best(top_k=10)
 
         # rois = {'BR_R002', 'KR_R001', 'KR_R002', 'AE_R001', 'US_R007'}
         # rois = {'KR_R001', 'KR_R002'}
         # rois = {'KR_R001', 'KR_R002', 'US_R007'}
-        rois = {'BR_R002', 'KR_R001', 'KR_R002', 'AE_R001'}
-        _ = agg.build_macro_table(rois)
+        # rois = {'BR_R002', 'KR_R001', 'KR_R002', 'AE_R001'}
+        # _ = agg.build_macro_table(rois)
+
         agg_best = agg.report_best(top_k=3)
         params_of_interest = ub.oset(ub.flatten([
             v['param_hashid'].to_list() for v in reversed(agg_best.values())]))
@@ -635,7 +646,7 @@ class Aggregator:
         hashid_to_params = {}
         for param_vals, group in effective_params.groupby(param_cols, dropna=False):
             unique_params = ub.dzip(param_cols, param_vals)
-            hashid = ub.hash_data(unique_params)[0:8]
+            hashid = hash_param(unique_params)
             hashid_to_params[hashid] = unique_params
             new_hashids.loc[group.index] = hashid
 
@@ -1210,12 +1221,23 @@ def pandas_suffix_columns(data, suffixes):
     return [c for c in data.columns if any(c.endswith(s) for s in suffixes)]
 
 
+def hash_param(row):
+    param_hashid = ub.hash_data(row, base=26)[0:8]
+    return param_hashid
+
+
+def hash_regions(rois):
+    suffix = ub.hash_data(sorted(rois), base=16)[0:6]
+    macro_key = f'macro_{len(rois):02d}_{suffix}'
+    return macro_key
+
+
 def pandas_hashed_rows(data, hashed_colname='hashed'):
     # data = top_params
     hashid_to_row = {}
     hash_rows = []
     for row in data.to_dict('records'):
-        hashid = ub.hash_data(row)[0:8]
+        hashid = hash_param(row)
         hashid_to_row[hashid] = row
         hash_rows.append(hashid)
 
