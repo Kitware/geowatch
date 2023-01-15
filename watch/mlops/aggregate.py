@@ -106,26 +106,26 @@ def custom_analysis(eval_type_to_aggregator):
         for chosen in ub.ProgIter(chosen_macro_rois, desc='build macro ave'):
             agg.build_macro_table(chosen)
 
-        _ = agg.report_best(top_k=10)
+        agg_best = agg.report_best(top_k=10)
+
+        params_of_interest = ub.oset(ub.flatten([
+            v['param_hashid'].to_list() for v in reversed(agg_best.values())]))
 
         # rois = {'BR_R002', 'KR_R001', 'KR_R002', 'AE_R001', 'US_R007'}
         # rois = {'KR_R001', 'KR_R002'}
         # rois = {'KR_R001', 'KR_R002', 'US_R007'}
         # rois = {'BR_R002', 'KR_R001', 'KR_R002', 'AE_R001'}
         # _ = agg.build_macro_table(rois)
-
-        agg_best = agg.report_best(top_k=3)
-        params_of_interest = ub.oset(ub.flatten([
-            v['param_hashid'].to_list() for v in reversed(agg_best.values())]))
-
         # params_of_interest = ['414d0b37']
-        params_of_interest = ['ab43161b']
+        # params_of_interest = ['ab43161b']
         # params_of_interest = ['34bed2b3']
         # params_of_interest = ['8ac5594b']
 
         subagg1 = agg.filterto(param_hashids=params_of_interest)
-        _ = subagg1.build_macro_table({'KR_R001', 'KR_R002'})
-        _ = subagg1.build_macro_table(rois)
+        for chosen in chosen_macro_rois:
+            subagg1.build_macro_table(chosen)
+
+        # _ = subagg1.build_macro_table(rois)
         agg1_best = subagg1.report_best(top_k=1)
         params_of_interest1 = ub.oset(ub.flatten([
             v['param_hashid'].to_list() for v in reversed(agg1_best.values())]))
