@@ -102,6 +102,7 @@ class PrepareTA2Config(scfg.Config):
 
         'aws_profile': scfg.Value('iarpa', help='AWS profile to use for remote data access'),
 
+        'query_workers': scfg.Value('0', help='workers for STAC search'),
         'convert_workers': scfg.Value('min(avail,8)', help='workers for stac-to-kwcoco script'),
         'fields_workers': scfg.Value('min(avail,max(all/2,8))', help='workers for add-watch-fields script'),
         'align_workers': scfg.Value(0, help='primary workers for align script'),
@@ -338,6 +339,7 @@ def main(cmdline=False, **kwargs):
                             --cloud_cover "{config['cloud_cover']}" \
                             --sensors "{config['sensors']}" \
                             --api_key "{config['api_key']}" \
+                            --query_workers = "{config['query_workers']}" \
                             --max_products_per_region "{config['max_products_per_region']}" \
                             --append_mode=False \
                             --mode area \
