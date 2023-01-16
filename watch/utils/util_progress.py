@@ -33,13 +33,19 @@ class RichProgIter:
 
     TODO: enhance with the ability to have a update info panel that removes
     the circular reference
+
+    Ignore:
+        from watch.utils.util_progress import *  # NOQA
+        for _ in RichProgIter(range(1000)):
+            ...
+
     """
 
     def __init__(self, iterable=None, desc=None, total=None, freq=1, initial=0,
                  eta_window=64, clearline=True, adjust=True, time_thresh=2.0,
                  show_times=True, show_wall=False, enabled=True, verbose=None,
                  stream=None, chunksize=None, rel_adjust_limit=4.0,
-                 transient=False, prog_manager=None, **kwargs):
+                 transient=False, manager=None, **kwargs):
 
         unhandled = {
             'eta_window', 'clearline', 'adjust', 'time_thresh', 'show_times',
@@ -47,8 +53,15 @@ class RichProgIter:
         }
         kwargs = ub.udict(kwargs) - unhandled
 
-        from rich.progress import Progress as richProgress
-        self.prog_manager: richProgress = prog_manager
+        if manager is None:
+            manager = _RichProgIterManager()
+            self._self_managed = True
+        else:
+            import weakref
+            manager = weakref.proxy(manager)
+            self._self_managed = False
+
+        self.manager = manager
         self.iterable = iterable
         self.enabled = enabled
         if total is None:
@@ -58,7 +71,7 @@ class RichProgIter:
                 ...
         self.total = total
         self.desc = desc
-        self.task_id = self.prog_manager.add_task(desc, total=self.total)
+        self.task_id = self.manager.rich_manager.add_task(desc, total=self.total)
         self.transient = transient
         self.extra = None
 
@@ -66,26 +79,30 @@ class RichProgIter:
         if not self.enabled:
             yield from self.iterable
         else:
+            if self._self_managed:
+                self.manager.start()
             for item in self.iterable:
                 yield item
-                self.prog_manager.update(self.task_id, advance=1)
+                self.manager.rich_manager.update(self.task_id, advance=1)
             if self.total is None:
-                task = self.prog_manager._tasks[self.task_id]
-                self.prog_manager.update(self.task_id, total=task.completed)
+                task = self.manager.rich_manager._tasks[self.task_id]
+                self.manager.rich_manager.update(self.task_id, total=task.completed)
             if self.transient:
                 self.remove()
+            if self._self_managed:
+                self.manager.stop()
 
     def remove(self):
         """
         Remove this progress task from its rich manager
         """
         if self.enabled:
-            self.prog_manager.remove_task(self.task_id)
+            self.manager.rich_manager.remove_task(self.task_id)
 
     def update_info(self, text):
         if self.enabled:
             # FIXME: remove circular reference
-            self.prog_manager.pman.update_info(text)
+            self.manager.update_info(text)
 
     def set_postfix_str(self, text, refresh=True):
         self.extra = text
@@ -94,12 +111,11 @@ class RichProgIter:
             parts.append(self.extra)
         if self.enabled:
             description = ' '.join(parts)
-            self.prog_manager.update(self.task_id, description=description,
-                                     refresh=refresh)
+            self.manager.rich_manager.update(
+                self.task_id, description=description, refresh=refresh)
 
 
 class BaseProgIterManager:
-
     def new(self, *args, **kw):
         return self.progiter(*args, **kw)
 
@@ -112,14 +128,97 @@ class BaseProgIterManager:
     def begin(self):
         return self.start()
 
-    def stop(self, *args):
+    def stop(self, **kwargs):
         ...
 
     def __enter__(self):
         return self.start()
 
-    def __exit__(self, *args):
-        self.stop(*args)
+    def __exit__(self, exc_type=None, exc_val=None, exc_tb=None):
+        self.stop(exc_type=exc_type, exc_val=exc_val, exc_tb=exc_tb)
+
+
+class _RichProgIterManager(BaseProgIterManager):
+    """
+    rich specific backend.
+    """
+    def __init__(self, **kwargs):
+        self.prog_iters = []
+        self.rich_manager = None
+        self.enabled = kwargs.get('enabled', True)
+        self.setup_rich()
+
+    def progiter(self, iterable, total=None, desc=None, transient=False, verbose='auto', **kw):
+        # Fixme remove circular ref
+        self.rich_manager.pman = self
+        prog = RichProgIter(
+            manager=self, iterable=iterable, total=total, desc=desc,
+            transient=transient, **kw)
+        self.prog_iters.append(prog)
+        return prog
+
+    def setup_rich(self):
+        import rich
+        import rich.progress
+        from rich.console import Group
+        from rich.live import Live
+        from rich.progress import BarColumn, TextColumn
+        from rich.progress import Progress as richProgress
+        from rich.progress import ProgressColumn, Text
+
+        class ProgressRateColumn(ProgressColumn):
+            """Renders human readable transfer speed."""
+
+            def render(self, task) -> Text:
+                """Show progress speed speed."""
+                _iters_per_second = task.finished_speed or task.speed
+                if _iters_per_second is not None:
+                    rate_format = '4.2f' if _iters_per_second > .001 else 'g'
+                    fmt = '{:' + rate_format + '} Hz'
+                    n = Text(fmt.format(_iters_per_second))
+                    return n
+                else:
+                    return '?'
+                # speed = task.finished_speed or task.speed
+                # return rich.progress.TaskProgressColumn.render_speed(speed)
+
+        self.rich_manager = richProgress(
+            TextColumn("{task.description}"),
+            BarColumn(),
+            rich.progress.MofNCompleteColumn(),
+            # "[progress.percentage]{task.percentage:>3.0f}%",
+            # rich.progress.TransferSpeedColumn(),
+            rich.progress.TimeRemainingColumn(),
+            rich.progress.TimeElapsedColumn(),
+            ProgressRateColumn(),
+        )
+        self.info_panel = None
+        # Panel('')
+        self.progress_group = Group(
+            # self.info_panel,
+            self.rich_manager,
+        )
+        self.live_context = Live(self.progress_group)
+
+    def update_info(self, text):
+        from rich.panel import Panel
+        if self.info_panel is None:
+            self.info_panel = Panel(text)
+            self.progress_group.renderables.insert(0, self.info_panel)
+        else:
+            self.info_panel.renderable = text
+
+    def start(self):
+        if self.enabled:
+            return self.live_context.__enter__()
+
+    def stop(self, **kw):
+        if self.enabled:
+            if not kw:
+                kw['exc_type'] = None
+                kw['exc_val'] = None
+                kw['exc_tb'] = None
+            return self.live_context.__exit__(**kw)
 
 
 class _ProgIterManager(BaseProgIterManager):
@@ -154,64 +253,6 @@ class _ProgIterManager(BaseProgIterManager):
 
     def update_info(self, text):
         self.prog_iters[0].update_info(text)
-
-
-class _RichProgIterManager(BaseProgIterManager):
-    """
-    rich specific backend.
-    """
-    def __init__(self, **kwargs):
-        self.prog_iters = []
-        self.enabled = kwargs.get('enabled', True)
-        self.setup_rich()
-
-    def progiter(self, iterable, total=None, desc=None, transient=False, verbose='auto', **kw):
-        # Fixme remove circular ref
-        self.prog_manager.pman = self
-        prog = RichProgIter(
-            prog_manager=self.prog_manager, iterable=iterable, total=total,
-            desc=desc, transient=transient, **kw)
-        self.prog_iters.append(prog)
-        return prog
-
-    def setup_rich(self):
-        import rich
-        import rich.progress
-        from rich.console import Group
-        from rich.live import Live
-        from rich.progress import BarColumn, TextColumn
-        from rich.progress import Progress as richProgress
-        self.prog_manager = richProgress(
-            TextColumn("{task.description}"),
-            BarColumn(),
-            rich.progress.MofNCompleteColumn(),
-            # "[progress.percentage]{task.percentage:>3.0f}%",
-            rich.progress.TimeRemainingColumn(),
-            rich.progress.TimeElapsedColumn(),
-        )
-        self.info_panel = None
-        # Panel('')
-        self.progress_group = Group(
-            # self.info_panel,
-            self.prog_manager,
-        )
-        self.live_context = Live(self.progress_group)
-
-    def update_info(self, text):
-        from rich.panel import Panel
-        if self.info_panel is None:
-            self.info_panel = Panel(text)
-            self.progress_group.renderables.insert(0, self.info_panel)
-        else:
-            self.info_panel.renderable = text
-
-    def start(self):
-        if self.enabled:
-            return self.live_context.__enter__()
-
-    def stop(self, *args, **kw):
-        if self.enabled:
-            return self.live_context.__exit__(*args, **kw)
 
 
 class ProgressManager(BaseProgIterManager):
@@ -252,7 +293,7 @@ class ProgressManager(BaseProgIterManager):
         >>> # A fairly complex example
         >>> from watch.utils.util_progress import ProgressManager
         >>> import time
-        >>> delay = 0.000005
+        >>> delay = 0.005
         >>> N_inner = 1000
         >>> N_outer = 11
         >>> self = pman = ProgressManager(backend='rich')
@@ -327,5 +368,5 @@ class ProgressManager(BaseProgIterManager):
     def start(self):
         self.backend.start()
 
-    def stop(self, *args):
-        self.backend.stop(*args)
+    def stop(self, *args, **kwargs):
+        self.backend.stop(*args, **kwargs)

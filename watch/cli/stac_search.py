@@ -402,7 +402,10 @@ def main(cmdline=True, **kwargs):
             if not hasattr(args, 'region_file'):
                 raise ValueError('Missing region file')
             region_file_fpaths = [args.region_file]
-        print('region_file_fpaths = {}'.format(ub.repr2(region_file_fpaths, nl=1)))
+        from watch.utils import slugify_ext
+
+        print('region_file_fpaths = {}'.format(slugify_ext.smart_truncate(
+            ub.repr2(region_file_fpaths, nl=1), max_length=1000)))
 
         if not hasattr(args, 'search_json'):
             raise ValueError('Missing stac search parameters')

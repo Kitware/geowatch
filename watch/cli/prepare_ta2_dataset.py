@@ -301,8 +301,8 @@ def main(cmdline=False, **kwargs):
             ASSIGN_BY_FPATH = True
             if ASSIGN_BY_FPATH:
                 # This is not robust, but it doesn't require touching the disk
-                region_id_to_fpath = {p.stem: p for p in region_file_fpaths}
-                site_id_to_fpath = {p.stem: p for p in region_site_fpaths}
+                region_id_to_fpath = {ub.Path(p).stem: p for p in region_file_fpaths}
+                site_id_to_fpath = {ub.Path(p).stem: p for p in region_site_fpaths}
                 region_id_to_site_fpaths = ub.ddict(list)
                 for site_id, site_fpaths in site_id_to_fpath.items():
                     region_id, site_num = site_id.rsplit('_', maxsplit=1)
