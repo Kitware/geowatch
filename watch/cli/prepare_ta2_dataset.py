@@ -301,8 +301,8 @@ def main(cmdline=False, **kwargs):
             ASSIGN_BY_FPATH = True
             if ASSIGN_BY_FPATH:
                 # This is not robust, but it doesn't require touching the disk
-                region_id_to_fpath = {ub.Path(p).stem: p for p in region_file_fpaths}
-                site_id_to_fpath = {ub.Path(p).stem: p for p in region_site_fpaths}
+                region_id_to_fpath = {p.stem: p for p in region_file_fpaths}
+                site_id_to_fpath = {p.stem: p for p in region_site_fpaths}
                 region_id_to_site_fpaths = ub.ddict(list)
                 for site_id, site_fpaths in site_id_to_fpath.items():
                     region_id, site_num = site_id.rsplit('_', maxsplit=1)
@@ -840,27 +840,8 @@ def main(cmdline=False, **kwargs):
 
         # This logic will exist in cmd-queue itself
         other_session_handler = config['other_session_handler']
-
-        def handle_other_sessions(other_session_handler):
-            if other_session_handler == 'auto':
-                from cmd_queue.tmux_queue import has_stdin
-                if has_stdin():
-                    other_session_handler = 'ask'
-                else:
-                    other_session_handler = 'kill'
-            if other_session_handler == 'ask':
-                queue.kill_other_queues(ask_first=True)
-            elif other_session_handler == 'kill':
-                queue.kill_other_queues(ask_first=False)
-            elif other_session_handler == 'ignore':
-                ...
-            else:
-                raise KeyError
-
-        if config['backend'] == 'tmux':
-            handle_other_sessions(other_session_handler)
         queue.run(block=True, system=True, with_textual=config['with_textual'],
-                  check_other_sessions=False)
+                  other_session_handler=other_session_handler)
 
     # TODO: team features
     """

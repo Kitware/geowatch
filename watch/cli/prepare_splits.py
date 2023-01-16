@@ -44,7 +44,11 @@ class PrepareSplitsConfig(scfg.Config):
             does not start it by default.''')),
         'run': scfg.Value(True, help='if True execute the pipeline'),
         'cache': scfg.Value(0, help='if True skip completed results'),
-        'backend': scfg.Value('tmux', help=None),
+
+        'backend': scfg.Value('tmux', help='can be serial, tmux, or slurm. Using tmux is recommended.'),
+        'with_textual': scfg.Value('auto', help='setting for cmd-queue monitoring'),
+        'other_session_handler': scfg.Value('ask', help='for tmux backend only. How to handle conflicting sessions. Can be ask, kill, or ignore, or auto'),
+
         'verbose': scfg.Value(1, help=''),
     }
 
@@ -162,7 +166,8 @@ def prep_splits(cmdline=False, **kwargs):
         queue.rprint()
 
     if config['run']:
-        queue.run(block=True)
+        queue.run(block=True, with_textual=config['with_textual'],
+                  other_session_handler=config['other_session_handler'])
 
     return queue
 
