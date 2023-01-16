@@ -114,6 +114,11 @@ DOCKER_BUILDKIT=1 docker build --progress=plain \
     -f ./dockerfiles/pyenv.Dockerfile .
 
 docker run --runtime=nvidia -it pyenv:310 bash  
+
+docker login gitlab.kitware.com:4567
+
+docker tag pyenv:310 gitlab.kitware.com:4567/smart/watch/pyenv:310
+docker push gitlab.kitware.com:4567/smart/watch/pyenv:310
 # docker buildx build -t "pyenv3.10" -f ./pyenv.Dockerfile --build-arg BUILD_STRICT=1 .
 "
 

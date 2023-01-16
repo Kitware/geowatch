@@ -111,6 +111,10 @@ echo "
 
 cd $HOME/code/watch
 
+# Either build the pyenv image or
+docker pull gitlab.kitware.com:4567/smart/watch/pyenv:310
+docker tag gitlab.kitware.com:4567/smart/watch/pyenv:310 pyenv:310 
+
 DOCKER_BUILDKIT=1 docker build --progress=plain \
     -t "watch:310" \
     --build-arg PYTHON_VERSION=3.10.5 \
