@@ -98,13 +98,130 @@ class RichProgIter:
                                      refresh=refresh)
 
 
-class ProgressManager:
+class BaseProgIterManager:
+
+    def new(self, *args, **kw):
+        return self.progiter(*args, **kw)
+
+    def __call__(self, *args, **kw):
+        return self.progiter(*args, **kw)
+
+    def start(self):
+        return self
+
+    def begin(self):
+        return self.start()
+
+    def stop(self, *args):
+        ...
+
+    def __enter__(self):
+        return self.start()
+
+    def __exit__(self, *args):
+        self.stop(*args)
+
+
+class _ProgIterManager(BaseProgIterManager):
+    """
+    progiter specific backend
+    """
+    def __init__(self, **kwargs):
+        self.enabled = kwargs.get('enabled', True)
+        # Default arguments for new progiters
+        self.default_progkw = ub.udict({
+            'time_thresh': 2.0,
+        }) & ub.udict(kwargs)
+        self.prog_iters = []
+
+    def progiter(self, iterable, total=None, desc=None, transient=False, verbose='auto', **kw):
+        progkw = self.default_progkw.copy()
+        progkw.update(kw)
+        progkw['verbose'] = verbose
+        if verbose == 'auto':
+            # Change all other - now outer - progiters to verbose=3 mode
+            for other in self.prog_iters:
+                other.ensure_newline()
+                if other.enabled:
+                    other.clearline = False
+                    other.adjust = False
+                    other.freq = 1
+            progkw['verbose'] = 1
+        # progkw['verbose'] = 1
+        prog = ProgIter2(iterable, total=total, desc=desc, **progkw)
+        self.prog_iters.append(prog)
+        return prog
+
+    def update_info(self, text):
+        self.prog_iters[0].update_info(text)
+
+
+class _RichProgIterManager(BaseProgIterManager):
+    """
+    rich specific backend.
+    """
+    def __init__(self, **kwargs):
+        self.prog_iters = []
+        self.enabled = kwargs.get('enabled', True)
+        self.setup_rich()
+
+    def progiter(self, iterable, total=None, desc=None, transient=False, verbose='auto', **kw):
+        # Fixme remove circular ref
+        self.prog_manager.pman = self
+        prog = RichProgIter(
+            prog_manager=self.prog_manager, iterable=iterable, total=total,
+            desc=desc, transient=transient, **kw)
+        self.prog_iters.append(prog)
+        return prog
+
+    def setup_rich(self):
+        import rich
+        import rich.progress
+        from rich.console import Group
+        from rich.live import Live
+        from rich.progress import BarColumn, TextColumn
+        from rich.progress import Progress as richProgress
+        self.prog_manager = richProgress(
+            TextColumn("{task.description}"),
+            BarColumn(),
+            rich.progress.MofNCompleteColumn(),
+            # "[progress.percentage]{task.percentage:>3.0f}%",
+            rich.progress.TimeRemainingColumn(),
+            rich.progress.TimeElapsedColumn(),
+        )
+        self.info_panel = None
+        # Panel('')
+        self.progress_group = Group(
+            # self.info_panel,
+            self.prog_manager,
+        )
+        self.live_context = Live(self.progress_group)
+
+    def update_info(self, text):
+        from rich.panel import Panel
+        if self.info_panel is None:
+            self.info_panel = Panel(text)
+            self.progress_group.renderables.insert(0, self.info_panel)
+        else:
+            self.info_panel.renderable = text
+
+    def start(self):
+        if self.enabled:
+            return self.live_context.__enter__()
+
+    def stop(self, *args, **kw):
+        if self.enabled:
+            return self.live_context.__exit__(*args, **kw)
+
+
+class ProgressManager(BaseProgIterManager):
     r"""
     A progress manager.
 
     Manage multiple progress bars, either with rich or ProgIter.
 
     CommandLine:
+        xdoctest -m watch.utils.util_progress ProgressManager:0
         xdoctest -m watch.utils.util_progress ProgressManager:1
         xdoctest -m watch.utils.util_progress ProgressManager:2
 
@@ -193,105 +310,22 @@ class ProgressManager:
     """
 
     def __init__(self, backend='rich', **kwargs):
-        self.backend = backend
-        self.sub_progs = []
-        self.enabled = kwargs.get('enabled', True)
-        # Default arguments for new progiters
-        self.default_progkw = ub.udict({
-            'time_thresh': 2.0,
-        }) & ub.udict(kwargs)
-        if self.backend == 'rich':
-            self.setup_rich()
-
-    def progiter(self, iterable, total=None, desc=None, transient=False, verbose='auto', **kw):
-        self.prog_iters = []
-        backend = self.backend
         if PROGITER_NOTHREAD:
             backend = 'progiter'
         if backend == 'rich':
-            # Fixme remove circular ref
-            self.prog_manager.pman = self
-            prog = RichProgIter(
-                prog_manager=self.prog_manager, iterable=iterable, total=total,
-                desc=desc, transient=transient, **kw)
+            self.backend = _RichProgIterManager(**kwargs)
         elif backend == 'progiter':
-            progkw = self.default_progkw.copy()
-            progkw.update(kw)
-            progkw['verbose'] = verbose
-            if verbose == 'auto':
-                # Change all other - now outer - progiters to verbose=3 mode
-                for other in self.prog_iters:
-                    other.ensure_newline()
-                    if 0 < other.verbose < 3:
-                        other.clearline = False
-                        other.adjust = False
-                        other.freq = 1
-                        other.verbose = 3
-                progkw['verbose'] = 1 if len(self.prog_iters) == 0 else 3
-            # progkw['verbose'] = 1
-            prog = ProgIter2(iterable, total=total, desc=desc, **progkw)
-        else:
-            raise KeyError(backend)
-        self.prog_iters.append(prog)
+            self.backend = _ProgIterManager(**kwargs)
+
+    def progiter(self, *args, **kw):
+        prog = self.backend.progiter(*args, **kw)
         return prog
 
-    def new(self, *args, **kw):
-        return self.progiter(*args, **kw)
-
-    def __call__(self, *args, **kw):
-        return self.progiter(*args, **kw)
-
-    def setup_rich(self):
-        import rich
-        import rich.progress
-        from rich.console import Group
-        from rich.live import Live
-        from rich.progress import BarColumn, TextColumn
-        from rich.progress import Progress as richProgress
-        self.prog_manager = richProgress(
-            TextColumn("{task.description}"),
-            BarColumn(),
-            rich.progress.MofNCompleteColumn(),
-            # "[progress.percentage]{task.percentage:>3.0f}%",
-            rich.progress.TimeRemainingColumn(),
-            rich.progress.TimeElapsedColumn(),
-        )
-        self.info_panel = None
-        # Panel('')
-        self.progress_group = Group(
-            # self.info_panel,
-            self.prog_manager,
-        )
-        self.live_context = Live(self.progress_group)
-
     def update_info(self, text):
-        # TODO: make a backend RichProgIterManager, TQDMProgIterManager and ProgIterManager
-        if self.backend == 'rich':
-            from rich.panel import Panel
-            if self.info_panel is None:
-                self.info_panel = Panel(text)
-                self.progress_group.renderables.insert(0, self.info_panel)
-            else:
-                self.info_panel.renderable = text
-        else:
-            self.prog_iters[0].update_info(text)
+        self.backend.update_info(text)
 
     def start(self):
-        self.__enter__()
-        return self
+        self.backend.start()
 
-    def begin(self):
-        return self.start()
-
-    def stop(self):
-        self.__exit__(None, None, None)
-
-    def __enter__(self):
-        if self.backend == 'rich':
-            if self.enabled:
-                return self.live_context.__enter__()
-
-    def __exit__(self, *args, **kw):
-        if self.backend == 'rich':
-            if self.enabled:
-                return self.live_context.__exit__(*args, **kw)
+    def stop(self, *args):
+        self.backend.stop(*args)

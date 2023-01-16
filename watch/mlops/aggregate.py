@@ -936,13 +936,13 @@ def bas_poly_eval_confusion_analysis(eval_fpath):
 
     # hack: if there are "seq" in the site names, we need to fix those old
     # files by reinvoking.
-    if any('_seq_' in m for m in assign2['site model'] if m):
+    if any('_seq_' in m or m.startswith('seq_') for m in assign2['site model'] if m):
         invoke_fpath = eval_fpath.parent / 'invoke.sh'
         info = ub.cmd(f'bash {invoke_fpath}', verbose=3)
 
         assign1 = pd.read_csv(assign_fpath1)
         assign2 = pd.read_csv(assign_fpath2)
-        if any('_seq_' in m for m in assign2['site model'] if m):
+        if any('_seq_' in m or m.startswith('seq_') for m in assign2['site model'] if m):
             raise AssertionError
 
     true_confusion_rows = []
