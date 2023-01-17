@@ -236,6 +236,12 @@ def run_sc_fusion_for_baseline(
     os.makedirs(site_models_outdir, exist_ok=True)
     region_models_outdir = os.path.join(ingress_dir, 'sc_out_region_models')
     os.makedirs(region_models_outdir, exist_ok=True)
+
+    site_models_manifest_outdir = os.path.join(
+        ingress_dir, 'tracking_manifests_sc')
+    os.makedirs(site_models_manifest_outdir, exist_ok=True)
+    site_models_manifest_outpath = os.path.join(
+        site_models_manifest_outdir, 'site_models_manifest.json')
     # Copy input region model into region_models outdir to be updated
     # (rather than generated from tracking, which may not have the
     # same bounds as the original)
@@ -299,6 +305,7 @@ def run_sc_fusion_for_baseline(
                             sc_fusion_kwcoco_path,
                             '--out_site_summaries_dir', region_models_outdir,
                             '--out_sites_dir', site_models_outdir,
+                            '--out_sites_fpath', site_models_manifest_outpath,
                             '--out_kwcoco', tracked_sc_kwcoco_path,
                             '--default_track_fn', sc_track_fn,
                             '--site_summary',
