@@ -1853,6 +1853,7 @@ python -m watch.tasks.fusion.fit \
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
 rsync -avprPR ooo:data/dvc-repos/smart_expt_dvc/./training/Ooo/joncrall/Drop4-BAS/runs "$DVC_EXPT_DPATH"
 rsync -avprPR ooo:data/dvc-repos/smart_expt_dvc/./training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V10 "$DVC_EXPT_DPATH"
+rsync -avprPR ooo:data/dvc-repos/smart_expt_dvc/./training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_10GSD_BGRN_V11 "$DVC_EXPT_DPATH"
 
 Drop4_BAS_2022_12_10GSD_BGRN_V11  Drop4_BAS_2022_12_15GSD_BGRN_V10  Drop4_BAS_2022_12_15GSD_BGRN_V5  Drop4_TuneV323_BAS_BGRNSH_V1
 

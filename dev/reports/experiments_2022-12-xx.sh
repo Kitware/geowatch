@@ -62,7 +62,8 @@ python -m watch.mlops.schedule_evaluation \
         matrix:
             bas_pxl.package_fpath:
                 #- $DVC_EXPT_DPATH/bas_native_epoch44.pt
-                - $DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
+                #- $DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
+                - $DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_10GSD_BGRN_V11/lightning_logs/version_1/checkpoints/Drop4_BAS_2022_12_10GSD_BGRN_V11_epoch=86-step=44544.pt
                 #- $DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V5/lightning_logs/version_3/checkpoints/Drop4_BAS_2022_12_15GSD_BGRN_V5_epoch=1-step=77702-v1.pt
                 #- $DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V10/lightning_logs/version_0/checkpoints/Drop4_BAS_2022_12_15GSD_BGRN_V10_epoch=0-step=4305.pt
                 #- $DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V10/lightning_logs/version_3/checkpoints/Drop4_BAS_2022_12_15GSD_BGRN_V10_epoch=0-step=512-v1.pt
@@ -77,7 +78,7 @@ python -m watch.mlops.schedule_evaluation \
                 - $DVC_DATA_DPATH/Drop4-BAS/data_vali_KR_R001_uky_invariants.kwcoco.json
                 - $DVC_DATA_DPATH/Drop4-BAS/data_vali_KR_R002_uky_invariants.kwcoco.json
                 - $DVC_DATA_DPATH/Drop4-BAS/data_train_BR_R002_uky_invariants.kwcoco.json
-                - $DVC_DATA_DPATH/Drop4-BAS/data_train_AE_R001_uky_invariants.kwcoco.json
+                #- $DVC_DATA_DPATH/Drop4-BAS/data_train_AE_R001_uky_invariants.kwcoco.json
                 #- $DVC_DATA_DPATH/Drop4-BAS/data_vali_US_R007_uky_invariants.kwcoco.json
 
                 #- $DVC_DATA_DPATH/Drop4-BAS/data_vali_KR_R001.kwcoco.json
@@ -88,7 +89,7 @@ python -m watch.mlops.schedule_evaluation \
             bas_pxl.chip_overlap: 0.3
             bas_pxl.chip_dims:
                 - auto
-                - 256,256
+                #- 256,256
             bas_pxl.time_span: auto
             bas_pxl.time_sampling: auto
             bas_poly.thresh:
@@ -122,11 +123,11 @@ python -m watch.mlops.schedule_evaluation \
                 #- 200
             bas_poly.max_area_sqkm:
                 - null
-                - 1.00
-                - 2.00
-                - 2.25
-                - 3.25
-                - 8
+                #- 1.00
+                #- 2.00
+                #- 2.25
+                #- 3.25
+                #- 8
             bas_pxl.enabled: 1
             bas_poly.enabled: 1
             bas_poly_eval.enabled: 1
