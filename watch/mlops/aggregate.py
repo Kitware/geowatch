@@ -66,6 +66,8 @@ def main(cmdline=True, **kwargs):
 
         config = AggregateEvluationConfig.legacy(cmdline=cmdline, data=kwargs)
         eval_type_to_results = build_tables(config)
+        eval_type_to_aggregator = build_aggregators(eval_type_to_results)
+        agg = ub.peek(eval_type_to_aggregator.values())
 
         >>> ## Execute
         >>> main(cmdline=cmdline, **kwargs)
@@ -84,15 +86,17 @@ def main(cmdline=True, **kwargs):
 
     eval_type_to_aggregator = build_aggregators(eval_type_to_results)
 
-    custom_analysis(eval_type_to_aggregator, config)
+    automated_analysis(eval_type_to_aggregator, config)
 
 
-def custom_analysis(eval_type_to_aggregator, config):
+def automated_analysis(eval_type_to_aggregator, config):
 
     timestamp = ub.timestamp()
 
     aggregate_dpath = ub.Path(config['root_dpath'] / 'aggregate')
 
+    # TODO: save this for custom analysis, let automatic choose
+    # for generality
     macro_groups = [
         {'KR_R001', 'KR_R002'},
         {'KR_R001', 'KR_R002', 'US_R007'},
@@ -122,7 +126,7 @@ def custom_analysis(eval_type_to_aggregator, config):
         # rois = {'KR_R001', 'KR_R002'}
         # rois = {'KR_R001', 'KR_R002', 'US_R007'}
         # rois = {'BR_R002', 'KR_R001', 'KR_R002', 'AE_R001'}
-        # _ = agg.build_macro_table(rois)
+        # _ = agg.build_macro_tables(rois)
         # params_of_interest = ['414d0b37']
         # params_of_interest = ['ab43161b']
         # params_of_interest = ['34bed2b3']
@@ -136,26 +140,26 @@ def custom_analysis(eval_type_to_aggregator, config):
         #     'Drop4_BAS_2022_12_15GSD_BGRN_V5_epoch=1-step=77702-v1',
         # ]
         # subagg2 = agg.filterto(models=params_of_interest1)
-        # _ = subagg2.build_macro_table({'KR_R001', 'KR_R002'})
-        # _ = subagg2.build_macro_table(rois)
+        # _ = subagg2.build_macro_tables({'KR_R001', 'KR_R002'})
+        # _ = subagg2.build_macro_tables(rois)
         # subagg2.macro_analysis()
-        # _ = subagg2.build_macro_table('max')
-        # _ = subagg2.build_macro_table({'KR_R001', 'KR_R002', 'US_R007'})
-        # _ = subagg2.build_macro_table({'KR_R001', 'KR_R002'})
-        # _ = subagg2.build_macro_table({'AE_R001'})
-        # _ = subagg2.build_macro_table({'BR_R002'})
-        # _ = subagg2.build_macro_table({'US_R007'})
-        # _ = subagg2.build_macro_table({'KR_R002'})
+        # _ = subagg2.build_macro_tables('max')
+        # _ = subagg2.build_macro_tables({'KR_R001', 'KR_R002', 'US_R007'})
+        # _ = subagg2.build_macro_tables({'KR_R001', 'KR_R002'})
+        # _ = subagg2.build_macro_tables({'AE_R001'})
+        # _ = subagg2.build_macro_tables({'BR_R002'})
+        # _ = subagg2.build_macro_tables({'US_R007'})
+        # _ = subagg2.build_macro_tables({'KR_R002'})
         # subagg2.macro_analysis()
         # _ = subagg2.report_best()
 
         # rois = {'BR_R002', 'KR_R001', 'KR_R002', 'AE_R001'}
-        # macro_results = subagg.build_macro_table(rois)
+        # macro_results = subagg.build_macro_tables(rois)
         # top_idxs = macro_results['metrics'].sort_values(subagg.primary_metric_cols).index[0:3]
         # top_param_hashids = macro_results['index']['param_hashid'].iloc[top_idxs]
         # flags = kwarray.isect_flags(subagg.index['param_hashid'].values, top_param_hashids)
         # final_agg = subagg.compress(flags)
-        # macro_results = final_agg.build_macro_table(rois)
+        # macro_results = final_agg.build_macro_tables(rois)
         # # top_idx = macro_results['metrics'].sort_values(subagg.primary_metric_cols).index[0]
         # final_scores = final_agg.report_best()
         # region_id_to_summary = subagg.report_best()
@@ -175,29 +179,95 @@ def custom_analysis(eval_type_to_aggregator, config):
     plot_examples()  # TODO
 
 
+def custom_analysis(eval_type_to_aggregator, config):
+
+    macro_groups = [
+        {'KR_R001', 'KR_R002'},
+        {'KR_R001', 'KR_R002', 'US_R007'},
+        {'BR_R002', 'KR_R001', 'KR_R002', 'AE_R001'},
+        {'BR_R002', 'KR_R001', 'KR_R002', 'AE_R001', 'US_R007'},
+    ]
+
+    agg0 = eval_type_to_aggregator.get('bas_poly_eval', None)
+    aggregate_dpath = ub.Path(config['root_dpath'] / 'aggregate')
+
+    if agg0 is not None:
+        agg0_ = fix_duplicate_param_hashids(agg0)
+        # params_of_interest = ['414d0b37']
+        # v0_params_of_interest = [
+        #     '414d0b37', 'ab43161b', '34bed2b3', '8ac5594b']
+        params_of_interest = list({
+            '414d0b37': 'ffmpktiwwpbx',
+            'ab43161b': 'nriolrrxfbco',
+            '34bed2b3': 'eflhsmpfhgsj',
+            '8ac5594b': 'lbxwewpkfwcd',
+        }.values())
+
+        param_of_interest = params_of_interest[0]
+        subagg1 = agg0_.filterto(param_hashids=param_of_interest)
+        subagg1.build_macro_tables(macro_groups)
+        subagg1.report_best()
+
+        print(ub.repr2(subagg1.results['fpaths']['fpath'].to_list()))
+
+        agg_group_dpath = aggregate_dpath / (f'agg_params_{param_of_interest}')
+        agg_group_dpath = agg_group_dpath.ensuredir()
+
+        # Make a directory with a summary over all the regions
+        summary_dpath = (agg_group_dpath / 'summary').ensuredir()
+
+        # make a analysis link to the final product
+        for idx, fpath in ub.ProgIter(list(subagg1.fpaths.iteritems())):
+            region_viz_fpaths = list((fpath.parent / 'region_viz_overall').glob('*_detailed.png'))
+            assert len(region_viz_fpaths) == 1
+            region_viz_fpath = region_viz_fpaths[0]
+            region_id = subagg1.index.loc[idx]['region_id']
+            param_hashid = subagg1.index.loc[idx]['param_hashid']
+            link_dpath = agg_group_dpath / region_id
+            ub.symlink(real_path=fpath.parent, link_path=link_dpath)
+            # ub.symlink(real_path=region_viz_fpath, link_path=summary_dpath / region_viz_fpath.name)
+            import kwimage
+            from kwcoco.metrics.drawing import concice_si_display
+            viz_img = kwimage.imread(region_viz_fpath)
+            scores_of_interest = pandas_shorten_columns(subagg1.metrics).loc[idx, ['bas_tp', 'bas_fp', 'bas_fn', 'bas_f1']]
+            scores_of_interest = ub.udict(scores_of_interest.to_dict())
+            text = ub.urepr(scores_of_interest.map_values(concice_si_display), nobr=1, si=1, compact=1)
+            new_img = kwimage.draw_header_text(viz_img, param_hashid + '\n' + text)
+            kwimage.imwrite(summary_dpath / f'summary_{region_id}.jpg', new_img)
+
+            # eval_dpath = bas_poly_eval_confusion_analysis(eval_fpath)
+            # TODO: use the region_id.
+            # ub.symlink(real_path=eval_dpath, link_path=agg_group_dpath / eval_dpath.name)
+
+
+def fix_duplicate_param_hashids(agg0):
+    # There are some circumstances where we can have duplicates region / param
+    # hash ids due to munging of the param fields. In this case they should
+    # have the same or similar results. Hack to deduplicate them.
+    ideally_unique = list(map(ub.hash_data, agg0.index[['region_id', 'param_hashid']].to_dict('records')))
+    dupxs = ub.find_duplicates(ideally_unique)
+    remove_idxs = []
+    for k, dup_idxs in dupxs.items():
+        # dup_df = agg0.metrics.iloc[dup_idxs]
+        mtimes = [ub.Path(fpath).stat().st_mtime for fpath in agg0.results['fpaths'].iloc[dup_idxs]['fpath']]
+        keep_idx = dup_idxs[ub.argmax(mtimes)]
+        remove_idxs.extend(set(dup_idxs) - {keep_idx})
+
+        # is_safe_cols = {
+        #     k: ub.allsame(vs, eq=nan_eq)
+        #     for k, vs in dup_df.T.iterrows()}
+        ...
+    flags = ~kwarray.boolmask(remove_idxs, shape=len(agg0.index.index))
+    print(f'hack to remove {len(remove_idxs)} / {len(agg0.index.index)} duplicates')
+    agg0_ = agg0.compress(flags)
+    return agg0_
+
+
 def generic_analysis(agg0, macro_groups=None, selector=None):
 
     HACK_DEDUPLICATE = 1
     if HACK_DEDUPLICATE:
-        # There are some circumstances where we can have duplicates region / param
-        # hash ids due to munging of the param fields. In this case they should
-        # have the same or similar results. Hack to deduplicate them.
-        ideally_unique = list(map(ub.hash_data, agg0.index[['region_id', 'param_hashid']].to_dict('records')))
-        dupxs = ub.find_duplicates(ideally_unique)
-        remove_idxs = []
-        for k, dup_idxs in dupxs.items():
-            # dup_df = agg0.metrics.iloc[dup_idxs]
-            mtimes = [ub.Path(fpath).stat().st_mtime for fpath in agg0.results['fpaths'].iloc[dup_idxs]['fpath']]
-            keep_idx = dup_idxs[ub.argmax(mtimes)]
-            remove_idxs.extend(set(dup_idxs) - {keep_idx})
-
-            # is_safe_cols = {
-            #     k: ub.allsame(vs, eq=nan_eq)
-            #     for k, vs in dup_df.T.iterrows()}
-            ...
-        flags = ~kwarray.boolmask(remove_idxs, shape=len(agg0.index.index))
-        print(f'hack to remove {len(remove_idxs)} / {len(agg0.index.index)} duplicates')
-        agg0_ = agg0.compress(flags)
+        agg0_ = fix_duplicate_param_hashids(agg0)
     else:
         agg0_ = agg0
 
@@ -215,8 +285,7 @@ def generic_analysis(agg0, macro_groups=None, selector=None):
         selector = chosen_macro_rois[-1]
 
     print('chosen_macro_rois = {}'.format(ub.repr2(chosen_macro_rois, nl=1)))
-    for chosen in ub.ProgIter(chosen_macro_rois, desc='build macro ave'):
-        agg0_.build_macro_table(chosen)
+    agg0_.build_macro_tables(chosen_macro_rois)
 
     agg_best = agg0_.report_best(top_k=10)
 
@@ -228,8 +297,7 @@ def generic_analysis(agg0, macro_groups=None, selector=None):
     print(f'Restrict to {n1} / {n2} top parameters')
 
     subagg1 = agg0_.filterto(param_hashids=params_of_interest)
-    for chosen in chosen_macro_rois:
-        subagg1.build_macro_table(chosen)
+    subagg1.build_macro_tables(chosen_macro_rois)
     agg1_best = subagg1.report_best(top_k=1)
 
     param_hashid = agg1_best[hash_regions(selector)]['param_hashid'].iloc[0]
@@ -240,8 +308,7 @@ def generic_analysis(agg0, macro_groups=None, selector=None):
     n2 = len(agg0_.index['param_hashid'])
     print(f'Restrict to {n1} / {n2} top parameters')
     subagg2 = agg0_.filterto(param_hashids=params_of_interest1)
-    for chosen in chosen_macro_rois:
-        subagg2.build_macro_table(chosen)
+    subagg2.build_macro_tables(chosen_macro_rois)
     agg2_best = subagg2.report_best(top_k=1)  # NOQA
     return subagg2
 
@@ -319,6 +386,7 @@ def build_tables(config):
                 'metrics': [],
                 'index': [],
                 'params': [],
+                'specified_params': [],
                 'param_types': [],
                 'fpaths': [],
                 # 'json_info': [],
@@ -347,6 +415,9 @@ def build_tables(config):
                     cols['params'].append(params)
                     cols['index'].append(index)
                     cols['param_types'].append(param_types)
+                    # To make hashing consistent we need to know which
+                    # parameters were explicitly specified
+                    cols['specified_params'].append({k: 1 for k in params})
                     cols['fpaths'].append(fpath)
                     # cols['json_info'].append(result['json_info'])
                 else:
@@ -360,6 +431,7 @@ def build_tables(config):
                 'index': pd.DataFrame(cols['index']),
                 'metrics': pd.DataFrame(cols['metrics']),
                 'params': pd.DataFrame(cols['params']),
+                'specified_params': pd.DataFrame(cols['specified_params']),
                 'trunc_params': trunc_params,
                 'param_types': pd.DataFrame(cols['param_types']),
             }
@@ -447,22 +519,39 @@ def build_aggregators(eval_type_to_results):
     return eval_type_to_aggregator
 
 
-class Aggregator:
+class Aggregator(ub.NiceRepr):
+    """
+    Stores multiple data frames that separate metrics, parameters, and other
+    information using consistent pandas indexing. Can be filtered to a
+    comparable subsets of choice. Can also handle building macro averaged
+    results over different "regions" with the same parameters.
+    """
     def __init__(agg, results, type=None):
         agg.results = results
         agg.type = type
         agg.metrics = results['metrics']
         agg.params = results['params']
         agg.index = results['index']
+        agg.fpaths = results['fpaths']['fpath']
+
+    def __nice__(self):
+        return f'{self.type}, n={len(self)}'
+
+    def __len__(self):
+        return len(self.index)
 
     def filterto(agg, models=None, param_hashids=None):
         import numpy as np
         final_flags = 1
         if param_hashids is not None:
+            if not ub.iterable(param_hashids):
+                param_hashids = [param_hashids]
             flags = kwarray.isect_flags(agg.index['param_hashid'].values, param_hashids)
             final_flags = np.logical_and(final_flags, flags)
 
         if models is not None:
+            if not ub.iterable(models):
+                models = [models]
             flags = kwarray.isect_flags(agg.effective_params[agg.model_cols[0]].values, models)
             final_flags = np.logical_and(final_flags, flags)
 
@@ -552,7 +641,7 @@ class Aggregator:
                 'effective_params': agg.effective_params.loc[idx_group.index],
             }
         agg.macro_compatible = agg.find_macro_comparable()
-        # agg.build_macro_table()
+        # agg.build_macro_tables()
 
     def macro_analysis(agg):
         from watch.utils import result_analysis
@@ -615,16 +704,6 @@ class Aggregator:
         big_param_lut = {}
         region_id_to_ntotal = {}
 
-        def shorten(summary_table):
-            import ubelt as ub
-            # fixme
-            from watch.utils.util_stringalgo import shortest_unique_suffixes
-            old_cols = summary_table.columns
-            new_cols = shortest_unique_suffixes(old_cols, sep='.')
-            mapping = ub.dzip(old_cols, new_cols)
-            summary_table = summary_table.rename(columns=mapping)
-            return summary_table
-
         for region_id, group in agg.region_to_tables.items():
             metric_group = group['metrics']
             metric_group = metric_group.sort_values(agg.primary_metric_cols)
@@ -636,10 +715,11 @@ class Aggregator:
             top_indexes = group['index'].loc[top_idxs]
             # top_params = group['effective_params'].loc[top_idxs].drop(agg.test_dset_cols, axis=1)
             param_lut = agg.hashid_to_params.subdict(top_indexes['param_hashid'])
-            # hashed_params, param_lut = pandas_hashed_rows(top_params, hashed_colname='param_hashid')
             big_param_lut.update(param_lut)
             summary_table = pd.concat([top_indexes, top_metrics], axis=1)
-            region_id_to_summary[region_id] = shorten(summary_table)
+            if shorten:
+                summary_table = pandas_shorten_columns(summary_table)
+            region_id_to_summary[region_id] = summary_table
             region_id_to_ntotal[region_id] = len(metric_group)
 
         # In reverse order (so they correspond with last region table)
@@ -726,19 +806,31 @@ class Aggregator:
             col_mapping = ub.dzip(condensed, raw_paths)
             mappings[colname] = col_mapping
 
+        specified_params = agg.results['specified_params']
+        is_param_included = specified_params > 0
+
         # For each unique set of effective parameters compute a hashid
         param_cols = ub.oset(effective_params.columns).difference(agg.test_dset_cols)
         param_cols = list(param_cols - {'region_id', 'type'})
-        new_hashids = pd.Series([None] * len(agg.index), index=agg.index.index)
+        hashids_v1 = pd.Series([None] * len(agg.index), index=agg.index.index)
+        # hashids_v0 = pd.Series([None] * len(agg.index), index=agg.index.index)
         hashid_to_params = {}
         for param_vals, group in effective_params.groupby(param_cols, dropna=False):
-            unique_params = ub.dzip(param_cols, param_vals)
-            hashid = hash_param(unique_params)
-            hashid_to_params[hashid] = unique_params
-            new_hashids.loc[group.index] = hashid
+
+            # Further subdivide the group so each row only computes its hash
+            # with the parameters that were included in its row
+            for param_flags, subgroup in is_param_included.loc[group.index].groupby(param_cols, dropna=False):
+                valid_param_cols = list(ub.compress(param_cols, param_flags))
+                valid_param_vals = list(ub.compress(param_vals, param_flags))
+                unique_params = ub.dzip(valid_param_cols, valid_param_vals)
+                hashid = hash_param(unique_params, version=1)
+                hashid_to_params[hashid] = unique_params
+                hashids_v1.loc[subgroup.index] = hashid
+                # hashids_v0.loc[subgroup.index] = hash_param(unique_params, version=0)
 
         # Update the index with an effective parameter hashid
-        agg.index.loc[new_hashids.index, 'param_hashid'] = new_hashids
+        agg.index.loc[hashids_v1.index, 'param_hashid'] = hashids_v1
+        # agg.index.loc[hashids_v0.index, 'param_hashid_v0'] = hashids_v0
 
         return effective_params, mappings, hashid_to_params
 
@@ -765,17 +857,22 @@ class Aggregator:
         # print('region_to_num_compatible = {}'.format(ub.urepr(region_to_num_compatible, nl=1)))
         return macro_compatible
 
-    def build_macro_table(agg, rois=None):
+    def build_macro_tables(agg, rois=None):
+        if isinstance(rois, list) and len(rois) and ub.iterable(rois[0]):
+            # Asked for multiple groups of ROIS.
+            for single_rois in rois:
+                agg.build_single_macro_table(single_rois)
+        else:
+            agg.build_single_macro_table(rois)
+
+    def build_single_macro_table(agg, rois):
         macro_compatible = agg.macro_compatible
 
         # Given a specific group of regions,
         if rois is None:
-            # Get all measurements that can be averaged over the chosen regions
-            # regions_of_interest = {'BR_R002', 'KR_R001', 'KR_R002', 'US_R007'}
-            regions_of_interest = {'BR_R002', 'KR_R001', 'KR_R002', 'AE_R001'}
-            # regions_of_interest = {'KR_R001', 'KR_R002', 'BR_R002'}
-            # regions_of_interest = {'KR_R001', 'KR_R002'}
-        elif isinstance(rois, str):
+            rois = 'max'
+
+        if isinstance(rois, str):
             if rois == 'max':
                 regions_of_interest = ub.argmax(macro_compatible, key=len)
         else:
@@ -1327,8 +1424,29 @@ def pandas_suffix_columns(data, suffixes):
     return [c for c in data.columns if any(c.endswith(s) for s in suffixes)]
 
 
-def hash_param(row):
-    param_hashid = ub.hash_data(row, base=26)[0:12]
+def hash_param(row, version=1):
+    """
+    Rule of thumb for probability of a collision:
+
+        base, length = 16, 8
+        rule_of_thumb = np.sqrt(base ** length)
+        rule_of_thumb = base ** (length // 2)
+        print(f'rule_of_thumb={rule_of_thumb}')
+
+        base, length = 26, 12
+        rule_of_thumb = np.sqrt(base ** length)
+        rule_of_thumb = base ** (length // 2)
+        print(f'rule_of_thumb={rule_of_thumb}')
+
+    """
+    # TODO: something like multibase
+    # https://github.com/multiformats/multibase
+    if version == 1:
+        param_hashid = ub.hash_data(row, base=26)[0:12]
+    elif version == 0:
+        param_hashid = ub.hash_data(row)[0:8]
+    else:
+        raise KeyError(version)
     return param_hashid
 
 
@@ -1336,19 +1454,6 @@ def hash_regions(rois):
     suffix = ub.hash_data(sorted(rois), base=16)[0:6]
     macro_key = f'macro_{len(rois):02d}_{suffix}'
     return macro_key
-
-
-def pandas_hashed_rows(data, hashed_colname='hashed'):
-    # data = top_params
-    hashid_to_row = {}
-    hash_rows = []
-    for row in data.to_dict('records'):
-        hashid = hash_param(row)
-        hashid_to_row[hashid] = row
-        hash_rows.append(hashid)
-
-    hashed_df = pd.DataFrame(hash_rows, columns=[hashed_colname], index=data.index)
-    return hashed_df, hashid_to_row
 
 
 def nan_to_None(x):
@@ -1363,6 +1468,17 @@ def nan_eq(a, b):
         return True
     else:
         return a == b
+
+
+def pandas_shorten_columns(summary_table):
+    import ubelt as ub
+    # fixme
+    from watch.utils.util_stringalgo import shortest_unique_suffixes
+    old_cols = summary_table.columns
+    new_cols = shortest_unique_suffixes(old_cols, sep='.')
+    mapping = ub.dzip(old_cols, new_cols)
+    summary_table = summary_table.rename(columns=mapping)
+    return summary_table
 
 
 if __name__ == '__main__':
