@@ -183,6 +183,10 @@ def main(cmdline=False, **kwargs):
         }
 
     """
+    import cmd_queue
+    from watch.utils import slugify_ext
+    from watch.utils import util_gis
+
     # import shlex
     config = PrepareTA2Config(cmdline=cmdline, data=kwargs)
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
@@ -251,9 +255,6 @@ def main(cmdline=False, **kwargs):
     final_region_globstr = _coerce_globstr(config['region_globstr'])
     final_site_globstr = _coerce_globstr(config['site_globstr'])
 
-    import cmd_queue
-    from watch.utils import util_gis
-
     # Global environs are given to all jobs
     api_key = config['api_key']
     environ = {}
@@ -311,9 +312,8 @@ def main(cmdline=False, **kwargs):
                 if 1:
                     regions_without_sites = set(region_id_to_fpath) - set(region_id_to_site_fpaths)
                     sites_without_regions = set(region_id_to_site_fpaths) - set(region_id_to_fpath)
-                    from watch.utils import slugify_ext
-                    print(f'regions_without_sites={slugify_ext.smart_truncate(ub.urepr(regions_without_sites, nl=0))}')
-                    print(f'sites_without_regions={slugify_ext.smart_truncate(ub.urepr(sites_without_regions, nl=0))}')
+                    print(f'regions_without_sites={slugify_ext.smart_truncate(ub.urepr(regions_without_sites, nl=1), max_length=1000)}')
+                    print(f'sites_without_regions={slugify_ext.smart_truncate(ub.urepr(sites_without_regions, nl=1), max_length=1000)}')
             else:
                 raise NotImplementedError(
                     'TODO: implement more robust alternative that reads '
@@ -322,7 +322,7 @@ def main(cmdline=False, **kwargs):
             if config['max_regions'] is not None:
                 region_file_fpaths = region_file_fpaths[:config['max_regions']]
 
-            print('region_file_fpaths = {}'.format(ub.repr2(sorted(region_file_fpaths), nl=1)))
+            print(f'region_file_fpaths={slugify_ext.smart_truncate(ub.urepr(sorted(region_file_fpaths), nl=1), max_length=1000)}')
             for region_id, region_fpath in region_id_to_fpath.items():
                 if region_id in region_id_blocklist:
                     continue
