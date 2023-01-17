@@ -311,9 +311,9 @@ def main(cmdline=False, **kwargs):
                 if 1:
                     regions_without_sites = set(region_id_to_fpath) - set(region_id_to_site_fpaths)
                     sites_without_regions = set(region_id_to_site_fpaths) - set(region_id_to_fpath)
-                    print(f'regions_without_sites={regions_without_sites}')
-                    print(f'sites_without_regions={sites_without_regions}')
-
+                    from watch.utils import slugify_ext
+                    print(f'regions_without_sites={slugify_ext.smart_truncate(ub.urepr(regions_without_sites, nl=0))}')
+                    print(f'sites_without_regions={slugify_ext.smart_truncate(ub.urepr(sites_without_regions, nl=0))}')
             else:
                 raise NotImplementedError(
                     'TODO: implement more robust alternative that reads '
