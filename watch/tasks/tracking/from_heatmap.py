@@ -310,6 +310,14 @@ def time_aggregated_polys(
 
         agg_fn: (3d heatmaps -> 2d heatmaps), calling convention TBD
 
+    Ignore:
+        # For debugging
+        import xdev
+        import sys, ubelt
+        from watch.tasks.tracking.from_heatmap import *  # NOQA
+        from watch.tasks.tracking.from_heatmap import _validate_keys
+        globals().update(xdev.get_func_kwargs(time_aggregated_polys))
+
     Example:
         >>> # test interpolation
         >>> from watch.tasks.tracking.from_heatmap import time_aggregated_polys
@@ -418,13 +426,11 @@ def time_aggregated_polys(
 
     polys = [p.to_shapely() for p in polys]
 
-    if polygon_simplify_tolerance is not None:
-        polys = [
-            p.simplify(polygon_simplify_tolerance)
-            for p in polys
-        ]
-
     _TRACKS = gpd.GeoDataFrame(dict(gid=gids, poly=polys), geometry='poly')
+
+    if polygon_simplify_tolerance is not None:
+        _TRACKS['poly'] = _TRACKS['poly'].simplify(tolerance=polygon_simplify_tolerance)
+
     # _TRACKS['track_idx'] = range(len(_TRACKS))
     _TRACKS = _TRACKS.reset_index().rename(columns={'index': 'track_idx'})
     _TRACKS = _TRACKS.explode('gid')
