@@ -760,3 +760,6 @@ DSET_CODE_TO_GSD = {
     'Aligned-Drop3-TA1-2022-03-10': 10.0,
     'Cropped-Drop3-TA1-2022-03-10': 1.0,
 }
+
+
+PHASES = ['No Activity', 'Site Preparation', 'Active Construction', 'Post Construction']
