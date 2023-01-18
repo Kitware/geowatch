@@ -9,7 +9,6 @@ import shapely.ops
 from dataclasses import dataclass
 from typing import List, Dict, Optional, Literal
 import ubelt as ub
-import safer
 from watch.heuristics import PHASES as phases
 
 
@@ -555,9 +554,7 @@ def merge_sc_metrics_results(sc_results: List[RegionResult]):
     return df
 
 
-def merge_metrics_results(region_dpaths, true_site_dpath, true_region_dpath,
-                          merge_dpath, merge_fpath, fbetas, parent_info, info,
-                          sc_viz=True):
+def merge_metrics_results( region_dpaths, true_site_dpath, true_region_dpath, fbetas):
     '''
     Merge metrics results from multiple regions.
 
@@ -567,14 +564,12 @@ def merge_metrics_results(region_dpaths, true_site_dpath, true_region_dpath,
             phase_activity/ [optional]
         true_site_dpath, true_region_dpath: Path to GT annotations repo
         merge_dpath: Directory to save merged results.
-            Existing contents will be removed.
 
     Returns:
         (bas_df, sc_df)
         Two pd.DataFrames that are saved as
             {out_dpath}/(bas|sc)_df.pkl
     '''
-    merge_dpath = ub.Path(merge_dpath).ensuredir()
     # assert merge_dpath not in region_dpaths
     # merge_dpath.delete().ensuredir()
 
@@ -595,9 +590,6 @@ def merge_metrics_results(region_dpaths, true_site_dpath, true_region_dpath,
     # merge SC
     sc_results = [r for r in results if r.sc_dpath]
     sc_df = merge_sc_metrics_results(sc_results)
-
-    bas_df.to_pickle(merge_dpath / 'bas_df.pkl')
-    sc_df.to_pickle(merge_dpath / 'sc_df.pkl')
 
     # create and print a BAS and SC summary
     min_rho, max_rho = 0.5, 0.5
@@ -639,49 +631,10 @@ def merge_metrics_results(region_dpaths, true_site_dpath, true_region_dpath,
     concise_sc = concise_sc[['F1', 'TIoU', 'TE', 'tp', 'fp']]
     print(concise_sc.to_string())
 
-    # write BAS and SC summary in readable form
-    with safer.open(merge_dpath / 'summary.csv', 'w') as f:
-        best_bas_rows.to_csv(f)
-        f.write('\n')
-        sc_df.to_csv(f)
-
     json_data = {}
-    # TODO: parent info should probably belong to info itself
-    json_data['info'] = info
-    json_data['parent_info'] = parent_info
     json_data['best_bas_rows'] = json.loads(best_bas_rows.to_json(orient='table', indent=2))
     json_data['sc_df'] = json.loads(sc_df.to_json(orient='table', indent=2))
-
-    if not merge_fpath.parent.exists():
-        raise OSError(f'{merge_fpath.parent=} does not exist')
-
-    with safer.open(merge_fpath, 'w', temp_file=True) as f:
-        json.dump(json_data, f, indent=4)
-
-    # Consolodate visualizations
-    region_viz_dpath = (merge_dpath / 'region_viz_overall').ensuredir()
-
-    # Write a legend to go with the BAS viz
-    legend_img = iarpa_bas_color_legend()
-    legend_fpath = (region_viz_dpath / 'bas_legend.png')
-    import kwimage
-    kwimage.imwrite(legend_fpath, legend_img)
-
-    # Symlink to visualizations
-    for dpath in region_dpaths:
-        overall_dpath = dpath / 'overall'
-        viz_dpath = (overall_dpath / 'bas' / 'region').ensuredir()
-
-        for viz_fpath in viz_dpath.iterdir():
-            viz_link = viz_fpath.augment(dpath=region_viz_dpath)
-            ub.symlink(viz_fpath, viz_link, verbose=1)
-
-    # viz SC
-    if sc_viz:
-        from watch.tasks.metrics.viz_sc_results import viz_sc
-        viz_sc(sc_results, region_viz_dpath)
-
-    return bas_df, sc_df
+    return json_data, bas_df, sc_df, best_bas_rows
 
 
 def iarpa_bas_color_legend():

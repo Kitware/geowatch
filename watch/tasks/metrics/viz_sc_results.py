@@ -11,7 +11,22 @@ from typing import Literal
 import datetime
 
 
-def viz_sc(sc_results, save_dpath):
+def viz_sc(region_dpaths, true_site_dpath, true_region_dpath, save_dpath):
+    from watch.tasks.metrics.merge_iarpa_metrics import RegionResult
+    from watch.heuristics import PHASES as phases
+
+    results = []
+    for pth in region_dpaths:
+        try:
+            results.append(
+                RegionResult.from_dpath_and_anns_root(
+                    pth, true_site_dpath, true_region_dpath)
+            )
+        except FileNotFoundError:
+            print(f'warning: missing region {pth}')
+
+    # merge SC
+    sc_results = [r for r in results if r.sc_dpath]
 
     # check out:
     # kwimage.stack_image
@@ -49,7 +64,6 @@ def viz_sc(sc_results, save_dpath):
         )
 
         # order hack for relplot
-        from watch.heuristics import PHASES as phases
         phases_type = pd.api.types.CategoricalDtype(
             (['Unknown'] + phases)[::-1], ordered=True)
         df['value'] = df['value'].astype(phases_type)

@@ -321,15 +321,17 @@ def main(cmdline=True, **kwargs):
     main_out_dir = ub.Path(args.out_dir or './iarpa-metrics-output')
     main_out_dir.ensuredir()
 
-    full_invocation_text = ub.codeblock(
-        '''
-        #!/bin/bash
-        __doc__="
-        This is an auto-generated file that records the command used to
-        generate this evaluation of multiple regions.
-        "
-        ''') + chr(10) + shlex.join(sys.argv) + chr(10)
-    (main_out_dir / 'invocation.sh').write_text(full_invocation_text)
+    if 0:
+        # This is not necessary anymore with mlops v3
+        full_invocation_text = ub.codeblock(
+            '''
+            #!/bin/bash
+            __doc__="
+            This is an auto-generated file that records the command used to
+            generate this evaluation of multiple regions.
+            "
+            ''') + chr(10) + shlex.join(sys.argv) + chr(10)
+        (main_out_dir / 'invocation.sh').write_text(full_invocation_text)
 
     # First build up all of the commands and prepare necessary data for them.
     commands = []
@@ -444,6 +446,7 @@ def main(cmdline=True, **kwargs):
     print('out_dirs = {}'.format(ub.repr2(out_dirs, nl=1)))
     if args.merge and out_dirs:
         from watch.tasks.metrics.merge_iarpa_metrics import merge_metrics_results
+        from watch.tasks.metrics.merge_iarpa_metrics import iarpa_bas_color_legend
 
         if args.merge_fpath is None:
             merge_dpath = (main_out_dir / 'merged').ensuredir()
@@ -456,10 +459,46 @@ def main(cmdline=True, **kwargs):
 
         info.append(proc_context.stop())
 
-        merge_metrics_results(region_dpaths, true_site_dpath,
-                              true_region_dpath, merge_dpath, merge_fpath,
-                              args.merge_fbetas, parent_info, info)
+        json_data, bas_df, sc_df, best_bas_rows = merge_metrics_results(
+            region_dpaths, true_site_dpath, true_region_dpath,
+            args.merge_fbetas)
+
+        # TODO: parent info should probably belong to info itself
+        json_data['info'] = info
+        json_data['parent_info'] = parent_info
+
+        merge_dpath = ub.Path(merge_dpath).ensuredir()
+
+        with safer.open(merge_fpath, 'w', temp_file=True) as f:
+            json.dump(json_data, f, indent=4)
         print('merge_fpath = {!r}'.format(merge_fpath))
+
+        # Consolodate visualizations
+        combined_viz_dpath = (merge_dpath / 'region_viz_overall').ensuredir()
+
+        # Write a legend to go with the BAS viz
+        legend_img = iarpa_bas_color_legend()
+        legend_fpath = (combined_viz_dpath / 'bas_legend.png')
+        import kwimage
+        kwimage.imwrite(legend_fpath, legend_img)
+
+        bas_df.to_pickle(merge_dpath / 'bas_df.pkl')
+        sc_df.to_pickle(merge_dpath / 'sc_df.pkl')
+
+        # Symlink to visualizations
+        for dpath in region_dpaths:
+            overall_dpath = dpath / 'overall'
+            viz_dpath = (overall_dpath / 'bas' / 'region').ensuredir()
+
+        for viz_fpath in viz_dpath.iterdir():
+            viz_link = viz_fpath.augment(dpath=combined_viz_dpath)
+            ub.symlink(viz_fpath, viz_link, verbose=1)
+
+        sc_viz = True
+        # viz SC
+        if sc_viz:
+            from watch.tasks.metrics.viz_sc_results import viz_sc
+            viz_sc(region_dpaths, true_site_dpath, true_region_dpath, combined_viz_dpath)
 
 
 if __name__ == '__main__':
