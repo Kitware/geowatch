@@ -554,7 +554,7 @@ def merge_sc_metrics_results(sc_results: List[RegionResult]):
     return df
 
 
-def merge_metrics_results( region_dpaths, true_site_dpath, true_region_dpath, fbetas):
+def merge_metrics_results(region_dpaths, true_site_dpath, true_region_dpath, fbetas):
     '''
     Merge metrics results from multiple regions.
 
@@ -635,6 +635,46 @@ def merge_metrics_results( region_dpaths, true_site_dpath, true_region_dpath, fb
     json_data['best_bas_rows'] = json.loads(best_bas_rows.to_json(orient='table', indent=2))
     json_data['sc_df'] = json.loads(sc_df.to_json(orient='table', indent=2))
     return json_data, bas_df, sc_df, best_bas_rows
+
+
+def _devcheck():
+    """
+    rsync -avprLPR --exclude '.succ' --exclude 'tmp' $HOME/data/dvc-repos/smart_expt_dvc/_testpipe/aggregate/./agg_params_ffmpktiwwpbx horologic:data/dvc-repos/smart_expt_dvc/_testpipe/aggregate
+    """
+    import watch
+    region_dpaths = ['/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_testpipe/aggregate/agg_params_ffmpktiwwpbx/KR_R001/KR_R001/']
+    fbetas = []
+    data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
+    gt_dpath = data_dvc_dpath / 'annotations'
+    true_region_dpath = gt_dpath / 'region_models'
+    true_site_dpath =  gt_dpath / 'site_models'
+    json_data, bas_df, sc_df, best_bas_rows = merge_metrics_results(region_dpaths, true_site_dpath, true_region_dpath, fbetas)
+    import rich
+    primary_columns = ['tp sites', 'fp sites', 'fn sites', 'ffpa', 'F1', 'tp over', 'tp exact', 'tp under']
+
+    region_id = bas_df.index.levels[0][0]
+    group = bas_df.loc[[region_id]]
+
+    # other_cols = group.columns.difference(primary_columns)
+
+    toshow = group.loc[:, primary_columns]
+    rich.print(toshow.to_string())
+
+    import kwplot
+    sns = kwplot.autosns()
+    plt = kwplot.autoplt()
+    kwplot.figure(fnum=1, docla=1)
+    sns.histplot(data=group, x='rho', y='tau', hue='F1')
+    # sns.kdeplot(data=group, x='rho', y='tau', hue='F1')
+    ax = plt.gca()
+    ax.set_xlim(-0.1, 0.91)
+    ax.set_ylim(-0.1, 0.51)
+    ax.set_title(region_id)
+    ax.scatter(0.5, 0.2, marker='*', s=400, color='orange', alpha=0.98)
+    sns.scatterplot(data=group, x='rho', y='tau', hue='F1')
+
+    sns.lineplot(data=group, x='rho', y='F1', hue='tau')
+    sns.lineplot(data=group, x='tau', y='F1', hue='rho')
 
 
 def iarpa_bas_color_legend():
