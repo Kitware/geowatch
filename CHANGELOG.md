@@ -12,6 +12,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Add `smartwatch visualize` option `--resolution` to specify the resolution to output the visualization at (e.g. "10GSD")
 * Add `smartwatch visualize` option `--role_order` for showing different annotation roles on different channel stacks.
 * Experimental new logic in `smartwatch project` for keyframe propagation / interpolation.
+* Added `polygon_simplify_tolerance` to tracking.
 
 ### Fixed
 * Switched scriptconfig objects to use "data=kwargs" rather than "default=kwargs" to avoid a copy issue.
