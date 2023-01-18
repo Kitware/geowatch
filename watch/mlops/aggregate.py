@@ -33,6 +33,7 @@ from watch.utils import util_pattern
 from watch.mlops import smart_result_parser
 import json
 from watch.utils.util_param_grid import DotDictDataFrame
+from watch.utils.util_stringalgo import shortest_unique_suffixes
 from watch.utils import slugify_ext
 from watch.utils import util_parallel
 from typing import Dict, Any
@@ -287,19 +288,20 @@ def generic_analysis(agg0, macro_groups=None, selector=None):
     print('chosen_macro_rois = {}'.format(ub.repr2(chosen_macro_rois, nl=1)))
     agg0_.build_macro_tables(chosen_macro_rois)
 
-    agg_best = agg0_.report_best(top_k=10)
+    agg_best, param_lut = agg0_.report_best(top_k=1)
+    params_of_interest = pd.concat(agg_best.values())['param_hashid'].value_counts()
 
-    params_of_interest = ub.oset(ub.flatten([
-        v['param_hashid'].to_list() for v in reversed(agg_best.values())]))
-
+    params_of_interest = list(param_lut.keys())
     n1 = len(params_of_interest)
     n2 = len(agg0_.index['param_hashid'])
     print(f'Restrict to {n1} / {n2} top parameters')
 
     subagg1 = agg0_.filterto(param_hashids=params_of_interest)
     subagg1.build_macro_tables(chosen_macro_rois)
-    agg1_best = subagg1.report_best(top_k=1)
+    models_of_interest = subagg1.effective_params[subagg1.model_cols].value_counts()
+    print('models_of_interest = {}'.format(ub.urepr(models_of_interest, nl=1)))
 
+    agg1_best, param_lut1 = subagg1.report_best(top_k=1)
     param_hashid = agg1_best[hash_regions(selector)]['param_hashid'].iloc[0]
     params_of_interest1 = [param_hashid]
     # params_of_interest1 = [list(agg1_best.values())[-1]['param_hashid'].iloc[0]]
@@ -309,7 +311,7 @@ def generic_analysis(agg0, macro_groups=None, selector=None):
     print(f'Restrict to {n1} / {n2} top parameters')
     subagg2 = agg0_.filterto(param_hashids=params_of_interest1)
     subagg2.build_macro_tables(chosen_macro_rois)
-    agg2_best = subagg2.report_best(top_k=1)  # NOQA
+    agg2_best, param_lut2 = subagg2.report_best(top_k=1)  # NOQA
     return subagg2
 
 
@@ -699,6 +701,24 @@ class Aggregator(ub.NiceRepr):
         analysis.analysis()
 
     def report_best(agg, top_k=3, shorten=True):
+        """
+        Report the top k pointwise results for each region / macro-region.
+
+        Note:
+            Results are chosen per-region independently. To get comparable
+            results for a specific set of parameters, filter to them and then
+            report the top results for that filtering.
+
+        Args:
+            k (int): number of top results for each region
+
+        Returns:
+            Tuple[T1, T2]:
+                region_id_to_summary (T1=Dict[str, DataFrame]):
+                    mapping from region_id to top k results
+                top_param_lut (T2=Dict[str, DataFrame]):
+                    mapping from param hash to invocation details
+        """
         import rich
         region_id_to_summary = {}
         big_param_lut = {}
@@ -733,9 +753,9 @@ class Aggregator(ub.NiceRepr):
             param_hashid_order.update(param_hashids)
 
         param_hashid_order = param_hashid_order[::-1]
-        show_param_lut = ub.udict(big_param_lut).subdict(param_hashid_order)
+        top_param_lut = ub.udict(big_param_lut).subdict(param_hashid_order)
 
-        rich.print('Parameter LUT: {}'.format(ub.urepr(show_param_lut, nl=2)))
+        rich.print('Parameter LUT: {}'.format(ub.urepr(top_param_lut, nl=2)))
 
         # Check for a common special case that we can make more concise output for
         only_one_top_item = all(len(t) == 1 for t in region_id_to_summary.values())
@@ -764,7 +784,7 @@ class Aggregator(ub.NiceRepr):
                     rich.print(f'Top {len(summary_table)} / {ntotal} for {region_id}')
                 rich.print(summary_table.iloc[::-1].to_string())
 
-        return region_id_to_summary
+        return region_id_to_summary, top_param_lut
 
     def build_effective_params(agg):
         """
@@ -784,27 +804,14 @@ class Aggregator(ub.NiceRepr):
         test_dset_cols = agg.test_dset_cols
 
         mappings : Dict[str, Dict[Any, str]] = {}
-        for colname in model_cols:
-            raw_paths = params[colname].tolist()
-            condensed = []
-            for p in raw_paths:
-                p = ub.Path(p).stem
-                p = '.'.join(p.split('.')[0:1])
-                condensed.append(p)
-            effective_params[colname] = condensed
-            col_mapping = ub.dzip(condensed, raw_paths)
-            mappings[colname] = col_mapping
 
-        for colname in test_dset_cols:
-            raw_paths = params[colname].tolist()
-            condensed = []
-            for p in raw_paths:
-                p = ub.Path(p).stem
-                p = '.'.join(p.split('.')[0:1])
-                condensed.append(p)
+        path_colnames = model_cols + test_dset_cols
+
+        for colname in path_colnames:
+            colvals = params[colname]
+            condensed, mapper = pandas_condense_paths(colvals)
+            mappings[colname] = mapper
             effective_params[colname] = condensed
-            col_mapping = ub.dzip(condensed, raw_paths)
-            mappings[colname] = col_mapping
 
         specified_params = agg.results['specified_params']
         is_param_included = specified_params > 0
@@ -1473,12 +1480,22 @@ def nan_eq(a, b):
 def pandas_shorten_columns(summary_table):
     import ubelt as ub
     # fixme
-    from watch.utils.util_stringalgo import shortest_unique_suffixes
     old_cols = summary_table.columns
     new_cols = shortest_unique_suffixes(old_cols, sep='.')
     mapping = ub.dzip(old_cols, new_cols)
     summary_table = summary_table.rename(columns=mapping)
     return summary_table
+
+
+def pandas_condense_paths(colvals):
+    is_valid = ~pd.isnull(colvals)
+    valid_vals = colvals[is_valid]
+    unique_valid_vals = valid_vals.unique()
+    unique_short_vals = shortest_unique_suffixes(unique_valid_vals, sep='/')
+    new_vals = [p.split('.')[0] for p in unique_short_vals]
+    mapper = ub.dzip(unique_valid_vals, new_vals)
+    condensed = colvals.apply(lambda x: mapper.get(x, x))
+    return condensed, mapper
 
 
 if __name__ == '__main__':
