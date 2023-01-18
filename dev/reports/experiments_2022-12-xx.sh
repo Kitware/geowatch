@@ -62,16 +62,18 @@ python -m watch.mlops.schedule_evaluation \
         matrix:
             bas_pxl.package_fpath:
                 #- $DVC_EXPT_DPATH/bas_native_epoch44.pt
-                #- $DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
+                - $DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
                 - $DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_10GSD_BGRN_V11/lightning_logs/version_1/checkpoints/Drop4_BAS_2022_12_10GSD_BGRN_V11_epoch=86-step=44544.pt
+                - $DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V10/lightning_logs/version_0/checkpoints/Drop4_BAS_2022_12_15GSD_BGRN_V10_epoch=0-step=4305.pt
+                - $DVC_EXPT_DPATH/training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_15GSD_BGRNSH_invar_V8/lightning_logs/version_0/checkpoints/Drop4_BAS_15GSD_BGRNSH_invar_V8_epoch=16-step=8704.pt
+
+
                 #- $DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V5/lightning_logs/version_3/checkpoints/Drop4_BAS_2022_12_15GSD_BGRN_V5_epoch=1-step=77702-v1.pt
-                #- $DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V10/lightning_logs/version_0/checkpoints/Drop4_BAS_2022_12_15GSD_BGRN_V10_epoch=0-step=4305.pt
                 #- $DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V10/lightning_logs/version_3/checkpoints/Drop4_BAS_2022_12_15GSD_BGRN_V10_epoch=0-step=512-v1.pt
                 #- $DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V10/lightning_logs/version_3/checkpoints/Drop4_BAS_2022_12_15GSD_BGRN_V10_epoch=4-step=2560.pt
                 #- $DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V10/lightning_logs/version_3/checkpoints/Drop4_BAS_2022_12_15GSD_BGRN_V10_epoch=6-step=3584.pt
                 #- $DVC_EXPT_DPATH/training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_10GSD_BGRNSH_invar_V12/lightning_logs/version_1/checkpoints/Drop4_BAS_10GSD_BGRNSH_invar_V12_epoch=16-step=17408.pt
                 #- $DVC_EXPT_DPATH/training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_10GSD_BGRNSH_invar_V12/lightning_logs/version_1/checkpoints/Drop4_BAS_10GSD_BGRNSH_invar_V12_epoch=71-step=73728.pt
-                - $DVC_EXPT_DPATH/training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_15GSD_BGRNSH_invar_V8/lightning_logs/version_0/checkpoints/Drop4_BAS_15GSD_BGRNSH_invar_V8_epoch=16-step=8704.pt
                 #- $DVC_EXPT_DPATH/training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_15GSD_BGRNSH_invar_V8/lightning_logs/version_1/checkpoints/Drop4_BAS_15GSD_BGRNSH_invar_V8_epoch=90-step=46592.pt
                 #- $DVC_EXPT_DPATH/training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_15GSD_BGRNSH_invar_V8/lightning_logs/version_1/checkpoints/Drop4_BAS_15GSD_BGRNSH_invar_V8_epoch=159-step=81920.pt
             bas_pxl.test_dataset:
@@ -117,17 +119,25 @@ python -m watch.mlops.schedule_evaluation \
                 #- 0.4
                 #- 0.45
                 #- 0.5
+            bas_poly.polygon_simplify_tolerance:
+                - 3
             bas_poly.moving_window_size: 
                 - null
                 #- 100
                 #- 200
+                #- 300
+                #- 400
+            #bas_poly.min_area_sqkm:
+            #    - 0.072
+            #    #- 0.031
+            #    - 0.001
             bas_poly.max_area_sqkm:
                 - null
                 #- 1.00
                 #- 2.00
-                #- 2.25
+                - 2.25
                 #- 3.25
-                #- 8
+                - 8
             bas_pxl.enabled: 1
             bas_poly.enabled: 1
             bas_poly_eval.enabled: 1
@@ -152,10 +162,10 @@ python -m watch.mlops.schedule_evaluation \
             ##      bas_pxl.output_space_scale: auto
     " \
     --root_dpath="$DVC_EXPT_DPATH/_testpipe" \
-    --devices="0,1" --queue_size=2 \
+    --devices="0,1" --queue_size=1 \
     --backend=tmux --queue_name "demo-queue3" \
     --pipeline=bas --skip_existing=1 \
-    --run=1
+    --run=0
 
 
 #######
