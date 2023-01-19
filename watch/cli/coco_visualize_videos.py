@@ -856,7 +856,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                any3=True, dset_idstr='',
                                skip_missing=False,
                                only_boxes=1,
-                               draw_labels=1,
+                               draw_labels=True,
                                cmap='viridis',
                                max_dim=None,
                                min_dim=None,
@@ -978,7 +978,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
         role_dets = kwimage.Detections.from_coco_annots(role_anns, dset=coco_dset)
         role_dets = role_dets.warp(warp_viz_from_img)
-        role_dets.data['colors'] = colors
+        role_dets.data['colors'] = np.array(colors)
         role_to_dets[role] = role_dets
 
     # TODO: asset space
@@ -1412,7 +1412,7 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
 
             for role_dets in requested_role_to_dets.values():
                 # TODO: better role handling
-                colors = role_dets.data['colors']
+                colors = [kwimage.Color.coerce(c).as01() for c in role_dets.data['colors']]
                 draw_on_kwargs['labels'] = draw_labels
                 if verbose > 100:
                     print('About to draw dets on a canvas')
