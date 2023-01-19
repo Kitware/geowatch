@@ -1028,6 +1028,8 @@ def main(args):
     saliency_cats = ['salient']
     if args.default_track_fn is not None:
         from watch.tasks.tracking import from_heatmap, from_polygon
+        # TODO: we should be able to let the user know about these algorithms
+        # and parameters. Can jsonargparse help here?
         _known_funcs = {
             'saliency_heatmaps': from_heatmap.TimeAggregatedBAS,
             'saliency_polys': from_polygon.OverlapTrack,

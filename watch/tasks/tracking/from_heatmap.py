@@ -279,7 +279,9 @@ def time_aggregated_polys(
         max_area_sqkm=None,
         # max_area_sqkm=2.25,  # ~1.5x upper tail of truth
         max_area_behavior='drop',
-        thresh_hysteresis=None):
+        thresh_hysteresis=None,
+        polygon_simplify_tolerance=None,
+        ):
     '''
     Track function.
 
@@ -307,6 +309,14 @@ def time_aggregated_polys(
             np.inf, 'inf', or None: max
 
         agg_fn: (3d heatmaps -> 2d heatmaps), calling convention TBD
+
+    Ignore:
+        # For debugging
+        import xdev
+        import sys, ubelt
+        from watch.tasks.tracking.from_heatmap import *  # NOQA
+        from watch.tasks.tracking.from_heatmap import _validate_keys
+        globals().update(xdev.get_func_kwargs(time_aggregated_polys))
 
     Example:
         >>> # test interpolation
@@ -415,7 +425,12 @@ def time_aggregated_polys(
         gids, polys = [], []
 
     polys = [p.to_shapely() for p in polys]
+
     _TRACKS = gpd.GeoDataFrame(dict(gid=gids, poly=polys), geometry='poly')
+
+    if polygon_simplify_tolerance is not None:
+        _TRACKS['poly'] = _TRACKS['poly'].simplify(tolerance=polygon_simplify_tolerance)
+
     # _TRACKS['track_idx'] = range(len(_TRACKS))
     _TRACKS = _TRACKS.reset_index().rename(columns={'index': 'track_idx'})
     _TRACKS = _TRACKS.explode('gid')
@@ -705,6 +720,7 @@ class TimeAggregatedBAS(NewTrackFunction):
     min_area_sqkm: Optional[float] = 0.072
     max_area_sqkm: Optional[float] = 2.25
     max_area_behavior: str = 'drop'
+    polygon_simplify_tolerance: Union[None, float] = None
 
     def create_tracks(self, sub_dset):
         tracks = time_aggregated_polys(
@@ -721,6 +737,7 @@ class TimeAggregatedBAS(NewTrackFunction):
             min_area_sqkm=self.min_area_sqkm,
             max_area_sqkm=self.max_area_sqkm,
             max_area_behavior=self.max_area_behavior,
+            polygon_simplify_tolerance=self.polygon_simplify_tolerance,
         )
         return tracks
 
@@ -750,6 +767,7 @@ class TimeAggregatedSC(NewTrackFunction):
     min_area_sqkm: Optional[float] = None
     max_area_sqkm: Optional[float] = None
     max_area_behavior: str = 'drop'
+    polygon_simplify_tolerance: Union[None, float] = None
 
     def create_tracks(self, sub_dset):
         '''
@@ -790,6 +808,7 @@ class TimeAggregatedSC(NewTrackFunction):
                 min_area_sqkm=self.min_area_sqkm,
                 max_area_sqkm=self.max_area_sqkm,
                 max_area_behavior=self.max_area_behavior,
+                polygon_simplify_tolerance=self.polygon_simplify_tolerance,
             )
 
         return tracks

@@ -68,6 +68,16 @@ SUPPORTED_COARSE_PLATFORMS = {
     'PD': {'PlanetScope', 'dove', 'PD'},  # Planet
 }
 
+
+def normalize_str(s):
+    return s.lower().replace('-', '_')
+
+PLATFORM_NORMALIZED_TO_PLATFORM_STANDARD_CASE = {
+    normalize_str(v): v
+    for vs in SUPPORTED_COARSE_PLATFORMS.values()
+    for v in vs
+}
+
 SUPPORTED_PLATFORMS = set.union(
     *SUPPORTED_COARSE_PLATFORMS.values(),
     set(SUPPORTED_COARSE_PLATFORMS.keys()))
@@ -447,6 +457,9 @@ def _stac_item_to_kwcoco_image(stac_item,
         if stac_item_dict['properties']['constellation'] == 'dove':
             platform = 'PD'
 
+    # Convet to standard case
+    platform = PLATFORM_NORMALIZED_TO_PLATFORM_STANDARD_CASE.get(normalize_str(platform), platform)
+
     if platform not in SUPPORTED_PLATFORMS:
         print("* Warning * platform '{}' not supported, not adding to "
               "KWCOCO output!".format(platform))
@@ -525,6 +538,19 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
     all_items = [stac_item for stac_item in catalog.get_all_items()]
 
     if 1:
+        if verbose > 5:
+            # Printout one item per sensor
+            sensor_to_one_item = {}
+            for stac_item in all_items:
+                # TODO: we can use this data to prepopulate the kwcoco file
+                # so it takes far less time to field it.
+                stac_dict = stac_item.to_dict()
+                # stac_dict['geometry']
+                sensor = stac_dict['properties'].get(
+                    'constellation', stac_dict['properties'].get('platform', None))
+                sensor_to_one_item[sensor] = stac_dict
+            print('sensor_to_one_item = {}'.format(ub.urepr(sensor_to_one_item, nl=True)))
+
         # Sumamrize items before processing
         sensorchan_hist = ub.ddict(lambda: 0)
         sensorasset_hist = ub.ddict(lambda: 0)

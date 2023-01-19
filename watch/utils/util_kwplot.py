@@ -46,3 +46,27 @@ def cropwhite_ondisk(fpath):
     imdata = kwimage.imread(fpath)
     imdata = crop_border_by_color(imdata)
     kwimage.imwrite(fpath, imdata)
+
+
+def relabel_xticks(mapping, ax=None):
+    """
+    Change the tick labels on the x-axis.
+
+    Args:
+        mapping (dict):
+        ax (Axes | None):
+    """
+    if ax is None:
+        import kwplot
+        plt = kwplot.autoplt()
+        ax = plt.gca()
+    xtick_labels = list(ax.get_xticklabels())
+
+    new_labels = []
+    for label in xtick_labels:
+        text = label.get_text()
+        new_text = mapping.get(text, mapping.get(str(text), text))
+        label.set_text(new_text)
+        new_labels.append(label)
+
+    ax.set_xticklabels(new_labels)

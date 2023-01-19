@@ -102,6 +102,7 @@ class PrepareTA2Config(scfg.Config):
 
         'aws_profile': scfg.Value('iarpa', help='AWS profile to use for remote data access'),
 
+        'query_workers': scfg.Value('0', help='workers for STAC search'),
         'convert_workers': scfg.Value('min(avail,8)', help='workers for stac-to-kwcoco script'),
         'fields_workers': scfg.Value('min(avail,max(all/2,8))', help='workers for add-watch-fields script'),
         'align_workers': scfg.Value(0, help='primary workers for align script'),
@@ -182,6 +183,10 @@ def main(cmdline=False, **kwargs):
         }
 
     """
+    import cmd_queue
+    from watch.utils import slugify_ext
+    from watch.utils import util_gis
+
     # import shlex
     config = PrepareTA2Config(cmdline=cmdline, data=kwargs)
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
@@ -250,9 +255,6 @@ def main(cmdline=False, **kwargs):
     final_region_globstr = _coerce_globstr(config['region_globstr'])
     final_site_globstr = _coerce_globstr(config['site_globstr'])
 
-    import cmd_queue
-    from watch.utils import util_gis
-
     # Global environs are given to all jobs
     api_key = config['api_key']
     environ = {}
@@ -310,9 +312,8 @@ def main(cmdline=False, **kwargs):
                 if 1:
                     regions_without_sites = set(region_id_to_fpath) - set(region_id_to_site_fpaths)
                     sites_without_regions = set(region_id_to_site_fpaths) - set(region_id_to_fpath)
-                    print(f'regions_without_sites={regions_without_sites}')
-                    print(f'sites_without_regions={sites_without_regions}')
-
+                    print(f'regions_without_sites={slugify_ext.smart_truncate(ub.urepr(regions_without_sites, nl=1), max_length=1000)}')
+                    print(f'sites_without_regions={slugify_ext.smart_truncate(ub.urepr(sites_without_regions, nl=1), max_length=1000)}')
             else:
                 raise NotImplementedError(
                     'TODO: implement more robust alternative that reads '
@@ -321,7 +322,7 @@ def main(cmdline=False, **kwargs):
             if config['max_regions'] is not None:
                 region_file_fpaths = region_file_fpaths[:config['max_regions']]
 
-            print('region_file_fpaths = {}'.format(ub.repr2(sorted(region_file_fpaths), nl=1)))
+            print(f'region_file_fpaths={slugify_ext.smart_truncate(ub.urepr(sorted(region_file_fpaths), nl=1), max_length=1000)}')
             for region_id, region_fpath in region_id_to_fpath.items():
                 if region_id in region_id_blocklist:
                     continue
@@ -338,6 +339,7 @@ def main(cmdline=False, **kwargs):
                             --cloud_cover "{config['cloud_cover']}" \
                             --sensors "{config['sensors']}" \
                             --api_key "{config['api_key']}" \
+                            --query_workers "{config['query_workers']}" \
                             --max_products_per_region "{config['max_products_per_region']}" \
                             --append_mode=False \
                             --mode area \
@@ -838,27 +840,8 @@ def main(cmdline=False, **kwargs):
 
         # This logic will exist in cmd-queue itself
         other_session_handler = config['other_session_handler']
-
-        def handle_other_sessions(other_session_handler):
-            if other_session_handler == 'auto':
-                from cmd_queue.tmux_queue import has_stdin
-                if has_stdin():
-                    other_session_handler = 'ask'
-                else:
-                    other_session_handler = 'kill'
-            if other_session_handler == 'ask':
-                queue.kill_other_queues(ask_first=True)
-            elif other_session_handler == 'kill':
-                queue.kill_other_queues(ask_first=False)
-            elif other_session_handler == 'ignore':
-                ...
-            else:
-                raise KeyError
-
-        if config['backend'] == 'tmux':
-            handle_other_sessions(other_session_handler)
         queue.run(block=True, system=True, with_textual=config['with_textual'],
-                  check_other_sessions=False)
+                  other_session_handler=other_session_handler)
 
     # TODO: team features
     """

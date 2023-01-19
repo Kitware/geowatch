@@ -819,7 +819,7 @@ def coerce_geojson_datas(arg, format='dataframe', allow_raw=False, workers=0,
             else:
                 return True
         else:
-            return True
+            return False
 
     if allow_raw:
         # Normally the function assumes we are only inputing things that are
@@ -835,7 +835,12 @@ def coerce_geojson_datas(arg, format='dataframe', allow_raw=False, workers=0,
         raw_items = []
         other_items = []
         for item in iterable_arg:
-            was_raw, item = _coerce_raw_geojson(item, format)
+            try:
+                was_raw, item = _coerce_raw_geojson(item, format)
+            except TypeError:
+                print(f'iterable_arg={iterable_arg}')
+                print(f'arg={arg}')
+                raise
             if was_raw:
                 raw_items.append(item)
             else:
@@ -932,7 +937,7 @@ def coerce_geojson_paths(data, return_manifests=False):
             peeked = json.loads(p.read_text())
             if isinstance(peeked, dict) and 'files' in peeked:
                 manifest_fpaths.append(p)
-                resolved = peeked['files']
+                resolved = list(map(ub.Path, peeked['files']))
         if resolved is None:
             resolved = [p]
         geojson_fpaths.extend(resolved)

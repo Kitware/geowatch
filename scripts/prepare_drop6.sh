@@ -22,25 +22,27 @@ python -m watch.cli.prepare_ta2_dataset \
     --aws_profile=iarpa \
     --region_globstr="$REGION_GLOBSTR" \
     --site_globstr="$SITE_GLOBSTR" \
-    --exclude_channels=pan \
     --requester_pays=False \
     --fields_workers=8 \
     --convert_workers=8 \
     --align_workers=4 \
     --align_aux_workers=0 \
-    --max_queue_size=1 \
+    --max_queue_size=4 \
     --ignore_duplicates=1 \
     --separate_region_queues=1 \
     --separate_align_jobs=1 \
     --visualize=0 \
     --target_gsd=10 \
-    --cache=1 \
+    --cache=0 \
     --verbose=100 \
-    --skip_existing=1 \
+    --skip_existing=0 \
     --warp_tries=1 \
     --asset_timeout="1hour" \
     --image_timeout="1hour" \
+    --force_min_gsd=2.0 \
     --backend=tmux --run=1
+
+    #--exclude_channels=pan \
 
 #--hack_lazy=True
 

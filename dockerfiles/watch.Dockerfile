@@ -11,7 +11,7 @@ RUN <<EOF
 #!/bin/bash
 apt update -q
 DEBIAN_FRONTEND=noninteractive apt install -q -y --no-install-recommends \
-        ffmpeg tmux jq tree p7zip-full rsync
+        ffmpeg vim tmux jq tree p7zip-full rsync
 apt-get clean 
 rm -rf /var/lib/apt/lists/*
 EOF
@@ -110,6 +110,10 @@ echo "
 # docker pull docker/dockerfile:1.3.0-labs
 
 cd $HOME/code/watch
+
+# Either build the pyenv image or
+docker pull gitlab.kitware.com:4567/smart/watch/pyenv:310
+docker tag gitlab.kitware.com:4567/smart/watch/pyenv:310 pyenv:310 
 
 DOCKER_BUILDKIT=1 docker build --progress=plain \
     -t "watch:310" \
