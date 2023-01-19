@@ -436,7 +436,7 @@ def check_processed_regions():
     region_dpath = base / 'region_models'
     # region_fpaths = list(region_dpath.glob('*.geojson'))
     # region_fpaths = list(region_dpath.glob('*_C*.geojson'))
-    # region_fpaths = list(region_dpath.glob('*_R*.geojson'))
+    region_fpaths = list(region_dpath.glob('*_R*.geojson'))
 
     # region_dpath = dvc_data_dpath / 'golden_regions/region_models'
     # region_fpaths = list(region_dpath.glob('*_S*.geojson'))
@@ -462,7 +462,7 @@ def check_processed_regions():
         'ta1-ls-acc-2',
 
         # 'ta1-wv-acc',
-        'ta1-wv-acc-1',
+        # 'ta1-wv-acc-1',
         'ta1-wv-acc-2',
     ]
 
@@ -474,16 +474,15 @@ def check_processed_regions():
     rows = []
 
     from watch.utils import util_progress
+
     mprog = util_progress.ProgressManager()
-    with mprog:
-        region_iter = None
+    jobs = ub.JobPool(mode='thread', max_workers=20)
+    with mprog, jobs:
         # Check that planet items exist
         for collection in mprog.progiter(collections_of_interest, desc='Query collections'):
             # Check that planet items exist in our regions
             region_to_results = {}
-            if region_iter is not None:
-                region_iter.remove()
-            region_iter = mprog.progiter(region_fpaths, desc=f'Query regions for {str(collection)}')
+            region_iter = mprog.progiter(region_fpaths, desc=f'Submit query regions for {str(collection)}')
             for region_fpath in region_iter:
                 with open(region_fpath) as file:
                     region_data = json.load(file)
@@ -492,6 +491,8 @@ def check_processed_regions():
                 geom = region_row['geometry']
                 start = region_row['properties']['start_date']
                 end = region_row['properties']['end_date']
+                print(f'start={start}')
+                print(f'end={end}')
                 if end is None:
                     # end = datetime_cls.utcnow().date()
                     end = datetime_cls.now().date().isoformat()
@@ -502,17 +503,30 @@ def check_processed_regions():
                     intersects=geom,
                     max_items=1000,
                 )
-                search_iter = item_search.items()
-                # result0 = next(search_iter)
-                results = list(search_iter)
-                region_to_results[region_id] = results
+                job = jobs.submit(list, item_search.items())
+                job.region_id = region_id
+                job.collection = collection
 
+        for job in mprog(jobs.as_completed(), total=len(jobs), desc='collect results'):
+            region_id = job.region_id
+            collection = job.collection
+            results = job.result()
+            region_to_results[region_id] = results
+
+            year_to_results = ub.udict(ub.group_items(results, key=lambda r: r.get_datetime().year))
+
+            for year, year_results in year_to_results.items():
+                year_dates = [r.get_datetime() for r in year_results]
+                min_date = min(year_dates)
+                max_date = max(year_dates)
                 rows.append({
                     'collection': collection,
                     'region_id': region_id,
-                    'num_results': len(results),
-                    'start_date': start,
-                    'end_date': end,
+                    'num_results': len(year_results),
+                    'year': year,
+                    'min_date': min_date.isoformat(),
+                    'max_date': max_date.isoformat(),
+                    # **year_oo_num
                 })
 
     for row in rows:
@@ -534,16 +548,56 @@ def check_processed_regions():
 
     import pandas as pd
     from rich import print
+
+    def pandas_aggregate2(data, func, axis=0):
+        assert isinstance(func, dict)
+        agg_func = {}
+        drop_cols = []
+        for k, v in func.items():
+            if isinstance(v, str) and v == 'drop':
+                drop_cols.append(k)
+            else:
+                agg_func[k] = v
+        df2 = data.drop(drop_cols, axis=1)
+        out = df2.iloc[0:1].reset_index(drop=True).iloc[0].copy()
+        agg_cols = df2.agg(agg_func, axis=axis)
+        out.loc[agg_cols.index] = agg_cols
+        return out
+
+    # Aggregate over years
+    agg_rows = []
     df = pd.DataFrame(rows)
     print(df.to_string())
+
+    for region_id, group in df.groupby(['region_id', 'collection']):
+        agg = pandas_aggregate2(group, func={
+            'num_results': 'sum',
+            'min_date': 'min',
+            'max_date': 'max',
+            'year': 'drop',
+        }, axis=0)
+        agg_rows.append(agg)
+    agg_df = pd.DataFrame(agg_rows)
+
+    agg_df = agg_df.sort_values(['region_id', 'collection'])
+    print(agg_df.to_string())
 
     # df = df.sort_values(['processing', 'sensor', 'collection'])
     # piv = df.pivot(['region_id'], ['processing', 'sensor', 'collection'], ['num_results'])
 
-    df = df.sort_values(['sensor', 'processing', 'collection'])
-    piv = df.pivot(['region_id'], ['sensor', 'processing', 'collection'], ['num_results'])
+    agg_df = agg_df.sort_values(['sensor', 'processing', 'collection'])
+    piv = agg_df.pivot(['region_id'], ['sensor', 'processing', 'collection'], ['num_results'])
     # piv = piv.astype(bool)
     print(piv.to_string())
+
+    df = df.sort_values(['sensor', 'processing', 'collection', 'year'])
+    piv = df.pivot(['region_id'], ['sensor', 'processing', 'collection', 'year'], ['num_results'])
+    print(piv.to_string())
+
+    for c, group in df.groupby('collection'):
+        group = group.sort_values('year')
+        piv = group.pivot(['region_id'], ['sensor', 'processing', 'collection', 'year'], ['num_results'])
+        print(piv.to_string())
 
     # print(df.to_string())
     # print(f'region_id={region_id}')

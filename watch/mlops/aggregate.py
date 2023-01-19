@@ -32,7 +32,7 @@ from watch.mlops import smart_pipeline
 from watch.utils import util_pattern
 from watch.mlops import smart_result_parser
 import json
-from watch.utils.util_param_grid import DotDictDataFrame
+# from watch.utils.util_param_grid import DotDictDataFrame
 from watch.utils.util_stringalgo import shortest_unique_suffixes
 from watch.utils import slugify_ext
 from watch.utils import util_parallel
@@ -925,14 +925,11 @@ class Aggregator(ub.NiceRepr):
         if len(macro_keys) == 0:
             raise Exception('Build a macro result first')
 
-        region_id = macro_keys[-1]
-        regions_of_interest = agg.macro_key_to_regions[region_id]
-        tables = agg.region_to_tables[region_id]
-
+        regions_of_interest = agg.macro_key_to_regions[agg.primary_macro_region]
+        tables = agg.region_to_tables[agg.primary_macro_region]
         effective_params = tables['effective_params']
         metrics = tables['metrics']
         index = tables['index']
-
         table = pd.concat([index, effective_params, metrics], axis=1)
         table = table.fillna('None')
 
@@ -1294,47 +1291,107 @@ def plot_examples():
 
 
 def plot_tables(agg):
+    ...
+
+
+def plot_stats_tables(agg, config):
     # from watch.mlops import smart_result_parser
     # for fpath in fpaths:
     #     ...
     #     result = smart_result_parser.load_eval_act_poly(fpath, None)
     #     print(result['metrics']['sc_macro_f1'])
 
+    import numpy as np
+    from watch.utils import util_kwplot
     import kwplot
     sns = kwplot.autosns()
     plt = kwplot.autoplt()
     # metric_cols = [c for c in df.columns if 'metrics.' in c]
-
-    metrics_of_interset = [
-        'sc_poly_eval.metrics.macro_f1_siteprep',
-        'sc_poly_eval.metrics.macro_f1_active',
-        'sc_poly_eval.metrics.sc_macro_f1',
-        'sc_poly_eval.metrics.sc_micro_f1',
-
-        'bas_poly_eval.metrics.bas_faa_f1',
-        'bas_poly_eval.metrics.bas_tp',
-        'bas_poly_eval.metrics.bas_fp',
-        'bas_poly_eval.metrics.bas_fn',
-        'bas_poly_eval.metrics.bas_f1',
-        'bas_poly_eval.metrics.bas_ffpa',
-
-        'bas_pxl_eval.metrics.salient_AP',
-        # 'sc_pxl_eval.metrics.coi_mAP',
-    ]
     kwplot.close_figures()
 
     metric = 'sc_poly_eval.metrics.sc_macro_f1'
 
+    agg_dpath = ub.Path(config['root_dpath'] / 'aggregate')
+
+    agg.build_single_macro_table({'BR_R002', 'KR_R001', 'KR_R002'})
+    macro_key = agg.primary_macro_region
+
+    agg_group_dpath = (agg_dpath / (f'stats_tables_{macro_key}' + ub.timestamp())).ensuredir()
+
     # df['sc_poly_eval.metrics.macro_f1_active']
-    for metric in metrics_of_interset:
+    for metric in agg.primary_metric_cols:
         node_id = metric.split('.')[0]
         metric_name = metric.split('.')[-1]
-        DotDictDataFrame(agg.metrics)[node_id]
         df = pd.concat([agg.metrics, agg.index, agg.params], axis=1)
+
         plt.figure()
         ax = sns.boxplot(data=df, x='region_id', y=metric)
+        fig = ax.figure
         ax.set_ylabel(metric_name)
-        ax.set_title(node_id + ' ' + metric_name)
+        ax.set_title(f'{node_id} {metric_name} n={len(agg)}')
+        xtick_mapping = {
+            region_id: f'{region_id}\n(n={num})'
+            for region_id, num in df.groupby('region_id').size().to_dict().items()
+        }
+        util_kwplot.relabel_xticks(xtick_mapping, ax=ax)
+
+        fname = f'boxplot_{metric}.png'
+        fpath = agg_group_dpath / fname
+        fig.set_size_inches(np.array([6.4, 4.8]) * 1.4)
+        fig.tight_layout()
+        fig.savefig(fpath)
+        util_kwplot.cropwhite_ondisk(fpath)
+
+        ### Macro stats analysis
+        regions_of_interest = agg.macro_key_to_regions[macro_key]
+        print(f'regions_of_interest={regions_of_interest}')
+        tables = agg.region_to_tables[agg.primary_macro_region]
+        effective_params = tables['effective_params']
+        metrics = tables['metrics']
+        index = tables['index']
+        table = pd.concat([index, effective_params, metrics], axis=1)
+        table = table.fillna('None')
+
+        from watch.utils import result_analysis
+        results = []
+        for idx, row in enumerate(table.to_dict('records')):
+            row = ub.udict(row)
+            row_metrics = row & set(metrics.keys())
+            row_params = row & set(effective_params.keys())
+            result = result_analysis.Result(str(idx), row_params, row_metrics)
+            results.append(result)
+        analysis = result_analysis.ResultAnalysis(
+            results, metrics=[metric],
+            metric_objectives={metric: 'max'}
+        )
+        # self = analysis
+        analysis.analysis()
+        analysis.report()
+
+        kwplot.close_figures()
+
+        for param in analysis.varied:
+            fig = plt.figure()
+            fig.clf()
+            ax = sns.boxplot(data=table, x=param, y=metric)
+            fig = ax.figure
+            ax.set_ylabel(metric_name)
+            ax.set_title(f'{node_id} {macro_key} {metric_name} {param} n={len(table)}')
+
+            xtick_mapping = {
+                str(value): f'{value}\nn={num}'
+                for value, num in table.groupby(param, dropna=False).size().to_dict().items()
+            }
+            util_kwplot.relabel_xticks(xtick_mapping, ax=ax)
+
+            # util_kwplot.relabel_xticks(xtick_mapping, ax=ax)
+            fname = f'boxplot_{macro_key}_{metric}_{param}.png'
+            fpath = agg_group_dpath / fname
+            # fig.set_size_inches(np.array([6.4, 4.8]) * 1.4)
+            fig.set_size_inches(np.array([16, 9]) * 1.0)
+            fig.tight_layout()
+            fig.savefig(fpath)
+            util_kwplot.cropwhite_ondisk(fpath)
 
 
 # def node_matching_outputs(node):
