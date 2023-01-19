@@ -741,12 +741,9 @@ def normalize(
     out_dset = add_track_index(out_dset)
 
     if viz_out_dir is not None:
-        from watch.tasks.tracking.visualize import keys_to_score_sc, viz_track_scores
-        from watch.heuristics import SITE_SUMMARY_CNAME
-        track_cats = [SITE_SUMMARY_CNAME] + sorted(set(out_dset.annots().cnames))
-        keys_to_score = keys_to_score_sc
+        from watch.tasks.tracking.visualize import viz_track_scores
         out_pth = viz_out_dir / 'track_scores.jpg'
-        viz_track_scores(out_dset, track_cats, keys_to_score, out_pth)
+        viz_track_scores(out_dset, out_pth, gt_dset)
 
     if isinstance(use_viterbi, str):
         parts = use_viterbi.split(',')
@@ -781,11 +778,10 @@ def normalize(
     if viz_out_dir is not None and gt_dset is not None:
         # visualize predicted sites with true sites
         # TODO needs a refactor
-        from .visualize import visualize_videos
-        visualize_videos(out_dset,
+        from watch.tasks.tracking.visualize import visualize_videos2
+        visualize_videos2(out_dset,
                          gt_dset,
-                         viz_out_dir,
-                         coco_dset_sc=track_kwargs.get('coco_dset_sc'))
+                         viz_out_dir / 'gif')
 
     return out_dset
 

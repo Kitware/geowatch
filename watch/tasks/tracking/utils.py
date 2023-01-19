@@ -301,23 +301,26 @@ def gpd_len(gdf):
 
 
 @profile
-def gpd_compute_scores(gdf,
-                       sub_dset,
-                       thrs: Iterable,
-                       ks: Dict,
-                       USE_DASK=False,
-                       resolution=None):
+def gpd_compute_scores(
+        gdf,
+        sub_dset,
+        thrs: Iterable,
+        ks: Dict,
+        USE_DASK=False,
+        resolution=None):
 
     def compute_scores(grp, thrs=[], ks={}):
         # TODO handle keys as channelcodes
         # port over better handling from utils.build_heatmaps
+        # import xdev; xdev.embed()
         gid = getattr(grp, 'name', None)
         if gid is None:
             for thr in thrs:
                 grp[[(k, thr) for k in ks]] = 0
         else:
             heatmaps = []
-            keys = list(set().union(itertools.chain.from_iterable(ks.values())))
+            keys = list(set().union(itertools.chain.from_iterable(
+                ks.values())))
             for k in keys:
                 # TODO use nans instead of fill
                 heatmap = build_heatmap(sub_dset, gid, k, missing='fill',
@@ -327,10 +330,13 @@ def gpd_compute_scores(gdf,
             scores = grp['poly'].map(
                 lambda p: score_poly(p, heatmaps, threshold=thrs))
 
-            score_df = pd.DataFrame(dict(zip(thrs, scores.to_list())),
-                                    index=grp.index)
-            for thr, s in score_df.items():
-                grp[[(k, thr) for k in keys]] = s.to_list()
+            scores = scores.explode().explode()
+            scores.index = pd.MultiIndex.from_product((keys, thrs, grp.index))
+            import xdev
+            with xdev.embed_on_exception_context():
+                scores_wide = scores.reset_index([0, 1]).pivot(
+                    columns=['level_0', 'level_1'], values=scores.name)
+                grp[scores_wide.columns.values] = scores_wide.values
         return grp
 
     ks = {k: v for k, v in ks.items() if v}
@@ -338,15 +344,15 @@ def gpd_compute_scores(gdf,
         ks.values()))  # | ks.keys()
     score_cols = list(itertools.product(_valid_keys, thrs))
 
-    if USE_DASK:  # 63% runtime
+    # if USE_DASK:  # 63% runtime
+    if 0:
         import dask_geopandas
         # https://github.com/geopandas/dask-geopandas
         # _col_order = gdf.columns  # doesn't matter
         gdf = gdf.set_index('gid')
         # npartitions and chunksize are mutually exclusive
         gdf = dask_geopandas.from_geopandas(gdf, npartitions=8)
-        meta = gdf._meta.join(
-            pd.DataFrame(columns=score_cols, dtype=float))
+        meta = gdf._meta.join(pd.DataFrame(columns=score_cols, dtype=float))
         gdf = gdf.groupby('gid', group_keys=False).apply(compute_scores,
                                                          thrs=thrs,
                                                          ks=ks,
@@ -363,7 +369,6 @@ def gpd_compute_scores(gdf,
 
     else:  # 95% runtime
         grouped = gdf.groupby('gid', group_keys=False)
-        # import xdev; xdev.embed()
         gdf = grouped.apply(compute_scores, thrs=thrs, ks=ks)
 
     # fill nan scores from nodata pxls
@@ -430,12 +435,13 @@ def pop_tracks(coco_dset: kwcoco.CocoDataset,
     assert len(polys) == len(annots), ('TODO handle multipolygon boundaries')
 
     polys = [p.to_shapely() for p in polys]
-    gdf = gpd.GeoDataFrame(dict(gid=annots.gids, poly=polys,
+    gdf = gpd.GeoDataFrame(dict(gid=annots.gids,
+                                poly=polys,
                                 track_idx=annots.get('track_id')),
                            geometry='poly')
     if score_chan is not None:
         keys = {score_chan.spec: list(score_chan.unique())}
-        gdf = gpd_compute_scores(gdf, coco_dset, [None], keys, USE_DASK=True,
+        gdf = gpd_compute_scores(gdf, coco_dset, [-1], keys, USE_DASK=True,
                                  resolution=resolution)
     # TODO standard way to access sorted_gids
     sorted_gids = coco_dset.index._set_sorted_by_frame_index(
@@ -449,7 +455,7 @@ def pop_tracks(coco_dset: kwcoco.CocoDataset,
 
 
 @profile
-def score_poly(poly, probs, threshold=None, use_rasterio=True):
+def score_poly(poly, probs, threshold=-1, use_rasterio=True):
     '''
     Args:
         poly: kwimage.Polygon or MultiPolygon in pixel coords
@@ -459,8 +465,8 @@ def score_poly(poly, probs, threshold=None, use_rasterio=True):
 
         use_rasterio: use rasterio.features module instead of kwimage
 
-        threshold: if not None, return fraction of poly with probs > threshold.
-        Else, return average value of probs in poly. Can be a list of values,
+        threshold: Return fraction of poly with probs > threshold.
+        If -1, return average value of probs in poly. Can be a list of values,
         in which case returns all of them.
 
     '''
@@ -498,7 +504,7 @@ def score_poly(poly, probs, threshold=None, use_rasterio=True):
     for t in threshold:
         if not msk.any():
             result.append(np.nan)
-        elif t is None:
+        elif t == -1:
             mskd = np.ma.array(rel_probs, mask=~msk)
             result.append(mskd.mean(axis=(-2, -1)))
         else:
@@ -610,15 +616,16 @@ def _validate_keys(key, bg_key):
 
 
 @profile
-def build_heatmaps(sub_dset: kwcoco.CocoDataset,
-                   gids: List[int],
-                   # TODO debug List
-                   keys: Union[List[str], Dict[str, List[str]]],
-                   missing='fill',
-                   skipped='interpolate',
-                   space='video',
-                   resolution=None,
-                   video_id=None) -> Dict[str, List[np.array]]:
+def build_heatmaps(
+        sub_dset: kwcoco.CocoDataset,
+        gids: List[int],
+        # TODO debug List
+        keys: Union[List[str], Dict[str, List[str]]],
+        missing='fill',
+        skipped='interpolate',
+        space='video',
+        resolution=None,
+        video_id=None) -> Dict[str, List[np.array]]:
     '''
     Vectorized version of watch.tasks.tracking.utils.build_heatmap across gids.
 
@@ -679,16 +686,16 @@ def build_heatmaps(sub_dset: kwcoco.CocoDataset,
     assert space == 'video'
 
     if isinstance(keys, list):
+        _dummy_key = '__dummy__'
         key_groups = {'__dummy__': keys}
-        _dummy_groups = ['__dummy__']
     elif isinstance(keys, dict):
+        _dummy_key = None
         key_groups = keys
-        _dummy_groups = []
     elif isinstance(keys, str):
         import kwcoco
+        _dummy_key = '__dummy__'
         key_groups = {'__dummy__': kwcoco.FusedChannelSpec.coerce(keys).to_list()}
-        _dummy_groups = ['__dummy__']
-    else:
+        else:
         raise TypeError(type(keys))
 
     # Would use RunningStats, but it can't support indexed/subsetted access
@@ -749,8 +756,8 @@ def build_heatmaps(sub_dset: kwcoco.CocoDataset,
                 else:
                     raise ValueError(skipped)
 
-    for dummy in _dummy_groups:
-        heatmaps_dct.pop(dummy)
+    if _dummy_key is not None:
+        heatmaps_dct.pop(_dummy_key)
     return heatmaps_dct
 
 

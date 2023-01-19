@@ -163,8 +163,8 @@ def probs(heatmaps, norm_ord, morph_kernel, thresh):
         kwimage.imwrite(VIZ_DPATH / '0.png', (probs * 255).astype(np.uint8))
         kwimage.imwrite(VIZ_DPATH / '0.tiff', probs)
 
+        # here, the png is the truth
         kwimage.imwrite(VIZ_DPATH / '1.png', (hard_probs * 255).astype(np.uint8))
-        kwimage.imwrite(VIZ_DPATH / '1.tiff', hard_probs)
 
         kwimage.imwrite(VIZ_DPATH / '2.png', (modulated_probs * 255).astype(np.uint8))
         kwimage.imwrite(VIZ_DPATH / '2.tiff', modulated_probs)
@@ -279,7 +279,7 @@ class ResponsePolygonFilter:
         self.threshold = threshold
 
         gids = gdf['gid'].unique()
-        mean_response = gdf[('fg', None)].mean()
+        mean_response = gdf[('fg', -1)].mean()
 
         self.gids = gids
         self.mean_response = mean_response
@@ -293,12 +293,12 @@ class ResponsePolygonFilter:
 
             def _filter(grp):
                 this_response = grp[grp['gid'].isin(self.gids)][('fg',
-                                                                 None)].mean()
+                                                                 -1)].mean()
                 return this_response / self.mean_response > threshold
 
             return gdf.groupby('track_idx', group_keys=False).filter(_filter)
         else:
-            cond = (gdf[('fg', None)] / self.mean_response > threshold)
+            cond = (gdf[('fg', -1)] / self.mean_response > threshold)
             return gdf[cond]
 
 
@@ -373,10 +373,10 @@ def _add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
         import warnings
         warnings.warn('warning: no tracks to add the the kwcoco dataset')
     else:
-        for tid, grp in groups:
+        for tid, grp in tracks.groupby('track_idx', axis=0):
             score_chan = kwcoco.ChannelSpec('|'.join(key))
-            this_score = grp[(score_chan.spec, None)]
-            scores_dct = {k: grp[(k, None)] for k in score_chan.unique()}
+            this_score = grp[(score_chan.spec, -1)]
+            scores_dct = {k: grp[(k, -1)] for k in score_chan.unique()}
             scores_dct = [dict(zip(scores_dct, t))
                           for t in zip(*scores_dct.values())]
             _add(zip(grp['gid'], grp['poly'], this_score, scores_dct), tid)
@@ -474,8 +474,8 @@ def time_aggregated_polys(
         >>>      sub_dset.imgs[gid]['auxiliary'].pop()
         >>> inter_track = time_aggregated_polys(
         >>>                 sub_dset, thresh, min_area_square_meters=min_area_square_meters, time_thresh=None)
-        >>> assert inter_track.iloc[0][('fg', None)] == 0
-        >>> assert inter_track.iloc[1][('fg', None)] > 0
+        >>> assert inter_track.iloc[0][('fg', -1)] == 0
+        >>> assert inter_track.iloc[1][('fg', -1)] > 0
     '''
     #
     # --- input validation ---
@@ -620,9 +620,9 @@ def time_aggregated_polys(
     _TRACKS = gpd_sort_by_gid(_TRACKS, sorted_gids)
 
     # awk, find better way of bookkeeping and indexing into scores needed
-    thrs = {None}
+    thrs = {-1}
     if response_thresh:
-        thrs.add(None)
+        thrs.add(-1)
     if time_thresh:
         thrs.add(time_thresh * thresh)
     thrs = list(thrs)
@@ -1203,7 +1203,7 @@ class TimeAggregatedSC(NewTrackFunction):
                 resolution=self.resolution,
             )
             # hack in always-foreground instead
-            # tracks[(score_chan, None)] = 1
+            # tracks[(score_chan, -1)] = 1
 
             # try to ignore this error
             tracks['poly'] = tracks['poly'].map(
