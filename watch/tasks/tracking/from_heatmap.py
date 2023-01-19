@@ -7,6 +7,7 @@ SeeAlso:
 from watch.utils import kwcoco_extensions
 from watch.heuristics import SITE_SUMMARY_CNAME, CNAMES_DCT
 import kwimage
+import kwarray
 import kwcoco
 import numpy as np
 import ubelt as ub
@@ -51,6 +52,16 @@ def _norm(heatmaps, norm_ord):
 
 def probs(heatmaps, norm_ord, morph_kernel, thresh):
     probs = _norm(heatmaps, norm_ord)
+
+    hard_probs = kwimage.morphology(probs > thresh, 'dilate', morph_kernel)
+    modulated_probs = probs * hard_probs
+
+    return modulated_probs
+
+
+def rescaled_probs(heatmaps, norm_ord, morph_kernel, thresh, upper_quantile=0.999):
+    probs = _norm(heatmaps, norm_ord)
+    probs = kwarray.normalize(probs, min_val=0, max_val=np.quantile(probs, upper_quantile))
 
     hard_probs = kwimage.morphology(probs > thresh, 'dilate', morph_kernel)
     modulated_probs = probs * hard_probs
@@ -105,6 +116,7 @@ def frequency_weighted_mean(heatmaps, thresh, norm_ord=0, morph_kernel=3):
 AGG_FN_REGISTRY = {
     'frequency_weighted_mean': frequency_weighted_mean,
     'mean_normalized': mean_normalized,
+    'rescaled_probs': rescaled_probs,
     'probs': probs,
 }
 
