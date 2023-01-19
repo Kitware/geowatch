@@ -309,39 +309,40 @@ def gpd_compute_scores(
         USE_DASK=False,
         resolution=None):
 
-    def compute_scores(grp, thrs=[], ks={}):
+    def compute_scores(grp, thrs=[], keys=[]):
         # TODO handle keys as channelcodes
         # port over better handling from utils.build_heatmaps
-        # import xdev; xdev.embed()
         gid = getattr(grp, 'name', None)
         if gid is None:
             for thr in thrs:
-                grp[[(k, thr) for k in ks]] = 0
+                grp[[(k, thr) for k in keys]] = 0
         else:
             heatmaps = []
-            keys = list(set().union(itertools.chain.from_iterable(
-                ks.values())))
             for k in keys:
                 # TODO use nans instead of fill
                 heatmap = build_heatmap(sub_dset, gid, k, missing='fill',
                                        resolution=resolution)
                 heatmaps.append(heatmap)
             heatmaps = np.stack(heatmaps, axis=0)
+            if 0:
+                h = build_heatmaps(sub_dset, [gid], keys, missing='fill')
+                heatmaps2 = np.stack([h[k][0] for k in keys], axis=0)
+                # TODO why does this fail?
+                assert np.allclose(heatmaps, heatmaps2)
             scores = grp['poly'].map(
                 lambda p: score_poly(p, heatmaps, threshold=thrs))
 
             scores = scores.explode().explode()
             scores.index = pd.MultiIndex.from_product((keys, thrs, grp.index))
-            import xdev
-            with xdev.embed_on_exception_context():
-                scores_wide = scores.reset_index([0, 1]).pivot(
-                    columns=['level_0', 'level_1'], values=scores.name)
-                grp[scores_wide.columns.values] = scores_wide.values
+            scores_wide = scores.reset_index([0, 1]).pivot(
+                columns=['level_0', 'level_1'], values=scores.name)
+            score_cols = scores_wide.columns.values
+            grp[score_cols] = scores_wide.values
         return grp
 
     ks = {k: v for k, v in ks.items() if v}
-    _valid_keys = set().union(itertools.chain.from_iterable(
-        ks.values()))  # | ks.keys()
+    _valid_keys = list(set().union(itertools.chain.from_iterable(
+        ks.values())))  # | ks.keys()
     score_cols = list(itertools.product(_valid_keys, thrs))
 
     # if USE_DASK:  # 63% runtime
@@ -355,7 +356,7 @@ def gpd_compute_scores(
         meta = gdf._meta.join(pd.DataFrame(columns=score_cols, dtype=float))
         gdf = gdf.groupby('gid', group_keys=False).apply(compute_scores,
                                                          thrs=thrs,
-                                                         ks=ks,
+                                                         keys=_valid_keys,
                                                          meta=meta)
         # raises this, which is probably fine:
         # /home/local/KHQ/matthew.bernstein/.local/conda/envs/watch/lib/python3.9/site-packages/rasterio/features.py:362:
@@ -369,9 +370,10 @@ def gpd_compute_scores(
 
     else:  # 95% runtime
         grouped = gdf.groupby('gid', group_keys=False)
-        gdf = grouped.apply(compute_scores, thrs=thrs, ks=ks)
+        gdf = grouped.apply(compute_scores, thrs=thrs, keys=_valid_keys)
 
     # fill nan scores from nodata pxls
+    # groupby track instead of gid
     def _fillna(grp):
         if len(grp) == 0:
             grp = grp.reindex(list(ub.oset(grp.columns) | score_cols), axis=1)
@@ -479,7 +481,7 @@ def score_poly(poly, probs, threshold=-1, use_rasterio=True):
     # And create a mask for only the valid region of the polygon
     box = poly.bounding_box().quantize().to_xywh()
     # Ensure box is inside probs
-    ymax, xmax = probs.shape[:2]
+    ymax, xmax = probs.shape[-2:]
     box = box.clip(0, 0, xmax, ymax).to_xywh()
     if box.area[0][0] == 0:
         warnings.warn(
@@ -492,7 +494,7 @@ def score_poly(poly, probs, threshold=-1, use_rasterio=True):
     rel_poly = poly.translate((-x, -y))
     rel_mask = rel_poly.to_mask((h, w), pixels_are=pixels_are).data
     # Slice out the corresponding region of probabilities
-    rel_probs = probs[y:y + h, x:x + w]
+    rel_probs = probs[..., y:y + h, x:x + w]
 
     _return_list = isinstance(threshold, Iterable)
     if not _return_list:
