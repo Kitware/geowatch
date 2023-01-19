@@ -173,6 +173,23 @@ key and then the encrypted message. The plaintext credentials will be generated
 in the top box. These are your credentials that we will use in the subsequent
 steps.
 
+To summarize, here is an example. Alice wants to send Bob the secret message:
+"hello world".
+
+* Alice navigates to https://cryptotools.net/dhe, generates a public key: `bSoNKmm2qF2HLo2tG39gVN4c5xuMnBqX6ES4C0nLdOI=`, and sends it to Bob.
+ 
+* Bob navigates to https://cryptotools.net/dhe, generates a public key: `UYXjuE9QpXASQM8QQmjImECyvIg4MsOwkS3YrTXXLB0=`, and sends it to Alice.
+
+* Alice enters Bob's secret key into her "Public key" on the right.
+
+* Bob enters Alices's secret key into his "Public key" on the right.
+
+* Both Alice and Bob now see a shared secret: `arnE9PLCOHrvKRLAXsrx+Nc4pyCBZtjCoESjo16Fvi8=` appear, which they can now use for encryption and decryption.
+
+* Alice navigates to https://cryptotools.net/aes, enters the plain text "hello world" and uses the shared secret `arnE9PLCOHrvKRLAXsrx+Nc4pyCBZtjCoESjo16Fvi8=` as the encryption key. This generates the encrypted cyphertext `U2FsdGVkX19sofdkwHQvnur20N8KwDULOxqVPkboYxI=`, which Alice can send to Bob.
+ 
+* Bob receives the cyphertext from Alice, navigates to https://cryptotools.net/aes, and hits the "Decrypt" button. He enters the cyphertext `U2FsdGVkX19sofdkwHQvnur20N8KwDULOxqVPkboYxI=` into the bottom pane, and also enters the shared secret `arnE9PLCOHrvKRLAXsrx+Nc4pyCBZtjCoESjo16Fvi8=` into the key feild. The decryption happens automatically and the secret message appears in the top plaintext box.
+
 
 Using Credentials
 ~~~~~~~~~~~~~~~~~
