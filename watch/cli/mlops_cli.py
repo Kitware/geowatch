@@ -1,5 +1,7 @@
 """
 Exposes the mlops tools in the CLI
+
+BROKEN DO NOT USE
 """
 from watch.mlops import expt_manager
 

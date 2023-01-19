@@ -453,17 +453,16 @@ def check_processed_regions():
     collections_of_interest = [c.id for c in all_collections if pat.match(c.id)]
 
     collections_of_interest = [
+        # 'ta1-s2-acc-2',
+        # 'ta1-ls-acc-2',
+        'ta1-wv-acc-2',
+
         # 'ta1-s2-acc',
         # 'ta1-s2-acc-1',
-        'ta1-s2-acc-2',
-
         # 'ta1-ls-acc',
         # 'ta1-ls-acc-1',
-        'ta1-ls-acc-2',
-
         # 'ta1-wv-acc',
         # 'ta1-wv-acc-1',
-        'ta1-wv-acc-2',
     ]
 
     #     'ta1-pd-acc',
@@ -471,9 +470,12 @@ def check_processed_regions():
     #     'ta1-mixedgsd-acc-1',
     #     'ta1-30m-acc-1'
     # ]
-    rows = []
-
     from watch.utils import util_progress
+    from watch.cli.ta1_stac_to_kwcoco import summarize_stac_item
+
+    peryear_rows = []
+    peritem_rows = []
+    raw_stac_items = []
 
     mprog = util_progress.ProgressManager()
     jobs = ub.JobPool(mode='thread', max_workers=20)
@@ -516,10 +518,21 @@ def check_processed_regions():
             year_to_results = ub.udict(ub.group_items(results, key=lambda r: r.get_datetime().year))
 
             for year, year_results in year_to_results.items():
+                for r in year_results:
+                    summary = summarize_stac_item(r)
+                    summary['collection'] = collection
+                    summary['region_id'] = region_id
+                    summary['year'] = year
+                    r.extra_fields['collection'] = collection
+                    r.extra_fields['region_id'] = region_id
+                    r.extra_fields['year'] = year
+                    peritem_rows.append(summary)
+                    raw_stac_items.append(r)
+
                 year_dates = [r.get_datetime() for r in year_results]
                 min_date = min(year_dates)
                 max_date = max(year_dates)
-                rows.append({
+                peryear_rows.append({
                     'collection': collection,
                     'region_id': region_id,
                     'num_results': len(year_results),
@@ -529,7 +542,7 @@ def check_processed_regions():
                     # **year_oo_num
                 })
 
-    for row in rows:
+    for row in peryear_rows + peritem_rows:
         if row['collection'].endswith('acc-2'):
             row['processing'] = 'acc-2'
         elif row['collection'].endswith('acc-1'):
@@ -548,6 +561,27 @@ def check_processed_regions():
 
     import pandas as pd
     from rich import print
+    item_df = pd.DataFrame(peritem_rows)
+
+    if 0:
+        # Specific queries
+        for item in raw_stac_items:
+            summary = summarize_stac_item(item)
+            b = summary['eo_bands']
+            b = b if isinstance(b, str) else '|'.join(sorted(b))
+            if b != 'pan':
+                if summary['datetime'].year < 2016 and item.extra_fields['region_id'] == 'KR_R002':
+                    # print(f'item.extra_fields={item.extra_fields}')
+                    # print('summary = {}'.format(ub.urepr(summary, nl=1)))
+                    print(item.id)
+
+        sub = item_df[item_df.year < 2016]
+        sub = sub[sub.sensor == 'worldview']
+        sub.loc[:, 'eo_bands'] = [b if isinstance(b, str) else '|'.join(sorted(b)) for b in sub['eo_bands']]
+        sub.loc[:, 'asset_names'] = [b if isinstance(b, str) else '|'.join(sorted(b)) for b in sub['asset_names']]
+        for region_id, group in sub.groupby('region_id'):
+            histo = group.value_counts(['region_id', 'sensor', 'year', 'eo_bands', 'eo_cloud_cover'])
+            print(histo.to_string())
 
     def pandas_aggregate2(data, func, axis=0):
         assert isinstance(func, dict)
@@ -566,7 +600,7 @@ def check_processed_regions():
 
     # Aggregate over years
     agg_rows = []
-    df = pd.DataFrame(rows)
+    df = pd.DataFrame(peryear_rows)
     print(df.to_string())
 
     for region_id, group in df.groupby(['region_id', 'collection']):
