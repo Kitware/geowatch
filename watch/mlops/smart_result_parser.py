@@ -322,7 +322,11 @@ def _handle_process_item(item):
     return item
 
 
-def load_pxl_eval(fpath, expt_dvc_dpath=None, arg_prefix=''):
+def load_bas_pxl_eval(fpath, expt_dvc_dpath=None):
+    return load_pxl_eval(fpath, expt_dvc_dpath=expt_dvc_dpath, mode=0)
+
+
+def load_pxl_eval(fpath, expt_dvc_dpath=None, arg_prefix='', mode=0):
     from kwcoco.coco_evaluator import CocoSingleResult
     from watch.utils import util_pattern
     # from watch.utils import result_analysis
@@ -333,9 +337,13 @@ def load_pxl_eval(fpath, expt_dvc_dpath=None, arg_prefix=''):
 
     pred_info = meta['info']
     dvc_dpath = expt_dvc_dpath
-    param_types = parse_pred_pxl_params(pred_info, dvc_dpath, arg_prefix=arg_prefix)
+    param_types = parse_pred_pxl_params(pred_info, dvc_dpath, arg_prefix=arg_prefix, mode=mode)
 
-    predict_args = param_types[arg_prefix + 'pxl']
+    if mode == 0:
+        predict_args = param_types[arg_prefix + 'pxl']
+    else:
+        predict_args = None
+
     if predict_args is None:
         raise Exception('no prediction metadata')
 
@@ -670,7 +678,7 @@ def find_info_items(info, query_type, query_name=None):
                 yield item
 
 
-def parse_pred_pxl_params(pred_info, expt_dvc_dpath=None, arg_prefix=''):
+def parse_pred_pxl_params(pred_info, expt_dvc_dpath=None, arg_prefix='', mode=0):
     pred_item = find_pred_pxl_item(pred_info)
     pred_item = _handle_process_item(pred_item)
 
@@ -684,8 +692,10 @@ def parse_pred_pxl_params(pred_info, expt_dvc_dpath=None, arg_prefix=''):
     fit_config = pred_item['properties']['extra']['fit_config']
     meta['start_time'] = pred_item['properties']['start_timestamp']
     meta['end_time'] = pred_item['properties']['stop_timestamp']
-    meta['start_timestamp'] = pred_item['properties']['start_timestamp']
-    meta['stop_timestamp'] = pred_item['properties']['stop_timestamp']
+    meta['duration'] = pred_item['properties']['duration']
+    meta['uuid'] = pred_item['properties']['uuid']
+    # meta['start_timestamp'] = pred_item['properties']['start_timestamp']
+    # meta['stop_timestamp'] = pred_item['properties']['stop_timestamp']
 
     resources = parse_resource_item(pred_item, arg_prefix=(arg_prefix + 'pxl.'))
 
@@ -694,12 +704,20 @@ def parse_pred_pxl_params(pred_info, expt_dvc_dpath=None, arg_prefix=''):
         pred_pxl_config, expt_dvc_dpath, arg_prefix=arg_prefix)
     fit_config = relevant_fit_config(fit_config, arg_prefix=arg_prefix)
 
-    param_types = {
-        arg_prefix + 'fit': fit_config,
-        arg_prefix + 'pxl': pred_pxl_config,
-        arg_prefix + 'pxl.resource': resources,
-        arg_prefix + 'pxl.meta': _add_prefix(arg_prefix + 'pxl.meta.', meta),
-    }
+    if mode:
+        param_types = {
+            arg_prefix + 'fit': fit_config,
+            arg_prefix + 'pxl': pred_pxl_config,
+            arg_prefix + 'pxl.resource': resources,
+            arg_prefix + 'pxl.meta': _add_prefix(arg_prefix + 'pxl.meta.', meta),
+        }
+    else:
+        param_types = {
+            arg_prefix + 'fit': fit_config,
+            arg_prefix + 'pxl': pred_pxl_config,
+            arg_prefix + 'pxl.resource': resources,
+            arg_prefix + 'pxl.meta': _add_prefix(arg_prefix + 'pxl.meta.', meta),
+        }
     return param_types
 
 

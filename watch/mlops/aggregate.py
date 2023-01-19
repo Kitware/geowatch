@@ -1,4 +1,4 @@
-"""
+r"""
 Loads results from an evaluation and aggregates them
 
 Ignore:
@@ -32,7 +32,6 @@ from watch.mlops import smart_pipeline
 from watch.utils import util_pattern
 from watch.mlops import smart_result_parser
 import json
-# from watch.utils.util_param_grid import DotDictDataFrame
 from watch.utils.util_stringalgo import shortest_unique_suffixes
 from watch.utils import slugify_ext
 from watch.utils import util_parallel
@@ -47,6 +46,7 @@ class AggregateEvluationConfig(scfg.DataConfig):
     root_dpath = scfg.Value('auto', help='Where do dump all results. If "auto", uses <expt_dvc_dpath>/dag_runs')
     pipeline = scfg.Value('joint_bas_sc', help='the name of the pipeline to run')
     io_workers = scfg.Value('avail', help='number of processes to load results')
+    freeze_cache = scfg.Value(False, help='set to a specific cache string to freeze a cache with the current results')
 
 
 def main(cmdline=True, **kwargs):
@@ -60,7 +60,8 @@ def main(cmdline=True, **kwargs):
         >>> kwargs = {
         >>>     'root_dpath': expt_dvc_dpath / '_testpipe',
         >>>     'pipeline': 'bas',
-        >>>     'io_workers': 2,
+        >>>     'io_workers': 0,
+        >>>     'freeze_cache': 1,
         >>>     # 'pipeline': 'joint_bas_sc_nocrop',
         >>>     # 'root_dpath': expt_dvc_dpath / '_testsc',
         >>>     #'pipeline': 'sc',
@@ -76,10 +77,14 @@ def main(cmdline=True, **kwargs):
     """
     config = AggregateEvluationConfig.legacy(cmdline=cmdline, data=kwargs)
 
+    agg_dpath = ub.Path(config['root_dpath']) / 'aggregate'
+    cache_dpath = agg_dpath / '_cache'
+
     cacher = ub.Cacher(
         # Caching may be important depending on how much data we need to load
-        'table_cacher', appname='watch/mlops/aggregate', depends=dict(config),
-        enabled=0,
+        'table_cacher', dpath=cache_dpath, depends=dict(config),
+        enabled=config['freeze_cache'],
+        verbose=3,
     )
     tables = cacher.tryload()
     if tables is None:
@@ -95,19 +100,21 @@ def automated_analysis(eval_type_to_aggregator, config):
 
     timestamp = ub.timestamp()
 
-    aggregate_dpath = ub.Path(config['root_dpath'] / 'aggregate')
+    agg_dpath = ub.Path(config['root_dpath']) / 'aggregate'
 
     # TODO: save this for custom analysis, let automatic choose
     # for generality
-    macro_groups = [
-        {'KR_R001', 'KR_R002'},
-        {'KR_R001', 'KR_R002', 'US_R007'},
-        {'KR_R001', 'KR_R002', 'BR_R002', 'AE_R001'},
-        {'KR_R001', 'KR_R002', 'BR_R002', 'AE_R001', 'US_R007'},
-    ]
-    rois = macro_groups  # NOQA
+    # macro_groups = [
+    #     {'KR_R001', 'KR_R002'},
+    #     {'KR_R001', 'KR_R002', 'US_R007'},
+    #     {'KR_R001', 'KR_R002', 'BR_R002', 'AE_R001'},
+    #     {'KR_R001', 'KR_R002', 'BR_R002', 'AE_R001', 'US_R007'},
+    # ]
+    # rois = macro_groups  # NOQA
     # selector = {'BR_R002', 'KR_R001', 'KR_R002', 'AE_R001'}
-    selector = {'BR_R002', 'KR_R001', 'KR_R002'}
+    # selector = {'BR_R002', 'KR_R001', 'KR_R002'}
+    macro_groups = None
+    selector = None
 
     agg0 = eval_type_to_aggregator.get('bas_poly_eval', None)
     if agg0 is not None:
@@ -115,7 +122,7 @@ def automated_analysis(eval_type_to_aggregator, config):
         subagg2 = generic_analysis(agg0, macro_groups, selector)
 
         to_visualize_fpaths = list(subagg2.results['fpaths']['fpath'])
-        agg_group_dpath = aggregate_dpath / ('bas_poly_agg_' + timestamp)
+        agg_group_dpath = agg_dpath / ('bas_poly_agg_' + timestamp)
         agg_group_dpath = agg_group_dpath.ensuredir()
         # make a analysis link to the final product
         for eval_fpath in to_visualize_fpaths[::-1]:
@@ -141,6 +148,41 @@ def automated_analysis(eval_type_to_aggregator, config):
     plot_examples()  # TODO
 
 
+def foldin_resolved_params(agg):
+    # make these just parse nicer, but for now munge the data.
+    from watch.utils.util_param_grid import DotDictDataFrame
+    from watch.utils.util_param_grid import pandas_add_prefix
+    param_types = DotDictDataFrame(agg.results['param_types'])
+
+    # param_types['pxl.meta']
+    fit_params = pandas_shorten_columns(param_types['fit'])
+    resources = pandas_shorten_columns(param_types['pxl.resource'])
+    properties = pandas_shorten_columns(param_types['pxl.properties'])
+    meta = pandas_shorten_columns(param_types['pxl.meta'])
+    pred_params = param_types['pxl']
+    pred_params = pred_params.drop([
+        c for c in pred_params.columns
+        if '.meta' in c or '.resource' in c or '.properties' in c],
+        axis=1)
+    pred_params = pandas_shorten_columns(pred_params)
+
+    node_name = agg.type
+    resolved_params = pandas_add_prefix(pred_params, node_name + '.params.')
+    properties = pandas_add_prefix(properties, node_name + '.properties.')
+    fit_params = pandas_add_prefix(fit_params, node_name + '.fit.')
+    resources = pandas_add_prefix(resources, node_name + '.resources.')
+    meta = pandas_add_prefix(meta, node_name + '.meta.')
+
+    resolved_params = {
+        'resources': resources,
+        'fit_params': fit_params,
+        'properties': properties,
+        'resolved_params': resolved_params,
+        'meta': meta,
+    }
+    return resolved_params
+
+
 def custom_analysis(eval_type_to_aggregator, config):
 
     macro_groups = [
@@ -152,7 +194,7 @@ def custom_analysis(eval_type_to_aggregator, config):
     rois = macro_groups  # NOQA
 
     agg0 = eval_type_to_aggregator.get('bas_poly_eval', None)
-    aggregate_dpath = ub.Path(config['root_dpath'] / 'aggregate')
+    agg_dpath = ub.Path(config['root_dpath'] / 'aggregate')
 
     if agg0 is not None:
         agg0_ = fix_duplicate_param_hashids(agg0)
@@ -173,7 +215,7 @@ def custom_analysis(eval_type_to_aggregator, config):
 
         print(ub.repr2(subagg1.results['fpaths']['fpath'].to_list()))
 
-        agg_group_dpath = aggregate_dpath / (f'agg_params_{param_of_interest}')
+        agg_group_dpath = agg_dpath / (f'agg_params_{param_of_interest}')
         agg_group_dpath = agg_group_dpath.ensuredir()
 
         # Make a directory with a summary over all the regions
@@ -285,8 +327,8 @@ def custom_analysis(eval_type_to_aggregator, config):
 
 def make_summary_analysis(agg1, config):
 
-    aggregate_dpath = ub.Path(config['root_dpath'] / 'aggregate')
-    agg_group_dpath = aggregate_dpath / ('agg_summary_params2_v2')
+    agg_dpath = ub.Path(config['root_dpath'] / 'aggregate')
+    agg_group_dpath = agg_dpath / ('agg_summary_params2_v2')
     agg_group_dpath = agg_group_dpath.ensuredir()
 
     # agg2 =
