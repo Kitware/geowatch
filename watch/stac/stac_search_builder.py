@@ -435,7 +435,8 @@ def check_processed_regions():
 
     region_dpath = base / 'region_models'
     # region_fpaths = list(region_dpath.glob('*.geojson'))
-    region_fpaths = list(region_dpath.glob('*_C*.geojson'))
+    # region_fpaths = list(region_dpath.glob('*_C*.geojson'))
+    # region_fpaths = list(region_dpath.glob('*_R*.geojson'))
 
     # region_dpath = dvc_data_dpath / 'golden_regions/region_models'
     # region_fpaths = list(region_dpath.glob('*_S*.geojson'))
@@ -461,8 +462,8 @@ def check_processed_regions():
         'ta1-ls-acc-2',
 
         # 'ta1-wv-acc',
-        # 'ta1-wv-acc-1',
-        # 'ta1-wv-acc-2',
+        'ta1-wv-acc-1',
+        'ta1-wv-acc-2',
     ]
 
     #     'ta1-pd-acc',

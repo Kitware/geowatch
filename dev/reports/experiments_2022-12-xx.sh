@@ -77,11 +77,11 @@ python -m watch.mlops.schedule_evaluation \
                 #- $DVC_EXPT_DPATH/training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_15GSD_BGRNSH_invar_V8/lightning_logs/version_1/checkpoints/Drop4_BAS_15GSD_BGRNSH_invar_V8_epoch=90-step=46592.pt
                 #- $DVC_EXPT_DPATH/training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_15GSD_BGRNSH_invar_V8/lightning_logs/version_1/checkpoints/Drop4_BAS_15GSD_BGRNSH_invar_V8_epoch=159-step=81920.pt
             bas_pxl.test_dataset:
-                #- $DVC_DATA_DPATH/Drop4-BAS/data_vali_KR_R001_uky_invariants.kwcoco.json
-                #- $DVC_DATA_DPATH/Drop4-BAS/data_vali_KR_R002_uky_invariants.kwcoco.json
-                #- $DVC_DATA_DPATH/Drop4-BAS/data_train_BR_R002_uky_invariants.kwcoco.json
-                - $DVC_DATA_DPATH/Drop4-BAS/data_train_AE_R001_uky_invariants.kwcoco.json
-                - $DVC_DATA_DPATH/Drop4-BAS/data_vali_US_R007_uky_invariants.kwcoco.json
+                - $DVC_DATA_DPATH/Drop4-BAS/data_vali_KR_R001_uky_invariants.kwcoco.json
+                - $DVC_DATA_DPATH/Drop4-BAS/data_vali_KR_R002_uky_invariants.kwcoco.json
+                - $DVC_DATA_DPATH/Drop4-BAS/data_train_BR_R002_uky_invariants.kwcoco.json
+                #- $DVC_DATA_DPATH/Drop4-BAS/data_train_AE_R001_uky_invariants.kwcoco.json
+                #- $DVC_DATA_DPATH/Drop4-BAS/data_vali_US_R007_uky_invariants.kwcoco.json
 
                 #- $DVC_DATA_DPATH/Drop4-BAS/data_vali_KR_R001.kwcoco.json
                 #- $DVC_DATA_DPATH/Drop4-BAS/data_vali_KR_R002.kwcoco.json
@@ -120,6 +120,8 @@ python -m watch.mlops.schedule_evaluation \
                 #- 0.45
                 #- 0.5
             bas_poly.polygon_simplify_tolerance:
+                - 0.5
+                - 1
                 - 3
             bas_poly.moving_window_size: 
                 - null
@@ -138,7 +140,7 @@ python -m watch.mlops.schedule_evaluation \
                 - 2.25
                 #- 3.25
                 - 8
-            bas_pxl.enabled: 1
+            bas_pxl.enabled: 0
             bas_poly.enabled: 1
             bas_poly_eval.enabled: 1
             bas_pxl_eval.enabled: 1

@@ -50,9 +50,9 @@ Example:
       Mean-ANOVA: p=0.31622777
     ...
     Pairwise T-Tests
-      If p is low, param1=1 may outperform param1=0.
+      If p is low, param1=1 may outperform 0.
         ttest_ind:  p=nan
-      If p is low, param1=0 may outperform param1=2.
+      If p is low, param1=0 may outperform 2.
         ttest_ind:  p=nan
       param_name metric  anova_rank_H  anova_rank_p  anova_mean_F  anova_mean_p
     0     param2     f1           2.7       0.25924       81.1875      0.078236
@@ -955,7 +955,7 @@ class ResultAnalysis(ub.NiceRepr):
             if value2 == winner:
                 value1, value2 = value2, value1
             print(
-                f"  If p is low, {param_name}={value1} may outperform {param_name}={value2}."
+                f"  If p is low, {value1} may outperform {value2} for {param_name}."
             )
             if "ttest_ind" in pairstat:
                 ttest_ind_result = pairstat["ttest_ind"]
@@ -988,9 +988,9 @@ class ResultAnalysis(ub.NiceRepr):
                     value1, value2 = value2, value1
                 pvalue = stat = pairstat["ttest_ind"].pvalue
                 if round(pvalue, 8) == 0:
-                    txt = f"p={pvalue:0.2g}, If p is low, {param_name}={value1} may outperform {value2} on {metric}."
+                    txt = f"p={pvalue:0.2g}, If p is low, {value1} may outperform {value2} for {param_name} on {metric}."
                 else:
-                    txt = f"p={pvalue:0.8f}, If p is low, {param_name}={value1} may outperform {value2} on {metric}."
+                    txt = f"p={pvalue:0.8f}, If p is low, {value1} may outperform {value2} for {param_name} on {metric}."
                 conclusions.append(txt)
         return conclusions
 
