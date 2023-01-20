@@ -101,7 +101,16 @@ stages:
         test
 
     before_script:
-        - source ~/.bashrc
+        - |
+          export HOME="/root"
+          export PYENV_ROOT="$HOME/.pyenv"
+          if [ -d "$PYENV_ROOT" ]; then
+              export PATH="$PYENV_ROOT/bin:$PATH"
+              eval "$($PYENV_ROOT/bin/pyenv init -)"
+              source $PYENV_ROOT/completions/pyenv.bash
+              export PYENV_PREFIX=$(pyenv prefix)
+          fi
+          pyenv global 3.10
         - pip install wheel build
         - pip install --prefer-binary -r requirements/gdal.txt  # gdal is special
         - pip install --prefer-binary -e .[runtime,headless,development]
@@ -185,14 +194,24 @@ run_linter:
         - <<: *if-merged-into-default
 
     before_script:
-        #- conda init bash
-        - source ~/.bashrc
+        # FIXME: we really shouldn't need to do this.
+        # But gitlab does nots seem to source the bashrc.
+        - |
+          export HOME="/root"
+          export PYENV_ROOT="$HOME/.pyenv"
+          if [ -d "$PYENV_ROOT" ]; then
+              export PATH="$PYENV_ROOT/bin:$PATH"
+              eval "$($PYENV_ROOT/bin/pyenv init -)"
+              source $PYENV_ROOT/completions/pyenv.bash
+              export PYENV_PREFIX=$(pyenv prefix)
+          fi
+          pyenv global 3.10
         # NOTE: The default env runs Python 3.7, need to run 3.8 for 3.8 syntax
         # - conda create -y -n lint_env python=3.8 --override-channels --channel conda-forge
         # - conda activate lint_env
-        - pip install pip -U
+        - python -m pip install pip -U
         - ls -al
-        - pip install -r requirements/linting.txt 
+        - python -m pip install -r requirements/linting.txt 
 
     script:
         - ./run_linter.sh
