@@ -5,7 +5,6 @@ correctly on our end. This requires that the DVC repo is in the same location
 relative to the home dir on the remote machine, but otherwise assumptions are
 minimal.
 """
-# -*- coding: utf-8 -*-
 from os.path import normpath
 from os.path import realpath
 from os.path import expanduser
