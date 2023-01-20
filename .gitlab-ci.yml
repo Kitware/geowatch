@@ -101,7 +101,7 @@ stages:
         test
 
     before_script:
-        - .cache/conda/envs/loose-watch-env/bin/python -m pip install -e .
+        - source ~/.bashrc
         - pip install wheel build
         - pip install --prefer-binary -r requirements/gdal.txt  # gdal is special
         - pip install --prefer-binary -e .[runtime,headless,development]
@@ -186,7 +186,7 @@ run_linter:
 
     before_script:
         #- conda init bash
-        #- source ~/.bashrc
+        - source ~/.bashrc
         # NOTE: The default env runs Python 3.7, need to run 3.8 for 3.8 syntax
         # - conda create -y -n lint_env python=3.8 --override-channels --channel conda-forge
         # - conda activate lint_env
