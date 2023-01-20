@@ -2044,18 +2044,28 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
     # data is valid.
     force_spatial_res = None
     if force_min_gsd is not None:
-        if 'geotiff_metadata' in first_obj:
-            info = first_obj['geotiff_metadata']
+        if 'approx_meter_gsd' in first_obj:
+            approx_meter_gsd = first_obj['approx_meter_gsd']
         else:
-            warnings.warn(ub.paragraph(
-                '''
-                Popluating geotiff crs info, which probably should
-                have already been populated; to ensure pre-population
-                use the 'geo_preprop' argument.
-                '''))
-            info = watch.gis.geotiff.geotiff_crs_info(input_gpaths[0])
+            if 'geotiff_metadata' in first_obj:
+                warnings.warn(ub.paragraph(
+                    '''
+                    Prepopulation should have set the approx_meter_gsd property
+                    when geotiff_metadata was populated. As of 0.3.9 we should
+                    not be hitting this case. There may be something wrong.
+                    '''))
+                info = first_obj['geotiff_metadata']
+            else:
+                warnings.warn(ub.paragraph(
+                    '''
+                    Popluating geotiff approx_meter_gsd should have already been
+                    done.  To ensure pre-population use the '--geo_preprop=True'
+                    argument.
+                    '''))
+                info = watch.gis.geotiff.geotiff_crs_info(input_gpaths[0])
+            approx_meter_gsd = info.get('approx_meter_gsd', None)
 
-        if 'approx_meter_gsd' in info and info['approx_meter_gsd'] < force_min_gsd:
+        if approx_meter_gsd is not None and approx_meter_gsd < force_min_gsd:
             # Only setting if needed to avoid needless warping if the
             # 'approximate_meter_gsd' value is slightly different from
             # what GDAL computes at the time of warping
