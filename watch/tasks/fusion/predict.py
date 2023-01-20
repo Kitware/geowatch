@@ -421,8 +421,8 @@ def predict(cmdline=False, **kwargs):
         >>> ub.ensuredir(results_path)
         >>> package_fpath = join(test_dpath, 'my_test_package.pt')
         >>> import kwcoco
-        >>> train_dset = kwcoco.CocoDataset.demo('special:vidshapes4-multispectral', num_frames=5, gsize=(128, 128))
-        >>> test_dset = kwcoco.CocoDataset.demo('special:vidshapes2-multispectral', num_frames=5, gsize=(128, 128))
+        >>> train_dset = kwcoco.CocoDataset.demo('special:vidshapes4-multispectral', num_frames=5, image_size=(128, 128))
+        >>> test_dset = kwcoco.CocoDataset.demo('special:vidshapes2-multispectral', num_frames=5, image_size=(128, 128))
         >>> fit_kwargs = kwargs = {
         ...     'train_dataset': train_dset.fpath,
         ...     'datamodule': 'KWCocoVideoDataModule',
@@ -498,10 +498,9 @@ def predict(cmdline=False, **kwargs):
         >>> ub.delete(results_path)
         >>> ub.ensuredir(results_path)
 
-
         >>> import kwcoco
-        >>> train_dset = kwcoco.CocoDataset.demo('special:vidshapes8-multispectral-multisensor', num_frames=5, gsize=(128, 128))
-        >>> test_dset = kwcoco.CocoDataset.demo('special:vidshapes8-multispectral-multisensor', num_frames=5, gsize=(128, 128))
+        >>> train_dset = kwcoco.CocoDataset.demo('special:vidshapes8-multispectral-multisensor', num_frames=5, image_size=(128, 128))
+        >>> test_dset = kwcoco.CocoDataset.demo('special:vidshapes8-multispectral-multisensor', num_frames=5, image_size=(128, 128))
         >>> datamodule = datamodules.kwcoco_video_data.KWCocoVideoDataModule(
         >>>     train_dataset=train_dset, #'special:vidshapes8-multispectral-multisensor',
         >>>     test_dataset=test_dset, #'special:vidshapes8-multispectral-multisensor',
