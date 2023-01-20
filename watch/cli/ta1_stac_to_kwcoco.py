@@ -64,7 +64,7 @@ def main():
 SUPPORTED_COARSE_PLATFORMS = {
     'S2': {'S2A', 'S2B', 'sentinel-2a', 'sentinel-2b', 'S2'},  # Sentinel-2
     'L8': {'OLI_TIRS', 'LANDSAT_8', 'L8'},  # Landsat-8
-    'WV': {'DigitalGlobe', 'worldview-2', 'worldview-3', 'WV'},  # Worldview
+    'WV': {'DigitalGlobe', 'worldview-2', 'worldview-3', 'WV', 'WV02', 'WV03'},  # Worldview
     'PD': {'PlanetScope', 'dove', 'PD'},  # Planet
 }
 
