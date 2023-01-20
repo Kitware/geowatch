@@ -11,11 +11,15 @@ def bas_poly_eval_confusion_analysis(eval_fpath):
     Ignore:
         ls /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_testpipe/aggregate/inspect_simplify_2023-01-18T175853-5
         eval_fpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_testpipe/eval/flat/bas_poly_eval/bas_poly_eval_id_bcabbc12/poly_eval.json')
+
+        eval_fpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_testpipe/pred/flat/sc_poly_viz/sc_poly_viz_id_735ce10d/.pred/sc_poly/sc_poly_id_ff4b875f/.succ/sc_poly_eval/sc_poly_eval_id_1ce902c2/')
     """
     out_dpath = eval_fpath.parent
     eval_fpath.parent / '.pred'
-    bas_poly_dpath = list((eval_fpath.parent / '.pred/bas_poly').glob('*'))[0]
-    pred_sites_fpath = bas_poly_dpath / 'sites_manifest.json'
+    poly_pred_dpaths = list((eval_fpath.parent / '.pred').glob('*_poly/*'))
+    assert len(poly_pred_dpaths) == 1
+    poly_pred_dpath = ub.Path(poly_pred_dpaths[0])
+    pred_sites_fpath = poly_pred_dpath / 'sites_manifest.json'
 
     info = smart_result_parser.load_eval_trk_poly(eval_fpath)
     bas_row = info['json_info']['best_bas_rows']['data'][0]
@@ -241,7 +245,7 @@ def bas_poly_eval_confusion_analysis(eval_fpath):
     # Project confusion site models onto kwcoco for visualization
     from watch.cli import project_annotations
     import kwcoco
-    src_fpath = bas_poly_dpath / 'poly.kwcoco.json'
+    src_fpath = poly_pred_dpath / 'poly.kwcoco.json'
     dst_fpath = out_dpath / 'poly_toviz.kwcoco.json'
     src_dset = kwcoco.CocoDataset(src_fpath)
     dst_dset = src_dset.copy()
@@ -300,7 +304,7 @@ def bas_poly_eval_confusion_analysis(eval_fpath):
 
     summary_visualization(dst_dset, out_dpath)
 
-    if 0:
+    if 1:
         # FIXME
         from watch.cli import coco_visualize_videos
         kwargs = dict(
@@ -312,7 +316,7 @@ def bas_poly_eval_confusion_analysis(eval_fpath):
             workers='avail',
             draw_labels=False,
             animate=False,
-            with_imgs=False,
+            draw_imgs=False,
         )
         coco_visualize_videos.main(cmdline=cmdline, **kwargs)
 
