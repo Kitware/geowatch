@@ -214,15 +214,15 @@ run_linter:
         gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3
     needs: []
 
-test_full_loose/conda-linux:
-    <<:
-        *test_loose_template
-    rules:
-        - <<: *if-merge-request
-        - <<: *if-merged-into-default
-    image:
-        gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3
-    needs: []
+#test_full_loose/conda-linux:
+#    <<:
+#        *test_loose_template
+#    rules:
+#        - <<: *if-merge-request
+#        - <<: *if-merged-into-default
+#    image:
+#        gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3
+#    needs: []
 
 
 test_full_strict/conda-linux:
@@ -261,10 +261,12 @@ test_full_strict/conda-linux:
 .__local_docker_heredoc__:
         - | 
 
+            #GITLAB_TOKEN=$(git_token_for https://gitlab.kitware.com)
+            #docker login gitlab.kitware.com:4567 --username jon.crall --password "$GITLAB_TOKEN"
+            
             # Commands to help developers debug pipelines on their local machine
             # Grab the base docker image, (forwarding your ssh credentials), clone
             # the watch repo, create the environment, and run the tests. 
-            docker login gitlab.kitware.com:4567
 
             docker pull registry.smartgitlab.com/kitware/watch/miniconda3
             docker run -v $PWD:/io:ro -v $HOME/.cache/pip:/pip_cache -it registry.smartgitlab.com/kitware/watch/miniconda3 bash

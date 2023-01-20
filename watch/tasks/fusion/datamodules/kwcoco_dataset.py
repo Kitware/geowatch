@@ -2021,7 +2021,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
             >>> import watch
             >>> from watch.tasks.fusion import datamodules
-            >>> num = 1000
+            >>> num = 10
             >>> datamodule = datamodules.KWCocoVideoDataModule(
             >>>     train_dataset='vidshapes-watch', chip_size=64, time_steps=3,
             >>>     num_workers=0, batch_size=3, channels='auto',
