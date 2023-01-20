@@ -95,6 +95,7 @@ import torch
 import ubelt as ub
 from torch.utils import data
 from typing import Dict
+import functools
 import scriptconfig as scfg
 from os import getenv
 
@@ -306,6 +307,12 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             loss.
             ''')),
 
+        'upweight_time': scfg.Value(None, help=ub.paragraph(
+            '''
+            A number between 0.0 and 1.0 representing where to upweight time
+            the most (1.0 is last frame 0.0 is the first frame).
+            ''')),
+
         'use_cloudmask': scfg.Value(None, help=ub.paragraph(
             '''
             Allow the dataloader to use the quality band to skip frames.
@@ -322,6 +329,9 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             ''')),
 
         'mask_low_quality': scfg.Value(False, help='if True, mask low quality pixels with nans'),
+
+        'mask_samecolor_method': scfg.Value('histogram', help='If enabled, set as method to use for SAMECOLOR_QUALITY_HEURISTIC. Can be histogram or region'),
+
         'force_bad_frames': scfg.Value(False, help='if True, force loading, even if data is nan / missing'),
 
         'observable_threshold': scfg.Value(0.0, help=ub.paragraph(
@@ -849,7 +859,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         # SAMECOLOR_QUALITY_HEURISTIC = target_.get('SAMECOLOR_QUALITY_HEURISTIC', 'region')
         SAMECOLOR_VALUES = {0}
-        SAMECOLOR_QUALITY_HEURISTIC = target_.get('SAMECOLOR_QUALITY_HEURISTIC', 'histogram')
+        SAMECOLOR_QUALITY_HEURISTIC = target_.get('SAMECOLOR_QUALITY_HEURISTIC', self.config['mask_samecolor_method'])
         # SAMECOLOR_QUALITY_HEURISTIC = target_.get('SAMECOLOR_QUALITY_HEURISTIC', None)
         use_samecolor_region_method = SAMECOLOR_QUALITY_HEURISTIC == 'region'
         # There are only some values that we care about for the samecolor
@@ -1728,9 +1738,19 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             task_tid_to_cnames['class'][tid] = heuristics.hack_track_categories(cnames, 'class')
             task_tid_to_cnames['saliency'][tid] = heuristics.hack_track_categories(cnames, 'saliency')
 
-        if self.upweight_centers:
+        if self.upweight_centers or self.upweight_time is not None:
+
+            if self.upweight_time is None:
+                upweight_time = 0.5
+            else:
+                upweight_time = self.upweight_time
+
             # Learn more from the center of the space-time patch
-            time_weights = kwimage.gaussian_patch((1, num_frames))[0]
+            # if upweight_time == 0.5:
+            #     time_weights = kwimage.gaussian_patch((1, num_frames))[0]
+            # else:
+            time_weights = biased_1d_weights(upweight_time, num_frames)
+
             time_weights = time_weights / time_weights.max()
             time_weights = time_weights.clip(0, 1)
             time_weights = np.maximum(time_weights, self.min_spacetime_weight)
@@ -2497,8 +2517,40 @@ def _coerce_ndsampler(data):
     return self
 
 
-class FailedSample(Exception):
-    ...
+@functools.cache
+def biased_1d_weights(upweight_time, num_frames):
+    """
+    import kwplot
+    plt = kwplot.autoplt()
+
+    kwplot.figure()
+    import sys, ubelt
+    sys.path.append(ubelt.expandpath('~/code/watch'))
+    from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+
+    kwplot.figure(fnum=1, doclf=1)
+    num_frames = 5
+    values = biased_1d_weights(0.5, num_frames)
+    plt.plot(values)
+    values = biased_1d_weights(0.1, num_frames)
+    plt.plot(values)
+    values = biased_1d_weights(0.0, num_frames)
+    plt.plot(values)
+    values = biased_1d_weights(0.9, num_frames)
+    plt.plot(values)
+    values = biased_1d_weights(1.0, num_frames)
+    plt.plot(values)
+    """
+    # from kwarray.distributions import TruncNormal
+    from scipy.stats import norm
+    # from kwarray.distributions import TruncNormal
+    sigma = kwimage.im_cv2._auto_kernel_sigma(kernel=((num_frames, 1)))[1][0]
+    mean = upweight_time * (num_frames - 1) + 0.5
+    # rv = TruncNormal(mean=mean, std=sigma, low=0.0, high=num_frames).rv
+    rv = norm(mean, sigma)
+    locs = np.arange(num_frames) + 0.5
+    values = rv.pdf(locs)
+    return values
 
 
 # Backwards compat

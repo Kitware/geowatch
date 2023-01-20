@@ -14,6 +14,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Experimental new logic in `smartwatch project` for keyframe propagation / interpolation.
 * Added `polygon_simplify_tolerance` to tracking.
 * Add `--resolution` parameter to the tracker.
+* Add `--mask_samecolor_method` and default to `histogram`, will later change to False.
 
 ### Fixed
 * Switched scriptconfig objects to use "data=kwargs" rather than "default=kwargs" to avoid a copy issue.
