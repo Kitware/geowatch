@@ -292,7 +292,7 @@ def main(cmdline=True, **kw):
         >>> date_captured = dt.strftime('%Y/%m/%d')
         >>> gid = coco_dset.add_image(file_name=fpath, date_captured=date_captured)
         >>> dummy_poly = kwimage.Polygon.from_geojson(meta['geos_corners'])
-        >>> dummy_poly = dummy_poly.scale(0.3, about='center')
+        >>> dummy_poly = dummy_poly.scale(0.03, about='center')
         >>> sseg_geos = dummy_poly.to_geojson()
         >>> # NOTE: script is not always robust to missing annotation
         >>> # information like segmentation and bad bbox, but for this
