@@ -13,6 +13,8 @@ def bas_poly_eval_confusion_analysis(eval_fpath):
         eval_fpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_testpipe/eval/flat/bas_poly_eval/bas_poly_eval_id_bcabbc12/poly_eval.json')
 
         eval_fpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_testpipe/pred/flat/sc_poly_viz/sc_poly_viz_id_735ce10d/.pred/sc_poly/sc_poly_id_ff4b875f/.succ/sc_poly_eval/sc_poly_eval_id_1ce902c2/')
+
+        eval_fpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_testpipe/eval/flat/sc_poly_eval/sc_poly_eval_id_efbb2d98/poly_eval.fpath')
     """
     out_dpath = eval_fpath.parent
     eval_fpath.parent / '.pred'
