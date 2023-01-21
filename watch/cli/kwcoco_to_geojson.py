@@ -50,11 +50,14 @@ _KNOWN_TRACK_FUNCS = {
     'saliency_polys': from_polygon.OverlapTrack,
     'class_heatmaps': from_heatmap.TimeAggregatedSC,
     'class_polys': from_polygon.OverlapTrack,
+    'mono_track': from_polygon.MonoTrack,
 }
 
 
 _trackfn_details_docs = ' --- '.join([
     k + ': ' + ', '.join([field.name for field in v.__dataclass_fields__.values()])
+    if hasattr(v, '__dataclass_fields__') else
+    k + ':?'
     for k, v in _KNOWN_TRACK_FUNCS.items()
 ])
 
@@ -863,10 +866,13 @@ def main(args=None, **kwargs):
         >>> import kwcoco
         >>> import ubelt as ub
         >>> # run BAS on demodata in a new place
-        >>> coco_dset = smart_kwcoco_demodata.demo_smart_aligned_kwcoco()
-        >>> dpath = ub.Path.appdir('watch', 'test', 'tracking', 'main').ensuredir()
+        >>> import watch
+        >>> coco_dset = watch.coerce_kwcoco('watch-msi', heatmap=True, geodata=True, dates=True)
+        >>> #coco_dset = smart_kwcoco_demodata.demo_smart_aligned_kwcoco()
+        >>> dpath = ub.Path.appdir('watch', 'test', 'tracking', 'main0').ensuredir()
         >>> coco_dset.reroot(absolute=True)
         >>> coco_dset.fpath = dpath / 'bas_input.kwcoco.json'
+        >>> coco_dset.clear_annotations()
         >>> coco_dset.dump(coco_dset.fpath, indent=2)
         >>> region_id = 'dummy_region'
         >>> regions_dir = dpath / 'regions/'
@@ -880,7 +886,8 @@ def main(args=None, **kwargs):
         >>>     '--out_site_summaries_dir', str(regions_dir),
         >>>     '--out_site_summaries_fpath',  str(bas_fpath),
         >>>     '--out_kwcoco', str(bas_coco_fpath),
-        >>>     '--track_fn', 'watch.tasks.tracking.from_polygon.MonoTrack',
+        >>>     '--track_fn', 'saliency_heatmaps',
+        >>>     '--track-kwargs', json.dumps({'thresh': 1e-9, 'min_area_sqkm': None, 'max_area_sqkm': None, 'polygon_simplify_tolerance': 1}),
         >>> ]
         >>> main(args)
         >>> # Run SC on the same dset
@@ -890,15 +897,16 @@ def main(args=None, **kwargs):
         >>>     '--out_sites_dir', str(sites_dir),
         >>>     '--out_sites_fpath', str(sc_fpath),
         >>>     '--out_kwcoco', str(sc_coco_fpath),
+        >>>     '--track_fn', 'class_heatmaps',
+        >>>     '--site_summary', str(bas_fpath),
+        >>>     '--track-kwargs', json.dumps({'thresh': 1e-9, 'min_area_sqkm': None, 'max_area_sqkm': None, 'polygon_simplify_tolerance': 1, 'key': 'salient'}),
         >>> ]
         >>> main(args)
         >>> # Check expected results
         >>> bas_coco_dset = kwcoco.CocoDataset(bas_coco_fpath)
         >>> sc_coco_dset = kwcoco.CocoDataset(sc_coco_fpath)
-        >>> orig_trackids = coco_dset.annots().lookup('track_id', None)
         >>> bas_trackids = bas_coco_dset.annots().lookup('track_id', None)
         >>> sc_trackids = sc_coco_dset.annots().lookup('track_id', None)
-        >>> assert sorted(set(orig_trackids)) == [None]
         >>> assert len(bas_trackids) and None not in bas_trackids
         >>> assert len(sc_trackids) and None not in sc_trackids
         >>> summaries = list(util_gis.coerce_geojson_datas(bas_fpath, format='dataframe'))
@@ -921,6 +929,7 @@ def main(args=None, **kwargs):
         >>> # test resolution
         >>> from watch.cli.kwcoco_to_geojson import *  # NOQA
         >>> from watch.cli.kwcoco_to_geojson import main
+        >>> import watch
         >>> dset = watch.coerce_kwcoco('watch-msi', heatmap=True, geodata=True, dates=True)
         >>> dpath = ub.Path.appdir('watch', 'test', 'tracking', 'main1').ensuredir()
         >>> out_fpath = dpath / 'resolution_test.kwcoco.json'
@@ -962,6 +971,7 @@ def main(args=None, **kwargs):
     Example:
         >>> # xdoctest: +REQUIRES(--slow)
         >>> # test a more complicated track function
+        >>> import watch
         >>> from watch.cli.kwcoco_to_geojson import demo
         >>> import kwcoco
         >>> import watch

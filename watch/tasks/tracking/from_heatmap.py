@@ -864,7 +864,7 @@ class TimeAggregatedSC(NewTrackFunction):
 
         else:
             aggkw = ub.compatible(self.__dict__, time_aggregated_polys)
-            aggkw['boundaries_as'] = aggkw.get('boundaries_as', 'none') != 'none'
+            aggkw['use_boundaries'] = aggkw.get('boundaries_as', 'none') != 'none'
             tracks = time_aggregated_polys(sub_dset, **aggkw)
         return tracks
 
