@@ -239,13 +239,19 @@ def _add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
             new_ann = make_new_annotation(*o, track_id)
             all_new_anns.append(new_ann)
 
-    for tid, grp in tracks.groupby('track_idx', axis=0):
-        score_chan = kwcoco.ChannelSpec('|'.join(key))
-        this_score = grp[(score_chan.spec, None)]
-        scores_dct = {k: grp[(k, None)] for k in score_chan.unique()}
-        scores_dct = [dict(zip(scores_dct, t))
-                      for t in zip(*scores_dct.values())]
-        _add(zip(grp['gid'], grp['poly'], this_score, scores_dct), tid)
+    try:
+        groups = tracks.groupby('track_idx', axis=0)
+    except ValueError:
+        import warnings
+        warnings.warn('warning: no tracks to add the the kwcoco dataset')
+    else:
+        for tid, grp in groups:
+            score_chan = kwcoco.ChannelSpec('|'.join(key))
+            this_score = grp[(score_chan.spec, None)]
+            scores_dct = {k: grp[(k, None)] for k in score_chan.unique()}
+            scores_dct = [dict(zip(scores_dct, t))
+                          for t in zip(*scores_dct.values())]
+            _add(zip(grp['gid'], grp['poly'], this_score, scores_dct), tid)
 
     # TODO: Faster to add annotations in bulk, but we need to construct the
     # "ids" first
@@ -281,6 +287,7 @@ def time_aggregated_polys(
         max_area_behavior='drop',
         thresh_hysteresis=None,
         polygon_simplify_tolerance=None,
+        resolution=None,
         ):
     '''
     Track function.
@@ -309,6 +316,9 @@ def time_aggregated_polys(
             np.inf, 'inf', or None: max
 
         agg_fn: (3d heatmaps -> 2d heatmaps), calling convention TBD
+
+        resolution (str | None):
+            A resolution in units understood by kwcoco. E.g. "10GSD"
 
     Ignore:
         # For debugging
@@ -373,13 +383,14 @@ def time_aggregated_polys(
     #
 
     gids_polys = _gids_polys(sub_dset,
-                             key,
-                             agg_fn,
-                             thresh,
-                             morph_kernel,
-                             thresh_hysteresis,
-                             norm_ord,
-                             moving_window_size,
+                             key=key,
+                             agg_fn=agg_fn,
+                             thresh=thresh,
+                             morph_kernel=morph_kernel,
+                             thresh_hysteresis=thresh_hysteresis,
+                             norm_ord=norm_ord,
+                             moving_window_size=moving_window_size,
+                             resolution=resolution,
                              bounds=use_boundaries)
     orig_gid_polys = list(gids_polys)  # 26% of runtime
     gids_polys = orig_gid_polys
@@ -472,6 +483,9 @@ def time_aggregated_polys(
         _TRACKS = time_filter(_TRACKS)  # 7% of runtime? could be next line
         print('filter based on time overlap: remaining tracks '
               f'{gpd_len(_TRACKS)} / {n_orig}')
+
+    # FIXME: the tracks should be transformed back into video or image
+    # resolution at the end of this.
 
     # try to ignore this error
     _TRACKS['poly'] = _TRACKS['poly'].map(kwimage.MultiPolygon.from_shapely)
@@ -633,6 +647,7 @@ def _gids_polys(
         morph_kernel,
         thresh_hysteresis,
         norm_ord,
+        resolution=None,
         moving_window_size=None,  # 150
         bounds=False) -> Iterable[Union[int, Poly]]:
     if bounds:  # for SC
@@ -653,7 +668,8 @@ def _gids_polys(
 
     _heatmaps = build_heatmaps(sub_dset,
                                gids, {'fg': key},
-                               skipped='interpolate')['fg']
+                               skipped='interpolate',
+                               resolution=resolution)['fg']
 
     def _process(track):
 
@@ -701,6 +717,70 @@ def _gids_polys(
 #
 # --- wrappers ---
 #
+# Note:
+#     The following are valid choices of `track_fn` in
+#     ../../cli/kwcoco_to_geojson.py and will be called by ./normalize.py
+
+
+__devnote__ = """
+
+See Also kwcoco_to_geojson.KWCocoToGeoJSONConfig comment
+
+TODO:
+    it may make sense to change this into a scriptconfig.DataConfig in
+    order to provide richer introspection to tools that want to know
+    what parameters are available.
+
+The following are the common and differing settings between BAS / SC
+
+I include some candidate scfg logic that I may implement
+
+COMMON:
+
+from scriptconfig import DataConfig
+from scriptconfig import Value as V
+
+# Note that the V wrapping can/will be optional
+# Do something like __defaults__ = Common.__defaults__  # Can do this with a metaclass
+
+class CommonTrackerConfig(DataConfig):
+    agg_fn                     : V[str]           = V('probs', help='agg method')
+    max_area_behavior          : str              = 'drop'
+    morph_kernel               : V[int]           = V(3, help='...')
+    moving_window_size         : V[int | None]    = V(None, help='...')
+    norm_ord                   : V[int | str]     = V(1, help='...')
+    polygon_simplify_tolerance : V[float | None]  = V(None, help='...')
+    resolution                 : V[str | None]    = V(None, help='...')
+    response_thresh            : Optional[float]  = None
+    thresh_hysteresis          : Optional[float]  = None
+
+
+class BAS_TrackerConfig(CommonTrackerConfig):
+
+    # Common but different defaults
+    key: str = 'salient'
+    max_area_sqkm: Optional[float] = 2.25
+    min_area_sqkm: Optional[float] = 0.072
+    time_thresh: Optional[float] = 1
+    thresh: float = 0.2
+
+
+VALID_BOUNDRY_ALGOS = Literal['bounds', 'polys', 'none']
+BACKGROUND_NAMES = CNAMES_DCT['negative']['scored']
+
+class SC_TrackerConfig(CommonTrackerConfig):
+
+    # Common but different defaults
+    key           : Tuple[str]      = tuple(CNAMES_DCT['positive']['scored'])
+    max_area_sqkm : Optional[float] = None
+    min_area_sqkm : Optional[float] = None
+    thresh        : float           = 0.01
+    time_thresh   : Optional[float] = None
+
+    # Unique to SC
+    boundaries_as : VALID_BOUNDRY_ALGOS = 'bounds'
+    bg_key        : Tuple[str]          = tuple(BACKGROUND_NAMES)
+"""
 
 
 @dataclass
@@ -721,24 +801,11 @@ class TimeAggregatedBAS(NewTrackFunction):
     max_area_sqkm: Optional[float] = 2.25
     max_area_behavior: str = 'drop'
     polygon_simplify_tolerance: Union[None, float] = None
+    resolution: Optional[str] = None
 
     def create_tracks(self, sub_dset):
-        tracks = time_aggregated_polys(
-            sub_dset,
-            self.thresh,
-            self.morph_kernel,
-            key=self.key,
-            time_thresh=self.time_thresh,
-            response_thresh=self.response_thresh,
-            norm_ord=self.norm_ord,
-            agg_fn=self.agg_fn,
-            thresh_hysteresis=self.thresh_hysteresis,
-            moving_window_size=self.moving_window_size,
-            min_area_sqkm=self.min_area_sqkm,
-            max_area_sqkm=self.max_area_sqkm,
-            max_area_behavior=self.max_area_behavior,
-            polygon_simplify_tolerance=self.polygon_simplify_tolerance,
-        )
+        aggkw = ub.compatible(self.__dict__, time_aggregated_polys)
+        tracks = time_aggregated_polys(sub_dset, **aggkw)
         return tracks
 
     def add_tracks_to_dset(self, sub_dset, tracks):
@@ -752,6 +819,9 @@ class TimeAggregatedSC(NewTrackFunction):
     Wrapper for Site Characterization that looks for phase heatmaps.
 
     Alias: class_heatmaps
+
+    Note:
+        This is a valid choice of `track_fn` in ../../cli/kwcoco_to_geojson.py
     '''
     thresh: float = 0.01
     morph_kernel: int = 3
@@ -768,6 +838,7 @@ class TimeAggregatedSC(NewTrackFunction):
     max_area_sqkm: Optional[float] = None
     max_area_behavior: str = 'drop'
     polygon_simplify_tolerance: Union[None, float] = None
+    resolution: Optional[str] = None
 
     def create_tracks(self, sub_dset):
         '''
@@ -792,25 +863,9 @@ class TimeAggregatedSC(NewTrackFunction):
                 kwimage.MultiPolygon.from_shapely)
 
         else:
-            tracks = time_aggregated_polys(
-                sub_dset,
-                self.thresh,
-                self.morph_kernel,
-                key=self.key,
-                bg_key=self.bg_key,
-                time_thresh=self.time_thresh,
-                response_thresh=self.response_thresh,
-                use_boundaries=(self.boundaries_as != 'none'),
-                norm_ord=self.norm_ord,
-                agg_fn=self.agg_fn,
-                thresh_hysteresis=self.thresh_hysteresis,
-                moving_window_size=self.moving_window_size,
-                min_area_sqkm=self.min_area_sqkm,
-                max_area_sqkm=self.max_area_sqkm,
-                max_area_behavior=self.max_area_behavior,
-                polygon_simplify_tolerance=self.polygon_simplify_tolerance,
-            )
-
+            aggkw = ub.compatible(self.__dict__, time_aggregated_polys)
+            aggkw['boundaries_as'] = aggkw.get('boundaries_as', 'none') != 'none'
+            tracks = time_aggregated_polys(sub_dset, **aggkw)
         return tracks
 
     def add_tracks_to_dset(self, sub_dset, tracks, **kwargs):

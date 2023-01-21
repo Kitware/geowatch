@@ -630,26 +630,13 @@ def build_heatmaps(sub_dset: kwcoco.CocoDataset,
                    keys: Union[List[str], Dict[str, List[str]]],
                    missing='fill',
                    skipped='interpolate',
+                   space='video',
+                   resolution=None,
                    video_id=None) -> Dict[str, List[np.array]]:
     '''
     Vectorized version of watch.tasks.tracking.utils.build_heatmap across gids.
 
     Can also sum keys using group names.
-
-    Example:
-        build_heatmaps(dset, gids=[1,2], ['key1', 'key2', 'key3']) == {
-            'key1': heats1,
-            'key2': heats2,
-            'key3': heats3
-        }
-        build_heatmaps(dset, gids=[1,2],
-                       {'group1': ['key1', 'key2', 'key3']}) == {
-            'key1': heats1,
-            'key2': heats2,
-            'key3': heats3,
-            'group1': heats1 + heats2 + heats3
-        }
-        where len(heats) == len(gids) == 2.
 
     Restrictions wrt heatmap():
         - uses video space
@@ -672,10 +659,22 @@ def build_heatmaps(sub_dset: kwcoco.CocoDataset,
             otherwise assert that there is exactly one video
 
     Returns:
-        {key: [heatmap for each gid]}
+        Dict : {key: [heatmap for each gid]}
+
+    Example:
+        >>> from watch.tasks.tracking.utils import *  # NOQA
+        >>> import watch
+        >>> dset = watch.coerce_kwcoco('watch-msi', heatmap=True)
+        >>> keys = 'salient|notsalient|distri'
+        >>> videos = dset.videos()
+        >>> video_id = videos._ids[0]
+        >>> gids = videos.images[0][0:2]
+        >>> heatmaps = build_heatmaps(dset, gids=gids, keys=keys, video_id=video_id)
+        >>> assert all(len(v) == len(gids) for v in heatmaps.values())
+        >>> heatmaps = build_heatmaps(dset, gids=gids, keys={'group1': ['salient', 'notsalient']}, video_id=video_id)
+        >>> assert all(len(v) == len(gids) for v in heatmaps.values())
     '''
-    # TODO use ChannelSpec objects
-    # TODO doctest
+    assert space == 'video'
 
     if isinstance(keys, list):
         key_groups = {'__dummy__': keys}
@@ -683,6 +682,10 @@ def build_heatmaps(sub_dset: kwcoco.CocoDataset,
     elif isinstance(keys, dict):
         key_groups = keys
         _dummy_groups = []
+    elif isinstance(keys, str):
+        import kwcoco
+        key_groups = {'__dummy__': kwcoco.FusedChannelSpec.coerce(keys).to_list()}
+        _dummy_groups = ['__dummy__']
     else:
         raise TypeError(type(keys))
 
@@ -710,7 +713,8 @@ def build_heatmaps(sub_dset: kwcoco.CocoDataset,
             img_probs, chan_probs = build_heatmap(sub_dset,
                                                   gid,
                                                   key,
-                                                  space='video',
+                                                  space=space,
+                                                  resolution=resolution,
                                                   return_chan_probs=True)
             # TODO make this more efficient using missing='skip'
             if np.any(img_probs):
@@ -744,6 +748,7 @@ def build_heatmap(dset,
                   key,
                   return_chan_probs=False,
                   space='video',
+                  resolution=None,
                   missing='fill'):
     """
     Find the total heatmap of key within gid
@@ -780,6 +785,19 @@ def build_heatmap(dset,
         >>> return_chan_probs = True
         >>> key = 'eludium'
         >>> fg_img_probs1, chan_probs = build_heatmap(dset, gid, key, return_chan_probs, space, missing)
+
+    Example:
+        >>> from watch.tasks.tracking.utils import *  # NOQA
+        >>> import watch
+        >>> dset = watch.coerce_kwcoco(data='watch-msi', heatmap=True, geodata=True)
+        >>> gid = dset.images()[0]
+        >>> key = 'salient'
+        >>> # Test dynamic resolution
+        >>> fg_img_probs1 = build_heatmap(dset, gid, key, resolution='3GSD')
+        >>> fg_img_probs2 = build_heatmap(dset, gid, key, resolution='7GSD')
+        >>> a = np.array(fg_img_probs1.shape)
+        >>> b = np.array(fg_img_probs2.shape)
+        >>> assert np.isclose((a / b).mean(), 7 / 3, atol=.1)
     """
     key, _ = _validate_keys(key, None)
     coco_img = dset.coco_image(gid)
@@ -814,8 +832,10 @@ def build_heatmap(dset,
             print('WARNING: Im not sure about that sum axis=-1, '
                   'I hope there is only ever one channel here')
 
-    key_img_probs = coco_img.delay(channels=common,
-                                   space=space).finalize(nodata='float')
+    delayed = coco_img.delay(
+        channels=common, resolution=resolution, space=space,
+        nodata_method='float')
+    key_img_probs = delayed.finalize()
 
     # Not sure about that sum axis=-1 here
     fg_img_probs = key_img_probs.sum(axis=-1)

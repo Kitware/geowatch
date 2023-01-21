@@ -595,7 +595,8 @@ def normalize_sensors(coco_dset):
         except KeyError:
             sensor = img.get('sensor_coarse', None)
             name = img.get('name', img['file_name'])
-            raise KeyError(
+            import warnings
+            warnings.warn(
                 f'{coco_dset.tag} image {name} has unknown sensor {sensor}')
 
     return coco_dset
@@ -615,6 +616,10 @@ def normalize(
         **track_kwargs):
     '''
     Driver function to apply all normalizations
+
+    TODO:
+        Rename this to something like run_tracker. This is the entry point to
+        the main tracking pipeline.
 
     Example:
         >>> import kwcoco as kc
@@ -753,6 +758,12 @@ def normalize(
         debug_json_unserializable(out_dset.dataset, 'Output of normalize: ')
 
     if viz_videos:
+        # TODO: Remove this option, have the user call visualize videos on the
+        # output if they want that. However, what we DO want is a way to dump
+        # and visualize the data the tracker is using to make decisions.
+        # It would be even nicer if there was some way to aggregate that with
+        # smartwatch visualize video
+
         # visualize predicted sites with true sites
         from .visualize import visualize_videos
         visualize_videos(out_dset,
@@ -760,3 +771,8 @@ def normalize(
                          viz_out_dir,
                          coco_dset_sc=track_kwargs.get('coco_dset_sc'))
     return out_dset
+
+
+# Note: smooth transition while changing the name of "normalize"
+# Make a long search replacable name that we can fix later.
+run_tracking_pipeline = normalize

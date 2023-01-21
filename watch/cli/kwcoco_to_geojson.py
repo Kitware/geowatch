@@ -42,7 +42,22 @@ import shapely
 import shapely.ops
 import ubelt as ub
 import scriptconfig as scfg
-# import colored_traceback.auto  # noqa
+
+from watch.tasks.tracking import from_heatmap, from_polygon
+
+_KNOWN_TRACK_FUNCS = {
+    'saliency_heatmaps': from_heatmap.TimeAggregatedBAS,
+    'saliency_polys': from_polygon.OverlapTrack,
+    'class_heatmaps': from_heatmap.TimeAggregatedSC,
+    'class_polys': from_polygon.OverlapTrack,
+}
+
+
+_trackfn_details_docs = ' --- '.join([
+    k + ': ' + ', '.join([field.name for field in v.__dataclass_fields__.values()])
+    for k, v in _KNOWN_TRACK_FUNCS.items()
+])
+
 
 try:
     from xdev import profile
@@ -56,6 +71,7 @@ class KWCocoToGeoJSONConfig(scfg.DataConfig):
     """
 
     # TODO: can we store metadata in the type annotation?
+    # SeeAlso: notes in from_heatmap.__devnote__
     # e.g.
     #
     # in_file : scfg.Coercable(help='Input KWCOCO to convert', position=1) = None
@@ -125,11 +141,13 @@ class KWCocoToGeoJSONConfig(scfg.DataConfig):
             class_polys, they should be annotation categories.
             '''), group='track', mutex_group=1)
     track_kwargs = scfg.Value('{}', type=str, help=ub.paragraph(
-            '''
+            f'''
             JSON string or path to file containing keyword arguments for
             the chosen TrackFunction. Examples include: coco_dset_gt,
             coco_dset_sc, thresh, key. Any file paths will be loaded as
             CocoDatasets if possible.
+
+            Valid params for each track_fn are: {_trackfn_details_docs}
             '''), group='track')
     site_summary = scfg.Value(None, help=ub.paragraph(
             '''
@@ -513,12 +531,12 @@ def convert_kwcoco_to_iarpa(coco_dset,
 
     Example:
         >>> from watch.cli.kwcoco_to_geojson import *  # NOQA
-        >>> from watch.tasks.tracking.normalize import normalize
+        >>> from watch.tasks.tracking.normalize import run_tracking_pipeline
         >>> from watch.tasks.tracking.from_polygon import MonoTrack
         >>> from watch.demo import smart_kwcoco_demodata
         >>> import ubelt as ub
         >>> coco_dset = smart_kwcoco_demodata.demo_smart_aligned_kwcoco()
-        >>> coco_dset = normalize(coco_dset, track_fn=MonoTrack, overwrite=False)
+        >>> coco_dset = run_tracking_pipeline(coco_dset, track_fn=MonoTrack, overwrite=False)
         >>> region_ids = ['KR_R001', 'KR_R002']
         >>> coco_dset.videos().set('name', region_ids)
         >>> sites = convert_kwcoco_to_iarpa(coco_dset)
@@ -834,7 +852,7 @@ def create_region_feature(region_id, site_summaries):
 
 
 @profile
-def main(args):
+def main(args=None, **kwargs):
     """
     Example:
         >>> # test BAS and default (SC) modes
@@ -900,15 +918,56 @@ def main(args):
         >>> dpath.delete()
 
     Example:
+        >>> # test resolution
+        >>> from watch.cli.kwcoco_to_geojson import *  # NOQA
+        >>> from watch.cli.kwcoco_to_geojson import main
+        >>> dset = watch.coerce_kwcoco('watch-msi', heatmap=True, geodata=True, dates=True)
+        >>> dpath = ub.Path.appdir('watch', 'test', 'tracking', 'main1').ensuredir()
+        >>> out_fpath = dpath / 'resolution_test.kwcoco.json'
+        >>> regions_dir = dpath / 'regions'
+        >>> bas_fpath = dpath / 'bas_sites.json'
+        >>> import json
+        >>> track_kwargs = json.dumps({
+        >>>         'resolution': '10GSD',
+        >>> })
+        >>> kwargs = {
+        >>>     'in_file': str(dset.fpath),
+        >>>     'out_site_summaries_dir': str(regions_dir),
+        >>>     'out_site_summaries_fpath':  str(bas_fpath),
+        >>>     'out_kwcoco': str(out_fpath),
+        >>>     'track_fn': 'saliency_heatmaps',
+        >>>     'track_kwargs': track_kwargs,
+        >>> }
+        >>> args = None
+        >>> # Test case for no results
+        >>> main(args=args, **kwargs)
+        >>> # Try to get results here
+        >>> track_kwargs = json.dumps({
+        >>>         'resolution': '10GSD',
+        >>>         'min_area_sqkm': None,
+        >>>         'max_area_sqkm': None,
+        >>>         'thresh': 1e-9,
+        >>> })
+        >>> kwargs = {
+        >>>     'in_file': str(dset.fpath),
+        >>>     'out_site_summaries_dir': str(regions_dir),
+        >>>     'out_site_summaries_fpath':  str(bas_fpath),
+        >>>     'out_kwcoco': str(out_fpath),
+        >>>     'track_fn': 'saliency_heatmaps',
+        >>>     'track_kwargs': track_kwargs,
+        >>> }
+        >>> args = None
+        >>> main(args=args, **kwargs)
+
+    Example:
         >>> # xdoctest: +REQUIRES(--slow)
         >>> # test a more complicated track function
         >>> from watch.cli.kwcoco_to_geojson import demo
-        >>> from watch.demo import smart_kwcoco_demodata
         >>> import kwcoco
+        >>> import watch
         >>> import ubelt as ub
         >>> # make a new BAS dataset
-        >>> coco_dset = smart_kwcoco_demodata.demo_kwcoco_with_heatmaps(
-        >>>     num_videos=2)
+        >>> coco_dset = watch.coerce_kwcoco('watch-msi', heatmap=True, geodata=True)
         >>> #coco_dset.images().set('sensor_coarse', 'S2')
         >>> for img in coco_dset.imgs.values():
         >>>     img['sensor_coarse'] = 'S2'
@@ -935,7 +994,7 @@ def main(args):
         >>> demo(coco_dset, regions_dir, coco_dset_sc, sites_dir, cleanup=True)
 
     """
-    args = KWCocoToGeoJSONConfig.legacy(cmdline=args)
+    args = KWCocoToGeoJSONConfig.legacy(cmdline=args, data=kwargs)
     print('args = {}'.format(ub.repr2(dict(args), nl=1)))
 
     coco_fpath = ub.Path(args.in_file)
@@ -1026,39 +1085,39 @@ def main(args):
     CLEAN_DSET = 1
     class_cats = [cat['name'] for cat in watch.heuristics.CATEGORIES]
     saliency_cats = ['salient']
-    if args.default_track_fn is not None:
-        from watch.tasks.tracking import from_heatmap, from_polygon
+
+    track_fn = args.track_fn
+    print(f'track_fn={track_fn}')
+    if track_fn is None:
+        track_fn = (
+            watch.tasks.tracking.utils.NoOpTrackFunction
+            if args.default_track_fn is None else
+            args.default_track_fn
+        )
+
+    print(f'track_fn={track_fn}')
+    if isinstance(track_fn, str):
         # TODO: we should be able to let the user know about these algorithms
         # and parameters. Can jsonargparse help here?
-        _known_funcs = {
-            'saliency_heatmaps': from_heatmap.TimeAggregatedBAS,
-            'saliency_polys': from_polygon.OverlapTrack,
-            'class_heatmaps': from_heatmap.TimeAggregatedSC,
-            'class_polys': from_polygon.OverlapTrack,
-        }
         if CLEAN_DSET:
-            if 'class_' in args.default_track_fn:
+            if 'class_' in track_fn:
                 coco_dset.remove_categories(saliency_cats)
             else:
                 coco_dset.remove_categories(class_cats)
-        track_fn = _known_funcs.get(args.default_track_fn, None)
+
+        track_fn = _KNOWN_TRACK_FUNCS.get(track_fn, None)
         if track_fn is None:
-            raise KeyError(
-                f'Unknown Default Track Function: {args.default_track_fn}')
-            track_fn = from_heatmap.TimeAggregatedBAS
-            track_kwargs['key'] = [args.default_track_fn]
-            if CLEAN_DSET:
-                coco_dset.remove_categories(class_cats)
-    elif args.track_fn is None:
-        track_fn = watch.tasks.tracking.utils.NoOpTrackFunction
-    else:
-        # TODO: use avoid eval in favor of restricted eval
-        # With an explicit allow surface.
-        # from watch.utils import util_eval
-        # util_eval.restricted_eval
-        track_fn = eval(args.track_fn)
-        if CLEAN_DSET:
-            print('warning: could not check for invalid cats!')
+            raise RuntimeError('Old code would have evaled track_fn, we dont want to do that. Please change your code to specify a known track function')
+            # Not sure what the purpose of this was.
+            # args_track_fn = from_heatmap.TimeAggregatedBAS
+            # track_kwargs['key'] = [args.default_track_fn]
+            # if CLEAN_DSET:
+            #     coco_dset.remove_categories(class_cats)
+        print(f'track_fn={track_fn}')
+
+    if track_fn is None:
+        raise KeyError(
+            f'Unknown Default Track Function: {args.default_track_fn} not in {list(_KNOWN_TRACK_FUNCS.keys())}')
 
     # add site summaries (site boundary annotations)
     if args.site_summary is not None:
@@ -1074,11 +1133,9 @@ def main(args):
     """
     ../tasks/tracking/normalize.py
     """
-    coco_dset = watch.tasks.tracking.normalize.normalize(coco_dset,
-                                                         track_fn=track_fn,
-                                                         overwrite=False,
-                                                         gt_dset=gt_dset,
-                                                         **track_kwargs)
+    coco_dset = watch.tasks.tracking.normalize.run_tracking_pipeline(
+        coco_dset, track_fn=track_fn, overwrite=False, gt_dset=gt_dset,
+        **track_kwargs)
 
     # Measure how long tracking takes
     proc_context.stop()
