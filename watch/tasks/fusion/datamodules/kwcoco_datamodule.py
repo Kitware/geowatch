@@ -575,6 +575,32 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             >>> kwplot.autompl()
             >>> kwplot.imshow(canvas)
             >>> kwplot.show_if_requested()
+
+        Example:
+            >>> from watch.tasks.fusion.datamodules.kwcoco_datamodule import *  # NOQA
+            >>> from watch.tasks.fusion import datamodules
+            >>> self = datamodules.KWCocoVideoDataModule(
+            >>>     batch_size = 3,
+            >>>     train_dataset='special:vidshapes8-multispectral', channels='auto', num_workers=0)
+            >>> self.setup('fit')
+            >>> loader = self.train_dataloader()
+            >>> batch = next(iter(loader))
+            >>> batch[1] = None
+            >>> item = batch[0]
+            >>> # Visualize
+            >>> B = len(batch)
+            >>> C, H, W = ub.peek(item['frames'][0]['modes'].values()).shape
+            >>> T = len(item['frames'])
+            >>> import torch
+            >>> outputs = {'change_probs': [torch.rand(T - 1, H, W) for _ in range(B)]}
+            >>> outputs.update({'class_probs': [torch.rand(T, H, W, 10) for _ in range(B)]})
+            >>> stage = 'train'
+            >>> canvas = self.draw_batch(batch, stage=stage, outputs=outputs)
+            >>> # xdoctest: +REQUIRES(--show)
+            >>> import kwplot
+            >>> kwplot.autompl()
+            >>> kwplot.imshow(canvas)
+            >>> kwplot.show_if_requested()
         """
         dataset = self.torch_datasets[stage]
         # Get the raw dataset class
@@ -583,6 +609,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
 
         # assume collation is disabled
         batch_items = batch
+        # batch_items = [ex for ex in batch if (ex is not None)]
 
         DEBUG_INCOMING_DATA = 1
         if DEBUG_INCOMING_DATA:
@@ -604,6 +631,9 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             # - [ ] fine-grained probability of change
             # - [ ] per-frame semenatic segmentation
             # - [ ] detections with box results!
+
+            if item is None:
+                continue
 
             if outputs is not None:
                 # Extract outputs only for this specific batch item.

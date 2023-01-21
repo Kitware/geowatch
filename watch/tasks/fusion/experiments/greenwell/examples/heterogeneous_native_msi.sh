@@ -23,10 +23,8 @@ train a fusion model on RGB data.
 # In this example we are not using any DVC directories, but we will use DVC in
 # the variable names to be consistent with future tutorials.
 
-#DVC_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="hdd")
-DVC_DATA_DPATH=/home/local/KHQ/connor.greenwell/Projects/SMART/smart_watch_dvc
-# DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
-DVC_EXPT_DPATH=/home/local/KHQ/connor.greenwell/data/dvc-repos/smart_expt_dvc
+DVC_DATA_DPATH=$(smartwatch_dvc --tags="toy_data_hdd" --hardware="hdd")
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags="toy_expt_hdd")
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 
 mkdir -p "$DVC_DATA_DPATH"
@@ -43,12 +41,23 @@ The kwcoco package comes with a commandline utility called 'kwcoco toydata' to
 accomplish this.
 "
 
-DATASET_CODE=onera_2018
+NUM_TOY_TRAIN_VIDS="${NUM_TOY_TRAIN_VIDS:-100}"  # If variable not set or null, use default.
+NUM_TOY_VALI_VIDS="${NUM_TOY_VALI_VIDS:-5}"  # If variable not set or null, use default.
+NUM_TOY_TEST_VIDS="${NUM_TOY_TEST_VIDS:-2}"  # If variable not set or null, use default.
 
-KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/extern/$DATASET_CODE
-TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/onera_train.kwcoco.json
-VALI_FPATH=$KWCOCO_BUNDLE_DPATH/onera_test.kwcoco.json
-TEST_FPATH=$KWCOCO_BUNDLE_DPATH/onera_test.kwcoco.json
+# Generate toy datasets
+TRAIN_FPATH=$DVC_DATA_DPATH/vidshapes_msi_train${NUM_TOY_TRAIN_VIDS}/data.kwcoco.json
+VALI_FPATH=$DVC_DATA_DPATH/vidshapes_msi_vali${NUM_TOY_VALI_VIDS}/data.kwcoco.json
+TEST_FPATH=$DVC_DATA_DPATH/vidshapes_msi_test${NUM_TOY_TEST_VIDS}/data.kwcoco.json 
+
+kwcoco toydata --key="vidshapes${NUM_TOY_TRAIN_VIDS}-frames5-randgsize-speed0.2-msi-multisensor" \
+    --bundle_dpath "$DVC_DATA_DPATH/vidshapes_msi_train${NUM_TOY_TRAIN_VIDS}" --verbose=4
+
+kwcoco toydata --key="vidshapes${NUM_TOY_VALI_VIDS}-frames5-randgsize-speed0.2-msi-multisensor" \
+    --bundle_dpath "$DVC_DATA_DPATH/vidshapes_msi_vali${NUM_TOY_VALI_VIDS}"  --verbose=4
+
+kwcoco toydata --key="vidshapes${NUM_TOY_TEST_VIDS}-frames6-randgsize-speed0.2-msi-multisensor" \
+    --bundle_dpath "$DVC_DATA_DPATH/vidshapes_msi_test${NUM_TOY_TEST_VIDS}" --verbose=4
 
 
 echo "
@@ -69,29 +78,30 @@ kwcoco stats "$TRAIN_FPATH" "$VALI_FPATH" "$TEST_FPATH"
 smartwatch stats "$TRAIN_FPATH"
 
 
-echo "
+if [ -n "$DISPLAY" ]; then
+    echo "
 
-Another important CLI tool is 'smartwatch visualize' which can be used to
-visually inspect the contents of a kwcoco file. It does this by simply dumping
-image files to disk.  This is most useful when the underlying dataset has data
-outside of the visual range, but it will work on 'regular' rgb data too!
+    Another important CLI tool is 'smartwatch visualize' which can be used to
+    visually inspect the contents of a kwcoco file. It does this by simply dumping
+    image files to disk.  This is most useful when the underlying dataset has data
+    outside of the visual range, but it will work on 'regular' rgb data too!
 
-Running visualize by default will write images for all channels in the exiting
-'kwcoco bundle' (i.e. the directory that contains the kwcoco json file) with a
-hash corresponding to the state of the kwcoco file. It will also output all the
-channels by default. Use 'smartwatch visualize --help' for a list of additional
-options. 
+    Running visualize by default will write images for all channels in the exiting
+    'kwcoco bundle' (i.e. the directory that contains the kwcoco json file) with a
+    hash corresponding to the state of the kwcoco file. It will also output all the
+    channels by default. Use 'smartwatch visualize --help' for a list of additional
+    options. 
 
-Some useful options are:
+    Some useful options are:
 
-    * '--channels' to view only specific channels
-    * '--animate' create animated gifs from the sequence
-    * '--viz_dpath' specify a custom output directory
-"
+        * '--channels' to view only specific channels
+        * '--animate' create animated gifs from the sequence
+        * '--viz_dpath' specify a custom output directory
+    "
 
-# Try visualizing the training path
-smartwatch visualize "$TRAIN_FPATH"
-
+    # Try visualizing the training path
+    smartwatch visualize "$TRAIN_FPATH"
+fi
 
 echo "
 
@@ -116,25 +126,30 @@ We will also specify a work directory that will be similar to directories used
 when real watch models are trained.
 "
 # Fit 
-EXPERIMENT_NAME=OSCD_Heterogeneous_Demo_V001
+EXPERIMENT_NAME=ToyRGB_Heterogeneous_Demo_V001
+DATASET_CODE=ToyMSI
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 python -m watch.tasks.fusion fit \
     --trainer.default_root_dir="$DEFAULT_ROOT_DIR" \
     --data.train_dataset="$TRAIN_FPATH" \
     --data.vali_dataset="$VALI_FPATH" \
-    --data.channels="B02|B03|B04,B11|B12,B01" \
-    --data.time_steps=2 \
+    --data.channels="r|g|b,gauss|B11,B1|B8|B11" \
+    --data.time_steps=3 \
     --data.chip_size=96 \
     --data.batch_size=4 \
-    --data.input_space_scale=native \
+    --data.num_workers=2 \
     --model=watch.tasks.fusion.methods.HeterogeneousModel \
     --model.name="$EXPERIMENT_NAME" \
+    --model.position_encoder=watch.tasks.fusion.methods.heterogeneous.MipNerfPositionalEncoder\
+    --model.position_encoder.in_dims=3 \
+    --model.position_encoder.max_freq=3 \
+    --model.position_encoder.num_freqs=16 \
     --optimizer=torch.optim.AdamW \
     --optimizer.lr=1e-3 \
     --trainer.max_steps=20 \
+    --trainer.max_epochs=2 \
     --trainer.accelerator="gpu" \
     --trainer.devices="0,"
-    # --data.channels="r|g|b,gauss|B11,B1|B8|B11" \
 
 
 echo '
@@ -204,7 +219,6 @@ are stripped and ignored during prediction.
 
 # Predict 
 python -m watch.tasks.fusion.predict \
-    --output_space_scale="10GSD" \
     --test_dataset="$TEST_FPATH" \
     --package_fpath="$DEFAULT_ROOT_DIR"/final_package.pt  \
     --pred_dataset="$DVC_EXPT_DPATH"/predictions/pred.kwcoco.json
@@ -218,19 +232,21 @@ the "smartwatch stats" command to inspect what these new channels are.
 # Inspect the channels in the prediction file
 smartwatch stats "$DVC_EXPT_DPATH"/predictions/pred.kwcoco.json
 
-
-echo '
-Running this command you can see that images now have a channels "salient",
-which corresponds to the BAS saliency task, and "star", "eff", and "superstar"
-which correspond to the classification head (for SC), and lastly the "change"
-channel, which is from the change head.
-
-Because these are just rasters, we can visualize them using "smartwatch
-visualize"
-'
-
 # Visualize the channels in the prediction file
-smartwatch visualize "$DVC_EXPT_DPATH"/predictions/pred.kwcoco.json
+if [ -n "$DISPLAY" ]; then
+
+    echo '
+    Running this command you can see that images now have a channels "salient",
+    which corresponds to the BAS saliency task, and "star", "eff", and "superstar"
+    which correspond to the classification head (for SC), and lastly the "change"
+    channel, which is from the change head.
+
+    Because these are just rasters, we can visualize them using "smartwatch
+    visualize"
+    '
+
+    smartwatch visualize "$DVC_EXPT_DPATH"/predictions/pred.kwcoco.json
+fi
 
 
 echo '

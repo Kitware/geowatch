@@ -1,0 +1,43 @@
+model:
+  class_path: watch.tasks.fusion.methods.HeterogeneousModel
+  init_args:
+    token_width: 6
+    token_dim: 64
+    position_encoder:
+      class_path: watch.tasks.fusion.methods.heterogeneous.MipNerfPositionalEncoder
+      init_args:
+        in_dims: 3
+        max_freq: 3
+        num_freqs: 16
+    backbone:
+      class_path: watch.tasks.fusion.architectures.transformer.TransformerEncoderDecoder
+      init_args:
+        encoder_depth: 6
+        decoder_depth: 1
+        dim: 160
+        queries_dim: 96
+        logits_dim: 64
+        latent_dim_head: 256
+    spatial_scale_base: 1.0
+    temporal_scale_base: 1.0
+    global_change_weight: 0.0
+    global_class_weight: 1.0
+    global_saliency_weight: 0.5
+    class_loss: dicefocal
+    saliency_loss: focal
+    decoder: simple_conv
+trainer:
+  callbacks:
+    # - class_path: watch.utils.lightning_ext.callbacks.AutoResumer
+    # - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+    #   init_args:
+    #     monitor: val_class_f1_macro
+    #     mode: max
+    #     save_top_k: 5
+    #     auto_insert_metric_name: true
+    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+      init_args:
+        monitor: val_loss
+        mode: min
+        save_top_k: 5
+        auto_insert_metric_name: true

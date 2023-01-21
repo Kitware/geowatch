@@ -76,17 +76,25 @@ def load_model_from_package(package_path):
         imp.file_structure()['package_header']
 
     # Add extra metadata to the model
-    try:
-        fit_config_text = imp.load_text('package_header', 'fit_config.yaml')
-    except Exception:
-        pass
-    else:
-        import io
-        import yaml
-        file = io.StringIO(fit_config_text)
-        # Note: types might be wrong here
-        fit_config = yaml.safe_load(file)
-        model.fit_config = fit_config
+    # raise Exception("foo")
+    config_candidates = {
+        "config_cli_yaml": "config.yaml",
+        "fit_config": "fit_config.yaml",
+    }
+    for candidate_dest, candidate_fpath in config_candidates.items():
+        try:
+            fit_config_text = imp.load_text('package_header', candidate_fpath)
+        except Exception:
+            print(f"Did not find {candidate_dest} at {candidate_fpath}")
+            pass
+        else:
+            import io
+            import yaml
+            file = io.StringIO(fit_config_text)
+            # Note: types might be wrong here
+            fit_config = yaml.safe_load(file)
+            # model.fit_config = fit_config
+            setattr(model, candidate_dest, fit_config)
 
     model.package_path = package_path
     return model

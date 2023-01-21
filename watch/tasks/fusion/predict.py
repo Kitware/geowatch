@@ -264,7 +264,9 @@ def resolve_datamodule(config, method, datamodule_defaults):
     need_infer = ub.udict({
         k: v for k, v in parsetime_vals.items() if v == 'auto' or v == ['auto']})
     # Try and infer what data we were given at train time
-    if hasattr(method, 'fit_config'):
+    if hasattr(method, 'config_cli_yaml'):
+        traintime_params = method.config_cli_yaml["data"]
+    elif hasattr(method, 'fit_config'):
         traintime_params = method.fit_config
     elif hasattr(method, 'datamodule_hparams'):
         traintime_params = method.datamodule_hparams
@@ -419,8 +421,8 @@ def predict(cmdline=False, **kwargs):
         >>> ub.ensuredir(results_path)
         >>> package_fpath = join(test_dpath, 'my_test_package.pt')
         >>> import kwcoco
-        >>> train_dset = kwcoco.CocoDataset.demo('special:vidshapes4-multispectral', num_frames=5, gsize=(128, 128))
-        >>> test_dset = kwcoco.CocoDataset.demo('special:vidshapes2-multispectral', num_frames=5, gsize=(128, 128))
+        >>> train_dset = kwcoco.CocoDataset.demo('special:vidshapes4-multispectral', num_frames=5, image_size=(128, 128))
+        >>> test_dset = kwcoco.CocoDataset.demo('special:vidshapes2-multispectral', num_frames=5, image_size=(128, 128))
         >>> fit_kwargs = kwargs = {
         ...     'train_dataset': train_dset.fpath,
         ...     'datamodule': 'KWCocoVideoDataModule',
@@ -460,6 +462,110 @@ def predict(cmdline=False, **kwargs):
         >>>     # a change predictoion, depending on the temporal sampling.
         >>>     images = dset.images(dset.index.vidid_to_gids[1])
         >>>     pred_chans = [[a['channels'] for a in aux] for aux in images.lookup('auxiliary')]
+        >>>     assert any('change' in cs for cs in pred_chans), 'some frames should have change'
+        >>>     assert not all('change' in cs for cs in pred_chans), 'some frames should not have change'
+        >>>     # Test number of annots in each frame
+        >>>     frame_to_cathist = {
+        >>>         img['frame_index']: ub.dict_hist(annots.cnames, labels=result_dataset.object_categories())
+        >>>         for img, annots in zip(images.objs, images.annots)
+        >>>     }
+        >>>     assert frame_to_cathist[0]['change'] == 0, 'first frame should have no change polygons'
+        >>>     # This test may fail with very low probability, so warn
+        >>>     import warnings
+        >>>     if sum(d['change'] for d in frame_to_cathist.values()) == 0:
+        >>>         warnings.warn('should have some change predictions elsewhere')
+        >>> coco_img = dset.images().coco_images[1]
+        >>> # Test that new quantization does not existing APIs
+        >>> pred1 = coco_img.delay('salient', nodata_method='float').finalize()
+        >>> assert pred1.max() <= 1
+        >>> # new delayed image does not make it easy to remove dequantization
+        >>> # add test back in if we add support for that.
+        >>> # pred2 = coco_img.delay('salient').finalize(nodata_method='float', dequantize=False)
+        >>> # assert pred2.max() > 1
+
+    Example:
+        >>> # Train a demo model (in the future grab a pretrained demo model)
+        >>> from watch.tasks.fusion.fit import fit_model  # NOQA
+        >>> from watch.tasks.fusion.predict import *  # NOQA
+        >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
+        >>> disable_lightning_hardware_warnings()
+
+        >>> args = None
+        >>> cmdline = False
+        >>> devices = None
+        >>> test_dpath = ub.Path.appdir('watch/test/fusion/').ensuredir()
+        >>> results_path = ub.ensuredir((test_dpath, 'predict'))
+        >>> ub.delete(results_path)
+        >>> ub.ensuredir(results_path)
+
+        >>> import kwcoco
+        >>> train_dset = kwcoco.CocoDataset.demo('special:vidshapes8-multispectral-multisensor', num_frames=5, image_size=(128, 128))
+        >>> test_dset = kwcoco.CocoDataset.demo('special:vidshapes8-multispectral-multisensor', num_frames=5, image_size=(128, 128))
+        >>> datamodule = datamodules.kwcoco_video_data.KWCocoVideoDataModule(
+        >>>     train_dataset=train_dset, #'special:vidshapes8-multispectral-multisensor',
+        >>>     test_dataset=test_dset, #'special:vidshapes8-multispectral-multisensor',
+        >>>     chip_size=32,
+        >>>     channels="r|g|b",
+        >>>     batch_size=1, time_steps=3, num_workers=2, normalize_inputs=10)
+        >>> datamodule.setup('fit')
+        >>> datamodule.setup('test')
+        >>> dataset_stats = datamodule.torch_datasets['train'].cached_dataset_stats(num=3)
+        >>> classes = datamodule.torch_datasets['train'].classes
+        >>> print("classes = ", classes)
+
+        >>> from watch.tasks.fusion import methods
+        >>> from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+        >>> position_encoder = methods.heterogeneous.ScaleAgnostictPositionalEncoder(3)
+        >>> backbone = TransformerEncoderDecoder(
+        >>>     encoder_depth=1,
+        >>>     decoder_depth=1,
+        >>>     dim=position_encoder.output_dim + 16,
+        >>>     queries_dim=position_encoder.output_dim,
+        >>>     logits_dim=16,
+        >>>     cross_heads=1,
+        >>>     latent_heads=1,
+        >>>     cross_dim_head=1,
+        >>>     latent_dim_head=1,
+        >>> )
+        >>> model = methods.HeterogeneousModel(
+        >>>     classes=classes,
+        >>>     position_encoder=position_encoder,
+        >>>     backbone=backbone,
+        >>>     decoder="trans_conv",
+        >>>     token_width=16,
+        >>>     global_change_weight=1, global_class_weight=1, global_saliency_weight=1,
+        >>>     dataset_stats=dataset_stats, input_sensorchan=datamodule.input_sensorchan)
+        >>> print("model.heads.keys = ", model.heads.keys())
+
+        >>> # Save the self
+        >>> package_fpath = join(test_dpath, 'my_test_package.pt')
+        >>> model.save_package(package_fpath)
+        >>> # package_fpath = fit_model(**fit_kwargs)
+        >>> assert ub.Path(package_fpath).exists()
+
+        >>> # Predict via that model
+        >>> test_dset = datamodule.train_dataset
+        >>> predict_kwargs = kwargs = {
+        >>>     'package_fpath': package_fpath,
+        >>>     'pred_dataset': ub.Path(results_path) / 'pred.kwcoco.json',
+        >>>     'test_dataset': test_dset.sampler.dset.fpath,
+        >>>     'datamodule': 'KWCocoVideoDataModule',
+        >>>     'channels': 'r|g|b',
+        >>>     'batch_size': 1,
+        >>>     'num_workers': 0,
+        >>>     'devices': devices,
+        >>> }
+        >>> result_dataset = predict(**kwargs)
+
+        >>> dset = result_dataset
+        >>> dset.dataset['info'][-1]['properties']['config']['time_sampling']
+        >>> # Check that the result format looks correct
+        >>> for vidid in dset.index.videos.keys():
+        >>>     # Note: only some of the images in the pred sequence will get
+        >>>     # a change predictoion, depending on the temporal sampling.
+        >>>     images = dset.images(dset.index.vidid_to_gids[1])
+        >>>     pred_chans = [[a['channels'] for a in aux] for aux in images.lookup('auxiliary')]
+        >>>     print("pred_chans = ", pred_chans)
         >>>     assert any('change' in cs for cs in pred_chans), 'some frames should have change'
         >>>     assert not all('change' in cs for cs in pred_chans), 'some frames should not have change'
         >>>     # Test number of annots in each frame

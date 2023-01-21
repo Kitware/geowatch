@@ -52,7 +52,6 @@ from einops import rearrange, repeat
 import ubelt as ub  # NOQA
 import math
 
-
 try:
     import xdev
     profile = xdev.profile
@@ -1016,21 +1015,24 @@ class Attention(nn.Module):
         return self.to_out(out)
 
 
-class TransformerEncoderDecoder(nn.Module):
+class BackboneEncoderDecoder:
+    pass
+
+
+class TransformerEncoderDecoder(nn.Module, BackboneEncoderDecoder):
     def __init__(
         self,
-        *,
-        encoder_depth,
-        decoder_depth,
-        dim,
-        queries_dim,
-        logits_dim=None,
-        decode_cross_every=1,
-        cross_heads=1,
-        latent_heads=8,
-        cross_dim_head=64,
-        latent_dim_head=64,
-        weight_tie_layers=False,
+        encoder_depth: int,
+        decoder_depth: int,
+        dim: int,
+        queries_dim: int,
+        logits_dim: int,
+        decode_cross_every: int = 1,
+        cross_heads: int = 1,
+        latent_heads: int = 8,
+        cross_dim_head: int = 64,
+        latent_dim_head: int = 64,
+        weight_tie_layers: bool = False,
     ):
         super().__init__()
 
@@ -1097,7 +1099,7 @@ class TransformerEncoderDecoder(nn.Module):
 
         # layers
         for self_attn, self_ff in self.encoder_layers:
-            x = self_attn(x) + x
+            x = self_attn(x, mask=mask) + x
             x = self_ff(x) + x
 
         if not exists(queries):
@@ -1120,3 +1122,133 @@ class TransformerEncoderDecoder(nn.Module):
 
         # final linear out
         return self.to_logits(x)
+
+
+class MM_VITEncoderDecoder(nn.Module, BackboneEncoderDecoder):
+    """
+    mmsegmentation variant of VIT
+
+    Needs 768 features.
+
+    Notes:
+        https://github.com/open-mmlab/mmsegmentation/tree/master/configs/vit
+
+    Results:
+        # 1
+        https://github.com/open-mmlab/mmsegmentation/tree/master/configs/vit#ade20k
+        https://github.com/open-mmlab/mmsegmentation/blob/master/configs/vit/upernet_vit-b16_mln_512x512_80k_ade20k.py
+        https://github.com/open-mmlab/mmsegmentation/blob/master/configs/_base_/models/upernet_vit-b16_ln_mln.py
+
+
+    Example:
+        >>> # xdoctest: +REQUIRES(module:mmseg)
+        >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
+        >>> self = MM_VITEncoderDecoder(16, 16, 16)
+        >>> x = torch.rand(2, 3, 16)
+        >>> self.forward(x)
+
+    Ignore:
+        >>> # xdoctest: +REQUIRES(module:mmseg)
+        >>> # This tests downloading weights from the MM repo
+        >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
+        >>> self = MM_VITEncoderDecoder(16, 16, 16, pretrained="upernet_vit-b16_mln_512x512_80k_ade20k")
+        >>> x = torch.rand(2, 3, 16)
+        >>> self.forward(x)
+    """
+
+    pretrained_fpath_shortnames = {
+        "upernet_vit-b16_mln_512x512_80k_ade20k":
+            'https://download.openmmlab.com/mmsegmentation/v0.5/vit/upernet_vit-b16_mln_512x512_80k_ade20k/upernet_vit-b16_mln_512x512_80k_ade20k_20210624_130547-0403cee1.pth',
+    }
+
+    def __init__(
+        self,
+        dim,
+        queries_dim,
+        logits_dim,
+        pretrained=None,
+    ):
+        from mmseg.models.backbones.vit import VisionTransformer
+        super().__init__()
+
+        # if a short name is used, replace it with the appropriate full path
+        if pretrained in MM_VITEncoderDecoder.pretrained_fpath_shortnames.keys():
+            pretrained = MM_VITEncoderDecoder.pretrained_fpath_shortnames[pretrained]
+            pretrained = ub.grabdata(pretrained)
+
+        kwargs = dict(
+            pretrained=pretrained,
+            img_size=(512, 512),
+            patch_size=16,
+            in_channels=3,
+            embed_dims=768,
+            num_layers=12,
+            num_heads=12,
+            mlp_ratio=4,
+            out_indices=(2, 5, 8, 11),
+            qkv_bias=True,
+            drop_rate=0.0,
+            attn_drop_rate=0.0,
+            drop_path_rate=0.0,
+            with_cls_token=True,
+            norm_cfg=dict(type='LN', eps=1e-6),
+            act_cfg=dict(type='GELU'),
+            norm_eval=False,
+            interpolate_mode='bicubic')
+        vit_model = VisionTransformer(**kwargs)
+        # We only need the encoder
+        self.layers = vit_model.layers
+
+        # if a pretrained path is provided, try to use it
+        # if isinstance(pretrained, str):
+        #     self.initialize_from_pretrained(pretrained)
+
+        self.encoder_in_features = self.layers[0].ln1.weight.shape[0]
+        self.encoder_out_features = self.layers[-1].ffn.layers[1].out_features
+
+        self.input_projector = nn.Linear(dim, self.encoder_in_features)
+        self.query_projector = nn.Linear(queries_dim, self.encoder_out_features)
+        self.output_projector = nn.Linear(self.encoder_out_features, logits_dim)
+
+        self.decoder = nn.TransformerDecoder(
+            nn.TransformerDecoderLayer(d_model=self.encoder_out_features, nhead=8, dim_feedforward=512, batch_first=True),
+            num_layers=1,
+        )
+
+    def initialize_from_pretrained(self, fpath):
+        # FIXME: Having this import here breaks torch.package
+        # initializer = coerce_initializer(fpath)
+        # info = initializer.forward(self, verbose=0)  # NOQA
+        pass
+
+    def forward(self, x, mask=None, queries=None):
+        # orig_shape = x.shape
+        # x = x.view(x.shape[0], -1, x.shape[1])
+        x = self.input_projector(x)
+        for i, layer in enumerate(self.layers):
+            x = layer(x)
+            # if i == len(self.layers) - 1:
+            #     if self.final_norm:
+            #         x = self.norm1(x)
+            # if i in self.out_indices:
+            #     if self.with_cls_token:
+            #         # Remove class token and reshape token for decoder head
+            #         out = x[:, 1:]
+            #     else:
+            #         out = x
+            #     B, _, C = out.shape
+            #     out = out.reshape(B, hw_shape[0], hw_shape[1],
+            #                       C).permute(0, 3, 1, 2).contiguous()
+            #     if self.output_cls_token:
+            #         out = [out, x[:, 0]]
+            #     outs.append(out)
+        # x = x.view(*orig_shape[0], x.shape[-1])
+
+        if queries is None:
+            return x
+
+        queries = self.query_projector(queries)
+        x = self.decoder(queries, x)
+        x = self.output_projector(x)
+
+        return x

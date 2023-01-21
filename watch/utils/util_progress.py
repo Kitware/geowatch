@@ -293,7 +293,7 @@ class ProgressManager(BaseProgIterManager):
         >>> # A fairly complex example
         >>> from watch.utils.util_progress import ProgressManager
         >>> import time
-        >>> delay = 0.005
+        >>> delay = 0.00005
         >>> N_inner = 1000
         >>> N_outer = 11
         >>> self = pman = ProgressManager(backend='rich')

@@ -208,6 +208,22 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
             'normalize_peritem': fit_config.get('normalize_peritem'),
         }
 
+    param_stats = {
+        name: {
+            "size": param.size(),
+            "min": param.min().item(),
+            "max": param.max().item(),
+            "mean": param.mean().item(),
+            "std": param.std().item(),
+        }
+        for name, param in module.named_parameters()
+    }
+    param_stats_summary = {
+        "min": min([summary["min"] for summary in param_stats.values()]),
+        "max": min([summary["max"] for summary in param_stats.values()]),
+        "mean": min([summary["mean"] for summary in param_stats.values()]),
+    }
+
     row = {
         'name': package_fpath.stem,
         'task': 'TODO',
@@ -216,6 +232,7 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
         'train_dataset': str(train_dataset),
         'model_stats': model_stats,
         'prenorm_stats': prenorm_stats,
+        'param_stats': param_stats_summary,
     }
 
     if hasattr(module, 'input_sensorchan'):

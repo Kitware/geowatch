@@ -1,6 +1,7 @@
 import ubelt as ub
 import os
 import scriptconfig as scfg
+import importlib
 
 
 class RepackageConfig(scfg.DataConfig):
@@ -77,8 +78,9 @@ def repackage(checkpoint_fpath, force=False, dry=False):
         if force or not package_fpath.exists():
             if not dry:
                 train_dpath_hint = context['train_dpath_hint']
+                model_config_fpath = context.get("config_fpath", None)
                 repackage_single_checkpoint(checkpoint_fpath, package_fpath,
-                                            train_dpath_hint)
+                                            train_dpath_hint, model_config_fpath)
         package_fpaths.append(os.fspath(package_fpath))
     print('package_fpaths = {}'.format(ub.repr2(package_fpaths, nl=1)))
     from watch.utils import util_yaml
@@ -99,8 +101,10 @@ def inspect_checkpoint_context(checkpoint_fpath):
     # Can we precompute the package name of this checkpoint?
     train_dpath_hint = None
     if checkpoint_fpath.name.endswith('.ckpt'):
-        if checkpoint_fpath.parent.stem == 'checkpoints':
-            train_dpath_hint = checkpoint_fpath.parent.parent
+        # .resolve() is necessary if we are running within the checkpoint dir
+        path_ = ub.Path(checkpoint_fpath).resolve()
+        if path_.parent.stem == 'checkpoints':
+            train_dpath_hint = path_.parent.parent
 
     fit_config_fpath = None
     hparams_fpath = None
@@ -110,15 +114,21 @@ def inspect_checkpoint_context(checkpoint_fpath):
         candidates = list(train_dpath_hint.glob('fit_config.yaml'))
         if len(candidates) == 1:
             fit_config_fpath = candidates[0]
+
         candidates = list(train_dpath_hint.glob('hparams.yaml'))
         if len(candidates) == 1:
             hparams_fpath = candidates[0]
+
+        candidates = list(train_dpath_hint.glob('config.yaml'))
+        if len(candidates) == 1:
+            config_fpath = candidates[0]
 
     context['package_name'] = package_name
     context['train_dpath_hint'] = train_dpath_hint
     context['checkpoint_fpath'] = checkpoint_fpath
     context['fit_config_fpath'] = fit_config_fpath
     context['hparams_fpath'] = hparams_fpath
+    context['config_fpath'] = config_fpath
     return context
 
 
@@ -143,8 +153,34 @@ def suggest_package_name_for_checkpoint(context):
     return package_name
 
 
+def parse_and_init_config(config):
+    assert isinstance(config, dict)
+
+    if ("class_path" in config) and ("init_args" in config):
+        class_path = config["class_path"]
+        init_args = config["init_args"]
+
+        init_args = parse_and_init_config(init_args)
+
+        # https://stackoverflow.com/a/8719100
+        package_name, method_name = class_path.rsplit(".", 1)
+        package = importlib.import_module(package_name)
+        method = getattr(package, method_name)
+        module = method(**init_args)
+        return module
+
+    return {
+        key: (
+            parse_and_init_config(value)
+            if isinstance(value, dict)
+            else value
+        )
+        for key, value in config.items()
+    }
+
+
 def repackage_single_checkpoint(checkpoint_fpath, package_fpath,
-                                train_dpath_hint=None):
+                                train_dpath_hint=None, model_config_fpath=None):
     """
     Primary logic for repackaging a checkpoint into a torch package.
 
@@ -219,16 +255,25 @@ def repackage_single_checkpoint(checkpoint_fpath, package_fpath,
     # this. But in the future we could use context from the lightning output
     # directory to figure this out more generally.
 
-    from watch.tasks.fusion import methods
-    method = methods.MultimodalTransformer(**hparams)
+    if model_config_fpath is None:
+        from watch.tasks.fusion import methods
+        model = methods.MultimodalTransformer(**hparams)
+    else:
+        data = load_meta(model_config_fpath)
+        if "model" in data:
+            model_config = data["model"]
+
+        model_config["init_args"] = hparams | model_config["init_args"]
+        model = parse_and_init_config(model_config)
+
     state_dict = checkpoint['state_dict']
-    method.load_state_dict(state_dict)
+    model.load_state_dict(state_dict)
 
     if train_dpath_hint is not None:
-        method.train_dpath_hint = train_dpath_hint
+        model.train_dpath_hint = train_dpath_hint
 
     # We assume the module has its own save package method implemented.
-    method.save_package(os.fspath(package_fpath))
+    model.save_package(os.fspath(package_fpath))
     print(f'wrote: package_fpath={package_fpath}')
 
 
