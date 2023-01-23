@@ -75,7 +75,9 @@ class KWCocoVideoDataModuleConfig(scfg.Config):
 
         'sqlview': scfg.Value(False, help=ub.paragraph(
             '''
-            If True, use SQL views when reading COCO datasets.
+            If False, reads the COCO dataset as a json file. Otherwise it can
+            be sqlite or postgresql to cache json file in an SQL database for
+            faster responce times and lower memory footprint.
             ''')),
         # Mixin the dataset config
     }) | KWCocoVideoDatasetConfig.default
