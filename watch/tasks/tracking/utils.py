@@ -328,9 +328,7 @@ def gpd_compute_scores(gdf,
                     lambda p: score_poly(p, heatmap, threshold=thrs))
 
             cols = [(k, thr) for thr in thrs]
-            import xdev
-            with xdev.embed_on_exception_context():
-                grp[cols] = scores.to_list()
+            grp[cols] = scores.to_list()
         return grp
 
     ks = {k: v for k, v in ks.items() if v}
@@ -823,7 +821,10 @@ def build_heatmap(dset,
                 but only {channels_have=} existed.
                 '''))
 
-    # w, h = coco_img.delay(space=space).dsize
+    w, h = coco_img.delay(space=space).dsize
+    scale_trk_from_vid = coco_img._scalefactor_for_resolution(
+        space='video', resolution=resolution)
+    w, h = (np.array((w, h)) * scale_trk_from_vid).astype(int)
 
     common = channels_have
 
@@ -845,7 +846,6 @@ def build_heatmap(dset,
     delayed = coco_img.delay(
         channels=common, resolution=resolution, space=space,
         nodata_method='float')
-    w, h = delayed.dsize
     key_img_probs = delayed.finalize()
 
     # Not sure about that sum axis=-1 here
