@@ -207,7 +207,6 @@ def foldin_resolved_info(agg):
         'resources': resources,
         'fit_params': fit_params,
         'properties': properties,
-        'disk_resolved_params': disk_resolved_params,
         'meta': meta,
     }
 
@@ -1225,7 +1224,7 @@ class Aggregator(ub.NiceRepr):
         """
         Search for groups that have the same parameters over multiple regions.
         """
-        table = pd.concat([agg.index, agg.metrics, agg.effective_params], axis=1)
+        table = pd.concat([agg.index, agg.metrics, agg.resolved_params], axis=1)
 
         # Macro aggregation over regions.
         macro_compatible = ub.ddict(list)
@@ -1299,72 +1298,84 @@ class Aggregator(ub.NiceRepr):
             'bas_poly_eval.metrics.macro_f1_siteprep',
             'bas_poly_eval.metrics.macro_f1_active',
             'bas_poly_eval.metrics.sc_micro_f1',
-        ]
-        agg_id_cols = [
-            'region_id',
-        ] + agg.test_dset_cols
+        ] + [c for c in agg.metrics.columns if c.endswith((
+            'mAP', 'APUC', 'mAPUC', 'mAUC', 'AP', 'AUC'))]
 
-        if len(comparable_groups) > 0:
-            group = comparable_groups[0]
-            map_cols = [c for c in group.columns if 'metrics' in c and c.endswith(('AP', 'AUC', 'APUC'))]
-            mean_cols.extend(map_cols)
+        sum_cols = agg.metrics.columns.intersection(sum_cols)
+        mean_cols = agg.metrics.columns.intersection(mean_cols)
+        other_metric_cols = agg.metrics.columns.difference(sum_cols).difference(mean_cols)
+        assert len(other_metric_cols) == 0
 
-        def macro_aggregate(group):
-            other_cols = group.columns.difference(mean_cols).difference(sum_cols).difference(agg_id_cols)
-            group[other_cols]
+        aggregator = {c: 'mean' for c in mean_cols}
+        aggregator.update({c: 'sum' for c in sum_cols})
 
-            for c in mean_cols:
-                pass
+        # if len(comparable_groups) > 0:
+        #     group = comparable_groups[0]
+        #     map_cols = [c for c in group.columns if 'metrics' in c and c.endswith(('AP', 'AUC', 'APUC'))]
+        #     mean_cols.extend(map_cols)
 
-            aggid_df = group[group.columns.intersection(agg_id_cols)]
-            sum_df = group[group.columns.intersection(sum_cols)]
-            mean_df = group[group.columns.intersection(mean_cols)]
-            other_df = group[other_cols]
-
-            if len(aggid_df) == 1:
-                aggid_row = aggid_df.iloc[0]
+        def aggregate_param_cols(df, hash_cols=None, allow_nonuniform=False):
+            """
+            Aggregates parameter columns. Specified hash_cols should be
+            dataset-specific columns to be hashed. All other columns should
+            be effectively the same, otherwise we will warn.
+            """
+            agg_row = df.iloc[0]
+            if len(df) == 1:
+                return agg_row
             else:
-                aggid_row = pd.Series({
-                    k: hash_regions(v)
-                    for k, v in aggid_df.T.iterrows()
-                })
-            aggid_row['macro_size'] = len(aggid_df)
+                if hash_cols:
+                    df_comparable = df.drop(hash_cols, axis=1)
+                    df_hashable = df[hash_cols]
+                    hashed = {c: hash_regions(v) for c, v in df_hashable.T.iterrows()}
+                else:
+                    df_comparable = df
+                    hashed = {}
+                is_safe_cols = {
+                    k: ub.allsame(vs, eq=nan_eq)
+                    for k, vs in df_comparable.T.iterrows()}
+                nonuniform_cols = {k: v for k, v in is_safe_cols.items() if not v}
+                if allow_nonuniform:
+                    df = df.drop(nonuniform_cols, axis=1)
+                else:
+                    if nonuniform_cols:
+                        raise AssertionError(f'Values not identical: {nonuniform_cols}')
+                if hashed:
+                    agg_row = agg_row.copy()
+                    for c, v in hashed.items():
+                        agg_row[c] = v
+            return agg_row
 
-            is_safe_cols = {
-                k: ub.allsame(vs, eq=nan_eq)
-                for k, vs in other_df.T.iterrows()}
-            warn_cols = {k: v for k, v in is_safe_cols.items() if not v}
-            assert not warn_cols
+        def macro_aggregate(agg, group):
+            group_metrics = agg.metrics.loc[group.index]
+            group_params = agg.params.loc[group.index]
+            group_index = agg.index.loc[group.index]
+            group_specified_params = agg.results['specified_params'].loc[group.index]
+            group_resolved_params = agg.resolved_info['resolved_params'].loc[group.index]
+            group_resources = agg.resolved_info['resources'].loc[group.index]
 
-            sum_row = sum_df.sum(axis=0)
-            mean_row = mean_df.mean(axis=0, numeric_only=False)
-            other_row = other_df.iloc[0]
-
-            macro_row = pd.concat([aggid_row, mean_row, sum_row, other_row], axis=0)
-            return macro_row
+            agg_parts = {}
+            agg_parts['metrics'] = group_metrics.aggregate(aggregator)
+            agg_parts['resources']  = group_resources.sum(numeric_only=True)
+            agg_parts['index']  = aggregate_param_cols(group_index, ['region_id'])
+            agg_parts['params']  = aggregate_param_cols(group_params, agg.test_dset_cols, allow_nonuniform=True)
+            agg_parts['resolved_params']  = aggregate_param_cols(group_resolved_params, agg.test_dset_cols)
+            agg_parts['specified_params']  = aggregate_param_cols(group_specified_params, allow_nonuniform=True)
+            return agg_parts
 
         # Macro average comparable groups
-        macro_rows = []
-        macro_specified = []
+        macro_parts = ub.ddict(list)
         for group in comparable_groups:
-            macro_row = macro_aggregate(group)
-            macro_rows.append(macro_row)
-            # Add in the new specified params flags
-            specifed_row = agg.results['specified_params'].loc[group.index[0]]
-            macro_specified.append(specifed_row)
-
-        macro_df = pd.DataFrame(macro_rows)
-        macro_specified_params = pd.DataFrame(macro_specified).reset_index(drop=True)
+            agg_parts = macro_aggregate(agg, group)
+            for k, v in agg_parts.items():
+                macro_parts[k].append(v)
 
         # main_metric = 'bas_poly_eval.metrics.bas_faa_f1'
         # main_metric = 'bas_poly_eval.metrics.bas_tp'
         # macro_df = macro_df.sort_values(main_metric, ascending=False)
         macro_results = {
-            'index': macro_df[agg.index.columns],
-            'effective_params': macro_df[agg.effective_params.columns],
-            'specified_params': macro_specified_params,
-            'params': macro_df[agg.effective_params.columns],  # fixme, use real
-            'metrics': macro_df[agg.metrics.columns],
+            k: pd.DataFrame(vs).reset_index(drop=True)
+            for k, vs in macro_parts.items()
         }
         agg.region_to_tables.pop(macro_key, None)
         agg.macro_key_to_regions.pop(macro_key, None)
