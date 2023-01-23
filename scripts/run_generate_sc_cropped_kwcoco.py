@@ -143,9 +143,12 @@ def run_generate_sc_cropped_kwcoco(input_path,
                     '--target_gsd', '4',  # TODO: Expose as cli parameter
                     '--context_factor', '1.5',  # TODO: Expose as cli parameter
                     '--workers', '1' if force_one_job_for_cropping else str(jobs),  # noqa: 501
-                    '--aux_workers', str(include_channels.count('|') + 1),
+                    '--aux_workers', '2',  # str(include_channels.count('|') + 1),  # noqa: 501
                     '--rpc_align_method', 'affine_warp',  # Maybe needs to change to "orthorectified"  # noqa
                     '--force_min_gsd', '8',
+                    '--verbose', '4',
+                    '--image_timeout', '20minutes',
+                    '--asset_timeout', '10minutes',
                     ], check=True)
 
     # 5. "Clean" dataset

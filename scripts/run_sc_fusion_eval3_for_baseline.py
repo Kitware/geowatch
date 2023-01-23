@@ -288,6 +288,7 @@ def run_sc_fusion_for_baseline(
                     pred_dataset=sc_fusion_kwcoco_path,
                     num_workers=('0' if force_zero_num_workers else str(jobs)),  # noqa: 501
                     batch_size=1,
+                    write_workers=0,
                     **predict_config)
         except TimeSampleError:
             print("* Error with time sampling during SC Predict "

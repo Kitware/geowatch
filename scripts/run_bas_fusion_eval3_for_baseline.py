@@ -304,7 +304,9 @@ def run_bas_fusion_for_baseline(
 
     bas_tracking_config = {
         "thresh": bas_thresh,
-        "moving_window_size": None}
+        "moving_window_size": None,
+        "polygon_simplify_tolerance": 1,
+        "max_area_behavior": 'ignore'}
 
     tracked_bas_kwcoco_path = '_tracked'.join(
         os.path.splitext(bas_fusion_kwcoco_path))
