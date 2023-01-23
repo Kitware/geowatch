@@ -60,7 +60,7 @@ def main(cmdline=True, **kwargs):
         >>> kwargs = {
         >>>     'root_dpath': expt_dvc_dpath / '_testpipe',
         >>>     'pipeline': 'bas',
-        >>>     'io_workers': 0,
+        >>>     'io_workers': 10,
         >>>     'freeze_cache': 1,
         >>>     # 'pipeline': 'joint_bas_sc_nocrop',
         >>>     # 'root_dpath': expt_dvc_dpath / '_testsc',
@@ -118,6 +118,7 @@ def automated_analysis(eval_type_to_aggregator, config):
 
     agg0 = eval_type_to_aggregator.get('bas_poly_eval', None)
     if agg0 is not None:
+        ...
 
         subagg2 = generic_analysis(agg0, macro_groups, selector)
 
@@ -148,7 +149,25 @@ def automated_analysis(eval_type_to_aggregator, config):
     plot_examples()  # TODO
 
 
-def foldin_resolved_params(agg):
+def check_baseline(eval_type_to_aggregator):
+    from watch.utils.util_param_grid import DotDictDataFrame
+    models_of_interest = [
+        'package_epoch0_step41',
+    ]
+    agg0 = eval_type_to_aggregator.get('bas_poly_eval', None)
+    agg1 = agg0.filterto(models=models_of_interest)
+    _ = agg1.report_best()
+
+    DotDictDataFrame(agg1.effective_params)
+    flags = DotDictDataFrame(agg1.effective_params)['thresh'] == 0.1
+    agg2 = agg1.compress(flags.values)
+
+    agg3 = agg2.filterto(param_hashids=['peercprsgafm'])
+    agg3.build_macro_tables()
+    agg3.report_best()
+
+
+def foldin_resolved_info(agg):
     # make these just parse nicer, but for now munge the data.
     from watch.utils.util_param_grid import DotDictDataFrame
     from watch.utils.util_param_grid import pandas_add_prefix
@@ -167,20 +186,67 @@ def foldin_resolved_params(agg):
     pred_params = pandas_shorten_columns(pred_params)
 
     node_name = agg.type
-    resolved_params = pandas_add_prefix(pred_params, node_name + '.params.')
+
+    if True:
+        # HACK: This doesn't work generally, we need to be more careful
+        # about how we load resolved configurations.
+        if 'bas' in agg.type:
+            disk_resolved_params = pandas_add_prefix(pred_params, node_name + '.params.bas_pxl.')
+        else:
+            disk_resolved_params = pandas_add_prefix(pred_params, node_name + '.params.sc_pxl.')
+
+    else:
+        disk_resolved_params = pandas_add_prefix(pred_params, node_name + '.params.')
+
     properties = pandas_add_prefix(properties, node_name + '.properties.')
     fit_params = pandas_add_prefix(fit_params, node_name + '.fit.')
     resources = pandas_add_prefix(resources, node_name + '.resources.')
     meta = pandas_add_prefix(meta, node_name + '.meta.')
 
-    resolved_params = {
+    resolved_info = {
         'resources': resources,
         'fit_params': fit_params,
         'properties': properties,
-        'resolved_params': resolved_params,
+        'disk_resolved_params': disk_resolved_params,
         'meta': meta,
     }
-    return resolved_params
+
+    if True:
+        is_specified = agg.results['specified_params']
+        effective_params = agg.effective_params
+        d1 = effective_params
+        d2 = disk_resolved_params
+        # Handle autos and things by placing in defaults
+        c1 = d1.columns
+        c2 = d2.columns
+        always_defaulted_cols = c2.difference(c1)
+        common_cols = c1.intersection(c2)
+
+        path_colnames = agg.model_cols + agg.test_dset_cols
+        for colname in path_colnames:
+            colvals = d2[colname]
+            condensed, mapper = pandas_condense_paths(colvals)
+            d2[colname] = condensed
+
+        resolved_is_specified = is_specified.copy()
+        resolved_is_specified.loc[:, always_defaulted_cols] = 0
+        resolved_params = d1.copy()
+        resolved_params[always_defaulted_cols] = disk_resolved_params[always_defaulted_cols]
+
+        a = d1[common_cols]
+        b = d2[common_cols]
+        has_diff = ~pandas_nan_eq(a, b)
+
+        for colname, colflags in has_diff.T.iterrows():
+            resolved_params.loc[colflags, colname] = d2.loc[colflags, common_cols]
+
+        resolved_info['resolved_params'] = resolved_info
+        # ...
+        # print(f'colname={colname}')
+        # print(a[colname][colflags])
+        # print(b[colname][colflags])
+
+    return resolved_info
 
 
 def custom_analysis(eval_type_to_aggregator, config):
@@ -946,6 +1012,9 @@ class Aggregator(ub.NiceRepr):
         agg.mappings = mappings
         agg.effective_params = effective_params
 
+        agg.disk_params = foldin_resolved_info(agg)
+        agg.resolved_params = agg.disk_params['resolved_params']
+
         agg.effective_table = pd.concat([agg.metrics, agg.index, agg.effective_params], axis=1)
 
         agg.macro_key_to_regions = {}
@@ -1116,9 +1185,7 @@ class Aggregator(ub.NiceRepr):
         test_dset_cols = agg.test_dset_cols
 
         mappings : Dict[str, Dict[Any, str]] = {}
-
         path_colnames = model_cols + test_dset_cols
-
         for colname in path_colnames:
             colvals = params[colname]
             condensed, mapper = pandas_condense_paths(colvals)
@@ -1549,6 +1616,15 @@ def nan_eq(a, b):
         return True
     else:
         return a == b
+
+
+def pandas_nan_eq(a, b):
+    nan_flags1 = pd.isna(a)
+    nan_flags2 = pd.isna(b)
+    eq_flags = a == b
+    both_nan = nan_flags1 & nan_flags2
+    flags = eq_flags | both_nan
+    return flags
 
 
 def pandas_shorten_columns(summary_table):
