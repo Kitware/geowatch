@@ -328,7 +328,9 @@ def gpd_compute_scores(gdf,
                     lambda p: score_poly(p, heatmap, threshold=thrs))
 
             cols = [(k, thr) for thr in thrs]
-            grp[cols] = scores.to_list()
+            import xdev
+            with xdev.embed_on_exception_context():
+                grp[cols] = scores.to_list()
         return grp
 
     ks = {k: v for k, v in ks.items() if v}
@@ -706,7 +708,13 @@ def build_heatmaps(sub_dset: kwcoco.CocoDataset,
 
     vid = sub_dset.index.videos[video_id]
     vid_shape = (vid['height'], vid['width'])
-    prev_heatmap_dct = collections.defaultdict(lambda: np.zeros(vid_shape))
+    first_coco_img = sub_dset.coco_image(
+        sub_dset.images(video_id=video_id).peek()['id'])
+    scale_trk_from_vid = first_coco_img._scalefactor_for_resolution(
+        space='video', resolution=resolution)
+    trk_shape = (np.array(vid_shape) * scale_trk_from_vid).astype(int)
+
+    prev_heatmap_dct = collections.defaultdict(lambda: np.zeros(trk_shape))
 
     for gid in gids:
         for group, key in key_groups.items():
@@ -724,7 +732,7 @@ def build_heatmaps(sub_dset: kwcoco.CocoDataset,
             elif skipped == 'interpolate':
                 heatmaps_dct[group].append(prev_heatmap_dct[group])
             elif skipped == 'zeros':
-                heatmaps_dct[group].append(np.zeros(vid_shape))
+                heatmaps_dct[group].append(np.zeros(trk_shape))
             else:
                 raise ValueError(skipped)
 
@@ -735,7 +743,7 @@ def build_heatmaps(sub_dset: kwcoco.CocoDataset,
                 elif skipped == 'interpolate':
                     heatmaps_dct[k].append(prev_heatmap_dct[k])
                 elif skipped == 'zeros':
-                    heatmaps_dct[k].append(np.zeros(vid_shape))
+                    heatmaps_dct[k].append(np.zeros(trk_shape))
                 else:
                     raise ValueError(skipped)
 
@@ -815,7 +823,7 @@ def build_heatmap(dset,
                 but only {channels_have=} existed.
                 '''))
 
-    w, h = coco_img.delay(space=space).dsize
+    # w, h = coco_img.delay(space=space).dsize
 
     common = channels_have
 
@@ -837,6 +845,7 @@ def build_heatmap(dset,
     delayed = coco_img.delay(
         channels=common, resolution=resolution, space=space,
         nodata_method='float')
+    w, h = delayed.dsize
     key_img_probs = delayed.finalize()
 
     # Not sure about that sum axis=-1 here
