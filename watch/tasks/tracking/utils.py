@@ -328,16 +328,27 @@ def gpd_compute_scores(
                 h = build_heatmaps(sub_dset, [gid], keys, missing='fill')
                 heatmaps2 = np.stack([h[k][0] for k in keys], axis=0)
                 # TODO why does this fail?
+                # TODO deprecate build_heatmaps, interpolation behavior
+                # unneeded and confusing
                 assert np.allclose(heatmaps, heatmaps2)
-            scores = grp['poly'].map(
-                lambda p: score_poly(p, heatmaps, threshold=thrs))
-
-            scores = scores.explode().explode()
-            scores.index = pd.MultiIndex.from_product((keys, thrs, grp.index))
-            scores_wide = scores.reset_index([0, 1]).pivot(
-                columns=['level_0', 'level_1'], values=scores.name)
-            score_cols = scores_wide.columns.values
-            grp[score_cols] = scores_wide.values
+            if 0:
+                scores = grp['poly'].map(
+                    lambda p: score_poly(p, heatmaps, threshold=thrs))
+                scores = scores.explode().explode()
+                scores.index = pd.MultiIndex.from_product((keys, thrs, grp.index))
+                scores_wide = scores.reset_index([0, 1]).pivot(
+                    columns=['level_0', 'level_1'], values=scores.name)
+                score_cols = scores_wide.columns.values
+                grp[score_cols] = scores_wide.values
+            else:
+                # import xdev; xdev.embed()
+                score_cols = list(itertools.product(keys, thrs))
+                scores = grp['poly'].apply(
+                    lambda p: pd.Series(dict(zip(
+                        score_cols,
+                        ub.flatten(score_poly(p, heatmaps, threshold=thrs))))
+                    ))
+                grp[score_cols] = scores
         return grp
 
     ks = {k: v for k, v in ks.items() if v}
@@ -505,7 +516,7 @@ def score_poly(poly, probs, threshold=-1, use_rasterio=True):
     msk = (np.isfinite(rel_probs) * rel_mask).astype(bool)
     for t in threshold:
         if not msk.any():
-            result.append(np.nan)
+            result.append(np.nan * np.ones(rel_probs.shape[:-2]))
         elif t == -1:
             mskd = np.ma.array(rel_probs, mask=~msk)
             result.append(mskd.mean(axis=(-2, -1)))

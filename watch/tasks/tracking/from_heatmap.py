@@ -639,7 +639,8 @@ def time_aggregated_polys(
     if DEBUG:
         # check scores
         # main's output
-        ods = kwcoco.CocoDataset('/data/matthew.bernstein/kit_pre_eval_8_20230131/KR_R001/bas_fusion_kwcoco_tracked4.json')
+        # ods = kwcoco.CocoDataset('/data/matthew.bernstein/kit_pre_eval_8_20230131/KR_R001/bas_fusion_kwcoco_tracked4.json')
+        ods = kwcoco.CocoDataset('/data/matthew.bernstein/kit_pre_eval_8_20230131/KR_R001/bas_fusion_kwcoco_tracked4nt.json')
         # magic numbers from sipections, these tracks should be the same
         eq_ix = np.arange(446)
         oss = ods.annots().detections.data['scores'][eq_ix]
