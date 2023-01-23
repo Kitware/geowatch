@@ -293,6 +293,7 @@ def run_stac_to_cropped_kwcoco(input_path,
                     '--include_channels', include_channels,  # noqa
                     '--geo_preprop', 'auto',
                     '--keep', 'none',
+                    '--convexify_regions', 'True',
                     '--target_gsd', str(target_gsd),  # noqa
                     '--context_factor', '1',
                     '--workers', '1' if force_one_job_for_cropping else str(jobs),  # noqa: 501

@@ -140,6 +140,7 @@ def run_generate_sc_cropped_kwcoco(input_path,
                     '--site_summary', 'True',
                     '--geo_preprop', 'auto',
                     '--keep', 'none',
+                    '--convexify_regions', 'True',
                     '--target_gsd', '4',  # TODO: Expose as cli parameter
                     '--context_factor', '1.5',  # TODO: Expose as cli parameter
                     '--workers', '1' if force_one_job_for_cropping else str(jobs),  # noqa: 501
