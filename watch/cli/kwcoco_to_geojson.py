@@ -887,7 +887,10 @@ def main(args=None, **kwargs):
         >>>     '--out_site_summaries_fpath',  str(bas_fpath),
         >>>     '--out_kwcoco', str(bas_coco_fpath),
         >>>     '--track_fn', 'saliency_heatmaps',
-        >>>     '--track-kwargs', json.dumps({'thresh': 1e-9, 'min_area_sqkm': None, 'max_area_sqkm': None, 'polygon_simplify_tolerance': 1}),
+        >>>     '--track_kwargs', json.dumps({
+        >>>        'thresh': 1e-9, 'min_area_sqkm': None,
+        >>>        'max_area_sqkm': None,
+        >>>        'polygon_simplify_tolerance': 1}),
         >>> ]
         >>> main(args)
         >>> # Run SC on the same dset
@@ -899,7 +902,9 @@ def main(args=None, **kwargs):
         >>>     '--out_kwcoco', str(sc_coco_fpath),
         >>>     '--track_fn', 'class_heatmaps',
         >>>     '--site_summary', str(bas_fpath),
-        >>>     '--track-kwargs', json.dumps({'thresh': 1e-9, 'min_area_sqkm': None, 'max_area_sqkm': None, 'polygon_simplify_tolerance': 1, 'key': 'salient'}),
+        >>>     '--track_kwargs', json.dumps(
+        >>>         {'thresh': 1e-9, 'min_area_sqkm': None, 'max_area_sqkm': None,
+        >>>          'polygon_simplify_tolerance': 1, 'key': 'salient'}),
         >>> ]
         >>> main(args)
         >>> # Check expected results

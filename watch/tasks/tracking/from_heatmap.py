@@ -323,7 +323,6 @@ def time_aggregated_polys(
     Ignore:
         # For debugging
         import xdev
-        import sys, ubelt
         from watch.tasks.tracking.from_heatmap import *  # NOQA
         from watch.tasks.tracking.from_heatmap import _validate_keys
         globals().update(xdev.get_func_kwargs(time_aggregated_polys))
@@ -332,16 +331,22 @@ def time_aggregated_polys(
         >>> # test interpolation
         >>> from watch.tasks.tracking.from_heatmap import time_aggregated_polys
         >>> from watch.demo import demo_kwcoco_with_heatmaps
-        >>> sub_dset = demo_kwcoco_with_heatmaps(
-        >>>                 num_frames=5, image_size=(480, 640))
+        >>> import watch
+        >>> #sub_dset = demo_kwcoco_with_heatmaps(
+        >>> #                num_frames=5, image_size=(480, 640))
+        >>> sub_dset = watch.coerce_kwcoco(
+        >>>     'watch-msi', num_videos=1, num_frames=5, image_size=(480, 640),
+        >>>     geodata=True, heatmap=True)
+        >>> thresh = 0.01
+        >>> min_area_sqkm = None
         >>> orig_track = time_aggregated_polys(
-        >>>                 sub_dset, thresh=0.15, time_thresh=None)
+        >>>                 sub_dset, thresh, min_area_sqkm=min_area_sqkm, time_thresh=None)
+        >>> # Test robustness to frames that are missing heatmaps
         >>> skip_gids = [1,3]
         >>> for gid in skip_gids:
-        >>>      # remove salient channel
         >>>      sub_dset.imgs[gid]['auxiliary'].pop()
         >>> inter_track = time_aggregated_polys(
-        >>>                 sub_dset, thresh=0.15, time_thresh=None)
+        >>>                 sub_dset, thresh, min_area_sqkm=min_area_sqkm, time_thresh=None)
         >>> assert inter_track.iloc[0][('fg', None)] == 0
         >>> assert inter_track.iloc[1][('fg', None)] > 0
     '''
@@ -356,13 +361,39 @@ def time_aggregated_polys(
     coco_videos = sub_dset.videos()
     assert len(coco_videos) == 1, 'we expect EXACTLY one video here'
     video = coco_videos.objs[0]
-    vidname = video.get('name', None)
+    video_name = video.get('name', None)
+    video_id = video['id']
 
-    for gid in sub_dset.imgs:
+    video_gids = list(sub_dset.images(video_id=video_id))
+    for gid in video_gids:
         coco_img = sub_dset.coco_image(gid)
         chan_codes = coco_img.channels.normalize().fuse().as_set()
         flag = bool(_all_keys & chan_codes)
         has_requested_chans_list.append(flag)
+
+    scale_vid_from_trk = None
+    video_gsd = None
+    if len(video_gids):
+        # Determine resolution information for videospace (what we will return
+        # in) and tracking space (what we will build heatmaps in)
+        first_gid = video_gids[0]
+        first_coco_img = sub_dset.coco_image(first_gid)
+        try:
+            vidspace_resolution = first_coco_img.resolution(space='video')
+            video_gsd = np.mean(vidspace_resolution['mag'])
+            if resolution is not None:
+                # Get the transform from tracking space back to video space
+                scale_trk_from_vid = first_coco_img._scalefactor_for_resolution(
+                    space='video', resolution=resolution)
+                scale_vid_from_trk = 1 / np.array(scale_trk_from_vid)
+        except Exception:
+            ...
+
+    if video_gsd is None:
+        default_gsd = 30
+        video_gsd = default_gsd
+        print(f'warning: video {video["name"]} in dset {sub_dset.tag} '
+              f'has no listed resolution; assuming {default_gsd}')
 
     if not any(has_requested_chans_list):
         raise KeyError(f'no imgs in dset {sub_dset.tag} '
@@ -372,7 +403,7 @@ def time_aggregated_polys(
         n_have = sum(has_requested_chans_list)
         n_missing = (n_total - n_have)
         print(f'warning: {n_missing} / {n_total} imgs in dset {sub_dset.tag} '
-              f'with video {vidname} have no keys {key} or {bg_key}. '
+              f'with video {video_name} have no keys {key} or {bg_key}. '
               'Interpolating...')
 
     if norm_ord in {'inf', None}:
@@ -399,13 +430,6 @@ def time_aggregated_polys(
 
     # polys here are vidpolys.
     # size and response filters should operate on each vidpoly separately.
-
-    video_gsd = video.get('target_gsd', None)
-    if video_gsd is None:
-        default_gsd = 30
-        video_gsd = default_gsd
-        print(f'warning: video {video["name"]} in dset {sub_dset.tag} '
-              f'has no listed GSD; assuming {default_gsd}')
 
     if max_area_sqkm:
         max_area_px = max_area_sqkm * 1e6 / (video_gsd**2)
@@ -461,7 +485,8 @@ def time_aggregated_polys(
     ks = {'fg': key, 'bg': bg_key}
 
     # 95% of runtime
-    _TRACKS = gpd_compute_scores(_TRACKS, sub_dset, thrs, ks, USE_DASK=False)
+    _TRACKS = gpd_compute_scores(_TRACKS, sub_dset, thrs, ks, USE_DASK=False,
+                                 resolution=resolution)
     # 63% of runtime
     # _TRACKS = gpd_compute_scores(_TRACKS, sub_dset, thrs, ks, USE_DASK=True)
     # dask could unsort
@@ -484,10 +509,14 @@ def time_aggregated_polys(
         print('filter based on time overlap: remaining tracks '
               f'{gpd_len(_TRACKS)} / {n_orig}')
 
-    # FIXME: the tracks should be transformed back into video or image
-    # resolution at the end of this.
+    # The tracker assumes the polygons will be output in video space.
+    if scale_vid_from_trk is not None and len(_TRACKS):
+        # If a tracking resolution was specified undo the extra scale factor
+        _TRACKS['poly'] = _TRACKS['poly'].scale(*scale_vid_from_trk, origin=(0, 0))
 
     # try to ignore this error
+    # TODO: do we need to convert to MultiPolygon here? Or can that be handled
+    # by consumers of this method?
     _TRACKS['poly'] = _TRACKS['poly'].map(kwimage.MultiPolygon.from_shapely)
     return _TRACKS
 

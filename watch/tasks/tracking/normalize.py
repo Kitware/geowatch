@@ -594,10 +594,10 @@ def normalize_sensors(coco_dset):
                 img['sensor_coarse'] = sensor_dict[sensor]
         except KeyError:
             sensor = img.get('sensor_coarse', None)
-            name = img.get('name', img['file_name'])
+            # name = img.get('name', img['file_name'])
             import warnings
             warnings.warn(
-                f'{coco_dset.tag} image {name} has unknown sensor {sensor}')
+                f'image has unknown sensor {sensor} in tag={coco_dset.tag}')
 
     return coco_dset
 

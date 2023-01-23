@@ -306,7 +306,8 @@ def gpd_compute_scores(gdf,
                        sub_dset,
                        thrs: Iterable,
                        ks: Dict,
-                       USE_DASK=False):
+                       USE_DASK=False,
+                       resolution=None):
 
     def compute_scores(grp, thrs=[], ks={}):
         # TODO handle keys as channelcodes
@@ -321,7 +322,8 @@ def gpd_compute_scores(gdf,
             if gid is None:
                 scores = pd.Series(np.array([0] * len(thrs)))
             else:
-                heatmap = build_heatmap(sub_dset, gid, k, missing='fill')
+                heatmap = build_heatmap(sub_dset, gid, k, missing='fill',
+                                        resolution=resolution)
                 scores = grp['poly'].map(
                     lambda p: score_poly(p, heatmap, threshold=thrs))
 
