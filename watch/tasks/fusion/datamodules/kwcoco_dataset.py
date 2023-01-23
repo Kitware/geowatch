@@ -2557,6 +2557,10 @@ def biased_1d_weights(upweight_time, num_frames):
 sample_video_spacetime_targets = spacetime_grid_builder.sample_video_spacetime_targets
 
 
+class FailedSample(Exception):
+    ...
+
+
 def apply_robust_normalizer(normalizer, imdata, imdata_valid, mask, dtype, copy=True):
     """
         data = [self.dataset[idx] for idx in possibly_batched_index]
