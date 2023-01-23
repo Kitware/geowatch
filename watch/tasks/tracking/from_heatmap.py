@@ -50,6 +50,23 @@ def _norm(heatmaps, norm_ord):
 # give all these the same signature so they can be swapped out
 
 
+def binary(heatmaps, norm_ord, morph_kernel, thresh):
+    probs = _norm(heatmaps, norm_ord)
+
+    hard_probs = kwimage.morphology(probs > thresh, 'dilate', morph_kernel)
+
+    return hard_probs.astype("float")
+
+
+def rescaled_binary(heatmaps, norm_ord, morph_kernel, thresh, upper_quantile=0.999):
+    probs = _norm(heatmaps, norm_ord)
+    probs = kwarray.normalize(probs, min_val=0, max_val=np.quantile(probs, upper_quantile))
+
+    hard_probs = kwimage.morphology(probs > thresh, 'dilate', morph_kernel)
+
+    return hard_probs.astype("float")
+
+
 def probs(heatmaps, norm_ord, morph_kernel, thresh):
     probs = _norm(heatmaps, norm_ord)
 
@@ -118,6 +135,8 @@ AGG_FN_REGISTRY = {
     'mean_normalized': mean_normalized,
     'rescaled_probs': rescaled_probs,
     'probs': probs,
+    'rescaled_binary': rescaled_binary,
+    'binary': binary,
 }
 
 #
