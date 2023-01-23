@@ -311,6 +311,10 @@ class ResponsePolygonFilter:
 def _add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
     key, bg_key = _validate_keys(key, bg_key)
 
+    if tracks.empty:
+        print('no tracks to add!')
+        return sub_dset
+
     @ub.memoize
     def _warp_img_from_vid(gid):
         # Memoize the conversion to a matrix
@@ -1187,15 +1191,6 @@ class TimeAggregatedBAS(NewTrackFunction):
         global VIZ_DPATH
         VIZ_DPATH = self.viz_out_dir
         # HACK
-        # TypeError: Object of type Path is not JSON serializable
-        # it should be!
-        self.viz_out_dir = None
-
-        if VIZ_DPATH is not None:
-            from dataclasses import asdict
-            import json
-            with open(VIZ_DPATH / 'track_fn.json', 'w') as f:
-                json.dump(asdict(self), f, indent=2)
 
         aggkw = ub.compatible(self.__dict__, time_aggregated_polys)
         tracks = time_aggregated_polys(sub_dset, **aggkw)
@@ -1237,6 +1232,7 @@ class TimeAggregatedSC(NewTrackFunction):
     max_area_behavior: str = 'drop'
     polygon_simplify_tolerance: Union[None, float] = None
     resolution: Optional[str] = None
+    viz_out_dir: Optional[ub.Path] = None
 
     inner_window_size : Optional[str] = None
     inner_agg_fn : Optional[str] = None
@@ -1252,6 +1248,10 @@ class TimeAggregatedSC(NewTrackFunction):
             'polys': generated polys will be the boundaries
             'none': generated polys will ignore the boundaries
         '''
+        global VIZ_DPATH
+        VIZ_DPATH = self.viz_out_dir
+        # HACK
+
         if self.boundaries_as == 'polys':
             tracks = pop_tracks(
                 sub_dset,

@@ -291,9 +291,12 @@ def gpd_sort_by_gid(gdf, sorted_gids):
     # assert gdf['gid'].map(dct).groupby(
     # lambda x: x).is_monotonic_increasing.all()
 
-    return gdf.groupby('track_idx', group_keys=False).apply(
-        lambda x: x.sort_values('gid_order')).reset_index(drop=True).drop(
-            columns=['gid_order'])
+    if gdf.empty:
+        return gdf
+    else:
+        return gdf.groupby('track_idx', group_keys=False).apply(
+            lambda x: x.sort_values('gid_order')).reset_index(drop=True).drop(
+                columns=['gid_order'])
 
 
 def gpd_len(gdf):

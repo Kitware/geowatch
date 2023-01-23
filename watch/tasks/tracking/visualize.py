@@ -430,11 +430,12 @@ def viz_track_scores(dset, out_fpath, gt_dset=None):
     # detailed viz
     annots = dset.annots()
     try:
+        assert len(annots) > 0
         scores = annots.lookup('scores')
         tid = annots.lookup('track_id')
         dates = pd.to_datetime(annots.images.lookup('date_captured')).date
         sens = annots.images.lookup('sensor_coarse')
-    except KeyError as e:
+    except (KeyError, AssertionError) as e:
         print('cannot viz tracks ', e)
         return
 
