@@ -372,26 +372,31 @@ def time_aggregated_polys(
         has_requested_chans_list.append(flag)
 
     scale_vid_from_trk = None
-    video_gsd = None
+    tracking_gsd = None
     if len(video_gids):
         # Determine resolution information for videospace (what we will return
         # in) and tracking space (what we will build heatmaps in)
         first_gid = video_gids[0]
         first_coco_img = sub_dset.coco_image(first_gid)
         try:
-            vidspace_resolution = first_coco_img.resolution(space='video')
-            video_gsd = np.mean(vidspace_resolution['mag'])
-            if resolution is not None:
-                # Get the transform from tracking space back to video space
-                scale_trk_from_vid = first_coco_img._scalefactor_for_resolution(
-                    space='video', resolution=resolution)
-                scale_vid_from_trk = 1 / np.array(scale_trk_from_vid)
+            vidspace_resolution = first_coco_img.resolution(space='video')['mag']
+
+            scale_trk_from_vid = first_coco_img._scalefactor_for_resolution(
+                space='video', resolution=resolution)
+
+            # Determine the pixel size of tracking space
+            tracking_resolution = vidspace_resolution * scale_trk_from_vid
+            tracking_gsd = np.mean(tracking_resolution)
+
+            # Get the transform from tracking space back to video space
+            scale_vid_from_trk = 1 / np.array(scale_trk_from_vid)
+
         except Exception:
             ...
 
-    if video_gsd is None:
+    if tracking_gsd is None:
         default_gsd = 30
-        video_gsd = default_gsd
+        tracking_gsd = default_gsd
         print(f'warning: video {video["name"]} in dset {sub_dset.tag} '
               f'has no listed resolution; assuming {default_gsd}')
 
@@ -413,6 +418,7 @@ def time_aggregated_polys(
     # --- main logic ---
     #
 
+    # polys are in "tracking-space", i.e. video-space up to a scale factor.
     gids_polys = _gids_polys(sub_dset,
                              key=key,
                              agg_fn=agg_fn,
@@ -428,11 +434,9 @@ def time_aggregated_polys(
 
     print('time aggregation: number of polygons: ', len(gids_polys))
 
-    # polys here are vidpolys.
     # size and response filters should operate on each vidpoly separately.
-
     if max_area_sqkm:
-        max_area_px = max_area_sqkm * 1e6 / (video_gsd**2)
+        max_area_px = max_area_sqkm * 1e6 / (tracking_gsd**2)
         n_orig = len(gids_polys)
         if max_area_behavior == 'drop':
             gids_polys = [(t, p) for t, p in gids_polys
@@ -444,7 +448,7 @@ def time_aggregated_polys(
             raise NotImplementedError
 
     if min_area_sqkm:
-        min_area_px = min_area_sqkm * 1e6 / (video_gsd**2)
+        min_area_px = min_area_sqkm * 1e6 / (tracking_gsd**2)
         n_orig = len(gids_polys)
         gids_polys = [(t, p) for t, p in gids_polys
                       if p.to_shapely().area > min_area_px]
