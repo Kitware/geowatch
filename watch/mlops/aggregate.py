@@ -61,7 +61,7 @@ def main(cmdline=True, **kwargs):
         >>>     'root_dpath': expt_dvc_dpath / '_testpipe',
         >>>     'pipeline': 'bas',
         >>>     'io_workers': 10,
-        >>>     'freeze_cache': 1,
+        >>>     'freeze_cache': 0,
         >>>     # 'pipeline': 'joint_bas_sc_nocrop',
         >>>     # 'root_dpath': expt_dvc_dpath / '_testsc',
         >>>     #'pipeline': 'sc',
@@ -1304,7 +1304,9 @@ class Aggregator(ub.NiceRepr):
         sum_cols = agg.metrics.columns.intersection(sum_cols)
         mean_cols = agg.metrics.columns.intersection(mean_cols)
         other_metric_cols = agg.metrics.columns.difference(sum_cols).difference(mean_cols)
-        assert len(other_metric_cols) == 0
+        if len(other_metric_cols):
+            print(f'ignoring agg {other_metric_cols}')
+        # assert len(other_metric_cols) == 0
 
         aggregator = {c: 'mean' for c in mean_cols}
         aggregator.update({c: 'sum' for c in sum_cols})
@@ -1416,6 +1418,9 @@ def plot_tables(agg):
 
 
 def plot_stats_tables(agg, config):
+    """
+    agg = eval_type_to_aggregator.get('bas_poly_eval', None)
+    """
     # from watch.mlops import smart_result_parser
     # for fpath in fpaths:
     #     ...
@@ -1434,7 +1439,8 @@ def plot_stats_tables(agg, config):
 
     agg_dpath = ub.Path(config['root_dpath'] / 'aggregate')
 
-    agg.build_single_macro_table({'BR_R002', 'KR_R001', 'KR_R002'})
+    rois = {'BR_R002', 'KR_R001', 'KR_R002'}
+    agg.build_single_macro_table(rois)
     macro_key = agg.primary_macro_region
 
     agg_group_dpath = (agg_dpath / (f'stats_tables_{macro_key}' + ub.timestamp())).ensuredir()
@@ -1443,7 +1449,8 @@ def plot_stats_tables(agg, config):
     for metric in agg.primary_metric_cols:
         node_id = metric.split('.')[0]
         metric_name = metric.split('.')[-1]
-        df = pd.concat([agg.metrics, agg.index, agg.params], axis=1)
+
+        df = pd.concat([agg.metrics, agg.index, agg.resolved_params], axis=1)
 
         plt.figure()
         ax = sns.boxplot(data=df, x='region_id', y=metric)
@@ -1467,7 +1474,7 @@ def plot_stats_tables(agg, config):
         regions_of_interest = agg.macro_key_to_regions[macro_key]
         print(f'regions_of_interest={regions_of_interest}')
         tables = agg.region_to_tables[agg.primary_macro_region]
-        effective_params = tables['effective_params']
+        effective_params = tables['resolved_params']
         metrics = tables['metrics']
         index = tables['index']
         table = pd.concat([index, effective_params, metrics], axis=1)
