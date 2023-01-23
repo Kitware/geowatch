@@ -240,7 +240,7 @@ def foldin_resolved_info(agg):
         for colname, colflags in has_diff.T.iterrows():
             resolved_params.loc[colflags, colname] = d2.loc[colflags, common_cols]
 
-        resolved_info['resolved_params'] = resolved_info
+        resolved_info['resolved_params'] = resolved_params
         # ...
         # print(f'colname={colname}')
         # print(a[colname][colflags])
@@ -1012,8 +1012,8 @@ class Aggregator(ub.NiceRepr):
         agg.mappings = mappings
         agg.effective_params = effective_params
 
-        agg.disk_params = foldin_resolved_info(agg)
-        agg.resolved_params = agg.disk_params['resolved_params']
+        agg.resolved_info = foldin_resolved_info(agg)
+        agg.resolved_params = agg.resolved_info['resolved_params']
 
         agg.effective_table = pd.concat([agg.metrics, agg.index, agg.effective_params], axis=1)
 
@@ -1025,6 +1025,7 @@ class Aggregator(ub.NiceRepr):
                 'params': agg.params.loc[idx_group.index],
                 'index': agg.index.loc[idx_group.index],
                 'effective_params': agg.effective_params.loc[idx_group.index],
+                'resolved_params': agg.resolved_params.loc[idx_group.index],
             }
         agg.macro_compatible = agg.find_macro_comparable()
         # agg.build_macro_tables()
