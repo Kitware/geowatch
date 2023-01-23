@@ -666,7 +666,7 @@ def build_heatmaps(sub_dset: kwcoco.CocoDataset,
     Example:
         >>> from watch.tasks.tracking.utils import *  # NOQA
         >>> import watch
-        >>> dset = watch.coerce_kwcoco('watch-msi', heatmap=True)
+        >>> dset = watch.coerce_kwcoco('watch-msi', heatmap=True, geodata=True)
         >>> keys = 'salient|notsalient|distri'
         >>> videos = dset.videos()
         >>> video_id = videos._ids[0]
@@ -750,8 +750,8 @@ def build_heatmap(dset,
                   key,
                   return_chan_probs=False,
                   space='video',
-                  resolution=None,
-                  missing='fill'):
+                  missing='fill',
+                  resolution=None):
     """
     Find the total heatmap of key within gid
 
