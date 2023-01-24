@@ -70,6 +70,7 @@ def main(cmdline=True, **kwargs):
         eval_type_to_results = build_tables(config)
         eval_type_to_aggregator = build_aggregators(eval_type_to_results)
         agg = ub.peek(eval_type_to_aggregator.values())
+        agg = eval_type_to_aggregator.get('bas_poly_eval', None)
 
         >>> ## Execute
         >>> main(cmdline=cmdline, **kwargs)
@@ -146,6 +147,11 @@ def automated_analysis(eval_type_to_aggregator, config):
 
 
 def foldin_resolved_info(agg):
+    """
+    Uses the params after they have been resolved in the results files.  This
+    is still pretty dirty and needs to be refined to fit into mlops in a nicer
+    way.
+    """
     # make these just parse nicer, but for now munge the data.
     from watch.utils.util_param_grid import DotDictDataFrame
     from watch.utils.util_param_grid import pandas_add_prefix
@@ -221,11 +227,6 @@ def foldin_resolved_info(agg):
         resolved_params = resolved_params.applymap(lambda x: str(x) if isinstance(x, list) else x)
 
         resolved_info['resolved_params'] = resolved_params
-        # ...
-        # print(f'colname={colname}')
-        # print(a[colname][colflags])
-        # print(b[colname][colflags])
-
     return resolved_info
 
 
@@ -634,8 +635,6 @@ class Aggregator(ub.NiceRepr):
         agg.test_dset_cols = util_pandas.pandas_suffix_columns(
             agg.params, _testdset_suffixes)
 
-        agg.table = pd.concat([agg.metrics, agg.index, agg.params], axis=1)
-
         effective_params, mappings, hashid_to_params = agg.build_effective_params()
         agg.hashid_to_params = ub.udict(hashid_to_params)
         agg.mappings = mappings
@@ -657,6 +656,7 @@ class Aggregator(ub.NiceRepr):
                 'resolved_params': agg.resolved_params.loc[idx_group.index],
             }
         agg.macro_compatible = agg.find_macro_comparable()
+        agg.table = pd.concat([agg.metrics, agg.index, agg.params], axis=1)
         # agg.build_macro_tables()
 
     def macro_analysis(agg):
@@ -902,28 +902,25 @@ class Aggregator(ub.NiceRepr):
                     comparable_groups.append(group[flags])
         return comparable_groups
 
-    def build_single_macro_table(agg, rois):
-        # Given a specific group of regions,
+    def _coerce_rois(agg, rois=None):
         if rois is None:
             rois = 'max'
-
         if isinstance(rois, str):
             if rois == 'max':
                 regions_of_interest = ub.argmax(agg.macro_compatible, key=len)
         else:
             regions_of_interest = rois
+        return regions_of_interest
+
+    def build_single_macro_table(agg, rois):
+        # Given a specific group of regions,
+
+        regions_of_interest = agg._coerce_rois(rois)
 
         comparable_groups = agg.gather_macro_compatable_groups(regions_of_interest)
 
         macro_key = hash_regions(regions_of_interest)
 
-        sum_cols = [
-            'bas_poly_eval.metrics.bas_tp',
-            'bas_poly_eval.metrics.bas_fp',
-            'bas_poly_eval.metrics.bas_fn',
-            'bas_poly_eval.metrics.bas_ntrue',
-            'bas_poly_eval.metrics.bas_npred',
-        ]
         sum_cols = [c for c in agg.metrics.columns if c.endswith((
             '_tp', '_fp', '_fn', '_ntrue', '_npred'))]
         mean_cols = [c for c in agg.metrics.columns if c.endswith((
@@ -939,11 +936,6 @@ class Aggregator(ub.NiceRepr):
 
         aggregator = {c: 'mean' for c in mean_cols}
         aggregator.update({c: 'sum' for c in sum_cols})
-
-        # if len(comparable_groups) > 0:
-        #     group = comparable_groups[0]
-        #     map_cols = [c for c in group.columns if 'metrics' in c and c.endswith(('AP', 'AUC', 'APUC'))]
-        #     mean_cols.extend(map_cols)
 
         def aggregate_param_cols(df, hash_cols=None, allow_nonuniform=False):
             """
@@ -978,20 +970,49 @@ class Aggregator(ub.NiceRepr):
             return agg_row
 
         def macro_aggregate(agg, group):
-            group_metrics = agg.metrics.loc[group.index]
-            group_params = agg.params.loc[group.index]
             group_index = agg.index.loc[group.index]
-            group_specified_params = agg.results['specified_params'].loc[group.index]
-            group_resolved_params = agg.resolved_info['resolved_params'].loc[group.index]
-            group_resources = agg.resolved_info['resources'].loc[group.index]
+            if (group_index.value_counts('region_id') > 1).any():
+                # Check if there is more than one run per-region per-param and
+                # average them to keep the stats balanced.
+                subgroups = group_index.groupby('region_id')
+                subagg_parts = ub.ddict(list)
+                for _, subgroup in subgroups:
+                    subgroup_parts = {}
+                    subgroup_parts['index'] = agg.results['index'].loc[subgroup.index]
+                    subgroup_parts['params'] = agg.results['params'].loc[subgroup.index]
+                    subgroup_parts['specified_params'] = agg.results['specified_params'].loc[subgroup.index]
+                    subgroup_parts['resolved_params'] = agg.resolved_info['resolved_params'].loc[subgroup.index]
+                    subgroup_parts['metrics'] = agg.results['metrics'].loc[subgroup.index]
+                    subgroup_parts['resources'] = agg.resolved_info['resources'].loc[subgroup.index]
+
+                    subagg_part = {}
+                    subagg_part['index'] = aggregate_param_cols(subgroup_parts['index'])
+                    subagg_part['params'] = aggregate_param_cols(subgroup_parts['params'], agg.test_dset_cols, allow_nonuniform=True)
+                    subagg_part['resolved_params'] = aggregate_param_cols(subgroup_parts['resolved_params'], agg.test_dset_cols)
+                    subagg_part['specified_params'] = aggregate_param_cols(subgroup_parts['specified_params'], allow_nonuniform=True)
+                    # Always do mean within-regions
+                    subagg_part['metrics'] = subgroup_parts['metrics'].aggregate('mean')
+                    subagg_part['resources']  = subgroup_parts['resources'].mean(numeric_only=True)
+                    for k, v in subagg_part.items():
+                        subagg_parts[k].append(v)
+                group_parts = {k: pd.DataFrame(v).reset_index(drop=True) for k, v in subagg_parts.items()}
+            else:
+                # Each region has only one result, can use it as is.
+                group_parts = {}
+                group_parts['metrics'] = agg.metrics.loc[group.index]
+                group_parts['index'] = agg.index.loc[group.index]
+                group_parts['params'] = agg.params.loc[group.index]
+                group_parts['specified_params'] = agg.results['specified_params'].loc[group.index]
+                group_parts['resolved_params'] = agg.resolved_info['resolved_params'].loc[group.index]
+                group_parts['resources'] = agg.resolved_info['resources'].loc[group.index]
 
             agg_parts = {}
-            agg_parts['metrics'] = group_metrics.aggregate(aggregator)
-            agg_parts['resources']  = group_resources.sum(numeric_only=True)
-            agg_parts['index']  = aggregate_param_cols(group_index, ['region_id'])
-            agg_parts['params']  = aggregate_param_cols(group_params, agg.test_dset_cols, allow_nonuniform=True)
-            agg_parts['resolved_params']  = aggregate_param_cols(group_resolved_params, agg.test_dset_cols)
-            agg_parts['specified_params']  = aggregate_param_cols(group_specified_params, allow_nonuniform=True)
+            agg_parts['metrics'] = group_parts['metrics'].aggregate(aggregator)
+            agg_parts['resources']  = group_parts['resources'].sum(numeric_only=True)
+            agg_parts['index']  = aggregate_param_cols(group_parts['index'], ['region_id'])
+            agg_parts['params']  = aggregate_param_cols(group_parts['params'], agg.test_dset_cols, allow_nonuniform=True)
+            agg_parts['resolved_params']  = aggregate_param_cols(group_parts['resolved_params'], agg.test_dset_cols)
+            agg_parts['specified_params']  = aggregate_param_cols(group_parts['specified_params'], allow_nonuniform=True)
             return agg_parts
 
         # Macro average comparable groups

@@ -1,9 +1,60 @@
+# flake8: noqa
 import math
 import pandas as pd
 import ubelt as ub
 from watch.mlops.aggregate import hash_param
 from watch.mlops.aggregate import fix_duplicate_param_hashids
 from watch.utils import util_pandas
+
+
+def _setup():
+    from watch.mlops.aggregate import AggregateEvluationConfig
+    from watch.mlops.aggregate import build_tables
+    from watch.mlops.aggregate import build_aggregators
+    import watch
+    expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+    cmdline = 0
+    kwargs = {
+        'root_dpath': expt_dvc_dpath / '_testpipe',
+        'pipeline': 'bas',
+        'io_workers': 10,
+        'freeze_cache': 0,
+        # 'pipeline': 'joint_bas_sc_nocrop',
+        # 'root_dpath': expt_dvc_dpath / '_testsc',
+        #'pipeline': 'sc',
+    }
+    config = AggregateEvluationConfig.legacy(cmdline=cmdline, data=kwargs)
+    eval_type_to_results = build_tables(config)
+    eval_type_to_aggregator = build_aggregators(eval_type_to_results)
+    agg = ub.peek(eval_type_to_aggregator.values())
+    agg = eval_type_to_aggregator.get('bas_poly_eval', None)
+    print(f'agg={agg}')
+    rois = {'KR_R001', 'KR_R002', 'BR_R002'}
+    print(f'rois={rois}')
+
+
+def build_all_param_plots(agg):
+    from watch.utils import util_kwplot
+    import numpy as np
+    import kwplot
+    sns = kwplot.autosns()
+    plt = kwplot.autoplt()
+    # metric_cols = [c for c in df.columns if 'metrics.' in c]
+    kwplot.close_figures()
+    x = 'bas_poly_eval.metrics.bas_tpr'
+    y = 'bas_poly_eval.metrics.bas_ppv'
+
+    kwplot.figure(fnum=1, doclf=True)
+
+    table = pd.concat([agg.index, agg.metrics, agg.resolved_params,
+                       agg.resolved_info['resources']], axis=1)
+
+    agg.region_to_tables[agg.primary_macro_region].keys()
+
+    rois = {'KR_R001', 'KR_R002', 'BR_R002'}
+    macro_tables = agg.build_macro_tables(rois)
+
+    sns.scatterplot(data=table, x=x, y=y, hue='region_id')
 
 
 def check_baseline(eval_type_to_aggregator):
