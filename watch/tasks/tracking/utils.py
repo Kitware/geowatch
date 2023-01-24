@@ -708,9 +708,13 @@ def build_heatmaps(sub_dset: kwcoco.CocoDataset,
     vid_shape = (vid['height'], vid['width'])
     first_coco_img = sub_dset.coco_image(
         sub_dset.images(video_id=video_id).peek()['id'])
-    scale_trk_from_vid = first_coco_img._scalefactor_for_resolution(
-        space='video', resolution=resolution)
-    trk_shape = (np.array(vid_shape) * scale_trk_from_vid).astype(int)
+    # should this be special-cased in _scalefactor_for_resolution?
+    if resolution is not None:
+        scale_trk_from_vid = first_coco_img._scalefactor_for_resolution(
+            space='video', resolution=resolution)
+        trk_shape = (np.array(vid_shape) * scale_trk_from_vid).astype(int)
+    else:
+        trk_shape = vid_shape
 
     prev_heatmap_dct = collections.defaultdict(lambda: np.zeros(trk_shape))
 
@@ -777,7 +781,7 @@ def build_heatmap(dset,
         >>> from watch.tasks.tracking.utils import *  # NOQA
         >>> import watch
         >>> dset = watch.coerce_kwcoco(
-        >>>     data='watch-msi', heatmap=True)
+        >>>     data='watch-msi', heatmap=True, geodata=True, dates=True)
         >>> gid = dset.images()[0]
         >>> key = 'salient'
         >>> space = 'video'
@@ -822,9 +826,10 @@ def build_heatmap(dset,
                 '''))
 
     w, h = coco_img.delay(space=space).dsize
-    scale_trk_from_vid = coco_img._scalefactor_for_resolution(
-        space='video', resolution=resolution)
-    w, h = (np.array((w, h)) * scale_trk_from_vid).astype(int)
+    if resolution is not None:
+        scale_trk_from_vid = coco_img._scalefactor_for_resolution(
+            space='video', resolution=resolution)
+        w, h = (np.array((w, h)) * scale_trk_from_vid).astype(int)
 
     common = channels_have
 
