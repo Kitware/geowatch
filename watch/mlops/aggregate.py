@@ -239,6 +239,9 @@ def foldin_resolved_info(agg):
         for colname, colflags in has_diff.T.iterrows():
             resolved_params.loc[colflags, colname] = d2.loc[colflags, common_cols]
 
+        # Fix issues with chipdims
+        resolved_params = resolved_params.applymap(lambda x: str(x) if isinstance(x, list) else x)
+
         resolved_info['resolved_params'] = resolved_params
         # ...
         # print(f'colname={colname}')
@@ -442,6 +445,70 @@ def make_summary_analysis(agg1, config):
             model_name = group_agg.effective_params[group_agg.model_cols[0]].loc[id]
             im = kwimage.draw_header_text(im, param_hashid + ' - ' + model_name + '\n' + text)
             kwimage.imwrite(agg_group_dpath / f'confusion_{region_id}_{param_hashid}.jpg', im)
+
+
+def comparse_single_param(agg0, config):
+
+    agg0 = fix_duplicate_param_hashids(agg0)
+    agg0.resolved_params = agg0.resolved_params.applymap(lambda x: str(x) if isinstance(x, list) else x)
+    resolved_params = agg0.resolved_params.fillna('None')
+    parameters_of_interest = [
+        'bas_poly_eval.params.bas_pxl.output_space_scale',
+        'bas_poly_eval.params.bas_pxl.input_space_scale',
+        'bas_poly_eval.params.bas_pxl.window_space_scale',
+    ]
+    other_params = resolved_params.columns.difference(parameters_of_interest).tolist()
+    candidate_groups = resolved_params.groupby(other_params, dropna=False)
+
+    comparable_groups = []
+    for value, group in candidate_groups:
+        if len(group) > 1:
+            has_variation = ~group[parameters_of_interest].apply(ub.allsame, axis=0)
+            if has_variation.any():
+                comparable_groups.append(group)
+            else:
+                print('unsure why this can happen')
+
+    comparable_idxs = sorted(ub.flatten([group.index for group in comparable_groups]))
+    comparable_agg1 = agg0.filterto(index=comparable_idxs)
+    agg = comparable_agg1
+
+    selector = {'KR_R001', 'KR_R002', 'BR_R002'}
+    # Find the best result for the macro region
+    rois = selector  # NOQA
+    macro_results = comparable_agg1.build_single_macro_table(selector)
+    top_macro_id = macro_results['metrics'].sort_values(comparable_agg1.primary_metric_cols, ascending=False).index[0]
+
+    print(macro_results['index'].loc[top_macro_id])
+
+    # Find the corresponding A / B for each region.
+    # Get the param hash each region should have
+    top_params = macro_results['resolved_params'].loc[top_macro_id]
+    # top_value = top_params[parameter_of_interest]
+    top_flags = macro_results['specified_params'].loc[top_macro_id] > 0
+    top_flags[comparable_agg1.test_dset_cols] = False
+    comparable_agg1.hashid_to_params[macro_results['index'].loc[top_macro_id]['param_hashid']]
+
+    # comparable_agg1
+    # params_of_interest = []
+    # for value in comparable_agg1.resolved_params[parameter_of_interest].unique():
+    #     params_row = top_params.copy()
+    #     flags = top_flags.copy()
+    #     if isinstance(value, float) and math.isnan(value):
+    #         flags[parameter_of_interest] = False | flags[parameter_of_interest]
+    #     else:
+    #         flags[parameter_of_interest] = True | flags[parameter_of_interest]
+    #     params_row[parameter_of_interest] = value
+    #     params = params_row[flags].to_dict()
+    #     param_hashid = hash_param(params)
+    #     if not (param_hashid in comparable_agg1.index['param_hashid'].values):
+    #         flags[parameter_of_interest] = not flags[parameter_of_interest]
+    #         params_row[parameter_of_interest] = value
+    #         params = params_row[flags].to_dict()
+    #         param_hashid = hash_param(params)
+    #         if not (param_hashid in comparable_agg1.index['param_hashid'].values):
+    #             raise AssertionError
+    #     params_of_interest.append(param_hashid)
 
 
 def compare_simplify_tolerence(agg0, config):
@@ -1038,19 +1105,20 @@ class Aggregator(ub.NiceRepr):
 
         regions_of_interest = agg.macro_key_to_regions[agg.primary_macro_region]
         tables = agg.region_to_tables[agg.primary_macro_region]
-        effective_params = tables['effective_params']
+        resolved_params = tables['resolved_params']
         metrics = tables['metrics']
         index = tables['index']
-        table = pd.concat([index, effective_params, metrics], axis=1)
+        table = pd.concat([index, resolved_params, metrics], axis=1)
         table = table.fillna('None')
 
         main_metric = agg.primary_metric_cols[0]
+        table = table.applymap(lambda x: str(x) if isinstance(x, list) else x)
 
         results = []
         for idx, row in enumerate(table.to_dict('records')):
             row = ub.udict(row)
             row_metrics = row & set(metrics.keys())
-            row_params = row & set(effective_params.keys())
+            row_params = row & set(resolved_params.keys())
             result = result_analysis.Result(str(idx), row_params, row_metrics)
             results.append(result)
 
@@ -1061,17 +1129,23 @@ class Aggregator(ub.NiceRepr):
         # self = analysis
         analysis.analysis()
         analysis.report()
+        if 0:
+            model_cols = agg.model_cols
+            import kwplot
+            sns = kwplot.autosns()
+            sns = kwplot.autosns()
+            plt = kwplot.autoplt()
+            kwplot.figure()
+            x = 'bas_poly_eval.params.bas_poly.thresh'
+            sns.lineplot(data=table, x=x, y=main_metric, hue=model_cols[0], style=model_cols[0])
+            ax = plt.gca()
+            ax.set_title(f'BAS Macro Average over {regions_of_interest}')
 
-        model_cols = agg.model_cols
-        import kwplot
-        sns = kwplot.autosns()
-        sns = kwplot.autosns()
-        plt = kwplot.autoplt()
-        kwplot.figure()
-        x = 'bas_poly_eval.params.bas_poly.thresh'
-        sns.lineplot(data=table, x=x, y=main_metric, hue=model_cols[0], style=model_cols[0])
-        ax = plt.gca()
-        ax.set_title(f'BAS Macro Average over {regions_of_interest}')
+            x = 'bas_poly_eval.params.bas_pxl.output_space_scale'
+            sns.boxplot(data=table, x=x, y=main_metric)
+            ax = plt.gca()
+            ax.set_title(f'BAS Macro Average over {regions_of_interest}')
+        return analysis, table
 
     def analyze(agg):
         from watch.utils import result_analysis
@@ -1260,6 +1334,8 @@ class Aggregator(ub.NiceRepr):
                 groups = macro_compatible[key]
                 for group in groups:
                     flags = kwarray.isect_flags(group['region_id'], avail)
+                    # if len(group[flags]) > 3:
+                    #     raise Exception
                     comparable_groups.append(group[flags])
         return comparable_groups
 
@@ -1474,18 +1550,19 @@ def plot_stats_tables(agg, config):
         regions_of_interest = agg.macro_key_to_regions[macro_key]
         print(f'regions_of_interest={regions_of_interest}')
         tables = agg.region_to_tables[agg.primary_macro_region]
-        effective_params = tables['resolved_params']
-        metrics = tables['metrics']
-        index = tables['index']
-        table = pd.concat([index, effective_params, metrics], axis=1)
+        table = pd.concat(list((ub.udict(tables) & {
+            'index', 'resolved_params', 'metrics'}).values()), axis=1)
         table = table.fillna('None')
+
+        # Fix
+        table['bas_poly_eval.params.bas_pxl.chip_dims'] = table['bas_poly_eval.params.bas_pxl.chip_dims'].apply(lambda x: str(x) if isinstance(x, list) else x)
 
         from watch.utils import result_analysis
         results = []
         for idx, row in enumerate(table.to_dict('records')):
             row = ub.udict(row)
-            row_metrics = row & set(metrics.keys())
-            row_params = row & set(effective_params.keys())
+            row_metrics = row & set(tables['metrics'].keys())
+            row_params = row & set(tables['resolved_params'].keys())
             result = result_analysis.Result(str(idx), row_params, row_metrics)
             results.append(result)
         analysis = result_analysis.ResultAnalysis(
