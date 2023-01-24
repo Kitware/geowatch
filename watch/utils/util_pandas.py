@@ -53,14 +53,17 @@ def pandas_nan_eq(a, b):
     return flags
 
 
-def pandas_shorten_columns(summary_table):
+def pandas_shorten_columns(summary_table, return_mapping=True):
     import ubelt as ub
     # fixme
     old_cols = summary_table.columns
     new_cols = shortest_unique_suffixes(old_cols, sep='.')
     mapping = ub.dzip(old_cols, new_cols)
     summary_table = summary_table.rename(columns=mapping)
-    return summary_table
+    if return_mapping:
+        return summary_table, mapping
+    else:
+        return summary_table
 
 
 def pandas_condense_paths(colvals):

@@ -41,21 +41,96 @@ def build_all_param_plots(agg):
     plt = kwplot.autoplt()
     # metric_cols = [c for c in df.columns if 'metrics.' in c]
     kwplot.close_figures()
-    x = 'bas_poly_eval.metrics.bas_tpr'
-    y = 'bas_poly_eval.metrics.bas_ppv'
-
-    kwplot.figure(fnum=1, doclf=True)
-
-    table = pd.concat([agg.index, agg.metrics, agg.resolved_params,
-                       agg.resolved_info['resources']], axis=1)
-
-    agg.region_to_tables[agg.primary_macro_region].keys()
 
     rois = {'KR_R001', 'KR_R002', 'BR_R002'}
     macro_tables = agg.build_macro_tables(rois)
 
-    sns.scatterplot(data=table, x=x, y=y, hue='region_id')
+    macro_results = agg.region_to_tables[agg.primary_macro_region].copy()
+    single_results = {
+        'index': agg.index,
+        'metrics': agg.metrics,
+        'resolved_params': agg.resolved_params,
+        'resources': agg.resolved_info['resources'],
+    }
 
+    if True:
+        # Shorten columns
+        mappers = {}
+        mappers['metrics'] = {c: c.split('.')[-1] for c in macro_results['metrics'].columns}
+        mappers['resolved_params'] = {c: c.replace('bas_poly_eval.params.', '')
+                                      for c in macro_results['resolved_params'].columns}
+
+        for k, mapper in mappers.items():
+            macro_results[k] = macro_results[k].rename(mappers[k], axis=1)
+            single_results[k] = single_results[k].rename(mappers[k], axis=1)
+
+    _parts = list((ub.udict(macro_results) & {
+        'index', 'metrics', 'resolved_params', 'resources'}).values())
+    macro_table = pd.concat(_parts, axis=1)
+    single_table = pd.concat(list(single_results.values()), axis=1)
+    single_table = single_table.fillna('None')
+    macro_table = macro_table.fillna('None')
+
+    # x = 'bas_poly_eval.metrics.bas_tpr'
+    # y = 'bas_poly_eval.metrics.bas_ppv'
+    # x = 'bas_poly_eval.metrics.bas_space_FAR'
+    # y = 'bas_poly_eval.metrics.bas_tpr'
+    x = 'bas_ffpa'
+    y = 'bas_f1'
+
+    agg_dpath = ub.Path(config['root_dpath'] / 'aggregate')
+    agg_group_dpath = (agg_dpath / ('all_params' + ub.timestamp())).ensuredir()
+
+    def finalize_figure(fig, fpath):
+        fig.set_size_inches(np.array([6.4, 4.8]) * 1.0)
+        fig.tight_layout()
+        fig.savefig(fpath)
+        util_kwplot.cropwhite_ondisk(fpath)
+
+    fig = kwplot.figure(fnum=2, doclf=True)
+    ax = sns.scatterplot(data=single_table, x=x, y=y, hue='region_id')
+    ax.set_title(f'BAS Experiment Results (n={len(agg)})')
+    ax.set_xscale('log')
+    fpath = agg_group_dpath / 'single_results.png'
+    finalize_figure(fig, fpath)
+    # ax.set_xlim(0, np.quantile(agg.metrics[x], 0.99))
+    # ax.set_xlim(1e-2, np.quantile(agg.metrics[x], 0.99))
+
+    macro_table = pd.concat(_parts, axis=1)
+    fig = kwplot.figure(fnum=3, doclf=True)
+    ax = sns.scatterplot(data=macro_table, x=x, y=y, hue='region_id')
+    ax.set_title(f'BAS Experiment Results (n={len(macro_table)})\nMacro Results over ' + str(rois))
+    ax.set_xscale('log')
+    fpath = agg_group_dpath / 'macro_results.png'
+    finalize_figure(fig, fpath)
+    # ax.set_xlim(1e-2, npe.quantile(agg.metrics[x], 0.99))
+    # ax.set_xlim(1e-2, 0.7)
+
+    ### Build param analysis
+    from watch.utils import result_analysis
+    results = {'params': macro_table[macro_results['resolved_params'].columns],
+               'metrics': macro_table[macro_results['metrics'].columns]}
+    analysis = result_analysis.ResultAnalysis(results, metrics=agg.primary_metric_cols)
+    analysis.build()
+    analysis.analysis()
+    analysis.varied
+
+    for stats in analysis.statistics:
+        stats['moments']
+        anova_rank_p = stats['anova_rank_p']
+        hue = stats['param_name']
+        print(f'anova_rank_p={anova_rank_p}')
+        print(f'hue={hue}')
+
+        fig = kwplot.figure(fnum=4, doclf=True)
+        # ax = sns.scatterplot(data=macro_table, x=x, y=y, hue=agg.model_cols[0])
+        ax = sns.scatterplot(data=macro_table, x=x, y=y, hue=hue)
+        ax.set_title(f'BAS Experiment Results (n={len(macro_table)})\n'
+                     f'Macro Results over {rois}')
+        ax.set_xscale('log')
+
+    # ax.set_xlim(1e-2, npe.quantile(agg.metrics[x], 0.99))
+    # ax.set_xlim(1e-2, 0.7)
 
 def check_baseline(eval_type_to_aggregator):
     from watch.utils.util_param_grid import DotDictDataFrame
