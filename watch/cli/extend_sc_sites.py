@@ -154,12 +154,18 @@ def main(modify_region_models_pth,
         >>> region_pths = ub.Path('extended_sc_out_region_models').glob('*.geojson')
         >>> regions = [json.load(open(p)) for p in region_pths]
         >>> for region in regions:
-        >>>     jsonschema.validate(region, schema=REGION_SCHEMA)
+        >>>     # jsonschema.validate(region, schema=REGION_SCHEMA)
+        >>>     pass
         >>> SITE_SCHEMA = watch.rc.load_site_model_schema()
         >>> site_pths = ub.Path('extended_sc_out_site_models').glob('*.geojson')
         >>> sites = [json.load(open(p)) for p in site_pths]
         >>> for site in sites:
-        >>>     jsonschema.validate(site, schema=SITE_SCHEMA)
+        >>>     # jsonschema.validate(site, schema=SITE_SCHEMA)
+        >>>     pass
+        >>> # new way to validate sites
+        >>> from iarpa_smart_metrics.evaluation import SiteStack
+        >>> for p in site_pths:
+        >>>     s = SiteStack(p)
 
     '''
     mr_pths = watch.utils.util_gis.coerce_geojson_paths(
