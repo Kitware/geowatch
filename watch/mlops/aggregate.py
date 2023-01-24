@@ -384,23 +384,6 @@ def build_tables(config):
          'result_loader': smart_result_parser.load_eval_trk_poly},
     ]
 
-    # pman = util_progress.ProgressManager(backend='rich')
-    # eval_node_prog = pman(node_eval_infos, desc='load node type')
-    # for node_eval_info in eval_node_prog:
-    #     node_name = node_eval_info['name']
-    #     eval_node_prog.set_postfix_str(node_name)
-    #     out_key = node_eval_info['out_key']
-    #     result_loader_fn = node_eval_info['result_loader']
-    #     if node_name not in dag.nodes:
-    #         continue
-    #     node = dag.nodes[node_name]
-    #     out_node = node.outputs[out_key]
-    #     fpaths = out_node_matching_fpaths(out_node)
-    #     fpath_prog = pman(fpaths, desc=f'loading node {node_name} results')
-    #     for fpath in fpath_prog:
-    #         import time
-    #         time.sleep(0.1)
-
     from concurrent.futures import as_completed
     pman = util_progress.ProgressManager(backend='rich')
     with pman:
@@ -423,7 +406,6 @@ def build_tables(config):
 
             # Pattern match
             # node.template_out_paths[out_node.name]
-
             cols = {
                 'metrics': [],
                 'index': [],
@@ -466,15 +448,15 @@ def build_tables(config):
                     num_ignored += 1
 
             params = pd.DataFrame(cols['params'])
-            trunc_params, mappings = util_pandas.pandas_truncate_items(params)
+            # trunc_params, mappings = util_pandas.pandas_truncate_items(params)
             results = {
-                'mappings': mappings,
+                # 'mappings': mappings,
                 'fpaths': pd.DataFrame(cols['fpaths'], columns=['fpath']),
                 'index': pd.DataFrame(cols['index']),
                 'metrics': pd.DataFrame(cols['metrics']),
                 'params': pd.DataFrame(cols['params']),
                 'specified_params': pd.DataFrame(cols['specified_params']),
-                'trunc_params': trunc_params,
+                # 'trunc_params': trunc_params,
                 'param_types': pd.DataFrame(cols['param_types']),
             }
             eval_type_to_results[node_name] = results
