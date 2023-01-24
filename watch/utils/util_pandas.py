@@ -53,7 +53,7 @@ def pandas_nan_eq(a, b):
     return flags
 
 
-def pandas_shorten_columns(summary_table, return_mapping=True):
+def pandas_shorten_columns(summary_table, return_mapping=False):
     import ubelt as ub
     # fixme
     old_cols = summary_table.columns
