@@ -150,6 +150,22 @@ torch_on_3090(){
 
 fix_opencv_conflicts
 
+check_metrics_framework(){
+    __doc__="
+    Check to see if the IARPA metrics framework is installed
+    "
+    python -c "import iarpa_smart_metrics"
+    METRICS_RETCODE="$?"
+    if [[ "$METRICS_RETCODE" == "1" ]]; then
+        echo "WARNING: IARPA metrics not installed!
+        
+        To enable evaluating your results, clone this repo and follow the instructions: 
+        https://gitlab.kitware.com/smart/metrics-and-test-framework#installation
+        "
+    fi
+}
+check_metrics_framework
+
 # Simple tests
 set -x
 echo "Start simple tests"
