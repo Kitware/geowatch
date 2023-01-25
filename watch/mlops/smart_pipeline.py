@@ -474,6 +474,7 @@ class BAS_PolygonPrediction(PolygonPrediction):
     def resolved_algo_config(self):
         return ub.udict({
             # 'boundaries_as': 'polys'
+            "agg_fn": "probs",
         }) | super().resolved_algo_config
 
 
