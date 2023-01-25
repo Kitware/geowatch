@@ -80,6 +80,21 @@ python -m pip install pip setuptools wheel build -U
 if [[ "$WATCH_STRICT" == "1" ]]; then
     ./dev/make_strict_req.sh
 
+    python -m pip install -r requirements-strict.txt -v
+
+    python -m pip install -r requirements-strict/gdal.txt
+
+    python -m pip install -r requirements-strict/headless.txt
+
+    python -m pip install -r requirements-strict/linting.txt
+
+    python -m pip install dvc[all]>=2.9.3
+
+    python -m pip install lru-dict || echo "unable to install lru-dict"
+
+    # Install the watch module in development mode
+    python -m pip install -e .[runtime-strict]
+else
     python -m pip install -r requirements.txt -v
 
     python -m pip install -r requirements/gdal.txt
@@ -95,21 +110,6 @@ if [[ "$WATCH_STRICT" == "1" ]]; then
     # Install the watch module in development mode
     python -m pip install -e .
 
-else
-    python -m pip install -r requirements-strict.txt -v
-
-    python -m pip install -r requirements-strict/gdal.txt
-
-    python -m pip install -r requirements-strict/headless.txt
-
-    python -m pip install -r requirements-strict/linting.txt
-
-    python -m pip install dvc[all]>=2.9.3
-
-    python -m pip install lru-dict || echo "unable to install lru-dict"
-
-    # Install the watch module in development mode
-    python -m pip install -e .
 fi
 
 fix_opencv_conflicts(){
