@@ -7,7 +7,7 @@ from watch.mlops.aggregate import fix_duplicate_param_hashids
 from watch.utils import util_pandas
 
 
-def _setup():
+def _setup_sc_analysis():
     from watch.mlops.aggregate import AggregateEvluationConfig
     from watch.mlops.aggregate import build_tables
     from watch.mlops.aggregate import build_aggregators
@@ -16,8 +16,8 @@ def _setup():
     cmdline = 0
     kwargs = {
         'root_dpath': expt_dvc_dpath / '_testpipe',
-        'pipeline': 'bas',
-        'io_workers': 10,
+        'pipeline': 'joint_bas_sc',
+        'io_workers': 20,
         'freeze_cache': 0,
         # 'pipeline': 'joint_bas_sc_nocrop',
         # 'root_dpath': expt_dvc_dpath / '_testsc',
@@ -31,6 +31,90 @@ def _setup():
     print(f'agg={agg}')
     rois = {'KR_R001', 'KR_R002', 'BR_R002'}
     print(f'rois={rois}')
+
+
+
+def _setup_bas():
+    from watch.mlops.aggregate import AggregateEvluationConfig
+    from watch.mlops.aggregate import build_tables
+    from watch.mlops.aggregate import build_aggregators
+    import watch
+    expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+    cmdline = 0
+    kwargs = {
+        'root_dpath': expt_dvc_dpath / '_testpipe',
+        'pipeline': 'bas',
+        'io_workers': 0,
+        'freeze_cache': 0,
+        # 'pipeline': 'joint_bas_sc_nocrop',
+        # 'root_dpath': expt_dvc_dpath / '_testsc',
+        #'pipeline': 'sc',
+    }
+    config = AggregateEvluationConfig.legacy(cmdline=cmdline, data=kwargs)
+    eval_type_to_results = build_tables(config)
+    eval_type_to_aggregator = build_aggregators(eval_type_to_results)
+    agg = ub.peek(eval_type_to_aggregator.values())
+    agg = eval_type_to_aggregator.get('bas_poly_eval', None)
+    print(f'agg={agg}')
+    rois = {'KR_R001', 'KR_R002', 'BR_R002'}
+    print(f'rois={rois}')
+
+
+def _resource_table(eval_type_to_aggregator):
+    agg1 = eval_type_to_aggregator.get('bas_poly_eval', None)
+    agg2 = eval_type_to_aggregator.get('bas_pxl_eval', None)
+
+    agg2.resolved_info['resources'].sum()
+
+    mapping = {
+        'bas_poly_eval.params.bas_pxl.package_fpath': 'models',
+        'bas_poly_eval.params.bas_poly.moving_window_size': 'tracking_window_size',
+        'bas_poly_eval.params.bas_poly.thresh': 'tracking_threshold',
+        'bas_poly_eval.params.bas_pxl.input_space_scale': 'heatmap_gsd',
+        'bas_poly_eval.params.bas_poly.max_area_sqkm': 'max_area_threshold',
+        'bas_poly_eval.params.bas_poly.polygon_simplify_tolerance': 'polygon_simplify_tolerence',
+        'bas_poly_eval.params.bas_pxl.chip_dims': 'input_window_dimensions',
+        'bas_poly_eval.params.bas_pxl.test_dataset': 'regions',
+    }
+    summary_rows = []
+    for colname, col in agg1.effective_params.fillna('None').T.iterrows():
+        histo = col.value_counts()
+        if len(histo) > 1:
+            if colname in mapping:
+                summary_rows.append({
+                    'param': mapping[colname],
+                    'num_unique': len(histo),
+                })
+            print(f'colname={colname}')
+            print(histo)
+    df = pd.DataFrame(summary_rows)
+    from watch.utils import util_kwplot
+    dfh = humanize_dataframe(df)
+    dataframe_table(dfh, 'foo.png')
+
+    from watch.utils import util_pandas
+    resource_df = util_pandas.pandas_shorten_columns(agg2.resolved_info['resources'])
+    resource_df = resource_df.drop(['vram_gb'], axis=1)
+    resouce_table = resource_df.sum(numeric_only=True, axis=0).to_frame('bas_pxl')
+    resouce_table.loc['num_params', 'bas_pxl'] = len(agg2)
+    resouce_table.loc[:, 'bas_poly'] = '<pending>'
+    resouce_table.loc['num_params', 'bas_poly'] = len(agg1)
+    dfh = humanize_dataframe(resouce_table, title='Pipeline Summary')
+    dataframe_table(dfh, 'pipeline_summary.png')
+
+
+def report_top_results(agg):
+    rois = {'KR_R001', 'KR_R002', 'BR_R002', 'AE_R001'}
+    agg.build_macro_tables(rois)
+
+    macro_results = agg.region_to_tables[agg.primary_macro_region].copy()
+
+    z = agg.report_best()
+    best_macro_param_hashid = list(z[0].values())[-1]['param_hashid'].iloc[0]
+    agg_best = agg.filterto(param_hashids=[best_macro_param_hashid])
+
+    agg_best.build_macro_tables()
+    agg_best.report_best()
 
 
 def build_all_param_plots(agg):
@@ -191,8 +275,46 @@ def build_all_param_plots(agg):
 
 
 def generate_kr2_heatmaps(agg):
-    agg.filterto(models=['package_epoch0_step41'])
-    ...
+    agg1 = agg.filterto(models=['package_epoch0_step41'])
+    rois = {'KR_R001', 'KR_R002', 'BR_R002'}
+    agg1 = agg1.compress(agg1.params['bas_poly_eval.params.bas_poly.thresh'] == 0.12)
+    agg1 = agg1.compress(agg1.params['bas_poly_eval.params.bas_poly.moving_window_size'].isna())
+    agg1 = agg1.filterto(param_hashids=['txfrewydmfeb'])
+    agg1.build_single_macro_table(rois)
+    agg1 = agg1.compress(agg1.index['region_id'] == 'KR_R002')
+
+    eval_fpath = agg1.fpaths.iloc[0]
+    from watch.mlops import confusion_visualization
+    confusion_visualization.bas_poly_eval_confusion_analysis(eval_fpath)
+
+    rois = {'KR_R001', 'KR_R002', 'BR_R002'}
+    agg1 = agg.filterto(models=['Drop4_BAS_15GSD_BGRNSH_invar_V8_epoch=16-step=8704'])
+    # agg1 = agg.filterto(param_hashids=['cvvlwbictocz'])
+    agg1.build_single_macro_table(rois)
+    best = agg1.report_best()
+    param_hashid = list(best[0].values())[-1].iloc[0]['param_hashid']
+    agg1 = agg1.filterto(param_hashids=[param_hashid])
+    agg1 = agg1.compress(agg1.index['region_id'] == 'KR_R002')
+    eval_fpath = agg1.fpaths.iloc[0]
+    print(f'eval_fpath={eval_fpath}')
+
+    from watch.mlops import confusion_visualization
+    confusion_visualization.bas_poly_eval_confusion_analysis(eval_fpath)
+
+
+    rois = {'KR_R001', 'KR_R002', 'BR_R002'}
+    agg1 = agg.filterto(models=['Drop4_BAS_2022_12_15GSD_BGRN_V10_epoch=0-step=4305'])
+    # agg1 = agg.filterto(param_hashids=['cvvlwbictocz'])
+    agg1.build_single_macro_table(rois)
+    best = agg1.report_best()
+    param_hashid = list(best[0].values())[-1].iloc[0]['param_hashid']
+    agg1 = agg1.filterto(param_hashids=[param_hashid])
+    agg1 = agg1.compress(agg1.index['region_id'] == 'KR_R002')
+    eval_fpath = agg1.fpaths.iloc[0]
+    print(f'eval_fpath={eval_fpath}')
+
+    from watch.mlops import confusion_visualization
+    confusion_visualization.bas_poly_eval_confusion_analysis(eval_fpath)
 
 def check_baseline(eval_type_to_aggregator):
     from watch.utils.util_param_grid import DotDictDataFrame

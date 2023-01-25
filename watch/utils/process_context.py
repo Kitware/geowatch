@@ -198,7 +198,7 @@ class ProcessContext:
                 )
                 emissions_tracker.start()
             except Exception as ex:
-                print('Unable to track emissions ex = {!r}'.format(ex))
+                print('Non-Critical Warning: Unable to track carbon emissions ex = {!r}'.format(ex))
 
         self.emissions_tracker = emissions_tracker
 

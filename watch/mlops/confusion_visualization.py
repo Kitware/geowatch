@@ -21,7 +21,6 @@ def bas_poly_eval_confusion_analysis(eval_fpath):
     poly_pred_dpaths = list((eval_fpath.parent / '.pred').glob('*_poly/*'))
     assert len(poly_pred_dpaths) == 1
     poly_pred_dpath = ub.Path(poly_pred_dpaths[0])
-    pred_sites_fpath = poly_pred_dpath / 'sites_manifest.json'
 
     info = smart_result_parser.load_eval_trk_poly(eval_fpath)
     bas_row = info['json_info']['best_bas_rows']['data'][0]
@@ -50,8 +49,64 @@ def bas_poly_eval_confusion_analysis(eval_fpath):
     # files by reinvoking.
     if any('_seq_' in m or m.startswith('seq_') for m in assign2['site model'] if m):
         invoke_fpath = eval_fpath.parent / 'invoke.sh'
-        info = ub.cmd(f'bash {invoke_fpath}', verbose=3)
+        import platform
+        if 'toothbrush' in invoke_fpath.read_text() and platform.node() != 'toothbrush':
+            # Resolve to a local invoke
+            text = invoke_fpath.read_text()
+            text = text.replace('/home/joncrall/remote/toothbrush', str(ub.Path.home()))
+            # Hack out paths
+            newline = ''
+            for line in text.split('\n'):
+                line = line.strip()
+                if not line.startswith('#'):
+                    if line.endswith('\\'):
+                        newline += line.rstrip('\\')
+                    else:
+                        newline += line + '\n'
+            import shlex
+            parts = shlex.split(newline)
+            ub.Path(ub.argval('--true_site_dpath', argv=parts)).exists()
+            ub.Path(ub.argval('--true_region_dpath', argv=parts)).exists()
+            ub.Path(ub.argval('--pred_sites', argv=parts)).exists()
+            ub.Path(ub.argval('--tmp_dir', argv=parts)).exists()
+            ub.Path(ub.argval('--out_dir', argv=parts)).exists()
+            ub.Path(ub.argval('--merge_fpath', argv=parts)).exists()
+            print(newline)
 
+            pred_fpath = ub.Path(ub.argval('--pred_sites', argv=parts))
+            import json
+            data = json.loads(pred_fpath.read_text())
+            old_root = '/home/joncrall/remote/toothbrush'
+            new_root = str(ub.Path.home())
+            data['files'] = [f.replace(old_root, new_root) for f in data['files']]
+
+            new_pred_fpath = pred_fpath.augment(stemsuffix='2')
+            new_pred_fpath.write_text(json.dumps(data))
+            fixed_invoke = newline.replace(str(pred_fpath), str(new_pred_fpath))
+            print(fixed_invoke)
+            _ = ub.cmd(fixed_invoke, verbose=3)
+
+            r"""
+
+            python -m watch.cli.run_metrics_framework --merge=True --name "todo-bas_poly_algo_id_6ad71c72-bas_pxl_algo_id_79393b54-todo" \
+                    --true_site_dpath "/home/local/KHQ/jon.crall/data/dvc-repos/smart_data_dvc-ssd/annotations/site_models" --true_region_dpath "/home/local/KHQ/jon.crall/data/dvc-repos/smart_data_dvc-ssd/annotations/region_models" \
+                    --pred_sites "/home/local/KHQ/jon.crall/data/dvc-repos/smart_expt_dvc/_testpipe/pred/flat/bas_poly/bas_poly_id_2fc4e8d6/sites_manifest.json" \
+                    --tmp_dir "/home/local/KHQ/jon.crall/data/dvc-repos/smart_expt_dvc/_testpipe/eval/flat/bas_poly_eval/bas_poly_eval_id_9f01d221/tmp" --out_dir "/home/local/KHQ/jon.crall/data/dvc-repos/smart_expt_dvc/_testpipe/eval/flat/bas_poly_eval/bas_poly_eval_id_9f01d221" --merge_fpath "/home/local/KHQ/jon.crall/data/dvc-repos/smart_expt_dvc/_testpipe/eval/flat/bas_poly_eval/bas_poly_eval_id_9f01d221/poly_eval.json"
+
+
+            python -m watch.cli.run_metrics_framework \
+                --merge=True \
+                --name "todo-bas_poly_algo_id_6ad71c72-bas_pxl_algo_id_a91d4564-todo" \
+                --true_site_dpath "/home/local/KHQ/jon.crall/data/dvc-repos/smart_data_dvc-ssd/annotations/site_models" \
+                --true_region_dpath "/home/local/KHQ/jon.crall/data/dvc-repos/smart_data_dvc-ssd/annotations/region_models" \
+                --pred_sites "/home/local/KHQ/jon.crall/data/dvc-repos/smart_expt_dvc/_testpipe/pred/flat/bas_poly/bas_poly_id_331d9ad9/sites" \
+                --tmp_dir "/home/local/KHQ/jon.crall/data/dvc-repos/smart_expt_dvc/_testpipe/eval/flat/bas_poly_eval/bas_poly_eval_id_1983aca0/tmp" \
+                --out_dir "/home/local/KHQ/jon.crall/data/dvc-repos/smart_expt_dvc/_testpipe/eval/flat/bas_poly_eval/bas_poly_eval_id_1983aca0" \
+                --merge_fpath "/home/local/KHQ/jon.crall/data/dvc-repos/smart_expt_dvc/_testpipe/eval/flat/bas_poly_eval/bas_poly_eval_id_1983aca0/poly_eval.json"
+
+            """
+        else:
+            info = ub.cmd(f'bash {invoke_fpath}', verbose=3)
         assign1 = pd.read_csv(assign_fpath1)
         assign2 = pd.read_csv(assign_fpath2)
         if any('_seq_' in m or m.startswith('seq_') for m in assign2['site model'] if m):
@@ -183,7 +238,10 @@ def bas_poly_eval_confusion_analysis(eval_fpath):
 
     # Add the confusion info as misc data in new site files and reproject them
     # onto the truth for visualization.
-    pred_site_fpaths = list(util_gis.coerce_geojson_paths(pred_sites_fpath))
+    # pred_sites_fpath = poly_pred_dpath / 'sites_manifest.json'
+    # assert pred_sites_fpath.exists()
+    # pred_site_fpaths = list(util_gis.coerce_geojson_paths(pred_sites_fpath))
+    pred_site_fpaths = list(util_gis.coerce_geojson_paths(poly_pred_dpath / 'sites'))
     # rm_files = list(true_region_dpath.glob(region_id + '*.geojson'))
     gt_files = list(true_site_dpath.glob(region_id + '*.geojson'))
     sm_files = pred_site_fpaths
@@ -248,8 +306,19 @@ def bas_poly_eval_confusion_analysis(eval_fpath):
     from watch.cli import project_annotations
     import kwcoco
     src_fpath = poly_pred_dpath / 'poly.kwcoco.json'
+    if not src_fpath.exists():
+        if ub.Path(src_fpath + '.zip').exists():
+            src_fpath = ub.Path(src_fpath + '.zip')
     dst_fpath = out_dpath / 'poly_toviz.kwcoco.json'
     src_dset = kwcoco.CocoDataset(src_fpath)
+
+    if True:
+        old_root = '/home/joncrall/remote/toothbrush'
+        new_root = str(ub.Path.home())
+        for img in src_dset.images().coco_images:
+            for obj in img.iter_asset_objs():
+                obj['file_name'] = obj['file_name'].replace(old_root, new_root)
+        ...
     dst_dset = src_dset.copy()
     dst_dset.fpath = dst_fpath
     cmdline = 0
@@ -317,7 +386,7 @@ def bas_poly_eval_confusion_analysis(eval_fpath):
             # workers=0,
             workers='avail',
             draw_labels=False,
-            animate=False,
+            animate={'frames_per_second': 10},
             draw_imgs=False,
         )
         coco_visualize_videos.main(cmdline=cmdline, **kwargs)
@@ -331,11 +400,8 @@ def bas_poly_eval_confusion_analysis(eval_fpath):
 
 
 def summary_visualization(dst_dset, out_dpath):
-    import kwcoco
     import kwplot
     import numpy as np
-    # Hack the coco resolution keys
-    kwcoco.coco_image.DEFAULT_RESOLUTION_KEYS = ['resolution', 'target_gsd']
 
     resolution = '10GSD'
     viz_dpath = (out_dpath / 'bas_summary_viz').ensuredir()

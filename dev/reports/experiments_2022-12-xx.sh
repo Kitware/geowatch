@@ -239,7 +239,7 @@ python -m watch.mlops.schedule_evaluation \
     --backend=tmux \
     --pipeline=joint_bas_sc_nocrop \
     --cache=1 --skip_existing=0 \
-    --rprint=1 --run=1
+    --rprint=1 --run=0
 
 #--max_configs=1 \
 
@@ -487,3 +487,59 @@ python -m watch.mlops.schedule_evaluation \
     --pipeline=sc \
     --cache=1 --skip_existing=1 \
     --rprint=0 --run=1
+    
+
+# Real data
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+
+python -m watch.mlops.schedule_evaluation \
+    --params="
+        matrix:
+            bas_pxl.package_fpath:
+                - $DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
+            sc_pxl.package_fpath:
+                - $DVC_EXPT_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt
+            bas_pxl.window_space_scale:
+                - auto
+            bas_pxl.test_dataset:
+                - $DVC_DATA_DPATH/Drop6/KR_R001_BAS.kwcoco.json
+            sitecrop.crop_src_fpath:
+                - $DVC_DATA_DPATH/Drop6/KR_R001.kwcoco.json
+            bas_pxl.input_space_scale: window
+            bas_pxl.output_space_scale: window
+            bas_pxl.chip_dims:
+                - auto
+            bas_pxl.time_sampling:
+                - auto
+            bas_poly.moving_window_size:
+                - null
+            bas_poly.thresh:
+                - 0.15
+            sc_pxl.chip_dims:
+                - auto
+            sc_pxl.window_space_scale:
+                - auto
+            sc_pxl.input_space_scale: window
+            sc_pxl.output_space_scale: window
+            sc_poly.thresh:
+                - 0.1
+            sc_poly.use_viterbi:
+                - 0
+            bas_pxl.enabled: 1
+            bas_poly.enabled: 1
+            bas_poly_eval.enabled: 1
+            bas_pxl_eval.enabled: 1
+            bas_poly_viz.enabled: 1
+            sc_pxl.enabled: 1
+            sc_poly.enabled: 1
+            sc_poly_eval.enabled: 1
+            sc_pxl_eval.enabled: 0
+            sc_poly_viz.enabled: 0
+    " \
+    --root_dpath="$DVC_EXPT_DPATH/_testpipe2" \
+    --devices="0,1" --queue_size=1 \
+    --backend=tmux \
+    --pipeline=joint_bas_sc_nocrop \
+    --cache=1 --skip_existing=0 \
+    --rprint=1 --run=0

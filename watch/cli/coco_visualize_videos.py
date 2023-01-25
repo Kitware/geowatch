@@ -108,7 +108,7 @@ class CocoVisualizeConfig(scfg.Config):
 
         'cmap': scfg.Value('viridis', help='colormap for single channel data'),
 
-        'animate': scfg.Value(False, isflag=True, help='if True, make an animated gif from the output'),
+        'animate': scfg.Value('auto', isflag=True, help='if True, make an animated gif from the output. Defaults to False.'),
 
         'num_frames': scfg.Value(None, type=str, help='show the first N frames from each video, if None, all are shown'),
         'start_frame': scfg.Value(0, type=str, help='If specified each video will start on this frame'),
@@ -243,7 +243,7 @@ def main(cmdline=True, **kwargs):
     if config['smart']:
         if config['workers'] == 'auto':
             config['workers'] = 'avail'
-        if not config['animate']:
+        if config['animate'] == 'auto':
             config['animate'] = True
         if config['stack'] == 'auto':
             config['stack'] = 'only'
@@ -251,6 +251,9 @@ def main(cmdline=True, **kwargs):
             channels = config['channels'] = 'auto'
         # if config['draw_valid_region'] is None:
         #     config['draw_valid_region'] = False
+
+    if config['animate'] == 'auto':
+        config['animate'] = False
 
     if config['stack'] == 'auto':
         config['stack'] = False

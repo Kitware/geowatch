@@ -207,9 +207,12 @@ def foldin_resolved_info(agg):
 
         path_colnames = agg.model_cols + agg.test_dset_cols
         for colname in path_colnames:
-            colvals = d2[colname]
-            condensed, mapper = util_pandas.pandas_condense_paths(colvals)
-            d2[colname] = condensed
+            try:
+                colvals = d2[colname]
+                condensed, mapper = util_pandas.pandas_condense_paths(colvals)
+                d2[colname] = condensed
+            except Exception:
+                ...
 
         resolved_is_specified = is_specified.copy()
         resolved_is_specified.loc[:, always_defaulted_cols] = 0
