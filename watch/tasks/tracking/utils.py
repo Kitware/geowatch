@@ -65,17 +65,17 @@ class TrackFunction(collections.abc.Callable):
                                 total=total,
                                 desc='apply_per_video',
                                 verbose=3):
-            try:
-                sub_dset = self.safe_apply(coco_dset,
-                                           gids,
-                                           overwrite,
-                                           legacy=legacy)
-                if legacy:
-                    coco_dset = sub_dset
-                else:
-                    tracked_subdsets.append(sub_dset)
-            except ValueError as e:
-                print(e)
+
+            # Beware, in the past there was a crash here that required
+            # wrapping the rest of this loop in a try/except. -csg
+            sub_dset = self.safe_apply(coco_dset,
+                                       gids,
+                                       overwrite,
+                                       legacy=legacy)
+            if legacy:
+                coco_dset = sub_dset
+            else:
+                tracked_subdsets.append(sub_dset)
 
         if not legacy:
             # Tracks were either updated or added.
