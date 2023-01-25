@@ -378,21 +378,23 @@ def time_aggregated_polys(
         # in) and tracking space (what we will build heatmaps in)
         first_gid = video_gids[0]
         first_coco_img = sub_dset.coco_image(first_gid)
-        try:
-            vidspace_resolution = first_coco_img.resolution(space='video')['mag']
+        # (w, h)
+        vidspace_resolution = first_coco_img.resolution(space='video')['mag']
+        vidspace_resolution = np.array(vidspace_resolution)
 
-            scale_trk_from_vid = first_coco_img._scalefactor_for_resolution(
-                space='video', resolution=resolution)
+        # (w, h)
+        scale_trk_from_vid = first_coco_img._scalefactor_for_resolution(
+            space='video', resolution=resolution)
+        scale_trk_from_vid = np.array(scale_trk_from_vid)
 
-            # Determine the pixel size of tracking space
-            tracking_resolution = vidspace_resolution * scale_trk_from_vid
-            tracking_gsd = np.mean(tracking_resolution)
+        # Determinethe pixel size of tracking space
+        tracking_resolution = vidspace_resolution / scale_trk_from_vid
+        if not np.isclose(*tracking_resolution):
+            print(f'warning: nonsquare pxl size of {tracking_resolution}')
+        tracking_gsd = np.mean(tracking_resolution)
 
-            # Get the transform from tracking space back to video space
-            scale_vid_from_trk = 1 / np.array(scale_trk_from_vid)
-
-        except Exception:
-            ...
+        # Get the transform from tracking space back to video space
+        scale_vid_from_trk = 1 / scale_trk_from_vid
 
     if tracking_gsd is None:
         default_gsd = 30
