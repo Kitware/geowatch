@@ -322,9 +322,19 @@ def gpd_compute_scores(
         else:
             heatmaps = []
             for k in keys:
-                # TODO use nans instead of fill
-                heatmap = build_heatmap(sub_dset, gid, k, missing='fill',
-                                        resolution=resolution)
+                DBG_SKIP_HMAPS=0
+                if DBG_SKIP_HMAPS:
+                    # TODO trailing dim
+                    img = sub_dset.coco_image(gid)
+                    if k in img.channels:
+                        heatmap = img.delay(k, space='video', resolution=resolution)
+                    else:
+                        w, h = img.delay(space='video', resolution=resolution).dsize
+                        heatmaps = np.zeros((w, h))
+                else:
+                    # TODO use nans instead of fill
+                    heatmap = build_heatmap(sub_dset, gid, k, missing='fill',
+                                            resolution=resolution)
                 heatmaps.append(heatmap)
             heatmaps = np.stack(heatmaps, axis=0)
             if 0:

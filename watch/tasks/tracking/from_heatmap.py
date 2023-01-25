@@ -923,12 +923,18 @@ def _gids_polys(
                    for d in images.lookup('date_captured')]
     # image_years = [d.year for d in image_dates]
 
-    _heatmaps = build_heatmaps(sub_dset,
-                               gids, {'fg': key},
-                               skipped='interpolate',
-                               resolution=resolution)['fg']
-    _heatmaps = np.array(_heatmaps)
-    assert len(_heatmaps) == len(images)
+    # TODO trailing 1 dim
+    imgs = sub_dset.images(gids).coco_images
+    _heatmaps = np.stack([i.delay(channels=key, space='video', resolution=resolution).finalize() for i in imgs], axis=0)
+    interpolate=1
+    if interpolate:
+        missing_ix = np.invert([key in i.channels for i in imgs])
+        diffed = np.concatenate((np.diff(missing_ix), [False]))
+        src = ~missing_ix & diffed
+        _heatmaps[missing_ix] =_heatmaps[src]
+        if missing_ix[0]:
+            _heatmaps[:np.searchsorted(diffed, True)] = 0
+        assert np.isnan(_heatmaps).all(axis=(1, 2, 3)).sum() == 0
 
     def _process(track):
 
