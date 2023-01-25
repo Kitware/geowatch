@@ -633,70 +633,12 @@ def time_aggregated_polys(
 
     ks = {'fg': key, 'bg': bg_key}
 
-    # 95% of runtime
-    _TRACKS = gpd_compute_scores(_TRACKS, sub_dset, thrs, ks, USE_DASK=False)
-    # 63% of runtime
+    # TODO dask gives different results on polys that overlap nodata area, need
+    # to debug this. (6% of polygons in KR_R001, so not a huge difference)
     # _TRACKS = gpd_compute_scores(_TRACKS, sub_dset, thrs, ks, USE_DASK=True)
+    _TRACKS = gpd_compute_scores(_TRACKS, sub_dset, thrs, ks, USE_DASK=False)
+
     # dask could unsort
-
-    DEBUG=0
-    if DEBUG:
-        # check scores
-        # main's output
-        # ods = kwcoco.CocoDataset('/data/matthew.bernstein/kit_pre_eval_8_20230131/KR_R001/bas_fusion_kwcoco_tracked4.json')
-        ods = kwcoco.CocoDataset('/data/matthew.bernstein/kit_pre_eval_8_20230131/KR_R001/bas_fusion_kwcoco_tracked4nt.json')
-        # magic numbers from sipections, these tracks should be the same
-        eq_ix = np.arange(446)
-        oss = ods.annots().detections.data['scores'][eq_ix]
-        print('DEBUG', np.mean(_TRACKS[('salient', -1)].iloc[eq_ix] - oss))
-        import xdev; xdev.embed()
-
-        # check polys after writing to dset
-        ops = ods.annots().detections.data['segmentations'].take(eq_ix)
-        # this branch's output
-        nds = kwcoco.CocoDataset('/data/matthew.bernstein/kit_pre_eval_8_20230131/KR_R001/bas_fusion_kwcoco_tracked5.json')
-        nps = nds.annots().detections.data['segmentations'].take(eq_ix)
-        # polys have been shifted.
-        assert sum(p1.area==p2.area for p1, p2 in zip(ops, nps)) == len(eq_ix)
-        assert sum(p1==p2 for p1, p2 in zip(ops, nps)) == 0
-
-        # check that new scoring function produces the old scores
-        oa = ods.annots().take(eq_ix)
-        owarps2 = [kwimage.Affine.coerce(w) for w in oa.images.lookup('warp_img_to_vid')]
-        ops2 = kwimage.PolygonList([d.warp(w).data['segmentations'][0] for d,w in zip(oa.detections, owarps2)])
-        otracks = gpd.GeoDataFrame(
-            dict(
-                poly=[p.to_shapely() for p in ops2],
-                gid=oa.images.gids,
-                track_idx=oa.lookup('track_id')),
-            geometry='poly'
-        )
-        oscores = gpd_compute_scores(otracks, ods, thrs, ks, USE_DASK=False)
-        oscores2 = gpd_compute_scores(otracks, sub_dset, thrs, ks, USE_DASK=False)
-        assert np.allclose(oscores[('fg', -1)], oss)
-        assert np.allclose(oscores[('fg', -1)], oscores2[('fg', -1)])
-
-        # draw tracks on image
-        gid = _TRACKS['gid'][0]
-        ci = kwcoco.CocoImage(sub_dset.imgs[gid], sub_dset)
-        img = ci.delay('salient', space='video').finalize()
-        img = kwimage.ensure_uint255(img)
-        ci2 = kwcoco.CocoImage(ods.imgs[gid], ods)
-        img2 = ci2.delay('salient', space='video').finalize()
-        img2 = kwimage.ensure_uint255(img)
-        assert np.allclose(img, img2)
-        _, flags = np.unique(ods.annots().lookup('track_id'), return_index=True)
-        owarps = [kwimage.Affine.coerce(w) for w in ods.annots().take(flags).images.lookup('warp_img_to_vid')]
-        old_polys = kwimage.PolygonList([p.warp(w) for p, w in zip(ods.annots().take(flags).detections.data['segmentations'], owarps)])
-        new_polys = _TRACKS.groupby('track_idx')['poly'].head(1)
-        new_polys = new_polys.astype(object).map(kwimage.MultiPolygon.from_shapely)
-        new_polys = kwimage.PolygonList(new_polys.values)
-        assert np.allclose(  # this works in vidspace
-            [p.area for p in new_polys],
-            [p.area for p in old_polys])
-        img = old_polys.draw_on(img, fill=0, edgecolor='green')
-        img = new_polys.draw_on(img, fill=0, edgecolor='red')
-
     _TRACKS = gpd_sort_by_gid(_TRACKS.reset_index(), sorted_gids)
 
     # response_thresh = 0.9

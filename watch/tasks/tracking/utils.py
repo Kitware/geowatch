@@ -324,7 +324,7 @@ def gpd_compute_scores(
             for k in keys:
                 # TODO use nans instead of fill
                 heatmap = build_heatmap(sub_dset, gid, k, missing='fill',
-                                       resolution=resolution)
+                                        resolution=resolution)
                 heatmaps.append(heatmap)
             heatmaps = np.stack(heatmaps, axis=0)
             if 0:
@@ -334,24 +334,13 @@ def gpd_compute_scores(
                 # TODO deprecate build_heatmaps, interpolation behavior
                 # unneeded and confusing
                 assert np.allclose(heatmaps, heatmaps2)
-            if 0:
-                scores = grp['poly'].map(
-                    lambda p: score_poly(p, heatmaps, threshold=thrs))
-                scores = scores.explode().explode()
-                scores.index = pd.MultiIndex.from_product((keys, thrs, grp.index))
-                scores_wide = scores.reset_index([0, 1]).pivot(
-                    columns=['level_0', 'level_1'], values=scores.name)
-                score_cols = scores_wide.columns.values
-                grp[score_cols] = scores_wide.values
-            else:
-                # import xdev; xdev.embed()
-                score_cols = list(itertools.product(keys, thrs))
-                scores = grp['poly'].apply(
-                    lambda p: pd.Series(dict(zip(
-                        score_cols,
-                        ub.flatten(score_poly(p, heatmaps, threshold=thrs))))
-                    ))
-                grp[score_cols] = scores
+            score_cols = list(itertools.product(keys, thrs))
+            scores = grp['poly'].apply(
+                lambda p: pd.Series(dict(zip(
+                    score_cols,
+                    ub.flatten(score_poly(p, heatmaps, threshold=thrs))))
+                ))
+            grp[score_cols] = scores
         return grp
 
     ks = {k: v for k, v in ks.items() if v}
@@ -359,8 +348,7 @@ def gpd_compute_scores(
         ks.values())))  # | ks.keys()
     score_cols = list(itertools.product(_valid_keys, thrs))
 
-    # if USE_DASK:  # 63% runtime
-    if 0:
+    if USE_DASK:  # 63% runtime
         import dask_geopandas
         # https://github.com/geopandas/dask-geopandas
         # _col_order = gdf.columns  # doesn't matter
@@ -711,7 +699,7 @@ def build_heatmaps(
         import kwcoco
         _dummy_key = '__dummy__'
         key_groups = {'__dummy__': kwcoco.FusedChannelSpec.coerce(keys).to_list()}
-        else:
+    else:
         raise TypeError(type(keys))
 
     # Would use RunningStats, but it can't support indexed/subsetted access
