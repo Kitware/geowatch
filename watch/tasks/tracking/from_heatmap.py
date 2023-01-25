@@ -373,7 +373,7 @@ def time_aggregated_polys(
 
     scale_vid_from_trk = None
     tracking_gsd = None
-    if len(video_gids):
+    if len(video_gids) and (resolution is not None):
         # Determine resolution information for videospace (what we will return
         # in) and tracking space (what we will build heatmaps in)
         first_gid = video_gids[0]
@@ -395,6 +395,8 @@ def time_aggregated_polys(
 
         # Get the transform from tracking space back to video space
         scale_vid_from_trk = 1 / scale_trk_from_vid
+    else:
+        scale_vid_from_trk = (1, 1)
 
     if tracking_gsd is None:
         default_gsd = 30
