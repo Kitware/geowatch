@@ -211,7 +211,8 @@ def foldin_resolved_info(agg):
                 colvals = d2[colname]
                 condensed, mapper = util_pandas.pandas_condense_paths(colvals)
                 d2[colname] = condensed
-            except Exception:
+            except Exception as ex:
+                print(f'warning: ex={ex}')
                 ...
 
         resolved_is_specified = is_specified.copy()

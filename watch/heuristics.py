@@ -565,8 +565,6 @@ def dummy_legend():
     dummy_legend()
 
     """
-
-
     import kwplot
     kwplot.autompl()
     img = kwplot.make_legend_img(CONFUSION_COLOR_SCHEME)

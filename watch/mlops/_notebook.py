@@ -27,7 +27,7 @@ def _setup_sc_analysis():
     eval_type_to_results = build_tables(config)
     eval_type_to_aggregator = build_aggregators(eval_type_to_results)
     agg = ub.peek(eval_type_to_aggregator.values())
-    agg = eval_type_to_aggregator.get('bas_poly_eval', None)
+    agg = eval_type_to_aggregator.get('sc_poly_eval', None)
     print(f'agg={agg}')
     rois = {'KR_R001', 'KR_R002', 'BR_R002'}
     print(f'rois={rois}')
@@ -44,7 +44,7 @@ def _setup_bas():
     kwargs = {
         'root_dpath': expt_dvc_dpath / '_testpipe',
         'pipeline': 'bas',
-        'io_workers': 0,
+        'io_workers': 20,
         'freeze_cache': 0,
         # 'pipeline': 'joint_bas_sc_nocrop',
         # 'root_dpath': expt_dvc_dpath / '_testsc',
@@ -220,8 +220,50 @@ def build_all_param_plots(agg):
     # ax.set_xlim(0, np.quantile(agg.metrics[x], 0.99))
     # ax.set_xlim(1e-2, np.quantile(agg.metrics[x], 0.99))
 
+    fig = kwplot.figure(fnum=5, doclf=True)
+    ax = sns.boxplot(data=macro_table, x=param_name, y=y, **snskw)
+    ax.set_title(f'BAS Per-Region Results (n={len(agg)})')
+    fpath = agg_group_dpath / f'single_results_boxplot.png'
+    finalize_figure(fig, fpath)
+
+    if 1:
+        #### Hack for models of interest.
+        star_params = []
+        p1 = macro_table[(
+            # (macro_table['bas_poly.moving_window_size'] == 200) &
+            (macro_table['bas_pxl.package_fpath'] == 'M02_NOV') &
+            (macro_table['bas_pxl.chip_dims'] == '[128, 128]') &
+            (macro_table['bas_poly.thresh'] == 0.12)  &
+            (macro_table['bas_poly.max_area_sqkm'] == 'None') &
+            (macro_table['bas_poly.moving_window_size'] == 'None')
+        )]['param_hashid'].iloc[0]
+        star_params = [p1]
+        p2 = macro_table[(
+            # (macro_table['bas_poly.moving_window_size'] == 200) &
+            (macro_table['bas_pxl.package_fpath'] == 'M00') &
+            (macro_table['bas_pxl.chip_dims'] == '[224, 224]') &
+            (macro_table['bas_poly.thresh'] == 0.13)  &
+            (macro_table['bas_poly.max_area_sqkm'] == 'None') &
+            (macro_table['bas_poly.moving_window_size'] == 200)
+        )]['param_hashid'].iloc[0]
+        star_params += [p2]
+        p3 = macro_table[(
+            # (macro_table['bas_poly.moving_window_size'] == 200) &
+            (macro_table['bas_pxl.package_fpath'] == 'M10') &
+            (macro_table['bas_pxl.chip_dims'] == '[256, 256]') &
+            (macro_table['bas_poly.thresh'] == 0.17)  &
+            (macro_table['bas_poly.max_area_sqkm'] == 'None') &
+            (macro_table['bas_poly.moving_window_size'] == 'None')
+        )]['param_hashid'].iloc[0]
+        star_params += [p3]
+
+    macro_table['is_star'] = kwarray.isect_flags(macro_table['param_hashid'], star_params)
+
+    # from watch.utils.util_kwplot import scatterplot_highlight
     fig = kwplot.figure(fnum=3, doclf=True)
-    ax = sns.scatterplot(data=macro_table, x=x, y=y, hue='region_id')
+    ax = fig.gca()
+    ax = sns.scatterplot(data=macro_table, x=x, y=y, hue='region_id', ax=ax)
+    scatterplot_highlight(data=macro_table, x=x, y=y, highlight='is_star', ax=ax, size=300)
     ax.set_title(f'BAS Results (n={len(macro_table)})\n'
                  f'Macro Analysis over {ub.urepr(rois, sv=1, nl=0)}')
     ax.set_xscale('log')
@@ -244,31 +286,60 @@ def build_all_param_plots(agg):
     unique_fit_params['fit.channels']
     unique_fit_params['fit.output_space_scale']
 
+    # Pre determine some palettes
+    shared_palette_groups = [
+        ['bas_poly.thresh'],
+        ['fit.learning_rate'],
+        ['fit.learning_rate'],
+        ['bas_pxl.chip_dims', 'fit.chip_dims'],
+        ['bas_pxl.output_space_scale', 'fit.output_space_scale'],
+    ]
+    param_to_palette = {}
+    for group_params in shared_palette_groups:
+        break
+        unique_vals = np.unique(macro_table[group_params].values)
+        # 'Spectral'
+        if len(unique_vals) > 5:
+            unique_colors = sns.color_palette('Spectral', n_colors=len(unique_vals))
+            # kwplot.imshow(_draw_color_swatch(unique_colors), fnum=32)
+        else:
+            unique_colors = sns.color_palette(n_colors=len(unique_vals))
+        palette = ub.dzip(unique_vals, unique_colors)
+        param_to_palette.update({p: palette for p in group_params})
+
     from kwcoco.metrics.drawing import concice_si_display
-    for rank, stats in ub.ProgIter(enumerate(sorted(analysis.statistics, key=lambda x: x['anova_rank_p']))):
+    ranked_stats = list(enumerate(sorted(analysis.statistics, key=lambda x: x['anova_rank_p'])))
+    ranked_stats = ranked_stats[1:2]
+    for rank, stats in ub.ProgIter(ranked_stats):
         stats['moments']
         anova_rank_p = stats['anova_rank_p']
-        hue = stats['param_name']
+        param_name = stats['param_name']
         print(f'anova_rank_p={anova_rank_p}')
-        print(f'hue={hue}')
+        print(f'param_name={param_name}')
 
         fig = kwplot.figure(fnum=4, doclf=True)
         # ax = sns.scatterplot(data=macro_table, x=x, y=y, hue=agg.model_cols[0])
-        ax = sns.scatterplot(data=macro_table, x=x, y=y, hue=hue)
+        snskw = {}
+        if param_name in param_to_palette:
+            snskw['palette'] = param_to_palette[param_name]
+        ax = sns.scatterplot(data=macro_table, x=x, y=y, hue=param_name, legend=False, **snskw)
+        # scatterplot_highlight(data=macro_table, x=x, y=y, highlight='is_star', ax=ax, size=300)
         ax.set_title(f'BAS Results (n={len(macro_table)})\n'
                      f'Macro Analysis over {ub.urepr(rois, sv=1, nl=0)}\n'
-                     f'Effect of {hue}: anova_rank_p={concice_si_display(anova_rank_p)}')
+                     f'Effect of {param_name}: anova_rank_p={concice_si_display(anova_rank_p)}')
         ax.set_xscale('log')
-        fpath = agg_group_dpath / f'macro_results_{rank:03d}_{hue}.png'
+        fpath = agg_group_dpath / f'macro_results_{rank:03d}_{param_name}.png'
         finalize_figure(fig, fpath)
 
         fig = kwplot.figure(fnum=5, doclf=True)
-        ax = sns.boxplot(data=macro_table, x=hue, y=y)
+        ax = sns.boxplot(data=macro_table, x=param_name, y=y, **snskw)
         ax.set_title(f'BAS Results (n={len(macro_table)})\n'
                      f'Macro Analysis over {ub.urepr(rois, sv=1, nl=0)}\n'
-                     f'Effect of {hue}: anova_rank_p={concice_si_display(anova_rank_p)}')
-        fpath = agg_group_dpath / f'macro_results_{rank:03d}_{hue}_box.png'
+                     f'Effect of {param_name}: anova_rank_p={concice_si_display(anova_rank_p)}')
+        fpath = agg_group_dpath / f'macro_results_{rank:03d}_{param_name}_box.png'
         finalize_figure(fig, fpath)
+        # from kwcoco.metrics.drawing import concice_si_display
+        # relabel_xticks(lambda x: concice_si_display(float(x)), ax=ax)
 
     # ax.set_xlim(1e-2, npe.quantile(agg.metrics[x], 0.99))
     # ax.set_xlim(1e-2, 0.7)

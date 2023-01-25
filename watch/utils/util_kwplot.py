@@ -65,7 +65,10 @@ def relabel_xticks(mapping, ax=None):
     new_labels = []
     for label in xtick_labels:
         text = label.get_text()
-        new_text = mapping.get(text, mapping.get(str(text), text))
+        if callable(mapping):
+            new_text = mapping(text)
+        else:
+            new_text = mapping.get(text, mapping.get(str(text), text))
         label.set_text(new_text)
         new_labels.append(label)
 
@@ -136,3 +139,20 @@ def humanize_dataframe(df, col_formats=None, human_labels=None, index_format=Non
     if title:
         df2_style = df2_style.set_caption(title)
     return df2_style
+
+
+def scatterplot_highlight(data, x, y, highlight, size=10, color='orange', marker='*', ax=None):
+    if ax is None:
+        import kwplot
+        plt = kwplot.autoplt()
+        ax = plt.gca()
+    _starkw = {
+        's': size,
+        'edgecolor': color,
+        'facecolor': 'none',
+    }
+    flags = data[highlight].apply(bool)
+    star_data = data[flags]
+    star_x = star_data[x]
+    star_y = star_data[y]
+    ax.scatter(star_x, star_y, marker=marker, **_starkw)
