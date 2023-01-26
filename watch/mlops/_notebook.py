@@ -220,8 +220,8 @@ def build_all_param_plots(agg):
     # ax.set_xlim(0, np.quantile(agg.metrics[x], 0.99))
     # ax.set_xlim(1e-2, np.quantile(agg.metrics[x], 0.99))
 
-    fig = kwplot.figure(fnum=5, doclf=True)
-    ax = sns.boxplot(data=macro_table, x=param_name, y=y, **snskw)
+    fig = kwplot.figure(fnum=90, doclf=True)
+    ax = sns.boxplot(data=single_table, x='region_id', y=main_metric)
     ax.set_title(f'BAS Per-Region Results (n={len(agg)})')
     fpath = agg_group_dpath / f'single_results_boxplot.png'
     finalize_figure(fig, fpath)
