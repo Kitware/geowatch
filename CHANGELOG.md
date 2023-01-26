@@ -21,6 +21,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * `find_dvc_dpath` no longer is impacted by environment variables.
 
 
+### Changed
+* `smartwatch stats` now outputs a histogram over sensor / time range
+
+
 ### Deprecated
 * `add_watch_fields` no longer populates `wgs84_corners`, `wgs84_crs_info`,
   `utm_corners`, and `utm_crs_info`, which are redundant with `geos_corners`.
