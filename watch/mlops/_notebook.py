@@ -129,7 +129,8 @@ def build_all_param_plots(agg):
     agg_dpath = ub.Path(config['root_dpath'] / 'aggregate')
     agg_group_dpath = (agg_dpath / ('all_params' + ub.timestamp())).ensuredir()
 
-    rois = {'KR_R001', 'KR_R002', 'BR_R002'}
+    # rois = {'KR_R001', 'KR_R002', 'BR_R002'}
+    rois = {'KR_R001', 'KR_R002'}
 
     # Hack in fit params
     if 1:
@@ -146,7 +147,13 @@ def build_all_param_plots(agg):
         'resolved_params': agg.resolved_params,
         'resources': agg.resolved_info['resources'],
     }
-    if True:
+
+    macro_results['resolved_params']['bas_poly_eval.fit.effective_batch_size'] = (
+        macro_results['resolved_params']['bas_poly_eval.fit.accumulate_grad_batches'] *
+        macro_results['resolved_params']['bas_poly_eval.fit.batch_size']
+    )
+
+    if False:
         # Shorten columns
         mappers = {}
         mappers['metrics'] = {c: c.split('.')[-1] for c in macro_results['metrics'].columns}
@@ -156,18 +163,7 @@ def build_all_param_plots(agg):
             macro_results[k] = macro_results[k].rename(mappers[k], axis=1)
             single_results[k] = single_results[k].rename(mappers[k], axis=1)
 
-    macro_results['resolved_params']['effective_batch_size'] = macro_results['resolved_params']['fit.accumulate_grad_batches'] * macro_results['resolved_params']['fit.batch_size']
-
-    _parts = list((ub.udict(macro_results) & {
-        'index', 'metrics', 'resolved_params', 'resources'}).values())
-    macro_table = pd.concat(_parts, axis=1)
-    single_table = pd.concat(list(single_results.values()), axis=1)
-    single_table = single_table.fillna('None')
-    macro_table = macro_table.fillna('None')
-    macro_table = macro_table.applymap(lambda x: str(x) if isinstance(x, list) else x)
-    single_table = single_table.applymap(lambda x: str(x) if isinstance(x, list) else x)
-
-    if 1:
+    if 0:
         agg.model_cols
         from watch.utils.util_param_grid import DotDictDataFrame
         fit_params = DotDictDataFrame(macro_table)['fit']
@@ -194,15 +190,31 @@ def build_all_param_plots(agg):
             pkgmap[pkg] = new_name
         macro_table['bas_pxl.package_fpath'] = macro_table['bas_pxl.package_fpath'].apply(lambda x: pkgmap.get(x, x))
 
-    macro_table['bas_pxl.package_fpath']
+    _parts = list((ub.udict(macro_results) & {
+        'index', 'metrics', 'resolved_params', 'resources'}).values())
+    macro_table = pd.concat(_parts, axis=1)
+    single_table = pd.concat(list(single_results.values()), axis=1)
+    single_table = single_table.fillna('None')
+    macro_table = macro_table.fillna('None')
+    macro_table = macro_table.applymap(lambda x: str(x) if isinstance(x, list) else x)
+    single_table = single_table.applymap(lambda x: str(x) if isinstance(x, list) else x)
 
     # x = 'bas_poly_eval.metrics.bas_tpr'
     # y = 'bas_poly_eval.metrics.bas_ppv'
     # x = 'bas_poly_eval.metrics.bas_space_FAR'
     # y = 'bas_poly_eval.metrics.bas_tpr'
-    x = 'bas_ffpa'
-    y = 'bas_f1'
-    main_metric = 'bas_f1'
+
+    # x = 'bas_poly_eval.metrics.bas_ffpa'
+    # xscale = 'log'
+
+    x = 'bas_poly_eval.metrics.bas_tpr'
+    xscale = 'linear'
+
+    y = 'bas_poly_eval.metrics.bas_f1'
+    y = 'bas_poly_eval.metrics.bas_faa_f1'
+
+    # main_metric = 'bas_poly_eval.metrics.bas_f1'
+    main_metric = 'bas_poly_eval.metrics.bas_faa_f1'
     metric_objectives = {main_metric: 'maximize'}
 
     def finalize_figure(fig, fpath):
@@ -226,77 +238,61 @@ def build_all_param_plots(agg):
     fpath = agg_group_dpath / f'single_results_boxplot.png'
     finalize_figure(fig, fpath)
 
-    if 1:
+    if 0:
         #### Hack for models of interest.
         star_params = []
         p1 = macro_table[(
             # (macro_table['bas_poly.moving_window_size'] == 200) &
-            (macro_table['bas_pxl.package_fpath'] == 'M02_NOV') &
-            (macro_table['bas_pxl.chip_dims'] == '[128, 128]') &
-            (macro_table['bas_poly.thresh'] == 0.12)  &
-            (macro_table['bas_poly.max_area_sqkm'] == 'None') &
-            (macro_table['bas_poly.moving_window_size'] == 'None')
+            (macro_table['bas_poly_eval.params.bas_pxl.package_fpath'] == 'package_epoch0_step41') &
+            (macro_table['bas_poly_eval.params.bas_pxl.chip_dims'] == '[128, 128]') &
+            (macro_table['bas_poly_eval.params.bas_poly.thresh'] == 0.12)  &
+            (macro_table['bas_poly_eval.params.bas_poly.max_area_sqkm'] == 'None') &
+            (macro_table['bas_poly_eval.params.bas_poly.moving_window_size'] == 'None')
         )]['param_hashid'].iloc[0]
         star_params = [p1]
         p2 = macro_table[(
             # (macro_table['bas_poly.moving_window_size'] == 200) &
-            (macro_table['bas_pxl.package_fpath'] == 'M00') &
-            (macro_table['bas_pxl.chip_dims'] == '[224, 224]') &
-            (macro_table['bas_poly.thresh'] == 0.13)  &
-            (macro_table['bas_poly.max_area_sqkm'] == 'None') &
-            (macro_table['bas_poly.moving_window_size'] == 200)
+            (macro_table['bas_poly_eval.params.bas_pxl.package_fpath'] == 'Drop4_BAS_2022_12_15GSD_BGRN_V10_epoch=0-step=4305') &
+            (macro_table['bas_poly_eval.params.bas_pxl.chip_dims'] == '[224, 224]') &
+            (macro_table['bas_poly_eval.params.bas_poly.thresh'] == 0.13)  &
+            (macro_table['bas_poly_eval.params.bas_poly.max_area_sqkm'] == 'None') &
+            (macro_table['bas_poly_eval.params.bas_poly.moving_window_size'] == 200)
         )]['param_hashid'].iloc[0]
         star_params += [p2]
         p3 = macro_table[(
             # (macro_table['bas_poly.moving_window_size'] == 200) &
-            (macro_table['bas_pxl.package_fpath'] == 'M10') &
-            (macro_table['bas_pxl.chip_dims'] == '[256, 256]') &
-            (macro_table['bas_poly.thresh'] == 0.17)  &
-            (macro_table['bas_poly.max_area_sqkm'] == 'None') &
-            (macro_table['bas_poly.moving_window_size'] == 'None')
+            (macro_table['bas_poly_eval.params.bas_pxl.package_fpath'] == 'Drop4_BAS_15GSD_BGRNSH_invar_V8_epoch=16-step=8704') &
+            (macro_table['bas_poly_eval.params.bas_pxl.chip_dims'] == '[256, 256]') &
+            (macro_table['bas_poly_eval.params.bas_poly.thresh'] == 0.17)  &
+            (macro_table['bas_poly_eval.params.bas_poly.max_area_sqkm'] == 'None') &
+            (macro_table['bas_poly_eval.params.bas_poly.moving_window_size'] == 'None')
         )]['param_hashid'].iloc[0]
         star_params += [p3]
+        macro_table['is_star'] = kwarray.isect_flags(macro_table['param_hashid'], star_params)
 
-    macro_table['is_star'] = kwarray.isect_flags(macro_table['param_hashid'], star_params)
-
-    # from watch.utils.util_kwplot import scatterplot_highlight
+    from watch.utils.util_kwplot import scatterplot_highlight
     fig = kwplot.figure(fnum=3, doclf=True)
     ax = fig.gca()
     ax = sns.scatterplot(data=macro_table, x=x, y=y, hue='region_id', ax=ax)
     scatterplot_highlight(data=macro_table, x=x, y=y, highlight='is_star', ax=ax, size=300)
     ax.set_title(f'BAS Results (n={len(macro_table)})\n'
                  f'Macro Analysis over {ub.urepr(rois, sv=1, nl=0)}')
-    ax.set_xscale('log')
+    ax.set_xscale(xscale)
     fpath = agg_group_dpath / 'macro_results.png'
     finalize_figure(fig, fpath)
     # ax.set_xlim(1e-2, npe.quantile(agg.metrics[x], 0.99))
     # ax.set_xlim(1e-2, 0.7)
 
-    ### Build param analysis
-    from watch.utils import result_analysis
-    results = {'params': macro_table[macro_results['resolved_params'].columns],
-               'metrics': macro_table[macro_results['metrics'].columns]}
-    # agg.primary_metric_cols)
-    analysis = result_analysis.ResultAnalysis(
-        results, metrics=[main_metric], metric_objectives=metric_objectives)
-    analysis.build()
-    analysis.analysis()
-    analysis.varied
-
-    unique_fit_params['fit.channels']
-    unique_fit_params['fit.output_space_scale']
-
     # Pre determine some palettes
     shared_palette_groups = [
-        ['bas_poly.thresh'],
-        ['fit.learning_rate'],
-        ['fit.learning_rate'],
-        ['bas_pxl.chip_dims', 'fit.chip_dims'],
-        ['bas_pxl.output_space_scale', 'fit.output_space_scale'],
+        ['bas_poly_eval.params.bas_poly.thresh'],
+        ['bas_poly_eval.fit.learning_rate'],
+        ['bas_poly_eval.fit.learning_rate'],
+        ['bas_poly_eval.params.bas_pxl.chip_dims', 'bas_poly_eval.fit.chip_dims'],
+        ['bas_poly_eval.params.bas_pxl.output_space_scale', 'bas_poly_eval.fit.output_space_scale', 'bas_poly_eval.params.bas_poly.resolution'],
     ]
     param_to_palette = {}
     for group_params in shared_palette_groups:
-        break
         unique_vals = np.unique(macro_table[group_params].values)
         # 'Spectral'
         if len(unique_vals) > 5:
@@ -307,15 +303,27 @@ def build_all_param_plots(agg):
         palette = ub.dzip(unique_vals, unique_colors)
         param_to_palette.update({p: palette for p in group_params})
 
+    DO_STAT_ANALYSIS = True
+    if DO_STAT_ANALYSIS:
+        ### Build param analysis
+        from watch.utils import result_analysis
+        results = {'params': macro_table[macro_results['resolved_params'].columns],
+                   'metrics': macro_table[macro_results['metrics'].columns]}
+        # agg.primary_metric_cols)
+        analysis = result_analysis.ResultAnalysis(
+            results, metrics=[main_metric], metric_objectives=metric_objectives)
+        analysis.build()
+        analysis.analysis()
+        print('analysis.varied = {}'.format(ub.urepr(analysis.varied, nl=2)))
+        ranked_stats = list(enumerate(sorted(analysis.statistics, key=lambda x: x['anova_rank_p'])))
+    else:
+        ...
+
     from kwcoco.metrics.drawing import concice_si_display
-    ranked_stats = list(enumerate(sorted(analysis.statistics, key=lambda x: x['anova_rank_p'])))
-    ranked_stats = ranked_stats[1:2]
     for rank, stats in ub.ProgIter(ranked_stats):
         stats['moments']
         anova_rank_p = stats['anova_rank_p']
         param_name = stats['param_name']
-        print(f'anova_rank_p={anova_rank_p}')
-        print(f'param_name={param_name}')
 
         fig = kwplot.figure(fnum=4, doclf=True)
         # ax = sns.scatterplot(data=macro_table, x=x, y=y, hue=agg.model_cols[0])
@@ -327,7 +335,7 @@ def build_all_param_plots(agg):
         ax.set_title(f'BAS Results (n={len(macro_table)})\n'
                      f'Macro Analysis over {ub.urepr(rois, sv=1, nl=0)}\n'
                      f'Effect of {param_name}: anova_rank_p={concice_si_display(anova_rank_p)}')
-        ax.set_xscale('log')
+        ax.set_xscale(xscale)
         fpath = agg_group_dpath / f'macro_results_{rank:03d}_{param_name}.png'
         finalize_figure(fig, fpath)
 

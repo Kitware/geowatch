@@ -252,15 +252,18 @@ def coco_watch_stats(dset, with_video_info=False):
     image_df = pd.DataFrame(image_rows)
     import numpy as np
     _, year_bins = np.histogram(image_df['year'])
-    max_bins = max(10 // len(image_df['sensor'].unique()), 2)
+    year_bins = sorted(np.unique(np.ceil(year_bins)))
+    # max_bins = max(18 // len(image_df['sensor'].unique()), 2)
+    max_bins = 15
     if len(year_bins) > max_bins:
         _, year_bins = np.histogram(image_df['year'], bins=max_bins)
+        year_bins = sorted(np.unique(np.ceil(year_bins)))
 
     bin_labels = []
     for a, b in ub.iter_window(year_bins, 2):
         a = int(a)
         b = int(b)
-        if a == b:
+        if a == b or (a + 1) == b:
             bin_labels += [str(a)]
         else:
             bin_labels += [f'{a} - {b}']
@@ -274,7 +277,8 @@ def coco_watch_stats(dset, with_video_info=False):
         year_summaries.extend(summaries)
     year_summary_df = pd.DataFrame(year_summaries)
     year_summary_df = year_summary_df.sort_values('time')
-    year_pivot = year_summary_df.pivot(['video'], ['time', 'sensor'], ['count'])
+
+    year_pivot = year_summary_df.pivot(['video', 'sensor'], ['time'], ['count'])
     year_pivot = year_pivot.fillna('0').astype(int)
     rich.print('Sensor Date Range Histograms')
     rich.print(year_pivot)
@@ -298,6 +302,7 @@ def coco_watch_stats(dset, with_video_info=False):
         'sensor_hist': info['sensor_hist'],
         'sensorchan_hist2': info['sensorchan_hist2'],
         'video_summary_rows': video_summary_rows,
+        'year_pivot': year_pivot,
     }
     return stat_info
 

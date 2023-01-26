@@ -4,6 +4,17 @@ rm -rf _cmd_queue_schedule
 """
 
 
+def link_zipfiles():
+    import ubelt as ub
+    root_dpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_testpipe')
+    zipped_kwcoco_fpaths = list((root_dpath / 'pred/flat').glob('*/*/*.kwcoco.json.zip'))
+
+    for zip_fpath in zipped_kwcoco_fpaths:
+        orig_fpath = zip_fpath.parent / zip_fpath.name.rsplit('.', 1)[0]
+        if not orig_fpath.exists():
+            ub.symlink(real_path=zip_fpath, link_path=orig_fpath, verbose=1)
+
+
 def cleanup_mlops():
     import ubelt as ub
     root_dpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_testpipe')

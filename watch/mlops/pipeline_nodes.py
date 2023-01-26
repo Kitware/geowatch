@@ -274,6 +274,8 @@ class PipelineDAG:
 
             node.will_exist = ((node.enabled and ancestors_will_exist) or
                                node.does_exist)
+            node.resolved_out_paths
+            print(f'node.resolved_out_paths={node.resolved_out_paths}')
             print(f'Checking {node_name}, will_exist={node.will_exist}')
 
             if node.will_exist and node.enabled:
