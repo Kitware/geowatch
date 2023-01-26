@@ -159,7 +159,10 @@ check_metrics_framework(){
     if [[ "$METRICS_RETCODE" == "1" ]]; then
         echo "WARNING: IARPA metrics not installed!
         
-        To enable evaluating your results, clone this repo and follow the instructions: 
+        To enable evaluating your results, run this command:
+        $ pip install git+ssh://git@gitlab.kitware.com/smart/metrics-and-test-framework.git
+        
+        For more information, see:
         https://gitlab.kitware.com/smart/metrics-and-test-framework#installation
         "
     fi
