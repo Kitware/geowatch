@@ -4,6 +4,7 @@ import geojson
 import ubelt as ub
 import dateutil
 import datetime
+from collections import defaultdict
 # import pandas as pd
 # import geopandas as gpd
 
@@ -38,14 +39,17 @@ def extend(site_summary, site):
     if ssd < sd:
         print(f'extending start of {site_id} from {sd} to {ssd}')
         geom = site['features'][1]['geometry']
-        days = site['features'][1]['properties']['misc_info']['phase_transition_days']
+        days = site['features'][1]['properties']['misc_info'][
+            'phase_transition_days']
         days[0] += (sd - ssd).days
         obs0_feat = {}
         obs0_feat['geometry'] = geom
         obs0_feat['properties'] = default_feat()
         obs0_feat['properties']['current_phase'] = 'Site Preparation'
         obs0_feat['properties']['observation_date'] = start_date
-        obs0_feat['properties']['misc_info'] = {'phase_transition_days': [days]}
+        obs0_feat['properties']['misc_info'] = {
+            'phase_transition_days': [days]
+        }
         site['features'].insert(1, obs0_feat)
         site['features'][0]['properties']['start_date'] = sstart_date
 
@@ -60,7 +64,8 @@ def extend(site_summary, site):
             days = 1.0
         else:
             days = (sed - ed).days
-        site['features'][-1]['properties']['misc_info']['phase_transition_days'] = [days]
+        site['features'][-1]['properties']['misc_info'][
+            'phase_transition_days'] = [days]
         obsn_feat = {}
         obsn_feat['geometry'] = site['features'][-1]['geometry']
         obsn_feat['properties'] = default_feat()
@@ -68,6 +73,54 @@ def extend(site_summary, site):
         obsn_feat['properties']['observation_date'] = send_date
         obsn_feat['properties']['misc_info'] = {'phase_transition_days': [1.0]}
         site['features'].append(obsn_feat)
+        site['features'][0]['properties']['end_date'] = send_date
+
+    return site
+
+
+def extend_clone(bas_site, site):
+    '''
+    TODO does not handle phase_transition_days or enforce temporal consistency
+    in phases.
+    '''
+
+    sstart_date = bas_site['features'][0]['properties']['start_date']
+    send_date = bas_site['features'][0]['properties']['end_date']
+    ssd, sed = to_date(sstart_date), to_date(send_date)
+    start_date = site['features'][0]['properties']['start_date']
+    end_date = site['features'][0]['properties']['end_date']
+    sd, ed = to_date(start_date), to_date(end_date)
+    site_id = bas_site['features'][0]['properties']['site_id']
+
+    n_existing_feats = len(site['features']) - 1
+
+    site_feats = defaultdict(list)
+    for f in site['features'][1:]:
+        k = to_date(f['properties']['observation_date'])
+        site_feats[k].append(f)
+
+    bas_site_feats = defaultdict(list)
+    for f in bas_site['features'][1:]:
+        k = to_date(f['properties']['observation_date'])
+        bas_site_feats[k].append(f)
+
+    if ssd < sd:
+        print(f'extending start of {site_id} from {sd} to {ssd}')
+        site['features'][0]['properties']['start_date'] = sstart_date
+
+    if ed < sed:
+        print(f'extending end of {site_id} from {ed} to {sed}')
+        site['features'][0]['properties']['end_date'] = send_date
+
+    for k in bas_site_feats:
+        if k not in site_feats:
+            site_feats[k] = bas_site_feats[k]
+
+    site['features'] = (site['features'][:1] +
+                        list(ub.flatten(ub.sorted_keys(site_feats).values())))
+
+    n_after_feats = len(site['features']) - 1
+    print(f'added {n_after_feats - n_existing_feats} features to {site_id}')
 
     return site
 
@@ -98,7 +151,9 @@ def create(site_summary):
     obs0_feat['properties'] = default_feat()
     obs0_feat['properties']['current_phase'] = 'Site Preparation'
     obs0_feat['properties']['observation_date'] = start_date
-    obs0_feat['properties']['misc_info'] = {'phase_transition_days': [mid_days]}
+    obs0_feat['properties']['misc_info'] = {
+        'phase_transition_days': [mid_days]
+    }
     site.append(obs0_feat)
 
     obs1_feat = {}
@@ -106,7 +161,9 @@ def create(site_summary):
     obs1_feat['properties'] = default_feat()
     obs1_feat['properties']['current_phase'] = 'Active Construction'
     obs0_feat['properties']['observation_date'] = mid_date
-    obs1_feat['properties']['misc_info'] = {'phase_transition_days': [end_days]}
+    obs1_feat['properties']['misc_info'] = {
+        'phase_transition_days': [end_days]
+    }
     site.append(obs1_feat)
 
     obs2_feat = {}
@@ -120,11 +177,12 @@ def create(site_summary):
     return {'type': 'FeatureCollection', 'features': site}
 
 
-def main(modify_region_models_pth,
-         region_models_pth,
+def main(region_models_pth,
          site_models_pth,
          out_region_models_pth,
          out_site_models_pth,
+         modify_region_models_pth,
+         modify_site_models_pth=None,
          create_missing=True,
          extend_existing=True):
     '''
@@ -132,6 +190,8 @@ def main(modify_region_models_pth,
     site summaries.
 
     Args:
+        modify_site_models_pth: If given, create/extend from site models
+        instead of site summaries
         create_missing: Create a new site model for any site summary that
         doesn't have one
         extend_existing: Extend the temporal duration of any site model smaller
@@ -140,11 +200,11 @@ def main(modify_region_models_pth,
     Ignore:
         >>> from watch.cli.extend_sc_sites import main
         >>> main(
-        >>>     'cropped_region_models_bas',
         >>>     'sc_out_region_models',
         >>>     'sc_out_site_models',
         >>>     'extended_sc_out_region_models',
-        >>>     'extended_sc_out_site_models'
+        >>>     'extended_sc_out_site_models',
+        >>>     'cropped_region_models_bas',
         >>> )
         >>> import jsonschema
         >>> import json
@@ -171,31 +231,13 @@ def main(modify_region_models_pth,
     mr_pths = watch.utils.util_gis.coerce_geojson_paths(
         modify_region_models_pth)
     rm_pths = watch.utils.util_gis.coerce_geojson_paths(region_models_pth)
+    ms_pths = watch.utils.util_gis.coerce_geojson_paths(modify_site_models_pth)
     sm_pths = watch.utils.util_gis.coerce_geojson_paths(site_models_pth)
     assert len(mr_pths) == 1, 'need 1 region -> n site models'
     assert len(rm_pths) == 1, 'need 1 region -> n site models'
     if len(sm_pths) < 1:
         print('warning: no existing site models found')
-    '''
-    regions = pd.concat([
-        i['data'] for i in watch.utils.util_gis.coerce_geojson_datas(rm_pths)
-    ])
 
-    site_summaries = regions[(regions['type'] == 'site_summary')
-                             & (regions['model_content'] == 'proposed')]
-    site_summaries = site_summaries.set_index(['region_id', 'site_id', 'type'],
-                                              drop=False,
-                                              append=True)
-
-    sites = pd.concat([
-        i['data'] for i in watch.utils.util_gis.coerce_geojson_datas(sm_pths)
-    ])
-    # sites = sites[(sites['type'] == 'site')
-                  # & (sites['model_content'] == 'proposed')]
-    sites = sites.set_index(['region_id', 'site_id', 'type'],
-                            drop=False,
-                            append=True)
-    '''
     msite_summaries = {}
     for pth in mr_pths:
         rm = json.load(open(pth))
@@ -215,22 +257,33 @@ def main(modify_region_models_pth,
             else:
                 others.append(f)
 
+    msite_models = {}
+    for pth in ms_pths:
+        sm = json.load(open(pth))
+        f = sm['features'][0]
+        if (f['properties']['type'] == 'site'
+                and f['properties']['model_content'] == 'proposed'):
+            msite_models[f['properties']['site_id']] = sm
+
     site_models = {}
     for pth in sm_pths:
         sm = json.load(open(pth))
         f = sm['features'][0]
-        if (f['properties']['type'] == 'site' and f['properties']['model_content'] == 'proposed'):
+        if (f['properties']['type'] == 'site'
+                and f['properties']['model_content'] == 'proposed'):
             site_models[f['properties']['site_id']] = sm
 
     default_summary_settings = next(iter(site_summaries.values())).copy()
     for k in ['start_date', 'end_date', 'site_id']:
         default_summary_settings['properties'].pop(k)
     rid = others[0]['properties']['region_id']
-    # next_si = max(int(f['properties']['site_id'].split('_')[-1]) for f in msite_summaries.values()) + 1
 
     if extend_existing:
         for k in site_models:
-            sm = extend(msite_summaries[k], site_models[k])
+            if k in msite_models:
+                sm = extend_clone(msite_models[k], site_models[k])
+            else:
+                sm = extend(msite_summaries[k], site_models[k])
             site_models[k] = sm
             ss = site_summaries[k]
             ss['start_date'] = sm['features'][0]['properties']['start_date']
@@ -240,17 +293,17 @@ def main(modify_region_models_pth,
     if create_missing:
         for k in msite_summaries:
             if k not in site_models:
-                sm = create(
-                    msite_summaries[k],
-                    # '_'.join((rid, str(next_si).zfill(4)))
-                )
+                if k in msite_models:
+                    site_models[k] = msite_models[k]
+                else:
+                    sm = create(msite_summaries[k])
                 ss = default_summary_settings.copy()
                 ss['site_id'] = k
-                ss['start_date'] = sm['features'][0]['properties']['start_date']
+                ss['start_date'] = sm['features'][0]['properties'][
+                    'start_date']
                 ss['end_date'] = sm['features'][0]['properties']['end_date']
                 site_models[k] = sm
                 site_summaries[k] = ss
-                # next_si += 1
 
     new_rm = geojson.FeatureCollection(others + list(site_summaries.values()))
     with open(
