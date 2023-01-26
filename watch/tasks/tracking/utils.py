@@ -313,42 +313,28 @@ def gpd_compute_scores(
         resolution=None):
 
     def compute_scores(grp, thrs=[], keys=[]):
-        # TODO handle keys as channelcodes
-        # port over better handling from utils.build_heatmaps
         gid = getattr(grp, 'name', None)
         if gid is None:
             for thr in thrs:
                 grp[[(k, thr) for k in keys]] = 0
         else:
             heatmaps = []
+            img = sub_dset.coco_image(gid)
             for k in keys:
-                DBG_SKIP_HMAPS=0
-                if DBG_SKIP_HMAPS:
-                    # TODO trailing dim
-                    img = sub_dset.coco_image(gid)
-                    if k in img.channels:
-                        heatmap = img.delay(k, space='video', resolution=resolution)
-                    else:
-                        w, h = img.delay(space='video', resolution=resolution).dsize
-                        heatmaps = np.zeros((w, h))
+                # TODO handle keys as channelcodes
+                if k in img.channels:
+                    heatmap = img.delay(k, space='video', resolution=resolution).finalize()
+                    heatmap = np.squeeze(heatmap, -1)
                 else:
-                    # TODO use nans instead of fill
-                    heatmap = build_heatmap(sub_dset, gid, k, missing='fill',
-                                            resolution=resolution)
+                    w, h = img.delay(space='video', resolution=resolution).dsize
+                    heatmap = np.zeros((h, w))
                 heatmaps.append(heatmap)
             heatmaps = np.stack(heatmaps, axis=0)
-            if 0:
-                h = build_heatmaps(sub_dset, [gid], keys, missing='fill')
-                heatmaps2 = np.stack([h[k][0] for k in keys], axis=0)
-                # TODO why does this fail?
-                # TODO deprecate build_heatmaps, interpolation behavior
-                # unneeded and confusing
-                assert np.allclose(heatmaps, heatmaps2)
             score_cols = list(itertools.product(keys, thrs))
             scores = grp['poly'].apply(
                 lambda p: pd.Series(dict(zip(
                     score_cols,
-                    ub.flatten(score_poly(p, heatmaps, threshold=thrs))))
+                    list(ub.flatten(score_poly(p, heatmaps, threshold=thrs)))))
                 ))
             grp[score_cols] = scores
         return grp
@@ -627,274 +613,3 @@ def _validate_keys(key, bg_key):
     if not set(key).isdisjoint(set(bg_key)):
         raise ValueError('cannot have a key in foreground and background')
     return key, bg_key
-
-
-@profile
-def build_heatmaps(
-        sub_dset: kwcoco.CocoDataset,
-        gids: List[int],
-        # TODO debug List
-        keys: Union[List[str], Dict[str, List[str]]],
-        missing='fill',
-        skipped='interpolate',
-        space='video',
-        resolution=None,
-        video_id=None) -> Dict[str, List[np.array]]:
-    '''
-    Vectorized version of watch.tasks.tracking.utils.build_heatmap across gids.
-
-    Can also sum keys using group names.
-
-    Restrictions wrt heatmap():
-        - uses video space
-        - returns chan probs
-
-    Args:
-        sub_dset (kwcoco.CocoDataset): must have exactly 1 video
-
-        gids: List[image id]
-
-        key: List[str] list of channel names
-
-        space (str):
-            The "space" the heatmaps are loaded in.
-            Can be 'video' or 'image'. Should generally be "video".
-
-        missing: behavior for missing keys.
-            'fill': return probs and chan_probs of zeros
-            'skip': return probs of zeros, skip chan_probs
-            'raise': raise exception
-
-        skipped: behavior for missing keys across gids.
-            'interpolate': use heatmap from last gid
-            'zeros': insert zeros
-            # 'remove': do not return this gid  # TODO w/ different signature
-
-        video_id (int | None): if specified, get heatmaps for this video
-            otherwise assert that there is exactly one video
-
-        resolution (str | None):
-            desired resolution (e.g. 10GSD) that will define a scale factor
-            on top of the "space" (i.e. video space) used to build the heatmaps.
-
-    SeeAlso:
-        :func:`build_heatmap`
-        :func:`build_heatmaps`
-
-    Returns:
-        Dict : {key: [heatmap for each gid]}
-
-    Example:
-        >>> from watch.tasks.tracking.utils import *  # NOQA
-        >>> import watch
-        >>> dset = watch.coerce_kwcoco('watch-msi', heatmap=True, geodata=True, dates=True)
-        >>> keys = 'salient|notsalient|distri'
-        >>> videos = dset.videos()
-        >>> video_id = videos._ids[0]
-        >>> gids = videos.images[0][0:2]
-        >>> heatmaps = build_heatmaps(dset, gids=gids, keys=keys, video_id=video_id)
-        >>> assert all(len(v) == len(gids) for v in heatmaps.values())
-        >>> heatmaps = build_heatmaps(dset, gids=gids, keys={'group1': ['salient', 'notsalient']}, video_id=video_id)
-        >>> assert all(len(v) == len(gids) for v in heatmaps.values())
-    '''
-    assert space == 'video'
-
-    if isinstance(keys, list):
-        _dummy_key = '__dummy__'
-        key_groups = {'__dummy__': keys}
-    elif isinstance(keys, dict):
-        _dummy_key = None
-        key_groups = keys
-    elif isinstance(keys, str):
-        import kwcoco
-        _dummy_key = '__dummy__'
-        key_groups = {'__dummy__': kwcoco.FusedChannelSpec.coerce(keys).to_list()}
-    else:
-        raise TypeError(type(keys))
-
-    # Would use RunningStats, but it can't support indexed/subsetted access
-    # for multiple site boundaries over different times.
-    # This solution is more efficient when len(tracks) > len(gids).
-    #
-    # running_dct = defaultdict(kwarray.RunningStats)
-    heatmaps_dct = collections.defaultdict(list)
-
-    # record previous heatmaps in video space to propagate thru missing
-    # frames
-    if video_id is None:
-        assert len(sub_dset.index.videos) == 1
-        video_id = ub.peek(sub_dset.index.videos.values())['id']
-
-    vid = sub_dset.index.videos[video_id]
-    vid_shape = (vid['height'], vid['width'])
-    first_coco_img = sub_dset.coco_image(
-        sub_dset.images(video_id=video_id).peek()['id'])
-    # should this be special-cased in _scalefactor_for_resolution?
-    if resolution is not None:
-        scale_trk_from_vid = first_coco_img._scalefactor_for_resolution(
-            space='video', resolution=resolution)
-        trk_shape = (np.array(vid_shape) * scale_trk_from_vid).astype(int)
-    else:
-        trk_shape = vid_shape
-
-    prev_heatmap_dct = collections.defaultdict(lambda: np.zeros(trk_shape))
-
-    for gid in gids:
-        for group, key in key_groups.items():
-
-            # we are working only in vid space, so forget about warping
-            img_probs, chan_probs = build_heatmap(sub_dset,
-                                                  gid,
-                                                  key,
-                                                  space=space,
-                                                  resolution=resolution,
-                                                  return_chan_probs=True)
-            # TODO make this more efficient using missing='skip'
-            if np.any(img_probs):
-                heatmaps_dct[group].append(img_probs)
-            elif skipped == 'interpolate':
-                heatmaps_dct[group].append(prev_heatmap_dct[group])
-            elif skipped == 'zeros':
-                heatmaps_dct[group].append(np.zeros(trk_shape))
-            else:
-                raise ValueError(skipped)
-
-            for k in key:
-                if k in chan_probs:
-                    heatmaps_dct[k].append(chan_probs[k])
-                    prev_heatmap_dct[k] = chan_probs[k]
-                elif skipped == 'interpolate':
-                    heatmaps_dct[k].append(prev_heatmap_dct[k])
-                elif skipped == 'zeros':
-                    heatmaps_dct[k].append(np.zeros(trk_shape))
-                else:
-                    raise ValueError(skipped)
-
-    if _dummy_key is not None:
-        heatmaps_dct.pop(_dummy_key)
-    return heatmaps_dct
-
-
-@profile
-def build_heatmap(dset,
-                  gid,
-                  key,
-                  return_chan_probs=False,
-                  space='video',
-                  missing='fill',
-                  resolution=None):
-    """
-    Find the total heatmap of key within gid
-
-    Args:
-        dset: kwcoco.CocoDataset
-        gid: image id
-        key: List[str] list of channel names
-        return_chan_probs:
-            if True, also return a dict {k: build_heatmap(k) for k in keys}
-        space: 'video' or 'image'
-        missing: behavior for missing keys.
-            'fill': return probs and chan_probs of zeros
-            'skip': return probs of zeros, skip chan_probs
-            'raise': raise exception
-
-    SeeAlso:
-        :func:`build_heatmap`
-        :func:`build_heatmaps`
-
-    Example:
-        >>> from watch.tasks.tracking.utils import *  # NOQA
-        >>> import watch
-        >>> dset = watch.coerce_kwcoco(
-        >>>     data='watch-msi', heatmap=True, geodata=True, dates=True)
-        >>> gid = dset.images()[0]
-        >>> key = 'salient'
-        >>> space = 'video'
-        >>> missing = 'fill'
-        >>> # With probs
-        >>> return_chan_probs = True
-        >>> fg_img_probs1, chan_probs = build_heatmap(dset, gid, key, return_chan_probs, space, missing)
-        >>> # FG only
-        >>> return_chan_probs = False
-        >>> fg_img_probs2 = build_heatmap(dset, gid, key, return_chan_probs, space, missing)
-        >>> #
-        >>> # Test with a non-existing key
-        >>> return_chan_probs = True
-        >>> key = 'eludium'
-        >>> fg_img_probs1, chan_probs = build_heatmap(dset, gid, key, return_chan_probs, space, missing)
-
-    Example:
-        >>> from watch.tasks.tracking.utils import *  # NOQA
-        >>> import watch
-        >>> dset = watch.coerce_kwcoco(data='watch-msi', heatmap=True, geodata=True, dates=True)
-        >>> gid = dset.images()[0]
-        >>> key = 'salient'
-        >>> # Test dynamic resolution
-        >>> fg_img_probs1 = build_heatmap(dset, gid, key, resolution='3GSD')
-        >>> fg_img_probs2 = build_heatmap(dset, gid, key, resolution='7GSD')
-        >>> a = np.array(fg_img_probs1.shape)
-        >>> b = np.array(fg_img_probs2.shape)
-        >>> assert np.isclose((a / b).mean(), 7 / 3, atol=.1)
-    """
-    key, _ = _validate_keys(key, None)
-    coco_img = dset.coco_image(gid)
-
-    channels_request = kwcoco.FusedChannelSpec.coerce(key)
-    channels_have = coco_img.channels.fuse().intersection(channels_request)
-
-    if missing == 'raise':
-        if channels_have.numel() != channels_request.numel():
-            raise ValueError(
-                ub.paragraph(f'''
-                Requested {channels_request=} in the image {gid=} of {dset=}
-                but only {channels_have=} existed.
-                '''))
-
-    w, h = coco_img.delay(space=space).dsize
-    if resolution is not None:
-        scale_trk_from_vid = coco_img._scalefactor_for_resolution(
-            space='video', resolution=resolution)
-        w, h = (np.array((w, h)) * scale_trk_from_vid).astype(int)
-
-    common = channels_have
-
-    if len(common) == 0:  # for bg_key
-        fg_img_probs = np.zeros((h, w))
-        if return_chan_probs:
-            if missing == 'skip':
-                return fg_img_probs, {}
-            else:
-                return fg_img_probs, {k: fg_img_probs for k in key}
-        else:
-            return fg_img_probs
-
-    if 0 and __debug__:
-        if common.numel() > 1:
-            print('WARNING: Im not sure about that sum axis=-1, '
-                  'I hope there is only ever one channel here')
-
-    delayed = coco_img.delay(
-        channels=common, resolution=resolution, space=space,
-        nodata_method='float')
-    key_img_probs = delayed.finalize()
-
-    # Not sure about that sum axis=-1 here
-    fg_img_probs = key_img_probs.sum(axis=-1)
-    if return_chan_probs:
-        # some awkwardness here from non-invertible mapping from
-        # ChannelSpec to FusedChannelSpec
-        chan_probs = {}
-        idxs = common.component_indices()
-        for k in key:
-            codes = common.intersection([k]).as_list()
-            probs = [key_img_probs[idxs[code]] for code in codes]
-            if len(probs) == 0:
-                if missing == 'skip':
-                    continue
-                else:
-                    probs.append(np.zeros((h, w)))
-            # Again, I'm not sure about this sum here.
-            chan_probs[k] = np.sum(probs, axis=0)
-        return fg_img_probs, chan_probs
-    else:
-        return fg_img_probs

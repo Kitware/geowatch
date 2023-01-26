@@ -6,7 +6,6 @@ import numpy as np
 import kwcoco
 import kwimage
 
-from watch.tasks.tracking.utils import build_heatmaps, score_poly
 from watch.heuristics import CNAMES_DCT
 from watch.utils.kwcoco_extensions import sorted_annots
 
@@ -548,21 +547,3 @@ def phase_prediction_baseline(annots) -> List[float]:
         next_offset = np.array(list(phase_avg_days.values())).astype('timedelta64[D]').astype(float).mean()
 
     return next_offset
-
-
-def phase_prediction_heatmap(annots, coco_dset, key) -> List[float]:
-    '''
-    Get phase prediction heatmaps from model output and score them against
-    annotation polygons to get predicted dates
-    '''
-    gids = list(set(annots.gids))
-    heatmaps_dct = dict(
-        zip(gids,
-            build_heatmaps(coco_dset, gids, [key], skipped='interpolate')[key]))
-    # TODO generalize this as annots.detections.responses()?
-    return [
-        score_poly(poly, heatmaps_dct[gid])
-        for poly, gid in zip(
-            annots.detections.data['segmentations'].to_polygon_list(),
-            annots.gids)
-    ]

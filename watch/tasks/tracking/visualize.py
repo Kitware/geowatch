@@ -440,7 +440,7 @@ def viz_track_scores(dset, out_fpath, gt_dset=None):
         return
 
     df = pd.DataFrame(dict(date=dates, sens=sens, tid=tid)).join(pd.DataFrame.from_records(scores))
-    df['No Activity'] = 1 - df[keys.as_list()]
+    df['No Activity'] = 1 - df[keys.as_list()].sum(axis=1)
     ordered_phases = ['No Activity'] + keys.as_list()
     df['orig'] = df[ordered_phases].idxmax(axis=1)
     df['y'] = df['orig'].map(dict(zip(ordered_phases, np.linspace(0, 1, len(ordered_phases)))))

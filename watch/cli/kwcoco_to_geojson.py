@@ -396,7 +396,8 @@ def track_to_site(coco_dset,
         site_id = '_'.join((region_id, str(site_idx).zfill(4)))
     else:
         site_id = trackid
-        region_id = '_'.join(site_id.split('_')[:-1])
+        # TODO make more robust
+        region_id = '_'.join(site_id.split('_')[:2])
 
     if as_summary:
         return site_feature(coco_dset, region_id, site_id, trackid, gids, features, as_summary)
