@@ -665,7 +665,7 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
             true_overlay = kwimage.ensure_uint255(true_overlay)
             true_overlay = kwimage.draw_text_on_image(
                 true_overlay, 'true class', org=(1, 1), valign='top',
-                color='limegreen', border=1)
+                color=TRUE_GREEN, border=1)
             vert_parts.append(true_overlay)
 
             pred_overlay = colorize_class_probs(pred_cat_ohe, pred_classes)[..., 0:3]
@@ -676,7 +676,7 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
             pred_overlay = kwimage.ensure_uint255(pred_overlay)
             pred_overlay = kwimage.draw_text_on_image(
                 pred_overlay, 'pred class', org=(1, 1), valign='top',
-                color='dodgerblue', border=1)
+                color=PRED_BLUE, border=1)
             vert_parts.append(pred_overlay)
 
         if 'pred_saliency' in info:
@@ -703,7 +703,7 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
             heatmap_int = kwimage.ensure_uint255(heatmap[..., 0:3])
             heatmap_int = kwimage.draw_text_on_image(
                 heatmap_int, 'true saliency', org=(1, 1), valign='top',
-                color='limegreen', border=1)
+                color=TRUE_GREEN, border=1)
             vert_parts.append(heatmap_int)
         # confusion_image = kwimage.draw_text_on_image(
         #     confusion_image, image_text, org=(1, 1), valign='top',
@@ -749,7 +749,7 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
                 heatmap_int = kwimage.ensure_uint255(heatmap[..., 0:3])
                 heatmap_int = kwimage.draw_text_on_image(
                     heatmap_int, 'pred saliency', org=(1, 1), valign='top',
-                    color='dodgerblue', border=1)
+                    color=PRED_BLUE, border=1)
                 vert_parts.append(heatmap_int)
                 # if real_image_norm is not None:
                 #     overlaid = kwimage.overlay_alpha_layers([heatmap, real_image_norm.mean(axis=2)])
