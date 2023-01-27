@@ -36,6 +36,7 @@ VIZ_DPATH = None
 
 
 def _norm(heatmaps, norm_ord):
+<<<<<<< HEAD
     """
     Computes the generalized mean over axis=0.
 
@@ -639,6 +640,9 @@ def time_aggregated_polys(
     # _TRACKS = gpd_compute_scores(_TRACKS, sub_dset, thrs, ks, USE_DASK=True)
     _TRACKS = gpd_compute_scores(_TRACKS, sub_dset, thrs, ks, USE_DASK=False)
 
+    if _TRACKS.empty:
+        return _TRACKS
+
     # dask could unsort
     _TRACKS = gpd_sort_by_gid(_TRACKS.reset_index(), sorted_gids)
 
@@ -664,7 +668,6 @@ def time_aggregated_polys(
         # If a tracking resolution was specified undo the extra scale factor
         _TRACKS['poly'] = _TRACKS['poly'].scale(*scale_vid_from_trk, origin=(0, 0))
 
-    # try to ignore this error
     # TODO: do we need to convert to MultiPolygon here? Or can that be handled
     # by consumers of this method?
     _TRACKS['poly'] = _TRACKS['poly'].map(kwimage.MultiPolygon.from_shapely)
