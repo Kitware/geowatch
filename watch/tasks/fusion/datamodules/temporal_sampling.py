@@ -6,7 +6,32 @@ This is used to define our dilated time sampling.
 This following doctest illustrates the method on project data.
 
 Example:
-        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+    >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
+    >>> import watch
+    >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, num_frames=128, image_size=(32, 32))
+    >>> vidid = dset.dataset['videos'][0]['id']
+    >>> self = TimeWindowSampler.from_coco_video(
+    >>>     dset, vidid,
+    >>>     time_window=11,
+    >>>     affinity_type='uniform', time_span='8m', update_rule='',
+    >>> )
+    >>> import kwplot
+    >>> plt = kwplot.autoplt()
+    >>> self.update_affinity(affinity_type='contiguous')
+    >>> self.show_summary(samples_per_frame=3, fnum=1)
+    >>> self.show_procedure(fnum=4)
+    >>> plt.subplots_adjust(top=0.9)
+    >>> self.update_affinity(affinity_type='soft2')
+    >>> self.show_summary(samples_per_frame=3, fnum=2)
+    >>> self.show_procedure(fnum=5)
+    >>> plt.subplots_adjust(top=0.9)
+    >>> self.update_affinity(affinity_type='hardish3')
+    >>> self.show_summary(samples_per_frame=3, fnum=3)
+    >>> self.show_procedure(fnum=6)
+    >>> plt.subplots_adjust(top=0.9)
+
+Example:
+        >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
         >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
         >>> import watch
         >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
@@ -30,9 +55,8 @@ Example:
         >>> self.show_summary(samples_per_frame=3, fnum=3)
         >>> plt.subplots_adjust(top=0.8)
 
-
 Example:
-        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
         >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
         >>> import watch
         >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
@@ -311,7 +335,7 @@ class TimeWindowSampler(CommonSamplerMixin):
         main_indexes
 
     Example:
-        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
         >>> import os
         >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
         >>> import kwcoco
@@ -354,7 +378,7 @@ class TimeWindowSampler(CommonSamplerMixin):
         Construct the affinity matrix given the current ``affinity_type``.
 
         Example:
-            >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+            >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
             >>> import os
             >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
             >>> import watch
@@ -504,7 +528,7 @@ class TimeWindowSampler(CommonSamplerMixin):
             ndarray | Tuple[ndarray, Dict]
 
         Example:
-            >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+            >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
             >>> import os
             >>> import kwcoco
             >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
@@ -522,6 +546,27 @@ class TimeWindowSampler(CommonSamplerMixin):
             >>> self.determenistic = False
             >>> self.show_summary(samples_per_frame=1 if self.determenistic else 10, fnum=1)
             >>> self.show_procedure(fnum=2)
+
+        Example:
+            >>> import os
+            >>> import kwcoco
+            >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
+            >>> import watch
+            >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, num_frames=128, image_size=(32, 32))
+            >>> vidid = dset.dataset['videos'][0]['id']
+            >>> self = TimeWindowSampler.from_coco_video(
+            >>>     dset, vidid,
+            >>>     time_span='1y',
+            >>>     time_window=3,
+            >>>     affinity_type='soft2',
+            >>>     update_rule='distribute+pairwise')
+            >>> self.determenistic = False
+            >>> self.show_summary(samples_per_frame=1 if self.determenistic else 10, fnum=1)
+            >>> self.show_procedure(fnum=2)
+
+        Ignore:
+            import xdev
+            globals().update(xdev.get_func_kwargs(TimeWindowSampler.sample))
         """
         if main_frame_idx is None:
             include_indices = []
@@ -573,7 +618,7 @@ class TimeWindowSampler(CommonSamplerMixin):
         are included in that sample.
 
         Example:
-            >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+            >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
             >>> import os
             >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
             >>> from watch.utils.util_data import find_smart_dvc_dpath
@@ -687,7 +732,7 @@ class TimeWindowSampler(CommonSamplerMixin):
         row.
 
         Example:
-            >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+            >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
             >>> import os
             >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
             >>> from watch.utils.util_data import find_smart_dvc_dpath
@@ -735,6 +780,9 @@ class TimeWindowSampler(CommonSamplerMixin):
             >>> self.determenistic = False
             >>> self.show_summary(samples_per_frame=3, fnum=10)
 
+        Ignore:
+            import xdev
+            globals().update(xdev.get_func_kwargs(TimeWindowSampler.show_procedure))
         """
         rng = kwarray.ensure_rng(rng)
         # if idx is None:
@@ -947,7 +995,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
             'steps': [],
 
             'initial_weights': initial_weights.copy(),
-            'initial_update_weights': update_weights.copy(),
+            'initial_update_weights': update_weights.copy() if hasattr(update_weights, 'copy') else update_weights,
             'initial_probs': initial_probs,
 
             'initial_chosen': chosen.copy(),
@@ -979,7 +1027,23 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
                 # Should really never get here in day-to-day, but just in case
                 if error_level == 2:
                     raise TimeSampleError('all included probability is exhausted')
-                current_weights[:] = rng.rand(len(current_weights))
+                # Zero weight method: neighbors
+                zero_weight_method = 'neighbors'
+                if zero_weight_method == 'neighbors':
+
+                    if len(chosen) == 0:
+                        zero_weight_method = 'random'
+                    else:
+                        chosen_neighbor_idxs = np.hstack([np.array(chosen) + 1, np.array(chosen) - 1])
+                        chosen_neighbor_idxs = np.unique(np.clip(chosen_neighbor_idxs, 0,  len(current_weights) - 1))
+                        ideal_idxs = np.setdiff1d(chosen_neighbor_idxs, chosen)
+                        if len(ideal_idxs) == 0:
+                            ideal_idxs = chosen_neighbor_idxs
+                        current_weights[ideal_idxs] = 1
+
+                if zero_weight_method == 'random':
+                    current_weights[:] = rng.rand(len(current_weights))
+
                 current_weights[chosen] = 0
                 total_weight = current_weights.sum()
                 if return_info:
@@ -987,7 +1051,10 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
                 if total_weight == 0:
                     if error_level == 1:
                         raise TimeSampleError('all chosen probability is exhausted')
-                    current_weights[:] = rng.rand(len(current_weights))
+                    if zero_weight_method == 'neighbors':
+                        current_weights[:] = rng.rand(len(current_weights))
+                    if zero_weight_method == 'random':
+                        current_weights[:] = rng.rand(len(current_weights))
                     if return_info:
                         errors.append('all indices were chosen, punting')
 
@@ -1066,7 +1133,7 @@ def hard_time_sample_pattern(unixtimes, time_window, time_span='2y'):
         >>> name = 'demo-data'
 
     Ignore:
-        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
         >>> import os
         >>> from watch.utils.util_data import find_smart_dvc_dpath
         >>> dvc_dpath = find_smart_dvc_dpath()
@@ -1561,7 +1628,12 @@ def show_affinity_sample_process(chosen, info, fnum=1):
 
     fig = kwplot.figure(pnum=pnum_())
     ax = fig.gca()
-    ax.plot(np.arange(xmax), info['initial_update_weights'], color='orange')
+
+    try:
+        ax.plot(np.arange(xmax), info['initial_update_weights'], color='orange')
+    except ValueError:
+        ax.plot(np.arange(xmax), [info['initial_update_weights']] * xmax, color='orange')
+        ...
     ax.set_title('Initialize Update weights')
 
     # kwplot.imshow(kwimage.normalize(affinity), title='Pairwise Affinity')
@@ -1594,9 +1666,14 @@ def show_affinity_sample_process(chosen, info, fnum=1):
         fig = kwplot.figure(pnum=pnum_())
         ax = fig.gca()
         if step_idx < len(steps):
-            ax.plot(np.arange(xmax), step['update_weights'], color='orange')
-            #ax.annotate('chosen', (x, y), xytext=(xpos, ypos), color='black', arrowprops=dict(color='black', arrowstyle="->"))
-            ax.plot([x, x], [0, step['update_weights'].max()], color='orangered')
+            try:
+                ax.plot(np.arange(xmax), step['update_weights'], color='orange')
+                #ax.annotate('chosen', (x, y), xytext=(xpos, ypos), color='black', arrowprops=dict(color='black', arrowstyle="->"))
+                ax.plot([x, x], [0, step['update_weights'].max()], color='orangered')
+            except ValueError:
+                ax.plot(np.arange(xmax), [step['update_weights']] * xmax, color='orange')
+                #ax.annotate('chosen', (x, y), xytext=(xpos, ypos), color='black', arrowprops=dict(color='black', arrowstyle="->"))
+                ax.plot([x, x], [0, step['update_weights']], color='orangered')
             ax.set_title('Iteration {}: update weights'.format(step_idx))
         else:
             for x_ in chosen_so_far:
