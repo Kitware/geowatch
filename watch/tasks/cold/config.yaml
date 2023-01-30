@@ -1,5 +1,5 @@
-n_rows: 5000
-n_cols: 5000
+n_rows: 780
+n_cols: 660
 band_num: 8
 n_block_x: 20
 n_block_y: 20

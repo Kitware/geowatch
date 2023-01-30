@@ -21,7 +21,7 @@ Limitations:
     * Configurations are hard-coded
 """
 import kwcoco
-import json
+import os, json
 import numpy as np
 import einops
 import functools
@@ -31,7 +31,22 @@ import itertools as it
 import logging
 from datetime import datetime
 import numpy as geek
+import scriptconfig as scfg
+
 logger = logging.getLogger(__name__)
+
+class PrepareKwcocoConfig(scfg.DataConfig):
+    """
+    The docstring will be the description in the CLI help
+    """
+    
+    coco_fpath = scfg.Value(None, help=ub.paragraph(
+        '''
+        a path to a file to input kwcoco file
+        '''))
+    out_dpath = scfg.Value(None, help='output directory for the output')
+    adj_cloud = scfg.Value(False, help='How to treat QA band, default is False: ignoring adj. cloud class')
+    method = scfg.Value(None, help='stacking mode for original COLD or Hybrid, default is None, if HybridCOLD then stacked data include g, r, nir, swir16, swir22, ASI, tir, QA')
 
 
 # TODO:
@@ -67,6 +82,36 @@ QA_INTERPRETATIONS['FMASK'] = {
     'no_obs'        : 255,
 }
 QUALITY_BIT_INTERPRETATIONS = {}
+    
+def main(cmdline=1, **kwargs):
+    """_summary_
+
+    Args:
+        cmdline (int, optional): _description_. Defaults to 1. 
+        
+    Ignore:
+    python -m watch.tasks.cold.prepare_kwcoco --help
+    from watch.tasks.cold.prepare_kwcoco import main
+    from watch.tasks.cold.prepare_kwcoco import *
+    kwargs= dict(        
+    coco_fpath = '/home/jws18003/data/dvc-repos/smart_data_dvc/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data.kwcoco.json',
+    out_dpath = ub.Path.appdir('/gpfs/scratchfs1/zhz18039/jws18003/kwcoco'),
+    adj_cloud = False,
+    method = None,
+    )
+    cmdline=0    
+    main(cmdline, **kwargs)
+    """
+    config = PrepareKwcocoConfig.legacy(cmdline=cmdline, data=kwargs)
+    coco_fpath = config['coco_fpath']
+    dpath = ub.Path(config['out_dpath']).ensuredir()
+    adj_cloud = config['adj_cloud']
+    method = config['method']
+    out_dir = dpath / 'stacked'
+    meta_fpath = stack_kwcoco(coco_fpath, out_dir, adj_cloud, method)
+    return meta_fpath
+
+
 
 # function for decoding HLS qa band
 def qa_decoding(qa_array):
@@ -340,7 +385,7 @@ def artificial_surface_index(Blue, Green, Red, NIR, SWIR1, SWIR2, Scale, MaskVal
 #     plt.show()
 
 
-def stack_kwcoco(coco_fpath, out_dir):
+def stack_kwcoco(coco_fpath, out_dir, adj_cloud, method):
     """
     Args:
         coco_fpath (str | PathLike | CocoDataset):
@@ -358,23 +403,14 @@ def stack_kwcoco(coco_fpath, out_dir):
         >>> dpath = ub.Path.appdir('pycold/tests/stack_kwcoco').ensuredir()
         >>> out_dir = dpath / 'stacked'
         >>> results = stack_kwcoco(coco_fpath, out_dir)
-    """
-
-    # TODO: determine the block settings from the config
-    config = {
-        'n_block_x': 20,
-        'n_block_y': 20,
-        'adj_cloud': False,
-        'mode'     : 'ASI' #None # 'ASI'
-    }
-
+    """   
     # TODO: configure
     out_dir = ub.Path(out_dir)
 
     # Load the kwcoco dataset
     dset = kwcoco.CocoDataset.coerce(coco_fpath)
     videos = dset.videos()
-    results = []
+    # results = []
 
     for video_id in videos:
 
@@ -388,14 +424,13 @@ def stack_kwcoco(coco_fpath, out_dir):
 
                 # For now, it supports only L8
                 if coco_image.img['sensor_coarse'] == 'L8':
-                    adj_cloud = False
                     # Transform the image data into the desired block structure.
-                    result = process_one_coco_image(coco_image, config, out_dir)
-                    results.append(result)
+                    result = process_one_coco_image(coco_image, out_dir, adj_cloud, method)
+                    # results.append(result)
 
-    return results
+    return result
 
-def process_one_coco_image(coco_image, config, out_dir):
+def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
     """
     Args:
         coco_image (kwcoco.CocoImage): the image to process
@@ -406,11 +441,8 @@ def process_one_coco_image(coco_image, config, out_dir):
             status (str) : either a string passed or failed
             fpaths (List[str]): a list of files that were written
     """
-    n_block_x = config['n_block_x']
-    n_block_y = config['n_block_y']
-    adj_cloud = config['adj_cloud']
-    mode      = config['mode']
-    
+    n_block_x = 20
+    n_block_y = 20
     is_partition = True  # hard coded
 
     # Use the COCO name as a unique filename id.
@@ -473,7 +505,6 @@ def process_one_coco_image(coco_image, config, out_dir):
     # antialiased, whereas the intensity bands should be.
     qa_data = delayed_qa.finalize(interpolation='nearest', antialias=False)
     # Decoding QA band
-    adj_cloud = False
     if adj_cloud == True:
         qa_unpacked = qa_decoding(qa_data)
     else:
@@ -497,7 +528,8 @@ def process_one_coco_image(coco_image, config, out_dir):
         clear_ratio = 1
 
     result = {
-        'status': None
+        'status': None,
+        'fpaths': None,
     }
 
     if clear_ratio <= clear_threshold:
@@ -511,7 +543,7 @@ def process_one_coco_image(coco_image, config, out_dir):
     # NOTE: if we enable a nodata method, we will need to handle it here.
     # NOTE: if any intensity modification needs to be done handle it here.
     
-    if mode == 'ASI':
+    if method == 'ASI':
         Scale = 10000
         fill_value = 0
         B1 = im_data[:, :, 0]
@@ -560,6 +592,7 @@ def process_one_coco_image(coco_image, config, out_dir):
         'image_name' : image_name,
         'date_captured': date_captured,
         'ordinal_date': ordinal_date,
+        'region_id': video_name,
         'n_cols': n_cols,
         'n_rows': n_rows,
         'padded_n_cols': padded_w,
@@ -567,7 +600,7 @@ def process_one_coco_image(coco_image, config, out_dir):
         'n_block_x': n_block_x,
         'n_block_y': n_block_y,
         'adj_cloud': adj_cloud,
-        'mode': mode
+        'method': method
     }
 
     if is_partition:
@@ -596,8 +629,8 @@ def process_one_coco_image(coco_image, config, out_dir):
 
             block_dname = 'block_x{}_y{}'.format(i + 1, j + 1)
             block_dpath = (video_dpath / block_dname).ensuredir()
-            block_fpath = block_dpath / (image_name + '.npy')
-
+            block_fpath = block_dpath / (image_name + '.npy')           
+            
             metadata.update({
                 'x': i + 1,
                 'y': j + 1,
@@ -605,31 +638,31 @@ def process_one_coco_image(coco_image, config, out_dir):
                 'total_bands': int(block.shape[-1]),
             })
             meta_fpath = block_dpath / (image_name + '.json')
-            meta_fpath.write_text(json.dumps(metadata))
-            np.save(block_fpath, block)
-            result_fpaths.append(block_fpath)
-            result_fpaths.append(meta_fpath)
+            if not os.path.exists(block_fpath):
+                meta_fpath.write_text(json.dumps(metadata))                
+                np.save(block_fpath, block)
+                result_fpaths.append(block_fpath)
+                result_fpaths.append(meta_fpath)
         logger.info('Stacked blocked image {}/{}'.format(video_name, image_name))
     else:
+        
         metadata.update({
             'total_pixels': int(np.prod(data.shape[0:2])),
             'total_bands': int(data.shape[-1]),
         })
+    
         full_fpath = video_dpath / (image_name + '.npy')
         meta_fpath = video_dpath / (image_name + '.json')
-        meta_fpath.write_text(json.dumps(metadata))
-        np.save(full_fpath, data)
-        result_fpaths.append(full_fpath)
-        result_fpaths.append(meta_fpath)
-        logger.info('Stacked full image {}/{}'.format(video_name, image_name))
+        if not os.path.exists(block_fpath):
+            meta_fpath.write_text(json.dumps(metadata))        
+            np.save(full_fpath, data)
+            result_fpaths.append(full_fpath)
+            result_fpaths.append(meta_fpath)
+            logger.info('Stacked full image {}/{}'.format(video_name, image_name))
 
     result['status'] = 'passed'
     result['fpaths'] = result_fpaths
-    return result
+    return meta_fpath
 
-# FIXME: I wasn't sure how to update grab_demo_kwcoco_dataset(). So I manually defined coco_fpath...
-coco_fpath = '/home/jws18003/data/dvc-repos/smart_data_dvc/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data.kwcoco.json'
-dpath = ub.Path.appdir('/gpfs/scratchfs1/zhz18039/jws18003/kwcoco').ensuredir()
-out_dir = dpath / 'stacked'
-
-stack_kwcoco(coco_fpath, out_dir)
+if __name__ == '__main__':
+    main()
