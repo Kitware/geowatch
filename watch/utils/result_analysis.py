@@ -463,7 +463,7 @@ class ResultAnalysis(ub.NiceRepr):
         isect_params = set.intersection(*config_keys)
         other_params = sorted(isect_params - set(param_group))
         groups = []
-        for key, group in table.groupby(other_params, dropna=False):
+        for key, group in fix_groupby(table.groupby(other_params, dropna=False)):
             if len(group) >= k:
                 groups.append(group)
         return groups
@@ -582,7 +582,7 @@ class ResultAnalysis(ub.NiceRepr):
                 ascending = self._objective_is_ascending(metric_key)
 
                 group = group.sort_values(metric_key, ascending=ascending)
-                subgroups = group.groupby(param_group)
+                subgroups = fix_groupby(group.groupby(param_group))
                 if ascending:
                     best_idx = subgroups[metric_key].idxmax()
                 else:
@@ -674,7 +674,7 @@ class ResultAnalysis(ub.NiceRepr):
         # We use these to select comparable rows for pairwise t-tests
         nuisance_cols = sorted(set(self.varied.keys()) - set(param_group))
 
-        for param_value, group in self.table.groupby(param_group):
+        for param_value, group in fix_groupby(self.table.groupby(param_group)):
             metric_group = group[["name", metric_key] + varied_cols]
             metric_vals = metric_group[metric_key]
             metric_vals = metric_vals.dropna()
@@ -796,8 +796,8 @@ class ResultAnalysis(ub.NiceRepr):
             if nuisance_cols:
                 nuisance_vals1 = metric_group1[nuisance_cols]
                 nuisance_vals2 = metric_group2[nuisance_cols]
-                nk_to_group1 = dict(list(nuisance_vals1.groupby(nuisance_cols)))
-                nk_to_group2 = dict(list(nuisance_vals2.groupby(nuisance_cols)))
+                nk_to_group1 = dict(list(fix_groupby(nuisance_vals1.groupby(nuisance_cols))))
+                nk_to_group2 = dict(list(fix_groupby(nuisance_vals2.groupby(nuisance_cols))))
             else:
                 nk_to_group1 = {None: metric_group1}
                 nk_to_group2 = {None: metric_group2}
@@ -1077,7 +1077,7 @@ class ResultAnalysis(ub.NiceRepr):
         if not fig_params:
             groups = [("", data)]
         else:
-            groups = data.groupby(fig_params)
+            groups = fix_groupby(data.groupby(fig_params))
 
         if "marker" not in plot_kws:
             plot_kws["marker"] = "o"
@@ -1116,9 +1116,10 @@ class ResultAnalysis(ub.NiceRepr):
                 facet_kws=facet_kws,
                 **plot_kws,
             )
+            # FIXME: code not ported from ujson PR
             from json_benchmarks.benchmarker.util_stats import aggregate_stats
 
-            facet_data_groups = dict(list(facet.data.groupby(facet._col_var)))
+            facet_data_groups = dict(list(fix_groupby(facet.data.groupby(facet._col_var))))
             # facet_data_group_iter = iter(facet_data_groups.keys())
 
             for ax in facet.axes.ravel():
@@ -1129,7 +1130,7 @@ class ResultAnalysis(ub.NiceRepr):
                 col_data["std_time"]
                 xlabel = plot_kws["x"]
                 ylabel = plot_kws["y"]
-                subgroups = col_data.groupby(plot_kws["hue"])
+                subgroups = fix_groupby(col_data.groupby(plot_kws["hue"]))
                 for subgroup_key, subgroup in subgroups:
                     # combine stds in multiple groups on the x and manually draw errors
                     suffix = "_" + ylabel.partition("_")[2]
@@ -1356,3 +1357,28 @@ def varied_values(longform, min_variations=0, default=ub.NoParam, dropna=False):
             if len(values) < min_variations:
                 varied.pop(key)
     return varied
+
+
+if 1:
+    # Fix pandas groupby so it uses the new behavior with a list of len 1
+    import wrapt
+    class GroupbyFutureWrapper(wrapt.ObjectProxy):
+        """
+        Wraps a groupby object to get the new behavior sooner.
+        """
+        def __iter__(self):
+            keys = self.keys
+            if isinstance(keys, list) and len(keys) == 1:
+                # Handle this special case to avoid a warning
+                for key, group in self.grouper.get_iterator(self._selected_obj, axis=self.axis):
+                    yield (key,), group
+            else:
+                # Otherwise use the parent impl
+                yield from self.__wrapped__.__iter__()
+
+    def fix_groupby(groups):
+        keys = groups.keys
+        if isinstance(keys, list) and len(keys) == 1:
+            return GroupbyFutureWrapper(groups)
+        else:
+            return groups

@@ -35,3 +35,6 @@ cmd_queue >= 0.1.6
 # Pygments>=2.2.0
 
 dataframe_image>=0.1.1
+
+# For monkey patches
+wrapt>=1.13.3
