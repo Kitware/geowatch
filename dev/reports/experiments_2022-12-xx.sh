@@ -136,6 +136,7 @@ python -m watch.mlops.schedule_evaluation \
                 - frequency_weighted_mean
             bas_poly.resolution:
                 - 10GSD
+                - 15GSD
                 - 30GSD
             bas_poly.moving_window_size: 
                 - null
@@ -159,19 +160,19 @@ python -m watch.mlops.schedule_evaluation \
             bas_poly_eval.enabled: 1
             bas_pxl_eval.enabled: 0
             bas_poly_viz.enabled: 0
-            #include:
-            #    - bas_pxl.chip_dims: 256,256
-            #      bas_pxl.window_space_scale: 10GSD
-            #      bas_pxl.input_space_scale: 10GSD
-            #      bas_pxl.output_space_scale: 10GSD
-            #    - bas_pxl.chip_dims: 256,256
-            #      bas_pxl.window_space_scale: 15GSD
-            #      bas_pxl.input_space_scale: 15GSD
-            #      bas_pxl.output_space_scale: 15GSD
-            #    - bas_pxl.chip_dims: 256,256
-            #      bas_pxl.window_space_scale: 30GSD
-            #      bas_pxl.input_space_scale: 30GSD
-            #      bas_pxl.output_space_scale: 30GSD
+            include:
+                - bas_pxl.chip_dims: 256,256
+                  bas_pxl.window_space_scale: 10GSD
+                  bas_pxl.input_space_scale: 10GSD
+                  bas_pxl.output_space_scale: 10GSD
+                - bas_pxl.chip_dims: 256,256
+                  bas_pxl.window_space_scale: 15GSD
+                  bas_pxl.input_space_scale: 15GSD
+                  bas_pxl.output_space_scale: 15GSD
+                - bas_pxl.chip_dims: 256,256
+                  bas_pxl.window_space_scale: 30GSD
+                  bas_pxl.input_space_scale: 30GSD
+                  bas_pxl.output_space_scale: 30GSD
             ##    - bas_pxl.chip_dims: auto
             ##      bas_pxl.window_space_scale: auto
             ##      bas_pxl.input_space_scale: auto
@@ -179,7 +180,7 @@ python -m watch.mlops.schedule_evaluation \
     " \
     --root_dpath="$DVC_EXPT_DPATH/_testpipe" \
     --devices="0,1" --queue_size=2 \
-    --backend=tmux --queue_name "evaluation-grid" \
+    --backend=tmux --queue_name "bas-evaluation-grid" \
     --pipeline=bas --skip_existing=1 \
     --run=1
 
