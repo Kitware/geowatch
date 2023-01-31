@@ -112,6 +112,9 @@ class SmartLightningCLI(LightningCLI_Extension):
                 '''
                 Fit does nothing with this flag. This just allows for `@xdev.profile`
                 profiling which checks sys.argv separately.
+
+                DEPRECATED: there is no longer any reason to use this. Set the
+                XDEV_PROFILE environment variable instead.
                 '''))
 
         def data_value_getter(key):
