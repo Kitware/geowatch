@@ -136,7 +136,7 @@ class MultimodalTransformerConfig(scfg.DataConfig):
         automatically computed class weights. Should be a comma separated list
         of name*weight or name*weight+offset. E.g.
         `negative*0,background*0.001,No Activity*0.1+1`
-        ''')),
+        '''))
     saliency_weights = scfg.Value('auto', type=str, help='class weighting strategy')
     stream_channels = scfg.Value(8, type=int, help=ub.paragraph(
         '''
