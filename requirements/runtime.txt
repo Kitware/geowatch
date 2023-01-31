@@ -190,8 +190,11 @@ ujson>=5.2.0
 kwimage_ext >= 0.2.0
 
 py-cpuinfo>=8.0.0
-jsonargparse[signatures]!=4.15.0!=4.15.1>=4.13.3 
 
+# todo: fixme: this spec was breaking our requirement parser, but 
+# we can just use a more recent version 
+# jsonargparse[signatures]!=4.15.0!=4.15.1>=4.13.3
+jsonargparse[signatures]>=4.15.2
 
 ruamel.yaml>=0.17.21
 

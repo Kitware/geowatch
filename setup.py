@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 """The setup script."""
-from os.path import exists
+import re
 import sys
+from os.path import exists, dirname, join
 from setuptools import setup, find_packages
 
 
@@ -71,8 +72,6 @@ def parse_requirements(fname='requirements.txt', versions=True):
     Returns:
         List[str]: list of requirements items
     """
-    from os.path import exists, dirname, join
-    import re
     require_fpath = fname
 
     def parse_line(line, dpath=''):
@@ -155,7 +154,6 @@ def parse_requirements(fname='requirements.txt', versions=True):
                 yield item
 
     packages = list(gen_packages_items())
-    packages = [r.replace(' ', '') for r in packages]
     return packages
 
 
