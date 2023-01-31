@@ -136,16 +136,6 @@ def build_all_param_plots(agg, rois, config):
         macro_results['resolved_params']['bas_poly_eval.fit.batch_size']
     )
 
-    if False:
-        # Shorten columns
-        mappers = {}
-        mappers['metrics'] = {c: c.split('.')[-1] for c in macro_results['metrics'].columns}
-        mappers['resolved_params'] = {c: c.replace('bas_poly_eval.params.', '').replace('bas_poly_eval.fit', 'fit')
-                                      for c in macro_results['resolved_params'].columns}
-        for k, mapper in mappers.items():
-            macro_results[k] = macro_results[k].rename(mappers[k], axis=1)
-            single_results[k] = single_results[k].rename(mappers[k], axis=1)
-
     _parts = list((ub.udict(macro_results) & {
         'index', 'metrics', 'resolved_params', 'resources'}).values())
     macro_table = pd.concat(_parts, axis=1)
@@ -161,18 +151,11 @@ def build_all_param_plots(agg, rois, config):
         fit_params = DotDictDataFrame(macro_table)['fit']
         unique_packages = macro_table['bas_pxl.package_fpath'].drop_duplicates()
         # unique_fit_params = fit_params.loc[unique_packages.index]
-        chanmap = {
-            'blue|green|red|nir': 'BGRN',
-            'blue|green|red|nir,invariants.0:17': 'invar',
-            'blue|green|red|nir|swir16|swir22': 'BGNRSH'
-        }
         pkgmap = {}
         pkgver = {}
         for id, pkg in unique_packages.items():
             pkgver[pkg] = 'M{:02d}'.format(len(pkgver))
             pid = pkgver[pkg]
-            chans = fit_params.loc[id, 'fit.channels']
-            chans = chanmap.get(chans, chans)
             out_gsd = fit_params.loc[id, 'fit.output_space_scale']
             in_gsd = fit_params.loc[id, 'fit.input_space_scale']
             assert in_gsd == out_gsd
@@ -182,46 +165,43 @@ def build_all_param_plots(agg, rois, config):
             pkgmap[pkg] = new_name
         macro_table['bas_pxl.package_fpath'] = macro_table['bas_pxl.package_fpath'].apply(lambda x: pkgmap.get(x, x))
 
-    # x = 'bas_poly_eval.metrics.bas_tpr'
-    # y = 'bas_poly_eval.metrics.bas_ppv'
-    # x = 'bas_poly_eval.metrics.bas_space_FAR'
-    # y = 'bas_poly_eval.metrics.bas_tpr'
+    modifier = util_kwplot.LabelModifier()
 
-    # x = 'bas_poly_eval.metrics.bas_ffpa'
-    # xscale = 'log'
+    modifier.add_mapping({
+        'blue|green|red|nir': 'BGRN',
+        'blue|green|red|nir,invariants.0:17': 'invar',
+        'blue|green|red|nir|swir16|swir22': 'BGNRSH'
+    })
 
-    x = 'bas_poly_eval.metrics.bas_tpr'
-    xscale = 'linear'
+    @modifier.add_mapping
+    def humanize_label(text):
+        text = text.replace('package_epoch0_step41', 'EVAL7')
+        text = text.replace('bas_poly_eval.params.', '')
+        text = text.replace('bas_poly_eval.metrics.', '')
+        text = text.replace('bas_poly_eval.fit.', 'fit.')
+        return text
 
-    y = 'bas_poly_eval.metrics.bas_f1'
-    y = 'bas_poly_eval.metrics.bas_faa_f1'
+    # Pre determine some palettes
+    shared_palette_groups = [
+        ['bas_poly_eval.params.bas_poly.thresh'],
+        ['bas_poly_eval.fit.learning_rate'],
+        ['bas_poly_eval.fit.learning_rate'],
+        ['bas_poly_eval.params.bas_pxl.chip_dims', 'bas_poly_eval.fit.chip_dims'],
+        ['bas_poly_eval.params.bas_pxl.output_space_scale', 'bas_poly_eval.fit.output_space_scale', 'bas_poly_eval.params.bas_poly.resolution'],
+    ]
+    param_to_palette = {}
+    for group_params in shared_palette_groups:
+        unique_vals = np.unique(macro_table[group_params].values)
+        # 'Spectral'
+        if len(unique_vals) > 5:
+            unique_colors = sns.color_palette('Spectral', n_colors=len(unique_vals))
+            # kwplot.imshow(_draw_color_swatch(unique_colors), fnum=32)
+        else:
+            unique_colors = sns.color_palette(n_colors=len(unique_vals))
+        palette = ub.dzip(unique_vals, unique_colors)
+        param_to_palette.update({p: palette for p in group_params})
 
-    # main_metric = 'bas_poly_eval.metrics.bas_f1'
-    main_metric = 'bas_poly_eval.metrics.bas_faa_f1'
-    metric_objectives = {main_metric: 'maximize'}
-
-    def finalize_figure(fig, fpath):
-        fig.set_size_inches(np.array([6.4, 4.8]) * 1.0)
-        fig.tight_layout()
-        fig.savefig(fpath)
-        util_kwplot.cropwhite_ondisk(fpath)
-
-    fig = kwplot.figure(fnum=2, doclf=True)
-    ax = sns.scatterplot(data=single_table, x=x, y=y, hue='region_id')
-    ax.set_title(f'BAS Per-Region Results (n={len(agg)})')
-    ax.set_xscale('log')
-    fpath = agg_group_dpath / 'single_results.png'
-    finalize_figure(fig, fpath)
-    # ax.set_xlim(0, np.quantile(agg.metrics[x], 0.99))
-    # ax.set_xlim(1e-2, np.quantile(agg.metrics[x], 0.99))
-
-    fig = kwplot.figure(fnum=90, doclf=True)
-    ax = sns.boxplot(data=single_table, x='region_id', y=main_metric)
-    ax.set_title(f'BAS Per-Region Results (n={len(agg)})')
-    fpath = agg_group_dpath / 'single_results_boxplot.png'
-    finalize_figure(fig, fpath)
-
-    if 0:
+    if 1:
         #### Hack for models of interest.
         star_params = []
         p1 = macro_table[(
@@ -253,11 +233,53 @@ def build_all_param_plots(agg, rois, config):
         star_params += [p3]
         macro_table['is_star'] = kwarray.isect_flags(macro_table['param_hashid'], star_params)
 
+    # x = 'bas_poly_eval.metrics.bas_tpr'
+    # y = 'bas_poly_eval.metrics.bas_ppv'
+    # x = 'bas_poly_eval.metrics.bas_space_FAR'
+    # y = 'bas_poly_eval.metrics.bas_tpr'
+    # x = 'bas_poly_eval.metrics.bas_ffpa'
+    # xscale = 'log'
+
+    x = 'bas_poly_eval.metrics.bas_tpr'
+    xscale = 'linear'
+
+    y = 'bas_poly_eval.metrics.bas_f1'
+    y = 'bas_poly_eval.metrics.bas_faa_f1'
+
+    # main_metric = 'bas_poly_eval.metrics.bas_f1'
+    main_metric = 'bas_poly_eval.metrics.bas_faa_f1'
+    metric_objectives = {main_metric: 'maximize'}
+
+    def finalize_figure(fig, fpath):
+        fig.set_size_inches(np.array([6.4, 4.8]) * 1.0)
+        fig.tight_layout()
+        fig.savefig(fpath)
+        util_kwplot.cropwhite_ondisk(fpath)
+
+    fig = kwplot.figure(fnum=2, doclf=True)
+    ax = sns.scatterplot(data=single_table, x=x, y=y, hue='region_id')
+    ax.set_title(f'BAS Per-Region Results (n={len(agg)})')
+    ax.set_xscale('log')
+    fpath = agg_group_dpath / 'single_results.png'
+    finalize_figure(fig, fpath)
+    # ax.set_xlim(0, np.quantile(agg.metrics[x], 0.99))
+    # ax.set_xlim(1e-2, np.quantile(agg.metrics[x], 0.99))
+
+    fig = kwplot.figure(fnum=90, doclf=True)
+    ax = sns.boxplot(data=single_table, x='region_id', y=main_metric)
+    ax.set_title(f'BAS Per-Region Results (n={len(agg)})')
+    util_kwplot.LabelModifier({
+        param_value: f'{param_value}\n(n={num})'
+        for param_value, num in single_table.groupby('region_id').size().to_dict().items()
+    }).relabel_xticks(ax)
+    modifier.relabel(ax)
+    fpath = agg_group_dpath / 'single_results_boxplot.png'
+    finalize_figure(fig, fpath)
+
     from watch.utils.util_kwplot import scatterplot_highlight
     fig = kwplot.figure(fnum=3, doclf=True)
     ax = fig.gca()
     ax = sns.scatterplot(data=macro_table, x=x, y=y, hue='region_id', ax=ax)
-
     if 'is_star' in macro_table:
         scatterplot_highlight(data=macro_table, x=x, y=y, highlight='is_star', ax=ax, size=300)
     ax.set_title(f'BAS Results (n={len(macro_table)})\n'
@@ -267,26 +289,6 @@ def build_all_param_plots(agg, rois, config):
     finalize_figure(fig, fpath)
     # ax.set_xlim(1e-2, npe.quantile(agg.metrics[x], 0.99))
     # ax.set_xlim(1e-2, 0.7)
-
-    # Pre determine some palettes
-    shared_palette_groups = [
-        ['bas_poly_eval.params.bas_poly.thresh'],
-        ['bas_poly_eval.fit.learning_rate'],
-        ['bas_poly_eval.fit.learning_rate'],
-        ['bas_poly_eval.params.bas_pxl.chip_dims', 'bas_poly_eval.fit.chip_dims'],
-        ['bas_poly_eval.params.bas_pxl.output_space_scale', 'bas_poly_eval.fit.output_space_scale', 'bas_poly_eval.params.bas_poly.resolution'],
-    ]
-    param_to_palette = {}
-    for group_params in shared_palette_groups:
-        unique_vals = np.unique(macro_table[group_params].values)
-        # 'Spectral'
-        if len(unique_vals) > 5:
-            unique_colors = sns.color_palette('Spectral', n_colors=len(unique_vals))
-            # kwplot.imshow(_draw_color_swatch(unique_colors), fnum=32)
-        else:
-            unique_colors = sns.color_palette(n_colors=len(unique_vals))
-        palette = ub.dzip(unique_vals, unique_colors)
-        param_to_palette.update({p: palette for p in group_params})
 
     DO_STAT_ANALYSIS = True
     if DO_STAT_ANALYSIS:
@@ -300,35 +302,54 @@ def build_all_param_plots(agg, rois, config):
         analysis.build()
         analysis.analysis()
         print('analysis.varied = {}'.format(ub.urepr(analysis.varied, nl=2)))
-        ranked_stats = list(enumerate(sorted(analysis.statistics, key=lambda x: x['anova_rank_p'])))
+        ranked_stats = list(sorted(analysis.statistics, key=lambda x: x['anova_rank_p']))
+        param_name_to_stats = {s['param_name']: s for s in ranked_stats}
+        ranked_params = ub.oset(param_name_to_stats.keys())
     else:
         ...
 
+    if 0:
+        import xdev
+        xdev.view_directory(agg_group_dpath)
+
+    if 1:
+        ranked_params = [p for p in ranked_params if 'resolution' in p]
+
     from kwcoco.metrics.drawing import concice_si_display
-    for rank, stats in ub.ProgIter(ranked_stats):
+    for rank, param_name in ub.ProgIter(enumerate(ranked_params)):
+        stats = param_name_to_stats[param_name]
         stats['moments']
         anova_rank_p = stats['anova_rank_p']
         param_name = stats['param_name']
 
-        fig = kwplot.figure(fnum=4, doclf=True)
-        # ax = sns.scatterplot(data=macro_table, x=x, y=y, hue=agg.model_cols[0])
         snskw = {}
         if param_name in param_to_palette:
             snskw['palette'] = param_to_palette[param_name]
+
+        fig = kwplot.figure(fnum=4, doclf=True)
+        # ax = sns.scatterplot(data=macro_table, x=x, y=y, hue=agg.model_cols[0])
         ax = sns.scatterplot(data=macro_table, x=x, y=y, hue=param_name, legend=False, **snskw)
         # scatterplot_highlight(data=macro_table, x=x, y=y, highlight='is_star', ax=ax, size=300)
         ax.set_title(f'BAS Results (n={len(macro_table)})\n'
                      f'Macro Analysis over {ub.urepr(rois, sv=1, nl=0)}\n'
                      f'Effect of {param_name}: anova_rank_p={concice_si_display(anova_rank_p)}')
+        if 'is_star' in macro_table:
+            scatterplot_highlight(data=macro_table, x=x, y=y, highlight='is_star', ax=ax, size=300)
         ax.set_xscale(xscale)
+        modifier.relabel(ax)
         fpath = agg_group_dpath / f'macro_results_{rank:03d}_{param_name}.png'
         finalize_figure(fig, fpath)
 
         fig = kwplot.figure(fnum=5, doclf=True)
         ax = sns.boxplot(data=macro_table, x=param_name, y=y, **snskw)
+        util_kwplot.LabelModifier({
+            param_value: f'{param_value}\n(n={num})'
+            for param_value, num in macro_table.groupby(param_name).size().to_dict().items()
+        }).relabel_xticks(ax)
         ax.set_title(f'BAS Results (n={len(macro_table)})\n'
                      f'Macro Analysis over {ub.urepr(rois, sv=1, nl=0)}\n'
                      f'Effect of {param_name}: anova_rank_p={concice_si_display(anova_rank_p)}')
+        modifier.relabel(ax)
         fpath = agg_group_dpath / f'macro_results_{rank:03d}_{param_name}_box.png'
         finalize_figure(fig, fpath)
 
@@ -1121,14 +1142,6 @@ class Aggregator(ub.NiceRepr):
         # print('region_to_num_compatible = {}'.format(ub.urepr(region_to_num_compatible, nl=1)))
         return macro_compatible
 
-    def build_macro_tables(agg, rois=None):
-        if isinstance(rois, list) and len(rois) and ub.iterable(rois[0]):
-            # Asked for multiple groups of ROIS.
-            for single_rois in rois:
-                agg.build_single_macro_table(single_rois)
-        else:
-            agg.build_single_macro_table(rois)
-
     def gather_macro_compatable_groups(agg, regions_of_interest):
         comparable_groups = []
         macro_compatible = agg.macro_compatible
@@ -1153,32 +1166,63 @@ class Aggregator(ub.NiceRepr):
             regions_of_interest = rois
         return regions_of_interest
 
+    def build_macro_tables(agg, rois=None):
+        """
+        Builds one or more macro tables
+        """
+        if isinstance(rois, list) and len(rois) and ub.iterable(rois[0]):
+            # Asked for multiple groups of ROIS.
+            for single_rois in rois:
+                agg.build_single_macro_table(single_rois)
+        else:
+            agg.build_single_macro_table(rois)
+
     def build_single_macro_table(agg, rois):
+        """
+        Builds a single macro table for a choice of regions.
+        """
         # Given a specific group of regions,
 
         regions_of_interest = agg._coerce_rois(rois)
-
-        comparable_groups = agg.gather_macro_compatable_groups(regions_of_interest)
-
         macro_key = hash_regions(regions_of_interest)
 
+        # Define how to aggregate each column
         sum_cols = [c for c in agg.metrics.columns if c.endswith((
             '_tp', '_fp', '_fn', '_ntrue', '_npred'))]
         mean_cols = [c for c in agg.metrics.columns if c.endswith((
             'mAP', 'APUC', 'mAPUC', 'mAUC', 'AP', 'AUC', 'f1', 'FAR', 'ppv',
             'tpr', 'ffpa', 'f1', 'f1_siteprep', 'f1_active'))]
-
         sum_cols = agg.metrics.columns.intersection(sum_cols)
         mean_cols = agg.metrics.columns.intersection(mean_cols)
         other_metric_cols = agg.metrics.columns.difference(sum_cols).difference(mean_cols)
         if len(other_metric_cols):
             print(f'ignoring agg {other_metric_cols}')
-        # assert len(other_metric_cols) == 0
-
         aggregator = {c: 'mean' for c in mean_cols}
         aggregator.update({c: 'sum' for c in sum_cols})
 
-        # Macro average comparable groups
+        # Gather groups that can be aggregated
+        comparable_groups = agg.gather_macro_compatable_groups(regions_of_interest)
+
+        if 0:
+            # gather debug info about all of the comparable groups and check
+            # basic assumptions
+            stat_accum = {
+                'size': []
+            }
+            seen_indexes = set()
+            for group in comparable_groups:
+                assert len(group.param_hashid.unique()) == 1
+                assert len(group.param_hashid) >= 1
+                assert len(group.index.unique()) == len(group)
+                stat_accum['size'].append(len(group))
+                assert not (set(group.index) & seen_indexes)
+                seen_indexes.update(group.index)
+                if len(group) > 2:
+                    break
+
+            print(pd.DataFrame(stat_accum).describe().T)
+
+        # Macro aggregaet comparable groups
         macro_parts = ub.ddict(list)
         for group in comparable_groups:
             agg_parts = macro_aggregate(agg, group, aggregator)

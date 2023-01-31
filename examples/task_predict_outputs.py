@@ -92,5 +92,57 @@ For example an input coco image dictionary may look like this:
 
 
 def demo():
-    from watch.demo import coerce_kwcoco
-    dset = coerce_kwcoco(geodata=True, dates=True)
+    # This demo will show how to add new assets / auxiliary images to a kwcoco
+    # file.
+    import watch
+    import kwcoco
+    import kwimage
+    import numpy as np
+    import ubelt as ub
+
+    # Create a path where we can dumpy demo info
+    demo_dpath = ub.Path.appdir('watch/demo/demo_add_auxiliary').ensuredir()
+
+    # Start off by loading a demo dataset (this would be your dataset)
+    dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True)
+
+    # We are going to add a new asset to each image.
+    for image_id in dset.images():
+        # Create a CocoImage object for each image.
+        coco_image: kwcoco.CocoImage = dset.coco_image(image_id)
+
+        image_name = coco_image.img['name']
+
+        # When we add an asset we need to pass it the file path to that asset
+        # and some additional information, namely the:
+        # 1. filepath of the new asset
+        # 2. the transform that warps the asset into "image space"
+        # 3. Information about what channels / bands are in the image.
+        # Other information can be added, but this tutorial currently only
+        # covers the simple case.
+        #coco_image.add_asset()
+
+        # Let's pretend we've made a new asset for this coco image with 4 new
+        # bands I will label as "foo" "bar" "baz" and "biz".
+
+        # Let's create the demo image
+        img_w = coco_image.img['width']
+        img_h = coco_image.img['height']
+
+        asset_w = img_w
+        asset_h = img_h
+        imdata = np.random.rand(asset_h, asset_w , 4)
+        new_fpath = demo_dpath / f'image_{image_name}_myfeat.tif'
+        kwimage.imwrite(new_fpath, imdata)
+
+        # We will label it with this channel code:
+        channels = 'foo|bar|baz|biz'
+
+        # We need the transform that warps from asset space to image space
+        # In this case they are aligned so we can just use the identity.
+        warp_aux_to_img = kwimage.Affine.eye()
+
+        # Use the CocoImage helper which will augment the coco dictionary with
+        # your information.
+        coco_image.add_asset(new_fpath, channels=channels, width=asset_w,
+                             height=asset_h, warp_aux_to_img=warp_aux_to_img)
