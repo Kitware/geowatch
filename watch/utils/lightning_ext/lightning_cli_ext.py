@@ -36,27 +36,28 @@ class LightningArgumentParser_Extension(LightningArgumentParser):
 
     """
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Initialize argument parser that supports configuration file input.
+    # #15038 is Fixed, so we don't need this anymore.
+    # def __init__(self, *args: Any, **kwargs: Any) -> None:
+    #     """Initialize argument parser that supports configuration file input.
 
-        For full details of accepted arguments see `ArgumentParser.__init__
-        <https://jsonargparse.readthedocs.io/en/stable/index.html#jsonargparse.ArgumentParser.__init__>`_.
+    #     For full details of accepted arguments see `ArgumentParser.__init__
+    #     <https://jsonargparse.readthedocs.io/en/stable/index.html#jsonargparse.ArgumentParser.__init__>`_.
 
-        Example:
-            >>> from watch.utils.lightning_ext.lightning_cli_ext import LightningCLI_Extension
-        """
-        if not _JSONARGPARSE_SIGNATURES_AVAILABLE:
-            raise ModuleNotFoundError(
-                f"{_JSONARGPARSE_SIGNATURES_AVAILABLE}. Try `pip install -U 'jsonargparse[signatures]'`."
-            )
-        super(LightningArgumentParser, self).__init__(*args, **kwargs)
-        # self.add_argument(
-        #     "-c", "--config", action=ActionConfigFile, help="Path to a configuration file in json or yaml format."
-        # )
-        self.callback_keys: List[str] = []
-        # separate optimizers and lr schedulers to know which were added
-        self._optimizers: Dict[str, Tuple[Union[Type, Tuple[Type, ...]], str]] = {}
-        self._lr_schedulers: Dict[str, Tuple[Union[Type, Tuple[Type, ...]], str]] = {}
+    #     Example:
+    #         >>> from watch.utils.lightning_ext.lightning_cli_ext import LightningCLI_Extension
+    #     """
+    #     if not _JSONARGPARSE_SIGNATURES_AVAILABLE:
+    #         raise ModuleNotFoundError(
+    #             f"{_JSONARGPARSE_SIGNATURES_AVAILABLE}. Try `pip install -U 'jsonargparse[signatures]'`."
+    #         )
+    #     super(LightningArgumentParser, self).__init__(*args, **kwargs)
+    #     # self.add_argument(
+    #     #     "-c", "--config", action=ActionConfigFile, help="Path to a configuration file in json or yaml format."
+    #     # )
+    #     self.callback_keys: List[str] = []
+    #     # separate optimizers and lr schedulers to know which were added
+    #     self._optimizers: Dict[str, Tuple[Union[Type, Tuple[Type, ...]], str]] = {}
+    #     self._lr_schedulers: Dict[str, Tuple[Union[Type, Tuple[Type, ...]], str]] = {}
 
     def add_subclass_arguments(
         self,

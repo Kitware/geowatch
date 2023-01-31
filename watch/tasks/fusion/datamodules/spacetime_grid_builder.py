@@ -443,7 +443,8 @@ def _sample_single_video_spacetime_targets(
         dset, video_id, gids=video_gids, time_window=vidspace_time_dims,
         affinity_type=affinity_type, update_rule=update_rule,
         name=video_name, time_span=time_span)
-    time_sampler.video_gids = np.array(video_gids)
+    gid_arr = np.array(video_gids)
+    time_sampler.video_gids = gid_arr
     time_sampler.gid_to_index = ub.udict(enumerate(time_sampler.video_gids)).invert()
     time_sampler.determenistic = True
 
@@ -470,7 +471,7 @@ def _sample_single_video_spacetime_targets(
         affinity_type,
         update_rule,
         video_name,
-        np.array(video_gids),
+        gid_arr,
         vidspace_window_dims, window_overlap,
         negative_classes, keepbound,
         affinity_type, update_rule,
@@ -482,9 +483,18 @@ def _sample_single_video_spacetime_targets(
         set_cover_algo,
         'cache_v11',
     ]
+
+    # Only use the cache if this is probably going to be a slow operation.
+    # Otherwise punt, the entire thing gets cached at the end, so the extra
+    # disk IO may just slow things down.
+    rough_num_windows = np.prod(np.array(vidspace_full_dims) / np.array(vidspace_window_dims))
+    rough_num_cells = len(gid_arr) * rough_num_windows
+    probably_slow = rough_num_cells > (16 * 30)
+
     cache_dpath = ub.Path.appdir('watch', 'grid_cache').ensuredir()
     cacher = ub.Cacher('sliding-window-cache-' + video_name,
-                       dpath=cache_dpath, depends=depends, enabled=use_cache)
+                       dpath=cache_dpath, depends=depends,
+                       enabled=(use_cache and probably_slow))
     _cached = cacher.tryload()
     if _cached is None:
 
@@ -525,8 +535,13 @@ def _sample_single_video_spacetime_targets(
                                        overlap=window_overlap,
                                        keepbound=keepbound,
                                        allow_overshoot=True)
+        slices = list(slider)
 
-        for vidspace_region in ub.ProgIter(list(slider), desc='Sliding window',
+        num_cells = len(slices) * len(video_gids)
+        probably_slow = num_cells > (16 * 30)
+
+        for vidspace_region in ub.ProgIter(slices, desc='Sliding window',
+                                           enabled=probably_slow,
                                            verbose=verbose):
 
             new_targets = _build_targets_in_spatial_region(
@@ -549,8 +564,10 @@ def _sample_single_video_spacetime_targets(
             # FIXME: This code is too slow
             # in addition to the sliding window sample, add positive samples
             # centered around each annotation.
-            for tid, infos in ub.ProgIter(list(tid_to_infos.items()),
+            track_infos = list(tid_to_infos.items())
+            for tid, infos in ub.ProgIter(track_infos,
                                           desc='Centered annots',
+                                          enabled=len(track_infos) > 4 and probably_slow,
                                           verbose=verbose):
 
                 new_targets = _build_targets_around_track(
