@@ -12,7 +12,10 @@ from jsonargparse.parameter_resolvers import ParamData
 from typing import List, Set, Union, Optional, Tuple, Type
 from typing import Any, Dict
 from pytorch_lightning.cli import _JSONARGPARSE_SIGNATURES_AVAILABLE
-from pytorch_lightning.cli import ActionConfigFile
+try:
+    from pytorch_lightning.cli import ActionConfigFile
+except Exception:
+    from jsonargparse import ActionConfigFile
 from jsonargparse.util import get_import_path, iter_to_set_str
 # from typing import Callable, List, Type, Union
 # from jsonargparse import class_from_function

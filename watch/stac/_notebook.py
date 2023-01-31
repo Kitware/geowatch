@@ -369,6 +369,10 @@ def check_processed_regions():
         piv = group.pivot(index=['region_id'], columns=['sensor', 'processing', 'collection', 'year'], values=['num_results'])
         print(piv.to_string())
 
+    requested_regions = {p.name.split('.')[0] for p in region_fpaths}
+    missing_regions = requested_regions - set(piv.index)
+    print('No results for regions = {}'.format(ub.urepr(missing_regions, nl=0)))
+
     # print(df.to_string())
     # print(f'region_id={region_id}')
     # print(f'results={results}')
