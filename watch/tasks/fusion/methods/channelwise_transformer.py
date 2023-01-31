@@ -372,9 +372,6 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         # hueristic_ignore_keys.update(hueristic_occluded_keys)
 
         self.saliency_num_classes = 2
-        _n = self.saliency_num_classes
-        saliency_weights = self._coerce_saliency_weights(self.hparams.saliency_weights)
-        saliency_weights = torch.Tensor(_w)
 
         # criterion and metrics
         # TODO: parametarize loss criterions
@@ -384,12 +381,15 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         class_weights = self.hparams.class_weights
         modulate_class_weights = self.hparams.modulate_class_weights
         if modulate_class_weights:
+            ub.schedule_deprecation(
+                'watch', 'modulate_class_weights', 'param',
+                migration='Use class_weights:<modulate_str> instead',
+                deprecate='0.3.9', error='0.3.11', remove='0.3.13')
             if isinstance(class_weights, str) and class_weights == 'auto':
                 class_weights = class_weights + ':' + modulate_class_weights
-        class_weights = self._coerce_class_weights(class_weights)
 
-        self.saliency_weights = saliency_weights
-        self.class_weights = class_weights
+        self.saliency_weights = self._coerce_saliency_weights(self.hparams.saliency_weights)
+        self.class_weights = self._coerce_class_weights(class_weights)
         self.change_weights = torch.FloatTensor([
             self.hparams.negative_change_weight,
             self.hparams.positive_change_weight

@@ -13,13 +13,10 @@ import netharn as nh
 import ubelt as ub
 
 from watch import heuristics
-from watch.tasks.fusion.methods.network_modules import _class_weights_from_freq
 from watch.tasks.fusion.methods.network_modules import coerce_criterion
 from watch.tasks.fusion.methods.network_modules import RobustModuleDict
 from watch.tasks.fusion.methods.watch_module_mixins import WatchModuleMixins
 from watch.tasks.fusion.architectures.transformer import BackboneEncoderDecoder, TransformerEncoderDecoder
-
-import numpy as np
 
 from abc import ABCMeta, abstractmethod
 
@@ -432,11 +429,8 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         # For loss function experiments, see and work in
         # ~/code/watch/watch/tasks/fusion/methods/sequence_aware.py
         # self.change_criterion = monai.losses.FocalLoss(reduction='none', to_onehot_y=False)
-        class_weights = self._coerce_class_weights(class_weights)
         self.saliency_weights = self._coerce_saliency_weights('auto')
-
-        self.saliency_weights = saliency_weights
-        self.class_weights = class_weights
+        self.class_weights = self._coerce_class_weights(class_weights)
         self.change_weights = torch.FloatTensor([
             self.hparams.negative_change_weight,
             self.hparams.positive_change_weight
