@@ -6,6 +6,25 @@ This is used to define our dilated time sampling.
 This following doctest illustrates the method on project data.
 
 Example:
+    >>> # Basic overview demo of the algorithm
+    >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
+    >>> import watch
+    >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, num_frames=128, image_size=(32, 32))
+    >>> vidid = dset.dataset['videos'][0]['id']
+    >>> self = TimeWindowSampler.from_coco_video(
+    >>>     dset, vidid,
+    >>>     time_window=11,
+    >>>     affinity_type='soft2', time_span='8m', update_rule='distribute',
+    >>> )
+    >>> # xdoctest: +REQUIRES(--show)
+    >>> import kwplot
+    >>> plt = kwplot.autoplt()
+    >>> self.show_summary(samples_per_frame=3, fnum=3)
+    >>> self.show_procedure(fnum=1)
+    >>> plt.subplots_adjust(top=0.9)
+
+Example:
+    >>> # Demo multiple different settings
     >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
     >>> import watch
     >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, num_frames=128, image_size=(32, 32))
@@ -15,6 +34,7 @@ Example:
     >>>     time_window=11,
     >>>     affinity_type='uniform', time_span='8m', update_rule='',
     >>> )
+    >>> # xdoctest: +REQUIRES(--show)
     >>> import kwplot
     >>> plt = kwplot.autoplt()
     >>> self.update_affinity(affinity_type='contiguous')
@@ -28,50 +48,75 @@ Example:
     >>> self.update_affinity(affinity_type='hardish3')
     >>> self.show_summary(samples_per_frame=3, fnum=3)
     >>> self.show_procedure(fnum=6)
+    >>> self.update_affinity(affinity_type='uniform')
+    >>> self.show_summary(samples_per_frame=3, fnum=3)
+    >>> self.show_procedure(fnum=6)
     >>> plt.subplots_adjust(top=0.9)
 
 Example:
-        >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
-        >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
-        >>> import watch
-        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-        >>> coco_fpath = data_dvc_dpath / 'Drop4-BAS/KR_R001.kwcoco.json'
-        >>> dset = watch.coerce_kwcoco(coco_fpath)
-        >>> vidid = dset.dataset['videos'][0]['id']
-        >>> self = TimeWindowSampler.from_coco_video(
-        >>>     dset, vidid,
-        >>>     time_window=11,
-        >>>     affinity_type='uniform', time_span='8m', update_rule='',
-        >>> )
-        >>> import kwplot
-        >>> plt = kwplot.autoplt()
-        >>> self.update_affinity(affinity_type='contiguous')
-        >>> self.show_summary(samples_per_frame=3, fnum=1)
-        >>> plt.subplots_adjust(top=0.8)
-        >>> self.update_affinity(affinity_type='soft2')
-        >>> self.show_summary(samples_per_frame=3, fnum=2)
-        >>> plt.subplots_adjust(top=0.8)
-        >>> self.update_affinity(affinity_type='hardish3')
-        >>> self.show_summary(samples_per_frame=3, fnum=3)
-        >>> plt.subplots_adjust(top=0.8)
+    >>> # Demo corner case where there are too few observations
+    >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
+    >>> import watch
+    >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, num_frames=1, num_videos=1, image_size=(32, 32))
+    >>> vidid = dset.dataset['videos'][0]['id']
+    >>> self = TimeWindowSampler.from_coco_video(
+    >>>     dset, vidid,
+    >>>     time_window=2,
+    >>>     affinity_type='hardish3', time_span='1y', update_rule='',
+    >>> )
+    >>> idxs = self.sample()
+    >>> print(f'idxs={idxs}')
+    idxs=[0, 0]
+    >>> # xdoctest: +REQUIRES(--show)
+    >>> import kwplot
+    >>> plt = kwplot.autoplt()
+    >>> self.show_summary(samples_per_frame=3, fnum=1)
+    >>> self.show_procedure(fnum=4)
+    >>> plt.subplots_adjust(top=0.9)
 
 Example:
-        >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
-        >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
-        >>> import watch
-        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-        >>> coco_fpath = data_dvc_dpath / 'Drop4-BAS/KR_R001.kwcoco.json'
-        >>> dset = watch.coerce_kwcoco(coco_fpath)
-        >>> self = MultiTimeWindowSampler.from_coco_video(
-        >>>     dset, vidid,
-        >>>     time_window=11,
-        >>>     affinity_type='uniform-soft2-hardish3', update_rule=[''], gamma=2,
-        >>>     time_span='6m-1y')
-        >>> self.sample()
-        >>> # xdoctest: +REQUIRES(--show)
-        >>> import kwplot
-        >>> kwplot.autosns()
-        >>> self.show_summary(3)
+    >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
+    >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
+    >>> import watch
+    >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+    >>> coco_fpath = data_dvc_dpath / 'Drop4-BAS/KR_R001.kwcoco.json'
+    >>> dset = watch.coerce_kwcoco(coco_fpath)
+    >>> vidid = dset.dataset['videos'][0]['id']
+    >>> self = TimeWindowSampler.from_coco_video(
+    >>>     dset, vidid,
+    >>>     time_window=11,
+    >>>     affinity_type='uniform', time_span='8m', update_rule='',
+    >>> )
+    >>> # xdoctest: +REQUIRES(--show)
+    >>> import kwplot
+    >>> plt = kwplot.autoplt()
+    >>> self.update_affinity(affinity_type='contiguous')
+    >>> self.show_summary(samples_per_frame=3, fnum=1)
+    >>> plt.subplots_adjust(top=0.8)
+    >>> self.update_affinity(affinity_type='soft2')
+    >>> self.show_summary(samples_per_frame=3, fnum=2)
+    >>> plt.subplots_adjust(top=0.8)
+    >>> self.update_affinity(affinity_type='hardish3')
+    >>> self.show_summary(samples_per_frame=3, fnum=3)
+    >>> plt.subplots_adjust(top=0.8)
+
+Example:
+    >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
+    >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
+    >>> import watch
+    >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+    >>> coco_fpath = data_dvc_dpath / 'Drop4-BAS/KR_R001.kwcoco.json'
+    >>> dset = watch.coerce_kwcoco(coco_fpath)
+    >>> self = MultiTimeWindowSampler.from_coco_video(
+    >>>     dset, vidid,
+    >>>     time_window=11,
+    >>>     affinity_type='uniform-soft2-hardish3', update_rule=[''], gamma=2,
+    >>>     time_span='6m-1y')
+    >>> self.sample()
+    >>> # xdoctest: +REQUIRES(--show)
+    >>> import kwplot
+    >>> kwplot.autosns()
+    >>> self.show_summary(3)
 """
 
 import kwarray
@@ -80,6 +125,7 @@ import numpy as np
 import ubelt as ub
 import math
 import datetime
+import itertools as it
 from dateutil import parser
 from watch.utils import util_kwarray
 from watch.utils.util_time import coerce_timedelta
@@ -171,7 +217,6 @@ class MultiTimeWindowSampler(CommonSamplerMixin):
         self._build()
 
     def _build(self):
-        import itertools as it
         for time_span, affinity_type, update_rule in it.product(self.time_span, self.affinity_type, self.update_rule):
             sub_sampler = TimeWindowSampler(
                 unixtimes=self.unixtimes,
