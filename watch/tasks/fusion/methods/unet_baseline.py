@@ -85,7 +85,7 @@ class UNetBaseline(pl.LightningModule, WatchModuleMixins):
         super().__init__()
         self.save_hyperparameters()
 
-        input_stats = self.set_dataset_specific_attributes(dataset_stats, input_sensorchan)
+        input_stats = self.set_dataset_specific_attributes(input_sensorchan, dataset_stats)
 
         self.classes = kwcoco.CategoryTree.coerce(classes)
         self.num_classes = len(self.classes)

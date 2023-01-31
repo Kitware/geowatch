@@ -442,7 +442,7 @@ def _torch_meshgrid(*basis_dims):
 def _class_weights_from_freq(total_freq, mode='median-idf'):
     """
     Example:
-        >>> from watch.tasks.fusion.methods.channelwise_transformer import _class_weights_from_freq
+        >>> from watch.tasks.fusion.methods.network_modules import _class_weights_from_freq
         >>> total_freq = np.array([19503736, 92885, 883379, 0, 0])
         >>> print(_class_weights_from_freq(total_freq, mode='idf'))
         >>> print(_class_weights_from_freq(total_freq, mode='median-idf'))

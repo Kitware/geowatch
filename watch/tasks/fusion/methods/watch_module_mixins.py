@@ -383,6 +383,16 @@ class WatchModuleMixins:
         """
         Set module attributes based on dataset stats it will be trained on.
 
+        Args:
+            input_sensorchan (str | kwcoco.SensorchanSpec | None):
+                The input sensor channels the model should expect
+
+            dataset_stats (Dict | None):
+                See :func:`demo_dataset_stats` for an example of this structure
+
+        Returns:
+            None | Dict: input_stats
+
         The following attributes will be set after calling this method.
 
             * self.class_freq
@@ -400,16 +410,6 @@ class WatchModuleMixins:
         for legacy reasons and duplicated across several modules. This is a
         common location for that code to allow it to be more easily refactored
         and simplified at a later date.
-
-        Args:
-            input_sensorchan (str | kwcoco.SensorchanSpec | None):
-                The input sensor channels the model should expect
-
-            dataset_stats (Dict | None):
-                See :func:`demo_dataset_stats` for an example of this structure
-
-        Returns:
-            None | Dict: input_stats
         """
         if dataset_stats is not None:
             input_stats = dataset_stats['input_stats']
@@ -421,9 +421,6 @@ class WatchModuleMixins:
             class_freq = None
             input_stats = None
 
-        self.class_freq = class_freq
-        self.dataset_stats = dataset_stats
-
         # Handle channel-wise input mean/std in the network (This is in
         # contrast to common practice where it is done in the dataloader)
         if input_sensorchan is None:
@@ -432,7 +429,7 @@ class WatchModuleMixins:
                 'input channels')
         input_sensorchan = kwcoco.SensorChanSpec.coerce(input_sensorchan)
 
-        if self.dataset_stats is None:
+        if dataset_stats is None:
             # Handle the case where we know what the input streams are, but not
             # what their statistics are.
             input_stats = None
@@ -441,8 +438,10 @@ class WatchModuleMixins:
                 for s in input_sensorchan.streams()
             }
         else:
-            unique_sensor_modes = self.dataset_stats['unique_sensor_modes']
+            unique_sensor_modes = dataset_stats['unique_sensor_modes']
 
+        self.class_freq = class_freq
+        self.dataset_stats = dataset_stats
         self.unique_sensor_modes = unique_sensor_modes
         self.input_sensorchan = input_sensorchan
         return input_stats

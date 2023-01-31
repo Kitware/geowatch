@@ -44,7 +44,7 @@ class NoopModel(pl.LightningModule, WatchModuleMixins):
 
         self.dummy_param = nn.Parameter(torch.randn(1), requires_grad=True)
 
-        self.set_dataset_specific_attributes(dataset_stats, input_sensorchan)
+        input_stats = self.set_dataset_specific_attributes(input_sensorchan, dataset_stats)
 
         self.classes = kwcoco.CategoryTree.coerce(classes)
         self.num_classes = len(self.classes)
