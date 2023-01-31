@@ -376,7 +376,7 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         cacher.save(sample_grid)
     vidid_to_meta = sample_grid['vidid_to_meta']
     from watch.utils.slugify_ext import smart_truncate
-    print('vidid_to_meta = {}'.format(smart_truncate(ub.repr2(vidid_to_meta, nl=-1), max_length=1000)))
+    print('vidid_to_meta = {}'.format(smart_truncate(ub.repr2(vidid_to_meta, nl=-1), max_length=1600)))
     return sample_grid
 
 
@@ -452,6 +452,7 @@ def _sample_single_video_spacetime_targets(
     vidspace_video_height = video_info['height']
     vidspace_video_width = video_info['width']
     vidspace_full_dims = [vidspace_video_height, vidspace_video_width]
+    winspace_full_dims = np.ceil(np.array(vidspace_full_dims) * window_scale)
     if winspace_space_dims == 'full':
         vidspace_window_dims = vidspace_full_dims
     else:
@@ -592,7 +593,11 @@ def _sample_single_video_spacetime_targets(
         'vidspace_window_space_dims': vidspace_window_dims,
         'winspace_window_space_dims': winspace_space_dims,
         'vidspace_full_dims': vidspace_full_dims,
+        'winspace_full_dims': winspace_full_dims,
         'num_available_frames': len(time_sampler.indexes),
+        'num_samples': len(_cached['video_targets']),
+        'num_pos_samples': len(_cached['video_positive_idxs']),
+        'num_neg_samples': len(_cached['video_negative_idxs']),
     }
     return _cached, meta, time_sampler, video_gids
 
