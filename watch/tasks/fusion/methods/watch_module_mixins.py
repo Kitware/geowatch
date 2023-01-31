@@ -1,6 +1,8 @@
 import kwcoco
+import ubelt as ub
 import torch
 import numpy as np
+from watch.tasks.fusion.methods.network_modules import _class_weights_from_freq
 
 
 class WatchModuleMixins:
@@ -15,6 +17,10 @@ class WatchModuleMixins:
 
     @classmethod
     def demo_dataset_stats(cls):
+        """
+        Mock data that mimiks a dataset summary a kwcoco dataloader could
+        provide.
+        """
         channels = kwcoco.ChannelSpec.coerce('pan,red|green|blue,nir|swir16|swir22')
         unique_sensor_modes = {
             ('sensor1', 'pan'),
@@ -32,15 +38,6 @@ class WatchModuleMixins:
             'input_stats': input_stats,
             'class_freq': {c: np.random.randint(0, 10000) for c in classes},
         }
-        # 'sensor_mode_hist': {('sensor3', 'B10|B11|r|g|b|flowx|flowy|distri'): 1,
-        #  ('sensor2', 'B8|B11|r|g|b|disparity|gauss'): 2,
-        #  ('sensor0', 'B1|B8|B8a|B10|B11'): 1},
-        # 'class_freq': {'star': 0,
-        #  'superstar': 5822,
-        #  'eff': 0,
-        #  'negative': 0,
-        #  'ignore': 9216,
-        #  'background': 21826}}
         return channels, classes, dataset_stats
 
     def demo_batch(self, batch_size=1, num_timesteps=3, width=8, height=8, nans=0, rng=None):
@@ -222,3 +219,162 @@ class WatchModuleMixins:
         from watch.tasks.fusion.utils import load_model_from_package
         self = load_model_from_package(package_path)
         return self
+
+    def _coerce_class_weights(self, class_weights):
+        """
+        Handles automatic class weighting based on dataset stats.
+
+        Args:
+            class_weights (str | FloatTensor):
+                If already a tensor does nothing. If the string "auto" then
+                class frequency weighting is used. The string "auto" can be
+                suffixed with a "class modulation code".
+
+        Note:
+            A class modulate code is a a special syntax that lets the user
+            modulate automatically computed class weights. Should be a comma
+            separated list of name*weight or name*weight+offset. E.g.
+            `auto:negative*0,background*0.001,No Activity*0.1+1`
+
+        Example:
+            >>> # xdoctest: +IGNORE_WANT
+            >>> from watch.tasks.fusion.methods.watch_module_mixins import *  # NOQA
+            >>> self = WatchModuleMixins()
+            >>> self.classes = ['a', 'b', 'c', 'd', 'e']
+            >>> self.class_freq = {
+            >>>     'a': 100, 'b': 100, 'c': 100, 'd': 100, 'e': 100, 'f': 100,
+            >>> }
+            >>> self._coerce_class_weights('auto')
+            tensor([1., 1., 1., 1., 1.])
+            >>> self.class_freq = {
+            >>>     'a': 100, 'b': 100, 'c': 200, 'd': 300, 'e': 500, 'f': 800,
+            >>> }
+            >>> self._coerce_class_weights('auto')
+            tensor([1.0000, 1.0000, 0.5000, 0.3333, 0.2000])
+            >>> self._coerce_class_weights('auto:a+1,b*2,c*0+31415')
+            tensor([2.0000e+00, 2.0000e+00, 3.1415e+04, 3.3333e-01, 2.0000e-01])
+        """
+        from watch import heuristics
+        hueristic_ignore_keys = heuristics.IGNORE_CLASSNAMES
+        if isinstance(class_weights, str):
+            if class_weights.startswith('auto'):
+                if ':' in class_weights:
+                    class_weights, modulate_class_weights = class_weights.split(':')
+                else:
+                    modulate_class_weights = None
+                class_weights.split(':')
+                if self.class_freq is None:
+                    heuristic_weights = {}
+                else:
+                    total_freq = np.array(list(self.class_freq.values()))
+                    cat_weights = _class_weights_from_freq(total_freq)
+                    catnames = list(self.class_freq.keys())
+                    print('total_freq = {!r}'.format(total_freq))
+                    print('cat_weights = {!r}'.format(cat_weights))
+                    print('catnames = {!r}'.format(catnames))
+                    heuristic_weights = ub.dzip(catnames, cat_weights)
+                print('heuristic_weights = {}'.format(ub.repr2(heuristic_weights, nl=1)))
+
+                heuristic_weights.update({k: 0 for k in hueristic_ignore_keys})
+                # print('heuristic_weights = {}'.format(ub.repr2(heuristic_weights, nl=1, align=':')))
+                class_weights = []
+                for catname in self.classes:
+                    w = heuristic_weights.get(catname, 1.0)
+                    class_weights.append(w)
+                using_class_weights = ub.dzip(self.classes, class_weights)
+
+                # Add in user-specific modulation of the weights
+                if modulate_class_weights:
+                    import re
+                    parts = [p.strip() for p in modulate_class_weights.split(',')]
+                    parts = [p for p in parts if p]
+                    for part in parts:
+                        toks = re.split('([+*])', part)
+                        catname = toks[0]
+                        rest_iter = iter(toks[1:])
+                        weight = using_class_weights[catname]
+                        nrhtoks = len(toks) - 1
+                        assert nrhtoks % 2 == 0
+                        nstmts = nrhtoks // 2
+                        for _ in range(nstmts):
+                            opcode = next(rest_iter)
+                            arg = float(next(rest_iter))
+                            if opcode == '*':
+                                weight = weight * arg
+                            elif opcode == '+':
+                                weight = weight + arg
+                            else:
+                                raise KeyError(opcode)
+                        # Modulate
+                        using_class_weights[catname] = weight
+
+                print('using_class_weights = {}'.format(ub.repr2(using_class_weights, nl=1, align=':')))
+                class_weights = [
+                    using_class_weights.get(catname, 1.0)
+                    for catname in self.classes
+                ]
+                class_weights = torch.FloatTensor(class_weights)
+            else:
+                raise KeyError(class_weights)
+        else:
+            raise NotImplementedError(class_weights)
+        return class_weights
+
+    def _coerce_saliency_weights(self, saliency_weights):
+        """
+        Finds weights to balance saliency forward / background classes.
+
+        Args:
+            saliency_weights (Tensor | str):
+                Can be a raw tensor, auto, or a string <fg>:<bg>.
+
+        Example:
+            >>> # xdoctest: +IGNORE_WANT
+            >>> from watch.tasks.fusion.methods.watch_module_mixins import *  # NOQA
+            >>> self = WatchModuleMixins()
+            >>> self.saliency_num_classes = 2
+            >>> self.background_classes = ['a', 'b', 'c']
+            >>> self.foreground_classes = ['d', 'e']
+            >>> self.class_freq = {
+            >>>     'a': 100, 'b': 100, 'c': 100, 'd': 100, 'e': 100, 'f': 100,
+            >>> }
+            >>> self._coerce_saliency_weights('auto')
+            tensor([1.0000, 1.4925])
+            >>> self.background_classes = ['a', 'b', 'c']
+            >>> self.foreground_classes = []
+            >>> self._coerce_saliency_weights('auto')
+            tensor([  1., 300.])
+            >>> self.background_classes = []
+            >>> self.foreground_classes = []
+            >>> self._coerce_saliency_weights('auto')
+            tensor([1., 0.])
+            >>> self._coerce_saliency_weights('2:1')
+            tensor([2., 1.])
+            >>> self._coerce_saliency_weights('70:20')
+            tensor([70., 20.])
+        """
+        if isinstance(saliency_weights, str):
+            if saliency_weights == 'auto':
+                class_freq = self.class_freq
+                if class_freq is not None:
+                    print(f'class_freq={class_freq}')
+                    bg_freq = sum(class_freq.get(k, 0) for k in self.background_classes)
+                    fg_freq = sum(class_freq.get(k, 0) for k in self.foreground_classes)
+                    bg_weight = 1.
+                    fg_weight = bg_freq / (fg_freq + 1)
+                else:
+                    bg_weight = 1.0
+                    fg_weight = 1.0
+            else:
+                bg_weight, fg_weight = saliency_weights.split(':')
+                fg_weight = float(fg_weight)
+                bg_weight = float(bg_weight)
+        else:
+            raise NotImplementedError(saliency_weights)
+        print(f'bg_weight={bg_weight}')
+        print(f'fg_weight={fg_weight}')
+        fg_bg_weights = [bg_weight, fg_weight]
+        _n = self.saliency_num_classes
+        _w = fg_bg_weights + ([0.0] * (_n - len(fg_bg_weights)))
+        saliency_weights = torch.Tensor(_w)
+        return saliency_weights

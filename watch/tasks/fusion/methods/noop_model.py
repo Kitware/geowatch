@@ -95,6 +95,8 @@ class NoopModel(pl.LightningModule, WatchModuleMixins):
         # hueristic_ignore_keys.update(hueristic_occluded_keys)
 
         self.saliency_num_classes = 2
+        self.class_weights = self._coerce_class_weights('auto')
+        self.saliency_weights = self._coerce_saliency_weights('auto')
 
         self.sensor_channel_tokenizers = RobustModuleDict()
 
