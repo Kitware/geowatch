@@ -1,5 +1,5 @@
 import pandas as pd
-import json
+import json  # NOQA
 from watch.mlops import smart_result_parser
 import ubelt as ub
 
@@ -74,7 +74,6 @@ def bas_poly_eval_confusion_analysis(eval_fpath):
             print(newline)
 
             pred_fpath = ub.Path(ub.argval('--pred_sites', argv=parts))
-            import json
             data = json.loads(pred_fpath.read_text())
             old_root = '/home/joncrall/remote/toothbrush'
             new_root = str(ub.Path.home())
