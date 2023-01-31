@@ -13,6 +13,9 @@ __author_email__ = 'kitware@kitware.com, jon.crall@kitware.com'
 __url__ = 'https://gitlab.kitware.com/watch/watch'
 
 
+os.environ['USE_PYGEOS'] = '0'
+
+
 WATCH_PREIMPORT_VARIANTS = {
     'variant1': ['geopandas', 'pyproj', 'gdal'],  # align-crs on horologic
     'variant2': ['pyproj', 'gdal'],               # CI machine
