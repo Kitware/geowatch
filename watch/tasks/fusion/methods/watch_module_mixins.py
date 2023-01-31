@@ -378,3 +378,71 @@ class WatchModuleMixins:
         _w = fg_bg_weights + ([0.0] * (_n - len(fg_bg_weights)))
         saliency_weights = torch.Tensor(_w)
         return saliency_weights
+
+    def set_dataset_specific_attributes(self, input_sensorchan, dataset_stats):
+        """
+        Set module attributes based on dataset stats it will be trained on.
+
+        The following attributes will be set after calling this method.
+
+            * self.class_freq
+
+            * self.dataset_stats
+
+            * self.input_sensorchan
+
+            * self.unique_sensor_modes
+
+        We also return an ``input_stats`` variable which should be used for
+        setting model-dependent handling of input normalization.
+
+        The handling of dataset_stats and input_sensorchan are weirdly coupled
+        for legacy reasons and duplicated across several modules. This is a
+        common location for that code to allow it to be more easily refactored
+        and simplified at a later date.
+
+        Args:
+            input_sensorchan (str | kwcoco.SensorchanSpec | None):
+                The input sensor channels the model should expect
+
+            dataset_stats (Dict | None):
+                See :func:`demo_dataset_stats` for an example of this structure
+
+        Returns:
+            None | Dict: input_stats
+        """
+        if dataset_stats is not None:
+            input_stats = dataset_stats['input_stats']
+            class_freq = dataset_stats['class_freq']
+            if input_sensorchan is None:
+                input_sensorchan = ','.join(
+                    [f'{s}:{c}' for s, c in dataset_stats['unique_sensor_modes']])
+        else:
+            class_freq = None
+            input_stats = None
+
+        self.class_freq = class_freq
+        self.dataset_stats = dataset_stats
+
+        # Handle channel-wise input mean/std in the network (This is in
+        # contrast to common practice where it is done in the dataloader)
+        if input_sensorchan is None:
+            raise Exception(
+                'need to specify input_sensorchan at least as the number of '
+                'input channels')
+        input_sensorchan = kwcoco.SensorChanSpec.coerce(input_sensorchan)
+
+        if self.dataset_stats is None:
+            # Handle the case where we know what the input streams are, but not
+            # what their statistics are.
+            input_stats = None
+            unique_sensor_modes = {
+                (s.sensor.spec, s.chans.spec)
+                for s in input_sensorchan.streams()
+            }
+        else:
+            unique_sensor_modes = self.dataset_stats['unique_sensor_modes']
+
+        self.unique_sensor_modes = unique_sensor_modes
+        self.input_sensorchan = input_sensorchan
+        return input_stats

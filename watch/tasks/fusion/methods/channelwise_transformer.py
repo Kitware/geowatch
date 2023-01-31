@@ -293,37 +293,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         self.save_hyperparameters()
         self.hparams.update(**_cfgdict)
 
-        if dataset_stats is not None:
-            input_stats = dataset_stats['input_stats']
-            class_freq = dataset_stats['class_freq']
-            if input_sensorchan is None:
-                input_sensorchan = ','.join(
-                    [f'{s}:{c}' for s, c in dataset_stats['unique_sensor_modes']])
-        else:
-            class_freq = None
-            input_stats = None
-
-        self.class_freq = class_freq
-        self.dataset_stats = dataset_stats
-
-        # Handle channel-wise input mean/std in the network (This is in
-        # contrast to common practice where it is done in the dataloader)
-        if input_sensorchan is None:
-            raise Exception(
-                'need to specify input_sensorchan at least as the number of '
-                'input channels')
-        input_sensorchan = kwcoco.SensorChanSpec.coerce(input_sensorchan)
-        self.input_sensorchan = input_sensorchan
-
-        if self.dataset_stats is None:
-            # hack for tests (or no known sensors case)
-            input_stats = None
-            self.unique_sensor_modes = {
-                (s.sensor.spec, s.chans.spec)
-                for s in input_sensorchan.streams()
-            }
-        else:
-            self.unique_sensor_modes = self.dataset_stats['unique_sensor_modes']
+        input_stats = self.set_dataset_specific_attributes(dataset_stats, input_sensorchan)
 
         input_norms = None
         if input_stats is not None:
@@ -537,7 +507,9 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
             # Also add in a special weight for the max
             sensor_chan_reduction_weights = RobustParameterDict()
-            unique_sensorchans = [sensor + ':' + chan for sensor, chan in self.unique_sensor_modes]
+            unique_sensorchans = [
+                sensor + ':' + chan
+                for sensor, chan in self.unique_sensor_modes]
             for sensor_chan in unique_sensorchans + ['__MAX']:
                 sensor_chan_reduction_weights[sensor_chan] = torch.nn.Parameter(torch.ones([1]))
             self.sensor_chan_reduction_weights = sensor_chan_reduction_weights
@@ -1479,7 +1451,6 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                 for _s in sorted(self.input_norms.keys()):
                     for _c in sorted(self.input_norms[_s].keys()):
                         print(f'{_s=!r} {_c=!r}')
-                print('self.unique_sensor_modes = {!r}'.format(self.unique_sensor_modes))
                 raise
             # self.sensor_channel_tokenizers[]
 
