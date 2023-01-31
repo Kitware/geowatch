@@ -491,6 +491,7 @@ def _sample_single_video_spacetime_targets(
     rough_num_windows = np.prod(np.array(vidspace_full_dims) / np.array(vidspace_window_dims))
     rough_num_cells = len(gid_arr) * rough_num_windows
     probably_slow = rough_num_cells > (16 * 30)
+    probably_slow = False
 
     cache_dpath = ub.Path.appdir('watch', 'grid_cache').ensuredir()
     cacher = ub.Cacher('sliding-window-cache-' + video_name,
@@ -540,6 +541,7 @@ def _sample_single_video_spacetime_targets(
 
         num_cells = len(slices) * len(video_gids)
         probably_slow = num_cells > (16 * 30)
+        probably_slow = False
 
         for vidspace_region in ub.ProgIter(slices, desc='Sliding window',
                                            enabled=probably_slow,
