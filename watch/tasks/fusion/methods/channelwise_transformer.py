@@ -75,7 +75,6 @@ from watch import heuristics
 from watch.tasks.fusion import utils
 from watch.tasks.fusion.architectures import transformer
 from watch.tasks.fusion.methods.network_modules import _torch_meshgrid
-from watch.tasks.fusion.methods.network_modules import _class_weights_from_freq
 from watch.tasks.fusion.methods.network_modules import coerce_criterion
 from watch.tasks.fusion.methods.network_modules import torch_safe_stack
 from watch.tasks.fusion.methods.network_modules import RobustModuleDict
@@ -128,7 +127,16 @@ class MultimodalTransformerConfig(scfg.DataConfig):
     lr_scheduler = scfg.Value('CosineAnnealingLR', type=str)
     positive_change_weight = scfg.Value(1.0, type=float)
     negative_change_weight = scfg.Value(1.0, type=float)
-    class_weights = scfg.Value('auto', type=str, help='class weighting strategy')
+    class_weights = scfg.Value('auto', type=str, help=ub.paragraph(
+        '''
+        class weighting strategy
+
+        Can be auto or auto:<modulate_str>.
+        A modulate string is a special syntax that lets the user modulate
+        automatically computed class weights. Should be a comma separated list
+        of name*weight or name*weight+offset. E.g.
+        `negative*0,background*0.001,No Activity*0.1+1`
+        '''))
     saliency_weights = scfg.Value('auto', type=str, help='class weighting strategy')
     stream_channels = scfg.Value(8, type=int, help=ub.paragraph(
         '''
@@ -154,10 +162,7 @@ class MultimodalTransformerConfig(scfg.DataConfig):
     global_saliency_weight = scfg.Value(1.0, type=float)
     modulate_class_weights = scfg.Value('', type=str, help=ub.paragraph(
         '''
-        a special syntax that lets the user modulate automatically
-        computed class weights. Should be a comma separated list of
-        name*weight or name*weight+offset. E.g.
-        `negative*0,background*0.001,No Activity*0.1+1`
+        DEPRECATE. SET THE class_weights to auto:<modulate_str>
         '''))
     change_loss = scfg.Value('cce')
     class_loss = scfg.Value('focal')
@@ -288,37 +293,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         self.save_hyperparameters()
         self.hparams.update(**_cfgdict)
 
-        if dataset_stats is not None:
-            input_stats = dataset_stats['input_stats']
-            class_freq = dataset_stats['class_freq']
-            if input_sensorchan is None:
-                input_sensorchan = ','.join(
-                    [f'{s}:{c}' for s, c in dataset_stats['unique_sensor_modes']])
-        else:
-            class_freq = None
-            input_stats = None
-
-        self.class_freq = class_freq
-        self.dataset_stats = dataset_stats
-
-        # Handle channel-wise input mean/std in the network (This is in
-        # contrast to common practice where it is done in the dataloader)
-        if input_sensorchan is None:
-            raise Exception(
-                'need to specify input_sensorchan at least as the number of '
-                'input channels')
-        input_sensorchan = kwcoco.SensorChanSpec.coerce(input_sensorchan)
-        self.input_sensorchan = input_sensorchan
-
-        if self.dataset_stats is None:
-            # hack for tests (or no known sensors case)
-            input_stats = None
-            self.unique_sensor_modes = {
-                (s.sensor.spec, s.chans.spec)
-                for s in input_sensorchan.streams()
-            }
-        else:
-            self.unique_sensor_modes = self.dataset_stats['unique_sensor_modes']
+        input_stats = self.set_dataset_specific_attributes(input_sensorchan, dataset_stats)
 
         input_norms = None
         if input_stats is not None:
@@ -367,91 +342,24 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         # hueristic_ignore_keys.update(hueristic_occluded_keys)
 
         self.saliency_num_classes = 2
-        _n = self.saliency_num_classes
-        if isinstance(self.hparams.saliency_weights, str):
-            if self.hparams.saliency_weights == 'auto':
-                if class_freq is not None:
-                    print(f'class_freq={class_freq}')
-                    bg_freq = sum(class_freq.get(k, 0) for k in self.background_classes)
-                    fg_freq = sum(class_freq.get(k, 0) for k in self.foreground_classes)
-                    bg_weight = 1.
-                    fg_weight = bg_freq / (fg_freq + 1)
-                else:
-                    bg_weight = 1.0
-                    fg_weight = 1.0
-            else:
-                bg_weight, fg_weight = self.hparams.saliency_weights.split(':')
-                fg_weight = float(fg_weight)
-                bg_weight = float(bg_weight)
-        else:
-            raise NotImplementedError(self.hparams.saliency_weights)
-        print(f'bg_weight={bg_weight}')
-        print(f'fg_weight={fg_weight}')
-        fg_bg_weights = [bg_weight, fg_weight]
-        _w = fg_bg_weights + ([0.0] * (_n - len(fg_bg_weights)))
-        saliency_weights = torch.Tensor(_w)
 
         # criterion and metrics
         # TODO: parametarize loss criterions
         # For loss function experiments, see and work in
         # ~/code/watch/watch/tasks/fusion/methods/channelwise_transformer.py
         # self.change_criterion = monai.losses.FocalLoss(reduction='none', to_onehot_y=False)
-        if isinstance(self.hparams.class_weights, str):
-            if self.hparams.class_weights == 'auto':
-                if self.class_freq is None:
-                    heuristic_weights = {}
-                else:
-                    total_freq = np.array(list(self.class_freq.values()))
-                    cat_weights = _class_weights_from_freq(total_freq)
-                    catnames = list(self.class_freq.keys())
-                    print('total_freq = {!r}'.format(total_freq))
-                    print('cat_weights = {!r}'.format(cat_weights))
-                    print('catnames = {!r}'.format(catnames))
-                    heuristic_weights = ub.dzip(catnames, cat_weights)
-                print('heuristic_weights = {}'.format(ub.repr2(heuristic_weights, nl=1)))
+        class_weights = self.hparams.class_weights
+        modulate_class_weights = self.hparams.modulate_class_weights
+        if modulate_class_weights:
+            ub.schedule_deprecation(
+                'watch', 'modulate_class_weights', 'param',
+                migration='Use class_weights:<modulate_str> instead',
+                deprecate='0.3.9', error='0.3.11', remove='0.3.13')
+            if isinstance(class_weights, str) and class_weights == 'auto':
+                class_weights = class_weights + ':' + modulate_class_weights
 
-                heuristic_weights.update({k: 0 for k in hueristic_ignore_keys})
-                # print('heuristic_weights = {}'.format(ub.repr2(heuristic_weights, nl=1, align=':')))
-                class_weights = []
-                for catname in self.classes:
-                    w = heuristic_weights.get(catname, 1.0)
-                    class_weights.append(w)
-                using_class_weights = ub.dzip(self.classes, class_weights)
-
-                # Add in user-specific modulation of the weights
-                if self.hparams.modulate_class_weights:
-                    import re
-                    parts = [p.strip() for p in self.hparams.modulate_class_weights.split(',')]
-                    parts = [p for p in parts if p]
-                    for part in parts:
-                        toks = re.split('([+*])', part)
-                        catname = toks[0]
-                        rest_iter = iter(toks[1:])
-                        weight = using_class_weights[catname]
-                        nrhtoks = len(toks) - 1
-                        assert nrhtoks % 2 == 0
-                        nstmts = nrhtoks // 2
-                        for _ in range(nstmts):
-                            opcode = next(rest_iter)
-                            arg = float(next(rest_iter))
-                            if opcode == '*':
-                                weight = weight * arg
-                            elif opcode == '+':
-                                weight = weight * arg
-                            else:
-                                raise KeyError(opcode)
-                        # Modulate
-                        using_class_weights[catname] = weight
-
-                print('using_class_weights = {}'.format(ub.repr2(using_class_weights, nl=1, align=':')))
-                class_weights = torch.FloatTensor(class_weights)
-            else:
-                raise KeyError(class_weights)
-        else:
-            raise NotImplementedError(class_weights)
-
-        self.saliency_weights = saliency_weights
-        self.class_weights = class_weights
+        self.saliency_weights = self._coerce_saliency_weights(self.hparams.saliency_weights)
+        self.class_weights = self._coerce_class_weights(class_weights)
         self.change_weights = torch.FloatTensor([
             self.hparams.negative_change_weight,
             self.hparams.positive_change_weight
@@ -599,7 +507,9 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
             # Also add in a special weight for the max
             sensor_chan_reduction_weights = RobustParameterDict()
-            unique_sensorchans = [sensor + ':' + chan for sensor, chan in self.unique_sensor_modes]
+            unique_sensorchans = [
+                sensor + ':' + chan
+                for sensor, chan in self.unique_sensor_modes]
             for sensor_chan in unique_sensorchans + ['__MAX']:
                 sensor_chan_reduction_weights[sensor_chan] = torch.nn.Parameter(torch.ones([1]))
             self.sensor_chan_reduction_weights = sensor_chan_reduction_weights
@@ -1541,7 +1451,6 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                 for _s in sorted(self.input_norms.keys()):
                     for _c in sorted(self.input_norms[_s].keys()):
                         print(f'{_s=!r} {_c=!r}')
-                print('self.unique_sensor_modes = {!r}'.format(self.unique_sensor_modes))
                 raise
             # self.sensor_channel_tokenizers[]
 

@@ -11,13 +11,11 @@ import netharn as nh
 import ubelt as ub
 
 from watch import heuristics
-from watch.tasks.fusion.methods.network_modules import _class_weights_from_freq
 from watch.tasks.fusion.methods.network_modules import coerce_criterion
 from watch.tasks.fusion.methods.network_modules import RobustModuleDict
 from watch.tasks.fusion.methods.watch_module_mixins import WatchModuleMixins
 from watch.tasks.fusion.architectures import unet_blur
 
-import numpy as np
 from typing import Dict, Any
 
 try:
@@ -87,37 +85,7 @@ class UNetBaseline(pl.LightningModule, WatchModuleMixins):
         super().__init__()
         self.save_hyperparameters()
 
-        if dataset_stats is not None:
-            input_stats = dataset_stats['input_stats']
-            class_freq = dataset_stats['class_freq']
-            if input_sensorchan is None:
-                input_sensorchan = ','.join(
-                    [f'{s}:{c}' for s, c in dataset_stats['unique_sensor_modes']])
-        else:
-            class_freq = None
-            input_stats = None
-
-        self.class_freq = class_freq
-        self.dataset_stats = dataset_stats
-
-        # Handle channel-wise input mean/std in the network (This is in
-        # contrast to common practice where it is done in the dataloader)
-        if input_sensorchan is None:
-            raise Exception(
-                'need to specify input_sensorchan at least as the number of '
-                'input channels')
-        input_sensorchan = kwcoco.SensorChanSpec.coerce(input_sensorchan)
-        self.input_sensorchan = input_sensorchan
-
-        if self.dataset_stats is None:
-            # hack for tests (or no known sensors case)
-            input_stats = None
-            self.unique_sensor_modes = {
-                (s.sensor.spec, s.chans.spec)
-                for s in input_sensorchan.streams()
-            }
-        else:
-            self.unique_sensor_modes = self.dataset_stats['unique_sensor_modes']
+        input_stats = self.set_dataset_specific_attributes(input_sensorchan, dataset_stats)
 
         self.classes = kwcoco.CategoryTree.coerce(classes)
         self.num_classes = len(self.classes)
@@ -139,89 +107,13 @@ class UNetBaseline(pl.LightningModule, WatchModuleMixins):
 
         self.saliency_num_classes = 2
 
-        if isinstance(saliency_weights, str):
-            if saliency_weights == 'auto':
-                if class_freq is not None:
-                    bg_freq = sum(class_freq.get(k, 0) for k in self.background_classes)
-                    fg_freq = sum(class_freq.get(k, 0) for k in self.foreground_classes)
-                    bg_weight = 1.
-                    fg_weight = bg_freq / (fg_freq + 1)
-                    fg_bg_weights = [bg_weight, fg_weight]
-                    _w = fg_bg_weights + ([0.0] * (self.saliency_num_classes - len(fg_bg_weights)))
-                    saliency_weights = torch.Tensor(_w)
-                else:
-                    fg_bg_weights = [1.0, 1.0]
-                    _w = fg_bg_weights + ([0.0] * (self.saliency_num_classes - len(fg_bg_weights)))
-                    saliency_weights = torch.Tensor(_w)
-                # total_freq = np.array(list())
-                # print('total_freq = {!r}'.format(total_freq))
-                # cat_weights = _class_weights_from_freq(total_freq)
-            else:
-                raise KeyError(saliency_weights)
-        else:
-            raise NotImplementedError(saliency_weights)
-
         # criterion and metrics
         # TODO: parametarize loss criterions
         # For loss function experiments, see and work in
-        # ~/code/watch/watch/tasks/fusion/methods/sequence_aware.py
+        # ~/code/watch/watch/tks/fusion/methods/sequence_aware.py
         # self.change_criterion = monai.losses.FocalLoss(reduction='none', to_onehot_y=False)
-        if isinstance(class_weights, str):
-            if class_weights == 'auto':
-                if self.class_freq is None:
-                    heuristic_weights = {}
-                else:
-                    total_freq = np.array(list(self.class_freq.values()))
-                    cat_weights = _class_weights_from_freq(total_freq)
-                    catnames = list(self.class_freq.keys())
-                    print('total_freq = {!r}'.format(total_freq))
-                    print('cat_weights = {!r}'.format(cat_weights))
-                    print('catnames = {!r}'.format(catnames))
-                    heuristic_weights = ub.dzip(catnames, cat_weights)
-                print('heuristic_weights = {}'.format(ub.repr2(heuristic_weights, nl=1)))
-
-                heuristic_weights.update({k: 0 for k in hueristic_ignore_keys})
-                # print('heuristic_weights = {}'.format(ub.repr2(heuristic_weights, nl=1, align=':')))
-                class_weights = []
-                for catname in self.classes:
-                    w = heuristic_weights.get(catname, 1.0)
-                    class_weights.append(w)
-                using_class_weights = ub.dzip(self.classes, class_weights)
-
-                # Add in user-specific modulation of the weights
-                # if self.hparams.modulate_class_weights:
-                #     import re
-                #     parts = [p.strip() for p in self.hparams.modulate_class_weights.split(',')]
-                #     parts = [p for p in parts if p]
-                #     for part in parts:
-                #         toks = re.split('([+*])', part)
-                #         catname = toks[0]
-                #         rest_iter = iter(toks[1:])
-                #         weight = using_class_weights[catname]
-                #         nrhtoks = len(toks) - 1
-                #         assert nrhtoks % 2 == 0
-                #         nstmts = nrhtoks // 2
-                #         for _ in range(nstmts):
-                #             opcode = next(rest_iter)
-                #             arg = float(next(rest_iter))
-                #             if opcode == '*':
-                #                 weight = weight * arg
-                #             elif opcode == '+':
-                #                 weight = weight * arg
-                #             else:
-                #                 raise KeyError(opcode)
-                #         # Modulate
-                #         using_class_weights[catname] = weight
-
-                print('using_class_weights = {}'.format(ub.repr2(using_class_weights, nl=1, align=':')))
-                class_weights = torch.FloatTensor(class_weights)
-            else:
-                raise KeyError(class_weights)
-        else:
-            raise NotImplementedError(class_weights)
-
-        self.saliency_weights = saliency_weights
-        self.class_weights = class_weights
+        self.saliency_weights = self._coerce_saliency_weights(saliency_weights)
+        self.class_weights = self._coerce_class_weights(class_weights)
         self.change_weights = torch.FloatTensor([
             self.hparams.negative_change_weight,
             self.hparams.positive_change_weight
