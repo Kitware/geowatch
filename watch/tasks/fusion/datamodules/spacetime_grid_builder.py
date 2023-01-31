@@ -491,7 +491,6 @@ def _sample_single_video_spacetime_targets(
     rough_num_windows = np.prod(np.array(vidspace_full_dims) / np.array(vidspace_window_dims))
     rough_num_cells = len(gid_arr) * rough_num_windows
     probably_slow = rough_num_cells > (16 * 30)
-    probably_slow = False
 
     cache_dpath = ub.Path.appdir('watch', 'grid_cache').ensuredir()
     cacher = ub.Cacher('sliding-window-cache-' + video_name,
@@ -541,11 +540,10 @@ def _sample_single_video_spacetime_targets(
 
         num_cells = len(slices) * len(video_gids)
         probably_slow = num_cells > (16 * 30)
-        probably_slow = False
 
         for vidspace_region in ub.ProgIter(slices, desc='Sliding window',
                                            enabled=probably_slow,
-                                           verbose=verbose):
+                                           verbose=verbose * probably_slow):
 
             new_targets = _build_targets_in_spatial_region(
                 dset, video_id, vidspace_region, use_annot_info, qtree,
@@ -571,7 +569,7 @@ def _sample_single_video_spacetime_targets(
             for tid, infos in ub.ProgIter(track_infos,
                                           desc='Centered annots',
                                           enabled=len(track_infos) > 4 and probably_slow,
-                                          verbose=verbose):
+                                          verbose=verbose * (len(track_infos) > 4 and probably_slow)):
 
                 new_targets = _build_targets_around_track(
                     video_id, tid, infos, video_gids, vidspace_window_dims,
