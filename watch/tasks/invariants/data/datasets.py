@@ -146,12 +146,12 @@ class GriddedDataset(torch.utils.data.Dataset):
         self.images : kwcoco.coco_objects1d.Images = self.coco_dset.images()
         self.sampler = ndsampler.CocoSampler(self.coco_dset)
 
-        window_dims = [num_images, patch_size, patch_size]
-
         print('make grid')
         from watch.tasks.fusion.datamodules import spacetime_grid_builder
         builder = spacetime_grid_builder.SpacetimeGridBuilder(
-            self.coco_dset, window_dims=window_dims,
+            self.coco_dset,
+            time_dims=num_images,
+            window_dims=[patch_size, patch_size],
             window_overlap=patch_overlap,
             time_sampling='hardish3', time_span='1y',
             use_annot_info=False,

@@ -14,9 +14,9 @@ def dzyne_mwe():
                               time_steps=5,
                               chip_dims=(196, 196),
                               time_sampling='uniform',
-                              input_space_scale='3GSD',
-                              window_space_scale='3GSD',
-                              output_space_scale='3GSD',
+                              input_resolution='3GSD',
+                              window_resolution='3GSD',
+                              output_resolution='3GSD',
                               channels=channels)
     self.disable_augmenter = True
 
@@ -49,16 +49,17 @@ def visualize_invariant_batch():
     from watch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
     dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
     coco_fpath = dvc_dpath / 'Drop4-BAS/combo_vali_I2.kwcoco.json'
-    channels = 'red|green|blue,invariants.0:3,invariants.16,cloudmask'
+    # channels = 'red|green|blue,invariants.0:3,invariants.16,cloudmask'
+    channels = 'red|green|blue,cloudmask'
     # coco_fpath = dvc_dpath / 'Drop4-BAS/KR_R001.kwcoco.json'
     # channels = 'red|green|blue,nir|swir16|swir22'
     self = KWCocoVideoDataset(coco_fpath,
-                              time_steps=7,
-                              chip_dims=(196, 196),
+                              time_steps=2,
+                              chip_dims='full',
                               time_sampling='uniform',
-                              input_space_scale='native',
-                              window_space_scale='10GSD',
-                              output_space_scale='10GSD',
+                              input_resolution='native',
+                              window_resolution='10GSD',
+                              output_resolution='10GSD',
                               channels=channels)
     self.disable_augmenter = True
     target = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][0]].copy()
@@ -123,7 +124,8 @@ def visualize_invariant_batch():
 
     if 0:
         # Pick a cloudmask that looks questionable
-        chosen_index = 3
+        chosen_index = 2
+
         frame_item = item['frames'][chosen_index]
         qa_data = frame_item['modes']['cloudmask'].numpy()
         qa_data[np.isnan(qa_data)] = -9999

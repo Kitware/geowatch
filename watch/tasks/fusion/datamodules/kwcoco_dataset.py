@@ -10,8 +10,7 @@ Example:
     >>> import kwcoco
     >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=10)
     >>> channels = 'B10|B8a|B1|B8'
-    >>> sample_shape = (3, 300, 300)
-    >>> self = KWCocoVideoDataset(coco_dset, sample_shape=sample_shape,
+    >>> self = KWCocoVideoDataset(coco_dset, time_dims=3, window_dims=(300, 300),
     >>>                           channels=channels,
     >>>                           input_space_scale='native',
     >>>                           output_space_scale=None,
@@ -42,7 +41,7 @@ Example:
     >>> ##'red|green|blue',
     >>> self = KWCocoVideoDataset(
     >>>     coco_dset,
-    >>>     sample_shape=(11, 196, 196),
+    >>>     time_dims=11, window_dims=(196, 196),
     >>>     window_overlap=0,
     >>>     channels="(S2,L8):blue|green|red|nir",
     >>>     input_space_scale='10GSD',
@@ -142,7 +141,7 @@ class KWCocoVideoDatasetConfig(scfg.Config):
 
     """
     default = {
-        'time_steps': scfg.Value(2, help='number of temporal sampler per batch'),
+        'time_steps': scfg.Value(2, help='number of temporal sampler per batch', alias=['time_dims']),
 
         'chip_size': scfg.Value(128, help='spatial width and height per batch. DEPRECATED. Use chip_dims instead.'),
 
@@ -151,7 +150,7 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             spatial height/width per batch. If given as a single number, used
             as both width and height. Default is currently taken from
             deprecated chip_size, but in the future will be 128.
-            '''), alias=['window_space_dims'], nargs='+'),
+            '''), alias=['window_space_dims', 'window_dims'], nargs='+'),
 
         'window_space_scale': scfg.Value(None, help=ub.paragraph(
             '''
@@ -448,8 +447,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         >>> print({c.get('sensor_coarse') for c in coco_dset.images().coco_images})
         >>> print({c.channels.spec for c in coco_dset.images().coco_images})
         >>> sampler = ndsampler.CocoSampler(coco_dset)
-        >>> sample_shape = (5, 100, 300)
-        >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape,
+        >>> self = KWCocoVideoDataset(sampler, time_dims=5, window_dims=(100, 300),
         >>>                           input_space_scale='native',
         >>>                           window_space_scale='0.7GSD',
         >>>                           output_space_scale='native',
@@ -478,8 +476,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         >>> print({c.get('sensor_coarse') for c in coco_dset.images().coco_images})
         >>> print({c.channels.spec for c in coco_dset.images().coco_images})
         >>> sampler = ndsampler.CocoSampler(coco_dset)
-        >>> sample_shape = (5, 100, 300)
-        >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape,
+        >>> self = KWCocoVideoDataset(sampler, window_dims=(100, 100), time_dims=5,
         >>>                           input_space_scale='0.35GSD',
         >>>                           window_space_scale='0.7GSD',
         >>>                           output_space_scale='0.2GSD',
@@ -513,14 +510,23 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             if window_overlap is not None:
                 config['chip_overlap'] = window_overlap
             if sample_shape is not None:
+                ub.schedule_deprecation(
+                    'watch', 'sample_shape', 'arg',
+                    migration='use window_dims and time_dims instead',
+                    deprecate='now',
+                )
                 config['time_steps'] = sample_shape[0]
                 config['chip_dims'] = sample_shape[1:3]
 
         chip_dims = config['chip_dims']
-        if not ub.iterable(chip_dims):
-            chip_dims = (chip_dims, chip_dims)
-        chip_h, chip_w = chip_dims
-        window_dims = (config['time_steps'], chip_h, chip_w)
+        if isinstance(chip_dims, str):
+            window_dims = chip_dims
+        else:
+            if not ub.iterable(chip_dims):
+                chip_dims = (chip_dims, chip_dims)
+            chip_h, chip_w = chip_dims
+            window_dims = (chip_h, chip_w)
+        time_dims = config['time_steps']
         window_overlap = config['chip_overlap']
 
         self.config = config
@@ -568,6 +574,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         grid_workers = int(os.environ.get('WATCH_GRID_WORKERS', 0))
 
         common_grid_kw = dict(
+            time_dims=time_dims,
             window_dims=window_dims,
             window_overlap=window_overlap,
             exclude_sensors=config['exclude_sensors'],
@@ -1023,7 +1030,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> # Each sensor uses all of its own channels
             >>> channels = 'auto'
-            >>> self = KWCocoVideoDataset(sampler, sample_shape=(5, 256, 256), channels=channels, normalize_perframe=False)
+            >>> self = KWCocoVideoDataset(sampler, time_dims=5, window_dims=(256, 256), channels=channels, normalize_perframe=False)
             >>> self.disable_augmenter = False
             >>> index = 0
             >>> index = target = self.new_sample_grid['targets'][0]
@@ -1058,7 +1065,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> self = KWCocoVideoDataset(
             >>>     sampler,
-            >>>     sample_shape=(5, 320, 320),
+            >>>     time_dims=5, window_dims=(320, 320),
             >>>     window_overlap=0,
             >>>     channels="(S2,L8):blue|green|red|nir",
             >>>     input_space_scale='10GSD',
@@ -1094,7 +1101,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> self = KWCocoVideoDataset(
             >>>     sampler,
-            >>>     sample_shape=(5, 320, 320),
+            >>>     time_dims=5, window_dims=(320, 320),
             >>>     window_overlap=0,
             >>>     channels="(S2,L8):blue|green|red|nir",
             >>>     input_space_scale='native',
@@ -2023,16 +2030,14 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
             >>> import kwcoco
             >>> dct_dset = coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=3)
-            >>> sample_shape = (2, 256, 256)
-            >>> self = KWCocoVideoDataset(dct_dset, sample_shape=sample_shape, channels='auto')
+            >>> self = KWCocoVideoDataset(dct_dset, time_dims=2, window_dims=(256, 256), channels='auto')
             >>> self.compute_dataset_stats(num_workers=2)
 
         Example:
             >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
             >>> import kwcoco
             >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2')
-            >>> sample_shape = (2, 256, 256)
-            >>> self = KWCocoVideoDataset(coco_dset, sample_shape=sample_shape, channels='auto')
+            >>> self = KWCocoVideoDataset(coco_dset, time_dims=2, window_dims=(256, 256), channels='auto')
             >>> stats = self.compute_dataset_stats()
             >>> assert stats['class_freq']['star'] > 0 or stats['class_freq']['superstar'] > 0 or stats['class_freq']['eff'] > 0
             >>> assert stats['class_freq']['background'] > 0
@@ -2065,8 +2070,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2')
             >>> for img in coco_dset.imgs.values():
             ...     img['sensor_coarse'] = 'demo'  # hack in a sensor
-            >>> sample_shape = (1, 32, 32)
-            >>> self = KWCocoVideoDataset(coco_dset, sample_shape=sample_shape, channels='demo:(r|g,b,n)')
+            >>> self = KWCocoVideoDataset(coco_dset, time_dims=1, window_dims=(32, 32), channels='demo:(r|g,b,n)')
             >>> self.input_sensorchan
             >>> stats = self.compute_dataset_stats(batch_size=1)
 
@@ -2332,7 +2336,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> channels = 'B10|B8a|B1|B8|B11'
             >>> combinable_extra = [['B10', 'B8', 'B8a']]  # special behavior
             >>> # combinable_extra = None  # uncomment for raw behavior
-            >>> self = KWCocoVideoDataset(coco_dset, sample_shape=(5, 530, 610), channels=channels)
+            >>> self = KWCocoVideoDataset(coco_dset, time_dims=5, space_dims=(530, 610), channels=channels)
             >>> #index = len(self) // 4
             >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][5]]
             >>> if 1:
@@ -2476,7 +2480,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> import kwcoco
             >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
-            >>> self = KWCocoVideoDataset(sampler, sample_shape=(3, 530, 610), channels='auto')
+            >>> self = KWCocoVideoDataset(sampler, time_dims=3, window_dims=(530, 610), channels='auto')
             >>> loader = self.make_loader(batch_size=2)
             >>> batch = next(iter(loader))
         """

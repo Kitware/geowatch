@@ -23,6 +23,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 * `smartwatch stats` now outputs a histogram over sensor / time range
+* In the spacetime grid builder `window_dims` now always corresponds to the spatial window dimensions and `time_dims` is given for time.
 * KWCocoDataloader exposes `window_resolution`, `input_resolution`, `output_resolution` as aliases for the `*_space_scale` arguments and will become the main ids in the future.
 
 

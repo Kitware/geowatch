@@ -19,6 +19,7 @@ class SpacetimeGridBuilder:
     def __init__(
         builder,
         dset,
+        time_dims,
         window_dims,
         window_overlap=0.0,
         negative_classes=None,
@@ -44,8 +45,12 @@ class SpacetimeGridBuilder:
         return sample_video_spacetime_targets(**builder.kw)
 
 
-def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
-                                   negative_classes=None, keepbound=False,
+def sample_video_spacetime_targets(dset,
+                                   time_dims=None,
+                                   window_dims=None,
+                                   window_overlap=0.0,
+                                   negative_classes=None,
+                                   keepbound=False,
                                    include_sensors=None,
                                    exclude_sensors=None,
                                    select_images=None,
@@ -76,8 +81,11 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
     Args:
         dset (kwcoco.CocoDataset): coco dataset
 
-        window_dims (Tuple[int, int, int]):
-            time, height, width of the sample region.
+        time_dims (int):
+            number of time steps
+
+        window_dims (Tuple[int, int] | str):
+            spatial height, width of the sample region or a string code.
 
         window_overlap (float):
             fractional spatial overlap
@@ -134,14 +142,11 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data_train.kwcoco.json'
         >>> dset = kwcoco.CocoDataset(coco_fpath)
         >>> window_overlap = 0.0
-        >>> window_dims = (11, 128, 128)
         >>> keepbound = False
         >>> exclude_sensors = None
-        >>> sample_grid = sample_video_spacetime_targets(dset, window_dims)
+        >>> sample_grid = sample_video_spacetime_targets(dset, 11, (128, 128))
         >>> time_sampling = 'hard+distribute'
         >>> positives = list(ub.take(sample_grid['targets'], sample_grid['positives_indexes']))
-
-        _ = xdev.profile_now(sample_video_spacetime_targets)(dset, window_dims)
 
         >>> import os
         >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
@@ -150,7 +155,6 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data_vali.kwcoco.json'
         >>> dset = kwcoco.CocoDataset(coco_fpath)
         >>> window_overlap = 0.0
-        >>> window_dims = (2, 128, 128)
         >>> keepbound = False
         >>> exclude_sensors = None
         >>> set_cover_algo = 'approx'
@@ -163,7 +167,7 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         >>> time_sampling = 'hard+distribute'
         >>> with ub.Timer('sample'):
         >>>     sample_grid = sample_video_spacetime_targets(
-        >>>         dset, window_dims, window_overlap, set_cover_algo=set_cover_algo,
+        >>>         dset, time_dims=2, window_dims=(128, 128), window_overlap, set_cover_algo=set_cover_algo,
         >>>         window_space_scale=window_space_scale, time_sampling=time_sampling,
         >>>         use_annot_info=use_annot_info, time_span=time_span, use_cache=1, workers=0)
         >>> positives = list(ub.take(sample_grid['targets'], sample_grid['positives_indexes']))
@@ -178,11 +182,11 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         >>> coco_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/combo_LM_nowv_vali.kwcoco.json'
         >>> dset = kwcoco.CocoDataset(coco_fpath)
         >>> window_overlap = 0.5
-        >>> window_dims = (2, 128, 128)
+        >>> window_dims = (128, 128)
         >>> keepbound = False
         >>> exclude_sensors = None
         >>> set_cover_algo = 'approx'
-        >>> sample_grid = sample_video_spacetime_targets(dset, window_dims, window_overlap, set_cover_algo=set_cover_algo)
+        >>> sample_grid = sample_video_spacetime_targets(dset, time_dims=2, window_dims, window_overlap, set_cover_algo=set_cover_algo)
         >>> time_sampling = 'hard+distribute'
         >>> positives = list(ub.take(sample_grid['targets'], sample_grid['positives_indexes']))
 
@@ -195,16 +199,17 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         >>> import kwcoco
         >>> dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=30)
         >>> window_overlap = 0.0
-        >>> window_dims = (3, 256, 256)
+        >>> time_dims = 3
+        >>> window_dims = (256, 256)
         >>> keepbound = False
         >>> time_sampling = 'soft2+distribute'
         >>> sample_grid1 = sample_video_spacetime_targets(
-        >>>     dset, window_dims, window_overlap,
+        >>>     dset, time_dims, window_dims, window_overlap,
         >>>     time_sampling='soft2+distribute')
         >>> boxes = [kwimage.Boxes.from_slice(target['space_slice'], clip=False).to_xywh() for target in sample_grid1['targets']]
         >>> all_boxes = kwimage.Boxes.concatenate(boxes)
-        >>> assert np.all(all_boxes.height == window_dims[1])
-        >>> assert np.all(all_boxes.width == window_dims[2])
+        >>> assert np.all(all_boxes.height == window_dims[0])
+        >>> assert np.all(all_boxes.width == window_dims[1])
 
     Example:
         >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
@@ -212,19 +217,20 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         >>> import kwcoco
         >>> dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=30)
         >>> window_overlap = 0.0
-        >>> window_dims = (3, 32, 32)
+        >>> time_dims = 3
+        >>> window_dims = (32, 32)
         >>> keepbound = False
         >>> time_sampling = 'soft2+distribute'
         >>> sample_grid1 = sample_video_spacetime_targets(
-        >>>     dset, window_dims, window_overlap, exclude_sensors='Foo',
+        >>>     dset, time_dims, window_dims, window_overlap, exclude_sensors='Foo',
         >>>     time_sampling='soft2+distribute')
         >>> sample_grid2 = sample_video_spacetime_targets(
-        >>>     dset, window_dims, window_overlap,
+        >>>     dset, time_dims, window_dims, window_overlap,
         >>>     time_sampling='contiguous+pairwise')
 
         ub.peek(sample_grid1['vidid_to_time_sampler'].values()).show_summary(fnum=1)
         ub.peek(sample_grid2['vidid_to_time_sampler'].values()).show_summary(fnum=2)
-        _ = xdev.profile_now(sample_video_spacetime_targets)(dset, window_dims, window_overlap)
+        _ = xdev.profile_now(sample_video_spacetime_targets)(dset, time_dims, window_dims, window_overlap)
 
         import xdev
         globals().update(xdev.get_func_kwargs(sample_video_spacetime_targets))
@@ -236,10 +242,18 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         >>> coco_fpath = dvc_dpath / 'Drop1-Aligned-TA1-2022-01/data.kwcoco.json'
         >>> dset = kwcoco.CocoDataset(coco_fpath)
         >>> window_overlap = 0.0
-        >>> window_dims = (3, 128, 128)
     """
-    winspace_space_dims = window_dims[1:3]
-    winspace_time_dims = window_dims[0]
+    if window_dims is not None and isinstance(window_dims, tuple) and len(window_dims) == 3:
+        ub.schedule_deprecation(
+            'watch', 'window_dims', 'argument in spacetime_grid_builder',
+            migration='window_dims no longer supports T,H,W specification, use time_times=T, window_dims=(H, W)',
+            deprecate='now')
+        winspace_time_dims = window_dims[0]
+        winspace_space_dims = window_dims[1:3]
+        assert time_dims is None, 'cant do old style and new style'
+    else:
+        winspace_time_dims = time_dims
+        winspace_space_dims = window_dims
 
     # from ndsampler import isect_indexer
     # _isect_index = isect_indexer.FrameIntersectionIndex.from_coco(dset)
@@ -275,7 +289,8 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         negative_classes,
         affinity_type,
         update_rule,
-        window_dims,
+        winspace_space_dims,
+        winspace_time_dims,
         window_overlap,
         window_space_scale,
         negative_classes, keepbound,
@@ -334,7 +349,7 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
 
             job = jobs.submit(
                 _sample_single_video_spacetime_targets, dset, dset_hashid,
-                video_id, video_gids, winspace_time_dims, winspace_space_dims, window_dims,
+                video_id, video_gids, winspace_time_dims, winspace_space_dims,
                 window_overlap, negative_classes, keepbound,
                 affinity_type, update_rule, time_span, use_annot_info,
                 use_grid_positives, use_centered_positives, window_space_scale,
@@ -382,7 +397,7 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
 
 def _sample_single_video_spacetime_targets(
         dset, dset_hashid, video_id, video_gids, winspace_time_dims, winspace_space_dims,
-        window_dims, window_overlap, negative_classes,
+        window_overlap, negative_classes,
         keepbound, affinity_type, update_rule, time_span,
         use_annot_info, use_grid_positives, use_centered_positives,
         window_space_scale, set_cover_algo, use_cache, respect_valid_regions,
