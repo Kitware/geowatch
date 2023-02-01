@@ -23,6 +23,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 * `smartwatch stats` now outputs a histogram over sensor / time range
+* KWCocoDataloader exposes `window_resolution`, `input_resolution`, `output_resolution` as aliases for the `*_space_scale` arguments and will become the main ids in the future.
 
 
 ### Deprecated

@@ -1997,7 +1997,7 @@ rsync -avprPR yardrat:data/dvc-repos/smart_expt_dvc/./training/yardrat/jon.crall
 
 
 ### Ooo run - V 10... again
-export CUDA_VISIBLE_DEVICES="0"
+export CUDA_VISIBLE_DEVICES=1
 DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
@@ -2094,7 +2094,7 @@ python -m watch.tasks.fusion.fit \
     --input_space_scale="6.6GSD" \
     --window_space_scale="6.6GSD" \
     --output_space_scale="6.6GSD" \
-    --chip_dims=128,128 \
+    --chip_dims=224,224 \
     --neg_to_pos_ratio=0.4 \
     --accumulate_grad_batches=16 \
     --batch_size=2 \

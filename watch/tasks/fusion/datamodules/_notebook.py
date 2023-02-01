@@ -108,7 +108,7 @@ def visualize_invariant_batch():
         target = item['target']
         target['resample_invalid_frames'] = 0
         target['FORCE_LOADING_BAD_IMAGES'] = 1
-        target['mask_low_quality'] = 0
+        target['mask_low_quality'] = 1
         # And different properties
         item = self[target]
 

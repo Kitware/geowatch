@@ -166,7 +166,7 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             "target_gsd", then this can be set to as an absolute by including
             the "GSD" suffix. (e.g. If this is set to "10GSD", then video space
             will be scaled to match).
-            ''')),
+            '''), alias=['window_resolution']),
 
         'input_space_scale': scfg.Value(None, help=ub.paragraph(
             '''
@@ -182,14 +182,14 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             will be scaled to match).
 
             This can also be set to "native" to use heterogeneous sampling.
-            '''), alias=['space_scale', 'data_space_scale']),
+            '''), alias=['space_scale', 'data_space_scale', 'input_resolution']),
 
         'output_space_scale': scfg.Value(None, help=ub.paragraph(
             '''
             Change the "scale" or resolution of the desired target resolution.
 
             Follows other GSD / scale semantics.
-            '''), alias=['target_space_scale']),
+            '''), alias=['target_space_scale', 'output_resolution']),
 
         # 'time_overlap': scfg.Value(0.0, help='fraction of time steps to overlap'),
         'chip_overlap': scfg.Value(
@@ -267,7 +267,7 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             If specified, restricts number of steps per epoch
             ''')),
 
-        'min_spacetime_weight': scfg.Value(0.5, help='Minimum space-time dilation weight'),
+        'min_spacetime_weight': scfg.Value(0.9, help='Minimum space-time dilation weight'),
 
         'normalize_perframe': scfg.Value(False, help='undocumented - ignored'),
 
@@ -320,7 +320,7 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             Set to a positive value to use it, up to that threshold.
             ''')),
 
-        'quality_threshold': scfg.Value(0.2, help=ub.paragraph(
+        'quality_threshold': scfg.Value(0.0, help=ub.paragraph(
             '''
             The minimum fraction of usable pixels required in a frame sample.
             If a frame has fewer than this fraction of usable pixels (i.e. not

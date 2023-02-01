@@ -1022,11 +1022,11 @@ class BackboneEncoderDecoder:
 class TransformerEncoderDecoder(nn.Module, BackboneEncoderDecoder):
     def __init__(
         self,
-        encoder_depth: int,
-        decoder_depth: int,
-        dim: int,
-        queries_dim: int,
-        logits_dim: int,
+        encoder_depth: int = 2,
+        decoder_depth: int = 1,
+        dim: int = 128,
+        queries_dim: int = 96,
+        logits_dim: int = 32,
         decode_cross_every: int = 1,
         cross_heads: int = 1,
         latent_heads: int = 8,
