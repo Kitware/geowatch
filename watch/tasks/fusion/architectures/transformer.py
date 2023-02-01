@@ -1036,6 +1036,8 @@ class TransformerEncoderDecoder(nn.Module, BackboneEncoderDecoder):
     ):
         super().__init__()
 
+        self.has_decoder = (decoder_depth > 0) and (queries_dim is not None) and (queries_dim > 0)
+
         def latent_cross_attn():
             return PreNorm(
                 queries_dim,
@@ -1071,21 +1073,22 @@ class TransformerEncoderDecoder(nn.Module, BackboneEncoderDecoder):
                 get_latent_ff(**cache_args)
             ]))
 
-        get_latent_cross_attn, get_latent_attn, get_latent_ff = map(cache_fn, (latent_cross_attn, latent_attn, latent_ff))
-        self.decoder_layers = nn.ModuleList([])
-        for i in range(decoder_depth):
-            if (i % decode_cross_every) == 0:
-                layers = [
-                    get_latent_cross_attn(**cache_args),
-                    get_latent_attn(**cache_args),
-                    get_latent_ff(**cache_args)
-                ]
-            else:
-                layers = [
-                    get_latent_attn(**cache_args),
-                    get_latent_ff(**cache_args)
-                ]
-            self.decoder_layers.append(nn.ModuleList(layers))
+        if self.has_decoder:
+            get_latent_cross_attn, get_latent_attn, get_latent_ff = map(cache_fn, (latent_cross_attn, latent_attn, latent_ff))
+            self.decoder_layers = nn.ModuleList([])
+            for i in range(decoder_depth):
+                if (i % decode_cross_every) == 0:
+                    layers = [
+                        get_latent_cross_attn(**cache_args),
+                        get_latent_attn(**cache_args),
+                        get_latent_ff(**cache_args)
+                    ]
+                else:
+                    layers = [
+                        get_latent_attn(**cache_args),
+                        get_latent_ff(**cache_args)
+                    ]
+                self.decoder_layers.append(nn.ModuleList(layers))
 
         self.to_logits = nn.Linear(dim, logits_dim) if exists(logits_dim) else nn.Identity()
 
@@ -1102,8 +1105,8 @@ class TransformerEncoderDecoder(nn.Module, BackboneEncoderDecoder):
             x = self_attn(x, mask=mask) + x
             x = self_ff(x) + x
 
-        if not exists(queries):
-            return x
+        if (not exists(queries)) or (not self.has_decoder):
+            return self.to_logits(x)
 
         # make sure queries contains batch dimension
         if queries.ndim == 2:
@@ -1164,8 +1167,8 @@ class MM_VITEncoderDecoder(nn.Module, BackboneEncoderDecoder):
     def __init__(
         self,
         dim,
-        queries_dim,
         logits_dim,
+        queries_dim=None,
         pretrained=None,
     ):
         from mmseg.models.backbones.vit import VisionTransformer
@@ -1207,13 +1210,16 @@ class MM_VITEncoderDecoder(nn.Module, BackboneEncoderDecoder):
         self.encoder_out_features = self.layers[-1].ffn.layers[1].out_features
 
         self.input_projector = nn.Linear(dim, self.encoder_in_features)
-        self.query_projector = nn.Linear(queries_dim, self.encoder_out_features)
         self.output_projector = nn.Linear(self.encoder_out_features, logits_dim)
 
-        self.decoder = nn.TransformerDecoder(
-            nn.TransformerDecoderLayer(d_model=self.encoder_out_features, nhead=8, dim_feedforward=512, batch_first=True),
-            num_layers=1,
-        )
+        self.has_decoder = (queries_dim is not None) and (queries_dim > 0)
+
+        if self.has_decoder:
+            self.query_projector = nn.Linear(queries_dim, self.encoder_out_features)
+            self.decoder = nn.TransformerDecoder(
+                nn.TransformerDecoderLayer(d_model=self.encoder_out_features, nhead=8, dim_feedforward=512, batch_first=True),
+                num_layers=1,
+            )
 
     def initialize_from_pretrained(self, fpath):
         # FIXME: Having this import here breaks torch.package
@@ -1244,7 +1250,7 @@ class MM_VITEncoderDecoder(nn.Module, BackboneEncoderDecoder):
             #     outs.append(out)
         # x = x.view(*orig_shape[0], x.shape[-1])
 
-        if queries is None:
+        if (queries is None) or (not self.has_decoder):
             return x
 
         queries = self.query_projector(queries)
