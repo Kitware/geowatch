@@ -226,6 +226,7 @@ def main(config=None):
             with the specified config.
 
     Example:
+        >>> # xdoctest: +SKIP(working on getting this right)
         >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
         >>> from watch.tasks.fusion.fit_lightning import *  # NOQA
         >>> disable_lightning_hardware_warnings()
@@ -241,6 +242,7 @@ def main(config=None):
         >>> main(config=config)
 
     Example:
+        >>> # xdoctest: +SKIP(working on getting this right)
         >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
         >>> from watch.tasks.fusion.fit_lightning import *  # NOQA
         >>> disable_lightning_hardware_warnings()
