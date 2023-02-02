@@ -236,7 +236,7 @@ def main(config=None):
         >>>     'data.train_dataset': 'special:vidshapes8-frames9-speed0.5-multispectral',
         >>>     'data.vali_dataset': 'special:vidshapes4-frames9-speed0.5-multispectral',
         >>>     'trainer.max_steps': 3,
-        >>>     'trainer.num_sanity_val_steps'
+        >>>     'trainer.num_sanity_val_steps': 0,
         >>> }
         >>> main(config=config)
 

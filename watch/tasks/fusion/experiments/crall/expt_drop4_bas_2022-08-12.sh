@@ -2002,15 +2002,15 @@ DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
-DATASET_CODE=Drop4-BAS
+DATASET_CODE=Drop6
 KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
-TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
-VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
-TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
-CHANNELS="blue|green|red|nir"
-EXPERIMENT_NAME=Drop4_BAS_2022_12_10GSD_BGRN_V11_CONT1
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_split1.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_split1.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_split1.kwcoco.json
+CHANNELS="(L8,S2,PD,WV):(blue|green|red|nir)"
+EXPERIMENT_NAME=Drop6_BAS_2022_12_10GSD_BGRN_V11_CONT1
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
+WATCH_GRID_WORKERS=4 python -m watch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -2026,44 +2026,45 @@ python -m watch.tasks.fusion.fit \
     --input_space_scale="3.3GSD" \
     --window_space_scale="3.3GSD" \
     --output_space_scale="3.3GSD" \
-    --chip_dims=224,224 \
+    --chip_dims=320,320 \
     --neg_to_pos_ratio=0.4 \
-    --batch_size=4 \
+    --batch_size=12 \
     --max_epochs=160 \
     --patience=160 \
-    --num_workers=2 \
-    --dist_weights=False \
+    --num_workers=4 \
     --time_steps=3 \
     --time_span="6month" \
     --channels="$CHANNELS" \
-    --saliency_weights="1:1" \
-    --class_weights="auto:Site Preparation*0+1,Active Construction*0+1,Post Construction*0+1,No Activity*0+1,background*0+1" \
-    --normalize_peritem="blue|green|red|nir" \
+    --saliency_weights="1:10" \
+    --class_weights="auto:Site Preparation*0+1,Active Construction*0+3,Post Construction*0+1,No Activity*0+1,background*0+1,negative*0+1" \
     --time_sampling=uniform-soft2-contiguous-hardish3\
     --time_span=3m-6m-1y \
     --tokenizer=linconv \
     --optimizer=AdamW \
     --arch_name=smt_it_stm_p8 \
     --decoder=mlp \
-    --draw_interval=5min \
-    --num_draw=4 \
+    --draw_interval=1min \
+    --num_draw=3 \
     --positive_change_weight=1 \
     --negative_change_weight=0.01 \
     --use_centered_positives=False \
     --normalize_inputs=2048 \
     --stream_channels=16 \
     --temporal_dropout=0.5 \
-    --amp_backend=apex \
     --mask_low_quality=True \
-    --use_cloudmask=1 \
     --observable_threshold=0.6 \
     --num_sanity_val_steps=0 \
     --max_epoch_length=16384 \
+    --min_spacetime_weight=0.6 \
     --accelerator=gpu \
     --devices="0," \
-    --sqlview=sqlite \
-    --init="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_10GSD_BGRN_V11_CONT1/lightning_logs/version_5"
+    --init="$DVC_EXPT_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_BAS_2022_12_15GSD_BGRN_V10/Drop4_BAS_2022_12_15GSD_BGRN_V10_epoch=0-step=4305.pt
 
+
+    --init="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6/runs/Drop6_BAS_2022_12_10GSD_BGRN_V11_CONT1/lightning_logs/version_3/package-interupt/package_epoch0_step255.pt"
+
+    #--sqlview=sqlite \
+    #--init="$DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V10/lightning_logs/version_0/checkpoints/Drop4_BAS_2022_12_15GSD_BGRN_V10_epoch=0-step=4305.pt"
 #--init="$DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V10/lightning_logs/version_0/checkpoints/Drop4_BAS_2022_12_15GSD_BGRN_V10_epoch=0-step=4305.pt"
 #smartwatch model_stats "$DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V10/lightning_logs/version_0/checkpoints/Drop4_BAS_2022_12_15GSD_BGRN_V10_epoch=0-step=4305.pt"
 

@@ -632,7 +632,15 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 len(new_sample_grid['targets']))
 
             if 1:
-                vidnames = self.sampler.dset.videos(target_vidids).lookup('name')
+                # TODO: each video should be able to have some sort of group
+                # attribute we can use to balance over similar videos.
+                print('Balancing over videos')
+
+                # Do this for unique video ids otherwise SQLviews will take forever
+                unique_vidids, _idx_to_unique_idx = np.unique(target_vidids, return_inverse=True)
+                unique_vidnames = self.sampler.dset.videos(unique_vidids).lookup('name')
+                vidnames = list(ub.take(unique_vidnames, _idx_to_unique_idx))
+
                 # if 0:
                 #     # DEBUG postgres
                 #     # all_vidids = self.sampler.dset.videos()

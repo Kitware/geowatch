@@ -625,8 +625,13 @@ def coerce_kwcoco(data='watch-msi', **kwargs):
             'max_speed': 0.01,
         }
         defaults.update(dict(
-            num_videos=4, num_frames=10, heatmap=False, dates=False,
-            geodata=False, bad_nodata=False))
+            num_videos=kwargs.get('num_videos', 4),
+            num_frames=kwargs.get('num_frames', 10),
+            heatmap=kwargs.get('heatmap', False),
+            dates=kwargs.get('dates', False),
+            geodata=kwargs.get('geodata', False),
+            bad_nodata=kwargs.get('bad_nodata', False)
+        ))
         vidkw_aliases = {
             'num_frames': {'frames'},
             'num_tracks': {'tracks'},

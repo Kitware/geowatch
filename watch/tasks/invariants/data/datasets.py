@@ -15,8 +15,8 @@ class GriddedDataset(torch.utils.data.Dataset):
 
     Example:
         >>> from watch.tasks.invariants.data.datasets import *  # NOQA
-        >>> from watch.demo import coerce_kwcoco
-        >>> coco_dset = coerce_kwcoco('watch-msi', dates=True, geodata=True)
+        >>> import watch
+        >>> coco_dset = watch.coerce_kwcoco('watch-msi', dates=True, geodata=True)
         >>> keep_ids = [img.img['id'] for img in coco_dset.images().coco_images if 'B11' in img.channels]
         >>> coco_dset = coco_dset.subset(keep_ids)
         >>> self = GriddedDataset(coco_dset, include_debug_info=True, bands=['B11'], patch_size=32, input_space_scale='3GSD')
