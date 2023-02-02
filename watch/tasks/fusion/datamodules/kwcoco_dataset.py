@@ -144,14 +144,12 @@ class KWCocoVideoDatasetConfig(scfg.Config):
     default = {
         'time_steps': scfg.Value(2, help='number of temporal sampler per batch', alias=['time_dims']),
 
-        'chip_size': scfg.Value(128, help='spatial width and height per batch. DEPRECATED. Use chip_dims instead.'),
-
-        'chip_dims': scfg.Value(None, help=ub.paragraph(
+        'chip_dims': scfg.Value(128, help=ub.paragraph(
             '''
             spatial height/width per batch. If given as a single number, used
             as both width and height. Default is currently taken from
             deprecated chip_size, but in the future will be 128.
-            '''), alias=['window_space_dims', 'window_dims'], nargs='+'),
+            '''), alias=['window_space_dims', 'window_dims', 'chip_size'], nargs='+'),
 
         'window_space_scale': scfg.Value(None, help=ub.paragraph(
             '''
@@ -201,18 +199,28 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             alias=['window_space_overlap', 'window_overlap'],
         ),
 
+        'time_sampling': scfg.Value('contiguous', type=str, help=ub.paragraph(
+            '''
+            Strategy for expanding the time window across non-contiguous
+            frames. Can be auto, contiguous, hard+distribute, or
+            dilate_affinity
+            ''')),
+
+        'time_span': scfg.Value('2y', type=str, help=ub.paragraph(
+            '''
+            how long a time window should roughly span by default
+            ''')),
+
         'channels': scfg.Value(None, type=str, help=ub.paragraph(
             '''
             channels to use should be SensorChanSpec coercable
             ''')),
 
-        'dist_weights': scfg.Value(0, help=ub.paragraph(
+        'include_sensors': scfg.Value(None, help=ub.paragraph(
             '''
-            To use distance-transform based weights on annotations or
-            not
+            if specified can be comma separated valid sensors. NOTE: this
+            should be specified via a sensorchan speci in channels instead
             ''')),
-
-        'include_sensors': scfg.Value(None, help='if specified can be comma separated valid sensors. NOTE: this should be specified via a sensorchan speci in channels instead'),
 
         'exclude_sensors': scfg.Value(None, type=str, help=ub.paragraph(
             '''
@@ -260,18 +268,20 @@ class KWCocoVideoDatasetConfig(scfg.Config):
                 Requries the "jq" python library is installed.
                 ''')),
 
-        'ignore_dilate': scfg.Value(0, help='Dilation applied to ignore masks.'),
-
         'max_epoch_length': scfg.Value(None, help=ub.paragraph(
             '''
             If specified, restricts number of steps per epoch
             ''')),
 
-        'min_spacetime_weight': scfg.Value(0.9, help='Minimum space-time dilation weight'),
+        'ignore_dilate': scfg.Value(0, help='Dilation applied to ignore masks.'),
 
         'normalize_perframe': scfg.Value(False, help='undocumented - ignored'),
 
-        'normalize_peritem': scfg.Value(None, type=str, help='if specified normalize these bands/channels on a per-batch-item level across time. if True normalize all bands.'),
+        'normalize_peritem': scfg.Value(None, type=str, help=ub.paragraph(
+            '''
+            if specified normalize these bands/channels on a per-batch-item
+            level across time. if True normalize all bands.
+            ''')),
 
         'set_cover_algo': scfg.Value(None, choices=[None, 'approx', 'exact'], help=ub.paragraph(
             '''
@@ -282,23 +292,16 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             so it is generally not recommended).
             ''')),
 
-        'time_sampling': scfg.Value('contiguous', type=str, help=ub.paragraph(
-            '''
-            Strategy for expanding the time window across non-contiguous
-            frames. Can be auto, contiguous, hard+distribute, or
-            dilate_affinity
-            ''')),
-
-        'time_span': scfg.Value('2y', type=str, help=ub.paragraph(
-            '''
-            how long a time window should roughly span by default
-            ''')),
-
         'use_centered_positives': scfg.Value(False, help=ub.paragraph(
             '''
             Use centers of annotations as window centers
             Only applies to training dataset when used in the data module.
             Validation/test dataset defaults to False.
+            ''')),
+
+        'min_spacetime_weight': scfg.Value(0.9, help=ub.paragraph(
+            '''
+            Minimum space-time dilation weight. Used in conjunction with
             ''')),
 
         'upweight_centers': scfg.Value(True, help=ub.paragraph(
@@ -311,6 +314,12 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             '''
             A number between 0.0 and 1.0 representing where to upweight time
             the most (1.0 is last frame 0.0 is the first frame).
+            ''')),
+
+        'dist_weights': scfg.Value(0, help=ub.paragraph(
+            '''
+            To use distance-transform based weights on annotations or
+            not
             ''')),
 
         'use_cloudmask': scfg.Value(None, help=ub.paragraph(
@@ -330,7 +339,11 @@ class KWCocoVideoDatasetConfig(scfg.Config):
 
         'mask_low_quality': scfg.Value(False, help='if True, mask low quality pixels with nans'),
 
-        'mask_samecolor_method': scfg.Value('histogram', help='If enabled, set as method to use for SAMECOLOR_QUALITY_HEURISTIC. Can be histogram or region'),
+        'mask_samecolor_method': scfg.Value('histogram', help=ub.paragraph(
+            '''
+            If enabled, set as method to use for SAMECOLOR_QUALITY_HEURISTIC.
+            Can be histogram or region.
+            ''')),
 
         'force_bad_frames': scfg.Value(False, help='if True, force loading, even if data is nan / missing'),
 
@@ -410,11 +423,10 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             self['exclude_sensors'] = [s.strip() for s in self['exclude_sensors'].split(',')]
         self['time_steps'] = int(self['time_steps'])
 
-        if self['chip_dims'] is None:
-            d = int(self['chip_size'])
-            self['chip_dims'] = [d, d]  # has to be a list not a tuple for yaml
-
-        self['chip_size'] = None
+        # if self['chip_dims'] is None:
+        #     d = int(self['chip_size'])
+        #     self['chip_dims'] = [d, d]  # has to be a list not a tuple for yaml
+        # self['chip_size'] = None
 
         if self['input_space_scale'] in {None, 'None', 'window'}:
             self['input_space_scale'] = self['window_space_scale']
@@ -444,23 +456,24 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         >>> import ndsampler
         >>> import kwcoco
         >>> import watch
-        >>> coco_dset = watch.demo.coerce_kwcoco('watch', geodata=True)
+        >>> coco_dset = watch.demo.coerce_kwcoco('watch-multisensor-msi', geodata=True)
         >>> print({c.get('sensor_coarse') for c in coco_dset.images().coco_images})
         >>> print({c.channels.spec for c in coco_dset.images().coco_images})
         >>> sampler = ndsampler.CocoSampler(coco_dset)
-        >>> self = KWCocoVideoDataset(sampler, time_dims=5, window_dims=(100, 300),
+        >>> self = KWCocoVideoDataset(sampler, time_dims=5, window_dims=(200, 300),
         >>>                           input_space_scale='native',
-        >>>                           window_space_scale='0.7GSD',
+        >>>                           window_space_scale='0.05GSD',
         >>>                           output_space_scale='native',
         >>>                           channels='auto',
         >>> )
         >>> self.disable_augmenter = True
-        >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
+        >>> target = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
         >>> Box = util_kwimage.Box
-        >>> index['space_slice'] = Box.from_slice(index['space_slice']).translate((30, 0)).quantize().to_slice()
-        >>> item = self[index]
+        >>> #target['space_slice'] = Box.from_slice(target['space_slice']).translate((30, 0)).quantize().to_slice()
+        >>> target['verbose_ndsample'] = True
+        >>> item = self[target]
         >>> #print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
-        >>> canvas = self.draw_item(item, overlay_on_image=1, rescale=0, max_channels=3)
+        >>> canvas = self.draw_item(item, overlay_on_image=0, rescale=0, max_channels=3)
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
         >>> kwplot.autompl()
@@ -497,24 +510,16 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         >>> kwplot.show_if_requested()
     """
 
-    def __init__(self, sampler, sample_shape=None, mode='fit', **kwargs):
-
+    def __init__(self, sampler, mode='fit', **kwargs):
+        """
+        Args:
+            sampler (kwcoco.CocoDataset | ndsampler.CocoSampler): kwcoco dataset
+            mode (str): fit or predict
+            **kwargs: see :class:`KWCocoVideoDatasetConfig` for valid options
+        """
         # note: sampler can be a ndsampler.CocoSampler or a kwcoco.CocoDataset
-
         sampler = ndsampler.CocoSampler.coerce(sampler)
-
         config = KWCocoVideoDatasetConfig(cmdline=0, data=kwargs)
-        BACKWARDS_COMPATIBILITY = True
-        if BACKWARDS_COMPATIBILITY:
-            if sample_shape is not None:
-                ub.schedule_deprecation(
-                    'watch', 'sample_shape', 'arg',
-                    migration='use window_dims and time_dims instead',
-                    deprecate='now',
-                )
-                config['time_steps'] = sample_shape[0]
-                config['chip_dims'] = sample_shape[1:3]
-
         chip_dims = config['chip_dims']
         if isinstance(chip_dims, str):
             window_dims = chip_dims
@@ -569,7 +574,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         import os
         grid_workers = int(os.environ.get('WATCH_GRID_WORKERS', 0))
-
         common_grid_kw = dict(
             time_dims=time_dims,
             window_dims=window_dims,
@@ -842,6 +846,10 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             ub.oset(['r', 'g', 'b']),
         ] + heuristics.HUERISTIC_COMBINABLE_CHANNELS
 
+    @property
+    def coco_dset(self):
+        return self.sampler.dset
+
     def __len__(self):
         return self.length
 
@@ -1030,6 +1038,124 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
     def __getitem__(self, index):
         """
         Example:
+            >>> # Native sampling project data doctest
+            >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+            >>> import watch
+            >>> import kwcoco
+            >>> coco_dset = watch.coerce_kwcoco('watch-msi-geodata-dates')
+            >>> self = KWCocoVideoDataset(
+            >>>     coco_dset,
+            >>>     time_dims=5, window_dims=(320, 320),
+            >>>     window_overlap=0,
+            >>>     input_space_scale='native',
+            >>>     window_space_scale='0.3GSD',
+            >>>     output_space_scale='0.6GSD',
+            >>>     dist_weights=1,
+            >>>     quality_threshold=0,
+            >>>     neg_to_pos_ratio=0, time_sampling='soft2',
+            >>> )
+            >>> self.requested_tasks['change'] = False
+            >>> # Find a sample with S2 and L8 images in it.
+            >>> for target in self.new_sample_grid['targets']:
+            ...     sensors = coco_dset.images(target['gids']).lookup('sensor_coarse')
+            ...     shist = ub.dict_hist(sensors)
+            ...     if len(shist) > 1 and all(v > 1 for v in shist.values()):
+            ...         break
+            >>> target['allow_augment'] = False
+            >>> index = target
+            >>> item = self[index]
+            >>> print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
+            >>> # xdoctest: +REQUIRES(--show)
+            >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0, rescale=0)
+            >>> import kwplot
+            >>> kwplot.autompl()
+            >>> kwplot.imshow(canvas)
+            >>> kwplot.show_if_requested()
+
+        Example:
+            >>> # xdoctest: +REQUIRES(env:DVC_DATA_DPATH)
+            >>> # Native sampling project data doctest
+            >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+            >>> import watch
+            >>> import kwcoco
+            >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+            >>> coco_fpath = dvc_dpath / 'Drop4-BAS/data_vali.kwcoco.json'
+            >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+            >>> self = KWCocoVideoDataset(
+            >>>     coco_dset,
+            >>>     time_dims=5, window_dims=(320, 320),
+            >>>     window_overlap=0,
+            >>>     channels="(S2,L8):blue|green|red|nir",
+            >>>     input_space_scale='native',
+            >>>     window_space_scale='10GSD',
+            >>>     output_space_scale='native',
+            >>>     #output_space_scale='10GSD',
+            >>>     dist_weights=1,
+            >>>     quality_threshold=0,
+            >>>     neg_to_pos_ratio=0, time_sampling='soft2',
+            >>> )
+            >>> self.requested_tasks['change'] = False
+            >>> # Find a sample with S2 and L8 images in it.
+            >>> for target in self.new_sample_grid['targets']:
+            ...     sensors = coco_dset.images(target['gids']).lookup('sensor_coarse')
+            ...     shist = ub.dict_hist(sensors)
+            ...     if len(shist) > 1 and all(v > 1 for v in shist.values()):
+            ...         break
+            >>> target['allow_augment'] = False
+            >>> index = target
+            >>> item = self[index]
+            >>> print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
+            >>> # xdoctest: +REQUIRES(--show)
+            >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0, rescale=0)
+            >>> import kwplot
+            >>> kwplot.autompl()
+            >>> kwplot.imshow(canvas)
+            >>> kwplot.show_if_requested()
+
+        Example:
+            >>> # xdoctest: +REQUIRES(env:DVC_DATA_DPATH)
+            >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+            >>> import watch
+            >>> import kwcoco
+            >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+            >>> coco_fpath = dvc_dpath / 'Drop4-BAS/data_vali.kwcoco.json'
+            >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+            >>> self = KWCocoVideoDataset(
+            >>>     coco_dset,
+            >>>     time_dims=5, window_dims=(320, 320),
+            >>>     window_overlap=0,
+            >>>     channels="(S2,L8):blue|green|red|nir",
+            >>>     input_space_scale='10GSD',
+            >>>     window_space_scale='10GSD',
+            >>>     output_space_scale='10GSD',
+            >>>     dist_weights=1,
+            >>>     quality_threshold=0,
+            >>>     neg_to_pos_ratio=0, time_sampling='soft2',
+            >>> )
+            >>> self.requested_tasks['change'] = False
+            >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][0]]
+            >>> index['allow_augment'] = False
+            >>> item = self[index]
+            >>> target = item['target']
+            >>> print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
+            >>> # xdoctest: +REQUIRES(--show)
+            >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0, rescale=0)
+            >>> import kwplot
+            >>> kwplot.autompl()
+            >>> kwplot.imshow(canvas)
+            >>> kwplot.show_if_requested()
+        """
+        try:
+            return self.getitem(index)
+        except FailedSample:
+            return None
+
+    @profile
+    def getitem(self, index):
+        """
+        This is just the same thing as `__getitem__` but it raises an error
+        when it fails, which is handled by `__getitem__`.
+        Example:
             >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
             >>> import kwcoco
             >>> import watch
@@ -1063,226 +1189,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> item = self[index]
             >>> # xdoctest: +REQUIRES(--show)
             >>> canvas = self.draw_item(item)
-            >>> import kwplot
-            >>> kwplot.autompl()
-            >>> kwplot.imshow(canvas)
-            >>> kwplot.show_if_requested()
-
-        Example:
-            >>> # xdoctest: +REQUIRES(env:DVC_DATA_DPATH)
-            >>> # Native sampling project data doctest
-            >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
-            >>> import watch
-            >>> import kwcoco
-            >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-            >>> coco_fpath = dvc_dpath / 'Drop4-BAS/data_vali.kwcoco.json'
-            >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
-            >>> self = KWCocoVideoDataset(
-            >>>     coco_dset,
-            >>>     time_dims=5, window_dims=(320, 320),
-            >>>     window_overlap=0,
-            >>>     channels="(S2,L8):blue|green|red|nir",
-            >>>     input_space_scale='native',
-            >>>     window_space_scale='10GSD',
-            >>>     output_space_scale='native',
-            >>>     #output_space_scale='10GSD',
-            >>>     dist_weights=1,
-            >>>     quality_threshold=0,
-            >>>     neg_to_pos_ratio=0, time_sampling='soft2',
-            >>> )
-            >>> self.requested_tasks['change'] = False
-            >>> # Find a sample with S2 and L8 images in it.
-            >>> for target in self.new_sample_grid['targets']:
-            ...     sensors = coco_dset.images(target['gids']).lookup('sensor_coarse')
-            ...     shist = ub.dict_hist(sensors)
-            ...     if len(shist) > 1 and all(v > 1 for v in shist.values()):
-            ...         break
-            >>> target['allow_augment'] = False
-            >>> index = target
-            >>> item = self[index]
-            >>> print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
-            >>> # xdoctest: +REQUIRES(--show)
-            >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0, rescale=0)
-            >>> import kwplot
-            >>> kwplot.autompl()
-            >>> kwplot.imshow(canvas)
-            >>> kwplot.show_if_requested()
-
-        Example:
-            >>> # xdoctest: +REQUIRES(env:DVC_DATA_DPATH)
-            >>> # Native sampling project data doctest
-            >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
-            >>> import watch
-            >>> import kwcoco
-            >>> coco_dset = watch.coerce_kwcoco('watch-msi-geodata-dates')
-            >>> self = KWCocoVideoDataset(
-            >>>     coco_dset,
-            >>>     time_dims=5, window_dims=(320, 320),
-            >>>     window_overlap=0,
-            >>>     channels="(S2,L8):blue|green|red|nir",
-            >>>     input_space_scale='native',
-            >>>     window_space_scale='10GSD',
-            >>>     output_space_scale='native',
-            >>>     #output_space_scale='10GSD',
-            >>>     dist_weights=1,
-            >>>     quality_threshold=0,
-            >>>     neg_to_pos_ratio=0, time_sampling='soft2',
-            >>> )
-            >>> self.requested_tasks['change'] = False
-            >>> # Find a sample with S2 and L8 images in it.
-            >>> for target in self.new_sample_grid['targets']:
-            ...     sensors = coco_dset.images(target['gids']).lookup('sensor_coarse')
-            ...     shist = ub.dict_hist(sensors)
-            ...     if len(shist) > 1 and all(v > 1 for v in shist.values()):
-            ...         break
-            >>> target['allow_augment'] = False
-            >>> index = target
-            >>> item = self[index]
-            >>> print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
-            >>> # xdoctest: +REQUIRES(--show)
-            >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0, rescale=0)
-            >>> import kwplot
-            >>> kwplot.autompl()
-            >>> kwplot.imshow(canvas)
-            >>> kwplot.show_if_requested()
-        """
-        try:
-            return self.getitem(index)
-        except FailedSample:
-            return None
-
-    def _coerce_target(self, index):
-        """
-        Returns a target dictionary given an index or an explicit target dictionary
-        """
-        # The index can be specified as either
-        # * directly as a target (target) dictionary, or
-        # * an integer index
-        if isinstance(index, dict):
-            target = index
-            index = 'given-as-dictionary'
-        else:
-            if self.mode == 'test':
-                # In test-mode the index directly determines the grid location.
-                target = self.new_sample_grid['targets'][index]
-            else:
-                # In non-test-mode we discard the user index and randomly
-                # sample a grid location to achive balanced sampling.
-                try:
-                    tr_idx = self.nested_pool.sample()
-                except Exception as ex:
-                    raise FailedSample(f'Failed to sample grid location: {ex=}')
-                else:
-                    target = self.new_sample_grid['targets'][tr_idx]
-
-        if target is None:
-            raise FailedSample('no target')
-        return target
-
-    def _sample_from_target(self, target_, vidspace_box):
-        """
-        Given a space-time target, samples frame rasters and annotation vectors.
-
-        This includes
-            * rejection sampling
-            * quality masking
-            * dynamic resolution
-        """
-        ###
-        # Execute data sampling
-        ###
-        sampler = self.sampler
-        coco_dset = self.sampler.dset
-
-        vidid = target_['video_id']
-        video = coco_dset.index.videos[vidid]
-
-        with_annots = [] if self.inference_only else ['boxes', 'segmentation']
-
-        # New true-multimodal data items
-        gid_to_sample: Dict[int, Dict] = {}
-        gid_to_isbad: Dict[int, bool] = {}
-
-        for gid in target_['gids']:
-            self._sample_one_frame(gid, sampler, coco_dset, target_, with_annots,
-                                   gid_to_isbad, gid_to_sample)
-
-        time_sampler = self.new_sample_grid['vidid_to_time_sampler'][vidid]
-        video_gids = time_sampler.video_gids
-
-        # If we skipped the main gid, record why
-        main_gid = target_.get('main_gid', None)
-        if main_gid is not None and gid_to_isbad[main_gid]:
-            main_skip_reason = gid_to_isbad[main_gid]
-        else:
-            main_skip_reason = None
-
-        resample_invalid = target_.get('resample_invalid_frames', self.config['resample_invalid_frames'])
-        num_images_wanted = len(target_['gids'])
-        if resample_invalid:
-            if resample_invalid is True:
-                max_tries = 3
-            else:
-                max_tries = int(resample_invalid)
-            # print(f'max_tries={max_tries}')
-            vidname = video['name']
-            self._resample_bad_images(
-                video_gids, gid_to_isbad, sampler, coco_dset, target_,
-                num_images_wanted,
-                with_annots, gid_to_sample, vidspace_box, vidname, max_tries)
-
-        good_gids = [gid for gid, flag in gid_to_isbad.items() if not flag]
-        if len(good_gids) == 0:
-            raise FailedSample('Cannot force a good sample')
-
-        final_gids = ub.oset(video_gids) & good_gids
-        force_bad_frames = target_.get('force_bad_frames', 0)
-        if force_bad_frames:
-            final_gids = ub.oset(video_gids) & set(gid_to_isbad.keys())
-            print('gid_to_isbad = {}'.format(ub.repr2(gid_to_isbad, nl=1)))
-
-        # coco_dset.images(final_gids).lookup('date_captured')
-        target_['gids'] = final_gids
-
-        if main_skip_reason:
-            target_['main_skip_reason'] = main_skip_reason
-
-        return final_gids, gid_to_sample
-
-    @profile
-    def getitem(self, index):
-        """
-        This is just the same thing as `__getitem__` but it raises an error
-        when it fails, which is handled by `__getitem__`.
-
-        Example:
-            >>> # xdoctest: +REQUIRES(env:DVC_DATA_DPATH)
-            >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
-            >>> import watch
-            >>> import kwcoco
-            >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-            >>> coco_fpath = dvc_dpath / 'Drop4-BAS/data_vali.kwcoco.json'
-            >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
-            >>> self = KWCocoVideoDataset(
-            >>>     coco_dset,
-            >>>     time_dims=5, window_dims=(320, 320),
-            >>>     window_overlap=0,
-            >>>     channels="(S2,L8):blue|green|red|nir",
-            >>>     input_space_scale='10GSD',
-            >>>     window_space_scale='10GSD',
-            >>>     output_space_scale='10GSD',
-            >>>     dist_weights=1,
-            >>>     quality_threshold=0,
-            >>>     neg_to_pos_ratio=0, time_sampling='soft2',
-            >>> )
-            >>> self.requested_tasks['change'] = False
-            >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][0]]
-            >>> index['allow_augment'] = False
-            >>> item = self[index]
-            >>> target = item['target']
-            >>> print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
-            >>> # xdoctest: +REQUIRES(--show)
-            >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0, rescale=0)
             >>> import kwplot
             >>> kwplot.autompl()
             >>> kwplot.imshow(canvas)
@@ -1560,6 +1466,105 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             'target': tr_subset
         }
         return item
+
+    def _coerce_target(self, index):
+        """
+        Returns a target dictionary given an index or an explicit target dictionary
+        """
+        # The index can be specified as either
+        # * directly as a target (target) dictionary, or
+        # * an integer index
+        if isinstance(index, dict):
+            target = index
+            index = 'given-as-dictionary'
+        else:
+            if self.mode == 'test':
+                # In test-mode the index directly determines the grid location.
+                target = self.new_sample_grid['targets'][index]
+            else:
+                # In non-test-mode we discard the user index and randomly
+                # sample a grid location to achive balanced sampling.
+                try:
+                    tr_idx = self.nested_pool.sample()
+                except Exception as ex:
+                    raise FailedSample(f'Failed to sample grid location: {ex=}')
+                else:
+                    target = self.new_sample_grid['targets'][tr_idx]
+
+        if target is None:
+            raise FailedSample('no target')
+        return target
+
+    def _sample_from_target(self, target_, vidspace_box):
+        """
+        Given a space-time target, samples frame rasters and annotation vectors.
+
+        This includes
+            * rejection sampling
+            * quality masking
+            * dynamic resolution
+        """
+        ###
+        # Execute data sampling
+        ###
+        sampler = self.sampler
+        coco_dset = self.sampler.dset
+
+        vidid = target_['video_id']
+        video = coco_dset.index.videos[vidid]
+
+        with_annots = [] if self.inference_only else ['boxes', 'segmentation']
+
+        # New true-multimodal data items
+        gid_to_sample: Dict[int, Dict] = {}
+        gid_to_isbad: Dict[int, bool] = {}
+
+        for gid in target_['gids']:
+            ...
+            self._sample_one_frame(gid, sampler, coco_dset, target_, with_annots,
+                                   gid_to_isbad, gid_to_sample)
+
+        time_sampler = self.new_sample_grid['vidid_to_time_sampler'][vidid]
+        video_gids = time_sampler.video_gids
+
+        # If we skipped the main gid, record why
+        main_gid = target_.get('main_gid', None)
+        if main_gid is not None and gid_to_isbad[main_gid]:
+            main_skip_reason = gid_to_isbad[main_gid]
+        else:
+            main_skip_reason = None
+
+        resample_invalid = target_.get('resample_invalid_frames', self.config['resample_invalid_frames'])
+        num_images_wanted = len(target_['gids'])
+        if resample_invalid:
+            if resample_invalid is True:
+                max_tries = 3
+            else:
+                max_tries = int(resample_invalid)
+            # print(f'max_tries={max_tries}')
+            vidname = video['name']
+            self._resample_bad_images(
+                video_gids, gid_to_isbad, sampler, coco_dset, target_,
+                num_images_wanted,
+                with_annots, gid_to_sample, vidspace_box, vidname, max_tries)
+
+        good_gids = [gid for gid, flag in gid_to_isbad.items() if not flag]
+        if len(good_gids) == 0:
+            raise FailedSample('Cannot force a good sample')
+
+        final_gids = ub.oset(video_gids) & good_gids
+        force_bad_frames = target_.get('force_bad_frames', 0)
+        if force_bad_frames:
+            final_gids = ub.oset(video_gids) & set(gid_to_isbad.keys())
+            print('gid_to_isbad = {}'.format(ub.repr2(gid_to_isbad, nl=1)))
+
+        # coco_dset.images(final_gids).lookup('date_captured')
+        target_['gids'] = final_gids
+
+        if main_skip_reason:
+            target_['main_skip_reason'] = main_skip_reason
+
+        return final_gids, gid_to_sample
 
     def _resolve_resolution(self, target_, video):
         # Compute scale if we are doing that
@@ -2146,7 +2151,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> from watch.tasks.fusion import datamodules
             >>> num = 10
             >>> datamodule = datamodules.KWCocoVideoDataModule(
-            >>>     train_dataset='vidshapes-watch', chip_size=64, time_steps=3,
+            >>>     train_dataset='vidshapes-watch', window_dims=64, time_steps=3,
             >>>     num_workers=0, batch_size=3, channels='auto',
             >>>     normalize_inputs=num)
             >>> datamodule.setup('fit')
@@ -2522,6 +2527,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         Returns:
             dict : a summary of the item
         """
+        if item is None:
+            raise Exception('Cant summarize a failed sample item=None')
         item_summary = {}
         item_summary['frame_summaries'] = []
         timestamps = []
