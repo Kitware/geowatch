@@ -88,6 +88,7 @@ import warnings
 import kwarray
 import kwcoco
 import kwimage
+import ndsampler
 import numpy as np
 import pandas as pd
 import torch
@@ -500,8 +501,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         # note: sampler can be a ndsampler.CocoSampler or a kwcoco.CocoDataset
 
-        # todo: replace with ndsampler.CocoSampler.coerce
-        sampler = _coerce_ndsampler(sampler)
+        sampler = ndsampler.CocoSampler.coerce(sampler)
 
         config = KWCocoVideoDatasetConfig(cmdline=0, data=kwargs)
         BACKWARDS_COMPATIBILITY = True
@@ -1031,17 +1031,20 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         """
         Example:
             >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
-            >>> import ndsampler
             >>> import kwcoco
             >>> import watch
-            >>> coco_dset = watch.demo.demo_kwcoco_multisensor()
-            >>> sampler = ndsampler.CocoSampler(coco_dset)
+            >>> coco_dset = watch.coerce_kwcoco('watch-msi-dates-geodata-heatmap', num_frames=5, image_size=(256, 256), num_videos=1)
             >>> # Each sensor uses all of its own channels
             >>> channels = 'auto'
-            >>> self = KWCocoVideoDataset(sampler, time_dims=5, window_dims=(256, 256), channels=channels, normalize_perframe=False)
+            >>> self = KWCocoVideoDataset(coco_dset, time_dims=5,
+            >>>                           window_resolution='0.09GSD',
+            >>>                           input_resolution='0.09GSD',
+            >>>                           window_dims=(256, 256),
+            >>>                           channels=channels,
+            >>>                           normalize_perframe=False)
             >>> self.disable_augmenter = False
             >>> index = 0
-            >>> index = target = self.new_sample_grid['targets'][0]
+            >>> index = target = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][4]]
             >>> item = self[index]
             >>> canvas = self.draw_item(item)
             >>> # xdoctest: +REQUIRES(--show)
@@ -1065,14 +1068,12 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> # xdoctest: +REQUIRES(env:DVC_DATA_DPATH)
             >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
             >>> import watch
-            >>> import ndsampler
             >>> import kwcoco
             >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
             >>> coco_fpath = dvc_dpath / 'Drop4-BAS/data_vali.kwcoco.json'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
-            >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> self = KWCocoVideoDataset(
-            >>>     sampler,
+            >>>     coco_dset,
             >>>     time_dims=5, window_dims=(320, 320),
             >>>     window_overlap=0,
             >>>     channels="(S2,L8):blue|green|red|nir",
@@ -1101,14 +1102,50 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> # Native sampling project data doctest
             >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
             >>> import watch
-            >>> import ndsampler
             >>> import kwcoco
             >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
             >>> coco_fpath = dvc_dpath / 'Drop4-BAS/data_vali.kwcoco.json'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
-            >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> self = KWCocoVideoDataset(
-            >>>     sampler,
+            >>>     coco_dset,
+            >>>     time_dims=5, window_dims=(320, 320),
+            >>>     window_overlap=0,
+            >>>     channels="(S2,L8):blue|green|red|nir",
+            >>>     input_space_scale='native',
+            >>>     window_space_scale='10GSD',
+            >>>     output_space_scale='native',
+            >>>     #output_space_scale='10GSD',
+            >>>     dist_weights=1,
+            >>>     quality_threshold=0,
+            >>>     neg_to_pos_ratio=0, time_sampling='soft2',
+            >>> )
+            >>> self.requested_tasks['change'] = False
+            >>> # Find a sample with S2 and L8 images in it.
+            >>> for target in self.new_sample_grid['targets']:
+            ...     sensors = coco_dset.images(target['gids']).lookup('sensor_coarse')
+            ...     shist = ub.dict_hist(sensors)
+            ...     if len(shist) > 1 and all(v > 1 for v in shist.values()):
+            ...         break
+            >>> target['allow_augment'] = False
+            >>> index = target
+            >>> item = self[index]
+            >>> print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
+            >>> # xdoctest: +REQUIRES(--show)
+            >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0, rescale=0)
+            >>> import kwplot
+            >>> kwplot.autompl()
+            >>> kwplot.imshow(canvas)
+            >>> kwplot.show_if_requested()
+
+        Example:
+            >>> # xdoctest: +REQUIRES(env:DVC_DATA_DPATH)
+            >>> # Native sampling project data doctest
+            >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+            >>> import watch
+            >>> import kwcoco
+            >>> coco_dset = watch.coerce_kwcoco('watch-msi-geodata-dates')
+            >>> self = KWCocoVideoDataset(
+            >>>     coco_dset,
             >>>     time_dims=5, window_dims=(320, 320),
             >>>     window_overlap=0,
             >>>     channels="(S2,L8):blue|green|red|nir",
@@ -2337,7 +2374,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         Example:
             >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
-            >>> import ndsampler
             >>> import kwcoco
             >>> import kwarray
             >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
@@ -2484,11 +2520,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         Example:
             >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
-            >>> import ndsampler
             >>> import kwcoco
             >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
-            >>> sampler = ndsampler.CocoSampler(coco_dset)
-            >>> self = KWCocoVideoDataset(sampler, time_dims=3, window_dims=(530, 610), channels='auto')
+            >>> self = KWCocoVideoDataset(coco_dset, time_dims=3, window_dims=(530, 610), channels='auto')
             >>> loader = self.make_loader(batch_size=2)
             >>> batch = next(iter(loader))
         """
@@ -2513,20 +2547,6 @@ def worker_init_fn(worker_id):
         if hasattr(self.sampler.dset, 'connect'):
             # Reconnect to the backend if we are using SQL
             self.sampler.dset.connect(readonly=True)
-
-
-def _coerce_ndsampler(data):
-    """
-    Helper to ensure a sampler, kwcoco file, or path to a kwcoco file is
-    converted to a sampler
-    """
-    import ndsampler
-    if isinstance(data, ndsampler.CocoSampler):
-        self = data
-    else:
-        dset = kwcoco.CocoDataset.coerce(data)
-        self = ndsampler.CocoSampler(dset)
-    return self
 
 
 @functools.cache
