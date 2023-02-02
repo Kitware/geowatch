@@ -197,7 +197,7 @@ class KWCocoVideoDatasetConfig(scfg.Config):
                 Fraction of the spatial sliding window that will overlap.
                 Only applies to training dataset when used in the data module.
                 '''),
-            alias=['window_space_overlap'],
+            alias=['window_space_overlap', 'window_overlap'],
         ),
 
         'channels': scfg.Value(None, type=str, help=ub.paragraph(
@@ -496,8 +496,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         >>> kwplot.show_if_requested()
     """
 
-    def __init__(self, sampler, sample_shape=None, window_overlap=None,
-                 mode='fit', **kwargs):
+    def __init__(self, sampler, sample_shape=None, mode='fit', **kwargs):
 
         # note: sampler can be a ndsampler.CocoSampler or a kwcoco.CocoDataset
 
@@ -507,8 +506,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         config = KWCocoVideoDatasetConfig(cmdline=0, data=kwargs)
         BACKWARDS_COMPATIBILITY = True
         if BACKWARDS_COMPATIBILITY:
-            if window_overlap is not None:
-                config['chip_overlap'] = window_overlap
             if sample_shape is not None:
                 ub.schedule_deprecation(
                     'watch', 'sample_shape', 'arg',
@@ -2347,7 +2344,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> channels = 'B10|B8a|B1|B8|B11'
             >>> combinable_extra = [['B10', 'B8', 'B8a']]  # special behavior
             >>> # combinable_extra = None  # uncomment for raw behavior
-            >>> self = KWCocoVideoDataset(coco_dset, time_dims=5, space_dims=(530, 610), channels=channels)
+            >>> self = KWCocoVideoDataset(coco_dset, time_dims=5, window_dims=(530, 610), channels=channels)
             >>> #index = len(self) // 4
             >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][5]]
             >>> if 1:
