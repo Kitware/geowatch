@@ -589,6 +589,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             use_cache=self.config['use_grid_cache'],
             respect_valid_regions=self.config['use_grid_valid_regions'],
         )
+        # print('common_grid_kw = {}'.format(ub.urepr(common_grid_kw, nl=1)))
 
         if mode == 'custom':
             new_sample_grid = None
@@ -933,9 +934,11 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             tr_frame['channels'] = stream
             tr_frame['padkw' ] = {'constant_values': np.nan}
             tr_frame['nodata' ] = 'float'
+            # FIXME: each kwcoco asset should be able to control its own
+            # interpolation as a function of its role.
             sample = sampler.load_sample(
                 tr_frame, with_annots=first_with_annot,
-                dtype=np.float32
+                dtype=np.float32,
             )
 
             stream_oset = ub.oset(stream)

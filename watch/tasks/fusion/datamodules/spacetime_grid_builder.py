@@ -284,6 +284,8 @@ def sample_video_spacetime_targets(dset,
     # TODO: we can disable respect valid regions here and then just do it on
     # the fly in the dataloader, but it is unclear which is more efficient.
 
+    print(f'winspace_time_dims={winspace_time_dims}')
+    print(f'winspace_space_dims={winspace_space_dims}')
     depends = [
         dset_hashid,
         negative_classes,
@@ -305,7 +307,7 @@ def sample_video_spacetime_targets(dset,
         use_centered_positives,
         refine_iosa_thresh,
         respect_valid_regions,
-        'cache_v11',
+        'cache_v12',
     ]
     # Higher level cacher (not sure if adding this secondary level of caching
     # is faster or not).

@@ -138,6 +138,38 @@ class QA_SpecMixin:
 class QA_BitSpecTable(QA_SpecMixin):
     """
     Bit tables are more efficient because we can reduce over the query input
+
+    Example:
+        >>> from watch.tasks.fusion.datamodules import qa_bands
+        >>> import kwimage
+        >>> # Lookup a table for this spec
+        >>> self = qa_bands.QA_SPECS.find_table('ACC-1', 'S2')
+        >>> assert isinstance(self, qa_bands.QA_BitSpecTable)
+        >>> # Make a quality image with every value
+        >>> pure_patches = [np.zeros((32, 32), dtype=np.int16) + val for val in self.name_to_value.values()]
+        >>> # Also add in a few mixed patches
+        >>> mixed_patches = [
+        >>>     pure_patches[0] | pure_patches[1],
+        >>>     pure_patches[4] | pure_patches[1],
+        >>>     pure_patches[3] | pure_patches[5],
+        >>>     pure_patches[0] | pure_patches[4],
+        >>>     pure_patches[3] | pure_patches[4],
+        >>> ]
+        >>> patches = pure_patches + mixed_patches
+        >>> quality_im = kwimage.stack_images_grid(patches)
+        >>> # The mask_any method makes a mask where any of the semantically given labels will be masked
+        >>> query_names = ['cloud']
+        >>> is_iffy = self.mask_any(quality_im, ['cloud', 'cirrus'])
+        >>> drawings = self.draw_labels(quality_im)  # visualize
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> plt = kwplot.autoplt()
+        >>> qa_canvas = drawings['qa_canvas']
+        >>> legend = drawings['legend']
+        >>> kwplot.imshow(is_iffy, pnum=(1, 3, 1), title=f'mask matching {query_names}')
+        >>> kwplot.imshow(qa_canvas, pnum=(1, 3, 2), title='qa bits')
+        >>> kwplot.imshow(legend, pnum=(1, 3, 3), title='qa bit legend')
+        >>> kwplot.set_figtitle(f"QA Spec: name={self.spec['qa_spec_name']} sensor={self.spec['sensor']}")
     """
     def __init__(table, spec):
         table.spec = spec
@@ -313,7 +345,8 @@ class QA_SpecRegistry:
 
     def find_table(self, spec_name='*', sensor='*'):
         results = list(self.query_table(spec_name=spec_name, sensor=sensor))
-        assert len(results) == 1
+        if len(results) != 1:
+            raise AssertionError(f'{len(results)} - {spec_name}, {sensor}')
         table = results[0]
         return table
 
