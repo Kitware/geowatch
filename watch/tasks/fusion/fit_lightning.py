@@ -112,6 +112,9 @@ class SmartLightningCLI(LightningCLI_Extension):
                 '''
                 Fit does nothing with this flag. This just allows for `@xdev.profile`
                 profiling which checks sys.argv separately.
+
+                DEPRECATED: there is no longer any reason to use this. Set the
+                XDEV_PROFILE environment variable instead.
                 '''))
 
         def data_value_getter(key):
@@ -137,20 +140,58 @@ class SmartLightningCLI(LightningCLI_Extension):
         super().add_arguments_to_parser(parser)
 
 
-def main():
-    SmartLightningCLI(
+def make_cli(config=None):
+
+    if isinstance(config, str):
+        try:
+            if len(config) > 200:
+                raise Exception
+            if ub.Path(config).exists():
+                config = config.read_text()
+        except Exception:
+            ...
+        def nested_to_jsonnest(nested):
+            config = {}
+            for p, v in ub.IndexableWalker(nested):
+                if not isinstance(v, (dict, list)):
+                    k = '.'.join(list(map(str, p)))
+                    config[k] = v
+                    # print('--' + k + '=' + str(v) + ' \\\\')
+            return config
+        from watch.utils import util_yaml
+        print(ub.highlight_code(config, 'yaml'))
+        nested = util_yaml.yaml_loads(config, backend='pyyaml')
+        print('nested = {}'.format(ub.urepr(nested, nl=1)))
+        config = nested_to_jsonnest(nested)
+        print('config = {}'.format(ub.urepr(config, nl=1)))
+
+    manual_mode = False
+    clikw = {'run': True}
+    if config is not None:
+        # overload the argument parsing with a programatic config
+        clikw['args'] = config
+        clikw['run'] = False
+        # Note: we may not need manual mode once we have a deeper understanding
+        # of how lightning CLI works.
+        manual_mode = True
+
+    cli = SmartLightningCLI(
         model_class=pl.LightningModule,  # TODO: factor out common components of the two models and put them in base class models inherit from
-        # MultimodalTransformer,
         datamodule_class=KWCocoVideoDataModule,
         subclass_mode_model=True,
         # subclass_mode_data=True,
-        parser_kwargs=dict(parser_mode='yaml_unsafe_for_tuples'),
+        parser_kwargs=dict(
+            parser_mode='yaml_unsafe_for_tuples',
+            error_handler=None,
+        ),
         trainer_defaults=dict(
             # The following works, but it might be better to move some of these callbacks into the cli
             # (https://pytorch-lightning.readthedocs.io/en/latest/cli/lightning_cli_expert.html#configure-forced-callbacks)
             # Another option is to have a base_config.yaml that includes these, which would make them fully configurable
             # without modifying source code.
-            profiler=pl.profilers.AdvancedProfiler(dirpath=".", filename="perf_logs"),
+            # TODO: find good way to reenable profiling, but not by default
+            # profiler=pl.profilers.AdvancedProfiler(dirpath=".", filename="perf_logs"),
+
             callbacks=[
                 pl_ext.callbacks.BatchPlotter(  # Fixme: disabled for multi-gpu training with deepspeed
                     num_draw=2,  # args.num_draw,
@@ -171,12 +212,75 @@ def main():
                 #     monitor='val_class_f1_macro', mode='max', save_top_k=4),
             ]
         ),
+        **clikw,
     )
+    cli.manual_mode = manual_mode
+    return cli
+
+
+def main(config=None):
+    """
+    Args:
+        config (None | Dict):
+            if specified disables sys.argv usage and executes a training run
+            with the specified config.
+
+    Example:
+        >>> # xdoctest: +SKIP(working on getting this right)
+        >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
+        >>> from watch.tasks.fusion.fit_lightning import *  # NOQA
+        >>> disable_lightning_hardware_warnings()
+        >>> dpath = ub.Path.appdir('watch/tests/test_fusion_fit/demo_main_noop').ensuredir()
+        >>> config = {
+        >>>     'model': 'NoopModel',
+        >>>     'trainer.default_root_dir': dpath,
+        >>>     'data.train_dataset': 'special:vidshapes8-frames9-speed0.5-multispectral',
+        >>>     'data.vali_dataset': 'special:vidshapes4-frames9-speed0.5-multispectral',
+        >>>     'trainer.max_steps': 3,
+        >>>     'trainer.num_sanity_val_steps': 0,
+        >>> }
+        >>> main(config=config)
+
+    Example:
+        >>> # xdoctest: +SKIP(working on getting this right)
+        >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
+        >>> from watch.tasks.fusion.fit_lightning import *  # NOQA
+        >>> disable_lightning_hardware_warnings()
+        >>> dpath = ub.Path.appdir('watch/tests/test_fusion_fit/demo_main_heterogeneous').ensuredir()
+        >>> config = {
+        >>>     # 'model': 'watch.tasks.fusion.methods.MultimodalTransformer',
+        >>>     #'model': 'watch.tasks.fusion.methods.UNetBaseline',
+        >>>     'model.class_path': 'watch.tasks.fusion.methods.heterogeneous.HeterogeneousModel',
+        >>>     'model.init_args.position_encoder.class_path': 'watch.tasks.fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder',
+        >>>     'model.init_args.position_encoder.init_args.in_dims': 3,
+        >>>     'model.init_args.position_encoder.init_args.max_freq': 3,
+        >>>     'model.init_args.position_encoder.init_args.num_freqs': 10,
+        >>>     'model.init_args.backbone.class_path': 'watch.tasks.fusion.architectures.transformer.TransformerEncoderDecoder',
+        >>>     'optimizer.class_path': 'torch.optim.Adam',
+        >>>     'optimizer.init_args.lr': 1e-4,
+        >>>     'optimizer.init_args.weight_decay': 1e-2,
+        >>>     'optimizer.init_args.betas': [0.9, 0.98],
+        >>>     'optimizer.init_args.eps': 1e-12,
+        >>>     'trainer.default_root_dir': dpath,
+        >>>     'data.train_dataset': 'special:vidshapes8-frames9-speed0.5-multispectral',
+        >>>     'data.vali_dataset': 'special:vidshapes4-frames9-speed0.5-multispectral',
+        >>>     'trainer.max_steps': 3,
+        >>>     'trainer.num_sanity_val_steps': 0,
+        >>> }
+        >>> main(config=config)
+    """
+    cli = make_cli(config)
+    if cli.manual_mode:
+        # Do the running ourself
+        print('trainer.logger.log_dir = {!r}'.format(cli.trainer.logger.log_dir))
+        cli.trainer.fit(cli.model, cli.datamodule)
 
 
 if __name__ == "__main__":
     r"""
     CommandLine:
+        python -m watch.tasks.fusion.fit_lightning fit --help
+
         python -m watch.tasks.fusion.fit_lightning fit \
                 --model.help=MultimodalTransformer
 
@@ -188,7 +292,7 @@ if __name__ == "__main__":
             --trainer.accelerator=gpu --trainer.devices=0, \
             --trainer.precision=16  \
             --trainer.fast_dev_run=5 \
-            --model=MultimodalTransformer \
+            --model=HeterogeneousModel \
             --model.tokenizer=linconv \
             --trainer.default_root_dir ./demo_train
 
@@ -200,7 +304,6 @@ if __name__ == "__main__":
             --trainer.devices=0, \
             --trainer.precision=16 \
             --trainer.fast_dev_run=5 \
-            --model=NoopModel\
-            --model.tokenizer=linconv
+            --model=NoopModel
     """
     main()

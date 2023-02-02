@@ -439,7 +439,7 @@ class BatchVisualizationBuilder:
 
                     if needs_norm:
                         mask = (raw_signal != 0) & np.isfinite(raw_signal)
-                        norm_signal = kwimage.normalize_intensity(raw_signal, mask=mask).copy()
+                        norm_signal = kwimage.normalize_intensity(raw_signal, mask=mask, params={'scaling': 'sigmoid'}).copy()
                     elif is_label_img:
                         raw_signal = util_kwimage.exactly_1channel(raw_signal, ndim=2)
                         norm_signal = util_kwimage.colorize_label_image(raw_signal, with_legend=False)

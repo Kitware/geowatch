@@ -565,3 +565,8 @@ class DotDict(dict):
     #         subkeys = []
     #         subkeys.extend(self._prefix_trie.values(key))
     #         return self.__class__([(k, self[k]) for k in subkeys])
+
+
+def pandas_add_prefix(data, prefix):
+    mapper = {c: prefix + c for c in data.columns}
+    return data.rename(mapper, axis=1)

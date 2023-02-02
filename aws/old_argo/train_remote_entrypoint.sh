@@ -8,7 +8,42 @@ the Docker image was created with.
 Note: you must edit "ta2_train_workflow.yml" to specify the branch should be
 used.
 
-TODO: how to do this with smartflow?
+To submit these jobs run something like:
+
+    cd "$HOME/code/watch/aws"
+
+    WORKFLOW_FPATH=$HOME/code/watch/aws/ta2_train_workflow.yml
+    argo submit "$WORKFLOW_FPATH" --watch
+
+    WORKFLOW_FPATH=$HOME/code/watch/aws/ta2_train_workflow.yml
+    NAME_PREFIX=$(yq -r .metadata.generateName "$WORKFLOW_FPATH")
+    WORKFLOW_NAME=$(argo list --running | argo list --running | grep "$NAME_PREFIX" | head -n 1 | cut -d" " -f1)
+    kubctl logs "${WORKFLOW_NAME}" -c main --follow
+
+    # NOTE: It usually takes ~12-15 minutes for a job to startup after being
+    # submitte
+
+    # And then view the logs in real time (note: if the workflow ends, you need
+    # to use the UI to access the old logs)
+    # This is not 100% reliable has race conditions
+    # Get a shell in the pod
+
+    WORKFLOW_FPATH=$HOME/code/watch/aws/ta2_train_workflow.yml
+    NAME_PREFIX=$(yq -r .metadata.generateName "$WORKFLOW_FPATH")
+    WORKFLOW_NAME=$(argo list --running | argo list --running | grep "$NAME_PREFIX" | head -n 1 | cut -d" " -f1)
+    kubectl exec $WORKFLOW_NAME -- ls -al /root
+    
+    echo "WORKFLOW_NAME = $WORKFLOW_NAME"
+    kubectl exec --stdin --tty $WORKFLOW_NAME -- /bin/bash
+
+kubectl exec -it ta2-train-sd8qs -c main -- /bin/bash
+
+    kubectl exec --stdin --tty ta2-train-cdkc4 -- /bin/bash
+
+    kubectl -n argo exec ta2-train-vxqb7 -- bash
+    
+    # Use this to check outputs
+    aws s3 --profile iarpa ls s3://kitware-smart-watch-data/sync_root/
 '
 set -ex
 
@@ -223,3 +258,70 @@ python -m watch.tasks.fusion.fit \
     --gpus 1 \
     --num_workers=6 \
     --init="$INITIAL_STATE"
+
+__doc__='
+
+Execute instructions:
+
+    argo submit "$HOME/code/watch/aws/ta2_train_workflow.yml" --watch
+
+    argo_follow_recent(){
+        WORKFLOW_FPATH=$HOME/code/watch/aws/ta2_train_workflow.yml
+        NAME_PREFIX=$(yq -r .metadata.generateName "$WORKFLOW_FPATH")
+        WORKFLOW_NAME=$(argo list --running | argo list --running | grep "$NAME_PREFIX" | head -n 1 | cut -d" " -f1)
+        #argo logs "${WORKFLOW_NAME}" --follow
+        # kubctl gives better full logs
+        # kubectl logs "${WORKFLOW_NAME}" -c main --follow  
+        kubectl logs "${WORKFLOW_NAME}" -c main
+        kubectl attach "${WORKFLOW_NAME}"
+    }
+    argo_follow_recent
+
+
+    # Get a shell
+    argo_get_a_shell(){
+        WORKFLOW_FPATH=$HOME/code/watch/aws/ta2_train_workflow.yml
+        NAME_PREFIX=$(yq -r .metadata.generateName "$WORKFLOW_FPATH")
+        WORKFLOW_NAME=$(argo list --running | argo list --running | grep "$NAME_PREFIX" | head -n 1 | cut -d" " -f1)
+        kubectl exec --stdin --tty $WORKFLOW_NAME -- /bin/bash
+    }
+    argo_get_a_shell
+
+    # Use this to check outputs
+    aws s3 --profile iarpa ls s3://kitware-smart-watch-data/sync_root/ta2-train-xzzwv
+    mkdir -p $HOME/data/aws-sync
+    aws s3 --profile iarpa sync s3://kitware-smart-watch-data/sync_root/ta2-train-xzzwv/ $HOME/data/aws-sync
+    kubectl exec $WORKFLOW_NAME -- ls -al /root
+
+
+    TODO:
+    Allow hard coded specs for the following:
+        datamodule.dataset_stats = {
+            "sensor_mode_hist": {
+                ("L8", "blue|green|red|nir|swir16|swir22"): 1546,
+                ("S2", "blue|green|red|nir|swir16|swir22"): 3574,
+            },
+            "input_stats": {
+                ("L8", "blue|green|red|nir|swir16|swir22"): {
+                    "mean": np.array([[[11602.561]],[[11679.435]],[[12304.289]],[[15570.234]],[[15133.022]],[[12781.117]]], dtype=np.float64),
+                    "std": np.array([[[3267.417]],[[3930.465]],[[4846.832]],[[5261.937]],[[6077.674]],[[5040.008]]], dtype=np.float64),
+                },
+                ("S2", "blue|green|red|nir|swir16|swir22"): {
+                    "mean": np.array([[[1250.079]],[[1264.795]],[[1408.939]],[[1839.118]],[[1887.035]],[[1453.906]]], dtype=np.float64),
+                    "std": np.array([[[1016.882]],[[1088.721]],[[1313.853]],[[1473.62 ]],[[1633.727]],[[1320.249]]], dtype=np.float64),
+                },
+            },
+            "class_freq": {
+                "background": 719552801,
+                "ignore": 4800073,
+                "Unknown": 102704,
+                "positive": 12401990,
+                "negative": 0,
+                "Site Preparation": 144313,
+                "Active Construction": 818806,
+                "Post Construction": 1335078,
+                "No Activity": 172235,
+    },
+}
+     
+'

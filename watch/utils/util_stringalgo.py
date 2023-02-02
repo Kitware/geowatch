@@ -9,7 +9,7 @@ def shortest_unique_prefixes(items, sep=None, allow_simple=True, min_length=0, a
     The shortest unique prefix algorithm.
 
     Args:
-        items (list of str): returned prefixes will be unique wrt this set
+        items (List[str]): returned prefixes will be unique wrt this set
         sep (str): if specified, all characters between separators are treated
             as a single symbol. Makes the algo much faster.
         allow_simple (bool): if True tries to construct a simple feasible
@@ -30,7 +30,7 @@ def shortest_unique_prefixes(items, sep=None, allow_simple=True, min_length=0, a
         pip install pygtrie
 
     Example:
-        >>> # xdoctest: +REQUIRES(--pygtrie)
+        >>> # xdoctest: +REQUIRES(module:pygtrie)
         >>> items = ["zebra", "dog", "duck", "dove"]
         >>> shortest_unique_prefixes(items)
         ['z', 'dog', 'du', 'dov']

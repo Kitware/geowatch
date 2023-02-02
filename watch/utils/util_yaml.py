@@ -41,12 +41,18 @@ def yaml_dumps(data):
     return text
 
 
-def yaml_loads(text):
+def yaml_loads(text, backend='ruamel'):
     import io
     file = io.StringIO(text)
     # data = yaml.load(file, Loader=yaml.SafeLoader)
-    import ruamel.yaml
-    data = ruamel.yaml.load(file, Loader=ruamel.yaml.RoundTripLoader, preserve_quotes=True)
+    if backend == 'ruamel':
+        import ruamel.yaml
+        data = ruamel.yaml.load(file, Loader=ruamel.yaml.RoundTripLoader, preserve_quotes=True)
+    elif backend == 'pyyaml':
+        import yaml
+        data = yaml.load(file)
+    else:
+        raise KeyError(backend)
     return data
 
 

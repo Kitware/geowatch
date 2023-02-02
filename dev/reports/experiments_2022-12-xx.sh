@@ -63,11 +63,9 @@ python -m watch.mlops.schedule_evaluation \
             bas_pxl.package_fpath:
                 #- $DVC_EXPT_DPATH/bas_native_epoch44.pt
                 - $DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
-                - $DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_10GSD_BGRN_V11/lightning_logs/version_1/checkpoints/Drop4_BAS_2022_12_10GSD_BGRN_V11_epoch=86-step=44544.pt
                 - $DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V10/lightning_logs/version_0/checkpoints/Drop4_BAS_2022_12_15GSD_BGRN_V10_epoch=0-step=4305.pt
                 - $DVC_EXPT_DPATH/training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_15GSD_BGRNSH_invar_V8/lightning_logs/version_0/checkpoints/Drop4_BAS_15GSD_BGRNSH_invar_V8_epoch=16-step=8704.pt
-
-
+                #- $DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_10GSD_BGRN_V11/lightning_logs/version_1/checkpoints/Drop4_BAS_2022_12_10GSD_BGRN_V11_epoch=86-step=44544.pt
                 #- $DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V5/lightning_logs/version_3/checkpoints/Drop4_BAS_2022_12_15GSD_BGRN_V5_epoch=1-step=77702-v1.pt
                 #- $DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V10/lightning_logs/version_3/checkpoints/Drop4_BAS_2022_12_15GSD_BGRN_V10_epoch=0-step=512-v1.pt
                 #- $DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V10/lightning_logs/version_3/checkpoints/Drop4_BAS_2022_12_15GSD_BGRN_V10_epoch=4-step=2560.pt
@@ -79,7 +77,7 @@ python -m watch.mlops.schedule_evaluation \
             bas_pxl.test_dataset:
                 - $DVC_DATA_DPATH/Drop4-BAS/data_vali_KR_R001_uky_invariants.kwcoco.json
                 - $DVC_DATA_DPATH/Drop4-BAS/data_vali_KR_R002_uky_invariants.kwcoco.json
-                - $DVC_DATA_DPATH/Drop4-BAS/data_train_BR_R002_uky_invariants.kwcoco.json
+                #- $DVC_DATA_DPATH/Drop4-BAS/data_train_BR_R002_uky_invariants.kwcoco.json
                 #- $DVC_DATA_DPATH/Drop4-BAS/data_train_AE_R001_uky_invariants.kwcoco.json
                 #- $DVC_DATA_DPATH/Drop4-BAS/data_vali_US_R007_uky_invariants.kwcoco.json
 
@@ -119,10 +117,27 @@ python -m watch.mlops.schedule_evaluation \
                 #- 0.4
                 #- 0.45
                 #- 0.5
+                - 0.6
+                - 0.65
+                - 0.7
+                - 0.75
+                - 0.8
+                - 0.85
             bas_poly.polygon_simplify_tolerance:
-                - 0.5
+                #- 0.5
                 - 1
-                - 3
+                #- 3
+            bas_poly.agg_fn:
+                - probs
+                - binary
+                - rescaled_probs
+                - rescaled_binary
+                - mean_normalized
+                - frequency_weighted_mean
+            bas_poly.resolution:
+                - 10GSD
+                - 15GSD
+                - 30GSD
             bas_poly.moving_window_size: 
                 - null
                 #- 100
@@ -134,16 +149,16 @@ python -m watch.mlops.schedule_evaluation \
             #    #- 0.031
             #    - 0.001
             bas_poly.max_area_sqkm:
-                - null
+                #- null
                 #- 1.00
                 #- 2.00
-                - 2.25
+                #- 2.25
                 #- 3.25
                 - 8
             bas_pxl.enabled: 0
             bas_poly.enabled: 1
             bas_poly_eval.enabled: 1
-            bas_pxl_eval.enabled: 1
+            bas_pxl_eval.enabled: 0
             bas_poly_viz.enabled: 0
             include:
                 - bas_pxl.chip_dims: 256,256
@@ -165,7 +180,7 @@ python -m watch.mlops.schedule_evaluation \
     " \
     --root_dpath="$DVC_EXPT_DPATH/_testpipe" \
     --devices="0,1" --queue_size=2 \
-    --backend=tmux --queue_name "demo-queue3" \
+    --backend=tmux --queue_name "bas-evaluation-grid" \
     --pipeline=bas --skip_existing=1 \
     --run=1
 
@@ -239,7 +254,7 @@ python -m watch.mlops.schedule_evaluation \
     --backend=tmux \
     --pipeline=joint_bas_sc_nocrop \
     --cache=1 --skip_existing=0 \
-    --rprint=1 --run=1
+    --rprint=1 --run=0
 
 #--max_configs=1 \
 
@@ -487,3 +502,59 @@ python -m watch.mlops.schedule_evaluation \
     --pipeline=sc \
     --cache=1 --skip_existing=1 \
     --rprint=0 --run=1
+    
+
+# Real data
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+
+python -m watch.mlops.schedule_evaluation \
+    --params="
+        matrix:
+            bas_pxl.package_fpath:
+                - $DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
+            sc_pxl.package_fpath:
+                - $DVC_EXPT_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt
+            bas_pxl.window_space_scale:
+                - auto
+            bas_pxl.test_dataset:
+                - $DVC_DATA_DPATH/Drop6/KR_R001_BAS.kwcoco.json
+            sitecrop.crop_src_fpath:
+                - $DVC_DATA_DPATH/Drop6/KR_R001.kwcoco.json
+            bas_pxl.input_space_scale: window
+            bas_pxl.output_space_scale: window
+            bas_pxl.chip_dims:
+                - auto
+            bas_pxl.time_sampling:
+                - auto
+            bas_poly.moving_window_size:
+                - null
+            bas_poly.thresh:
+                - 0.15
+            sc_pxl.chip_dims:
+                - auto
+            sc_pxl.window_space_scale:
+                - auto
+            sc_pxl.input_space_scale: window
+            sc_pxl.output_space_scale: window
+            sc_poly.thresh:
+                - 0.1
+            sc_poly.use_viterbi:
+                - 0
+            bas_pxl.enabled: 1
+            bas_poly.enabled: 1
+            bas_poly_eval.enabled: 1
+            bas_pxl_eval.enabled: 1
+            bas_poly_viz.enabled: 1
+            sc_pxl.enabled: 1
+            sc_poly.enabled: 1
+            sc_poly_eval.enabled: 1
+            sc_pxl_eval.enabled: 0
+            sc_poly_viz.enabled: 0
+    " \
+    --root_dpath="$DVC_EXPT_DPATH/_testpipe2" \
+    --devices="0,1" --queue_size=1 \
+    --backend=tmux \
+    --pipeline=joint_bas_sc_nocrop \
+    --cache=1 --skip_existing=0 \
+    --rprint=1 --run=0

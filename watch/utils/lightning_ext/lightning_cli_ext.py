@@ -1,6 +1,9 @@
 """
 This module is an exension of jsonargparse and lightning CLI that will respect
 scriptconfig style arguments
+
+References:
+    https://github.com/Lightning-AI/lightning/issues/15038
 """
 from pytorch_lightning.cli import LightningCLI
 from pytorch_lightning.cli import LightningArgumentParser
@@ -10,9 +13,13 @@ from jsonargparse.signatures import get_signature_parameters
 from jsonargparse.signatures import get_doc_short_description
 from jsonargparse.parameter_resolvers import ParamData
 from typing import List, Set, Union, Optional, Tuple, Type
-from typing import Any, Dict
-from pytorch_lightning.cli import _JSONARGPARSE_SIGNATURES_AVAILABLE
-from pytorch_lightning.cli import ActionConfigFile
+# from typing import Any, Dict  # NOQA
+# from pytorch_lightning.cli import _JSONARGPARSE_SIGNATURES_AVAILABLE  # NOQA
+try:
+    from pytorch_lightning.cli import ActionConfigFile
+except Exception:
+    from jsonargparse import ActionConfigFile  # NOQA
+from pytorch_lightning.cli import Namespace
 from jsonargparse.util import get_import_path, iter_to_set_str
 # from typing import Callable, List, Type, Union
 # from jsonargparse import class_from_function
@@ -33,27 +40,28 @@ class LightningArgumentParser_Extension(LightningArgumentParser):
 
     """
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Initialize argument parser that supports configuration file input.
+    # #15038 is Fixed, so we don't need this anymore.
+    # def __init__(self, *args: Any, **kwargs: Any) -> None:
+    #     """Initialize argument parser that supports configuration file input.
 
-        For full details of accepted arguments see `ArgumentParser.__init__
-        <https://jsonargparse.readthedocs.io/en/stable/index.html#jsonargparse.ArgumentParser.__init__>`_.
+    #     For full details of accepted arguments see `ArgumentParser.__init__
+    #     <https://jsonargparse.readthedocs.io/en/stable/index.html#jsonargparse.ArgumentParser.__init__>`_.
 
-        Example:
-            >>> from watch.utils.lightning_ext.lightning_cli_ext import LightningCLI_Extension
-        """
-        if not _JSONARGPARSE_SIGNATURES_AVAILABLE:
-            raise ModuleNotFoundError(
-                f"{_JSONARGPARSE_SIGNATURES_AVAILABLE}. Try `pip install -U 'jsonargparse[signatures]'`."
-            )
-        super(LightningArgumentParser, self).__init__(*args, **kwargs)
-        # self.add_argument(
-        #     "-c", "--config", action=ActionConfigFile, help="Path to a configuration file in json or yaml format."
-        # )
-        self.callback_keys: List[str] = []
-        # separate optimizers and lr schedulers to know which were added
-        self._optimizers: Dict[str, Tuple[Union[Type, Tuple[Type, ...]], str]] = {}
-        self._lr_schedulers: Dict[str, Tuple[Union[Type, Tuple[Type, ...]], str]] = {}
+    #     Example:
+    #         >>> from watch.utils.lightning_ext.lightning_cli_ext import LightningCLI_Extension
+    #     """
+    #     if not _JSONARGPARSE_SIGNATURES_AVAILABLE:
+    #         raise ModuleNotFoundError(
+    #             f"{_JSONARGPARSE_SIGNATURES_AVAILABLE}. Try `pip install -U 'jsonargparse[signatures]'`."
+    #         )
+    #     super(LightningArgumentParser, self).__init__(*args, **kwargs)
+    #     # self.add_argument(
+    #     #     "-c", "--config", action=ActionConfigFile, help="Path to a configuration file in json or yaml format."
+    #     # )
+    #     self.callback_keys: List[str] = []
+    #     # separate optimizers and lr schedulers to know which were added
+    #     self._optimizers: Dict[str, Tuple[Union[Type, Tuple[Type, ...]], str]] = {}
+    #     self._lr_schedulers: Dict[str, Tuple[Union[Type, Tuple[Type, ...]], str]] = {}
 
     def add_subclass_arguments(
         self,
@@ -289,11 +297,13 @@ jsonargparse.ArgumentParser = LightningArgumentParser_Extension
 jsonargparse.core.ArgumentParser = LightningArgumentParser_Extension
 
 
+# Not needed anymore
 class LightningCLI_Extension(LightningCLI):
+    ...
 
     def init_parser(self, **kwargs):
         # Hack in our modified parser
-        DEBUG = 1
+        DEBUG = 0
         if DEBUG:
             kwargs['error_handler'] = None
         import pytorch_lightning as pl
@@ -303,6 +313,22 @@ class LightningCLI_Extension(LightningCLI):
             "-c", "--config", action=ActionConfigFile, help="Path to a configuration file in json or yaml format."
         )
         return parser
+
+    def parse_arguments(self, parser: LightningArgumentParser, args) -> None:
+        """Parses command line arguments and stores it in ``self.config``."""
+        import sys
+        if args is not None and len(sys.argv) > 1:
+            # Please let us shoot ourselves in the foot.
+            import warnings
+            warnings.warn(
+                "LightningCLI's args parameter is intended to run from within Python like if it were from the command "
+                "line. To prevent mistakes it is not allowed to provide both args and command line arguments, got: "
+                f"sys.argv[1:]={sys.argv[1:]}, args={args}."
+            )
+        if isinstance(args, (dict, Namespace)):
+            self.config = parser.parse_object(args)
+        else:
+            self.config = parser.parse_args(args)
 
     # def before_instantiate_classes(self) -> None:
     #     """Implement to run some code before instantiating the classes."""

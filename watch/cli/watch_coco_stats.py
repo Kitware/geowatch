@@ -44,6 +44,15 @@ class WatchCocoStats(scfg.Config):
 
     @classmethod
     def main(cls, cmdline=True, **kw):
+        """
+        Example:
+            >>> from watch.cli import watch_coco_stats
+            >>> import watch
+            >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, heatmap=True)
+            >>> kw = dict(src=[dset.fpath])
+            >>> cmdline = 0
+            >>> watch_coco_stats.__config__.main(cmdline=cmdline, **kw)
+        """
         import pandas as pd
         config = WatchCocoStats(kw, cmdline=cmdline)
 
@@ -146,12 +155,13 @@ def coco_watch_stats(dset, with_video_info=False):
         >>> coco_watch_stats(dset)
     """
     from kwcoco.util import util_truncate
-    import dateutil
+    from watch.utils import util_time
     num_videos = len(dset.index.videos)
     rich.print('num_videos = {!r}'.format(num_videos))
     print('Per-video stats summary')
 
     video_summary_rows = []
+    image_rows = []
 
     all_image_ids = set(dset.images())
     all_image_ids_with_video = set()
@@ -159,8 +169,6 @@ def coco_watch_stats(dset, with_video_info=False):
     all_sensor_entries = []
     for vidid, gids in dset.index.vidid_to_gids.items():
         all_image_ids_with_video.update(gids)
-        avail_sensors = dset.images(gids).lookup('sensor_coarse', None)
-        sensor_freq = ub.dict_hist(avail_sensors)
         video = dset.index.videos[vidid]
         video = ub.dict_diff(video, ['regions', 'properties'])
         # video_str = ub.repr2(video, nl=-1, sort=False)
@@ -168,12 +176,24 @@ def coco_watch_stats(dset, with_video_info=False):
         #     video_str, max_length=512, trunc_loc=0.7)
         # print('video = {}'.format(video_str))
 
-        frame_dates = dset.images(gids).lookup('date_captured', None)
-        frame_dt = sorted([dateutil.parser.parse(d) for d in frame_dates if d])
+        images = dset.images(gids)
+
+        avail_sensors = images.lookup('sensor_coarse', None)
+        frame_dates = images.lookup('date_captured', None)
+        sensor_freq = ub.dict_hist(avail_sensors)
+        frame_dt = sorted([util_time.coerce_datetime(d) for d in frame_dates if d])
         if frame_dt:
             date_range = (min(frame_dt).date().isoformat(), max(frame_dt).date().isoformat())
         else:
             date_range = None
+
+        for img in images.objs:
+            dt = util_time.coerce_datetime(img.get('date_captured', None))
+            image_rows.append({
+                'video': video['name'],
+                'year': dt.year,
+                'sensor': img.get('sensor_coarse', None)
+            })
 
         video_info = ub.udict({
             'name': video['name'],
@@ -229,6 +249,40 @@ def coco_watch_stats(dset, with_video_info=False):
     # fpath = coco_img.primary_image_filepath()
     # _ = ub.cmd('gdalinfo {}'.format(fpath), verbose=3)
 
+    image_df = pd.DataFrame(image_rows)
+    import numpy as np
+    _, year_bins = np.histogram(image_df['year'])
+    year_bins = sorted(np.unique(np.ceil(year_bins)))
+    # max_bins = max(18 // len(image_df['sensor'].unique()), 2)
+    max_bins = 15
+    if len(year_bins) > max_bins:
+        _, year_bins = np.histogram(image_df['year'], bins=max_bins)
+        year_bins = sorted(np.unique(np.ceil(year_bins)))
+
+    bin_labels = []
+    for a, b in ub.iter_window(year_bins, 2):
+        a = int(a)
+        b = int(b)
+        if a == b or (a + 1) == b:
+            bin_labels += [str(a)]
+        else:
+            bin_labels += [f'{a} - {b}']
+
+    year_summaries = []
+    group_keys = ['video', 'sensor']
+    for group_vals, group in image_df.groupby(group_keys):
+        counts = np.histogram(group['year'], bins=year_bins)[0]
+        group_id = ub.dzip(group_keys, group_vals)
+        summaries = [{'count': c, 'time': b, **group_id} for c, b in zip(counts, bin_labels)]
+        year_summaries.extend(summaries)
+    year_summary_df = pd.DataFrame(year_summaries)
+    year_summary_df = year_summary_df.sort_values('time')
+
+    year_pivot = year_summary_df.pivot(['video', 'sensor'], ['time'], ['count'])
+    year_pivot = year_pivot.fillna('0').astype(int)
+    rich.print('Sensor Date Range Histograms')
+    rich.print(year_pivot)
+
     sensorchan_gsd_stats = coco_sensorchan_gsd_stats(dset)
     rich.print(sensorchan_gsd_stats)
 
@@ -248,6 +302,7 @@ def coco_watch_stats(dset, with_video_info=False):
         'sensor_hist': info['sensor_hist'],
         'sensorchan_hist2': info['sensorchan_hist2'],
         'video_summary_rows': video_summary_rows,
+        'year_pivot': year_pivot,
     }
     return stat_info
 
@@ -307,6 +362,7 @@ def coco_sensorchan_gsd_stats(coco_dset):
 
 
 _SubConfig = WatchCocoStats
+__config__ = _SubConfig
 
 if __name__ == '__main__':
     """

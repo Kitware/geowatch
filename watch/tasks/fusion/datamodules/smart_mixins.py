@@ -251,7 +251,7 @@ class SMARTDataMixin:
             qa_sample = sampler.load_sample(
                 tr_cloud, with_annots=None,
                 # TODO: use a better constant value
-                padkw={'constant_values': 255},
+                padkw={'constant_values': 0},
                 # dtype=np.float32
             )
             qa_data = qa_sample['im']

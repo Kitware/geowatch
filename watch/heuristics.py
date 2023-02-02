@@ -560,22 +560,28 @@ CONFUSION_COLOR_SCHEME = {
 
 def dummy_legend():
     # hack to make a legend for slides
+    """
+    from watch.heuristics import *  # NOQA
+    dummy_legend()
+
+    """
+    import kwplot
+    kwplot.autompl()
+    img = kwplot.make_legend_img(CONFUSION_COLOR_SCHEME)
+    kwplot.imshow(img, fnum=1)
 
     label_to_color = {
         cat['name']: cat['color']
         for cat in CATEGORIES
     }
+    img = kwplot.make_legend_img(label_to_color)
+    kwplot.imshow(img, fnum=2)
+
     label_to_color = ub.dict_subset(label_to_color, {
         'Post Construction', 'Site Preparation', 'Active Construction',
         'No Activity', 'Unknown'})
-
-    import kwplot
-    kwplot.autompl()
-    img = kwplot.make_legend_img(CONFUSION_COLOR_SCHEME)
-    kwplot.imshow(img)
-
     img = kwplot.make_legend_img(label_to_color)
-    kwplot.imshow(img)
+    kwplot.imshow(img, fnum=3)
 
 
 def build_image_header_text(**kwargs):

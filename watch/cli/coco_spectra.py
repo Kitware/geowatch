@@ -42,6 +42,7 @@ class CocoSpectraConfig(scfg.Config):
         'dst': scfg.Value(None, help='if specified dump the figure to disk at this file path (e.g. with a jpg or png suffix)'),
 
         'show': scfg.Value(False, isflag=True, help='if True, do a plt.show()'),
+        'draw': scfg.Value(True, help='if False disables all visualization and just print tables'),
 
         'workers': scfg.Value(0, help='number of io workers'),
         'mode': scfg.Value('process', help='type of parallelism'),
@@ -173,15 +174,17 @@ class HistAccum:
 def main(cmdline=True, **kwargs):
     r"""
     Example:
-        >>> # xdoctest: +REQUIRES(--slow)
         >>> from watch.cli.coco_spectra import *  # NOQA
         >>> import kwcoco
         >>> test_dpath = ub.Path.appdir('watch/tests').ensuredir()
         >>> image_fpath = test_dpath + '/intensityhist_demo.jpg'
-        >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
+        >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes-msi-multisensor-videos1-frames64-gsize8')
         >>> kwargs = {'src': coco_dset, 'dst': image_fpath, 'mode': 'thread'}
         >>> kwargs['multiple'] = 'layer'
         >>> kwargs['element'] = 'step'
+        >>> kwargs['workers'] = 'avail'
+        >>> kwargs['show'] = False
+        >>> kwargs['draw'] = False
         >>> main(**kwargs)
 
     Example:
@@ -191,12 +194,13 @@ def main(cmdline=True, **kwargs):
         >>> import watch
         >>> test_dpath = ub.Path.appdir('watch/tests').ensuredir()
         >>> image_fpath = test_dpath + '/intensityhist_demo2.jpg'
-        >>> coco_dset = coerce_kwcoco('watch-msi')
+        >>> coco_dset = watch.coerce_kwcoco('watch-msi')
         >>> kwargs = {
         >>>     'src': coco_dset,
         >>>     'dst': image_fpath,
         >>>     'mode': 'thread',
         >>>     'valid_range': '10:2000',
+        >>>     'workers': 'avail',
         >>> }
         >>> kwargs['multiple'] = 'layer'
         >>> kwargs['element'] = 'step'
@@ -212,7 +216,7 @@ def main(cmdline=True, **kwargs):
     print('config = {}'.format(ub.repr2(config.to_dict(), nl=1)))
 
     # coco_dset = kwcoco.CocoDataset.coerce(config['src'])
-    coco_dset = watch.demo.coerce_kwcoco(config['src'])
+    coco_dset = watch.coerce_kwcoco(config['src'])
 
     valid_gids = kwcoco_extensions.filter_image_ids(
         coco_dset,
@@ -253,7 +257,7 @@ def main(cmdline=True, **kwargs):
     accum = HistAccum()
     for job in jobs.as_completed(desc='accumulate stats'):
         intensity_stats = job.result()
-        sensor = job.coco_img.get('sensor_coarse', 'unknown_sensor')
+        sensor = job.coco_img.get('sensor_coarse', job.coco_img.get('sensor', 'unknown_sensor'))
         for band_stats in intensity_stats['bands']:
             band_name = band_stats['band_name']
             intensity_hist = band_stats['intensity_hist']
@@ -275,29 +279,30 @@ def main(cmdline=True, **kwargs):
     else:
         extra_text = None
 
-    fig = plot_intensity_histograms(full_df, config)
+    if config['draw']:
+        fig = plot_intensity_histograms(full_df, config)
 
-    title_lines = []
-    title = config.get('title', None)
-    if title is not None:
-        title_lines.append(title)
+        title_lines = []
+        title = config.get('title', None)
+        if title is not None:
+            title_lines.append(title)
 
-    if extra_text is not None:
-        title_lines.append(extra_text)
+        if extra_text is not None:
+            title_lines.append(extra_text)
 
-    final_title = '\n'.join(title_lines)
-    fig.suptitle(final_title)
+        final_title = '\n'.join(title_lines)
+        fig.suptitle(final_title)
 
-    dst_fpath = config['dst']
-    if dst_fpath is not None:
-        print('dump to dst_fpath = {!r}'.format(dst_fpath))
-        fig.set_size_inches(np.array([6.4, 4.8]) * 1.68)
-        fig.tight_layout()
-        fig.savefig(dst_fpath)
+        dst_fpath = config['dst']
+        if dst_fpath is not None:
+            print('dump to dst_fpath = {!r}'.format(dst_fpath))
+            fig.set_size_inches(np.array([6.4, 4.8]) * 1.68)
+            fig.tight_layout()
+            fig.savefig(dst_fpath)
 
-    if config['show']:
-        from matplotlib import pyplot as plt
-        plt.show()
+        if config['show']:
+            from matplotlib import pyplot as plt
+            plt.show()
 
     results = {
         'sensor_chan_stats': sensor_chan_stats,
@@ -756,49 +761,6 @@ def _fill_missing_colors(label_to_color):
     for key, new_color in zip(needs_color, new_colors):
         final[key] = tuple(map(float, new_color))
     return final
-
-
-def demo_kwcoco_multisensor(num_videos=4, num_frames=10, **kwargs):
-    """
-    Note:
-        dev/flow21 has main implementation. remove this after this is merged
-
-    Ignore:
-        import watch
-        coco_dset = watch.demo.demo_kwcoco_multisensor()
-        coco_dset = watch.demo.demo_kwcoco_multisensor(max_speed=0.5)
-    """
-    demo_kwargs = {
-        'num_frames': num_frames,
-        'num_videos': num_videos,
-        'rng': 9111665008,
-        'multisensor': True,
-        'multispectral': True,
-        'image_size': 'random',
-    }
-    demo_kwargs.update(kwargs)
-    coco_dset = kwcoco.CocoDataset.demo('vidshapes', **demo_kwargs)
-    # Hack in sensor_coarse
-    images = coco_dset.images()
-    groups = ub.sorted_keys(ub.group_items(images.coco_images, lambda x: x.channels.spec))
-    for idx, (k, g) in enumerate(groups.items()):
-        for coco_img in g:
-            coco_img.img['sensor_coarse'] = 'sensor{}'.format(idx)
-    return coco_dset
-
-
-def coerce_kwcoco(data='watch-msi', **kwargs):
-    """
-    Note:
-        dev/flow21 has main implementation. remove this after this is merged
-
-    coerce with watch special datasets
-    """
-    if isinstance(data, str) and 'watch' in data.split('special:', 1)[-1].split('-'):
-        return demo_kwcoco_multisensor(**kwargs)
-    else:
-        return kwcoco.CocoDataset.coerce(data, **kwargs)
-
 
 _SubConfig = CocoSpectraConfig
 

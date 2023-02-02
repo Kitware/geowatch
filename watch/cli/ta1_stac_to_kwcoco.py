@@ -555,31 +555,10 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
         sensorchan_hist = ub.ddict(lambda: 0)
         sensorasset_hist = ub.ddict(lambda: 0)
         for stac_item in all_items:
-            # TODO: we can use this data to prepopulate the kwcoco file
-            # so it takes far less time to field it.
-            stac_dict = stac_item.to_dict()
-            # stac_dict['geometry']
-            sensor = stac_dict['properties'].get(
-                'constellation', stac_dict['properties'].get('platform', None))
-            # proc_level = stac_dict['landsat:correction']
-            asset_names = stac_dict['assets'].keys()
-
-            eo_bands = []
-            for asset_name, asset_item in stac_dict['assets'].items():
-                if 'roles' in asset_item and 'data' in asset_item['roles']:
-                    if 'eo:bands' in asset_item:
-                        for eo_band in asset_item['eo:bands']:
-                            if isinstance(eo_band, dict):
-                                if 'common_name' in eo_band:
-                                    eo_bands.append(eo_band['common_name'])
-                                elif 'name' in eo_band:
-                                    eo_bands.append(eo_band['name'])
-                                else:
-                                    raise AssertionError
-                            elif isinstance(eo_band, str):
-                                eo_bands.append(eo_band)
-            eo_bands = list(ub.unique(eo_bands))
-            eo_bands = list(ub.unique(eo_bands))
+            summary = summarize_stac_item(stac_item)
+            sensor = summary['sensor']
+            eo_bands = summary['eo_bands']
+            asset_names = summary['asset_names']
             sensorchan = kwcoco.SensorChanSpec.coerce(f'{sensor}:' + '|'.join(eo_bands))
             sensorchan_hist[sensorchan.spec] += 1
             sensorasset = kwcoco.SensorChanSpec.coerce(f'{sensor}:' + '|'.join(sorted(asset_names)))
@@ -625,6 +604,43 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
     print('Wrote: {}'.format(outpath))
 
     return output_dset
+
+
+def summarize_stac_item(stac_item):
+    # TODO: we can use this data to prepopulate the kwcoco file
+    # so it takes far less time to field it.
+    stac_dict = stac_item.to_dict()
+    # stac_dict['geometry']
+    sensor = stac_dict['properties'].get(
+        'constellation', stac_dict['properties'].get('platform', None))
+    # proc_level = stac_dict['landsat:correction']
+    asset_names = stac_dict['assets'].keys()
+
+    eo_bands = []
+    for asset_name, asset_item in stac_dict['assets'].items():
+        if 'roles' in asset_item and 'data' in asset_item['roles']:
+            if 'eo:bands' in asset_item:
+                for eo_band in asset_item['eo:bands']:
+                    if isinstance(eo_band, dict):
+                        if 'common_name' in eo_band:
+                            eo_bands.append(eo_band['common_name'])
+                        elif 'name' in eo_band:
+                            eo_bands.append(eo_band['name'])
+                        else:
+                            raise AssertionError
+                    elif isinstance(eo_band, str):
+                        eo_bands.append(eo_band)
+    eo_bands = list(ub.unique(eo_bands))
+    eo_cloud_cover = stac_dict['properties'].get('eo:cloud_cover', None)
+
+    summary = {
+        'sensor': sensor,
+        'asset_names': asset_names,
+        'eo_bands': eo_bands,
+        'eo_cloud_cover': eo_cloud_cover,
+        'datetime': stac_item.get_datetime(),
+    }
+    return summary
 
 
 if __name__ == "__main__":

@@ -153,6 +153,9 @@ def demo_kwcoco_with_heatmaps(num_videos=1, num_frames=20, image_size=(512, 512)
     """
     Return a dummy kwcoco file with special metdata
 
+    DEPRECATED:
+        Instead use watch.coerce_kwcoco('watch-msi-geodata-dates-heatmap-videos1-frames20-gsize512') or something similar
+
     TODO:
         rename
 
@@ -605,9 +608,42 @@ def coerce_kwcoco(data='watch-msi', **kwargs):
         >>> heatmap=True
         >>> kwargs = {}
         >>> coco_dset = watch.coerce_kwcoco(data='watch-msi', dates=dates, geodata=geodata, heatmap=heatmap)
+        >>> coco_dset2 = watch.coerce_kwcoco(data='watch-msi-dates-geodata-gsize32')
+        >>> assert 'date_captured' in coco_dset2.images().peek()
     """
     if isinstance(data, str) and 'watch' in data.split('-'):
+        defaults = {
+            'render': True,
+            'num_videos': 4,
+            'num_frames': 10,
+            'num_tracks': 2,
+            'anchors': None,
+            'image_size': (600, 600),
+            'aux': None,
+            'multispectral': True,
+            'multisensor': False,
+            'max_speed': 0.01,
+        }
+        defaults.update(dict(
+            num_videos=kwargs.get('num_videos', 4),
+            num_frames=kwargs.get('num_frames', 10),
+            heatmap=kwargs.get('heatmap', False),
+            dates=kwargs.get('dates', False),
+            geodata=kwargs.get('geodata', False),
+            bad_nodata=kwargs.get('bad_nodata', False)
+        ))
+        vidkw_aliases = {
+            'num_frames': {'frames'},
+            'num_tracks': {'tracks'},
+            'num_videos': {'videos'},
+            'max_speed': {'speed'},
+            'image_size': {'gsize'},
+            'multispectral': {'msi'},
+        }
+        alias_to_key = {k: v for v, ks in vidkw_aliases.items() for k in ks}
+        kwargs.update(_parse_demostr(data, defaults, alias_to_key)[0])
         kwargs.pop('sqlview', None)
+        print('kwargs = {}'.format(ub.urepr(kwargs, nl=1)))
         return demo_kwcoco_multisensor(**kwargs)
     else:
         import os
@@ -616,3 +652,41 @@ def coerce_kwcoco(data='watch-msi', **kwargs):
             if str(expanded) != str(data):
                 data = expanded
         return kwcoco.CocoDataset.coerce(data, **kwargs)
+
+
+def _parse_demostr(data, defaults, alias_to_key=None):
+    """
+    Special suffixes can be added to generic demo names. Parse them out here.
+    Arguments are `-` separated, only known defaulted values are parsed. Bare
+    default names are interpreted as a value of True, otherwise the value
+    should be numeric. TODO: generalize this and conslidate in the kwcoco
+    demo method.
+
+    Example:
+        >>> data = 'foo-bar-baz1-biz2.3'
+        >>> defaults = {}
+        >>> alias_to_key = None
+        >>> _parse_demostr(data, defaults)
+        ({}, {'foo': True, 'bar': True, 'baz': 1, 'biz': 2.3})
+    """
+    if alias_to_key is None:
+        alias_to_key = {}
+    parts = data.split('-')
+    import re
+    from scriptconfig.smartcast import smartcast
+    handled = defaults.copy()
+    unhandled = {}
+    for part in parts:
+        match = re.search(r'[\d]', part)
+        if match is None:
+            value = True
+            key = part
+        else:
+            key = part[:match.span()[0]]
+            value = smartcast(part[match.span()[0]:], allow_split=False)
+        key = alias_to_key.get(key, key)
+        if key in handled:
+            handled[key] = value
+        else:
+            unhandled[key] = value
+    return handled, unhandled

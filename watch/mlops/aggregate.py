@@ -1,4 +1,4 @@
-"""
+r"""
 Loads results from an evaluation and aggregates them
 
 Ignore:
@@ -23,7 +23,6 @@ Ignore:
         --root_dpath="$DVC_EXPT_DPATH/_testpipe"
 
 """
-import scriptconfig as scfg
 import kwarray
 import math
 import parse
@@ -31,22 +30,22 @@ import ubelt as ub
 from watch.mlops import smart_pipeline
 from watch.utils import util_pattern
 from watch.mlops import smart_result_parser
-import json
-# from watch.utils.util_param_grid import DotDictDataFrame
-from watch.utils.util_stringalgo import shortest_unique_suffixes
-from watch.utils import slugify_ext
+from watch.utils import util_pandas
 from watch.utils import util_parallel
 from typing import Dict, Any
 import pandas as pd
+import json
+from scriptconfig import DataConfig, Value as _V
 
 
-class AggregateEvluationConfig(scfg.DataConfig):
+class AggregateEvluationConfig(DataConfig):
     """
     Aggregates results from multiple DAG evaluations.
     """
-    root_dpath = scfg.Value('auto', help='Where do dump all results. If "auto", uses <expt_dvc_dpath>/dag_runs')
-    pipeline = scfg.Value('joint_bas_sc', help='the name of the pipeline to run')
-    io_workers = scfg.Value('avail', help='number of processes to load results')
+    root_dpath   = _V('auto', help='Where do dump all results. If "auto", uses <expt_dvc_dpath>/dag_runs')
+    pipeline     = _V('joint_bas_sc', help='the name of the pipeline to run')
+    io_workers   = _V('avail', help='number of processes to load results')
+    freeze_cache = _V(False, help='set to a specific cache string to freeze a cache with the current results')
 
 
 def main(cmdline=True, **kwargs):
@@ -60,7 +59,8 @@ def main(cmdline=True, **kwargs):
         >>> kwargs = {
         >>>     'root_dpath': expt_dvc_dpath / '_testpipe',
         >>>     'pipeline': 'bas',
-        >>>     'io_workers': 2,
+        >>>     'io_workers': 10,
+        >>>     'freeze_cache': 0,
         >>>     # 'pipeline': 'joint_bas_sc_nocrop',
         >>>     # 'root_dpath': expt_dvc_dpath / '_testsc',
         >>>     #'pipeline': 'sc',
@@ -70,16 +70,21 @@ def main(cmdline=True, **kwargs):
         eval_type_to_results = build_tables(config)
         eval_type_to_aggregator = build_aggregators(eval_type_to_results)
         agg = ub.peek(eval_type_to_aggregator.values())
+        agg = eval_type_to_aggregator.get('bas_poly_eval', None)
 
         >>> ## Execute
         >>> main(cmdline=cmdline, **kwargs)
     """
     config = AggregateEvluationConfig.legacy(cmdline=cmdline, data=kwargs)
 
+    agg_dpath = ub.Path(config['root_dpath']) / 'aggregate'
+    cache_dpath = agg_dpath / '_cache'
+
     cacher = ub.Cacher(
         # Caching may be important depending on how much data we need to load
-        'table_cacher', appname='watch/mlops/aggregate', depends=dict(config),
-        enabled=0,
+        'table_cacher', dpath=cache_dpath, depends=dict(config),
+        enabled=config['freeze_cache'],
+        verbose=3,
     )
     tables = cacher.tryload()
     if tables is None:
@@ -88,34 +93,295 @@ def main(cmdline=True, **kwargs):
 
     eval_type_to_aggregator = build_aggregators(eval_type_to_results)
 
-    automated_analysis(eval_type_to_aggregator, config)
+    # automated_analysis(eval_type_to_aggregator, config)
+    agg = eval_type_to_aggregator.get('bas_poly_eval', None)
+    # for agg in eval_type_to_aggregator.values():
+    if agg is not None:
+        # rois = {'KR_R001', 'KR_R002', 'BR_R002'}
+        rois = {'KR_R001', 'KR_R002'}
+        build_all_param_plots(agg, rois, config)
+        ...
+
+
+def build_all_param_plots(agg, rois, config):
+    from watch.utils import util_kwplot
+    import numpy as np
+    import kwplot
+    sns = kwplot.autosns()
+    plt = kwplot.autoplt()  # NOQA
+    # metric_cols = [c for c in df.columns if 'metrics.' in c]
+    kwplot.close_figures()
+
+    agg_dpath = ub.Path(config['root_dpath'] / 'aggregate')
+    agg_group_dpath = (agg_dpath / ('all_params' + ub.timestamp())).ensuredir()
+
+    # Hack in fit params
+    if 1:
+        resolved_params = pd.concat([agg.resolved_info['resolved_params'], agg.resolved_info['fit_params']], axis=1)
+        agg.resolved_info['resolved_params'] = resolved_params
+        agg.resolved_params = resolved_params
+
+    agg.build_macro_tables(rois)
+
+    macro_results = agg.region_to_tables[agg.primary_macro_region].copy()
+    single_results = {
+        'index': agg.index,
+        'metrics': agg.metrics,
+        'resolved_params': agg.resolved_params,
+        'resources': agg.resolved_info['resources'],
+    }
+
+    macro_results['resolved_params']['bas_poly_eval.fit.effective_batch_size'] = (
+        macro_results['resolved_params']['bas_poly_eval.fit.accumulate_grad_batches'] *
+        macro_results['resolved_params']['bas_poly_eval.fit.batch_size']
+    )
+
+    _parts = list((ub.udict(macro_results) & {
+        'index', 'metrics', 'resolved_params', 'resources'}).values())
+    macro_table = pd.concat(_parts, axis=1)
+    single_table = pd.concat(list(single_results.values()), axis=1)
+    single_table = single_table.fillna('None')
+    macro_table = macro_table.fillna('None')
+    macro_table = macro_table.applymap(lambda x: str(x) if isinstance(x, list) else x)
+    single_table = single_table.applymap(lambda x: str(x) if isinstance(x, list) else x)
+
+    if 0:
+        agg.model_cols
+        from watch.utils.util_param_grid import DotDictDataFrame
+        fit_params = DotDictDataFrame(macro_table)['fit']
+        unique_packages = macro_table['bas_pxl.package_fpath'].drop_duplicates()
+        # unique_fit_params = fit_params.loc[unique_packages.index]
+        pkgmap = {}
+        pkgver = {}
+        for id, pkg in unique_packages.items():
+            pkgver[pkg] = 'M{:02d}'.format(len(pkgver))
+            pid = pkgver[pkg]
+            out_gsd = fit_params.loc[id, 'fit.output_space_scale']
+            in_gsd = fit_params.loc[id, 'fit.input_space_scale']
+            assert in_gsd == out_gsd
+            new_name = f'{pid}'
+            if pkg == 'package_epoch0_step41':
+                new_name = f'{pid}_NOV'
+            pkgmap[pkg] = new_name
+        macro_table['bas_pxl.package_fpath'] = macro_table['bas_pxl.package_fpath'].apply(lambda x: pkgmap.get(x, x))
+
+    modifier = util_kwplot.LabelModifier()
+
+    modifier.add_mapping({
+        'blue|green|red|nir': 'BGRN',
+        'blue|green|red|nir,invariants.0:17': 'invar',
+        'blue|green|red|nir|swir16|swir22': 'BGNRSH'
+    })
+
+    @modifier.add_mapping
+    def humanize_label(text):
+        text = text.replace('package_epoch0_step41', 'EVAL7')
+        text = text.replace('bas_poly_eval.params.', '')
+        text = text.replace('bas_poly_eval.metrics.', '')
+        text = text.replace('bas_poly_eval.fit.', 'fit.')
+        return text
+
+    # Pre determine some palettes
+    shared_palette_groups = [
+        ['bas_poly_eval.params.bas_poly.thresh'],
+        ['bas_poly_eval.fit.learning_rate'],
+        ['bas_poly_eval.fit.learning_rate'],
+        ['bas_poly_eval.params.bas_pxl.chip_dims', 'bas_poly_eval.fit.chip_dims'],
+        ['bas_poly_eval.params.bas_pxl.output_space_scale', 'bas_poly_eval.fit.output_space_scale', 'bas_poly_eval.params.bas_poly.resolution'],
+    ]
+    param_to_palette = {}
+    for group_params in shared_palette_groups:
+        unique_vals = np.unique(macro_table[group_params].values)
+        # 'Spectral'
+        if len(unique_vals) > 5:
+            unique_colors = sns.color_palette('Spectral', n_colors=len(unique_vals))
+            # kwplot.imshow(_draw_color_swatch(unique_colors), fnum=32)
+        else:
+            unique_colors = sns.color_palette(n_colors=len(unique_vals))
+        palette = ub.dzip(unique_vals, unique_colors)
+        param_to_palette.update({p: palette for p in group_params})
+
+    if 1:
+        #### Hack for models of interest.
+        star_params = []
+        p1 = macro_table[(
+            # (macro_table['bas_poly.moving_window_size'] == 200) &
+            (macro_table['bas_poly_eval.params.bas_pxl.package_fpath'] == 'package_epoch0_step41') &
+            (macro_table['bas_poly_eval.params.bas_pxl.chip_dims'] == '[128, 128]') &
+            (macro_table['bas_poly_eval.params.bas_poly.thresh'] == 0.12)  &
+            (macro_table['bas_poly_eval.params.bas_poly.max_area_sqkm'] == 'None') &
+            (macro_table['bas_poly_eval.params.bas_poly.moving_window_size'] == 'None')
+        )]['param_hashid'].iloc[0]
+        star_params = [p1]
+        p2 = macro_table[(
+            # (macro_table['bas_poly.moving_window_size'] == 200) &
+            (macro_table['bas_poly_eval.params.bas_pxl.package_fpath'] == 'Drop4_BAS_2022_12_15GSD_BGRN_V10_epoch=0-step=4305') &
+            (macro_table['bas_poly_eval.params.bas_pxl.chip_dims'] == '[224, 224]') &
+            (macro_table['bas_poly_eval.params.bas_poly.thresh'] == 0.13)  &
+            (macro_table['bas_poly_eval.params.bas_poly.max_area_sqkm'] == 'None') &
+            (macro_table['bas_poly_eval.params.bas_poly.moving_window_size'] == 200)
+        )]['param_hashid'].iloc[0]
+        star_params += [p2]
+        p3 = macro_table[(
+            # (macro_table['bas_poly.moving_window_size'] == 200) &
+            (macro_table['bas_poly_eval.params.bas_pxl.package_fpath'] == 'Drop4_BAS_15GSD_BGRNSH_invar_V8_epoch=16-step=8704') &
+            (macro_table['bas_poly_eval.params.bas_pxl.chip_dims'] == '[256, 256]') &
+            (macro_table['bas_poly_eval.params.bas_poly.thresh'] == 0.17)  &
+            (macro_table['bas_poly_eval.params.bas_poly.max_area_sqkm'] == 'None') &
+            (macro_table['bas_poly_eval.params.bas_poly.moving_window_size'] == 'None')
+        )]['param_hashid'].iloc[0]
+        star_params += [p3]
+        macro_table['is_star'] = kwarray.isect_flags(macro_table['param_hashid'], star_params)
+
+    # x = 'bas_poly_eval.metrics.bas_tpr'
+    # y = 'bas_poly_eval.metrics.bas_ppv'
+    # x = 'bas_poly_eval.metrics.bas_space_FAR'
+    # y = 'bas_poly_eval.metrics.bas_tpr'
+    # x = 'bas_poly_eval.metrics.bas_ffpa'
+    # xscale = 'log'
+
+    x = 'bas_poly_eval.metrics.bas_tpr'
+    xscale = 'linear'
+
+    y = 'bas_poly_eval.metrics.bas_f1'
+    y = 'bas_poly_eval.metrics.bas_faa_f1'
+
+    # main_metric = 'bas_poly_eval.metrics.bas_f1'
+    main_metric = 'bas_poly_eval.metrics.bas_faa_f1'
+    metric_objectives = {main_metric: 'maximize'}
+
+    def finalize_figure(fig, fpath):
+        fig.set_size_inches(np.array([6.4, 4.8]) * 1.0)
+        fig.tight_layout()
+        fig.savefig(fpath)
+        util_kwplot.cropwhite_ondisk(fpath)
+
+    fig = kwplot.figure(fnum=2, doclf=True)
+    ax = sns.scatterplot(data=single_table, x=x, y=y, hue='region_id')
+    ax.set_title(f'BAS Per-Region Results (n={len(agg)})')
+    ax.set_xscale('log')
+    fpath = agg_group_dpath / 'single_results.png'
+    finalize_figure(fig, fpath)
+    # ax.set_xlim(0, np.quantile(agg.metrics[x], 0.99))
+    # ax.set_xlim(1e-2, np.quantile(agg.metrics[x], 0.99))
+
+    fig = kwplot.figure(fnum=90, doclf=True)
+    ax = sns.boxplot(data=single_table, x='region_id', y=main_metric)
+    ax.set_title(f'BAS Per-Region Results (n={len(agg)})')
+    util_kwplot.LabelModifier({
+        param_value: f'{param_value}\n(n={num})'
+        for param_value, num in single_table.groupby('region_id').size().to_dict().items()
+    }).relabel_xticks(ax)
+    modifier.relabel(ax)
+    fpath = agg_group_dpath / 'single_results_boxplot.png'
+    finalize_figure(fig, fpath)
+
+    from watch.utils.util_kwplot import scatterplot_highlight
+    fig = kwplot.figure(fnum=3, doclf=True)
+    ax = fig.gca()
+    ax = sns.scatterplot(data=macro_table, x=x, y=y, hue='region_id', ax=ax)
+    if 'is_star' in macro_table:
+        scatterplot_highlight(data=macro_table, x=x, y=y, highlight='is_star', ax=ax, size=300)
+    ax.set_title(f'BAS Results (n={len(macro_table)})\n'
+                 f'Macro Analysis over {ub.urepr(rois, sv=1, nl=0)}')
+    ax.set_xscale(xscale)
+    fpath = agg_group_dpath / 'macro_results.png'
+    finalize_figure(fig, fpath)
+    # ax.set_xlim(1e-2, npe.quantile(agg.metrics[x], 0.99))
+    # ax.set_xlim(1e-2, 0.7)
+
+    DO_STAT_ANALYSIS = True
+    if DO_STAT_ANALYSIS:
+        ### Build param analysis
+        from watch.utils import result_analysis
+        results = {'params': macro_table[macro_results['resolved_params'].columns],
+                   'metrics': macro_table[macro_results['metrics'].columns]}
+        # agg.primary_metric_cols)
+        analysis = result_analysis.ResultAnalysis(
+            results, metrics=[main_metric], metric_objectives=metric_objectives)
+        analysis.build()
+        analysis.analysis()
+        print('analysis.varied = {}'.format(ub.urepr(analysis.varied, nl=2)))
+        ranked_stats = list(sorted(analysis.statistics, key=lambda x: x['anova_rank_p']))
+        param_name_to_stats = {s['param_name']: s for s in ranked_stats}
+        ranked_params = ub.oset(param_name_to_stats.keys())
+    else:
+        ...
+
+    if 0:
+        import xdev
+        xdev.view_directory(agg_group_dpath)
+
+    if 1:
+        ranked_params = [p for p in ranked_params if 'resolution' in p]
+
+    from kwcoco.metrics.drawing import concice_si_display
+    for rank, param_name in ub.ProgIter(enumerate(ranked_params)):
+        stats = param_name_to_stats[param_name]
+        stats['moments']
+        anova_rank_p = stats['anova_rank_p']
+        param_name = stats['param_name']
+
+        snskw = {}
+        if param_name in param_to_palette:
+            snskw['palette'] = param_to_palette[param_name]
+
+        fig = kwplot.figure(fnum=4, doclf=True)
+        # ax = sns.scatterplot(data=macro_table, x=x, y=y, hue=agg.model_cols[0])
+        ax = sns.scatterplot(data=macro_table, x=x, y=y, hue=param_name, legend=False, **snskw)
+        # scatterplot_highlight(data=macro_table, x=x, y=y, highlight='is_star', ax=ax, size=300)
+        ax.set_title(f'BAS Results (n={len(macro_table)})\n'
+                     f'Macro Analysis over {ub.urepr(rois, sv=1, nl=0)}\n'
+                     f'Effect of {param_name}: anova_rank_p={concice_si_display(anova_rank_p)}')
+        if 'is_star' in macro_table:
+            scatterplot_highlight(data=macro_table, x=x, y=y, highlight='is_star', ax=ax, size=300)
+        ax.set_xscale(xscale)
+        modifier.relabel(ax)
+        fpath = agg_group_dpath / f'macro_results_{rank:03d}_{param_name}.png'
+        finalize_figure(fig, fpath)
+
+        fig = kwplot.figure(fnum=5, doclf=True)
+        ax = sns.boxplot(data=macro_table, x=param_name, y=y, **snskw)
+        util_kwplot.LabelModifier({
+            param_value: f'{param_value}\n(n={num})'
+            for param_value, num in macro_table.groupby(param_name).size().to_dict().items()
+        }).relabel_xticks(ax)
+        ax.set_title(f'BAS Results (n={len(macro_table)})\n'
+                     f'Macro Analysis over {ub.urepr(rois, sv=1, nl=0)}\n'
+                     f'Effect of {param_name}: anova_rank_p={concice_si_display(anova_rank_p)}')
+        modifier.relabel(ax)
+        fpath = agg_group_dpath / f'macro_results_{rank:03d}_{param_name}_box.png'
+        finalize_figure(fig, fpath)
 
 
 def automated_analysis(eval_type_to_aggregator, config):
 
     timestamp = ub.timestamp()
 
-    aggregate_dpath = ub.Path(config['root_dpath'] / 'aggregate')
+    agg_dpath = ub.Path(config['root_dpath']) / 'aggregate'
 
     # TODO: save this for custom analysis, let automatic choose
     # for generality
-    macro_groups = [
-        {'KR_R001', 'KR_R002'},
-        {'KR_R001', 'KR_R002', 'US_R007'},
-        {'KR_R001', 'KR_R002', 'BR_R002', 'AE_R001'},
-        {'KR_R001', 'KR_R002', 'BR_R002', 'AE_R001', 'US_R007'},
-    ]
-    rois = macro_groups  # NOQA
+    # macro_groups = [
+    #     {'KR_R001', 'KR_R002'},
+    #     {'KR_R001', 'KR_R002', 'US_R007'},
+    #     {'KR_R001', 'KR_R002', 'BR_R002', 'AE_R001'},
+    #     {'KR_R001', 'KR_R002', 'BR_R002', 'AE_R001', 'US_R007'},
+    # ]
+    # rois = macro_groups  # NOQA
     # selector = {'BR_R002', 'KR_R001', 'KR_R002', 'AE_R001'}
-    selector = {'BR_R002', 'KR_R001', 'KR_R002'}
+    # selector = {'BR_R002', 'KR_R001', 'KR_R002'}
+    macro_groups = None
+    selector = None
 
     agg0 = eval_type_to_aggregator.get('bas_poly_eval', None)
     if agg0 is not None:
+        ...
 
         subagg2 = generic_analysis(agg0, macro_groups, selector)
 
         to_visualize_fpaths = list(subagg2.results['fpaths']['fpath'])
-        agg_group_dpath = aggregate_dpath / ('bas_poly_agg_' + timestamp)
+        agg_group_dpath = agg_dpath / ('bas_poly_agg_' + timestamp)
         agg_group_dpath = agg_group_dpath.ensuredir()
         # make a analysis link to the final product
         for eval_fpath in to_visualize_fpaths[::-1]:
@@ -137,156 +403,98 @@ def automated_analysis(eval_type_to_aggregator, config):
         ...
         # agg0.analyze()
 
-    plot_tables()
-    plot_examples()  # TODO
 
+def foldin_resolved_info(agg):
+    """
+    Uses the params after they have been resolved in the results files.  This
+    is still pretty dirty and needs to be refined to fit into mlops in a nicer
+    way.
+    """
+    # make these just parse nicer, but for now munge the data.
+    from watch.utils.util_param_grid import DotDictDataFrame
+    from watch.utils.util_param_grid import pandas_add_prefix
+    param_types = DotDictDataFrame(agg.results['param_types'])
 
-def custom_analysis(eval_type_to_aggregator, config):
+    # param_types['pxl.meta']
+    fit_params = util_pandas.pandas_shorten_columns(param_types['fit'])
+    resources = util_pandas.pandas_shorten_columns(param_types['pxl.resource'])
+    properties = util_pandas.pandas_shorten_columns(param_types['pxl.properties'])
+    meta = util_pandas.pandas_shorten_columns(param_types['pxl.meta'])
+    pred_params = param_types['pxl']
+    pred_params = pred_params.drop([
+        c for c in pred_params.columns
+        if '.meta' in c or '.resource' in c or '.properties' in c],
+        axis=1)
+    pred_params = util_pandas.pandas_shorten_columns(pred_params)
 
-    macro_groups = [
-        {'KR_R001', 'KR_R002'},
-        {'KR_R001', 'KR_R002', 'US_R007'},
-        {'BR_R002', 'KR_R001', 'KR_R002', 'AE_R001'},
-        {'BR_R002', 'KR_R001', 'KR_R002', 'AE_R001', 'US_R007'},
-    ]
-    rois = macro_groups  # NOQA
+    node_name = agg.type
 
-    agg0 = eval_type_to_aggregator.get('bas_poly_eval', None)
-    aggregate_dpath = ub.Path(config['root_dpath'] / 'aggregate')
+    if True:
+        # HACK: This doesn't work generally, we need to be more careful
+        # about how we load resolved configurations.
+        if 'bas' in agg.type:
+            disk_resolved_params = pandas_add_prefix(pred_params, node_name + '.params.bas_pxl.')
+        else:
+            disk_resolved_params = pandas_add_prefix(pred_params, node_name + '.params.sc_pxl.')
 
-    if agg0 is not None:
-        agg0_ = fix_duplicate_param_hashids(agg0)
-        # params_of_interest = ['414d0b37']
-        # v0_params_of_interest = [
-        #     '414d0b37', 'ab43161b', '34bed2b3', '8ac5594b']
-        params_of_interest = list({
-            '414d0b37': 'ffmpktiwwpbx',
-            'ab43161b': 'nriolrrxfbco',
-            '34bed2b3': 'eflhsmpfhgsj',
-            '8ac5594b': 'lbxwewpkfwcd',
-        }.values())
+    else:
+        disk_resolved_params = pandas_add_prefix(pred_params, node_name + '.params.')
 
-        param_of_interest = params_of_interest[0]
-        subagg1 = agg0_.filterto(param_hashids=param_of_interest)
-        subagg1.build_macro_tables(macro_groups)
-        _ = subagg1.report_best()
+    properties = pandas_add_prefix(properties, node_name + '.properties.')
+    fit_params = pandas_add_prefix(fit_params, node_name + '.fit.')
+    resources = pandas_add_prefix(resources, node_name + '.resources.')
+    meta = pandas_add_prefix(meta, node_name + '.meta.')
 
-        print(ub.repr2(subagg1.results['fpaths']['fpath'].to_list()))
+    resolved_info = {
+        'resources': resources,
+        'fit_params': fit_params,
+        'properties': properties,
+        'meta': meta,
+    }
 
-        agg_group_dpath = aggregate_dpath / (f'agg_params_{param_of_interest}')
-        agg_group_dpath = agg_group_dpath.ensuredir()
+    if True:
+        is_specified = agg.results['specified_params']
+        effective_params = agg.effective_params
+        d1 = effective_params
+        d2 = disk_resolved_params
+        # Handle autos and things by placing in defaults
+        c1 = d1.columns
+        c2 = d2.columns
+        always_defaulted_cols = c2.difference(c1)
+        common_cols = c1.intersection(c2)
 
-        # Make a directory with a summary over all the regions
-        summary_dpath = (agg_group_dpath / 'summary').ensuredir()
+        path_colnames = agg.model_cols + agg.test_dset_cols
+        for colname in path_colnames:
+            try:
+                colvals = d2[colname]
+                condensed, mapper = util_pandas.pandas_condense_paths(colvals)
+                d2[colname] = condensed
+            except Exception as ex:
+                print(f'warning: ex={ex}')
+                ...
 
-        # make a analysis link to the final product
-        for idx, fpath in ub.ProgIter(list(subagg1.fpaths.iteritems())):
-            region_id = subagg1.index.loc[idx]['region_id']
-            param_hashid = subagg1.index.loc[idx]['param_hashid']
-            link_dpath = agg_group_dpath / region_id
-            ub.symlink(real_path=fpath.parent, link_path=link_dpath)
-            # ub.symlink(real_path=region_viz_fpath, link_path=summary_dpath / region_viz_fpath.name)
-            import kwimage
-            from kwcoco.metrics.drawing import concice_si_display
-            region_viz_fpaths = list((fpath.parent / 'region_viz_overall').glob('*_detailed.png'))
-            assert len(region_viz_fpaths) == 1
-            region_viz_fpath = region_viz_fpaths[0]
-            viz_img = kwimage.imread(region_viz_fpath)
-            scores_of_interest = pandas_shorten_columns(subagg1.metrics).loc[idx, ['bas_tp', 'bas_fp', 'bas_fn', 'bas_f1']]
-            scores_of_interest = ub.udict(scores_of_interest.to_dict())
-            text = ub.urepr(scores_of_interest.map_values(concice_si_display), nobr=1, si=1, compact=1)
-            new_img = kwimage.draw_header_text(viz_img, param_hashid + '\n' + text)
-            kwimage.imwrite(summary_dpath / f'summary_{region_id}.jpg', new_img)
+        resolved_is_specified = is_specified.copy()
+        resolved_is_specified.loc[:, always_defaulted_cols] = 0
+        resolved_params = d1.copy()
+        resolved_params[always_defaulted_cols] = disk_resolved_params[always_defaulted_cols]
 
-            # eval_dpath = bas_poly_eval_confusion_analysis(eval_fpath)
-            # TODO: use the region_id.
-            # ub.symlink(real_path=eval_dpath, link_path=agg_group_dpath / eval_dpath.name)
+        a = d1[common_cols]
+        b = d2[common_cols]
+        has_diff = ~util_pandas.pandas_nan_eq(a, b)
 
-        #### FIND BEST FOR EACH MODEL
+        for colname, colflags in has_diff.T.iterrows():
+            resolved_params.loc[colflags, colname] = d2.loc[colflags, common_cols]
 
-        agg0_.build_macro_tables(macro_groups)
+        # Fix issues with chipdims
+        resolved_params = resolved_params.applymap(lambda x: str(x) if isinstance(x, list) else x)
 
-        params_of_interest = []
-        macro_metrics = agg0_.region_to_tables[agg0_.primary_macro_region]['metrics']
-        macro_params = agg0_.region_to_tables[agg0_.primary_macro_region]['effective_params']
-        macro_index = agg0_.region_to_tables[agg0_.primary_macro_region]['index']
-        for model_name, group in macro_params.groupby(agg0_.model_cols):
-            group_metrics = macro_metrics.loc[group.index]
-            group_metrics = group_metrics.sort_values(agg0_.primary_metric_cols, ascending=False)
-            group_metrics.iloc[0]
-            param_hashid = macro_index.loc[group_metrics.index[0]]['param_hashid']
-            params_of_interest.append(param_hashid)
-
-        agg1 = agg0_.filterto(param_hashids=params_of_interest)
-        agg1.build_macro_tables(macro_groups)
-
-        # Get a shortlist of the top models
-        hash_part = agg1.region_to_tables[agg1.primary_macro_region]['index']['param_hashid']
-        model_part = agg1.region_to_tables[agg1.primary_macro_region]['effective_params'][agg0_.model_cols]
-        metric_part = agg1.region_to_tables[agg1.primary_macro_region]['metrics'][agg0_.primary_metric_cols]
-        table = pd.concat([hash_part, model_part, metric_part], axis=1)
-        table = table.sort_values(agg0_.primary_metric_cols, ascending=False)
-
-        blocklist = {
-            'Drop4_BAS_2022_12_15GSD_BGRN_V10_epoch=0-step=512-v1',
-            'Drop4_BAS_2022_12_15GSD_BGRN_V10_epoch=6-step=3584',
-            'Drop4_BAS_2022_12_15GSD_BGRN_V10_epoch=4-step=2560',
-            'Drop4_BAS_2022_12_15GSD_BGRN_V5_epoch=1-step=77702',
-            'Drop4_BAS_2022_12_15GSD_BGRN_V5_epoch=5-step=233106',
-        }
-        flags = ~kwarray.isect_flags(table['bas_poly_eval.params.bas_pxl.package_fpath'].values, blocklist)
-        params_of_interest = table['param_hashid'].loc[flags]
-        agg1 = agg0_.filterto(param_hashids=params_of_interest)
-        agg1.build_macro_tables(macro_groups)
-
-        # rois = {'BR_R002', 'KR_R001', 'KR_R002', 'AE_R001', 'US_R007'}/
-        # rois = {'KR_R001', 'KR_R002'}
-        # rois = {'KR_R001', 'KR_R002', 'US_R007'}
-        # rois = {'BR_R002', 'KR_R001', 'KR_R002', 'AE_R001'}
-        # _ = agg.build_macro_tables(rois)
-        # params_of_interest = ['414d0b37']
-        # params_of_interest = ['ab43161b']
-        # params_of_interest = ['34bed2b3']
-        # params_of_interest = ['8ac5594b']
-
-        # model_of_interest =
-        # models_of_interest = [
-        #     'package_epoch0_step41',
-        #     'Drop4_BAS_15GSD_BGRNSH_invar_V8_epoch=16-step=8704',
-        #     'Drop4_BAS_2022_12_15GSD_BGRN_V10_epoch=0-step=4305',
-        #     'Drop4_BAS_2022_12_15GSD_BGRN_V5_epoch=1-step=77702-v1',
-        # ]
-        # subagg2 = agg.filterto(models=params_of_interest1)
-        # _ = subagg2.build_macro_tables({'KR_R001', 'KR_R002'})
-        # _ = subagg2.build_macro_tables(rois)
-        # subagg2.macro_analysis()
-        # _ = subagg2.build_macro_tables('max')
-        # _ = subagg2.build_macro_tables({'KR_R001', 'KR_R002', 'US_R007'})
-        # _ = subagg2.build_macro_tables({'KR_R001', 'KR_R002'})
-        # _ = subagg2.build_macro_tables({'AE_R001'})
-        # _ = subagg2.build_macro_tables({'BR_R002'})
-        # _ = subagg2.build_macro_tables({'US_R007'})
-        # _ = subagg2.build_macro_tables({'KR_R002'})
-        # subagg2.macro_analysis()
-        # _ = subagg2.report_best()
-
-        # rois = {'BR_R002', 'KR_R001', 'KR_R002', 'AE_R001'}
-        # macro_results = subagg.build_macro_tables(rois)
-        # top_idxs = macro_results['metrics'].sort_values(subagg.primary_metric_cols).index[0:3]
-        # top_param_hashids = macro_results['index']['param_hashid'].iloc[top_idxs]
-        # flags = kwarray.isect_flags(subagg.index['param_hashid'].values, top_param_hashids)
-        # final_agg = subagg.compress(flags)
-        # macro_results = final_agg.build_macro_tables(rois)
-        # # top_idx = macro_results['metrics'].sort_values(subagg.primary_metric_cols).index[0]
-        # final_scores = final_agg.report_best()
-        # region_id_to_summary = subagg.report_best()
-        # region_id_to_summary['macro_02_19bfe3']
+        resolved_info['resolved_params'] = resolved_params
+    return resolved_info
 
 
 def make_summary_analysis(agg1, config):
-
-    aggregate_dpath = ub.Path(config['root_dpath'] / 'aggregate')
-    agg_group_dpath = aggregate_dpath / ('agg_summary_params2_v2')
+    agg_dpath = ub.Path(config['root_dpath'] / 'aggregate')
+    agg_group_dpath = agg_dpath / ('agg_summary_params2_v2')
     agg_group_dpath = agg_group_dpath.ensuredir()
 
     # agg2 =
@@ -302,14 +510,13 @@ def make_summary_analysis(agg1, config):
             link_dpath = agg_group_dpath / dname
             real_dpath = eval_fpath.parent
             ub.symlink(real_path=real_dpath, link_path=link_dpath)
-
             import kwimage
             from kwcoco.metrics.drawing import concice_si_display
             region_viz_fpaths = list((eval_fpath.parent / 'region_viz_overall').glob('*_detailed.png'))
             assert len(region_viz_fpaths) == 1
             region_viz_fpath = region_viz_fpaths[0]
             viz_img = kwimage.imread(region_viz_fpath)
-            scores_of_interest = pandas_shorten_columns(agg1.metrics).loc[id, ['bas_tp', 'bas_fp', 'bas_fn', 'bas_f1']]
+            scores_of_interest = util_pandas.pandas_shorten_columns(agg1.metrics).loc[id, ['bas_tp', 'bas_fp', 'bas_fn', 'bas_f1']]
             scores_of_interest = ub.udict(scores_of_interest.to_dict())
             text = ub.urepr(scores_of_interest.map_values(concice_si_display), nobr=1, si=1, compact=1)
             new_img = kwimage.draw_header_text(viz_img, param_hashid + '\n' + text)
@@ -329,174 +536,12 @@ def make_summary_analysis(agg1, config):
             assert len(confusion_fpaths) == 1
             confusion_fpath = confusion_fpaths[0]
             im = kwimage.imread(confusion_fpath)
-            scores_of_interest = pandas_shorten_columns(agg1.metrics).loc[id, ['bas_tp', 'bas_fp', 'bas_fn', 'bas_f1']]
+            scores_of_interest = util_pandas.pandas_shorten_columns(agg1.metrics).loc[id, ['bas_tp', 'bas_fp', 'bas_fn', 'bas_f1']]
             scores_of_interest = ub.udict(scores_of_interest.to_dict())
             text = ub.urepr(scores_of_interest.map_values(concice_si_display), nobr=1, si=1, compact=1)
             model_name = group_agg.effective_params[group_agg.model_cols[0]].loc[id]
             im = kwimage.draw_header_text(im, param_hashid + ' - ' + model_name + '\n' + text)
             kwimage.imwrite(agg_group_dpath / f'confusion_{region_id}_{param_hashid}.jpg', im)
-
-
-def compare_simplify_tolerence(agg0, config):
-    # Filter to only parameters that are A / B comparable
-    parameter_of_interest = 'bas_poly_eval.params.bas_poly.polygon_simplify_tolerance'
-    # groups = agg0.effective_params.groupby(parameter_of_interest)
-    if parameter_of_interest not in agg0.effective_params.columns:
-        raise ValueError(f'Missing parameter of interest: {parameter_of_interest}')
-
-    other_params = agg0.effective_params.columns.difference({parameter_of_interest}).tolist()
-    candidate_groups = agg0.effective_params.groupby(other_params, dropna=False)
-
-    comparable_groups = []
-    for value, group in candidate_groups:
-        # if len(group) > 1:
-        if len(group) == 4:
-            if len(group[parameter_of_interest].unique()) == 4:
-                comparable_groups.append(group)
-
-    comparable_idxs = sorted(ub.flatten([group.index for group in comparable_groups]))
-    comparable_agg1 = agg0.filterto(index=comparable_idxs)
-    agg = comparable_agg1
-
-    # _ = comparable_agg1.report_best()
-
-    selector = {'KR_R001', 'KR_R002', 'BR_R002'}
-    # Find the best result for the macro region
-    rois = selector  # NOQA
-    macro_results = comparable_agg1.build_single_macro_table(selector)
-    top_macro_id = macro_results['metrics'].sort_values(comparable_agg1.primary_metric_cols, ascending=False).index[0]
-
-    print(macro_results['index'].loc[top_macro_id])
-
-    # Find the corresponding A / B for each region.
-    # Get the param hash each region should have
-    top_params = macro_results['effective_params'].loc[top_macro_id]
-    # top_value = top_params[parameter_of_interest]
-    top_flags = macro_results['specified_params'].loc[top_macro_id] > 0
-    top_flags[comparable_agg1.test_dset_cols] = False
-    comparable_agg1.hashid_to_params[macro_results['index'].loc[top_macro_id]['param_hashid']]
-
-    params_of_interest = []
-    for value in comparable_agg1.effective_params[parameter_of_interest].unique():
-        params_row = top_params.copy()
-        flags = top_flags.copy()
-        if isinstance(value, float) and math.isnan(value):
-            flags[parameter_of_interest] = False | flags[parameter_of_interest]
-        else:
-            flags[parameter_of_interest] = True | flags[parameter_of_interest]
-        params_row[parameter_of_interest] = value
-        params = params_row[flags].to_dict()
-        param_hashid = hash_param(params)
-        if not (param_hashid in comparable_agg1.index['param_hashid'].values):
-            flags[parameter_of_interest] = not flags[parameter_of_interest]
-            params_row[parameter_of_interest] = value
-            params = params_row[flags].to_dict()
-            param_hashid = hash_param(params)
-            if not (param_hashid in comparable_agg1.index['param_hashid'].values):
-                raise AssertionError
-        params_of_interest.append(param_hashid)
-
-    comparable_agg2 = comparable_agg1.filterto(param_hashids=params_of_interest)
-
-    _ = comparable_agg2.report_best(top_k=10)
-
-    agg_dpath = ub.Path(config['root_dpath'] / 'aggregate')
-    agg_group_dpath = (agg_dpath / ('inspect_simplify_' + ub.timestamp())).ensuredir()
-
-    # Given these set of A/B values, visualize each region
-    for region_id, group in comparable_agg2.index.groupby('region_id'):
-        group_agg = comparable_agg2.filterto(index=group.index)
-        for id, row in group_agg.index.iterrows():
-            eval_fpath = group_agg.fpaths[id]
-            param_hashid = row['param_hashid']
-            region_id = row['region_id']
-            dname = f'{region_id}_{param_hashid}'
-            link_dpath = agg_group_dpath / dname
-            real_dpath = eval_fpath.parent
-            ub.symlink(real_path=real_dpath, link_path=link_dpath)
-
-            import kwimage
-            from kwcoco.metrics.drawing import concice_si_display
-            region_viz_fpaths = list((eval_fpath.parent / 'region_viz_overall').glob('*_detailed.png'))
-            assert len(region_viz_fpaths) == 1
-            region_viz_fpath = region_viz_fpaths[0]
-            viz_img = kwimage.imread(region_viz_fpath)
-            scores_of_interest = pandas_shorten_columns(comparable_agg2.metrics).loc[id, ['bas_tp', 'bas_fp', 'bas_fn', 'bas_f1']]
-            scores_of_interest = ub.udict(scores_of_interest.to_dict())
-            text = ub.urepr(scores_of_interest.map_values(concice_si_display), nobr=1, si=1, compact=1)
-            new_img = kwimage.draw_header_text(viz_img, param_hashid + '\n' + text)
-            kwimage.imwrite(agg_group_dpath / f'summary_{region_id}_{param_hashid}.jpg', new_img)
-
-    # Hacked result analysis
-
-    from watch.utils import result_analysis
-    metrics_of_interest = comparable_agg1.primary_metric_cols
-
-    params = comparable_agg1.results['params']
-    specified = comparable_agg1.results['specified_params']  # NOQA
-
-    params.loc[:, parameter_of_interest] = params.loc[:, parameter_of_interest].fillna('None')
-
-    analysis = result_analysis.ResultAnalysis(
-        comparable_agg1.results, metrics=metrics_of_interest)
-    analysis.results
-    analysis.analysis()
-
-    ###
-    comparable_agg1.build_macro_tables()
-
-    # Check to see if simplify shrinks the size of our files
-    rows = []
-    for idx, fpath in comparable_agg1.fpaths.iteritems():
-        poly_coco_fpath = list((fpath.parent / '.pred').glob('bas_poly/*/poly.kwcoco.json'))[0]
-        sites_dpath = list((fpath.parent / '.pred').glob('bas_poly/*/site_summaries'))[0]
-        size1 = poly_coco_fpath.stat().st_size
-        size2 = sum([p.stat().st_size for p in sites_dpath.ls()])
-        value = comparable_agg1.effective_params.loc[idx, parameter_of_interest]
-        rows.append({
-            'coco_size': size1,
-            'site_size': size2,
-            'param_value': value,
-        })
-    for val, group in pd.DataFrame(rows).groupby('param_value', dropna=False):
-        print(f'val={val}')
-        import xdev
-        print(len(group))
-        size1 = xdev.byte_str(group['coco_size'].sum())
-        size2 = xdev.byte_str(group['site_size'].sum())
-        print(f'size1={size1}')
-        print(f'size2={size2}')
-
-    macro_region_id = list(comparable_agg1.macro_key_to_regions.keys())[-1]
-    regions_of_interest = comparable_agg1.macro_key_to_regions[macro_region_id]  # NOQA
-    tables = comparable_agg1.region_to_tables[macro_region_id]
-
-    effective_params = tables['effective_params']
-    metrics = tables['metrics']
-    index = tables['index']
-
-    table = pd.concat([index, effective_params, metrics], axis=1)
-    table = table.fillna('None')
-
-    main_metric = agg.primary_metric_cols[0]
-
-    results = []
-    for idx, row in enumerate(table.to_dict('records')):
-        row = ub.udict(row)
-        row_metrics = row & set(metrics.keys())
-        row_params = row & set(effective_params.keys())
-        result = result_analysis.Result(str(idx), row_params, row_metrics)
-        results.append(result)
-
-    analysis = result_analysis.ResultAnalysis(
-        results, metrics=[main_metric],
-        metric_objectives={main_metric: 'max'}
-    )
-    # self = analysis
-    analysis.analysis()
-    analysis.report()
-
-    pd.Index.union(*[group.index for group in comparable_groups])
 
 
 def fix_duplicate_param_hashids(agg0):
@@ -602,23 +647,6 @@ def build_tables(config):
          'result_loader': smart_result_parser.load_eval_trk_poly},
     ]
 
-    # pman = util_progress.ProgressManager(backend='rich')
-    # eval_node_prog = pman(node_eval_infos, desc='load node type')
-    # for node_eval_info in eval_node_prog:
-    #     node_name = node_eval_info['name']
-    #     eval_node_prog.set_postfix_str(node_name)
-    #     out_key = node_eval_info['out_key']
-    #     result_loader_fn = node_eval_info['result_loader']
-    #     if node_name not in dag.nodes:
-    #         continue
-    #     node = dag.nodes[node_name]
-    #     out_node = node.outputs[out_key]
-    #     fpaths = out_node_matching_fpaths(out_node)
-    #     fpath_prog = pman(fpaths, desc=f'loading node {node_name} results')
-    #     for fpath in fpath_prog:
-    #         import time
-    #         time.sleep(0.1)
-
     from concurrent.futures import as_completed
     pman = util_progress.ProgressManager(backend='rich')
     with pman:
@@ -641,7 +669,6 @@ def build_tables(config):
 
             # Pattern match
             # node.template_out_paths[out_node.name]
-
             cols = {
                 'metrics': [],
                 'index': [],
@@ -684,15 +711,15 @@ def build_tables(config):
                     num_ignored += 1
 
             params = pd.DataFrame(cols['params'])
-            trunc_params, mappings = truncate_dataframe_items(params)
+            # trunc_params, mappings = util_pandas.pandas_truncate_items(params)
             results = {
-                'mappings': mappings,
+                # 'mappings': mappings,
                 'fpaths': pd.DataFrame(cols['fpaths'], columns=['fpath']),
                 'index': pd.DataFrame(cols['index']),
                 'metrics': pd.DataFrame(cols['metrics']),
                 'params': pd.DataFrame(cols['params']),
                 'specified_params': pd.DataFrame(cols['specified_params']),
-                'trunc_params': trunc_params,
+                # 'trunc_params': trunc_params,
                 'param_types': pd.DataFrame(cols['param_types']),
             }
             eval_type_to_results[node_name] = results
@@ -739,33 +766,6 @@ def load_result_worker(fpath, node_name, out_node_key):
     param_types = ub.udict.union({}, *list(param_types.values()))
 
     return fpath, index, metrics, params, param_types
-
-
-def truncate_dataframe_items(params):
-    """
-    Truncates long, typically path-like items in a data frame.
-    """
-    def truncate(x):
-        if not isinstance(x, str):
-            return x
-        return slugify_ext.smart_truncate(x, max_length=16, trunc_loc=0,
-                                          hash_len=4, head='', tail='')
-    mappings = {}
-    if len(params):
-        x = params.loc[0]
-        trunc_cols = [k for k, v in x.items() if isinstance(v, str) and len(v) > 16]
-        trunc_params = params.copy()
-        trunc_params[trunc_cols] = trunc_params[trunc_cols].applymap(truncate)
-        for c in trunc_params[trunc_cols]:
-            v2 = pd.Categorical(params[c])
-            params[c] = v2
-            v1 = v2.map(truncate)
-            mapping = list(zip(v1.categories, v2.categories))
-            mappings[c] = mapping
-    else:
-        mapping = {}
-        trunc_params = params
-    return trunc_params, mappings
 
 
 def build_aggregators(eval_type_to_results):
@@ -883,26 +883,27 @@ class Aggregator(ub.NiceRepr):
         else:
             raise NotImplementedError(agg.type)
 
-        agg.primary_metric_cols = pandas_suffix_columns(  # fixme sorting
+        agg.primary_metric_cols = util_pandas.pandas_suffix_columns(  # fixme sorting
             agg.metrics, _primary_metrics_suffixes)
 
-        agg.display_metric_cols = pandas_suffix_columns(  # fixme sorting
+        agg.display_metric_cols = util_pandas.pandas_suffix_columns(  # fixme sorting
             agg.metrics, _display_metrics_suffixes)
 
         _model_suffixes = ['package_fpath']
-        agg.model_cols = pandas_suffix_columns(
+        agg.model_cols = util_pandas.pandas_suffix_columns(
             agg.params, _model_suffixes)
 
         _testdset_suffixes = ['test_dataset']
-        agg.test_dset_cols = pandas_suffix_columns(
+        agg.test_dset_cols = util_pandas.pandas_suffix_columns(
             agg.params, _testdset_suffixes)
-
-        agg.table = pd.concat([agg.metrics, agg.index, agg.params], axis=1)
 
         effective_params, mappings, hashid_to_params = agg.build_effective_params()
         agg.hashid_to_params = ub.udict(hashid_to_params)
         agg.mappings = mappings
         agg.effective_params = effective_params
+
+        agg.resolved_info = foldin_resolved_info(agg)
+        agg.resolved_params = agg.resolved_info['resolved_params']
 
         agg.effective_table = pd.concat([agg.metrics, agg.index, agg.effective_params], axis=1)
 
@@ -914,8 +915,10 @@ class Aggregator(ub.NiceRepr):
                 'params': agg.params.loc[idx_group.index],
                 'index': agg.index.loc[idx_group.index],
                 'effective_params': agg.effective_params.loc[idx_group.index],
+                'resolved_params': agg.resolved_params.loc[idx_group.index],
             }
         agg.macro_compatible = agg.find_macro_comparable()
+        agg.table = pd.concat([agg.metrics, agg.index, agg.params], axis=1)
         # agg.build_macro_tables()
 
     def macro_analysis(agg):
@@ -927,19 +930,20 @@ class Aggregator(ub.NiceRepr):
 
         regions_of_interest = agg.macro_key_to_regions[agg.primary_macro_region]
         tables = agg.region_to_tables[agg.primary_macro_region]
-        effective_params = tables['effective_params']
+        resolved_params = tables['resolved_params']
         metrics = tables['metrics']
         index = tables['index']
-        table = pd.concat([index, effective_params, metrics], axis=1)
+        table = pd.concat([index, resolved_params, metrics], axis=1)
         table = table.fillna('None')
 
         main_metric = agg.primary_metric_cols[0]
+        table = table.applymap(lambda x: str(x) if isinstance(x, list) else x)
 
         results = []
         for idx, row in enumerate(table.to_dict('records')):
             row = ub.udict(row)
             row_metrics = row & set(metrics.keys())
-            row_params = row & set(effective_params.keys())
+            row_params = row & set(resolved_params.keys())
             result = result_analysis.Result(str(idx), row_params, row_metrics)
             results.append(result)
 
@@ -950,17 +954,23 @@ class Aggregator(ub.NiceRepr):
         # self = analysis
         analysis.analysis()
         analysis.report()
+        if 0:
+            model_cols = agg.model_cols
+            import kwplot
+            sns = kwplot.autosns()
+            sns = kwplot.autosns()
+            plt = kwplot.autoplt()
+            kwplot.figure()
+            x = 'bas_poly_eval.params.bas_poly.thresh'
+            sns.lineplot(data=table, x=x, y=main_metric, hue=model_cols[0], style=model_cols[0])
+            ax = plt.gca()
+            ax.set_title(f'BAS Macro Average over {regions_of_interest}')
 
-        model_cols = agg.model_cols
-        import kwplot
-        sns = kwplot.autosns()
-        sns = kwplot.autosns()
-        plt = kwplot.autoplt()
-        kwplot.figure()
-        x = 'bas_poly_eval.params.bas_poly.thresh'
-        sns.lineplot(data=table, x=x, y=main_metric, hue=model_cols[0], style=model_cols[0])
-        ax = plt.gca()
-        ax.set_title(f'BAS Macro Average over {regions_of_interest}')
+            x = 'bas_poly_eval.params.bas_pxl.output_space_scale'
+            sns.boxplot(data=table, x=x, y=main_metric)
+            ax = plt.gca()
+            ax.set_title(f'BAS Macro Average over {regions_of_interest}')
+        return analysis, table
 
     def analyze(agg):
         from watch.utils import result_analysis
@@ -998,7 +1008,7 @@ class Aggregator(ub.NiceRepr):
             metric_group = group['metrics']
             metric_group = metric_group.sort_values(agg.primary_metric_cols)
 
-            top_idxs = pandas_argmaxima(metric_group, agg.primary_metric_cols, k=top_k)
+            top_idxs = util_pandas.pandas_argmaxima(metric_group, agg.primary_metric_cols, k=top_k)
 
             top_metrics = metric_group.loc[top_idxs][agg.primary_metric_cols + agg.display_metric_cols]
             # top_metrics = top_metrics[agg.primary_metric_cols + agg.display_metric_cols]
@@ -1008,7 +1018,7 @@ class Aggregator(ub.NiceRepr):
             big_param_lut.update(param_lut)
             summary_table = pd.concat([top_indexes, top_metrics], axis=1)
             if shorten:
-                summary_table = pandas_shorten_columns(summary_table)
+                summary_table = util_pandas.pandas_shorten_columns(summary_table)
             region_id_to_summary[region_id] = summary_table
             region_id_to_ntotal[region_id] = len(metric_group)
 
@@ -1067,19 +1077,17 @@ class Aggregator(ub.NiceRepr):
         HACK_FIX_JUNK_PARAMS = True
         if HACK_FIX_JUNK_PARAMS:
             junk_suffixes = ['space_basale']
-            junk_cols = pandas_suffix_columns(effective_params, junk_suffixes)
+            junk_cols = util_pandas.pandas_suffix_columns(effective_params, junk_suffixes)
             effective_params = effective_params.drop(junk_cols, axis=1)
 
         model_cols = agg.model_cols
         test_dset_cols = agg.test_dset_cols
 
         mappings : Dict[str, Dict[Any, str]] = {}
-
         path_colnames = model_cols + test_dset_cols
-
         for colname in path_colnames:
             colvals = params[colname]
-            condensed, mapper = pandas_condense_paths(colvals)
+            condensed, mapper = util_pandas.pandas_condense_paths(colvals)
             mappings[colname] = mapper
             effective_params[colname] = condensed
 
@@ -1115,7 +1123,7 @@ class Aggregator(ub.NiceRepr):
         """
         Search for groups that have the same parameters over multiple regions.
         """
-        table = pd.concat([agg.index, agg.metrics, agg.effective_params], axis=1)
+        table = pd.concat([agg.index, agg.metrics, agg.resolved_params], axis=1)
 
         # Macro aggregation over regions.
         macro_compatible = ub.ddict(list)
@@ -1134,14 +1142,6 @@ class Aggregator(ub.NiceRepr):
         # print('region_to_num_compatible = {}'.format(ub.urepr(region_to_num_compatible, nl=1)))
         return macro_compatible
 
-    def build_macro_tables(agg, rois=None):
-        if isinstance(rois, list) and len(rois) and ub.iterable(rois[0]):
-            # Asked for multiple groups of ROIS.
-            for single_rois in rois:
-                agg.build_single_macro_table(single_rois)
-        else:
-            agg.build_single_macro_table(rois)
-
     def gather_macro_compatable_groups(agg, regions_of_interest):
         comparable_groups = []
         macro_compatible = agg.macro_compatible
@@ -1151,110 +1151,90 @@ class Aggregator(ub.NiceRepr):
                 groups = macro_compatible[key]
                 for group in groups:
                     flags = kwarray.isect_flags(group['region_id'], avail)
+                    # if len(group[flags]) > 3:
+                    #     raise Exception
                     comparable_groups.append(group[flags])
         return comparable_groups
 
-    def build_single_macro_table(agg, rois):
-        # Given a specific group of regions,
+    def _coerce_rois(agg, rois=None):
         if rois is None:
             rois = 'max'
-
         if isinstance(rois, str):
             if rois == 'max':
                 regions_of_interest = ub.argmax(agg.macro_compatible, key=len)
         else:
             regions_of_interest = rois
+        return regions_of_interest
 
-        comparable_groups = agg.gather_macro_compatable_groups(regions_of_interest)
+    def build_macro_tables(agg, rois=None):
+        """
+        Builds one or more macro tables
+        """
+        if isinstance(rois, list) and len(rois) and ub.iterable(rois[0]):
+            # Asked for multiple groups of ROIS.
+            for single_rois in rois:
+                agg.build_single_macro_table(single_rois)
+        else:
+            agg.build_single_macro_table(rois)
 
+    def build_single_macro_table(agg, rois):
+        """
+        Builds a single macro table for a choice of regions.
+        """
+        # Given a specific group of regions,
+
+        regions_of_interest = agg._coerce_rois(rois)
         macro_key = hash_regions(regions_of_interest)
 
-        sum_cols = [
-            'bas_poly_eval.metrics.bas_tp',
-            'bas_poly_eval.metrics.bas_fp',
-            'bas_poly_eval.metrics.bas_fn',
-            'bas_poly_eval.metrics.bas_ntrue',
-            'bas_poly_eval.metrics.bas_npred',
-        ]
-        mean_cols = [
-            'bas_poly_eval.metrics.bas_ppv',
-            'bas_poly_eval.metrics.bas_tpr',
-            'bas_poly_eval.metrics.bas_ffpa',
-            'bas_poly_eval.metrics.bas_f1',
-            'bas_poly_eval.metrics.bas_space_FAR',
-            'bas_poly_eval.metrics.bas_time_FAR',
-            'bas_poly_eval.metrics.bas_image_FAR',
-            'bas_poly_eval.metrics.bas_faa_f1',
-            'bas_poly_eval.metrics.sc_macro_f1',
-            'bas_poly_eval.metrics.macro_f1_siteprep',
-            'bas_poly_eval.metrics.macro_f1_active',
-            'bas_poly_eval.metrics.sc_micro_f1',
-        ]
-        agg_id_cols = [
-            'region_id',
-        ] + agg.test_dset_cols
+        # Define how to aggregate each column
+        sum_cols = [c for c in agg.metrics.columns if c.endswith((
+            '_tp', '_fp', '_fn', '_ntrue', '_npred'))]
+        mean_cols = [c for c in agg.metrics.columns if c.endswith((
+            'mAP', 'APUC', 'mAPUC', 'mAUC', 'AP', 'AUC', 'f1', 'FAR', 'ppv',
+            'tpr', 'ffpa', 'f1', 'f1_siteprep', 'f1_active'))]
+        sum_cols = agg.metrics.columns.intersection(sum_cols)
+        mean_cols = agg.metrics.columns.intersection(mean_cols)
+        other_metric_cols = agg.metrics.columns.difference(sum_cols).difference(mean_cols)
+        if len(other_metric_cols):
+            print(f'ignoring agg {other_metric_cols}')
+        aggregator = {c: 'mean' for c in mean_cols}
+        aggregator.update({c: 'sum' for c in sum_cols})
 
-        if len(comparable_groups) > 0:
-            group = comparable_groups[0]
-            map_cols = [c for c in group.columns if 'metrics' in c and c.endswith(('AP', 'AUC', 'APUC'))]
-            mean_cols.extend(map_cols)
+        # Gather groups that can be aggregated
+        comparable_groups = agg.gather_macro_compatable_groups(regions_of_interest)
 
-        def macro_aggregate(group):
-            other_cols = group.columns.difference(mean_cols).difference(sum_cols).difference(agg_id_cols)
-            group[other_cols]
+        if 0:
+            # gather debug info about all of the comparable groups and check
+            # basic assumptions
+            stat_accum = {
+                'size': []
+            }
+            seen_indexes = set()
+            for group in comparable_groups:
+                assert len(group.param_hashid.unique()) == 1
+                assert len(group.param_hashid) >= 1
+                assert len(group.index.unique()) == len(group)
+                stat_accum['size'].append(len(group))
+                assert not (set(group.index) & seen_indexes)
+                seen_indexes.update(group.index)
+                if len(group) > 2:
+                    break
 
-            for c in mean_cols:
-                pass
+            print(pd.DataFrame(stat_accum).describe().T)
 
-            aggid_df = group[group.columns.intersection(agg_id_cols)]
-            sum_df = group[group.columns.intersection(sum_cols)]
-            mean_df = group[group.columns.intersection(mean_cols)]
-            other_df = group[other_cols]
-
-            if len(aggid_df) == 1:
-                aggid_row = aggid_df.iloc[0]
-            else:
-                aggid_row = pd.Series({
-                    k: hash_regions(v)
-                    for k, v in aggid_df.T.iterrows()
-                })
-            aggid_row['macro_size'] = len(aggid_df)
-
-            is_safe_cols = {
-                k: ub.allsame(vs, eq=nan_eq)
-                for k, vs in other_df.T.iterrows()}
-            warn_cols = {k: v for k, v in is_safe_cols.items() if not v}
-            assert not warn_cols
-
-            sum_row = sum_df.sum(axis=0)
-            mean_row = mean_df.mean(axis=0, numeric_only=False)
-            other_row = other_df.iloc[0]
-
-            macro_row = pd.concat([aggid_row, mean_row, sum_row, other_row], axis=0)
-            return macro_row
-
-        # Macro average comparable groups
-        macro_rows = []
-        macro_specified = []
+        # Macro aggregaet comparable groups
+        macro_parts = ub.ddict(list)
         for group in comparable_groups:
-            macro_row = macro_aggregate(group)
-            macro_rows.append(macro_row)
-            # Add in the new specified params flags
-            specifed_row = agg.results['specified_params'].loc[group.index[0]]
-            macro_specified.append(specifed_row)
-
-        macro_df = pd.DataFrame(macro_rows)
-        macro_specified_params = pd.DataFrame(macro_specified).reset_index(drop=True)
+            agg_parts = macro_aggregate(agg, group, aggregator)
+            for k, v in agg_parts.items():
+                macro_parts[k].append(v)
 
         # main_metric = 'bas_poly_eval.metrics.bas_faa_f1'
         # main_metric = 'bas_poly_eval.metrics.bas_tp'
         # macro_df = macro_df.sort_values(main_metric, ascending=False)
         macro_results = {
-            'index': macro_df[agg.index.columns],
-            'effective_params': macro_df[agg.effective_params.columns],
-            'specified_params': macro_specified_params,
-            'params': macro_df[agg.effective_params.columns],  # fixme, use real
-            'metrics': macro_df[agg.metrics.columns],
+            k: pd.DataFrame(vs).reset_index(drop=True)
+            for k, vs in macro_parts.items()
         }
         agg.region_to_tables.pop(macro_key, None)
         agg.macro_key_to_regions.pop(macro_key, None)
@@ -1262,155 +1242,97 @@ class Aggregator(ub.NiceRepr):
         agg.region_to_tables[macro_key] = macro_results
         return macro_results
 
-    def visualize_cases(agg):
-        region_id = 'macro_02_19bfe3'
-        regions_of_interest = agg.macro_key_to_regions.get(region_id, [region_id])
-        param_hashid = 'ab43161b'
 
-        to_inspect_idxs = []
-        for region_id in regions_of_interest:
-            tables = agg.region_to_tables[region_id]
-
-            grouped_indexes = tables['index'].groupby('param_hashid')
-            rows = grouped_indexes.get_group(param_hashid)
-            assert len(rows) == 1
-            to_inspect_idxs.append(rows.index[0])
-
-        for index in to_inspect_idxs:
-            pass
-        index = to_inspect_idxs[0]
-
-        agg.index.iloc[index]
-
-        agg.results['param_types'][index]
-        eval_fpath = agg.results['fpaths'][index]  # NOQA
-
-
-def plot_examples():
-    pass
-
-
-def plot_tables(agg):
-    ...
-
-
-def plot_stats_tables(agg, config):
-    # from watch.mlops import smart_result_parser
-    # for fpath in fpaths:
-    #     ...
-    #     result = smart_result_parser.load_eval_act_poly(fpath, None)
-    #     print(result['metrics']['sc_macro_f1'])
-
-    import numpy as np
-    from watch.utils import util_kwplot
-    import kwplot
-    sns = kwplot.autosns()
-    plt = kwplot.autoplt()
-    # metric_cols = [c for c in df.columns if 'metrics.' in c]
-    kwplot.close_figures()
-
-    metric = 'sc_poly_eval.metrics.sc_macro_f1'
-
-    agg_dpath = ub.Path(config['root_dpath'] / 'aggregate')
-
-    agg.build_single_macro_table({'BR_R002', 'KR_R001', 'KR_R002'})
-    macro_key = agg.primary_macro_region
-
-    agg_group_dpath = (agg_dpath / (f'stats_tables_{macro_key}' + ub.timestamp())).ensuredir()
-
-    # df['sc_poly_eval.metrics.macro_f1_active']
-    for metric in agg.primary_metric_cols:
-        node_id = metric.split('.')[0]
-        metric_name = metric.split('.')[-1]
-        df = pd.concat([agg.metrics, agg.index, agg.params], axis=1)
-
-        plt.figure()
-        ax = sns.boxplot(data=df, x='region_id', y=metric)
-        fig = ax.figure
-        ax.set_ylabel(metric_name)
-        ax.set_title(f'{node_id} {metric_name} n={len(agg)}')
-        xtick_mapping = {
-            region_id: f'{region_id}\n(n={num})'
-            for region_id, num in df.groupby('region_id').size().to_dict().items()
-        }
-        util_kwplot.relabel_xticks(xtick_mapping, ax=ax)
-
-        fname = f'boxplot_{metric}.png'
-        fpath = agg_group_dpath / fname
-        fig.set_size_inches(np.array([6.4, 4.8]) * 1.4)
-        fig.tight_layout()
-        fig.savefig(fpath)
-        util_kwplot.cropwhite_ondisk(fpath)
-
-        ### Macro stats analysis
-        regions_of_interest = agg.macro_key_to_regions[macro_key]
-        print(f'regions_of_interest={regions_of_interest}')
-        tables = agg.region_to_tables[agg.primary_macro_region]
-        effective_params = tables['effective_params']
-        metrics = tables['metrics']
-        index = tables['index']
-        table = pd.concat([index, effective_params, metrics], axis=1)
-        table = table.fillna('None')
-
-        from watch.utils import result_analysis
-        results = []
-        for idx, row in enumerate(table.to_dict('records')):
-            row = ub.udict(row)
-            row_metrics = row & set(metrics.keys())
-            row_params = row & set(effective_params.keys())
-            result = result_analysis.Result(str(idx), row_params, row_metrics)
-            results.append(result)
-        analysis = result_analysis.ResultAnalysis(
-            results, metrics=[metric],
-            metric_objectives={metric: 'max'}
-        )
-        # self = analysis
-        analysis.analysis()
-        analysis.report()
-
-        kwplot.close_figures()
-
-        for param in analysis.varied:
-            fig = plt.figure()
-            fig.clf()
-            ax = sns.boxplot(data=table, x=param, y=metric)
-            fig = ax.figure
-            ax.set_ylabel(metric_name)
-            ax.set_title(f'{node_id} {macro_key} {metric_name} {param} n={len(table)}')
-
-            xtick_mapping = {
-                str(value): f'{value}\nn={num}'
-                for value, num in table.groupby(param, dropna=False).size().to_dict().items()
-            }
-            util_kwplot.relabel_xticks(xtick_mapping, ax=ax)
-
-            # util_kwplot.relabel_xticks(xtick_mapping, ax=ax)
-            fname = f'boxplot_{macro_key}_{metric}_{param}.png'
-            fpath = agg_group_dpath / fname
-            # fig.set_size_inches(np.array([6.4, 4.8]) * 1.4)
-            fig.set_size_inches(np.array([16, 9]) * 1.0)
-            fig.tight_layout()
-            fig.savefig(fpath)
-            util_kwplot.cropwhite_ondisk(fpath)
+def aggregate_param_cols(df, hash_cols=None, allow_nonuniform=False):
+    """
+    Aggregates parameter columns. Specified hash_cols should be
+    dataset-specific columns to be hashed. All other columns should
+    be effectively the same, otherwise we will warn.
+    """
+    agg_row = df.iloc[0]
+    if len(df) == 1:
+        return agg_row
+    else:
+        if hash_cols:
+            df_comparable = df.drop(hash_cols, axis=1)
+            df_hashable = df[hash_cols]
+            hashed = {c: hash_regions(v) for c, v in df_hashable.T.iterrows()}
+        else:
+            df_comparable = df
+            hashed = {}
+        is_safe_cols = {
+            k: ub.allsame(vs, eq=nan_eq)
+            for k, vs in df_comparable.T.iterrows()}
+        nonuniform_cols = {k: v for k, v in is_safe_cols.items() if not v}
+        if allow_nonuniform:
+            df = df.drop(nonuniform_cols, axis=1)
+        else:
+            if nonuniform_cols:
+                raise AssertionError(f'Values not identical: {nonuniform_cols}')
+        if hashed:
+            agg_row = agg_row.copy()
+            for c, v in hashed.items():
+                agg_row[c] = v
+    return agg_row
 
 
-# def node_matching_outputs(node):
-#     from watch.utils import util_pattern
-#     import ubelt as ub
-#     # print(f'node.template_out_paths={node.template_out_paths}')
-#     # out_key = eval_to_outkey[node.name]
-#     found = {}
-#     for out_key, out_template in node.template_out_paths.items():
-#         out_template = node.template_out_paths[out_key]
+def macro_aggregate(agg, group, aggregator):
+    """
+    Helper function
+    """
+    group_index = agg.index.loc[group.index]
+    if (group_index.value_counts('region_id') > 1).any():
+        # Check if there is more than one run per-region per-param and
+        # average them to keep the stats balanced.
+        subgroups = group_index.groupby('region_id')
+        subagg_parts = ub.ddict(list)
+        for _, subgroup in subgroups:
+            subgroup_parts = {}
+            subgroup_parts['index'] = agg.results['index'].loc[subgroup.index]
+            subgroup_parts['params'] = agg.results['params'].loc[subgroup.index]
+            subgroup_parts['specified_params'] = agg.results['specified_params'].loc[subgroup.index]
+            subgroup_parts['resolved_params'] = agg.resolved_info['resolved_params'].loc[subgroup.index]
+            subgroup_parts['metrics'] = agg.results['metrics'].loc[subgroup.index]
+            subgroup_parts['resources'] = agg.resolved_info['resources'].loc[subgroup.index]
 
-#         # self._parse_pattern_attrs(self.templates[key], path)
-#         pat = node.root_dpath / out_template.format(**patterns)
-#         mpat = util_pattern.Pattern.coerce(pat)
-#         fpaths = list(mpat.paths())
-#         found[out_key] = fpaths
+            subagg_part = {}
+            subagg_part['index'] = aggregate_param_cols(subgroup_parts['index'])
+            subagg_part['params'] = aggregate_param_cols(subgroup_parts['params'], agg.test_dset_cols, allow_nonuniform=True)
+            subagg_part['resolved_params'] = aggregate_param_cols(subgroup_parts['resolved_params'], agg.test_dset_cols)
+            subagg_part['specified_params'] = aggregate_param_cols(subgroup_parts['specified_params'], allow_nonuniform=True)
+            # Always do mean within-regions
+            subagg_part['metrics'] = subgroup_parts['metrics'].aggregate('mean')
+            subagg_part['resources']  = subgroup_parts['resources'].mean(numeric_only=True)
+            for k, v in subagg_part.items():
+                subagg_parts[k].append(v)
+        group_parts = {}
+        for k, v in subagg_parts.items():
+            # try:
+            group_parts[k] = pd.DataFrame(v).reset_index(drop=True)
+            # except Exception:
+            #     new = pd.concat(v, axis=1)
+            #     x = pd.DataFrame(new).T
+            #     group_parts[k] = x.reset_index(drop=True)
+            # group_parts[k] = pd.DataFrame([_.reset_index() for _ in v]).reset_index(drop=True)
+        # group_parts = {k: pd.DataFrame(v).reset_index(drop=True) for k, v in subagg_parts.items()}
+    else:
+        # Each region has only one result, can use it as is.
+        group_parts = {}
+        group_parts['metrics'] = agg.metrics.loc[group.index]
+        group_parts['index'] = agg.index.loc[group.index]
+        group_parts['params'] = agg.params.loc[group.index]
+        group_parts['specified_params'] = agg.results['specified_params'].loc[group.index]
+        group_parts['resolved_params'] = agg.resolved_info['resolved_params'].loc[group.index]
+        group_parts['resources'] = agg.resolved_info['resources'].loc[group.index]
 
-#     print(ub.map_vals(len, found))
-#     # print('fpaths = {}'.format(ub.urepr(fpaths, nl=1)))
+    agg_parts = {}
+    agg_parts['metrics'] = group_parts['metrics'].aggregate(aggregator)
+    agg_parts['resources']  = group_parts['resources'].sum(numeric_only=True)
+    agg_parts['index']  = aggregate_param_cols(group_parts['index'], ['region_id'])
+    agg_parts['params']  = aggregate_param_cols(group_parts['params'], agg.test_dset_cols, allow_nonuniform=True)
+    agg_parts['resolved_params']  = aggregate_param_cols(group_parts['resolved_params'], agg.test_dset_cols)
+    agg_parts['specified_params']  = aggregate_param_cols(group_parts['specified_params'], allow_nonuniform=True)
+    return agg_parts
 
 
 def out_node_matching_fpaths(out_node):
@@ -1421,46 +1343,6 @@ def out_node_matching_fpaths(out_node):
     mpat = util_pattern.Pattern.coerce(pat)
     fpaths = list(mpat.paths())
     return fpaths
-
-
-def pandas_argmaxima(data, columns, k=1):
-    """
-    Finds the top K indexes for each column.
-
-    Args:
-        data : pandas data frame
-        columns : columns to maximize
-        k : number of top entries per column
-
-    Returns:
-        List: indexes into subset of data that are in the top k for any of the
-            requested columns.
-
-    Example:
-        >>> from watch.mlops.aggregate import *  # NOQA
-        >>> import numpy as np
-        >>> data = pd.DataFrame({k: np.random.rand(10) for k in 'abcde'})
-        >>> columns = ['b', 'd', 'e']
-        >>> k = 1
-        >>> top_indexes = pandas_argmaxima(data=data, columns=columns, k=k)
-        >>> print(data.loc[top_indexes])
-    """
-    top_indexes = None
-    for col in columns:
-        ranked_data = data[col].sort_values(ascending=False)
-        ranked_idxs = ranked_data.index
-        if top_indexes is None:
-            top_indexes = ranked_idxs[0:k]
-        else:
-            top_indexes = top_indexes.union(ranked_idxs[0:k], sort=False)
-    return top_indexes
-
-
-def pandas_suffix_columns(data, suffixes):
-    """
-    Return columns that end with this suffix
-    """
-    return [c for c in data.columns if any(c.endswith(s) for s in suffixes)]
 
 
 def hash_param(row, version=1):
@@ -1476,7 +1358,6 @@ def hash_param(row, version=1):
         rule_of_thumb = np.sqrt(base ** length)
         rule_of_thumb = base ** (length // 2)
         print(f'rule_of_thumb={rule_of_thumb}')
-
     """
     # TODO: something like multibase
     # https://github.com/multiformats/multibase
@@ -1495,39 +1376,11 @@ def hash_regions(rois):
     return macro_key
 
 
-def nan_to_None(x):
-    if isinstance(x, float) and math.isnan(x):
-        return None
-    else:
-        return x
-
-
 def nan_eq(a, b):
     if isinstance(a, float) and isinstance(b, float) and math.isnan(a) and math.isnan(b):
         return True
     else:
         return a == b
-
-
-def pandas_shorten_columns(summary_table):
-    import ubelt as ub
-    # fixme
-    old_cols = summary_table.columns
-    new_cols = shortest_unique_suffixes(old_cols, sep='.')
-    mapping = ub.dzip(old_cols, new_cols)
-    summary_table = summary_table.rename(columns=mapping)
-    return summary_table
-
-
-def pandas_condense_paths(colvals):
-    is_valid = ~pd.isnull(colvals)
-    valid_vals = colvals[is_valid]
-    unique_valid_vals = valid_vals.unique()
-    unique_short_vals = shortest_unique_suffixes(unique_valid_vals, sep='/')
-    new_vals = [p.split('.')[0] for p in unique_short_vals]
-    mapper = ub.dzip(unique_valid_vals, new_vals)
-    condensed = colvals.apply(lambda x: mapper.get(x, x))
-    return condensed, mapper
 
 
 if __name__ == '__main__':

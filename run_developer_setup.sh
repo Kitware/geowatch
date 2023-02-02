@@ -88,13 +88,15 @@ if [[ "$WATCH_STRICT" == "1" ]]; then
 
     python -m pip install -r requirements-strict/linting.txt
 
-    python -m pip install dvc[all]>=2.9.3
+    python -m pip install "dvc[all]>=2.9.3"
 
     python -m pip install lru-dict || echo "unable to install lru-dict"
 
     # Install the watch module in development mode
     python -m pip install -e .[runtime-strict]
+
 else
+
     python -m pip install -r requirements.txt -v
 
     python -m pip install -r requirements/gdal.txt
@@ -103,7 +105,7 @@ else
 
     python -m pip install -r requirements/linting.txt
 
-    python -m pip install dvc[all]>=2.9.3
+    python -m pip install "dvc[all]>=2.9.3"
 
     python -m pip install lru-dict || echo "unable to install lru-dict"
 

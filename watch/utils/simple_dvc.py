@@ -38,7 +38,7 @@ class SimpleDVC(ub.NiceRepr):
     def __nice__(self):
         return str(self.dvc_root)
 
-    @property
+    @ub.memoize_property
     def cache_dir(self):
         info = ub.cmd('dvc cache dir', cwd=self.dvc_root, check=True)
         cache_dpath = ub.Path(info['out'].strip())
@@ -279,7 +279,7 @@ class SimpleDVC(ub.NiceRepr):
 
     # @classmethod
     # def find_dvc_tracking_fpath(cls, path):
-
+    @classmethod
     def find_file_tracker(cls, path):
         assert not path.name.endswith('.dvc')
         tracker_fpath = path.augment(tail='.dvc')
@@ -296,6 +296,15 @@ class SimpleDVC(ub.NiceRepr):
                 return tracker_fpath
             prev = dpath
             dpath = dpath.parent
+
+    def find_cache_files(self, tracker_fpath):
+        from watch.utils import util_yaml
+        info = util_yaml.yaml_load(tracker_fpath)
+        if len(info['outs']) > 1:
+            raise NotImplementedError
+        hashid = info['outs'][0]['md5']
+        cache_fpath = self.cache_dir / hashid[0:2] / hashid[2:]
+        yield cache_fpath
 
 
 def _ensure_iterable(inputs):

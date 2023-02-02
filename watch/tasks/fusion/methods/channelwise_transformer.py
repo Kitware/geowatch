@@ -364,6 +364,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             self.hparams.negative_change_weight,
             self.hparams.positive_change_weight
         ])
+        print(f'self.change_weights={self.change_weights}')
 
         if isinstance(self.hparams.stream_channels, str):
             RAW_CHANS = int(self.hparams.stream_channels.split(' ')[0])
