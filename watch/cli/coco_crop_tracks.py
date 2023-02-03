@@ -221,7 +221,7 @@ def main(cmdline=0, **kwargs):
        $DVC_DPATH/Cropped-Drop2-TA1-2022-02-15/imgonly.kwcoco.json
 
 
-    python -m watch project_annotations \
+    python -m watch reproject_annotations \
         --src "$DVC_DPATH/Cropped-Drop2-TA1-2022-02-15/imgonly.kwcoco.json" \
         --dst "$DVC_DPATH/Cropped-Drop2-TA1-2022-02-15/projected.kwcoco.json" \
         --site_models="$DVC_DPATH/annotations/site_models/*.geojson" \

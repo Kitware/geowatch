@@ -104,7 +104,7 @@ crop_to_regions(){
         --keep none
 
     # Project and propogate annotations from the site files in the kwcoco files
-    python -m watch.cli.project_annotations \
+    python -m watch.cli.reproject_annotations \
         --site_models="$DVC_DPATH/drop1/site_models/*.geojson" \
         --src "$ALIGNED_KWCOCO_FPATH" \
         --dst "$ALIGNED_KWCOCO_FPATH" 

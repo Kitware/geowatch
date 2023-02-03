@@ -97,7 +97,7 @@ Using ``python -m watch --help`` or ``smartwatch --help`` shows the top level mo
                                 Print watch-relevant information about a kwcoco dataset
             merge_region_models
                                 Combine the specific features from multiple region files into a single one.
-            project_annotations (project)
+            reproject_annotations (project)
                                 Projects annotations from geospace onto a kwcoco dataset and optionally
             coco_show_auxiliary
                                 Visualize kwcoco auxiliary channels to spot-inspect if they are aligned

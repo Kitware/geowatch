@@ -206,7 +206,10 @@ update_from_dmj_constructions(){
     # On horologic
     cd /home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan
 
-    ls KR_R001/kwcoco-dataset/KR_R001/
+    ls /home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan/KR_R001/kwcoco-dataset/
+    smartwatch stats /home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan/KR_R001/kwcoco-dataset/cropped_kwcoco.json
+    ls /home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan/KR_R001/kwcoco-dataset/KR_R001/
+    ls /home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_data_dvc/Drop6/KR_R001 
 
     __check_overlap__="
     import ubelt as ub
@@ -240,14 +243,23 @@ update_from_dmj_constructions(){
 
     print('grouped_missing_old ' + ub.urepr(grouped_missing_old))
     print('grouped_missing_new ' + ub.urepr(grouped_missing_new))
+    print('grouped_missing_old ' + ub.urepr(grouped_missing_old))
+    print('grouped_missing_new ' + ub.urepr(grouped_missing_new))
 
     print(f'{len(common)}')
 
-
+    flags = []
     for c in common:
         asset1 = dpath_new / c
         asset2 = dpath_old / c
-        assert ub.hash_file(asset2) == ub.hash_file(asset1)
+
+        print(asset1.shrinkuser('~/remote/horologic'))
+        print(asset2.shrinkuser('~/remote/horologic'))
+
+        flag = ub.hash_file(asset2) == ub.hash_file(asset1)
+        assert flag
+        flags.append(flag)
+        print(np.mean(flags))
         ...
 
     "

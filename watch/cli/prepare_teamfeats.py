@@ -601,7 +601,7 @@ if __name__ == '__main__':
         # TO UPDATE ANNOTS
         # Update to whatever the state of the annotations submodule is
         DVC_DPATH=$(smartwatch_dvc)
-        python -m watch project_annotations \
+        python -m watch reproject_annotations \
             --src $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
             --dst $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
             --site_models="$DVC_DPATH/annotations/site_models/*.geojson"
