@@ -1875,39 +1875,70 @@ def warp_annot_segmentations_to_geos(coco_dset):
 
 
 def warp_annot_segmentations_from_geos(coco_dset):
+    """
+    Uses the segmentation_geos property (which should be crs84) and warps it
+    into image space based on available geo data.
+
+    Ignore:
+        # xdoctest: +REQUIRES(env:DVC_DPATH)
+        from watch.utils.kwcoco_extensions import *  # NOQA
+        import watch
+        dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        coco_fpath = (dvc_dpath / 'Drop6') / 'imganns-KR_R001.kwcoco.json'
+        import kwcoco
+        coco_dset = kwcoco.CocoDataset(coco_fpath)
+
+    """
     # Warp segmentation from geos
-    import watch
-    from os.path import join
-    for gid in coco_dset.images():
+    # import watch
+    # from os.path import join
+    import geopandas as gpd
+    from watch.utils import util_gis
+    crs84 = util_gis._get_crs84()
+    for gid in ub.ProgIter(coco_dset.images(), desc='warping annotations'):
         coco_img = coco_dset._coco_image(gid)
         asset = coco_img.primary_asset(requires=['geos_corners'])
-        fpath = join(coco_dset.bundle_dpath, asset['file_name'])
-        geo_meta = watch.gis.geotiff.geotiff_metadata(fpath)
-        warp_wld_from_aux = kwimage.Affine.coerce(geo_meta['pxl_to_wld'])
+
+        # fpath = join(coco_dset.bundle_dpath, asset['file_name'])
+        # Dont rely on image metadata anymore
+        # geo_meta = watch.gis.geotiff.geotiff_metadata(fpath)
+        # warp_wld_from_aux = kwimage.Affine.coerce(geo_meta['pxl_to_wld'])
+        # warp_aux_from_wld = warp_wld_from_aux.inv()
+        # warp_wld_from_wgs84 = geo_meta['wgs84_to_wld']  # Could be a general CoordinateTransform!
+        # # warp_wgs84_from_wld = geo_meta['wld_to_wgs84']  # Could be a general CoordinateTransform!
+        # wgs84_crs_info = geo_meta['wgs84_crs_info']
+        # wgs84_axis_mapping = wgs84_crs_info['axis_mapping']
+        # assert wgs84_crs_info['auth'] == ('EPSG', '4326')
+
+        warp_aux_from_wld = kwimage.Affine.coerce(coco_img.img['wld_to_pxl'])
         warp_img_from_aux = kwimage.Affine.coerce(asset.get('warp_aux_to_img', None))
-
-        warp_wld_from_wgs84 = geo_meta['wgs84_to_wld']  # Could be a general CoordinateTransform!
-        # warp_wgs84_from_wld = geo_meta['wld_to_wgs84']  # Could be a general CoordinateTransform!
-        wgs84_crs_info = geo_meta['wgs84_crs_info']
-        wgs84_axis_mapping = wgs84_crs_info['axis_mapping']
-        assert wgs84_crs_info['auth'] == ('EPSG', '4326')
-
-        warp_aux_from_wld = warp_wld_from_aux.inv()
         warp_img_from_wld = warp_img_from_aux @ warp_aux_from_wld
 
+        rows = []
         for aid in coco_dset.annots(gid=gid):
             ann = coco_dset.index.anns[aid]
             sseg_geos = kwimage.MultiPolygon.from_geojson(ann['segmentation_geos'])
+            # if wgs84_axis_mapping == 'OAMS_AUTHORITY_COMPLIANT':
+            #     sseg_wgs84 = sseg_geos.swap_axes()
+            # elif wgs84_axis_mapping == 'OAMS_TRADITIONAL_GIS_ORDER':
+            #     sseg_wgs84 = sseg_geos
+            # else:
+            #     raise NotImplementedError(wgs84_axis_mapping)
+            rows.append({
+                'geometry': sseg_geos.to_shapely(),
+                'aid': aid,
+            })
+
+        crs84_ann_df = gpd.GeoDataFrame(rows, crs=crs84)
+        wld_crs_info = coco_img.img['wld_crs_info']
+        crs = util_gis.coerce_crs(wld_crs_info)  # TODO: traditional / authority check
+        wld_ann_df = crs84_ann_df.to_crs(crs)
+
+        for row in wld_ann_df.to_dict('records'):
             # TODO: check crs properties (probably always crs84)
-            ann['segmentation_geos']
-            if wgs84_axis_mapping == 'OAMS_AUTHORITY_COMPLIANT':
-                sseg_wgs84 = sseg_geos.swap_axes()
-            elif wgs84_axis_mapping == 'OAMS_TRADITIONAL_GIS_ORDER':
-                sseg_wgs84 = sseg_geos
-            else:
-                raise NotImplementedError(wgs84_axis_mapping)
-            sseg_wld = sseg_wgs84.warp(warp_wld_from_wgs84)
-            sseg_img = sseg_wld.warp(warp_img_from_wld)
+            aid = row['aid']
+            sseg_wld = row['geometry']
+            sseg_img = kwimage.MultiPolygon.coerce(sseg_wld).warp(warp_img_from_wld)
             ann['segmentation'] = sseg_img.to_coco(style='new')
             ann['bbox'] = list(sseg_img.bounding_box().quantize().to_coco())[0]
 

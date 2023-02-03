@@ -7,6 +7,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 * Renamed `project_annotations` to `reproject_annotations`
+* The `reproject_annotations` script no longer requires images to exist on disk.
 
 
 ## Version 0.3.10 - 

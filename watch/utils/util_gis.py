@@ -1170,3 +1170,42 @@ def crs_geojson_to_gdf(geometry, crs_info=None):
     sh_geom = kw_geom.to_shapely()
     gdf = gpd.GeoDataFrame({'geometry': [sh_geom]}, crs=crs)
     return gdf
+
+
+def coerce_crs(crs_info):
+    """
+    Get a pyproj CRS from something they should be inferrable from
+
+    Example:
+        >>> from watch.gis.geotiff import *  # NOQA
+        >>> from watch.utils.util_gis import *  # NOQA
+        >>> coerce_crs('crs84')
+        >>> coerce_crs(['EPSG', '4326'])
+    """
+    if isinstance(crs_info, str):
+        if crs_info == 'crs84':
+            crs = get_crs84()
+        else:
+            from pyproj import CRS
+            crs = CRS.from_user_input(crs_info['auth'])
+    elif isinstance(crs_info, dict):
+        auth = crs_info['auth']
+        if isinstance(auth, tuple):
+            auth = list(auth)
+        # if auth == ['EPSG', '4326']:
+        #     if crs_info['axis_mapping'] != 'OAMS_TRADITIONAL_GIS_ORDER':
+        #         raise ValueError(
+        #             'got real wgs crs. Should be in traditional order. i.e. crs84'
+        #         )
+        # else:
+        from pyproj import CRS
+        crs = CRS.from_user_input(crs_info['auth'])
+        # if crs_info['axis_mapping'] != 'OAMS_AUTHORITY_COMPLIANT':
+        #     raise NotImplementedError(
+        #         f'Non-CRS84 should be authority compliant. Got: {crs_info}'
+        #     )
+    else:
+        from pyproj import CRS
+        crs = CRS.from_user_input(crs_info)
+    # TODO: detect wgs84 and error, must assume crs84.
+    return crs

@@ -203,13 +203,73 @@ dvc_add(){
 
 
 update_from_dmj_constructions(){
+    __doc__="
+
+    READY:
+        BH_R001  BR_R001  BR_R002  BR_R004  LR_R001  NZ_R001  US_R001  US_R005                                                                                  
+    DONE:
+        KR_R001  KR_R002
+    
+    "
+
+
     # On horologic
-    cd /home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan
+    ls /home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan
 
     ls /home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan/KR_R001/kwcoco-dataset/
-    smartwatch stats /home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan/KR_R001/kwcoco-dataset/cropped_kwcoco.json
+    #smartwatch stats /home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan/KR_R001/kwcoco-dataset/cropped_kwcoco.json
     ls /home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan/KR_R001/kwcoco-dataset/KR_R001/
     ls /home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_data_dvc/Drop6/KR_R001 
+
+    DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="hdd")
+    DMJ_DPATH=/home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan
+    DST_DPATH=$DATA_DVC_DPATH/Drop6
+
+    ls $DMJ_DPATH
+
+    REGION_ID=KR_R002
+    REGION_ID=BR_R001
+    DMJ_COCO_FPATH=$DMJ_DPATH/$REGION_ID/kwcoco-dataset/cropped_kwcoco.json
+    IMGONLY_FPATH=$DST_DPATH/imgonly-$REGION_ID.kwcoco.json
+    IMGANNS_FPATH=$DST_DPATH/imganns-$REGION_ID.kwcoco.zip
+    DJM_ASSET_DPATH=$DMJ_DPATH/$REGION_ID/kwcoco-dataset/$REGION_ID
+    DST_ASSET_DPATH=$DST_DPATH/$REGION_ID
+
+    # Zip up imagery and write to our directory
+    #SENSORS=("L8" "S2")
+    SENSORS=("L8" "S2" "WV" "WV1" "PD")
+    for sensor in "${SENSORS[@]}"; do
+        echo " * sensor=$sensor"
+        for dpath in "$DJM_ASSET_DPATH"/"$sensor"; do
+          echo "  * dpath=$dpath"
+          7z a "${DST_ASSET_DPATH}/${sensor}.zip" "$dpath"
+        done
+    done
+    ls $DST_ASSET_DPATH
+    ls $DJM_ASSET_DPATH
+
+    # Remove the existing assets
+    #realpath $DST_DPATH/$REGION_ID
+    #rm -rf "$DST_DPATH/$REGION_ID"
+
+    # Zip the new data on DMJ drive
+     
+    # Overwrite old kwcoco files with new ones
+    echo "IMGONLY_FPATH = $IMGONLY_FPATH"
+    cp "$DMJ_COCO_FPATH" "$IMGONLY_FPATH"
+
+    python -m watch reproject_annotations \
+        --src "$IMGONLY_FPATH" \
+        --dst "$IMGANNS_FPATH" \
+        --propogate_strategy="SMART" \
+        --site_models="$DATA_DVC_DPATH/annotations/drop6/site_models/${REGION_ID}_*" \
+        --region_models="$DATA_DVC_DPATH/annotations/drop6/region_models/${REGION_ID}*" 
+
+    cd $DST_DPATH
+    ZIP_FPATHS=($REGION_ID/*.zip)
+    dvc add "${ZIP_FPATHS[@]}" -vv
+    ZIP_DVC_FPATHS=($REGION_ID/*.zip.dvc)
+    dvc push -r aws "${ZIP_DVC_FPATHS[@]}" -v
 
     __check_overlap__="
     import ubelt as ub
