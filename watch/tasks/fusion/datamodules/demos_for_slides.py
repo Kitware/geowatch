@@ -18,8 +18,7 @@ def demo_visualize_tokenization():
 
     sampler = ndsampler.CocoSampler(coco_dset)
     channels = 'red|green|blue,nir,bare_ground,panchromatic'
-    sample_shape = (2, 96, 96)
-    self = KWCocoVideoDataset(sampler, sample_shape=sample_shape,
+    self = KWCocoVideoDataset(sampler, time_dims=2, window_dims=(96, 96),
                               channels=channels,
                               time_sampling='soft2+distribute',
                               resample_invalid_frames=False)

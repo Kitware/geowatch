@@ -25,6 +25,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Fixed
 * Switched scriptconfig objects to use "data=kwargs" rather than "default=kwargs" to avoid a copy issue.
 * `find_dvc_dpath` no longer is impacted by environment variables.
+* Fixed interpolation artifacts in quality mask sampling.
 
 
 ### Changed

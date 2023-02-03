@@ -98,8 +98,7 @@ class SpacetimeAugmentMixin:
             >>> import watch
             >>> coco_dset = watch.demo.coerce_kwcoco('watch')
             >>> sampler = ndsampler.CocoSampler(coco_dset)
-            >>> sample_shape = (2, 128, 128)
-            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape)
+            >>> self = KWCocoVideoDataset(sampler, time_dims=2, window_dims=(128, 128))
             >>> index = 0
             >>> target = self.new_sample_grid['targets'][index]
             >>> target_ = target.copy()
