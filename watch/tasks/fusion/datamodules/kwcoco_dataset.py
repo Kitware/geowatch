@@ -275,6 +275,7 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             ''')),
 
         'ignore_dilate': scfg.Value(0, help='Dilation applied to ignore masks.'),
+        'weight_dilate': scfg.Value(0, help='Dilation applied to weight masks.'),
 
         'normalize_perframe': scfg.Value(False, help='undocumented - ignored'),
 
@@ -1177,6 +1178,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>>                           window_dims=(256, 256),
             >>>                           channels=channels,
             >>>                           balance_areas=True,
+            >>>                           weight_dilate=3,
             >>>                           normalize_perframe=False)
             >>> self.disable_augmenter = True
             >>> # Pretend that some external object has given us information about desired class weights
@@ -2176,6 +2178,10 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         if self.ignore_dilate > 0:
             for k, v in task_target_ignore.items():
                 task_target_ignore[k] = kwimage.morphology(v, 'dilate', kernel=self.ignore_dilate)
+
+        if self.weight_dilate > 0:
+            for k, v in task_target_weight.items():
+                task_target_weight[k] = kwimage.morphology(v, 'dilate', kernel=self.weight_dilate)
 
         frame_item['ann_aids'] = ann_aids
         if wants_class_sseg:
