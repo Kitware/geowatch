@@ -679,5 +679,5 @@ def _parse_demostr(data, defaults, alias_to_key=None):
         key = alias_to_key.get(key, key)
         if key in handled:
             handled[key] = value
-            unhandled.pop(key)
+            unhandled.pop(key, None)
     return handled, unhandled
