@@ -93,6 +93,7 @@ import numpy as np
 import pandas as pd
 import torch
 import ubelt as ub
+from shapely.ops import unary_union
 from torch.utils import data
 from typing import Dict
 import functools
@@ -387,6 +388,10 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             If true, will cache the spacetime grid to make multiple
             runs quicker.
             ''')),
+
+        'balance_areas': scfg.Value(False, help='if True balance the weight of small and large polygons'),
+
+        'downweight_nan_regions': scfg.Value(True, help='if True, unobservable (i.e. nan) pixels are downweighted'),
 
         ### Augmentation
         ### TODO: these should likely become a nested jsonargparse
@@ -1171,6 +1176,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>>                           input_resolution='0.09GSD',
             >>>                           window_dims=(256, 256),
             >>>                           channels=channels,
+            >>>                           balance_areas=True,
             >>>                           normalize_perframe=False)
             >>> self.disable_augmenter = True
             >>> # Pretend that some external object has given us information about desired class weights
@@ -1495,6 +1501,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             raise FailedSample('no target')
         return target
 
+    @profile
     def _sample_from_target(self, target_, vidspace_box):
         """
         Given a space-time target, samples frame rasters and annotation vectors.
@@ -1626,6 +1633,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         }
         return resolution_info
 
+    @profile
     def _resample_bad_images(self, video_gids, gid_to_isbad, sampler,
                              coco_dset, target_, num_images_wanted, with_annots,
                              gid_to_sample, vidspace_box, vidname, max_tries):
@@ -1742,9 +1750,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 upweight_time = self.upweight_time
 
             # Learn more from the center of the space-time patch
-            # if upweight_time == 0.5:
-            #     time_weights = kwimage.gaussian_patch((1, num_frames))[0]
-            # else:
             time_weights = biased_1d_weights(upweight_time, num_frames)
 
             time_weights = time_weights / time_weights.max()
@@ -1758,6 +1763,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         }
         return truth_info
 
+    @profile
     def _build_frame_items(self, final_gids, gid_to_sample,
                            truth_info, resolution_info):
 
@@ -1925,24 +1931,10 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         frame_cidxs = np.full(space_shape, dtype=np.int32,
                               fill_value=bg_idx)
 
-        class_ohe_shape = (len(self.classes),) + space_shape
-        salient_shape = space_shape
-
         # A "Salient" class is anything that is a foreground class
-        # Not sure if this should be a dataloader thing or not
-        frame_saliency = np.zeros(salient_shape, dtype=np.uint8)
-
-        frame_class_ohe = np.zeros(class_ohe_shape, dtype=np.uint8)
-        saliency_ignore = np.zeros(space_shape, dtype=np.uint8)
-        frame_class_ignore = np.zeros(space_shape, dtype=np.uint8)
-
         task_target_ohe = {}
-        task_target_ohe['saliency'] = frame_saliency
-        task_target_ohe['class'] = frame_class_ohe
-
         task_target_ignore = {}
-        task_target_ignore['saliency'] = saliency_ignore
-        task_target_ignore['class'] = frame_class_ignore
+        task_target_weight = {}
 
         # Rasterize frame targets into semantic segmentation masks
         ann_polys = dets.data['segmentations'].to_polygon_list()
@@ -1951,9 +1943,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         ann_tids = dets.data['tids']
         ann_ltrb = dets.data['boxes'].to_ltrb().data
 
-        frame_item['ann_aids'] = ann_aids
-
-        frame_poly_weights = np.ones(space_shape, dtype=np.float32)
+        # frame_poly_saliency_weights = np.ones(space_shape, dtype=np.float32)
+        # frame_poly_class_weights = np.ones(space_shape, dtype=np.float32)
 
         wants_saliency = self.requested_tasks['saliency']
         wants_class = self.requested_tasks['class']
@@ -1963,93 +1954,203 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         wants_class_sseg = wants_class or wants_change
         wants_saliency_sseg = wants_saliency
 
-        wants_class_info = wants_class_sseg or wants_boxes
-        wants_salient_info = wants_saliency or wants_boxes
-
-        if wants_boxes:
-            box_ltrb = []
-            box_tids = []
-            box_cidxs = []
-            box_weights = []
+        frame_box = kwimage.Box.from_dsize(space_shape[::-1])
+        frame_box = frame_box.to_shapely()
 
         # catname_to_weight = getattr(self, 'catname_to_weight', None)
 
         # Note: it is important to respect class indexes, ids, and
         # name mappings
-        # TODO: layer ordering? Multiclass prediction?
-        for poly, ltrb, aid, cid, tid in zip(ann_polys, ann_ltrb, ann_aids, ann_cids, ann_tids):
-            weight = 1.0
+        if wants_boxes:
+            box_labels = {
+                'box_ltrb': [],
+                'box_tids': [],
+                'box_cidxs': [],
+                'box_class_weights': [],
+                'box_saliency_weights': [],
+            }
+            # Do we want saliency boxes and class boxes?
+            for ltrb, cid, tid in zip(ann_ltrb, ann_cids, ann_tids):
+                new_salient_catname = task_tid_to_cnames['saliency'][tid][time_idx]
+                new_class_catname = task_tid_to_cnames['class'][tid][time_idx]
+                new_class_cidx = self.classes.node_to_idx[new_class_catname]
+                box_labels['box_ltrb'].append(ltrb)
+                box_labels['box_tids'].append(-1 if tid is None else tid)
+                box_labels['box_cidxs'].append(new_class_cidx)
+                box_labels['box_saliency_weights'].append(
+                    float(new_salient_catname in self.salient_classes))
+                box_labels['box_class_weights'].append(
+                    float(new_class_catname in self.class_foreground_classes))
+            box_labels['box_ltrb'] = np.array(box_labels['box_ltrb']).astype(np.float32)
+            box_labels['box_tids'] = np.array(box_labels['box_tids']).astype(np.int64)
+            box_labels['box_cidxs'] = np.array(box_labels['box_cidxs']).astype(np.int64)
+            box_labels['box_class_weights'] = np.array(box_labels['box_class_weights']).astype(np.float32)
+            box_labels['box_saliency_weights'] = np.array(box_labels['box_saliency_weights']).astype(np.float32)
+            frame_item.update(box_labels)
 
-            flag_poly_filled = False
-            if wants_salient_info:
-                # orig_cname = self.classes.id_to_node[cid]
+        if wants_saliency:
+            ### Build single frame SALIENCY target labels and weights
+            task_target_ohe['saliency'] = np.zeros(space_shape, dtype=np.uint8)
+            task_target_ignore['saliency'] = np.zeros(space_shape, dtype=np.uint8)
+            task_target_weight['saliency'] = np.empty(space_shape, dtype=np.float32)
+
+            # Group polygons into foreground / background for the saliency task
+            saliency_sseg_groups = {
+                'foreground': [],
+                'background': [],
+                'ignore': [],
+            }
+            for poly, tid in zip(ann_polys, ann_tids):
                 new_salient_catname = task_tid_to_cnames['saliency'][tid][time_idx]
                 if new_salient_catname in self.salient_classes:
-                    if wants_saliency_sseg:
-                        poly.fill(frame_saliency, value=1)
-                        flag_poly_filled = True
-                if wants_saliency_sseg and new_salient_catname in self.salient_ignore_classes:
-                    weight = 0.0
-                    poly.fill(saliency_ignore, value=1)
+                    saliency_sseg_groups['foreground'].append(poly)
+                elif new_salient_catname in self.salient_ignore_classes:
+                    saliency_sseg_groups['ignore'].append(poly)
+                elif new_salient_catname in self.non_salient_classes:
+                    saliency_sseg_groups['background'].append(poly)
+                else:
+                    raise AssertionError
 
-            if wants_class_info:
+            if self.config['balance_areas']:
+                # num_fg_polys = len(saliency_sseg_groups['foreground'])
+                big_poly_fg = unary_union([p.to_shapely() for p in saliency_sseg_groups['foreground']])
+                big_poly_ignore = unary_union([p.to_shapely() for p in saliency_sseg_groups['ignore']])
+                big_poly_bg = (frame_box - big_poly_fg) - big_poly_ignore
+                #unit_area_share = fg_polys.area / len(fg_polys)
+                total_area = frame_box.area
+                bg_cover_frac = big_poly_bg.area / (total_area + 1)
+                # fg_cover_frac = big_poly_fg.area / (total_area + 1)
+                bg_weight_share = (1 - bg_cover_frac)
+                task_target_weight['saliency'][:] = bg_weight_share ** 0.5
+            else:
+                task_target_weight['saliency'][:] = 1
+
+            for poly in saliency_sseg_groups['background']:
+                if self.config['balance_areas']:
+                    weight = (1 - (poly.area / (total_area + 1)))
+                    poly.fill(task_target_weight['saliency'], value=weight, assert_inplace=True)
+
+            for poly in saliency_sseg_groups['foreground']:
+                task_target_ohe['saliency'] = poly.fill(task_target_ohe['saliency'], value=1, assert_inplace=True)
+                if self.config['balance_areas']:
+                    weight = (1 - (poly.area / (total_area + 1)))
+                    poly.fill(task_target_weight['saliency'], value=weight, assert_inplace=True)
+
+                if self.dist_weights:
+                    # New feature where we encode that we care much more about
+                    # segmenting the inside of the object than the outside.
+                    # Effectively boundaries become uncertain.
+                    dist, poly_mask = util_kwimage.polygon_distance_transform(
+                        poly, shape=space_shape, dtype=np.float32)
+                    max_dist = dist.max()
+                    if max_dist > 0:
+                        dist_weight = dist / max_dist
+                        weight_mask = dist_weight + (1 - poly_mask)
+                        task_target_weight['saliency'] = task_target_weight['saliency'] * weight_mask
+
+            for poly in saliency_sseg_groups['ignore']:
+                poly.fill(task_target_ohe['saliency'], value=1, assert_inplace=True)
+                poly.fill(task_target_ignore['saliency'], value=1, assert_inplace=True)
+
+            max_weight = task_target_weight['saliency'].max()
+            if max_weight > 0:
+                task_target_weight['saliency'] /= max_weight
+
+        if wants_class_sseg:
+            ### Build single frame CLASS target labels and weights
+
+            task_target_ohe['class'] = np.zeros((len(self.classes),) + space_shape, dtype=np.uint8)
+            task_target_ignore['class'] = np.zeros(space_shape, dtype=np.uint8)
+            task_target_weight['class'] = np.ones(space_shape, dtype=np.float32)
+
+            # Group polygons into foreground / background for the class task
+            class_sseg_groups = {
+                'foreground': [],
+                'background': [],
+                'ignore': [],
+                'undistinguished': [],
+            }
+            for poly, cid, tid in zip(ann_polys, ann_cids, ann_tids):
                 new_class_catname = task_tid_to_cnames['class'][tid][time_idx]
                 new_class_cidx = self.classes.node_to_idx[new_class_catname]
                 orig_cidx = self.classes.id_to_idx[cid]
+                poly.meta['new_class_cidx'] = new_class_cidx
+                poly.meta['orig_cidx'] = orig_cidx
                 if new_class_catname in self.ignore_classes:
-                    weight = 0.0
-                    if wants_class_sseg:
-                        poly.fill(frame_class_ignore, value=1)
-                        poly.fill(frame_class_ohe[orig_cidx], value=1)
+                    class_sseg_groups['ignore'].append(poly)
                 elif new_class_catname in self.class_foreground_classes:
-                    if wants_class_sseg:
-                        poly.fill(frame_class_ohe[new_class_cidx], value=1)
-                        flag_poly_filled = True
+                    class_sseg_groups['foreground'].append(poly)
+                elif new_class_catname in self.background_classes:
+                    class_sseg_groups['background'].append(poly)
+                elif new_class_catname in self.undistinguished_classes:
+                    class_sseg_groups['undistinguished'].append(poly)
 
-            if wants_boxes:
-                box_ltrb.append(ltrb)
-                box_tids.append(-1 if tid is None else tid)
-                box_cidxs.append(new_class_cidx)
-                box_weights.append(weight)
+            if self.config['balance_areas']:
+                big_poly_fg = unary_union([p.to_shapely() for p in class_sseg_groups['foreground']])
+                big_poly_ignore = unary_union([p.to_shapely() for p in class_sseg_groups['ignore']])
+                big_poly_undistinguished = unary_union([p.to_shapely() for p in class_sseg_groups['undistinguished']])
+                big_poly_bg = ((frame_box - big_poly_fg) - big_poly_ignore) - big_poly_undistinguished
+                total_area = frame_box.area
+                bg_cover_frac = big_poly_bg.area / (total_area + 1)
+                # fg_cover_frac = big_poly_fg.area / (total_area + 1)
+                bg_weight_share = (1 - bg_cover_frac)
+                task_target_weight['class'][:] = bg_weight_share ** 0.5
+            else:
+                task_target_weight['class'][:] = 1
 
-            if self.dist_weights and flag_poly_filled:
-                # New feature where we encode that we care much more about
-                # segmenting the inside of the object than the outside.
-                # Effectively boundaries become uncertain.
-                shape = frame_class_ohe[0].shape
-                dtype = frame_class_ohe[0].dtype
-                dist, poly_mask = util_kwimage.polygon_distance_transform(
-                    poly, shape=shape, dtype=dtype)
-                max_dist = dist.max()
-                if max_dist > 0:
-                    dist_weight = dist / max_dist
-                    weight_mask = dist_weight + (1 - poly_mask)
-                    frame_poly_weights = frame_poly_weights * weight_mask
+            for poly in class_sseg_groups['ignore']:
+                poly.fill(task_target_ignore['class'], value=1, assert_inplace=True)
+                poly.fill(task_target_ohe['class'][poly.meta['orig_cidx']], value=1, assert_inplace=True)
 
-        frame_poly_weights = np.maximum(frame_poly_weights, self.min_spacetime_weight)
+            for poly in class_sseg_groups['background']:
+                # task_target_ignore['class'] = poly.fill(task_target_ignore['class'], value=1, assert_inplace=True)
+                poly.fill(task_target_ohe['class'][poly.meta['orig_cidx']], value=1, assert_inplace=True)
 
-        # Postprocess (Dilate?) the truth map
-        for cidx, class_map in enumerate(frame_class_ohe):
-            # class_map = kwimage.morphology(class_map, 'dilate', kernel=5)
-            frame_cidxs[class_map > 0] = cidx
+            for poly in class_sseg_groups['undistinguished']:
+                task_target_ignore['class'] = poly.fill(task_target_ignore['class'], value=1, assert_inplace=True)
+                poly.fill(task_target_ohe['class'][poly.meta['orig_cidx']], value=1, assert_inplace=True)
+
+            for poly in class_sseg_groups['foreground']:
+                poly.fill(task_target_ohe['class'][poly.meta['new_class_cidx']], value=1, assert_inplace=True)
+
+                if self.config['balance_areas']:
+                    weight = (1 - (poly.area / (total_area + 1)))
+                    poly.fill(task_target_weight['class'], value=weight, assert_inplace=True)
+
+                if self.dist_weights:
+                    # New feature where we encode that we care much more about
+                    # segmenting the inside of the object than the outside.
+                    # Effectively boundaries become uncertain.
+                    dist, poly_mask = util_kwimage.polygon_distance_transform(
+                        poly, shape=space_shape, dtype=np.float32)
+                    max_dist = dist.max()
+                    if max_dist > 0:
+                        dist_weight = dist / max_dist
+                        weight_mask = dist_weight + (1 - poly_mask)
+                        task_target_weight['class'] = task_target_weight['class'] * weight_mask
+
+            max_weight = task_target_weight['class'].max()
+            if max_weight > 0:
+                task_target_weight['class'] /= max_weight
+
+        # frame_poly_weights = np.maximum(frame_poly_weights, self.min_spacetime_weight)
 
         if self.upweight_centers:
             sigma = (
                 (4.8 * ((space_shape[1] - 1) * 0.5 - 1) + 0.8),
                 (4.8 * ((space_shape[0] - 1) * 0.5 - 1) + 0.8),
             )
-            space_weights = kwimage.normalize(kwimage.gaussian_patch(space_shape, sigma=sigma))
+            space_weights = kwarray.normalize(kwimage.gaussian_patch(space_shape, sigma=sigma))
             # space_weights = util_kwimage.upweight_center_mask(space_shape)
             space_weights = np.maximum(space_weights, self.min_spacetime_weight)
-            frame_weights = space_weights * time_weights[time_idx] * frame_poly_weights
+            spacetime_weights = space_weights * time_weights[time_idx]
         else:
-            frame_weights = frame_poly_weights
+            spacetime_weights = 1
 
         # Note: ensure this is resampled into target output space
         # Module the pixelwise weights by the 1 - the fraction of modes
         # that have nodata.
-        DOWNWEIGHT_NAN_REGIONS = 1
-        if DOWNWEIGHT_NAN_REGIONS:
+        if self.config['downweight_nan_regions']:
             nodata_total = 0.0
             for mask in mode_to_invalid_mask.values():
                 if mask is None:
@@ -2061,36 +2162,44 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                         mask_ = mask.astype(float)
                     mask_ = kwimage.imresize(mask_, dsize=output_dsize)
                     nodata_total += mask_
-            # nodata_total = np.add.reduce([0 if mask is None else mask.sum(axis=2) / mask.shape[2] for mask in mode_to_invalid_mask.values()])
             total_bands = len(mode_to_invalid_mask)
             nodata_frac = nodata_total / total_bands
             nodata_weight = 1 - nodata_frac
-            frame_weights = frame_weights * nodata_weight
+        else:
+            nodata_weight = 1
+            # frame_weights = frame_weights * nodata_weight
+
+        generic_frame_weight = nodata_weight * spacetime_weights
 
         # Dilate ignore masks (dont care about the surrounding area # either)
         # frame_saliency = kwimage.morphology(frame_saliency, 'dilate', kernel=ignore_dilate)
         if self.ignore_dilate > 0:
-            saliency_ignore = kwimage.morphology(saliency_ignore, 'dilate', kernel=self.ignore_dilate)
-            frame_class_ignore = kwimage.morphology(frame_class_ignore, 'dilate', kernel=self.ignore_dilate)
+            for k, v in task_target_ignore.items():
+                task_target_ignore[k] = kwimage.morphology(v, 'dilate', kernel=self.ignore_dilate)
 
-        saliency_weights = frame_weights * (1 - saliency_ignore)
-        class_weights = frame_weights * (1 - frame_class_ignore)
-        saliency_weights = saliency_weights.clip(0, 1)
-        frame_weights = frame_weights.clip(0, 1)
-
-        if wants_boxes:
-            frame_item['box_ltrb'] = np.array(box_ltrb).astype(np.float32)
-            # ann_boxes.to_ltrb().data
-            frame_item['box_tids'] = np.array(box_tids).astype(np.int64)
-            frame_item['box_cidxs'] = np.array(box_cidxs).astype(np.int64)
-            frame_item['box_weights'] = np.array(box_weights).astype(np.float32)
-
+        frame_item['ann_aids'] = ann_aids
         if wants_class_sseg:
+            # Postprocess (Dilate?) the truth map
+            # TODO: it would be better if the network accepted indicator vector
+            # style labels rather than integer style labels.
+            for cidx, class_map in enumerate(task_target_ohe['class']):
+                # class_map = kwimage.morphology(class_map, 'dilate', kernel=5)
+                frame_cidxs[class_map > 0] = cidx
+            task_frame_weight = (
+                (1 - task_target_ignore['class']) *
+                task_target_weight['class'] *
+                generic_frame_weight
+            )
             frame_item['class_idxs'] = frame_cidxs
-            frame_item['class_weights'] = class_weights
+            frame_item['class_weights'] = np.clip(task_frame_weight, 0, 1)
         if wants_saliency_sseg:
-            frame_item['saliency'] = frame_saliency
-            frame_item['saliency_weights'] = saliency_weights
+            task_frame_weight = (
+                (1 - task_target_ignore['saliency']) *
+                task_target_weight['saliency'] *
+                generic_frame_weight
+            )
+            frame_item['saliency'] = task_target_ohe['saliency']
+            frame_item['saliency_weights'] = np.clip(task_frame_weight, 0, 1)
 
     def cached_dataset_stats(self, num=None, num_workers=0, batch_size=2,
                              with_intensity=True, with_class=True):
