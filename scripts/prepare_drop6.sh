@@ -200,3 +200,56 @@ dvc_add(){
     git commit -am "Add Drop6 ACC-2" &&  \
     git push
 }
+
+
+update_from_dmj_constructions(){
+    # On horologic
+    cd /home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan
+
+    ls KR_R001/kwcoco-dataset/KR_R001/
+
+    __check_overlap__="
+    import ubelt as ub
+    import xdev
+
+    dpath_new = ub.Path('/home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan/KR_R001/kwcoco-dataset/KR_R001/')
+    dpath_old = ub.Path('/home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_data_dvc/Drop6/KR_R001').expand()
+
+    files_new = []
+    for r, ds, fs in dpath_new.walk():
+        rpath = r.relative_to(dpath_new)
+        files_new.extend([rpath / f for f in fs if f.endswith('.tif')])
+
+    files_old = []
+    for r, ds, fs in dpath_old.walk():
+        rpath = r.relative_to(dpath_old)
+        files_old.extend([rpath / f for f in fs if f.endswith('.tif')])
+
+    missing_from_new = set(files_old) - set(files_new)
+    missing_from_old = set(files_new) - set(files_old)
+    common = set(files_new) & set(files_old)
+
+    grouped_missing_old = ub.udict(ub.group_items(missing_from_old, lambda x: x.parent.name)).map_values(len).sorted_keys()
+    grouped_missing_new = ub.udict(ub.group_items(missing_from_new, lambda x: x.parent.name)).map_values(len).sorted_keys()
+
+    normkey_old = [k[:-2] for k in grouped_missing_old.keys()]
+    normkey_new = [k[:-2] for k in grouped_missing_new.keys()]
+
+    set(normkey_new) - set(normkey_old)
+    set(normkey_old) - set(normkey_new)
+
+    print('grouped_missing_old ' + ub.urepr(grouped_missing_old))
+    print('grouped_missing_new ' + ub.urepr(grouped_missing_new))
+
+    print(f'{len(common)}')
+
+
+    for c in common:
+        asset1 = dpath_new / c
+        asset2 = dpath_old / c
+        assert ub.hash_file(asset2) == ub.hash_file(asset1)
+        ...
+
+    "
+
+}
