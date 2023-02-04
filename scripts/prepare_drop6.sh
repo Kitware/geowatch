@@ -202,33 +202,13 @@ dvc_add(){
 }
 
 
-update_from_dmj_constructions(){
-    __doc__="
-
-    READY:
-        BH_R001  BR_R001  BR_R002  BR_R004  LR_R001  NZ_R001  US_R001  US_R005                                                                                  
-    DONE:
-        KR_R001  KR_R002
-    
-    "
-
-
-    # On horologic
-    ls /home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan
-
-    ls /home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan/KR_R001/kwcoco-dataset/
-    #smartwatch stats /home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan/KR_R001/kwcoco-dataset/cropped_kwcoco.json
-    ls /home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan/KR_R001/kwcoco-dataset/KR_R001/
-    ls /home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_data_dvc/Drop6/KR_R001 
+queue_archive_dmj_assets(){
+    REGION_ID=$1 $QUEUE_NAME
 
     DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="hdd")
     DMJ_DPATH=/home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan
     DST_DPATH=$DATA_DVC_DPATH/Drop6
 
-    ls $DMJ_DPATH
-
-    REGION_ID=KR_R002
-    REGION_ID=BR_R001
     DMJ_COCO_FPATH=$DMJ_DPATH/$REGION_ID/kwcoco-dataset/cropped_kwcoco.json
     IMGONLY_FPATH=$DST_DPATH/imgonly-$REGION_ID.kwcoco.json
     IMGANNS_FPATH=$DST_DPATH/imganns-$REGION_ID.kwcoco.zip
@@ -239,10 +219,85 @@ update_from_dmj_constructions(){
     #SENSORS=("L8" "S2")
     SENSORS=("L8" "S2" "WV" "WV1" "PD")
     for sensor in "${SENSORS[@]}"; do
+        echo "### sensor=$sensor"
+        for dpath in "$DJM_ASSET_DPATH"/"$sensor"; do
+          echo "### dpath=$dpath"
+          cmd_queue --command=submit --name=$QUEUE_NAME --bash_text="7z a '${DST_ASSET_DPATH}/${sensor}.zip' '$dpath'"
+        done
+    done
+}
+
+
+queue_dmj_reproject(){
+    REGION_ID=$1 $QUEUE_NAME
+
+    DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="hdd")
+    DMJ_DPATH=/home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan
+    DST_DPATH=$DATA_DVC_DPATH/Drop6
+
+    DMJ_COCO_FPATH=$DMJ_DPATH/$REGION_ID/kwcoco-dataset/cropped_kwcoco.json
+    IMGONLY_FPATH=$DST_DPATH/imgonly-$REGION_ID.kwcoco.json
+    IMGANNS_FPATH=$DST_DPATH/imganns-$REGION_ID.kwcoco.zip
+    DJM_ASSET_DPATH=$DMJ_DPATH/$REGION_ID/kwcoco-dataset/$REGION_ID
+    DST_ASSET_DPATH=$DST_DPATH/$REGION_ID
+
+    python -m watch reproject_annotations \
+        --src "$IMGONLY_FPATH" \
+        --dst "$IMGANNS_FPATH" \
+        --propogate_strategy="SMART" \
+        --site_models="$DATA_DVC_DPATH/annotations/drop6/site_models/${REGION_ID}_*" \
+        --region_models="$DATA_DVC_DPATH/annotations/drop6/region_models/${REGION_ID}*" 
+}
+
+
+update_from_dmj_constructions(){
+    __doc__="
+
+    READY:
+        BH_R001  BR_R002  BR_R004  LR_R001  NZ_R001  US_R001  US_R005                                                                                  
+    DONE:
+        KR_R001  KR_R002 BR_R001
+    
+    "
+
+    REGION_IDS=("BH_R001" "BR_R002" "BR_R004" "LR_R001" "NZ_R001" "US_R001"  "US_R005")
+    QUEUE_NAME=fixup-drop6-zip
+    cmd_queue new $QUEUE_NAME
+    for REGION_ID in "${REGION_IDS[@]}"; do
+        queue_archive_dmj_assets "$REGION_ID" "$QUEUE_NAME"
+    done
+    cmd_queue show fixup-drop6-zip
+    cmd_queue run fixup-drop6-zip
+
+    # On horologic
+    ls /home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan
+    ls /home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan/KR_R001/kwcoco-dataset/
+    #smartwatch stats /home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan/KR_R001/kwcoco-dataset/cropped_kwcoco.json
+    ls /home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan/KR_R001/kwcoco-dataset/KR_R001/
+    ls /home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_data_dvc/Drop6/KR_R001 
+
+    DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="hdd")
+    DMJ_DPATH=/home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan
+    DST_DPATH=$DATA_DVC_DPATH/Drop6
+    ls $DMJ_DPATH
+    REGION_ID=KR_R002
+    REGION_ID=BR_R001
+    REGION_ID=BH_R001
+    DMJ_COCO_FPATH=$DMJ_DPATH/$REGION_ID/kwcoco-dataset/cropped_kwcoco.json
+    IMGONLY_FPATH=$DST_DPATH/imgonly-$REGION_ID.kwcoco.json
+    IMGANNS_FPATH=$DST_DPATH/imganns-$REGION_ID.kwcoco.zip
+    DJM_ASSET_DPATH=$DMJ_DPATH/$REGION_ID/kwcoco-dataset/$REGION_ID
+    DST_ASSET_DPATH=$DST_DPATH/$REGION_ID
+
+    # Zip up imagery and write to our directory
+    #SENSORS=("L8" "S2")
+    #SENSORS=("L8" "S2" "WV" "WV1" "PD")
+    SENSORS=("L8")
+    for sensor in "${SENSORS[@]}"; do
         echo " * sensor=$sensor"
         for dpath in "$DJM_ASSET_DPATH"/"$sensor"; do
           echo "  * dpath=$dpath"
-          7z a "${DST_ASSET_DPATH}/${sensor}.zip" "$dpath"
+          echo 7z a "${DST_ASSET_DPATH}/${sensor}.zip" "$dpath"
         done
     done
     ls $DST_ASSET_DPATH
@@ -254,21 +309,50 @@ update_from_dmj_constructions(){
 
     # Zip the new data on DMJ drive
      
-    # Overwrite old kwcoco files with new ones
-    echo "IMGONLY_FPATH = $IMGONLY_FPATH"
-    cp "$DMJ_COCO_FPATH" "$IMGONLY_FPATH"
+    REGION_IDS=("BH_R001" "BR_R002" "BR_R004" "LR_R001" "NZ_R001" "US_R001"  "US_R005")
+    QUEUE_NAME=fixup-drop6-copy
+    cmd_queue new $QUEUE_NAME
+    for REGION_ID in "${REGION_IDS[@]}"; do
+        # Overwrite old kwcoco files with new ones
+        cmd_queue submit $QUEUE_NAME "cp '$DMJ_COCO_FPATH' '$IMGONLY_FPATH'"
+    done
+    cmd_queue show $QUEUE_NAME --backend=serial
+    cmd_queue run $QUEUE_NAME --backend=serial
 
-    python -m watch reproject_annotations \
-        --src "$IMGONLY_FPATH" \
-        --dst "$IMGANNS_FPATH" \
-        --propogate_strategy="SMART" \
-        --site_models="$DATA_DVC_DPATH/annotations/drop6/site_models/${REGION_ID}_*" \
-        --region_models="$DATA_DVC_DPATH/annotations/drop6/region_models/${REGION_ID}*" 
+    REGION_IDS=("BH_R001" "BR_R002" "BR_R004" "LR_R001" "NZ_R001" "US_R001"  "US_R005")
+    QUEUE_NAME=fixup-drop6-reproject
+    cmd_queue new $QUEUE_NAME
+    for REGION_ID in "${REGION_IDS[@]}"; do
+        queue_dmj_reproject "$REGION_ID" "$QUEUE_NAME"
+    done
+    cmd_queue show $QUEUE_NAME --backend=serial
+    cmd_queue run $QUEUE_NAME --backend=serial
 
+
+    DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="hdd")
+    DMJ_DPATH=/home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan
+    DST_DPATH=$DATA_DVC_DPATH/Drop6
+
+    ### DO THIS AT THE VERY END.
+    DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="hdd")
+    DST_DPATH=$DATA_DVC_DPATH/Drop6
     cd $DST_DPATH
-    ZIP_FPATHS=($REGION_ID/*.zip)
-    dvc add "${ZIP_FPATHS[@]}" -vv
+
+    cmd_queue new dvc-add
+    ZIP_FPATHS=(*/*.zip)
+    cmd_queue submit dvc-add -- 
+    echo dvc add "${ZIP_FPATHS[@]}" -vv
+    cmd_queue show dvc-add
+
+    for REGION_ID in "${REGION_IDS[@]}"; do
+        echo dvc add "$REGION_ID"/*.zip
+        dvc add -- BH_R001/*.zip BR_R002/*.zip BR_R004/*.zip LR_R001/*.zip NZ_R001/*.zip US_R001/*.zip US_R005/*.zip
+        
+    done
+
+    dvc add -- */*.zip
     ZIP_DVC_FPATHS=($REGION_ID/*.zip.dvc)
+
     dvc push -r aws "${ZIP_DVC_FPATHS[@]}" -v
 
     __check_overlap__="

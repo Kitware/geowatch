@@ -153,8 +153,8 @@ def coco_watch_stats(dset, with_video_info=False):
 
     Example:
         >>> from watch.cli.watch_coco_stats import *  # NOQA
-        >>> from watch.demo import smart_kwcoco_demodata
-        >>> dset = smart_kwcoco_demodata.demo_smart_aligned_kwcoco()
+        >>> import watch
+        >>> dset = watch.coerce_kwcoco('watch-msi-geodata-heatmap-dates')
         >>> stat_info = coco_watch_stats(dset)
     """
     from kwcoco.util import util_truncate
@@ -180,6 +180,17 @@ def coco_watch_stats(dset, with_video_info=False):
         # print('video = {}'.format(video_str))
 
         images = dset.images(gids)
+        annots_per_img = images.annots
+
+        flat_annots = dset.annots(list(ub.flatten(annots_per_img)))
+        # annots_per_img.lookup('track_id', None)
+        unique_trackids = set(flat_annots.lookup('track_id', None))
+        num_tracks = len(unique_trackids - {None})
+        num_annots = len(flat_annots)
+
+        # catname_freq = ub.udict(ub.dict_hist(
+        #     flat_annots.lookup('category_id'))).map_keys(
+        #         lambda x: dset._resolve_to_cat(x)['name'])
 
         avail_sensors = images.lookup('sensor_coarse', None)
         frame_dates = images.lookup('date_captured', None)
@@ -202,6 +213,9 @@ def coco_watch_stats(dset, with_video_info=False):
             'name': video['name'],
             **ub.dict_isect(video, ['width', 'height']),
             'num_frames': len(gids),
+            'num_tracks': num_tracks,
+            'num_annots': num_annots,
+            # 'catname_freq': catname_freq,
             'sensor_freq': sensor_freq,
             'date_range': date_range,
         }) | video

@@ -107,6 +107,7 @@ Example:
     >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
     >>> coco_fpath = data_dvc_dpath / 'Drop4-BAS/KR_R001.kwcoco.json'
     >>> dset = watch.coerce_kwcoco(coco_fpath)
+    >>> vidid = dset.dataset['videos'][0]['id']
     >>> self = MultiTimeWindowSampler.from_coco_video(
     >>>     dset, vidid,
     >>>     time_window=11,

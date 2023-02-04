@@ -621,7 +621,7 @@ def coerce_kwcoco(data='watch-msi', **kwargs):
             'image_size': (600, 600),
             'aux': None,
             'multispectral': True,
-            'multisensor': False,
+            'multisensor': True,
             'max_speed': 0.01,
         }
         defaults.update(dict(
