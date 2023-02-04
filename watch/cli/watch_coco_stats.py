@@ -108,7 +108,7 @@ class WatchCocoStats(scfg.Config):
                 piv = piv.applymap(lambda x: None if math.isnan(x) else int(x))
                 piv['total'] = piv.sum(axis=1)
                 print('Per-Video Sensor Frequency')
-                rich.print(piv.to_string(float_format='%0.0f'))
+                rich.print(piv.to_string(float_format='%0.0f', max_rows=500))
         else:
             print('No per-video stats')
 
@@ -129,7 +129,7 @@ class WatchCocoStats(scfg.Config):
                 ub.invert_dict(col_name_map), nl=1, sort=0)))
 
         summary = summary.rename(col_name_map, axis=1)
-        summary_string = summary.to_string()
+        summary_string = summary.to_string(max_rows=500)
         max_colwidth = max(map(len, summary_string.split('\n')))
         COLWIDTH_LIMIT = 1600
         if max_colwidth > COLWIDTH_LIMIT:
@@ -148,11 +148,14 @@ def coco_watch_stats(dset, with_video_info=False):
     Args:
         dset (kwcoco.CocoDataset)
 
+    Returns:
+        Dict[str, Any]: stat_info
+
     Example:
         >>> from watch.cli.watch_coco_stats import *  # NOQA
         >>> from watch.demo import smart_kwcoco_demodata
         >>> dset = smart_kwcoco_demodata.demo_smart_aligned_kwcoco()
-        >>> coco_watch_stats(dset)
+        >>> stat_info = coco_watch_stats(dset)
     """
     from kwcoco.util import util_truncate
     from watch.utils import util_time
@@ -281,10 +284,10 @@ def coco_watch_stats(dset, with_video_info=False):
     year_pivot = year_summary_df.pivot(['video', 'sensor'], ['time'], ['count'])
     year_pivot = year_pivot.fillna('0').astype(int)
     rich.print('Sensor Date Range Histograms')
-    rich.print(year_pivot)
+    rich.print(year_pivot.to_string(max_rows=500))
 
     sensorchan_gsd_stats = coco_sensorchan_gsd_stats(dset)
-    rich.print(sensorchan_gsd_stats)
+    rich.print(sensorchan_gsd_stats.to_string(max_rows=500))
 
     sensor_hist = ub.dict_hist(all_sensor_entries)
     rich.print('Sensor Histogram = {}'.format(ub.repr2(sensor_hist, nl=1, sort=0)))
