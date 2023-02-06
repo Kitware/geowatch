@@ -190,7 +190,9 @@ class DVCExptManager(ub.NiceRepr):
         >>> # xdoctest: +REQUIRES(env:DVC_EXPT_DPATH)
         >>> from watch.mlops.manager import *  # NOQA
         >>> import watch
-        >>> manager = DVCExptManager.coerce(watch.find_dvc_dpath(tags='phase2_expt'))
+        >>> expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
+        >>> dataset_codes = ['Drop4-BAS']
+        >>> manager = DVCExptManager(expt_dvc_dpath, dataset_codes)
         >>> manager.summarize()
 
     Ignore:
