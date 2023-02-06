@@ -17,6 +17,7 @@ DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 python -m watch.tasks.fusion fit \
     --config=config_common.yaml \
     --model.init_args.name=$EXPERIMENT_NAME \
+    --model.init_args.saliency_loss=dicefocal \
     --data.train_dataset="$TRAIN_FPATH" \
     --data.vali_dataset="$VALI_FPATH" \
     --data.num_workers=0 \
