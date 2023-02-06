@@ -162,24 +162,32 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         >>> weights = [1.0, 1.0]
         >>> output_channel_names = 'notsalient|salient'
         >>> sensor_name = None
+        >>> target_resolution = '12GSD'
         >>> # Execute merge
         >>> merge_kwcoco_channels(kwcoco_file_paths, output_kwcoco_path,
         >>>                       channel_names, weights, output_channel_names,
-        >>>                       sensor_name)
+        >>>                       sensor_name, target_resolution=target_resolution)
         >>> # Check results
         >>> output_dset = kwcoco.CocoDataset(output_kwcoco_path)
         >>> gid = 5
-        >>> imdata1 = dset1.coco_image(gid).delay('salient').finalize()
-        >>> imdata2 = dset2.coco_image(gid).delay('salient').finalize()
-        >>> imdataM = output_dset.coco_image(gid).delay('salient').finalize()
+        >>> imdata1 = dset1.coco_image(gid).delay('salient', space='asset').finalize()
+        >>> imdata2 = dset2.coco_image(gid).delay('salient', space='asset').finalize()
+        >>> imdataM = output_dset.coco_image(gid).delay('salient', space='asset').finalize()
+        >>> imdata1_img = dset1.coco_image(gid).delay('salient', space='image').finalize()
+        >>> imdata2_img = dset2.coco_image(gid).delay('salient', space='image').finalize()
+        >>> imdataM_img = output_dset.coco_image(gid).delay('salient', space='image').finalize()
         >>> # imdata1 = dset1.delayed_load(gid, channels='notsalient|salient').finalize()[:,:,0]
         >>> # imdata2 = dset2.delayed_load(gid, channels='notsalient|salient').finalize()[:,:,0]
         >>> # imdataM = output_dset.delayed_load(gid, channels='notsalient|salient').finalize()[:,:,0]
         >>> import kwplot
         >>> kwplot.autompl()
-        >>> kwplot.imshow(kwimage.normalize_intensity(imdata1), title='img1', pnum=(1, 3, 1), fnum=1)
-        >>> kwplot.imshow(kwimage.normalize_intensity(imdata2), title='img2', pnum=(1, 3, 2), fnum=1)
-        >>> kwplot.imshow(kwimage.normalize_intensity(imdataM), title='mean', pnum=(1, 3, 3), fnum=1)
+        >>> F = kwimage.fill_nans_with_checkers
+        >>> kwplot.imshow(F(kwimage.normalize_intensity(imdata1)), title='img1 (asset)', pnum=(2, 3, 1), fnum=1)
+        >>> kwplot.imshow(F(kwimage.normalize_intensity(imdata2)), title='img2 (asset)', pnum=(2, 3, 2), fnum=1)
+        >>> kwplot.imshow(F(kwimage.normalize_intensity(imdataM)), title='mean (asset)', pnum=(2, 3, 3), fnum=1)
+        >>> kwplot.imshow(F(kwimage.normalize_intensity(imdata1_img)), title='img1 (img)', pnum=(2, 3, 4), fnum=1)
+        >>> kwplot.imshow(F(kwimage.normalize_intensity(imdata2_img)), title='img2 (img)', pnum=(2, 3, 5), fnum=1)
+        >>> kwplot.imshow(F(kwimage.normalize_intensity(imdataM_img)), title='mean (img)', pnum=(2, 3, 6), fnum=1)
         >>> save_figure_path = dpath / 'test_1_result_plot.png'
         >>> import matplotlib.pyplot as plt
         >>> plt.savefig(save_figure_path)
@@ -189,9 +197,12 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         >>> print(f'Img2  mean: {np.nan_to_num(imdata2).mean()}')
         >>> print(f'Merge mean: {np.nan_to_num(imdataM).mean()}')
         >>> print()
-        >>> print(f'Img1  shape: {imdata1.shape}')
-        >>> print(f'Img2  shape: {imdata2.shape}')
-        >>> print(f'Merge shape: {imdataM.shape}')
+        >>> print(f'Img1  shape (asset space): {imdata1.shape}')
+        >>> print(f'Img2  shape (asset space): {imdata2.shape}')
+        >>> print(f'Merge shape (asset space): {imdataM.shape}')
+        >>> print(f'Img1  shape (img space): {imdata1_img.shape}')
+        >>> print(f'Img2  shape (img space): {imdata2_img.shape}')
+        >>> print(f'Merge shape (img space): {imdataM_img.shape}')
         >>> os.remove(dset1.fpath)
         >>> os.remove(dset2.fpath)
         >>> os.remove(output_dset.fpath)
@@ -363,7 +374,8 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         output_obj = merge_coco_img.find_asset_obj(output_channels)
 
         scale_target_from_vid = kwimage.Affine.scale(
-            coco_img._scalefactor_for_resolution(space='video', resolution=target_resolution))
+            coco_img._scalefactor_for_resolution(
+                space='video', resolution=target_resolution))
 
         warp_target_from_img = scale_target_from_vid @ coco_img.warp_vid_from_img
         warp_img_from_target = warp_target_from_img.inv()
