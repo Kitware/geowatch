@@ -7,6 +7,7 @@ from einops.layers.torch import Rearrange
 from torchvision import models as tv_models
 from torchvision.models import feature_extraction
 from typing import Union
+import numpy as np
 
 import kwcoco
 import kwarray
