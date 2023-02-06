@@ -486,6 +486,99 @@ class CocoAverageFeaturesConfig(scfg.DataConfig):
             '''))
 
 
+def coco_resolution(self, space='image', channel=None, RESOLUTION_KEY=None):
+    """
+    Returns the resolution of this CocoImage in the requested space if
+    known. Errors if this information is not registered.
+
+    Args:
+        channel (str) :  only relevant if asking for asset space
+
+    TODO:
+        - [ ] Remove this once kwcoco 0.5.6 lands
+
+    Example:
+        >>> import kwcoco
+        >>> dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
+        >>> self = dset.coco_image(1)
+        >>> self.img['resolution'] = 1
+        >>> self.resolution()
+        >>> self.img['resolution'] = '1 meter'
+        >>> coco_resolution(self, space='video')
+        >>> coco_resolution(self, space='asset', channel='B11')
+        >>> coco_resolution(self, space='asset', channel='B1')
+    """
+    import kwimage
+    # Compute the offset transform from the requested space
+    # Handle the cases where resolution is specified at the image or at the
+    # video level.
+    from kwcoco.coco_image import DEFAULT_RESOLUTION_KEYS
+    from kwcoco.coco_image import coerce_resolution
+
+    if RESOLUTION_KEY is None:
+        RESOLUTION_KEY = DEFAULT_RESOLUTION_KEYS
+
+    def aliased_get(d, keys, default=None):
+        if not ub.iterable(keys):
+            return d.get(keys, default)
+        else:
+            found = 0
+            for key in keys:
+                if key in d:
+                    found = 1
+                    val = d[key]
+                    break
+            if not found:
+                val = default
+            return val
+
+    if space == 'video':
+        vid_resolution_expr = aliased_get(self.video, RESOLUTION_KEY, None)
+        if vid_resolution_expr is None:
+            # Do we have an image level resolution?
+            img_resolution_expr = aliased_get(self.img, RESOLUTION_KEY, None)
+            assert img_resolution_expr is not None
+            img_resolution_info = coerce_resolution(img_resolution_expr)
+            img_resolution_mat = kwimage.Affine.scale(img_resolution_info['mag'])
+            vid_resolution = (self.warp_vid_from_img @ img_resolution_mat.inv()).inv()
+            vid_resolution_info = {
+                'mag': vid_resolution.decompose()['scale'],
+                'unit': img_resolution_info['unit']
+            }
+        else:
+            vid_resolution_info = coerce_resolution(vid_resolution_expr)
+        space_resolution_info = vid_resolution_info
+    elif space == 'image':
+        img_resolution_expr = aliased_get(self.img, RESOLUTION_KEY, None)
+        if img_resolution_expr is None:
+            # Do we have an image level resolution?
+            vid_resolution_expr = aliased_get(self.video, RESOLUTION_KEY, None)
+            assert vid_resolution_expr is not None
+            vid_resolution_info = coerce_resolution(vid_resolution_expr)
+            vid_resolution_mat = kwimage.Affine.scale(vid_resolution_info['mag'])
+            img_resolution = (self.warp_img_from_vid @ vid_resolution_mat.inv()).inv()
+            img_resolution_info = {
+                'mag': img_resolution.decompose()['scale'],
+                'unit': vid_resolution_info['unit']
+            }
+        else:
+            img_resolution_info = coerce_resolution(img_resolution_expr)
+        space_resolution_info = img_resolution_info
+    elif space == 'asset':
+        if channel is None:
+            raise ValueError('must specify a channel to ask for the asset resolution')
+        # Use existing code to get the resolution of the image (could be more efficient)
+        space_resolution_info = self.resolution('image', RESOLUTION_KEY=RESOLUTION_KEY).copy()
+        # Adjust the image resolution based on the asset scale factor
+        warp_img_from_aux = kwimage.Affine.coerce(self.find_asset_obj(channel).get('warp_aux_to_img', None))
+        img_res_mat = kwimage.Affine.scale(space_resolution_info['mag'])
+        aux_res_mat = img_res_mat @ warp_img_from_aux
+        space_resolution_info['mag'] = np.array(aux_res_mat.decompose()['scale'])
+    else:
+        raise KeyError(space)
+    return space_resolution_info
+
+
 def main(cmdline=True, **kw):
     """
     Main function for merge_kwcoco_channels.
