@@ -144,6 +144,10 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         >>> # Construct two copies of the same data with slightly different heatmaps
         >>> dset1 = perterb_coco(base_dset.copy(), box_noise=0.5, cls_noise=0.5, n_fp=10, n_fn=10, rng=32)
         >>> dset2 = base_dset.copy()
+        >>> for video in dset1.dataset['videos']:
+        ...      video['resolution'] = '10GSD'
+        >>> for video in dset2.dataset['videos']:
+        ...      video['resolution'] = '10GSD'
         >>> dset1.fpath = ub.Path(dset1.fpath).augment(stemsuffix='_heatmap1')
         >>> dset2.fpath = ub.Path(dset2.fpath).augment(stemsuffix='_heatmap2')
         >>> watch.demo.smart_kwcoco_demodata.hack_in_heatmaps(dset1, heatmap_dname='dummy_heatmap1', with_nan=0, rng=423432)
@@ -312,13 +316,10 @@ def merge_kwcoco_channels(kwcoco_file_paths,
 
             # Load the coco image based on image id.
             coco_img = kwcoco_file.coco_image(kwfile_image_id)
-
-            # Get the channel data based on channel names.
-            # image_channels: numpy float array of shape [height, width, n_channels].
-            # image_data = coco_img.delay(kwcoco_channel_names[file_index], space='video',
-            #                             resolution=target_resolution).finalize()
             asset = coco_img.find_asset_obj(kwcoco_channel_names[file_index])
-            delayed = coco_img.delay(kwcoco_channel_names[file_index], space='asset')
+            delayed = coco_img.delay(
+                kwcoco_channel_names[file_index], space='video',
+                resolution=target_resolution)
             gathered_parts.append({
                 'asset': asset,
                 'delayed': delayed,
@@ -345,7 +346,8 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         if 0:
             import kwplot
             kwplot.autompl()
-            a, b = gathered_parts[0:2]
+            a = gathered_parts[0]['delayed']
+            b = gathered_parts[1]['delayed']
             im1 = a.finalize(nodata_method='float')[..., 1]
             im2 = b.finalize(nodata_method='float')[..., 1]
             canvas = kwimage.stack_images([im1, im2, average_image_data[..., 1]], axis=1)
@@ -360,11 +362,25 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         # Check if there is already an asset with the same channel_names.
         output_obj = merge_coco_img.find_asset_obj(output_channels)
 
+        scale_target_from_vid = kwimage.Affine.scale(
+            coco_img._scalefactor_for_resolution(space='video', resolution=target_resolution))
+
+        warp_target_from_img = scale_target_from_vid @ coco_img.warp_vid_from_img
+        warp_img_from_target = warp_target_from_img.inv()
+
+        # TODO: see and ensure consistency with:
+        # ../tasks/fusion/predict.py
+
+        from watch.tasks.fusion.predict import quantize_float01
+        quant_data, quantization = quantize_float01(average_image_data)
+
         if output_obj is not None:
             # Overwrite the data in the output auxiliary item.
             output_obj["file_name"] = os.fspath(average_fpath)
-            # output_obj['height'] = average_image_data.shape[0]
-            # output_obj['width'] = average_image_data.shape[1]
+            output_obj['height'] = average_image_data.shape[0]
+            output_obj['width'] = average_image_data.shape[1]
+            output_obj['warp_aux_to_img'] = warp_img_from_target.concise()
+            output_obj['quantization'] = quantization
 
         # else:
         #     # Add this as a new auxiliary item.
@@ -375,7 +391,8 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         #                                     width=average_image_data.shape[1])
 
         # Write the averaged image data
-        kwimage.imwrite(average_fpath, average_image_data, backend="gdal")
+        kwimage.imwrite(average_fpath, quant_data, backend="gdal",
+                        nodata=quantization['nodata'])
 
         # Update all channels with projection info.
         try:
