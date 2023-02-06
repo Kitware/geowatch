@@ -100,6 +100,10 @@ def merge_kwcoco_channels(kwcoco_file_paths,
     Compute a weighted mean of channels from separate kwcoco file and save into
     merged kwcoco file.
 
+    Assumptions:
+        - The channel_nams to merge are not a subset of a group of channels targeted in the kwcoco file.
+            - I.e. 'salient' in 'salient|notsalient' will not work.
+
     Args:
         kwcoco_file_paths (list(str)):
             A list of paths representing pathes to kwcoco files to be merged.
@@ -150,53 +154,6 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         >>> kwcoco_file_paths = [dset1.fpath, dset2.fpath]
         >>> output_bundle_dpath = (dpath / 'merge_bundle').delete().ensuredir()
         >>> output_kwcoco_path = output_bundle_dpath / 'data.kwcoco.json'
-        >>> channel_names = ['notsalient'] * 2
-        >>> weights = [0.0, 1.0]
-        >>> output_channel_names = 'notsalient'
-        >>> sensor_name = None
-        >>> # Execute merge
-        >>> merge_kwcoco_channels(kwcoco_file_paths, output_kwcoco_path,
-        >>>                       channel_names, weights, output_channel_names,
-        >>>                       sensor_name)
-        >>> # Check results
-        >>> output_dset = kwcoco.CocoDataset(output_kwcoco_path)
-        >>> gid = 1
-        >>> imdata1 = dset1.coco_image(gid).delay('salient').finalize()
-        >>> imdata2 = dset2.coco_image(gid).delay('salient').finalize()
-        >>> imdataM = output_dset.coco_image(gid).delay('salient').finalize()
-        >>> import kwplot
-        >>> kwplot.autompl()
-        >>> kwplot.imshow(kwimage.normalize_intensity(imdata1), title='img1', pnum=(1, 3, 1), fnum=1)
-        >>> kwplot.imshow(kwimage.normalize_intensity(imdata2), title='img2', pnum=(1, 3, 2), fnum=1)
-        >>> kwplot.imshow(kwimage.normalize_intensity(imdataM), title='mean', pnum=(1, 3, 3), fnum=1)
-        >>> save_figure_path = dpath / 'test_1_result_plot.png'
-        >>> import matplotlib.pyplot as plt
-        >>> plt.savefig(save_figure_path)
-        >>> print(f'Test 1 plot saved to: {save_figure_path}')
-        >>> os.remove(dset1.fpath)
-        >>> os.remove(dset2.fpath)
-        >>> os.remove(output_dset.fpath)
-
-    Example:
-        >>> # TEST 2: Merge two kwcoco files with the same number of images but merge two channels at once.
-        >>> from watch.cli.coco_average_features import *  # NOQA
-        >>> import watch
-        >>> from kwcoco.demo.perterb import perterb_coco
-        >>> dpath = ub.Path.appdir('watch/test/coco_average_features')
-        >>> base_dset = watch.demo.coerce_kwcoco('watch-msi')
-        >>> # Construct two copies of the same data with slightly different heatmaps
-        >>> dset1 = perterb_coco(base_dset.copy(), box_noise=0.5, cls_noise=0.5, n_fp=10, n_fn=10, rng=32)
-        >>> dset2 = base_dset.copy()
-        >>> dset1.fpath = ub.Path(dset1.fpath).augment(stemsuffix='_heatmap1')
-        >>> dset2.fpath = ub.Path(dset2.fpath).augment(stemsuffix='_heatmap2')
-        >>> watch.demo.smart_kwcoco_demodata.hack_in_heatmaps(dset1, heatmap_dname='dummy_heatmap1', with_nan=0, rng=423432)
-        >>> watch.demo.smart_kwcoco_demodata.hack_in_heatmaps(dset2, heatmap_dname='dummy_heatmap2', with_nan=0, rng=132129)
-        >>> dset1.dump(dset1.fpath)
-        >>> dset2.dump(dset2.fpath)
-        >>> # Build method args
-        >>> kwcoco_file_paths = [dset1.fpath, dset2.fpath]
-        >>> output_bundle_dpath = (dpath / 'merge_bundle').delete().ensuredir()
-        >>> output_kwcoco_path = output_bundle_dpath / 'data.kwcoco.json'
         >>> channel_names = ['notsalient|salient'] * 2
         >>> weights = [1.0, 0.0]
         >>> output_channel_names = 'notsalient|salient'
@@ -207,10 +164,13 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         >>>                       sensor_name)
         >>> # Check results
         >>> output_dset = kwcoco.CocoDataset(output_kwcoco_path)
-        >>> gid = 1
+        >>> gid = 5
         >>> imdata1 = dset1.coco_image(gid).delay('salient').finalize()
         >>> imdata2 = dset2.coco_image(gid).delay('salient').finalize()
         >>> imdataM = output_dset.coco_image(gid).delay('salient').finalize()
+        >>> # imdata1 = dset1.delayed_load(gid, channels='notsalient|salient').finalize()[:,:,0]
+        >>> # imdata2 = dset2.delayed_load(gid, channels='notsalient|salient').finalize()[:,:,0]
+        >>> # imdataM = output_dset.delayed_load(gid, channels='notsalient|salient').finalize()[:,:,0]
         >>> import kwplot
         >>> kwplot.autompl()
         >>> kwplot.imshow(kwimage.normalize_intensity(imdata1), title='img1', pnum=(1, 3, 1), fnum=1)
@@ -219,59 +179,15 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         >>> save_figure_path = dpath / 'test_1_result_plot.png'
         >>> import matplotlib.pyplot as plt
         >>> plt.savefig(save_figure_path)
-        >>> print(f'Test 2 plot saved to: {save_figure_path}')
-        >>> os.remove(dset1.fpath)
-        >>> os.remove(dset2.fpath)
-        >>> os.remove(output_dset.fpath)
-        
-    Example:
-        >>> # TEST 3: Merge two kwcoco files with different images at a non-standard target resolution and plot results.
-        >>> # Checks innovation of target_resolution arg and makes sure that the images are resized properly in terms of shape.
-        >>> from watch.cli.coco_average_features import *  # NOQA
-        >>> import watch
-        >>> from kwcoco.demo.perterb import perterb_coco
-        >>> dpath = ub.Path.appdir('watch/test/coco_average_features')
-        >>> base_dset = watch.demo.coerce_kwcoco('watch-msi', geodata=True, dates=True)
-        >>> # Construct two copies of the same data with slightly different heatmaps and channel names.
-        >>> dset1 = perterb_coco(base_dset.copy(), box_noise=0.5, cls_noise=0.5, n_fp=10, n_fn=10, rng=32)
-        >>> dset2 = base_dset.copy()
-        >>> dset1.fpath = ub.Path(dset1.fpath).augment(stemsuffix='_ex2_heatmap1')
-        >>> dset2.fpath = ub.Path(dset2.fpath).augment(stemsuffix='_ex2_heatmap2')
-        >>> watch.demo.smart_kwcoco_demodata.hack_in_heatmaps(dset1, heatmap_dname='dummy_heatmap1', with_nan=0, rng=423532)
-        >>> watch.demo.smart_kwcoco_demodata.hack_in_heatmaps(dset2, heatmap_dname='dummy_heatmap2', with_nan=0, rng=132529)
-        >>> dset1.dump(dset1.fpath)
-        >>> dset2.dump(dset2.fpath)
-        >>> # Build method args
-        >>> kwcoco_file_paths = [dset1.fpath, dset2.fpath]
-        >>> output_bundle_dpath = (dpath / 'merge_bundle').delete().ensuredir()
-        >>> output_kwcoco_path = output_bundle_dpath / 'data.kwcoco.json'
-        >>> channel_names = ['notsalient|salient'] * 2
-        >>> weights = [1.0, 1.0]
-        >>> output_channel_names = 'notsalient|salient'
-        >>> sensor_name = None
-        >>> # target_resolution = '5GSD'
-        >>> target_resolution = None
-        >>> # Execute merge
-        >>> merge_kwcoco_channels(kwcoco_file_paths, output_kwcoco_path,
-        >>>                       channel_names, weights, output_channel_names,
-        >>>                       sensor_name,
-        >>>                       target_resolution=target_resolution)
-        >>> # Check results
-        >>> output_dset = kwcoco.CocoDataset(output_kwcoco_path)
-        >>> gid = 5
-        >>> imdata1 = dset1.coco_image(gid).delay('salient').finalize()
-        >>> imdata2 = dset2.coco_image(gid).delay('salient').finalize()
-        >>> imdataM = output_dset.coco_image(gid).delay('salient').finalize()
-        >>> print(imdataM.shape)
-        >>> import kwplot
-        >>> kwplot.autompl()
-        >>> kwplot.imshow(kwimage.normalize_intensity(imdata1), title='img1', pnum=(1, 3, 1), fnum=1)
-        >>> kwplot.imshow(kwimage.normalize_intensity(imdata2), title='img2', pnum=(1, 3, 2), fnum=1)
-        >>> kwplot.imshow(kwimage.normalize_intensity(imdataM), title='mean', pnum=(1, 3, 3), fnum=1)
-        >>> save_figure_path = dpath / 'test_2_result_plot.png'
-        >>> import matplotlib.pyplot as plt
-        >>> plt.savefig(save_figure_path)
-        >>> print(f'Test 3 plot saved to: {save_figure_path}')
+        >>> print(f'Test 1 plot saved to: {save_figure_path}')
+        >>> print(f'Weights: {weights}')
+        >>> print(f'Img1  mean: {np.nan_to_num(imdata1).mean()}')
+        >>> print(f'Img2  mean: {np.nan_to_num(imdata2).mean()}')
+        >>> print(f'Merge mean: {np.nan_to_num(imdataM).mean()}')
+        >>> print()
+        >>> print(f'Img1  shape: {imdata1.shape}')
+        >>> print(f'Img2  shape: {imdata2.shape}')
+        >>> print(f'Merge shape: {imdataM.shape}')
         >>> os.remove(dset1.fpath)
         >>> os.remove(dset2.fpath)
         >>> os.remove(output_dset.fpath)
@@ -366,9 +282,6 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         combined_channel_names = kwcoco.FusedChannelSpec.coerce(split_channel_names)
         kwcoco_channel_names.append(combined_channel_names)
 
-    # breakpoint()
-    # pass
-
     # Generate output channel names in (channel_name1|channel_name2|channel_name3) format.
     output_channels = kwcoco.FusedChannelSpec.coerce(output_channel_names)
 
@@ -398,9 +311,18 @@ def merge_kwcoco_channels(kwcoco_file_paths,
 
             # Get the channel data based on channel names.
             # image_channels: numpy float array of shape [height, width, n_channels].
-            image_data = coco_img.delay(kwcoco_channel_names[file_index], space='video',
-                                        resolution=target_resolution).finalize()
-            # image_data = np.nan_to_num(image_data, copy=False)
+            # image_data = coco_img.delay(kwcoco_channel_names[file_index], space='video',
+            #                             resolution=target_resolution).finalize()
+            image_data = coco_img.delay(kwcoco_channel_names[file_index]).finalize()
+
+            # FIXME:
+            image_data = np.nan_to_num(image_data)
+
+            if image_id == 5:
+                if file_index == 0:
+                    first_img = image_data
+                else:
+                    last_img = image_data
 
             # Weight image data.
             weighted_image_data = image_data * weights[file_index]
@@ -410,11 +332,31 @@ def merge_kwcoco_channels(kwcoco_file_paths,
             else:
                 accum_data += weighted_image_data
 
+        # breakpoint()
+        # pass
+        # img_data_no_nan = np.nan_to_num(image_data)
+        # print(img_data_no_nan.min(), img_data_no_nan.mean(), img_data_no_nan.max())
+
+        # accum_data_no_nan = np.nan_to_num(accum_data)
+        # print(accum_data_no_nan.min(), accum_data_no_nan.mean(), accum_data_no_nan.max())
+
+        # FIXME: Does not work.
+        # accum_data = image_data
+
         # Normalize averaged data by weights.
         average_image_data = accum_data / sum(weights)
-        # print(
-        #     f'GID: {image_id} | shape: {average_image_data.shape} | merge mean: {accum_data.mean()} | {average_image_data.mean()}'
-        # )
+        if image_id == 5:
+            print(
+                f'{image_id} | First: {first_img[:,:,0].mean()} | Second: {last_img[:,:,0].mean()} | Merge: {average_image_data[:,:,0].mean()}'
+            )
+            print(
+                f'{image_id} | First: {first_img.mean()} | Second: {last_img.mean()} | Merge: {average_image_data.mean()}'
+            )
+            print(
+                f'{image_id} | First: {first_img.shape} | Second: {last_img.shape} | Merge: {average_image_data.shape}')
+
+        # average_image_data_no_nan = np.nan_to_num(average_image_data)
+        # print(average_image_data_no_nan.min(), average_image_data_no_nan.mean(), average_image_data_no_nan.max())
 
         # TODO: better backend name.
         path_chan = output_channels.path_sanitize()
@@ -426,15 +368,23 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         output_obj = None
         for cand_obj in merge_coco_img.iter_asset_objs():
             cand_channels = kwcoco.FusedChannelSpec.coerce(cand_obj["channels"])
+            # Check if output channels matches candidate channels.
             if output_channels == cand_channels:
                 output_obj = cand_obj
                 break
 
-        # Overwrite the data in the output auxiliary item.
         if output_obj is not None:
+            # Overwrite the data in the output auxiliary item.
             output_obj["file_name"] = os.fspath(average_fpath)
-            output_obj['height'] = average_image_data.shape[0]
-            output_obj['width'] = average_image_data.shape[1]
+            # output_obj['height'] = average_image_data.shape[0]
+            # output_obj['width'] = average_image_data.shape[1]
+        # else:
+        #     # Add this as a new auxiliary item.
+        #     merge_kwcoco.add_auxiliary_item(image_id,
+        #                                     os.fspath(average_fpath),
+        #                                     channels=output_channels,
+        #                                     height=average_image_data.shape[0],
+        #                                     width=average_image_data.shape[1])
 
         # Write the averaged image data
         kwimage.imwrite(average_fpath, average_image_data, backend="gdal")
@@ -528,77 +478,6 @@ def main(cmdline=True, **kw):
     """
     config = CocoAverageFeaturesConfig(default=kw, cmdline=cmdline)
     config_dict = config.to_dict()
-
-    # # Check input arguments.
-    # ## Must have at least two kwcoco files.
-    # if len(config_dict['kwcoco_file_paths']) <= 1:
-    #     raise ValueError(
-    #         f"Need at least 2 kwcoco files to merge and only recieved {len(config_dict['kwcoco_file_paths'])}")
-
-    # ## If weights argument is not None then make sure it is the same length as kwcoco files.
-    # if config_dict['weights'] is not None:
-    #     if len(config_dict['weights']) != len(config_dict['kwcoco_file_paths']):
-    #         raise ValueError(
-    #             f"If weights is not None, number of weights ({len(config_dict['weights'])}) must be equal to number of kwcoco files ({len(config_dict['kwcoco_file_paths'])})."
-    #         )
-    # else:
-    #     # Set weight of all files to 1.
-    #     config_dict['weights'] = [1] * len(config_dict['kwcoco_file_paths'])
-
-    # ## If channels is not one value then make sure that it has the same number of values as kwcoco files.
-    # if len(config_dict['channel_name']) != 1:
-    #     if len(config_dict['channel_name']) != len(config_dict['kwcoco_file_paths']):
-    #         raise ValueError(
-    #             f"If more than one channel name, number of channel names ({len(config_dict['channel_name'])}) must be equal to number of kwcoco files ({len(config_dict['kwcoco_file_paths'])})."
-    #         )
-    #     # Make sure the number of channel names per file are equal.
-    #     n_channels_per_file = []
-    #     for channel_names in config_dict['channel_name']:
-    #         n_channels_per_file.append(len(split_channel_names_by_grammar(channel_names)))
-
-    #     if len(set(n_channels_per_file)) != 1:
-    #         raise ValueError(f"Number of requested channels per kwcoco file are not equal: {n_channels_per_file}")
-    # else:
-    #     config_dict['channel_name'] = config_dict['channel_name'] * len(config_dict['kwcoco_file_paths'])
-
-    # ## If no merge_channel_name given then use first
-    # if config_dict['output_channel_names'] is None:
-    #     config_dict['output_channel_names'] = config_dict['channel_name'][0]
-    #     print(f"INFO: No output channel name given, using channel name: {config_dict['channel_name'][0]}")
-    # else:
-    #     # Make sure that the size of output channel names and input channel names are equal in length.
-    #     output_channel_names = split_channel_names_by_grammar(config_dict['output_channel_names'])
-
-    #     # Get the number of channels per kwcoco file.
-    #     n_channels_per_file = []
-    #     for channel_names in config_dict['channel_name']:
-    #         n_channels_per_file.append(len(split_channel_names_by_grammar(channel_names)))
-
-    #     if len(output_channel_names) != list(set(n_channels_per_file))[0]:
-    #         raise ValueError(
-    #             f"Number of output channels ({(output_channel_names)}) does not match number of requested channels ({list(set(n_channels_per_file))[0]})."
-    #         )
-
-    # ## Check kwcoco files to see that they exist and contain the required channels.
-    # all_available_image_names, all_missing_image_names = [], []
-    # for kwcoco_file_path, channel_name in zip(config_dict['kwcoco_file_paths'], config_dict['channel_name']):
-    #     available_image_names, missing_image_names = check_kwcoco_file(kwcoco_file_path,
-    #                                                                    channel_name,
-    #                                                                    sensor_names=config_dict['sensors'],
-    #                                                                    flexible_merge=config_dict['flexible_merge'])
-    #     all_missing_image_names.append(set(missing_image_names))
-    #     all_available_image_names.append(set(available_image_names))
-
-    # # Find common image names.
-    # common_image_names = list(set.intersection(*all_available_image_names))
-    # if len(all_available_image_names) == 0:
-    #     raise ValueError("No common images found between all kwcoco files.")
-
-    # Find common missing image names.
-    # if len(all_missing_image_names) != 0:
-    #     common_missing_image_names = list(set.union(*all_missing_image_names))
-
-    # print("INFO: Verified that kwcoco files contain correct channel name(s).")
 
     # Merge kwcoco files along certain channels.
     merge_kwcoco_channels(
