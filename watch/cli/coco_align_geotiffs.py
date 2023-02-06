@@ -2079,6 +2079,7 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
             nodata=nodata, tries=tries,
             error_logfile=error_logfile,
             verbose=0 if verbose < 2 else verbose,
+            force_spatial_res=force_spatial_res,
             eager=not hack_lazy,
         )
     else:
