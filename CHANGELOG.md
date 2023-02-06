@@ -8,15 +8,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Changed
 * Renamed `project_annotations` to `reproject_annotations`
 * The `reproject_annotations` script no longer requires images to exist on disk.
-
-
-## Version 0.3.10 - 
-
-### Changed:
+* The mlops schedule evaluation now writes to .kwcoco.zip files, which does break existing caches
 * Clean geotiff now sets NODATA if it is unset and can be given a set of bands to never clean.
 
 
-## Version 0.3.9 - Target 2023-01-xx
+## Version 0.3.9 - Target 2023-01-31
 
 ### Added
 * Add new CLI tool: `smartwatch coco_clean_geotiffs` to fix NODATA values directly in geotiffs

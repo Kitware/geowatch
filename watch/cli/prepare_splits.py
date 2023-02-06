@@ -234,9 +234,9 @@ def prep_splits(cmdline=False, **kwargs):
         queue.add_header_command(config['virtualenv_cmd'])
 
     if config['constructive_mode']:
-        _submit_split_jobs(base_fpath, queue)
-    else:
         _submit_constructive_split_jobs(base_fpath, queue)
+    else:
+        _submit_split_jobs(base_fpath, queue)
 
     if config['verbose']:
         queue.rprint()
@@ -258,14 +258,5 @@ if __name__ == '__main__':
         python -m watch.cli.prepare_splits \
             --base_fpath=$BASE_FPATH \
             --backend=serial --run=0
-
-        python -m watch.cli.prepare_splits \
-            --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/foo.kwcoco.json \
-            --run=1 --backend=slurm
-
-        DVC_DPATH=$(smartwatch_dvc)
-        python -m watch.cli.prepare_splits \
-            --base_fpath=$DVC_DPATH/Drop1-Aligned-L1-2022-01/data.kwcoco.json \
-            --run=1 --backend=slurm
     """
     main(cmdline=True)

@@ -18,7 +18,7 @@ Example:
     >>>     'bas_pxl.package_fpath': '/global/models/bas_model2.pt',
     >>>     'bas_pxl.num_workers': 3,
     >>>     'bas_pxl.tta_time': 1,
-    >>>     'bas_pxl.test_dataset': '/global/datasets/foobar.kwcoco.json',
+    >>>     'bas_pxl.test_dataset': '/global/datasets/foobar.kwcoco.zip',
     >>> #
     >>>     'bas_poly.thresh': 0.1,
     >>>     'bas_poly.moving_window_size': 0.1,
@@ -70,9 +70,9 @@ Example:
     >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
     >>> #
     >>> config = {}
-    >>> config['bas_pxl.test_dataset'] = data_dvc_dpath / 'Drop4-BAS/KR_R001.kwcoco.json'
-    >>> #config['bas_pxl.test_dataset'] = data_dvc_dpath / 'Drop4-BAS/KR_R002.kwcoco.json'
-    >>> #config['bas_pxl.test_dataset'] = data_dvc_dpath / 'Drop4-BAS/BR_R001.kwcoco.json'
+    >>> config['bas_pxl.test_dataset'] = data_dvc_dpath / 'Drop4-BAS/KR_R001.kwcoco.zip'
+    >>> #config['bas_pxl.test_dataset'] = data_dvc_dpath / 'Drop4-BAS/KR_R002.kwcoco.zip'
+    >>> #config['bas_pxl.test_dataset'] = data_dvc_dpath / 'Drop4-BAS/BR_R001.kwcoco.zip'
     >>> config['bas_pxl.package_fpath'] = expt_dvc_dpath / 'models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt'
     >>> config['bas_pxl.num_workers'] = 6
     >>> #config['bas_pxl.chip_dims'] = "512,512"
@@ -140,7 +140,7 @@ class FeatureUnion(ProcessNode):
     group_dname = PREDICT_NAME
     in_paths = {'src'}
     out_paths = {
-        'dst': 'combo_{featunion_id}.kwcoco.json'
+        'dst': 'combo_{featunion_id}.kwcoco.zip'
     }
 
     def command(self):
@@ -180,7 +180,7 @@ class HeatmapPrediction(ProcessNode):
     }
 
     out_paths = {
-        'pred_pxl_fpath' : 'pred.kwcoco.json',
+        'pred_pxl_fpath' : 'pred.kwcoco.zip',
     }
 
     def command(self):
@@ -217,7 +217,7 @@ class PolygonPrediction(ProcessNode):
         'site_summaries_dpath': 'site_summaries',
         'sites_fpath': 'sites_manifest.json',
         'sites_dpath': 'sites',
-        'poly_kwcoco_fpath': 'poly.kwcoco.json'
+        'poly_kwcoco_fpath': 'poly.kwcoco.zip'
     }
 
     def command(self):
@@ -382,7 +382,7 @@ class InvariantFeatureComputation(FeatureComputation):
     name = 'invar_feat'
 
     out_paths = {
-        'dst': 'feat_I_{invar_feat_id}.kwcoco.json'
+        'dst': 'feat_I_{invar_feat_id}.kwcoco.zip'
     }
 
 
@@ -390,7 +390,7 @@ class MaterialFeatureComputation(FeatureComputation):
     name = 'mat_feat'
 
     out_paths = {
-        'dst': 'feat_M_{mat_feat_id}.kwcoco.json'
+        'dst': 'feat_M_{mat_feat_id}.kwcoco.zip'
     }
 
 
@@ -398,7 +398,7 @@ class LandcoverFeatureComputation(FeatureComputation):
     name = 'land_feat'
 
     out_paths = {
-        'dst': 'feat_L_{land_feat_id}.kwcoco.json'
+        'dst': 'feat_L_{land_feat_id}.kwcoco.zip'
     }
 
 
@@ -539,7 +539,7 @@ class SiteCropping(ProcessNode):
         'regions',
     }
     out_paths = {
-        'crop_dst_fpath': 'sitecrop.kwcoco.json'
+        'crop_dst_fpath': 'sitecrop.kwcoco.zip'
     }
 
     algo_params = {

@@ -115,7 +115,7 @@ def main(cmdline=True, **kwargs):
         'status', 'evaluate', 'push', 'pull', 'list', 'report',
     ]
     available_targets = [
-        'packages', 'evals'
+        'packages',
     ]
 
     actions = []
@@ -192,8 +192,14 @@ class DVCExptManager(ub.NiceRepr):
         >>> import watch
         >>> expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
         >>> dataset_codes = ['Drop4-BAS']
-        >>> manager = DVCExptManager(expt_dvc_dpath, dataset_codes)
+        >>> manager = DVCExptManager(expt_dvc_dpath=expt_dvc_dpath, dataset_codes=dataset_codes)
+        >>> manager.list()
         >>> manager.summarize()
+
+        self = manager.stats[0]
+        self.list()
+        util_pandas.pandas_truncate_items(self.staging_table(), paths=0, max_length=32)[0]
+
 
     Ignore:
         broke = df[df['is_broken']]
@@ -214,11 +220,11 @@ class DVCExptManager(ub.NiceRepr):
     def summarize(manager):
         # for state in manager.states:
         #     state.summarize()
-        for state in manager.stats:
+        for state in manager.states:
             state.summarize()
 
     def list(manager):
-        for state in manager.stats:
+        for state in manager.states:
             state.list()
 
     @classmethod
@@ -237,7 +243,6 @@ class DVCExptManager(ub.NiceRepr):
         for dataset_code in manager.dataset_codes:
             state = ExperimentState(
                 manager.expt_dvc_dpath, dataset_code, dvc_remote=manager.dvc_remote,
-                data_dvc_dpath=manager.data_dvc_dpath,
                 model_pattern=manager.model_pattern)
             states.append(state)
         manager.states = states
@@ -246,7 +251,7 @@ class DVCExptManager(ub.NiceRepr):
         # Assume just one git repo and manually pull
         manager.dvc.git_pull()
         pull_fpaths = []
-        for state in manager.stats:
+        for state in manager.states:
             pkg_df = state.versioned_table(types=['pkg_fpath'])
             pull_df = pkg_df[pkg_df['needs_pull'].astype(bool)]
             pull_fpaths += pull_df['dvc'].tolist()
@@ -265,14 +270,9 @@ class DVCExptManager(ub.NiceRepr):
         if 'packages' in targets:
             manager.push_packages()
 
-        if 'evals' in targets:
-            manager.push_evals()
-
     def pull(manager, targets):
         if 'packages' in targets:
             manager.pull_packages()
-        if 'evals' in targets:
-            manager.pull_evals()
 
     def reverse_hash_lookup(manager, key):
         # This probably doesn't belong here
@@ -354,11 +354,16 @@ class ExperimentState(ub.NiceRepr):
             #### Staging
             'host': '*',
             'user': '*',
+            'ckpt_ver': '*',
+            'epoch': '*',
+            'step': '*',
             'lightning_version': '*',
             'checkpoint': '*',  # hack, should have ext
             'stage_model': '*',  # hack, should have ext
             ### Deprecated
             'model': model_pattern,  # hack, should have ext
+            'imodel': model_pattern,
+            'smodel': model_pattern,
             'expt': '*',
         }
 
@@ -367,10 +372,14 @@ class ExperimentState(ub.NiceRepr):
             'ckpt': 'runs/{expt}/lightning_logs/{lightning_version}/checkpoints/{checkpoint}.ckpt',
 
             # Staged package
-            'spkg': 'runs/{expt}/lightning_logs/{lightning_version}/checkpoints/{model}.pt',
+            'spkg': 'runs/{expt}/lightning_logs/{lightning_version}/checkpoints/{smodel}.pt',
 
             # Interrupted models
-            'ipkg': 'runs/{expt}/lightning_logs/{lightning_version}/package-interupt/{model}.pt',
+            'ipkg': 'runs/{expt}/lightning_logs/{lightning_version}/package-interupt/{imodel}.pt',
+        }
+
+        self.versioned_templates = {
+            'pkg_fpath'            : 'packages/{expt}/{expt}_{ckpt_ver}_epoch{epoch}_step{step}.pt',  # by default packages dont know what task they have (because they may have multiple)
         }
 
         # that will cause a row to be ignored if it has one of those values
@@ -382,6 +391,9 @@ class ExperimentState(ub.NiceRepr):
         self.templates = {}
         for k, v in self.staging_templates.items():
             self.templates[k] = self.staging_template_prefix + v
+
+        for k, v in self.versioned_templates.items():
+            self.templates[k] = self.storage_template_prefix + v
 
         self.path_patterns_matrix = []
         self._build_path_patterns()
@@ -432,7 +444,7 @@ class ExperimentState(ub.NiceRepr):
         _id_to_row = ub.ddict(default.copy)
 
         rows = []
-        key = 'ckpt'
+        key = 'ckpt'  # a raw checkpoint
         for pat in [p[key] for p in self.path_patterns_matrix]:
             mpat = util_pattern.Pattern.coerce(pat)
             # Find all checkpoints
@@ -467,7 +479,7 @@ class ExperimentState(ub.NiceRepr):
                     # Modify existing row
                     row = _id_to_row[ckpt_path]
                 else:
-                    # Add new row
+                    # No corresponding raw checkpoint exists, add new row
                     row = default.copy()
                     row['checkpoint'] = ckpt_stem
                     row['ckpt_exists'] = False
@@ -478,7 +490,7 @@ class ExperimentState(ub.NiceRepr):
                 row.update(_attrs)
 
         # Find interrupted checkpoints
-        key = 'ipkg'  # stands for staged package
+        key = 'ipkg'  # stands for interrupted package
         for pat in [p[key] for p in self.path_patterns_matrix]:
             mpat = util_pattern.Pattern.coerce(pat)
             for spkg_fpath in list(mpat.paths()):
@@ -505,22 +517,21 @@ class ExperimentState(ub.NiceRepr):
         for row in rows:
             fname = row['checkpoint']
 
-            if row.get('spkg_fpath', None) is None:
-                # HACK!!!
-                row['model'] = None
-            else:
-                row['model'] = ub.Path(row['spkg_fpath']).name
-
             # Hack: making name assumptions
             info = checkpoint_filepath_info(fname)
             row.update(info)
 
+            row.pop('imodel', None)
+            row.pop('smodel', None)
+
             # Where would we expect to put this file?
-            kw = ub.udict(row).subdict({'expt', 'model'})
+            kw = ub.udict(row).subdict({'expt', 'ckpt_ver', 'epoch', 'step'})
             kw['expt_dvc_dpath'] = self.expt_dvc_dpath
             kw['dataset_code'] = self.dataset_code
-            # row['pkg_fpath'] = ub.Path(self.templates['pkg_fpath'].format(**kw))
-            # row['is_copied'] = row['pkg_fpath'].exists()
+            kw['storage_dpath'] = self.storage_dpath
+            # This is the name we would version this with.
+            row['pkg_fpath'] = ub.Path(self.templates['pkg_fpath'].format(**kw))
+            row['is_copied'] = row['pkg_fpath'].exists()
 
         return rows
 
@@ -584,6 +595,15 @@ class ExperimentState(ub.NiceRepr):
         staging_rows = list(self.staging_rows())
         staging_df = pd.DataFrame(staging_rows)
 
+        DEDUP = 1  # get rid of duplicate or near duplicate checkpoints
+        if DEDUP:
+            chosen = []
+            for _, group in staging_df.groupby(['expt', 'epoch', 'step']):
+                if len(group) > 1:
+                    group = group.sort_values('ckpt_ver').iloc[0:1]
+                chosen.append(group)
+            staging_df = pd.concat(chosen, axis=0).sort_index().reset_index(drop=True)
+
         if len(staging_df) == 0:
             staging_df[self.STAGING_COLUMNS] = 0
         return staging_df
@@ -595,13 +615,12 @@ class ExperimentState(ub.NiceRepr):
         Information includes its real path if it exists, its dvc path if it exists
         and what sort of actions need to be done to synchronize it.
         """
-        # eval_rows = list(self.versioned_rows(**kw))
-        eval_rows = []
-        eval_df = pd.DataFrame(eval_rows)
-        if len(eval_df) == 0:
-            eval_df[self.VERSIONED_COLUMNS] = 0
+        versioned_rows = list(self.versioned_rows(**kw))
+        versioned_df = pd.DataFrame(versioned_rows)
+        if len(versioned_df) == 0:
+            versioned_df[self.VERSIONED_COLUMNS] = 0
             # ['type', 'has_dvc', 'has_raw', 'needs_pull', 'is_link', 'is_broken', 'is_unprotected', 'needs_push', 'dataset_code']] = 0
-        return eval_df
+        return versioned_df
 
     def cross_referenced_tables(self):
         import kwarray
@@ -614,7 +633,7 @@ class ExperimentState(ub.NiceRepr):
         if len(staging_df) and len(versioned_df):
             # import xdev
             # with xdev.embed_on_exception_context:
-            spkg_was_copied = kwarray.isect_flags(staging_df['model'], versioned_df['model'])
+            spkg_was_copied = kwarray.isect_flags(staging_df['pkg_fpath'], versioned_df['raw'])
             staging_df['is_copied'] = spkg_was_copied
             # num_need_repackage = (~staging_df['is_packaged']).sum()
             # print(f'num_need_repackage={num_need_repackage}')
@@ -643,14 +662,9 @@ class ExperimentState(ub.NiceRepr):
                     prioritized = g.sort_values(by=by, ascending=ascending)
                     choice = prioritized.iloc[0:1]
                     deduped.append(choice)
-            staging_df = pd.concat(deduped)
-
-            # Add info from staging into the versioned table
-            versioned_has_orig = kwarray.isect_flags(versioned_df['model'], staging_df['model'])
-            versioned_df['has_orig'] = versioned_has_orig
+            staging_df = pd.concat(deduped).sort_index().reset_index(drop=True)
         else:
             staging_df['is_copied'] = False
-            versioned_df['has_orig'] = False
 
         tables = ub.udict({
             'staging': staging_df,
@@ -668,7 +682,7 @@ class ExperimentState(ub.NiceRepr):
         if 'versioned' in tables:
             todrop = ['raw', 'dvc', 'expt_dvc_dpath', 'expt', 'is_broken',
                       'is_link', 'has_raw', 'has_dvc', 'unprotected',
-                      'needs_pull', 'needs_push', 'has_orig']
+                      'needs_pull', 'needs_push']
             df = tables['versioned']
             type_to_versioned = dict(list(df.groupby('type')))
             for type, subdf in type_to_versioned.items():
@@ -690,6 +704,90 @@ class ExperimentState(ub.NiceRepr):
         tables = self.cross_referenced_tables()
         summarize_tables(tables)
 
+    def package_checkpoints(self, mode='interact'):
+        from rich.prompt import Confirm
+        staging_df = self.staging_table()
+        needs_package = staging_df[~staging_df['is_packaged']]
+
+        print(f'There are {len(needs_package)} checkpoints that need to be repackaged')
+        if mode == 'interact' and len(needs_package):
+            flag = Confirm.ask('Do you want to repackage?')
+            if not flag:
+                raise UserAbort
+
+        if 'ckpt_path' in needs_package:
+            to_repackage = needs_package['ckpt_path'].values.tolist()
+        else:
+            to_repackage = []
+        print('to_repackage = {}'.format(ub.repr2(to_repackage, nl=1)))
+        if to_repackage:
+            # NOTE: THIS RELIES ON KNOWING ABOUT THE SPECIFIC MODEL CODE.
+            # IT WOULD BE NICE IF WE DIDN'T NEED THAT HERE.
+            repackager.repackage(to_repackage)
+
+    def copy_packages_to_dvc(self, mode='interact'):
+        from rich.prompt import Confirm
+        # Rebuild the tables to ensure we are up to date
+        tables = self.cross_referenced_tables()
+        staging_df, versioned_df = ub.take(tables, ['staging', 'versioned'])
+        needs_copy = staging_df[~staging_df['is_copied']]
+        print(needs_copy)
+        print(f'There are {len(needs_copy)} packages that need to be copied')
+        if mode == 'interact':
+            flag = Confirm.ask('Do you want to copy?')
+            if not flag:
+                raise UserAbort
+
+        for row in ub.ProgIter(needs_copy.to_dict('records'), desc='Copy packages to DVC dir'):
+            src, dst = (row['spkg_fpath'], row['pkg_fpath'])
+            dst.parent.ensuredir()
+            ub.Path(src).copy(dst)
+
+    def add_packages_to_dvc(self, mode='interact'):
+        from rich.prompt import Confirm
+        perf_config = {
+            'push_workers': 8,
+        }
+        # Rebuild the tables to ensure we are up to date
+        tables = self.cross_referenced_tables()
+        staging_df, versioned_df = ub.take(tables, ['staging', 'versioned'])
+        needs_add_flags = (~versioned_df['has_dvc'] | versioned_df['unprotected'])
+        needs_dvc_add = versioned_df[needs_add_flags]
+        print(needs_dvc_add)
+        print(f'There are {len(needs_dvc_add)} packages that need DVC add/push')
+        if len(needs_dvc_add):
+            if mode == 'interact':
+                flag = Confirm.ask('Do you want to run DVC add/push?')
+                if not flag:
+                    raise UserAbort
+
+            import platform
+            from watch.utils.simple_dvc import SimpleDVC
+            hostname = platform.node()
+            dvc_api = SimpleDVC(self.expt_dvc_dpath)
+
+            toadd_pkg_fpaths = needs_dvc_add['raw'].to_list()
+
+            dvc_api.git_commitpush(f'new packaged models from {hostname}')
+
+            dvc_api.add(toadd_pkg_fpaths, verbose=1)
+            dvc_api.push(
+                toadd_pkg_fpaths, remote=self.dvc_remote,
+                jobs=perf_config['push_workers'],
+                recursive=True, verbose=1)
+
+        print(ub.codeblock(
+            f"""
+            # On the evaluation remote you need to run something like:
+            DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+            cd $DVC_EXPT_DPATH
+            git pull
+            dvc pull -r aws --recursive models/fusion/{self.dataset_code}
+
+            python -m watch.mlops.manager "pull packages" --dvc_dpath=$DVC_EXPT_DPATH
+            python -m watch.mlops.manager "status packages" --dvc_dpath=$DVC_EXPT_DPATH
+            """))
+
     def push_packages(self):
         """
         This does what repackage used to do.
@@ -705,91 +803,10 @@ class ExperimentState(ub.NiceRepr):
         >>> self = ExperimentState(expt_dvc_dpath, dataset_code, data_dvc_dpath)
         >>> self.summarize()
         """
-        from rich.prompt import Confirm
-
-        perf_config = {
-            'push_workers': 8,
-        }
-
         mode = 'all'
-
-        staging_df = self.staging_table()
-        needs_package = staging_df[~staging_df['is_packaged']]
-
-        print(f'There are {len(needs_package)} checkpoints that need to be repackaged')
-        if mode == 'interact':
-            flag = Confirm.ask('Do you want to repackage?')
-            if not flag:
-                raise UserAbort
-
-        if 'ckpt_path' in needs_package:
-            to_repackage = needs_package['ckpt_path'].values.tolist()
-        else:
-            to_repackage = []
-        print('to_repackage = {}'.format(ub.repr2(to_repackage, nl=1)))
-        if to_repackage:
-            # NOTE: THIS RELIES ON KNOWING ABOUT THE SPECIFIC MODEL CODE.
-            # IT WOULD BE NICE IF WE DIDN'T NEED THAT HERE.
-            repackager.repackage(to_repackage)
-
-        # Rebuild the tables to ensure we are up to date
-        tables = self.cross_referenced_tables()
-        staging_df, versioned_df = ub.take(tables, ['staging', 'versioned'])
-        needs_copy = staging_df[~staging_df['is_copied']]
-        print(needs_copy)
-        print(f'There are {len(needs_copy)} packages that need to be copied')
-        if mode == 'interact':
-            flag = Confirm.ask('Do you want to copy?')
-            if not flag:
-                raise UserAbort
-
-        import shutil
-        for row in ub.ProgIter(needs_copy.to_dict('records'), desc='Copy packages to DVC dir'):
-            kw = ub.udict(row).subdict({'expt', 'model'})
-            kw['expt_dvc_dpath'] = self.expt_dvc_dpath
-            kw['dataset_code'] = self.dataset_code
-            pkg_fpath = ub.Path(self.templates['pkg_fpath'].format(**kw))
-            src, dst = (row['spkg_fpath'], pkg_fpath)
-            dst.parent.ensuredir()
-            shutil.copy(src, dst)
-
-        # Rebuild the tables to ensure we are up to date
-        tables = self.cross_referenced_tables()
-        staging_df, versioned_df = ub.take(tables, ['staging', 'versioned'])
-        needs_add_flags = (~versioned_df['has_dvc'] | versioned_df['unprotected'])
-        needs_dvc_add = versioned_df[needs_add_flags]
-        print(needs_dvc_add)
-        print(f'There are {len(needs_dvc_add)} packages that need DVC add/push')
-        if mode == 'interact':
-            flag = Confirm.ask('Do you want to run DVC add/push?')
-            if not flag:
-                raise UserAbort
-
-        if len(needs_dvc_add):
-            from watch.utils.simple_dvc import SimpleDVC
-            dvc_api = SimpleDVC(self.expt_dvc_dpath)
-            toadd_pkg_fpaths = needs_dvc_add['raw'].to_list()
-            dvc_api.add(toadd_pkg_fpaths)
-            dvc_api.push(
-                toadd_pkg_fpaths, remote=self.dvc_remote,
-                jobs=perf_config['push_workers'],
-                recursive=True)
-
-            import platform
-            hostname = platform.node()
-            dvc_api.git_commitpush(f'new packaged models from {hostname}')
-
-        print(ub.codeblock(
-            f"""
-            # On the evaluation remote you need to run something like:
-            DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
-            cd $DVC_EXPT_DPATH
-            git pull
-            dvc pull -r aws --recursive models/fusion/{self.dataset_code}
-
-            python -m watch.mlops.manager "pull packages" --dvc_dpath=$DVC_EXPT_DPATH
-            python -m watch.mlops.manager "status packages" --dvc_dpath=$DVC_EXPT_DPATH
-            """))
+        self.package_checkpoints(mode=mode)
+        self.copy_packages_to_dvc(mode=mode)
+        self.add_packages_to_dvc(mode=mode)
 
 
 def checkpoint_filepath_info(fname):
@@ -886,9 +903,7 @@ def summarize_tables(tables):
 
     if versioned_df is not None:
         title = ('[bright_green] Versioned Summary (Packaged Models)')
-        # if 'has_orig' not in versioned_df.columns:
-        #     versioned_df['has_orig'] = np.nan
-        # version_bitcols = ['has_raw', 'has_dvc', 'is_link', 'is_broken', 'needs_pull', 'needs_push', 'has_orig']
+        # version_bitcols = ['has_raw', 'has_dvc', 'is_link', 'is_broken', 'needs_pull', 'needs_push']
         version_bitcols = ['has_raw', 'has_dvc', 'is_link', 'is_broken', 'needs_pull', 'needs_push']
         if len(versioned_df):
             grouper_keys = list(_grouper_keys & versioned_df.columns)
@@ -910,13 +925,14 @@ if __name__ == '__main__':
     """
     CommandLine:
         python ~/code/watch/watch/mlops/mlops.manager.py "pull all"
-        python -m watch.mlops.mlops.manager "status"
-        # python -m watch.mlops.manager "push all"
+        python -m watch.mlops.manager "status"
+        python -m watch.mlops.manager "list"
+        python -m watch.mlops.manager "pull packages"
+
+        # python -m watch.mlops.manager "push packages"
         # python -m watch.mlops.manager "pull evals"
 
         # python -m watch.mlops.manager "evaluate"
-
-        # python -m watch.mlops.manager "pull all"
         # python -m watch.mlops.manager "pull packages"
     """
     main(cmdline=True)

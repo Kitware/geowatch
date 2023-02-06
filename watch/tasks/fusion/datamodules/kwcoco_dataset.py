@@ -1245,6 +1245,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         if not self.inference_only:
             truth_info = self._prepare_truth_info(final_gids, gid_to_sample,
                                                   num_frames, target, target_)
+        else:
+            truth_info = None
 
         frame_items = self._build_frame_items(final_gids, gid_to_sample,
                                               truth_info, resolution_info)

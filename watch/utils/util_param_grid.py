@@ -249,14 +249,14 @@ def github_action_matrix(arg):
                          animal: cat
                  ''')
         >>> grid_items = github_action_matrix(arg)
-        >>> print('grid_items = {}'.format(ub.repr2(grid_items, nl=1)))
+        >>> print('grid_items = {}'.format(ub.urepr(grid_items, nl=1)))
         grid_items = [
-            {'animal': 'cat', 'color': 'pink', 'fruit': 'apple', 'shape': 'circle'},
-            {'animal': 'dog', 'color': 'green', 'fruit': 'apple', 'shape': 'circle'},
-            {'animal': 'cat', 'color': 'pink', 'fruit': 'pear'},
-            {'animal': 'dog', 'color': 'green', 'fruit': 'pear'},
+            {'fruit': 'apple', 'animal': 'cat', 'color': 'pink', 'shape': 'circle'},
+            {'fruit': 'apple', 'animal': 'dog', 'color': 'green', 'shape': 'circle'},
+            {'fruit': 'pear', 'animal': 'cat', 'color': 'pink'},
+            {'fruit': 'pear', 'animal': 'dog', 'color': 'green'},
             {'fruit': 'banana'},
-            {'animal': 'cat', 'fruit': 'banana'},
+            {'fruit': 'banana', 'animal': 'cat'},
         ]
 
 

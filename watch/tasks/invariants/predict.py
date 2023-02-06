@@ -65,8 +65,8 @@ class InvariantPredictConfig(scfg.DataConfig):
             number of background data writing workers
             '''))
 
-    window_space_scale = scfg.Value('10GSD', help='The window GSD to build the grid at')
-    input_space_scale = scfg.Value('10GSD', help='The input GSD to sample the grid at')
+    window_space_scale = scfg.Value('10GSD', help='The window GSD to build the grid at', alias=['window_resolution'])
+    input_space_scale = scfg.Value('10GSD', help='The input GSD to sample the grid at', alias=['input_resolution'])
 
     sensor = scfg.Value(['S2', 'L8'], nargs='+')
     bands = scfg.Value(['shared'], type=str, help=ub.paragraph(

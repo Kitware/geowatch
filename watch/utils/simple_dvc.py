@@ -109,9 +109,8 @@ class SimpleDVC(ub.NiceRepr):
         rel_paths = [os.fspath(p.relative_to(dvc_root)) for p in paths]
         with util_path.ChDir(dvc_root):
             dvc_command = ['add'] + rel_paths
-            if verbose:
-                verb_flag = '-' + ('v' * min(verbose, 3))
-                dvc_command += [verb_flag]
+            extra_args = self._verbose_extra_args(verbose)
+            dvc_command = dvc_command + extra_args
             ret = dvc_main.main(dvc_command)
         if ret != 0:
             raise Exception('Failed to add files')
@@ -132,9 +131,8 @@ class SimpleDVC(ub.NiceRepr):
             dvc_command = ['check-ignore'] + rel_paths
             if details:
                 dvc_command += ['--details']
-            if verbose:
-                verb_flag = '-' + ('v' * min(verbose, 3))
-                dvc_command += [verb_flag]
+            extra_args = self._verbose_extra_args(verbose)
+            dvc_command = dvc_command + extra_args
             ret = dvc_main.main(dvc_command)
         if ret != 0:
             raise Exception('Failed check-ignore')
@@ -169,7 +167,24 @@ class SimpleDVC(ub.NiceRepr):
                 else:
                     raise
 
-    def push(self, path, remote=None, recursive=False, jobs=None):
+    def _verbose_extra_args(self, verbose):
+        extra_args = []
+        if verbose:
+            verbose = max(min(3, verbose), 1)
+            extra_args += ['-' + 'v' * verbose]
+        return extra_args
+
+    def _remote_extra_args(self, remote, recursive, jobs, verbose):
+        extra_args = self._verbose_extra_args(verbose)
+        if remote:
+            extra_args += ['-r', remote]
+        if jobs is not None:
+            extra_args += ['--jobs', str(jobs)]
+        if recursive:
+            extra_args += ['--recursive']
+        return extra_args
+
+    def push(self, path, remote=None, recursive=False, jobs=None, verbose=0):
         """
         Push the content tracked by .dvc files to remote storage.
 
@@ -194,19 +209,12 @@ class SimpleDVC(ub.NiceRepr):
             return
         remote = self._ensure_remote(remote)
         dvc_root = self._ensure_root(paths)
-        extra_args = []
-        if remote:
-            extra_args += ['-r', remote]
-        if jobs is not None:
-            extra_args += ['--jobs', str(jobs)]
-        if recursive:
-            extra_args += ['--recursive']
-
+        extra_args = self._remote_extra_args(remote, recursive, jobs, verbose)
         with util_path.ChDir(dvc_root):
             dvc_command = ['push'] + extra_args + [str(p.relative_to(dvc_root)) for p in paths]
             dvc_main.main(dvc_command)
 
-    def pull(self, path, remote=None, recursive=False, jobs=None):
+    def pull(self, path, remote=None, recursive=False, jobs=None, verbose=0):
         from dvc import main as dvc_main
         paths = list(map(ub.Path, _ensure_iterable(path)))
         if len(paths) == 0:
@@ -214,14 +222,7 @@ class SimpleDVC(ub.NiceRepr):
             return
         remote = self._ensure_remote(remote)
         dvc_root = self._ensure_root(paths)
-        extra_args = []
-        if remote:
-            extra_args += ['-r', remote]
-        if jobs is not None:
-            extra_args += ['--jobs', str(jobs)]
-        if recursive:
-            extra_args += ['--recursive']
-
+        extra_args = self._remote_extra_args(remote, recursive, jobs, verbose)
         with util_path.ChDir(dvc_root):
             dvc_command = ['pull'] + extra_args + [str(p.relative_to(dvc_root)) for p in paths]
             dvc_main.main(dvc_command)

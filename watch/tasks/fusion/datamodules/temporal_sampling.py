@@ -84,21 +84,15 @@ Example:
     >>> vidid = dset.dataset['videos'][0]['id']
     >>> self = TimeWindowSampler.from_coco_video(
     >>>     dset, vidid,
-    >>>     time_window=11,
-    >>>     affinity_type='uniform', time_span='8m', update_rule='',
+    >>>     time_window=5,
+    >>>     affinity_type='hardish3', time_span='3m', update_rule='pairwise+distribute', determenistic=True
     >>> )
     >>> # xdoctest: +REQUIRES(--show)
     >>> import kwplot
     >>> plt = kwplot.autoplt()
-    >>> self.update_affinity(affinity_type='contiguous')
-    >>> self.show_summary(samples_per_frame=3, fnum=1)
-    >>> plt.subplots_adjust(top=0.8)
-    >>> self.update_affinity(affinity_type='soft2')
-    >>> self.show_summary(samples_per_frame=3, fnum=2)
-    >>> plt.subplots_adjust(top=0.8)
-    >>> self.update_affinity(affinity_type='hardish3')
-    >>> self.show_summary(samples_per_frame=3, fnum=3)
-    >>> plt.subplots_adjust(top=0.8)
+    >>> self.show_summary(samples_per_frame=5, fnum=1)
+    >>> self.show_procedure(fnum=4)
+    >>> plt.subplots_adjust(top=0.9)
 
 Example:
     >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
