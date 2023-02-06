@@ -220,10 +220,8 @@ queue_archive_dmj_assets(){
     SENSORS=("L8" "S2" "WV" "WV1" "PD")
     for sensor in "${SENSORS[@]}"; do
         echo "### sensor=$sensor"
-        for dpath in "$DJM_ASSET_DPATH"/"$sensor"; do
-          echo "### dpath=$dpath"
-          cmd_queue --command=submit --name=$QUEUE_NAME --bash_text="7z a '${DST_ASSET_DPATH}/${sensor}.zip' '$dpath'"
-        done
+        dpath="$DJM_ASSET_DPATH"/"$sensor"
+        cmd_queue --action=submit --name="$QUEUE_NAME" --command="7z a '${DST_ASSET_DPATH}/${sensor}.zip' '$dpath'"
     done
 }
 
@@ -241,6 +239,7 @@ queue_dmj_reproject(){
     DJM_ASSET_DPATH=$DMJ_DPATH/$REGION_ID/kwcoco-dataset/$REGION_ID
     DST_ASSET_DPATH=$DST_DPATH/$REGION_ID
 
+    cmd_queue --action=submit --name="$QUEUE_NAME" -- \
     python -m watch reproject_annotations \
         --src "$IMGONLY_FPATH" \
         --dst "$IMGANNS_FPATH" \
@@ -254,13 +253,17 @@ update_from_dmj_constructions(){
     __doc__="
 
     READY:
-        BH_R001  BR_R002  BR_R004  LR_R001  NZ_R001  US_R001  US_R005                                                                                  
-    DONE:
+        BH_R001  BR_R002  BR_R004  LR_R001  NZ_R001  US_R001  US_R005  KR_R001  KR_R002 BR_R001 
+        
+        DONE:
         KR_R001  KR_R002 BR_R001
+
+    NEW
+        echo AE_C003 PE_C003 QA_C001 SA_C005 US_C000 US_C010 US_C011 US_C012 US_C014
     
     "
 
-    REGION_IDS=("BH_R001" "BR_R002" "BR_R004" "LR_R001" "NZ_R001" "US_R001"  "US_R005")
+    REGION_IDS=(AE_C003 PE_C003 QA_C001 SA_C005 US_C000 US_C010 US_C011 US_C012 US_C014)
     QUEUE_NAME=fixup-drop6-zip
     cmd_queue new $QUEUE_NAME
     for REGION_ID in "${REGION_IDS[@]}"; do
@@ -300,8 +303,8 @@ update_from_dmj_constructions(){
           echo 7z a "${DST_ASSET_DPATH}/${sensor}.zip" "$dpath"
         done
     done
-    ls $DST_ASSET_DPATH
-    ls $DJM_ASSET_DPATH
+    ls "$DST_ASSET_DPATH"
+    ls "$DJM_ASSET_DPATH"
 
     # Remove the existing assets
     #realpath $DST_DPATH/$REGION_ID
@@ -354,6 +357,10 @@ update_from_dmj_constructions(){
     ZIP_DVC_FPATHS=($REGION_ID/*.zip.dvc)
 
     dvc push -r aws "${ZIP_DVC_FPATHS[@]}" -v
+
+    7z a splits.zip *.kwcoco.* -mx9
+
+    python ~/code/watch/watch/cli/prepare_splits.py
 
     __check_overlap__="
     import ubelt as ub

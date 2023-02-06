@@ -314,8 +314,8 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         dataset_stats=None,
         input_sensorchan=None,
         name: str = "unnamed_model",
-        position_encoder: ScaleAwarePositionalEncoder = None,
-        backbone: BackboneEncoderDecoder = None,
+        position_encoder: ScaleAwarePositionalEncoder = 'auto',
+        backbone: BackboneEncoderDecoder = 'auto',
         token_width: int = 10,
         token_dim: int = 16,
         spatial_scale_base: float = 1.,
@@ -365,9 +365,25 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             >>>   backbone=backbone,
             >>> )
         """
-        assert position_encoder is not None
+        # assert position_encoder is not None
         assert tokenizer in {"simple_conv", "resnet18"}, "Tokenizer not implemented yet."
         assert decoder in {"upsample", "simple_conv", "trans_conv"}, "Decoder not implemented yet."
+
+        if isinstance(position_encoder, str) and position_encoder == 'auto':
+            position_encoder = ScaleAgnostictPositionalEncoder(3, 8)
+
+        if isinstance(backbone, str) and backbone == 'auto':
+            backbone = TransformerEncoderDecoder(
+                encoder_depth=1,
+                decoder_depth=1,
+                dim=position_encoder.output_dim + 16,
+                queries_dim=position_encoder.output_dim,
+                logits_dim=16,
+                cross_heads=1,
+                latent_heads=1,
+                cross_dim_head=1,
+                latent_dim_head=1,
+            )
 
         super().__init__()
         self.save_hyperparameters(ignore=["position_encoder"])

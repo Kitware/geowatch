@@ -2061,6 +2061,9 @@ WATCH_GRID_WORKERS=4 python -m watch.tasks.fusion.fit \
     --devices="0," \
     --init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6/runs/Drop6_BAS_2022_12_10GSD_BGRN_V11_CONT1/lightning_logs/version_5/package-interupt/package_epoch43_step59666.pt
 
+### TODO: start from
+### /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6/runs/Drop6_BAS_2022_12_10GSD_BGRN_V11_CONT1/lightning_logs/version_8/package-interupt/package_epoch120_step328801.pt
+
 
     #--init="$DVC_EXPT_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_BAS_2022_12_15GSD_BGRN_V10/Drop4_BAS_2022_12_15GSD_BGRN_V10_epoch=0-step=4305.pt
     #--init="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6/runs/Drop6_BAS_2022_12_10GSD_BGRN_V11_CONT1/lightning_logs/version_3/package-interupt/package_epoch0_step255.pt"

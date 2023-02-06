@@ -35,9 +35,12 @@ class PrepareSplitsConfig(scfg.Config):
     This generates the bash commands necessary to split a base kwcoco file into
     the standard train / validation splits.
 
+    Ignore:
+        base_fpath = 'imganns*.kwcoco.*'
+
     """
     default = {
-        'base_fpath': scfg.Value(None, help='base coco file to split', position=1),
+        'base_fpath': scfg.Value(None, help='base coco file to split or a globstring in constructive mode', position=1),
         'virtualenv_cmd': scfg.Value(None, type=str, help=ub.paragraph(
             '''
             Command to start the appropriate virtual environment if your bashrc
@@ -49,8 +52,95 @@ class PrepareSplitsConfig(scfg.Config):
         'with_textual': scfg.Value('auto', help='setting for cmd-queue monitoring'),
         'other_session_handler': scfg.Value('ask', help='for tmux backend only. How to handle conflicting sessions. Can be ask, kill, or ignore, or auto'),
 
+        'constructive_mode': scfg.Value(False, help='if True use the new constructive mode'),
+
         'verbose': scfg.Value(1, help=''),
+        'workers': scfg.Value(2, help=''),
     }
+
+
+# TODO: should be some sort of external file we read / define
+VALI_REGIONS_SPLITS = {
+    'split1': {
+        'KR_R001',
+        'KR_R002',
+    },
+    'split2': {
+        'BR_R002',
+        'NZ_R001',
+    },
+    'split3': {
+        'AE_R001',
+        'US_R004',
+    },
+    'split4': {
+        'BR_R001',
+        'LT_R001',
+        'US_R004',
+    },
+    'split5': {
+        'BR_R001',
+        'US_R001',
+        'CH_R001',
+    },
+}
+
+IGNORE_REGIONS = {
+    'CN_C001',
+}
+
+
+def _submit_constructive_split_jobs(base_fpath, queue, depends=[]):
+    """
+    new method for splits to construct them from previouly partitioned files
+    """
+    from watch.utils import util_path
+    import shlex
+    partitioned_fpaths = util_path.coerce_patterned_paths(base_fpath)
+    dpath = ub.Path(base_fpath).parent
+
+    full_fpath = dpath / 'data.kwcoco.zip'
+
+    for split, vali_regions in VALI_REGIONS_SPLITS.items():
+        train_split_fpath = dpath / f'data_train_{split}.kwcoco.zip'
+        vali_split_fpath = dpath / f'data_vali_{split}.kwcoco.zip'
+        train_parts = []
+        vali_parts = []
+        for fpath in partitioned_fpaths:
+            if any(v in fpath.name for v in IGNORE_REGIONS):
+                ...
+            elif any(v in fpath.name for v in vali_regions):
+                vali_parts.append(fpath)
+            else:
+                train_parts.append(fpath)
+
+        train_parts_str = ' '.join([shlex.quote(str(p)) for p in train_parts])
+        vali_parts_str = ' '.join([shlex.quote(str(p)) for p in vali_parts])
+
+        command = ub.codeblock(
+            fr'''
+            python -m kwcoco union \
+                --src {vali_parts_str} \
+                --dst {vali_split_fpath}
+            ''')
+        queue.submit(command, begin=1, depends=depends)
+
+        command = ub.codeblock(
+            fr'''
+            python -m kwcoco union \
+                --src {train_parts_str} \
+                --dst {train_split_fpath}
+            ''')
+        queue.submit(command, depends=depends)
+
+    all_parts_Str = ' '.join([shlex.quote(str(p)) for p in partitioned_fpaths])
+    command = ub.codeblock(
+        fr'''
+        python -m kwcoco union \
+            --src {all_parts_Str} \
+            --dst {full_fpath}
+        ''')
+    queue.submit(command, depends=depends)
 
 
 def _submit_split_jobs(base_fpath, queue, depends=[]):
@@ -61,49 +151,32 @@ def _submit_split_jobs(base_fpath, queue, depends=[]):
     base_fpath = ub.Path(base_fpath)
 
     splits = {
-        # 'nowv': base_fpath.augment(suffix='_nowv', multidot=True),
+        # 'nowv': base_fpath.augment(stemsuffix='_nowv', multidot=True),
 
-        'train_split1': base_fpath.augment(suffix='_train_split1', multidot=True),
-        'train_split2': base_fpath.augment(suffix='_train_split2', multidot=True),
-        'train_split3': base_fpath.augment(suffix='_train_split3', multidot=True),
-        # 'nowv_train': base_fpath.augment(suffix='_nowv_train', multidot=True),
-        # 'wv_train': base_fpath.augment(suffix='_wv_train', multidot=True),
-        # 's2_wv_train': base_fpath.augment(suffix='_s2_wv_train', multidot=True),
+        'train_split1': base_fpath.augment(stemsuffix='_train_split1', multidot=True),
+        'train_split2': base_fpath.augment(stemsuffix='_train_split2', multidot=True),
+        'train_split3': base_fpath.augment(stemsuffix='_train_split3', multidot=True),
+        # 'nowv_train': base_fpath.augment(stemsuffix='_nowv_train', multidot=True),
+        # 'wv_train': base_fpath.augment(stemsuffix='_wv_train', multidot=True),
+        # 's2_wv_train': base_fpath.augment(stemsuffix='_s2_wv_train', multidot=True),
 
-        'vali_split1': base_fpath.augment(suffix='_vali_split1', multidot=True),
-        'vali_split2': base_fpath.augment(suffix='_vali_split2', multidot=True),
-        'vali_split3': base_fpath.augment(suffix='_vali_split3', multidot=True),
-        # 'nowv_vali': base_fpath.augment(suffix='_nowv_vali', multidot=True),
-        # 'wv_vali': base_fpath.augment(suffix='_wv_vali', multidot=True),
-        # 's2_wv_vali': base_fpath.augment(suffix='_s2_wv_vali', multidot=True),
-    }
-
-    ignore_regions = {
-        'CN_C001',
-    }
-    vali_regions_splits = {
-        'split1': {
-            'KR_R001',
-            'KR_R002',
-            'US_R007',
-        },
-        'split2': {
-            'BR_R002',
-        },
-        'split3': {
-            'AE_R001',
-        },
+        'vali_split1': base_fpath.augment(stemsuffix='_vali_split1', multidot=True),
+        'vali_split2': base_fpath.augment(stemsuffix='_vali_split2', multidot=True),
+        'vali_split3': base_fpath.augment(stemsuffix='_vali_split3', multidot=True),
+        # 'nowv_vali': base_fpath.augment(stemsuffix='_nowv_vali', multidot=True),
+        # 'wv_vali': base_fpath.augment(stemsuffix='_wv_vali', multidot=True),
+        # 's2_wv_vali': base_fpath.augment(stemsuffix='_s2_wv_vali', multidot=True),
     }
 
     # train_region_selector = '(' + ' or '.join(['(.name ==  "{}")'.format(n) for n in (ignore_regions | vali_regions)]) + ') | not'
     # vali_region_selector = ' or '.join(['(.name ==  "{}")'.format(n) for n in (vali_regions)])
 
-    for split, vali_regions in vali_regions_splits.items():
+    for split, vali_regions in VALI_REGIONS_SPLITS.items():
 
         train_key = f'train_{split}'
         vali_key = f'vali_{split}'
 
-        train_region_selector = '(' + ' or '.join(['(.name | startswith("{}"))'.format(n) for n in (ignore_regions | vali_regions)]) + ') | not'
+        train_region_selector = '(' + ' or '.join(['(.name | startswith("{}"))'.format(n) for n in (IGNORE_REGIONS | vali_regions)]) + ') | not'
         vali_region_selector = ' or '.join(['(.name | startswith("{}"))'.format(n) for n in (vali_regions)])
 
         split_jobs = {}
@@ -143,24 +216,27 @@ def prep_splits(cmdline=False, **kwargs):
 
     if config['base_fpath'] == 'auto':
         # Auto hack.
+        raise NotImplementedError
         import watch
         dvc_dpath = watch.find_smart_dvc_dpath()
         # base_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/data.kwcoco.json'
         base_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json'
-        raise NotImplementedError
     else:
         base_fpath = ub.Path(config['base_fpath'])
 
     import cmd_queue
     queue = cmd_queue.Queue.create(
         backend=config['backend'],
-        name='watch-splits', size=2
+        name='watch-splits', size=config['workers'],
     )
 
     if config['virtualenv_cmd']:
         queue.add_header_command(config['virtualenv_cmd'])
 
-    _submit_split_jobs(base_fpath, queue)
+    if config['constructive_mode']:
+        _submit_split_jobs(base_fpath, queue)
+    else:
+        _submit_constructive_split_jobs(base_fpath, queue)
 
     if config['verbose']:
         queue.rprint()

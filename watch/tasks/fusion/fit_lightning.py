@@ -288,13 +288,17 @@ if __name__ == "__main__":
                 --model.help=NoopModel
 
         python -m watch.tasks.fusion.fit_lightning fit \
-            --data.train_dataset=special:vidshapes8-frames9-speed0.5-multispectral \
-            --trainer.accelerator=gpu --trainer.devices=0, \
+            --data.train_dataset=special:vidshapes8-frames9-speed0.5 \
+            --trainer.accelerator=gpu \
+            --trainer.strategy=ddp \
+            --trainer.devices=0,1 \
+            --data.batch_size=4 \
+            --model.class_path=HeterogeneousModel \
+            --optimizer.class_path=torch.optim.Adam \
+            --trainer.default_root_dir ./demo_train
+
             --trainer.precision=16  \
             --trainer.fast_dev_run=5 \
-            --model=HeterogeneousModel \
-            --model.tokenizer=linconv \
-            --trainer.default_root_dir ./demo_train
 
         # Note: setting fast_dev_run seems to disable directory output.
 
