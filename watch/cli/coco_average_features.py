@@ -128,7 +128,7 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         sensor_names (list(str), optional):
             Only merge images belonging to sensors in this list. Defaults to None (aka do not filter by sensor).
 
-        target_resolution (int | str, optional): 
+        target_resolution (int | str, optional):
             GSD to resize the resolution of the images to. Defaults to None.
 
         flexible_merge (bool, optional):
@@ -155,7 +155,7 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         >>> output_bundle_dpath = (dpath / 'merge_bundle').delete().ensuredir()
         >>> output_kwcoco_path = output_bundle_dpath / 'data.kwcoco.json'
         >>> channel_names = ['notsalient|salient'] * 2
-        >>> weights = [1.0, 0.0]
+        >>> weights = [1.0, 1.0]
         >>> output_channel_names = 'notsalient|salient'
         >>> sensor_name = None
         >>> # Execute merge
@@ -191,6 +191,10 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         >>> os.remove(dset1.fpath)
         >>> os.remove(dset2.fpath)
         >>> os.remove(output_dset.fpath)
+
+    Ignore:
+        import xdev
+        globals().update(xdev.get_func_kwargs(merge_kwcoco_channels))
     """
 
     # Check args.
@@ -301,7 +305,7 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         merge_coco_img = merge_kwcoco.coco_image(image_id)
 
         # Get asset channels from each kwcoco file based on image_name.
-        accum_data = None
+        gathered_parts = []
         for file_index, kwcoco_file in enumerate(kwcoco_files):
             # Get the kwcoco specific image id from image name.
             kwfile_image_id = kwcoco_file.index.name_to_img[image_name]["id"]
@@ -313,50 +317,39 @@ def merge_kwcoco_channels(kwcoco_file_paths,
             # image_channels: numpy float array of shape [height, width, n_channels].
             # image_data = coco_img.delay(kwcoco_channel_names[file_index], space='video',
             #                             resolution=target_resolution).finalize()
-            image_data = coco_img.delay(kwcoco_channel_names[file_index]).finalize()
+            asset = coco_img.find_asset_obj(kwcoco_channel_names[file_index])
+            delayed = coco_img.delay(kwcoco_channel_names[file_index], space='asset')
+            gathered_parts.append({
+                'asset': asset,
+                'delayed': delayed,
+            })
 
-            # FIXME:
-            image_data = np.nan_to_num(image_data)
+        if __debug__:
+            # Assuming a high degree of alignment between input assets will
+            # need to extend if this assumption breaks.
+            assert ub.allsame([p['asset']['width'] for p in gathered_parts])
+            assert ub.allsame([p['asset']['height'] for p in gathered_parts])
+            warps = [p['asset']['warp_aux_to_img'] for p in gathered_parts]
+            assert ub.allsame(warps)
 
-            if image_id == 5:
-                if file_index == 0:
-                    first_img = image_data
-                else:
-                    last_img = image_data
+        import kwarray
+        accum = kwarray.Stitcher(gathered_parts[0]['delayed'].shape)
+        for part, weight in zip(gathered_parts, weights):
+            delayed = part['delayed']
+            image_data = delayed.finalize(nodata_method='float')
+            pxl_weight = (1 - np.isnan(image_data)) * weight
+            accum.add((slice(None), slice(None)), image_data, pxl_weight)
 
-            # Weight image data.
-            weighted_image_data = image_data * weights[file_index]
+        average_image_data = accum.finalize()
 
-            if accum_data is None:
-                accum_data = weighted_image_data
-            else:
-                accum_data += weighted_image_data
-
-        # breakpoint()
-        # pass
-        # img_data_no_nan = np.nan_to_num(image_data)
-        # print(img_data_no_nan.min(), img_data_no_nan.mean(), img_data_no_nan.max())
-
-        # accum_data_no_nan = np.nan_to_num(accum_data)
-        # print(accum_data_no_nan.min(), accum_data_no_nan.mean(), accum_data_no_nan.max())
-
-        # FIXME: Does not work.
-        # accum_data = image_data
-
-        # Normalize averaged data by weights.
-        average_image_data = accum_data / sum(weights)
-        if image_id == 5:
-            print(
-                f'{image_id} | First: {first_img[:,:,0].mean()} | Second: {last_img[:,:,0].mean()} | Merge: {average_image_data[:,:,0].mean()}'
-            )
-            print(
-                f'{image_id} | First: {first_img.mean()} | Second: {last_img.mean()} | Merge: {average_image_data.mean()}'
-            )
-            print(
-                f'{image_id} | First: {first_img.shape} | Second: {last_img.shape} | Merge: {average_image_data.shape}')
-
-        # average_image_data_no_nan = np.nan_to_num(average_image_data)
-        # print(average_image_data_no_nan.min(), average_image_data_no_nan.mean(), average_image_data_no_nan.max())
+        if 0:
+            import kwplot
+            kwplot.autompl()
+            a, b = gathered_parts[0:2]
+            im1 = a.finalize(nodata_method='float')[..., 1]
+            im2 = b.finalize(nodata_method='float')[..., 1]
+            canvas = kwimage.stack_images([im1, im2, average_image_data[..., 1]], axis=1)
+            kwplot.imshow(canvas)
 
         # TODO: better backend name.
         path_chan = output_channels.path_sanitize()
@@ -365,19 +358,14 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         average_fpath = save_assest_dir / average_fname
 
         # Check if there is already an asset with the same channel_names.
-        output_obj = None
-        for cand_obj in merge_coco_img.iter_asset_objs():
-            cand_channels = kwcoco.FusedChannelSpec.coerce(cand_obj["channels"])
-            # Check if output channels matches candidate channels.
-            if output_channels == cand_channels:
-                output_obj = cand_obj
-                break
+        output_obj = merge_coco_img.find_asset_obj(output_channels)
 
         if output_obj is not None:
             # Overwrite the data in the output auxiliary item.
             output_obj["file_name"] = os.fspath(average_fpath)
             # output_obj['height'] = average_image_data.shape[0]
             # output_obj['width'] = average_image_data.shape[1]
+
         # else:
         #     # Add this as a new auxiliary item.
         #     merge_kwcoco.add_auxiliary_item(image_id,
@@ -413,7 +401,7 @@ class CocoAverageFeaturesConfig(scfg.DataConfig):
             a. Average the features from each kwcoco file.
             b. Save the averaged features to the new kwcoco image.
         4. Save the new kwcoco file.
-    
+
     """
     kwcoco_file_paths = scfg.Value(None,
                                    type=str,
@@ -464,7 +452,7 @@ class CocoAverageFeaturesConfig(scfg.DataConfig):
     target_resolution = scfg.Value(None,
                                    type=float,
                                    help=ub.paragraph('''
-            Set the target resolution that the features will be loaded at 
+            Set the target resolution that the features will be loaded at
             and then merged.
             '''))
 
