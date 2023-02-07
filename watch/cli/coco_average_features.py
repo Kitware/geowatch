@@ -96,7 +96,7 @@ def merge_kwcoco_channels(kwcoco_file_paths,
                           weights,
                           output_channel_names,
                           sensor_names=None,
-                          target_resolution=None,
+                          resolution=None,
                           flexible_merge=False):
     """
     Compute a weighted mean of channels from separate kwcoco file and save into
@@ -130,7 +130,7 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         sensor_names (list(str), optional):
             Only merge images belonging to sensors in this list. Defaults to None (aka do not filter by sensor).
 
-        target_resolution (int | str, optional):
+        resolution (int | str, optional):
             GSD to resize the resolution of the images to. Defaults to None.
 
         flexible_merge (bool, optional):
@@ -165,11 +165,11 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         >>> weights = [1.0, 1.0]
         >>> output_channel_names = 'notsalient|salient'
         >>> sensor_name = None
-        >>> target_resolution = '12GSD'
+        >>> resolution = '12GSD'
         >>> # Execute merge
         >>> merge_kwcoco_channels(kwcoco_file_paths, output_kwcoco_path,
         >>>                       channel_names, weights, output_channel_names,
-        >>>                       sensor_name, target_resolution=target_resolution)
+        >>>                       sensor_name, resolution=resolution)
         >>> # Check results
         >>> output_dset = kwcoco.CocoDataset(output_kwcoco_path)
         >>> gid = 5
@@ -232,11 +232,11 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         >>> weights = [1.0, 1.0]
         >>> output_channel_names = 'notsalient|salient'
         >>> sensor_name = None
-        >>> target_resolution = None
+        >>> resolution = None
         >>> # Execute merge
         >>> merge_kwcoco_channels(kwcoco_file_paths, output_kwcoco_path,
         >>>                       channel_names, weights, output_channel_names,
-        >>>                       sensor_name, target_resolution=target_resolution)
+        >>>                       sensor_name, resolution=resolution)
         >>> # Check results
         >>> output_dset = kwcoco.CocoDataset(output_kwcoco_path)
         >>> gid = 3
@@ -388,20 +388,15 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         merge_coco_img = merge_kwcoco.coco_image(image_id)
 
         # If the target resolution is None, then set the target resolution as the image with the highest resolution.
-        if target_resolution is None:
+        if resolution is None:
             asset_resolutions = []
             for kwcoco_file, channel_name in zip(kwcoco_files, kwcoco_channel_names):
-                breakpoint()
-                pass
-                mag = coco_resolution(kwcoco_file.coco_image(image_id), space='asset', channel=channel_name)['mag']
-                coco_resolution(kwcoco_file.coco_image(image_id), space='asset', channel=channel_name)
-                coco_resolution(kwcoco_file.coco_image(image_id), space='image', channel=channel_name)
-                coco_resolution(kwcoco_file.coco_image(image_id), space='video')
-                asset_resolutions.append(mag)
+                asset_mag = kwcoco_file.coco_image(image_id).resolution(channel=channel_name, space='asset')['mag']
+                asset_resolutions.append(asset_mag[0])
 
             # ASSUMPTION: Scales are symmetric.
-            index = np.argmin([mag[0] for mag in asset_resolutions])
-            img_target_resolution = asset_resolutions[index]
+            index = np.argmin([mag for mag in asset_resolutions])
+            img_resolution = asset_resolutions[index]
 
         # Get asset channels from each kwcoco file based on image_name.
         gathered_parts = []
@@ -414,7 +409,7 @@ def merge_kwcoco_channels(kwcoco_file_paths,
             asset = coco_img.find_asset_obj(channel_name)
 
             # Load the image in 'video' space to ensure consistent space for target resolution.
-            delayed = coco_img.delay(channel_name, space='video', resolution=target_resolution)
+            delayed = coco_img.delay(channel_name, space='video', resolution=resolution)
             gathered_parts.append({
                 'asset': asset,
                 'delayed': delayed,
@@ -460,12 +455,15 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         output_obj = merge_coco_img.find_asset_obj(output_channels)
 
         # Find the transformation from target to image space.
-        if target_resolution is None:
+        if resolution is None:
             scale_target_from_vid = kwimage.Affine.scale(
-                coco_img._scalefactor_for_resolution(space='video', resolution=img_target_resolution))
+                coco_img._scalefactor_for_resolution(space='asset',
+                                                     channel=output_channel_names,
+                                                     resolution=img_resolution))
         else:
             scale_target_from_vid = kwimage.Affine.scale(
-                coco_img._scalefactor_for_resolution(space='video', resolution=target_resolution))
+                coco_img._scalefactor_for_resolution(space='video', channel=output_channel_names,
+                                                     resolution=resolution))
 
         warp_target_from_img = scale_target_from_vid @ coco_img.warp_vid_from_img
         warp_img_from_target = warp_target_from_img.inv()
@@ -568,99 +566,12 @@ class CocoAverageFeaturesConfig(scfg.DataConfig):
                                 help=ub.paragraph('''
             If active, skip images that dont contain band when merging.
             '''))
-    target_resolution = scfg.Value(None,
-                                   type=float,
-                                   help=ub.paragraph('''
-            Set the target resolution that the features will be loaded at
+    resolution = scfg.Value(None,
+                            type=float,
+                            help=ub.paragraph('''
+            Set the resolution that the features will be loaded at
             and then merged.
             '''))
-
-
-def coco_resolution(self, space='image', channel=None, RESOLUTION_KEY=None):
-    """
-    Returns the resolution of this CocoImage in the requested space if
-    known. Errors if this information is not registered.
-
-    Args:
-        channel (str) :  only relevant if asking for asset space
-
-    TODO:
-        - [ ] Remove this once kwcoco 0.5.6 lands
-
-    Example:
-        >>> import kwcoco
-        >>> dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
-        >>> self = dset.coco_image(1)
-        >>> self.img['resolution'] = 1
-        >>> self.resolution()
-        >>> self.img['resolution'] = '1 meter'
-        >>> coco_resolution(self, space='video')
-        >>> coco_resolution(self, space='asset', channel='B11')
-        >>> coco_resolution(self, space='asset', channel='B1')
-    """
-    import kwimage
-    # Compute the offset transform from the requested space
-    # Handle the cases where resolution is specified at the image or at the
-    # video level.
-    from kwcoco.coco_image import DEFAULT_RESOLUTION_KEYS
-    from kwcoco.coco_image import coerce_resolution
-
-    if RESOLUTION_KEY is None:
-        RESOLUTION_KEY = DEFAULT_RESOLUTION_KEYS
-
-    def aliased_get(d, keys, default=None):
-        if not ub.iterable(keys):
-            return d.get(keys, default)
-        else:
-            found = 0
-            for key in keys:
-                if key in d:
-                    found = 1
-                    val = d[key]
-                    break
-            if not found:
-                val = default
-            return val
-
-    if space == 'video':
-        vid_resolution_expr = aliased_get(self.video, RESOLUTION_KEY, None)
-        if vid_resolution_expr is None:
-            # Do we have an image level resolution?
-            img_resolution_expr = aliased_get(self.img, RESOLUTION_KEY, None)
-            assert img_resolution_expr is not None
-            img_resolution_info = coerce_resolution(img_resolution_expr)
-            img_resolution_mat = kwimage.Affine.scale(img_resolution_info['mag'])
-            vid_resolution = (self.warp_vid_from_img @ img_resolution_mat.inv()).inv()
-            vid_resolution_info = {'mag': vid_resolution.decompose()['scale'], 'unit': img_resolution_info['unit']}
-        else:
-            vid_resolution_info = coerce_resolution(vid_resolution_expr)
-        space_resolution_info = vid_resolution_info
-    elif space == 'image':
-        img_resolution_expr = aliased_get(self.img, RESOLUTION_KEY, None)
-        if img_resolution_expr is None:
-            # Do we have an image level resolution?
-            vid_resolution_expr = aliased_get(self.video, RESOLUTION_KEY, None)
-            assert vid_resolution_expr is not None
-            vid_resolution_info = coerce_resolution(vid_resolution_expr)
-            vid_resolution_mat = kwimage.Affine.scale(vid_resolution_info['mag'])
-            img_resolution = (self.warp_img_from_vid @ vid_resolution_mat.inv()).inv()
-            img_resolution_info = {'mag': img_resolution.decompose()['scale'], 'unit': vid_resolution_info['unit']}
-        else:
-            img_resolution_info = coerce_resolution(img_resolution_expr)
-        space_resolution_info = img_resolution_info
-    elif space == 'asset':
-        if channel is None:
-            raise ValueError('must specify a channel to ask for the asset resolution')
-        # Use existing code to get the resolution of the image (could be more efficient)
-        space_resolution_info = self.resolution('image', RESOLUTION_KEY=RESOLUTION_KEY).copy()
-        # Adjust the image resolution based on the asset scale factor
-        warp_img_from_aux = kwimage.Affine.coerce(self.find_asset_obj(channel).get('warp_aux_to_img', None))
-        img_res_mat = kwimage.Affine.scale(space_resolution_info['mag'])
-        aux_res_mat = img_res_mat @ warp_img_from_aux
-        space_resolution_info['mag'] = np.array(aux_res_mat.decompose()['scale'])
-    else:
-        raise KeyError(space)
-    return space_resolution_info
 
 
 def main(cmdline=True, **kw):
@@ -681,7 +592,7 @@ def main(cmdline=True, **kw):
         config_dict['weights'],
         config_dict['output_channel_names'],
         sensor_names=config_dict['sensors'],
-        target_resolution=config_dict['target_resolution'],
+        resolution=config_dict['resolution'],
     )
 
 
