@@ -593,6 +593,7 @@ def main(cmdline=True, **kw):
         config_dict['output_channel_names'],
         sensor_names=config_dict['sensors'],
         resolution=config_dict['resolution'],
+        flexible_merge=config_dict['flexible_merge'],
     )
 
 
