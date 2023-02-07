@@ -2,6 +2,7 @@ import os
 import re
 
 import kwcoco
+import kwarray
 import kwimage
 import numpy as np
 import ubelt as ub
@@ -9,6 +10,7 @@ from tqdm import tqdm
 import scriptconfig as scfg
 
 from watch import exceptions
+from watch.tasks.fusion.predict import quantize_float01
 from watch.utils.kwcoco_extensions import transfer_geo_metadata
 
 
@@ -176,9 +178,6 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         >>> imdata1_img = dset1.coco_image(gid).delay('salient', space='image').finalize()
         >>> imdata2_img = dset2.coco_image(gid).delay('salient', space='image').finalize()
         >>> imdataM_img = output_dset.coco_image(gid).delay('salient', space='image').finalize()
-        >>> # imdata1 = dset1.delayed_load(gid, channels='notsalient|salient').finalize()[:,:,0]
-        >>> # imdata2 = dset2.delayed_load(gid, channels='notsalient|salient').finalize()[:,:,0]
-        >>> # imdataM = output_dset.delayed_load(gid, channels='notsalient|salient').finalize()[:,:,0]
         >>> import kwplot
         >>> kwplot.autompl()
         >>> F = kwimage.fill_nans_with_checkers
@@ -206,6 +205,73 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         >>> os.remove(dset1.fpath)
         >>> os.remove(dset2.fpath)
         >>> os.remove(output_dset.fpath)
+
+    Example:
+        >>> # TEST 2: Merge two kwcoco files with geo information.
+        >>> from watch.cli.coco_average_features import *  # NOQA
+        >>> import watch
+        >>> from kwcoco.demo.perterb import perterb_coco
+        >>> dpath = ub.Path.appdir('watch/test/coco_average_features')
+        >>> base_dset = watch.demo.coerce_kwcoco('watch-msi', geodata=True, dates=True)
+        >>> # Construct two copies of the same data with slightly different heatmaps
+        >>> dset1 = perterb_coco(base_dset.copy(), box_noise=0.5, cls_noise=0.5, n_fp=10, n_fn=10, rng=32)
+        >>> dset2 = base_dset.copy()
+        >>> dset1.fpath = ub.Path(dset1.fpath).augment(stemsuffix='_heatmap1')
+        >>> dset2.fpath = ub.Path(dset2.fpath).augment(stemsuffix='_heatmap2')
+        >>> watch.demo.smart_kwcoco_demodata.hack_in_heatmaps(dset1, heatmap_dname='dummy_heatmap1', with_nan=0, rng=423555)
+        >>> watch.demo.smart_kwcoco_demodata.hack_in_heatmaps(dset2, heatmap_dname='dummy_heatmap2', with_nan=0, rng=132666)
+        >>> dset1.dump(dset1.fpath)
+        >>> dset2.dump(dset2.fpath)
+        >>> # Build method args
+        >>> kwcoco_file_paths = [dset1.fpath, dset2.fpath]
+        >>> output_bundle_dpath = (dpath / 'merge_bundle').delete().ensuredir()
+        >>> output_kwcoco_path = output_bundle_dpath / 'data.kwcoco.json'
+        >>> channel_names = ['notsalient|salient'] * 2
+        >>> weights = [1.0, 1.0]
+        >>> output_channel_names = 'notsalient|salient'
+        >>> sensor_name = None
+        >>> target_resolution = None
+        >>> # Execute merge
+        >>> merge_kwcoco_channels(kwcoco_file_paths, output_kwcoco_path,
+        >>>                       channel_names, weights, output_channel_names,
+        >>>                       sensor_name, target_resolution=target_resolution)
+        >>> # Check results
+        >>> output_dset = kwcoco.CocoDataset(output_kwcoco_path)
+        >>> gid = 3
+        >>> imdata1 = dset1.coco_image(gid).delay('salient', space='asset').finalize()
+        >>> imdata2 = dset2.coco_image(gid).delay('salient', space='asset').finalize()
+        >>> imdataM = output_dset.coco_image(gid).delay('salient', space='asset').finalize()
+        >>> imdata1_img = dset1.coco_image(gid).delay('salient', space='image').finalize()
+        >>> imdata2_img = dset2.coco_image(gid).delay('salient', space='image').finalize()
+        >>> imdataM_img = output_dset.coco_image(gid).delay('salient', space='image').finalize()
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> F = kwimage.fill_nans_with_checkers
+        >>> kwplot.imshow(F(kwimage.normalize_intensity(imdata1)), title='img1 (asset)', pnum=(2, 3, 1), fnum=1)
+        >>> kwplot.imshow(F(kwimage.normalize_intensity(imdata2)), title='img2 (asset)', pnum=(2, 3, 2), fnum=1)
+        >>> kwplot.imshow(F(kwimage.normalize_intensity(imdataM)), title='mean (asset)', pnum=(2, 3, 3), fnum=1)
+        >>> kwplot.imshow(F(kwimage.normalize_intensity(imdata1_img)), title='img1 (img)', pnum=(2, 3, 4), fnum=1)
+        >>> kwplot.imshow(F(kwimage.normalize_intensity(imdata2_img)), title='img2 (img)', pnum=(2, 3, 5), fnum=1)
+        >>> kwplot.imshow(F(kwimage.normalize_intensity(imdataM_img)), title='mean (img)', pnum=(2, 3, 6), fnum=1)
+        >>> save_figure_path = dpath / 'test_2_result_plot.png'
+        >>> import matplotlib.pyplot as plt
+        >>> plt.savefig(save_figure_path)
+        >>> print(f'Test 2 plot saved to: {save_figure_path}')
+        >>> print(f'Weights: {weights}')
+        >>> print(f'Img1  mean: {np.nan_to_num(imdata1).mean()}')
+        >>> print(f'Img2  mean: {np.nan_to_num(imdata2).mean()}')
+        >>> print(f'Merge mean: {np.nan_to_num(imdataM).mean()}')
+        >>> print()
+        >>> print(f'Img1  shape (asset space): {imdata1.shape}')
+        >>> print(f'Img2  shape (asset space): {imdata2.shape}')
+        >>> print(f'Merge shape (asset space): {imdataM.shape}')
+        >>> print(f'Img1  shape (img space): {imdata1_img.shape}')
+        >>> print(f'Img2  shape (img space): {imdata2_img.shape}')
+        >>> print(f'Merge shape (img space): {imdataM_img.shape}')
+        >>> os.remove(dset1.fpath)
+        >>> os.remove(dset2.fpath)
+        >>> os.remove(output_dset.fpath)
+
 
     Ignore:
         import xdev
@@ -319,23 +385,40 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         # Get the merged kwcoco image.
         merge_coco_img = merge_kwcoco.coco_image(image_id)
 
+        # If the target resolution is None, then set the target resolution as the image with the highest resolution.
+        if target_resolution is None:
+            asset_resolutions = []
+            for kwcoco_file, channel_name in zip(kwcoco_files, kwcoco_channel_names):
+                breakpoint()
+                pass
+                mag = coco_resolution(kwcoco_file.coco_image(image_id), space='asset', channel=channel_name)['mag']
+                coco_resolution(kwcoco_file.coco_image(image_id), space='asset', channel=channel_name)
+                coco_resolution(kwcoco_file.coco_image(image_id), space='image', channel=channel_name)
+                coco_resolution(kwcoco_file.coco_image(image_id), space='video')
+                asset_resolutions.append(mag)
+
+            # ASSUMPTION: Scales are symmetric.
+            index = np.argmin([mag[0] for mag in asset_resolutions])
+            img_target_resolution = asset_resolutions[index]
+
         # Get asset channels from each kwcoco file based on image_name.
         gathered_parts = []
-        for file_index, kwcoco_file in enumerate(kwcoco_files):
+        for kwcoco_file, channel_name in zip(kwcoco_files, kwcoco_channel_names):
             # Get the kwcoco specific image id from image name.
             kwfile_image_id = kwcoco_file.index.name_to_img[image_name]["id"]
 
-            # Load the coco image based on image id.
+            # Get the corresponding asset within the kwcoco image file.
             coco_img = kwcoco_file.coco_image(kwfile_image_id)
-            asset = coco_img.find_asset_obj(kwcoco_channel_names[file_index])
-            delayed = coco_img.delay(
-                kwcoco_channel_names[file_index], space='video',
-                resolution=target_resolution)
+            asset = coco_img.find_asset_obj(channel_name)
+
+            # Load the image in 'video' space to ensure consistent space for target resolution.
+            delayed = coco_img.delay(channel_name, space='video', resolution=target_resolution)
             gathered_parts.append({
                 'asset': asset,
                 'delayed': delayed,
             })
 
+        # Check that assets are the same dimentions and have the same transforms.
         if __debug__:
             # Assuming a high degree of alignment between input assets will
             # need to extend if this assumption breaks.
@@ -344,7 +427,7 @@ def merge_kwcoco_channels(kwcoco_file_paths,
             warps = [p['asset']['warp_aux_to_img'] for p in gathered_parts]
             assert ub.allsame(warps)
 
-        import kwarray
+        # Apply a weight mask to each image while masking out NaN values.
         accum = kwarray.Stitcher(gathered_parts[0]['delayed'].shape)
         for part, weight in zip(gathered_parts, weights):
             delayed = part['delayed']
@@ -354,6 +437,7 @@ def merge_kwcoco_channels(kwcoco_file_paths,
 
         average_image_data = accum.finalize()
 
+        # DEBUG: Plot the original and merged images.
         if 0:
             import kwplot
             kwplot.autompl()
@@ -373,17 +457,17 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         # Check if there is already an asset with the same channel_names.
         output_obj = merge_coco_img.find_asset_obj(output_channels)
 
-        scale_target_from_vid = kwimage.Affine.scale(
-            coco_img._scalefactor_for_resolution(
-                space='video', resolution=target_resolution))
+        # Find the transformation from target to image space.
+        if target_resolution is None:
+            scale_target_from_vid = kwimage.Affine.scale(
+                coco_img._scalefactor_for_resolution(space='video', resolution=img_target_resolution))
+        else:
+            scale_target_from_vid = kwimage.Affine.scale(
+                coco_img._scalefactor_for_resolution(space='video', resolution=target_resolution))
 
         warp_target_from_img = scale_target_from_vid @ coco_img.warp_vid_from_img
         warp_img_from_target = warp_target_from_img.inv()
 
-        # TODO: see and ensure consistency with:
-        # ../tasks/fusion/predict.py
-
-        from watch.tasks.fusion.predict import quantize_float01
         quant_data, quantization = quantize_float01(average_image_data)
 
         if output_obj is not None:
@@ -391,20 +475,24 @@ def merge_kwcoco_channels(kwcoco_file_paths,
             output_obj["file_name"] = os.fspath(average_fpath)
             output_obj['height'] = average_image_data.shape[0]
             output_obj['width'] = average_image_data.shape[1]
+            if len(average_image_data.shape) > 2:
+                # average_image_data: (H, W, C)
+                output_obj['num_bands'] = average_image_data.shape[-1]
+            else:
+                # average_image_data: (H, W)
+                output_obj['num_bands'] = 1
             output_obj['warp_aux_to_img'] = warp_img_from_target.concise()
             output_obj['quantization'] = quantization
 
-        # else:
-        #     # Add this as a new auxiliary item.
-        #     merge_kwcoco.add_auxiliary_item(image_id,
-        #                                     os.fspath(average_fpath),
-        #                                     channels=output_channels,
-        #                                     height=average_image_data.shape[0],
-        #                                     width=average_image_data.shape[1])
+        # Get default kwargs from ../tasks/fusion/predict.py:CocoStitchingManager.finalize_image
+        write_kwargs = {}
+        write_kwargs['blocksize'] = 128
+        write_kwargs['compress'] = 'DEFLATE'
+
+        # TODO: Possibly add `wld_crs_info` to write_kwargs.
 
         # Write the averaged image data
-        kwimage.imwrite(average_fpath, quant_data, backend="gdal",
-                        nodata=quantization['nodata'])
+        kwimage.imwrite(average_fpath, quant_data, backend="gdal", nodata=quantization['nodata'], **write_kwargs)
 
         # Update all channels with projection info.
         try:
@@ -541,10 +629,7 @@ def coco_resolution(self, space='image', channel=None, RESOLUTION_KEY=None):
             img_resolution_info = coerce_resolution(img_resolution_expr)
             img_resolution_mat = kwimage.Affine.scale(img_resolution_info['mag'])
             vid_resolution = (self.warp_vid_from_img @ img_resolution_mat.inv()).inv()
-            vid_resolution_info = {
-                'mag': vid_resolution.decompose()['scale'],
-                'unit': img_resolution_info['unit']
-            }
+            vid_resolution_info = {'mag': vid_resolution.decompose()['scale'], 'unit': img_resolution_info['unit']}
         else:
             vid_resolution_info = coerce_resolution(vid_resolution_expr)
         space_resolution_info = vid_resolution_info
@@ -557,10 +642,7 @@ def coco_resolution(self, space='image', channel=None, RESOLUTION_KEY=None):
             vid_resolution_info = coerce_resolution(vid_resolution_expr)
             vid_resolution_mat = kwimage.Affine.scale(vid_resolution_info['mag'])
             img_resolution = (self.warp_img_from_vid @ vid_resolution_mat.inv()).inv()
-            img_resolution_info = {
-                'mag': img_resolution.decompose()['scale'],
-                'unit': vid_resolution_info['unit']
-            }
+            img_resolution_info = {'mag': img_resolution.decompose()['scale'], 'unit': vid_resolution_info['unit']}
         else:
             img_resolution_info = coerce_resolution(img_resolution_expr)
         space_resolution_info = img_resolution_info
