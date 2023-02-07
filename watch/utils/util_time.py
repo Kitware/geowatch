@@ -251,6 +251,11 @@ def coerce_timedelta(delta):
     References:
         https://docs.python.org/3.4/library/datetime_mod.html#strftime-strptime-behavior
     """
+    if isinstance(delta, str):
+        try:
+            delta = float(delta)
+        except ValueError:
+            ...
     if isinstance(delta, (int, float)):
         delta = datetime_mod.timedelta(seconds=delta)
     elif isinstance(delta, str):

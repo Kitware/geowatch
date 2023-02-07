@@ -9,6 +9,7 @@ def _dev_1darray_sample():
     import ubelt as ub
     # The idea is that we are given cluttered datetimes
     from watch.utils.util_time import coerce_timedelta, coerce_datetime
+    from watch.tasks.fusion.datamodules.temporal_sampling.plots import plot_temporal_sample_indices
     # Generate a "clumpy" sample
 
     def demo_clumpy_data(N, rng):
@@ -80,3 +81,100 @@ def _dev_1darray_sample():
             sample_idxs.append(km_sample_idxs)
 
     plot_temporal_sample_indices(sample_idxs, unixtimes)
+
+
+def test_time_strategy():
+    # Basic overview demo of the algorithm
+    from watch.tasks.fusion.datamodules.temporal_sampling import TimeWindowSampler
+    import watch
+    dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, num_frames=128, image_size=(32, 32))
+    vidid = dset.dataset['videos'][0]['id']
+    self = TimeWindowSampler.from_coco_video(
+        dset, vidid,
+        time_window=11,
+        affinity_type='soft2', time_span='8m', update_rule='distribute',
+    )
+    # xdoctest: +REQUIRES(--show)
+    import kwplot
+    kwplot.autosns()
+
+    # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
+    from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
+    import watch
+    data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+    coco_fpath = data_dvc_dpath / 'Drop4-BAS/KR_R001.kwcoco.json'
+    dset = watch.coerce_kwcoco(coco_fpath)
+    vidid = dset.dataset['videos'][0]['id']
+    self = TimeWindowSampler.from_coco_video(
+        dset, vidid,
+        time_window=11,
+        affinity_type='hardish3', time_span='3m', update_rule='pairwise+distribute', determenistic=True
+    )
+
+    # from scipy.special import expit
+    from watch.utils.util_time import coerce_timedelta
+    # ideal_pattern = 'time_kernel:60d-30d-0-30d-60d'
+    ideal_pattern = 'time_kernel:3y-1y-60d-30d-1d-0-1d-30d-60d-1y-3y'
+    kernel_deltas = ideal_pattern.split(':')[1].split('-')
+    parsed = [coerce_timedelta(d) for d in kernel_deltas]
+    import numpy as np
+    prekernel = np.array([v.total_seconds() for v in parsed])
+    presign = np.sign(np.diff(prekernel))
+    kernel = prekernel.copy()
+    kernel[0:len(prekernel) - 1] *= presign
+
+    import kwarray
+    delta_diff = (self.unixtimes[:, None] - self.unixtimes[None, :])
+    kwplot.autoplt().imshow(delta_diff, cmap='coolwarm')
+
+    [coerce_timedelta(d) for d in delta_diff[0]][0:10]
+
+    diff = np.abs((delta_diff - kernel[:, None, None]))
+    sdiff = diff - diff.min(axis=0)[None, :, :]
+    energy = sdiff.mean()
+    kwplot.autoplt().imshow(sdiff.mean(axis=0), cmap='magma')
+
+    s = 1 / sdiff.mean(axis=0)
+    flags = np.isinf(s)
+    s[flags] = 0
+    s = (s / s.max())
+    s[flags] = 1
+    kwplot.autoplt().imshow(s, cmap='magma')
+    distance_weight = s
+
+    # delta_diff01 = kwarray.normalize(delta_diff)
+    # kernel01 = kwarray.normalize(kernel, min_val=delta_diff.min(), max_val=delta_diff.max())
+
+    sensor_value = {
+        'WV': 10,
+        'S2': 1,
+        'PD': 7,
+        'L8': 0.3,
+        'sensor1': 11,
+        'sensor2': 7,
+        'sensor3': 5,
+        'sensor4': 3,
+    }
+    import ubelt as ub
+    values = np.array(list(ub.take(sensor_value, self.sensors, default=1))).astype(float)
+    values /= values.max()
+    sensor_weight = np.sqrt(values[:, None] * values[None, :])
+    # distance = (1 - np.abs((delta_diff01 - kernel01[:, None, None])).min(axis=0))
+
+    # kwplot.autoplt().imshow(distance, cmap='plasma')
+    # kwplot.autoplt().imshow(distance ** 4, cmap='plasma')
+
+    energy = distance_weight * sensor_weight
+    # energy = distance_weight
+    energy = (energy / np.diag(energy)[:, None]).clip(None, 1)
+    energy.max(axis=0)
+
+    self.affinity = self.affinity * energy
+
+    kwplot.autoplt().imshow(energy, cmap='plasma')
+
+    import kwplot
+    plt = kwplot.autoplt()
+    self.show_summary(samples_per_frame=11, fnum=1)
+    self.show_procedure(fnum=4)
+    plt.subplots_adjust(top=0.9)
