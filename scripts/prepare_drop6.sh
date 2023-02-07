@@ -359,12 +359,17 @@ update_from_dmj_constructions(){
 
     dvc push -r aws "${ZIP_DVC_FPATHS[@]}" -v
 
-    7z a splits.zip *.kwcoco.* -mx9
-
     python ~/code/watch/watch/cli/prepare_splits.py \
         --base_fpath="imganns*.kwcoco.*" \
         --workers=5 \
-        --constructive_mode=True --run=0
+        --constructive_mode=True --run=1
+
+    rm splits.zip
+    7z a splits.zip -mx9 -- *.kwcoco.* 
+    dvc add splits.zip
+    git commit -am "Update annotations"
+    git push 
+    dvc push -r aws splits.zip
 
     __check_overlap__="
     import ubelt as ub
