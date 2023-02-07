@@ -12,8 +12,7 @@ def main(cmdline=1, **kwargs):
     Example:
         >>> # xdoctest: +SKIP
         >>> cmdline = 0
-        >>> kwargs = dict(
-        >>> )
+        >>> kwargs = dict(dpath='.')
         >>> main(cmdline=cmdline, **kwargs)
     """
     config = DVCPurgeConfig.cli(cmdline=cmdline, data=kwargs)
@@ -36,7 +35,7 @@ def main(cmdline=1, **kwargs):
         for item in data['outs']:
             md5 = item['md5']
             cache_fpath = dvc.cache_dir / md5[0:2] / md5[2:]
-            if md5.endswith('.dir'):
+            if md5.endswith('.dir') and cache_fpath.exists():
                 dir_data = util_yaml.yaml_loads(cache_fpath.read_text())
                 for item in dir_data:
                     file_md5 = item['md5']
@@ -56,7 +55,10 @@ def main(cmdline=1, **kwargs):
             for fpath in fpath_iter:
                 jobs.submit(fpath.delete)
             for job in pman(jobs.as_completed(), desc='finish deletes'):
-                job.result()
+                try:
+                    job.result()
+                except Exception as ex:
+                    print(f'ex={ex}')
 
 
 if __name__ == '__main__':
