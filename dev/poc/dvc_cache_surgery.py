@@ -164,11 +164,12 @@ class CachePurgeCLI(scfg.Config):
 
 
 @modal.register
-class CacheMoveCLI(scfg.Config):
+class CacheCopyCLI(scfg.Config):
     """
-    Destroy all files in the DVC cache referenced in the target directory.
+    Copy all files reference in the current checkout from one cache to another
+    cache.
     """
-    __command__ = 'purge'
+    __command__ = 'copy'
     __default__ = dict(
         dpath=scfg.Value('.', position=2, help='input path'),
         new_cache_dpath=scfg.Value(None, position=2, help='new cache location'),
@@ -179,24 +180,42 @@ class CacheMoveCLI(scfg.Config):
     def main(cls, cmdline=False, **kwargs):
         """
         Ignore:
+            cmdline = 0
+            config = dict(
+                dpath='/home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_expt_dvc',
+                workers=0,
+                new_cache_dpath='/data/dvc-caches/smart_expt_dvc_cache'
+            )
             ...
         """
+        config = cls(cmdline=cmdline, data=kwargs)
+
         from watch.utils import util_progress
         from watch.utils.simple_dvc import SimpleDVC
-        config = cls(cmdline=cmdline, data=kwargs)
         dvc = SimpleDVC.coerce(config['dpath'])
 
-        new_cache_dpath = config['new_cache_dpath']
+        old_cache_dpath = dvc.cache_dir
+        new_cache_dpath = ub.Path(config['new_cache_dpath'])
         workers = config['workers']
 
-        jobs = ub.JobPool(mode='thread', max_workers=4)
+        cache_fpath_iter = find_cached_fpaths(dvc)
+
+        def copy_job(fpath):
+            if fpath.exists():
+                cache_rel_path = fpath.relative_to(old_cache_dpath)
+                new_fpath = new_cache_dpath / cache_rel_path
+                if not new_fpath.exists():
+                    new_fpath.parent.ensuredir()
+                    fpath.copy(new_fpath)
+
+        jobs = ub.JobPool(mode='thread', max_workers=workers)
         with jobs:
             pman = util_progress.ProgressManager()
             with pman:
-                fpath_iter = pman(find_cached_fpaths(dvc), desc='deleting cache')
-                for fpath in fpath_iter:
-                    jobs.submit(fpath.delete)
-                for job in pman(jobs.as_completed(), desc='finish deletes'):
+                for fpath in pman(cache_fpath_iter, desc='moving cache'):
+                    jobs.submit(copy_job, fpath)
+
+                for job in pman(jobs.as_completed(), desc='finish moving'):
                     try:
                         job.result()
                     except Exception as ex:

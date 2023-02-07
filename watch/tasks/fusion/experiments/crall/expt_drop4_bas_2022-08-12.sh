@@ -2088,9 +2088,9 @@ WATCH_GRID_WORKERS=4 python -m watch.tasks.fusion.fit \
     --global_saliency_weight=0.30 \
     --learning_rate=1e-3 \
     --weight_decay=1e-6 \
-    --input_space_scale="4.0GSD" \
-    --window_space_scale="4.0GSD" \
-    --output_space_scale="4.0GSD" \
+    --input_space_scale="3.3GSD" \
+    --window_space_scale="3.3GSD" \
+    --output_space_scale="3.3GSD" \
     --chip_dims=196,196 \
     --neg_to_pos_ratio=1.0 \
     --batch_size=6 \
@@ -2124,8 +2124,10 @@ WATCH_GRID_WORKERS=4 python -m watch.tasks.fusion.fit \
     --accelerator=gpu \
     --balance_areas=False \
     --devices="0," \
-    --init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6/runs/Drop6_BAS_2022_12_10GSD_BGRN_V11_CONT2/lightning_logs/version_0/package-interupt/package_epoch14_step40965.pt
+    --init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6/runs/Drop6_BAS_2022_12_10GSD_BGRN_V11_CONT2/lightning_logs/version_1/package-interupt/package_epoch0_step2731.pt
 
+
+    #--init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6/runs/Drop6_BAS_2022_12_10GSD_BGRN_V11_CONT2/lightning_logs/version_0/package-interupt/package_epoch14_step40965.pt
     #--init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6/runs/Drop6_BAS_2022_12_10GSD_BGRN_V11_CONT1/lightning_logs/version_8/package-interupt/package_epoch120_step328801.pt
 
 
