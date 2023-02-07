@@ -137,7 +137,6 @@ def merge_kwcoco_channels(kwcoco_file_paths,
             Skip images that do not contain channel_name. Defaults to False.
 
     Example:
-        >>> # xdoctest: +REQUIRES(--show)
         >>> # TEST 1: Merge two kwcoco files with the same number of images and plot results.
         >>> from watch.cli.coco_average_features import *  # NOQA
         >>> import watch
@@ -179,19 +178,6 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         >>> imdata1_img = dset1.coco_image(gid).delay('salient', space='image').finalize()
         >>> imdata2_img = dset2.coco_image(gid).delay('salient', space='image').finalize()
         >>> imdataM_img = output_dset.coco_image(gid).delay('salient', space='image').finalize()
-        >>> import kwplot
-        >>> kwplot.autompl()
-        >>> F = kwimage.fill_nans_with_checkers
-        >>> kwplot.imshow(F(kwimage.normalize_intensity(imdata1)), title='img1 (asset)', pnum=(2, 3, 1), fnum=1)
-        >>> kwplot.imshow(F(kwimage.normalize_intensity(imdata2)), title='img2 (asset)', pnum=(2, 3, 2), fnum=1)
-        >>> kwplot.imshow(F(kwimage.normalize_intensity(imdataM)), title='mean (asset)', pnum=(2, 3, 3), fnum=1)
-        >>> kwplot.imshow(F(kwimage.normalize_intensity(imdata1_img)), title='img1 (img)', pnum=(2, 3, 4), fnum=1)
-        >>> kwplot.imshow(F(kwimage.normalize_intensity(imdata2_img)), title='img2 (img)', pnum=(2, 3, 5), fnum=1)
-        >>> kwplot.imshow(F(kwimage.normalize_intensity(imdataM_img)), title='mean (img)', pnum=(2, 3, 6), fnum=1)
-        >>> save_figure_path = dpath / 'test_1_result_plot.png'
-        >>> import matplotlib.pyplot as plt
-        >>> plt.savefig(save_figure_path)
-        >>> print(f'Test 1 plot saved to: {save_figure_path}')
         >>> print(f'Weights: {weights}')
         >>> print(f'Img1  mean: {np.nan_to_num(imdata1).mean()}')
         >>> print(f'Img2  mean: {np.nan_to_num(imdata2).mean()}')
@@ -206,9 +192,22 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         >>> os.remove(dset1.fpath)
         >>> os.remove(dset2.fpath)
         >>> os.remove(output_dset.fpath)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> F = kwimage.fill_nans_with_checkers
+        >>> kwplot.imshow(F(kwimage.normalize_intensity(imdata1)), title='img1 (asset)', pnum=(2, 3, 1), fnum=1)
+        >>> kwplot.imshow(F(kwimage.normalize_intensity(imdata2)), title='img2 (asset)', pnum=(2, 3, 2), fnum=1)
+        >>> kwplot.imshow(F(kwimage.normalize_intensity(imdataM)), title='mean (asset)', pnum=(2, 3, 3), fnum=1)
+        >>> kwplot.imshow(F(kwimage.normalize_intensity(imdata1_img)), title='img1 (img)', pnum=(2, 3, 4), fnum=1)
+        >>> kwplot.imshow(F(kwimage.normalize_intensity(imdata2_img)), title='img2 (img)', pnum=(2, 3, 5), fnum=1)
+        >>> kwplot.imshow(F(kwimage.normalize_intensity(imdataM_img)), title='mean (img)', pnum=(2, 3, 6), fnum=1)
+        >>> save_figure_path = dpath / 'test_1_result_plot.png'
+        >>> import matplotlib.pyplot as plt
+        >>> plt.savefig(save_figure_path)
+        >>> print(f'Test 1 plot saved to: {save_figure_path}')
 
     Example:
-        >>> # xdoctest: +REQUIRES(--show)
         >>> # TEST 2: Merge two kwcoco files with geo information.
         >>> from watch.cli.coco_average_features import *  # NOQA
         >>> import watch
@@ -246,19 +245,6 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         >>> imdata1_img = dset1.coco_image(gid).delay('salient', space='image').finalize()
         >>> imdata2_img = dset2.coco_image(gid).delay('salient', space='image').finalize()
         >>> imdataM_img = output_dset.coco_image(gid).delay('salient', space='image').finalize()
-        >>> import kwplot
-        >>> kwplot.autompl()
-        >>> F = kwimage.fill_nans_with_checkers
-        >>> kwplot.imshow(F(kwimage.normalize_intensity(imdata1)), title='img1 (asset)', pnum=(2, 3, 1), fnum=1)
-        >>> kwplot.imshow(F(kwimage.normalize_intensity(imdata2)), title='img2 (asset)', pnum=(2, 3, 2), fnum=1)
-        >>> kwplot.imshow(F(kwimage.normalize_intensity(imdataM)), title='mean (asset)', pnum=(2, 3, 3), fnum=1)
-        >>> kwplot.imshow(F(kwimage.normalize_intensity(imdata1_img)), title='img1 (img)', pnum=(2, 3, 4), fnum=1)
-        >>> kwplot.imshow(F(kwimage.normalize_intensity(imdata2_img)), title='img2 (img)', pnum=(2, 3, 5), fnum=1)
-        >>> kwplot.imshow(F(kwimage.normalize_intensity(imdataM_img)), title='mean (img)', pnum=(2, 3, 6), fnum=1)
-        >>> save_figure_path = dpath / 'test_2_result_plot.png'
-        >>> import matplotlib.pyplot as plt
-        >>> plt.savefig(save_figure_path)
-        >>> print(f'Test 2 plot saved to: {save_figure_path}')
         >>> print(f'Weights: {weights}')
         >>> print(f'Img1  mean: {np.nan_to_num(imdata1).mean()}')
         >>> print(f'Img2  mean: {np.nan_to_num(imdata2).mean()}')
@@ -273,6 +259,20 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         >>> os.remove(dset1.fpath)
         >>> os.remove(dset2.fpath)
         >>> os.remove(output_dset.fpath)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> F = kwimage.fill_nans_with_checkers
+        >>> kwplot.imshow(F(kwimage.normalize_intensity(imdata1)), title='img1 (asset)', pnum=(2, 3, 1), fnum=1)
+        >>> kwplot.imshow(F(kwimage.normalize_intensity(imdata2)), title='img2 (asset)', pnum=(2, 3, 2), fnum=1)
+        >>> kwplot.imshow(F(kwimage.normalize_intensity(imdataM)), title='mean (asset)', pnum=(2, 3, 3), fnum=1)
+        >>> kwplot.imshow(F(kwimage.normalize_intensity(imdata1_img)), title='img1 (img)', pnum=(2, 3, 4), fnum=1)
+        >>> kwplot.imshow(F(kwimage.normalize_intensity(imdata2_img)), title='img2 (img)', pnum=(2, 3, 5), fnum=1)
+        >>> kwplot.imshow(F(kwimage.normalize_intensity(imdataM_img)), title='mean (img)', pnum=(2, 3, 6), fnum=1)
+        >>> save_figure_path = dpath / 'test_2_result_plot.png'
+        >>> import matplotlib.pyplot as plt
+        >>> plt.savefig(save_figure_path)
+        >>> print(f'Test 2 plot saved to: {save_figure_path}')
 
 
     Ignore:
