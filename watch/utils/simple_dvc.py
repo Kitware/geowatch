@@ -289,6 +289,7 @@ class SimpleDVC(ub.NiceRepr):
 
     def find_dir_tracker(cls, path):
         # Find if an ancestor parent dpath is tracked
+        path = ub.Path(path)
         prev = path
         dpath = path.parent
         while (not (dpath / '.dvc').exists()) and prev != dpath:
@@ -306,6 +307,7 @@ class SimpleDVC(ub.NiceRepr):
             sidecar_fpath (PathLike | str): path to the .dvc file
         """
         from watch.utils import util_yaml
+        sidecar_fpath = ub.Path(sidecar_fpath)
         data = util_yaml.yaml_loads(sidecar_fpath.read_text())
         for item in data['outs']:
             md5 = item['md5']
@@ -319,7 +321,7 @@ class SimpleDVC(ub.NiceRepr):
                     yield file_cache_fpath
             yield cache_fpath
 
-    def find_sidecar_paths(self, dpath=None):
+    def find_sidecar_paths(self, dpath):
         """
         Args:
             dpath (Path | str): directory in dvc repo to search
@@ -327,10 +329,9 @@ class SimpleDVC(ub.NiceRepr):
         Yields:
             ub.Path: existing dvc sidecar files
         """
-        if dpath is None:
-            dpath = self.dvc_root
         # TODO: handle .dvcignore
-        for r, ds, fs in ub.Path(dpath).walk():
+        dpath = ub.Path(dpath)
+        for r, ds, fs in dpath.walk():
             for f in fs:
                 if f.endswith('.dvc'):
                     yield r / f

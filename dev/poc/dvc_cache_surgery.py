@@ -138,7 +138,7 @@ class CachePurgeCLI(scfg.Config):
     """
     __command__ = 'purge'
     __default__ = dict(
-        dpath=scfg.Value('.', position=2, help='input path'),
+        dpath=scfg.Value('.', position=1, help='input path'),
         workers=scfg.Value(0, help='number of parallel jobs'),
     )
 
@@ -147,13 +147,16 @@ class CachePurgeCLI(scfg.Config):
         from watch.utils import util_progress
         from watch.utils.simple_dvc import SimpleDVC
         config = cls(cmdline=cmdline, data=kwargs)
-        dvc = SimpleDVC.coerce(config['dpath'])
+        dpath = ub.Path(config['dpath'])
+        dvc = SimpleDVC.coerce(dpath)
+
+        cache_fpath_iter = find_cached_fpaths(dvc, dpath)
 
         jobs = ub.JobPool(mode='thread', max_workers=4)
         with jobs:
             pman = util_progress.ProgressManager()
             with pman:
-                fpath_iter = pman(find_cached_fpaths(dvc), desc='deleting cache')
+                fpath_iter = pman(cache_fpath_iter, desc='deleting cache')
                 for fpath in fpath_iter:
                     jobs.submit(fpath.delete)
                 for job in pman(jobs.as_completed(), desc='finish deletes'):
@@ -171,7 +174,7 @@ class CacheCopyCLI(scfg.Config):
     """
     __command__ = 'copy'
     __default__ = dict(
-        dpath=scfg.Value('.', position=2, help='input path'),
+        dpath=scfg.Value('.', position=1, help='input path'),
         new_cache_dpath=scfg.Value(None, position=2, help='new cache location'),
         workers=scfg.Value(0, help='number of parallel jobs'),
     )
@@ -192,13 +195,14 @@ class CacheCopyCLI(scfg.Config):
 
         from watch.utils import util_progress
         from watch.utils.simple_dvc import SimpleDVC
-        dvc = SimpleDVC.coerce(config['dpath'])
+        dpath = ub.Path(config['dpath'])
+        dvc = SimpleDVC.coerce(dpath)
 
         old_cache_dpath = dvc.cache_dir
         new_cache_dpath = ub.Path(config['new_cache_dpath'])
         workers = config['workers']
 
-        cache_fpath_iter = find_cached_fpaths(dvc)
+        cache_fpath_iter = find_cached_fpaths(dvc, dpath)
 
         def copy_job(fpath):
             if fpath.exists():
@@ -222,9 +226,9 @@ class CacheCopyCLI(scfg.Config):
                         print(f'ex={ex}')
 
 
-def find_cached_fpaths(dvc):
-    for fpath in dvc.find_sidecar_paths():
-        yield from dvc.resolve_cache_paths(fpath)
+def find_cached_fpaths(dvc, dpath):
+    for fpath in dvc.find_sidecar_paths(dpath):
+        yield from dvc.resolve_cache_paths(ub.Path(fpath))
 
 
 # class DVCCacheSurgeryConfig(scfg.DataConfig):
