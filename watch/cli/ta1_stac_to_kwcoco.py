@@ -564,7 +564,7 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
             sensorasset = kwcoco.SensorChanSpec.coerce(f'{sensor}:' + '|'.join(sorted(asset_names)))
             sensorasset_hist[sensorasset.spec] += 1
             # TODO: stac_item['geometry'] - we can prepopulate geo information
-            stac_dict['properties']
+            # stac_dict['properties']
 
         print('sensorchan_hist = {}'.format(ub.repr2(sensorchan_hist, nl=1)))
         print('sensorasset_hist = {}'.format(ub.repr2(sensorasset_hist, nl=1)))
