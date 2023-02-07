@@ -298,14 +298,42 @@ class SimpleDVC(ub.NiceRepr):
             prev = dpath
             dpath = dpath.parent
 
-    def find_cache_files(self, tracker_fpath):
+    def resolve_cache_paths(self, sidecar_fpath):
+        """
+        Given a .dvc file, enumerate the paths in the cache associated with it.
+
+        Args:
+            sidecar_fpath (PathLike | str): path to the .dvc file
+        """
         from watch.utils import util_yaml
-        info = util_yaml.yaml_load(tracker_fpath)
-        if len(info['outs']) > 1:
-            raise NotImplementedError
-        hashid = info['outs'][0]['md5']
-        cache_fpath = self.cache_dir / hashid[0:2] / hashid[2:]
-        yield cache_fpath
+        data = util_yaml.yaml_loads(sidecar_fpath.read_text())
+        for item in data['outs']:
+            md5 = item['md5']
+            cache_fpath = self.cache_dir / md5[0:2] / md5[2:]
+            if md5.endswith('.dir') and cache_fpath.exists():
+                dir_data = util_yaml.yaml_loads(cache_fpath.read_text())
+                for item in dir_data:
+                    file_md5 = item['md5']
+                    assert not file_md5.endswith('.dir'), 'unhandled'
+                    file_cache_fpath = self.cache_dir / file_md5[0:2] / file_md5[2:]
+                    yield file_cache_fpath
+            yield cache_fpath
+
+    def find_sidecar_paths(self, dpath=None):
+        """
+        Args:
+            dpath (Path | str): directory in dvc repo to search
+
+        Yields:
+            ub.Path: existing dvc sidecar files
+        """
+        if dpath is None:
+            dpath = self.dvc_root
+        # TODO: handle .dvcignore
+        for r, ds, fs in ub.Path(dpath).walk():
+            for f in fs:
+                if f.endswith('.dvc'):
+                    yield r / f
 
 
 def _ensure_iterable(inputs):
