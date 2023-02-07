@@ -137,6 +137,7 @@ def merge_kwcoco_channels(kwcoco_file_paths,
             Skip images that do not contain channel_name. Defaults to False.
 
     Example:
+        >>> # xdoctest: +REQUIRES(--show)
         >>> # TEST 1: Merge two kwcoco files with the same number of images and plot results.
         >>> from watch.cli.coco_average_features import *  # NOQA
         >>> import watch
@@ -207,6 +208,7 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         >>> os.remove(output_dset.fpath)
 
     Example:
+        >>> # xdoctest: +REQUIRES(--show)
         >>> # TEST 2: Merge two kwcoco files with geo information.
         >>> from watch.cli.coco_average_features import *  # NOQA
         >>> import watch
