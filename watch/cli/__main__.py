@@ -68,7 +68,7 @@ def main(cmdline=True, **kw):
         'watch.cli.kwcoco_to_geojson': [],
         'watch.cli.find_dvc': ['dvcdir'],
         'watch.cli.gifify': ['animate'],
-        'watch.cli.coco_average_features': ['average_features'],
+        'watch.cli.coco_average_features': ['average', 'average_features'],
     }
 
     for cli_module in cli_modules:
