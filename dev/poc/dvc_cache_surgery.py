@@ -184,11 +184,12 @@ class CacheCopyCLI(scfg.Config):
         """
         Ignore:
             cmdline = 0
-            config = dict(
+            kwargs = dict(
                 dpath='/home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_expt_dvc',
                 workers=0,
                 new_cache_dpath='/data/dvc-caches/smart_expt_dvc_cache'
             )
+            cls = CacheCopyCLI
             ...
         """
         config = cls(cmdline=cmdline, data=kwargs)

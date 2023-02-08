@@ -970,6 +970,7 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
         # Store metadata in the video
         video['warp_wld_to_vid'] = vid_from_wld.__json__()
         video['target_gsd'] = target_gsd_
+        video['resolution'] = f'{target_gsd_}GSD'
         video['min_gsd'] = min_gsd
         video['max_gsd'] = max_gsd
 

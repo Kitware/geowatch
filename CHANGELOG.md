@@ -5,11 +5,15 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Version 0.3.10 - Target 2023-01-xx
 
+### Added
+* WIP: New `time_kernel` method for temporal sampling
+
 ### Changed
 * Renamed `project_annotations` to `reproject_annotations`
 * The `reproject_annotations` script no longer requires images to exist on disk.
 * The mlops schedule evaluation now writes to .kwcoco.zip files, which does break existing caches
 * Clean geotiff now sets NODATA if it is unset and can be given a set of bands to never clean.
+* `coco_add_watch_fields` now uses correct `resolution` field instead of `target_gsd`
 
 
 ## Version 0.3.9 - Target 2023-01-31

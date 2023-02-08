@@ -9,7 +9,9 @@
 # F2FS (Flash-Friendly File System)
 # https://en.wikipedia.org/wiki/F2FS
 # https://www.phoronix.com/scan.php?page=news_item&px=Linux-5.14-File-Systems
-sudo apt-get install f2fs-tools -y
+#sudo apt-get install f2fs-tools -y  # Dont use F2FS, inodes are too low
+# Use btrfs instead
+sudo apt install btrfs-progs -y 
 
 # Output info about file systems to determine which disk devices to format
 lsblk -fs 
@@ -20,13 +22,19 @@ DEVICE_DPATH=/dev/nvme0n1
 MOUNT_NAME="flash"
 MOUNT_DPATH=/$MOUNT_NAME
 #FS_FORMAT="f2fs"
-FS_FORMAT="ext4"
+#FS_FORMAT="ext4"
+FS_FORMAT="btrfs"
 
 MOUNT_OWNER=root
 MOUNT_GROUP=smart
 
+# Force Unmount if necessary
+#sudo fuser -km $DEVICE_DPATH
+sudo umount $DEVICE_DPATH
+
 # Format device filesystem
-sudo mkfs -t "$FS_FORMAT" "$DEVICE_DPATH"
+sudo mkfs -t "$FS_FORMAT" -f "$DEVICE_DPATH"
+
 
 # Create mount point with group permissions
 sudo mkdir -p "$MOUNT_DPATH" 

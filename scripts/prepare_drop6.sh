@@ -258,7 +258,6 @@ queue_dmj_reproject(){
 
 update_from_dmj_constructions(){
     __doc__="
-
     READY:
         BH_R001  BR_R002  BR_R004  LR_R001  NZ_R001  US_R001  US_R005  KR_R001  KR_R002 BR_R001 
         
@@ -267,7 +266,6 @@ update_from_dmj_constructions(){
 
     NEW
         echo AE_C003 PE_C003 QA_C001 SA_C005 US_C000 US_C010 US_C011 US_C012 US_C014
-    
     "
 
     REGION_IDS=(AE_C003 PE_C003 QA_C001 SA_C005 US_C000 US_C010 US_C011 US_C012 US_C014)
@@ -321,6 +319,8 @@ update_from_dmj_constructions(){
 
     ls /home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_data_dvc/annotations/drop6/region_models/US_C012
 
+    # See:
+    # ~/code/watch/dev/oneoffs/drop6_fixups.py
 
     # On horologic
     ls /home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan

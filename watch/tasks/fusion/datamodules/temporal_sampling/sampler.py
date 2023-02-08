@@ -84,8 +84,10 @@ Example:
     >>> vidid = dset.dataset['videos'][0]['id']
     >>> self = TimeWindowSampler.from_coco_video(
     >>>     dset, vidid,
-    >>>     time_window=5,
-    >>>     affinity_type='hardish3', time_span='3m', update_rule='pairwise+distribute', determenistic=True
+    >>>     time_kernel='-1y,-8m,-2w,0,2w,8m,1y',
+    >>>     affinity_type='soft3', update_rule='', determenistic=True
+    >>>     #time_window=5,
+    >>>     #affinity_type='hardish3', time_span='3m', update_rule='pairwise+distribute', determenistic=True
     >>> )
     >>> # xdoctest: +REQUIRES(--show)
     >>> import kwplot
@@ -118,12 +120,13 @@ import numpy as np
 import ubelt as ub
 import itertools as it
 from dateutil import parser
-from .plots import plot_dense_sample_indices
-from .plots import plot_temporal_sample_indices
-from .plots import show_affinity_sample_process
-from .affinity import soft_frame_affinity
-from .affinity import hard_frame_affinity
-from .affinity import affinity_sample
+from watch.tasks.fusion.datamodules.temporal_sampling.utils import coerce_time_kernel
+from watch.tasks.fusion.datamodules.temporal_sampling.plots import plot_dense_sample_indices
+from watch.tasks.fusion.datamodules.temporal_sampling.plots import plot_temporal_sample_indices
+from watch.tasks.fusion.datamodules.temporal_sampling.plots import show_affinity_sample_process
+from watch.tasks.fusion.datamodules.temporal_sampling.affinity import soft_frame_affinity
+from watch.tasks.fusion.datamodules.temporal_sampling.affinity import hard_frame_affinity
+from watch.tasks.fusion.datamodules.temporal_sampling.affinity import affinity_sample
 
 
 class CommonSamplerMixin:
@@ -182,7 +185,7 @@ class MultiTimeWindowSampler(CommonSamplerMixin):
         >>> self.show_summary(10)
     """
 
-    def __init__(self, unixtimes, sensors, time_window, affinity_type='hard',
+    def __init__(self, unixtimes, sensors, time_window=None, affinity_type='hard',
                  update_rule='distribute', determenistic=False, gamma=1,
                  time_span=['2y', '1y', '5m'], name='?'):
 
@@ -243,6 +246,8 @@ class MultiTimeWindowSampler(CommonSamplerMixin):
             ndarray | Tuple[ndarray, Dict]
         """
         rng = kwarray.ensure_rng(rng)
+        # FIXME: the selection of the subsampler does not respect
+        # self.determenistic
         chosen_key = rng.choice(list(self.sub_samplers.keys()))
         chosen_sampler = self.sub_samplers[chosen_key]
         return chosen_sampler.sample(main_frame_idx, include=include,
@@ -342,6 +347,7 @@ class TimeWindowSampler(CommonSamplerMixin):
             sampling algorithm. Can be:
                 "soft" - The old generalized random affinity matrix.
                 "soft2" - The new generalized random affinity matrix.
+                "soft3" - The newer generalized random affinity matrix.
                 "hard" - A simplified affinity algorithm.
                 "hardish" - Like hard, but with a blur.
                 "contiguous" - Neighboring frames get high affinity.
@@ -393,10 +399,16 @@ class TimeWindowSampler(CommonSamplerMixin):
         >>> self.show_summary(samples_per_frame=3, fnum=2)
     """
 
-    def __init__(self, unixtimes, sensors, time_window,
+    def __init__(self, unixtimes, sensors, time_window=None,
                  affinity_type='hard', update_rule='distribute',
                  determenistic=False, gamma=1, time_span='2y',
-                 affkw=None, name='?'):
+                 time_kernel=None, affkw=None, name='?'):
+
+        self.time_kernel = None if time_kernel is None else coerce_time_kernel(time_kernel)
+        if time_window is None:
+            assert self.time_kernel is not None
+            time_window = len(self.time_kernel)
+            ...
         self.sensors = sensors
         self.unixtimes = unixtimes
         self.time_window = time_window
@@ -455,10 +467,13 @@ class TimeWindowSampler(CommonSamplerMixin):
             else:
                 version = int(self.affinity_type[4:])
             # Soft affinity
-            self.affinity = soft_frame_affinity(self.unixtimes, self.sensors,
-                                                self.time_span,
-                                                version=version,
-                                                **self.affkw)['final']
+            self.affinity = soft_frame_affinity(
+                unixtimes=self.unixtimes,
+                sensors=self.sensors,
+                time_span=self.time_span,
+                time_kernel=self.time_kernel,
+                version=version,
+                **self.affkw)['final']
         elif self.affinity_type == 'hard':
             # Hard affinity
             self.affinity = hard_frame_affinity(self.unixtimes, self.sensors,
@@ -598,7 +613,7 @@ class TimeWindowSampler(CommonSamplerMixin):
             >>>     time_window=3,
             >>>     affinity_type='soft2',
             >>>     update_rule='distribute+pairwise')
-            >>> self.determenistic = False
+            >>> self.determenistic = True
             >>> self.show_summary(samples_per_frame=1 if self.determenistic else 10, fnum=1)
             >>> self.show_procedure(fnum=2)
 
@@ -618,6 +633,8 @@ class TimeWindowSampler(CommonSamplerMixin):
         determenistic = self.determenistic
         update_rule = self.update_rule
         gamma = self.gamma
+        time_kernel = self.time_kernel
+        unixtimes = self.unixtimes
         rng = kwarray.ensure_rng(rng)
 
         # Ret could be an ndarray | Tuple[ndarray, Dict]
@@ -632,6 +649,8 @@ class TimeWindowSampler(CommonSamplerMixin):
             error_level=error_level,
             rng=rng,
             return_info=return_info,
+            time_kernel=time_kernel,
+            unixtimes=unixtimes,
         )
         return ret
 
@@ -825,11 +844,38 @@ class TimeWindowSampler(CommonSamplerMixin):
         rng = kwarray.ensure_rng(rng)
         # if idx is None:
         #     idx = self.num_frames // 2
+        from watch.utils.util_time import coerce_timedelta
+        td_kernel = None
+
+        def _concise_td(delta):
+            total_sec = delta.total_seconds()
+            sign = 1 if total_sec >= 0 else -1
+            delta = delta * sign
+            extra_days = delta.days
+            total_years, extra_days = divmod(extra_days, 365)
+            if total_years > 0:
+                return f'{sign * total_years}y'
+            if extra_days > 30:
+                total_months, extra_days = divmod(extra_days, 30)
+                if total_months > 0:
+                    return f'{sign * total_months}m'
+            if extra_days > 0:
+                return f'{sign * extra_days}d'
+            else:
+                return f'{sign * int(delta.total_seconds())}s'
+
+        if self.time_kernel is not None:
+            td_kernel = [coerce_timedelta(d) for d in self.time_kernel]
+            approx_code = ','.join([_concise_td(delta) for delta in td_kernel])
+        else:
+            approx_code = None
+
         title_info = ub.codeblock(
             f'''
             name={self.name}
             affinity_type={self.affinity_type} determenistic={self.determenistic}
             update_rule={self.update_rule} gamma={self.gamma}
+            {approx_code}
             ''')
         chosen, info = self.sample(idx, return_info=True, exclude=exclude,
                                    rng=rng)

@@ -57,3 +57,61 @@ def guess_missing_unixtimes(unixtimes):
             # No information.
             unixtimes = np.linspace(0, len(unixtimes) * assume_delta, len(unixtimes))
     return unixtimes
+
+
+def coerce_time_kernel(pattern):
+    """
+    Obtain a time kernel from user input
+
+    Args:
+        pattern (str | Iterable[str | Number]):
+            A string code or a iterable of time coercable time deltas in
+            ascending order. A pattern code is a ',' separated string of
+            coercable time deltas.
+
+    Returns:
+        ndarray : ascending timedelta offsets in seconds
+
+    Example:
+        >>> from watch.tasks.fusion.datamodules.temporal_sampling.utils import *  # NOQA
+        >>> import ubelt as ub
+        >>> valid_patterns = [
+        >>>     '-1y,-30d,-1d,0,1d,30d,1y',
+        >>>     '-60s,0s,60s',
+        >>>     '-1d,-60s,20s,60s,1d',
+        >>>     '1,1,1,1,1',
+        >>> ]
+        >>> for pattern in valid_patterns:
+        >>>     kernel = coerce_time_kernel(pattern)
+        >>>     assert np.all(kernel == coerce_time_kernel(pattern)), 'should be idempotent'
+        >>>     print('kernel = {}'.format(ub.urepr(kernel.tolist(), nl=0)))
+        kernel = [-31536000.0, -2592000.0, -86400.0, 0.0, 86400.0, 2592000.0, 31536000.0]
+        kernel = [-60.0, 0.0, 60.0]
+        kernel = [-86400.0, -60.0, 20.0, 60.0, 86400.0]
+        kernel = [1.0, 1.0, 1.0, 1.0, 1.0]
+        >>> import pytest
+        >>> invalid_patterns = [
+        >>>     '3s,2s,1s'
+        >>>     '-10,5,3,-2,0,1'
+        >>> ]
+        >>> for pattern in invalid_patterns:
+        >>>     with pytest.raises(ValueError):
+        >>>         kernel = coerce_time_kernel(pattern)
+        >>> with pytest.raises(TypeError):
+        >>>     coerce_time_kernel(3.14)
+    """
+    from watch.utils.util_time import coerce_timedelta
+    import numpy as np
+    import ubelt as ub
+    if isinstance(pattern, str):
+        kernel_deltas = pattern.split(':')[-1].split(',')
+    elif ub.iterable(pattern):
+        kernel_deltas = pattern
+    else:
+        raise TypeError(type(pattern))
+    parsed = [coerce_timedelta(d) for d in kernel_deltas]
+    kernel = np.array([v.total_seconds() for v in parsed])
+    diffs = np.diff(kernel)
+    if not np.all(diffs >= 0):
+        raise ValueError('Inputs must be in ascending order')
+    return kernel

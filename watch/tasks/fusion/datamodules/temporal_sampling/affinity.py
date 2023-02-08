@@ -1,4 +1,4 @@
-import datetime
+import datetime as datetime_mod
 import kwarray
 import kwimage
 import math
@@ -12,6 +12,7 @@ from .utils import guess_missing_unixtimes
 
 def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
                     update_rule='pairwise', gamma=1, determenistic=False,
+                    time_kernel=None, unixtimes=None,
                     error_level=2, rng=None, return_info=False, jit=False):
     """
     Randomly select `size` timesteps from a larger pool based on "affinity".
@@ -87,6 +88,10 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         jit (bool):
             NotImplemented - do not use
 
+        time_kernel (ndarray):
+            if specified, the sample will attempt to conform to this time
+            kernel.
+
     Returns:
         ndarray | Tuple[ndarray, Dict] -
             The ``chosen`` indexes for the sample, or if return_info is True,
@@ -99,8 +104,8 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
     Example:
         >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
         >>> from watch.tasks.fusion.datamodules.temporal_sampling.affinity import *  # NOQA
-        >>> low = datetime.datetime.now().timestamp()
-        >>> high = low + datetime.timedelta(days=365 * 5).total_seconds()
+        >>> low = datetime_mod.datetime.now().timestamp()
+        >>> high = low + datetime_mod.timedelta(days=365 * 5).total_seconds()
         >>> rng = kwarray.ensure_rng(0)
         >>> unixtimes = np.array(sorted(rng.randint(low, high, 113)), dtype=float)
         >>> #
@@ -111,14 +116,15 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         >>>                                return_info=True, determenistic=True)
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
+        >>> from watch.tasks.fusion.datamodules.temporal_sampling.plots import show_affinity_sample_process
         >>> sns = kwplot.autosns()
         >>> plt = kwplot.autoplt()
         >>> show_affinity_sample_process(chosen, info)
 
     Example:
         >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
-        >>> low = datetime.datetime.now().timestamp()
-        >>> high = low + datetime.timedelta(days=365 * 5).total_seconds()
+        >>> low = datetime_mod.datetime.now().timestamp()
+        >>> high = low + datetime_mod.timedelta(days=365 * 5).total_seconds()
         >>> rng = kwarray.ensure_rng(0)
         >>> unixtimes = np.array(sorted(rng.randint(low, high, 5)), dtype=float)
         >>> self = TimeWindowSampler(unixtimes, sensors=None, time_window=4,
@@ -139,14 +145,63 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
 
     Ignore:
         >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
-        >>> low = datetime.datetime.now().timestamp()
-        >>> high = low + datetime.timedelta(days=365 * 5).total_seconds()
+        >>> low = datetime_mod.datetime.now().timestamp()
+        >>> high = low + datetime_mod.timedelta(days=365 * 5).total_seconds()
         >>> rng = kwarray.ensure_rng(0)
         >>> unixtimes = np.array(sorted(rng.randint(low, high, 113)), dtype=float)
         >>> affinity = soft_frame_affinity(unixtimes)['final']
         >>> include_indices = [5]
         >>> size = 20
         >>> xdev.profile_now(affinity_sample)(affinity, size, include_indices)
+
+    Example:
+        >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
+        >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
+        >>> from watch.tasks.fusion.datamodules.temporal_sampling.utils import coerce_time_kernel
+        >>> import kwarray
+        >>> import watch
+        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> coco_fpath = data_dvc_dpath / 'Drop6/imgonly-KR_R001.kwcoco.json'
+        >>> dset = watch.coerce_kwcoco(coco_fpath)
+        >>> vidid = dset.dataset['videos'][0]['id']
+        >>> time_kernel_code = '-3m,-1w,0,3m,1y'
+        >>> time_kernel = coerce_time_kernel(time_kernel_code)
+        >>> self = TimeWindowSampler.from_coco_video(dset, vidid, time_window=5, time_kernel=time_kernel, affinity_type='soft3', update_rule='')
+        >>> self.determenistic = False
+        >>> self.show_affinity()
+        >>> include_indices = [len(self.unixtimes) // 2]
+        >>> exclude_indices = []
+        >>> affinity = self.affinity
+        >>> size = self.time_window
+        >>> determenistic = self.determenistic
+        >>> update_rule = self.update_rule
+        >>> unixtimes = self.unixtimes
+        >>> gamma = self.gamma
+        >>> time_kernel = self.time_kernel
+        >>> rng = kwarray.ensure_rng(None)
+        >>> determenistic = True
+        >>> return_info = True
+        >>> error_level = 2
+        >>> chosen, info = affinity_sample(
+        >>>     affinity=affinity,
+        >>>     size=size,
+        >>>     include_indices=include_indices,
+        >>>     exclude_indices=exclude_indices,
+        >>>     update_rule=update_rule,
+        >>>     gamma=gamma,
+        >>>     determenistic=determenistic,
+        >>>     error_level=error_level,
+        >>>     rng=rng,
+        >>>     return_info=return_info,
+        >>>     time_kernel=time_kernel,
+        >>>     unixtimes=unixtimes,
+        >>> )
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> info['title_suffix'] = chr(10) + time_kernel_code
+        >>> from watch.tasks.fusion.datamodules.temporal_sampling.plots import show_affinity_sample_process
+        >>> show_affinity_sample_process(chosen, info, fnum=1)
     """
     rng = kwarray.ensure_rng(rng)
 
@@ -164,6 +219,22 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
             raise Exception('nothing is available')
         avail_idx = rng.randint(0, len(avail))
         chosen = [avail_idx]
+
+    if time_kernel is not None:
+        # TODO: let the user pass in the primary idx
+        primary_idx = chosen[0]
+        primary_unixtime = unixtimes[primary_idx]
+        relative_unixtimes = unixtimes - primary_unixtime
+        kernel_distance = np.abs(relative_unixtimes[:, None] - time_kernel[None:, ])
+        # Partition the pool based on which part of the kernel they most satisfy
+        kernel_idxs = np.arange(len(time_kernel))
+        kernel_groups = kernel_distance.argmin(axis=1)
+
+        kernel_masks = ((kernel_groups[:, None] == kernel_idxs[None, :]).T).astype(affinity.dtype)
+
+        satisfied_kernel_idxs = kernel_groups[chosen]
+        unsatisfied_kernel_idxs = np.setdiff1d(kernel_idxs, satisfied_kernel_idxs)
+        _, kernel_idx_to_groupxs = kwarray.group_indices(kernel_groups)
 
     update_rules = {r for r in update_rule.split('+') if r}
     config = ub.dict_subset({'pairwise': True, 'distribute': True}, update_rules)
@@ -196,6 +267,16 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         cython_mod = cython_aff_samp_mod()
         return cython_mod.cython_affinity_sample(affinity, num_sample, current_weights, chosen, rng)
 
+    if time_kernel is not None:
+        assert len(unsatisfied_kernel_idxs) >= num_sample
+        assert len(unsatisfied_kernel_idxs) > 0
+        kernel_idx = unsatisfied_kernel_idxs[0]
+        initial_mask = kernel_masks[kernel_idx]
+        unsatisfied_kernel_idxs = unsatisfied_kernel_idxs[1:]
+    else:
+        initial_mask = None
+    current_mask = initial_mask
+
     # available_idxs = np.arange(affinity.shape[0])
     if return_info:
         denom = current_weights.sum()
@@ -207,72 +288,42 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
 
             'initial_weights': initial_weights.copy(),
             'initial_update_weights': update_weights.copy() if hasattr(update_weights, 'copy') else update_weights,
+            'initial_mask': initial_mask,
             'initial_probs': initial_probs,
 
             'initial_chosen': chosen.copy(),
 
             'include_indices': include_indices,
+
             'affinity': affinity,
+            'unixtimes': unixtimes,
+            'time_kernel': time_kernel,
         }
 
     for _ in range(num_sample):
         # Choose the next image based on combined sample affinity
 
-        total_weight = current_weights.sum()
-
         if return_info:
             errors = []
+
+        total_weight = current_weights.sum()
 
         # If we zeroed out all of the probabilities try two things before
         # punting and setting everything to uniform.
         if total_weight == 0:
-            if error_level == 3:
-                raise TimeSampleError('all probability is exhausted')
-            current_weights = affinity[chosen[0]].copy()
-            current_weights[chosen] = 0
-            current_weights[exclude_indices] = 0
-            total_weight = current_weights.sum()
-            if return_info:
-                errors.append('all indices were chosen, excluded, or had no affinity')
-            if total_weight == 0:
-                # Should really never get here in day-to-day, but just in case
-                if error_level == 2:
-                    raise TimeSampleError('all included probability is exhausted')
-                # Zero weight method: neighbors
-                zero_weight_method = 'neighbors'
-                if zero_weight_method == 'neighbors':
+            current_weights = _handle_degenerate_weights(
+                affinity, chosen, exclude_indices, errors, error_level,
+                return_info, rng)
 
-                    if len(chosen) == 0:
-                        zero_weight_method = 'random'
-                    else:
-                        chosen_neighbor_idxs = np.hstack([np.array(chosen) + 1, np.array(chosen) - 1])
-                        chosen_neighbor_idxs = np.unique(np.clip(chosen_neighbor_idxs, 0,  len(current_weights) - 1))
-                        ideal_idxs = np.setdiff1d(chosen_neighbor_idxs, chosen)
-                        if len(ideal_idxs) == 0:
-                            ideal_idxs = chosen_neighbor_idxs
-                        current_weights[ideal_idxs] = 1
-
-                if zero_weight_method == 'random':
-                    current_weights[:] = rng.rand(len(current_weights))
-
-                current_weights[chosen] = 0
-                total_weight = current_weights.sum()
-                if return_info:
-                    errors.append('all indices were chosen, excluded')
-                if total_weight == 0:
-                    if error_level == 1:
-                        raise TimeSampleError('all chosen probability is exhausted')
-                    if zero_weight_method == 'neighbors':
-                        current_weights[:] = rng.rand(len(current_weights))
-                    if zero_weight_method == 'random':
-                        current_weights[:] = rng.rand(len(current_weights))
-                    if return_info:
-                        errors.append('all indices were chosen, punting')
+        if current_mask is not None:
+            masked_current_weights = current_weights * current_mask
+        else:
+            masked_current_weights = current_weights
 
         if determenistic:
-            next_idx = current_weights.argmax()
+            next_idx = masked_current_weights.argmax()
         else:
-            cumprobs = (current_weights ** gamma).cumsum()
+            cumprobs = (masked_current_weights ** gamma).cumsum()
             dart = rng.rand() * cumprobs[-1]
             next_idx = np.searchsorted(cumprobs, dart)
 
@@ -287,21 +338,32 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
 
         chosen.append(next_idx)
 
+        if current_mask is not None:
+            # Build the next mask
+            if len(unsatisfied_kernel_idxs):
+                kernel_idx = unsatisfied_kernel_idxs[0]
+                next_mask = kernel_masks[kernel_idx]
+                unsatisfied_kernel_idxs = unsatisfied_kernel_idxs[1:]
+            else:
+                next_mask = None
+
         if return_info:
             if total_weight == 0:
-                probs = current_weights.copy()
+                probs = masked_current_weights.copy()
             else:
-                probs = current_weights / total_weight
-            probs = current_weights
+                probs = masked_current_weights / total_weight
+            probs = masked_current_weights
             info['steps'].append({
                 'probs': probs,
                 'next_idx': next_idx,
                 'update_weights': update_weights,
+                'next_mask': next_mask,
                 'errors': errors,
             })
 
         # Modify weights to impact next sample
         current_weights = current_weights * update_weights
+        current_mask = next_mask
 
         # Don't resample the same item
         current_weights[next_idx] = 0
@@ -311,6 +373,53 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         return chosen, info
     else:
         return chosen
+
+
+def _handle_degenerate_weights(affinity, chosen, exclude_indices, errors,
+                               error_level, return_info, rng):
+    if error_level == 3:
+        raise TimeSampleError('all probability is exhausted')
+    current_weights = affinity[chosen[0]].copy()
+    current_weights[chosen] = 0
+    current_weights[exclude_indices] = 0
+
+    total_weight = current_weights.sum()
+    if return_info:
+        errors.append('all indices were chosen, excluded, or had no affinity')
+    if total_weight == 0:
+        # Should really never get here in day-to-day, but just in case
+        if error_level == 2:
+            raise TimeSampleError('all included probability is exhausted')
+        # Zero weight method: neighbors
+        zero_weight_method = 'neighbors'
+        if zero_weight_method == 'neighbors':
+            if len(chosen) == 0:
+                zero_weight_method = 'random'
+            else:
+                chosen_neighbor_idxs = np.hstack([np.array(chosen) + 1, np.array(chosen) - 1])
+                chosen_neighbor_idxs = np.unique(np.clip(chosen_neighbor_idxs, 0,  len(current_weights) - 1))
+                ideal_idxs = np.setdiff1d(chosen_neighbor_idxs, chosen)
+                if len(ideal_idxs) == 0:
+                    ideal_idxs = chosen_neighbor_idxs
+                current_weights[ideal_idxs] = 1
+
+        if zero_weight_method == 'random':
+            current_weights[:] = rng.rand(len(current_weights))
+
+        current_weights[chosen] = 0
+        total_weight = current_weights.sum()
+        if return_info:
+            errors.append('all indices were chosen, excluded')
+        if total_weight == 0:
+            if error_level == 1:
+                raise TimeSampleError('all chosen probability is exhausted')
+            if zero_weight_method == 'neighbors':
+                current_weights[:] = rng.rand(len(current_weights))
+            if zero_weight_method == 'random':
+                current_weights[:] = rng.rand(len(current_weights))
+            if return_info:
+                errors.append('all indices were chosen, punting')
+    return current_weights
 
 
 def hard_time_sample_pattern(unixtimes, time_window, time_span='2y'):
@@ -345,10 +454,11 @@ def hard_time_sample_pattern(unixtimes, time_window, time_span='2y'):
 
     Ignore:
         >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
-        >>> import os
-        >>> from watch.utils.util_data import find_smart_dvc_dpath
-        >>> dvc_dpath = find_smart_dvc_dpath()
-        >>> coco_fpath = dvc_dpath / 'Drop1-Aligned-L1-2022-01/data.kwcoco.json'
+        >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
+        >>> import watch
+        >>> from watch.utils import util_time
+        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> coco_fpath = data_dvc_dpath / 'Drop6/imgonly-KR_R001.kwcoco.json'
         >>> dset = kwcoco.CocoDataset(coco_fpath)
         >>> video_ids = list(ub.sorted_vals(dset.index.vidid_to_gids, key=len).keys())
         >>> vidid = video_ids[0]
@@ -356,7 +466,7 @@ def hard_time_sample_pattern(unixtimes, time_window, time_span='2y'):
         >>> name = (video['name'])
         >>> print('name = {!r}'.format(name))
         >>> images = dset.images(vidid=vidid)
-        >>> datetimes = [parser.parse(date) for date in images.lookup('date_captured')]
+        >>> datetimes = [util_time.coerce_datetime(date) for date in images.lookup('date_captured')]
         >>> unixtimes = np.array([dt.timestamp() for dt in datetimes])
         >>> time_window = 5
         >>> sample_idxs = hard_time_sample_pattern(unixtimes, time_window)
@@ -435,12 +545,12 @@ def hard_time_sample_pattern(unixtimes, time_window, time_span='2y'):
         # pass in a delta
         if time_window == 1:
             template_deltas = np.array([
-                datetime.timedelta(days=0).total_seconds(),
+                datetime_mod.timedelta(days=0).total_seconds(),
             ])
         else:
             time_span = coerce_timedelta(time_span).total_seconds()
-            min_time = -datetime.timedelta(seconds=time_span).total_seconds()
-            max_time = datetime.timedelta(seconds=time_span).total_seconds()
+            min_time = -datetime_mod.timedelta(seconds=time_span).total_seconds()
+            max_time = datetime_mod.timedelta(seconds=time_span).total_seconds()
             template_deltas = np.linspace(min_time, max_time, time_window).round().astype(int)
             # Always include a delta of 0
             template_deltas[np.abs(template_deltas).argmin()] = 0
@@ -536,15 +646,16 @@ def hard_time_sample_pattern(unixtimes, time_window, time_span='2y'):
     return sample_idxs
 
 
-def soft_frame_affinity(unixtimes, sensors=None, time_span='2y', version=1,
-                        heuristics='default'):
+def soft_frame_affinity(unixtimes, sensors=None, time_kernel=None,
+                        time_span='2y', version=1, heuristics='default'):
     """
     Produce a pairwise affinity weights between frames based on a dilated time
     heuristic.
 
     Example:
-        >>> low = datetime.datetime.now().timestamp()
-        >>> high = low + datetime.timedelta(days=365 * 5).total_seconds()
+        >>> from watch.tasks.fusion.datamodules.temporal_sampling.affinity import *  # NOQA
+        >>> low = datetime_mod.datetime.now().timestamp()
+        >>> high = low + datetime_mod.timedelta(days=365 * 5).total_seconds()
         >>> rng = kwarray.ensure_rng(0)
         >>> base_unixtimes = np.array(sorted(rng.randint(low, high, 113)), dtype=float)
 
@@ -594,9 +705,51 @@ def soft_frame_affinity(unixtimes, sensors=None, time_span='2y', version=1,
         >>> sns.lineplot(data=df, x='index', y='final')
         >>> fig.gca().set_title('Affinity components for row={}'.format(row_idx))
 
+    Example:
+        >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
+        >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
+        >>> import watch
+        >>> import kwimage
+        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> coco_fpath = data_dvc_dpath / 'Drop6/imgonly-KR_R001.kwcoco.json'
+        >>> dset = watch.coerce_kwcoco(coco_fpath)
+        >>> vidid = dset.dataset['videos'][0]['id']
+        >>> self = TimeWindowSampler.from_coco_video(dset, vidid, time_window=5, time_kernel='-1y,-3m,0,3m,1y', affinity_type='soft3')
+        >>> unixtimes = self.unixtimes
+        >>> sensors = self.sensors
+        >>> time_kernel = self.time_kernel
+        >>> time_span = '2y'
+        >>> version = 3
+        >>> heuristics = 'default'
+        >>> weights = soft_frame_affinity(unixtimes, sensors, time_kernel, time_span, version, heuristics)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autoplt()
+        >>> pnum_ = kwplot.PlotNums(nCols=5)
+        >>> kwplot.figure(fnum=1, doclf=True)
+        >>> kwplot.imshow(kwimage.normalize(weights['final']), pnum=pnum_(), title='all missing dates')
+
+        >>> import pandas as pd
+        >>> sns = kwplot.autosns()
+        >>> fig = kwplot.figure(fnum=2, doclf=True)
+        >>> kwplot.imshow(kwimage.normalize(weights['final']), pnum=(1, 3, 1), title='pairwise affinity')
+        >>> row_idx = 200
+        >>> df = pd.DataFrame({k: v[row_idx] for k, v in weights.items()})
+        >>> df['index'] = np.arange(df.shape[0])
+        >>> data = df.drop(['final'], axis=1).melt(['index'])
+        >>> kwplot.figure(fnum=2, pnum=(1, 3, 2))
+        >>> sns.lineplot(data=data, x='index', y='value', hue='variable')
+        >>> fig.gca().set_title('Affinity components for row={}'.format(row_idx))
+        >>> kwplot.figure(fnum=2, pnum=(1, 3, 3))
+        >>> sns.lineplot(data=df, x='index', y='final')
+        >>> fig.gca().set_title('Affinity components for row={}'.format(row_idx))
+
     """
     if heuristics == 'default':
-        heuristics = {'daylight', 'season'}
+        if version in {1, 2}:
+            heuristics = {'daylight', 'season', 'sensor_similiarty'}
+        elif version == 3:
+            heuristics = {'daylight', 'season', 'sensor_similiarty', 'sensor_value'}
 
     missing_date = np.isnan(unixtimes)
     missing_any_dates = np.any(missing_date)
@@ -606,8 +759,8 @@ def soft_frame_affinity(unixtimes, sensors=None, time_span='2y', version=1,
 
     if have_any_dates:
         # unixtimes[np.random.rand(*unixtimes.shape) > 0.1] = np.nan
-        seconds_per_year = datetime.timedelta(days=365).total_seconds()
-        seconds_per_day = datetime.timedelta(days=1).total_seconds()
+        seconds_per_year = datetime_mod.timedelta(days=365).total_seconds()
+        seconds_per_day = datetime_mod.timedelta(days=1).total_seconds()
 
         second_deltas = np.abs(unixtimes[None, :] - unixtimes[:, None])
 
@@ -631,13 +784,15 @@ def soft_frame_affinity(unixtimes, sensors=None, time_span='2y', version=1,
             future_weights = (future_weights / future_weights.max())
             future_weights = future_weights * 0.8 + 0.2
             weights['future'] = future_weights
-        elif version == 2:
+        elif version in {2, 3}:
             # TODO:
             # incorporate the time_span?
-            time_span = coerce_timedelta(time_span).total_seconds()
-            span_delta = (second_deltas - time_span) ** 2
-            norm_span_delta = span_delta / (time_span ** 2)
-            weights['time_span'] = (1 - np.minimum(norm_span_delta, 1)) * 0.5 + 0.5
+            # if version == 2:
+            if version == 2:
+                time_span = coerce_timedelta(time_span).total_seconds()
+                span_delta = (second_deltas - time_span) ** 2
+                norm_span_delta = span_delta / (time_span ** 2)
+                weights['time_span'] = (1 - np.minimum(norm_span_delta, 1)) * 0.5 + 0.5
 
             # Modify the influence of season / daylight
             if 'daylight' in heuristics:
@@ -649,6 +804,9 @@ def soft_frame_affinity(unixtimes, sensors=None, time_span='2y', version=1,
                 daylight_weights = (daylight_weights - middle) * 0.1 + (middle / 2)
             if 'season' in heuristics:
                 season_weights = ((season_weights - 0.5) / 2) + 0.5
+
+        if version == 3:
+            season_weights = (season_weights / 32) + 0.3
 
         if 'daylight' in heuristics:
             weights['daylight'] = daylight_weights
@@ -664,13 +822,56 @@ def soft_frame_affinity(unixtimes, sensors=None, time_span='2y', version=1,
 
     if sensors is not None:
         sensors = np.asarray(sensors)
-        same_sensor = sensors[:, None] == sensors[None, :]
-        sensor_weights = ((same_sensor * 0.5) + 0.5)
-        weights['sensor'] = sensor_weights
+
+        if 'sensor_similiarty' in heuristics:
+            same_sensor = sensors[:, None] == sensors[None, :]
+            sensor_similarity_weight = ((same_sensor * 0.5) + 0.5)
+            if version == 3:
+                sensor_similarity_weight = sensor_similarity_weight / 32 + .4
+            weights['sensor_similarity'] = sensor_similarity_weight
+            if frame_weights is None:
+                frame_weights = sensor_similarity_weight
+            else:
+                frame_weights = frame_weights * sensor_similarity_weight
+
+        # TODO: this info does not belong here. Pass this information in.
+        if 'sensor_value' in heuristics:
+            sensor_value = {
+                'WV': 10,
+                'WV1': 9,
+                'S2': 1,
+                'PD': 7,
+                'L8': 0.3,
+                'sensor1': 11,
+                'sensor2': 7,
+                'sensor3': 5,
+                'sensor4': 3,
+            }
+            values = np.array(list(ub.take(sensor_value, sensors, default=1))).astype(float)
+            values /= values.max()
+            sensor_value_weight = np.sqrt(values[:, None] * values[None, :])
+            weights['sensor_value'] = sensor_value_weight
+            if frame_weights is None:
+                frame_weights = sensor_value_weight
+            else:
+                frame_weights = frame_weights * sensor_value_weight
+
+    if time_kernel is not None:
+        delta_diff = (unixtimes[:, None] - unixtimes[None, :])
+        diff = np.abs((delta_diff - time_kernel[:, None, None]))
+        sdiff = diff - diff.min(axis=0)[None, :, :]
+        s = 1 / sdiff.mean(axis=0)
+        flags = np.isinf(s)
+        s[flags] = 0
+        s = (s / s.max())
+        s[flags] = 1
+        # kwplot.autoplt().imshow(s, cmap='magma')
+        kernel_weight = s
+        weights['kernel_weight'] = kernel_weight
         if frame_weights is None:
-            frame_weights = frame_weights
+            frame_weights = kernel_weight
         else:
-            frame_weights = frame_weights * sensor_weights
+            frame_weights = frame_weights * kernel_weight
 
     if missing_any_dates:
         # For the frames that don't have dates on them, we use indexes to

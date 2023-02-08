@@ -13,8 +13,20 @@ def show_affinity_sample_process(chosen, info, fnum=1):
     """
     # import seaborn as sns
     import kwplot
+
+    mask_color = kwimage.Color.coerce('kitware_yellow').as01()
+    probability_color = kwimage.Color.coerce('kitware_blue').as01()
+    update_weight_color = kwimage.Color.coerce('kitware_green').as01()
+    prev_chosen_color = kwimage.Color.coerce('kitware_darkgray').as01()
+    chosen_text_color = 'black'
+    chosen_arrow_color = 'orange'
+    chosen_line_color = 'orange'
+
     # from matplotlib import pyplot as plt
     steps = info['steps']
+    unixtimes = info.get('unixtimes', None)
+    if unixtimes is not None:
+        unixtimes = guess_missing_unixtimes(unixtimes)
 
     _include_summary_row = 0
 
@@ -35,25 +47,36 @@ def show_affinity_sample_process(chosen, info, fnum=1):
     probs = info['initial_weights']
     ymax = probs.max()
     xmax = len(probs)
-    for x_ in initial_indexes:
-        ax.plot([x_, x_], [0, ymax], color='gray')
-    ax.plot(np.arange(xmax), probs)
-    if idx is not None:
-        x, y = idx, probs[idx]
-        xpos = x + xmax * 0.0 if x < (xmax / 2) else x - xmax * 0.0
-        ypos = y + ymax * 0.3 if y < (ymax / 2) else y - ymax * 0.3
-        ax.plot([x, x], [0, ymax], color='gray')
+
+    if unixtimes is None:
+        for x_ in initial_indexes:
+            ax.plot([x_, x_], [0, ymax], color=prev_chosen_color)
+        ax.plot(np.arange(xmax), probs)
+    else:
+        datetimes = np.array([datetime_cls.fromtimestamp(t) for t in unixtimes])
+        initial_datetimes = datetimes[initial_indexes]
+        for x_ in initial_datetimes:
+            ax.plot([x_, x_], [0, ymax], color=prev_chosen_color)
+        ax.plot(datetimes, probs)
     ax.set_title('Initialize included indices')
 
     fig = kwplot.figure(pnum=pnum_())
     ax = fig.gca()
 
+    initial_mask = info.get('initial_mask', None)
+    xidxs = np.arange(xmax)
+    if initial_mask is not None:
+        ax.fill_between(xidxs, initial_mask, color=mask_color, alpha=0.5)
+
     try:
-        ax.plot(np.arange(xmax), info['initial_update_weights'], color='orange')
+        ax.plot(xidxs, info['initial_update_weights'], color=update_weight_color)
     except ValueError:
-        ax.plot(np.arange(xmax), [info['initial_update_weights']] * xmax, color='orange')
+        ax.plot(xidxs, [info['initial_update_weights']] * xmax, color=update_weight_color)
         ...
-    ax.set_title('Initialize Update weights')
+    if initial_mask is not None:
+        ax.set_title('Initialize update weights & Mask')
+    else:
+        ax.set_title('Initialize update weights')
 
     # kwplot.imshow(kwimage.normalize(affinity), title='Pairwise Affinity')
 
@@ -71,12 +94,12 @@ def show_affinity_sample_process(chosen, info, fnum=1):
         xmax = len(probs)
         x, y = idx, probs[idx]
         for x_ in chosen_so_far:
-            ax.plot([x_, x_], [0, ymax], color='gray')
-        ax.plot(np.arange(xmax), probs)
+            ax.plot([x_, x_], [0, ymax], color=prev_chosen_color)
+        ax.plot(np.arange(xmax), probs, color=probability_color)
         xpos = x + xmax * 0.0 if x < (xmax / 2) else x - xmax * 0.0
         ypos = y + ymax * 0.3 if y < (ymax / 2) else y - ymax * 0.3
-        ax.annotate('chosen', (x, y), xytext=(xpos, ypos), color='black', arrowprops=dict(color='orange', arrowstyle='->'))
-        ax.plot([x, x], [0, ymax], color='orange')
+        ax.annotate('chosen', (x, y), xytext=(xpos, ypos), color=chosen_text_color, arrowprops=dict(color=chosen_arrow_color, arrowstyle='->'))
+        ax.plot([x, x], [0, ymax], color=chosen_line_color)
         #ax.annotate('chosen', (x, y), color='black')
         ax.set_title('Iteration {}: sample'.format(step_idx))
 
@@ -85,19 +108,31 @@ def show_affinity_sample_process(chosen, info, fnum=1):
         fig = kwplot.figure(pnum=pnum_())
         ax = fig.gca()
         if step_idx < len(steps):
+            next_mask = step.get('next_mask', None)
+            xidxs = np.arange(xmax)
             try:
-                ax.plot(np.arange(xmax), step['update_weights'], color='orange')
-                #ax.annotate('chosen', (x, y), xytext=(xpos, ypos), color='black', arrowprops=dict(color='black', arrowstyle="->"))
-                ax.plot([x, x], [0, step['update_weights'].max()], color='orangered')
+                if next_mask is not None:
+                    ax.fill_between(xidxs, next_mask, color=mask_color, alpha=0.5)
+                ax.plot(xidxs, step['update_weights'], color=update_weight_color)
+                ax.plot([x, x], [0, step['update_weights'].max()], color=chosen_line_color)
             except ValueError:
-                ax.plot(np.arange(xmax), [step['update_weights']] * xmax, color='orange')
-                #ax.annotate('chosen', (x, y), xytext=(xpos, ypos), color='black', arrowprops=dict(color='black', arrowstyle="->"))
-                ax.plot([x, x], [0, step['update_weights']], color='orangered')
-            ax.set_title('Iteration {}: update weights'.format(step_idx))
+                ax.plot(xidxs, [step['update_weights']] * xmax, color=update_weight_color)
+                ax.plot([x, x], [0, step['update_weights']], color=chosen_line_color)
+            if next_mask is not None:
+                ax.set_title('Iteration {}: update & mask weights'.format(step_idx))
+            else:
+                ax.set_title('Iteration {}: update weights'.format(step_idx))
         else:
-            for x_ in chosen_so_far:
-                ax.plot([x_, x_], [0, ymax], color='gray')
-            ax.set_title('Final Sample')
+            if unixtimes is None:
+                for x_ in chosen_so_far:
+                    ax.plot([x_, x_], [0, ymax], color=prev_chosen_color)
+            else:
+                chosen_unixtimes = unixtimes[chosen_so_far]
+                chosen_datetimes = np.array([datetime_cls.fromtimestamp(t) for t in chosen_unixtimes])
+                for x_ in chosen_datetimes:
+                    ax.plot([x_, x_], [0, ymax], color=prev_chosen_color)
+
+            ax.set_title('Final sample')
 
     if _include_summary_row:
         # This last row is not helpful, don't include it.
@@ -106,13 +141,13 @@ def show_affinity_sample_process(chosen, info, fnum=1):
         ax = fig.gca()
         for row in affinity[chosen]:
             ax.plot(row)
-        ax.set_title('Chosen Affinities')
+        ax.set_title('Chosen affinities')
         # kwplot.imshow(kwimage.normalize(), pnum=pnum_(), title='Chosen Affinities')
 
         final_mat = affinity[chosen][:, chosen]
         final_mat[np.isnan(final_mat)] = 0
         final_mat = kwimage.normalize(final_mat)
-        kwplot.imshow(final_mat, pnum=pnum_(), title='Final Affinities')
+        kwplot.imshow(final_mat, pnum=pnum_(), title='Final affinities')
 
     title_suffix = info.get('title_suffix', '')
     fig.suptitle(f'Sample procedure: {start_index}{title_suffix}')

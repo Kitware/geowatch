@@ -20,3 +20,7 @@ dvc remote add --local toothbrush ssh://toothbrush/data/joncrall/dvc-repos/smart
 
 # On horologic
 dvc remote add --local local_store /data/dvc-caches/smart_watch_dvc
+
+
+### See ALso:
+"$HOME/data/dvc-repos/smart_data_dvc/Drop6/unpack.py"

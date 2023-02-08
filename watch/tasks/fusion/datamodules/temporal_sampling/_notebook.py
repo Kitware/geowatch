@@ -112,18 +112,13 @@ def test_time_strategy():
     )
 
     # from scipy.special import expit
+    from watch.tasks.fusion.datamodules.temporal_sampling.utils import coerce_time_kernel
     from watch.utils.util_time import coerce_timedelta
-    # ideal_pattern = 'time_kernel:60d-30d-0-30d-60d'
-    ideal_pattern = 'time_kernel:3y-1y-60d-30d-1d-0-1d-30d-60d-1y-3y'
-    kernel_deltas = ideal_pattern.split(':')[1].split('-')
-    parsed = [coerce_timedelta(d) for d in kernel_deltas]
+    # import kwarray
     import numpy as np
-    prekernel = np.array([v.total_seconds() for v in parsed])
-    presign = np.sign(np.diff(prekernel))
-    kernel = prekernel.copy()
-    kernel[0:len(prekernel) - 1] *= presign
+    pattern = '-1y,-60d,-30d,-1d,0,1d,30d,60d,1y'
+    kernel = coerce_time_kernel(pattern)
 
-    import kwarray
     delta_diff = (self.unixtimes[:, None] - self.unixtimes[None, :])
     kwplot.autoplt().imshow(delta_diff, cmap='coolwarm')
 
@@ -147,6 +142,7 @@ def test_time_strategy():
 
     sensor_value = {
         'WV': 10,
+        'WV1': 9,
         'S2': 1,
         'PD': 7,
         'L8': 0.3,

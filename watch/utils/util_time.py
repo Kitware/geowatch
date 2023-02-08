@@ -127,6 +127,8 @@ def coerce_datetime(data, default_timezone='utc', strict=False):
         dt = data
     elif isinstance(data, datetime_mod.date):
         dt = dateutil.parser.parse(data.isoformat())
+    elif isinstance(data, (float, int)):
+        dt = datetime_cls.fromtimestamp(data)
     else:
         raise TypeError('unhandled {}'.format(data))
     dt = ensure_timezone(dt, default=default_timezone)
