@@ -7,6 +7,7 @@ import json
 from watch.cli.baseline_framework_ingress import baseline_framework_ingress, load_input_stac_items  # noqa: 501
 from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress  # noqa: 501
 from watch.cli.ta1_stac_to_kwcoco import ta1_stac_to_kwcoco
+from watch.cli import coco_add_watch_fields
 from watch.utils.util_framework import download_region
 
 
@@ -74,6 +75,11 @@ def main():
                         type=str,
                         required=False,
                         help="STAC json input file for previous interval")
+    parser.add_argument("--target_gsd",
+                        type=int,
+                        default=30,
+                        required=False,
+                        help="Target GSD of output KWCOCO video space")
 
     run_stac_to_cropped_kwcoco(**vars(parser.parse_args()))
 
@@ -165,7 +171,8 @@ def run_stac_to_cropped_kwcoco(input_path,
                                virtual=False,
                                dont_recompute=False,
                                force_one_job_for_cropping=False,
-                               previous_input_path=None):
+                               previous_input_path=None,
+                               target_gsd=30):
     if aws_profile is not None:
         aws_ls_command = ['aws', 's3', '--profile', aws_profile, 'ls']
     else:
@@ -208,10 +215,17 @@ def run_stac_to_cropped_kwcoco(input_path,
     ta1_stac_to_kwcoco(ingress_catalog,
                        ta1_kwcoco_path,
                        assume_relative=False,
-                       populate_watch_fields=True,
+                       populate_watch_fields=False,
                        jobs=jobs,
                        from_collated=from_collated,
                        ignore_duplicates=True)
+    # Add watch fields
+    print("* Adding watch fields *")
+    coco_add_watch_fields.main(cmdline=False,
+                               src=ta1_kwcoco_path,
+                               dst=ta1_kwcoco_path,
+                               target_gsd=target_gsd,
+                               workers=jobs)
 
     # `ta1_cropped_dir` is the directory that gets recursively copied
     # up to S3, want to put any kwcoco manifests we may need
@@ -279,13 +293,25 @@ def run_stac_to_cropped_kwcoco(input_path,
                     '--include_channels', include_channels,  # noqa
                     '--geo_preprop', 'auto',
                     '--keep', 'none',
-                    '--target_gsd', '30',  # TODO: Expose as cli parameter
+                    '--convexify_regions', 'True',
+                    '--target_gsd', str(target_gsd),  # noqa
                     '--context_factor', '1',
                     '--workers', '1' if force_one_job_for_cropping else str(jobs),  # noqa: 501
                     '--aux_workers', str(include_channels.count('|') + 1),
                     '--rpc_align_method', 'affine_warp'], check=True)
 
-    # 5. Egress (envelop KWCOCO dataset in a STAC item and egress;
+    # 5. "Clean" dataset
+    # TODO: Ask Jon about channels (can it include 'quality'?)
+    subprocess.run(['python', '-m', 'watch.cli.coco_clean_geotiffs',
+                    '--src', ta1_cropped_kwcoco_path,
+                    '--channels', "red|green|blue|nir|swir16|swir22",
+                    '--prefilter_channels', "red",
+                    '--min_region_size', '256',
+                    '--nodata_value', '-9999',
+                    '--workers', '1' if force_one_job_for_cropping else str(jobs),  # noqa: 501
+                    ], check=True)
+
+    # 6. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)
     print("* Egressing KWCOCO dataset and associated STAC item *")

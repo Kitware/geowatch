@@ -140,15 +140,30 @@ def run_generate_sc_cropped_kwcoco(input_path,
                     '--site_summary', 'True',
                     '--geo_preprop', 'auto',
                     '--keep', 'none',
+                    '--convexify_regions', 'True',
                     '--target_gsd', '4',  # TODO: Expose as cli parameter
                     '--context_factor', '1.5',  # TODO: Expose as cli parameter
                     '--workers', '1' if force_one_job_for_cropping else str(jobs),  # noqa: 501
-                    '--aux_workers', str(include_channels.count('|') + 1),
+                    '--aux_workers', '2',  # str(include_channels.count('|') + 1),  # noqa: 501
                     '--rpc_align_method', 'affine_warp',  # Maybe needs to change to "orthorectified"  # noqa
                     '--force_min_gsd', '8',
+                    '--verbose', '4',
+                    '--image_timeout', '20minutes',
+                    '--asset_timeout', '10minutes',
                     ], check=True)
 
-    # 5. Egress (envelop KWCOCO dataset in a STAC item and egress;
+    # 5. "Clean" dataset
+    # TODO: Ask Jon about channels (can it include 'quality'?)
+    subprocess.run(['python', '-m', 'watch.cli.coco_clean_geotiffs',
+                    '--src', ta1_sc_cropped_kwcoco_path,
+                    '--channels', "red|green|blue",
+                    '--prefilter_channels', "red",
+                    '--min_region_size', '256',
+                    '--nodata_value', '-9999',
+                    '--workers', '1' if force_one_job_for_cropping else str(jobs),  # noqa: 501
+                    ], check=True)
+
+    # 6. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)
     print("* Egressing KWCOCO dataset and associated STAC item *")

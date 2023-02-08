@@ -228,22 +228,11 @@ def run_bas_fusion_for_baseline(
 
     predict_config = json.loads("""
 {
-      "tta_fliprot": 0,
-      "tta_time": 0,
       "chip_overlap": 0.3,
-      "input_space_scale": "15GSD",
-      "window_space_scale": "15GSD",
-      "output_space_scale": "15GSD",
-      "time_span": "6m",
+      "chip_dims": "auto",
+      "time_span": "auto",
       "time_sampling": "auto",
-      "time_steps": 5,
-      "chip_dims": [
-         128,
-         128
-      ],
-      "set_cover_algo": null,
-      "resample_invalid_frames": true,
-      "use_cloudmask": 1
+      "drop_unused_frames": true
 }
     """)
 
@@ -301,6 +290,12 @@ def run_bas_fusion_for_baseline(
     print("* Computing tracks (BAS) *")
     region_models_outdir = os.path.join(ingress_dir, 'region_models')
     os.makedirs(region_models_outdir, exist_ok=True)
+
+    region_models_manifest_outdir = os.path.join(
+        ingress_dir, 'tracking_manifests_bas')
+    os.makedirs(region_models_manifest_outdir, exist_ok=True)
+    region_models_manifest_outpath = os.path.join(
+        region_models_manifest_outdir, 'region_models_manifest.json')
     # Copy input region model into region_models outdir to be updated
     # (rather than generated from tracking, which may not have the
     # same bounds as the original)
@@ -310,6 +305,7 @@ def run_bas_fusion_for_baseline(
     bas_tracking_config = {
         "thresh": bas_thresh,
         "moving_window_size": None,
+        "polygon_simplify_tolerance": 1,
         "max_area_behavior": 'ignore'}
 
     tracked_bas_kwcoco_path = '_tracked'.join(
@@ -317,6 +313,8 @@ def run_bas_fusion_for_baseline(
     subprocess.run(['python', '-m', 'watch.cli.run_tracker',
                     combined_bas_fusion_kwcoco_path,
                     '--out_site_summaries_dir', region_models_outdir,
+                    '--out_site_summaries_fpath',
+                    region_models_manifest_outpath,
                     '--out_kwcoco', tracked_bas_kwcoco_path,
                     '--default_track_fn', 'saliency_heatmaps',
                     '--append_mode', 'True',
