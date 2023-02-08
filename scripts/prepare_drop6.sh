@@ -271,6 +271,7 @@ update_from_dmj_constructions(){
     "
 
     REGION_IDS=(AE_C003 PE_C003 QA_C001 SA_C005 US_C000 US_C010 US_C011 US_C012 US_C014)
+    REGION_ID=BH_R001
     DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="hdd")
     DMJ_DPATH=/home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan
     DST_DPATH=$DATA_DVC_DPATH/Drop6

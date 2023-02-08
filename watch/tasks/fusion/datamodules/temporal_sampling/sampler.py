@@ -254,7 +254,10 @@ class MultiTimeWindowSampler(CommonSamplerMixin):
         """
         Approximate combined affinity, for this multi-sampler
         """
-        affinity = np.mean(np.stack([sampler.affinity for sampler in self.sub_samplers.values()]), axis=0)
+        affinity = np.mean(np.stack([
+            sampler.affinity
+            for sampler in self.sub_samplers.values()
+        ]), axis=0)
         return affinity
 
     @affinity.setter
