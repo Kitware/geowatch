@@ -1,0 +1,741 @@
+import datetime
+import kwarray
+import kwimage
+import math
+import numpy as np
+import ubelt as ub
+from watch.utils import util_kwarray
+from watch.utils.util_time import coerce_timedelta
+from .exceptions import TimeSampleError
+from .utils import guess_missing_unixtimes
+
+
+def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
+                    update_rule='pairwise', gamma=1, determenistic=False,
+                    error_level=2, rng=None, return_info=False, jit=False):
+    """
+    Randomly select `size` timesteps from a larger pool based on "affinity".
+
+    Given an NxN affinity matrix between frames and an initial set of indices
+    to include, chooses a sample of other frames to complete the sample.  Each
+    row and column in the affinity matrix represent a "selectable" timestamp.
+    Given an initial set of ``include_indices`` that indicate which timesteps
+    must be included in the sample. An iterative process is used to select
+    remaining indices such that ``size`` timesteps are returned. In each
+    iteration we choose the "next" timestep based on a probability distribution
+    derived from (1) the affinity matrix (2) the currently included set of
+    indexes and (3) the update rule.
+
+    Args:
+        affinity (ndarray):
+            pairwise affinity matrix
+
+        size (int):
+            Number of sample indices to return
+
+        include_indices (List[int]):
+            Indicies that must be included in the sample
+
+        exclude_indices (List[int]):
+            Indicies that cannnot be included in the sample
+
+        update_rule (str):
+            Modifies how the affinity matrix is used to create the
+            probability distribution for the "next" frame that will be
+            selected.
+            a "+" separated string of codes which can contain:
+                * pairwise - if included, each newly chosen sample will
+                    modulate the initial "main" affinity with it's own
+                    affinity.  Otherwise, only the affinity of the initially
+                    included rows are considered.
+                * distribute - if included, every step of weight updates will
+                    downweight samples temporally close to the most recently
+                    selected sample.
+
+        gamma (float, default=1.0):
+            Exponent that modulates the probability distribution. Lower gamma
+            will "flatten" the probability curve. At gamma=0, all frames will
+            be equally likely regardless of affinity. As gamma -> inf, the rule
+            becomes more likely to sample the maximum probaility at each
+            timestep. In the limit this becomes equivalent to
+            ``determenistic=True``.
+
+        determenistic (bool):
+            if True, on each step we choose the next timestamp with maximum
+            probability. Otherwise, we randomly choose a timestep, but with
+            probability according to the current distribution.
+
+        error_level (int):
+            Error and fallback behavior if perfect sampling is not possible.
+            error level 0:
+                might return excluded, duplicate indexes, or 0-affinity indexes
+                if everything else is exhausted.
+            error level 1:
+                duplicate indexes will raise an error
+            error level 2:
+                duplicate and excluded indexes will raise an error
+            error level 3:
+                duplicate, excluded, and 0-affinity indexes will raise an error
+
+        rng (Coercable[RandomState]):
+            random state for reproducible sampling
+
+        return_info (bool):
+            If True, includes a dictionary of information that details the
+            internal steps the algorithm took.
+
+        jit (bool):
+            NotImplemented - do not use
+
+    Returns:
+        ndarray | Tuple[ndarray, Dict] -
+            The ``chosen`` indexes for the sample, or if return_info is True,
+            then returns a tuple of ``chosen`` and the info dictionary.
+
+    Possible Related Work:
+        * Random Stratified Sampling Affinity Matrix
+        * A quasi-random sampling approach to image retrieval
+
+    Example:
+        >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
+        >>> from watch.tasks.fusion.datamodules.temporal_sampling.affinity import *  # NOQA
+        >>> low = datetime.datetime.now().timestamp()
+        >>> high = low + datetime.timedelta(days=365 * 5).total_seconds()
+        >>> rng = kwarray.ensure_rng(0)
+        >>> unixtimes = np.array(sorted(rng.randint(low, high, 113)), dtype=float)
+        >>> #
+        >>> affinity = soft_frame_affinity(unixtimes, version=2, time_span='1d')['final']
+        >>> include_indices = [5]
+        >>> size = 5
+        >>> chosen, info = affinity_sample(affinity, size, include_indices, update_rule='pairwise',
+        >>>                                return_info=True, determenistic=True)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> sns = kwplot.autosns()
+        >>> plt = kwplot.autoplt()
+        >>> show_affinity_sample_process(chosen, info)
+
+    Example:
+        >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
+        >>> low = datetime.datetime.now().timestamp()
+        >>> high = low + datetime.timedelta(days=365 * 5).total_seconds()
+        >>> rng = kwarray.ensure_rng(0)
+        >>> unixtimes = np.array(sorted(rng.randint(low, high, 5)), dtype=float)
+        >>> self = TimeWindowSampler(unixtimes, sensors=None, time_window=4,
+        >>>     affinity_type='soft2', time_span='0.3y',
+        >>>     update_rule='distribute+pairwise')
+        >>> self.determenistic = False
+        >>> import pytest
+        >>> with pytest.raises(IndexError):
+        >>>     self.sample(0, exclude=[1, 2, 4], error_level=3)
+        >>> with pytest.raises(IndexError):
+        >>>     self.sample(0, exclude=[1, 2, 4], error_level=2)
+        >>> self.sample(0, exclude=[1, 2, 4], error_level=1)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> chosen, info = self.show_procedure(idx=0, fnum=10, exclude=[1, 2, 4])
+        >>> print('info = {}'.format(ub.repr2(info, nl=4)))
+
+    Ignore:
+        >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
+        >>> low = datetime.datetime.now().timestamp()
+        >>> high = low + datetime.timedelta(days=365 * 5).total_seconds()
+        >>> rng = kwarray.ensure_rng(0)
+        >>> unixtimes = np.array(sorted(rng.randint(low, high, 113)), dtype=float)
+        >>> affinity = soft_frame_affinity(unixtimes)['final']
+        >>> include_indices = [5]
+        >>> size = 20
+        >>> xdev.profile_now(affinity_sample)(affinity, size, include_indices)
+    """
+    rng = kwarray.ensure_rng(rng)
+
+    if include_indices is None:
+        include_indices = []
+    if exclude_indices is None:
+        exclude_indices = []
+
+    chosen = list(include_indices)
+
+    if len(chosen) == 0:
+        # Need to find a seed frame
+        avail = list(set(range(len(affinity))) - set(exclude_indices))
+        if len(avail) == 0:
+            raise Exception('nothing is available')
+        avail_idx = rng.randint(0, len(avail))
+        chosen = [avail_idx]
+
+    update_rules = {r for r in update_rule.split('+') if r}
+    config = ub.dict_subset({'pairwise': True, 'distribute': True}, update_rules)
+    do_pairwise = config.get('pairwise', False)
+    do_distribute = config.get('distribute', False)
+
+    if len(chosen) == 1:
+        initial_weights = affinity[chosen[0]]
+    else:
+        initial_weights = affinity[chosen].prod(axis=0)
+
+    initial_weights[exclude_indices] = 0
+    update_weights = 1
+
+    if do_pairwise:
+        update_weights = initial_weights * update_weights
+
+    if do_distribute:
+        col_idxs = np.arange(0, affinity.shape[1])
+        update_weights *= (np.abs(col_idxs - np.array(chosen)[:, None]) / len(col_idxs)).min(axis=0)
+
+    current_weights = initial_weights * update_weights
+    current_weights[chosen] = 0
+
+    num_sample = size - len(chosen)
+
+    if jit:
+        raise NotImplementedError
+        # out of date
+        cython_mod = cython_aff_samp_mod()
+        return cython_mod.cython_affinity_sample(affinity, num_sample, current_weights, chosen, rng)
+
+    # available_idxs = np.arange(affinity.shape[0])
+    if return_info:
+        denom = current_weights.sum()
+        if denom == 0:
+            denom = 1
+        initial_probs = current_weights / denom
+        info = {
+            'steps': [],
+
+            'initial_weights': initial_weights.copy(),
+            'initial_update_weights': update_weights.copy() if hasattr(update_weights, 'copy') else update_weights,
+            'initial_probs': initial_probs,
+
+            'initial_chosen': chosen.copy(),
+
+            'include_indices': include_indices,
+            'affinity': affinity,
+        }
+
+    for _ in range(num_sample):
+        # Choose the next image based on combined sample affinity
+
+        total_weight = current_weights.sum()
+
+        if return_info:
+            errors = []
+
+        # If we zeroed out all of the probabilities try two things before
+        # punting and setting everything to uniform.
+        if total_weight == 0:
+            if error_level == 3:
+                raise TimeSampleError('all probability is exhausted')
+            current_weights = affinity[chosen[0]].copy()
+            current_weights[chosen] = 0
+            current_weights[exclude_indices] = 0
+            total_weight = current_weights.sum()
+            if return_info:
+                errors.append('all indices were chosen, excluded, or had no affinity')
+            if total_weight == 0:
+                # Should really never get here in day-to-day, but just in case
+                if error_level == 2:
+                    raise TimeSampleError('all included probability is exhausted')
+                # Zero weight method: neighbors
+                zero_weight_method = 'neighbors'
+                if zero_weight_method == 'neighbors':
+
+                    if len(chosen) == 0:
+                        zero_weight_method = 'random'
+                    else:
+                        chosen_neighbor_idxs = np.hstack([np.array(chosen) + 1, np.array(chosen) - 1])
+                        chosen_neighbor_idxs = np.unique(np.clip(chosen_neighbor_idxs, 0,  len(current_weights) - 1))
+                        ideal_idxs = np.setdiff1d(chosen_neighbor_idxs, chosen)
+                        if len(ideal_idxs) == 0:
+                            ideal_idxs = chosen_neighbor_idxs
+                        current_weights[ideal_idxs] = 1
+
+                if zero_weight_method == 'random':
+                    current_weights[:] = rng.rand(len(current_weights))
+
+                current_weights[chosen] = 0
+                total_weight = current_weights.sum()
+                if return_info:
+                    errors.append('all indices were chosen, excluded')
+                if total_weight == 0:
+                    if error_level == 1:
+                        raise TimeSampleError('all chosen probability is exhausted')
+                    if zero_weight_method == 'neighbors':
+                        current_weights[:] = rng.rand(len(current_weights))
+                    if zero_weight_method == 'random':
+                        current_weights[:] = rng.rand(len(current_weights))
+                    if return_info:
+                        errors.append('all indices were chosen, punting')
+
+        if determenistic:
+            next_idx = current_weights.argmax()
+        else:
+            cumprobs = (current_weights ** gamma).cumsum()
+            dart = rng.rand() * cumprobs[-1]
+            next_idx = np.searchsorted(cumprobs, dart)
+
+        update_weights = 1
+
+        if do_pairwise:
+            if next_idx < affinity.shape[0]:
+                update_weights = affinity[next_idx] * update_weights
+
+        if do_distribute:
+            update_weights = (np.abs(col_idxs - next_idx) / len(col_idxs)) * update_weights
+
+        chosen.append(next_idx)
+
+        if return_info:
+            if total_weight == 0:
+                probs = current_weights.copy()
+            else:
+                probs = current_weights / total_weight
+            probs = current_weights
+            info['steps'].append({
+                'probs': probs,
+                'next_idx': next_idx,
+                'update_weights': update_weights,
+                'errors': errors,
+            })
+
+        # Modify weights to impact next sample
+        current_weights = current_weights * update_weights
+
+        # Don't resample the same item
+        current_weights[next_idx] = 0
+
+    chosen = sorted(chosen)
+    if return_info:
+        return chosen, info
+    else:
+        return chosen
+
+
+def hard_time_sample_pattern(unixtimes, time_window, time_span='2y'):
+    """
+    Finds hard time sampling indexes
+
+    Args:
+        unixtimes (ndarray):
+            list of unix timestamps indicating available temporal samples
+
+        time_window (int):
+            number of frames per sample
+
+    References:
+        https://docs.google.com/presentation/d/1GSOaY31cKNERQObl_L3vk0rGu6zU7YM_ZFLrdksHSC0/edit#slide=id.p
+
+    Example:
+        >>> low = datetime.datetime.now().timestamp()
+        >>> high = low + datetime.timedelta(days=365 * 5).total_seconds()
+        >>> rng = kwarray.ensure_rng(0)
+        >>> base_unixtimes = np.array(sorted(rng.randint(low, high, 20)), dtype=float)
+        >>> unixtimes = base_unixtimes.copy()
+        >>> #unixtimes[rng.rand(*unixtimes.shape) < 0.1] = np.nan
+        >>> time_window = 5
+        >>> sample_idxs = hard_time_sample_pattern(unixtimes, time_window)
+        >>> name = 'demo-data'
+
+        >>> #unixtimes[:] = np.nan
+        >>> time_window = 5
+        >>> sample_idxs = hard_time_sample_pattern(unixtimes, time_window)
+        >>> name = 'demo-data'
+
+    Ignore:
+        >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
+        >>> import os
+        >>> from watch.utils.util_data import find_smart_dvc_dpath
+        >>> dvc_dpath = find_smart_dvc_dpath()
+        >>> coco_fpath = dvc_dpath / 'Drop1-Aligned-L1-2022-01/data.kwcoco.json'
+        >>> dset = kwcoco.CocoDataset(coco_fpath)
+        >>> video_ids = list(ub.sorted_vals(dset.index.vidid_to_gids, key=len).keys())
+        >>> vidid = video_ids[0]
+        >>> video = dset.index.videos[vidid]
+        >>> name = (video['name'])
+        >>> print('name = {!r}'.format(name))
+        >>> images = dset.images(vidid=vidid)
+        >>> datetimes = [parser.parse(date) for date in images.lookup('date_captured')]
+        >>> unixtimes = np.array([dt.timestamp() for dt in datetimes])
+        >>> time_window = 5
+        >>> sample_idxs = hard_time_sample_pattern(unixtimes, time_window)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autoplt()
+        >>> plot_dense_sample_indices(sample_idxs, unixtimes, title_suffix=f': {name}')
+
+    Ignore:
+        >>> import kwplot
+        >>> import numpy as np
+        >>> sns = kwplot.autosns()
+
+        >>> # =====================
+        >>> # Show Sample Pattern in heatmap
+        >>> plot_dense_sample_indices(sample_idxs, unixtimes, title_suffix=f': {name}')
+
+        >>> datetimes = np.array([datetime.datetime.fromtimestamp(t) for t in unixtimes])
+        >>> dates = np.array([datetime.datetime.fromtimestamp(t).date() for t in unixtimes])
+        >>> #
+        >>> sample_pattern = kwarray.one_hot_embedding(sample_idxs, len(unixtimes), dim=1).sum(axis=2)
+        >>> kwplot.imshow(sample_pattern)
+        >>> import pandas as pd
+        >>> df = pd.DataFrame(sample_pattern)
+        >>> df.index.name = 'index'
+        >>> #
+        >>> df.columns = pd.to_datetime(datetimes).date
+        >>> df.columns.name = 'date'
+        >>> #
+        >>> kwplot.figure(fnum=1, doclf=True)
+        >>> ax = sns.heatmap(data=df)
+        >>> ax.set_title(f'Sample Pattern wrt Available Observations: {name}')
+        >>> ax.set_xlabel('Observation Index')
+        >>> ax.set_ylabel('Sample Index')
+        >>> #
+        >>> #import matplotlib.dates as mdates
+        >>> #ax.figure.autofmt_xdate()
+
+        >>> # =====================
+        >>> # Show Sample Pattern WRT to time
+        >>> fig = kwplot.figure(fnum=2, doclf=True)
+        >>> ax = fig.gca()
+        >>> for t in datetimes:
+        >>>     ax.plot([t, t], [0, len(sample_idxs) + 1], color='orange')
+        >>> for sample_ypos, sample in enumerate(sample_idxs, start=1):
+        >>>     ax.plot(datetimes[sample], [sample_ypos] * len(sample), '-x')
+        >>> ax.set_title(f'Sample Pattern wrt Time Range: {name}')
+        >>> ax.set_xlabel('Time')
+        >>> ax.set_ylabel('Sample Index')
+        >>> # import matplotlib.dates as mdates
+        >>> # ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+        >>> # ax.xaxis.set_major_locator(mdates.DayLocator(interval=1))
+        >>> # ax.figure.autofmt_xdate()
+
+        >>> # =====================
+        >>> # Show Available Samples
+        >>> import july
+        >>> from july.utils import date_range
+        >>> datetimes = [datetime.datetime.fromtimestamp(t) for t in unixtimes]
+        >>> grid_dates = date_range(
+        >>>     datetimes[0].date().isoformat(),
+        >>>     (datetimes[-1] + datetime.timedelta(days=1)).date().isoformat()
+        >>> )
+        >>> grid_unixtime = np.array([
+        >>>     datetime.datetime.combine(d, datetime.datetime.min.time()).timestamp()
+        >>>     for d in grid_dates
+        >>> ])
+        >>> positions = np.searchsorted(grid_unixtime, unixtimes)
+        >>> indicator = np.zeros_like(grid_unixtime)
+        >>> indicator[positions] = 1
+        >>> dates_unixtimes = [d for d in dates]
+        >>> july.heatmap(grid_dates, indicator, title=f'Available Observations: {name}', cmap="github")
+    """
+    if isinstance(time_window, int):
+        # TODO: formulate how to choose template delta for given window dims Or
+        # pass in a delta
+        if time_window == 1:
+            template_deltas = np.array([
+                datetime.timedelta(days=0).total_seconds(),
+            ])
+        else:
+            time_span = coerce_timedelta(time_span).total_seconds()
+            min_time = -datetime.timedelta(seconds=time_span).total_seconds()
+            max_time = datetime.timedelta(seconds=time_span).total_seconds()
+            template_deltas = np.linspace(min_time, max_time, time_window).round().astype(int)
+            # Always include a delta of 0
+            template_deltas[np.abs(template_deltas).argmin()] = 0
+    else:
+        template_deltas = time_window
+
+    unixtimes = guess_missing_unixtimes(unixtimes)
+
+    rel_unixtimes = unixtimes - unixtimes[0]
+    temporal_sampling = rel_unixtimes[:, None] + template_deltas[None, :]
+
+    # Wraparound (this is a bit of a hack)
+    hackit = 1
+    if hackit:
+        wraparound = 1
+        last_time = rel_unixtimes[-1] + 1
+        is_oob_left = temporal_sampling < 0
+        is_oob_right = temporal_sampling >= last_time
+        is_oob = (is_oob_right | is_oob_left)
+        is_ib = ~is_oob
+
+        tmp = temporal_sampling.copy()
+        tmp[is_oob] = np.nan
+        # filter warn
+        max_ib = np.nanmax(tmp, axis=1)
+        min_ib = np.nanmin(tmp, axis=1)
+
+        row_oob_flag = is_oob.any(axis=1)
+
+        # TODO: rewrite this with reasonable logic for fixing oob samples
+        # This is horrible logic, I'd be ashamed, but it works.
+        for rx in np.where(row_oob_flag)[0]:
+            is_bad = is_oob[rx]
+            mx = max_ib[rx]
+            mn = min_ib[rx]
+            row = temporal_sampling[rx].copy()
+            valid_data = row[is_ib[rx]]
+            if not len(valid_data):
+                wraparound = 1
+                temporal_sampling[rx, :] = 0.0
+            else:
+                step = (mx - mn) / len(valid_data)
+                if step == 0:
+                    step = np.diff(template_deltas[0:2])[0]
+
+                if step <= 0:
+                    wraparound = 1
+                else:
+                    avail_after = last_time - mx
+                    avail_before = mn
+
+                    if avail_after > 0:
+                        avail_after_steps = avail_after / step
+                    else:
+                        avail_after_steps = 0
+
+                    if avail_before > 0:
+                        avail_before_steps = avail_before / step
+                    else:
+                        avail_before_steps = 0
+
+                    need = is_bad.sum()
+                    before_oob = is_oob_left[rx]
+                    after_oob = is_oob_right[rx]
+
+                    take_after = min(before_oob.sum(), int(avail_after_steps))
+                    take_before = min(after_oob.sum(), int(avail_before_steps))
+
+                    extra_after = np.linspace(mx, mx + take_after * step, take_after)
+                    extra_before = np.linspace(mn - take_before * step, mn, take_before)
+
+                    extra = np.hstack([extra_before, extra_after])
+
+                    bad_idxs = np.where(is_bad)[0]
+                    use = min(min(len(bad_idxs), need), len(extra))
+                    row[bad_idxs[:use]] = extra[:use]
+                    temporal_sampling[rx] = row
+
+    wraparound = 1
+    if wraparound:
+        temporal_sampling = temporal_sampling % last_time
+
+    losses = np.abs(temporal_sampling[:, :, None] - rel_unixtimes[None, None, :])
+    losses[losses == 0] = -np.inf
+    all_rows = []
+    for loss_for_row in losses:
+        # For each row find the closest available frames to the ideal
+        # sample without duplicates.
+        sample_idxs = np.array(kwarray.mincost_assignment(loss_for_row)[0]).T[1]
+        all_rows.append(sorted(sample_idxs))
+
+    sample_idxs = np.vstack(all_rows)
+    return sample_idxs
+
+
+def soft_frame_affinity(unixtimes, sensors=None, time_span='2y', version=1,
+                        heuristics='default'):
+    """
+    Produce a pairwise affinity weights between frames based on a dilated time
+    heuristic.
+
+    Example:
+        >>> low = datetime.datetime.now().timestamp()
+        >>> high = low + datetime.timedelta(days=365 * 5).total_seconds()
+        >>> rng = kwarray.ensure_rng(0)
+        >>> base_unixtimes = np.array(sorted(rng.randint(low, high, 113)), dtype=float)
+
+        >>> # Test no missing data case
+        >>> unixtimes = base_unixtimes.copy()
+        >>> allhave_weights = soft_frame_affinity(unixtimes, version=2)
+        >>> #
+        >>> # Test all missing data case
+        >>> unixtimes = np.full_like(unixtimes, fill_value=np.nan)
+        >>> allmiss_weights = soft_frame_affinity(unixtimes, version=2)
+        >>> #
+        >>> # Test partial missing data case
+        >>> unixtimes = base_unixtimes.copy()
+        >>> unixtimes[rng.rand(*unixtimes.shape) < 0.1] = np.nan
+        >>> anymiss_weights_1 = soft_frame_affinity(unixtimes, version=2)
+        >>> unixtimes = base_unixtimes.copy()
+        >>> unixtimes[rng.rand(*unixtimes.shape) < 0.5] = np.nan
+        >>> anymiss_weights_2 = soft_frame_affinity(unixtimes, version=2)
+        >>> unixtimes = base_unixtimes.copy()
+        >>> unixtimes[rng.rand(*unixtimes.shape) < 0.9] = np.nan
+        >>> anymiss_weights_3 = soft_frame_affinity(unixtimes, version=2)
+
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autoplt()
+        >>> pnum_ = kwplot.PlotNums(nCols=5)
+        >>> kwplot.figure(fnum=1, doclf=True)
+        >>> # kwplot.imshow(kwimage.normalize(daylight_weights))
+        >>> kwplot.imshow(kwimage.normalize(allhave_weights['final']), pnum=pnum_(), title='no missing dates')
+        >>> kwplot.imshow(kwimage.normalize(anymiss_weights_1['final']), pnum=pnum_(), title='any missing dates (0.1)')
+        >>> kwplot.imshow(kwimage.normalize(anymiss_weights_2['final']), pnum=pnum_(), title='any missing dates (0.5)')
+        >>> kwplot.imshow(kwimage.normalize(anymiss_weights_3['final']), pnum=pnum_(), title='any missing dates (0.9)')
+        >>> kwplot.imshow(kwimage.normalize(allmiss_weights['final']), pnum=pnum_(), title='all missing dates')
+
+        >>> import pandas as pd
+        >>> sns = kwplot.autosns()
+        >>> fig = kwplot.figure(fnum=2, doclf=True)
+        >>> kwplot.imshow(kwimage.normalize(allhave_weights['final']), pnum=(1, 3, 1), title='pairwise affinity')
+        >>> row_idx = 5
+        >>> df = pd.DataFrame({k: v[row_idx] for k, v in allhave_weights.items()})
+        >>> df['index'] = np.arange(df.shape[0])
+        >>> data = df.drop(['final'], axis=1).melt(['index'])
+        >>> kwplot.figure(fnum=2, pnum=(1, 3, 2))
+        >>> sns.lineplot(data=data, x='index', y='value', hue='variable')
+        >>> fig.gca().set_title('Affinity components for row={}'.format(row_idx))
+        >>> kwplot.figure(fnum=2, pnum=(1, 3, 3))
+        >>> sns.lineplot(data=df, x='index', y='final')
+        >>> fig.gca().set_title('Affinity components for row={}'.format(row_idx))
+
+    """
+    if heuristics == 'default':
+        heuristics = {'daylight', 'season'}
+
+    missing_date = np.isnan(unixtimes)
+    missing_any_dates = np.any(missing_date)
+    have_any_dates = not np.all(missing_date)
+
+    weights = {}
+
+    if have_any_dates:
+        # unixtimes[np.random.rand(*unixtimes.shape) > 0.1] = np.nan
+        seconds_per_year = datetime.timedelta(days=365).total_seconds()
+        seconds_per_day = datetime.timedelta(days=1).total_seconds()
+
+        second_deltas = np.abs(unixtimes[None, :] - unixtimes[:, None])
+
+        # Upweight similar seasons
+        if 'season' in heuristics:
+            year_deltas = second_deltas / seconds_per_year
+            season_weights = (1 + np.cos(year_deltas * math.tau)) / 2.0
+
+        # Upweight similar times of day
+        if 'daylight' in heuristics:
+            day_deltas = second_deltas / seconds_per_day
+            daylight_weights = ((1 + np.cos(day_deltas * math.tau)) / 2.0) * 0.95 + 0.95
+
+        if version == 1:
+            # backwards compat
+            # Upweight times in the future
+            # future_weights = year_deltas ** 0.25
+            # future_weights = util_kwarray.asymptotic(year_deltas, degree=1)
+            future_weights = util_kwarray.tukey_biweight_loss(year_deltas, c=0.5)
+            future_weights = future_weights - future_weights.min()
+            future_weights = (future_weights / future_weights.max())
+            future_weights = future_weights * 0.8 + 0.2
+            weights['future'] = future_weights
+        elif version == 2:
+            # TODO:
+            # incorporate the time_span?
+            time_span = coerce_timedelta(time_span).total_seconds()
+            span_delta = (second_deltas - time_span) ** 2
+            norm_span_delta = span_delta / (time_span ** 2)
+            weights['time_span'] = (1 - np.minimum(norm_span_delta, 1)) * 0.5 + 0.5
+
+            # Modify the influence of season / daylight
+            if 'daylight' in heuristics:
+                # squash daylight weight influence
+                try:
+                    middle = np.nanmean(daylight_weights)
+                except Exception:
+                    middle = 0
+                daylight_weights = (daylight_weights - middle) * 0.1 + (middle / 2)
+            if 'season' in heuristics:
+                season_weights = ((season_weights - 0.5) / 2) + 0.5
+
+        if 'daylight' in heuristics:
+            weights['daylight'] = daylight_weights
+
+        if 'season' in heuristics:
+            weights['season'] = season_weights
+
+        frame_weights = np.prod(np.stack(list(weights.values())), axis=0)
+        # frame_weights = season_weights * daylight_weights
+        # frame_weights = frame_weights * future_weights
+    else:
+        frame_weights = None
+
+    if sensors is not None:
+        sensors = np.asarray(sensors)
+        same_sensor = sensors[:, None] == sensors[None, :]
+        sensor_weights = ((same_sensor * 0.5) + 0.5)
+        weights['sensor'] = sensor_weights
+        if frame_weights is None:
+            frame_weights = frame_weights
+        else:
+            frame_weights = frame_weights * sensor_weights
+
+    if missing_any_dates:
+        # For the frames that don't have dates on them, we use indexes to
+        # calculate a proxy weight.
+        frame_idxs = np.arange(len(unixtimes))
+        frame_dist = np.abs(frame_idxs[:, None] - frame_idxs[None, ])
+        index_weight = (frame_dist / len(frame_idxs)) ** 0.33
+        weights['index'] = index_weight
+
+        # Interpolate over any existing values
+        # https://stackoverflow.com/questions/21690608/numpy-inpaint-nans-interpolate-and-extrapolate
+        if have_any_dates:
+            from scipy import interpolate
+            miss_idxs = frame_idxs[missing_date]
+            have_idxs = frame_idxs[~missing_date]
+
+            miss_coords = np.vstack([
+                util_kwarray.cartesian_product(miss_idxs, frame_idxs),
+                util_kwarray.cartesian_product(have_idxs, miss_idxs)])
+            have_coords = util_kwarray.cartesian_product(have_idxs, have_idxs)
+            have_values = frame_weights[tuple(have_coords.T)]
+
+            interp = interpolate.LinearNDInterpolator(have_coords, have_values, fill_value=0.8)
+            interp_vals = interp(miss_coords)
+
+            miss_coords_fancy = tuple(miss_coords.T)
+            frame_weights[miss_coords_fancy] = interp_vals
+
+            # Average interpolation with the base case
+            frame_weights[miss_coords_fancy] = (
+                frame_weights[miss_coords_fancy] +
+                index_weight[miss_coords_fancy]) / 2
+        else:
+            # No data to use, just use
+            frame_weights = index_weight
+
+    weights['final'] = frame_weights
+    return weights
+
+
+def hard_frame_affinity(unixtimes, sensors, time_window, time_span='2y', blur=False):
+    # Hard affinity
+    sample_idxs = hard_time_sample_pattern(unixtimes, time_window, time_span=time_span)
+    affinity = kwarray.one_hot_embedding(
+        sample_idxs, len(unixtimes), dim=1).sum(axis=2)
+    affinity[np.eye(len(affinity), dtype=bool)] = 0
+    if blur:
+        if blur is True:
+            affinity = kwimage.gaussian_blur(affinity, kernel=(5, 1))
+        else:
+            affinity = kwimage.gaussian_blur(affinity, sigma=blur)
+
+    affinity[np.eye(len(affinity), dtype=bool)] = 0
+    # affinity = affinity * 0.99 + 0.01
+    affinity = affinity / affinity.max()
+    affinity[np.eye(len(affinity), dtype=bool)] = 1
+    return affinity
+
+
+@ub.memoize
+def cython_aff_samp_mod():
+    """ Old JIT code, no longer works """
+    import os
+    from watch.tasks.fusion.datamodules import temporal_sampling
+    fpath = os.path.join(os.path.dirname(temporal_sampling.__file__), 'affinity_sampling.pyx')
+    import xdev
+    cython_mod = xdev.import_module_from_pyx(fpath, verbose=0, annotate=True)
+    return cython_mod

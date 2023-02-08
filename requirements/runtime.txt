@@ -199,3 +199,5 @@ jsonargparse[signatures]>=4.15.2
 ruamel.yaml>=0.17.21
 
 ijson>=3.1.4
+
+lazy_loader>=0.1
