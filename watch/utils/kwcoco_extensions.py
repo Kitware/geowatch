@@ -1930,7 +1930,7 @@ def warp_annot_segmentations_from_geos(coco_dset):
                 'aid': aid,
             })
 
-        crs84_ann_df = gpd.GeoDataFrame(rows, crs=crs84)
+        crs84_ann_df = gpd.GeoDataFrame(rows, crs=crs84, columns=['geometry', 'aid'])
         wld_crs_info = coco_img.img['wld_crs_info']
         crs = util_gis.coerce_crs(wld_crs_info)  # TODO: traditional / authority check
         wld_ann_df = crs84_ann_df.to_crs(crs)

@@ -214,9 +214,7 @@ def main(cmdline=False, **kwargs):
     for ann in propogated_annotations:
         coco_dset.add_annotation(**ann)
 
-    import xdev
-    with xdev.embed_on_exception_context:
-        kwcoco_extensions.warp_annot_segmentations_from_geos(coco_dset)
+    kwcoco_extensions.warp_annot_segmentations_from_geos(coco_dset)
 
     if output_fpath != 'return':
         # print('dump coco_dset.fpath = {!r}'.format(coco_dset.fpath))
