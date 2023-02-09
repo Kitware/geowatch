@@ -258,4 +258,3 @@ See detailed **internal** instructions for rotating keys:
 
     # Synchronize those keys to all other machine that need them.
     # Doing this will depend on how the user synchronizes keys.
-
