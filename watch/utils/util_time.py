@@ -1,8 +1,18 @@
 import datetime as datetime_mod
+import numbers
 import dateutil
 import time
 import ubelt as ub
+import math
 from datetime import datetime as datetime_cls
+
+
+class TimeValueError(ValueError):
+    ...
+
+
+class TimeTypeError(TypeError):
+    ...
 
 
 def isoformat(dt, sep='T', timespec='seconds', pathsafe=True):
@@ -130,7 +140,7 @@ def coerce_datetime(data, default_timezone='utc', strict=False):
     elif isinstance(data, (float, int)):
         dt = datetime_cls.fromtimestamp(data)
     else:
-        raise TypeError('unhandled {}'.format(data))
+        raise TimeTypeError('unhandled {}'.format(data))
     dt = ensure_timezone(dt, default=default_timezone)
     return dt
 
@@ -258,8 +268,16 @@ def coerce_timedelta(delta):
             delta = float(delta)
         except ValueError:
             ...
-    if isinstance(delta, (int, float)):
-        delta = datetime_mod.timedelta(seconds=delta)
+
+    if isinstance(delta, datetime_mod.timedelta):
+        ...
+    elif isinstance(delta, numbers.Number):
+        try:
+            delta = datetime_mod.timedelta(seconds=delta)
+        except ValueError:
+            if isinstance(delta, float) and math.isnan(delta):
+                raise TimeValueError('Cannot coerce nan to a timedelta')
+            raise
     elif isinstance(delta, str):
 
         try:
@@ -306,9 +324,6 @@ def coerce_timedelta(delta):
                     raise Exception(delta)
                 delta = datetime_mod.timedelta(seconds=seconds)
                 return delta
-
-    elif isinstance(delta, datetime_mod.timedelta):
-        pass
     else:
-        raise TypeError(type(delta))
+        raise TimeTypeError(type(delta))
     return delta

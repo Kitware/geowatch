@@ -250,11 +250,9 @@ def build_all_param_plots(agg, rois, config):
     main_metric = 'bas_poly_eval.metrics.bas_faa_f1'
     metric_objectives = {main_metric: 'maximize'}
 
-    def finalize_figure(fig, fpath):
-        fig.set_size_inches(np.array([6.4, 4.8]) * 1.0)
-        fig.tight_layout()
-        fig.savefig(fpath)
-        util_kwplot.cropwhite_ondisk(fpath)
+    finalize_figure = util_kwplot.FigureFinalizer(
+        size_inches=np.array([6.4, 4.8]) * 1.0,
+    )
 
     fig = kwplot.figure(fnum=2, doclf=True)
     ax = sns.scatterplot(data=single_table, x=x, y=y, hue='region_id')
