@@ -43,21 +43,21 @@ SHELL ["/bin/bash", "--login", "-c"]
 
 RUN echo $(pwd)
 
-COPY conda_env.yml /watch/
-COPY requirements /watch/requirements
-COPY dev /watch/dev
+COPY conda_env.yml /src/watch/
+COPY requirements /src/watch/requirements
+COPY dev /src/watch/dev
 
 RUN if [ "$BUILD_STRICT" -eq 1 ]; then \
-    (cd /watch && ./dev/make_strict_req.sh && conda env create -f conda_env_strict.yml); \
+    (cd /src/watch && ./dev/make_strict_req.sh && conda env create -f conda_env_strict.yml); \
 else \
-    (cd /watch && conda env create -f conda_env.yml); \
+    (cd /src/watch && conda env create -f conda_env.yml); \
 fi
 
 RUN pip install awscli
 
-COPY . /watch
+COPY . /src/watch
 
 RUN conda activate watch && \
-    pip install --no-deps -e /watch
+    pip install --no-deps -e /src/watch
 
 # docker build --build-arg BUILD_STRICT=1 .
