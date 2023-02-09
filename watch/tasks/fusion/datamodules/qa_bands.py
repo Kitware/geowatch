@@ -338,9 +338,12 @@ class QA_SpecRegistry:
         spec_pat = util_pattern.Pattern.coerce(spec_name)
         sensor_pat = util_pattern.Pattern.coerce(sensor)
         for table in self.tables:
-            f1 = sensor_pat.match(table.spec['sensor'])
-            f2 = spec_pat.match(table.spec['qa_spec_name'])
-            if f1 and f2:
+            matches_main_sensor = sensor_pat.match(table.spec['sensor'])
+            maches_sensor_alias = any(
+                sensor_pat.match(a) for a in table.spec.get('sensor_alias', []))
+            matches_spec_name = spec_pat.match(table.spec['qa_spec_name'])
+            matches_sensor = matches_main_sensor or maches_sensor_alias
+            if matches_spec_name and matches_sensor:
                 yield table
 
     def find_table(self, spec_name='*', sensor='*'):
@@ -420,6 +423,7 @@ QA_SPECS += QA_BitSpecTable({
     'qa_spec_name': 'ACC-1',
     'qa_spec_date': '2022-11-28',
     'sensor': 'WV',
+    'sensor_alias': ['WV1'],
     'dtype': {'kind': 'u', 'itemsize': 2},
 
     'bits': [
