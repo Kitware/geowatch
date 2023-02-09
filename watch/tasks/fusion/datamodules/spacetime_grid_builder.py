@@ -139,46 +139,21 @@ def sample_video_spacetime_targets(dset,
         >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
         >>> import watch
         >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
-        >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data_train.kwcoco.json'
-        >>> dset = kwcoco.CocoDataset(coco_fpath)
+        >>> coco_fpath = dvc_dpath / 'Drop6/data_train_split1.kwcoco.zip'
+        >>> dset = watch.coerce_kwcoco(coco_fpath)
         >>> window_overlap = 0.0
-        >>> keepbound = False
-        >>> exclude_sensors = None
-        >>> sample_grid = sample_video_spacetime_targets(dset, 11, (128, 128))
+        >>> window_dims = (128, 128)
+        >>> time_dims = 2
+        >>> sample_grid = sample_video_spacetime_targets(dset, time_dims, window_dims)
         >>> time_sampling = 'hard+distribute'
         >>> positives = list(ub.take(sample_grid['targets'], sample_grid['positives_indexes']))
-
-        >>> import os
-        >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
-        >>> import watch
-        >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
-        >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data_vali.kwcoco.json'
-        >>> dset = kwcoco.CocoDataset(coco_fpath)
-        >>> window_overlap = 0.0
-        >>> keepbound = False
-        >>> exclude_sensors = None
-        >>> set_cover_algo = 'approx'
-        >>> window_space_scale = '13GSD'
-        >>> negative_classes = None
-        >>> time_span = '2y'
-        >>> use_annot_info = True
-        >>> use_grid_positives = 1
-        >>> use_centered_positives = 1
-        >>> time_sampling = 'hard+distribute'
-        >>> with ub.Timer('sample'):
-        >>>     sample_grid = sample_video_spacetime_targets(
-        >>>         dset, time_dims=2, window_dims=(128, 128), window_overlap=window_overlap, set_cover_algo=set_cover_algo,
-        >>>         window_space_scale=window_space_scale, time_sampling=time_sampling,
-        >>>         use_annot_info=use_annot_info, time_span=time_span, use_cache=1, workers=0)
-        >>> positives = list(ub.take(sample_grid['targets'], sample_grid['positives_indexes']))
-        >>> list(ub.unique([t['space_slice'] for t in sample_grid['targets']], key=ub.hash_data))
 
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> import os
         >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
         >>> import watch
-        >>> dvc_dpath = watch.find_smart_dvc_dpath()
+        >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
         >>> coco_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/combo_LM_nowv_vali.kwcoco.json'
         >>> dset = kwcoco.CocoDataset(coco_fpath)
         >>> window_overlap = 0.5
@@ -239,10 +214,21 @@ def sample_video_spacetime_targets(dset,
     Ignore:
         >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
         >>> import watch
-        >>> dvc_dpath = watch.find_smart_dvc_dpath()
-        >>> coco_fpath = dvc_dpath / 'Drop1-Aligned-TA1-2022-01/data.kwcoco.json'
+        >>> import kwcoco
+        >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
+        >>> coco_fpath = dvc_dpath / 'Drop6/imganns-NZ_R001.kwcoco.zip'
         >>> dset = kwcoco.CocoDataset(coco_fpath)
         >>> window_overlap = 0.0
+        bad_image_ids = []
+        good_image_ids = []
+        for ann in dset.anns.values():
+            if 'bbox' not in ann:
+                bad_image_ids.append(ann['image_id'])
+            else:
+                good_image_ids.append(ann['image_id'])
+            ...
+        dset.videos(ub.oset(dset.images(ub.oset(bad_image_ids)).lookup('video_id'))).lookup('name')
+        dset.videos(ub.oset(dset.images(ub.oset(good_image_ids)).lookup('video_id'))).lookup('name')
     """
     if window_dims is not None and isinstance(window_dims, tuple) and len(window_dims) == 3:
         ub.schedule_deprecation(
@@ -886,7 +872,7 @@ def make_track_based_spatial_samples(coco_dset):
         >>> import os
         >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
         >>> import watch
-        >>> dvc_dpath = watch.find_smart_dvc_dpath()
+        >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
         >>> coco_fpath = dvc_dpath / 'Drop1-Aligned-L1/data.kwcoco.json'
         >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
     """

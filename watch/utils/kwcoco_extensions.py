@@ -1896,10 +1896,10 @@ def warp_annot_segmentations_from_geos(coco_dset):
     import geopandas as gpd
     from watch.utils import util_gis
     crs84 = util_gis._get_crs84()
+
     for gid in ub.ProgIter(coco_dset.images(), desc='warping annotations'):
         coco_img = coco_dset._coco_image(gid)
         asset = coco_img.primary_asset(requires=['geos_corners'])
-
         # fpath = join(coco_dset.bundle_dpath, asset['file_name'])
         # Dont rely on image metadata anymore
         # geo_meta = watch.gis.geotiff.geotiff_metadata(fpath)
@@ -1910,11 +1910,9 @@ def warp_annot_segmentations_from_geos(coco_dset):
         # wgs84_crs_info = geo_meta['wgs84_crs_info']
         # wgs84_axis_mapping = wgs84_crs_info['axis_mapping']
         # assert wgs84_crs_info['auth'] == ('EPSG', '4326')
-
-        warp_aux_from_wld = kwimage.Affine.coerce(coco_img.img['wld_to_pxl'])
+        warp_aux_from_wld = kwimage.Affine.coerce(asset['wld_to_pxl'])
         warp_img_from_aux = kwimage.Affine.coerce(asset.get('warp_aux_to_img', None))
         warp_img_from_wld = warp_img_from_aux @ warp_aux_from_wld
-
         rows = []
         for aid in coco_dset.annots(gid=gid):
             ann = coco_dset.index.anns[aid]
@@ -1929,19 +1927,23 @@ def warp_annot_segmentations_from_geos(coco_dset):
                 'geometry': sseg_geos.to_shapely(),
                 'aid': aid,
             })
-
         crs84_ann_df = gpd.GeoDataFrame(rows, crs=crs84, columns=['geometry', 'aid'])
         wld_crs_info = coco_img.img['wld_crs_info']
         crs = util_gis.coerce_crs(wld_crs_info)  # TODO: traditional / authority check
         wld_ann_df = crs84_ann_df.to_crs(crs)
-
         for row in wld_ann_df.to_dict('records'):
             # TODO: check crs properties (probably always crs84)
             aid = row['aid']
+            ann = coco_dset.index.anns[aid]
             sseg_wld = row['geometry']
             sseg_img = kwimage.MultiPolygon.coerce(sseg_wld).warp(warp_img_from_wld)
             ann['segmentation'] = sseg_img.to_coco(style='new')
             ann['bbox'] = list(sseg_img.bounding_box().quantize().to_coco())[0]
+
+    if __debug__:
+        for ann in coco_dset.dataset['annotations']:
+            assert 'bbox' in ann
+            assert 'segmentation' in ann
 
 
 # def coco_geopandas_images(coco_dset):
