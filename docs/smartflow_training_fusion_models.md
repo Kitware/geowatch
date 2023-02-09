@@ -1,8 +1,14 @@
 # Prerequisites
 
+Running smartflow requires setting up aws and kubectl. 
+We have [streamlined aws and kubctl install
+instructions](../docs/getting_started_aws.rst) but you may also fine the
+official resources useful:
+
 Install:
--   AWS CLI tool `aws` ([https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html))
--   Kubernetes command-line tool `kubectl` ([https://kubernetes.io/docs/tasks/tools/#kubectl](https://kubernetes.io/docs/tasks/tools/#kubectl))
+- AWS CLI tool `aws` ([https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html))
+- Kubernetes command-line tool `kubectl` ([https://kubernetes.io/docs/tasks/tools/#kubectl](https://kubernetes.io/docs/tasks/tools/#kubectl))
+- 
 
 ## AWS Configuration
 
@@ -17,16 +23,18 @@ Run `aws configure`. This common will ask you for some parameters:
 Once `kubectl` and `aws` are installed you'll want to configure it to be able to reach the cluster where Smartflow is running, here's a little bash script that should do that for you:
 
 ```
-################################  
 ENVIRONMENT_NAME=kitware-prod-v2  
-################################  
-AWS_ACCOUNT_ID=$(aws sts --profile iarpa get-caller-identity --query "Account" --output text)  
+export AWS_PROFILE="iarpa"
+AWS_ACCOUNT_ID=$(aws sts --profile "$AWS_PROFILE" get-caller-identity --query "Account" --output text)  
+echo "Verify this is your correct kitware-smart AWS Account ID"
+echo "AWS_ACCOUNT_ID = $AWS_ACCOUNT_ID"
 AWS_REGION=us-west-2  
   
 aws eks --profile iarpa --region $AWS_REGION update-kubeconfig \  
 	--name "smartflow-${ENVIRONMENT_NAME}-eks" \  
 	--role-arn "arn:aws:iam::${AWS_ACCOUNT_ID}:role/smartflow-${ENVIRONMENT_NAME}-${AWS_REGION}-eks-admin"  
 ```
+
 
 # Connecting to Smartflow
 
