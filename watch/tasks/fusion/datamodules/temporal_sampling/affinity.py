@@ -6,6 +6,7 @@ import numpy as np
 import ubelt as ub
 from watch.utils import util_kwarray
 from watch.utils.util_time import coerce_timedelta
+from datetime import datetime as datetime_cls  # NOQA
 from .exceptions import TimeSampleError
 from .utils import guess_missing_unixtimes
 
@@ -104,7 +105,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
     Example:
         >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
         >>> from watch.tasks.fusion.datamodules.temporal_sampling.affinity import *  # NOQA
-        >>> low = datetime_mod.datetime.now().timestamp()
+        >>> low = datetime_cls.now().timestamp()
         >>> high = low + datetime_mod.timedelta(days=365 * 5).total_seconds()
         >>> rng = kwarray.ensure_rng(0)
         >>> unixtimes = np.array(sorted(rng.randint(low, high, 113)), dtype=float)
@@ -123,7 +124,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
 
     Example:
         >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
-        >>> low = datetime_mod.datetime.now().timestamp()
+        >>> low = datetime_cls.now().timestamp()
         >>> high = low + datetime_mod.timedelta(days=365 * 5).total_seconds()
         >>> rng = kwarray.ensure_rng(0)
         >>> unixtimes = np.array(sorted(rng.randint(low, high, 5)), dtype=float)
@@ -145,7 +146,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
 
     Ignore:
         >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
-        >>> low = datetime_mod.datetime.now().timestamp()
+        >>> low = datetime_cls.now().timestamp()
         >>> high = low + datetime_mod.timedelta(days=365 * 5).total_seconds()
         >>> rng = kwarray.ensure_rng(0)
         >>> unixtimes = np.array(sorted(rng.randint(low, high, 113)), dtype=float)
@@ -275,6 +276,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         unsatisfied_kernel_idxs = unsatisfied_kernel_idxs[1:]
     else:
         initial_mask = None
+    next_mask = None
     current_mask = initial_mask
 
     # available_idxs = np.arange(affinity.shape[0])
@@ -300,6 +302,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
             'time_kernel': time_kernel,
         }
 
+    errors = []
     for _ in range(num_sample):
         # Choose the next image based on combined sample affinity
 
@@ -361,7 +364,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
                 'errors': errors,
             })
 
-        # Modify weights to impact next sample
+        # Modify weights / mask to impact next sample
         current_weights = current_weights * update_weights
         current_mask = next_mask
 
@@ -437,8 +440,8 @@ def hard_time_sample_pattern(unixtimes, time_window, time_span='2y'):
         https://docs.google.com/presentation/d/1GSOaY31cKNERQObl_L3vk0rGu6zU7YM_ZFLrdksHSC0/edit#slide=id.p
 
     Example:
-        >>> low = datetime.datetime.now().timestamp()
-        >>> high = low + datetime.timedelta(days=365 * 5).total_seconds()
+        >>> low = datetime_cls.now().timestamp()
+        >>> high = low + datetime_mod.timedelta(days=365 * 5).total_seconds()
         >>> rng = kwarray.ensure_rng(0)
         >>> base_unixtimes = np.array(sorted(rng.randint(low, high, 20)), dtype=float)
         >>> unixtimes = base_unixtimes.copy()
@@ -484,8 +487,8 @@ def hard_time_sample_pattern(unixtimes, time_window, time_span='2y'):
         >>> # Show Sample Pattern in heatmap
         >>> plot_dense_sample_indices(sample_idxs, unixtimes, title_suffix=f': {name}')
 
-        >>> datetimes = np.array([datetime.datetime.fromtimestamp(t) for t in unixtimes])
-        >>> dates = np.array([datetime.datetime.fromtimestamp(t).date() for t in unixtimes])
+        >>> datetimes = np.array([datetime_mod.datetime.fromtimestamp(t) for t in unixtimes])
+        >>> dates = np.array([datetime_mod.datetime.fromtimestamp(t).date() for t in unixtimes])
         >>> #
         >>> sample_pattern = kwarray.one_hot_embedding(sample_idxs, len(unixtimes), dim=1).sum(axis=2)
         >>> kwplot.imshow(sample_pattern)
@@ -525,13 +528,13 @@ def hard_time_sample_pattern(unixtimes, time_window, time_span='2y'):
         >>> # Show Available Samples
         >>> import july
         >>> from july.utils import date_range
-        >>> datetimes = [datetime.datetime.fromtimestamp(t) for t in unixtimes]
+        >>> datetimes = [datetime_cls.fromtimestamp(t) for t in unixtimes]
         >>> grid_dates = date_range(
         >>>     datetimes[0].date().isoformat(),
-        >>>     (datetimes[-1] + datetime.timedelta(days=1)).date().isoformat()
+        >>>     (datetimes[-1] + datetime_mod.timedelta(days=1)).date().isoformat()
         >>> )
         >>> grid_unixtime = np.array([
-        >>>     datetime.datetime.combine(d, datetime.datetime.min.time()).timestamp()
+        >>>     datetime_cls.combine(d, datetime_cls.min.time()).timestamp()
         >>>     for d in grid_dates
         >>> ])
         >>> positions = np.searchsorted(grid_unixtime, unixtimes)

@@ -2192,6 +2192,71 @@ WATCH_GRID_WORKERS=4 python -m watch.tasks.fusion.fit \
     --init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6/runs/Drop6_BAS_2022_12_10GSD_BGRN_V11_CONT2/lightning_logs/version_1/package-interupt/package_epoch0_step2731.pt
 
 
+export CUDA_VISIBLE_DEVICES=1
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop6
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_split1.kwcoco.zip
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_split1.kwcoco.zip
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_split1.kwcoco.zip
+CHANNELS="(L8,S2,PD,WV):(blue|green|red|nir)"
+EXPERIMENT_NAME=Drop6_BAS_2022_12_10GSD_BGRN_V11_CONT4
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+WATCH_GRID_WORKERS=4 python -m watch.tasks.fusion.fit \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --class_loss='dicefocal-gamma4' \
+    --saliency_loss='dicefocal-gamma4' \
+    --global_change_weight=0.00 \
+    --global_class_weight=1.00 \
+    --global_saliency_weight=0.30 \
+    --learning_rate=1e-3 \
+    --weight_decay=1e-4 \
+    --input_space_scale="3.3GSD" \
+    --window_space_scale="3.3GSD" \
+    --output_space_scale="3.3GSD" \
+    --chip_dims=196,196 \
+    --neg_to_pos_ratio=1.0 \
+    --batch_size=5 \
+    --max_epochs=160 \
+    --patience=160 \
+    --num_workers=3 \
+    --time_steps=12 \
+    --time_span="1month" \
+    --channels="$CHANNELS" \
+    --saliency_weights="1:1" \
+    --class_weights="auto" \
+    --time_sampling=uniform-soft3-contiguous-hardish3+pairwise+distribute \
+    --time_span=3m-6m-1y \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=5min \
+    --num_draw=4 \
+    --positive_change_weight=1 \
+    --negative_change_weight=0.01 \
+    --use_centered_positives=True \
+    --normalize_inputs=2048 \
+    --stream_channels=16 \
+    --temporal_dropout=0.5 \
+    --mask_low_quality=True \
+    --observable_threshold=0.6 \
+    --num_sanity_val_steps=0 \
+    --max_epoch_length=16384 \
+    --min_spacetime_weight=0.6 \
+    --accelerator=gpu \
+    --balance_areas=True \
+    --devices="0," \
+    --init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop6_BAS_2022_12_10GSD_BGRN_V11_CONT3/lightning_logs/version_2/checkpoints/epoch=21-step=60082.ckpt
+
+
     #--init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6/runs/Drop6_BAS_2022_12_10GSD_BGRN_V11_CONT2/lightning_logs/version_0/package-interupt/package_epoch14_step40965.pt
     #--init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6/runs/Drop6_BAS_2022_12_10GSD_BGRN_V11_CONT1/lightning_logs/version_8/package-interupt/package_epoch120_step328801.pt
 
