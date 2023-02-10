@@ -54,7 +54,19 @@ def _namek_eval():
     eval_type_to_aggregator = build_aggregators(eval_type_to_results)
     agg = ub.peek(eval_type_to_aggregator.values())
     agg = eval_type_to_aggregator.get('bas_poly_eval', None)
-    agg.report_best()
+
+    agg.build_macro_tables()
+
+    agg.primary_display_cols = ['bas_poly_eval.metrics.bas_faa_f1', 'bas_poly_eval.metrics.bas_f1', 'bas_poly_eval.metrics.bas_tpr', 'bas_poly_eval.metrics.bas_ppv']
+
+    agg.primary_metric_cols = ['bas_poly_eval.metrics.bas_tpr', 'bas_poly_eval.metrics.bas_ppv']
+    _ = agg.report_best()
+
+    agg.primary_metric_cols = ['bas_poly_eval.metrics.bas_f1']
+    _ = agg.report_best()
+
+    agg.primary_metric_cols = ['bas_poly_eval.metrics.bas_ppv', 'bas_poly_eval.metrics.bas_tpr']
+    _ = agg.report_best()
 
 
 def _setup_sc_analysis():

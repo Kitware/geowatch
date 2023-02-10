@@ -263,16 +263,19 @@ def build_all_param_plots(agg, rois, config):
     # ax.set_xlim(0, np.quantile(agg.metrics[x], 0.99))
     # ax.set_xlim(1e-2, np.quantile(agg.metrics[x], 0.99))
 
-    fig = kwplot.figure(fnum=90, doclf=True)
-    ax = sns.boxplot(data=single_table, x='region_id', y=main_metric)
-    ax.set_title(f'BAS Per-Region Results (n={len(agg)})')
-    util_kwplot.LabelModifier({
-        param_value: f'{param_value}\n(n={num})'
-        for param_value, num in single_table.groupby('region_id').size().to_dict().items()
-    }).relabel_xticks(ax)
-    modifier.relabel(ax)
-    fpath = agg_group_dpath / 'single_results_boxplot.png'
-    finalize_figure(fig, fpath)
+    try:
+        fig = kwplot.figure(fnum=90, doclf=True)
+        ax = sns.boxplot(data=single_table, x='region_id', y=main_metric)
+        ax.set_title(f'BAS Per-Region Results (n={len(agg)})')
+        util_kwplot.LabelModifier({
+            param_value: f'{param_value}\n(n={num})'
+            for param_value, num in single_table.groupby('region_id').size().to_dict().items()
+        }).relabel_xticks(ax)
+        modifier.relabel(ax)
+        fpath = agg_group_dpath / 'single_results_boxplot.png'
+        finalize_figure(fig, fpath)
+    except Exception:
+        ...
 
     from watch.utils.util_kwplot import scatterplot_highlight
     fig = kwplot.figure(fnum=3, doclf=True)
