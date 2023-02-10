@@ -164,7 +164,8 @@ check_metrics_framework(){
         WARNING: IARPA metrics not installed!
         
         To enable evaluating your results, run this command:
-        $ pip install git+ssh://git@gitlab.kitware.com/smart/metrics-and-test-framework.git
+
+        pip install git+ssh://git@gitlab.kitware.com/smart/metrics-and-test-framework.git -U
         
         For more information, see:
         https://gitlab.kitware.com/smart/metrics-and-test-framework#installation
