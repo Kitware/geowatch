@@ -252,7 +252,13 @@ class _ProgIterManager(BaseProgIterManager):
         return prog
 
     def update_info(self, text):
-        self.prog_iters[0].update_info(text)
+        if len(self.prog_iters) == 0:
+            # if self._cursor_at_newline:
+            print('+ --- Info --- +')
+            print(text)
+            print('+ ------------ +')
+        else:
+            self.prog_iters[0].update_info(text)
 
 
 class ProgressManager(BaseProgIterManager):
