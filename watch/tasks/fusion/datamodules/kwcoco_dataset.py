@@ -2246,6 +2246,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         Args:
             num (int | None): number of input items to compute stats for
 
+        CommandLine:
+            xdoctest -m watch.tasks.fusion.datamodules.kwcoco_dataset KWCocoVideoDataset.compute_dataset_stats:2
+
         Example:
             >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
             >>> import kwcoco
@@ -2266,7 +2269,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
             >>> import watch
             >>> from watch.tasks.fusion import datamodules
-            >>> num = 10
+            >>> num = 1
             >>> datamodule = datamodules.KWCocoVideoDataModule(
             >>>     train_dataset='vidshapes-watch', window_dims=64, time_steps=3,
             >>>     num_workers=0, batch_size=3, channels='auto',
@@ -2320,15 +2323,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         video_id_histogram = ub.ddict(lambda: 0)
         image_id_histogram = ub.ddict(lambda: 0)
 
-        # TODO: we should ensure instance level frequency data as well
-        # as pixel level frequency data.
-
-        # TODO: we should ensure we include at least one sample from each type
-        # of modality.
-        # Note: the requested order of the channels could be different that
-        # what is registered in the dataset. Need to find a good way to account
-        # for this.
-
         # Make a list of all unique modes in the dataset.
         # User specifies all of this explicitly now
         unique_sensor_modes = set(
@@ -2338,8 +2332,24 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         is_native = self.config['input_space_scale'] == 'native'
 
         print('unique_sensor_modes = {}'.format(ub.repr2(unique_sensor_modes, nl=1)))
-
         intensity_dtype = np.float64
+
+        # Ensure instance level frequency data in addition to pixel level
+        USE_INSTANCE_LEVEL_CLASS_STATS = 1
+        if USE_INSTANCE_LEVEL_CLASS_STATS:
+            annots = self.sampler.dset.annots()
+            track_ids = annots.lookup('track_id', None)
+            cnames = annots.cnames
+            trackid_to_cnames = ub.udict(ub.group_items(cnames, track_ids))
+            trackid_to_cnames = trackid_to_cnames.map_values(set)
+            track_classes = list(ub.flatten(trackid_to_cnames.values()))
+            annot_class_freq = ub.udict(ub.dict_hist(cnames)).sorted_keys()
+            track_class_freq = ub.udict(ub.dict_hist(track_classes)).sorted_keys()
+            print('annot_class_freq = {}'.format(ub.urepr(annot_class_freq, nl=1)))
+            print('track_class_freq = {}'.format(ub.urepr(track_class_freq, nl=1)))
+        else:
+            track_class_freq = None
+            annot_class_freq = None
 
         WITH_PROG_POSTFIX_TEXT = 1
         if WITH_PROG_POSTFIX_TEXT:
@@ -2365,6 +2375,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                             perchan_stats = {'mean': np.array([np.nan]), 'std': np.array([np.nan])}
                         chan_mean = perchan_stats['mean'][:, None, None]
                         chan_std = perchan_stats['std'][:, None, None]
+                        chan_min = perchan_stats['min'][:, None, None]
+                        chan_max = perchan_stats['max'][:, None, None]
                     else:
                         try:
                             perchan_stats = running.summarize(axis=(1, 2))
@@ -2372,6 +2384,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                             perchan_stats = {'mean': np.array([[[np.nan]]]), 'std': np.array([[[np.nan]]])}
                         chan_mean = perchan_stats['mean']
                         chan_std = perchan_stats['std']
+                        chan_min = perchan_stats['min']
+                        chan_max = perchan_stats['max']
 
                     # For nans, set the mean to zero and set the std to a huge
                     # number if we dont have any data on it. That will prevent
@@ -2386,15 +2400,23 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     input_stats[(sensor, chan_key)] = {
                         'mean': chan_mean,
                         'std': chan_std,
+                        'min': chan_min,
+                        'max': chan_max,
                     }
             return input_stats
+
+        from watch.utils import util_progress
+        from watch.utils import util_environ
+        USE_RICH_UPDATES = util_environ.envflag('USE_RICH_UPDATES', 1)
+        pman = util_progress.ProgressManager(
+            backend='rich' if USE_RICH_UPDATES else 'progiter')
 
         def update_displayed_estimates():
             """
             Build an intermediate summary to display to the user while this is
             running.
             """
-            if pman.backend == 'rich':
+            if USE_RICH_UPDATES:
                 stat_lines = ['Current Estimated Dataset Statistics: ']
                 if with_intensity:
                     input_stats = current_input_stats()
@@ -2405,9 +2427,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     class_stats = ub.sorted_vals(ub.dzip(classes, total_freq), reverse=True)
                     class_info_text = 'Class Stats: ' + ub.urepr(class_stats)
                     stat_lines.append(class_info_text)
-                if 1:
-                    stat_lines.append('Unique Image Samples: {}'.format(len(image_id_histogram)))
-                    stat_lines.append('Unique Video Samples: {}'.format(len(video_id_histogram)))
+                stat_lines.append('Unique Image Samples: {}'.format(len(image_id_histogram)))
+                stat_lines.append('Unique Video Samples: {}'.format(len(video_id_histogram)))
                 info_text = '\n'.join(stat_lines).strip()
                 if info_text:
                     pman.update_info(info_text)
@@ -2422,7 +2443,12 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
                 if with_intensity:
                     try:
-                        curr = ub.udict(running.summarize(keepdims=False))
+                        # Broken in general, only looks at one sensorchan, but
+                        # not sure how to do better. This is off by default
+                        # anyway.
+                        input_stats = current_input_stats()
+                        input_stats2 = {sc: {k: v.ravel() for k, v in stats.items()} for sc, stats in input_stats.items()}
+                        curr = ub.peek(input_stats2.values())
                     except RuntimeError:
                         curr = {}
                     else:
@@ -2433,11 +2459,25 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     text = intermediate_text_trunc
                 prog.set_postfix_str(text)
 
-        from watch.utils import util_progress
-        from watch.utils import util_environ
-        USE_RICH_UPDATES = util_environ.envflag('USE_RICH_UPDATES', 1)
-        pman = util_progress.ProgressManager(
-            backend='rich' if USE_RICH_UPDATES else 'progiter')
+        def update_intensity_estimates(frame_item):
+            # Update pixel-level intensity histogram
+            sensor_code = frame_item['sensor']
+            modes = frame_item['modes']
+
+            for mode_code, mode_val in modes.items():
+                sensor_mode_hist[(sensor_code, mode_code)] += 1
+                running = channel_stats[sensor_code][mode_code]
+                val = mode_val.numpy().astype(intensity_dtype)
+                weights = np.isfinite(val).astype(intensity_dtype)
+                # kwarray can handle nans now
+                if is_native:
+                    # Put channels last so we can update multiple at once
+                    flat_vals = val.transpose(1, 2, 0).reshape(-1, val.shape[0])
+                    flat_weights = weights.transpose(1, 2, 0).reshape(-1, weights.shape[0])
+                    running.update_many(flat_vals, weights=flat_weights)
+                else:
+                    running.update(val, weights=weights)
+
         # TODO: we can compute the intensity histogram more efficiently by
         # only doing it for unique channels (which might be duplicated)
         with pman:
@@ -2462,23 +2502,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                                 item_freq = np.histogram(class_idxs.ravel(), bins=bins)[0]
                                 total_freq += item_freq
                         if with_intensity:
-                            # Update pixel-level intensity histogram
-                            sensor_code = frame_item['sensor']
-                            modes = frame_item['modes']
-
-                            for mode_code, mode_val in modes.items():
-                                sensor_mode_hist[(sensor_code, mode_code)] += 1
-                                running = channel_stats[sensor_code][mode_code]
-                                val = mode_val.numpy().astype(intensity_dtype)
-                                weights = np.isfinite(val).astype(intensity_dtype)
-                                # kwarray can handle nans now
-                                if is_native:
-                                    # Put channels last so we can update multiple at once
-                                    flat_vals = val.transpose(1, 2, 0).reshape(-1, val.shape[0])
-                                    flat_weights = weights.transpose(1, 2, 0).reshape(-1, weights.shape[0])
-                                    running.update_many(flat_vals, weights=flat_weights)
-                                else:
-                                    running.update(val, weights=weights)
+                            update_intensity_estimates(frame_item)
 
                 if WITH_PROG_POSTFIX_TEXT and timer._first or timer.toc() > postfix_update_threshold:
                     update_displayed_estimates()
@@ -2487,6 +2511,50 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
             if WITH_PROG_POSTFIX_TEXT:
                 update_displayed_estimates()
+
+        # TODO: we should ensure we include at least one sample from each type
+        # of modality.  Note: the requested order of the channels could be
+        # different that what is registered in the dataset. Need to find a good
+        # way to account for this.
+        MISSING_SENSOR_FALLBACK = util_environ.envflag('MISSING_SENSOR_FALLBACK', 1)
+        if MISSING_SENSOR_FALLBACK and with_intensity:
+            missing_sensor_modes = set(unique_sensor_modes) - set(sensor_mode_hist)
+            # Try to find a few examples with these missing modes
+            if missing_sensor_modes:
+                print(f'Warning: we are missing stats for {missing_sensor_modes}. '
+                      'We will try to force something for them')
+                coco_images = self.sampler.dset.images().coco_images
+                sensor_to_images = ub.group_items(coco_images, key=lambda x: x.img.get('sensor_coarse', None))
+                extra_sample_groups = []
+                for sensor, mode in missing_sensor_modes:
+                    candidate_images = sensor_to_images.get(sensor, [])
+                    if len(candidate_images) == 0:
+                        print(f'sensor warning: unable to sample data for {sensor}:{mode}')
+                    else:
+                        filtered = []
+                        for img in candidate_images:
+                            if (img.channels & mode).numel():
+                                filtered.append(img)
+                        if not filtered:
+                            print(f'mode warning: unable to sample data for {sensor}:{mode}')
+                        extra_sample_groups.append(filtered)
+
+                # Build extra fallback samples
+                for group in ub.ProgIter(extra_sample_groups, desc='process fallbacks'):
+                    image_ids = [g.img['id'] for g in group]
+                    images = self.sampler.dset.images(image_ids)
+                    vidid_to_gids = ub.group_items(image_ids, images.lookup('video_id'))
+                    for vidid, gids in vidid_to_gids.items():
+                        video = self.sampler.dset.index.videos[vidid]
+                        # Hack: just use the entire video, if that fails we should
+                        # implement windowing here.
+                        space_slice = (
+                            slice(0, video['height']),
+                            slice(0, video['width']),
+                        )
+                        sample = {'video_id': vidid, 'gids': gids[0:1],
+                                  'space_slice': space_slice}
+                        item = self[sample]
 
         self.disable_augmenter = False
 
@@ -2505,7 +2573,10 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             'unique_sensor_modes': unique_sensor_modes,
             'sensor_mode_hist': dict(sensor_mode_hist),
             'input_stats': input_stats,
-            'class_freq': class_freq,
+            'class_freq': class_freq,  # pixelwise
+
+            'annot_class_freq': annot_class_freq,
+            'track_class_freq': track_class_freq,
             # 'video_id_histogram': dict(video_id_histogram),
         }
         return dataset_stats

@@ -14,6 +14,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * The mlops schedule evaluation now writes to .kwcoco.zip files, which does break existing caches
 * Clean geotiff now sets NODATA if it is unset and can be given a set of bands to never clean.
 * `coco_add_watch_fields` now uses correct `resolution` field instead of `target_gsd`
+* `KWcocoVideoDataLoader.compute_dataset_stats` now estimates instance-level class frequency data.
+* `KWcocoVideoDataLoader.compute_dataset_stats` will now try to estimate stats for all sensors/channels if the main pass does not sample them
+
 
 ### Fixed
 * issue in reproject annots when frames had no annotations
