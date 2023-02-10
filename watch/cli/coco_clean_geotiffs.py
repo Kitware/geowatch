@@ -43,14 +43,32 @@ class CleanGeotiffConfig(scfg.DataConfig):
             --workers="min(2,avail)" \
             --probe_scale=None \
             --dry=False
+
+
+    Ignore:
+
+        smartwatch clean_geotiffs \
+            --src=data.kwcoco.zip --dry=True --workers=8  \
+            --probe_scale=0.25 --prefilter_channels=pan --channels=pan
+
+
+        smartwatch clean_geotiffs \
+            --src=imganns-AE_R001.kwcoco.json --dry=True --workers=0  \
+            --probe_scale=0.25 --prefilter_channels=None --channels=*
+
     """
-    src = scfg.Value(None, help='input coco dataset')
+    src = scfg.Value(None, position=1, help='input coco dataset')
 
     workers = scfg.Value(0, type=str, help='number of workers')
 
     channels = scfg.Value('red|green|blue|nir|swir16|swir22', help=ub.paragraph(
         '''
         The channels to apply nodata fixes to.
+        '''))
+
+    exclude_channels = scfg.Value('quality|cloudmask', help=ub.paragraph(
+        '''
+        Channels to never apply fixes to.
         '''))
 
     prefilter_channels = scfg.Value('red', help=ub.paragraph(
@@ -185,11 +203,14 @@ def main(cmdline=1, **kwargs):
     # channels = kwcoco.ChannelSpec.coerce('red')
     # channels = kwcoco.ChannelSpec.coerce('red|blue|nir')
     # channels = kwcoco.ChannelSpec.coerce('nir')
-    channels = kwcoco.ChannelSpec.coerce(config['channels'])
-    if config['prefilter_channels'] is None:
-        prefilter_channels = kwcoco.ChannelSpec.coerce(config['prefilter_channels'])
+    if config['channels'] is None or config['channels'] == '*':
+        channels = None
     else:
-        prefilter_channels = channels
+        channels = kwcoco.ChannelSpec.coerce(config['channels'])
+    if config['prefilter_channels'] is None:
+        prefilter_channels = None
+    else:
+        prefilter_channels = kwcoco.ChannelSpec.coerce(config['prefilter_channels'])
 
     possible_nodata_values = set(config['possible_nodata_values'])
 
@@ -198,18 +219,20 @@ def main(cmdline=1, **kwargs):
 
     probe_kwargs = {
         'channels': channels,
+        'exclude_channels': kwcoco.ChannelSpec.coerce(config['exclude_channels']).fuse(),
         'scale': config['scale'],
         'possible_nodata_values': possible_nodata_values,
         'prefilter_channels': prefilter_channels,
-        'channels': channels,
         'min_region_size': config['min_region_size'],
         'probe_scale': config['probe_scale'],
         'use_fix_stamps': config['use_fix_stamps'],
+        'nodata_value': config['nodata_value'],
     }
 
     coco_imgs = coco_dset.images().coco_images
 
     from watch.utils import util_progress
+    # mprog = util_progress.ProgressManager(backend='progiter')
     mprog = util_progress.ProgressManager(backend='rich')
     with mprog:
         mprog.update_info('Looking for geotiff issues')
@@ -232,6 +255,7 @@ def main(cmdline=1, **kwargs):
 
             num_asset_issues = 0
             num_images_issues = 0
+            num_incorrect_nodata = 0
             seen_bad_values = set()
 
             mprog.update_info(ub.codeblock(
@@ -241,17 +265,20 @@ def main(cmdline=1, **kwargs):
                 Found num_images_issues={num_images_issues}
                 Found num_asset_issues={num_asset_issues}
 
+                num_incorrect_nodata={num_incorrect_nodata}
                 seen_bad_values={seen_bad_values}
                 '''
             ))
 
             for image_summary in summaries:
-                if len(image_summary.get('bad_values', None)):
+                if image_summary['needs_fix']:
                     num_images_issues += 1
                     for asset_summary in image_summary['chans']:
-                        if asset_summary.get('bad_values', None):
+                        if asset_summary['needs_fix']:
                             asset_summary['coco_img'] = image_summary['coco_img']
                             seen_bad_values.update(asset_summary['bad_values'])
+                            if not asset_summary['has_correct_nodata_value']:
+                                num_incorrect_nodata += 1
                             num_asset_issues += 1
                             mprog.update_info(ub.codeblock(
                                 f'''
@@ -328,7 +355,8 @@ def main(cmdline=1, **kwargs):
 
 def probe_image_issues(coco_img, channels=None, prefilter_channels=None, scale=None,
                        possible_nodata_values=None, min_region_size=256,
-                       probe_scale=None, use_fix_stamps=False):
+                       exclude_channels=None, probe_scale=None,
+                       use_fix_stamps=False, nodata_value=-9999):
     """
     Inspect a single image, possibily with multiple assets, each with possibily
     multiple bands for fixable nodata values.
@@ -372,11 +400,16 @@ def probe_image_issues(coco_img, channels=None, prefilter_channels=None, scale=N
         >>> print(f'image_summary={image_summary}')
     """
     if channels is None:
-        request_channels = coco_img.channels
+        request_channels = coco_img.channels.fuse()
     else:
         request_channels = kwcoco.ChannelSpec.coerce(channels).fuse()
     if prefilter_channels is not None:
         prefilter_channels = kwcoco.ChannelSpec.coerce(prefilter_channels).fuse()
+
+    if exclude_channels is not None:
+        request_channels = request_channels.difference(exclude_channels)
+        if prefilter_channels is not None:
+            prefilter_channels = prefilter_channels.difference(exclude_channels)
 
     image_summary = {}
     asset_summaries = []
@@ -387,10 +420,13 @@ def probe_image_issues(coco_img, channels=None, prefilter_channels=None, scale=N
         chans = kwcoco.ChannelSpec.coerce(obj['channels']).fuse()
         request_common = (chans & request_channels).fuse()
         if request_common.numel():
-            prefilter_common = (chans & prefilter_channels).fuse()
+            if prefilter_channels is None:
+                prefilter_common = None
+            else:
+                prefilter_common = (chans & prefilter_channels).fuse()
             chans_ = chans.to_oset()
             band_idxs = [chans_.index(c) for c in request_common.to_list()]
-            if prefilter_common.numel():
+            if prefilter_common is not None and prefilter_common.numel():
                 prefilter_assets.append({
                     'obj': obj,
                     'band_idxs': band_idxs,
@@ -412,7 +448,8 @@ def probe_image_issues(coco_img, channels=None, prefilter_channels=None, scale=N
             probe_asset_summary = probe_asset(
                 coco_img, obj, band_idxs=band_idxs, scale=probe_scale,
                 possible_nodata_values=possible_nodata_values,
-                min_region_size=min_region_size, use_fix_stamps=use_fix_stamps)
+                min_region_size=min_region_size, use_fix_stamps=use_fix_stamps,
+                nodata_value=nodata_value)
             if not probe_asset_summary['bad_values']:
                 should_continue = False
 
@@ -423,7 +460,8 @@ def probe_image_issues(coco_img, channels=None, prefilter_channels=None, scale=N
                                         scale=scale,
                                         possible_nodata_values=possible_nodata_values,
                                         min_region_size=min_region_size,
-                                        use_fix_stamps=use_fix_stamps)
+                                        use_fix_stamps=use_fix_stamps,
+                                        nodata_value=nodata_value)
             if not asset_summary['bad_values']:
                 should_continue = False
             asset_summaries.append(asset_summary)
@@ -439,18 +477,20 @@ def probe_image_issues(coco_img, channels=None, prefilter_channels=None, scale=N
                                         scale=scale,
                                         possible_nodata_values=possible_nodata_values,
                                         min_region_size=min_region_size,
-                                        use_fix_stamps=use_fix_stamps)
+                                        use_fix_stamps=use_fix_stamps,
+                                        nodata_value=nodata_value)
             asset_summaries.append(asset_summary)
 
     image_summary['chans'] = asset_summaries
     image_summary['coco_img'] = coco_img
     image_summary['bad_values'] = list(ub.unique(ub.flatten([c['bad_values'] for c in asset_summaries])))
+    image_summary['needs_fix'] = any([c['needs_fix'] for c in asset_summaries])
     return image_summary
 
 
 def probe_asset(coco_img, obj, band_idxs=None, scale=None,
                 possible_nodata_values=None, min_region_size=256,
-                use_fix_stamps=False):
+                use_fix_stamps=False, nodata_value=-9999):
     """
     Inspect a specific single-file asset possibily with multiple bands for
     fixable nodata values.
@@ -465,6 +505,7 @@ def probe_asset(coco_img, obj, band_idxs=None, scale=None,
     asset_summary = {
         'channels': asset_channels,
         'fpath': fpath,
+        'needs_fix': False,
     }
 
     if use_fix_stamps:
@@ -492,10 +533,31 @@ def probe_asset(coco_img, obj, band_idxs=None, scale=None,
     else:
         min_region_size_ = min_region_size
 
-    asset_summary = probe_asset_imdata(
+    if possible_nodata_values is not None:
+        possible_nodata_values = list(possible_nodata_values)
+        possible_nodata_values.append(nodata_value)
+
+    asset_summary.update(probe_asset_imdata(
         imdata, band_idxs, min_region_size_=min_region_size_,
-        possible_nodata_values=possible_nodata_values)
-    asset_summary['fpath'] = fpath
+        possible_nodata_values=possible_nodata_values))
+
+    asset_summary.update(_probe_correct_nodata_value(
+        fpath, band_idxs, nodata_value))
+
+    return asset_summary
+
+
+def _probe_correct_nodata_value(fpath, band_idxs, nodata_value=-9999):
+    asset_summary = {}
+    from watch.utils import util_gdal
+    gdal_dset = util_gdal.GdalDataset.open(fpath)
+    band_infos = gdal_dset.info()['bands']
+    gdal_dset = None
+    for band_idx in band_idxs:
+        band_info = band_infos[band_idx]
+        if band_info.get('noDataValue', None) != nodata_value:
+            asset_summary['has_correct_nodata_value'] = False
+            asset_summary['needs_fix'] = True
     return asset_summary
 
 
@@ -514,6 +576,8 @@ def probe_asset_imdata(imdata, band_idxs, min_region_size_=256,
     asset_summary['band_summaries'] = band_summaries
     asset_summary['bad_values'] = list(ub.unique(ub.flatten([
         c['bad_values'] for c in band_summaries])))
+    if len(asset_summary['bad_values']) > 0:
+        asset_summary['needs_fix'] = True
     return asset_summary
 
 
@@ -541,6 +605,35 @@ def probe_band_imdata(band_imdata, min_region_size_=256,
     else:
         band_summary['bad_values'] = []
     return band_summary
+
+
+def fix_single_asset(fpath, dry=False):
+    from delayed_image import DelayedLoad
+    asset_summary = {
+        'fpath': fpath,
+        'needs_fix': False,
+    }
+
+    min_region_size_ = 256
+    nodata_value = -9999
+    possible_nodata_values = [0, nodata_value]
+
+    delayed = DelayedLoad(fpath)
+    delayed.prepare()
+    band_idxs = list(range(delayed.num_channels))
+
+    imdata = delayed.finalize(nodata_method='nan', interpolation='nearest')
+
+    asset_summary.update(probe_asset_imdata(
+        imdata, band_idxs, min_region_size_=min_region_size_,
+        possible_nodata_values=possible_nodata_values))
+
+    asset_summary.update(_probe_correct_nodata_value(
+        fpath, band_idxs, nodata_value))
+
+    print('asset_summary = {}'.format(ub.urepr(asset_summary, nl=True)))
+    if not dry:
+        fix_geotiff_ondisk(asset_summary, correct_nodata_value=nodata_value)
 
 
 def fix_geotiff_ondisk(asset_summary, correct_nodata_value=-9999):
@@ -641,6 +734,7 @@ def fix_geotiff_ondisk(asset_summary, correct_nodata_value=-9999):
     from osgeo import gdal
     import tempfile
     fpath = ub.Path(asset_summary['fpath'])
+    band_idxs = asset_summary['band_idxs']
 
     # We will write a modified version to a temporay file and then overwrite
     # the destination file to avoid race conditions.
@@ -657,16 +751,23 @@ def fix_geotiff_ondisk(asset_summary, correct_nodata_value=-9999):
     orig_driver_name = src_dset.GetDriver().ShortName
     assert orig_driver_name == 'GTiff'
 
+    band_idx_to_orig_props = {}
+    for band_idx in band_idxs:
+        band = src_dset.GetRasterBand(band_idx + 1)
+        # Have to read this here because it is clobbered in the copy
+        band_idx_to_orig_props[band_idx] = {
+            'blocksize': band.GetBlockSize(),
+            'num_overviews': band.GetOverviewCount(),
+        }
+
     ### Copy the source data to memory and modify it
     driver1 = gdal.GetDriverByName(str('MEM'))
     copy1 = driver1.CreateCopy(str(''), src_dset)
     src_dset.FlushCache()
     src_dset = None
 
-    bandmeta_candidates = []
     ### Pixel Modification ###
     # Modify the pixel contents
-    band_idxs = asset_summary['band_idxs']
     for band_idx, band_summary in zip(band_idxs, asset_summary['band_summaries']):
         band = copy1.GetRasterBand(band_idx + 1)
         band_data = band.ReadAsArray()
@@ -684,29 +785,28 @@ def fix_geotiff_ondisk(asset_summary, correct_nodata_value=-9999):
         band.WriteArray(band_data)
         if curr_nodat_value != correct_nodata_value:
             band.SetNoDataValue(correct_nodata_value)
-        bandmeta_candidates.append((
-            band.GetBlockSize(),
-            band.GetOverviewCount(),
-        ))
 
-    if bandmeta_candidates:
-        assert ub.allsame(bandmeta_candidates), (
+    if band_idx_to_orig_props:
+        assert ub.allsame(band_idx_to_orig_props.values()), (
             'We expect input bands to have the same blocksize')
-        blocksize = bandmeta_candidates[0][0]
-        num_overviews = bandmeta_candidates[0][1]
+        bandprop = ub.peek(band_idx_to_orig_props.values())
+        blocksize = bandprop['blocksize']
+        num_overviews = bandprop['num_overviews']
     else:
-        src_band = src_dset.GetRasterBand(1)
-        blocksize = src_band.GetBlockSize()
-        num_overviews = src_band.GetOverviewCount()
+        raise AssertionError('should have this info')
+        # src_band = src_dset.GetRasterBand(1)
+        # blocksize = src_band.GetBlockSize()
+        # num_overviews = src_band.GetOverviewCount()
 
     # FIXME: the returned band size from the gdal calls doesnt seem correct.
     # For multi-band images I get 256x1 blocksizes when gdalinfo reports
     # 256,256. For now just always use a 256x256 blocksize and at least 3
     # overviews.
-    HACK_FIX_BAND_METADATA = True
-    if HACK_FIX_BAND_METADATA:
-        blocksize = (256, 256)
-        num_overviews = max(num_overviews, 3)
+    # ANS: seems to be because I was reading from a copy
+    # HACK_FIX_BAND_METADATA = True
+    # if HACK_FIX_BAND_METADATA:
+    #     blocksize = (256, 256)
+    #     num_overviews = max(num_overviews, 3)
 
     ### Rebuild overviews
     overviewlist = (2 ** np.arange(1, num_overviews + 1)).tolist()
