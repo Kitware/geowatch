@@ -100,13 +100,24 @@ class SimpleDVC(ub.NiceRepr):
         return remote
 
     def add(self, path, verbose=0):
+        """
+        Args:
+            path (str | PathLike | Iterable[str | PathLike]):
+                a single or multiple paths to add
+        """
         from dvc import main as dvc_main
         paths = list(map(ub.Path, _ensure_iterable(path)))
         if len(paths) == 0:
             print('No paths to add')
             return
-        dvc_root = self._ensure_root(paths)
-        rel_paths = [os.fspath(p.relative_to(dvc_root)) for p in paths]
+        if 1:
+            # Handle symlinks: https://dvc.org/doc/user-guide/troubleshooting#add-symlink
+            # not sure if this is safe
+            dvc_root = self._ensure_root(paths).resolve()
+            rel_paths = [os.fspath(p.resolve().relative_to(dvc_root)) for p in paths]
+        else:
+            dvc_root = self._ensure_root(paths)
+            rel_paths = [os.fspath(p.relative_to(dvc_root)) for p in paths]
         with util_path.ChDir(dvc_root):
             dvc_command = ['add'] + rel_paths
             extra_args = self._verbose_extra_args(verbose)
@@ -298,6 +309,12 @@ class SimpleDVC(ub.NiceRepr):
                 return tracker_fpath
             prev = dpath
             dpath = dpath.parent
+
+    def read_dvc_sidecar(self, sidecar_fpath):
+        from watch.utils import util_yaml
+        sidecar_fpath = ub.Path(sidecar_fpath)
+        data = util_yaml.yaml_loads(sidecar_fpath.read_text())
+        return data
 
     def resolve_cache_paths(self, sidecar_fpath):
         """
