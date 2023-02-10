@@ -31,6 +31,7 @@ def main(cmdline=True, **kw):
         'coco_clean_geotiffs',
         # 'mlops_cli',
         'gifify',
+        'coco_average_features',
     ]
     module_lut = {}
     for name in modnames:
@@ -42,17 +43,15 @@ def main(cmdline=True, **kw):
 
     # Create a subparser that uses the first positional argument to run one of
     # the previous CLI interfaces.
-    class RawDescriptionDefaultsHelpFormatter(
-            argparse.RawDescriptionHelpFormatter,
-            argparse.ArgumentDefaultsHelpFormatter):
+    class RawDescriptionDefaultsHelpFormatter(argparse.RawDescriptionHelpFormatter,
+                                              argparse.ArgumentDefaultsHelpFormatter):
         pass
 
     parser = argparse.ArgumentParser(
         description='The SMART WATCH CLI',
         formatter_class=RawDescriptionDefaultsHelpFormatter,
     )
-    parser.add_argument('--version', action='store_true',
-                        help='show version number and exit')
+    parser.add_argument('--version', action='store_true', help='show version number and exit')
     subparsers = parser.add_subparsers(help='specify a command to run')
 
     cmd_alias = {
@@ -69,6 +68,7 @@ def main(cmdline=True, **kw):
         'watch.cli.kwcoco_to_geojson': [],
         'watch.cli.find_dvc': ['dvcdir'],
         'watch.cli.gifify': ['animate'],
+        'watch.cli.coco_average_features': ['average', 'average_features'],
     }
 
     for cli_module in cli_modules:
@@ -105,7 +105,7 @@ def main(cmdline=True, **kw):
         primary_cmdname = cmdname_aliases[0]
         secondary_cmdnames = cmdname_aliases[1:]
         if secondary_cmdnames:
-            parserkw['aliases']  = secondary_cmdnames
+            parserkw['aliases'] = secondary_cmdnames
 
         if cli_subconfig is not None:
             # TODO: make subparser.add_parser args consistent with what

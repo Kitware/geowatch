@@ -574,6 +574,10 @@ class CocoAverageFeaturesConfig(scfg.DataConfig):
             '''))
 
 
+_CLI = CocoAverageFeaturesConfig
+__config__ = CocoAverageFeaturesConfig
+
+
 def main(cmdline=True, **kw):
     """
     Main function for merge_kwcoco_channels.
