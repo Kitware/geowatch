@@ -973,3 +973,40 @@ def custom_analysis(eval_type_to_aggregator, config):
         # region_id_to_summary['macro_02_19bfe3']
 
 
+
+def quick_heatmap_viz():
+    import ubelt as ub
+    import kwcoco
+    import kwarray
+    dmj_dpath = ub.Path('/data/david.joy/DataFor2023Jan31Delivery/KW_R001_eval_8/2021-08-31/split/mono/products/bas-fusion')
+    kwcoco_fpath = dmj_dpath / 'bas_fusion_kwcoco.json'
+    dset = kwcoco.CocoDataset(kwcoco_fpath)
+    video_name = 'KW_R001'
+    video = dset.index.name_to_video[video_name]
+    video_id = video['id']
+    images = dset.images(video_id=video_id)
+
+    # Average all heatmaps together
+    running = kwarray.RunningStats()
+    for coco_img in ub.ProgIter(images.coco_images, desc='loading images'):
+        delayed = coco_img.imdelay('salient', resolution='10 GSD', nodata_method='float')
+        heatmap = delayed.finalize()
+        running.update(heatmap)
+
+    import kwplot
+    import kwimage
+    from watch.utils import util_kwimage
+    stats = running.current()
+    average_heatmap = stats['mean']
+    average_heatmap = util_kwimage.exactly_1channel(average_heatmap)
+    canvas = kwplot.make_heatmask(average_heatmap)[:, :, 0:3]
+    canvas = kwimage.ensure_uint255(canvas)
+    kwimage.imwrite('average_heatmap.png', canvas)
+
+    import kwplot
+    kwplot.autompl()
+
+    kwplot.imshow(stats['min'], cmap='plasma', data_colorbar=True, title='min response', fnum=1)
+    kwplot.imshow(stats['max'], cmap='plasma', data_colorbar=True, title='max response', fnum=2)
+    kwplot.imshow(stats['mean'], cmap='plasma', data_colorbar=True, title='mean response', fnum=3)
+    kwplot.imshow(stats['std'], cmap='plasma', data_colorbar=True, title='std response', fnum=4)

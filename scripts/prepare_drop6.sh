@@ -266,6 +266,9 @@ update_from_dmj_constructions(){
 
     NEW
         echo AE_C003 PE_C003 QA_C001 SA_C005 US_C000 US_C010 US_C011 US_C012 US_C014
+
+    SEE:
+        ~/code/watch/dev/oneoffs/drop6_fixups.py where this work is being done now
     "
 
     REGION_IDS=(AE_C003 PE_C003 QA_C001 SA_C005 US_C000 US_C010 US_C011 US_C012 US_C014)
