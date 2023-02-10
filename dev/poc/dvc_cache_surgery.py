@@ -135,6 +135,11 @@ modal = ModalCLI(
 class CachePurgeCLI(scfg.Config):
     """
     Destroy all files in the DVC cache referenced in the target directory.
+
+    Example:
+        cd /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC
+        python ~/code/watch/dev/poc/dvc_cache_surgery.py purge . --workers=0
+
     """
     __command__ = 'purge'
     __default__ = dict(
@@ -148,18 +153,20 @@ class CachePurgeCLI(scfg.Config):
         from watch.utils.simple_dvc import SimpleDVC
         config = cls(cmdline=cmdline, data=kwargs)
         dpath = ub.Path(config['dpath'])
+        workers = config['workers']
         dvc = SimpleDVC.coerce(dpath)
 
         cache_fpath_iter = find_cached_fpaths(dvc, dpath)
 
-        jobs = ub.JobPool(mode='thread', max_workers=4)
+        jobs = ub.JobPool(mode='thread', max_workers=workers)
         with jobs:
             pman = util_progress.ProgressManager()
             with pman:
-                fpath_iter = pman(cache_fpath_iter, desc='deleting cache')
+                fpath_iter = pman(cache_fpath_iter, desc='submit delete jobs')
                 for fpath in fpath_iter:
-                    jobs.submit(fpath.delete)
-                for job in pman(jobs.as_completed(), desc='finish deletes'):
+                    if fpath.exists():
+                        jobs.submit(fpath.delete)
+                for job in pman(jobs.as_completed(), desc='collect deletes jobs'):
                     try:
                         job.result()
                     except Exception as ex:
