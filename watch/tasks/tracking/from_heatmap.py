@@ -310,11 +310,8 @@ def time_aggregated_polys(
         norm_ord=1,
         agg_fn='probs',
         moving_window_size=None,  # 150
-        min_area_sqkm=0.072,  # 80px@30GSD
-        # min_area_sqkm=0.018,  # 80px@15GSD
-        # min_area_sqkm=0.008,  # 80px@10GSD
-        max_area_sqkm=None,
-        # max_area_sqkm=2.25,  # ~1.5x upper tail of truth
+        min_area_square_meters=None,
+        max_area_square_meters=None,
         max_area_behavior='drop',
         thresh_hysteresis=None,
         polygon_simplify_tolerance=None,
@@ -369,15 +366,15 @@ def time_aggregated_polys(
         >>>     'watch-msi', num_videos=1, num_frames=5, image_size=(480, 640),
         >>>     geodata=True, heatmap=True)
         >>> thresh = 0.01
-        >>> min_area_sqkm = None
+        >>> min_area_square_meters = None
         >>> orig_track = time_aggregated_polys(
-        >>>                 sub_dset, thresh, min_area_sqkm=min_area_sqkm, time_thresh=None)
+        >>>                 sub_dset, thresh, min_area_square_meters=min_area_square_meters, time_thresh=None)
         >>> # Test robustness to frames that are missing heatmaps
         >>> skip_gids = [1,3]
         >>> for gid in skip_gids:
         >>>      sub_dset.imgs[gid]['auxiliary'].pop()
         >>> inter_track = time_aggregated_polys(
-        >>>                 sub_dset, thresh, min_area_sqkm=min_area_sqkm, time_thresh=None)
+        >>>                 sub_dset, thresh, min_area_square_meters=min_area_square_meters, time_thresh=None)
         >>> assert inter_track.iloc[0][('fg', None)] == 0
         >>> assert inter_track.iloc[1][('fg', None)] > 0
     '''
@@ -470,23 +467,23 @@ def time_aggregated_polys(
     print('time aggregation: number of polygons: ', len(gids_polys))
 
     # size and response filters should operate on each vidpoly separately.
-    if max_area_sqkm:
-        max_area_px = max_area_sqkm * 1e6 / (tracking_gsd**2)
+    if max_area_square_meters:
+        max_area_sqpx = max_area_square_meters / (tracking_gsd ** 2)
         n_orig = len(gids_polys)
         if max_area_behavior == 'drop':
             gids_polys = [(t, p) for t, p in gids_polys
-                          if p.to_shapely().area < max_area_px]
+                          if p.to_shapely().area < max_area_sqpx]
             print('filter large: remaining polygons: '
                   f'{len(gids_polys)} / {n_orig}')
         elif max_area_behavior == 'grid':
             # edits tracks instead of removing them
             raise NotImplementedError
 
-    if min_area_sqkm:
-        min_area_px = min_area_sqkm * 1e6 / (tracking_gsd**2)
+    if min_area_square_meters:
+        min_area_sqpx = min_area_square_meters / (tracking_gsd ** 2)
         n_orig = len(gids_polys)
         gids_polys = [(t, p) for t, p in gids_polys
-                      if p.to_shapely().area > min_area_px]
+                      if p.to_shapely().area > min_area_sqpx]
         print('filter small: remaining polygons: '
               f'{len(gids_polys)} / {n_orig}')
 
@@ -827,8 +824,8 @@ class BAS_TrackerConfig(CommonTrackerConfig):
 
     # Common but different defaults
     key: str = 'salient'
-    max_area_sqkm: Optional[float] = 2.25
-    min_area_sqkm: Optional[float] = 0.072
+    min_area_square_meters: Optional[float] = None
+    max_area_square_meters: Optional[float] = None
     time_thresh: Optional[float] = 1
     thresh: float = 0.2
 
@@ -840,8 +837,8 @@ class SC_TrackerConfig(CommonTrackerConfig):
 
     # Common but different defaults
     key           : Tuple[str]      = tuple(CNAMES_DCT['positive']['scored'])
-    max_area_sqkm : Optional[float] = None
-    min_area_sqkm : Optional[float] = None
+    max_area_square_meters : Optional[float] = None
+    min_area_square_meters : Optional[float] = None
     thresh        : float           = 0.01
     time_thresh   : Optional[float] = None
 
@@ -849,6 +846,47 @@ class SC_TrackerConfig(CommonTrackerConfig):
     boundaries_as : VALID_BOUNDRY_ALGOS = 'bounds'
     bg_key        : Tuple[str]          = tuple(BACKGROUND_NAMES)
 """
+
+
+def _resolve_deprecated_args(self):
+    """
+    Ignore:
+        # Logic to check the conversion constant is correct
+        import pint
+        ureg = pint.UnitRegistry()
+        sqm = ureg.meters ** 2
+        sqkm = ureg.kilometers ** 2
+        sqm_to_skqm_scale_factor = float(((1 * sqkm) / (1 * sqm)).to_base_units())
+        print(f'sqm_to_skqm_scale_factor={sqm_to_skqm_scale_factor}')
+        print((0.072 * sqkm).to(sqm))
+        print(0.072 * sqm_to_skqm_scale_factor)
+        0.072 * sqkm
+    """
+    sqm_to_skqm_scale_factor = 1_000_000
+
+    if self.min_area_sqkm is not None:
+        ub.schedule_deprecation(
+            'watch', 'min_area_sqkm', 'tracking param',
+            migration='use min_area_square_meters instead',
+            deprecate='now')
+
+        if self.min_area_square_meters is not None:
+            raise ValueError('Cannot specify min_area_sqkm and min_area_square_meters')
+
+        self.min_area_square_meters = self.min_area_sqkm * sqm_to_skqm_scale_factor
+        self.min_area_sqkm = None
+
+    if self.max_area_sqkm is not None:
+        ub.schedule_deprecation(
+            'watch', 'max_area_sqkm', 'tracking param',
+            migration='use max_area_square_meters instead',
+            deprecate='now')
+
+        if self.max_area_square_meters is not None:
+            raise ValueError('Cannot specify min_area_sqkm and max_area_square_meters')
+
+        self.max_area_square_meters = self.max_area_sqkm * sqm_to_skqm_scale_factor
+        self.max_area_sqkm = None
 
 
 @dataclass
@@ -865,11 +903,19 @@ class TimeAggregatedBAS(NewTrackFunction):
     agg_fn: str = 'probs'
     thresh_hysteresis: Optional[float] = None
     moving_window_size: Optional[int] = None
-    min_area_sqkm: Optional[float] = 0.072
-    max_area_sqkm: Optional[float] = 2.25
+
+    min_area_sqkm: Optional[float] = None  # was 0.072  # 80px@30GSD
+    max_area_sqkm: Optional[float] = None  # was 2.25
+
+    min_area_square_meters: Optional[float] = None  # was 7_200
+    max_area_square_meters: Optional[float] = None  # was 2_250_000
+
     max_area_behavior: str = 'drop'
     polygon_simplify_tolerance: Union[None, float] = None
     resolution: Optional[str] = None
+
+    def __post_init__(self):
+        _resolve_deprecated_args(self)
 
     def create_tracks(self, sub_dset):
         aggkw = ub.compatible(self.__dict__, time_aggregated_polys)
@@ -902,11 +948,19 @@ class TimeAggregatedSC(NewTrackFunction):
     agg_fn: str = 'probs'
     thresh_hysteresis: Optional[float] = None
     moving_window_size: Optional[int] = None
+
     min_area_sqkm: Optional[float] = None
     max_area_sqkm: Optional[float] = None
+
+    min_area_square_meters: Optional[float] = None
+    max_area_square_meters: Optional[float] = None
+
     max_area_behavior: str = 'drop'
     polygon_simplify_tolerance: Union[None, float] = None
     resolution: Optional[str] = None
+
+    def __post_init__(self):
+        _resolve_deprecated_args(self)
 
     def create_tracks(self, sub_dset):
         '''

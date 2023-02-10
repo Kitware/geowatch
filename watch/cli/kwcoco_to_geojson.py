@@ -888,8 +888,8 @@ def main(args=None, **kwargs):
         >>>     '--out_kwcoco', str(bas_coco_fpath),
         >>>     '--track_fn', 'saliency_heatmaps',
         >>>     '--track_kwargs', json.dumps({
-        >>>        'thresh': 1e-9, 'min_area_sqkm': None,
-        >>>        'max_area_sqkm': None,
+        >>>        'thresh': 1e-9, 'min_area_square_meters': None,
+        >>>        'max_area_square_meters': None,
         >>>        'polygon_simplify_tolerance': 1}),
         >>> ]
         >>> main(args)
@@ -903,7 +903,7 @@ def main(args=None, **kwargs):
         >>>     '--track_fn', 'class_heatmaps',
         >>>     '--site_summary', str(bas_fpath),
         >>>     '--track_kwargs', json.dumps(
-        >>>         {'thresh': 1e-9, 'min_area_sqkm': None, 'max_area_sqkm': None,
+        >>>         {'thresh': 1e-9, 'min_area_square_meters': None, 'max_area_square_meters': None,
         >>>          'polygon_simplify_tolerance': 1, 'key': 'salient'}),
         >>> ]
         >>> main(args)
@@ -943,6 +943,9 @@ def main(args=None, **kwargs):
         >>> import json
         >>> track_kwargs = json.dumps({
         >>>         'resolution': '10GSD',
+        >>>         'min_area_square_meters': 1000000,  # high area threshold filters results
+        >>>         'max_area_square_meters': None,
+        >>>         'thresh': 1e-9,
         >>> })
         >>> kwargs = {
         >>>     'in_file': str(dset.fpath),
@@ -955,11 +958,13 @@ def main(args=None, **kwargs):
         >>> args = None
         >>> # Test case for no results
         >>> main(args=args, **kwargs)
+        >>> from watch.utils import util_gis
+        >>> assert len(list(util_gis.coerce_geojson_datas(bas_fpath))) == 0
         >>> # Try to get results here
         >>> track_kwargs = json.dumps({
         >>>         'resolution': '10GSD',
-        >>>         'min_area_sqkm': None,
-        >>>         'max_area_sqkm': None,
+        >>>         'min_area_square_meters': None,
+        >>>         'max_area_square_meters': None,
         >>>         'thresh': 1e-9,
         >>> })
         >>> kwargs = {
@@ -972,6 +977,7 @@ def main(args=None, **kwargs):
         >>> }
         >>> args = None
         >>> main(args=args, **kwargs)
+        >>> assert len(list(util_gis.coerce_geojson_datas(bas_fpath))) > 0
 
     Example:
         >>> # xdoctest: +REQUIRES(--slow)
