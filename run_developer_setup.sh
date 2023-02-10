@@ -156,16 +156,20 @@ check_metrics_framework(){
     __doc__="
     Check to see if the IARPA metrics framework is installed
     "
-    python -c "import iarpa_smart_metrics"
-    METRICS_RETCODE="$?"
-    if [[ "$METRICS_RETCODE" == "1" ]]; then
-        echo "WARNING: IARPA metrics not installed!
+    METRICS_MODPATH=$(python -c "import ubelt; print(ubelt.modname_to_modpath('iarpa_smart_metrics'))")
+    if [[ "$METRICS_MODPATH" == "None" ]]; then
+        echo "
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+        WARNING: IARPA metrics not installed!
         
         To enable evaluating your results, run this command:
         $ pip install git+ssh://git@gitlab.kitware.com/smart/metrics-and-test-framework.git
         
         For more information, see:
         https://gitlab.kitware.com/smart/metrics-and-test-framework#installation
+
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         "
     fi
 }
