@@ -7,6 +7,55 @@ from watch.mlops.aggregate import fix_duplicate_param_hashids
 from watch.utils import util_pandas
 
 
+def _check_high_tpr_case(agg, config):
+    macro_results = agg.region_to_tables[agg.primary_macro_region].copy()
+
+    from watch.utils.util_param_grid import DotDictDataFrame
+    macro_metrics = DotDictDataFrame(macro_results['metrics'])
+    tpr_col = macro_metrics.find_column('bas_tpr')
+    macro_metrics = macro_metrics.sort_values(tpr_col, ascending=False)
+    inspect_idxs = macro_metrics.index[0:1]
+
+    for idx in inspect_idxs:
+        param_hashid = macro_results['index'].loc[idx]['param_hashid']
+
+        subagg = agg.filterto(param_hashids=[param_hashid])
+        subagg.build_macro_tables(rois)
+        subagg.report_best()
+
+        agg.index['param_hashid'] == param_hashid
+
+        subagg.fpaths.tolist()
+        from watch.mlops.aggregate import make_summary_analysis
+        agg1 = subagg
+        make_summary_analysis(agg1, config)
+    ...
+
+
+def _namek_eval():
+    from watch.mlops.aggregate import AggregateEvluationConfig
+    from watch.mlops.aggregate import build_tables
+    from watch.mlops.aggregate import build_aggregators
+    import watch
+    data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+    expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+    cmdline = 0
+    kwargs = {
+        'root_dpath': expt_dvc_dpath / '_namek_eval',
+        'pipeline': 'bas',
+        'io_workers': 10,
+        'freeze_cache': 0,
+        # 'pipeline': 'joint_bas_sc_nocrop',
+        # 'root_dpath': expt_dvc_dpath / '_testsc',
+        #'pipeline': 'sc',
+    }
+    config = AggregateEvluationConfig.legacy(cmdline=cmdline, data=kwargs)
+    eval_type_to_results = build_tables(config)
+    eval_type_to_aggregator = build_aggregators(eval_type_to_results)
+    agg = ub.peek(eval_type_to_aggregator.values())
+    agg = eval_type_to_aggregator.get('bas_poly_eval', None)
+
+
 def _setup_sc_analysis():
     from watch.mlops.aggregate import AggregateEvluationConfig
     from watch.mlops.aggregate import build_tables

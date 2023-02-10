@@ -212,6 +212,11 @@ class PolygonPrediction(ProcessNode):
         'site_summary',
     }
 
+    # also
+    # algo_params = {
+    #     'resolution': None,
+    # }
+
     out_paths = {
         'site_summaries_fpath': 'site_summaries_manifest.json',
         'site_summaries_dpath': 'site_summaries',

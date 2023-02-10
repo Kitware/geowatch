@@ -97,8 +97,8 @@ def main(cmdline=True, **kwargs):
     agg = eval_type_to_aggregator.get('bas_poly_eval', None)
     # for agg in eval_type_to_aggregator.values():
     if agg is not None:
-        # rois = {'KR_R001', 'KR_R002', 'BR_R002'}
-        rois = {'KR_R001', 'KR_R002'}
+        rois = {'KR_R001', 'KR_R002', 'BR_R002'}
+        # rois = {'KR_R001', 'KR_R002'}
         build_all_param_plots(agg, rois, config)
         ...
 
@@ -492,10 +492,8 @@ def foldin_resolved_info(agg):
 
 def make_summary_analysis(agg1, config):
     agg_dpath = ub.Path(config['root_dpath'] / 'aggregate')
-    agg_group_dpath = agg_dpath / ('agg_summary_params2_v2')
+    agg_group_dpath = agg_dpath / ('agg_summary_params2_v3')
     agg_group_dpath = agg_group_dpath.ensuredir()
-
-    # agg2 =
 
     # Given these set of A/B values, visualize each region
     for region_id, group in agg1.index.groupby('region_id'):
@@ -857,6 +855,8 @@ class Aggregator(ub.NiceRepr):
                 'bas_poly_eval.metrics.bas_fn',
                 'bas_poly_eval.metrics.bas_f1',
                 'bas_poly_eval.metrics.bas_ffpa',
+                # 'bas_poly_eval.metrics.bas_faa_f1',
+                'bas_poly_eval.metrics.bas_tpr',
             ]
             _primary_metrics_suffixes = [
                 # 'bas_faa_f1'
