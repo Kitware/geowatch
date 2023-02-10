@@ -62,36 +62,55 @@ pyenv install $PYTHON_VERSION
 
 EOF
 
+#SHELL ["/bin/bash", "--login", "-c"]
 
-## Create a default Python virtualenv
+### Create a default Python virtualenv
+#RUN <<EOF
+##!/bin/bash
+#export PATH="$PYENV_ROOT/bin:$PATH"
+#eval "$($PYENV_ROOT/bin/pyenv init -)"
+#pyenv global $PYTHON_VERSION
+
+#PYENV_PREFIX=$(pyenv prefix)
+#python -m venv $PYENV_PREFIX/envs/pyenv$PYTHON_VERSION
+
+#BASHRC_CONTENTS='
+## Add the pyenv command to our environment if it exists
+#export HOME="/root"
+#export PYENV_ROOT="$HOME/.pyenv"
+#if [ -d "$PYENV_ROOT" ]; then
+#    export PATH="$PYENV_ROOT/bin:$PATH"
+#    eval "$($PYENV_ROOT/bin/pyenv init -)"
+#    source $PYENV_ROOT/completions/pyenv.bash
+#    export PYENV_PREFIX=$(pyenv prefix)
+#fi
+
+## Optionally auto-activate the chosen pyenv pyenv environment
+#if [ -d "$PYENV_PREFIX/envs/pyenv$PYTHON_VERSION" ]; then
+#    source $PYENV_PREFIX/envs/pyenv$PYTHON_VERSION/bin/activate
+#fi
+#'
+#echo "$BASHRC_CONTENTS" >> $HOME/.bashrc
+## Write a secondary script for non-interactive usage
+#echo "$BASHRC_CONTENTS" >> $HOME/activate
+#EOF
+
+
 RUN <<EOF
 #!/bin/bash
-export PATH="$PYENV_ROOT/bin:$PATH"
-eval "$($PYENV_ROOT/bin/pyenv init -)"
-pyenv global $PYTHON_VERSION
+echo "Hello" >> /hello
+echo "World!" >> /hello
+EOF
 
-PYENV_PREFIX=$(pyenv prefix)
-python -m venv $PYENV_PREFIX/envs/pyenv$PYTHON_VERSION
 
-BASHRC_CONTENTS='
-# Add the pyenv command to our environment if it exists
-export HOME="/root"
-export PYENV_ROOT="$HOME/.pyenv"
-if [ -d "$PYENV_ROOT" ]; then
-    export PATH="$PYENV_ROOT/bin:$PATH"
-    eval "$($PYENV_ROOT/bin/pyenv init -)"
-    source $PYENV_ROOT/completions/pyenv.bash
-    export PYENV_PREFIX=$(pyenv prefix)
-fi
+## Install Prerequisites 
+RUN <<EOF
+mkdir -p foobar
+EOF
 
-# Optionally auto-activate the chosen pyenv pyenv environment
-if [ -d "$PYENV_PREFIX/envs/pyenv$PYTHON_VERSION" ]; then
-    source $PYENV_PREFIX/envs/pyenv$PYTHON_VERSION/bin/activate
-fi
-'
-echo "$BASHRC_CONTENTS" >> $HOME/.bashrc
-# Write a secondary script for non-interactive usage
-echo "$BASHRC_CONTENTS" >> $HOME/activate
+## Install pyenv
+RUN <<EOF
+rm -rf foobar
 EOF
 
 
@@ -99,8 +118,6 @@ EOF
 ### __DOCS__ ###
 ################
 RUN <<EOF
-
-
 # https://www.docker.com/blog/introduction-to-heredocs-in-dockerfiles/
 echo "
 
@@ -109,7 +126,7 @@ echo "
 
 cd $HOME/code/watch
 DOCKER_BUILDKIT=1 docker build --progress=plain \
-    -t "pyenv:310" \
+    -t pyenv:310 \
     --build-arg PYTHON_VERSION=3.10.5 \
     -f ./dockerfiles/pyenv.Dockerfile .
 
@@ -117,10 +134,8 @@ docker run --runtime=nvidia -it pyenv:310 bash
 
 docker login gitlab.kitware.com:4567
 
-docker tag pyenv:310 gitlab.kitware.com:4567/smart/watch/pyenv:310
-docker push gitlab.kitware.com:4567/smart/watch/pyenv:310
+#docker tag pyenv:310 gitlab.kitware.com:4567/smart/watch/pyenv:310
+#docker push gitlab.kitware.com:4567/smart/watch/pyenv:310
 # docker buildx build -t "pyenv3.10" -f ./pyenv.Dockerfile --build-arg BUILD_STRICT=1 .
 "
-
-
 EOF

@@ -54,6 +54,7 @@ def _namek_eval():
     eval_type_to_aggregator = build_aggregators(eval_type_to_results)
     agg = ub.peek(eval_type_to_aggregator.values())
     agg = eval_type_to_aggregator.get('bas_poly_eval', None)
+    agg.report_best()
 
 
 def _setup_sc_analysis():

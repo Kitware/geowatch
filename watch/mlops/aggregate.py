@@ -781,14 +781,26 @@ class Aggregator(ub.NiceRepr):
     information using consistent pandas indexing. Can be filtered to a
     comparable subsets of choice. Can also handle building macro averaged
     results over different "regions" with the same parameters.
+
+    Set attributes based on your problem
+
+    Attributes:
+        agg.primary_metric_cols
+        agg.display_metric_cols
     """
-    def __init__(agg, results, type=None):
+    def __init__(agg, results, type=None,
+                 primary_metric_cols='auto',
+                 display_metric_cols='auto'):
         agg.results = results
         agg.type = type
         agg.metrics = results['metrics']
         agg.params = results['params']
         agg.index = results['index']
         agg.fpaths = results['fpaths']['fpath']
+        agg.config = {
+            'display_metric_cols': display_metric_cols,
+            'primary_metric_cols': primary_metric_cols,
+        }
 
     def __nice__(self):
         return f'{self.type}, n={len(self)}'
@@ -842,11 +854,12 @@ class Aggregator(ub.NiceRepr):
                 new_results[key] = val[flags].copy()
             else:
                 new_results[key] = val
-        new_agg = Aggregator(new_results, agg.type)
+        new_agg = Aggregator(new_results, agg.type, **agg.config)
         new_agg.build()
         return new_agg
 
     def build(agg):
+        agg.__dict__.update(**agg.config)
         _display_metrics_suffixes = []
         if agg.type == 'bas_poly_eval':
             _display_metrics_suffixes = [
@@ -855,8 +868,9 @@ class Aggregator(ub.NiceRepr):
                 'bas_poly_eval.metrics.bas_fn',
                 'bas_poly_eval.metrics.bas_f1',
                 'bas_poly_eval.metrics.bas_ffpa',
-                # 'bas_poly_eval.metrics.bas_faa_f1',
+                'bas_poly_eval.metrics.bas_faa_f1',
                 'bas_poly_eval.metrics.bas_tpr',
+                'bas_poly_eval.metrics.bas_ppv',
             ]
             _primary_metrics_suffixes = [
                 # 'bas_faa_f1'
@@ -881,11 +895,13 @@ class Aggregator(ub.NiceRepr):
         else:
             raise NotImplementedError(agg.type)
 
-        agg.primary_metric_cols = util_pandas.pandas_suffix_columns(  # fixme sorting
-            agg.metrics, _primary_metrics_suffixes)
+        if agg.primary_metric_cols == 'auto':
+            agg.primary_metric_cols = util_pandas.pandas_suffix_columns(  # fixme sorting
+                agg.metrics, _primary_metrics_suffixes)
 
-        agg.display_metric_cols = util_pandas.pandas_suffix_columns(  # fixme sorting
-            agg.metrics, _display_metrics_suffixes)
+        if agg.display_metric_cols == 'auto':
+            agg.display_metric_cols = util_pandas.pandas_suffix_columns(  # fixme sorting
+                agg.metrics, _display_metrics_suffixes)
 
         _model_suffixes = ['package_fpath']
         agg.model_cols = util_pandas.pandas_suffix_columns(
@@ -1008,7 +1024,8 @@ class Aggregator(ub.NiceRepr):
 
             top_idxs = util_pandas.pandas_argmaxima(metric_group, agg.primary_metric_cols, k=top_k)
 
-            top_metrics = metric_group.loc[top_idxs][agg.primary_metric_cols + agg.display_metric_cols]
+            final_display_cols = list(ub.oset(agg.primary_metric_cols + agg.display_metric_cols))
+            top_metrics = metric_group.loc[top_idxs][final_display_cols]
             # top_metrics = top_metrics[agg.primary_metric_cols + agg.display_metric_cols]
             top_indexes = group['index'].loc[top_idxs]
             # top_params = group['effective_params'].loc[top_idxs].drop(agg.test_dset_cols, axis=1)
