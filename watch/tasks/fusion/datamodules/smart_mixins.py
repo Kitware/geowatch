@@ -274,13 +274,18 @@ class SMARTDataMixin:
                 # punt for now and assume "Drop4"
                 spec_name = 'ACC-1'
                 sensor = coco_img.img.get('sensor_coarse', '*')
-                table = QA_SPECS.find_table(spec_name, sensor)
-                iffy_qa_names = [
-                    'cloud',
-                    # 'dilated_cloud',
-                    'cirrus',
-                ]
-                is_cloud_iffy = table.mask_any(qa_data, iffy_qa_names)
+                try:
+                    table = QA_SPECS.find_table(spec_name, sensor)
+                except AssertionError as ex:
+                    print(f'warning ex={ex}')
+                    is_cloud_iffy = None
+                else:
+                    iffy_qa_names = [
+                        'cloud',
+                        # 'dilated_cloud',
+                        'cirrus',
+                    ]
+                    is_cloud_iffy = table.mask_any(qa_data, iffy_qa_names)
 
         else:
             is_cloud_iffy = None
