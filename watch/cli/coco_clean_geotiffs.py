@@ -51,10 +51,10 @@ class CleanGeotiffConfig(scfg.DataConfig):
             --src=data.kwcoco.zip --dry=True --workers=8  \
             --probe_scale=0.25 --prefilter_channels=pan --channels=pan
 
-
         smartwatch clean_geotiffs \
-            --src=imganns-AE_R001.kwcoco.json --dry=True --workers=0  \
-            --probe_scale=0.25 --prefilter_channels=None --channels=*
+            --src=data.kwcoco.zip --dry=True --workers=8  \
+            --probe_scale=0.25 --prefilter_channels="red|pan" \
+            --channels="red|green|blue|nir|swir16|swir22|pan"
 
     """
     src = scfg.Value(None, position=1, help='input coco dataset')
