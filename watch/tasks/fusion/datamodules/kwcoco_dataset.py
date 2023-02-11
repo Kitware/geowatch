@@ -726,6 +726,23 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             if max_epoch_length is not None:
                 self.length = min(self.length, max_epoch_length)
 
+        # x = list(ub.flatten(ub.flatten(all_chunks)))
+        # import networkx as nx
+        # def nested_tree(tree, nested, name='root'):
+        #     tree.add_node(name)
+        #     for idx, child in enumerate(nested):
+        #         key = f'{name}.{idx}'
+        #         if ub.iterable(child):
+        #             child = nested_tree(tree, child, key)
+        #         else:
+        #             tree.add_node(key)
+        #         tree.add_edge(name, key)
+        # nested = self.nested_pool
+        # tree = nx.DiGraph()
+        # xdev.fix_embed_globals()
+        # node = nested_tree(tree, nested)
+        # ub.dict_hist(list(map(len, nested)))
+
         self.new_sample_grid = new_sample_grid
 
         bg_catname = ub.peek(sorted(self.background_classes))
