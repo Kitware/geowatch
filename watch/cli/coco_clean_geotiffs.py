@@ -52,9 +52,22 @@ class CleanGeotiffConfig(scfg.DataConfig):
             --probe_scale=0.25 --prefilter_channels=pan --channels=pan
 
         smartwatch clean_geotiffs \
-            --src=data.kwcoco.zip --dry=True --workers=8  \
-            --probe_scale=0.25 --prefilter_channels="red|pan" \
-            --channels="red|green|blue|nir|swir16|swir22|pan"
+            --dry=True --workers=avail  \
+            --probe_scale=0.0625 --prefilter_channels="pan" \
+            --channels="pan" \
+            --src=data.kwcoco.zip
+
+        smartwatch clean_geotiffs \
+            --dry=True --workers=avail  \
+            --probe_scale=0.0625 --prefilter_channels="red" \
+            --channels="red|green|blue|nir" \
+            --src=data.kwcoco.zip
+
+        smartwatch clean_geotiffs \
+            --dry=True --workers=avail  \
+            --probe_scale=0.25 --prefilter_channels="swir22" \
+            --channels="swir16|swir22" \
+            --src=imgonly-BR_R005.kwcoco.json
 
     """
     src = scfg.Value(None, position=1, help='input coco dataset')
@@ -277,7 +290,7 @@ def main(cmdline=1, **kwargs):
                         if asset_summary['needs_fix']:
                             asset_summary['coco_img'] = image_summary['coco_img']
                             seen_bad_values.update(asset_summary['bad_values'])
-                            if not asset_summary['has_correct_nodata_value']:
+                            if not asset_summary.get('has_incorrect_nodata_value', False):
                                 num_incorrect_nodata += 1
                             num_asset_issues += 1
                             mprog.update_info(ub.codeblock(
@@ -553,10 +566,11 @@ def _probe_correct_nodata_value(fpath, band_idxs, nodata_value=-9999):
     gdal_dset = util_gdal.GdalDataset.open(fpath)
     band_infos = gdal_dset.info()['bands']
     gdal_dset = None
+    asset_summary['has_incorrect_nodata_value'] = False
     for band_idx in band_idxs:
         band_info = band_infos[band_idx]
         if band_info.get('noDataValue', None) != nodata_value:
-            asset_summary['has_correct_nodata_value'] = False
+            asset_summary['has_incorrect_nodata_value'] = True
             asset_summary['needs_fix'] = True
     return asset_summary
 
