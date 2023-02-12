@@ -23,7 +23,7 @@ class TensorboardPlotter(pl.callbacks.Callback):
         xdoctest -m watch.utils.lightning_ext.callbacks.tensorboard_plotter TensorboardPlotter
 
     Example:
-        >>> #
+        >>> # xdoctest: +REQUIRES(module:tensorboard)
         >>> from watch.utils.lightning_ext import demo
         >>> from watch.monkey import monkey_lightning
         >>> monkey_lightning.disable_lightning_hardware_warnings()
