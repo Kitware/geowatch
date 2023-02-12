@@ -143,7 +143,9 @@ class KWCocoVideoDatasetConfig(scfg.Config):
 
     """
     default = {
-        'time_steps': scfg.Value(2, help='number of temporal sampler per batch', alias=['time_dims']),
+        ###############
+        # SPACE OPTIONS
+        ###############
 
         'chip_dims': scfg.Value(128, help=ub.paragraph(
             '''
@@ -200,6 +202,13 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             alias=['window_space_overlap', 'window_overlap'],
         ),
 
+        ##############
+        # TIME OPTIONS
+        ##############
+
+        'time_steps': scfg.Value(2, help='number of temporal sampler per batch', alias=['time_dims']),
+
+
         'time_sampling': scfg.Value('contiguous', type=str, help=ub.paragraph(
             '''
             Strategy for expanding the time window across non-contiguous
@@ -211,6 +220,15 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             '''
             how long a time window should roughly span by default
             ''')),
+
+        'time_kernel': scfg.Value(None, type=str, help=ub.paragraph(
+            '''
+            Mutually exclusive with time_span.
+            ''')),
+
+        ##############
+        # MODE OPTIONS
+        ##############
 
         'channels': scfg.Value(None, type=str, help=ub.paragraph(
             '''
@@ -227,6 +245,10 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             '''
             comma delimited list of sensors to avoid, such as S2 or L8
             ''')),
+
+        ##############
+        # SIZE OPTIONS
+        ##############
 
         'select_images': scfg.Value(
             None, type=str, help=ub.paragraph(
@@ -274,16 +296,9 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             If specified, restricts number of steps per epoch
             ''')),
 
-        'ignore_dilate': scfg.Value(0, help='Dilation applied to ignore masks.'),
-        'weight_dilate': scfg.Value(0, help='Dilation applied to weight masks.'),
-
-        'normalize_perframe': scfg.Value(False, help='undocumented - ignored'),
-
-        'normalize_peritem': scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            if specified normalize these bands/channels on a per-batch-item
-            level across time. if True normalize all bands.
-            ''')),
+        #######################
+        # SAMPLING GRID OPTIONS
+        #######################
 
         'set_cover_algo': scfg.Value(None, choices=[None, 'approx', 'exact'], help=ub.paragraph(
             '''
@@ -299,6 +314,48 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             Use centers of annotations as window centers
             Only applies to training dataset when used in the data module.
             Validation/test dataset defaults to False.
+            ''')),
+
+        'use_grid_positives': scfg.Value(True, help=ub.paragraph(
+            '''
+            Use annotation overlaps with grid as positives.
+            Only applies to training dataset when used in the data module.
+            Validation/test dataset defaults to True.
+            ''')),
+
+        'use_grid_valid_regions': scfg.Value(True, help=ub.paragraph(
+            '''
+            If True, the initial grid will only place windows in valid regions.
+            ''')),
+
+        # Overwritten for non-train
+        'neg_to_pos_ratio': scfg.Value(1.0, type=float, help=ub.paragraph(
+            '''
+            maximum ratio of samples with no annotations to samples with
+            annots.
+            Only applies to training dataset when used in the data module.
+            Validation/test dataset defaults to zero.
+            ''')),
+
+        'use_grid_cache': scfg.Value(True, help=ub.paragraph(
+            '''
+            If true, will cache the spacetime grid to make multiple
+            runs quicker.
+            ''')),
+
+        ###################
+        # WEIGHTING OPTIONS
+        ###################
+
+        'ignore_dilate': scfg.Value(0, help='Dilation applied to ignore masks.'),
+        'weight_dilate': scfg.Value(0, help='Dilation applied to weight masks.'),
+
+        'normalize_perframe': scfg.Value(False, help='undocumented - ignored'),
+
+        'normalize_peritem': scfg.Value(None, type=str, help=ub.paragraph(
+            '''
+            if specified normalize these bands/channels on a per-batch-item
+            level across time. if True normalize all bands.
             ''')),
 
         'min_spacetime_weight': scfg.Value(0.9, help=ub.paragraph(
@@ -323,6 +380,12 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             To use distance-transform based weights on annotations or
             not
             ''')),
+
+        'balance_areas': scfg.Value(False, help='if True balance the weight of small and large polygons'),
+
+        ##################################
+        # DYNAMIC FILTER / MASKING OPTIONS
+        ##################################
 
         'use_cloudmask': scfg.Value(None, help=ub.paragraph(
             '''
@@ -363,38 +426,11 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             quality or nodata checks.
             '''), alias=['resample_max_tries']),
 
-        'use_grid_positives': scfg.Value(True, help=ub.paragraph(
-            '''
-            Use annotation overlaps with grid as positives.
-            Only applies to training dataset when used in the data module.
-            Validation/test dataset defaults to True.
-            ''')),
-
-        'use_grid_valid_regions': scfg.Value(True, help=ub.paragraph(
-            '''
-            If True, the initial grid will only place windows in valid regions.
-            ''')),
-
-        # Overwritten for non-train
-        'neg_to_pos_ratio': scfg.Value(1.0, type=float, help=ub.paragraph(
-            '''
-            maximum ratio of samples with no annotations to samples with
-            annots.
-            Only applies to training dataset when used in the data module.
-            Validation/test dataset defaults to zero.
-            ''')),
-
-        'use_grid_cache': scfg.Value(True, help=ub.paragraph(
-            '''
-            If true, will cache the spacetime grid to make multiple
-            runs quicker.
-            ''')),
-
-        'balance_areas': scfg.Value(False, help='if True balance the weight of small and large polygons'),
-
         'downweight_nan_regions': scfg.Value(True, help='if True, unobservable (i.e. nan) pixels are downweighted'),
 
-        ### Augmentation
+        ######################
+        # AUGMENTATION OPTIONS
+        ######################
         ### TODO: these should likely become a nested jsonargparse
         ### style config for a more general "augmentation scheme".
 
