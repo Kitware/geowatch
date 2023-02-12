@@ -10,7 +10,13 @@ from datetime import datetime as datetime_cls  # NOQA
 from .exceptions import TimeSampleError
 from .utils import guess_missing_unixtimes
 
+try:
+    from xdev import profile
+except ImportError:
+    profile = ub.identity
 
+
+@profile
 def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
                     update_rule='pairwise', gamma=1, determenistic=False,
                     time_kernel=None, unixtimes=None,
@@ -378,6 +384,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         return chosen
 
 
+@profile
 def _handle_degenerate_weights(affinity, chosen, exclude_indices, errors,
                                error_level, return_info, rng):
     if error_level == 3:
@@ -425,6 +432,7 @@ def _handle_degenerate_weights(affinity, chosen, exclude_indices, errors,
     return current_weights
 
 
+@profile
 def hard_time_sample_pattern(unixtimes, time_window, time_span='2y'):
     """
     Finds hard time sampling indexes
@@ -649,6 +657,7 @@ def hard_time_sample_pattern(unixtimes, time_window, time_span='2y'):
     return sample_idxs
 
 
+@profile
 def soft_frame_affinity(unixtimes, sensors=None, time_kernel=None,
                         time_span='2y', version=1, heuristics='default'):
     """
@@ -915,6 +924,7 @@ def soft_frame_affinity(unixtimes, sensors=None, time_kernel=None,
     return weights
 
 
+@profile
 def hard_frame_affinity(unixtimes, sensors, time_window, time_span='2y', blur=False):
     # Hard affinity
     sample_idxs = hard_time_sample_pattern(unixtimes, time_window, time_span=time_span)

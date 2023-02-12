@@ -5,6 +5,10 @@ This is used to define our dilated time sampling.
 
 This following doctest illustrates the method on project data.
 
+
+CommandLine:
+    SMART_DATA_DVC_DPATH=1 XDEV_PROFILE=1 xdoctest -m watch.tasks.fusion.datamodules.temporal_sampling __doc__:3
+
 Example:
     >>> # Basic overview demo of the algorithm
     >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
@@ -79,7 +83,7 @@ Example:
     >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
     >>> import watch
     >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-    >>> coco_fpath = data_dvc_dpath / 'Drop4-BAS/KR_R001.kwcoco.json'
+    >>> coco_fpath = data_dvc_dpath / 'Drop6/imganns-KR_R001.kwcoco.zip'
     >>> dset = watch.coerce_kwcoco(coco_fpath)
     >>> vidid = dset.dataset['videos'][0]['id']
     >>> self = TimeWindowSampler.from_coco_video(
@@ -89,6 +93,8 @@ Example:
     >>>     #time_window=5,
     >>>     #affinity_type='hardish3', time_span='3m', update_rule='pairwise+distribute', determenistic=True
     >>> )
+    >>> idxs = self.sample()
+    >>> idxs = self.sample()
     >>> # xdoctest: +REQUIRES(--show)
     >>> import kwplot
     >>> plt = kwplot.autoplt()
@@ -127,6 +133,12 @@ from watch.tasks.fusion.datamodules.temporal_sampling.plots import show_affinity
 from watch.tasks.fusion.datamodules.temporal_sampling.affinity import soft_frame_affinity
 from watch.tasks.fusion.datamodules.temporal_sampling.affinity import hard_frame_affinity
 from watch.tasks.fusion.datamodules.temporal_sampling.affinity import affinity_sample
+
+
+try:
+    from xdev import profile
+except ImportError:
+    profile = ub.identity
 
 
 class CommonSamplerMixin:
@@ -187,7 +199,7 @@ class MultiTimeWindowSampler(CommonSamplerMixin):
 
     def __init__(self, unixtimes, sensors, time_window=None, affinity_type='hard',
                  update_rule='distribute', determenistic=False, gamma=1,
-                 time_span=['2y', '1y', '5m'], name='?'):
+                 time_span=['2y', '1y', '5m'], time_kernel=None, name='?'):
 
         if isinstance(time_span, str):
             time_span = time_span.split('-')
@@ -209,6 +221,7 @@ class MultiTimeWindowSampler(CommonSamplerMixin):
         self.name = name
         self.num_frames = len(unixtimes)
         self.time_span = time_span
+        self.time_kernel = time_kernel
         self.sub_samplers = {}
         self._build()
 
@@ -230,6 +243,7 @@ class MultiTimeWindowSampler(CommonSamplerMixin):
             self.indexes = sub_sampler.indexes
         # self.indexes = np.arange(self.affinity.shape[0])
 
+    @profile
     def sample(self, main_frame_idx=None, include=None, exclude=None,
                return_info=False, error_level=0, rng=None):
         """
@@ -567,6 +581,7 @@ class TimeWindowSampler(CommonSamplerMixin):
             'watch', 'main_indexes', 'use indexes instead', deprecate='now')
         return self.indexes
 
+    @profile
     def sample(self, main_frame_idx=None, include=None, exclude=None,
                return_info=False, error_level=0, rng=None):
         """
