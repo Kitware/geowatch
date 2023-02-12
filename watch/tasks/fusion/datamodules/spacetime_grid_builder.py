@@ -783,7 +783,6 @@ def _build_vidspace_track_qtree(dset, video_gids, negative_classes,
     """
     import pyqtree
     qtree = pyqtree.Index((0, 0, vidspace_video_width, vidspace_video_height))
-    # qtree.aid_to_ltrb = {}
     tid_to_infos = ub.ddict(list)
     video_images = dset.images(video_gids)
     video_coco_images = video_images.coco_images
@@ -825,35 +824,13 @@ def _build_vidspace_track_qtree(dset, video_gids, negative_classes,
         for info, ltrb in zip(valid_infos, valid_vidspace_boxes.to_ltrb().data):
             tid = info['tid']
             aid = info['aid']
-            valid_vidspace_boxes
             if tid is not None:
                 info.update({
                     'vidspace_box': ltrb,
                 })
                 tid_to_infos[tid].append(info)
             qtree.insert(aid, ltrb)
-            # qtree.aid_to_ltrb[aid] = ltrb
 
-        # for tid, aid, cid, cname in zip(tids, aids, cids, cnames):
-        #     if cname not in negative_classes:
-        #         imgspace_box = kwimage.Boxes([
-        #             dset.index.anns[aid]['bbox']], 'xywh')
-        #         vidspace_box = imgspace_box.warp(warp_vid_from_img)
-        #         vidspace_box = vidspace_box.clip(
-        #             0, 0, vidspace_video_width, vidspace_video_height)
-        #         if vidspace_box.area.ravel()[0] > 0:
-        #             tlbr_box = vidspace_box.to_ltrb().data[0]
-        #             if tid is not None:
-        #                 tid_to_infos[tid].append({
-        #                     'gid': gid,
-        #                     'cid': cid,
-        #                     'frame_index': frame_index,
-        #                     'vidspace_box': tlbr_box,
-        #                     'cname': dset._resolve_to_cat(cid)['name'],
-        #                     'aid': aid,
-        #                 })
-        #             qtree.insert(aid, tlbr_box)
-        #             # qtree.aid_to_ltrb[aid] = tlbr_box
     return qtree, tid_to_infos
 
 
