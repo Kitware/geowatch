@@ -1108,8 +1108,6 @@ class SimpleDataCube(object):
         import pandas as pd  # NOQA
         from shapely import geometry
         from watch.utils import util_gis
-        from shapely.ops import unary_union
-        import shapely
         # import watch
         coco_dset = cube.coco_dset
 
