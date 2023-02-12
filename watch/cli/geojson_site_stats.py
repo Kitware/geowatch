@@ -273,6 +273,7 @@ def main(cmdline=0, **kwargs):
     # import xdev
     # xdev.view_diri
 
+
 def geopandas_shape_stats(df):
     """
     Compute shape statistics about a geopandas dataframe (assume UTM CRS)
