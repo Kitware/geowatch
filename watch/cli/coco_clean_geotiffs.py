@@ -52,19 +52,19 @@ class CleanGeotiffConfig(scfg.DataConfig):
             --probe_scale=0.25 --prefilter_channels=pan --channels=pan
 
         smartwatch clean_geotiffs \
-            --dry=False --workers=4  \
+            --dry=False --workers=2  \
             --probe_scale=0.0625 --prefilter_channels="pan" \
             --channels="pan" \
             --src=data.kwcoco.zip
 
         smartwatch clean_geotiffs \
-            --dry=True --workers=avail  \
+            --dry=False --workers=avail  \
             --probe_scale=0.0625 --prefilter_channels="red" \
             --channels="red|green|blue|nir|swir16|swir22" \
             --src=data.kwcoco.zip
 
         smartwatch clean_geotiffs \
-            --dry=True --workers=avail  \
+            --dry=False --workers=avail  \
             --probe_scale=0.25 --prefilter_channels="swir22" \
             --channels="swir16|swir22" \
             --src=imgonly-BR_R005.kwcoco.json
