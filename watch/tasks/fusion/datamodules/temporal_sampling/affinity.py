@@ -496,12 +496,12 @@ def hard_time_sample_pattern(unixtimes, time_window, time_kernel=None, time_span
         >>> unixtimes = base_unixtimes.copy()
         >>> #unixtimes[rng.rand(*unixtimes.shape) < 0.1] = np.nan
         >>> time_window = 5
-        >>> sample_idxs = hard_time_sample_pattern(unixtimes, time_window)
+        >>> sample_idxs = hard_time_sample_pattern(unixtimes, time_window, time_span='2y')
         >>> name = 'demo-data'
 
         >>> #unixtimes[:] = np.nan
         >>> time_window = 5
-        >>> sample_idxs = hard_time_sample_pattern(unixtimes, time_window)
+        >>> sample_idxs = hard_time_sample_pattern(unixtimes, time_window, time_span='2y')
         >>> name = 'demo-data'
 
     Ignore:
