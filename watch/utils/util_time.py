@@ -6,6 +6,11 @@ import ubelt as ub
 import math
 from datetime import datetime as datetime_cls
 
+try:
+    from xdev import profile
+except ImportError:
+    profile = ub.identity
+
 
 class TimeValueError(ValueError):
     ...
@@ -103,6 +108,7 @@ def _format_offset(off):
     return s
 
 
+@profile
 def coerce_datetime(data, default_timezone='utc', strict=False):
     """
     Parses a timestamp and always returns a timestamp with a timezone.
@@ -145,6 +151,7 @@ def coerce_datetime(data, default_timezone='utc', strict=False):
     return dt
 
 
+@profile
 def ensure_timezone(dt, default='utc'):
     """
     Gives a datetime_mod a timezone (utc by default) if it doesnt have one
@@ -212,6 +219,10 @@ def _time_unit_registery():
     return ureg
 
 
+_time_unit_registery()
+
+
+@profile
 def coerce_timedelta(delta):
     """
     TODO:

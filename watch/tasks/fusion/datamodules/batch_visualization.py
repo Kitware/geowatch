@@ -26,7 +26,7 @@ class BatchVisualizationBuilder:
         >>> combinable_extra = [['B10', 'B8', 'B8a']]  # special behavior
         >>> # combinable_extra = None  # uncomment for raw behavior
         >>> self = KWCocoVideoDataset(
-        >>>     coco_dset, sample_shape=(5, 224, 256), channels=channels,
+        >>>     coco_dset, time_dims=5, window_dims=(224, 256), channels=channels,
         >>>     use_centered_positives=True, neg_to_pos_ratio=0)
         >>> index = len(self) // 4
         >>> item = self[index]
@@ -84,8 +84,8 @@ class BatchVisualizationBuilder:
         >>> draw_weights = 1
         >>> rescaled_item = self[rescaled_target]
         >>> print(ub.repr2(self.summarize_item(native_item), nl=-1, sort=0))
-        >>> native_item_output = BatchVisualizationBuilder.populate_demo_output(native_item, sampler.classes, rng=0)
-        >>> rescaled_item_output = BatchVisualizationBuilder.populate_demo_output(rescaled_item, sampler.classes, rng=0)
+        >>> native_item_output = BatchVisualizationBuilder.populate_demo_output(native_item, self.sampler.classes, rng=0)
+        >>> rescaled_item_output = BatchVisualizationBuilder.populate_demo_output(rescaled_item, self.sampler.classes, rng=0)
         >>> #rescaled_item_output = None
         >>> #rescaled_item_output = None
         >>> #binprobs[0][:] = 0  # first change prob should be all zeros

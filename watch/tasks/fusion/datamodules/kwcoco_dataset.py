@@ -16,12 +16,13 @@ Example:
     >>>                           output_space_scale=None,
     >>>                           window_space_scale=1.2,
     >>>                           time_sampling='soft2+distribute',
+    >>>                           time_kernel='-1y,0,1y',
     >>>                           temporal_dropout=0.5)
     >>> self.disable_augmenter = True
     >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
     >>> item = self[index]
     >>> print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
-    >>> canvas = self.draw_item(item, overlay_on_image=1, rescale=0)
+    >>> canvas = self.draw_item(item, overlay_on_image=0, rescale=0)
     >>> # xdoctest: +REQUIRES(--show)
     >>> import kwplot
     >>> kwplot.autompl()

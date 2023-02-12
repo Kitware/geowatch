@@ -9,6 +9,7 @@ from watch.utils.util_time import coerce_timedelta
 from datetime import datetime as datetime_cls  # NOQA
 from .exceptions import TimeSampleError
 from .utils import guess_missing_unixtimes
+from watch.tasks.fusion.datamodules.temporal_sampling.utils import coerce_time_kernel
 
 try:
     from xdev import profile
@@ -433,7 +434,7 @@ def _handle_degenerate_weights(affinity, chosen, exclude_indices, errors,
 
 
 @profile
-def hard_time_sample_pattern(unixtimes, time_window, time_span='2y'):
+def hard_time_sample_pattern(unixtimes, time_window, time_kernel=None, time_span=None):
     """
     Finds hard time sampling indexes
 
@@ -480,11 +481,17 @@ def hard_time_sample_pattern(unixtimes, time_window, time_span='2y'):
         >>> datetimes = [util_time.coerce_datetime(date) for date in images.lookup('date_captured')]
         >>> unixtimes = np.array([dt.timestamp() for dt in datetimes])
         >>> time_window = 5
-        >>> sample_idxs = hard_time_sample_pattern(unixtimes, time_window)
+        >>> time_kernel = '-1y-3m,-1w,0,1w,3m,1y'
+        >>> sample_idxs = hard_time_sample_pattern(unixtimes, time_window, time_kernel=time_kernel)
         >>> # xdoctest: +REQUIRES(--show)
+        >>> from watch.tasks.fusion.datamodules.temporal_sampling.plots import plot_dense_sample_indices
+        >>> from watch.tasks.fusion.datamodules.temporal_sampling.plots import plot_temporal_sample_indices
         >>> import kwplot
         >>> kwplot.autoplt()
+        >>> kwplot.figure(fnum=1, doclf=1)
         >>> plot_dense_sample_indices(sample_idxs, unixtimes, title_suffix=f': {name}')
+        >>> kwplot.figure(fnum=2, doclf=1)
+        >>> plot_temporal_sample_indices(sample_idxs, unixtimes, title_suffix=f': {name}')
 
     Ignore:
         >>> import kwplot
@@ -493,6 +500,7 @@ def hard_time_sample_pattern(unixtimes, time_window, time_span='2y'):
 
         >>> # =====================
         >>> # Show Sample Pattern in heatmap
+        >>> from watch.tasks.fusion.datamodules.temporal_sampling.plots import plot_dense_sample_indices
         >>> plot_dense_sample_indices(sample_idxs, unixtimes, title_suffix=f': {name}')
 
         >>> datetimes = np.array([datetime_mod.datetime.fromtimestamp(t) for t in unixtimes])
@@ -551,6 +559,9 @@ def hard_time_sample_pattern(unixtimes, time_window, time_span='2y'):
         >>> dates_unixtimes = [d for d in dates]
         >>> july.heatmap(grid_dates, indicator, title=f'Available Observations: {name}', cmap="github")
     """
+    if time_span is not None and time_kernel is not None:
+        raise ValueError('time_span and time_kernel are mutex')
+
     if isinstance(time_window, int):
         # TODO: formulate how to choose template delta for given window dims Or
         # pass in a delta
@@ -559,13 +570,18 @@ def hard_time_sample_pattern(unixtimes, time_window, time_span='2y'):
                 datetime_mod.timedelta(days=0).total_seconds(),
             ])
         else:
-            time_span = coerce_timedelta(time_span).total_seconds()
-            min_time = -datetime_mod.timedelta(seconds=time_span).total_seconds()
-            max_time = datetime_mod.timedelta(seconds=time_span).total_seconds()
-            template_deltas = np.linspace(min_time, max_time, time_window).round().astype(int)
-            # Always include a delta of 0
-            template_deltas[np.abs(template_deltas).argmin()] = 0
+            if time_span is not None:
+                time_span = coerce_timedelta(time_span).total_seconds()
+                min_time = -datetime_mod.timedelta(seconds=time_span).total_seconds()
+                max_time = datetime_mod.timedelta(seconds=time_span).total_seconds()
+                template_deltas = np.linspace(min_time, max_time, time_window).round().astype(int)
+                # Always include a delta of 0
+                template_deltas[np.abs(template_deltas).argmin()] = 0
+            elif time_kernel is not None:
+                time_kernel = coerce_time_kernel(time_kernel)
+                template_deltas = time_kernel
     else:
+        raise NotImplementedError
         template_deltas = time_window
 
     unixtimes = guess_missing_unixtimes(unixtimes)
@@ -659,7 +675,7 @@ def hard_time_sample_pattern(unixtimes, time_window, time_span='2y'):
 
 @profile
 def soft_frame_affinity(unixtimes, sensors=None, time_kernel=None,
-                        time_span='2y', version=1, heuristics='default'):
+                        time_span=None, version=1, heuristics='default'):
     """
     Produce a pairwise affinity weights between frames based on a dilated time
     heuristic.
@@ -757,6 +773,9 @@ def soft_frame_affinity(unixtimes, sensors=None, time_kernel=None,
         >>> fig.gca().set_title('Affinity components for row={}'.format(row_idx))
 
     """
+    if time_span is not None and time_kernel is not None:
+        raise ValueError('time_span and time_kernel are mutex')
+
     if heuristics == 'default':
         if version in {1, 2}:
             heuristics = {'daylight', 'season', 'sensor_similiarty'}
@@ -800,7 +819,7 @@ def soft_frame_affinity(unixtimes, sensors=None, time_kernel=None,
             # TODO:
             # incorporate the time_span?
             # if version == 2:
-            if version == 2:
+            if time_span is not None:
                 time_span = coerce_timedelta(time_span).total_seconds()
                 span_delta = (second_deltas - time_span) ** 2
                 norm_span_delta = span_delta / (time_span ** 2)
@@ -925,9 +944,12 @@ def soft_frame_affinity(unixtimes, sensors=None, time_kernel=None,
 
 
 @profile
-def hard_frame_affinity(unixtimes, sensors, time_window, time_span='2y', blur=False):
+def hard_frame_affinity(unixtimes, sensors, time_window, time_kernel=None, time_span=None, blur=False):
     # Hard affinity
-    sample_idxs = hard_time_sample_pattern(unixtimes, time_window, time_span=time_span)
+
+    sample_idxs = hard_time_sample_pattern(unixtimes, time_window,
+                                           time_kernel=time_kernel,
+                                           time_span=time_span)
     affinity = kwarray.one_hot_embedding(
         sample_idxs, len(unixtimes), dim=1).sum(axis=2)
     affinity[np.eye(len(affinity), dtype=bool)] = 0

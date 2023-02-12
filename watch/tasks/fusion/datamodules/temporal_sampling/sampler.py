@@ -199,8 +199,20 @@ class MultiTimeWindowSampler(CommonSamplerMixin):
 
     def __init__(self, unixtimes, sensors, time_window=None, affinity_type='hard',
                  update_rule='distribute', determenistic=False, gamma=1,
-                 time_span=['2y', '1y', '5m'], time_kernel=None, name='?'):
+                 time_span=None, time_kernel=None, name='?'):
+        """
+        Args:
+            time_span (List[List[str]]):
+                a list of time spans. e.g. ['2y', '1y', '5m']
 
+            time_kernel (List[str]):
+                a list of time kernels.
+        """
+
+        if time_span is None:
+            time_span = [None]
+        if time_kernel is None:
+            time_kernel = [None]
         if isinstance(time_span, str):
             time_span = time_span.split('-')
         if isinstance(affinity_type, str):
@@ -226,7 +238,7 @@ class MultiTimeWindowSampler(CommonSamplerMixin):
         self._build()
 
     def _build(self):
-        for time_span, affinity_type, update_rule in it.product(self.time_span, self.affinity_type, self.update_rule):
+        for time_span, time_kernel, affinity_type, update_rule in it.product(self.time_span, self.time_kernel, self.affinity_type, self.update_rule):
             sub_sampler = TimeWindowSampler(
                 unixtimes=self.unixtimes,
                 sensors=self.sensors,
@@ -237,8 +249,9 @@ class MultiTimeWindowSampler(CommonSamplerMixin):
                 gamma=self.gamma,
                 name=self.name,
                 time_span=time_span,
+                time_kernel=time_kernel,
             )
-            key = ':'.join([time_span, affinity_type, update_rule])
+            key = ':'.join([str(time_span), str(time_kernel), affinity_type, update_rule])
             self.sub_samplers[key] = sub_sampler
             self.indexes = sub_sampler.indexes
         # self.indexes = np.arange(self.affinity.shape[0])
