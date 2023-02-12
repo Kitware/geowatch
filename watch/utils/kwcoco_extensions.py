@@ -738,8 +738,8 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
           effectively lost when sampling in video space, because anything
           outside the video canvas is cropped out.
 
-        * Auxilary images are required to have an "approx_meter_gsd" and a
-          "warp_to_wld" attribute to use this function atm.
+        * Auxilary / asset images are required to have an "approx_meter_gsd"
+          and a "warp_to_wld" attribute to use this function atm.
 
     TODO:
         - [ ] Allow choosing of a custom "video-canvas" not based on any one image.
@@ -1910,7 +1910,23 @@ def warp_annot_segmentations_from_geos(coco_dset):
         # wgs84_crs_info = geo_meta['wgs84_crs_info']
         # wgs84_axis_mapping = wgs84_crs_info['axis_mapping']
         # assert wgs84_crs_info['auth'] == ('EPSG', '4326')
-        warp_aux_from_wld = kwimage.Affine.coerce(asset['wld_to_pxl'])
+        if 'wld_to_pxl' in asset:
+            warp_aux_from_wld = kwimage.Affine.coerce(asset['wld_to_pxl'])
+        elif 'warp_to_wld' in asset:
+            warp_aux_from_wld = kwimage.Affine.coerce(asset['warp_to_wld']).inv()
+        else:
+            print('asset = {}'.format(ub.urepr(asset, nl=1)))
+            raise KeyError('Asset has no known transform to world coordinates')
+
+        if 'wld_crs_info' in asset:
+            wld_crs_info = asset['wld_crs_info']
+        elif 'wld_crs_info' in coco_img.img:
+            wld_crs_info = coco_img.img['wld_crs_info']
+        else:
+            print('asset = {}'.format(ub.urepr(asset, nl=1)))
+            raise KeyError('Asset / image has no registered world CRS info')
+        wld_crs = util_gis.coerce_crs(wld_crs_info)  # TODO: traditional / authority check
+
         warp_img_from_aux = kwimage.Affine.coerce(asset.get('warp_aux_to_img', None))
         warp_img_from_wld = warp_img_from_aux @ warp_aux_from_wld
         rows = []
@@ -1928,9 +1944,7 @@ def warp_annot_segmentations_from_geos(coco_dset):
                 'aid': aid,
             })
         crs84_ann_df = gpd.GeoDataFrame(rows, crs=crs84, columns=['geometry', 'aid'])
-        wld_crs_info = coco_img.img['wld_crs_info']
-        crs = util_gis.coerce_crs(wld_crs_info)  # TODO: traditional / authority check
-        wld_ann_df = crs84_ann_df.to_crs(crs)
+        wld_ann_df = crs84_ann_df.to_crs(wld_crs)
         for row in wld_ann_df.to_dict('records'):
             # TODO: check crs properties (probably always crs84)
             aid = row['aid']
