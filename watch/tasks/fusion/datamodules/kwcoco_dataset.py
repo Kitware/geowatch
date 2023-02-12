@@ -2099,7 +2099,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     # segmenting the inside of the object than the outside.
                     # Effectively boundaries become uncertain.
                     dist, poly_mask = util_kwimage.polygon_distance_transform(
-                        poly, shape=space_shape, dtype=np.float32)
+                        poly, shape=space_shape)
                     max_dist = dist.max()
                     if max_dist > 0:
                         dist_weight = dist / max_dist
@@ -2180,7 +2180,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     # segmenting the inside of the object than the outside.
                     # Effectively boundaries become uncertain.
                     dist, poly_mask = util_kwimage.polygon_distance_transform(
-                        poly, shape=space_shape, dtype=np.float32)
+                        poly, shape=space_shape)
                     max_dist = dist.max()
                     if max_dist > 0:
                         dist_weight = dist / max_dist

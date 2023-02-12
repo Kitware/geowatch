@@ -228,6 +228,8 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         avail_idx = rng.randint(0, len(avail))
         chosen = [avail_idx]
 
+    col_idxs = np.arange(0, affinity.shape[1])
+
     if time_kernel is not None:
         # TODO: let the user pass in the primary idx
         primary_idx = chosen[0]
@@ -238,7 +240,33 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         kernel_idxs = np.arange(len(time_kernel))
         kernel_groups = kernel_distance.argmin(axis=1)
 
+        # bin_edges = [0] + (np.where(np.diff(kernel_groups))[0] + 1).tolist() + [len(kernel_groups)]
+        kernel_idx_to_idxs = ub.dzip(*(kwarray.group_indices(kernel_groups)))
+
+        kernel_ideal_idxs = kernel_distance.argmin(axis=0)  # the ideal index to sample for each kernel bin.
         kernel_masks = ((kernel_groups[:, None] == kernel_idxs[None, :]).T).astype(affinity.dtype)
+
+        # Build weight factor for window masks to turn them into soft masks
+        for kernel_idx, ideal_idx in enumerate(kernel_ideal_idxs):
+            this_idxs = kernel_idx_to_idxs.get(kernel_idx, [ideal_idx])
+            s = this_idxs[0]
+            t = this_idxs[-1]
+            left_size = max((ideal_idx - s) + 1, 1)
+            right_size = max((t - ideal_idx) + 1, 1)
+            mid_size = min(left_size, right_size) + 1
+            # print(f'mid_size={mid_size}')
+            modulator = np.linspace(0.3, 1, mid_size)
+            # print(f'modulator={modulator}')
+            kernel_masks[kernel_idx, :] *= 0.1
+            try:
+                kernel_masks[kernel_idx, ideal_idx - mid_size:ideal_idx] = modulator
+            except Exception:
+                ...
+            try:
+                kernel_masks[kernel_idx, ideal_idx:ideal_idx + mid_size] = modulator[::-1]
+            except Exception:
+                ...
+            # print(kernel_masks[kernel_idx])
 
         satisfied_kernel_idxs = kernel_groups[chosen]
         unsatisfied_kernel_idxs = np.setdiff1d(kernel_idxs, satisfied_kernel_idxs)
@@ -261,7 +289,6 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         update_weights = initial_weights * update_weights
 
     if do_distribute:
-        col_idxs = np.arange(0, affinity.shape[1])
         update_weights *= (np.abs(col_idxs - np.array(chosen)[:, None]) / len(col_idxs)).min(axis=0)
 
     current_weights = initial_weights * update_weights
@@ -271,9 +298,9 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
 
     if jit:
         raise NotImplementedError
-        # out of date
-        cython_mod = cython_aff_samp_mod()
-        return cython_mod.cython_affinity_sample(affinity, num_sample, current_weights, chosen, rng)
+        # # out of date
+        # cython_mod = cython_aff_samp_mod()
+        # return cython_mod.cython_affinity_sample(affinity, num_sample, current_weights, chosen, rng)
 
     if time_kernel is not None:
         if len(unsatisfied_kernel_idxs) < num_sample:
@@ -281,12 +308,15 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         if len(unsatisfied_kernel_idxs) == 0:
             raise AssertionError(f'{len(unsatisfied_kernel_idxs)}, {num_sample}')
         kernel_idx = unsatisfied_kernel_idxs[0]
-        initial_mask = kernel_masks[kernel_idx]
+        next_mask = kernel_masks[kernel_idx]
+        # next_ideal_idx = kernel_ideal_idxs[kernel_idx]
         unsatisfied_kernel_idxs = unsatisfied_kernel_idxs[1:]
     else:
-        initial_mask = None
-    next_mask = None
-    current_mask = initial_mask
+        next_mask = None
+        # next_ideal_idx = None
+
+    current_mask = initial_mask = next_mask
+    # current_ideal_idx = next_ideal_idx
 
     # available_idxs = np.arange(affinity.shape[0])
     if return_info:
@@ -329,6 +359,12 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
 
         if current_mask is not None:
             masked_current_weights = current_weights * current_mask
+
+            total_weight = masked_current_weights.sum()
+            if total_weight == 0:
+                masked_current_weights = _handle_degenerate_weights(
+                    affinity, chosen, exclude_indices, errors, error_level,
+                    return_info, rng)
         else:
             masked_current_weights = current_weights
 
@@ -355,6 +391,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
             if len(unsatisfied_kernel_idxs):
                 kernel_idx = unsatisfied_kernel_idxs[0]
                 next_mask = kernel_masks[kernel_idx]
+                # next_ideal_idx = kernel_ideal_idxs[kernel_idx]
                 unsatisfied_kernel_idxs = unsatisfied_kernel_idxs[1:]
             else:
                 next_mask = None
@@ -376,6 +413,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         # Modify weights / mask to impact next sample
         current_weights = current_weights * update_weights
         current_mask = next_mask
+        # current_ideal_idx = next_ideal_idx
 
         # Don't resample the same item
         current_weights[next_idx] = 0
@@ -582,6 +620,8 @@ def hard_time_sample_pattern(unixtimes, time_window, time_kernel=None, time_span
             elif time_kernel is not None:
                 time_kernel = coerce_time_kernel(time_kernel)
                 template_deltas = time_kernel
+            else:
+                raise Exception('need time span or time kernel')
     else:
         raise NotImplementedError
         template_deltas = time_window

@@ -48,7 +48,9 @@ def show_affinity_sample_process(chosen, info, fnum=1):
     ymax = probs.max()
     xmax = len(probs)
 
-    if unixtimes is None:
+    SHOW_UNIXTIMES_IN_TOP_LEFT = 0
+
+    if unixtimes is None or not SHOW_UNIXTIMES_IN_TOP_LEFT:
         for x_ in initial_indexes:
             ax.plot([x_, x_], [0, ymax], color=prev_chosen_color)
         ax.plot(np.arange(xmax), probs)

@@ -89,7 +89,7 @@ Example:
     >>> self = TimeWindowSampler.from_coco_video(
     >>>     dset, vidid,
     >>>     time_kernel='-1y,-8m,-2w,0,2w,8m,1y',
-    >>>     affinity_type='soft3', update_rule='', determenistic=True
+    >>>     affinity_type='soft2', update_rule='', determenistic=True
     >>>     #time_window=5,
     >>>     #affinity_type='hardish3', time_span='3m', update_rule='pairwise+distribute', determenistic=True
     >>> )
@@ -99,7 +99,7 @@ Example:
     >>> import kwplot
     >>> plt = kwplot.autoplt()
     >>> self.show_summary(samples_per_frame=5, fnum=1)
-    >>> self.show_procedure(fnum=4)
+    >>> chosen, info = self.show_procedure(fnum=4, idx=10)
     >>> plt.subplots_adjust(top=0.9)
 
 Example:
@@ -452,8 +452,11 @@ class TimeWindowSampler(CommonSamplerMixin):
 
     def __init__(self, unixtimes, sensors, time_window=None,
                  affinity_type='hard', update_rule='distribute',
-                 determenistic=False, gamma=1, time_span='2y',
+                 determenistic=False, gamma=1, time_span=None,
                  time_kernel=None, affkw=None, name='?'):
+
+        if time_kernel is not None and time_span is not None:
+            raise ValueError('time_span and time_kernel are mutex')
 
         self.time_kernel = None if time_kernel is None else coerce_time_kernel(time_kernel)
         if time_window is None:
@@ -531,12 +534,14 @@ class TimeWindowSampler(CommonSamplerMixin):
                                                 time_window=self.time_window,
                                                 blur=False,
                                                 time_span=self.time_span,
+                                                time_kernel=self.time_kernel,
                                                 **self.affkw)
         elif self.affinity_type == 'hardish':
             # Hardish affinity
             self.affinity = hard_frame_affinity(self.unixtimes, self.sensors,
                                                 time_window=self.time_window,
                                                 blur=True,
+                                                time_kernel=self.time_kernel,
                                                 time_span=self.time_span,
                                                 **self.affkw)
         elif self.affinity_type == 'hardish2':
@@ -545,6 +550,7 @@ class TimeWindowSampler(CommonSamplerMixin):
                                                 time_window=self.time_window,
                                                 blur=3.0,
                                                 time_span=self.time_span,
+                                                time_kernel=self.time_kernel,
                                                 **self.affkw)
         elif self.affinity_type == 'hardish3':
             # Hardish affinity
@@ -552,6 +558,7 @@ class TimeWindowSampler(CommonSamplerMixin):
                                                 time_window=self.time_window,
                                                 blur=6.0,
                                                 time_span=self.time_span,
+                                                time_kernel=self.time_kernel,
                                                 **self.affkw)
         elif self.affinity_type == 'contiguous':
             # Recovers the original method that we used to sample time.

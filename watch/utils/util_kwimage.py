@@ -1120,7 +1120,7 @@ def find_high_frequency_values(image, values=None, abs_thresh=0.2,
     return mask
 
 
-def polygon_distance_transform(poly, shape, dtype=np.uint8):
+def polygon_distance_transform(poly, shape):
     """
     The API needs work, but I think the idea could be useful
 
@@ -1129,9 +1129,8 @@ def polygon_distance_transform(poly, shape, dtype=np.uint8):
         >>> import cv2
         >>> import kwimage
         >>> poly = kwimage.Polygon.random().scale(32)
-        >>> dtype = np.uint8
         >>> shape = (32, 32)
-        >>> dist, poly_mask = polygon_distance_transform(poly, shape, dtype)
+        >>> dist, poly_mask = polygon_distance_transform(poly, shape)
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
         >>> kwplot.autompl()
@@ -1139,7 +1138,7 @@ def polygon_distance_transform(poly, shape, dtype=np.uint8):
         >>> poly.draw(fill=0, border=1)
     """
     import cv2
-    poly_mask = np.zeros(shape, dtype=dtype)
+    poly_mask = np.zeros(shape, dtype=np.uint8)
     poly_mask = poly.fill(poly_mask, value=1)
     dist = cv2.distanceTransform(
         src=poly_mask, distanceType=cv2.DIST_L2, maskSize=3)
