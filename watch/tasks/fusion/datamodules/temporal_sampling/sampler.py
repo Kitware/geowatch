@@ -127,6 +127,7 @@ import ubelt as ub
 import itertools as it
 from dateutil import parser
 from watch.tasks.fusion.datamodules.temporal_sampling.utils import coerce_time_kernel
+from watch.tasks.fusion.datamodules.temporal_sampling.utils import coerce_multi_time_kernel
 from watch.tasks.fusion.datamodules.temporal_sampling.plots import plot_dense_sample_indices
 from watch.tasks.fusion.datamodules.temporal_sampling.plots import plot_temporal_sample_indices
 from watch.tasks.fusion.datamodules.temporal_sampling.plots import show_affinity_sample_process
@@ -189,12 +190,37 @@ class MultiTimeWindowSampler(CommonSamplerMixin):
         >>> self = MultiTimeWindowSampler(
         >>>     unixtimes=unixtimes, sensors=sensors, time_window=time_window, update_rule='pairwise+distribute',
         >>>     #time_span=['2y', '1y', '5m'])
-        >>>     time_span='7d-1m', affinity_type='soft2')
+        >>>     time_span='7d-1m',
+        >>>     affinity_type='soft2')
         >>> self.sample()
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
         >>> kwplot.autosns()
         >>> self.show_summary(10)
+
+    Example:
+        >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
+        >>> import datetime as datetime_mod
+        >>> from datetime import datetime as datetime_cls
+        >>> low = datetime_cls.now().timestamp()
+        >>> high = low + datetime_mod.timedelta(days=365 * 5).total_seconds()
+        >>> rng = kwarray.ensure_rng(0)
+        >>> unixtimes = np.array(sorted(rng.randint(low, high, 113)), dtype=float)
+        >>> sensors = ['a' for _ in range(len(unixtimes))]
+        >>> time_window = 5
+        >>> self = MultiTimeWindowSampler(
+        >>>     unixtimes=unixtimes, sensors=sensors, time_window=time_window, update_rule='distribute',
+        >>>     time_kernel=['-1y,-3m,0,3m,+1y', '-1m,-1d,0,1d,1m'],
+        >>>     affinity_type='soft2')
+        >>> self.sample()
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autosns()
+        >>> self.show_summary(10, show_indexes=1, fnum=1)
+        >>> list(self.sub_samplers.values())[0].show_summary(10, show_indexes=1, fnum=2)
+        >>> list(self.sub_samplers.values())[1].show_summary(10, show_indexes=1, fnum=3)
+
+        self.subplots_adjust
     """
 
     def __init__(self, unixtimes, sensors, time_window=None, affinity_type='hard',
@@ -211,8 +237,6 @@ class MultiTimeWindowSampler(CommonSamplerMixin):
 
         if time_span is None:
             time_span = [None]
-        if time_kernel is None:
-            time_kernel = [None]
         if isinstance(time_span, str):
             time_span = time_span.split('-')
         if isinstance(affinity_type, str):
@@ -223,6 +247,7 @@ class MultiTimeWindowSampler(CommonSamplerMixin):
         if len(update_rule) == 0:
             update_rule = ['']
 
+        self.time_kernel = coerce_multi_time_kernel(time_kernel)
         self.sensors = sensors
         self.unixtimes = unixtimes
         self.time_window = time_window
@@ -233,7 +258,6 @@ class MultiTimeWindowSampler(CommonSamplerMixin):
         self.name = name
         self.num_frames = len(unixtimes)
         self.time_span = time_span
-        self.time_kernel = time_kernel
         self.sub_samplers = {}
         self._build()
 

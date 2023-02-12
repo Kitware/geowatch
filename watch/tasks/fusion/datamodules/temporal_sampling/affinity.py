@@ -276,8 +276,10 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         return cython_mod.cython_affinity_sample(affinity, num_sample, current_weights, chosen, rng)
 
     if time_kernel is not None:
-        assert len(unsatisfied_kernel_idxs) >= num_sample
-        assert len(unsatisfied_kernel_idxs) > 0
+        if len(unsatisfied_kernel_idxs) < num_sample:
+            raise AssertionError(f'{len(unsatisfied_kernel_idxs)}, {num_sample}')
+        if len(unsatisfied_kernel_idxs) == 0:
+            raise AssertionError(f'{len(unsatisfied_kernel_idxs)}, {num_sample}')
         kernel_idx = unsatisfied_kernel_idxs[0]
         initial_mask = kernel_masks[kernel_idx]
         unsatisfied_kernel_idxs = unsatisfied_kernel_idxs[1:]

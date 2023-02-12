@@ -6,7 +6,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## Version 0.3.10 - Target 2023-01-xx
 
 ### Added
-* WIP: New `time_kernel` method for temporal sampling
+* New `time_kernel` method for temporal sampling
 
 ### Changed
 * Renamed `project_annotations` to `reproject_annotations`
