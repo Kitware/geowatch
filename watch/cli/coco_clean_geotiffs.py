@@ -617,6 +617,7 @@ def probe_band_imdata(band_imdata, min_region_size_=256,
         band_summary['bad_values'] = bad_values
         band_summary['bad_counts'] = bad_counts
     else:
+        band_summary['is_samecolor'] = False
         band_summary['bad_values'] = []
     return band_summary
 
