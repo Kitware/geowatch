@@ -150,7 +150,10 @@ class ProcessContext:
         stop_time = ub.timeparse(self.properties["stop_timestamp"])
         self.properties["duration"] = str(stop_time - start_time)
         if self.emissions_tracker is not None:
-            self._stop_emissions_tracker()
+            try:
+                self._stop_emissions_tracker()
+            except Exception as ex:
+                print(f'warning: issue with emissions ex={ex}')
         return self.obj
 
     def __enter__(self):
