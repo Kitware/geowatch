@@ -37,6 +37,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Reworked `utils` to use `lazy_loader`.
 * New `util_kwplot` constructs
 
+### Misc
+* Drop6 scripts in the dev folder
+* DVC cache surgery and improved `simple_dvc`
+* FFVC POC
+* Reworked `utils` to use `lazy_loader`.
+* New `util_kwplot` constructs
+
 ## Version 0.3.9 - Target 2023-01-31
 
 ### Added
