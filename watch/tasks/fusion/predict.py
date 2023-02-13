@@ -11,7 +11,6 @@ import torch  # NOQA
 # import pathlib
 import ubelt as ub
 import numpy as np
-from os.path import join
 from os.path import relpath
 import kwimage
 import kwarray
@@ -417,10 +416,10 @@ def predict(cmdline=False, **kwargs):
         >>> cmdline = False
         >>> devices = None
         >>> test_dpath = ub.Path.appdir('watch/test/fusion/').ensuredir()
-        >>> results_path = ub.ensuredir((test_dpath, 'predict'))
-        >>> ub.delete(results_path)
-        >>> ub.ensuredir(results_path)
-        >>> package_fpath = join(test_dpath, 'my_test_package.pt')
+        >>> results_path = (test_dpath / 'predict').ensuredir()
+        >>> results_path.delete()
+        >>> results_path.ensuredir()
+        >>> package_fpath = test_dpath / 'my_test_package.pt'
         >>> import kwcoco
         >>> train_dset = kwcoco.CocoDataset.demo('special:vidshapes4-multispectral', num_frames=5, image_size=(128, 128))
         >>> test_dset = kwcoco.CocoDataset.demo('special:vidshapes2-multispectral', num_frames=5, image_size=(128, 128))
@@ -539,7 +538,7 @@ def predict(cmdline=False, **kwargs):
         >>> print("model.heads.keys = ", model.heads.keys())
 
         >>> # Save the self
-        >>> package_fpath = join(test_dpath, 'my_test_package.pt')
+        >>> package_fpath = test_dpath / 'my_test_package.pt'
         >>> model.save_package(package_fpath)
         >>> # package_fpath = fit_model(**fit_kwargs)
         >>> assert ub.Path(package_fpath).exists()
