@@ -439,7 +439,7 @@ def sample_video_spacetime_targets(dset,
         cacher.save(sample_grid)
     vidid_to_meta = sample_grid['vidid_to_meta']
     from watch.utils.slugify_ext import smart_truncate
-    print('vidid_to_meta = {}'.format(smart_truncate(ub.repr2(vidid_to_meta, nl=-1), max_length=1600)))
+    print('vidid_to_meta = {}'.format(smart_truncate(ub.repr2(vidid_to_meta, nl=-1), max_length=1600, head='\n~...', tail='\n...~')))
     return sample_grid
 
 

@@ -2490,7 +2490,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 if with_class:
                     intermediate = ub.sorted_vals(ub.dzip(classes, total_freq), reverse=True)
                     intermediate_text = ub.repr2(intermediate, compact=1)
-                    intermediate_text_trunc = smart_truncate(intermediate_text, max_length=40, trunc_loc=0.8)
+                    intermediate_text_trunc = smart_truncate(intermediate_text, max_length=40, trunc_loc=0.8, head='\n~...', tail='\n...~')
                 else:
                     intermediate_text = ''
                     intermediate_text_trunc = ''
