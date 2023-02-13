@@ -6,6 +6,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## Version 0.3.10 - Target 2023-01-xx
 
 ### Added
+* `smartwatch align` can now accept the `--context_padding` argument
 * New `time_kernel` method for temporal sampling in `KWcocoVideoDataLoader`
 * New visualizations in `geojson_site_stats`
 
