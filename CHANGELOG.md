@@ -6,21 +6,34 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## Version 0.3.10 - Target 2023-01-xx
 
 ### Added
-* New `time_kernel` method for temporal sampling
+* New `time_kernel` method for temporal sampling in `KWcocoVideoDataLoader`
+* New visualizations in `geojson_site_stats`
 
 ### Changed
 * Renamed `project_annotations` to `reproject_annotations`
 * The `reproject_annotations` script no longer requires images to exist on disk.
 * The mlops schedule evaluation now writes to .kwcoco.zip files, which does break existing caches
-* Clean geotiff now sets NODATA if it is unset and can be given a set of bands to never clean.
+* `clean_geotiffs` now sets NODATA if it is unset and can be given a set of bands to never clean.
 * `coco_add_watch_fields` now uses correct `resolution` field instead of `target_gsd`
 * `KWcocoVideoDataLoader.compute_dataset_stats` now estimates instance-level class frequency data.
 * `KWcocoVideoDataLoader.compute_dataset_stats` will now try to estimate stats for all sensors/channels if the main pass does not sample them
-
+* New aliases for `KWcocoVideoDataLoader` parameters
+* Added `utils.coerce_crs`.
 
 ### Fixed
 * issue in reproject annots when frames had no annotations
+* `KWcocoVideoDataLoader` no longer throws an error if it fails to load a QA band.
+* Removed `tensorboard` and `tensorflow` dependencies
+* Issue in `warp_annot_segmentations_from_geos`
+* Issue in `polygon_distance_transform`.
 
+
+### Misc
+* Drop6 scripts in the dev folder
+* DVC cache surgery and improved `simple_dvc`
+* FFVC POC
+* Reworked `utils` to use `lazy_loader`.
+* New `util_kwplot` constructs
 
 ## Version 0.3.9 - Target 2023-01-31
 
