@@ -97,8 +97,8 @@ def main(cmdline=True, **kwargs):
     agg = eval_type_to_aggregator.get('bas_poly_eval', None)
     # for agg in eval_type_to_aggregator.values():
     if agg is not None:
-        # rois = {'KR_R001', 'KR_R002', 'BR_R002'}
-        rois = {'KR_R001', 'KR_R002'}
+        rois = {'KR_R001', 'KR_R002', 'BR_R002'}
+        # rois = {'KR_R001', 'KR_R002'}
         build_all_param_plots(agg, rois, config)
         ...
 
@@ -250,11 +250,9 @@ def build_all_param_plots(agg, rois, config):
     main_metric = 'bas_poly_eval.metrics.bas_faa_f1'
     metric_objectives = {main_metric: 'maximize'}
 
-    def finalize_figure(fig, fpath):
-        fig.set_size_inches(np.array([6.4, 4.8]) * 1.0)
-        fig.tight_layout()
-        fig.savefig(fpath)
-        util_kwplot.cropwhite_ondisk(fpath)
+    finalize_figure = util_kwplot.FigureFinalizer(
+        size_inches=np.array([6.4, 4.8]) * 1.0,
+    )
 
     fig = kwplot.figure(fnum=2, doclf=True)
     ax = sns.scatterplot(data=single_table, x=x, y=y, hue='region_id')
@@ -265,16 +263,19 @@ def build_all_param_plots(agg, rois, config):
     # ax.set_xlim(0, np.quantile(agg.metrics[x], 0.99))
     # ax.set_xlim(1e-2, np.quantile(agg.metrics[x], 0.99))
 
-    fig = kwplot.figure(fnum=90, doclf=True)
-    ax = sns.boxplot(data=single_table, x='region_id', y=main_metric)
-    ax.set_title(f'BAS Per-Region Results (n={len(agg)})')
-    util_kwplot.LabelModifier({
-        param_value: f'{param_value}\n(n={num})'
-        for param_value, num in single_table.groupby('region_id').size().to_dict().items()
-    }).relabel_xticks(ax)
-    modifier.relabel(ax)
-    fpath = agg_group_dpath / 'single_results_boxplot.png'
-    finalize_figure(fig, fpath)
+    try:
+        fig = kwplot.figure(fnum=90, doclf=True)
+        ax = sns.boxplot(data=single_table, x='region_id', y=main_metric)
+        ax.set_title(f'BAS Per-Region Results (n={len(agg)})')
+        util_kwplot.LabelModifier({
+            param_value: f'{param_value}\n(n={num})'
+            for param_value, num in single_table.groupby('region_id').size().to_dict().items()
+        }).relabel_xticks(ax)
+        modifier.relabel(ax)
+        fpath = agg_group_dpath / 'single_results_boxplot.png'
+        finalize_figure(fig, fpath)
+    except Exception:
+        ...
 
     from watch.utils.util_kwplot import scatterplot_highlight
     fig = kwplot.figure(fnum=3, doclf=True)
@@ -494,10 +495,8 @@ def foldin_resolved_info(agg):
 
 def make_summary_analysis(agg1, config):
     agg_dpath = ub.Path(config['root_dpath'] / 'aggregate')
-    agg_group_dpath = agg_dpath / ('agg_summary_params2_v2')
+    agg_group_dpath = agg_dpath / ('agg_summary_params2_v3')
     agg_group_dpath = agg_group_dpath.ensuredir()
-
-    # agg2 =
 
     # Given these set of A/B values, visualize each region
     for region_id, group in agg1.index.groupby('region_id'):
@@ -785,14 +784,26 @@ class Aggregator(ub.NiceRepr):
     information using consistent pandas indexing. Can be filtered to a
     comparable subsets of choice. Can also handle building macro averaged
     results over different "regions" with the same parameters.
+
+    Set attributes based on your problem
+
+    Attributes:
+        agg.primary_metric_cols
+        agg.display_metric_cols
     """
-    def __init__(agg, results, type=None):
+    def __init__(agg, results, type=None,
+                 primary_metric_cols='auto',
+                 display_metric_cols='auto'):
         agg.results = results
         agg.type = type
         agg.metrics = results['metrics']
         agg.params = results['params']
         agg.index = results['index']
         agg.fpaths = results['fpaths']['fpath']
+        agg.config = {
+            'display_metric_cols': display_metric_cols,
+            'primary_metric_cols': primary_metric_cols,
+        }
 
     def __nice__(self):
         return f'{self.type}, n={len(self)}'
@@ -846,11 +857,12 @@ class Aggregator(ub.NiceRepr):
                 new_results[key] = val[flags].copy()
             else:
                 new_results[key] = val
-        new_agg = Aggregator(new_results, agg.type)
+        new_agg = Aggregator(new_results, agg.type, **agg.config)
         new_agg.build()
         return new_agg
 
     def build(agg):
+        agg.__dict__.update(**agg.config)
         _display_metrics_suffixes = []
         if agg.type == 'bas_poly_eval':
             _display_metrics_suffixes = [
@@ -859,6 +871,9 @@ class Aggregator(ub.NiceRepr):
                 'bas_poly_eval.metrics.bas_fn',
                 'bas_poly_eval.metrics.bas_f1',
                 'bas_poly_eval.metrics.bas_ffpa',
+                'bas_poly_eval.metrics.bas_faa_f1',
+                'bas_poly_eval.metrics.bas_tpr',
+                'bas_poly_eval.metrics.bas_ppv',
             ]
             _primary_metrics_suffixes = [
                 # 'bas_faa_f1'
@@ -883,11 +898,13 @@ class Aggregator(ub.NiceRepr):
         else:
             raise NotImplementedError(agg.type)
 
-        agg.primary_metric_cols = util_pandas.pandas_suffix_columns(  # fixme sorting
-            agg.metrics, _primary_metrics_suffixes)
+        if agg.primary_metric_cols == 'auto':
+            agg.primary_metric_cols = util_pandas.pandas_suffix_columns(  # fixme sorting
+                agg.metrics, _primary_metrics_suffixes)
 
-        agg.display_metric_cols = util_pandas.pandas_suffix_columns(  # fixme sorting
-            agg.metrics, _display_metrics_suffixes)
+        if agg.display_metric_cols == 'auto':
+            agg.display_metric_cols = util_pandas.pandas_suffix_columns(  # fixme sorting
+                agg.metrics, _display_metrics_suffixes)
 
         _model_suffixes = ['package_fpath']
         agg.model_cols = util_pandas.pandas_suffix_columns(
@@ -1010,7 +1027,8 @@ class Aggregator(ub.NiceRepr):
 
             top_idxs = util_pandas.pandas_argmaxima(metric_group, agg.primary_metric_cols, k=top_k)
 
-            top_metrics = metric_group.loc[top_idxs][agg.primary_metric_cols + agg.display_metric_cols]
+            final_display_cols = list(ub.oset(agg.primary_metric_cols + agg.display_metric_cols))
+            top_metrics = metric_group.loc[top_idxs][final_display_cols]
             # top_metrics = top_metrics[agg.primary_metric_cols + agg.display_metric_cols]
             top_indexes = group['index'].loc[top_idxs]
             # top_params = group['effective_params'].loc[top_idxs].drop(agg.test_dset_cols, axis=1)

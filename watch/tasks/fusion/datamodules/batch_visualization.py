@@ -20,19 +20,17 @@ class BatchVisualizationBuilder:
     Example:
         >>> from watch.tasks.fusion.datamodules.batch_visualization import *  # NOQA
         >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
-        >>> import ndsampler
         >>> import watch
         >>> coco_dset = watch.coerce_kwcoco('vidshapes2-watch', num_frames=5)
-        >>> sampler = ndsampler.CocoSampler(coco_dset)
         >>> channels = 'r|g|b,B10|B8a|B1|B8|B11,X.2|Y.2'
         >>> combinable_extra = [['B10', 'B8', 'B8a']]  # special behavior
         >>> # combinable_extra = None  # uncomment for raw behavior
         >>> self = KWCocoVideoDataset(
-        >>>     sampler, sample_shape=(5, 224, 256), channels=channels,
+        >>>     coco_dset, time_dims=5, window_dims=(224, 256), channels=channels,
         >>>     use_centered_positives=True, neg_to_pos_ratio=0)
         >>> index = len(self) // 4
         >>> item = self[index]
-        >>> item_output = BatchVisualizationBuilder.populate_demo_output(item, sampler.classes)
+        >>> item_output = BatchVisualizationBuilder.populate_demo_output(item, self.sampler.classes)
         >>> #binprobs[0][:] = 0  # first change prob should be all zeros
         >>> requested_tasks = self.requested_tasks
         >>> builder = BatchVisualizationBuilder(
@@ -54,17 +52,15 @@ class BatchVisualizationBuilder:
     Example:
         >>> from watch.tasks.fusion.datamodules.batch_visualization import *  # NOQA
         >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
-        >>> import ndsampler
         >>> import watch
         >>> coco_dset = watch.coerce_kwcoco('vidshapes2-watch', num_frames=5)
         >>> channels = 'r|g|b,B10|B8a|B1|B8|B11,X.2|Y.2'
         >>> #coco_dset = watch.coerce_kwcoco('vidshapes2', num_frames=5)
         >>> #channels = None
-        >>> sampler = ndsampler.CocoSampler(coco_dset)
         >>> combinable_extra = [['B10', 'B8', 'B8a']]  # special behavior
         >>> # combinable_extra = None  # uncomment for raw behavior
         >>> self = KWCocoVideoDataset(
-        >>>     sampler, sample_shape=(5, 128, 165), channels=channels,
+        >>>     coco_dset, time_dims=5, window_dims=(128, 165), channels=channels,
         >>>     use_centered_positives=True, neg_to_pos_ratio=0, input_space_scale='native')
         >>> index = len(self) // 4
         >>> index = 0
@@ -88,8 +84,8 @@ class BatchVisualizationBuilder:
         >>> draw_weights = 1
         >>> rescaled_item = self[rescaled_target]
         >>> print(ub.repr2(self.summarize_item(native_item), nl=-1, sort=0))
-        >>> native_item_output = BatchVisualizationBuilder.populate_demo_output(native_item, sampler.classes, rng=0)
-        >>> rescaled_item_output = BatchVisualizationBuilder.populate_demo_output(rescaled_item, sampler.classes, rng=0)
+        >>> native_item_output = BatchVisualizationBuilder.populate_demo_output(native_item, self.sampler.classes, rng=0)
+        >>> rescaled_item_output = BatchVisualizationBuilder.populate_demo_output(rescaled_item, self.sampler.classes, rng=0)
         >>> #rescaled_item_output = None
         >>> #rescaled_item_output = None
         >>> #binprobs[0][:] = 0  # first change prob should be all zeros

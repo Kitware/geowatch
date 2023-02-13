@@ -1,4 +1,5 @@
 import ubelt as ub
+import os
 import pandas as pd
 from watch.utils import slugify_ext
 from watch.utils.util_stringalgo import shortest_unique_suffixes
@@ -54,6 +55,9 @@ def pandas_nan_eq(a, b):
 
 
 def pandas_shorten_columns(summary_table, return_mapping=False):
+    """
+    Shorten column names
+    """
     import ubelt as ub
     # fixme
     old_cols = summary_table.columns
@@ -67,9 +71,12 @@ def pandas_shorten_columns(summary_table, return_mapping=False):
 
 
 def pandas_condense_paths(colvals):
+    """
+    Condense a column of paths
+    """
     is_valid = ~pd.isnull(colvals)
-    valid_vals = colvals[is_valid]
-    unique_valid_vals = valid_vals.unique()
+    valid_vals = colvals[is_valid].apply(os.fspath)
+    unique_valid_vals = valid_vals.unique().tolist()
     unique_short_vals = shortest_unique_suffixes(unique_valid_vals, sep='/')
     new_vals = [p.split('.')[0] for p in unique_short_vals]
     mapper = ub.dzip(unique_valid_vals, new_vals)
@@ -77,28 +84,58 @@ def pandas_condense_paths(colvals):
     return condensed, mapper
 
 
-def pandas_truncate_items(params):
+def pandas_truncate_items(data, paths=False, max_length=16):
     """
-    Truncates long, typically path-like items in a data frame.
+    from watch.utils.util_pandas import pandas_truncate_items
+
+    Args:
+        data (pd.DataFrame): data frame to truncate
+
+    Returns:
+        Tuple[pd.DataFrame, Dict[str, str]]
     """
     def truncate(x):
-        if not isinstance(x, str):
+        if not isinstance(x, (str, os.PathLike)):
             return x
-        return slugify_ext.smart_truncate(x, max_length=16, trunc_loc=0,
+        return slugify_ext.smart_truncate(str(x), max_length=max_length, trunc_loc=0,
                                           hash_len=4, head='', tail='')
     mappings = {}
-    if len(params):
-        x = params.loc[0]
-        trunc_cols = [k for k, v in x.items() if isinstance(v, str) and len(v) > 16]
-        trunc_params = params.copy()
-        trunc_params[trunc_cols] = trunc_params[trunc_cols].applymap(truncate)
-        for c in trunc_params[trunc_cols]:
-            v2 = pd.Categorical(params[c])
-            params[c] = v2
+    if len(data):
+        # only check the first row to see if we want to truncate the columns or
+        # not
+        trunc_str_cols = set()
+        trunc_path_cols = set()
+        for _, check_row in data.iloc[0:10].iterrows():
+            for k, v in check_row.items():
+                if paths:
+                    # Check if probably a path or not
+                    if isinstance(v, os.PathLike):
+                        trunc_path_cols.add(k)
+                        continue
+                    elif isinstance(v, str) and '/' in v:
+                        trunc_path_cols.add(k)
+                        continue
+                if isinstance(v, (str, os.PathLike)) and len(str(v)) > max_length:
+                    trunc_str_cols.add(k)
+
+        trunc_str_cols = list(ub.oset(data.columns) & trunc_str_cols)
+        trunc_path_cols = list(ub.oset(data.columns) & trunc_path_cols)
+
+        trunc_data = data.copy()
+        trunc_data[trunc_str_cols] = trunc_data[trunc_str_cols].applymap(truncate)
+        for c in trunc_data[trunc_str_cols]:
+            v2 = pd.Categorical(data[c])
+            data[c] = v2
             v1 = v2.map(truncate)
             mapping = list(zip(v1.categories, v2.categories))
             mappings[c] = mapping
+
+        for c in trunc_path_cols:
+            colvals = trunc_data[c]
+            condensed, mapping = pandas_condense_paths(colvals)
+            trunc_data[c] = condensed
+            mappings[c] = mapping
     else:
         mapping = {}
-        trunc_params = params
-    return trunc_params, mappings
+        trunc_data = data
+    return trunc_data, mappings

@@ -154,6 +154,7 @@ class TeamFeaturePipelineConfig(scfg.Config):
 
         'invariant_segmentation': scfg.Value(False, help='Enable/Disable segmentation part of invariants'),
         'invariant_pca': scfg.Value(0, help='Enable/Disable invariant PCA'),
+        'invariant_resolution': scfg.Value('10GSD', help='GSD for invariants'),
 
         'virtualenv_cmd': scfg.Value(None, type=str, help=ub.paragraph(
             '''
@@ -179,6 +180,8 @@ class TeamFeaturePipelineConfig(scfg.Config):
 
         'check': scfg.Value(True, help='if True check files exist where we can'),
         'verbose': scfg.Value(1, help=''),
+
+        'kwcoco_ext': scfg.Value('.kwcoco.json', help='use .kwcoco.json or .kwcoco.zip for outputs'),
     }
 
 
@@ -315,10 +318,10 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
     name_suffix = '_' + ub.hash_data(base_fpath)[0:8]
 
     outputs = {
-        'rutgers_materials': aligned_bundle_dpath / (subset_name + '_rutgers_material_seg_v3.kwcoco.json'),
-        'dzyne_landcover': aligned_bundle_dpath / (subset_name + '_dzyne_landcover.kwcoco.json'),
-        'dzyne_depth': aligned_bundle_dpath / (subset_name + '_dzyne_depth.kwcoco.json'),
-        'uky_invariants': aligned_bundle_dpath / (subset_name + '_uky_invariants.kwcoco.json'),
+        'rutgers_materials': aligned_bundle_dpath / (subset_name + '_rutgers_material_seg_v3' + config['kwcoco_ext']),
+        'dzyne_landcover': aligned_bundle_dpath / (subset_name + '_dzyne_landcover' + config['kwcoco_ext']),
+        'dzyne_depth': aligned_bundle_dpath / (subset_name + '_dzyne_depth' + config['kwcoco_ext']),
+        'uky_invariants': aligned_bundle_dpath / (subset_name + '_uky_invariants' + config['kwcoco_ext']),
     }
 
     print('Exist check: ')
@@ -506,8 +509,8 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
                 --output_kwcoco "{task['output_fpath']}" \
                 --pretext_package_path "{model_fpaths['uky_pretext2']}" \
                 --pca_projection_path  "{model_fpaths['uky_pca']}" \
-                --input_space_scale=10GSD \
-                --window_space_scale=10GSD \
+                --input_resolution={config['invariant_resolution']} \
+                --window_resolution={config['invariant_resolution']} \
                 --patch_size=256 \
                 --do_pca {config['invariant_pca']} \
                 --patch_overlap=0.3 \
@@ -544,7 +547,7 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
     tocombine = [str(base_fpath)] + feature_paths
     combo_code = ''.join(sorted(combo_code_parts))
 
-    base_combo_fpath = aligned_bundle_dpath / f'combo_{subset_name}_{combo_code}.kwcoco.json'
+    base_combo_fpath = aligned_bundle_dpath / (f'combo_{subset_name}_{combo_code}' + config['kwcoco_ext'])
 
     # Note: sync tells the queue that everything after this
     # depends on everything before this
@@ -601,7 +604,7 @@ if __name__ == '__main__':
         # TO UPDATE ANNOTS
         # Update to whatever the state of the annotations submodule is
         DVC_DPATH=$(smartwatch_dvc)
-        python -m watch project_annotations \
+        python -m watch reproject_annotations \
             --src $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
             --dst $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
             --site_models="$DVC_DPATH/annotations/site_models/*.geojson"

@@ -1,8 +1,23 @@
 import datetime as datetime_mod
+import numbers
 import dateutil
 import time
 import ubelt as ub
+import math
 from datetime import datetime as datetime_cls
+
+try:
+    from xdev import profile
+except ImportError:
+    profile = ub.identity
+
+
+class TimeValueError(ValueError):
+    ...
+
+
+class TimeTypeError(TypeError):
+    ...
 
 
 def isoformat(dt, sep='T', timespec='seconds', pathsafe=True):
@@ -93,6 +108,7 @@ def _format_offset(off):
     return s
 
 
+@profile
 def coerce_datetime(data, default_timezone='utc', strict=False):
     """
     Parses a timestamp and always returns a timestamp with a timezone.
@@ -127,12 +143,15 @@ def coerce_datetime(data, default_timezone='utc', strict=False):
         dt = data
     elif isinstance(data, datetime_mod.date):
         dt = dateutil.parser.parse(data.isoformat())
+    elif isinstance(data, (float, int)):
+        dt = datetime_cls.fromtimestamp(data)
     else:
-        raise TypeError('unhandled {}'.format(data))
+        raise TimeTypeError('unhandled {}'.format(data))
     dt = ensure_timezone(dt, default=default_timezone)
     return dt
 
 
+@profile
 def ensure_timezone(dt, default='utc'):
     """
     Gives a datetime_mod a timezone (utc by default) if it doesnt have one
@@ -200,6 +219,10 @@ def _time_unit_registery():
     return ureg
 
 
+_time_unit_registery()
+
+
+@profile
 def coerce_timedelta(delta):
     """
     TODO:
@@ -251,8 +274,21 @@ def coerce_timedelta(delta):
     References:
         https://docs.python.org/3.4/library/datetime_mod.html#strftime-strptime-behavior
     """
-    if isinstance(delta, (int, float)):
-        delta = datetime_mod.timedelta(seconds=delta)
+    if isinstance(delta, str):
+        try:
+            delta = float(delta)
+        except ValueError:
+            ...
+
+    if isinstance(delta, datetime_mod.timedelta):
+        ...
+    elif isinstance(delta, numbers.Number):
+        try:
+            delta = datetime_mod.timedelta(seconds=delta)
+        except ValueError:
+            if isinstance(delta, float) and math.isnan(delta):
+                raise TimeValueError('Cannot coerce nan to a timedelta')
+            raise
     elif isinstance(delta, str):
 
         try:
@@ -279,17 +315,19 @@ def coerce_timedelta(delta):
                 unit = None
                 magnitude = None
 
-            if unit == 'y':
+            if unit in {'y', 'year', 'years'}:
                 delta = datetime_mod.timedelta(days=365 * float(magnitude))
-            elif unit == 'd':
+            elif unit in {'d', 'day', 'days'}:
                 delta = datetime_mod.timedelta(days=1 * float(magnitude))
-            elif unit == 'm':
+            elif unit in {'w', 'week', 'weeks'}:
+                delta = datetime_mod.timedelta(days=7 * float(magnitude))
+            elif unit == {'m', 'month', 'months'}:
                 delta = datetime_mod.timedelta(days=30.437 * float(magnitude))
-            elif unit == 'H':
+            elif unit == {'H', 'hour', 'hours'}:
                 delta = datetime_mod.timedelta(hours=float(magnitude))
-            elif unit == 'M':
+            elif unit == {'M', 'min', 'mins', 'minute', 'minutes'}:
                 delta = datetime_mod.timedelta(minutes=float(magnitude))
-            elif unit == 'S':
+            elif unit == {'S', 'sec', 'secs', 'second', 'seconds'}:
                 delta = datetime_mod.timedelta(seconds=float(magnitude))
             else:
                 import pytimeparse  #
@@ -299,9 +337,6 @@ def coerce_timedelta(delta):
                     raise Exception(delta)
                 delta = datetime_mod.timedelta(seconds=seconds)
                 return delta
-
-    elif isinstance(delta, datetime_mod.timedelta):
-        pass
     else:
-        raise TypeError(type(delta))
+        raise TimeTypeError(type(delta))
     return delta

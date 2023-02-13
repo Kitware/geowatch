@@ -3,14 +3,26 @@
 This changelog follows the specifications detailed in: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
+## Version 0.3.10 - Target 2023-01-xx
 
-## Version 0.3.10 - 
+### Added
+* New `time_kernel` method for temporal sampling
 
-### Changed:
+### Changed
+* Renamed `project_annotations` to `reproject_annotations`
+* The `reproject_annotations` script no longer requires images to exist on disk.
+* The mlops schedule evaluation now writes to .kwcoco.zip files, which does break existing caches
 * Clean geotiff now sets NODATA if it is unset and can be given a set of bands to never clean.
+* `coco_add_watch_fields` now uses correct `resolution` field instead of `target_gsd`
+* `KWcocoVideoDataLoader.compute_dataset_stats` now estimates instance-level class frequency data.
+* `KWcocoVideoDataLoader.compute_dataset_stats` will now try to estimate stats for all sensors/channels if the main pass does not sample them
 
 
-## Version 0.3.9 - Target 2023-01-xx
+### Fixed
+* issue in reproject annots when frames had no annotations
+
+
+## Version 0.3.9 - Target 2023-01-31
 
 ### Added
 * Add new CLI tool: `smartwatch coco_clean_geotiffs` to fix NODATA values directly in geotiffs
@@ -25,6 +37,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Fixed
 * Switched scriptconfig objects to use "data=kwargs" rather than "default=kwargs" to avoid a copy issue.
 * `find_dvc_dpath` no longer is impacted by environment variables.
+* Fixed interpolation artifacts in quality mask sampling.
 
 
 ### Changed
@@ -69,7 +82,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Quality mask filtering was broken and is now using correct data.
 * The `smartwatch spectra` script now correctly dequantizes kwcoco images.
 * Issue in KWcocoVideoDataLoader where change labels were not computed correctly if the class task was not requested.
-* Fixed `smartwatch project_annotations` for new regions / sites from T&E
+* Fixed `smartwatch reproject_annotations` for new regions / sites from T&E
 * Fix bugs in `util_kwimage.colorize_label_image`
 * Fix bugs in `util_kwimage.find_samecolor_region`
 
@@ -167,7 +180,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Old scripts in fusion
 
 ### Fixed
-* Fixed various bugs where `project_annotations`, and `coco_align_geotiffs`
+* Fixed various bugs where `reproject_annotations`, and `coco_align_geotiffs`
   would fail when a video was empty.
 * fusion predict now writes nodata correctly and georeferences predictions.
 * Fixed issue where `chip_dims` was not set correctly at predict time.

@@ -49,6 +49,32 @@ Example:
         --pipeline=joint_bas_sc \
         --run=0
 
+    python -m watch.mlops.schedule_evaluation \
+        --params="
+            matrix:
+                bas_pxl.package_fpath:
+                    - ./my_bas_model1.pt
+                    - ./my_bas_model2.pt
+                bas_pxl.test_dataset:
+                    - ./my_test_dataset/bas_ready_data.kwcoco.json
+                bas_pxl.window_space_scale: 15GSD
+                bas_pxl.time_sampling:
+                    - "auto"
+                bas_pxl.input_space_scale:
+                    - "15GSD"
+                bas_poly.moving_window_size:
+                bas_poly.thresh:
+                    - 0.1
+                    - 0.1
+                    - 0.2
+                bas_pxl.enabled: 0
+        " \
+        --root_dpath=./my_dag_runs \
+        --devices="0,1" --queue_size=2 \
+        --backend=serial --skip_existing=0 \
+        --pipeline=bas \
+        --run=0
+
     # Real inputs, this actually will run something given the DVC repos
     DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
     DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
@@ -223,10 +249,9 @@ class ScheduleEvaluationConfig(scfg.DataConfig):
     partition = scfg.Value(None, help='specify slurm partition (slurm backend only)')
     mem = scfg.Value(None, help='specify slurm memory per task (slurm backend only)')
 
-    rprint = scfg.Value(True, isflag=True, help='enable / disable rprint before exec')
-
     max_configs = scfg.Value(None, help='if specified only run at most this many of the grid search configs')
 
+    rprint = scfg.Value(1, isflag=True, help='enable / disable rprint before exec', alias=['print_commands'])
     print_queue = 0
 
 
@@ -289,6 +314,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
         all_param_grid = []
 
     # Configure a DAG for each row.
+    import xdev
+    xdev.embed()
     for row_config in ub.ProgIter(all_param_grid, desc='configure dags', verbose=3):
         dag.configure(
             config=row_config, root_dpath=root_dpath, cache=config['cache'])

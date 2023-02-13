@@ -690,7 +690,7 @@ def main(cmdline=False, **kwargs):
             viz_part = ''
             project_anns_job = pipeline.submit(command=ub.codeblock(
                 rf'''
-                python -m watch project_annotations \
+                python -m watch reproject_annotations \
                     --src "{aligned_imgonly_fpath}" \
                     --dst "{aligned_imganns_fpath}" \
                     --propogate_strategy="{config['propogate_strategy']}" \

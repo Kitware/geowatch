@@ -319,7 +319,7 @@ prepare_cropped_from_tracks(){
 
     DVC_DPATH=$(smartwatch_dvc --hardware="ssd")
     BASE_DPATH="$DVC_DPATH/Cropped-Drop3-TA1-2022-03-10/data.kwcoco.json"
-    python -m watch project_annotations \
+    python -m watch reproject_annotations \
         --src "$IMGONLY_FPATH" \
         --dst "$BASE_DPATH" \
         --site_models="$DVC_DPATH/annotations/site_models/*.geojson" \
@@ -380,7 +380,7 @@ cropped_with_more_context(){
         --channels="$CHANNELS" \
         --context_factor=1.8
 
-    python -m watch project_annotations \
+    python -m watch reproject_annotations \
         --src "$NEW_KWCOCO_BUNDLE_DPATH/imgonly_S2_WV.kwcoco.json" \
         --dst "$NEW_KWCOCO_BUNDLE_DPATH/data.kwcoco.json" \
         --site_models="$DVC_DPATH/annotations/site_models/*.geojson" \

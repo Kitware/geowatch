@@ -302,7 +302,7 @@ def bas_poly_eval_confusion_analysis(eval_fpath):
         fpath.write_text(text)
 
     # Project confusion site models onto kwcoco for visualization
-    from watch.cli import project_annotations
+    from watch.cli import reproject_annotations
     import kwcoco
     src_fpath = poly_pred_dpath / 'poly.kwcoco.json'
     if not src_fpath.exists():
@@ -332,7 +332,7 @@ def bas_poly_eval_confusion_analysis(eval_fpath):
 
     for info in true_site_infos2:
         site_df = info['data']
-        project_annotations.validate_site_dataframe(site_df)
+        reproject_annotations.validate_site_dataframe(site_df)
 
     dst_dset.clear_annotations()
     common_kwargs = ub.udict(
@@ -357,12 +357,12 @@ def bas_poly_eval_confusion_analysis(eval_fpath):
     # I don't know why this isn't in-place. Maybe it is a scriptconfig thing?
     repr1 = str(dst_dset.annots())
     print(f'repr1={repr1}')
-    dst_dset = project_annotations.main(cmdline=cmdline, **true_kwargs)
+    dst_dset = reproject_annotations.main(cmdline=cmdline, **true_kwargs)
     repr2 = str(dst_dset.annots())
     print(f'repr1={repr1}')
     print(f'repr2={repr2}')
     pred_kwargs['src'] = dst_dset
-    dst_dset = project_annotations.main(cmdline=cmdline, **pred_kwargs)
+    dst_dset = reproject_annotations.main(cmdline=cmdline, **pred_kwargs)
     repr3 = str(dst_dset.annots())
     print(f'repr1={repr1}')
     print(f'repr2={repr2}')

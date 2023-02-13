@@ -24,7 +24,7 @@ The following is a list of the primary CLI commands:
 
 * ``smartwatch coco_align_geotiffs --help`` - Crop a set of unstructured kwcoco file (that registers a set of geotiffs) into a TA-2 ready kwcoco file containing cropped video sequences corresponding to each region in a specified set of regions files.
 
-* ``smartwatch project_annotations --help`` - Project annotations from raw site/region models onto the pixel space of a kwcoco file. This also propogates these annotations in time as needed.
+* ``smartwatch reproject_annotations --help`` - Project annotations from raw site/region models onto the pixel space of a kwcoco file. This also propogates these annotations in time as needed.
 
 * ``smartwatch kwcoco_to_geojson --help`` - Transform "saliency" or "class" heatmaps into tracked geojson site models, and optionally score these with IARPA metrics.
 
@@ -51,7 +51,7 @@ Using ``--help`` shows the top level modal CLI:
                                 Print watch-relevant information about a kwcoco dataset
             merge_region_models
                                 Combine the specific features from multiple region files into a single one.
-            project_annotations (project)
+            reproject_annotations (project)
                                 Projects annotations from geospace onto a kwcoco dataset and optionally
             coco_show_auxiliary
                                 Visualize kwcoco auxiliary channels to spot-inspect if they are aligned
@@ -134,7 +134,7 @@ coco_add_watch_fields - Step 3 in "prepare_ta2_dataset. Helper to add special fi
 
 coco_align_geotiffs - Step 4 in "prepare_ta2_dataset". The big cropping script that creates the main videos. Could be better.
 
-project_annotations - Step 5 in "prepare_ta2_dataset". Projects site models onto a kwcoco set and adds the them as kwcoco annotations.
+reproject_annotations - Step 5 in "prepare_ta2_dataset". Projects site models onto a kwcoco set and adds the them as kwcoco annotations.
 
 prepare_splits - Runs after "prepare_ta2_dataset" to finalize train/valiation splits. Computes predefined train / validation splits on main kwcoco files.
 

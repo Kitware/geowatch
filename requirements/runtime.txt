@@ -130,7 +130,7 @@ tempenv>=0.2.0
 pystac_client>=0.5.1
 scriptconfig>=0.7.2
 pygtrie>=2.3.3
-protobuf>=3.15.8
+# protobuf>=3.15.8
 networkx>=2.7.0
 python_dateutil>=2.8.2
 pytimeparse>=1.1.8
@@ -143,7 +143,7 @@ lark_cython >= 0.0.12
 
 # Imaging
 distinctipy>=1.2.1
-kwimage>=0.9.11
+kwimage>=0.9.12
 kwcoco>=0.5.6
 delayed_image>=0.2.4
 albumentations>=1.0.0
@@ -173,13 +173,13 @@ torch>=1.13.1   # 1.10 does not run latest models
 torchvision>=0.14.1   ; python_version < '3.11'
 
 torchmetrics>=0.11.0
-torch_liberator>=0.2.0
+torch_liberator>=0.2.1
 # pytorch_lightning>=1.7.1,<1.8
 # pytorch_lightning>=1.7.1
 pytorch_lightning>=1.8.6
 monai>=0.6.0
 torch_optimizer>=0.1.0
-netharn>=0.5.18 
+netharn>=0.6.1
 
 timm>=0.4.12
 # Do we need to pin this?
@@ -199,3 +199,5 @@ jsonargparse[signatures]>=4.15.2
 ruamel.yaml>=0.17.21
 
 ijson>=3.1.4
+
+lazy_loader>=0.1

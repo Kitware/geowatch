@@ -200,3 +200,232 @@ dvc_add(){
     git commit -am "Add Drop6 ACC-2" &&  \
     git push
 }
+
+
+queue_archive_dmj_assets(){
+    REGION_ID=$1 
+    QUEUE_NAME=$2
+
+    DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="hdd")
+    DMJ_DPATH=/home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan
+    DST_DPATH=$DATA_DVC_DPATH/Drop6
+
+    DMJ_COCO_FPATH=$DMJ_DPATH/$REGION_ID/kwcoco-dataset/cropped_kwcoco.json
+    IMGONLY_FPATH=$DST_DPATH/imgonly-$REGION_ID.kwcoco.json
+    IMGANNS_FPATH=$DST_DPATH/imganns-$REGION_ID.kwcoco.zip
+    DJM_ASSET_DPATH=$DMJ_DPATH/$REGION_ID/kwcoco-dataset/$REGION_ID
+    DST_ASSET_DPATH=$DST_DPATH/$REGION_ID
+
+    # Zip up imagery and write to our directory
+    #SENSORS=("L8" "S2")
+    SENSORS=("L8" "S2" "WV" "WV1" "PD")
+    for sensor in "${SENSORS[@]}"; do
+        echo "### sensor=$sensor"
+        dpath="$DJM_ASSET_DPATH"/"$sensor"
+        if [ -d "$dpath" ]; then
+            if [ ! -e "${DST_ASSET_DPATH}/${sensor}.zip" ]; then
+                mkdir -p "$DST_ASSET_DPATH"
+                cmd_queue --action=submit --name="$QUEUE_NAME" --command="7z a '${DST_ASSET_DPATH}/${sensor}.zip' '$dpath'"
+            fi
+        fi
+    done
+}
+
+
+queue_dmj_reproject(){
+    REGION_ID=$1 
+    QUEUE_NAME=$2
+
+    DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="hdd")
+    DMJ_DPATH=/home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan
+    DST_DPATH=$DATA_DVC_DPATH/Drop6
+
+    DMJ_COCO_FPATH=$DMJ_DPATH/$REGION_ID/kwcoco-dataset/cropped_kwcoco.json
+    IMGONLY_FPATH=$DST_DPATH/imgonly-$REGION_ID.kwcoco.json
+    IMGANNS_FPATH=$DST_DPATH/imganns-$REGION_ID.kwcoco.zip
+    DJM_ASSET_DPATH=$DMJ_DPATH/$REGION_ID/kwcoco-dataset/$REGION_ID
+    DST_ASSET_DPATH=$DST_DPATH/$REGION_ID
+
+    cmd_queue submit "$QUEUE_NAME" -- \
+        python -m watch reproject_annotations \
+            --src "$IMGONLY_FPATH" \
+            --dst "$IMGANNS_FPATH" \
+            --propogate_strategy="SMART" \
+            --site_models="$DATA_DVC_DPATH/annotations/drop6/site_models/${REGION_ID}_*" \
+            --region_models="$DATA_DVC_DPATH/annotations/drop6/region_models/${REGION_ID}*" 
+}
+
+
+update_from_dmj_constructions(){
+    __doc__="
+    READY:
+        BH_R001  BR_R002  BR_R004  LR_R001  NZ_R001  US_R001  US_R005  KR_R001  KR_R002 BR_R001 
+        
+        DONE:
+        KR_R001  KR_R002 BR_R001
+
+    NEW
+        echo AE_C003 PE_C003 QA_C001 SA_C005 US_C000 US_C010 US_C011 US_C012 US_C014
+
+    SEE:
+        ~/code/watch/dev/oneoffs/drop6_fixups.py where this work is being done now
+    "
+
+    REGION_IDS=(AE_C003 PE_C003 QA_C001 SA_C005 US_C000 US_C010 US_C011 US_C012 US_C014)
+    REGION_ID=BH_R001
+    DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="hdd")
+    DMJ_DPATH=/home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan
+    DST_DPATH=$DATA_DVC_DPATH/Drop6
+
+    QUEUE_NAME=fixup-drop6-zip
+    cmd_queue new $QUEUE_NAME
+    # Zip the new data from DMJ drive to dst drive
+    for REGION_ID in "${REGION_IDS[@]}"; do
+        queue_archive_dmj_assets "$REGION_ID" "$QUEUE_NAME"
+    done
+    cmd_queue show fixup-drop6-zip
+    cmd_queue run fixup-drop6-zip
+
+    # Copy over the kwcoco files
+    DMJ_COCO_FPATH=$DMJ_DPATH/$REGION_ID/kwcoco-dataset/cropped_kwcoco.json
+    QUEUE_NAME=fixup-drop6-copy
+    cmd_queue new $QUEUE_NAME
+    for REGION_ID in "${REGION_IDS[@]}"; do
+        IMGONLY_FPATH=$DST_DPATH/imgonly-$REGION_ID.kwcoco.json
+        # Overwrite old kwcoco files with new ones
+        cmd_queue submit $QUEUE_NAME "cp '$DMJ_COCO_FPATH' '$IMGONLY_FPATH'"
+    done
+    cmd_queue show $QUEUE_NAME --backend=serial
+    cmd_queue run $QUEUE_NAME --backend=serial
+
+    DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="hdd")
+    TODO_ZIPS=( )
+    cd $DATA_DVC_DPATH/Drop6
+    for REGION_ID in "${REGION_IDS[@]}"; do
+        ls_array HAVE_ZIPS "$REGION_ID/*.zip"
+        bash_array_repr "${HAVE_ZIPS[@]}"
+        TODO_ZIPS+=("${HAVE_ZIPS[@]}")
+    done
+    bash_array_repr "${TODO_ZIPS[@]}"
+    dvc add -vv -- "${TODO_ZIPS[@]}"
+    git commit -am "Add updated Drop6 images"
+    dvc push -r aws -vv -- "${TODO_ZIPS[@]}"
+    #dvc add -- BH_R001/*.zip BR_R002/*.zip BR_R004/*.zip LR_R001/*.zip NZ_R001/*.zip US_R001/*.zip US_R005/*.zip
+
+    QUEUE_NAME=fixup-drop6-reproject
+    cmd_queue new $QUEUE_NAME
+    for REGION_ID in "${REGION_IDS[@]}"; do
+        queue_dmj_reproject "$REGION_ID" "$QUEUE_NAME"
+    done
+    cmd_queue show $QUEUE_NAME --backend=serial
+    cmd_queue run $QUEUE_NAME --backend=tmux --workers=4
+
+    ls /home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_data_dvc/annotations/drop6/region_models/US_C012
+
+    # See:
+    # ~/code/watch/dev/oneoffs/drop6_fixups.py
+
+    # On horologic
+    ls /home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan
+    ls /home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan/KR_R001/kwcoco-dataset/
+    #smartwatch stats /home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan/KR_R001/kwcoco-dataset/cropped_kwcoco.json
+    ls /home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan/KR_R001/kwcoco-dataset/KR_R001/
+    ls /home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_data_dvc/Drop6/KR_R001 
+
+    DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="hdd")
+    DMJ_DPATH=/home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan
+    DST_DPATH=$DATA_DVC_DPATH/Drop6
+    ls $DMJ_DPATH
+
+
+    DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="hdd")
+    DMJ_DPATH=/home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan
+    DST_DPATH=$DATA_DVC_DPATH/Drop6
+
+    ### DO THIS AT THE VERY END.
+    DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="hdd")
+    DST_DPATH=$DATA_DVC_DPATH/Drop6
+    cd $DST_DPATH
+
+    cmd_queue new dvc-add
+    ZIP_FPATHS=(*/*.zip)
+    cmd_queue submit dvc-add -- 
+    echo dvc add "${ZIP_FPATHS[@]}" -vv
+    cmd_queue show dvc-add
+
+    for REGION_ID in "${REGION_IDS[@]}"; do
+        echo dvc add "$REGION_ID"/*.zip
+        #dvc add -- BH_R001/*.zip BR_R002/*.zip BR_R004/*.zip LR_R001/*.zip NZ_R001/*.zip US_R001/*.zip US_R005/*.zip
+    done
+
+    dvc add -- */*.zip
+    ZIP_DVC_FPATHS=($REGION_ID/*.zip.dvc)
+
+    dvc push -r aws "${ZIP_DVC_FPATHS[@]}" -v
+
+    python ~/code/watch/watch/cli/prepare_splits.py \
+        --base_fpath="imganns*.kwcoco.*" \
+        --workers=5 \
+        --constructive_mode=True --run=1
+
+    rm splits.zip
+    7z a splits.zip -mx9 -- *.kwcoco.* 
+    dvc add splits.zip
+    git commit -am "Update annotations"
+    git push 
+    dvc push -r aws splits.zip
+
+    __check_overlap__="
+    import ubelt as ub
+    import xdev
+
+    dpath_new = ub.Path('/home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan/KR_R001/kwcoco-dataset/KR_R001/')
+    dpath_old = ub.Path('/home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_data_dvc/Drop6/KR_R001').expand()
+
+    files_new = []
+    for r, ds, fs in dpath_new.walk():
+        rpath = r.relative_to(dpath_new)
+        files_new.extend([rpath / f for f in fs if f.endswith('.tif')])
+
+    files_old = []
+    for r, ds, fs in dpath_old.walk():
+        rpath = r.relative_to(dpath_old)
+        files_old.extend([rpath / f for f in fs if f.endswith('.tif')])
+
+    missing_from_new = set(files_old) - set(files_new)
+    missing_from_old = set(files_new) - set(files_old)
+    common = set(files_new) & set(files_old)
+
+    grouped_missing_old = ub.udict(ub.group_items(missing_from_old, lambda x: x.parent.name)).map_values(len).sorted_keys()
+    grouped_missing_new = ub.udict(ub.group_items(missing_from_new, lambda x: x.parent.name)).map_values(len).sorted_keys()
+
+    normkey_old = [k[:-2] for k in grouped_missing_old.keys()]
+    normkey_new = [k[:-2] for k in grouped_missing_new.keys()]
+
+    set(normkey_new) - set(normkey_old)
+    set(normkey_old) - set(normkey_new)
+
+    print('grouped_missing_old ' + ub.urepr(grouped_missing_old))
+    print('grouped_missing_new ' + ub.urepr(grouped_missing_new))
+    print('grouped_missing_old ' + ub.urepr(grouped_missing_old))
+    print('grouped_missing_new ' + ub.urepr(grouped_missing_new))
+
+    print(f'{len(common)}')
+
+    flags = []
+    for c in common:
+        asset1 = dpath_new / c
+        asset2 = dpath_old / c
+
+        print(asset1.shrinkuser('~/remote/horologic'))
+        print(asset2.shrinkuser('~/remote/horologic'))
+
+        flag = ub.hash_file(asset2) == ub.hash_file(asset1)
+        assert flag
+        flags.append(flag)
+        print(np.mean(flags))
+        ...
+
+    "
+
+}

@@ -19,7 +19,7 @@ class SMARTDataMixin:
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> self = KWCocoVideoDataset(
             >>>     sampler,
-            >>>     sample_shape=(11, 256, 256),
+            >>>     time_dims=5, window_dims=(256, 256),
             >>>     window_overlap=0,
             >>>     #channels="ASI|MF_Norm|AF|EVI|red|green|blue|swir16|swir22|nir",
             >>>     channels="blue|green|red|nir|swir16|swir22",
@@ -146,7 +146,7 @@ class SMARTDataMixin:
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> self = KWCocoVideoDataset(
             >>>     sampler,
-            >>>     sample_shape=(5, 128, 128),
+            >>>     time_dims=5, window_dims=(128, 128),
             >>>     window_overlap=0,
             >>>     channels="(S2,L8):blue|green|red|nir|cloudmask",
             >>>     input_space_scale='30GSD',
@@ -274,13 +274,18 @@ class SMARTDataMixin:
                 # punt for now and assume "Drop4"
                 spec_name = 'ACC-1'
                 sensor = coco_img.img.get('sensor_coarse', '*')
-                table = QA_SPECS.find_table(spec_name, sensor)
-                iffy_qa_names = [
-                    'cloud',
-                    # 'dilated_cloud',
-                    'cirrus',
-                ]
-                is_cloud_iffy = table.mask_any(qa_data, iffy_qa_names)
+                try:
+                    table = QA_SPECS.find_table(spec_name, sensor)
+                except AssertionError as ex:
+                    print(f'warning ex={ex}')
+                    is_cloud_iffy = None
+                else:
+                    iffy_qa_names = [
+                        'cloud',
+                        # 'dilated_cloud',
+                        'cirrus',
+                    ]
+                    is_cloud_iffy = table.mask_any(qa_data, iffy_qa_names)
 
         else:
             is_cloud_iffy = None

@@ -100,18 +100,28 @@ class SimpleDVC(ub.NiceRepr):
         return remote
 
     def add(self, path, verbose=0):
+        """
+        Args:
+            path (str | PathLike | Iterable[str | PathLike]):
+                a single or multiple paths to add
+        """
         from dvc import main as dvc_main
         paths = list(map(ub.Path, _ensure_iterable(path)))
         if len(paths) == 0:
             print('No paths to add')
             return
-        dvc_root = self._ensure_root(paths)
-        rel_paths = [os.fspath(p.relative_to(dvc_root)) for p in paths]
+        if 1:
+            # Handle symlinks: https://dvc.org/doc/user-guide/troubleshooting#add-symlink
+            # not sure if this is safe
+            dvc_root = self._ensure_root(paths).resolve()
+            rel_paths = [os.fspath(p.resolve().relative_to(dvc_root)) for p in paths]
+        else:
+            dvc_root = self._ensure_root(paths)
+            rel_paths = [os.fspath(p.relative_to(dvc_root)) for p in paths]
         with util_path.ChDir(dvc_root):
             dvc_command = ['add'] + rel_paths
-            if verbose:
-                verb_flag = '-' + ('v' * min(verbose, 3))
-                dvc_command += [verb_flag]
+            extra_args = self._verbose_extra_args(verbose)
+            dvc_command = dvc_command + extra_args
             ret = dvc_main.main(dvc_command)
         if ret != 0:
             raise Exception('Failed to add files')
@@ -132,9 +142,8 @@ class SimpleDVC(ub.NiceRepr):
             dvc_command = ['check-ignore'] + rel_paths
             if details:
                 dvc_command += ['--details']
-            if verbose:
-                verb_flag = '-' + ('v' * min(verbose, 3))
-                dvc_command += [verb_flag]
+            extra_args = self._verbose_extra_args(verbose)
+            dvc_command = dvc_command + extra_args
             ret = dvc_main.main(dvc_command)
         if ret != 0:
             raise Exception('Failed check-ignore')
@@ -169,7 +178,24 @@ class SimpleDVC(ub.NiceRepr):
                 else:
                     raise
 
-    def push(self, path, remote=None, recursive=False, jobs=None):
+    def _verbose_extra_args(self, verbose):
+        extra_args = []
+        if verbose:
+            verbose = max(min(3, verbose), 1)
+            extra_args += ['-' + 'v' * verbose]
+        return extra_args
+
+    def _remote_extra_args(self, remote, recursive, jobs, verbose):
+        extra_args = self._verbose_extra_args(verbose)
+        if remote:
+            extra_args += ['-r', remote]
+        if jobs is not None:
+            extra_args += ['--jobs', str(jobs)]
+        if recursive:
+            extra_args += ['--recursive']
+        return extra_args
+
+    def push(self, path, remote=None, recursive=False, jobs=None, verbose=0):
         """
         Push the content tracked by .dvc files to remote storage.
 
@@ -194,19 +220,12 @@ class SimpleDVC(ub.NiceRepr):
             return
         remote = self._ensure_remote(remote)
         dvc_root = self._ensure_root(paths)
-        extra_args = []
-        if remote:
-            extra_args += ['-r', remote]
-        if jobs is not None:
-            extra_args += ['--jobs', str(jobs)]
-        if recursive:
-            extra_args += ['--recursive']
-
+        extra_args = self._remote_extra_args(remote, recursive, jobs, verbose)
         with util_path.ChDir(dvc_root):
             dvc_command = ['push'] + extra_args + [str(p.relative_to(dvc_root)) for p in paths]
             dvc_main.main(dvc_command)
 
-    def pull(self, path, remote=None, recursive=False, jobs=None):
+    def pull(self, path, remote=None, recursive=False, jobs=None, verbose=0):
         from dvc import main as dvc_main
         paths = list(map(ub.Path, _ensure_iterable(path)))
         if len(paths) == 0:
@@ -214,14 +233,7 @@ class SimpleDVC(ub.NiceRepr):
             return
         remote = self._ensure_remote(remote)
         dvc_root = self._ensure_root(paths)
-        extra_args = []
-        if remote:
-            extra_args += ['-r', remote]
-        if jobs is not None:
-            extra_args += ['--jobs', str(jobs)]
-        if recursive:
-            extra_args += ['--recursive']
-
+        extra_args = self._remote_extra_args(remote, recursive, jobs, verbose)
         with util_path.ChDir(dvc_root):
             dvc_command = ['pull'] + extra_args + [str(p.relative_to(dvc_root)) for p in paths]
             dvc_main.main(dvc_command)
@@ -288,6 +300,7 @@ class SimpleDVC(ub.NiceRepr):
 
     def find_dir_tracker(cls, path):
         # Find if an ancestor parent dpath is tracked
+        path = ub.Path(path)
         prev = path
         dpath = path.parent
         while (not (dpath / '.dvc').exists()) and prev != dpath:
@@ -297,14 +310,48 @@ class SimpleDVC(ub.NiceRepr):
             prev = dpath
             dpath = dpath.parent
 
-    def find_cache_files(self, tracker_fpath):
+    def read_dvc_sidecar(self, sidecar_fpath):
         from watch.utils import util_yaml
-        info = util_yaml.yaml_load(tracker_fpath)
-        if len(info['outs']) > 1:
-            raise NotImplementedError
-        hashid = info['outs'][0]['md5']
-        cache_fpath = self.cache_dir / hashid[0:2] / hashid[2:]
-        yield cache_fpath
+        sidecar_fpath = ub.Path(sidecar_fpath)
+        data = util_yaml.yaml_loads(sidecar_fpath.read_text())
+        return data
+
+    def resolve_cache_paths(self, sidecar_fpath):
+        """
+        Given a .dvc file, enumerate the paths in the cache associated with it.
+
+        Args:
+            sidecar_fpath (PathLike | str): path to the .dvc file
+        """
+        from watch.utils import util_yaml
+        sidecar_fpath = ub.Path(sidecar_fpath)
+        data = util_yaml.yaml_loads(sidecar_fpath.read_text())
+        for item in data['outs']:
+            md5 = item['md5']
+            cache_fpath = self.cache_dir / md5[0:2] / md5[2:]
+            if md5.endswith('.dir') and cache_fpath.exists():
+                dir_data = util_yaml.yaml_loads(cache_fpath.read_text())
+                for item in dir_data:
+                    file_md5 = item['md5']
+                    assert not file_md5.endswith('.dir'), 'unhandled'
+                    file_cache_fpath = self.cache_dir / file_md5[0:2] / file_md5[2:]
+                    yield file_cache_fpath
+            yield cache_fpath
+
+    def find_sidecar_paths(self, dpath):
+        """
+        Args:
+            dpath (Path | str): directory in dvc repo to search
+
+        Yields:
+            ub.Path: existing dvc sidecar files
+        """
+        # TODO: handle .dvcignore
+        dpath = ub.Path(dpath)
+        for r, ds, fs in dpath.walk():
+            for f in fs:
+                if f.endswith('.dvc'):
+                    yield r / f
 
 
 def _ensure_iterable(inputs):

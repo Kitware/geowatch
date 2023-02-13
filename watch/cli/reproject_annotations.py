@@ -6,7 +6,7 @@ CommandLine:
     # Update a dataset with new annotations
     DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
 
-    # You dont need to run this, but if you plan on running the project
+    # You dont need to run this, but if you plan on running the reproject
     # annotations script multiple times, preloading this work will make it
     # faster
     python -m watch add_fields \
@@ -15,7 +15,7 @@ CommandLine:
         --overwrite=warp --workers 10
 
     # Update to whatever the state of the annotations submodule is
-    python -m watch project_annotations \
+    python -m watch reproject_annotations \
         --src $DVC_DATA_DPATH/Drop4-BAS/data.kwcoco.json \
         --dst $DVC_DATA_DPATH/Drop4-BAS/data.kwcoco.json \
         --viz_dpath $DVC_DATA_DPATH/Drop4-BAS/_viz_propogate \
@@ -49,7 +49,7 @@ from watch.utils import util_time
 from watch.utils.util_environ import envflag
 
 
-class ProjectAnnotationsConfig(scfg.Config):
+class ReprojectAnnotationsConfig(scfg.Config):
     """
     Projects annotations from geospace onto a kwcoco dataset and optionally
     propogates them forward in time.
@@ -98,7 +98,7 @@ class ProjectAnnotationsConfig(scfg.Config):
 
         'clear_existing': scfg.Value(True, help=ub.paragraph(
             '''
-            if True, clears existing annotations before projecting the new ones.
+            if True, clears existing annotations before reprojecting the new ones.
             ''')),
 
         'propogate_strategy': scfg.Value('SMART', help='strategy for how to interpolate annotations over time'),
@@ -119,7 +119,7 @@ def main(cmdline=False, **kwargs):
     r"""
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-        >>> from watch.cli.project_annotations import *  # NOQA
+        >>> from watch.cli.reproject_annotations import *  # NOQA
         >>> import watch
         >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> coco_fpath = dvc_dpath / 'Drop4-BAS/data_vali.kwcoco.json'
@@ -138,7 +138,7 @@ def main(cmdline=False, **kwargs):
     """
     import geopandas as gpd  # NOQA
     from watch.utils import util_gis
-    config = ProjectAnnotationsConfig(data=kwargs, cmdline=cmdline)
+    config = ReprojectAnnotationsConfig(data=kwargs, cmdline=cmdline)
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
 
     output_fpath = config['dst']
@@ -213,6 +213,7 @@ def main(cmdline=False, **kwargs):
 
     for ann in propogated_annotations:
         coco_dset.add_annotation(**ann)
+
     kwcoco_extensions.warp_annot_segmentations_from_geos(coco_dset)
 
     if output_fpath != 'return':
@@ -221,7 +222,7 @@ def main(cmdline=False, **kwargs):
         coco_dset.dump(coco_dset.fpath)
 
     if viz_dpath == 'auto':
-        viz_dpath = (ub.Path(coco_dset.fpath).parent / '_viz_project_anns')
+        viz_dpath = (ub.Path(coco_dset.fpath).parent / '_viz_reproject_anns')
     if viz_dpath:
         import kwplot
         kwplot.autoplt()
@@ -1126,7 +1127,7 @@ def keyframe_interpolate(image_times, key_infos):
             a list of associated image indexes for each key frame.
 
     Example:
-        >>> from watch.cli.project_annotations import *  # NOQA
+        >>> from watch.cli.reproject_annotations import *  # NOQA
         >>> image_times = np.array([1, 2, 3, 4, 5, 6, 7])
         >>> # TODO: likely also needs a range for a maximum amount of time you will
         >>> # apply the observation for.
@@ -1452,7 +1453,7 @@ def draw_geospace(dvc_dpath, sites):
         gdf.plot(ax=ax, facecolor='none', edgecolor='red', alpha=0.5)
 
 
-_SubConfig = ProjectAnnotationsConfig
+_SubConfig = ReprojectAnnotationsConfig
 
 
 def embed_if_requested(n=0):
@@ -1480,6 +1481,6 @@ def reorder_columns(df, columns):
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/watch/cli/project_annotations.py
+        python ~/code/watch/watch/cli/reproject_annotations.py
     """
     main(cmdline=True)

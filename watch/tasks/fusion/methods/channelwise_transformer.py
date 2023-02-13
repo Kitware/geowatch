@@ -305,12 +305,14 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                 if stats is None:
                     input_norms[s][c] = nh.layers.InputNorm()
                 else:
-                    input_norms[s][c] = nh.layers.InputNorm(**stats)
+                    input_norms[s][c] = nh.layers.InputNorm(
+                        **ub.udict(stats) & {'mean', 'std'})
 
             for (s, c), stats in input_stats.items():
                 if s not in input_norms:
                     input_norms[s] = RobustModuleDict()
-                input_norms[s][c] = nh.layers.InputNorm(**stats)
+                input_norms[s][c] = nh.layers.InputNorm(
+                    **ub.udict(stats) & {'mean', 'std'})
 
         self.input_norms = input_norms
 

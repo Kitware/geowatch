@@ -7,6 +7,7 @@ rm -rf _cmd_queue_schedule
 def link_zipfiles():
     import ubelt as ub
     root_dpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_testpipe')
+
     zipped_kwcoco_fpaths = list((root_dpath / 'pred/flat').glob('*/*/*.kwcoco.json.zip'))
 
     for zip_fpath in zipped_kwcoco_fpaths:
@@ -15,12 +16,32 @@ def link_zipfiles():
             ub.symlink(real_path=zip_fpath, link_path=orig_fpath, verbose=1)
 
 
+def fix_bad_kwcoco_zipfiles():
+    """
+    Some kwcoco files were saved as zips before updating, so they are actually
+    just json. Reload and resave them.
+    """
+    import ubelt as ub
+    root_dpath = ub.Path('/home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc/_namek_eval')
+    candidate_fpaths = list(root_dpath.glob('pred/flat/*/*/*.kwcoco.zip'))
+    import zipfile
+    for fpath in ub.ProgIter(candidate_fpaths):
+        if not zipfile.is_zipfile(fpath):
+            import kwcoco
+            dset = kwcoco.CocoDataset(fpath)
+            dset.dump()
+            assert zipfile.is_zipfile(fpath)
+
+    # for r, ds, fs in
+    # for dpath in root_dpath.
+
+
 def cleanup_mlops():
     import ubelt as ub
     root_dpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_testpipe')
 
     # Reduce site model sizes
-    json_fpaths = list((root_dpath / 'pred/flat').glob('*/*/*.json'))
+    # json_fpaths = list((root_dpath / 'pred/flat').glob('*/*/*.json'))
 
     # site_dpaths = list((root_dpath / 'pred/flat').glob('*/*/sites'))
     # sitesumary_dpaths = list((root_dpath / 'pred/flat').glob('*/*/site_summaries'))
@@ -90,15 +111,11 @@ def cleanup_mlops():
         job.result()
 
 
-
-
 def compress_coco_files(kwcoco_fpaths):
     import ubelt as ub
     for p in ub.ProgIter(kwcoco_fpaths, desc='compressing'):
         if p.exists():
             compress_file(p, remove_src=True)
-
-
 
 
 def test_compression_ratios(src_fpath):
@@ -147,7 +164,7 @@ def test_compression_ratios(src_fpath):
             compress_file(src_fpath, zip_fpath=zip_fpath, **kw)
         with ub.Timer('reading') as read_time:
             with ub.zopen(zip_fpath + '/' + src_fpath.name) as file:
-                data = file.read()
+                file.read()
         row = {
             'write_time': write_time.elapsed,
             'read_time': read_time.elapsed,
@@ -167,7 +184,8 @@ def test_compression_ratios(src_fpath):
     rich.print(df)
 
     big_data = src_fpath.read_bytes()
-    small_data = zstd.compress(big_data)
+    import zstd
+    small_data = zstd.compress(big_data)  # NOQA
 
     # df = df.sort_values('write_efficiency')
     # rich.print(df)

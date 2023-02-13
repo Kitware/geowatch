@@ -80,7 +80,7 @@ def shortest_unique_prefixes(items, sep=None, allow_simple=True, min_length=0, a
                 return simple_solution
             for i in range(2, 10):
                 # print('return simple solution at i = {!r}'.format(i))
-                simple_solution = ['-'.join(t[:i]) for t in tokens]
+                simple_solution = [sep.join(t[:i]) for t in tokens]
                 if len(simple_solution) == len(set(simple_solution)):
                     return simple_solution
 

@@ -249,14 +249,14 @@ def github_action_matrix(arg):
                          animal: cat
                  ''')
         >>> grid_items = github_action_matrix(arg)
-        >>> print('grid_items = {}'.format(ub.repr2(grid_items, nl=1)))
+        >>> print('grid_items = {}'.format(ub.urepr(grid_items, nl=1)))
         grid_items = [
-            {'animal': 'cat', 'color': 'pink', 'fruit': 'apple', 'shape': 'circle'},
-            {'animal': 'dog', 'color': 'green', 'fruit': 'apple', 'shape': 'circle'},
-            {'animal': 'cat', 'color': 'pink', 'fruit': 'pear'},
-            {'animal': 'dog', 'color': 'green', 'fruit': 'pear'},
+            {'fruit': 'apple', 'animal': 'cat', 'color': 'pink', 'shape': 'circle'},
+            {'fruit': 'apple', 'animal': 'dog', 'color': 'green', 'shape': 'circle'},
+            {'fruit': 'pear', 'animal': 'cat', 'color': 'pink'},
+            {'fruit': 'pear', 'animal': 'dog', 'color': 'green'},
             {'fruit': 'banana'},
-            {'animal': 'cat', 'fruit': 'banana'},
+            {'fruit': 'banana', 'animal': 'cat'},
         ]
 
 
@@ -450,7 +450,15 @@ class DotDictDataFrame(pd.DataFrame):
     def nested_columns(self):
         return dotkeys_to_nested(self.columns)
 
-    def resolve_column(self, col):
+    def find_column(self, col):
+        result = self.query_column(col)
+        if len(result) == 0:
+            raise KeyError
+        elif len(result) > 1:
+            raise RuntimeError
+        return list(result)[0]
+
+    def query_column(self, col):
         # Might be better to do a globby sort of pattern
         parts = col.split('.')
         return ub.oset.intersection(*[self._column_node_groups[p] for p in parts])
@@ -476,9 +484,12 @@ class DotDictDataFrame(pd.DataFrame):
     def __getitem__(self, cols):
         if isinstance(cols, str):
             if cols not in self.columns:
-                cols = self.resolve_column(cols)
+                cols = self.query_column(cols)
+                if not cols:
+                    print(f'Available columns={self.columns}')
+                    raise KeyError
         elif isinstance(cols, list):
-            cols = list(ub.flatten([self.resolve_column(c) for c in cols]))
+            cols = list(ub.flatten([self.query_column(c) for c in cols]))
         return super().__getitem__(cols)
 
 

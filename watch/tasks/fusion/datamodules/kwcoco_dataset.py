@@ -16,12 +16,13 @@ Example:
     >>>                           output_space_scale=None,
     >>>                           window_space_scale=1.2,
     >>>                           time_sampling='soft2+distribute',
+    >>>                           time_kernel='-1y,0,1y',
     >>>                           temporal_dropout=0.5)
     >>> self.disable_augmenter = True
     >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
     >>> item = self[index]
     >>> print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
-    >>> canvas = self.draw_item(item, overlay_on_image=1, rescale=0)
+    >>> canvas = self.draw_item(item, overlay_on_image=0, rescale=0)
     >>> # xdoctest: +REQUIRES(--show)
     >>> import kwplot
     >>> kwplot.autompl()
@@ -88,10 +89,12 @@ import warnings
 import kwarray
 import kwcoco
 import kwimage
+import ndsampler
 import numpy as np
 import pandas as pd
 import torch
 import ubelt as ub
+from shapely.ops import unary_union
 from torch.utils import data
 from typing import Dict
 import functools
@@ -141,16 +144,16 @@ class KWCocoVideoDatasetConfig(scfg.Config):
 
     """
     default = {
-        'time_steps': scfg.Value(2, help='number of temporal sampler per batch', alias=['time_dims']),
+        ###############
+        # SPACE OPTIONS
+        ###############
 
-        'chip_size': scfg.Value(128, help='spatial width and height per batch. DEPRECATED. Use chip_dims instead.'),
-
-        'chip_dims': scfg.Value(None, help=ub.paragraph(
+        'chip_dims': scfg.Value(128, help=ub.paragraph(
             '''
             spatial height/width per batch. If given as a single number, used
             as both width and height. Default is currently taken from
             deprecated chip_size, but in the future will be 128.
-            '''), alias=['window_space_dims', 'window_dims'], nargs='+'),
+            '''), alias=['window_space_dims', 'window_dims', 'chip_size'], nargs='+'),
 
         'window_space_scale': scfg.Value(None, help=ub.paragraph(
             '''
@@ -200,23 +203,53 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             alias=['window_space_overlap', 'window_overlap'],
         ),
 
+        ##############
+        # TIME OPTIONS
+        ##############
+
+        'time_steps': scfg.Value(2, help='number of temporal sampler per batch', alias=['time_dims']),
+
+
+        'time_sampling': scfg.Value('contiguous', type=str, help=ub.paragraph(
+            '''
+            Strategy for expanding the time window across non-contiguous
+            frames. Can be auto, contiguous, hard+distribute, or
+            dilate_affinity
+            ''')),
+
+        'time_span': scfg.Value('2y', type=str, help=ub.paragraph(
+            '''
+            how long a time window should roughly span by default
+            ''')),
+
+        'time_kernel': scfg.Value(None, type=str, help=ub.paragraph(
+            '''
+            Mutually exclusive with time_span.
+            ''')),
+
+        ##############
+        # MODE OPTIONS
+        ##############
+
         'channels': scfg.Value(None, type=str, help=ub.paragraph(
             '''
             channels to use should be SensorChanSpec coercable
             ''')),
 
-        'dist_weights': scfg.Value(0, help=ub.paragraph(
+        'include_sensors': scfg.Value(None, help=ub.paragraph(
             '''
-            To use distance-transform based weights on annotations or
-            not
+            if specified can be comma separated valid sensors. NOTE: this
+            should be specified via a sensorchan speci in channels instead
             ''')),
-
-        'include_sensors': scfg.Value(None, help='if specified can be comma separated valid sensors. NOTE: this should be specified via a sensorchan speci in channels instead'),
 
         'exclude_sensors': scfg.Value(None, type=str, help=ub.paragraph(
             '''
             comma delimited list of sensors to avoid, such as S2 or L8
             ''')),
+
+        ##############
+        # SIZE OPTIONS
+        ##############
 
         'select_images': scfg.Value(
             None, type=str, help=ub.paragraph(
@@ -259,18 +292,14 @@ class KWCocoVideoDatasetConfig(scfg.Config):
                 Requries the "jq" python library is installed.
                 ''')),
 
-        'ignore_dilate': scfg.Value(0, help='Dilation applied to ignore masks.'),
-
         'max_epoch_length': scfg.Value(None, help=ub.paragraph(
             '''
             If specified, restricts number of steps per epoch
             ''')),
 
-        'min_spacetime_weight': scfg.Value(0.9, help='Minimum space-time dilation weight'),
-
-        'normalize_perframe': scfg.Value(False, help='undocumented - ignored'),
-
-        'normalize_peritem': scfg.Value(None, type=str, help='if specified normalize these bands/channels on a per-batch-item level across time. if True normalize all bands.'),
+        #######################
+        # SAMPLING GRID OPTIONS
+        #######################
 
         'set_cover_algo': scfg.Value(None, choices=[None, 'approx', 'exact'], help=ub.paragraph(
             '''
@@ -281,71 +310,12 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             so it is generally not recommended).
             ''')),
 
-        'time_sampling': scfg.Value('contiguous', type=str, help=ub.paragraph(
-            '''
-            Strategy for expanding the time window across non-contiguous
-            frames. Can be auto, contiguous, hard+distribute, or
-            dilate_affinity
-            ''')),
-
-        'time_span': scfg.Value('2y', type=str, help=ub.paragraph(
-            '''
-            how long a time window should roughly span by default
-            ''')),
-
         'use_centered_positives': scfg.Value(False, help=ub.paragraph(
             '''
             Use centers of annotations as window centers
             Only applies to training dataset when used in the data module.
             Validation/test dataset defaults to False.
             ''')),
-
-        'upweight_centers': scfg.Value(True, help=ub.paragraph(
-            '''
-            Applies a weighting such that the center of the frame incurs more
-            loss.
-            ''')),
-
-        'upweight_time': scfg.Value(None, help=ub.paragraph(
-            '''
-            A number between 0.0 and 1.0 representing where to upweight time
-            the most (1.0 is last frame 0.0 is the first frame).
-            ''')),
-
-        'use_cloudmask': scfg.Value(None, help=ub.paragraph(
-            '''
-            Allow the dataloader to use the quality band to skip frames.
-            DEPRECATED: set quality_threshold=0 to disable the cloudmask.
-            Set to a positive value to use it, up to that threshold.
-            ''')),
-
-        'quality_threshold': scfg.Value(0.0, help=ub.paragraph(
-            '''
-            The minimum fraction of usable pixels required in a frame sample.
-            If a frame has fewer than this fraction of usable pixels (i.e. not
-            clouds or other quality flags), it is marked for resampling as a
-            "bad" frame.
-            ''')),
-
-        'mask_low_quality': scfg.Value(False, help='if True, mask low quality pixels with nans'),
-
-        'mask_samecolor_method': scfg.Value('histogram', help='If enabled, set as method to use for SAMECOLOR_QUALITY_HEURISTIC. Can be histogram or region'),
-
-        'force_bad_frames': scfg.Value(False, help='if True, force loading, even if data is nan / missing'),
-
-        'observable_threshold': scfg.Value(0.0, help=ub.paragraph(
-            '''
-            The minimum fraction of non-nan pixels required in a frame sample.
-            If a frame has fewer than this fraction of usable pixels (i.e. not
-            clouds or other quality flags), it is marked for resampling as a
-            "bad" frame.
-            ''')),
-
-        'resample_invalid_frames': scfg.Value(3, help=ub.paragraph(
-            '''
-            Number of attempts to resample any frame marked as invalid via
-            quality or nodata checks.
-            '''), alias=['resample_max_tries']),
 
         'use_grid_positives': scfg.Value(True, help=ub.paragraph(
             '''
@@ -374,7 +344,94 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             runs quicker.
             ''')),
 
-        ### Augmentation
+        ###################
+        # WEIGHTING OPTIONS
+        ###################
+
+        'ignore_dilate': scfg.Value(0, help='Dilation applied to ignore masks.'),
+        'weight_dilate': scfg.Value(0, help='Dilation applied to weight masks.'),
+
+        'normalize_perframe': scfg.Value(False, help='undocumented - ignored'),
+
+        'normalize_peritem': scfg.Value(None, type=str, help=ub.paragraph(
+            '''
+            if specified normalize these bands/channels on a per-batch-item
+            level across time. if True normalize all bands.
+            ''')),
+
+        'min_spacetime_weight': scfg.Value(0.9, help=ub.paragraph(
+            '''
+            Minimum space-time dilation weight. Used in conjunction with
+            ''')),
+
+        'upweight_centers': scfg.Value(True, help=ub.paragraph(
+            '''
+            Applies a weighting such that the center of the frame incurs more
+            loss.
+            ''')),
+
+        'upweight_time': scfg.Value(None, help=ub.paragraph(
+            '''
+            A number between 0.0 and 1.0 representing where to upweight time
+            the most (1.0 is last frame 0.0 is the first frame).
+            ''')),
+
+        'dist_weights': scfg.Value(0, help=ub.paragraph(
+            '''
+            To use distance-transform based weights on annotations or
+            not
+            ''')),
+
+        'balance_areas': scfg.Value(False, help='if True balance the weight of small and large polygons'),
+
+        ##################################
+        # DYNAMIC FILTER / MASKING OPTIONS
+        ##################################
+
+        'use_cloudmask': scfg.Value(None, help=ub.paragraph(
+            '''
+            Allow the dataloader to use the quality band to skip frames.
+            DEPRECATED: set quality_threshold=0 to disable the cloudmask.
+            Set to a positive value to use it, up to that threshold.
+            ''')),
+
+        'quality_threshold': scfg.Value(0.0, help=ub.paragraph(
+            '''
+            The minimum fraction of usable pixels required in a frame sample.
+            If a frame has fewer than this fraction of usable pixels (i.e. not
+            clouds or other quality flags), it is marked for resampling as a
+            "bad" frame.
+            ''')),
+
+        'mask_low_quality': scfg.Value(False, help='if True, mask low quality pixels with nans'),
+
+        'mask_samecolor_method': scfg.Value('histogram', help=ub.paragraph(
+            '''
+            If enabled, set as method to use for SAMECOLOR_QUALITY_HEURISTIC.
+            Can be histogram or region.
+            ''')),
+
+        'force_bad_frames': scfg.Value(False, help='if True, force loading, even if data is nan / missing'),
+
+        'observable_threshold': scfg.Value(0.0, help=ub.paragraph(
+            '''
+            The minimum fraction of non-nan pixels required in a frame sample.
+            If a frame has fewer than this fraction of usable pixels (i.e. not
+            clouds or other quality flags), it is marked for resampling as a
+            "bad" frame.
+            ''')),
+
+        'resample_invalid_frames': scfg.Value(3, help=ub.paragraph(
+            '''
+            Number of attempts to resample any frame marked as invalid via
+            quality or nodata checks.
+            '''), alias=['resample_max_tries']),
+
+        'downweight_nan_regions': scfg.Value(True, help='if True, unobservable (i.e. nan) pixels are downweighted'),
+
+        ######################
+        # AUGMENTATION OPTIONS
+        ######################
         ### TODO: these should likely become a nested jsonargparse
         ### style config for a more general "augmentation scheme".
 
@@ -409,11 +466,10 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             self['exclude_sensors'] = [s.strip() for s in self['exclude_sensors'].split(',')]
         self['time_steps'] = int(self['time_steps'])
 
-        if self['chip_dims'] is None:
-            d = int(self['chip_size'])
-            self['chip_dims'] = [d, d]  # has to be a list not a tuple for yaml
-
-        self['chip_size'] = None
+        # if self['chip_dims'] is None:
+        #     d = int(self['chip_size'])
+        #     self['chip_dims'] = [d, d]  # has to be a list not a tuple for yaml
+        # self['chip_size'] = None
 
         if self['input_space_scale'] in {None, 'None', 'window'}:
             self['input_space_scale'] = self['window_space_scale']
@@ -443,23 +499,24 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         >>> import ndsampler
         >>> import kwcoco
         >>> import watch
-        >>> coco_dset = watch.demo.coerce_kwcoco('watch', geodata=True)
+        >>> coco_dset = watch.demo.coerce_kwcoco('watch-multisensor-msi', geodata=True)
         >>> print({c.get('sensor_coarse') for c in coco_dset.images().coco_images})
         >>> print({c.channels.spec for c in coco_dset.images().coco_images})
         >>> sampler = ndsampler.CocoSampler(coco_dset)
-        >>> self = KWCocoVideoDataset(sampler, time_dims=5, window_dims=(100, 300),
+        >>> self = KWCocoVideoDataset(sampler, time_dims=5, window_dims=(200, 300),
         >>>                           input_space_scale='native',
-        >>>                           window_space_scale='0.7GSD',
+        >>>                           window_space_scale='0.05GSD',
         >>>                           output_space_scale='native',
         >>>                           channels='auto',
         >>> )
         >>> self.disable_augmenter = True
-        >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
+        >>> target = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
         >>> Box = util_kwimage.Box
-        >>> index['space_slice'] = Box.from_slice(index['space_slice']).translate((30, 0)).quantize().to_slice()
-        >>> item = self[index]
+        >>> #target['space_slice'] = Box.from_slice(target['space_slice']).translate((30, 0)).quantize().to_slice()
+        >>> target['verbose_ndsample'] = True
+        >>> item = self[target]
         >>> #print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
-        >>> canvas = self.draw_item(item, overlay_on_image=1, rescale=0, max_channels=3)
+        >>> canvas = self.draw_item(item, overlay_on_image=0, rescale=0, max_channels=3)
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
         >>> kwplot.autompl()
@@ -496,25 +553,16 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         >>> kwplot.show_if_requested()
     """
 
-    def __init__(self, sampler, sample_shape=None, mode='fit', **kwargs):
-
+    def __init__(self, sampler, mode='fit', **kwargs):
+        """
+        Args:
+            sampler (kwcoco.CocoDataset | ndsampler.CocoSampler): kwcoco dataset
+            mode (str): fit or predict
+            **kwargs: see :class:`KWCocoVideoDatasetConfig` for valid options
+        """
         # note: sampler can be a ndsampler.CocoSampler or a kwcoco.CocoDataset
-
-        # todo: replace with ndsampler.CocoSampler.coerce
-        sampler = _coerce_ndsampler(sampler)
-
+        sampler = ndsampler.CocoSampler.coerce(sampler)
         config = KWCocoVideoDatasetConfig(cmdline=0, data=kwargs)
-        BACKWARDS_COMPATIBILITY = True
-        if BACKWARDS_COMPATIBILITY:
-            if sample_shape is not None:
-                ub.schedule_deprecation(
-                    'watch', 'sample_shape', 'arg',
-                    migration='use window_dims and time_dims instead',
-                    deprecate='now',
-                )
-                config['time_steps'] = sample_shape[0]
-                config['chip_dims'] = sample_shape[1:3]
-
         chip_dims = config['chip_dims']
         if isinstance(chip_dims, str):
             window_dims = chip_dims
@@ -569,7 +617,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         import os
         grid_workers = int(os.environ.get('WATCH_GRID_WORKERS', 0))
-
         common_grid_kw = dict(
             time_dims=time_dims,
             window_dims=window_dims,
@@ -716,6 +763,23 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             if max_epoch_length is not None:
                 self.length = min(self.length, max_epoch_length)
 
+        # x = list(ub.flatten(ub.flatten(all_chunks)))
+        # import networkx as nx
+        # def nested_tree(tree, nested, name='root'):
+        #     tree.add_node(name)
+        #     for idx, child in enumerate(nested):
+        #         key = f'{name}.{idx}'
+        #         if ub.iterable(child):
+        #             child = nested_tree(tree, child, key)
+        #         else:
+        #             tree.add_node(key)
+        #         tree.add_edge(name, key)
+        # nested = self.nested_pool
+        # tree = nx.DiGraph()
+        # xdev.fix_embed_globals()
+        # node = nested_tree(tree, nested)
+        # ub.dict_hist(list(map(len, nested)))
+
         self.new_sample_grid = new_sample_grid
 
         bg_catname = ub.peek(sorted(self.background_classes))
@@ -841,6 +905,10 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             ub.oset(['Dred', 'Dgreen', 'Dblue']),
             ub.oset(['r', 'g', 'b']),
         ] + heuristics.HUERISTIC_COMBINABLE_CHANNELS
+
+    @property
+    def coco_dset(self):
+        return self.sampler.dset
 
     def __len__(self):
         return self.length
@@ -1030,64 +1098,32 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
     def __getitem__(self, index):
         """
         Example:
-            >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
-            >>> import ndsampler
-            >>> import kwcoco
-            >>> import watch
-            >>> coco_dset = watch.demo.demo_kwcoco_multisensor()
-            >>> sampler = ndsampler.CocoSampler(coco_dset)
-            >>> # Each sensor uses all of its own channels
-            >>> channels = 'auto'
-            >>> self = KWCocoVideoDataset(sampler, time_dims=5, window_dims=(256, 256), channels=channels, normalize_perframe=False)
-            >>> self.disable_augmenter = False
-            >>> index = 0
-            >>> index = target = self.new_sample_grid['targets'][0]
-            >>> item = self[index]
-            >>> canvas = self.draw_item(item)
-            >>> # xdoctest: +REQUIRES(--show)
-            >>> import kwplot
-            >>> kwplot.autompl()
-            >>> kwplot.imshow(canvas)
-            >>> kwplot.show_if_requested()
-        """
-        try:
-            return self.getitem(index)
-        except FailedSample:
-            return None
-
-    @profile
-    def getitem(self, index):
-        """
-        This is just the same thing as `__getitem__` but it raises an error
-        when it fails, which is handled by `__getitem__`.
-
-        Example:
-            >>> # xdoctest: +REQUIRES(env:DVC_DATA_DPATH)
+            >>> # Native sampling project data doctest
             >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
             >>> import watch
-            >>> import ndsampler
             >>> import kwcoco
-            >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-            >>> coco_fpath = dvc_dpath / 'Drop4-BAS/data_vali.kwcoco.json'
-            >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
-            >>> sampler = ndsampler.CocoSampler(coco_dset)
+            >>> coco_dset = watch.coerce_kwcoco('watch-msi-geodata-dates')
             >>> self = KWCocoVideoDataset(
-            >>>     sampler,
+            >>>     coco_dset,
             >>>     time_dims=5, window_dims=(320, 320),
             >>>     window_overlap=0,
-            >>>     channels="(S2,L8):blue|green|red|nir",
-            >>>     input_space_scale='10GSD',
-            >>>     window_space_scale='10GSD',
-            >>>     output_space_scale='10GSD',
+            >>>     input_space_scale='native',
+            >>>     window_space_scale='0.3GSD',
+            >>>     output_space_scale='0.6GSD',
             >>>     dist_weights=1,
             >>>     quality_threshold=0,
             >>>     neg_to_pos_ratio=0, time_sampling='soft2',
             >>> )
             >>> self.requested_tasks['change'] = False
-            >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][0]]
-            >>> index['allow_augment'] = False
+            >>> # Find a sample with S2 and L8 images in it.
+            >>> for target in self.new_sample_grid['targets']:
+            ...     sensors = coco_dset.images(target['gids']).lookup('sensor_coarse')
+            ...     shist = ub.dict_hist(sensors)
+            ...     if len(shist) > 1 and all(v > 1 for v in shist.values()):
+            ...         break
+            >>> target['allow_augment'] = False
+            >>> index = target
             >>> item = self[index]
-            >>> target = item['target']
             >>> print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
             >>> # xdoctest: +REQUIRES(--show)
             >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0, rescale=0)
@@ -1101,14 +1137,12 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> # Native sampling project data doctest
             >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
             >>> import watch
-            >>> import ndsampler
             >>> import kwcoco
             >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
             >>> coco_fpath = dvc_dpath / 'Drop4-BAS/data_vali.kwcoco.json'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
-            >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> self = KWCocoVideoDataset(
-            >>>     sampler,
+            >>>     coco_dset,
             >>>     time_dims=5, window_dims=(320, 320),
             >>>     window_overlap=0,
             >>>     channels="(S2,L8):blue|green|red|nir",
@@ -1138,32 +1172,95 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> kwplot.imshow(canvas)
             >>> kwplot.show_if_requested()
 
+        Example:
+            >>> # xdoctest: +REQUIRES(env:DVC_DATA_DPATH)
+            >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+            >>> import watch
+            >>> import kwcoco
+            >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+            >>> coco_fpath = dvc_dpath / 'Drop4-BAS/data_vali.kwcoco.json'
+            >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+            >>> self = KWCocoVideoDataset(
+            >>>     coco_dset,
+            >>>     time_dims=5, window_dims=(320, 320),
+            >>>     window_overlap=0,
+            >>>     channels="(S2,L8):blue|green|red|nir",
+            >>>     input_space_scale='10GSD',
+            >>>     window_space_scale='10GSD',
+            >>>     output_space_scale='10GSD',
+            >>>     dist_weights=1,
+            >>>     quality_threshold=0,
+            >>>     neg_to_pos_ratio=0, time_sampling='soft2',
+            >>> )
+            >>> self.requested_tasks['change'] = False
+            >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][0]]
+            >>> index['allow_augment'] = False
+            >>> item = self[index]
+            >>> target = item['target']
+            >>> print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
+            >>> # xdoctest: +REQUIRES(--show)
+            >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0, rescale=0)
+            >>> import kwplot
+            >>> kwplot.autompl()
+            >>> kwplot.imshow(canvas)
+            >>> kwplot.show_if_requested()
+        """
+        try:
+            return self.getitem(index)
+        except FailedSample:
+            return None
+
+    @profile
+    def getitem(self, index):
+        """
+        This is just the same thing as `__getitem__` but it raises an error
+        when it fails, which is handled by `__getitem__`.
+        Example:
+            >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+            >>> import kwcoco
+            >>> import watch
+            >>> coco_dset = watch.coerce_kwcoco('watch-msi-dates-geodata-heatmap', num_frames=5, image_size=(256, 256), num_videos=1)
+            >>> # Remove two annotations to test new time weights
+            >>> aids = coco_dset.images().take([0]).annots[0].lookup('id')
+            >>> coco_dset.remove_annotations(aids)
+            >>> #
+            >>> # Each sensor uses all of its own channels
+            >>> channels = 'auto'
+            >>> self = KWCocoVideoDataset(coco_dset, time_dims=5,
+            >>>                           window_resolution='0.09GSD',
+            >>>                           input_resolution='0.09GSD',
+            >>>                           window_dims=(256, 256),
+            >>>                           channels=channels,
+            >>>                           balance_areas=True,
+            >>>                           weight_dilate=3,
+            >>>                           normalize_perframe=False)
+            >>> self.disable_augmenter = True
+            >>> # Pretend that some external object has given us information about desired class weights
+            >>> from watch.tasks.fusion.methods import watch_module_mixins
+            >>> dataset_stats = self.cached_dataset_stats()
+            >>> from watch.tasks.fusion.methods.network_modules import _class_weights_from_freq
+            >>> class_keys = dataset_stats['class_freq']
+            >>> total_freq = np.array(list(dataset_stats['class_freq'].values()))
+            >>> class_importance_weights = _class_weights_from_freq(total_freq)
+            >>> catname_to_weight = ub.dzip(class_keys, class_importance_weights)
+            >>> catname_to_weight['star'] = 2.0
+            >>> self.catname_to_weight = catname_to_weight
+            >>> #
+            >>> index = 0
+            >>> index = target = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][4]]
+            >>> item = self[index]
+            >>> # xdoctest: +REQUIRES(--show)
+            >>> canvas = self.draw_item(item)
+            >>> import kwplot
+            >>> kwplot.autompl()
+            >>> kwplot.imshow(canvas)
+            >>> kwplot.show_if_requested()
+
         Ignore:
             import xdev
             _ = xdev.profile_now(self.getitem)(target)
         """
-        # The index can be specified as either
-        # * directly as a target (target) dictionary, or
-        # * an integer index
-        if isinstance(index, dict):
-            target = index
-            index = 'given-as-dictionary'
-        else:
-            if self.mode == 'test':
-                # In test-mode the index directly determines the grid location.
-                target = self.new_sample_grid['targets'][index]
-            else:
-                # In non-test-mode we discard the user index and randomly
-                # sample a grid location to achive balanced sampling.
-                try:
-                    tr_idx = self.nested_pool.sample()
-                except Exception as ex:
-                    raise FailedSample(f'Failed to sample grid location: {ex=}')
-                else:
-                    target = self.new_sample_grid['targets'][tr_idx]
-
-        if target is None:
-            raise FailedSample('no target')
+        target = self._coerce_target(index)
 
         sampler = self.sampler
         coco_dset = self.sampler.dset
@@ -1184,180 +1281,29 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         vidid = target_['video_id']
         video = coco_dset.index.videos[vidid]
 
-        _resolved = self._resolve_resolution(target_, video)
-        (
-            common_outspace_box,
-            vidspace_box,
-            video_dsize,
-            vidspace_dsize,
-            resolved_input_scale,
-            resolved_output_scale,
-            common_input_scale,
-            common_output_scale
-        ) = _resolved
+        resolution_info = self._resolve_resolution(target_, video)
 
         allow_augment = target_.get('allow_augment', True)
         if allow_augment:
             target_ = self._augment_spacetime_target(target_)
 
-        with_annots = [] if self.inference_only else ['boxes', 'segmentation']
-
-        ###
-        # Execute data sampling
-        ###
-        # New true-multimodal data items
-        gid_to_sample: Dict[int, Dict] = {}
-        gid_to_isbad: Dict[int, bool] = {}
-
-        for gid in target_['gids']:
-            self._sample_one_frame(gid, sampler, coco_dset, target_, with_annots,
-                                   gid_to_isbad, gid_to_sample)
-
-        time_sampler = self.new_sample_grid['vidid_to_time_sampler'][vidid]
-        video_gids = time_sampler.video_gids
-
-        # If we skipped the main gid, record why
-        main_gid = target_.get('main_gid', None)
-        if main_gid is not None and gid_to_isbad[main_gid]:
-            main_skip_reason = gid_to_isbad[main_gid]
-        else:
-            main_skip_reason = None
-
-        resample_invalid = target_.get('resample_invalid_frames', self.config['resample_invalid_frames'])
-        if resample_invalid:
-            if resample_invalid is True:
-                max_tries = 3
-            else:
-                max_tries = int(resample_invalid)
-            # print(f'max_tries={max_tries}')
-            vidname = video['name']
-            self._resample_bad_images(
-                video_gids, gid_to_isbad, sampler, coco_dset, target, target_,
-                with_annots, gid_to_sample, vidspace_box, vidname, max_tries)
-
-        good_gids = [gid for gid, flag in gid_to_isbad.items() if not flag]
-        if len(good_gids) == 0:
-            raise FailedSample('Cannot force a good sample')
-
-        final_gids = ub.oset(video_gids) & good_gids
-        force_bad_frames = target_.get('force_bad_frames', 0)
-        if force_bad_frames:
-            final_gids = ub.oset(video_gids) & set(gid_to_isbad.keys())
-            print('gid_to_isbad = {}'.format(ub.repr2(gid_to_isbad, nl=1)))
+        vidspace_box = resolution_info['vidspace_box']
+        final_gids, gid_to_sample = self._sample_from_target(target_, vidspace_box)
 
         num_frames = len(final_gids)
         if num_frames == 0:
             raise Exception('0 frames')
 
-        # coco_dset.images(final_gids).lookup('date_captured')
-        target_['gids'] = final_gids
-
         ###
         # Process sampled data
-        ###
-
         if not self.inference_only:
-            _tup = self._prepare_truth_info(final_gids, gid_to_sample,
-                                            num_frames, target, target_)
-            (task_tid_to_cnames, gid_to_dets, time_weights) = _tup
+            truth_info = self._prepare_truth_info(final_gids, gid_to_sample,
+                                                  num_frames, target, target_)
+        else:
+            truth_info = None
 
-        # TODO: handle all augmentation before we construct any labels
-        frame_items = []
-        for time_idx, gid in enumerate(final_gids):
-            img = coco_dset.index.imgs[gid]
-
-            stream_sample = gid_to_sample[gid]
-            assert len(stream_sample) > 0
-
-            # Collect image data from all modes within this frame
-            mode_to_imdata = {}
-            mode_to_invalid_mask = {}
-            mode_to_dsize = {}
-            for mode_key, mode_sample in stream_sample.items():
-
-                mode_imdata = mode_sample['im'][0]
-                mode_invalid_mask = mode_sample.get('invalid_mask', None)
-                if mode_invalid_mask is not None:
-                    mode_invalid_mask = mode_invalid_mask[0]
-
-                mode_imdata = np.asarray(mode_imdata, dtype=np.float32)
-                # ensure channel dim is not squeezed
-                mode_hwc = kwarray.atleast_nd(mode_imdata, 3)
-                # rearrange image axes for pytorch
-                mode_chw = einops.rearrange(mode_hwc, 'h w c -> c h w')
-                mode_to_imdata[mode_key] = mode_chw
-                mode_to_invalid_mask[mode_key] = mode_invalid_mask
-                h, w = mode_hwc.shape[0:2]
-                mode_to_dsize[mode_key] = (w, h)
-
-            # For each frame we need to choose a resolution for the truth.
-            # Using the maximum resolution mode should be decent choise.
-            # We could choose this to be arbitrary or independent of the input
-            # dimensions, but it makes sense to pin it to the input data
-            # in most cases.
-            if common_outspace_box is None:
-                # In the native case, we use the size of the largest mode for
-                # each frame.
-                max_mode_dsize = np.array(max(mode_to_dsize.values(), key=np.prod))
-                # Compute the scale factor for this frame wrt video space
-                scale_inspace_from_vid = max_mode_dsize / vidspace_dsize
-                frame_outspace_box = vidspace_box.scale(scale_inspace_from_vid).quantize()
-            else:
-                frame_outspace_box = common_outspace_box
-
-            output_dsize = (frame_outspace_box.width, frame_outspace_box.height)
-            scale_outspace_from_vid = output_dsize / vidspace_dsize
-            output_dims = output_dsize[::-1]  # the size we want to predict
-
-            dt_captured = img.get('date_captured', None)
-            if dt_captured:
-                dt_captured = util_time.coerce_datetime(dt_captured)
-                timestamp = dt_captured.timestamp()
-            else:
-                timestamp = np.nan
-
-            sensor = img.get('sensor_coarse', '*')
-
-            # The size of the larger image this output is expected to be
-            # embedded in.
-            outimg_dsize = video_dsize * scale_outspace_from_vid
-            outimg_box = util_kwimage.Box.from_dsize(outimg_dsize).quantize()
-
-            frame_item = {
-                'gid': gid,
-                'date_captured': img.get('date_captured', ''),
-                'timestamp': timestamp,
-                'time_index': time_idx,
-                'sensor': sensor,
-                'modes': mode_to_imdata,
-                'change': None,
-                'class_idxs': None,
-                'saliency': None,
-                'change_weights': None,
-                'class_weights': None,
-                'saliency_weights': None,
-                # Could group these into head and input/head specific dictionaries?
-                # info for how to construct the output.
-                'change_output_dims': None if time_idx == 0 else output_dims,
-                'class_output_dims': output_dims,
-                'saliency_output_dims': output_dims,
-                #
-                'output_dims': output_dims,
-                'output_space_slice': frame_outspace_box.to_slice(),
-                'output_image_dsize': outimg_box.dsize,
-                'scale_outspace_from_vid': scale_outspace_from_vid,
-                'ann_aids': None,
-            }
-
-            if not self.inference_only:
-                # Build single-frame truth
-                self._populate_frame_labels(
-                    frame_item, gid, output_dsize,
-                    task_tid_to_cnames, time_idx,
-                    gid_to_dets, time_weights, mode_to_invalid_mask,
-                    common_input_scale, common_output_scale)
-
-            frame_items.append(frame_item)
+        frame_items = self._build_frame_items(final_gids, gid_to_sample,
+                                              truth_info, resolution_info)
 
         if self.normalize_perframe:
             for frame_item in frame_items:
@@ -1485,7 +1431,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     data = frame_item.get(key, None)
                     if data is not None:
                         output_dims = frame_item['output_dims']
-                        output_dsize = output_dims[::-1]
                         frame_item[key] = data_utils.fliprot_annot(
                             kwimage.Boxes(data, 'ltrb'), **fliprot_params, axes=[-2, -1], canvas_dsize=output_dims).data
 
@@ -1567,13 +1512,13 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         # or something like that)
         tr_subset = ub.dict_isect(target_, {
             'gids', 'space_slice', 'video_id', 'fliprot_params',
-            'main_idx', 'scale',
+            'main_idx', 'scale', 'main_skip_reason'
         })
-
-        if main_skip_reason:
-            tr_subset['main_skip_reason'] = main_skip_reason
         # dont allow augmenting on resample by default
         tr_subset['allow_augment'] = False
+
+        resolved_input_scale = resolution_info['resolved_input_scale']
+        resolved_output_scale = resolution_info['resolved_output_scale']
         item = {
             'index': index,
             'frames': frame_items,
@@ -1585,6 +1530,106 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             'target': tr_subset
         }
         return item
+
+    def _coerce_target(self, index):
+        """
+        Returns a target dictionary given an index or an explicit target dictionary
+        """
+        # The index can be specified as either
+        # * directly as a target (target) dictionary, or
+        # * an integer index
+        if isinstance(index, dict):
+            target = index
+            index = 'given-as-dictionary'
+        else:
+            if self.mode == 'test':
+                # In test-mode the index directly determines the grid location.
+                target = self.new_sample_grid['targets'][index]
+            else:
+                # In non-test-mode we discard the user index and randomly
+                # sample a grid location to achive balanced sampling.
+                try:
+                    tr_idx = self.nested_pool.sample()
+                except Exception as ex:
+                    raise FailedSample(f'Failed to sample grid location: {ex=}')
+                else:
+                    target = self.new_sample_grid['targets'][tr_idx]
+
+        if target is None:
+            raise FailedSample('no target')
+        return target
+
+    @profile
+    def _sample_from_target(self, target_, vidspace_box):
+        """
+        Given a space-time target, samples frame rasters and annotation vectors.
+
+        This includes
+            * rejection sampling
+            * quality masking
+            * dynamic resolution
+        """
+        ###
+        # Execute data sampling
+        ###
+        sampler = self.sampler
+        coco_dset = self.sampler.dset
+
+        vidid = target_['video_id']
+        video = coco_dset.index.videos[vidid]
+
+        with_annots = [] if self.inference_only else ['boxes', 'segmentation']
+
+        # New true-multimodal data items
+        gid_to_sample: Dict[int, Dict] = {}
+        gid_to_isbad: Dict[int, bool] = {}
+
+        for gid in target_['gids']:
+            ...
+            self._sample_one_frame(gid, sampler, coco_dset, target_, with_annots,
+                                   gid_to_isbad, gid_to_sample)
+
+        time_sampler = self.new_sample_grid['vidid_to_time_sampler'][vidid]
+        video_gids = time_sampler.video_gids
+
+        # If we skipped the main gid, record why
+        main_gid = target_.get('main_gid', None)
+        if main_gid is not None and gid_to_isbad[main_gid]:
+            main_skip_reason = gid_to_isbad[main_gid]
+        else:
+            main_skip_reason = None
+
+        resample_invalid = target_.get('resample_invalid_frames', self.config['resample_invalid_frames'])
+        num_images_wanted = len(target_['gids'])
+        if resample_invalid:
+            if resample_invalid is True:
+                max_tries = 3
+            else:
+                max_tries = int(resample_invalid)
+            # print(f'max_tries={max_tries}')
+            vidname = video['name']
+            self._resample_bad_images(
+                video_gids, gid_to_isbad, sampler, coco_dset, target_,
+                num_images_wanted,
+                with_annots, gid_to_sample, vidspace_box, vidname, max_tries)
+
+        good_gids = [gid for gid, flag in gid_to_isbad.items() if not flag]
+        if len(good_gids) == 0:
+            raise FailedSample('Cannot force a good sample')
+
+        final_gids = ub.oset(video_gids) & good_gids
+        force_bad_frames = target_.get('force_bad_frames', 0)
+        if force_bad_frames:
+            final_gids = ub.oset(video_gids) & set(gid_to_isbad.keys())
+            print('gid_to_isbad = {}'.format(ub.repr2(gid_to_isbad, nl=1)))
+
+        # coco_dset.images(final_gids).lookup('date_captured')
+        target_['gids'] = final_gids
+
+        if main_skip_reason:
+            target_['main_skip_reason'] = main_skip_reason
+
+        return final_gids, gid_to_sample
 
     def _resolve_resolution(self, target_, video):
         # Compute scale if we are doing that
@@ -1633,20 +1678,22 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             common_outspace_box = common_outspace_box.quantize()
 
         # fixme: giant tuple returns are error prone
-        _resolved = (
-            common_outspace_box,
-            vidspace_box,
-            video_dsize,
-            vidspace_dsize,
-            resolved_input_scale,
-            resolved_output_scale,
-            common_input_scale,
-            common_output_scale
-        )
-        return _resolved
+        resolution_info = {
+            'common_outspace_box': common_outspace_box,
+            'vidspace_box': vidspace_box,
+            'video_dsize': video_dsize,
+            'vidspace_dsize': vidspace_dsize,
+            'resolved_input_scale': resolved_input_scale,
+            'resolved_output_scale': resolved_output_scale,
+            'common_input_scale': common_input_scale,
+            'common_output_scale': common_output_scale,
 
+        }
+        return resolution_info
+
+    @profile
     def _resample_bad_images(self, video_gids, gid_to_isbad, sampler,
-                             coco_dset, target, target_, with_annots,
+                             coco_dset, target_, num_images_wanted, with_annots,
                              gid_to_sample, vidspace_box, vidname, max_tries):
         """
         If the initial sample has marked any of the images as "bad", then we
@@ -1660,7 +1707,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             for iter_idx in range(max_tries):
                 # print(f'resample try iter_idx={iter_idx}')
                 good_gids = np.array([gid for gid, flag in gid_to_isbad.items() if not flag])
-                if len(good_gids) == len(target['gids']):
+                if len(good_gids) == num_images_wanted:
                     break
                 bad_gids = np.array([gid for gid, flag in gid_to_isbad.items() if flag])
                 include_idxs = np.where(kwarray.isect_flags(time_sampler.video_gids, good_gids))[0]
@@ -1761,25 +1808,128 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 upweight_time = self.upweight_time
 
             # Learn more from the center of the space-time patch
-            # if upweight_time == 0.5:
-            #     time_weights = kwimage.gaussian_patch((1, num_frames))[0]
-            # else:
             time_weights = biased_1d_weights(upweight_time, num_frames)
 
             time_weights = time_weights / time_weights.max()
             time_weights = time_weights.clip(0, 1)
             time_weights = np.maximum(time_weights, self.min_spacetime_weight)
 
-        return (
-            task_tid_to_cnames, gid_to_dets,
-            time_weights,
-        )
+        truth_info = {
+            'task_tid_to_cnames': task_tid_to_cnames,
+            'gid_to_dets': gid_to_dets,
+            'time_weights': time_weights,
+        }
+        return truth_info
 
-    def _populate_frame_labels(self, frame_item, gid, output_dsize,
-                               task_tid_to_cnames,
-                               time_idx, gid_to_dets, time_weights,
-                               mode_to_invalid_mask, common_input_scale,
-                               common_output_scale):
+    @profile
+    def _build_frame_items(self, final_gids, gid_to_sample,
+                           truth_info, resolution_info):
+
+        common_outspace_box = resolution_info['common_outspace_box']
+        vidspace_dsize = resolution_info['vidspace_dsize']
+        vidspace_box = resolution_info['vidspace_box']
+        video_dsize = resolution_info['video_dsize']
+
+        coco_dset = self.sampler.dset
+        # TODO: handle all augmentation before we construct any labels
+        frame_items = []
+        for time_idx, gid in enumerate(final_gids):
+            img = coco_dset.index.imgs[gid]
+
+            stream_sample = gid_to_sample[gid]
+            assert len(stream_sample) > 0
+
+            # Collect image data from all modes within this frame
+            mode_to_imdata = {}
+            mode_to_invalid_mask = {}
+            mode_to_dsize = {}
+            for mode_key, mode_sample in stream_sample.items():
+
+                mode_imdata = mode_sample['im'][0]
+                mode_invalid_mask = mode_sample.get('invalid_mask', None)
+                if mode_invalid_mask is not None:
+                    mode_invalid_mask = mode_invalid_mask[0]
+
+                mode_imdata = np.asarray(mode_imdata, dtype=np.float32)
+                # ensure channel dim is not squeezed
+                mode_hwc = kwarray.atleast_nd(mode_imdata, 3)
+                # rearrange image axes for pytorch
+                mode_chw = einops.rearrange(mode_hwc, 'h w c -> c h w')
+                mode_to_imdata[mode_key] = mode_chw
+                mode_to_invalid_mask[mode_key] = mode_invalid_mask
+                h, w = mode_hwc.shape[0:2]
+                mode_to_dsize[mode_key] = (w, h)
+
+            # For each frame we need to choose a resolution for the truth.
+            # Using the maximum resolution mode should be decent choise.
+            # We could choose this to be arbitrary or independent of the input
+            # dimensions, but it makes sense to pin it to the input data
+            # in most cases.
+            if common_outspace_box is None:
+                # In the native case, we use the size of the largest mode for
+                # each frame.
+                max_mode_dsize = np.array(max(mode_to_dsize.values(), key=np.prod))
+                # Compute the scale factor for this frame wrt video space
+                scale_inspace_from_vid = max_mode_dsize / vidspace_dsize
+                frame_outspace_box = vidspace_box.scale(scale_inspace_from_vid).quantize()
+            else:
+                frame_outspace_box = common_outspace_box
+
+            output_dsize = (frame_outspace_box.width, frame_outspace_box.height)
+            scale_outspace_from_vid = output_dsize / vidspace_dsize
+            output_dims = output_dsize[::-1]  # the size we want to predict
+
+            dt_captured = img.get('date_captured', None)
+            if dt_captured:
+                dt_captured = util_time.coerce_datetime(dt_captured)
+                timestamp = dt_captured.timestamp()
+            else:
+                timestamp = np.nan
+
+            sensor = img.get('sensor_coarse', '*')
+
+            # The size of the larger image this output is expected to be
+            # embedded in.
+            outimg_dsize = video_dsize * scale_outspace_from_vid
+            outimg_box = util_kwimage.Box.from_dsize(outimg_dsize).quantize()
+
+            frame_item = {
+                'gid': gid,
+                'date_captured': img.get('date_captured', ''),
+                'timestamp': timestamp,
+                'time_index': time_idx,
+                'sensor': sensor,
+                'modes': mode_to_imdata,
+                'change': None,
+                'class_idxs': None,
+                'saliency': None,
+                'change_weights': None,
+                'class_weights': None,
+                'saliency_weights': None,
+                # Could group these into head and input/head specific dictionaries?
+                # info for how to construct the output.
+                'change_output_dims': None if time_idx == 0 else output_dims,
+                'class_output_dims': output_dims,
+                'saliency_output_dims': output_dims,
+                #
+                'output_dims': output_dims,
+                'output_space_slice': frame_outspace_box.to_slice(),
+                'output_image_dsize': outimg_box.dsize,
+                'scale_outspace_from_vid': scale_outspace_from_vid,
+                'ann_aids': None,
+            }
+
+            if not self.inference_only:
+                # Build single-frame truth
+                self._populate_frame_labels(
+                    frame_item, gid, output_dsize, time_idx,
+                    mode_to_invalid_mask, resolution_info, truth_info)
+
+            frame_items.append(frame_item)
+        return frame_items
+
+    def _populate_frame_labels(self, frame_item, gid, output_dsize, time_idx,
+                               mode_to_invalid_mask, resolution_info, truth_info):
         """
         Build single-frame truth-labels.
 
@@ -1788,12 +1938,19 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         could use work to reduce the number of input params.
         """
 
+        common_input_scale = resolution_info['common_input_scale']
+        common_output_scale = resolution_info['common_output_scale']
+
         # The frame detections will be in a scaled videos space the
         # constant scale case.
         # TODO: will need special handling for "native" resolutions on
         # a per-mode / frame basis, we will need the concept of an
         # annotation window (where ndsampler lets us assume the corners
         # of each window are in correspondence)
+
+        task_tid_to_cnames = truth_info['task_tid_to_cnames']
+        time_weights = truth_info['time_weights']
+        gid_to_dets = truth_info['gid_to_dets']
 
         input_is_native = (isinstance(common_input_scale, str) and common_input_scale == 'native')
         output_is_native = (isinstance(common_output_scale, str) and common_output_scale == 'native')
@@ -1832,24 +1989,10 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         frame_cidxs = np.full(space_shape, dtype=np.int32,
                               fill_value=bg_idx)
 
-        class_ohe_shape = (len(self.classes),) + space_shape
-        salient_shape = space_shape
-
         # A "Salient" class is anything that is a foreground class
-        # Not sure if this should be a dataloader thing or not
-        frame_saliency = np.zeros(salient_shape, dtype=np.uint8)
-
-        frame_class_ohe = np.zeros(class_ohe_shape, dtype=np.uint8)
-        saliency_ignore = np.zeros(space_shape, dtype=np.uint8)
-        frame_class_ignore = np.zeros(space_shape, dtype=np.uint8)
-
         task_target_ohe = {}
-        task_target_ohe['saliency'] = frame_saliency
-        task_target_ohe['class'] = frame_class_ohe
-
         task_target_ignore = {}
-        task_target_ignore['saliency'] = saliency_ignore
-        task_target_ignore['class'] = frame_class_ignore
+        task_target_weight = {}
 
         # Rasterize frame targets into semantic segmentation masks
         ann_polys = dets.data['segmentations'].to_polygon_list()
@@ -1858,9 +2001,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         ann_tids = dets.data['tids']
         ann_ltrb = dets.data['boxes'].to_ltrb().data
 
-        frame_item['ann_aids'] = ann_aids
-
-        frame_poly_weights = np.ones(space_shape, dtype=np.float32)
+        # frame_poly_saliency_weights = np.ones(space_shape, dtype=np.float32)
+        # frame_poly_class_weights = np.ones(space_shape, dtype=np.float32)
 
         wants_saliency = self.requested_tasks['saliency']
         wants_class = self.requested_tasks['class']
@@ -1870,91 +2012,203 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         wants_class_sseg = wants_class or wants_change
         wants_saliency_sseg = wants_saliency
 
-        wants_class_info = wants_class_sseg or wants_boxes
-        wants_salient_info = wants_saliency or wants_boxes
+        frame_box = kwimage.Box.from_dsize(space_shape[::-1])
+        frame_box = frame_box.to_shapely()
 
-        if wants_boxes:
-            box_ltrb = []
-            box_tids = []
-            box_cidxs = []
-            box_weights = []
+        # catname_to_weight = getattr(self, 'catname_to_weight', None)
 
         # Note: it is important to respect class indexes, ids, and
         # name mappings
-        # TODO: layer ordering? Multiclass prediction?
-        for poly, ltrb, aid, cid, tid in zip(ann_polys, ann_ltrb, ann_aids, ann_cids, ann_tids):
-            weight = 1.0
+        if wants_boxes:
+            box_labels = {
+                'box_ltrb': [],
+                'box_tids': [],
+                'box_cidxs': [],
+                'box_class_weights': [],
+                'box_saliency_weights': [],
+            }
+            # Do we want saliency boxes and class boxes?
+            for ltrb, cid, tid in zip(ann_ltrb, ann_cids, ann_tids):
+                new_salient_catname = task_tid_to_cnames['saliency'][tid][time_idx]
+                new_class_catname = task_tid_to_cnames['class'][tid][time_idx]
+                new_class_cidx = self.classes.node_to_idx[new_class_catname]
+                box_labels['box_ltrb'].append(ltrb)
+                box_labels['box_tids'].append(-1 if tid is None else tid)
+                box_labels['box_cidxs'].append(new_class_cidx)
+                box_labels['box_saliency_weights'].append(
+                    float(new_salient_catname in self.salient_classes))
+                box_labels['box_class_weights'].append(
+                    float(new_class_catname in self.class_foreground_classes))
+            box_labels['box_ltrb'] = np.array(box_labels['box_ltrb']).astype(np.float32)
+            box_labels['box_tids'] = np.array(box_labels['box_tids']).astype(np.int64)
+            box_labels['box_cidxs'] = np.array(box_labels['box_cidxs']).astype(np.int64)
+            box_labels['box_class_weights'] = np.array(box_labels['box_class_weights']).astype(np.float32)
+            box_labels['box_saliency_weights'] = np.array(box_labels['box_saliency_weights']).astype(np.float32)
+            frame_item.update(box_labels)
 
-            flag_poly_filled = False
-            if wants_salient_info:
-                # orig_cname = self.classes.id_to_node[cid]
+        if wants_saliency:
+            ### Build single frame SALIENCY target labels and weights
+            task_target_ohe['saliency'] = np.zeros(space_shape, dtype=np.uint8)
+            task_target_ignore['saliency'] = np.zeros(space_shape, dtype=np.uint8)
+            task_target_weight['saliency'] = np.empty(space_shape, dtype=np.float32)
+
+            # Group polygons into foreground / background for the saliency task
+            saliency_sseg_groups = {
+                'foreground': [],
+                'background': [],
+                'ignore': [],
+            }
+            for poly, tid in zip(ann_polys, ann_tids):
                 new_salient_catname = task_tid_to_cnames['saliency'][tid][time_idx]
                 if new_salient_catname in self.salient_classes:
-                    if wants_saliency_sseg:
-                        poly.fill(frame_saliency, value=1)
-                        flag_poly_filled = True
-                if wants_saliency_sseg and new_salient_catname in self.salient_ignore_classes:
-                    weight = 0.0
-                    poly.fill(saliency_ignore, value=1)
+                    saliency_sseg_groups['foreground'].append(poly)
+                elif new_salient_catname in self.salient_ignore_classes:
+                    saliency_sseg_groups['ignore'].append(poly)
+                elif new_salient_catname in self.non_salient_classes:
+                    saliency_sseg_groups['background'].append(poly)
+                else:
+                    raise AssertionError
 
-            if wants_class_info:
+            if self.config['balance_areas']:
+                # num_fg_polys = len(saliency_sseg_groups['foreground'])
+                big_poly_fg = unary_union([p.to_shapely() for p in saliency_sseg_groups['foreground']])
+                big_poly_ignore = unary_union([p.to_shapely() for p in saliency_sseg_groups['ignore']])
+                big_poly_bg = (frame_box - big_poly_fg) - big_poly_ignore
+                #unit_area_share = fg_polys.area / len(fg_polys)
+                total_area = frame_box.area
+                bg_cover_frac = big_poly_bg.area / (total_area + 1)
+                # fg_cover_frac = big_poly_fg.area / (total_area + 1)
+                bg_weight_share = (1 - bg_cover_frac)
+                task_target_weight['saliency'][:] = bg_weight_share ** 0.5
+            else:
+                task_target_weight['saliency'][:] = 1
+
+            for poly in saliency_sseg_groups['background']:
+                if self.config['balance_areas']:
+                    weight = (1 - (poly.area / (total_area + 1)))
+                    poly.fill(task_target_weight['saliency'], value=weight, assert_inplace=True)
+
+            for poly in saliency_sseg_groups['foreground']:
+                task_target_ohe['saliency'] = poly.fill(task_target_ohe['saliency'], value=1, assert_inplace=True)
+                if self.config['balance_areas']:
+                    weight = (1 - (poly.area / (total_area + 1)))
+                    poly.fill(task_target_weight['saliency'], value=weight, assert_inplace=True)
+
+                if self.dist_weights:
+                    # New feature where we encode that we care much more about
+                    # segmenting the inside of the object than the outside.
+                    # Effectively boundaries become uncertain.
+                    dist, poly_mask = util_kwimage.polygon_distance_transform(
+                        poly, shape=space_shape)
+                    max_dist = dist.max()
+                    if max_dist > 0:
+                        dist_weight = dist / max_dist
+                        weight_mask = dist_weight + (1 - poly_mask)
+                        task_target_weight['saliency'] = task_target_weight['saliency'] * weight_mask
+
+            for poly in saliency_sseg_groups['ignore']:
+                poly.fill(task_target_ohe['saliency'], value=1, assert_inplace=True)
+                poly.fill(task_target_ignore['saliency'], value=1, assert_inplace=True)
+
+            max_weight = task_target_weight['saliency'].max()
+            if max_weight > 0:
+                task_target_weight['saliency'] /= max_weight
+
+        if wants_class_sseg:
+            ### Build single frame CLASS target labels and weights
+
+            task_target_ohe['class'] = np.zeros((len(self.classes),) + space_shape, dtype=np.uint8)
+            task_target_ignore['class'] = np.zeros(space_shape, dtype=np.uint8)
+            task_target_weight['class'] = np.ones(space_shape, dtype=np.float32)
+
+            # Group polygons into foreground / background for the class task
+            class_sseg_groups = {
+                'foreground': [],
+                'background': [],
+                'ignore': [],
+                'undistinguished': [],
+            }
+            for poly, cid, tid in zip(ann_polys, ann_cids, ann_tids):
                 new_class_catname = task_tid_to_cnames['class'][tid][time_idx]
                 new_class_cidx = self.classes.node_to_idx[new_class_catname]
                 orig_cidx = self.classes.id_to_idx[cid]
+                poly.meta['new_class_cidx'] = new_class_cidx
+                poly.meta['orig_cidx'] = orig_cidx
                 if new_class_catname in self.ignore_classes:
-                    weight = 0.0
-                    if wants_class_sseg:
-                        poly.fill(frame_class_ignore, value=1)
-                        poly.fill(frame_class_ohe[orig_cidx], value=1)
+                    class_sseg_groups['ignore'].append(poly)
                 elif new_class_catname in self.class_foreground_classes:
-                    if wants_class_sseg:
-                        poly.fill(frame_class_ohe[new_class_cidx], value=1)
-                        flag_poly_filled = True
+                    class_sseg_groups['foreground'].append(poly)
+                elif new_class_catname in self.background_classes:
+                    class_sseg_groups['background'].append(poly)
+                elif new_class_catname in self.undistinguished_classes:
+                    class_sseg_groups['undistinguished'].append(poly)
 
-            if wants_boxes:
-                box_ltrb.append(ltrb)
-                box_tids.append(-1 if tid is None else tid)
-                box_cidxs.append(new_class_cidx)
-                box_weights.append(weight)
+            if self.config['balance_areas']:
+                big_poly_fg = unary_union([p.to_shapely() for p in class_sseg_groups['foreground']])
+                big_poly_ignore = unary_union([p.to_shapely() for p in class_sseg_groups['ignore']])
+                big_poly_undistinguished = unary_union([p.to_shapely() for p in class_sseg_groups['undistinguished']])
+                big_poly_bg = ((frame_box - big_poly_fg) - big_poly_ignore) - big_poly_undistinguished
+                total_area = frame_box.area
+                bg_cover_frac = big_poly_bg.area / (total_area + 1)
+                # fg_cover_frac = big_poly_fg.area / (total_area + 1)
+                bg_weight_share = (1 - bg_cover_frac)
+                task_target_weight['class'][:] = bg_weight_share ** 0.5
+            else:
+                task_target_weight['class'][:] = 1
 
-            if self.dist_weights and flag_poly_filled:
-                # New feature where we encode that we care much more about
-                # segmenting the inside of the object than the outside.
-                # Effectively boundaries become uncertain.
-                shape = frame_class_ohe[0].shape
-                dtype = frame_class_ohe[0].dtype
-                dist, poly_mask = util_kwimage.polygon_distance_transform(
-                    poly, shape=shape, dtype=dtype)
-                max_dist = dist.max()
-                if max_dist > 0:
-                    dist_weight = dist / max_dist
-                    weight_mask = dist_weight + (1 - poly_mask)
-                    frame_poly_weights = frame_poly_weights * weight_mask
+            for poly in class_sseg_groups['ignore']:
+                poly.fill(task_target_ignore['class'], value=1, assert_inplace=True)
+                poly.fill(task_target_ohe['class'][poly.meta['orig_cidx']], value=1, assert_inplace=True)
 
-        frame_poly_weights = np.maximum(frame_poly_weights, self.min_spacetime_weight)
+            for poly in class_sseg_groups['background']:
+                # task_target_ignore['class'] = poly.fill(task_target_ignore['class'], value=1, assert_inplace=True)
+                poly.fill(task_target_ohe['class'][poly.meta['orig_cidx']], value=1, assert_inplace=True)
 
-        # Postprocess (Dilate?) the truth map
-        for cidx, class_map in enumerate(frame_class_ohe):
-            # class_map = kwimage.morphology(class_map, 'dilate', kernel=5)
-            frame_cidxs[class_map > 0] = cidx
+            for poly in class_sseg_groups['undistinguished']:
+                task_target_ignore['class'] = poly.fill(task_target_ignore['class'], value=1, assert_inplace=True)
+                poly.fill(task_target_ohe['class'][poly.meta['orig_cidx']], value=1, assert_inplace=True)
+
+            for poly in class_sseg_groups['foreground']:
+                poly.fill(task_target_ohe['class'][poly.meta['new_class_cidx']], value=1, assert_inplace=True)
+
+                if self.config['balance_areas']:
+                    weight = (1 - (poly.area / (total_area + 1)))
+                    poly.fill(task_target_weight['class'], value=weight, assert_inplace=True)
+
+                if self.dist_weights:
+                    # New feature where we encode that we care much more about
+                    # segmenting the inside of the object than the outside.
+                    # Effectively boundaries become uncertain.
+                    dist, poly_mask = util_kwimage.polygon_distance_transform(
+                        poly, shape=space_shape)
+                    max_dist = dist.max()
+                    if max_dist > 0:
+                        dist_weight = dist / max_dist
+                        weight_mask = dist_weight + (1 - poly_mask)
+                        task_target_weight['class'] = task_target_weight['class'] * weight_mask
+
+            max_weight = task_target_weight['class'].max()
+            if max_weight > 0:
+                task_target_weight['class'] /= max_weight
+
+        # frame_poly_weights = np.maximum(frame_poly_weights, self.min_spacetime_weight)
 
         if self.upweight_centers:
             sigma = (
                 (4.8 * ((space_shape[1] - 1) * 0.5 - 1) + 0.8),
                 (4.8 * ((space_shape[0] - 1) * 0.5 - 1) + 0.8),
             )
-            space_weights = kwimage.normalize(kwimage.gaussian_patch(space_shape, sigma=sigma))
+            space_weights = kwarray.normalize(kwimage.gaussian_patch(space_shape, sigma=sigma))
             # space_weights = util_kwimage.upweight_center_mask(space_shape)
             space_weights = np.maximum(space_weights, self.min_spacetime_weight)
-            frame_weights = space_weights * time_weights[time_idx] * frame_poly_weights
+            spacetime_weights = space_weights * time_weights[time_idx]
         else:
-            frame_weights = frame_poly_weights
+            spacetime_weights = 1
 
         # Note: ensure this is resampled into target output space
         # Module the pixelwise weights by the 1 - the fraction of modes
         # that have nodata.
-        DOWNWEIGHT_NAN_REGIONS = 1
-        if DOWNWEIGHT_NAN_REGIONS:
+        if self.config['downweight_nan_regions']:
             nodata_total = 0.0
             for mask in mode_to_invalid_mask.values():
                 if mask is None:
@@ -1966,36 +2220,48 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                         mask_ = mask.astype(float)
                     mask_ = kwimage.imresize(mask_, dsize=output_dsize)
                     nodata_total += mask_
-            # nodata_total = np.add.reduce([0 if mask is None else mask.sum(axis=2) / mask.shape[2] for mask in mode_to_invalid_mask.values()])
             total_bands = len(mode_to_invalid_mask)
             nodata_frac = nodata_total / total_bands
             nodata_weight = 1 - nodata_frac
-            frame_weights = frame_weights * nodata_weight
+        else:
+            nodata_weight = 1
+            # frame_weights = frame_weights * nodata_weight
+
+        generic_frame_weight = nodata_weight * spacetime_weights
 
         # Dilate ignore masks (dont care about the surrounding area # either)
         # frame_saliency = kwimage.morphology(frame_saliency, 'dilate', kernel=ignore_dilate)
         if self.ignore_dilate > 0:
-            saliency_ignore = kwimage.morphology(saliency_ignore, 'dilate', kernel=self.ignore_dilate)
-            frame_class_ignore = kwimage.morphology(frame_class_ignore, 'dilate', kernel=self.ignore_dilate)
+            for k, v in task_target_ignore.items():
+                task_target_ignore[k] = kwimage.morphology(v, 'dilate', kernel=self.ignore_dilate)
 
-        saliency_weights = frame_weights * (1 - saliency_ignore)
-        class_weights = frame_weights * (1 - frame_class_ignore)
-        saliency_weights = saliency_weights.clip(0, 1)
-        frame_weights = frame_weights.clip(0, 1)
+        if self.weight_dilate > 0:
+            for k, v in task_target_weight.items():
+                task_target_weight[k] = kwimage.morphology(v, 'dilate', kernel=self.weight_dilate)
 
-        if wants_boxes:
-            frame_item['box_ltrb'] = np.array(box_ltrb).astype(np.float32)
-            # ann_boxes.to_ltrb().data
-            frame_item['box_tids'] = np.array(box_tids).astype(np.int64)
-            frame_item['box_cidxs'] = np.array(box_cidxs).astype(np.int64)
-            frame_item['box_weights'] = np.array(box_weights).astype(np.float32)
-
+        frame_item['ann_aids'] = ann_aids
         if wants_class_sseg:
+            # Postprocess (Dilate?) the truth map
+            # TODO: it would be better if the network accepted indicator vector
+            # style labels rather than integer style labels.
+            for cidx, class_map in enumerate(task_target_ohe['class']):
+                # class_map = kwimage.morphology(class_map, 'dilate', kernel=5)
+                frame_cidxs[class_map > 0] = cidx
+            task_frame_weight = (
+                (1 - task_target_ignore['class']) *
+                task_target_weight['class'] *
+                generic_frame_weight
+            )
             frame_item['class_idxs'] = frame_cidxs
-            frame_item['class_weights'] = class_weights
+            frame_item['class_weights'] = np.clip(task_frame_weight, 0, 1)
         if wants_saliency_sseg:
-            frame_item['saliency'] = frame_saliency
-            frame_item['saliency_weights'] = saliency_weights
+            task_frame_weight = (
+                (1 - task_target_ignore['saliency']) *
+                task_target_weight['saliency'] *
+                generic_frame_weight
+            )
+            frame_item['saliency'] = task_target_ohe['saliency']
+            frame_item['saliency_weights'] = np.clip(task_frame_weight, 0, 1)
 
     def cached_dataset_stats(self, num=None, num_workers=0, batch_size=2,
                              with_intensity=True, with_class=True):
@@ -2034,6 +2300,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         Args:
             num (int | None): number of input items to compute stats for
 
+        CommandLine:
+            xdoctest -m watch.tasks.fusion.datamodules.kwcoco_dataset KWCocoVideoDataset.compute_dataset_stats:2
+
         Example:
             >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
             >>> import kwcoco
@@ -2054,9 +2323,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
             >>> import watch
             >>> from watch.tasks.fusion import datamodules
-            >>> num = 10
+            >>> num = 1
             >>> datamodule = datamodules.KWCocoVideoDataModule(
-            >>>     train_dataset='vidshapes-watch', chip_size=64, time_steps=3,
+            >>>     train_dataset='vidshapes-watch', window_dims=64, time_steps=3,
             >>>     num_workers=0, batch_size=3, channels='auto',
             >>>     normalize_inputs=num)
             >>> datamodule.setup('fit')
@@ -2108,15 +2377,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         video_id_histogram = ub.ddict(lambda: 0)
         image_id_histogram = ub.ddict(lambda: 0)
 
-        # TODO: we should ensure instance level frequency data as well
-        # as pixel level frequency data.
-
-        # TODO: we should ensure we include at least one sample from each type
-        # of modality.
-        # Note: the requested order of the channels could be different that
-        # what is registered in the dataset. Need to find a good way to account
-        # for this.
-
         # Make a list of all unique modes in the dataset.
         # User specifies all of this explicitly now
         unique_sensor_modes = set(
@@ -2126,8 +2386,24 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         is_native = self.config['input_space_scale'] == 'native'
 
         print('unique_sensor_modes = {}'.format(ub.repr2(unique_sensor_modes, nl=1)))
-
         intensity_dtype = np.float64
+
+        # Ensure instance level frequency data in addition to pixel level
+        USE_INSTANCE_LEVEL_CLASS_STATS = 1
+        if USE_INSTANCE_LEVEL_CLASS_STATS:
+            annots = self.sampler.dset.annots()
+            track_ids = annots.lookup('track_id', None)
+            cnames = annots.cnames
+            trackid_to_cnames = ub.udict(ub.group_items(cnames, track_ids))
+            trackid_to_cnames = trackid_to_cnames.map_values(set)
+            track_classes = list(ub.flatten(trackid_to_cnames.values()))
+            annot_class_freq = ub.udict(ub.dict_hist(cnames)).sorted_keys()
+            track_class_freq = ub.udict(ub.dict_hist(track_classes)).sorted_keys()
+            print('annot_class_freq = {}'.format(ub.urepr(annot_class_freq, nl=1)))
+            print('track_class_freq = {}'.format(ub.urepr(track_class_freq, nl=1)))
+        else:
+            track_class_freq = None
+            annot_class_freq = None
 
         WITH_PROG_POSTFIX_TEXT = 1
         if WITH_PROG_POSTFIX_TEXT:
@@ -2153,6 +2429,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                             perchan_stats = {'mean': np.array([np.nan]), 'std': np.array([np.nan])}
                         chan_mean = perchan_stats['mean'][:, None, None]
                         chan_std = perchan_stats['std'][:, None, None]
+                        chan_min = perchan_stats['min'][:, None, None]
+                        chan_max = perchan_stats['max'][:, None, None]
                     else:
                         try:
                             perchan_stats = running.summarize(axis=(1, 2))
@@ -2160,6 +2438,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                             perchan_stats = {'mean': np.array([[[np.nan]]]), 'std': np.array([[[np.nan]]])}
                         chan_mean = perchan_stats['mean']
                         chan_std = perchan_stats['std']
+                        chan_min = perchan_stats['min']
+                        chan_max = perchan_stats['max']
 
                     # For nans, set the mean to zero and set the std to a huge
                     # number if we dont have any data on it. That will prevent
@@ -2174,15 +2454,23 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     input_stats[(sensor, chan_key)] = {
                         'mean': chan_mean,
                         'std': chan_std,
+                        'min': chan_min,
+                        'max': chan_max,
                     }
             return input_stats
+
+        from watch.utils import util_progress
+        from watch.utils import util_environ
+        USE_RICH_UPDATES = util_environ.envflag('USE_RICH_UPDATES', 1)
+        pman = util_progress.ProgressManager(
+            backend='rich' if USE_RICH_UPDATES else 'progiter')
 
         def update_displayed_estimates():
             """
             Build an intermediate summary to display to the user while this is
             running.
             """
-            if pman.backend == 'rich':
+            if USE_RICH_UPDATES:
                 stat_lines = ['Current Estimated Dataset Statistics: ']
                 if with_intensity:
                     input_stats = current_input_stats()
@@ -2193,9 +2481,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     class_stats = ub.sorted_vals(ub.dzip(classes, total_freq), reverse=True)
                     class_info_text = 'Class Stats: ' + ub.urepr(class_stats)
                     stat_lines.append(class_info_text)
-                if 1:
-                    stat_lines.append('Unique Image Samples: {}'.format(len(image_id_histogram)))
-                    stat_lines.append('Unique Video Samples: {}'.format(len(video_id_histogram)))
+                stat_lines.append('Unique Image Samples: {}'.format(len(image_id_histogram)))
+                stat_lines.append('Unique Video Samples: {}'.format(len(video_id_histogram)))
                 info_text = '\n'.join(stat_lines).strip()
                 if info_text:
                     pman.update_info(info_text)
@@ -2210,7 +2497,12 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
                 if with_intensity:
                     try:
-                        curr = ub.udict(running.summarize(keepdims=False))
+                        # Broken in general, only looks at one sensorchan, but
+                        # not sure how to do better. This is off by default
+                        # anyway.
+                        input_stats = current_input_stats()
+                        input_stats2 = {sc: {k: v.ravel() for k, v in stats.items()} for sc, stats in input_stats.items()}
+                        curr = ub.peek(input_stats2.values())
                     except RuntimeError:
                         curr = {}
                     else:
@@ -2221,11 +2513,25 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     text = intermediate_text_trunc
                 prog.set_postfix_str(text)
 
-        from watch.utils import util_progress
-        from watch.utils import util_environ
-        USE_RICH_UPDATES = util_environ.envflag('USE_RICH_UPDATES', 1)
-        pman = util_progress.ProgressManager(
-            backend='rich' if USE_RICH_UPDATES else 'progiter')
+        def update_intensity_estimates(frame_item):
+            # Update pixel-level intensity histogram
+            sensor_code = frame_item['sensor']
+            modes = frame_item['modes']
+
+            for mode_code, mode_val in modes.items():
+                sensor_mode_hist[(sensor_code, mode_code)] += 1
+                running = channel_stats[sensor_code][mode_code]
+                val = mode_val.numpy().astype(intensity_dtype)
+                weights = np.isfinite(val).astype(intensity_dtype)
+                # kwarray can handle nans now
+                if is_native:
+                    # Put channels last so we can update multiple at once
+                    flat_vals = val.transpose(1, 2, 0).reshape(-1, val.shape[0])
+                    flat_weights = weights.transpose(1, 2, 0).reshape(-1, weights.shape[0])
+                    running.update_many(flat_vals, weights=flat_weights)
+                else:
+                    running.update(val, weights=weights)
+
         # TODO: we can compute the intensity histogram more efficiently by
         # only doing it for unique channels (which might be duplicated)
         with pman:
@@ -2250,23 +2556,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                                 item_freq = np.histogram(class_idxs.ravel(), bins=bins)[0]
                                 total_freq += item_freq
                         if with_intensity:
-                            # Update pixel-level intensity histogram
-                            sensor_code = frame_item['sensor']
-                            modes = frame_item['modes']
-
-                            for mode_code, mode_val in modes.items():
-                                sensor_mode_hist[(sensor_code, mode_code)] += 1
-                                running = channel_stats[sensor_code][mode_code]
-                                val = mode_val.numpy().astype(intensity_dtype)
-                                weights = np.isfinite(val).astype(intensity_dtype)
-                                # kwarray can handle nans now
-                                if is_native:
-                                    # Put channels last so we can update multiple at once
-                                    flat_vals = val.transpose(1, 2, 0).reshape(-1, val.shape[0])
-                                    flat_weights = weights.transpose(1, 2, 0).reshape(-1, weights.shape[0])
-                                    running.update_many(flat_vals, weights=flat_weights)
-                                else:
-                                    running.update(val, weights=weights)
+                            update_intensity_estimates(frame_item)
 
                 if WITH_PROG_POSTFIX_TEXT and timer._first or timer.toc() > postfix_update_threshold:
                     update_displayed_estimates()
@@ -2275,6 +2565,50 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
             if WITH_PROG_POSTFIX_TEXT:
                 update_displayed_estimates()
+
+        # TODO: we should ensure we include at least one sample from each type
+        # of modality.  Note: the requested order of the channels could be
+        # different that what is registered in the dataset. Need to find a good
+        # way to account for this.
+        MISSING_SENSOR_FALLBACK = util_environ.envflag('MISSING_SENSOR_FALLBACK', 1)
+        if MISSING_SENSOR_FALLBACK and with_intensity:
+            missing_sensor_modes = set(unique_sensor_modes) - set(sensor_mode_hist)
+            # Try to find a few examples with these missing modes
+            if missing_sensor_modes:
+                print(f'Warning: we are missing stats for {missing_sensor_modes}. '
+                      'We will try to force something for them')
+                coco_images = self.sampler.dset.images().coco_images
+                sensor_to_images = ub.group_items(coco_images, key=lambda x: x.img.get('sensor_coarse', None))
+                extra_sample_groups = []
+                for sensor, mode in missing_sensor_modes:
+                    candidate_images = sensor_to_images.get(sensor, [])
+                    if len(candidate_images) == 0:
+                        print(f'sensor warning: unable to sample data for {sensor}:{mode}')
+                    else:
+                        filtered = []
+                        for img in candidate_images:
+                            if (img.channels & mode).numel():
+                                filtered.append(img)
+                        if not filtered:
+                            print(f'mode warning: unable to sample data for {sensor}:{mode}')
+                        extra_sample_groups.append(filtered)
+
+                # Build extra fallback samples
+                for group in ub.ProgIter(extra_sample_groups, desc='process fallbacks'):
+                    image_ids = [g.img['id'] for g in group]
+                    images = self.sampler.dset.images(image_ids)
+                    vidid_to_gids = ub.group_items(image_ids, images.lookup('video_id'))
+                    for vidid, gids in vidid_to_gids.items():
+                        video = self.sampler.dset.index.videos[vidid]
+                        # Hack: just use the entire video, if that fails we should
+                        # implement windowing here.
+                        space_slice = (
+                            slice(0, video['height']),
+                            slice(0, video['width']),
+                        )
+                        sample = {'video_id': vidid, 'gids': gids[0:1],
+                                  'space_slice': space_slice}
+                        item = self[sample]
 
         self.disable_augmenter = False
 
@@ -2293,7 +2627,10 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             'unique_sensor_modes': unique_sensor_modes,
             'sensor_mode_hist': dict(sensor_mode_hist),
             'input_stats': input_stats,
-            'class_freq': class_freq,
+            'class_freq': class_freq,  # pixelwise
+
+            'annot_class_freq': annot_class_freq,
+            'track_class_freq': track_class_freq,
             # 'video_id_histogram': dict(video_id_histogram),
         }
         return dataset_stats
@@ -2337,7 +2674,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         Example:
             >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
-            >>> import ndsampler
             >>> import kwcoco
             >>> import kwarray
             >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
@@ -2433,6 +2769,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         Returns:
             dict : a summary of the item
         """
+        if item is None:
+            raise Exception('Cant summarize a failed sample item=None')
         item_summary = {}
         item_summary['frame_summaries'] = []
         timestamps = []
@@ -2484,11 +2822,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         Example:
             >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
-            >>> import ndsampler
             >>> import kwcoco
             >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
-            >>> sampler = ndsampler.CocoSampler(coco_dset)
-            >>> self = KWCocoVideoDataset(sampler, time_dims=3, window_dims=(530, 610), channels='auto')
+            >>> self = KWCocoVideoDataset(coco_dset, time_dims=3, window_dims=(530, 610), channels='auto')
             >>> loader = self.make_loader(batch_size=2)
             >>> batch = next(iter(loader))
         """
@@ -2513,20 +2849,6 @@ def worker_init_fn(worker_id):
         if hasattr(self.sampler.dset, 'connect'):
             # Reconnect to the backend if we are using SQL
             self.sampler.dset.connect(readonly=True)
-
-
-def _coerce_ndsampler(data):
-    """
-    Helper to ensure a sampler, kwcoco file, or path to a kwcoco file is
-    converted to a sampler
-    """
-    import ndsampler
-    if isinstance(data, ndsampler.CocoSampler):
-        self = data
-    else:
-        dset = kwcoco.CocoDataset.coerce(data)
-        self = ndsampler.CocoSampler(dset)
-    return self
 
 
 @functools.cache

@@ -1,3 +1,44 @@
+"""
+CommandLine:
+    # Benchmark time sampling
+    SMART_DATA_DVC_DPATH=1 XDEV_PROFILE=1 xdoctest -m watch.tasks.fusion.datamodules.spacetime_grid_builder __doc__:0
+
+Example:
+    >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
+    >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
+    >>> import watch
+    >>> import kwcoco
+    >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
+    >>> coco_fpath = dvc_dpath / 'Drop6/imganns-NZ_R001.kwcoco.zip'
+    >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+    >>> window_dims = 128
+    >>> time_dims = 5
+    >>> builder = SpacetimeGridBuilder(
+    >>>     coco_dset,
+    >>>     time_dims,
+    >>>     window_dims,
+    >>>     time_sampling='soft2+distribute',
+    >>>     time_kernel='-1y,-8m,-2w,0,2w,8m,1y',
+    >>>     keepbound=True,
+    >>>     use_annot_info=False,
+    >>>     use_grid_positives=False,
+    >>>     use_centered_positives=False,
+    >>>     respect_valid_regions=False,  # enabling this is slow
+    >>>     use_cache=0
+    >>> )
+    >>> grid = builder.build()
+    >>> # xdoctest: +REQUIRES(--show)
+    >>> import kwplot
+    >>> plt = kwplot.autoplt()
+    >>> canvas = visualize_sample_grid(dset, grid, max_vids=1, max_frames=3)
+    >>> kwplot.imshow(canvas, doclf=1, fnum=2)
+    >>> plt.gca().set_title(ub.codeblock(
+        '''
+        Sampled using larger scaled windows
+        '''))
+    >>> kwplot.show_if_requested()
+"""
+
 import kwarray
 import kwimage
 import numpy as np
@@ -5,6 +46,11 @@ import ubelt as ub
 from watch.utils import util_kwimage
 from watch.utils import kwcoco_extensions
 from watch import heuristics
+
+try:
+    from xdev import profile
+except ImportError:
+    profile = ub.identity
 
 
 class SpacetimeGridBuilder:
@@ -23,13 +69,14 @@ class SpacetimeGridBuilder:
         window_dims,
         window_overlap=0.0,
         negative_classes=None,
-        keepbound=False,
+        keepbound=True,
         include_sensors=None,
         exclude_sensors=None,
         select_images=None,
         select_videos=None,
         time_sampling='hard+distribute',
-        time_span='2y',
+        time_span=None,
+        time_kernel=None,
         use_annot_info=True,
         use_grid_positives=True,
         use_centered_positives=True,
@@ -39,24 +86,85 @@ class SpacetimeGridBuilder:
         workers=0,
         use_cache=1
     ):
+        """
+        Args:
+            dset (kwcoco.CocoDataset): coco dataset
+
+            time_dims (int):
+                number of time steps
+
+            window_dims (Tuple[int, int] | str):
+                spatial height, width of the sample region or a string code.
+
+            window_overlap (float):
+                fractional spatial overlap
+
+            set_cover_algo (str | None):
+                Algorithm used to find set cover of image IDs. Options are 'approx' (a greedy solution)
+                or 'exact' (an ILP solution). If None is passed, set cover is not computed. The 'exact'
+                method requires the packe pulp, available at PyPi.
+
+            window_space_scale (str):
+                Code indicating the scale at which to sample. If None uses the
+                videospace GSD.
+
+            use_grid_positives (bool):
+                if False, will remove any grid sample that contains a positive
+                example. In this case use_centered_positives should be True.
+
+            use_centered_positives (bool):
+                extend the grid with extra off-axis samples where positive
+                annotations are centered. TODO: we could do a box packing
+                to reduce the potential size here.
+
+            use_annot_info (bool):
+                if True allows using annotation information to get a better
+                train-time grid. Should not be used at test-time.
+
+            time_span (str):
+                indicates the desired start/stop date range of the sample
+
+            time_kernel (str):
+                mutually exclusive with time span.
+
+            time_sampling (str):
+                code for specific temporal sampler: see temporal_sampling.py for
+                more information.
+
+            exclude_sensors (List[str]):
+                A list of sensors to exclude from the grid
+
+            negative_classes (List[str]):
+                indicate class names that should not count towards a region being
+                marked as positive.
+
+            respect_valid_regions (bool):
+                if True, only place windows in valid regions
+
+            workers (int): parallel workers
+
+            use_cache (bool): uses a disk cache if True
+        """
         builder.kw = ub.udict(locals()) - {'builder'}
 
     def build(builder):
         return sample_video_spacetime_targets(**builder.kw)
 
 
+@profile
 def sample_video_spacetime_targets(dset,
                                    time_dims=None,
                                    window_dims=None,
                                    window_overlap=0.0,
                                    negative_classes=None,
-                                   keepbound=False,
+                                   keepbound=True,
                                    include_sensors=None,
                                    exclude_sensors=None,
                                    select_images=None,
                                    select_videos=None,
                                    time_sampling='hard+distribute',
                                    time_span='2y',
+                                   time_kernel=None,
                                    use_annot_info=True,
                                    use_grid_positives=True,
                                    use_centered_positives=True,
@@ -78,60 +186,20 @@ def sample_video_spacetime_targets(dset,
     Ask jon about what the params mean if you need this.
     This code badly needs a refactor.
 
-    Args:
-        dset (kwcoco.CocoDataset): coco dataset
-
-        time_dims (int):
-            number of time steps
-
-        window_dims (Tuple[int, int] | str):
-            spatial height, width of the sample region or a string code.
-
-        window_overlap (float):
-            fractional spatial overlap
-
-        set_cover_algo (str | None):
-            Algorithm used to find set cover of image IDs. Options are 'approx' (a greedy solution)
-            or 'exact' (an ILP solution). If None is passed, set cover is not computed. The 'exact'
-            method requires the packe pulp, available at PyPi.
-
-        window_space_scale (str):
-            Code indicating the scale at which to sample. If None uses the
-            videospace GSD.
-
-        use_grid_positives (bool):
-            if False, will remove any grid sample that contains a positive
-            example. In this case use_centered_positives should be True.
-
-        use_centered_positives (bool):
-            extend the grid with extra off-axis samples where positive
-            annotations are centered. TODO: we could do a box packing
-            to reduce the potential size here.
-
-        use_annot_info (bool):
-            if True allows using annotation information to get a better
-            train-time grid. Should not be used at test-time.
-
-        time_span (str):
-            indicates the desired start/stop date range of the sample
-
-        time_sampling (str):
-            code for specific temporal sampler: see temporal_sampling.py for
-            more information.
-
-        exclude_sensors (List[str]):
-            A list of sensors to exclude from the grid
-
-        negative_classes (List[str]):
-            indicate class names that should not count towards a region being
-            marked as positive.
-
-        respect_valid_regions (bool):
-            if True, only place windows in valid regions
-
-        workers (int): parallel workers
-
-        use_cache (bool): uses a disk cache if True
+    Example:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> import os
+        >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
+        >>> import watch
+        >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
+        >>> coco_fpath = dvc_dpath / 'Drop6/data_train_split1.kwcoco.zip'
+        >>> dset = watch.coerce_kwcoco(coco_fpath)
+        >>> window_overlap = 0.0
+        >>> window_dims = (128, 128)
+        >>> time_dims = 2
+        >>> sample_grid = SpacetimeGridBuilder(dset, time_dims, window_dims).build()
+        >>> time_sampling = 'hard+distribute'
+        >>> positives = list(ub.take(sample_grid['targets'], sample_grid['positives_indexes']))
 
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
@@ -139,46 +207,6 @@ def sample_video_spacetime_targets(dset,
         >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
         >>> import watch
         >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
-        >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data_train.kwcoco.json'
-        >>> dset = kwcoco.CocoDataset(coco_fpath)
-        >>> window_overlap = 0.0
-        >>> keepbound = False
-        >>> exclude_sensors = None
-        >>> sample_grid = sample_video_spacetime_targets(dset, 11, (128, 128))
-        >>> time_sampling = 'hard+distribute'
-        >>> positives = list(ub.take(sample_grid['targets'], sample_grid['positives_indexes']))
-
-        >>> import os
-        >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
-        >>> import watch
-        >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
-        >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data_vali.kwcoco.json'
-        >>> dset = kwcoco.CocoDataset(coco_fpath)
-        >>> window_overlap = 0.0
-        >>> keepbound = False
-        >>> exclude_sensors = None
-        >>> set_cover_algo = 'approx'
-        >>> window_space_scale = '13GSD'
-        >>> negative_classes = None
-        >>> time_span = '2y'
-        >>> use_annot_info = True
-        >>> use_grid_positives = 1
-        >>> use_centered_positives = 1
-        >>> time_sampling = 'hard+distribute'
-        >>> with ub.Timer('sample'):
-        >>>     sample_grid = sample_video_spacetime_targets(
-        >>>         dset, time_dims=2, window_dims=(128, 128), window_overlap=window_overlap, set_cover_algo=set_cover_algo,
-        >>>         window_space_scale=window_space_scale, time_sampling=time_sampling,
-        >>>         use_annot_info=use_annot_info, time_span=time_span, use_cache=1, workers=0)
-        >>> positives = list(ub.take(sample_grid['targets'], sample_grid['positives_indexes']))
-        >>> list(ub.unique([t['space_slice'] for t in sample_grid['targets']], key=ub.hash_data))
-
-    Example:
-        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-        >>> import os
-        >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
-        >>> import watch
-        >>> dvc_dpath = watch.find_smart_dvc_dpath()
         >>> coco_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/combo_LM_nowv_vali.kwcoco.json'
         >>> dset = kwcoco.CocoDataset(coco_fpath)
         >>> window_overlap = 0.5
@@ -187,12 +215,11 @@ def sample_video_spacetime_targets(dset,
         >>> keepbound = False
         >>> exclude_sensors = None
         >>> set_cover_algo = 'approx'
-        >>> sample_grid = sample_video_spacetime_targets(dset, time_dims, window_dims, window_overlap, set_cover_algo=set_cover_algo)
+        >>> sample_grid = SpacetimeGridBuilder(dset, time_dims, window_dims, window_overlap, set_cover_algo=set_cover_algo).build()
         >>> time_sampling = 'hard+distribute'
         >>> positives = list(ub.take(sample_grid['targets'], sample_grid['positives_indexes']))
 
         _ = xdev.profile_now(sample_video_spacetime_targets)(dset, window_dims, window_overlap)
-
 
     Example:
         >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
@@ -204,9 +231,9 @@ def sample_video_spacetime_targets(dset,
         >>> window_dims = (256, 256)
         >>> keepbound = False
         >>> time_sampling = 'soft2+distribute'
-        >>> sample_grid1 = sample_video_spacetime_targets(
+        >>> sample_grid1 = SpacetimeGridBuilder(
         >>>     dset, time_dims, window_dims, window_overlap,
-        >>>     time_sampling='soft2+distribute')
+        >>>     time_sampling='soft2+distribute').build()
         >>> boxes = [kwimage.Boxes.from_slice(target['space_slice'], clip=False).to_xywh() for target in sample_grid1['targets']]
         >>> all_boxes = kwimage.Boxes.concatenate(boxes)
         >>> assert np.all(all_boxes.height == window_dims[0])
@@ -222,12 +249,12 @@ def sample_video_spacetime_targets(dset,
         >>> window_dims = (32, 32)
         >>> keepbound = False
         >>> time_sampling = 'soft2+distribute'
-        >>> sample_grid1 = sample_video_spacetime_targets(
+        >>> sample_grid1 = SpacetimeGridBuilder(
         >>>     dset, time_dims, window_dims, window_overlap, exclude_sensors='Foo',
-        >>>     time_sampling='soft2+distribute')
-        >>> sample_grid2 = sample_video_spacetime_targets(
+        >>>     time_sampling='soft2+distribute').build()
+        >>> sample_grid2 = SpacetimeGridBuilder(
         >>>     dset, time_dims, window_dims, window_overlap,
-        >>>     time_sampling='contiguous+pairwise')
+        >>>     time_sampling='contiguous+pairwise').build()
 
         ub.peek(sample_grid1['vidid_to_time_sampler'].values()).show_summary(fnum=1)
         ub.peek(sample_grid2['vidid_to_time_sampler'].values()).show_summary(fnum=2)
@@ -239,11 +266,25 @@ def sample_video_spacetime_targets(dset,
     Ignore:
         >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
         >>> import watch
-        >>> dvc_dpath = watch.find_smart_dvc_dpath()
-        >>> coco_fpath = dvc_dpath / 'Drop1-Aligned-TA1-2022-01/data.kwcoco.json'
+        >>> import kwcoco
+        >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
+        >>> coco_fpath = dvc_dpath / 'Drop6/imganns-NZ_R001.kwcoco.zip'
         >>> dset = kwcoco.CocoDataset(coco_fpath)
         >>> window_overlap = 0.0
+        bad_image_ids = []
+        good_image_ids = []
+        for ann in dset.anns.values():
+            if 'bbox' not in ann:
+                bad_image_ids.append(ann['image_id'])
+            else:
+                good_image_ids.append(ann['image_id'])
+            ...
+        dset.videos(ub.oset(dset.images(ub.oset(bad_image_ids)).lookup('video_id'))).lookup('name')
+        dset.videos(ub.oset(dset.images(ub.oset(good_image_ids)).lookup('video_id'))).lookup('name')
     """
+    if isinstance(window_dims, int):
+        window_dims = (window_dims, window_dims)
+
     if window_dims is not None and isinstance(window_dims, tuple) and len(window_dims) == 3:
         ub.schedule_deprecation(
             'watch', 'window_dims', 'argument in spacetime_grid_builder',
@@ -256,6 +297,9 @@ def sample_video_spacetime_targets(dset,
         winspace_time_dims = time_dims
         winspace_space_dims = window_dims
 
+    if time_kernel is not None and time_span is not None:
+        raise ValueError('time_span and time_kernel are mutually exclusive')
+
     # from ndsampler import isect_indexer
     # _isect_index = isect_indexer.FrameIntersectionIndex.from_coco(dset)
     parts = set(time_sampling.split('+'))
@@ -263,6 +307,7 @@ def sample_video_spacetime_targets(dset,
         'hard', 'hardish', 'contiguous', 'soft2', 'soft', 'hardish2',
         'hardish3', 'soft2-contiguous-hardish3', 'uniform',
         'uniform-soft2-contiguous-hardish3',
+        'uniform-soft3-contiguous-hardish3',
     }
     update_rule_parts = parts & {'distribute', 'pairwise'}
     unknown = (parts - affinity_type_parts) - update_rule_parts
@@ -301,8 +346,8 @@ def sample_video_spacetime_targets(dset,
         exclude_sensors,
         select_videos,
         select_images,
-        affinity_type, update_rule,
-        time_span, use_annot_info,
+        affinity_type,
+        time_span, time_kernel, use_annot_info,
         set_cover_algo,
         use_grid_positives,
         use_centered_positives,
@@ -354,7 +399,7 @@ def sample_video_spacetime_targets(dset,
                 _sample_single_video_spacetime_targets, dset, dset_hashid,
                 video_id, video_gids, winspace_time_dims, winspace_space_dims,
                 window_overlap, negative_classes, keepbound,
-                affinity_type, update_rule, time_span, use_annot_info,
+                affinity_type, update_rule, time_span, time_kernel, use_annot_info,
                 use_grid_positives, use_centered_positives, window_space_scale,
                 set_cover_algo, use_cache, respect_valid_regions,
                 refine_iosa_thresh, verbose)
@@ -398,10 +443,11 @@ def sample_video_spacetime_targets(dset,
     return sample_grid
 
 
+@profile
 def _sample_single_video_spacetime_targets(
         dset, dset_hashid, video_id, video_gids, winspace_time_dims, winspace_space_dims,
         window_overlap, negative_classes,
-        keepbound, affinity_type, update_rule, time_span,
+        keepbound, affinity_type, update_rule, time_span, time_kernel,
         use_annot_info, use_grid_positives, use_centered_positives,
         window_space_scale, set_cover_algo, use_cache, respect_valid_regions,
         refine_iosa_thresh, verbose):
@@ -420,7 +466,7 @@ def _sample_single_video_spacetime_targets(
     from watch.tasks.fusion.datamodules import data_utils
 
     @ub.memoize
-    def get_warp_vidspace_from_imgspace(gid):
+    def get_warp_vid_from_img(gid):
         """
         Abstract the transform to bring us into whatever the internal "window
         space" is. Depends on whatever "window_scale" is computed as.
@@ -435,7 +481,7 @@ def _sample_single_video_spacetime_targets(
         if not coco_poly:
             sh_poly_vid = None
         else:
-            warp_vid_from_img = get_warp_vidspace_from_imgspace(gid)
+            warp_vid_from_img = get_warp_vid_from_img(gid)
             kw_poly_img = kwimage.MultiPolygon.coerce(coco_poly)
             kw_poly_vid = kw_poly_img.warp(warp_vid_from_img)
             sh_poly_vid = kw_poly_vid.to_shapely()
@@ -456,11 +502,12 @@ def _sample_single_video_spacetime_targets(
 
     vidspace_time_dims = winspace_time_dims
 
-    # TODO: allow for multiple time samplers
     time_sampler = tsm.MultiTimeWindowSampler.from_coco_video(
         dset, video_id, gids=video_gids, time_window=vidspace_time_dims,
-        affinity_type=affinity_type, update_rule=update_rule,
-        name=video_name, time_span=time_span)
+        affinity_type=affinity_type, update_rule=update_rule, name=video_name,
+        time_kernel=time_kernel, time_span=time_span
+    )
+
     gid_arr = np.array(video_gids)
     time_sampler.video_gids = gid_arr
     time_sampler.gid_to_index = ub.udict(enumerate(time_sampler.video_gids)).invert()
@@ -496,7 +543,7 @@ def _sample_single_video_spacetime_targets(
         gid_arr,
         vidspace_window_dims, window_overlap,
         negative_classes, keepbound,
-        affinity_type, update_rule,
+        affinity_type,
         time_span, use_annot_info,
         use_grid_positives,
         use_centered_positives,
@@ -545,7 +592,7 @@ def _sample_single_video_spacetime_targets(
         if use_annot_info:
             qtree, tid_to_infos = _build_vidspace_track_qtree(
                 dset, video_gids, negative_classes, vidspace_video_width,
-                vidspace_video_height, get_warp_vidspace_from_imgspace)
+                vidspace_video_height, get_warp_vid_from_img)
         else:
             qtree = None
             tid_to_infos = None
@@ -571,16 +618,20 @@ def _sample_single_video_spacetime_targets(
                 main_idx_to_gids, refine_iosa_thresh, time_sampler,
                 get_image_valid_region_in_vidspace, respect_valid_regions,
                 set_cover_algo)
+            new_targets = list(new_targets)
 
-            for target in new_targets:
-                label = target['label']
-                if label == 'positive_grid':
-                    if not use_grid_positives:
-                        continue
-                    video_positive_idxs.append(len(video_targets))
-                elif label == 'negative_grid':
-                    video_negative_idxs.append(len(video_targets))
-                video_targets.append(target)
+            if not use_annot_info:
+                video_targets.extend(new_targets)
+            else:
+                for target in new_targets:
+                    label = target['label']
+                    if label == 'positive_grid':
+                        if not use_grid_positives:
+                            continue
+                        video_positive_idxs.append(len(video_targets))
+                    elif label == 'negative_grid':
+                        video_negative_idxs.append(len(video_targets))
+                    video_targets.append(target)
 
         if use_centered_positives and use_annot_info:
             # FIXME: This code is too slow
@@ -595,6 +646,7 @@ def _sample_single_video_spacetime_targets(
                 new_targets = _build_targets_around_track(
                     video_id, tid, infos, video_gids, vidspace_window_dims,
                     time_sampler)
+                new_targets = list(new_targets)
                 for target in new_targets:
                     video_positive_idxs.append(len(video_targets))
                     video_targets.append(target)
@@ -623,6 +675,7 @@ def _sample_single_video_spacetime_targets(
     return _cached, meta, time_sampler, video_gids
 
 
+@profile
 def _build_targets_around_track(video_id, tid, infos, video_gids,
                                 vidspace_window_dims, time_sampler):
     """
@@ -639,7 +692,8 @@ def _build_targets_around_track(video_id, tid, infos, video_gids,
         # TODO: we could make frames where the phase transitions
         # more likely here.
         _hack_main_idx = np.where(time_sampler.video_gids == main_gid)[0][0]
-        sample_gids = list(ub.take(video_gids, time_sampler.sample(_hack_main_idx)))
+        _sample_idxs = time_sampler.sample(_hack_main_idx)
+        sample_gids = list(ub.take(video_gids, _sample_idxs))
         _hack = {_hack_main_idx: sample_gids}
         _hack2 = _hack
         if _hack2:
@@ -659,6 +713,7 @@ def _build_targets_around_track(video_id, tid, infos, video_gids,
             yield target
 
 
+@profile
 def _build_targets_in_spatial_region(dset, video_id, vidspace_region,
                                      use_annot_info, qtree, main_idx_to_gids,
                                      refine_iosa_thresh, time_sampler,
@@ -736,9 +791,10 @@ def _build_targets_in_spatial_region(dset, video_id, vidspace_region,
         yield target
 
 
+@profile
 def _build_vidspace_track_qtree(dset, video_gids, negative_classes,
                                 vidspace_video_width, vidspace_video_height,
-                                get_warp_vidspace_from_imgspace):
+                                get_warp_vid_from_img):
     """
     Build a data structure that allows for fast lookup of which annotations
     exist in the in the requested "Window Space".
@@ -747,7 +803,6 @@ def _build_vidspace_track_qtree(dset, video_gids, negative_classes,
     """
     import pyqtree
     qtree = pyqtree.Index((0, 0, vidspace_video_width, vidspace_video_height))
-    qtree.aid_to_tlbr = {}
     tid_to_infos = ub.ddict(list)
     video_images = dset.images(video_gids)
     video_coco_images = video_images.coco_images
@@ -756,35 +811,50 @@ def _build_vidspace_track_qtree(dset, video_gids, negative_classes,
         img_info = coco_img.img
         gid = img_info['id']
         frame_index = img_info['frame_index']
-        tids = dset.annots(aids).lookup('track_id', None)
-        cids = dset.annots(aids).lookup('category_id', None)
+        annots = dset.annots(aids)
+        tids = annots.lookup('track_id', None)
+        cids = annots.lookup('category_id', None)
         cnames = dset.categories(cids).name
 
-        warp_vid_from_img = get_warp_vidspace_from_imgspace(gid)
+        warp_vid_from_img = get_warp_vid_from_img(gid)
 
+        # Gather data in imagespace so we can group expensive steps together
+        imgspace_xywh = []
+        infos = []
         for tid, aid, cid, cname in zip(tids, aids, cids, cnames):
             if cname not in negative_classes:
-                imgspace_box = kwimage.Boxes([
-                    dset.index.anns[aid]['bbox']], 'xywh')
-                vidspace_box = imgspace_box.warp(warp_vid_from_img)
-                vidspace_box = vidspace_box.clip(
-                    0, 0, vidspace_video_width, vidspace_video_height)
-                if vidspace_box.area.ravel()[0] > 0:
-                    tlbr_box = vidspace_box.to_ltrb().data[0]
-                    if tid is not None:
-                        tid_to_infos[tid].append({
-                            'gid': gid,
-                            'cid': cid,
-                            'frame_index': frame_index,
-                            'vidspace_box': tlbr_box,
-                            'cname': dset._resolve_to_cat(cid)['name'],
-                            'aid': aid,
-                        })
-                    qtree.insert(aid, tlbr_box)
-                    qtree.aid_to_tlbr[aid] = tlbr_box
+                imgspace_xywh.append(dset.index.anns[aid]['bbox'])
+                infos.append({
+                    'gid': gid,
+                    'cid': cid,
+                    'tid': tid,
+                    'frame_index': frame_index,
+                    'cname': dset._resolve_to_cat(cid)['name'],
+                    'aid': aid,
+                })
+
+        imgspace_boxes = kwimage.Boxes(np.array(imgspace_xywh), 'xywh')
+        vidspace_boxes = imgspace_boxes.warp(warp_vid_from_img)
+        vidspace_boxes = vidspace_boxes.clip(
+            0, 0, vidspace_video_width, vidspace_video_height)
+        isvalid_flags = vidspace_boxes.area.ravel() > 0
+        valid_vidspace_boxes = vidspace_boxes.compress(isvalid_flags)
+        valid_infos = list(ub.compress(infos, isvalid_flags))
+
+        for info, ltrb in zip(valid_infos, valid_vidspace_boxes.to_ltrb().data):
+            tid = info['tid']
+            aid = info['aid']
+            if tid is not None:
+                info.update({
+                    'vidspace_box': ltrb,
+                })
+                tid_to_infos[tid].append(info)
+            qtree.insert(aid, ltrb)
+
     return qtree, tid_to_infos
 
 
+@profile
 def _refine_time_sample(dset, main_idx_to_gids, vidspace_box, refine_iosa_thresh, time_sampler, get_image_valid_region_in_vidspace):
     """
     Refine the time sample based on spatial information
@@ -885,7 +955,7 @@ def make_track_based_spatial_samples(coco_dset):
         >>> import os
         >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
         >>> import watch
-        >>> dvc_dpath = watch.find_smart_dvc_dpath()
+        >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
         >>> coco_fpath = dvc_dpath / 'Drop1-Aligned-L1/data.kwcoco.json'
         >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
     """

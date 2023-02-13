@@ -9,6 +9,7 @@ rm -rf __pycache__
 rm -rf htmlcov
 rm -rf dist
 rm -rf pred_out
+rm -rf .pytest_cache
 
 CLEAN_PYTHON='find . -iname *.pyc -delete ; find . -iname *.pyo -delete ; find . -regex ".*\(__pycache__\|\.py[co]\)" -delete'
 bash -c "$CLEAN_PYTHON"

@@ -405,7 +405,7 @@ def demo_change_pairs():
 
         import pyqtree
         qtree = pyqtree.Index((0, 0, video_info['width'], video_info['height']))
-        qtree.aid_to_tlbr = {}
+        qtree.aid_to_ltrb = {}
 
         tid_to_info = ub.ddict(list)
         video_aids = dset.images(video_gids).annots.lookup('id')
@@ -425,7 +425,7 @@ def demo_change_pairs():
 
                 tlbr_box = vidspace_box.to_tlbr().data[0]
                 qtree.insert(aid, tlbr_box)
-                qtree.aid_to_tlbr[aid] = tlbr_box
+                qtree.aid_to_ltrb[aid] = tlbr_box
 
                 dset.index.anns[aid]['bbox']
 

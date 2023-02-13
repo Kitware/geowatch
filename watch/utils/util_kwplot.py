@@ -209,6 +209,13 @@ class LabelModifier:
             elif hasattr(mapping, 'get'):
                 self._dict_mappers.append(mapping)
 
+    def update(self, dict_mapping):
+        if self._dict_mappers:
+            for d in self._dict_mappers:
+                d.update(dict_mapping)
+        else:
+            self.add_mapping(dict_mapping)
+
     def _modify_text(self, text: str):
         # Handles strings, which we call text by convention, but that is
         # confusing here.
@@ -265,3 +272,60 @@ class LabelModifier:
 
         if ax.legend_ is not None:
             self.modify_legend(ax.legend_)
+
+    def __call__(self, ax=None):
+        self.relabel(ax)
+
+
+class FigureFinalizer:
+    def __init__(
+        self,
+        dpath='.',
+        size_inches=None,
+        cropwhite=True,
+        tight_layout=True
+    ):
+        self.update(ub.udict(locals()) - {'self'})
+
+    def update(self, *args, **kwargs):
+        self.__dict__.update(*args, **kwargs)
+
+    def __call__(self, fig, fpath, **kwargs):
+        config = ub.udict(self.__dict__) | kwargs
+        final_fpath = ub.Path(config['dpath']) / fpath
+        if config['size_inches'] is not None:
+            fig.set_size_inches(config['size_inches'])
+        if config['tight_layout'] is not None:
+            fig.tight_layout()
+        fig.savefig(final_fpath)
+        cropwhite_ondisk(final_fpath)
+
+
+def fix_matplotlib_dates(dates):
+    from watch.utils import util_time
+    import matplotlib.dates as mdates
+    new = []
+    for d in dates:
+        n = util_time.coerce_datetime(d)
+        if n is not None:
+            n = mdates.date2num(n)
+        new.append(n)
+    return new
+
+
+def fix_matplotlib_timedeltas(deltas):
+    from watch.utils import util_time
+    # import matplotlib.dates as mdates
+    new = []
+    for d in deltas:
+        if d is None:
+            n = None
+        else:
+            try:
+                n = util_time.coerce_timedelta(d)
+            except util_time.TimeValueError:
+                n = None
+        # if n is not None:
+        #     n = mdates.num2timedelta(n)
+        new.append(n)
+    return new

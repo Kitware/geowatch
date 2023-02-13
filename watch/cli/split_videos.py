@@ -26,7 +26,15 @@ class SplitVideoConfig(scfg.DataConfig):
     dst_dpath = scfg.Value(None, help=(
         'path to write to. If None, uses the src dataset path'))
 
-    io_workers = scfg.Value(2, help='number of background IO workers')
+    dst = scfg.Value(None, help=(
+        'If specified, this is a format string template for the path that '
+        'will be written to. An error will be thrown if they are not unique.'
+        'Available keys are {src_name} and {video_name} in this version.'
+        'This name will be relative to dst_dpath. Defaults to '
+        '``{src_name}_{video_name}.kwcoco.json``'
+    ))
+
+    io_workers = scfg.Value(0, help='number of background IO workers')
 
 
 def main(cmdline=1, **kwargs):
@@ -59,30 +67,47 @@ def main(cmdline=1, **kwargs):
     io_workers = util_globals.coerce_num_workers(config.io_workers)
     writer = util_parallel.BlockingJobQueue(max_workers=io_workers)
 
+    writen_fpaths = set()
+
+    if config['dst'] is None:
+        dst_template = '{src_name}_{video_name}.kwcoco.json'
+    else:
+        dst_template = config['dst']
+        assert '{' in dst_template
+        assert '}' in dst_template
+
     for coco_fpath in coco_fpaths:
         print(f'splitting coco_fpath={coco_fpath}')
         dset = kwcoco.CocoDataset.coerce(coco_fpath)
 
-        prefix = ub.Path(dset.fpath).name.split('.')[0]
+        src_name = ub.Path(dset.fpath).name.split('.')[0]
 
         for video in ub.ProgIter(dset.videos().objs, desc='Splitting dataset'):
-            vidname = video['name']
+            video_name = video['name']
 
+            fmtkw = {
+                'video_name': video_name,
+                'src_name': src_name,
+            }
             if config.dst_dpath is None:
                 dst_dpath = dset.bundle_dpath
             else:
                 dst_dpath = ub.Path(config.dst_dpath)
-
-            vid_fpath = ub.Path(dst_dpath) / (prefix + '_' + vidname + '.kwcoco.json')
+            vid_fpath = ub.Path(dst_dpath) / dst_template.format(**fmtkw)
+            if vid_fpath in writen_fpaths:
+                raise Exception('Split name template did not generate unique names')
+            writen_fpaths.add(vid_fpath)
             # print(f'vidname={vidname}')
             video_gids = list(dset.images(video_id=video['id']))
             # print(f'video_gids={video_gids}')
             vid_subset = dset.subset(video_gids)
             vid_subset.fpath = vid_fpath
-            vid_subset.dump(vid_subset.fpath, newlines=False)
+            writer.submit(vid_subset.dump)
+            # vid_subset.dump(vid_subset.fpath, newlines=False)
 
         writer.wait_until_finished(desc="Finish write jobs")
         print(f'finished splitting coco_fpath={coco_fpath}')
+    print('Finished splits')
 
 
 if __name__ == '__main__':

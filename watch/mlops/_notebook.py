@@ -7,6 +7,68 @@ from watch.mlops.aggregate import fix_duplicate_param_hashids
 from watch.utils import util_pandas
 
 
+def _check_high_tpr_case(agg, config):
+    macro_results = agg.region_to_tables[agg.primary_macro_region].copy()
+
+    from watch.utils.util_param_grid import DotDictDataFrame
+    macro_metrics = DotDictDataFrame(macro_results['metrics'])
+    tpr_col = macro_metrics.find_column('bas_tpr')
+    macro_metrics = macro_metrics.sort_values(tpr_col, ascending=False)
+    inspect_idxs = macro_metrics.index[0:1]
+
+    for idx in inspect_idxs:
+        param_hashid = macro_results['index'].loc[idx]['param_hashid']
+
+        subagg = agg.filterto(param_hashids=[param_hashid])
+        subagg.build_macro_tables(rois)
+        subagg.report_best()
+
+        agg.index['param_hashid'] == param_hashid
+
+        subagg.fpaths.tolist()
+        from watch.mlops.aggregate import make_summary_analysis
+        agg1 = subagg
+        make_summary_analysis(agg1, config)
+    ...
+
+
+def _namek_eval():
+    from watch.mlops.aggregate import AggregateEvluationConfig
+    from watch.mlops.aggregate import build_tables
+    from watch.mlops.aggregate import build_aggregators
+    import watch
+    data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+    expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+    cmdline = 0
+    kwargs = {
+        'root_dpath': expt_dvc_dpath / '_namek_eval',
+        'pipeline': 'bas',
+        'io_workers': 10,
+        'freeze_cache': 0,
+        # 'pipeline': 'joint_bas_sc_nocrop',
+        # 'root_dpath': expt_dvc_dpath / '_testsc',
+        #'pipeline': 'sc',
+    }
+    config = AggregateEvluationConfig.legacy(cmdline=cmdline, data=kwargs)
+    eval_type_to_results = build_tables(config)
+    eval_type_to_aggregator = build_aggregators(eval_type_to_results)
+    agg = ub.peek(eval_type_to_aggregator.values())
+    agg = eval_type_to_aggregator.get('bas_poly_eval', None)
+
+    agg.build_macro_tables()
+
+    agg.primary_display_cols = ['bas_poly_eval.metrics.bas_faa_f1', 'bas_poly_eval.metrics.bas_f1', 'bas_poly_eval.metrics.bas_tpr', 'bas_poly_eval.metrics.bas_ppv']
+
+    agg.primary_metric_cols = ['bas_poly_eval.metrics.bas_tpr', 'bas_poly_eval.metrics.bas_ppv']
+    _ = agg.report_best()
+
+    agg.primary_metric_cols = ['bas_poly_eval.metrics.bas_f1']
+    _ = agg.report_best()
+
+    agg.primary_metric_cols = ['bas_poly_eval.metrics.bas_ppv', 'bas_poly_eval.metrics.bas_tpr']
+    _ = agg.report_best()
+
+
 def _setup_sc_analysis():
     from watch.mlops.aggregate import AggregateEvluationConfig
     from watch.mlops.aggregate import build_tables
@@ -911,3 +973,40 @@ def custom_analysis(eval_type_to_aggregator, config):
         # region_id_to_summary['macro_02_19bfe3']
 
 
+
+def quick_heatmap_viz():
+    import ubelt as ub
+    import kwcoco
+    import kwarray
+    dmj_dpath = ub.Path('/data/david.joy/DataFor2023Jan31Delivery/KW_R001_eval_8/2021-08-31/split/mono/products/bas-fusion')
+    kwcoco_fpath = dmj_dpath / 'bas_fusion_kwcoco.json'
+    dset = kwcoco.CocoDataset(kwcoco_fpath)
+    video_name = 'KW_R001'
+    video = dset.index.name_to_video[video_name]
+    video_id = video['id']
+    images = dset.images(video_id=video_id)
+
+    # Average all heatmaps together
+    running = kwarray.RunningStats()
+    for coco_img in ub.ProgIter(images.coco_images, desc='loading images'):
+        delayed = coco_img.imdelay('salient', resolution='10 GSD', nodata_method='float')
+        heatmap = delayed.finalize()
+        running.update(heatmap)
+
+    import kwplot
+    import kwimage
+    from watch.utils import util_kwimage
+    stats = running.current()
+    average_heatmap = stats['mean']
+    average_heatmap = util_kwimage.exactly_1channel(average_heatmap)
+    canvas = kwplot.make_heatmask(average_heatmap)[:, :, 0:3]
+    canvas = kwimage.ensure_uint255(canvas)
+    kwimage.imwrite('average_heatmap.png', canvas)
+
+    import kwplot
+    kwplot.autompl()
+
+    kwplot.imshow(stats['min'], cmap='plasma', data_colorbar=True, title='min response', fnum=1)
+    kwplot.imshow(stats['max'], cmap='plasma', data_colorbar=True, title='max response', fnum=2)
+    kwplot.imshow(stats['mean'], cmap='plasma', data_colorbar=True, title='mean response', fnum=3)
+    kwplot.imshow(stats['std'], cmap='plasma', data_colorbar=True, title='std response', fnum=4)

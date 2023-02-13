@@ -621,7 +621,7 @@ def coerce_kwcoco(data='watch-msi', **kwargs):
             'image_size': (600, 600),
             'aux': None,
             'multispectral': True,
-            'multisensor': False,
+            'multisensor': True,
             'max_speed': 0.01,
         }
         defaults.update(dict(
@@ -663,6 +663,7 @@ def _parse_demostr(data, defaults, alias_to_key=None):
     demo method.
 
     Example:
+        >>> from watch.demo.smart_kwcoco_demodata import _random_utm_box, _parse_demostr
         >>> data = 'foo-bar-baz1-biz2.3'
         >>> defaults = {}
         >>> alias_to_key = None
@@ -671,22 +672,12 @@ def _parse_demostr(data, defaults, alias_to_key=None):
     """
     if alias_to_key is None:
         alias_to_key = {}
-    parts = data.split('-')
-    import re
-    from scriptconfig.smartcast import smartcast
+    from watch.utils.util_codes import parse_delimited_argstr
     handled = defaults.copy()
-    unhandled = {}
-    for part in parts:
-        match = re.search(r'[\d]', part)
-        if match is None:
-            value = True
-            key = part
-        else:
-            key = part[:match.span()[0]]
-            value = smartcast(part[match.span()[0]:], allow_split=False)
+    unhandled = parse_delimited_argstr(data)
+    for key, value in list(unhandled.items()):
         key = alias_to_key.get(key, key)
         if key in handled:
             handled[key] = value
-        else:
-            unhandled[key] = value
+            unhandled.pop(key, None)
     return handled, unhandled

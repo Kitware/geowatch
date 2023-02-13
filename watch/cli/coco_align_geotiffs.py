@@ -1108,8 +1108,6 @@ class SimpleDataCube(object):
         import pandas as pd  # NOQA
         from shapely import geometry
         from watch.utils import util_gis
-        from shapely.ops import unary_union
-        import shapely
         # import watch
         coco_dset = cube.coco_dset
 
@@ -1288,94 +1286,11 @@ class SimpleDataCube(object):
                         print('debug_valid_regions = {!r}'.format(debug_valid_regions))
                         print('can_vis_geos = {!r}'.format(can_vis_geos))
                     if debug_valid_regions and can_vis_geos:
-                        import kwplot
-                        group_local_df = gpd.GeoDataFrame(rows, crs=local_epsg)
-                        print('\n\n')
-                        print(group_local_df)
-
-                        debug_dpath = ub.Path(extract_dpath) / '_debug_regions'
-                        debug_dpath.mkdir(exist_ok=True)
-                        with kwplot.BackendContext('agg'):
-
-                            debug_name = '{}_{}_{}_{}'.format(video_name, iso_time, space_str, sensor_coarse)
-
-                            # Dump a visualization of the bounds of the
-                            # valid region for debugging.
-                            wld_map_crs84_gdf = gpd.read_file(
-                                gpd.datasets.get_path('naturalearth_lowres')
-                            ).to_crs('crs84')
-                            sh_tight_bounds_local = unary_union([sh_space_region_local] + [row['geometry'] for row in rows if row['geometry'] is not None])
-                            sh_total_bounds_local = shapely.affinity.scale(sh_tight_bounds_local.convex_hull, 2.5, 2.5)
-                            total_bounds_local = gpd.GeoDataFrame({'geometry': [sh_total_bounds_local]}, crs=local_epsg)
-
-                            subimg_crs84_df = cube.img_geos_df.loc[[r['gid'] for r in rows]]
-                            subimg_local_df = subimg_crs84_df.to_crs(local_epsg)
-
-                            wld_map_local_gdf = wld_map_crs84_gdf.to_crs(local_epsg)
-
-                            ax = kwplot.figure(doclf=True, fnum=2).gca()
-                            ax.set_title(f'Local CRS: {local_epsg}\n{iso_time} sensor={sensor_coarse} n={len(rows)} source_gids={final_gids}')
-                            wld_map_local_gdf.plot(ax=ax)
-                            subimg_local_df.plot(ax=ax, color='blue', alpha=0.6, edgecolor='black', linewidth=4)
-                            group_local_df.plot(ax=ax, color='pink', alpha=0.6)
-                            space_region_local.plot(ax=ax, color='green', alpha=0.6)
-                            bounds = total_bounds_local.bounds.iloc[0]
-                            ax.set_xlim(bounds.minx, bounds.maxx)
-                            ax.set_ylim(bounds.miny, bounds.maxy)
-                            fname = f'debug_{debug_name}_local.jpg'
-                            debug_fpath = debug_dpath / fname
-                            kwplot.phantom_legend({'valid region': 'pink', 'geos_bounds': 'black', 'query': 'green'}, ax=ax)
-                            ax.figure.savefig(debug_fpath)
-
-                            group_crs84_df = group_local_df.to_crs('crs84')
-                            total_bounds_crs84 = total_bounds_local.to_crs('crs84')
-                            ax = kwplot.figure(doclf=True, fnum=3).gca()
-                            ax.set_title(f'CRS84:\n{iso_time} sensor={sensor_coarse} n={len(rows)} source_gids={final_gids}')
-                            wld_map_crs84_gdf.plot(ax=ax)
-                            subimg_crs84_df.plot(ax=ax, color='blue', alpha=0.6, edgecolor='black', linewidth=4)
-                            group_crs84_df.plot(ax=ax, color='pink', alpha=0.6)
-                            space_region_crs84.plot(ax=ax, color='green', alpha=0.6)
-                            bounds = total_bounds_crs84.bounds.iloc[0]
-                            ax.set_xlim(bounds.minx, bounds.maxx)
-                            ax.set_ylim(bounds.miny, bounds.maxy)
-                            fname = f'debug_{debug_name}_crs84.jpg'
-                            debug_fpath = debug_dpath / fname
-                            kwplot.phantom_legend({'valid region': 'pink', 'geos_bounds': 'black', 'query': 'green'}, ax=ax)
-                            ax.figure.savefig(debug_fpath)
-
-                            debug_info = {
-                                'coco_fpath': os.path.abspath(coco_dset.fpath),
-                                'gids': final_gids,
-                                'rows': [ub.dict_diff(row, {'geometry'}) for row in rows],
-                            }
-                            fname = f'debug_{debug_name}_text.py'
-                            debug_fpath = debug_dpath / fname
-                            datastr = ub.repr2(debug_info, nl=2)
-                            debug_text = ub.codeblock(
-                                '''
-                                """
-                                See ~/code/watch/dev/debug_coco_geo_img.py
-                                """
-                                debug_info = {datastr}
-
-
-                                def main():
-                                    import kwcoco
-                                    from watch.utils import kwcoco_extensions
-                                    parent_dset = kwcoco.CocoDataset(debug_info['coco_fpath'])
-                                    coco_imgs = parent_dset.images(debug_info['gids']).coco_images
-
-                                    for coco_img in coco_imgs:
-                                        gid = coco_img.img['id']
-                                        kwcoco_extensions.coco_populate_geo_img_heuristics2(
-                                            coco_img, overwrite=True)
-
-                                if __name__ == '__main__':
-                                    main()
-                                ''').format(datastr=datastr)
-                            print('write debug_fpath = {!r}'.format(debug_fpath))
-                            with open(debug_fpath, 'w') as file:
-                                file.write(debug_text + '\n')
+                        _debug_valid_regions(
+                            cube, coco_dset, space_region_crs84,
+                            space_region_local, final_gids, rows,
+                            sh_space_region_local, local_epsg, extract_dpath,
+                            video_name, iso_time, space_str, sensor_coarse)
 
             else:
                 groups.append({
@@ -1810,6 +1725,7 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
         # A: I'm fairly sure these coordinates are all Traditional-WGS84-Lon-Lat
         # We convert them to authority compliant WGS84 (lat-lon)
         # Hack to support real and orig drop0 geojson
+        # FIXME: simply use crs84
         geo = _fix_geojson_poly(ann['segmentation_geos'])
         geo_poly = kwimage.structs.MultiPolygon.from_geojson(geo).swap_axes()
         geo_poly_list.append(geo_poly)
@@ -2100,6 +2016,106 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
     if verbose > 2:
         print('finish gdal warp dst_gpath = {!r}'.format(dst_gpath))
     return dst
+
+
+def _debug_valid_regions(cube, coco_dset, space_region_crs84,
+                         space_region_local, final_gids, rows,
+                         sh_space_region_local, local_epsg, extract_dpath,
+                         video_name, iso_time, space_str, sensor_coarse):
+    """
+    Debugging helper
+    """
+    import kwplot
+    import shapely
+    import geopandas as gpd
+    from shapely.ops import unary_union
+    group_local_df = gpd.GeoDataFrame(rows, crs=local_epsg)
+    print('\n\n')
+    print(group_local_df)
+
+    debug_dpath = ub.Path(extract_dpath) / '_debug_regions'
+    debug_dpath.mkdir(exist_ok=True)
+    with kwplot.BackendContext('agg'):
+
+        debug_name = '{}_{}_{}_{}'.format(video_name, iso_time, space_str, sensor_coarse)
+
+        # Dump a visualization of the bounds of the
+        # valid region for debugging.
+        wld_map_crs84_gdf = gpd.read_file(
+            gpd.datasets.get_path('naturalearth_lowres')
+        ).to_crs('crs84')
+        sh_tight_bounds_local = unary_union([sh_space_region_local] + [row['geometry'] for row in rows if row['geometry'] is not None])
+        sh_total_bounds_local = shapely.affinity.scale(sh_tight_bounds_local.convex_hull, 2.5, 2.5)
+        total_bounds_local = gpd.GeoDataFrame({'geometry': [sh_total_bounds_local]}, crs=local_epsg)
+
+        subimg_crs84_df = cube.img_geos_df.loc[[r['gid'] for r in rows]]
+        subimg_local_df = subimg_crs84_df.to_crs(local_epsg)
+
+        wld_map_local_gdf = wld_map_crs84_gdf.to_crs(local_epsg)
+
+        ax = kwplot.figure(doclf=True, fnum=2).gca()
+        ax.set_title(f'Local CRS: {local_epsg}\n{iso_time} sensor={sensor_coarse} n={len(rows)} source_gids={final_gids}')
+        wld_map_local_gdf.plot(ax=ax)
+        subimg_local_df.plot(ax=ax, color='blue', alpha=0.6, edgecolor='black', linewidth=4)
+        group_local_df.plot(ax=ax, color='pink', alpha=0.6)
+        space_region_local.plot(ax=ax, color='green', alpha=0.6)
+        bounds = total_bounds_local.bounds.iloc[0]
+        ax.set_xlim(bounds.minx, bounds.maxx)
+        ax.set_ylim(bounds.miny, bounds.maxy)
+        fname = f'debug_{debug_name}_local.jpg'
+        debug_fpath = debug_dpath / fname
+        kwplot.phantom_legend({'valid region': 'pink', 'geos_bounds': 'black', 'query': 'green'}, ax=ax)
+        ax.figure.savefig(debug_fpath)
+
+        group_crs84_df = group_local_df.to_crs('crs84')
+        total_bounds_crs84 = total_bounds_local.to_crs('crs84')
+        ax = kwplot.figure(doclf=True, fnum=3).gca()
+        ax.set_title(f'CRS84:\n{iso_time} sensor={sensor_coarse} n={len(rows)} source_gids={final_gids}')
+        wld_map_crs84_gdf.plot(ax=ax)
+        subimg_crs84_df.plot(ax=ax, color='blue', alpha=0.6, edgecolor='black', linewidth=4)
+        group_crs84_df.plot(ax=ax, color='pink', alpha=0.6)
+        space_region_crs84.plot(ax=ax, color='green', alpha=0.6)
+        bounds = total_bounds_crs84.bounds.iloc[0]
+        ax.set_xlim(bounds.minx, bounds.maxx)
+        ax.set_ylim(bounds.miny, bounds.maxy)
+        fname = f'debug_{debug_name}_crs84.jpg'
+        debug_fpath = debug_dpath / fname
+        kwplot.phantom_legend({'valid region': 'pink', 'geos_bounds': 'black', 'query': 'green'}, ax=ax)
+        ax.figure.savefig(debug_fpath)
+
+        debug_info = {
+            'coco_fpath': os.path.abspath(coco_dset.fpath),
+            'gids': final_gids,
+            'rows': [ub.dict_diff(row, {'geometry'}) for row in rows],
+        }
+        fname = f'debug_{debug_name}_text.py'
+        debug_fpath = debug_dpath / fname
+        datastr = ub.repr2(debug_info, nl=2)
+        debug_text = ub.codeblock(
+            '''
+            """
+            See ~/code/watch/dev/debug_coco_geo_img.py
+            """
+            debug_info = {datastr}
+
+
+            def main():
+                import kwcoco
+                from watch.utils import kwcoco_extensions
+                parent_dset = kwcoco.CocoDataset(debug_info['coco_fpath'])
+                coco_imgs = parent_dset.images(debug_info['gids']).coco_images
+
+                for coco_img in coco_imgs:
+                    gid = coco_img.img['id']
+                    kwcoco_extensions.coco_populate_geo_img_heuristics2(
+                        coco_img, overwrite=True)
+
+            if __name__ == '__main__':
+                main()
+            ''').format(datastr=datastr)
+        print('write debug_fpath = {!r}'.format(debug_fpath))
+        with open(debug_fpath, 'w') as file:
+            file.write(debug_text + '\n')
 
 
 class SkipImage(Exception):
