@@ -1070,12 +1070,20 @@ def predict(cmdline=False, **kwargs):
     all_video_ids = list(result_dataset.videos())
     print(f'Requested predictions for {len(all_video_ids)} videos')
     stitched_video_histogram = ub.ddict(lambda: 0)
+    stitched_video_patch_histogram = ub.ddict(lambda: 0)
     for _head_key, head_stitcher in stitch_managers.items():
         _histo = ub.dict_hist(result_dataset.images(head_stitcher._seen_gids).lookup('video_id'))
         print(f'stitched videos for {_head_key}={ub.urepr(_histo)}')
+
+        for gid, v in head_stitcher._stitched_gid_patch_histograms.items():
+            vidid = result_dataset.index.imgs[gid]['video_id']
+            stitched_video_patch_histogram[vidid] += v
+
         for k, v in _histo.items():
             stitched_video_histogram[k] += v
+
     print('stitched_video_histogram = {}'.format(ub.urepr(stitched_video_histogram, nl=1)))
+    print('stitched_video_patch_histogram = {}'.format(ub.urepr(stitched_video_patch_histogram, nl=1)))
     missing_vidids = set(all_video_ids) - set(stitched_video_histogram)
     if missing_vidids:
         print(f'missing_vidids={missing_vidids}')
@@ -1204,7 +1212,7 @@ class CocoStitchingManager(object):
 
         # Keep track of the number of times we've stitched something into an
         # image.
-        self._stitched_gid_histograms = ub.ddict(lambda: 0)
+        self._stitched_gid_patch_histograms = ub.ddict(lambda: 0)
 
         # TODO: writing predictions and probabilities needs robustness work
         self.write_probs = write_probs
@@ -1247,7 +1255,7 @@ class CocoStitchingManager(object):
 
             is_ready (bool): todo, fix this to work better
         """
-        self._stitched_gid_histograms[gid] += 1
+        self._stitched_gid_patch_histograms[gid] += 1
         data = kwarray.atleast_nd(data, 3)
         dset = self.result_dataset
         if self.stiching_space == 'video':
