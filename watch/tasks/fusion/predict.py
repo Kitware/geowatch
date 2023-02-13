@@ -136,7 +136,8 @@ def make_predict_config(cmdline=False, **kwargs):
 
     # parse and pass to main
     parser.set_defaults(**kwargs)
-    args, _ = parser.parse_known_args(default_args)
+    # args, _ = parser.parse_known_args(default_args)
+    args = parser.parse_args(default_args)
     args.datamodule_defaults = datamodule_defaults
     # assert args.batch_size == 1
     return args
