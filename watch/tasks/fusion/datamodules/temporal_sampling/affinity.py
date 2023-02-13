@@ -173,8 +173,12 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         >>> dset = watch.coerce_kwcoco(coco_fpath)
         >>> vidid = dset.dataset['videos'][0]['id']
         >>> time_kernel_code = '-3m,-1w,0,3m,1y'
-        >>> time_kernel = coerce_time_kernel(time_kernel_code)
-        >>> self = TimeWindowSampler.from_coco_video(dset, vidid, time_window=5, time_kernel=time_kernel, affinity_type='soft3', update_rule='')
+        >>> self = TimeWindowSampler.from_coco_video(
+        >>>     dset, vidid,
+        >>>     time_window=5,
+        >>>     time_kernel=time_kernel_code,
+        >>>     affinity_type='soft3',
+        >>>     update_rule='')
         >>> self.determenistic = False
         >>> self.show_affinity()
         >>> include_indices = [len(self.unixtimes) // 2]
@@ -233,41 +237,16 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
     if time_kernel is not None:
         # TODO: let the user pass in the primary idx
         primary_idx = chosen[0]
+
         primary_unixtime = unixtimes[primary_idx]
         relative_unixtimes = unixtimes - primary_unixtime
+
+        kernel_masks, kernel_attrs = make_soft_mask(time_kernel, relative_unixtimes)
+
         kernel_distance = np.abs(relative_unixtimes[:, None] - time_kernel[None:, ])
         # Partition the pool based on which part of the kernel they most satisfy
         kernel_idxs = np.arange(len(time_kernel))
         kernel_groups = kernel_distance.argmin(axis=1)
-
-        # bin_edges = [0] + (np.where(np.diff(kernel_groups))[0] + 1).tolist() + [len(kernel_groups)]
-        kernel_idx_to_idxs = ub.dzip(*(kwarray.group_indices(kernel_groups)))
-
-        kernel_ideal_idxs = kernel_distance.argmin(axis=0)  # the ideal index to sample for each kernel bin.
-        kernel_masks = ((kernel_groups[:, None] == kernel_idxs[None, :]).T).astype(affinity.dtype)
-
-        # Build weight factor for window masks to turn them into soft masks
-        for kernel_idx, ideal_idx in enumerate(kernel_ideal_idxs):
-            this_idxs = kernel_idx_to_idxs.get(kernel_idx, [ideal_idx])
-            s = this_idxs[0]
-            t = this_idxs[-1]
-            left_size = max((ideal_idx - s) + 1, 1)
-            right_size = max((t - ideal_idx) + 1, 1)
-            mid_size = min(left_size, right_size) + 1
-            # print(f'mid_size={mid_size}')
-            modulator = np.linspace(0.3, 1, mid_size)
-            # print(f'modulator={modulator}')
-            kernel_masks[kernel_idx, :] *= 0.1
-            try:
-                kernel_masks[kernel_idx, ideal_idx - mid_size:ideal_idx] = modulator
-            except Exception:
-                ...
-            try:
-                kernel_masks[kernel_idx, ideal_idx:ideal_idx + mid_size] = modulator[::-1]
-            except Exception:
-                ...
-            # print(kernel_masks[kernel_idx])
-
         satisfied_kernel_idxs = kernel_groups[chosen]
         unsatisfied_kernel_idxs = np.setdiff1d(kernel_idxs, satisfied_kernel_idxs)
         _, kernel_idx_to_groupxs = kwarray.group_indices(kernel_groups)
@@ -309,7 +288,6 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
             raise AssertionError(f'{len(unsatisfied_kernel_idxs)}, {num_sample}')
         kernel_idx = unsatisfied_kernel_idxs[0]
         next_mask = kernel_masks[kernel_idx]
-        # next_ideal_idx = kernel_ideal_idxs[kernel_idx]
         unsatisfied_kernel_idxs = unsatisfied_kernel_idxs[1:]
     else:
         next_mask = None
@@ -391,7 +369,6 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
             if len(unsatisfied_kernel_idxs):
                 kernel_idx = unsatisfied_kernel_idxs[0]
                 next_mask = kernel_masks[kernel_idx]
-                # next_ideal_idx = kernel_ideal_idxs[kernel_idx]
                 unsatisfied_kernel_idxs = unsatisfied_kernel_idxs[1:]
             else:
                 next_mask = None
@@ -423,6 +400,98 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         return chosen, info
     else:
         return chosen
+
+
+def make_soft_mask(time_kernel, relative_unixtimes):
+    """
+    Ignore:
+        from watch.tasks.fusion.datamodules.temporal_sampling.affinity import *  # NOQA
+        time_kernel = coerce_time_kernel('-1H,-5M,0,5M,1H')
+        relative_unixtimes = coerce_time_kernel('-90M,-70M,-50M,0,1sec,10S,30M')
+        # relative_unixtimes = coerce_time_kernel('-90M,-70M,-50M,-20M,-10M,0,1sec,10S,30M,57M,87M')
+
+        kernel_masks, kernel_attrs = make_soft_mask(time_kernel, relative_unixtimes)
+
+        min_t = min(kattr['left'] for kattr in kernel_attrs)
+        max_t = max(kattr['right'] for kattr in kernel_attrs)
+
+        import kwplot
+        plt = kwplot.autoplt()
+        import kwimage
+        kwplot.figure(fnum=1, doclf=1)
+        kernel_color = kwimage.Color.coerce('kitware_green').as01()
+        obs_color = kwimage.Color.coerce('kitware_blue').as01()
+
+        kwplot.figure(fnum=1, pnum=(2, 1, 1))
+        plt.plot(time_kernel, [0] * len(time_kernel), '-o', color=kernel_color, label='kernel')
+
+        for kattr in kernel_attrs:
+            rv = kattr['rv']
+            xs = np.linspace(min_t, max_t, 1000)
+            ys = rv.pdf(xs)
+            ys_norm = ys / ys.sum()
+            plt.plot(xs, ys_norm)
+
+        ax = plt.gca()
+        # ax.set_ylim(0, 1)
+        ax.legend()
+        ax.set_xlabel('time')
+        ax.set_ylabel('ideal probability')
+        ax.set_title('ideal kernel')
+
+        kwplot.figure(fnum=1, pnum=(2, 1, 2))
+        plt.plot(relative_unixtimes, [0] * len(relative_unixtimes), '-o', color=obs_color, label='observation')
+        ax = plt.gca()
+
+        for kattr in kernel_attrs:
+            rv = kattr['rv']
+            xs = relative_unixtimes
+            ys = rv.pdf(xs)
+            ys_norm = ys / ys.sum()
+            plt.plot(xs, ys_norm)
+        ax.legend()
+        ax.set_xlabel('time')
+        ax.set_ylabel('sample probability')
+        ax.set_title('discrete observations')
+        plt.subplots_adjust(top=0.9, hspace=.3)
+    """
+    if len(time_kernel) == 1:
+        raise Exception
+
+    first = time_kernel[0]
+    second = time_kernel[1]
+    penult = time_kernel[-2]
+    last = time_kernel[-1]
+    left_pad = second - first
+    right_pad = last - penult
+
+    padded_time_kernel = [first - left_pad] + list(time_kernel) + [last + right_pad]
+
+    kernel_attrs = []
+
+    from scipy.stats import norm
+    for a, b, c in ub.iter_window(padded_time_kernel, 3):
+        left_extent = b - a
+        right_extent = c - b
+        extent = min(left_extent, right_extent)
+        mean = b
+        std = extent / 3  # 3sigma
+        rv = norm(mean, std)
+        kernel_attrs.append({
+            'left': a,
+            'mid': b,
+            'right': c,
+            'extent': extent,
+            'rv': rv,
+        })
+
+    kernel_masks = []
+    for kattr in kernel_attrs:
+        probs = kattr['rv'].pdf(relative_unixtimes)
+        pmf = probs / probs.sum()
+        kernel_masks.append(pmf)
+
+    return kernel_masks, kernel_attrs
 
 
 @profile
@@ -788,8 +857,8 @@ def soft_frame_affinity(unixtimes, sensors=None, time_kernel=None,
         >>> unixtimes = self.unixtimes
         >>> sensors = self.sensors
         >>> time_kernel = self.time_kernel
-        >>> time_span = '2y'
-        >>> version = 3
+        >>> time_span = None
+        >>> version = 4
         >>> heuristics = 'default'
         >>> weights = soft_frame_affinity(unixtimes, sensors, time_kernel, time_span, version, heuristics)
         >>> # xdoctest: +REQUIRES(--show)
@@ -802,7 +871,7 @@ def soft_frame_affinity(unixtimes, sensors=None, time_kernel=None,
         >>> import pandas as pd
         >>> sns = kwplot.autosns()
         >>> fig = kwplot.figure(fnum=2, doclf=True)
-        >>> kwplot.imshow(kwimage.normalize(weights['final']), pnum=(1, 3, 1), title='pairwise affinity')
+        >>> kwplot.imshow(weights['final'], pnum=(1, 3, 1), title='pairwise affinity', cmap='viridis')
         >>> row_idx = 200
         >>> df = pd.DataFrame({k: v[row_idx] for k, v in weights.items()})
         >>> df['index'] = np.arange(df.shape[0])
@@ -823,6 +892,10 @@ def soft_frame_affinity(unixtimes, sensors=None, time_kernel=None,
             heuristics = {'daylight', 'season', 'sensor_similiarty'}
         elif version == 3:
             heuristics = {'daylight', 'season', 'sensor_similiarty', 'sensor_value'}
+        elif version == 4:
+            heuristics = {'sensor_value'}
+        elif version == 5:
+            heuristics = {'sensor_similiarty'}
 
     missing_date = np.isnan(unixtimes)
     missing_any_dates = np.any(missing_date)
@@ -887,64 +960,45 @@ def soft_frame_affinity(unixtimes, sensors=None, time_kernel=None,
         if 'season' in heuristics:
             weights['season'] = season_weights
 
-        frame_weights = np.prod(np.stack(list(weights.values())), axis=0)
-        # frame_weights = season_weights * daylight_weights
-        # frame_weights = frame_weights * future_weights
-    else:
-        frame_weights = None
-
     if sensors is not None:
         sensors = np.asarray(sensors)
 
         if 'sensor_similiarty' in heuristics:
             same_sensor = sensors[:, None] == sensors[None, :]
             sensor_similarity_weight = ((same_sensor * 0.5) + 0.5)
-            if version == 3:
+            if version >= 3:
                 sensor_similarity_weight = sensor_similarity_weight / 32 + .4
             weights['sensor_similarity'] = sensor_similarity_weight
-            if frame_weights is None:
-                frame_weights = sensor_similarity_weight
-            else:
-                frame_weights = frame_weights * sensor_similarity_weight
 
         # TODO: this info does not belong here. Pass this information in.
         if 'sensor_value' in heuristics:
-            sensor_value = {
-                'WV': 10,
-                'WV1': 9,
-                'S2': 1,
-                'PD': 7,
-                'L8': 0.3,
-                'sensor1': 11,
-                'sensor2': 7,
-                'sensor3': 5,
-                'sensor4': 3,
-            }
+            from watch.heuristics import SENSOR_TEMPORAL_SAMPLING_VALUES
+            sensor_value = SENSOR_TEMPORAL_SAMPLING_VALUES
             values = np.array(list(ub.take(sensor_value, sensors, default=1))).astype(float)
             values /= values.max()
             sensor_value_weight = np.sqrt(values[:, None] * values[None, :])
             weights['sensor_value'] = sensor_value_weight
-            if frame_weights is None:
-                frame_weights = sensor_value_weight
-            else:
-                frame_weights = frame_weights * sensor_value_weight
 
     if time_kernel is not None:
-        delta_diff = (unixtimes[:, None] - unixtimes[None, :])
-        diff = np.abs((delta_diff - time_kernel[:, None, None]))
-        sdiff = diff - diff.min(axis=0)[None, :, :]
-        s = 1 / sdiff.mean(axis=0)
-        flags = np.isinf(s)
-        s[flags] = 0
-        s = (s / s.max())
-        s[flags] = 1
-        # kwplot.autoplt().imshow(s, cmap='magma')
-        kernel_weight = s
-        weights['kernel_weight'] = kernel_weight
-        if frame_weights is None:
-            frame_weights = kernel_weight
-        else:
-            frame_weights = frame_weights * kernel_weight
+        if 0:
+            # Don't do anything with the time kernel here. That will be handled
+            # at sample time.
+            delta_diff = (unixtimes[:, None] - unixtimes[None, :])
+            diff = np.abs((delta_diff - time_kernel[:, None, None]))
+            sdiff = diff - diff.min(axis=0)[None, :, :]
+            s = 1 / sdiff.mean(axis=0)
+            flags = np.isinf(s)
+            s[flags] = 0
+            s = (s / s.max())
+            s[flags] = 1
+            # kwplot.autoplt().imshow(s, cmap='magma')
+            kernel_weight = s
+            weights['kernel_weight'] = kernel_weight
+
+    if len(weights) == 0:
+        frame_weights = np.ones((len(unixtimes), len(unixtimes)))
+    else:
+        frame_weights = np.prod(np.stack(list(weights.values())), axis=0)
 
     if missing_any_dates:
         # For the frames that don't have dates on them, we use indexes to
@@ -1003,7 +1057,7 @@ def hard_frame_affinity(unixtimes, sensors, time_window, time_kernel=None, time_
 
     affinity[np.eye(len(affinity), dtype=bool)] = 0
     # affinity = affinity * 0.99 + 0.01
-    affinity = affinity / affinity.max()
+    affinity = affinity / max(affinity.max(), 1e-9)
     affinity[np.eye(len(affinity), dtype=bool)] = 1
     return affinity
 

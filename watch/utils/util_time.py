@@ -315,17 +315,19 @@ def coerce_timedelta(delta):
                 unit = None
                 magnitude = None
 
-            if unit == 'y':
+            if unit in {'y', 'year', 'years'}:
                 delta = datetime_mod.timedelta(days=365 * float(magnitude))
-            elif unit == 'd':
+            elif unit in {'d', 'day', 'days'}:
                 delta = datetime_mod.timedelta(days=1 * float(magnitude))
-            elif unit == 'm':
+            elif unit in {'w', 'week', 'weeks'}:
+                delta = datetime_mod.timedelta(days=7 * float(magnitude))
+            elif unit == {'m', 'month', 'months'}:
                 delta = datetime_mod.timedelta(days=30.437 * float(magnitude))
-            elif unit == 'H':
+            elif unit == {'H', 'hour', 'hours'}:
                 delta = datetime_mod.timedelta(hours=float(magnitude))
-            elif unit == 'M':
+            elif unit == {'M', 'min', 'mins', 'minute', 'minutes'}:
                 delta = datetime_mod.timedelta(minutes=float(magnitude))
-            elif unit == 'S':
+            elif unit == {'S', 'sec', 'secs', 'second', 'seconds'}:
                 delta = datetime_mod.timedelta(seconds=float(magnitude))
             else:
                 import pytimeparse  #

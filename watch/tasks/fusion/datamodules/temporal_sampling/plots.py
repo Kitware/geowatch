@@ -206,9 +206,20 @@ def plot_temporal_sample_indices(sample_idxs, unixtimes, sensors=None, title_suf
     for t, color in zip(datetimes, colors):
         ax.plot([t, t], [0, len(sample_idxs) + 1], color=color, alpha=0.5)
 
-    # Mark specific sample location
-    sample_idxs = sorted(sample_idxs, key=lambda x: tuple([min(x), max(x)]))
+    # Order the samples along the y-axis
+    sample_ordering = 'duration'
+    sample_ordering = 'start_time'
 
+    if sample_ordering == 'start_time':
+        sample_idxs = sorted(sample_idxs, key=lambda x: tuple([min(x), max(x)]))  # start time
+    elif sample_ordering == 'end_time':
+        sample_idxs = sorted(sample_idxs, key=lambda x: tuple([max(x), min(x)]))
+    elif sample_ordering == 'duration':
+        sample_idxs = sorted(sample_idxs, key=lambda x: tuple([max(x) - min(x), min(x), max(x)]))
+    else:
+        raise KeyError(sample_ordering)
+
+    # Mark specific sample locations
     for sample_ypos, sample in enumerate(sample_idxs, start=1):
         ax.plot(datetimes[sample], [sample_ypos] * len(sample), '-', marker='.')
 

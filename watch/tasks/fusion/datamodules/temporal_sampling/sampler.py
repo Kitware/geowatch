@@ -89,7 +89,7 @@ Example:
     >>> self = TimeWindowSampler.from_coco_video(
     >>>     dset, vidid,
     >>>     time_kernel='-1y,-8m,-2w,0,2w,8m,1y',
-    >>>     affinity_type='soft2', update_rule='', determenistic=True
+    >>>     affinity_type='soft3', update_rule='', determenistic=True
     >>>     #time_window=5,
     >>>     #affinity_type='hardish3', time_span='3m', update_rule='pairwise+distribute', determenistic=True
     >>> )
@@ -107,7 +107,7 @@ Example:
     >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
     >>> import watch
     >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-    >>> coco_fpath = data_dvc_dpath / 'Drop4-BAS/KR_R001.kwcoco.json'
+    >>> coco_fpath = data_dvc_dpath / 'Drop6/imganns-KR_R001.kwcoco.zip'
     >>> dset = watch.coerce_kwcoco(coco_fpath)
     >>> vidid = dset.dataset['videos'][0]['id']
     >>> self = MultiTimeWindowSampler.from_coco_video(

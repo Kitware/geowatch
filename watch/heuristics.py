@@ -769,3 +769,18 @@ DSET_CODE_TO_GSD = {
 
 
 PHASES = ['No Activity', 'Site Preparation', 'Active Construction', 'Post Construction']
+
+
+# Represents default relative weights to give to each sensor in temporal
+# sampling.
+SENSOR_TEMPORAL_SAMPLING_VALUES = {
+    'WV': 10,
+    'WV1': 9,
+    'S2': 1,
+    'PD': 7,
+    'L8': 0.3,
+    'sensor1': 11,
+    'sensor2': 7,
+    'sensor3': 5,
+    'sensor4': 3,
+}
