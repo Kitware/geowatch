@@ -2,7 +2,7 @@ data:
   time_steps: 5
   chip_dims: 128
   # channels: "(WV):blue|green|red"
-  channels: "blue|green|red"
+  channels: "(L8,S2):blue|green|red"
   window_space_scale: 10GSD
   input_space_scale: 10GSD
   output_space_scale: 10GSD

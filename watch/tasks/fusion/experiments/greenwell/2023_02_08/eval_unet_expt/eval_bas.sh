@@ -31,6 +31,7 @@ DATA_DVC_DPATH=$DATA_DVC_DPATH
             #     - $EXPT_DVC_DPATH/Drop4_BAS_S2L8_NoDecoderHetModel/lightning_logs/version_2/checkpoints/epoch=472-step=11825.pt
             #     - $EXPT_DVC_DPATH/Drop4_BAS_S2L8_NoDecoderHetModel/lightning_logs/version_2/checkpoints/epoch=454-step=11375.pt
 
+
 # python -m watch.mlops.schedule_evaluation \
 #     --params="
 #         matrix:
@@ -40,12 +41,12 @@ DATA_DVC_DPATH=$DATA_DVC_DPATH
 #                 - $EXPT_DVC_DPATH/Drop4_BAS_S2L8_NoDecoderHetModel/lightning_logs/version_2/checkpoints/epoch=472-step=11825.pt
 
 #             bas_pxl.test_dataset:
-#                 #- $DATA_DVC_DPATH/imganns-KR_R001.kwcoco.zip
-#                 #- $DATA_DVC_DPATH/imganns-KR_R002.kwcoco.zip
-#                 #- $DATA_DVC_DPATH/imganns-US_R007.kwcoco.json
+#                 - $DATA_DVC_DPATH/imganns-KR_R001.kwcoco.zip
+#                 - $DATA_DVC_DPATH/imganns-KR_R002.kwcoco.zip
+#                 - $DATA_DVC_DPATH/imganns-US_R007.kwcoco.zip
 #                 - $DATA_DVC_DPATH/imganns-BR_R001.kwcoco.zip
 #                 - $DATA_DVC_DPATH/imganns-BR_R002.kwcoco.zip
-#                 #- $DATA_DVC_DPATH/imganns-AE_R001.kwcoco.json
+#                 - $DATA_DVC_DPATH/imganns-AE_R001.kwcoco.zip
 
 #             bas_pxl.channels: auto
 #             bas_pxl.chip_dims: 128, 128
@@ -64,27 +65,26 @@ DATA_DVC_DPATH=$DATA_DVC_DPATH
 #             bas_poly.time_thresh: null
 #             bas_poly.morph_kernel: 0
 #             bas_poly.thresh:
-#                 - 0.025
 #                 - 0.05
-#                 - 0.075
 #                 - 0.1
-#                 - 0.125
 #                 - 0.15
-#                 - 0.175
 #                 - 0.2
-#                 - 0.225
 #                 - 0.25
-#                 - 0.275
 #                 - 0.3
-#                 - 0.325
 #                 - 0.35
-#                 - 0.375
 #                 - 0.4
-#                 - 0.425
 #                 - 0.45
-#                 - 0.475
 #                 - 0.5
-#             bas_poly.agg_fn: probs
+#                 - 0.55
+#                 - 0.6
+#                 - 0.65
+#                 - 0.7
+#                 - 0.75
+#                 - 0.8
+#                 - 0.85
+#                 - 0.9
+#                 - 0.95
+#             bas_poly.agg_fn: rescaled_probs
 
 #             bas_pxl.enabled: 1
 #             bas_poly.enabled: 1
@@ -110,10 +110,10 @@ python -m watch.mlops.schedule_evaluation \
             bas_pxl.test_dataset:
                 - $DATA_DVC_DPATH/imganns-KR_R001.kwcoco.zip
                 - $DATA_DVC_DPATH/imganns-KR_R002.kwcoco.zip
-                - $DATA_DVC_DPATH/imganns-US_R007.kwcoco.json
+                - $DATA_DVC_DPATH/imganns-US_R007.kwcoco.zip
                 - $DATA_DVC_DPATH/imganns-BR_R001.kwcoco.zip
                 - $DATA_DVC_DPATH/imganns-BR_R002.kwcoco.zip
-                - $DATA_DVC_DPATH/imganns-AE_R001.kwcoco.json
+                - $DATA_DVC_DPATH/imganns-AE_R001.kwcoco.zip
 
             bas_pxl.channels: auto
             bas_pxl.chip_dims: 128, 128
@@ -132,26 +132,27 @@ python -m watch.mlops.schedule_evaluation \
             bas_poly.time_thresh: null
             bas_poly.morph_kernel: 0
             bas_poly.thresh:
+                - 0.025
                 - 0.05
+                - 0.075
                 - 0.1
+                - 0.125
                 - 0.15
+                - 0.175
                 - 0.2
+                - 0.225
                 - 0.25
+                - 0.275
                 - 0.3
+                - 0.325
                 - 0.35
+                - 0.375
                 - 0.4
+                - 0.425
                 - 0.45
+                - 0.475
                 - 0.5
-                - 0.55
-                - 0.6
-                - 0.65
-                - 0.7
-                - 0.75
-                - 0.8
-                - 0.85
-                - 0.9
-                - 0.95
-            bas_poly.agg_fn: rescaled_probs
+            bas_poly.agg_fn: probs
 
             bas_pxl.enabled: 1
             bas_poly.enabled: 1
