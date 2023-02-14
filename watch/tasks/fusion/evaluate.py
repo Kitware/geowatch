@@ -133,11 +133,16 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
         dsize = np.array((video1['width'], video1['height']))
     else:
         raise KeyError(score_space)
-    try:
-        scale = true_coco_img._scalefactor_for_resolution(resolution=resolution, space=score_space)['mag']
-    except Exception as ex:
-        # print(f'warning: ex={ex}')
+
+    if resolution is None:
         scale = None
+    else:
+        try:
+            scale = true_coco_img._scalefactor_for_resolution(resolution=resolution, space=score_space)['mag']
+        except Exception as ex:
+            print(f'warning: ex={ex}')
+            scale = None
+
     if scale is not None:
         dsize = np.ceil(np.array(dsize) * np.array(scale)).astype(int)
 
@@ -309,15 +314,13 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
             if balance_area:
                 # Fill in the weights to upweight smaller areas.
                 instance_weight = unit_sseg_share / true_sseg.area
-                catname_to_true[true_catname] = true_sseg.fill(catname_to_true[true_catname], value=instance_weight)
-            else:
-                catname_to_true[true_catname] = true_sseg.fill(catname_to_true[true_catname], value=1)
+                class_weights = true_sseg.fill(class_weights, value=instance_weight)
+            catname_to_true[true_catname] = true_sseg.fill(catname_to_true[true_catname], value=1)
 
         # Hack:
         # normalize to 0-1, this downweights the background too much, but
         # I think fixes a upstream issue. Remove (or justify?) if possible.
-        class_weights = class_weights / class_weights.max()
-
+        # class_weights = class_weights / class_weights.max()
 
     if classes_of_interest:
         try:
@@ -658,15 +661,21 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
             # class_pred_idx = pred_cat_ohe.argmax(axis=0)
             # class_true_idx = true_cat_ohe.argmax(axis=0)
 
-            true_overlay = colorize_class_probs(true_cat_ohe, true_classes)[..., 0:3]
-            # true_heatmap = kwimage.Heatmap(class_probs=true_cat_ohe, classes=true_classes)
-            # true_overlay = true_heatmap.colorize('class_probs')[..., 0:3]
-            true_overlay = draw_truth_borders(true_dets, true_overlay, alpha=1.0)
-            true_overlay = kwimage.ensure_uint255(true_overlay)
-            true_overlay = kwimage.draw_text_on_image(
-                true_overlay, 'true class', org=(1, 1), valign='top',
-                color=TRUE_GREEN, border=1)
-            vert_parts.append(true_overlay)
+            try:
+                true_overlay = colorize_class_probs(true_cat_ohe, true_classes)[..., 0:3]
+                # true_heatmap = kwimage.Heatmap(class_probs=true_cat_ohe, classes=true_classes)
+                # true_overlay = true_heatmap.colorize('class_probs')[..., 0:3]
+                true_overlay = draw_truth_borders(true_dets, true_overlay, alpha=1.0)
+                true_overlay = kwimage.ensure_uint255(true_overlay)
+                true_overlay = kwimage.draw_text_on_image(
+                    true_overlay, 'true class', org=(1, 1), valign='top',
+                    color=TRUE_GREEN, border=1)
+                vert_parts.append(true_overlay)
+            except Exception:
+                from watch.utils import util_progress
+                util_progress.ProgressManager.stopall()
+                import xdev
+                xdev.embed()
 
             pred_overlay = colorize_class_probs(pred_cat_ohe, pred_classes)[..., 0:3]
             # pred_heatmap = kwimage.Heatmap(class_probs=pred_cat_ohe, classes=pred_classes)
@@ -1059,7 +1068,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
 
     # Submit scoring jobs over pairs of true-predicted images in videos
     for video_match in video_matches:
-        prog.set_extra('comparing ' + video_match['vidname'])
+        prog.set_postfix_str('comparing ' + video_match['vidname'])
         gids1 = video_match['match_gids1']
         gids2 = video_match['match_gids2']
         if required_marked:
@@ -1124,33 +1133,19 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         # Use rich outside of slurm
         RICH_PROG = not os.environ.get('SLURM_JOBID', '')
 
-    if RICH_PROG:
-        # TODO: use new util_progress instead
-        # from watch.utils import util_progress
-        import rich
-        import rich.progress
-        progress = rich.progress.Progress(
-            "[progress.description]{task.description}",
-            rich.progress.BarColumn(),
-            rich.progress.MofNCompleteColumn(),
-            # "[progress.percentage]{task.percentage:>3.0f}%",
-            rich.progress.TimeRemainingColumn(),
-            rich.progress.TimeElapsedColumn(),
-        )
-    else:
-        score_prog = ub.ProgIter(desc='Scoring', total=num_jobs)
-        num_draw_finished = 1
-        progress = score_prog  # Hack
+    from watch.utils import util_progress
+    pman = util_progress.ProgressManager(backend='rich' if RICH_PROG else 'progiter')
 
     DEBUG = 0
     if DEBUG:
         orig_infos = []
 
-    with progress:
-        if RICH_PROG:
-            score_task = progress.add_task("[cyan] Scoring...", total=num_jobs)
-            if draw_heatmaps:
-                draw_task = progress.add_task("[green] Drawing...", total=len(job_chunks))
+    with pman:
+        score_prog = pman.progiter(desc="[cyan] Scoring...", total=num_jobs)
+        score_prog.start()
+        if draw_heatmaps:
+            draw_prog = pman.progiter(desc="[green] Drawing...", total=len(job_chunks))
+            draw_prog.start()
 
         for job_chunk in job_chunks:
             chunk_info = []
@@ -1159,10 +1154,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
                 if DEBUG:
                     orig_infos.append(info)
 
-                if RICH_PROG:
-                    progress.update(score_task, advance=1)
-                else:
-                    score_prog.update(1)
+                score_prog.update(1)
                 rows.append(info['row'])
 
                 class_measures = info.get('class_measures', None)
@@ -1190,12 +1182,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
                 for draw_job in draw_jobs:
                     if draw_job.done():
                         draw_job.result()
-                        if RICH_PROG:
-                            progress.update(draw_task, advance=1)
-                        else:
-                            num_draw_finished += 1
-                            score_prog.set_extra(f'Drawing : {num_draw_finished}')
-                            pass
+                        draw_prog.update(1)
                     else:
                         remaining_draw_jobs.append(draw_job)
                 draw_job = None
@@ -1218,12 +1205,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
             while draw_jobs:
                 job = draw_jobs.pop()
                 job.result()
-                if RICH_PROG:
-                    progress.update(draw_task, advance=1)
-                else:
-                    # draw_prog.update()
-                    num_draw_finished += 1
-                    score_prog.set_extra(f'Drawing : {num_draw_finished}')
+                draw_prog.update(1)
             draw_executor.shutdown()
 
     df = pd.DataFrame(rows)

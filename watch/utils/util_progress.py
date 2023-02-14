@@ -4,10 +4,19 @@ POC for a better ProgIter with rich support
 import ubelt as ub
 import os
 from progiter import ProgIter
+import weakref
 
 
 # If truthy disable all threaded rich options
-PROGITER_NOTHREAD = os.environ.get('PROGITER_NOTHREAD', '')
+PROGITER_NOTHREAD = os.environ.get('PROGITER_NOTHREAD', 'auto')
+if PROGITER_NOTHREAD == 'auto':
+    # Use rich outside of slurm
+    PROGITER_NOTHREAD = not os.environ.get('SLURM_JOBID', '')
+else:
+    PROGITER_NOTHREAD = bool(PROGITER_NOTHREAD)
+
+
+LIVE_PROGRESS_MANAGERS = weakref.WeakValueDictionary()
 
 
 class ProgIter2(ProgIter):
@@ -35,6 +44,13 @@ class RichProgIter:
     the circular reference
 
     Ignore:
+        from watch.utils import util_progress
+        util_progress.LIVE_PROGRESS_MANAGERS
+        print(len(util_progress.LIVE_PROGRESS_MANAGERS))
+
+        for v in util_progress.LIVE_PROGRESS_MANAGERS.values():
+            ...
+
         from watch.utils.util_progress import *  # NOQA
         for _ in RichProgIter(range(1000)):
             ...
@@ -57,7 +73,6 @@ class RichProgIter:
             manager = _RichProgIterManager()
             self._self_managed = True
         else:
-            import weakref
             manager = weakref.proxy(manager)
             self._self_managed = False
 
@@ -75,22 +90,37 @@ class RichProgIter:
         self.transient = transient
         self.extra = None
 
+    def start(self):
+        return self.begin()
+
+    def stop(self):
+        return self.end()
+
+    def begin(self):
+        if self._self_managed:
+            self.manager.start()
+
+    def end(self):
+        if self.transient:
+            self.remove()
+        if self._self_managed:
+            self.manager.stop()
+
+    def update(self, n=1):
+        self.manager.rich_manager.update(self.task_id, advance=n)
+
     def __iter__(self):
         if not self.enabled:
             yield from self.iterable
         else:
-            if self._self_managed:
-                self.manager.start()
+            self.start()
             for item in self.iterable:
                 yield item
                 self.manager.rich_manager.update(self.task_id, advance=1)
             if self.total is None:
                 task = self.manager.rich_manager._tasks[self.task_id]
                 self.manager.rich_manager.update(self.task_id, total=task.completed)
-            if self.transient:
-                self.remove()
-            if self._self_managed:
-                self.manager.stop()
+            self.stop()
 
     def remove(self):
         """
@@ -148,7 +178,7 @@ class _RichProgIterManager(BaseProgIterManager):
         self.enabled = kwargs.get('enabled', True)
         self.setup_rich()
 
-    def progiter(self, iterable, total=None, desc=None, transient=False, verbose='auto', **kw):
+    def progiter(self, iterable=None, total=None, desc=None, transient=False, verbose='auto', **kw):
         # Fixme remove circular ref
         self.rich_manager.pman = self
         prog = RichProgIter(
@@ -233,7 +263,7 @@ class _ProgIterManager(BaseProgIterManager):
         }) & ub.udict(kwargs)
         self.prog_iters = []
 
-    def progiter(self, iterable, total=None, desc=None, transient=False, verbose='auto', **kw):
+    def progiter(self, iterable=None, total=None, desc=None, transient=False, verbose='auto', **kw):
         progkw = self.default_progkw.copy()
         progkw.update(kw)
         progkw['verbose'] = verbose
@@ -354,9 +384,33 @@ class ProgressManager(BaseProgIterManager):
         >>>             for j in self.progiter(iter(range(N_inner)), **inner_kwargs):
         >>>                 time.sleep(delay)
         >>>     grid_prog.update_info(f'Finished test item')
+
+    Example:
+        >>> # Demo manual usage
+        >>> from watch.utils.util_progress import ProgressManager
+        >>> from watch.utils import util_progress
+        >>> import time
+        >>> pman = ProgressManager()
+        >>> pman.start()
+        >>> task1 = pman.progiter(desc='task1', total=100)
+        >>> task2 = pman.progiter(desc='task2')
+        >>> for i in range(100):
+        >>>     task1.update()
+        >>>     task2.update(2)
+        >>>     time.sleep(0.01)
+        >>> ProgressManager.stopall()
     """
 
+    @classmethod
+    def stopall(self):
+        """
+        Stop all background progress threads (likely only 1 exists)
+        """
+        for pman in LIVE_PROGRESS_MANAGERS.values():
+            pman.stop()
+
     def __init__(self, backend='rich', **kwargs):
+        LIVE_PROGRESS_MANAGERS[id(self)] = self
         if PROGITER_NOTHREAD:
             backend = 'progiter'
         if backend == 'rich':
