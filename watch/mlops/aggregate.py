@@ -117,7 +117,9 @@ def build_all_param_plots(agg, rois, config):
 
     # Hack in fit params
     if 1:
-        resolved_params = pd.concat([agg.resolved_info['resolved_params'], agg.resolved_info['fit_params']], axis=1)
+        resolved_params = pd.concat([
+            agg.resolved_info['resolved_params'],
+            agg.resolved_info['fit_params']], axis=1)
         agg.resolved_info['resolved_params'] = resolved_params
         agg.resolved_params = resolved_params
 
@@ -147,7 +149,7 @@ def build_all_param_plots(agg, rois, config):
 
     if 0:
         agg.model_cols
-        from watch.utils.util_param_grid import DotDictDataFrame
+        from watch.utils.util_pandas import DotDictDataFrame
         fit_params = DotDictDataFrame(macro_table)['fit']
         unique_packages = macro_table['bas_pxl.package_fpath'].drop_duplicates()
         # unique_fit_params = fit_params.loc[unique_packages.index]
@@ -412,8 +414,8 @@ def foldin_resolved_info(agg):
     way.
     """
     # make these just parse nicer, but for now munge the data.
-    from watch.utils.util_param_grid import DotDictDataFrame
-    from watch.utils.util_param_grid import pandas_add_prefix
+    from watch.utils.util_pandas import DotDictDataFrame
+    from watch.utils.util_pandas import pandas_add_prefix
     param_types = DotDictDataFrame(agg.results['param_types'])
 
     # param_types['pxl.meta']

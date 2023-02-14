@@ -140,9 +140,8 @@ def main():
 
     viz_cmds = []
 
-    # from watch.utils import util_param_grid
     colnames = ub.oset(reporter.orig_merged_df.columns)
-    # column_nestings = util_param_grid.dotkeys_to_nested(colnames)
+    # column_nestings = util_dotdict.dotkeys_to_nested(colnames)
     dotted = ub.oset([c for c in colnames if '.' in c])
     metric_cols = ub.oset([c for c in dotted if 'metrics.' in c])
     meta_cols = ub.oset([c for c in dotted if 'meta.' in c])

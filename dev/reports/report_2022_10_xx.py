@@ -176,7 +176,6 @@ def bas_report():
 
     df = reporter.orig_merged_df
 
-    # from watch.utils.util_param_grid import DotDictDataFrame
     # df = DotDictDataFrame(df)
     groupid_to_shortlist = reporter.report_best(show_configs=True, verbose=1, top_k=10)
 
@@ -266,7 +265,7 @@ def main():
 
     reporter.state.summarize()
     df = reporter.orig_merged_df
-    from watch.utils.util_param_grid import DotDictDataFrame
+    from watch.utils.util_pandas import DotDictDataFrame
     df = DotDictDataFrame(df)
 
     groupid_to_shortlist = reporter.report_best(show_configs=True, verbose=1, top_k=4)
@@ -322,14 +321,14 @@ def main():
         fig.set_size_inches([6, 3])
         fig.subplots_adjust(bottom=0.2)
 
-    from watch.utils.util_param_grid import DotDictDataFrame
+    from watch.utils.util_pandas import DotDictDataFrame
     sdf = DotDictDataFrame(groupid_to_shortlist[('Drop4-SC_data_vali_small.kwcoco', 'eval_act_poly_fpath')])
 
     keepers = []
     for x in groupid_to_shortlist.values():
         keepers.extend(x['act_model'])
 
-    from watch.utils.util_param_grid import DotDictDataFrame
+    from watch.utils.util_pandas import DotDictDataFrame
     df = DotDictDataFrame(df)
     print('df.nested_columns = {}'.format(ub.repr2(df.nested_columns, nl=True)))
 

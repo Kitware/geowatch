@@ -1,6 +1,7 @@
+"""
+Handles github actions like parameter matrices
+"""
 import ubelt as ub
-import pandas as pd
-import pygtrie
 
 
 def handle_yaml_grid(default, auto, arg):
@@ -189,6 +190,7 @@ def expand_param_grid(arg):
             ''')
         >>> grid_items = expand_param_grid(arg)
         >>> print('grid_items = {}'.format(ub.repr2(grid_items, nl=1, sort=0)))
+        >>> from watch.utils.util_dotdict import dotdict_to_nested
         >>> print(ub.repr2([dotdict_to_nested(p) for p in grid_items], nl=-3, sort=0))
         >>> print(len(grid_items))
     """
@@ -198,29 +200,6 @@ def expand_param_grid(arg):
     for item in action_matrices:
         grid_items += github_action_matrix(item)
     return grid_items
-
-
-def dotdict_to_nested(d):
-    auto = ub.AutoDict()
-    walker = ub.IndexableWalker(auto)
-    for k, v in d.items():
-        path = k.split('.')
-        walker[path] = v
-    return auto.to_dict()
-
-
-def dotkeys_to_nested(keys):
-    """
-    Args:
-        keys (List[str]): a list of dotted key names
-    """
-    auto = ub.AutoDict()
-    walker = ub.IndexableWalker(auto)
-    for k in keys:
-        path = k.split('.')
-        walker[path] = k
-    # print(ub.repr2(auto))
-    return auto.to_dict()
 
 
 def github_action_matrix(arg):
@@ -375,209 +354,3 @@ def github_action_matrix(arg):
     grid_items = grid_stage1 + appended_items
 
     return grid_items
-
-
-class DotDictDataFrame(pd.DataFrame):
-    """
-    A proof-of-concept wrapper around pandas that lets us walk down the nested
-    structure a little easier.
-
-    The API is a bit weird, and the caches are not invalidated if any column
-    changes, but it does a reasonable job otherwise.
-
-    Is there another library out there that does this?
-
-    Example:
-        >>> from watch.utils.util_param_grid import *  # NOQA
-        >>> rows = [
-        >>>     {'node1.id': 1, 'node2.id': 2, 'node1.metrics.ap': 0.5, 'node2.metrics.ap': 0.8},
-        >>>     {'node1.id': 1, 'node2.id': 2, 'node1.metrics.ap': 0.5, 'node2.metrics.ap': 0.8},
-        >>>     {'node1.id': 1, 'node2.id': 2, 'node1.metrics.ap': 0.5, 'node2.metrics.ap': 0.8},
-        >>>     {'node1.id': 1, 'node2.id': 2, 'node1.metrics.ap': 0.5, 'node2.metrics.ap': 0.8},
-        >>> ]
-        >>> self = DotDictDataFrame(rows)
-        >>> # Test prefix lookup
-        >>> assert set(self['node1'].columns) == {'node1.id', 'node1.metrics.ap'}
-        >>> # Test suffix lookup
-        >>> assert set(self['id'].columns) == {'node1.id', 'node2.id'}
-        >>> # Test mid-node lookup
-        >>> assert set(self['metrics'].columns) == {'node1.metrics.ap', 'node2.metrics.ap'}
-        >>> # Test single lookup
-        >>> assert set(self[['node1.id']].columns) == {'node1.id'}
-        >>> # Test glob
-        >>> assert set(self.find_columns('*metri*')) == {'node1.metrics.ap', 'node2.metrics.ap'}
-    """
-
-    def __init__(self, *args, **kw):
-        super().__init__(*args, **kw)
-        self.__dict__['_trie_cache'] = {}
-
-    def _clear_column_caches(self):
-        self._trie_cache = {}
-
-    @property
-    def _column_prefix_trie(self):
-        # TODO: cache the trie correctly
-        if self._trie_cache.get('prefix_trie', None) is None:
-            _trie_data = ub.dzip(self.columns, self.columns)
-            _trie = pygtrie.StringTrie(_trie_data, separator='.')
-            self._trie_cache['prefix_trie'] = _trie
-        return self._trie_cache['prefix_trie']
-
-    @property
-    def _column_suffix_trie(self):
-        if self._trie_cache.get('suffix_trie', None) is None:
-            reversed_columns = ['.'.join(col.split('.')[::-1])
-                                for col in self.columns]
-            _trie_data = ub.dzip(reversed_columns, reversed_columns)
-            _trie = pygtrie.StringTrie(_trie_data, separator='.')
-            self._trie_cache['suffix_trie'] = _trie
-        return self._trie_cache['suffix_trie']
-
-    @property
-    def _column_node_groups(self):
-        if self._trie_cache.get('node_groups', None) is None:
-            paths = [col.split('.') for col in self.columns]
-            lut = ub.ddict(list)
-            for path in paths:
-                col = '.'.join(path)
-                for part in path:
-                    lut[part].append(col)
-            self._trie_cache['node_groups'] = lut
-        return self._trie_cache['node_groups']
-
-    @property
-    def nested_columns(self):
-        return dotkeys_to_nested(self.columns)
-
-    def find_column(self, col):
-        result = self.query_column(col)
-        if len(result) == 0:
-            raise KeyError
-        elif len(result) > 1:
-            raise RuntimeError
-        return list(result)[0]
-
-    def query_column(self, col):
-        # Might be better to do a globby sort of pattern
-        parts = col.split('.')
-        return ub.oset.intersection(*[self._column_node_groups[p] for p in parts])
-        # try:
-        #     candiates.update(self._column_prefix_trie.values(col))
-        # except KeyError:
-        #     ...
-        # try:
-        #     candiates.update(self._column_suffix_trie.values(col))
-        # except KeyError:
-        #     ...
-        # return candiates
-
-    def lookup_suffix_columns(self, col):
-        return self._column_suffix_trie.values(col)
-
-    def find_columns(self, pat, hint='glob'):
-        from watch.utils import util_pattern
-        pat = util_pattern.Pattern.coerce(pat, hint=hint)
-        found = [c for c in self.columns if pat.match(c)]
-        return found
-
-    def __getitem__(self, cols):
-        if isinstance(cols, str):
-            if cols not in self.columns:
-                cols = self.query_column(cols)
-                if not cols:
-                    print(f'Available columns={self.columns}')
-                    raise KeyError
-        elif isinstance(cols, list):
-            cols = list(ub.flatten([self.query_column(c) for c in cols]))
-        return super().__getitem__(cols)
-
-
-class DotDict(dict):
-    """
-    I'm sure this data structure exists on pypi.
-    This should be replaced with that if we find it.
-
-    Example:
-        >>> from watch.utils.util_param_grid import *  # NOQA
-        >>> self = DotDict({
-        >>>     'proc1.param1': 1,
-        >>>     'proc1.param2': 2,
-        >>>     'proc2.param1': 3,
-        >>>     'proc2.param2': 4,
-        >>>     'proc3.param1': 5,
-        >>>     'proc3.param2': 6,
-        >>>     'proc4.part1.param1': 7,
-        >>>     'proc4.part1.param2': 8,
-        >>>     'proc4.part2.param2': 9,
-        >>>     'proc4.part2.param2': 10,
-        >>> })
-        >>> self.get('proc1')
-        >>> self.prefix_get('proc4')
-        >>> 'proc1' in self
-    """
-
-    def __init__(self, /, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._trie_cache = {}
-
-    @property
-    def _prefix_trie(self):
-        if self._trie_cache.get('prefix_trie', None) is None:
-            _trie_data = ub.dzip(self.keys(), self.keys())
-            _trie = pygtrie.StringTrie(_trie_data, separator='.')
-            self._trie_cache['prefix_trie'] = _trie
-        return self._trie_cache['prefix_trie']
-
-    @property
-    def _suffix_trie(self):
-        if self._trie_cache.get('prefix_trie', None) is None:
-            _trie_data = ub.dzip(self.keys(), self.keys())
-            _trie = pygtrie.StringTrie(_trie_data, separator='.')
-            self._trie_cache['prefix_trie'] = _trie
-        return self._trie_cache['prefix_trie']
-
-    def prefix_get(self, key, default=ub.NoParam):
-        try:
-            suffix_dict = DotDict()
-            full_keys = self._prefix_trie.values(key)
-        except KeyError:
-            if default is not ub.NoParam:
-                return default
-            else:
-                raise
-        else:
-            for full_key in full_keys:
-                sub_key = full_key[len(key) + 1:]
-                suffix_dict[sub_key] = self[full_key]
-            return suffix_dict
-
-    # def __contains__(self, key):
-    #     if super().__contains__(key):
-    #         return True
-    #     else:
-    #         subkeys = []
-    #         subkeys.extend(self._prefix_trie.values(key))
-    #         return bool(subkeys)
-
-    # def get(self, key, default=ub.NoParam):
-    #     if default is ub.NoParam:
-    #         return self[key]
-    #     else:
-    #         try:
-    #             return self[key]
-    #         except KeyError:
-    #             return default
-
-    # def __getitem__(self, key):
-    #     try:
-    #         return super().__getitem__(key)
-    #     except KeyError:
-    #         subkeys = []
-    #         subkeys.extend(self._prefix_trie.values(key))
-    #         return self.__class__([(k, self[k]) for k in subkeys])
-
-
-def pandas_add_prefix(data, prefix):
-    mapper = {c: prefix + c for c in data.columns}
-    return data.rename(mapper, axis=1)

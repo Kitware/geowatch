@@ -10,7 +10,7 @@ from watch.utils import util_pandas
 def _check_high_tpr_case(agg, config):
     macro_results = agg.region_to_tables[agg.primary_macro_region].copy()
 
-    from watch.utils.util_param_grid import DotDictDataFrame
+    from watch.utils.util_pandas import DotDictDataFrame
     macro_metrics = DotDictDataFrame(macro_results['metrics'])
     tpr_col = macro_metrics.find_column('bas_tpr')
     macro_metrics = macro_metrics.sort_values(tpr_col, ascending=False)
@@ -227,7 +227,7 @@ def build_all_param_plots(agg):
 
     if 0:
         agg.model_cols
-        from watch.utils.util_param_grid import DotDictDataFrame
+        from watch.utils.util_pandas import DotDictDataFrame
         fit_params = DotDictDataFrame(macro_table)['fit']
         unique_packages = macro_table['bas_pxl.package_fpath'].drop_duplicates()
         unique_fit_params = fit_params.loc[unique_packages.index]
@@ -458,7 +458,7 @@ def generate_kr2_heatmaps(agg):
     confusion_visualization.bas_poly_eval_confusion_analysis(eval_fpath)
 
 def check_baseline(eval_type_to_aggregator):
-    from watch.utils.util_param_grid import DotDictDataFrame
+    from watch.utils.util_pandas import DotDictDataFrame
     models_of_interest = [
         'package_epoch0_step41',
     ]
