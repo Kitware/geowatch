@@ -6,6 +6,8 @@ import einops
 from einops.layers.torch import Rearrange
 from torchvision import models as tv_models
 from torchvision.models import feature_extraction
+import numpy as np
+from typing import Union
 
 import kwcoco
 import kwarray
@@ -314,8 +316,8 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         dataset_stats=None,
         input_sensorchan=None,
         name: str = "unnamed_model",
-        position_encoder: ScaleAwarePositionalEncoder = 'auto',
-        backbone: BackboneEncoderDecoder = 'auto',
+        position_encoder: Union[str, ScaleAwarePositionalEncoder] = 'auto',
+        backbone: Union[str, BackboneEncoderDecoder] = 'auto',
         token_width: int = 10,
         token_dim: int = 16,
         spatial_scale_base: float = 1.,
