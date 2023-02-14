@@ -11,7 +11,7 @@ import weakref
 PROGITER_NOTHREAD = os.environ.get('PROGITER_NOTHREAD', 'auto')
 if PROGITER_NOTHREAD == 'auto':
     # Use rich outside of slurm
-    PROGITER_NOTHREAD = not os.environ.get('SLURM_JOBID', '')
+    PROGITER_NOTHREAD = os.environ.get('SLURM_JOBID', '')
 else:
     PROGITER_NOTHREAD = bool(PROGITER_NOTHREAD)
 
@@ -20,6 +20,9 @@ LIVE_PROGRESS_MANAGERS = weakref.WeakValueDictionary()
 
 
 class ProgIter2(ProgIter):
+
+    def _set_manager(self, manager):
+        self.manager = weakref.proxy(manager)
 
     def update_info(self, text):
         self.info_text = text
@@ -31,6 +34,21 @@ class ProgIter2(ProgIter):
             print(info_text)
             print('+ ------------ +')
         # self.display_message()
+
+    def update(self, n=1):
+        if not self.started:
+            self.begin()
+        manager = getattr(self, 'manager', None)
+        if manager is not None:
+            # TODO: vet this, not quite working. The idea is if part of a
+            # progress manager and this is not the "tail" progiter (i.e. it
+            # isn't the only progiter allowed to be clearing newlines) then we
+            # should ensure that the progiter that is allowed to clear the
+            # newline has its ensure_newline method called so we can actually
+            # write our progress without getting clobbered.
+            if len(manager.prog_iters) and manager.prog_iters[-1] is not self:
+                manager.prog_iters[-1].ensure_newline()
+        super().update(n=n)
 
     def display_message(self):
         super().display_message()
@@ -260,7 +278,7 @@ class _ProgIterManager(BaseProgIterManager):
         # Default arguments for new progiters
         self.default_progkw = ub.udict({
             'time_thresh': 2.0,
-        }) & ub.udict(kwargs)
+        }) | ub.udict(kwargs)
         self.prog_iters = []
 
     def progiter(self, iterable=None, total=None, desc=None, transient=False, verbose='auto', **kw):
@@ -268,6 +286,8 @@ class _ProgIterManager(BaseProgIterManager):
         progkw.update(kw)
         progkw['verbose'] = verbose
         if verbose == 'auto':
+            progkw['verbose'] = self.default_progkw.get('verbose', 1)
+        if True:
             # Change all other - now outer - progiters to verbose=3 mode
             for other in self.prog_iters:
                 other.ensure_newline()
@@ -275,9 +295,8 @@ class _ProgIterManager(BaseProgIterManager):
                     other.clearline = False
                     other.adjust = False
                     other.freq = 1
-            progkw['verbose'] = 1
-        # progkw['verbose'] = 1
         prog = ProgIter2(iterable, total=total, desc=desc, **progkw)
+        prog._set_manager(self)
         self.prog_iters.append(prog)
         return prog
 
@@ -399,16 +418,25 @@ class ProgressManager(BaseProgIterManager):
         >>>     task2.update(2)
         >>>     time.sleep(0.01)
         >>> ProgressManager.stopall()
+
+    Example:
+        >>> # Demo manual usage (progiter backend)
+        >>> from watch.utils.util_progress import ProgressManager
+        >>> from watch.utils import util_progress
+        >>> import time
+        >>> pman = ProgressManager(backend='progiter', adjust=0, freq=1)
+        >>> pman.start()
+        >>> task1 = pman.progiter(desc='task1', total=12)
+        >>> task2 = pman.progiter(desc='task2')
+        >>> task1.update()
+        >>> task2.update()
+        >>> for i in range(10):
+        >>>     time.sleep(0.01)
+        >>>     task1.update()
+        >>>     time.sleep(0.01)
+        >>>     task2.update(2)
+        >>> ProgressManager.stopall()
     """
-
-    @classmethod
-    def stopall(self):
-        """
-        Stop all background progress threads (likely only 1 exists)
-        """
-        for pman in LIVE_PROGRESS_MANAGERS.values():
-            pman.stop()
-
     def __init__(self, backend='rich', **kwargs):
         LIVE_PROGRESS_MANAGERS[id(self)] = self
         if PROGITER_NOTHREAD:
@@ -417,6 +445,8 @@ class ProgressManager(BaseProgIterManager):
             self.backend = _RichProgIterManager(**kwargs)
         elif backend == 'progiter':
             self.backend = _ProgIterManager(**kwargs)
+        else:
+            raise KeyError(backend)
 
     def progiter(self, *args, **kw):
         prog = self.backend.progiter(*args, **kw)
@@ -430,3 +460,11 @@ class ProgressManager(BaseProgIterManager):
 
     def stop(self, *args, **kwargs):
         self.backend.stop(*args, **kwargs)
+
+    @classmethod
+    def stopall(self):
+        """
+        Stop all background progress threads (likely only 1 exists)
+        """
+        for pman in LIVE_PROGRESS_MANAGERS.values():
+            pman.stop()
