@@ -213,6 +213,7 @@ class _RichProgIterManager(BaseProgIterManager):
         from rich.progress import BarColumn, TextColumn
         from rich.progress import Progress as richProgress
         from rich.progress import ProgressColumn, Text
+        # from rich.style import Style
 
         class ProgressRateColumn(ProgressColumn):
             """Renders human readable transfer speed."""
@@ -223,12 +224,13 @@ class _RichProgIterManager(BaseProgIterManager):
                 if _iters_per_second is not None:
                     rate_format = '4.2f' if _iters_per_second > .001 else 'g'
                     fmt = '{:' + rate_format + '} Hz'
-                    n = Text(fmt.format(_iters_per_second))
-                    return n
+                    text = fmt.format(_iters_per_second)
                 else:
-                    return '?'
-                # speed = task.finished_speed or task.speed
-                # return rich.progress.TaskProgressColumn.render_speed(speed)
+                    text = '?'
+                # style = Style(color="red")
+                style = 'progress.data.speed'
+                renderable = Text(text, style=style)
+                return renderable
 
         self.rich_manager = richProgress(
             TextColumn("{task.description}"),
@@ -236,9 +238,11 @@ class _RichProgIterManager(BaseProgIterManager):
             rich.progress.MofNCompleteColumn(),
             # "[progress.percentage]{task.percentage:>3.0f}%",
             # rich.progress.TransferSpeedColumn(),
-            rich.progress.TimeRemainingColumn(),
-            rich.progress.TimeElapsedColumn(),
             ProgressRateColumn(),
+            'eta',
+            rich.progress.TimeRemainingColumn(),
+            'total',
+            rich.progress.TimeElapsedColumn(),
         )
         self.info_panel = None
         # Panel('')
