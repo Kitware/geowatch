@@ -1,4 +1,10 @@
 #!/usr/bin/env python
+"""
+Compute semantic segmentation evaluation metrics
+
+TODO:
+    - [ ] Move to kwcoco proper
+"""
 import sys
 import json
 import kwarray
@@ -22,6 +28,7 @@ from kwcoco.metrics.confusion_measures import MeasureCombiner
 from kwcoco.metrics.confusion_measures import Measures
 from typing import Dict
 import scriptconfig as scfg  # NOQA
+from shapely.ops import unary_union
 
 try:
     from xdev import profile
@@ -29,111 +36,59 @@ except Exception:
     profile = ub.identity
 
 
-class SegmentationEvalConfig(scfg.Config):
+# The colors I traditionally use for truth and predictions
+# TRUE_GREEN = 'limegreen'
+# PRED_BLUE = 'dodgerblue'
+
+# If we have a recent kwimage we can use kitware colors, which look pretty good
+# in these roles too.
+TRUE_GREEN = 'kitware_green'
+PRED_BLUE = 'kitware_blue'
+
+
+class SegmentationEvalConfig(scfg.DataConfig):
     """
     Evaluation script for change/segmentation task
     """
-    default = {
-         'true_dataset': scfg.Value(None, help='path to the groundtruth dataset'),
-         'pred_dataset': scfg.Value(None, help='path to the predicted dataset'),
-         'eval_dpath': scfg.Value(None, help='directory to dump results'),
-         'eval_fpath': scfg.Value(None, help='path to dump result summary'),
-         'draw_curves': scfg.Value('auto', help='flag to draw curves or not'),
-         'draw_heatmaps': scfg.Value('auto', help='flag to draw heatmaps or not'),
-         'score_space': scfg.Value('video', help='can score in image or video space'),
-         'workers': scfg.Value('auto', help='number of parallel scoring workers'),
-         'draw_workers': scfg.Value('auto', help='number of parallel drawing workers'),
-         'viz_thresh': scfg.Value('auto', help='visualization threshold'),
-    }
-
-
-# def make_evaluate_config(cmdline=False, **kwargs):
-#     from watch.utils.configargparse_ext import ArgumentParser
-#     parser = ArgumentParser(
-#         add_config_file_help=False,
-#         description='Evaluation script for change/segmentation task',
-#         auto_env_var_prefix='WATCH_FUSION_EVAL_',
-#         add_env_var_help=True,
-#         formatter_class='defaults',
-#         config_file_parser_class='yaml',
-#         args_for_setting_config_path=['--config'],
-#         args_for_writing_out_config_file=['--dump'],
-#     )
-#     parser.add_argument('--true_dataset', '--test_dataset', help='path to the groundtruth dataset')
-#     parser.add_argument('--pred_dataset', help='path to the predicted dataset')
-#     parser.add_argument('--eval_dpath', help='path to dump results')
-#     parser.add_argument('--draw_curves', default='auto', help='flag to draw curves or not')
-#     parser.add_argument('--draw_heatmaps', default='auto', help='flag to draw heatmaps or not')
-#     parser.add_argument('--score_space', default='video', help='can score in image or video space')
-#     parser.add_argument('--workers', default='auto', help='number of parallel scoring workers')
-#     parser.add_argument('--draw_workers', default='auto', help='number of parallel drawing workers')
-#     parser.set_defaults(**kwargs)
-#     default_args = None if cmdline else []
-#     args, _ = parser.parse_known_args(default_args)
-#     return args
+    true_dataset = scfg.Value(None, help='path to the groundtruth dataset')
+    pred_dataset = scfg.Value(None, help='path to the predicted dataset')
+    eval_dpath = scfg.Value(None, help='directory to dump results')
+    eval_fpath = scfg.Value(None, help='path to dump result summary')
+    # options
+    draw_curves = scfg.Value('auto', help='flag to draw curves or not')
+    draw_heatmaps = scfg.Value('auto', help='flag to draw heatmaps or not')
+    score_space = scfg.Value('video', help='can score in image or video space')
+    workers = scfg.Value('auto', help='number of parallel scoring workers')
+    draw_workers = scfg.Value('auto', help='number of parallel drawing workers')
+    viz_thresh = scfg.Value('auto', help='visualization threshold')
+    balance_area = scfg.Value(False, help='upweight small instances, downweight large instances')
 
 
 def main(cmdline=True, **kwargs):
     """
-    Ignore:
-        from watch.tasks.fusion.evaluate import *  # NOQA
-        from watch.tasks.fusion.evaluate import _memo_legend, _redraw_measures
-        kwargs = {
-            'config': './debug-eval.yaml',
-            'draw_heatmaps': 0,
-            'draw_curves': 0,
-            'workers': 2,
-            'score_space': 'video',
-        }
-        cmdline = False
+    Entry point: todo: doctest and CLI structure
 
-        argv = '/home/joncrall/code/watch/watch/tasks/fusion/evaluate.py --true_dataset=/home/joncrall/data/dvc-repos/smart_data_dvc/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data_train_subset.kwcoco.json --pred_dataset=/home/joncrall/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/pred/Drop4_BAS_Retrain_V002/Drop4_BAS_Retrain_V002_epoch=43-step=22528.pt/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_data_train_subset.kwcoco/predcfg_480dba90/pred.kwcoco.json --eval_dpath=/home/joncrall/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/eval/Drop4_BAS_Retrain_V002/Drop4_BAS_Retrain_V002_epoch=43-step=22528.pt/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_data_train_subset.kwcoco/predcfg_480dba90/eval/eval_pxl --score_space=video --draw_curves=1 --draw_heatmaps=1 --workers=2'
-        kwargs = dict(SegmentationEvalConfig(cmdline=argv))
+    todo: ProcessContext to track resource usage
     """
+    full_config = SegmentationEvalConfig.legacy(cmdline=cmdline, data=kwargs)
+    full_config = ub.udict(full_config)
+    print('full_config = {}'.format(ub.repr2(full_config, nl=1)))
 
-    # args = make_evaluate_config(cmdline=cmdline, **kwargs)
-    # config = args.__dict__
+    true_coco = kwcoco.CocoDataset.coerce(full_config['true_dataset'])
+    pred_coco = kwcoco.CocoDataset.coerce(full_config['pred_dataset'])
+    eval_fpath = full_config['eval_fpath']
+    eval_dpath = full_config['eval_dpath']
 
-    cfgpath = kwargs.pop('config', None)
-    config = SegmentationEvalConfig(cmdline=cmdline, data=kwargs)
-    if cfgpath is not None:
-        # Hack, scriptconfig should have a nicer API than this
-        config = config.load(cfgpath)
-    config.update(kwargs)
-
-    print('config = {}'.format(ub.repr2(dict(config), nl=1)))
-    true_coco = kwcoco.CocoDataset.coerce(config['true_dataset'])
-    pred_fpath = config['pred_dataset']
-
-    try:
-        pred_coco = kwcoco.CocoDataset.coerce(pred_fpath)
-    except Exception:
-        # Hack around issue in coerce
-        pred_coco = kwcoco.CocoDataset()
-        pred_coco.fpath = pred_fpath
-
-    workers = config['workers']
-    score_space = config['score_space']
-    draw_workers = config['workers']
-    eval_dpath = config['eval_dpath']
-    eval_fpath = config['eval_fpath']
-
-    from scriptconfig.smartcast import smartcast
-    draw_heatmaps = smartcast(config['draw_heatmaps'])
-    draw_curves = smartcast(config['draw_curves'])
-    viz_thresh = smartcast(config['viz_thresh'])
+    config = full_config - {
+        'true_dataset', 'pred_dataset', 'eval_dpath', 'eval_fpath'}
     evaluate_segmentations(true_coco, pred_coco, eval_dpath, eval_fpath,
-                           draw_curves=draw_curves,
-                           draw_heatmaps=draw_heatmaps,
-                           score_space=score_space, workers=workers,
-                           draw_workers=draw_workers, viz_thresh=viz_thresh)
+                           config)
 
 
 @profile
 def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
                                       true_classes, true_dets, video1=None,
-                                      score_space='video', thresh_bins=None,
-                                      viz_thresh=None):
+                                      thresh_bins=None, config=None):
     """
     Args:
         true_coco_img (kwcoco.CocoImage): detatched true coco image
@@ -143,6 +98,22 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
         thresh_bins (int): if specified rounds scores into this many bins
             to make calculating metrics more efficient
     """
+    if config is None:
+        config = {}
+
+    viz_thresh = config.get('viz_thresh', None)
+    score_space = config.get('score_space', 'auto')
+    resolution = config.get('resolution', None)
+    balance_area = config.get('balance_area', False)
+
+    if score_space == 'auto':
+        pred_vidid = pred_coco_img.img.get('video_id', None)
+        true_vidid = true_coco_img.img.get('video_id', None)
+        if true_vidid is not None or pred_vidid is not None:
+            score_space = 'video'
+        else:
+            score_space = 'image'
+
     true_gid = true_coco_img.img['id']
     pred_gid = pred_coco_img.img['id']
 
@@ -157,11 +128,23 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
     img1 = true_coco_img.img
 
     if score_space == 'image':
-        shape = (img1['height'], img1['width'])
+        dsize = np.array((img1['width'], img1['height']))
     elif score_space == 'video':
-        shape = (video1['height'], video1['width'])
+        dsize = np.array((video1['width'], video1['height']))
     else:
         raise KeyError(score_space)
+
+    if resolution is None:
+        scale = None
+    else:
+        try:
+            scale = true_coco_img._scalefactor_for_resolution(resolution=resolution, space=score_space)['mag']
+        except Exception as ex:
+            print(f'warning: ex={ex}')
+            scale = None
+
+    if scale is not None:
+        dsize = np.ceil(np.array(dsize) * np.array(scale)).astype(int)
 
     row = {
         'true_gid': true_gid,
@@ -170,12 +153,14 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
     if video1 is not None:
         row['video'] = video1['name']
 
+    shape = dsize[::-1]
     info = {
         'row': row,
         'shape': shape,
     }
 
     # TODO: parametarize these class categories
+    # TODO: remove and generalize before porting to kwcoco
     from watch import heuristics
     ignore_classes = heuristics.IGNORE_CLASSNAMES
     background_classes = heuristics.BACKGROUND_CLASSES
@@ -248,18 +233,36 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
         # Truth for saliency-task
         true_saliency = np.zeros(shape, dtype=np.uint8)
         saliency_weights = np.ones(shape, dtype=np.float32)
+
+        sseg_groups = {
+            'ignore': [],
+            'context': [],
+            'foreground': [],
+            'background': [],
+        }
         for true_sseg, true_catname in zip(true_ssegs, true_catnames):
-            if true_catname not in background_classes:
-                if true_catname in ignore_classes:
-                    # background should be background
-                    saliency_weights = true_sseg.fill(saliency_weights, value=0)
-                elif true_catname in context_classes:
-                    # Ignore context classes in saliency
-                    # Ignore no-activity and post-construction, ignore, and Unknown
-                    saliency_weights = true_sseg.fill(saliency_weights, value=0)
-                else:
-                    # Score positive, site prep, and active construction.
-                    true_saliency = true_sseg.fill(true_saliency, value=1)
+            if true_catname in background_classes:
+                key = 'background'
+            if true_catname in ignore_classes:
+                key = 'ignore'
+            elif true_catname in context_classes:
+                key = 'context'
+            else:
+                key = 'foreground'
+            sseg_groups[key].append(true_sseg)
+
+        # background should be background, do nothing with it
+        sseg_groups['background']
+        # Ignore context classes in saliency
+        # Ignore no-activity and post-construction, ignore, and Unknown
+        for true_sseg in sseg_groups['ignore']:
+            saliency_weights = true_sseg.fill(saliency_weights, value=0)
+        for true_sseg in sseg_groups['context']:
+            saliency_weights = true_sseg.fill(saliency_weights, value=0)
+        # Score positive, site prep, and active construction.
+        for true_sseg in sseg_groups['foreground']:
+            true_saliency = true_sseg.fill(true_saliency, value=1)
+        saliency_weights = saliency_weights / saliency_weights.max()
 
     if classes_of_interest:
         # Truth for class-task
@@ -268,24 +271,66 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
             for catname in classes_of_interest
         }
         class_weights = np.ones(shape, dtype=np.float32)
+        initial_total_weight = class_weights.size
+
+        sseg_groups = {
+            'background': [],
+            'ignore': [],
+            'undistinguished': [],
+            'foreground': [],
+        }
+        fg_classes = []
         for true_sseg, true_catname in zip(true_ssegs, true_catnames):
-            if true_catname not in background_classes:
-                if true_catname in ignore_classes:
-                    class_weights = true_sseg.fill(class_weights, value=0)
-                elif true_catname in undistinguished_classes:
-                    class_weights = true_sseg.fill(class_weights, value=0)
-                else:
-                    catname_to_true[true_catname] = true_sseg.fill(catname_to_true[true_catname], value=1)
+            if true_catname in background_classes:
+                key = 'background'
+            if true_catname in ignore_classes:
+                key = 'ignore'
+            elif true_catname in undistinguished_classes:
+                key = 'undistinguished'
+            else:
+                key = 'foreground'
+                fg_classes.append(true_catname)
+            sseg_groups[key].append(true_sseg)
+
+        if balance_area:
+            if len(sseg_groups['foreground']):
+                fg_poly = unary_union([p.to_shapely() for p in sseg_groups['foreground']])
+                unit_sseg_share = fg_poly.area / len(sseg_groups['foreground'])
+            else:
+                unit_sseg_share = 1
+
+        true_sseg.area / initial_total_weight
+
+        # background should be background, do nothing with it
+        sseg_groups['background']
+        # Ignore context classes in saliency
+        # Ignore no-activity and post-construction, ignore, and Unknown
+        for true_sseg in sseg_groups['ignore']:
+            class_weights = true_sseg.fill(class_weights, value=0)
+        for true_sseg in sseg_groups['undistinguished']:
+            class_weights = true_sseg.fill(class_weights, value=0)
+        # Score positive, site prep, and active construction.
+        for true_sseg, true_catname in zip(sseg_groups['foreground'], fg_classes):
+            if balance_area:
+                # Fill in the weights to upweight smaller areas.
+                instance_weight = unit_sseg_share / true_sseg.area
+                class_weights = true_sseg.fill(class_weights, value=instance_weight)
+            catname_to_true[true_catname] = true_sseg.fill(catname_to_true[true_catname], value=1)
+
+        # Hack:
+        # normalize to 0-1, this downweights the background too much, but
+        # I think fixes a upstream issue. Remove (or justify?) if possible.
+        # class_weights = class_weights / class_weights.max()
 
     if classes_of_interest:
         try:
             # handle multiclass case
             pred_chan_of_interest = '|'.join(classes_of_interest)
-            # delayed_probs = pred_coco_img.delay(pred_chan_of_interest, space=score_space)
-            # class_probs = delayed_probs.finalize(as_xarray=True, nodata='float')
             delayed_probs = pred_coco_img.delay(
                 pred_chan_of_interest, space=score_space,
-                nodata_method='float').as_xarray()
+                resolution=resolution, nodata_method='float').as_xarray()
+            # Do we need xarray anymore?
+
             class_probs = delayed_probs.finalize()
             invalid_mask = np.isnan(class_probs).all(axis=2)
             class_weights[invalid_mask] = 0
@@ -496,17 +541,25 @@ def draw_truth_borders(true_dets, canvas, alpha=1.0, color=None):
 
 @profile
 def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
-                           heatmap_dpath, score_space='video', title=None):
+                           heatmap_dpath, title=None, config=None):
     """
     Draw a a sequence of true/pred image predictions
     """
     from watch import heuristics
     color_labels = ['TN', 'TP', 'FN', 'FP']
+
+    score_space = config.get('score_space', 'video')
+
     colors = list(ub.take(heuristics.CONFUSION_COLOR_SCHEME, color_labels))
     # colors = ['blue', 'green', 'yellow', 'red']
     # colors = ['black', 'white', 'yellow', 'red']
     color_lut = np.array([kwimage.Color(c).as255() for c in colors])
     # full_classes: kwcoco.CategoryTree = true_coco.object_categories()
+
+    if config is None:
+        config = {}
+
+    resolution = config.get('resolution', None)
 
     # Make a legend
     color01_lut = color_lut / 255.0
@@ -608,15 +661,21 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
             # class_pred_idx = pred_cat_ohe.argmax(axis=0)
             # class_true_idx = true_cat_ohe.argmax(axis=0)
 
-            true_overlay = colorize_class_probs(true_cat_ohe, true_classes)[..., 0:3]
-            # true_heatmap = kwimage.Heatmap(class_probs=true_cat_ohe, classes=true_classes)
-            # true_overlay = true_heatmap.colorize('class_probs')[..., 0:3]
-            true_overlay = draw_truth_borders(true_dets, true_overlay, alpha=1.0)
-            true_overlay = kwimage.ensure_uint255(true_overlay)
-            true_overlay = kwimage.draw_text_on_image(
-                true_overlay, 'true class', org=(1, 1), valign='top',
-                color='limegreen', border=1)
-            vert_parts.append(true_overlay)
+            try:
+                true_overlay = colorize_class_probs(true_cat_ohe, true_classes)[..., 0:3]
+                # true_heatmap = kwimage.Heatmap(class_probs=true_cat_ohe, classes=true_classes)
+                # true_overlay = true_heatmap.colorize('class_probs')[..., 0:3]
+                true_overlay = draw_truth_borders(true_dets, true_overlay, alpha=1.0)
+                true_overlay = kwimage.ensure_uint255(true_overlay)
+                true_overlay = kwimage.draw_text_on_image(
+                    true_overlay, 'true class', org=(1, 1), valign='top',
+                    color=TRUE_GREEN, border=1)
+                vert_parts.append(true_overlay)
+            except Exception:
+                from watch.utils import util_progress
+                util_progress.ProgressManager.stopall()
+                import xdev
+                xdev.embed()
 
             pred_overlay = colorize_class_probs(pred_cat_ohe, pred_classes)[..., 0:3]
             # pred_heatmap = kwimage.Heatmap(class_probs=pred_cat_ohe, classes=pred_classes)
@@ -626,7 +685,7 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
             pred_overlay = kwimage.ensure_uint255(pred_overlay)
             pred_overlay = kwimage.draw_text_on_image(
                 pred_overlay, 'pred class', org=(1, 1), valign='top',
-                color='dodgerblue', border=1)
+                color=PRED_BLUE, border=1)
             vert_parts.append(pred_overlay)
 
         if 'pred_saliency' in info:
@@ -653,7 +712,7 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
             heatmap_int = kwimage.ensure_uint255(heatmap[..., 0:3])
             heatmap_int = kwimage.draw_text_on_image(
                 heatmap_int, 'true saliency', org=(1, 1), valign='top',
-                color='limegreen', border=1)
+                color=TRUE_GREEN, border=1)
             vert_parts.append(heatmap_int)
         # confusion_image = kwimage.draw_text_on_image(
         #     confusion_image, image_text, org=(1, 1), valign='top',
@@ -677,7 +736,7 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
             else:
                 chosen_viz_channs = true_coco_img.primary_asset()['channels']
             try:
-                real_image = true_coco_img.delay(chosen_viz_channs, space=score_space, nodata_method='float').finalize()[:]
+                real_image = true_coco_img.delay(chosen_viz_channs, space=score_space, nodata_method='float', resolution=resolution).finalize()[:]
                 real_image_norm = kwimage.normalize_intensity(real_image)
                 real_image_norm = kwimage.fill_nans_with_checkers(real_image_norm)
                 real_image_int = kwimage.ensure_uint255(real_image_norm)
@@ -699,7 +758,7 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
                 heatmap_int = kwimage.ensure_uint255(heatmap[..., 0:3])
                 heatmap_int = kwimage.draw_text_on_image(
                     heatmap_int, 'pred saliency', org=(1, 1), valign='top',
-                    color='dodgerblue', border=1)
+                    color=PRED_BLUE, border=1)
                 vert_parts.append(heatmap_int)
                 # if real_image_norm is not None:
                 #     overlaid = kwimage.overlay_alpha_layers([heatmap, real_image_norm.mean(axis=2)])
@@ -757,11 +816,11 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
 
 @profile
 def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
-                           eval_fpath=None,
-                           draw_curves='auto', draw_heatmaps='auto',
-                           score_space='video', workers='auto',
-                           draw_workers='auto', viz_thresh='auto'):
+                           eval_fpath=None, config=None):
     """
+    TODO:
+        - [ ] Fold non-critical options into the config
+
     CommandLine:
         XDEV_PROFILE=1 xdoctest -m watch.tasks.fusion.evaluate evaluate_segmentations
 
@@ -790,20 +849,64 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         >>> pred_coco = perterb_coco(true_coco, **kwargs)
         >>> eval_dpath = ub.Path.appdir('watch/tests/fusion_eval').ensuredir()
         >>> print('eval_dpath = {!r}'.format(eval_dpath))
-        >>> score_space = 'image'
+        >>> config = {}
+        >>> config['score_space'] = 'image'
         >>> draw_curves = 'auto'
         >>> draw_heatmaps = 'auto'
         >>> #draw_heatmaps = False
-        >>> workers = 'min(avail-2,6)'
+        >>> config['workers'] = 'min(avail-2,6)'
         >>> #workers = 0
-        >>> evaluate_segmentations(true_coco, pred_coco, eval_dpath,
-        >>>                        score_space=score_space,
-        >>>                        draw_heatmaps=draw_heatmaps,
-        >>>                        draw_curves=draw_curves, workers=workers)
+        >>> evaluate_segmentations(true_coco, pred_coco, eval_dpath, config=config)
+
+    Example:
+        >>> from watch.tasks.fusion.evaluate import *  # NOQA
+        >>> from kwcoco.coco_evaluator import CocoEvaluator
+        >>> from kwcoco.demo.perterb import perterb_coco
+        >>> import kwcoco
+        >>> true_coco = kwcoco.CocoDataset.demo('vidshapes2')
+        >>> kwargs = {
+        >>>     'box_noise': 0.5,
+        >>>     'n_fp': (0, 10),
+        >>>     'n_fn': (0, 10),
+        >>>     'with_probs': True,
+        >>>     'with_heatmaps': True,
+        >>>     'verbose': 1,
+        >>> }
+        >>> # TODO: it would be nice to demo the soft metrics
+        >>> # functionality by adding "salient_prob" or "class_prob"
+        >>> # auxiliary channels to this demodata.
+        >>> print('perterbing')
+        >>> pred_coco = perterb_coco(true_coco, **kwargs)
+        >>> eval_dpath = ub.Path.appdir('watch/tests/fusion_eval-video').ensuredir()
+        >>> print('eval_dpath = {!r}'.format(eval_dpath))
+        >>> config = {}
+        >>> config['score_space'] = 'video'
+        >>> config['balance_area'] = True
+        >>> draw_curves = 'auto'
+        >>> draw_heatmaps = 'auto'
+        >>> #draw_heatmaps = False
+        >>> config['workers'] = 'min(avail-2,6)'
+        >>> #workers = 0
+        >>> evaluate_segmentations(true_coco, pred_coco, eval_dpath, config=config)
     """
     import platform
     from watch import heuristics
-    from watch.utils.lightning_ext import util_globals
+    from watch.utils import util_parallel
+
+    if config is None:
+        config = {}
+
+    draw_curves = config.get('draw_curves', 'auto')
+    draw_heatmaps = config.get('draw_heatmaps', 'auto')
+    score_space = config.get('score_space', 'auto')
+    draw_workers = config.get('draw_workers', 'auto')
+
+    if score_space == 'auto':
+        if true_coco.n_videos:
+            score_space = 'video'
+        else:
+            score_space = 'image'
+        config['score_space'] = score_space
 
     # Ensure each class has colors.
     heuristics.ensure_heuristic_coco_colors(true_coco)
@@ -813,11 +916,11 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     # Sometimes supercategories dont get colors, this fixes that.
     heuristics.ensure_heuristic_category_tree_colors(full_classes)
 
-    workers = util_globals.coerce_num_workers(workers)
+    workers = util_parallel.coerce_num_workers(config.get('workers', 0))
     if draw_workers == 'auto':
         draw_workers = min(2, workers)
     else:
-        draw_workers = util_globals.coerce_num_workers(draw_workers)
+        draw_workers = util_parallel.coerce_num_workers(draw_workers)
 
     # Extract metadata about the predictions to persist
     meta = {}
@@ -900,6 +1003,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         curve_dpath = (ub.Path(eval_dpath) / 'curves').ensuredir()
         invocation_fpath = curve_dpath / 'invocation.sh'
         command = ' '.join(list(map(shlex.quote, sys.argv)))
+        # TODO: make this optional
         invocation_fpath.write_text(ub.codeblock(
             f'''
             #!/bin/bash
@@ -907,6 +1011,12 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
             '''))
         # TODO: use the process tracker
         jsonified_args = util_json.ensure_json_serializable(sys.argv)
+        # TODO: process context instead
+        # from watch.utils import process_context
+        # i.e.
+        # process_context = process_context.ProcessContext()
+        # process_context.start()
+        # eval_process_info_item = process_context.stop()
         eval_process_info_item = {
             'type': 'process',
             'properties': {
@@ -958,7 +1068,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
 
     # Submit scoring jobs over pairs of true-predicted images in videos
     for video_match in video_matches:
-        prog.set_extra('comparing ' + video_match['vidname'])
+        prog.set_postfix_str('comparing ' + video_match['vidname'])
         gids1 = video_match['match_gids1']
         gids2 = video_match['match_gids2']
         if required_marked:
@@ -978,8 +1088,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
             job = metrics_executor.submit(
                 single_image_segmentation_metrics, pred_coco_img,
                 true_coco_img, true_classes, true_dets, video1,
-                score_space=score_space, thresh_bins=thresh_bins,
-                viz_thresh=viz_thresh)
+                thresh_bins=thresh_bins, config=config)
 
             if len(current_chunk) >= chunk_size:
                 job_chunks.append(current_chunk)
@@ -1003,8 +1112,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
             job = metrics_executor.submit(
                 single_image_segmentation_metrics, pred_coco_img,
                 true_coco_img, true_classes, true_dets, video1,
-                score_space=score_space, thresh_bins=thresh_bins,
-                viz_thresh=viz_thresh)
+                thresh_bins=thresh_bins, config=config)
             prog.update()
             job_chunks.append([job])
     else:
@@ -1025,31 +1133,19 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         # Use rich outside of slurm
         RICH_PROG = not os.environ.get('SLURM_JOBID', '')
 
-    if RICH_PROG:
-        import rich
-        import rich.progress
-        progress = rich.progress.Progress(
-            "[progress.description]{task.description}",
-            rich.progress.BarColumn(),
-            rich.progress.MofNCompleteColumn(),
-            # "[progress.percentage]{task.percentage:>3.0f}%",
-            rich.progress.TimeRemainingColumn(),
-            rich.progress.TimeElapsedColumn(),
-        )
-    else:
-        score_prog = ub.ProgIter(desc='Scoring', total=num_jobs)
-        num_draw_finished = 1
-        progress = score_prog  # Hack
+    from watch.utils import util_progress
+    pman = util_progress.ProgressManager(backend='rich' if RICH_PROG else 'progiter')
 
     DEBUG = 0
     if DEBUG:
         orig_infos = []
 
-    with progress:
-        if RICH_PROG:
-            score_task = progress.add_task("[cyan] Scoring...", total=num_jobs)
-            if draw_heatmaps:
-                draw_task = progress.add_task("[green] Drawing...", total=len(job_chunks))
+    with pman:
+        score_prog = pman.progiter(desc="[cyan] Scoring...", total=num_jobs)
+        score_prog.start()
+        if draw_heatmaps:
+            draw_prog = pman.progiter(desc="[green] Drawing...", total=len(job_chunks))
+            draw_prog.start()
 
         for job_chunk in job_chunks:
             chunk_info = []
@@ -1058,10 +1154,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
                 if DEBUG:
                     orig_infos.append(info)
 
-                if RICH_PROG:
-                    progress.update(score_task, advance=1)
-                else:
-                    score_prog.update(1)
+                score_prog.update(1)
                 rows.append(info['row'])
 
                 class_measures = info.get('class_measures', None)
@@ -1089,12 +1182,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
                 for draw_job in draw_jobs:
                     if draw_job.done():
                         draw_job.result()
-                        if RICH_PROG:
-                            progress.update(draw_task, advance=1)
-                        else:
-                            num_draw_finished += 1
-                            score_prog.set_extra(f'Drawing : {num_draw_finished}')
-                            pass
+                        draw_prog.update(1)
                     else:
                         remaining_draw_jobs.append(draw_job)
                 draw_job = None
@@ -1107,8 +1195,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
                 true_coco_imgs = [g.detach() for g in true_coco_imgs]
                 draw_job = draw_executor.submit(
                     dump_chunked_confusion, full_classes, true_coco_imgs,
-                    chunk_info, heatmap_dpath, score_space=score_space,
-                    title=title)
+                    chunk_info, heatmap_dpath, title=title, config=config)
                 draw_jobs.append(draw_job)
 
         metrics_executor.shutdown()
@@ -1118,12 +1205,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
             while draw_jobs:
                 job = draw_jobs.pop()
                 job.result()
-                if RICH_PROG:
-                    progress.update(draw_task, advance=1)
-                else:
-                    # draw_prog.update()
-                    num_draw_finished += 1
-                    score_prog.set_extra(f'Drawing : {num_draw_finished}')
+                draw_prog.update(1)
             draw_executor.shutdown()
 
     df = pd.DataFrame(rows)
@@ -1256,75 +1338,6 @@ def _redraw_measures(eval_dpath):
 
 
 if __name__ == '__main__':
-    r"""
-    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-
-    python -m watch.tasks.fusion.predict \
-        --write_probs=True \
-        --write_preds=False \
-        --with_class=auto \
-        --with_saliency=auto \
-        --with_change=False \
-        --package_fpath=$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v55/BOTH_smt_it_stm_p8_L1_DIL_v55_epoch=5-step=53819.pt \
-        --pred_dataset=$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v55/pred_BOTH_smt_it_stm_p8_L1_DIL_v55_epoch=5-step=53819/combo_vali_nowv.kwcoco/pred.kwcoco.json \
-        --test_dataset=$DVC_DPATH/Drop1-Aligned-L1/combo_vali_nowv.kwcoco.json \
-        --num_workers=5 \
-        --compress=DEFLATE \
-        --gpus=0, \
-        --batch_size=8
-
-    python -m watch.tasks.fusion.evaluate \
-        --true_dataset=$DVC_DPATH/Drop1-Aligned-L1/combo_vali_nowv.kwcoco.json \
-        --pred_dataset=$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v55/pred_BOTH_smt_it_stm_p8_L1_DIL_v55_epoch=5-step=53819/combo_vali_nowv.kwcoco/pred.kwcoco.json \
-          --eval_dpath=$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v55/pred_BOTH_smt_it_stm_p8_L1_DIL_v55_epoch=5-step=53819/combo_vali_nowv.kwcoco/eval \
-          --score_space=video \
-          --draw_curves=1 \
-          --draw_heatmaps=1
-
-
-    python -m watch.tasks.fusion.predict \
-        --write_probs=True \
-        --write_preds=False \
-        --with_class=auto \
-        --with_saliency=auto \
-        --with_change=False \
-        --package_fpath=/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/packages/BOTH_TA1_COMBO_TINY_p1_v0100/BOTH_TA1_COMBO_TINY_p1_v0100_epoch=4-step=5119-v2.pt \
-        --pred_dataset=/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/pred/BOTH_TA1_COMBO_TINY_p1_v0100/pred_BOTH_TA1_COMBO_TINY_p1_v0100_epoch=4-step=5119-v2/Drop2-Aligned-TA1-2022-02-15_combo_DILM_nowv_vali.kwcoco/unknown_pred_cfg/pred.kwcoco.json \
-        --test_dataset=/home/joncrall/data/dvc-repos/smart_watch_dvc/Drop2-Aligned-TA1-2022-02-15/combo_DILM_nowv_vali.kwcoco.json \
-        --num_workers=5 \
-        --compress=DEFLATE \
-        --gpus=0, \
-        --batch_size=1
-
-    python -m watch.tasks.fusion.evaluate \
-        --true_dataset=/home/joncrall/data/dvc-repos/smart_watch_dvc/Drop2-Aligned-TA1-2022-02-15/combo_DILM_nowv_vali.kwcoco.json \
-        --pred_dataset=/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/pred/BOTH_TA1_COMBO_TINY_p1_v0100/pred_BOTH_TA1_COMBO_TINY_p1_v0100_epoch=4-step=5119-v2/Drop2-Aligned-TA1-2022-02-15_combo_DILM_nowv_vali.kwcoco/unknown_pred_cfg/pred.kwcoco.json \
-          --eval_dpath=/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/eval/BOTH_TA1_COMBO_TINY_p1_v0100/pred_BOTH_TA1_COMBO_TINY_p1_v0100_epoch=4-step=5119-v2/Drop2-Aligned-TA1-2022-02-15_combo_DILM_nowv_vali.kwcoco/unknown_pred_cfg/eval \
-          --score_space=video \
-          --draw_curves=1 \
-          --draw_heatmaps=1 --workers=2
-
-
-    PRED_DATASET=$HOME/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/pred/Drop3_BASELINE_BAS_V303/pred_Drop3_BASELINE_BAS_V303_epoch=5-step=12287/Aligned-Drop3-TA1-2022-03-10_combo_LM_nowv_vali.kwcoco/predcfg_abd043ec/pred.kwcoco.json
-    TEST_DATASET=$HOME/data/dvc-repos/smart_watch_dvc/Aligned-Drop3-TA1-2022-03-10/combo_LM_nowv_vali.kwcoco.json
-    python -m watch.tasks.fusion.evaluate \
-        --true_dataset=$TEST_DATASET \
-        --pred_dataset=$PRED_DATASET \
-        --eval_dpath=tmp/eval-tmp \
-        --score_space=video \
-        --draw_curves=1 \
-        --draw_heatmaps=1 --workers=2 --dump=./debug-eval.yaml
-
-    Ignore:
-        kwargs = {
-            'config': './debug-eval.yaml',
-        }
-        cmdline = False
-
-    V303_epoch=5-step=12287
-
-
-    """
     # import xdev
     # xdev.make_warnings_print_tracebacks()
     main()
