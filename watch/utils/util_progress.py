@@ -349,7 +349,7 @@ class ProgressManager(BaseProgIterManager):
         >>> from watch.utils.util_progress import ProgressManager
         >>> import time
         >>> delay = 0.00005
-        >>> N_inner = 1000
+        >>> N_inner = 300
         >>> N_outer = 11
         >>> self = pman = ProgressManager(backend='rich')
         >>> with pman:
@@ -369,7 +369,7 @@ class ProgressManager(BaseProgIterManager):
         >>> from watch.utils.util_progress import ProgressManager, ProgIter2
         >>> import time
         >>> delay = 0.000005
-        >>> N_inner = 1000
+        >>> N_inner = 300
         >>> N_outer = 11
         >>> basis = {
         >>>     'with_info': [0, 1],
@@ -416,7 +416,7 @@ class ProgressManager(BaseProgIterManager):
         >>> for i in range(100):
         >>>     task1.update()
         >>>     task2.update(2)
-        >>>     time.sleep(0.01)
+        >>>     time.sleep(0.001)
         >>> ProgressManager.stopall()
 
     Example:
@@ -431,9 +431,9 @@ class ProgressManager(BaseProgIterManager):
         >>> task1.update()
         >>> task2.update()
         >>> for i in range(10):
-        >>>     time.sleep(0.01)
+        >>>     time.sleep(0.001)
         >>>     task1.update()
-        >>>     time.sleep(0.01)
+        >>>     time.sleep(0.001)
         >>>     task2.update(2)
         >>> ProgressManager.stopall()
     """
