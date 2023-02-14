@@ -11,7 +11,6 @@ import torch  # NOQA
 # import pathlib
 import ubelt as ub
 import numpy as np
-from os.path import join
 from os.path import relpath
 import kwimage
 import kwarray
@@ -136,7 +135,8 @@ def make_predict_config(cmdline=False, **kwargs):
 
     # parse and pass to main
     parser.set_defaults(**kwargs)
-    args, _ = parser.parse_known_args(default_args)
+    # args, _ = parser.parse_known_args(default_args)
+    args = parser.parse_args(default_args)
     args.datamodule_defaults = datamodule_defaults
     # assert args.batch_size == 1
     return args
@@ -416,10 +416,10 @@ def predict(cmdline=False, **kwargs):
         >>> cmdline = False
         >>> devices = None
         >>> test_dpath = ub.Path.appdir('watch/test/fusion/').ensuredir()
-        >>> results_path = ub.ensuredir((test_dpath, 'predict'))
-        >>> ub.delete(results_path)
-        >>> ub.ensuredir(results_path)
-        >>> package_fpath = join(test_dpath, 'my_test_package.pt')
+        >>> results_path = (test_dpath / 'predict').ensuredir()
+        >>> results_path.delete()
+        >>> results_path.ensuredir()
+        >>> package_fpath = test_dpath / 'my_test_package.pt'
         >>> import kwcoco
         >>> train_dset = kwcoco.CocoDataset.demo('special:vidshapes4-multispectral', num_frames=5, image_size=(128, 128))
         >>> test_dset = kwcoco.CocoDataset.demo('special:vidshapes2-multispectral', num_frames=5, image_size=(128, 128))
@@ -538,7 +538,7 @@ def predict(cmdline=False, **kwargs):
         >>> print("model.heads.keys = ", model.heads.keys())
 
         >>> # Save the self
-        >>> package_fpath = join(test_dpath, 'my_test_package.pt')
+        >>> package_fpath = test_dpath / 'my_test_package.pt'
         >>> model.save_package(package_fpath)
         >>> # package_fpath = fit_model(**fit_kwargs)
         >>> assert ub.Path(package_fpath).exists()
@@ -826,10 +826,12 @@ def predict(cmdline=False, **kwargs):
     assert not list(util_json.find_json_unserializable(traintime_params))
 
     from watch.utils import process_context
+    import sys
     proc_context = process_context.ProcessContext(
         name='watch.tasks.fusion.predict',
         type='process',
-        args=jsonified_args,
+        args=sys.argv,
+        # args=jsonified_args,
         config=config_resolved,
         track_emissions=config['track_emissions'],
         extra={'fit_config': traintime_params}
@@ -996,7 +998,6 @@ def predict(cmdline=False, **kwargs):
                 for gid in head_stitcher.ready_image_ids():
                     head_stitcher._ready_gids.difference_update({gid})  # avoid race condition
                     head_stitcher.submit_finalize_image(gid)
-                    # writer_queue.submit(head_stitcher.finalize_image, gid)
 
         writer_queue.wait_until_finished()  # hack to avoid race condition
 
@@ -1004,7 +1005,6 @@ def predict(cmdline=False, **kwargs):
         for _head_key, head_stitcher in stitch_managers.items():
             for gid in head_stitcher.managed_image_ids():
                 head_stitcher.submit_finalize_image(gid)
-                # writer_queue.submit(head_stitcher.finalize_image, gid)
         writer_queue.wait_until_finished()
 
     if DEBUG_PRED_SPATIAL_COVERAGE:
@@ -1066,11 +1066,36 @@ def predict(cmdline=False, **kwargs):
     proc_context.add_device_info(device)
     proc_context.stop()
 
+    # Print logs about what we predicted on
+    all_video_ids = list(result_dataset.videos())
+    print(f'Requested predictions for {len(all_video_ids)} videos')
+    stitched_video_histogram = ub.ddict(lambda: 0)
+    stitched_video_patch_histogram = ub.ddict(lambda: 0)
+    for _head_key, head_stitcher in stitch_managers.items():
+        _histo = ub.dict_hist(result_dataset.images(head_stitcher._seen_gids).lookup('video_id'))
+        print(f'stitched videos for {_head_key}={ub.urepr(_histo)}')
+
+        for gid, v in head_stitcher._stitched_gid_patch_histograms.items():
+            vidid = result_dataset.index.imgs[gid]['video_id']
+            stitched_video_patch_histogram[vidid] += v
+
+        for k, v in _histo.items():
+            stitched_video_histogram[k] += v
+
+    print('stitched_video_histogram = {}'.format(ub.urepr(stitched_video_histogram, nl=1)))
+    print('stitched_video_patch_histogram = {}'.format(ub.urepr(stitched_video_patch_histogram, nl=1)))
+    missing_vidids = set(all_video_ids) - set(stitched_video_histogram)
+    if missing_vidids:
+        print(f'missing_vidids={missing_vidids}')
+    else:
+        print('Made at least one prediction on each video')
+
     if args.drop_unused_frames:
         keep_gids = set()
         for manager in stitch_managers.values():
             keep_gids.update(manager.seen_image_ids)
         drop_gids = set(result_dataset.images()) - keep_gids
+        print(f'Dropping {len(drop_gids)} unused frames')
         result_dataset.remove_images(drop_gids)
 
     # validate and save results
@@ -1185,6 +1210,10 @@ class CocoStitchingManager(object):
         self._last_vidid = None
         self._ready_gids = set()
 
+        # Keep track of the number of times we've stitched something into an
+        # image.
+        self._stitched_gid_patch_histograms = ub.ddict(lambda: 0)
+
         # TODO: writing predictions and probabilities needs robustness work
         self.write_probs = write_probs
         self.write_preds = write_preds
@@ -1202,10 +1231,9 @@ class CocoStitchingManager(object):
             self.polygon_idxs = [_idx_lut[c] for c in self.polygon_categories]
 
         if self.write_probs:
-            bundle_dpath = self.result_dataset.bundle_dpath
+            bundle_dpath = ub.Path(self.result_dataset.bundle_dpath)
             prob_subdir = f'_assets/{self.short_code}'
-            self.prob_dpath = join(bundle_dpath, prob_subdir)
-            ub.ensuredir(self.prob_dpath)
+            self.prob_dpath = (bundle_dpath / prob_subdir).ensuredir()
 
     def accumulate_image(self, gid, space_slice, data, dsize=None, scale=None,
                          is_ready='auto'):
@@ -1227,6 +1255,7 @@ class CocoStitchingManager(object):
 
             is_ready (bool): todo, fix this to work better
         """
+        self._stitched_gid_patch_histograms[gid] += 1
         data = kwarray.atleast_nd(data, 3)
         dset = self.result_dataset
         if self.stiching_space == 'video':
@@ -1454,7 +1483,7 @@ class CocoStitchingManager(object):
             # Save probabilities (or feature maps) as a new auxiliary image
             bundle_dpath = self.result_dataset.bundle_dpath
             new_fname = img.get('name', str(img['id'])) + f'_{self.suffix_code}.tif'  # FIXME
-            new_fpath = join(self.prob_dpath, new_fname)
+            new_fpath = self.prob_dpath / new_fname
 
             # assert final_probs.shape[2] == (self.chan_code.count('|') + 1)
 
