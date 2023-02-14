@@ -16,19 +16,33 @@ def _check_high_tpr_case(agg, config):
     macro_metrics = macro_metrics.sort_values(tpr_col, ascending=False)
     inspect_idxs = macro_metrics.index[0:1]
 
-    for idx in inspect_idxs:
+    agg_dpath = ub.Path(config['root_dpath'] / 'aggregate')
+    agg_group_dpath = (agg_dpath / ('top_tpr_cases' + ub.timestamp())).ensuredir()
+
+    for rank, idx in enumerate(inspect_idxs):
         param_hashid = macro_results['index'].loc[idx]['param_hashid']
 
         subagg = agg.filterto(param_hashids=[param_hashid])
         subagg.build_macro_tables(rois)
         subagg.report_best()
 
+        dpath = (agg_group_dpath / f'top_{rank:03d}_tpr_case').ensuredir()
+
+        for loc in subagg.fpaths.index:
+            index_row = subagg.index.loc[loc]
+            eval_fpath = subagg.fpaths.loc[loc]
+            eval_dpath = eval_fpath.parent
+            link_dpath = dpath / f'eval_link_{index_row.region_id}_{index_row.param_hashid}'
+            ub.symlink(real_path=eval_dpath, link_path=link_dpath)
+            ...
+
+
         agg.index['param_hashid'] == param_hashid
 
         subagg.fpaths.tolist()
         from watch.mlops.aggregate import make_summary_analysis
         agg1 = subagg
-        make_summary_analysis(agg1, config)
+        make_summary_analysis(agg1, config, dpath)
     ...
 
 
@@ -118,7 +132,8 @@ def _setup_bas():
     agg = ub.peek(eval_type_to_aggregator.values())
     agg = eval_type_to_aggregator.get('bas_poly_eval', None)
     print(f'agg={agg}')
-    rois = {'KR_R001', 'KR_R002', 'BR_R002'}
+    rois = {'KR_R001', 'KR_R002'}
+    # rois = {'KR_R001', 'KR_R002', 'BR_R002'}
     print(f'rois={rois}')
 
 

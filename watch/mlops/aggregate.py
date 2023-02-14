@@ -495,8 +495,11 @@ def foldin_resolved_info(agg):
     return resolved_info
 
 
-def make_summary_analysis(agg1, config):
-    agg_dpath = ub.Path(config['root_dpath'] / 'aggregate')
+def make_summary_analysis(agg1, config, dpath=None):
+    if dpath is None:
+        agg_dpath = ub.Path(config['root_dpath'] / 'aggregate')
+    else:
+        agg_dpath = dpath
     agg_group_dpath = agg_dpath / ('agg_summary_params2_v3')
     agg_group_dpath = agg_group_dpath.ensuredir()
 
