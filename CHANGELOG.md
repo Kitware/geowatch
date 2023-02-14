@@ -19,6 +19,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * `KWcocoVideoDataLoader.compute_dataset_stats` will now try to estimate stats for all sensors/channels if the main pass does not sample them
 * New aliases for `KWcocoVideoDataLoader` parameters
 * Added `utils.coerce_crs`.
+* Tracker now prefers arguments `min_area_square_meters` and `max_area_square_meters` for size thresholds
+* Tracker size thresholds now default to `None` (i.e. off)
 
 ### Fixed
 * issue in reproject annots when frames had no annotations
@@ -26,7 +28,6 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Removed `tensorboard` and `tensorflow` dependencies
 * Issue in `warp_annot_segmentations_from_geos`
 * Issue in `polygon_distance_transform`.
-
 
 ### Misc
 * Drop6 scripts in the dev folder
