@@ -6,7 +6,6 @@ import einops
 from einops.layers.torch import Rearrange
 from torchvision import models as tv_models
 from torchvision.models import feature_extraction
-import numpy as np
 from typing import Union
 
 import kwcoco
