@@ -117,8 +117,8 @@ class ResolvedWindowTransformer(ResolvedTransformer):
     __grammar__ = RESOLVED_WINDOW_GRAMMAR
 
     def window_1d_dim(self, items):
-        d = _int_or_float(items[0].value)
-        info = (d,)
+        d1 = _int_or_float(items[0].value)
+        info = (d1, d1)
         return info
 
     def window_2d_dim(self, items):
@@ -230,7 +230,7 @@ class ResolvedWindow(Resolved, ub.NiceRepr):
         >>> resolved_window = "128@10GSD"
         >>> resolved_window = ResolvedWindow.parse(resolved_window)
         >>> print('resolved_window = {}'.format(ub.urepr(resolved_window, nl=1, sv=1)))
-        resolved_window = <ResolvedWindow((128,) @ {'mag': 10, 'unit': 'GSD'})>
+        resolved_window = <ResolvedWindow((128, 128) @ {'mag': 10, 'unit': 'GSD'})>
 
     """
     __transformer__ = ResolvedWindowTransformer
@@ -238,6 +238,25 @@ class ResolvedWindow(Resolved, ub.NiceRepr):
     def __init__(self, window, resolution):
         self.window = window
         self.resolution = resolution
+
+    def at_resolution(self, new_resolution):
+        '''
+        Update the resolution
+
+        Example:
+            >>> from watch.utils.util_resolution import *  # NOQA
+            >>> new_resolution = {'mag': 1, 'unit': 'GSD'}
+            >>> self = ResolvedWindow.parse("128x64@10GSD")
+            >>> print(self.at_resolution(new_resolution))
+            >>> print(self.at_resolution({'mag': 20, 'unit': 'GSD'}))
+            <ResolvedWindow((1280.0, 640.0) @ {'mag': 1, 'unit': 'GSD'})>
+            <ResolvedWindow((64.0, 32.0) @ {'mag': 20, 'unit': 'GSD'})>
+        '''
+        scale_factor = self.resolution['mag'] / new_resolution['mag']
+        w, h = self.window
+        new_window = (w * scale_factor, h * scale_factor)
+        new = self.__class__(new_window, new_resolution)
+        return new
 
     def __nice__(self):
         return (f'{self.window} @ {self.resolution}')

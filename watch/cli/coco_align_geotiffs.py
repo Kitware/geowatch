@@ -120,13 +120,12 @@ class CocoAlignGeotiffConfig(scfg.Config):
             '''
         )),
 
-        'context_padding': scfg.Value(None, help=ub.paragraph(
+        'minimum_size': scfg.Value(None, help=ub.paragraph(
             '''
-            Absolute size to increase each ROI by on all sides.
-            Must be specified as <pixels> @ <magnitude> <resolution>.
-            This will increase the maximum width by twice as much.
-            E.g. ``128@10GSD`` will buffer a region polygon by 128 pixels at
-            10GSD on all sides resulting in 256 pixels of extra length.
+            Minimum (bounding-box) size of each ROI.
+            Must be specified as ``<w> x <h> @ <magnitude> <resolution>``.
+            E.g. ``128x128@10GSD`` eill ensure a region polygon is at least
+            1280 meters tall and wide.
             ''')),
 
         'convexify_regions': scfg.Value(False, help=ub.paragraph(
@@ -320,7 +319,7 @@ def main(cmdline=True, **kw):
         >>>     'workers': 2,
         >>>     'aux_workers': 2,
         >>>     'convexify_regions': True,
-        >>>     'context_padding': '100 @ 10 GSD',
+        >>>     'minimum_size': '8000x8000 @ 1GSD',
         >>>     #'image_timeout': '1 microsecond',
         >>>     #'asset_timeout': '1 microsecond',
         >>>     'visualize': True,
@@ -597,19 +596,25 @@ def main(cmdline=True, **kw):
         region_df['geometry'] = region_df['geometry'].scale(
             xfact=context_factor, yfact=context_factor, origin='center')
 
-    context_padding = config['context_padding']
-    if context_padding:
-        resolved_pad = util_resolution.ResolvedScalar.coerce(context_padding)
-        assert resolved_pad.resolution['unit'] == 'GSD', 'must be GSD for now'
-        resolved_pad_utm = resolved_pad.at_resolution({'mag': 1, 'unit': 'GSD'})
-        pad_meters = resolved_pad_utm.scalar
+    minimum_size = config['minimum_size']
+    if minimum_size:
+        minimum_size = util_resolution.ResolvedWindow.coerce(minimum_size)
+        assert minimum_size.resolution['unit'] == 'GSD', 'must be GSD for now'
+        resolved_size_utm = minimum_size.at_resolution({'mag': 1, 'unit': 'GSD'})
+        min_utm_w, min_utm_h = resolved_size_utm.window
         orig_crs = region_df.crs
         # Is there a better way to estimate a CRS for each row?
         buffered_geoms = []
         for i in range(len(region_df)):
             sub = region_df[i: i + 1]
             sub_utm = util_gis.project_gdf_to_local_utm(sub)
-            buf_utm = sub_utm['geometry'].buffer(pad_meters)
+            # Get w / h of the bounding box around the region
+            utm_box = kwimage.Box.coerce(sub_utm.bounds.iloc[0].values, format='ltrb')
+            # Determine a scale factor to grow the region to a min size
+            sfx = max(1, min_utm_w / utm_box.width)
+            sfy = max(1, min_utm_h / utm_box.height)
+            # Get the bounding box around the region
+            buf_utm = sub_utm['geometry'].scale(xfact=sfx, yfact=sfy, origin='centroid')
             buf = buf_utm.to_crs(orig_crs)
             buffered_geoms.append(buf)
         region_df['geometry'] = pd.concat(buffered_geoms)
