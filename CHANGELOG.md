@@ -6,6 +6,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## Version 0.3.10 - Target 2023-01-xx
 
 ### Added
+* `smartwatch align` new argument `--minimum_size`: to ensure all regions have enough pixels
 * New `time_kernel` method for temporal sampling in `KWcocoVideoDataLoader`
 * New visualizations in `geojson_site_stats`
 

@@ -116,10 +116,17 @@ class CocoAlignGeotiffConfig(scfg.Config):
 
         'context_factor': scfg.Value(1.0, help=ub.paragraph(
             '''
-            scale factor for the clustered ROIs.
-            Amount of context to extract around each ROI.
+            Scale factor to expand each ROI by crop regions by.
             '''
         )),
+
+        'minimum_size': scfg.Value(None, help=ub.paragraph(
+            '''
+            Minimum (bounding-box) size of each ROI.
+            Must be specified as ``<w> x <h> @ <magnitude> <resolution>``.
+            E.g. ``128x128@10GSD`` eill ensure a region polygon is at least
+            1280 meters tall and wide.
+            ''')),
 
         'convexify_regions': scfg.Value(False, help=ub.paragraph(
             '''
@@ -312,6 +319,7 @@ def main(cmdline=True, **kw):
         >>>     'workers': 2,
         >>>     'aux_workers': 2,
         >>>     'convexify_regions': True,
+        >>>     'minimum_size': '8000x8000 @ 1GSD',
         >>>     #'image_timeout': '1 microsecond',
         >>>     #'asset_timeout': '1 microsecond',
         >>>     'visualize': True,
@@ -437,8 +445,14 @@ def main(cmdline=True, **kw):
         df1 = covered_annot_geo_regions(coco_dset)
         df2 = covered_image_geo_regions(coco_dset)
     """
-    from watch.utils.lightning_ext import util_globals
+    from kwcoco.util.util_json import ensure_json_serializable
+    from watch.utils import util_gis
+    from watch.utils import util_parallel
+    from watch.utils import util_resolution
+    import os
     import pandas as pd
+    import warnings
+
     config = CocoAlignGeotiffConfig(default=kw, cmdline=cmdline)
 
     # Store that this dataset is a result of a process.
@@ -450,12 +464,9 @@ def main(cmdline=True, **kw):
         # always serialize it, so we punt and mark it as such
         config_dict['src'] = ':memory:'
 
-    from kwcoco.util.util_json import ensure_json_serializable
     config_dict = ensure_json_serializable(config_dict)
 
-    import os
     if os.environ.get('GDAL_DISABLE_READDIR_ON_OPEN') != 'EMPTY_DIR':
-        import warnings
         warnings.warn('environ GDAL_DISABLE_READDIR_ON_OPEN should probably be set to EMPTY_DIR')
         os.environ['GDAL_DISABLE_READDIR_ON_OPEN'] = 'EMPTY_DIR'
 
@@ -474,7 +485,6 @@ def main(cmdline=True, **kw):
     src_fpath = config['src']
     dst = config['dst']
     regions = config['regions']
-    context_factor = config['context_factor']
     rpc_align_method = config['rpc_align_method']
     visualize = config['visualize']
     write_subsets = config['write_subsets']
@@ -483,11 +493,11 @@ def main(cmdline=True, **kw):
     max_frames = config['max_frames']
 
     if config['max_workers'] is not None:
-        img_workers = util_globals.coerce_num_workers(config['max_workers'])
+        img_workers = util_parallel.coerce_num_workers(config['max_workers'])
     else:
-        img_workers = util_globals.coerce_num_workers(config['workers'])
+        img_workers = util_parallel.coerce_num_workers(config['workers'])
 
-    aux_workers = util_globals.coerce_num_workers(config['aux_workers'])
+    aux_workers = util_parallel.coerce_num_workers(config['aux_workers'])
     print('img_workers = {!r}'.format(img_workers))
     print('aux_workers = {!r}'.format(aux_workers))
 
@@ -507,7 +517,6 @@ def main(cmdline=True, **kw):
     if regions in {'annots', 'images'}:
         pass
     else:
-        from watch.utils import util_gis
         infos = list(util_gis.coerce_geojson_datas(regions))
         parts = []
         for info in infos:
@@ -541,7 +550,6 @@ def main(cmdline=True, **kw):
 
     geo_preprop = config['geo_preprop']
     if config['skip_geo_preprop']:
-        import warnings
         warnings.warn('skip_geo_preprop is deprecated', DeprecationWarning)
         geo_preprop = False
     if geo_preprop == 'auto':
@@ -582,10 +590,34 @@ def main(cmdline=True, **kw):
 
     # Convert the ROI to a bounding box
     # region_df['geometry'] = region_df['geometry'].apply(shapely_bounding_box)
+    context_factor = config['context_factor']
     if context_factor != 1:
         # Exapnd the ROI by the context factor
         region_df['geometry'] = region_df['geometry'].scale(
             xfact=context_factor, yfact=context_factor, origin='center')
+
+    minimum_size = config['minimum_size']
+    if minimum_size:
+        minimum_size = util_resolution.ResolvedWindow.coerce(minimum_size)
+        assert minimum_size.resolution['unit'] == 'GSD', 'must be GSD for now'
+        resolved_size_utm = minimum_size.at_resolution({'mag': 1, 'unit': 'GSD'})
+        min_utm_w, min_utm_h = resolved_size_utm.window
+        orig_crs = region_df.crs
+        # Is there a better way to estimate a CRS for each row?
+        buffered_geoms = []
+        for i in range(len(region_df)):
+            sub = region_df[i: i + 1]
+            sub_utm = util_gis.project_gdf_to_local_utm(sub)
+            # Get w / h of the bounding box around the region
+            utm_box = kwimage.Box.coerce(sub_utm.bounds.iloc[0].values, format='ltrb')
+            # Determine a scale factor to grow the region to a min size
+            sfx = max(1, min_utm_w / utm_box.width)
+            sfy = max(1, min_utm_h / utm_box.height)
+            # Get the bounding box around the region
+            buf_utm = sub_utm['geometry'].scale(xfact=sfx, yfact=sfy, origin='centroid')
+            buf = buf_utm.to_crs(orig_crs)
+            buffered_geoms.append(buf)
+        region_df['geometry'] = pd.concat(buffered_geoms)
 
     # For each ROI extract the aligned regions to the target path
     extract_dpath = ub.ensuredir(output_bundle_dpath)
@@ -1107,7 +1139,6 @@ class SimpleDataCube(object):
         import geopandas as gpd
         import pandas as pd  # NOQA
         from shapely import geometry
-        from watch.utils import util_gis
         # import watch
         coco_dset = cube.coco_dset
 
