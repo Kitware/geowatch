@@ -283,8 +283,7 @@ class PolygonEvaluation(ProcessNode):
 
         # Hack:
         if fmtkw['true_site_dpath'] is None:
-            import watch
-            dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+            dvc_dpath = _phase2_dvc_data_dpath()
             fmtkw['true_site_dpath'] = dvc_dpath / 'annotations/site_models'
             fmtkw['true_region_dpath'] = dvc_dpath / 'annotations/region_models'
 
@@ -307,6 +306,13 @@ class PolygonEvaluation(ProcessNode):
                 --merge_fpath "{eval_fpath}"
             ''').format(**fmtkw)
         return command
+
+
+@ub.memoize
+def _phase2_dvc_data_dpath():
+    import watch
+    dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+    return dvc_dpath
 
 
 class HeatmapEvaluation(ProcessNode):
