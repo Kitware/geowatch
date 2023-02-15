@@ -5,7 +5,6 @@ Compute semantic segmentation evaluation metrics
 TODO:
     - [ ] Move to kwcoco proper
 """
-import sys
 import json
 import kwarray
 import kwcoco
@@ -16,9 +15,6 @@ import pandas as pd
 import sklearn.metrics as skm
 import ubelt as ub
 import warnings
-from watch.tasks.fusion import utils
-# from watch.utils import util_kwimage
-from watch.utils import kwcoco_extensions
 from kwcoco.coco_evaluator import CocoSingleResult
 from kwcoco.metrics.confusion_vectors import BinaryConfusionVectors
 from kwcoco.metrics.confusion_measures import OneVersusRestMeasureCombiner
@@ -27,8 +23,14 @@ from kwcoco.metrics.confusion_measures import MeasureCombiner
 # from kwcoco.metrics.confusion_measures import PerClass_Measures
 from kwcoco.metrics.confusion_measures import Measures
 from typing import Dict
-import scriptconfig as scfg  # NOQA
+import scriptconfig as scfg
 from shapely.ops import unary_union
+
+from watch.utils import kwcoco_extensions
+from watch.utils import process_context
+from watch.utils import util_progress
+from watch.utils import util_parallel
+from watch import heuristics
 
 try:
     from xdev import profile
@@ -57,11 +59,14 @@ class SegmentationEvalConfig(scfg.DataConfig):
     # options
     draw_curves = scfg.Value('auto', help='flag to draw curves or not')
     draw_heatmaps = scfg.Value('auto', help='flag to draw heatmaps or not')
-    score_space = scfg.Value('video', help='can score in image or video space')
+
+    score_space = scfg.Value('auto', help='can score in image or video space. If auto, chooses video if there are any, otherwise image')
+    resolution = scfg.Value(None, help='if specified, override the default resolution to score at')
+
     workers = scfg.Value('auto', help='number of parallel scoring workers')
     draw_workers = scfg.Value('auto', help='number of parallel drawing workers')
     viz_thresh = scfg.Value('auto', help='visualization threshold')
-    balance_area = scfg.Value(False, help='upweight small instances, downweight large instances')
+    balance_area = scfg.Value(False, isflag=True, help='upweight small instances, downweight large instances')
 
 
 def main(cmdline=True, **kwargs):
@@ -70,7 +75,8 @@ def main(cmdline=True, **kwargs):
 
     todo: ProcessContext to track resource usage
     """
-    full_config = SegmentationEvalConfig.legacy(cmdline=cmdline, data=kwargs)
+    full_config = SegmentationEvalConfig.cli(
+        cmdline=cmdline, data=kwargs, strict=True)
     full_config = ub.udict(full_config)
     print('full_config = {}'.format(ub.repr2(full_config, nl=1)))
 
@@ -138,7 +144,7 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
         scale = None
     else:
         try:
-            scale = true_coco_img._scalefactor_for_resolution(resolution=resolution, space=score_space)['mag']
+            scale = true_coco_img._scalefactor_for_resolution(resolution=resolution, space=score_space)
         except Exception as ex:
             print(f'warning: ex={ex}')
             scale = None
@@ -161,7 +167,6 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
 
     # TODO: parametarize these class categories
     # TODO: remove and generalize before porting to kwcoco
-    from watch import heuristics
     ignore_classes = heuristics.IGNORE_CLASSNAMES
     background_classes = heuristics.BACKGROUND_CLASSES
     undistinguished_classes = heuristics.UNDISTINGUISHED_CLASSES
@@ -203,10 +208,12 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
         warp_img_to_vid = kwimage.Affine.coerce(
             true_coco_img.img['warp_img_to_vid'])
         true_dets = true_dets.warp(warp_img_to_vid)
+    if scale is not None:
+        true_dets = true_dets.scale(scale)
+    info['true_dets'] = true_dets
     true_cidxs = true_dets.data['class_idxs']
     true_ssegs = true_dets.data['segmentations']
     true_catnames = list(ub.take(true_dets.classes.idx_to_node, true_cidxs))
-    info['true_dets'] = true_dets
 
     # NOTE: The exact definition of how we build the "truth" segmentation mask
     # is up for debate. I think this is a reasonable definition, but this needs
@@ -243,13 +250,20 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
         for true_sseg, true_catname in zip(true_ssegs, true_catnames):
             if true_catname in background_classes:
                 key = 'background'
-            if true_catname in ignore_classes:
+            elif true_catname in ignore_classes:
                 key = 'ignore'
             elif true_catname in context_classes:
                 key = 'context'
             else:
                 key = 'foreground'
             sseg_groups[key].append(true_sseg)
+
+        if balance_area:
+            if len(sseg_groups['foreground']):
+                fg_poly = unary_union([p.to_shapely() for p in sseg_groups['foreground']])
+                unit_sseg_share = fg_poly.area / len(sseg_groups['foreground'])
+            else:
+                unit_sseg_share = 1
 
         # background should be background, do nothing with it
         sseg_groups['background']
@@ -258,11 +272,16 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
         for true_sseg in sseg_groups['ignore']:
             saliency_weights = true_sseg.fill(saliency_weights, value=0)
         for true_sseg in sseg_groups['context']:
-            saliency_weights = true_sseg.fill(saliency_weights, value=0)
+            # saliency_weights = true_sseg.fill(saliency_weights, value=0)
+            ...
         # Score positive, site prep, and active construction.
         for true_sseg in sseg_groups['foreground']:
             true_saliency = true_sseg.fill(true_saliency, value=1)
-        saliency_weights = saliency_weights / saliency_weights.max()
+            if balance_area:
+                # Fill in the weights to upweight smaller areas.
+                instance_weight = unit_sseg_share / true_sseg.area
+                saliency_weights = true_sseg.fill(saliency_weights, value=instance_weight)
+        # saliency_weights = saliency_weights / saliency_weights.max()
 
     if classes_of_interest:
         # Truth for class-task
@@ -279,17 +298,16 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
             'undistinguished': [],
             'foreground': [],
         }
-        fg_classes = []
         for true_sseg, true_catname in zip(true_ssegs, true_catnames):
             if true_catname in background_classes:
                 key = 'background'
-            if true_catname in ignore_classes:
+            elif true_catname in ignore_classes:
                 key = 'ignore'
             elif true_catname in undistinguished_classes:
                 key = 'undistinguished'
             else:
                 key = 'foreground'
-                fg_classes.append(true_catname)
+                true_sseg.meta['true_catname'] = true_catname
             sseg_groups[key].append(true_sseg)
 
         if balance_area:
@@ -310,7 +328,8 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
         for true_sseg in sseg_groups['undistinguished']:
             class_weights = true_sseg.fill(class_weights, value=0)
         # Score positive, site prep, and active construction.
-        for true_sseg, true_catname in zip(sseg_groups['foreground'], fg_classes):
+        for true_sseg in sseg_groups['foreground']:
+            true_catname = true_sseg.meta['true_catname']
             if balance_area:
                 # Fill in the weights to upweight smaller areas.
                 instance_weight = unit_sseg_share / true_sseg.area
@@ -323,120 +342,126 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
         # class_weights = class_weights / class_weights.max()
 
     if classes_of_interest:
-        try:
-            # handle multiclass case
-            pred_chan_of_interest = '|'.join(classes_of_interest)
-            delayed_probs = pred_coco_img.delay(
-                pred_chan_of_interest, space=score_space,
-                resolution=resolution, nodata_method='float').as_xarray()
-            # Do we need xarray anymore?
+        # handle multiclass case
+        pred_chan_of_interest = '|'.join(classes_of_interest)
+        delayed_probs = pred_coco_img.imdelay(
+            pred_chan_of_interest, space=score_space,
+            resolution=resolution, nodata_method='float').as_xarray()
+        # Do we need xarray anymore?
 
-            class_probs = delayed_probs.finalize()
-            invalid_mask = np.isnan(class_probs).all(axis=2)
-            class_weights[invalid_mask] = 0
+        class_probs = delayed_probs.finalize()
+        invalid_mask = np.isnan(class_probs).all(axis=2)
 
-            catname_to_prob = {}
-            cx_to_binvecs = {}
-            for cx, cname in enumerate(classes_of_interest):
-                is_true = catname_to_true[cname]
-                score = class_probs.loc[:, :, cname].data.copy()
-                invalid_mask = np.isnan(score)
-                weights = class_weights.copy()
-                weights[invalid_mask] = 0
-                score[invalid_mask] = 0
+        # import xdev
+        # with xdev.embed_on_exception_context(before_embed=util_progress.ProgressManager.stopall):
+        class_weights[invalid_mask] = 0
 
-                pred_score = score.ravel()
-                if left_bin_edges is not None:
-                    # round scores down to the nearest bin
-                    rounded_idx = np.searchsorted(left_bin_edges, pred_score)
-                    pred_score = left_bin_edges[rounded_idx]
+        catname_to_prob = {}
+        cx_to_binvecs = {}
+        for cx, cname in enumerate(classes_of_interest):
+            is_true = catname_to_true[cname]
+            score = class_probs.loc[:, :, cname].data.copy()
+            invalid_mask = np.isnan(score)
+            weights = class_weights.copy()
+            weights[invalid_mask] = 0
+            score[invalid_mask] = 0
 
-                catname_to_prob[cname] = score
-                bin_data = {
-                    # is_true denotes if the true class of the item is the
-                    # category of interest.
-                    'is_true': is_true.ravel(),
-                    'pred_score': pred_score,
-                    'weight': weights.ravel(),
-                }
-                bin_data = kwarray.DataFrameArray(bin_data)
-                bin_cfsn = BinaryConfusionVectors(bin_data, cx, classes_of_interest)
-                # TODO: use me?
-                # bin_measures = bin_cfsn.measures()
-                # bin_measures.summary()
-                cx_to_binvecs[cname] = bin_cfsn
-            ovr_cfns = OneVsRestConfusionVectors(cx_to_binvecs, classes_of_interest)
-            class_measures = ovr_cfns.measures()
-            row['mAP'] = class_measures['mAP']
-            row['mAUC'] = class_measures['mAUC']
-            info.update({
-                # TODO: data for visualization
-                'class_measures': class_measures,
-                'catname_to_true': catname_to_true,
-                'catname_to_prob': catname_to_prob,
-            })
-        except Exception:
-            raise
-
-    if has_saliency:
-        try:
-            # TODO: consolidate this with above class-specific code
-            salient_delay = pred_coco_img.delay(salient_class, space=score_space)
-            salient_prob = salient_delay.finalize(nodata='float')[..., 0]
-            salient_prob_orig = salient_prob.copy()
-            invalid_mask = np.isnan(salient_prob)
-            salient_prob[invalid_mask] = 0
-            saliency_weights[invalid_mask] = 0
-
-            pred_score = salient_prob.ravel()
+            pred_score = score.ravel()
             if left_bin_edges is not None:
+                # round scores down to the nearest bin
                 rounded_idx = np.searchsorted(left_bin_edges, pred_score)
                 pred_score = left_bin_edges[rounded_idx]
 
-            bin_cfns = BinaryConfusionVectors(kwarray.DataFrameArray({
-                'is_true': true_saliency.ravel(),
+            catname_to_prob[cname] = score
+            bin_data = {
+                # is_true denotes if the true class of the item is the
+                # category of interest.
+                'is_true': is_true.ravel(),
                 'pred_score': pred_score,
-                'weight': saliency_weights.ravel().astype(np.float32),
-            }))
-            salient_measures = bin_cfns.measures()
-            salient_summary = salient_measures.summary()
-
-            salient_metrics = {
-                'salient_' + k: v
-                for k, v in ub.dict_isect(salient_summary, {
-                    'ap', 'auc', 'max_f1'}).items()
+                'weight': weights.ravel(),
             }
-            row.update(salient_metrics)
+            bin_data = kwarray.DataFrameArray(bin_data)
+            bin_cfsn = BinaryConfusionVectors(bin_data, cx, classes_of_interest)
+            # TODO: use me?
+            # bin_measures = bin_cfsn.measures()
+            # bin_measures.summary()
+            cx_to_binvecs[cname] = bin_cfsn
+        ovr_cfns = OneVsRestConfusionVectors(cx_to_binvecs, classes_of_interest)
+        class_measures = ovr_cfns.measures()
+        row['mAP'] = class_measures['mAP']
+        row['mAUC'] = class_measures['mAUC']
+        info.update({
+            'class_weights': class_weights,
+            'class_measures': class_measures,
+            'catname_to_true': catname_to_true,
+            'catname_to_prob': catname_to_prob,
+        })
 
-            info.update({
-                'salient_measures': salient_measures,
-                'salient_prob': salient_prob_orig,
-                'true_saliency': true_saliency,
-            })
+    if has_saliency:
+        # TODO: consolidate this with above class-specific code
+        salient_delay = pred_coco_img.imdelay(salient_class, space=score_space,
+                                              resolution=resolution,
+                                              nodata_method='float')
+        salient_prob = salient_delay.finalize(nodata_method='float')[..., 0]
+        salient_prob_orig = salient_prob.copy()
+        invalid_mask = np.isnan(salient_prob)
 
-            if 1:
-                maximized_info = salient_measures.maximized_thresholds()
-
-                # This cherry-picks a threshold per image!
-                if viz_thresh == 'auto':
-                    cherry_picked_thresh = maximized_info['f1']['viz_thresh']
-                    saliency_thresh = cherry_picked_thresh
-                else:
-                    saliency_thresh = viz_thresh
-                pred_saliency = salient_prob > saliency_thresh
-
-                y_true = true_saliency.ravel()
-                y_pred = pred_saliency.ravel()
-                sample_weight = saliency_weights.ravel()
-                mat = skm.confusion_matrix(y_true, y_pred, labels=np.array([0, 1]),
-                                           sample_weight=sample_weight)
-                info.update({
-                    'mat': mat,
-                    'pred_saliency': pred_saliency,
-                    'saliency_thresh': saliency_thresh,
-                })
+        salient_prob[invalid_mask] = 0
+        try:
+            saliency_weights[invalid_mask] = 0
         except Exception:
-            pass
+            print(f'invalid_mask.shape={invalid_mask.shape}')
+            print(f'saliency_weights.shape={saliency_weights.shape}')
+            raise
+
+        pred_score = salient_prob.ravel()
+        if left_bin_edges is not None:
+            rounded_idx = np.searchsorted(left_bin_edges, pred_score)
+            pred_score = left_bin_edges[rounded_idx]
+
+        bin_cfns = BinaryConfusionVectors(kwarray.DataFrameArray({
+            'is_true': true_saliency.ravel(),
+            'pred_score': pred_score,
+            'weight': saliency_weights.ravel().astype(np.float32),
+        }))
+        salient_measures = bin_cfns.measures()
+        salient_summary = salient_measures.summary()
+
+        salient_metrics = {
+            'salient_' + k: v
+            for k, v in ub.dict_isect(salient_summary, {
+                'ap', 'auc', 'max_f1'}).items()
+        }
+        row.update(salient_metrics)
+
+        info.update({
+            'salient_measures': salient_measures,
+            'salient_prob': salient_prob_orig,
+            'true_saliency': true_saliency,
+        })
+
+        if 1:
+            maximized_info = salient_measures.maximized_thresholds()
+
+            # This cherry-picks a threshold per image!
+            if viz_thresh == 'auto':
+                cherry_picked_thresh = maximized_info['f1']['viz_thresh']
+                saliency_thresh = cherry_picked_thresh
+            else:
+                saliency_thresh = viz_thresh
+            pred_saliency = salient_prob > saliency_thresh
+
+            y_true = true_saliency.ravel()
+            y_pred = pred_saliency.ravel()
+            sample_weight = saliency_weights.ravel()
+            mat = skm.confusion_matrix(y_true, y_pred, labels=np.array([0, 1]),
+                                       sample_weight=sample_weight)
+            info.update({
+                'mat': mat,
+                'pred_saliency': pred_saliency,
+                'saliency_thresh': saliency_thresh,
+                'saliency_weights': saliency_weights,
+            })
 
     # TODO: look at the category ranking at each pixel by score.
     # Is there a generalization of a confusion matrix to a ranking tensor?
@@ -457,6 +482,15 @@ def _memo_legend(label_to_color):
     import kwplot
     legend_img = kwplot.make_legend_img(label_to_color)
     return legend_img
+
+
+def draw_confusion_image(pred, target):
+    canvas = np.zeros_like(pred)
+    np.putmask(canvas, (target == 0) & (pred == 0), 0)  # true-neg
+    np.putmask(canvas, (target == 1) & (pred == 1), 1)  # true-pos
+    np.putmask(canvas, (target == 1) & (pred == 0), 2)  # false-neg
+    np.putmask(canvas, (target == 0) & (pred == 1), 3)  # false-pos
+    return canvas
 
 
 @profile
@@ -545,7 +579,6 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
     """
     Draw a a sequence of true/pred image predictions
     """
-    from watch import heuristics
     color_labels = ['TN', 'TP', 'FN', 'FP']
 
     score_space = config.get('score_space', 'video')
@@ -640,13 +673,13 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
         vert_parts = [
             header,
         ]
+        DRAW_WEIGHTS = 1
 
         if 'catname_to_prob' in info:
 
             true_dets = info['true_dets']
             true_dets.data['classes'] = full_classes
 
-            # from watch import heuristics
             pred_classes = kwcoco.CategoryTree.coerce(list(info['catname_to_prob'].keys()))
             true_classes = kwcoco.CategoryTree.coerce(list(info['catname_to_true'].keys()))
             # todo: ensure colors are robust and consistent
@@ -661,21 +694,31 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
             # class_pred_idx = pred_cat_ohe.argmax(axis=0)
             # class_true_idx = true_cat_ohe.argmax(axis=0)
 
-            try:
-                true_overlay = colorize_class_probs(true_cat_ohe, true_classes)[..., 0:3]
-                # true_heatmap = kwimage.Heatmap(class_probs=true_cat_ohe, classes=true_classes)
-                # true_overlay = true_heatmap.colorize('class_probs')[..., 0:3]
-                true_overlay = draw_truth_borders(true_dets, true_overlay, alpha=1.0)
-                true_overlay = kwimage.ensure_uint255(true_overlay)
-                true_overlay = kwimage.draw_text_on_image(
-                    true_overlay, 'true class', org=(1, 1), valign='top',
-                    color=TRUE_GREEN, border=1)
-                vert_parts.append(true_overlay)
-            except Exception:
-                from watch.utils import util_progress
-                util_progress.ProgressManager.stopall()
-                import xdev
-                xdev.embed()
+            true_overlay = colorize_class_probs(true_cat_ohe, true_classes)[..., 0:3]
+            # true_heatmap = kwimage.Heatmap(class_probs=true_cat_ohe, classes=true_classes)
+            # true_overlay = true_heatmap.colorize('class_probs')[..., 0:3]
+            true_overlay = draw_truth_borders(true_dets, true_overlay, alpha=1.0)
+            true_overlay = kwimage.ensure_uint255(true_overlay)
+            true_overlay = kwimage.draw_text_on_image(
+                true_overlay, 'true class', org=(1, 1), valign='top',
+                color=TRUE_GREEN, border=1)
+            vert_parts.append(true_overlay)
+
+            if DRAW_WEIGHTS:
+                class_weights = info['class_weights']
+                if class_weights.max() > 1:
+                    weight_image = kwarray.normalize(class_weights, min_val=0)
+                    weight_title = 'weights (normed)'
+                else:
+                    weight_image = class_weights
+                    weight_title = 'weights'
+                weight_image = kwimage.ensure_uint255(weight_image)
+                weight_image = kwimage.draw_text_on_image(
+                    weight_image,
+                    weight_title,
+                    org=(1, 1), valign='top',
+                    color='pink', border=1)
+                vert_parts.append(weight_image)
 
             pred_overlay = colorize_class_probs(pred_cat_ohe, pred_classes)[..., 0:3]
             # pred_heatmap = kwimage.Heatmap(class_probs=pred_cat_ohe, classes=pred_classes)
@@ -692,7 +735,7 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
             pred_saliency = info['pred_saliency'].astype(np.uint8)
             true_saliency = info['true_saliency']
             saliency_thresh = info['saliency_thresh']
-            confusion_idxs = utils.confusion_image(pred_saliency, true_saliency)
+            confusion_idxs = draw_confusion_image(pred_saliency, true_saliency)
             confusion_image = color_lut[confusion_idxs]
             confusion_image = kwimage.ensure_uint255(confusion_image)
             confusion_image = kwimage.draw_text_on_image(
@@ -703,6 +746,23 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
             vert_parts.append(
                 confusion_image
             )
+
+            if DRAW_WEIGHTS:
+                saliency_weights = info['saliency_weights']
+                if saliency_weights.max() > 1:
+                    weight_image = kwarray.normalize(saliency_weights, min_val=0)
+                    weight_title = 'weights (normed)'
+                else:
+                    weight_image = saliency_weights
+                    weight_title = 'weights'
+                weight_image = kwimage.ensure_uint255(weight_image)
+                weight_image = kwimage.draw_text_on_image(
+                    weight_image,
+                    weight_title,
+                    org=(1, 1), valign='top',
+                    color='pink', border=1)
+                vert_parts.append(weight_image)
+
         elif 'true_saliency' in info:
             true_saliency = info['true_saliency']
             true_saliency = true_saliency.astype(np.float32)
@@ -733,10 +793,15 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
                 chosen_viz_channs = 'red|green|blue'
             elif len(avali_chans & {'r', 'g', 'b'}) == 3:
                 chosen_viz_channs = 'r|g|b'
+            elif len(avali_chans & {'pan'}) == 3:
+                chosen_viz_channs = 'pan'
             else:
                 chosen_viz_channs = true_coco_img.primary_asset()['channels']
             try:
-                real_image = true_coco_img.delay(chosen_viz_channs, space=score_space, nodata_method='float', resolution=resolution).finalize()[:]
+                real_image = true_coco_img.imdelay(chosen_viz_channs,
+                                                   space=score_space,
+                                                   nodata_method='float',
+                                                   resolution=resolution).finalize()[:]
                 real_image_norm = kwimage.normalize_intensity(real_image)
                 real_image_norm = kwimage.fill_nans_with_checkers(real_image_norm)
                 real_image_int = kwimage.ensure_uint255(real_image_norm)
@@ -889,9 +954,6 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         >>> #workers = 0
         >>> evaluate_segmentations(true_coco, pred_coco, eval_dpath, config=config)
     """
-    import platform
-    from watch import heuristics
-    from watch.utils import util_parallel
 
     if config is None:
         config = {}
@@ -926,11 +988,6 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     meta = {}
     meta['info'] = info = []
 
-    # Add info about where and when evaluation happened
-    meta['hostname'] = platform.node()
-    meta['user'] = user = ub.Path(ub.userhome()).name
-    meta['time'] = start_timestamp = ub.timestamp()
-
     if pred_coco.fpath is not None:
         pred_fpath = ub.Path(pred_coco.fpath)
         meta['pred_name'] = '_'.join((list(pred_fpath.parts[-2:-1]) + [pred_fpath.stem]))
@@ -949,7 +1006,6 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
                     item['package_name'] = ub.Path(package_fpath).stem
 
                 # FIXME: title should also include pred-config info
-
                 meta['title'] = item['title']
                 meta['package_name'] = item['package_name']
                 info.append(item)
@@ -958,6 +1014,14 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     package_name = meta.get('package_name', '')
     pred_name = meta.get('pred_name', '')
     title_parts = [p for p in [package_name, pred_name] if p]
+
+    resolution = config.get('resolution', None)
+    balance_area = config.get('balance_area', False)
+    if resolution is not None:
+        title_parts.append(f'space={score_space} @ {resolution}, balance_area={balance_area}')
+    else:
+        title_parts.append(f'space={score_space} balance_area={balance_area}')
+
     meta['title_parts'] = title_parts
     title = meta['title'] = ' - '.join(title_parts)
 
@@ -992,44 +1056,18 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     if draw_heatmaps == 'auto':
         draw_heatmaps = bool(eval_dpath is not None)
 
+    pcontext = process_context.ProcessContext(
+        name='watch.tasks.fusion.evaluate',
+        config=config,
+    )
+    pcontext.start()
+
     if eval_dpath is None:
         heatmap_dpath = None
     else:
-        import socket
-        from kwcoco.util import util_json
-        import shlex
         heatmap_dpath = (ub.Path(eval_dpath) / 'heatmaps').ensuredir()
-
         curve_dpath = (ub.Path(eval_dpath) / 'curves').ensuredir()
-        invocation_fpath = curve_dpath / 'invocation.sh'
-        command = ' '.join(list(map(shlex.quote, sys.argv)))
-        # TODO: make this optional
-        invocation_fpath.write_text(ub.codeblock(
-            f'''
-            #!/bin/bash
-            {command}
-            '''))
-        # TODO: use the process tracker
-        jsonified_args = util_json.ensure_json_serializable(sys.argv)
-        # TODO: process context instead
-        # from watch.utils import process_context
-        # i.e.
-        # process_context = process_context.ProcessContext()
-        # process_context.start()
-        # eval_process_info_item = process_context.stop()
-        eval_process_info_item = {
-            'type': 'process',
-            'properties': {
-                'name': 'watch.tasks.fusion.evaluate',
-                'args': jsonified_args,
-                'hostname': socket.gethostname(),
-                'user': user,
-                'cwd': os.getcwd(),
-                'start_timestamp': start_timestamp,
-                'end_timestamp': None,
-            }
-        }
-        meta['info'].append(eval_process_info_item)
+        pcontext.write_invocation(curve_dpath / 'invocation.sh')
 
     # Objects that will aggregate confusion across multiple images
     salient_measure_combiner = MeasureCombiner(thresh_bins=thresh_bins)
@@ -1133,7 +1171,6 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         # Use rich outside of slurm
         RICH_PROG = not os.environ.get('SLURM_JOBID', '')
 
-    from watch.utils import util_progress
     pman = util_progress.ProgressManager(backend='rich' if RICH_PROG else 'progiter')
 
     DEBUG = 0
@@ -1266,7 +1303,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         salient_combo_measures, ovr_combo_measures, None, meta)
     print('result = {}'.format(result))
 
-    eval_process_info_item['properties']['end_timestamp'] = ub.timestamp()
+    meta['info'].append(pcontext.stop())
 
     if salient_combo_measures is not None:
         if eval_dpath is not None:
