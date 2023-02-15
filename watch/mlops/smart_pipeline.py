@@ -163,7 +163,7 @@ class HeatmapPrediction(ProcessNode):
     perf_params = {
         'num_workers': 2,
         'devices': '0,',
-        'accelerator': 'gpu',
+        #'accelerator': 'gpu',
         'batch_size': 1,
         'with_saliency': 'auto',
         'with_class': 'auto',
