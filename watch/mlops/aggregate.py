@@ -116,7 +116,7 @@ def build_all_param_plots(agg, rois, config):
     agg_group_dpath = (agg_dpath / ('all_params' + ub.timestamp())).ensuredir()
 
     # Hack in fit params
-    if 1:
+    if 0:
         resolved_params = pd.concat([
             agg.resolved_info['resolved_params'],
             agg.resolved_info['fit_params']], axis=1)
@@ -130,16 +130,17 @@ def build_all_param_plots(agg, rois, config):
         'index': agg.index,
         'metrics': agg.metrics,
         'resolved_params': agg.resolved_params,
+        'fit_params': agg.fit_params,
         'resources': agg.resolved_info['resources'],
     }
 
-    macro_results['resolved_params']['bas_poly_eval.fit.effective_batch_size'] = (
-        macro_results['resolved_params']['bas_poly_eval.fit.accumulate_grad_batches'] *
-        macro_results['resolved_params']['bas_poly_eval.fit.batch_size']
+    macro_results['fit_params']['bas_poly_eval.fit.effective_batch_size'] = (
+        macro_results['fit_params']['bas_poly_eval.fit.accumulate_grad_batches'] *
+        macro_results['fit_params']['bas_poly_eval.fit.batch_size']
     )
 
     _parts = list((ub.udict(macro_results) & {
-        'index', 'metrics', 'resolved_params', 'resources'}).values())
+        'index', 'metrics', 'resolved_params', 'fit_params', 'resources'}).values())
     macro_table = pd.concat(_parts, axis=1)
     single_table = pd.concat(list(single_results.values()), axis=1)
     single_table = single_table.fillna('None')
@@ -167,21 +168,7 @@ def build_all_param_plots(agg, rois, config):
             pkgmap[pkg] = new_name
         macro_table['bas_pxl.package_fpath'] = macro_table['bas_pxl.package_fpath'].apply(lambda x: pkgmap.get(x, x))
 
-    modifier = util_kwplot.LabelModifier()
-
-    modifier.add_mapping({
-        'blue|green|red|nir': 'BGRN',
-        'blue|green|red|nir,invariants.0:17': 'invar',
-        'blue|green|red|nir|swir16|swir22': 'BGNRSH'
-    })
-
-    @modifier.add_mapping
-    def humanize_label(text):
-        text = text.replace('package_epoch0_step41', 'EVAL7')
-        text = text.replace('bas_poly_eval.params.', '')
-        text = text.replace('bas_poly_eval.metrics.', '')
-        text = text.replace('bas_poly_eval.fit.', 'fit.')
-        return text
+    modifier = build_smart_label_modifier()
 
     # Pre determine some palettes
     shared_palette_groups = [
@@ -203,7 +190,7 @@ def build_all_param_plots(agg, rois, config):
         palette = ub.dzip(unique_vals, unique_colors)
         param_to_palette.update({p: palette for p in group_params})
 
-    if 1:
+    if 0:
         #### Hack for models of interest.
         star_params = []
         p1 = macro_table[(
@@ -315,8 +302,8 @@ def build_all_param_plots(agg, rois, config):
         import xdev
         xdev.view_directory(agg_group_dpath)
 
-    if 1:
-        ranked_params = [p for p in ranked_params if 'resolution' in p]
+    # if 1:
+    #     ranked_params = [p for p in ranked_params if 'resolution' in p]
 
     from kwcoco.metrics.drawing import concice_si_display
     for rank, param_name in ub.ProgIter(enumerate(ranked_params)):
@@ -355,6 +342,29 @@ def build_all_param_plots(agg, rois, config):
         modifier.relabel(ax)
         fpath = agg_group_dpath / f'macro_results_{rank:03d}_{param_name}_box.png'
         finalize_figure(fig, fpath)
+
+
+def build_smart_label_modifier():
+    """
+    Build the label modifier for the SMART task.
+    """
+    from watch.utils import util_kwplot
+    modifier = util_kwplot.LabelModifier()
+
+    modifier.add_mapping({
+        'blue|green|red|nir': 'BGRN',
+        'blue|green|red|nir,invariants.0:17': 'invar',
+        'blue|green|red|nir|swir16|swir22': 'BGNRSH'
+    })
+
+    @modifier.add_mapping
+    def humanize_label(text):
+        text = text.replace('package_epoch0_step41', 'EVAL7')
+        text = text.replace('bas_poly_eval.params.', '')
+        text = text.replace('bas_poly_eval.metrics.', '')
+        text = text.replace('bas_poly_eval.fit.', 'fit.')
+        return text
+    return modifier
 
 
 def automated_analysis(eval_type_to_aggregator, config):
@@ -939,6 +949,7 @@ class Aggregator(ub.NiceRepr):
                 'index': agg.index.loc[idx_group.index],
                 'effective_params': agg.effective_params.loc[idx_group.index],
                 'resolved_params': agg.resolved_params.loc[idx_group.index],
+                'fit_params': agg.fit_params.loc[idx_group.index],
             }
         agg.macro_compatible = agg.find_macro_comparable()
         agg.table = pd.concat([agg.metrics, agg.index, agg.params], axis=1)
@@ -1226,45 +1237,51 @@ class Aggregator(ub.NiceRepr):
 
         # Gather groups that can be aggregated
         comparable_groups = agg.gather_macro_compatable_groups(regions_of_interest)
+        if len(comparable_groups) == 0:
+            print(ub.paragraph(
+                f'''
+                WARNING: Failed to build macro results. No comparable groups
+                for rois={rois}
+                '''))
+        else:
+            if 0:
+                # gather debug info about all of the comparable groups and check
+                # basic assumptions
+                stat_accum = {
+                    'size': []
+                }
+                seen_indexes = set()
+                for group in comparable_groups:
+                    assert len(group.param_hashid.unique()) == 1
+                    assert len(group.param_hashid) >= 1
+                    assert len(group.index.unique()) == len(group)
+                    stat_accum['size'].append(len(group))
+                    assert not (set(group.index) & seen_indexes)
+                    seen_indexes.update(group.index)
+                    if len(group) > 2:
+                        break
 
-        if 0:
-            # gather debug info about all of the comparable groups and check
-            # basic assumptions
-            stat_accum = {
-                'size': []
-            }
-            seen_indexes = set()
+                print(pd.DataFrame(stat_accum).describe().T)
+
+            # Macro aggregaet comparable groups
+            macro_parts = ub.ddict(list)
             for group in comparable_groups:
-                assert len(group.param_hashid.unique()) == 1
-                assert len(group.param_hashid) >= 1
-                assert len(group.index.unique()) == len(group)
-                stat_accum['size'].append(len(group))
-                assert not (set(group.index) & seen_indexes)
-                seen_indexes.update(group.index)
-                if len(group) > 2:
-                    break
+                agg_parts = macro_aggregate(agg, group, aggregator)
+                for k, v in agg_parts.items():
+                    macro_parts[k].append(v)
 
-            print(pd.DataFrame(stat_accum).describe().T)
-
-        # Macro aggregaet comparable groups
-        macro_parts = ub.ddict(list)
-        for group in comparable_groups:
-            agg_parts = macro_aggregate(agg, group, aggregator)
-            for k, v in agg_parts.items():
-                macro_parts[k].append(v)
-
-        # main_metric = 'bas_poly_eval.metrics.bas_faa_f1'
-        # main_metric = 'bas_poly_eval.metrics.bas_tp'
-        # macro_df = macro_df.sort_values(main_metric, ascending=False)
-        macro_results = {
-            k: pd.DataFrame(vs).reset_index(drop=True)
-            for k, vs in macro_parts.items()
-        }
-        agg.region_to_tables.pop(macro_key, None)
-        agg.macro_key_to_regions.pop(macro_key, None)
-        agg.macro_key_to_regions[macro_key] = regions_of_interest
-        agg.region_to_tables[macro_key] = macro_results
-        return macro_results
+            # main_metric = 'bas_poly_eval.metrics.bas_faa_f1'
+            # main_metric = 'bas_poly_eval.metrics.bas_tp'
+            # macro_df = macro_df.sort_values(main_metric, ascending=False)
+            macro_results = {
+                k: pd.DataFrame(vs).reset_index(drop=True)
+                for k, vs in macro_parts.items()
+            }
+            agg.region_to_tables.pop(macro_key, None)
+            agg.macro_key_to_regions.pop(macro_key, None)
+            agg.macro_key_to_regions[macro_key] = regions_of_interest
+            agg.region_to_tables[macro_key] = macro_results
+            return macro_results
 
 
 def aggregate_param_cols(df, hash_cols=None, allow_nonuniform=False):
@@ -1316,6 +1333,7 @@ def macro_aggregate(agg, group, aggregator):
             subgroup_parts['params'] = agg.results['params'].loc[subgroup.index]
             subgroup_parts['specified_params'] = agg.results['specified_params'].loc[subgroup.index]
             subgroup_parts['resolved_params'] = agg.resolved_info['resolved_params'].loc[subgroup.index]
+            subgroup_parts['fit_params'] = agg.resolved_info['fit_params'].loc[subgroup.index]
             subgroup_parts['metrics'] = agg.results['metrics'].loc[subgroup.index]
             subgroup_parts['resources'] = agg.resolved_info['resources'].loc[subgroup.index]
 
@@ -1323,6 +1341,7 @@ def macro_aggregate(agg, group, aggregator):
             subagg_part['index'] = aggregate_param_cols(subgroup_parts['index'])
             subagg_part['params'] = aggregate_param_cols(subgroup_parts['params'], agg.test_dset_cols, allow_nonuniform=True)
             subagg_part['resolved_params'] = aggregate_param_cols(subgroup_parts['resolved_params'], agg.test_dset_cols)
+            subagg_part['fit_params'] = aggregate_param_cols(subgroup_parts['fit_params'], agg.test_dset_cols)
             subagg_part['specified_params'] = aggregate_param_cols(subgroup_parts['specified_params'], allow_nonuniform=True)
             # Always do mean within-regions
             subagg_part['metrics'] = subgroup_parts['metrics'].aggregate('mean')
@@ -1347,6 +1366,7 @@ def macro_aggregate(agg, group, aggregator):
         group_parts['params'] = agg.params.loc[group.index]
         group_parts['specified_params'] = agg.results['specified_params'].loc[group.index]
         group_parts['resolved_params'] = agg.resolved_info['resolved_params'].loc[group.index]
+        group_parts['fit_params'] = agg.resolved_info['fit_params'].loc[group.index]
         group_parts['resources'] = agg.resolved_info['resources'].loc[group.index]
 
     agg_parts = {}
@@ -1355,6 +1375,7 @@ def macro_aggregate(agg, group, aggregator):
     agg_parts['index']  = aggregate_param_cols(group_parts['index'], ['region_id'])
     agg_parts['params']  = aggregate_param_cols(group_parts['params'], agg.test_dset_cols, allow_nonuniform=True)
     agg_parts['resolved_params']  = aggregate_param_cols(group_parts['resolved_params'], agg.test_dset_cols)
+    agg_parts['fit_params']  = aggregate_param_cols(group_parts['fit_params'])
     agg_parts['specified_params']  = aggregate_param_cols(group_parts['specified_params'], allow_nonuniform=True)
     return agg_parts
 

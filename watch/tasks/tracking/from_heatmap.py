@@ -904,8 +904,8 @@ class TimeAggregatedBAS(NewTrackFunction):
     thresh_hysteresis: Optional[float] = None
     moving_window_size: Optional[int] = None
 
-    min_area_sqkm: Optional[float] = None  # was 0.072  # 80px@30GSD
-    max_area_sqkm: Optional[float] = None  # was 2.25
+    min_area_sqkm: Optional[float] = None  # was 0.072  # 80px@30GSD  # deprecate
+    max_area_sqkm: Optional[float] = None  # was 2.25  # deprecate
 
     min_area_square_meters: Optional[float] = None  # was 7_200
     max_area_square_meters: Optional[float] = None  # was 2_250_000
@@ -949,8 +949,8 @@ class TimeAggregatedSC(NewTrackFunction):
     thresh_hysteresis: Optional[float] = None
     moving_window_size: Optional[int] = None
 
-    min_area_sqkm: Optional[float] = None
-    max_area_sqkm: Optional[float] = None
+    min_area_sqkm: Optional[float] = None  # deprecate
+    max_area_sqkm: Optional[float] = None  # deprecate
 
     min_area_square_meters: Optional[float] = None
     max_area_square_meters: Optional[float] = None
