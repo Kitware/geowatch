@@ -23,6 +23,7 @@ docker run \
     --mount type=bind,source="$PHASE2_DATA_DPATH_SRC",target="$PHASE2_DATA_DPATH" \
     --mount type=bind,source="$PHASE2_EXPT_DPATH_SRC",target="$PHASE2_EXPT_DPATH" \
     --mount type=bind,source="$(pwd)/config_common.yaml",target="/config_common.yaml" \
+    --mount type=bind,source="/data/connor.greenwell/cache",target="/.cache" \
     "feature/decoderless_heterogeneous_model" \
     conda run --no-capture-output -n watch \
     python -m watch.tasks.fusion fit \
@@ -31,12 +32,12 @@ docker run \
         --data.train_dataset="$TRAIN_FPATH" \
         --data.vali_dataset="$VALI_FPATH" \
         --data.num_workers=5 \
-        --data.use_grid_cache=False \
         --data.verbose=true \
         --trainer.default_root_dir="$DEFAULT_ROOT_DIR" \
         --trainer.max_steps=100 \
         --trainer.accelerator="gpu" \
         --trainer.devices=1 \
-        --trainer.strategy="ddp" \
         --trainer.precision=16
         # --print_config
+        # --trainer.strategy="ddp" \
+        # --data.use_grid_cache=False \
