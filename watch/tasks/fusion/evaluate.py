@@ -5,7 +5,6 @@ Compute semantic segmentation evaluation metrics
 TODO:
     - [ ] Move to kwcoco proper
 """
-import sys
 import json
 import kwarray
 import kwcoco
@@ -16,9 +15,6 @@ import pandas as pd
 import sklearn.metrics as skm
 import ubelt as ub
 import warnings
-from watch.tasks.fusion import utils
-# from watch.utils import util_kwimage
-from watch.utils import kwcoco_extensions
 from kwcoco.coco_evaluator import CocoSingleResult
 from kwcoco.metrics.confusion_vectors import BinaryConfusionVectors
 from kwcoco.metrics.confusion_measures import OneVersusRestMeasureCombiner
@@ -27,8 +23,14 @@ from kwcoco.metrics.confusion_measures import MeasureCombiner
 # from kwcoco.metrics.confusion_measures import PerClass_Measures
 from kwcoco.metrics.confusion_measures import Measures
 from typing import Dict
-import scriptconfig as scfg  # NOQA
+import scriptconfig as scfg
 from shapely.ops import unary_union
+
+from watch.utils import kwcoco_extensions
+from watch.utils import process_context
+from watch.utils import util_progress
+from watch.utils import util_parallel
+from watch import heuristics
 
 try:
     from xdev import profile
@@ -165,7 +167,6 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
 
     # TODO: parametarize these class categories
     # TODO: remove and generalize before porting to kwcoco
-    from watch import heuristics
     ignore_classes = heuristics.IGNORE_CLASSNAMES
     background_classes = heuristics.BACKGROUND_CLASSES
     undistinguished_classes = heuristics.UNDISTINGUISHED_CLASSES
@@ -352,7 +353,6 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
         invalid_mask = np.isnan(class_probs).all(axis=2)
 
         # import xdev
-        # from watch.utils import util_progress
         # with xdev.embed_on_exception_context(before_embed=util_progress.ProgressManager.stopall):
         class_weights[invalid_mask] = 0
 
@@ -484,6 +484,15 @@ def _memo_legend(label_to_color):
     return legend_img
 
 
+def draw_confusion_image(pred, target):
+    canvas = np.zeros_like(pred)
+    np.putmask(canvas, (target == 0) & (pred == 0), 0)  # true-neg
+    np.putmask(canvas, (target == 1) & (pred == 1), 1)  # true-pos
+    np.putmask(canvas, (target == 1) & (pred == 0), 2)  # false-neg
+    np.putmask(canvas, (target == 0) & (pred == 1), 3)  # false-pos
+    return canvas
+
+
 @profile
 def colorize_class_probs(probs, classes):
     """
@@ -570,7 +579,6 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
     """
     Draw a a sequence of true/pred image predictions
     """
-    from watch import heuristics
     color_labels = ['TN', 'TP', 'FN', 'FP']
 
     score_space = config.get('score_space', 'video')
@@ -672,7 +680,6 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
             true_dets = info['true_dets']
             true_dets.data['classes'] = full_classes
 
-            # from watch import heuristics
             pred_classes = kwcoco.CategoryTree.coerce(list(info['catname_to_prob'].keys()))
             true_classes = kwcoco.CategoryTree.coerce(list(info['catname_to_true'].keys()))
             # todo: ensure colors are robust and consistent
@@ -728,7 +735,7 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
             pred_saliency = info['pred_saliency'].astype(np.uint8)
             true_saliency = info['true_saliency']
             saliency_thresh = info['saliency_thresh']
-            confusion_idxs = utils.confusion_image(pred_saliency, true_saliency)
+            confusion_idxs = draw_confusion_image(pred_saliency, true_saliency)
             confusion_image = color_lut[confusion_idxs]
             confusion_image = kwimage.ensure_uint255(confusion_image)
             confusion_image = kwimage.draw_text_on_image(
@@ -947,9 +954,6 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         >>> #workers = 0
         >>> evaluate_segmentations(true_coco, pred_coco, eval_dpath, config=config)
     """
-    import platform
-    from watch import heuristics
-    from watch.utils import util_parallel
 
     if config is None:
         config = {}
@@ -984,11 +988,6 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     meta = {}
     meta['info'] = info = []
 
-    # Add info about where and when evaluation happened
-    meta['hostname'] = platform.node()
-    meta['user'] = user = ub.Path(ub.userhome()).name
-    meta['time'] = start_timestamp = ub.timestamp()
-
     if pred_coco.fpath is not None:
         pred_fpath = ub.Path(pred_coco.fpath)
         meta['pred_name'] = '_'.join((list(pred_fpath.parts[-2:-1]) + [pred_fpath.stem]))
@@ -1007,7 +1006,6 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
                     item['package_name'] = ub.Path(package_fpath).stem
 
                 # FIXME: title should also include pred-config info
-
                 meta['title'] = item['title']
                 meta['package_name'] = item['package_name']
                 info.append(item)
@@ -1017,10 +1015,12 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     pred_name = meta.get('pred_name', '')
     title_parts = [p for p in [package_name, pred_name] if p]
 
-    if config['resolution'] is not None:
-        title_parts.append('space={} @ {}, balance_area={}'.format(score_space, config['resolution'], config['balance_area']))
+    resolution = config.get('resolution', None)
+    balance_area = config.get('balance_area', False)
+    if resolution is not None:
+        title_parts.append(f'space={score_space} @ {resolution}, balance_area={balance_area}')
     else:
-        title_parts.append('space={}, balance_area={}'.format(score_space, config['balance_area']))
+        title_parts.append(f'space={score_space} balance_area={balance_area}')
 
     meta['title_parts'] = title_parts
     title = meta['title'] = ' - '.join(title_parts)
@@ -1056,44 +1056,18 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     if draw_heatmaps == 'auto':
         draw_heatmaps = bool(eval_dpath is not None)
 
+    pcontext = process_context.ProcessContext(
+        name='watch.tasks.fusion.evaluate',
+        config=config,
+    )
+    pcontext.start()
+
     if eval_dpath is None:
         heatmap_dpath = None
     else:
-        import socket
-        from kwcoco.util import util_json
-        import shlex
         heatmap_dpath = (ub.Path(eval_dpath) / 'heatmaps').ensuredir()
-
         curve_dpath = (ub.Path(eval_dpath) / 'curves').ensuredir()
-        invocation_fpath = curve_dpath / 'invocation.sh'
-        command = ' '.join(list(map(shlex.quote, sys.argv)))
-        # TODO: make this optional
-        invocation_fpath.write_text(ub.codeblock(
-            f'''
-            #!/bin/bash
-            {command}
-            '''))
-        # TODO: use the process tracker
-        jsonified_args = util_json.ensure_json_serializable(sys.argv)
-        # TODO: process context instead
-        # from watch.utils import process_context
-        # i.e.
-        # process_context = process_context.ProcessContext()
-        # process_context.start()
-        # eval_process_info_item = process_context.stop()
-        eval_process_info_item = {
-            'type': 'process',
-            'properties': {
-                'name': 'watch.tasks.fusion.evaluate',
-                'args': jsonified_args,
-                'hostname': socket.gethostname(),
-                'user': user,
-                'cwd': os.getcwd(),
-                'start_timestamp': start_timestamp,
-                'end_timestamp': None,
-            }
-        }
-        meta['info'].append(eval_process_info_item)
+        pcontext.write_invocation(curve_dpath / 'invocation.sh')
 
     # Objects that will aggregate confusion across multiple images
     salient_measure_combiner = MeasureCombiner(thresh_bins=thresh_bins)
@@ -1197,7 +1171,6 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         # Use rich outside of slurm
         RICH_PROG = not os.environ.get('SLURM_JOBID', '')
 
-    from watch.utils import util_progress
     pman = util_progress.ProgressManager(backend='rich' if RICH_PROG else 'progiter')
 
     DEBUG = 0
@@ -1330,7 +1303,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         salient_combo_measures, ovr_combo_measures, None, meta)
     print('result = {}'.format(result))
 
-    eval_process_info_item['properties']['end_timestamp'] = ub.timestamp()
+    meta['info'].append(pcontext.stop())
 
     if salient_combo_measures is not None:
         if eval_dpath is not None:
