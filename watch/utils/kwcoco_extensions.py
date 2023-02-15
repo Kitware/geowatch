@@ -1897,10 +1897,17 @@ def warp_annot_segmentations_to_geos(coco_dset):
                 }
 
 
-def warp_annot_segmentations_from_geos(coco_dset):
+def warp_annot_segmentations_from_geos(coco_dset, max_workers=8):
     """
     Uses the segmentation_geos property (which should be crs84) and warps it
     into image space based on available geo data.
+
+    TODO dedupe with watch.tasks.tracking.normalize.add_geos, should be the
+    inverse of this function.
+
+    Only real way to speed this up would be to groupby wld and img CRS and
+    bulk-warp segs without accessing all imgs.
+    Parallelism doesn't work due to in-memory dset.
 
     Ignore:
         # xdoctest: +REQUIRES(env:DVC_DPATH)
@@ -1917,10 +1924,11 @@ def warp_annot_segmentations_from_geos(coco_dset):
     # from os.path import join
     import geopandas as gpd
     from watch.utils import util_gis
+    from shapely.geometry import shape
     crs84 = util_gis._get_crs84()
 
-    for gid in ub.ProgIter(coco_dset.images(), desc='warping annotations'):
-        coco_img = coco_dset._coco_image(gid)
+    def wld_info(coco_img):
+        # coco_img = coco_dset._coco_image(gid)
         asset = coco_img.primary_asset(requires=['geos_corners'])
         # fpath = join(coco_dset.bundle_dpath, asset['file_name'])
         # Dont rely on image metadata anymore
@@ -1951,30 +1959,55 @@ def warp_annot_segmentations_from_geos(coco_dset):
 
         warp_img_from_aux = kwimage.Affine.coerce(asset.get('warp_aux_to_img', None))
         warp_img_from_wld = warp_img_from_aux @ warp_aux_from_wld
-        rows = []
-        for aid in coco_dset.annots(gid=gid):
-            ann = coco_dset.index.anns[aid]
-            sseg_geos = kwimage.MultiPolygon.from_geojson(ann['segmentation_geos'])
-            # if wgs84_axis_mapping == 'OAMS_AUTHORITY_COMPLIANT':
-            #     sseg_wgs84 = sseg_geos.swap_axes()
-            # elif wgs84_axis_mapping == 'OAMS_TRADITIONAL_GIS_ORDER':
-            #     sseg_wgs84 = sseg_geos
-            # else:
-            #     raise NotImplementedError(wgs84_axis_mapping)
-            rows.append({
-                'geometry': sseg_geos.to_shapely(),
-                'aid': aid,
-            })
-        crs84_ann_df = gpd.GeoDataFrame(rows, crs=crs84, columns=['geometry', 'aid'])
-        wld_ann_df = crs84_ann_df.to_crs(wld_crs)
-        for row in wld_ann_df.to_dict('records'):
+        return warp_img_from_wld, wld_crs
+
+
+    def anns_update(geojson_polys, warp_img_from_wld, wld_crs):
+        sseg_crs84 = gpd.GeoSeries([shape(p) for p in geojson_polys], crs=crs84)
+        sseg_wld = sseg_crs84.to_crs(wld_crs)
+        sseg_wld = kwimage.PolygonList(
+            [kwimage.MultiPolygon.from_shapely(p) for p in sseg_wld])
+        sseg_img = sseg_wld.warp(warp_img_from_wld)
+        return {
+            'segmentation': list(sseg_img.to_coco(style='new')),
+            'bbox': [
+                list(p.bounding_box().quantize().to_coco())[0]
+                for p in sseg_img
+            ]
+        }
+
+        # rows = []
+        # for aid in coco_dset.annots(gid=gid):
+            # ann = coco_dset.index.anns[aid]
+            # sseg_geos = kwimage.MultiPolygon.from_geojson(ann['segmentation_geos'])
+            # # if wgs84_axis_mapping == 'OAMS_AUTHORITY_COMPLIANT':
+            # #     sseg_wgs84 = sseg_geos.swap_axes()
+            # # elif wgs84_axis_mapping == 'OAMS_TRADITIONAL_GIS_ORDER':
+            # #     sseg_wgs84 = sseg_geos
+            # # else:
+            # #     raise NotImplementedError(wgs84_axis_mapping)
+            # rows.append({
+                # 'geometry': sseg_geos.to_shapely(),
+                # 'aid': aid,
+            # })
+    executor = ub.JobPool('serial', max_workers)
+    for gid in coco_dset.images().gids:
+        annots = coco_dset.annots(image_id=gid)
+        has_geos = np.array(annots.get('segmentation_geos', False), dtype=bool)
+        annots = annots.compress(has_geos)  # overwrites existing segs
+        if len(annots) > 0:
             # TODO: check crs properties (probably always crs84)
-            aid = row['aid']
-            ann = coco_dset.index.anns[aid]
-            sseg_wld = row['geometry']
-            sseg_img = kwimage.MultiPolygon.coerce(sseg_wld).warp(warp_img_from_wld)
-            ann['segmentation'] = sseg_img.to_coco(style='new')
-            ann['bbox'] = list(sseg_img.bounding_box().quantize().to_coco())[0]
+            sseg_geos = annots.lookup('segmentation_geos')
+            warp_img_from_wld, wld_crs = wld_info(coco_dset.coco_image(gid))
+            job = executor.submit(
+                anns_update, sseg_geos, warp_img_from_wld, wld_crs)
+            job.aids = annots.aids
+
+    for job in executor.as_completed(desc='warping annotations'):
+        result = job.result()
+        annots = coco_dset.annots(job.aids)
+        for k, v in result.items():
+            annots.set(k, v)
 
     if __debug__:
         for ann in coco_dset.dataset['annotations']:
