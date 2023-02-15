@@ -98,7 +98,7 @@ Example:
     >>> # xdoctest: +REQUIRES(--show)
     >>> import kwplot
     >>> plt = kwplot.autoplt()
-    >>> self.show_summary(samples_per_frame=5, fnum=1)
+    >>> self.show_summary(samples_per_frame=1, fnum=1)
     >>> chosen, info = self.show_procedure(fnum=4, idx=10)
     >>> plt.subplots_adjust(top=0.9)
 

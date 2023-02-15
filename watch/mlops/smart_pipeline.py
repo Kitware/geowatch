@@ -108,6 +108,12 @@ import shlex
 import json
 from watch.mlops.pipeline_nodes import ProcessNode
 
+
+try:
+    from xdev import profile  # NOQA
+except ImportError:
+    profile = ub.identity
+
 PREDICT_NAME  = 'pred'
 EVALUATE_NAME = 'eval'
 
@@ -120,6 +126,7 @@ class FeatureComputation(ProcessNode):
 
     in_paths = {'src'}
 
+    @profile
     def command(self):
         command = ub.codeblock(
             r'''
@@ -143,6 +150,7 @@ class FeatureUnion(ProcessNode):
         'dst': 'combo_{featunion_id}.kwcoco.zip'
     }
 
+    @profile
     def command(self):
         command = ub.codeblock(
             r'''
@@ -183,6 +191,7 @@ class HeatmapPrediction(ProcessNode):
         'pred_pxl_fpath' : 'pred.kwcoco.zip',
     }
 
+    @profile
     def command(self):
         fmtkw = self.resolved_config.copy()
         perf_config = self.resolved_perf_config
@@ -225,6 +234,7 @@ class PolygonPrediction(ProcessNode):
         'poly_kwcoco_fpath': 'poly.kwcoco.zip'
     }
 
+    @profile
     def command(self):
         fmtkw = self.resolved_config.copy()
         fmtkw['default_track_fn'] = self.default_track_fn
@@ -262,6 +272,7 @@ class PolygonEvaluation(ProcessNode):
         'eval_fpath': 'poly_eval.json',
     }
 
+    @profile
     def command(self):
         # self.tmp_dpath = self.paths['eval_dpath'] / 'tmp'
         # self.tmp_dpath = self.paths['eval_dpath'] / 'tmp'
@@ -312,6 +323,7 @@ class HeatmapEvaluation(ProcessNode):
         'eval_pxl_fpath': 'pxl_eval.json',
     }
 
+    @profile
     def command(self):
         # TODO: better score space
         fmtkw = self.resolved_config.copy()
@@ -353,6 +365,7 @@ class KWCocoVisualization(ProcessNode):
         'viz_stamp_fpath': '_viz.stamp'
     }
 
+    @profile
     def command(self):
         fmtkw = self.resolved_config.copy()
         name_parts = {
@@ -580,6 +593,7 @@ class SiteCropping(ProcessNode):
         condensed['src_dset'] = 'todo'
         return condensed
 
+    @profile
     def command(self):
         fmtkw = self.resolved_config.copy()
         algo_config = self.resolved_algo_config - {'crop_src_fpath'}

@@ -134,7 +134,7 @@ def prevalidate_param_grid(arg):
                         log_issue(k, p, 'might not be a valid path')
 
 
-def expand_param_grid(arg, max_configs=None):
+def expand_param_grid(arg, max_configs=None, version=1):
     """
     Our own method for specifying many combinations. Uses the github actions
     method under the hood with our own
@@ -198,14 +198,14 @@ def expand_param_grid(arg, max_configs=None):
     action_matrices = coerce_list_of_action_matrices(arg)
     grid_items = []
     for item in action_matrices:
-        grid_items += github_action_matrix(item)
+        grid_items += list(github_action_matrix(item, version=version))
     if max_configs is not None:
         # TODO: generator with early stop
         return grid_items[:max_configs]
     return grid_items
 
 
-def github_action_matrix(arg):
+def github_action_matrix(arg, version=1):
     """
     Try to implement the github method. Not sure if I like it.
 
@@ -369,7 +369,7 @@ def github_action_matrix(arg):
                 grid_item = grid_item | include_item
                 yield grid_item
 
-    NEW = 1
+    NEW = version == 2
     if NEW:
         for mat_item in map(ub.udict, ub.named_product(matrix_)):
             if not is_excluded(mat_item):

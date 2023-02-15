@@ -140,11 +140,16 @@ def build_all_param_plots(agg, rois, config):
     )
 
     _parts = list((ub.udict(macro_results) & {
-        'index', 'metrics', 'resolved_params', 'fit_params', 'resources'}).values())
+        'index', 'metrics', 'resolved_params', 'fit_params',
+        'resources'}).values())
     macro_table = pd.concat(_parts, axis=1)
     single_table = pd.concat(list(single_results.values()), axis=1)
-    single_table = single_table.fillna('None')
-    macro_table = macro_table.fillna('None')
+
+    single_table.loc[:, agg.resolved_params.columns] = single_table.loc[:, agg.resolved_params.columns].fillna('None')
+    macro_table.loc[:, agg.resolved_params.columns] = macro_table.loc[:, agg.resolved_params.columns].fillna('None')
+    single_table.loc[:, agg.fit_params.columns] = single_table.loc[:, agg.fit_params.columns].fillna('None')
+    macro_table.loc[:, agg.fit_params.columns] = macro_table.loc[:, agg.fit_params.columns].fillna('None')
+
     macro_table = macro_table.applymap(lambda x: str(x) if isinstance(x, list) else x)
     single_table = single_table.applymap(lambda x: str(x) if isinstance(x, list) else x)
 

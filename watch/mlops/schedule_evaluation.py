@@ -251,7 +251,8 @@ class ScheduleEvaluationConfig(scfg.DataConfig):
 
     max_configs = scfg.Value(None, help='if specified only run at most this many of the grid search configs')
 
-    rprint = scfg.Value(1, isflag=True, help='enable / disable rprint before exec', alias=['print_commands'])
+    print_commands = scfg.Value(1, isflag=True, help='enable / disable rprint before exec', alias=['rprint'])
+    print_varied_info = 0
     print_queue = 0
 
 
@@ -263,6 +264,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
     """
     import watch
     from watch.mlops import smart_pipeline
+    from watch.utils import util_progress
+    import pandas as pd
     config = ScheduleEvaluationConfig.legacy(cmdline=cmdline, data=kwargs)
     print('ScheduleEvaluationConfig config = {}'.format(ub.repr2(dict(config), nl=1, si=1)))
 
@@ -311,14 +314,19 @@ def schedule_evaluation(cmdline=False, **kwargs):
         all_param_grid = []
 
     # Configure a DAG for each row.
-    for row_config in ub.ProgIter(all_param_grid, desc='configure dags', verbose=3):
-        dag.configure(
-            config=row_config, root_dpath=root_dpath, cache=config['cache'])
-        dag.submit_jobs(queue=queue, skip_existing=config['skip_existing'],
-                        enable_links=config['enable_links'])
+    pman = util_progress.ProgressManager()
+    with pman:
+        for row_config in pman.progiter(all_param_grid, desc='configure dags', verbose=3):
+            dag.configure(
+                config=row_config,
+                root_dpath=root_dpath,
+                cache=config['cache'])
+            dag.submit_jobs(
+                queue=queue,
+                skip_existing=config['skip_existing'],
+                enable_links=config['enable_links'])
 
-    import pandas as pd
-    if 1:
+    if config['print_varied_info']:
         # Print config info
         from watch.utils.result_analysis import varied_values
         longparams = pd.DataFrame(all_param_grid)
@@ -342,7 +350,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
     if config['print_queue']:
         queue.write_network_text()
 
-    if config['rprint']:
+    if config['print_commands']:
         queue.rprint(with_status=with_status, with_rich=with_rich,
                      with_locks=0, exclude_tags=['boilerplate'])
 
