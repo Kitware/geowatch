@@ -4,7 +4,7 @@ import os
 import functools
 from functools import cached_property
 from cmd_queue.util import util_networkx  # NOQA
-from watch.utils import util_param_grid  # NOQA
+from watch.utils import util_dotdict  # NOQA
 from typing import Union, Dict, Set, List, Any, Optional
 
 Collection = Optional[Union[Dict, Set, List]]
@@ -200,7 +200,7 @@ class PipelineDAG:
             # print('CONFIGURE config = {}'.format(ub.repr2(config, nl=1)))
 
             # Set the configuration for each node in this pipeline.
-            dotconfig = util_param_grid.DotDict(config)
+            dotconfig = util_dotdict.DotDict(config)
             for node_name in nx.topological_sort(self.proc_graph):
                 node = self.proc_graph.nodes[node_name]['node']
                 node_config = dict(dotconfig.prefix_get(node.name, {}))

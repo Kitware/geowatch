@@ -305,17 +305,12 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
     # Expand paramater search grid
     if config['params'] is not None:
-        all_param_grid = expand_param_grid(config['params'])
-
-        max_configs = config['max_configs']
-        if max_configs is not None:
-            all_param_grid = all_param_grid[0:max_configs]
+        all_param_grid = expand_param_grid(
+            config['params'], max_configs=config['max_configs'])
     else:
         all_param_grid = []
 
     # Configure a DAG for each row.
-    #import xdev
-    #xdev.embed()
     for row_config in ub.ProgIter(all_param_grid, desc='configure dags', verbose=3):
         dag.configure(
             config=row_config, root_dpath=root_dpath, cache=config['cache'])

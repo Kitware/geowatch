@@ -935,7 +935,12 @@ def soft_frame_affinity(unixtimes, sensors=None, time_kernel=None,
             # incorporate the time_span?
             # if version == 2:
             if time_span is not None:
-                time_span = coerce_timedelta(time_span).total_seconds()
+                try:
+                    time_span = coerce_timedelta(time_span).total_seconds()
+                except Exception:
+                    print(f'time_span={time_span!r}')
+                    print('time_span = {}'.format(ub.urepr(time_span, nl=1)))
+                    raise
                 span_delta = (second_deltas - time_span) ** 2
                 norm_span_delta = span_delta / (time_span ** 2)
                 weights['time_span'] = (1 - np.minimum(norm_span_delta, 1)) * 0.5 + 0.5

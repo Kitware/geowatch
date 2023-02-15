@@ -925,6 +925,7 @@ class Aggregator(ub.NiceRepr):
         agg.effective_params = effective_params
 
         agg.resolved_info = foldin_resolved_info(agg)
+        agg.fit_params = agg.resolved_info['fit_params']
         agg.resolved_params = agg.resolved_info['resolved_params']
 
         agg.effective_table = pd.concat([agg.metrics, agg.index, agg.effective_params], axis=1)

@@ -108,6 +108,7 @@ def inspect_checkpoint_context(checkpoint_fpath):
 
     fit_config_fpath = None
     hparams_fpath = None
+    config_fpath = None
     if train_dpath_hint is not None:
         # Look at the training config file to get info about this
         # experiment

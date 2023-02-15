@@ -134,7 +134,7 @@ def prevalidate_param_grid(arg):
                         log_issue(k, p, 'might not be a valid path')
 
 
-def expand_param_grid(arg):
+def expand_param_grid(arg, max_configs=None):
     """
     Our own method for specifying many combinations. Uses the github actions
     method under the hood with our own
@@ -199,6 +199,9 @@ def expand_param_grid(arg):
     grid_items = []
     for item in action_matrices:
         grid_items += github_action_matrix(item)
+    if max_configs is not None:
+        # TODO: generator with early stop
+        return grid_items[:max_configs]
     return grid_items
 
 
@@ -208,6 +211,10 @@ def github_action_matrix(arg):
 
     References:
         https://docs.github.com/en/actions/using-jobs/using-a-matrix-for-your-jobs#expanding-or-adding-matrix-configurations
+
+    CommandLine:
+        xdoctest -m /home/joncrall/code/watch/watch/utils/util_param_grid.py github_action_matrix
+        xdoctest -m watch.utils.util_param_grid github_action_matrix:1
 
     Example:
         >>> from watch.utils.util_param_grid import *  # NOQA
@@ -227,8 +234,9 @@ def github_action_matrix(arg):
                        - fruit: banana
                          animal: cat
                  ''')
-        >>> grid_items = github_action_matrix(arg)
+        >>> grid_items = list(github_action_matrix(arg))
         >>> print('grid_items = {}'.format(ub.urepr(grid_items, nl=1)))
+
         grid_items = [
             {'fruit': 'apple', 'animal': 'cat', 'color': 'pink', 'shape': 'circle'},
             {'fruit': 'apple', 'animal': 'dog', 'color': 'green', 'shape': 'circle'},
@@ -237,6 +245,23 @@ def github_action_matrix(arg):
             {'fruit': 'banana'},
             {'fruit': 'banana', 'animal': 'cat'},
         ]
+
+    Example:
+        >>> from watch.utils.util_param_grid import *  # NOQA
+        >>> from watch.utils import util_param_grid
+        >>> arg = ub.codeblock(
+                 '''
+                   matrix:
+                     ones: [1, 2]
+                     tens: [10, 20]
+                     include:
+                       - ones: 1
+                         color: green
+                       - ones: 1
+                         color: pink
+                 ''')
+        >>> grid_items = list(github_action_matrix(arg))
+        >>> print('grid_items = {}'.format(ub.urepr(grid_items, nl=1)))
 
 
     Example:
@@ -254,7 +279,7 @@ def github_action_matrix(arg):
                       - os: windows-latest
                         version: 16
             ''')
-        >>> grid_items = github_action_matrix(arg)
+        >>> grid_items = list(github_action_matrix(arg))
         >>> print('grid_items = {}'.format(ub.repr2(grid_items, nl=1)))
         grid_items = [
             {'environment': 'staging', 'os': 'macos-latest', 'version': 12},
@@ -306,16 +331,17 @@ def github_action_matrix(arg):
         data = arg.copy()
 
     matrix = data.pop('matrix').copy()
-    include = [ub.udict(p) for p in matrix.pop('include', [])]
-    exclude = [ub.udict(p) for p in matrix.pop('exclude', [])]
 
+    include = matrix.pop('include', data.pop('include', []))
+    exclude = matrix.pop('include', data.pop('exclude', []))
+    include = list(map(ub.udict, include))
+    exclude = list(map(ub.udict, exclude))
+
+    # include = [ub.udict(p) for p in matrix.pop('include', [])]
+    # exclude = [ub.udict(p) for p in matrix.pop('exclude', [])]
     matrix_ = {k: (v if ub.iterable(v) else [v])
                for k, v in matrix.items()}
-    grid_stage0 = list(map(ub.udict, ub.named_product(matrix_)))
 
-    # Note: All include combinations are processed after exclude. This allows
-    # you to use include to add back combinations that were previously
-    # excluded.
     def is_excluded(grid_item):
         for exclude_item in exclude:
             common1 = exclude_item & grid_item
@@ -324,33 +350,70 @@ def github_action_matrix(arg):
                 if common1 == common2 == exclude_item:
                     return True
 
-    grid_stage1 = [p for p in grid_stage0 if not is_excluded(p)]
-
     orig_keys = set(matrix.keys())
-    # Extra items are never modified by future include values include values
-    # will only modify non-conflicting original grid items or create one of
-    # these special immutable grid items.
-    appended_items = []
+    include_idx_to_nvariants = ub.ddict(lambda: 0)
 
-    # For each object in the include list
-    for include_item in include:
-        ...
-        any_updated = False
-        for grid_item in grid_stage1:
-            common_orig1 = (grid_item & include_item) & orig_keys
-            common_orig2 = (include_item & grid_item) & orig_keys
+    def included_variants(mat_item):
+        grid_item = ub.udict(mat_item)
+        for include_idx, include_item in enumerate(include):
+            common_orig1 = (mat_item & include_item) & orig_keys
+            common_orig2 = (include_item & mat_item) & orig_keys
             if common_orig1 == common_orig2:
+                include_idx_to_nvariants[include_idx] += 1
                 # the key:value pairs in the object will be added to each of
                 # the [original] matrix combinations if none of the key:value
                 # pairs overwrite any of the original matrix values
-                any_updated = True
+                #
                 # Note that the original matrix values will not be overwritten
                 # but added matrix values can be overwritten
-                grid_item.update(include_item)
-        if not any_updated:
-            # If the object cannot be added to any of the matrix combinations, a
-            # new matrix combination will be created instead.
-            appended_items.append(include_item)
-    grid_items = grid_stage1 + appended_items
+                grid_item = grid_item | include_item
+                yield grid_item
 
-    return grid_items
+    NEW = 1
+    if NEW:
+        for mat_item in map(ub.udict, ub.named_product(matrix_)):
+            if not is_excluded(mat_item):
+                for grid_item in included_variants(mat_item):
+                    yield grid_item
+
+        for idx, n in include_idx_to_nvariants.items():
+            if n == 0:
+                grid_item = include[n]
+                yield grid_item
+    else:
+        grid_stage0 = list(map(ub.udict, ub.named_product(matrix_)))
+
+        # Note: All include combinations are processed after exclude. This allows
+        # you to use include to add back combinations that were previously
+        # excluded.
+
+        grid_stage1 = [p for p in grid_stage0 if not is_excluded(p)]
+
+        orig_keys = set(matrix.keys())
+        # Extra items are never modified by future include values include values
+        # will only modify non-conflicting original grid items or create one of
+        # these special immutable grid items.
+        appended_items = []
+
+        # For each object in the include list
+        for include_item in include:
+            ...
+            any_updated = False
+            for grid_item in grid_stage1:
+                common_orig1 = (grid_item & include_item) & orig_keys
+                common_orig2 = (include_item & grid_item) & orig_keys
+                if common_orig1 == common_orig2:
+                    # the key:value pairs in the object will be added to each of
+                    # the [original] matrix combinations if none of the key:value
+                    # pairs overwrite any of the original matrix values
+                    any_updated = True
+                    # Note that the original matrix values will not be overwritten
+                    # but added matrix values can be overwritten
+                    grid_item.update(include_item)
+            if not any_updated:
+                # If the object cannot be added to any of the matrix combinations, a
+                # new matrix combination will be created instead.
+                appended_items.append(include_item)
+        grid_items = grid_stage1 + appended_items
+
+        yield from grid_items

@@ -2389,6 +2389,86 @@ WATCH_GRID_WORKERS=4 python -m watch.tasks.fusion.fit \
     --init="$DVC_EXPT_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt  \
     --limit_val_batches=0.25
 
+
+export CUDA_VISIBLE_DEVICES=1
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop6
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_split1.kwcoco.zip
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_split1.kwcoco.zip
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_split1.kwcoco.zip
+CHANNELS="(L8,S2,PD):(blue|green|red|nir),(WV):(blue|green|red),(WV,WV1):pan"
+EXPERIMENT_NAME=Drop6_BAS_only_tune_3GSD_at_10GSD_L8_S2
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+WATCH_GRID_WORKERS=4 python -m watch.tasks.fusion.fit \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --class_loss='dicefocal' \
+    --exclude_sensors=WV,WV1,PD \
+    --saliency_loss='dicefocal' \
+    --global_change_weight=0.00 \
+    --global_class_weight=0.00 \
+    --global_saliency_weight=1.00 \
+    --learning_rate=1e-4 \
+    --weight_decay=1e-2 \
+    --input_space_scale="10.0GSD" \
+    --window_space_scale="10.0GSD" \
+    --output_space_scale="10.0GSD" \
+    --chip_dims=196,196 \
+    --neg_to_pos_ratio=1.0 \
+    --batch_size=16 \
+    --max_epochs=160 \
+    --patience=160 \
+    --num_workers=4 \
+    --time_steps=7 \
+    --channels="$CHANNELS" \
+    --saliency_weights="auto" \
+    --class_weights="auto" \
+    --time_sampling=uniform-soft5-soft4-contiguous \
+    --time_kernel="(-1y,-2m,-1w,0,1w,2m,1y)" \
+    --time_span=None \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=5min \
+    --num_draw=4 \
+    --weight_dilate=10 \
+    --positive_change_weight=1 \
+    --negative_change_weight=0.01 \
+    --use_centered_positives=True \
+    --normalize_inputs=16384 \
+    --stream_channels=16 \
+    --temporal_dropout=0.5 \
+    --mask_low_quality=False \
+    --mask_samecolor_method=None \
+    --observable_threshold=0.0 \
+    --quality_threshold=0.0 \
+    --num_sanity_val_steps=0 \
+    --max_epoch_length=16384 \
+    --min_spacetime_weight=0.6 \
+    --accelerator=gpu \
+    --devices="0," \
+    --init="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6/runs/Drop6_BAS_tune_3GSD_allheads/lightning_logs/version_0/package-interupt/package_epoch29_step30029.pt" \
+    --limit_val_batches=0.25
+
+    #--init="$DVC_EXPT_DPATH/models/fusion/Drop6/packages/Drop6_BAS_2022_12_10GSD_BGRN_V12/Drop6_BAS_2022_12_10GSD_BGRN_V12_v0_epoch159_step163840.pt" \
+    #--init="$DVC_EXPT_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt  \
+    #--balance_areas=True \
+
+
+/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6/packages/Drop6_BAS_2022_12_10GSD_BGRN_V12/Drop6_BAS_2022_12_10GSD_BGRN_V12_v0_epoch159_step163840.pt
+
+#--time_span=3m-6m-1m \
+# /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6/runs/Drop6_BAS_2022_12_10GSD_BGRN_V12/lightning_logs/version_4/packages/package_epoch160_step163840.pt
+
+
 #16384 / 12301858
 #65536
 #65536 / 8388608

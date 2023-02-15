@@ -152,6 +152,9 @@ class RichProgIter:
             # FIXME: remove circular reference
             self.manager.update_info(text)
 
+    def ensure_newline(self):
+        ...
+
     def set_postfix_str(self, text, refresh=True):
         self.extra = text
         parts = [self.desc]

@@ -82,6 +82,14 @@ def _namek_eval():
     agg.primary_metric_cols = ['bas_poly_eval.metrics.bas_ppv', 'bas_poly_eval.metrics.bas_tpr']
     _ = agg.report_best()
 
+    # Find best dicefocal model
+    from watch.utils import util_pandas
+    col = util_pandas.DotDictDataFrame(agg.fit_params).find_column('saliency_loss')
+    flags = agg.fit_params[col] == 'dicefocal'
+    subagg1 = agg.compress(flags)
+    agg.primary_metric_cols = ['bas_poly_eval.metrics.bas_ppv', 'bas_poly_eval.metrics.bas_tpr']
+    _ = subagg1.report_best()
+
 
 def _setup_sc_analysis():
     from watch.mlops.aggregate import AggregateEvluationConfig

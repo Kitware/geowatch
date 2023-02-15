@@ -308,6 +308,7 @@ def sample_video_spacetime_targets(dset,
         'hardish3', 'soft2-contiguous-hardish3', 'uniform',
         'uniform-soft2-contiguous-hardish3',
         'uniform-soft3-contiguous-hardish3',
+        'uniform-soft5-soft4-contiguous',
     }
     update_rule_parts = parts & {'distribute', 'pairwise'}
     unknown = (parts - affinity_type_parts) - update_rule_parts

@@ -217,7 +217,7 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             dilate_affinity
             ''')),
 
-        'time_span': scfg.Value('2y', type=str, help=ub.paragraph(
+        'time_span': scfg.Value('2y', help=ub.paragraph(
             '''
             how long a time window should roughly span by default
             ''')),
@@ -627,6 +627,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             select_videos=config['select_videos'],
             time_sampling=config['time_sampling'],
             time_span=config['time_span'],
+            time_kernel=config['time_kernel'],
             window_space_scale=self.config['window_space_scale'],
             set_cover_algo=config['set_cover_algo'],
             workers=grid_workers,  # could configure this
