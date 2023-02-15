@@ -50,6 +50,14 @@ class ProcessContext:
                  extra=None, track_emissions=False):
         if args is None:
             args = sys.argv
+        else:
+            import warnings
+            warnings.warn(ub.paragraph(
+                '''
+                It is better to leave args unspecified so sys.argv is captured.
+                Be sure to specify ``config`` as the resolved config.
+                In the future we may add an extra param for unresolved configs.
+                '''))
 
         self.properties = {
             "name": name,
@@ -69,6 +77,20 @@ class ProcessContext:
         self.track_emissions = track_emissions
         self.emissions_tracker = None
         self._emission_backend = 'auto'
+
+    def write_invocation(self, invocation_fpath):
+        """
+        Write a helper file that contains a locally reproducable invocation of
+        this process.
+        """
+        import shlex
+        command = ' '.join(list(map(shlex.quote, self.properties['args'])))
+        invocation_fpath = ub.Path(invocation_fpath)
+        invocation_fpath.write_text(ub.codeblock(
+            f'''
+            #!/bin/bash
+            {command}
+            '''))
 
     def _timestamp(self):
         timestamp = ub.timestamp()
