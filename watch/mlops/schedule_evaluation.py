@@ -314,8 +314,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
         all_param_grid = []
 
     # Configure a DAG for each row.
-    import xdev
-    xdev.embed()
+    #import xdev
+    #xdev.embed()
     for row_config in ub.ProgIter(all_param_grid, desc='configure dags', verbose=3):
         dag.configure(
             config=row_config, root_dpath=root_dpath, cache=config['cache'])
