@@ -814,9 +814,6 @@ def add_site_summary_to_kwcoco(possible_summaries,
                 track_id=track_id
             )
 
-    # TODO: we can be more efficient if we already have the transform data
-    # computed. We need to pass it in here, and prevent it from making
-    # more calls to geotiff_metadata
     print('Projecting regions to pixel coords')
     from watch.utils import kwcoco_extensions
     kwcoco_extensions.warp_annot_segmentations_from_geos(coco_dset)

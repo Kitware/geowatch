@@ -1905,10 +1905,6 @@ def warp_annot_segmentations_from_geos(coco_dset, max_workers=8):
     TODO dedupe with watch.tasks.tracking.normalize.add_geos, should be the
     inverse of this function.
 
-    Only real way to speed this up would be to groupby wld and img CRS and
-    bulk-warp segs without accessing all imgs.
-    Parallelism doesn't work due to in-memory dset.
-
     Ignore:
         # xdoctest: +REQUIRES(env:DVC_DPATH)
         from watch.utils.kwcoco_extensions import *  # NOQA
@@ -1922,6 +1918,7 @@ def warp_annot_segmentations_from_geos(coco_dset, max_workers=8):
     # Warp segmentation from geos
     # import watch
     # from os.path import join
+    import pandas as pd
     import geopandas as gpd
     from watch.utils import util_gis
     from shapely.geometry import shape
@@ -1961,21 +1958,6 @@ def warp_annot_segmentations_from_geos(coco_dset, max_workers=8):
         warp_img_from_wld = warp_img_from_aux @ warp_aux_from_wld
         return warp_img_from_wld, wld_crs
 
-
-    def anns_update(geojson_polys, warp_img_from_wld, wld_crs):
-        sseg_crs84 = gpd.GeoSeries([shape(p) for p in geojson_polys], crs=crs84)
-        sseg_wld = sseg_crs84.to_crs(wld_crs)
-        sseg_wld = kwimage.PolygonList(
-            [kwimage.MultiPolygon.from_shapely(p) for p in sseg_wld])
-        sseg_img = sseg_wld.warp(warp_img_from_wld)
-        return {
-            'segmentation': list(sseg_img.to_coco(style='new')),
-            'bbox': [
-                list(p.bounding_box().quantize().to_coco())[0]
-                for p in sseg_img
-            ]
-        }
-
         # rows = []
         # for aid in coco_dset.annots(gid=gid):
             # ann = coco_dset.index.anns[aid]
@@ -1990,7 +1972,7 @@ def warp_annot_segmentations_from_geos(coco_dset, max_workers=8):
                 # 'geometry': sseg_geos.to_shapely(),
                 # 'aid': aid,
             # })
-    executor = ub.JobPool('serial', max_workers)
+    gdfs = []
     for gid in coco_dset.images().gids:
         annots = coco_dset.annots(image_id=gid)
         has_geos = np.array(annots.get('segmentation_geos', False), dtype=bool)
@@ -1999,15 +1981,34 @@ def warp_annot_segmentations_from_geos(coco_dset, max_workers=8):
             # TODO: check crs properties (probably always crs84)
             sseg_geos = annots.lookup('segmentation_geos')
             warp_img_from_wld, wld_crs = wld_info(coco_dset.coco_image(gid))
-            job = executor.submit(
-                anns_update, sseg_geos, warp_img_from_wld, wld_crs)
-            job.aids = annots.aids
+            gdf = gpd.GeoDataFrame(
+                dict(
+                    geometry=[shape(p) for p in sseg_geos],
+                    aid=annots.aids,
+                ),
+                crs=crs84)
+            gdf = gdf.join(
+                pd.DataFrame(dict(
+                    gid=gid,
+                    wld_crs=wld_crs,
+                    warp_img_from_wld=[warp_img_from_wld.to_shapely()],
+                )),
+                how='cross'
+            )
+            gdfs.append(gdf)
+    gdf = pd.concat(gdfs, axis=0, ignore_index=True)
 
-    for job in executor.as_completed(desc='warping annotations'):
-        result = job.result()
-        annots = coco_dset.annots(job.aids)
-        for k, v in result.items():
-            annots.set(k, v)
+    gdf['wld_geom'] = gdf.groupby('wld_crs')['geometry'].apply(
+        lambda grp: grp.to_crs(grp.name))
+
+    gdf['img_geom'] = gdf.groupby('warp_img_from_wld')['wld_geom'].apply(
+        lambda grp: grp.affine_transform(grp.name))
+
+    for aid, img_geom in zip(gdf['aid'], gdf['img_geom']):
+        sseg = kwimage.MultiPolygon.from_shapely(img_geom)
+        ann = coco_dset.anns[aid]
+        ann['segmentation'] = list(sseg.to_coco(style='new'))
+        ann['bbox'] = list(sseg.bounding_box().quantize().to_coco())[0]
 
     if __debug__:
         for ann in coco_dset.dataset['annotations']:
