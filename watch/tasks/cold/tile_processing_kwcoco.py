@@ -39,6 +39,7 @@ class TileProcessingKwcocoConfig(scfg.DataConfig):
     prob = scfg.Value(0.99, help='change probability of chi-distribution, e.g., 0.99')
     conse = scfg.Value(6, help='consecutive observation to confirm change, e.g., 6')
     cm_interval = scfg.Value(60, help='CM output inverval, e.g., 60')
+    
 # def main(rank, n_cores, stack_path, reccg_path, method, year_lowbound, year_highbound, b_c2):    
 def main(cmdline=1, **kwargs):
     """_summary_
@@ -54,23 +55,23 @@ def main(cmdline=1, **kwargs):
         cmdline (int, optional): _description_. Defaults to 1.
         
     Ignore:
-    python -m watch.tasks.cold.tile_processing_kwcoco --help
-    from watch.tasks.cold.tile_processing_kwcoco import main
-    from watch.tasks.cold.tile_processing_kwcoco import *
-    kwargs= dict(        
-    rank = 1,
-    n_cores = 1,
-    stack_path = ub.Path.appdir('/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/US_C000'), 
-    reccg_path = ub.Path.appdir('/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/COLD_result/COLD_parameter_test/COLD_US_C000_prob099_conse4'),
-    meta_fpath = '/home/jws18003/Document/pycold-uconnhpc/config_watch.yaml',
-    method = 'COLD',    
-    b_c2 = True,
-    prob = 0.99,
-    conse = 6,
-    cm_interval = 60,
-    )
-    cmdline=0    
-    main(cmdline, **kwargs)
+        python -m watch.tasks.cold.tile_processing_kwcoco --help
+        from watch.tasks.cold.tile_processing_kwcoco import main
+        from watch.tasks.cold.tile_processing_kwcoco import *
+        kwargs= dict(        
+        rank = 1,
+        n_cores = 1,
+        stack_path = ub.Path.appdir('/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/US_C000'), 
+        reccg_path = ub.Path.appdir('/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/COLD_result/COLD_parameter_test/COLD_US_C000_prob099_conse4'),
+        meta_fpath = '/home/jws18003/Document/pycold-uconnhpc/config_watch.yaml',
+        method = 'COLD',    
+        b_c2 = True,
+        prob = 0.99,
+        conse = 6,
+        cm_interval = 60,
+        )
+        cmdline=0    
+        main(cmdline, **kwargs)
     """  
     config_in = TileProcessingKwcocoConfig.legacy(cmdline=cmdline, data=kwargs)        
     rank = config_in['rank']

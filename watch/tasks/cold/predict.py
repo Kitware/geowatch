@@ -59,7 +59,7 @@ def main(cmdline=1, **kwargs):
         >>>   year_lowbound = 2020,
         >>>   year_highbound = 2020,
         >>>   coefs = ['cv'],
-        >>>   coefs_bands = [4],
+        >>>   coefs_bands = [0, 1, 2, 3, 4, 5],
         >>>   timestamp = True,       
         >>>   mode = 'process', 
         >>> )    
@@ -75,8 +75,8 @@ def main(cmdline=1, **kwargs):
     out_dpath = ub.Path(config['out_dpath']).ensuredir()
     adj_cloud = config['adj_cloud']
     method = config['method']
-    # meta_fpath = prepare_kwcoco.main(cmdline=0, coco_fpath=coco_fpath, out_dpath=out_dpath, adj_cloud=adj_cloud, method=method)  
-    meta_fpath = '/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/US_C000/block_x9_y9/crop_20210716T150000Z_N38.904157W077.594580_N39.117177W077.375621_L8_0.json'  
+    meta_fpath = prepare_kwcoco.main(cmdline=0, coco_fpath=coco_fpath, out_dpath=out_dpath, adj_cloud=adj_cloud, method=method)  
+    # meta_fpath = '/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/US_C000/block_x9_y9/crop_20210716T150000Z_N38.904157W077.594580_N39.117177W077.375621_L8_0.json'  
     meta = open(meta_fpath)
     metadata = json.load(meta)
     
@@ -89,7 +89,6 @@ def main(cmdline=1, **kwargs):
     tile_kwargs['prob'] = config['prob']
     tile_kwargs['conse'] = config['conse']
     tile_kwargs['cm_interval'] = config['cm_interval']
-    # # tile_processing_kwcoco.main(cmdline=0, **tile_kwargs)    
    
     workers = 8
     jobs = ub.JobPool(mode=config['mode'], max_workers=workers)
@@ -119,9 +118,6 @@ def main(cmdline=1, **kwargs):
     export_kwargs['timestamp'] = config['timestamp']
     export_cold_result_kwcoco.main(cmdline=0, **export_kwargs)  
 
-    
-    
-    
     
 if __name__ == '__main__':
     main()
