@@ -15,9 +15,9 @@ class ColdPredictConfig(scfg.DataConfig):
         '''
         a path to a file to input kwcoco file
         '''))
-    out_dpath = scfg.Value(None, position=2, help='output directory for the output')
-    adj_cloud = scfg.Value(False, position=2, help='How to treat QA band, default is False: ignoring adj. cloud class')
-    method = scfg.Value('COLD', position=8, choices= ['COLD', 'HybridCOLD', 'OBCOLD'], help='type of cold algorithms')
+    out_dpath = scfg.Value(None, help='output directory for the output')
+    adj_cloud = scfg.Value(False, help='How to treat QA band, default is False: ignoring adj. cloud class')
+    method = scfg.Value('COLD', choices= ['COLD', 'HybridCOLD', 'OBCOLD'], help='type of cold algorithms')
     prob = scfg.Value(None, help='change probability of chi-distribution, e.g., 0.99')
     conse = scfg.Value(None, help='consecutive observation to confirm change, e.g., 6')
     cm_interval = scfg.Value(None, help='CM output inverval, e.g., 60')
@@ -48,7 +48,7 @@ def main(cmdline=1, **kwargs):
         >>> from watch.tasks.cold.predict import main
         >>> from watch.tasks.cold.predict import *
         >>> kwargs= dict(        
-        >>>   coco_fpath = '/home/jws18003/data/dvc-repos/smart_data_dvc/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data.kwcoco.json',
+        >>>   coco_fpath = '/home/jws18003/data/dvc-repos/smart_data_dvc/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/US_C000/data_US_C000.kwcoco.json',
         >>>   out_dpath = ub.Path.appdir('/gpfs/scratchfs1/zhz18039/jws18003/kwcoco'),
         >>>   adj_cloud = False,
         >>>   method = 'COLD',
@@ -75,8 +75,8 @@ def main(cmdline=1, **kwargs):
     out_dpath = ub.Path(config['out_dpath']).ensuredir()
     adj_cloud = config['adj_cloud']
     method = config['method']
-    meta_fpath = prepare_kwcoco.main(cmdline=0, coco_fpath=coco_fpath, out_dpath=out_dpath, adj_cloud=adj_cloud, method=method)  
-    # meta_fpath = '/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/US_C000/block_x9_y9/crop_20210716T150000Z_N38.904157W077.594580_N39.117177W077.375621_L8_0.json'  
+    # meta_fpath = prepare_kwcoco.main(cmdline=0, coco_fpath=coco_fpath, out_dpath=out_dpath, adj_cloud=adj_cloud, method=method)  
+    meta_fpath = '/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/US_C000/block_x9_y9/crop_20210716T150000Z_N38.904157W077.594580_N39.117177W077.375621_L8_0.json'  
     meta = open(meta_fpath)
     metadata = json.load(meta)
     
@@ -89,7 +89,7 @@ def main(cmdline=1, **kwargs):
     tile_kwargs['prob'] = config['prob']
     tile_kwargs['conse'] = config['conse']
     tile_kwargs['cm_interval'] = config['cm_interval']
-    # tile_processing_kwcoco.main(cmdline=0, **tile_kwargs)    
+    # # tile_processing_kwcoco.main(cmdline=0, **tile_kwargs)    
    
     workers = 8
     jobs = ub.JobPool(mode=config['mode'], max_workers=workers)
@@ -117,28 +117,8 @@ def main(cmdline=1, **kwargs):
     export_kwargs['coefs'] = config['coefs']
     export_kwargs['coefs_bands'] = config['coefs_bands']
     export_kwargs['timestamp'] = config['timestamp']
-    # export_cold_result_kwcoco.main(cmdline=0, **export_kwargs)
-    
-    workers = 8
-    jobs = ub.JobPool(mode=config['mode'], max_workers=workers)
-    for i in range(workers):
-        #jobs.submit(func, arg1, arg2, arg3=34)
-        #func(arg, arg3, arg3=34)
-        export_kwargs['rank'] = i
-        export_kwargs['n_cores'] = workers
-        jobs.submit(export_cold_result_kwcoco.main, cmdline=0, **export_kwargs)    
-    
-    # for job in jobs.as_completed(desc='Collect export jobs', progkw={'verbose': 3}):
-    #     ret = job.result()    
-        
-    # for i in range(workers):
-    #     jobs.submit(export_cold_result_kwcoco.main, **tile_kwargs)
-    #     ...
-    
-    # for job in jobs.as_completed(desc='Collect tile jobs'):
-    #     ret = job.result()
+    export_cold_result_kwcoco.main(cmdline=0, **export_kwargs)  
 
-    # How to save export_cold_result in kwcoco dataset
     
     
     

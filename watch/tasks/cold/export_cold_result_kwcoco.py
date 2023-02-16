@@ -8,19 +8,19 @@ import os
 import numpy as np
 import pandas as pd
 from osgeo import gdal
-from osgeo import gdal_array
-# import click
 import datetime as datetime
 from os.path import join
 import json
 from mpi4py import MPI
 import pickle
 import yaml
-from collections import namedtuple
-import kwcoco, kwimage
+import watch
+import kwcoco
+import kwimage
 import scriptconfig as scfg
-
-
+import ubelt as ub
+import logging
+logger = logging.getLogger(__name__)
 
 class ExportColdKwcocoConfig(scfg.DataConfig):
     """
@@ -37,8 +37,8 @@ class ExportColdKwcocoConfig(scfg.DataConfig):
     coefs = scfg.Value(None, help="list of COLD coefficients for saving geotiff, e.g., ['a0', 'c1', 'a1', 'b1', 'a2', 'b2', 'a3', 'b3', 'cv', 'rmse']")
     coefs_bands = scfg.Value(None, help='indicate the ba_nds for output coefs_bands, e.g., [0, 1, 2, 3, 4, 5]')
     timestamp = scfg.Value(True, help='True: exporting cold result by timestamp, False: exporting cold result by year, Default is False')   
-    rank = scfg.Value("MPI",  help='rank id')
-    n_cores = scfg.Value("MPI" ,help='number of processor')
+    # rank = scfg.Value("MPI",  help='rank id')
+    # n_cores = scfg.Value("MPI" ,help='number of processor')
 
 
 # def main(stack_path, reccg_path, out_path, reference_path, yaml_path, method, region, probability, conse, year_lowbound,
@@ -50,27 +50,30 @@ def main(cmdline=1, **kwargs):
         cmdline (int, optional): _description_. Defaults to 1.
         
     Ignore:
-    python -m watch.tasks.cold.export_cold_result_kwcoco --help
-    from watch.tasks.cold.export_cold_result_kwcoco import main
-    from watch.tasks.cold.export_cold_result_kwcoco import *
-    kwargs= dict(
-    stack_path = "/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/US_C000",
-    reccg_path = "/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/COLD_result/COLD_parameter_test/US_C000/COLD_US_C000_prob099_conse6",
-    out_path = "/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/COLD_result/COLD_parameter_test/US_C000/COLD_US_C000_prob099_conse6",
-    reference_path = "/home/jws18003/Document/kwcoco_working/US_C000_rowcol2.tif",
-    meta_fpath = "/home/jws18003/Document/pycold-uconnhpc/config_watch.yaml",
-    region_id = "US_C000",
-    coefs = ['cv'],
-    year_lowbound = 2017,
-    year_highbound = 2021,
-    coefs_bands = [5],
-    timestamp = True,
-    )    
-    cmdline=0    
-    main(cmdline, **kwargs)
+        python -m watch.tasks.cold.export_cold_result_kwcoco --help
+        TEST_COLD=1 xdoctest -m watch.tasks.cold.export_cold_result_kwcoco main
+    Example:
+    >>> # xdoctest: +REQUIRES(env:TEST_COLD) 
+    >>> from watch.tasks.cold.export_cold_result_kwcoco import main
+    >>> from watch.tasks.cold.export_cold_result_kwcoco import *
+    >>> kwargs= dict(
+    >>>    stack_path = "/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/US_C000",
+    >>>    reccg_path = "/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/reccg/US_C000",
+    >>>    out_path = "/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/reccg/US_C000",
+    >>>    reference_path = "/home/jws18003/Document/kwcoco_working/US_C000_rowcol2.tif",
+    >>>    meta_fpath = '/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/US_C000/block_x9_y9/crop_20210716T150000Z_N38.904157W077.594580_N39.117177W077.375621_L8_0.json',
+    >>>    region_id = "US_C000",
+    >>>    coefs = ['cv'],
+    >>>    year_lowbound = 2027,
+    >>>    year_highbound = 2027,
+    >>>    coefs_bands = [5],
+    >>>    timestamp = True,
+    >>>    )    
+    >>> cmdline=0    
+    >>> main(cmdline, **kwargs)
     """ 
-    # rank = 0
-    # n_cores = 1
+    rank = 0
+    n_cores = 1
     config_in = ExportColdKwcocoConfig.legacy(cmdline=cmdline, data=kwargs)
     # rank = config_in['rank']
     # n_cores = config_in['n_cores']
@@ -80,28 +83,64 @@ def main(cmdline=1, **kwargs):
     reference_path = config_in['reference_path']
     meta_fpath = config_in['meta_fpath']    
     region = config_in['region_id']
-    # method = config_in['method']
-    # prob = config_in['region']
-    # conse = config_in['conse']
     year_lowbound = config_in['year_lowbound']
     year_highbound = config_in['year_highbound']
     coefs = config_in['coefs']
     coefs_bands = config_in['coefs_bands']
     timestamp = config_in['timestamp']
     
-    if config_in['rank'] == 'MPI':
-        ## MPI mode
-        raise NotImplementedError('todo')
-        MPI = 'TODO'
-        comm = MPI.COMM_WORLD
-        rank = comm.Get_rank()
-        n_cores = comm.Get_size()
-    else:
-        rank = config_in['rank']
-        n_cores = config_in['n_cores']
+    # TODO: MPI mode
+    # if config_in['rank'] == 'MPI':
+    #     ## MPI mode
+    #     raise NotImplementedError('todo')
+    #     MPI = 'TODO'
+    #     comm = MPI.COMM_WORLD
+    #     rank = comm.Get_rank()
+    #     n_cores = comm.Get_size()
+    # else:
+    #     rank = config_in['rank']
+    #     n_cores = config_in['n_cores']
                 
     meta = open(meta_fpath)
     config = json.load(meta)    
+    
+    ##################################################################
+    # HELP: Get info from coco_image, not additional reference image #
+    ##################################################################
+    
+    # I used reference image to get information about GeoTransform and Projection to use these info when I wrote COLD output to geotiff.
+    # However, I want to find a way not to use reference image. Instead, I want to get these info from kwcoco image...    
+    ref_image = gdal.Open(reference_path, gdal.GA_ReadOnly)
+    trans = ref_image.GetGeoTransform()
+    proj = ref_image.GetProjection()
+    
+    # Get original transform from projection to image space
+    c, a, b, f, d, e = trans
+    original = kwimage.Affine(np.array([
+        [a, b, c],
+        [d, e, f],
+        [0, 0, 1],
+    ]))
+    
+    # I want to use following line not to use reference image anymore...
+    demo_dpath = ub.Path.appdir('/home/jws18003/data/dvc-repos/smart_data_dvc/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/US_C000').ensuredir()
+    dset = watch.coerce_kwcoco(demo_dpath)
+    for image_id in dset.images():
+        coco_image: kwcoco.CocoImage = dset.coco_image(image_id)
+        img_w = coco_image.img['width']
+        img_h = coco_image.img['height']
+        
+        # Get the modifier transform to move from image space to video space
+        warp_vid_from_img = kwimage.Affine.coerce(coco_image.img['warp_img_to_vid']).inv()
+        break
+    
+    # Combine transforms to get a new transform that goes
+    # from the projection to video space
+    new_geotrans =  original @ warp_vid_from_img
+    a, b, c, d, e, f, g, h, i = np.array(new_geotrans).ravel().tolist()
+    new_gdal_transform = (c, a, b, f, d, e) 
+    
+    ########################################################################
     
     # define variables
     n_cols = config['padded_n_cols']
@@ -111,28 +150,15 @@ def main(cmdline=1, **kwargs):
     block_width = int(n_cols / n_block_x)  # width of a block
     block_height = int(n_rows / n_block_y)  # height of a block
     n_blocks = n_block_x * n_block_y  # total number of blocks   
-    vid_w = config['n_cols'] #654 #280#    
-    vid_h = config['n_rows'] #771 #300#
+    # vid_w = config['n_cols'] 
+    # vid_h = config['n_rows'] 
     
-    log = open(reccg_path / 'log.json')
+    log = open(os.path.join(reccg_path, 'log.json'))
     cold_param = json.load(log)
     method = cold_param['algorithm']
     prob = cold_param['prob']
     conse = cold_param['conse']
-    
-    # Now write out the videospace image with correct updated transforms.
-    ref_image = gdal.Open(reference_path, gdal.GA_ReadOnly)
-    trans = ref_image.GetGeoTransform()
-    proj = ref_image.GetProjection()
-    # cols = ref_image.RasterXSize
-    # rows = ref_image.RasterYSize
-
-    # TODO: grab one of coco_image example and get new_gdal_transform
-    new_gdal_transform = (
-    275011.57468469924, 29.78988341490997, 3.256665984888778e-29, 4332467.113652797, -6.011541802002886e-29,
-    -29.804444582314744)
-    # new_gdal_transform = (487266.2098507709, 30.000285173743375, -8.695452349395058e-30, 4184925.4128578743, 3.617901573711234e-29, -29.931742369070598)
-
+        
     coef_names = ['a0', 'c1', 'a1', 'b1', 'a2', 'b2', 'a3', 'b3', 'cv', 'rmse']
     band_names = [0, 1, 2, 3, 4, 5, 6]
     SLOPE_SCALE = 10000
@@ -143,32 +169,7 @@ def main(cmdline=1, **kwargs):
                 3: 'nir',
                 4: 'swir16',
                 5: 'swir22'}
-    
-    coco_fpath = '/home/jws18003/data/dvc-repos/smart_data_dvc/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data.kwcoco.json'
-    coco_dset = kwcoco.CocoDataset.coerce(coco_fpath)
-    
-    coldpred_coco_dset = coco_dset.copy()
-    # videos = coldpred_coco_dset.videos()
-    image_names = ['crop_20170126T150000Z_N38.904157W077.594580_N39.117177W077.375621_L8_0']
-    image_ids = coldpred_coco_dset.images(names=image_names)
-    print(image_ids)
-    # for video_id in videos:
-
-    #     if video_id == 17: # testing for US_C000 site
-    #         # Get the image ids of each image in this video seqeunce
-    #         images = coldpred_coco_dset.images(video_id=video_id)
-
-    #         for image_id in images:
-    #             coco_image : kwcoco.CocoImage = dset.coco_image(image_id)
-    #             coco_image = coco_image.detach()
-    #             if coco_image.img['sensor_coarse'] == 'L8':
-    #                 # Transform the image data into the desired
-                    
-    # print(coldpred_coco_dset.add_auxiliary_item)
-    # for metafile in os.listdir(stack_path):
-    #     if metafile.endswith('.josn'):
-    #         meta = open.load(metafile)
-    
+        
     # NOTE: tmp file will be saved in reccg_path
     if method == 'OBCOLD':
         reccg_path = os.path.join(reccg_path, 'obcold')
@@ -182,10 +183,11 @@ def main(cmdline=1, **kwargs):
             tmp_path = os.path.join(reccg_path, 'cold_maps', 'by_timestamp')
         else:
             tmp_path = os.path.join(reccg_path, 'cold_maps', 'by_year')
+            
     if coefs is not None:
         try:
             coefs = list(coefs.split(","))
-            coefs = [str(coef) for coef in coefs]
+            # coefs = [str(coef) for coef in coefs]
         except:
             print("Illegal coefs inputs: example, --coefs='a0, c1, a1, b1, a2, b2, a3, b3, cv, rmse'")
 
@@ -211,45 +213,19 @@ def main(cmdline=1, **kwargs):
         assert all(elem in band_names for elem in coefs_bands)
 
     # if rank == 0:
-    # if not os.path.exists(out_path):
-    #     os.makedirs(out_path)
-
-
-    
-    # with open(yaml_path, 'r') as yaml_obj:
-    #     config = yaml.safe_load(yaml_obj)
-
-    # config = {'n_block_x': 20,
-    #             'n_block_y': 20,
-    #             'padded_n_cols': 660,
-    #             'padded_n_rows': 780
-    # }
-
-    # block_width = int(n_cols / config['n_block_x'])  # width of a block
-    # config['block_height'] = int(n_rows / config['n_block_y'])  # height of a block
-
-    ref_image = gdal.Open(reference_path, gdal.GA_ReadOnly)
-    trans = ref_image.GetGeoTransform()
-    proj = ref_image.GetProjection()
-    cols = ref_image.RasterXSize
-    rows = ref_image.RasterYSize
-    # else:
-    #     trans = None
-    #     proj = None
-    #     cols = None
-    #     rows = None
-    #     config = None
-
+    if not os.path.exists(out_path):
+        os.makedirs(out_path)
+    if not os.path.exists(tmp_path):
+        os.makedirs(tmp_path)
     # MPI mode
-    trans = comm.bcast(trans, root=0)
-    proj = comm.bcast(proj, root=0)
-    cols = comm.bcast(cols, root=0)
-    rows = comm.bcast(rows, root=0)
-    config = comm.bcast(config, root=0)
-
-    # stack_folder = '/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked_KR_R002_drop4_2paths/KR_R002'
+    # trans = comm.bcast(trans, root=0)
+    # proj = comm.bcast(proj, root=0)
+    # cols = comm.bcast(cols, root=0)
+    # rows = comm.bcast(rows, root=0)
+    # config = comm.bcast(config, root=0)
 
     ranks_percore = int(np.ceil(n_blocks / n_cores))
+    print(ranks_percore)
     for i in range(ranks_percore):
         iblock = n_cores * i + rank
         if iblock >= n_blocks:
@@ -265,27 +241,9 @@ def main(cmdline=1, **kwargs):
 
         block_folder = os.path.join(stack_path, 'block_x{}_y{}'.format(current_block_x, current_block_y))
 
-        if timestamp == False:
-            year_list_to_predict = list(range(year_lowbound, year_highbound + 1))
-            ordinal_day_list = [pd.Timestamp.toordinal(datetime.date(year, 7, 1)) for year
-                                in year_list_to_predict]
-            results_block = [np.full((block_height, block_width), -9999, dtype=np.int16)
-                             for t in range(year_highbound - year_lowbound + 1)]
-            if coefs is not None:
-                results_block_coefs = np.full(
-                    (block_height, block_width, len(coefs) * len(coefs_bands),
-                     year_highbound - year_lowbound + 1), -9999, dtype=np.float32)
-
-            print('processing the rec_cg file {}'.format(os.path.join(reccg_path, filename)))
-            if not os.path.exists(os.path.join(reccg_path, filename)):
-                print('the rec_cg file {} is missing'.format(os.path.join(reccg_path, filename)))
-                for year in range(year_lowbound, year_highbound + 1):
-                    outfile = os.path.join(tmp_path, 'tmp_map_block{}_{}.npy'.format(iblock + 1, year))
-                    np.save(outfile, results_block[year - year_lowbound])
-                continue
-        else:
+        if timestamp == True:
             meta_files = [m for m in os.listdir(block_folder) if m.endswith('.json')]
-
+            
             # sort image files by ordinal dates
             img_dates = []
             img_names = []
@@ -320,13 +278,7 @@ def main(cmdline=1, **kwargs):
 
             print('processing the rec_cg file {}'.format(os.path.join(reccg_path, filename)))
             if not os.path.exists(os.path.join(reccg_path, filename)):
-                print('the rec_cg file {} is missing'.format(os.path.join(reccg_path, filename)))
-
-                # for day in range(len(ordinal_day_list)):
-                #     outfile = os.path.join(tmp_path, 'tmp_map_block{}_{}.npy'.format(iblock + 1, ordinal_day_list[day]))
-                #     # if not os.path.exists(outfile):
-                #     np.save(outfile, results_block[day])
-                # continue
+                print('the rec_cg file {} is missing'.format(os.path.join(reccg_path, filename)))                
 
         cold_block = np.array(np.load(os.path.join(reccg_path, filename)), dtype=dt)
 
@@ -376,18 +328,9 @@ def main(cmdline=1, **kwargs):
                     for index, coef in enumerate(coefs):
                         results_block_coefs[i_row][i_col][index + band_idx * len(coefs)][:] = \
                             feature_row[index]
-        # e.g., 1315 means that disturbance happens at doy of 315
+
         # save the temp dataset out
-        if timestamp == False:
-            for year in range(year_lowbound, year_highbound + 1):
-                outfile = os.path.join(tmp_path,
-                                        'tmp_map_block{}_{}.npy'.format(iblock + 1, year))
-                np.save(outfile, results_block[year - year_lowbound])
-                if coefs is not None:
-                    outfile = os.path.join(tmp_path,
-                                            'tmp_coefmap_block{}_{}.npy'.format(iblock + 1, year))
-                    np.save(outfile, results_block_coefs[:, :, :, year - year_lowbound])
-        else:
+        if timestamp == True:
             for day in range(len(ordinal_day_list)):
                 if coefs is not None:
                     outfile = os.path.join(tmp_path,
@@ -396,134 +339,84 @@ def main(cmdline=1, **kwargs):
                     np.save(outfile, results_block_coefs[:, :, :, day])
 
     # MPI mode (wait for all processes)
-    comm.Barrier()
+    # comm.Barrier()
 
-    # if rank == 0:
-    # assemble
-    if timestamp is False:
-        for year in range(year_lowbound, year_highbound + 1):
-            tmp_map_blocks = [np.load(os.path.join(tmp_path, 'tmp_map_block{}_{}.npy'.format(x + 1, year)))
-                                for x in range(n_blocks)]
+    # assemble     
+    if coefs is not None:
+        for day in range(len(ordinal_day_list)):
+            tmp_map_blocks = [np.load(
+                os.path.join(tmp_path, 'tmp_coefmap_block{}_{}.npy'.format(x + 1, ordinal_day_list[day])))
+                for x in range(n_blocks)]
 
             results = np.hstack(tmp_map_blocks)
             results = np.vstack(np.hsplit(results, n_block_x))
+            ninput = 0
+            for band_idx, band_name in enumerate(coefs_bands):
+                for coef_index, coef in enumerate(coefs):
+                    if coef == 'cv':
+                        results[results == -9999.0] = 0
+                    # FIXME: Best name for outputs...?
+                    kwcoco_img_name = img_names[day]
+                    print(kwcoco_img_name)
+                    # date = str(datetime.date.fromordinal(ordinal_day_list[day]))
+                    band = BAND_INFO[band_name]
+                    outname = '%s_%s_%s_%s.tif' % (
+                    kwcoco_img_name[:-4], band, method, coef)
+                    print(outname)
+                    # out_fpath = os.path.join(out_path, region, 'L8', 'affine_warp', kwcoco_img_name[:-4])
+                    
+                    outfile = os.path.join(tmp_path, outname)
+                    outdriver1 = gdal.GetDriverByName("GTiff")
+                    outdata = outdriver1.Create(outfile, img_w, img_h, 1, gdal.GDT_Float32)
+                    outdata.GetRasterBand(1).WriteArray(results[:img_h, :img_w, ninput])
+                    outdata.FlushCache()
+                    outdata.SetGeoTransform(new_gdal_transform)
+                    outdata.FlushCache()
+                    outdata.SetProjection(proj)
+                    outdata.FlushCache()
+                    ninput = ninput + 1
 
             for x in range(n_blocks):
-                os.remove(os.path.join(out_path, 'tmp_map_block{}_{}.npy'.format(x + 1, year)))
-            outname = '%s_%s_prob_%s_conse_%s_%s_break_map.tif' % (region, method, prob, conse, year)
-            outfile = os.path.join(out_path, outname)
-            outdriver1 = gdal.GetDriverByName("GTiff")
-            outdata = outdriver1.Create(outfile, vid_w, vid_h, 1, gdal.GDT_Int16)
-            outdata.GetRasterBand(1).WriteArray(results[:vid_h, :vid_w])
-            outdata.FlushCache()
-            outdata.SetGeoTransform(new_gdal_transform)
-            outdata.FlushCache()
-            outdata.SetProjection(proj)
-            outdata.FlushCache()
-
-        # output recent disturbance year
-        recent_dist = np.full((vid_h, vid_w), 0, dtype=np.int16)
-        for year in range(year_lowbound, year_highbound + 1):
-            outname = '%s_%s_prob_%s_conse_%s_%s_break_map.tif' % (region, method, prob, conse, year)
-            breakmap = gdal_array.LoadFile(os.path.join(tmp_path, outname))
-            recent_dist[
-                (breakmap / 1000).astype(np.byte) == 1] = year
-        outname = "%s_%s_prob_%s_conse_%s_recent_disturbance_map.tif" % (region, method, prob, conse)
-        outfile = os.path.join(out_path, outname)
-        outdriver1 = gdal.GetDriverByName("GTiff")
-        outdata = outdriver1.Create(outfile, vid_w, vid_h, 1, gdal.GDT_Int16)
-        outdata.GetRasterBand(1).WriteArray(recent_dist[:vid_h, :vid_w])
-        outdata.FlushCache()
-        outdata.SetGeoTransform(new_gdal_transform)
-        outdata.FlushCache()
-        outdata.SetProjection(proj)
-        outdata.FlushCache()
-
-        first_dist = np.full((vid_h, vid_w), 0, dtype=np.int16)
-        for year in range(year_highbound, year_lowbound - 1, -1):
-            outname = '%s_%s_prob_%s_conse_%s_%s_break_map.tif' % (region, method, prob, conse, year)
-            breakmap = gdal_array.LoadFile(os.path.join(tmp_path, outname))
-            first_dist[(breakmap / 1000).astype(np.byte) == 1] = year
-        outname = "%s_%s_prob_%s_conse_%s_first_disturbance_map.tif" % (region, method, prob, conse)
-        outfile = os.path.join(out_path, outname)
-        outdriver1 = gdal.GetDriverByName("GTiff")
-        outdata = outdriver1.Create(outfile, vid_w, vid_h, 1, gdal.GDT_Int16)
-        outdata.GetRasterBand(1).WriteArray(first_dist[:vid_h, :vid_w])
-        outdata.FlushCache()
-        outdata.SetGeoTransform(new_gdal_transform)
-        outdata.FlushCache()
-        outdata.SetProjection(proj)
-        outdata.FlushCache()
-
-        if coefs is not None:
-            for year in range(year_lowbound, year_highbound + 1):
-                tmp_map_blocks = [np.load(os.path.join(tmp_path, 'tmp_coefmap_block{}_{}.npy'.format(x + 1, year)))
-                                    for x in range(n_blocks)]
-                results = np.hstack(tmp_map_blocks)
-                results = np.vstack(np.hsplit(results, n_block_x))
-                ninput = 0
-                for band_idx, band_name in enumerate(coefs_bands):
-                    for coef_index, coef in enumerate(coefs):
-                        # FIXME: Best name for outputs...?
-                        band = BAND_INFO[band_name]
-                        if coef == 'cv':
-                            results[results == -9999.0] = 0
-                        outname = '%s_%s_prob_%s_conse_%s_%s_%s_%s.tif' % (
-                        region, method, prob, conse, year, band,
-                        coef)
-                        outfile = os.path.join(out_path, outname)
-                        outdriver1 = gdal.GetDriverByName("GTiff")
-                        outdata = outdriver1.Create(outfile, vid_w, vid_h, 1, gdal.GDT_Float32)
-                        outdata.GetRasterBand(1).WriteArray(results[:vid_h, :vid_w, ninput])
-                        outdata.FlushCache()
-                        outdata.SetGeoTransform(new_gdal_transform)
-                        outdata.FlushCache()
-                        outdata.SetProjection(proj)
-                        outdata.FlushCache()
-                        ninput = ninput + 1
-                for x in range(n_blocks):
-                    os.remove(
-                        os.path.join(tmp_path, 'tmp_coefmap_block{}_{}.npy'.format(x + 1, year)))
-
-    else:
-        if coefs is not None:
-            for day in range(len(ordinal_day_list)):
-                tmp_map_blocks = [np.load(
+                os.remove(
                     os.path.join(tmp_path, 'tmp_coefmap_block{}_{}.npy'.format(x + 1, ordinal_day_list[day])))
-                    for x in range(n_blocks)]
+    
+    logger.info('Generated COLD output geotiff')
+    
+    logger.info('Starting adding new asset to kwcoco json')
+    # add new asset
+    dset = watch.coerce_kwcoco(demo_dpath)
+    # We are going to add a new asset to each image.
+    for image_id in dset.images():
+        # Create a CocoImage object for each image.
+        coco_image: kwcoco.CocoImage = dset.coco_image(image_id)
 
-                results = np.hstack(tmp_map_blocks)
-                results = np.vstack(np.hsplit(results, n_block_x))
-                ninput = 0
-                for band_idx, band_name in enumerate(coefs_bands):
-                    for coef_index, coef in enumerate(coefs):
-                        if coef == 'cv':
-                            results[results == -9999.0] = 0
-                        # FIXME: Best name for outputs...?
-                        kwcoco_img_name = img_names[day]
-                        # date = str(datetime.date.fromordinal(ordinal_day_list[day]))
-                        band = BAND_INFO[band_name]
-                        outname = '%s_%s_%s_%s.tif' % (
-                        kwcoco_img_name, band, method, coef)
-                        out_path = out_path / region / 'L8' / 'affine_warp' / kwcoco_img_name[:-4]
-                        print(out_path)
-                        outfile = os.path.join(out_path, outname)
-                        outdriver1 = gdal.GetDriverByName("GTiff")
-                        outdata = outdriver1.Create(outfile, vid_w, vid_h, 1, gdal.GDT_Float32)
-                        outdata.GetRasterBand(1).WriteArray(results[:vid_h, :vid_w, ninput])
-                        outdata.FlushCache()
-                        outdata.SetGeoTransform(new_gdal_transform)
-                        outdata.FlushCache()
-                        outdata.SetProjection(proj)
-                        outdata.FlushCache()
-                        ninput = ninput + 1
+        image_name = coco_image.img['name']
 
-                for x in range(n_blocks):
-                    os.remove(
-                        os.path.join(tmp_path, 'tmp_coefmap_block{}_{}.npy'.format(x + 1, ordinal_day_list[day])))
+        img_w = coco_image.img['width']
+        img_h = coco_image.img['height']
 
+        asset_w = img_w
+        asset_h = img_h
+        
+        new_fpath = os.path.join(tmp_path, '%s_swir16_COLD_cv.tif'%(image_name))
+        if os.path.exists(new_fpath):
+            
+            ###################################################################################################################  
+            # QUESTION: COLD output is generated in separate band. Then Do I need to go through this process by each channel? #
+            ###################################################################################################################
+            # For each band, possible COLD output would be 'cv', 'a0', 'a1', 'b1', 'c1', 'rmse'.            
+            channels = 'swir16_COLD_cv'
 
+            # We need the transform that warps from asset space to image space
+            # FIXME: I am not sure which variable is the correct one for warp_aux_to_img, 1) coco_image.img['warp_img_to_vid']).inv(), 2) 'warp_vid_from_img', 3) 'coco_image['warp_img_to_vid'] or other...?
+            warp_aux_to_img = coco_image.img(['warp_img_to_vid']).inv() #kwimage.Affine.eye()
 
+            # Use the CocoImage helper which will augment the coco dictionary with
+            # your information.
+            coco_image.add_asset(new_fpath, channels=channels, width=asset_w,
+                                    height=asset_h, warp_aux_to_img=warp_aux_to_img) 
+            logger.info(f'Added to the asset {new_fpath}')
+            
 
 # copy from /pycold/src/python/pycold/pyclassifier.py because MPI has conflicts with the pycold package in UCONN HPC.
 # Dirty approach!
@@ -547,6 +440,7 @@ def extract_features(cold_plot, band, ordinal_day_list, nan_val, timestamp, feat
         feature: a list (length = n_feature) of 1-array [len(ordinal_day_list)]
     """
     features = [np.full(len(ordinal_day_list), nan_val, dtype=np.double) for x in range(len(feature_outputs))]
+    SLOPE_SCALE = 10000
     for index, ordinal_day in enumerate(ordinal_day_list):
         for idx, cold_curve in enumerate(cold_plot):
             if idx == len(cold_plot) - 1:
@@ -658,6 +552,5 @@ def getcategory_obcold(cold_plot, i_curve, last_dist_type):
         else:
             return 1  # land disturbance
 
-if __name__ == '__main__':
-    
+if __name__ == '__main__':    
     main()
