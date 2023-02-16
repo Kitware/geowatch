@@ -111,8 +111,12 @@ def _timekernel_analysis():
     agg = eval_type_to_aggregator.get('bas_poly_eval', None)
 
     from watch.mlops.aggregate import build_all_param_plots
-    # rois = {'KR_R001', 'KR_R002'}
-    rois = {'KR_R001'}
+    rois = {'KR_R001', 'KR_R002'}
+    # rois = {'KR_R001'}
+    build_all_param_plots(agg, rois, config)
+    from watch.mlops.aggregate import build_all_param_plots
+    rois = {'KR_R001', 'KR_R002'}
+    # rois = {'KR_R001'}
     build_all_param_plots(agg, rois, config)
 
 

@@ -255,6 +255,8 @@ class ScheduleEvaluationConfig(scfg.DataConfig):
     print_varied_info = 0
     print_queue = 0
 
+    matrix_version = 1
+
 
 @profile
 def schedule_evaluation(cmdline=False, **kwargs):
@@ -309,7 +311,10 @@ def schedule_evaluation(cmdline=False, **kwargs):
     # Expand paramater search grid
     if config['params'] is not None:
         all_param_grid = expand_param_grid(
-            config['params'], max_configs=config['max_configs'])
+            config['params'],
+            max_configs=config['max_configs'],
+            version=config['matrix_version']
+        )
     else:
         all_param_grid = []
 
