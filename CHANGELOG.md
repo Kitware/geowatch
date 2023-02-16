@@ -22,6 +22,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Added `utils.coerce_crs`.
 * Tracker now prefers arguments `min_area_square_meters` and `max_area_square_meters` for size thresholds
 * Tracker size thresholds now default to `None` (i.e. off)
+* Change the default of `mask_samecolor_method` to None
 
 ### Fixed
 * issue in reproject annots when frames had no annotations

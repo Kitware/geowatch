@@ -851,6 +851,8 @@ def _build_vidspace_track_qtree(dset, video_gids, negative_classes,
                     'vidspace_box': ltrb,
                 })
                 tid_to_infos[tid].append(info)
+            # A faster qtree insert would be helpful.
+            # This takes 50% of the time in spacetime grid building.
             qtree.insert(aid, ltrb)
 
     return qtree, tid_to_infos

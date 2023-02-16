@@ -851,7 +851,7 @@ def predict(cmdline=False, **kwargs):
         EMERGENCY_INPUT_AGREEMENT_HACK = 1 and hasattr(method, 'input_norms')
         # prog.set_extra(' <will populate stats after first video>')
         # pman.start()
-        prog = pman.progiter(batch_iter)
+        prog = pman.progiter(batch_iter, desc='predicting')
         _batch_iter = iter(prog)
         if 0:
             item = test_dataloader.dataset[0]
