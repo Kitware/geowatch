@@ -9,6 +9,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * `smartwatch align` new argument `--minimum_size`: to ensure all regions have enough pixels
 * New `time_kernel` method for temporal sampling in `KWcocoVideoDataLoader`
 * New visualizations in `geojson_site_stats`
+* Add `submatrices` to MLOPs
 
 ### Changed
 * Renamed `project_annotations` to `reproject_annotations`
@@ -24,6 +25,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Tracker size thresholds now default to `None` (i.e. off)
 * Change the default of `mask_samecolor_method` to None
 * Change the default of `time_span` to None
+* Better legends and labeling in `aggregate.build_all_param_plots`
 
 ### Fixed
 * issue in reproject annots when frames had no annotations

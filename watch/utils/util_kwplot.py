@@ -50,18 +50,46 @@ def cropwhite_ondisk(fpath):
     kwimage.imwrite(fpath, imdata)
 
 
-def dataframe_table(table_style, fpath, fontsize=12, fnum=None, show=False):
+def dataframe_table(table, fpath, title=None, fontsize=12,
+                    table_conversion='chrome', fnum=None, show=False):
     """
     Use dataframe_image (dfi) to render a pandas dataframe.
+
+    Args:
+        table (pandas.DataFrame | pandas.io.formats.style.Styler)
+
+    Example:
+        >>> # xdoctest: +REQUIRES(module:dataframe_image)
+        >>> from watch.utils.util_kwplot import *  # NOQA
+        >>> import ubelt as ub
+        >>> dpath = ub.Path.appdir('kwplot/tests/test_dfi').ensuredir()
+        >>> import pandas as pd
+        >>> df = pd.DataFrame({'foo': ['one', 'one', 'one', 'two', 'two',
+        ...                            'two'],
+        ...                    'bar': ['A', 'B', 'C', 'A', 'B', 'C'],
+        ...                    'baz': [1, 2, 3, 4, 5, 6],
+        ...                    'zoo': ['x', 'y', 'z', 'q', 'w', 't']})
+        >>> fpath = dpath / 'dfi.png'
+        >>> dataframe_table(style, fpath, title='A caption / title')
     """
     import kwimage
     import kwplot
     import dataframe_image as dfi
-    dfi_converter = "chrome"  # matplotlib
+    import pandas as pd
+    # table_conversion = "chrome"  # matplotlib
+
+    if isinstance(table, pd.DataFrame):
+        style = table.style
+    else:
+        style = table
+
+    if title is not None:
+        style = style.set_caption(title)
+
     dfi.export(
-        table_style,
+        style,
         str(fpath),
-        table_conversion=dfi_converter,
+        table_conversion=table_conversion,
         fontsize=fontsize,
         max_rows=-1,
     )

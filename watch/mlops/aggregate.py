@@ -319,6 +319,12 @@ def build_all_param_plots(agg, rois, config):
         if param_name in param_to_palette:
             snskw['palette'] = param_to_palette[param_name]
 
+        try:
+            macro_table = macro_table.sort_values(param_name)
+        except Exception as ex:
+            print(f'warning ex={ex}')
+            ...
+
         # Number of samples we have for each value of this parameter
         param_histogram = ub.udict(macro_table.groupby(param_name).size().to_dict())
         param_histogram = param_histogram.map_keys(str)
@@ -367,16 +373,16 @@ def build_all_param_plots(agg, rois, config):
             scatterplot_highlight(data=macro_table, x=x, y=y, highlight='is_star', ax=ax, size=300)
         ax.set_xscale(xscale)
         modifier.relabel(ax)
-        fpath = agg_group_dpath / f'{fname_prefix}_scatter_legend.png'
+        fpath = agg_group_dpath / f'{fname_prefix}_PLT01_scatter_legend.png'
         finalize_figure.finalize(fig, fpath)
 
         legend_ax = util_kwplot.extract_legend(ax)
-        fpath = agg_group_dpath / f'{fname_prefix}_scatter_onlylegend.png'
+        fpath = agg_group_dpath / f'{fname_prefix}_PLT03_scatter_onlylegend.png'
         freq_mapper_scatter.relabel(legend_ax)
         finalize_figure.finalize(legend_ax.figure, fpath)
 
         ax.get_legend().remove()
-        fpath = agg_group_dpath / f'{fname_prefix}_scatter_nolegend.png'
+        fpath = agg_group_dpath / f'{fname_prefix}_PLT02_scatter_nolegend.png'
         finalize_figure.finalize(fig, fpath)
 
         fig = kwplot.figure(fnum=5, doclf=True)
@@ -386,21 +392,22 @@ def build_all_param_plots(agg, rois, config):
                      f'Macro Analysis over {ub.urepr(rois, sv=1, nl=0)}\n'
                      f'Effect of {param_name}: anova_rank_p={concice_si_display(anova_rank_p)}')
         modifier.relabel(ax)
-        fpath = agg_group_dpath / f'macro_results_{rank:03d}_{param_name}_box.png'
+        fpath = agg_group_dpath / f'{fname_prefix}_PLT04_box.png'
         finalize_figure.finalize(fig, fpath)
 
-        if had_value_remap:
-            param_code_lut = []
-            for old_name, new_name in param_valname_map.items():
-                param_code_lut.append({
-                    'code': new_name,
-                    'value': old_name,
-                    'num': param_histogram[old_name],
-                })
-            fpath = agg_group_dpath / f'{fname_prefix}_value_lut.png'
-            finalize_figure.finalize(fig, fpath)
-            param_code_lut = pd.DataFrame(param_code_lut)
-            util_kwplot.dataframe_table(param_code_lut, fpath)
+        param_code_lut = []
+        for old_name, new_name in param_valname_map.items():
+            param_code_lut.append({
+                'code': new_name,
+                'value': old_name,
+                'num': param_histogram[old_name],
+            })
+        param_code_lut = pd.DataFrame(param_code_lut)
+        if not had_value_remap:
+            param_code_lut = param_code_lut.drop('code', axis=1)
+        param_title = modifier._modify_text(param_name)
+        lut_style = param_code_lut.style.set_caption('Key: ' + param_title)
+        util_kwplot.dataframe_table(lut_style, fpath)
 
 
 def build_smart_label_modifier():
