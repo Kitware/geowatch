@@ -1850,60 +1850,10 @@ class TrackidGenerator:
         return next_id
 
 
-@profile
-def warp_annot_segmentations_to_geos(coco_dset):
-    """
-    Warps annotation segmentations in image pixel space into geos-space
-    """
-    import watch
-    # hack in segmentation_geos
-    for gid in coco_dset.images():
-        coco_img = coco_dset._coco_image(gid)
-        asset = coco_img.primary_asset()
-        fpath = join(coco_dset.bundle_dpath, asset['file_name'])
-        geo_meta = watch.gis.geotiff.geotiff_metadata(fpath)
-        warp_wld_from_aux = geo_meta['pxl_to_wld']
-        warp_img_from_aux = kwimage.Affine.coerce(asset.get('warp_aux_to_img', None))
-
-        warp_wgs84_from_wld = geo_meta['wld_to_wgs84']  # Could be a general CoordinateTransform!
-        wgs84_crs_info = geo_meta['wgs84_crs_info']
-        wgs84_axis_mapping = wgs84_crs_info['axis_mapping']
-        assert wgs84_crs_info['auth'] == ('EPSG', '4326')
-
-        warp_aux_from_img = warp_img_from_aux.inv()
-        warp_wld_from_img = warp_wld_from_aux @ warp_aux_from_img
-        for aid in coco_dset.annots(gid=gid):
-            ann = coco_dset.index.anns[aid]
-            try:
-                sseg_img = kwimage.Segmentation.coerce(ann['segmentation'])
-            except TypeError:
-                assert len(ann['segmentation']) == 0, 'only except on bad segmentation'
-            else:
-                sseg_wld = sseg_img.warp(warp_wld_from_img)
-                sseg_wgs84 = sseg_wld.warp(warp_wgs84_from_wld)
-                if wgs84_axis_mapping == 'OAMS_AUTHORITY_COMPLIANT':
-                    sseg_wgs84_lonlat = sseg_wgs84.swap_axes()
-                elif wgs84_axis_mapping == 'OAMS_TRADITIONAL_GIS_ORDER':
-                    sseg_wgs84_lonlat = sseg_wgs84.copy()
-                else:
-                    raise NotImplementedError(wgs84_axis_mapping)
-                ann['segmentation_geos'] = sseg_wgs84_lonlat.to_geojson()
-                geos_crs_info = {
-                    'axis_mapping': 'OAMS_TRADITIONAL_GIS_ORDER',
-                    'auth': ('EPSG', '4326')
-                }
-                ann['segmentation_geos']['properties'] = {
-                    'crs_info': geos_crs_info
-                }
-
-
-def warp_annot_segmentations_from_geos(coco_dset, max_workers=8):
+def warp_annot_segmentations_from_geos(coco_dset, reverse=False, overwrite=True):
     """
     Uses the segmentation_geos property (which should be crs84) and warps it
     into image space based on available geo data.
-
-    TODO dedupe with watch.tasks.tracking.normalize.add_geos, should be the
-    inverse of this function.
 
     Ignore:
         # xdoctest: +REQUIRES(env:DVC_DPATH)
@@ -1915,9 +1865,6 @@ def warp_annot_segmentations_from_geos(coco_dset, max_workers=8):
         coco_dset = kwcoco.CocoDataset(coco_fpath)
 
     """
-    # Warp segmentation from geos
-    # import watch
-    # from os.path import join
     import pandas as pd
     import geopandas as gpd
     from watch.utils import util_gis
@@ -1925,18 +1872,7 @@ def warp_annot_segmentations_from_geos(coco_dset, max_workers=8):
     crs84 = util_gis._get_crs84()
 
     def wld_info(coco_img):
-        # coco_img = coco_dset._coco_image(gid)
         asset = coco_img.primary_asset(requires=['geos_corners'])
-        # fpath = join(coco_dset.bundle_dpath, asset['file_name'])
-        # Dont rely on image metadata anymore
-        # geo_meta = watch.gis.geotiff.geotiff_metadata(fpath)
-        # warp_wld_from_aux = kwimage.Affine.coerce(geo_meta['pxl_to_wld'])
-        # warp_aux_from_wld = warp_wld_from_aux.inv()
-        # warp_wld_from_wgs84 = geo_meta['wgs84_to_wld']  # Could be a general CoordinateTransform!
-        # # warp_wgs84_from_wld = geo_meta['wld_to_wgs84']  # Could be a general CoordinateTransform!
-        # wgs84_crs_info = geo_meta['wgs84_crs_info']
-        # wgs84_axis_mapping = wgs84_crs_info['axis_mapping']
-        # assert wgs84_crs_info['auth'] == ('EPSG', '4326')
         if 'wld_to_pxl' in asset:
             warp_aux_from_wld = kwimage.Affine.coerce(asset['wld_to_pxl'])
         elif 'warp_to_wld' in asset:
@@ -1952,69 +1888,119 @@ def warp_annot_segmentations_from_geos(coco_dset, max_workers=8):
         else:
             print('asset = {}'.format(ub.urepr(asset, nl=1)))
             raise KeyError('Asset / image has no registered world CRS info')
-        wld_crs = util_gis.coerce_crs(wld_crs_info)  # TODO: traditional / authority check
+        # TODO: traditional / authority check? Or assume traditional?
+        # img['wld_crs_info']['axis_mapping'] == 'OAMS_TRADITIONAL_GIS_ORDER'
+        wld_crs = util_gis.coerce_crs(wld_crs_info)
 
         warp_img_from_aux = kwimage.Affine.coerce(asset.get('warp_aux_to_img', None))
         warp_img_from_wld = warp_img_from_aux @ warp_aux_from_wld
         return warp_img_from_wld, wld_crs
 
-        # rows = []
-        # for aid in coco_dset.annots(gid=gid):
-            # ann = coco_dset.index.anns[aid]
-            # sseg_geos = kwimage.MultiPolygon.from_geojson(ann['segmentation_geos'])
-            # # if wgs84_axis_mapping == 'OAMS_AUTHORITY_COMPLIANT':
-            # #     sseg_wgs84 = sseg_geos.swap_axes()
-            # # elif wgs84_axis_mapping == 'OAMS_TRADITIONAL_GIS_ORDER':
-            # #     sseg_wgs84 = sseg_geos
-            # # else:
-            # #     raise NotImplementedError(wgs84_axis_mapping)
-            # rows.append({
-                # 'geometry': sseg_geos.to_shapely(),
-                # 'aid': aid,
-            # })
-    gdfs = []
-    for gid in coco_dset.images().gids:
-        annots = coco_dset.annots(image_id=gid)
-        has_geos = np.array(annots.get('segmentation_geos', False), dtype=bool)
-        annots = annots.compress(has_geos)  # overwrites existing segs
-        if len(annots) > 0:
-            # TODO: check crs properties (probably always crs84)
-            sseg_geos = annots.lookup('segmentation_geos')
-            warp_img_from_wld, wld_crs = wld_info(coco_dset.coco_image(gid))
-            gdf = gpd.GeoDataFrame(
-                dict(
-                    geometry=[shape(p) for p in sseg_geos],
-                    aid=annots.aids,
-                ),
-                crs=crs84)
-            gdf = gdf.join(
-                pd.DataFrame(dict(
-                    gid=gid,
-                    wld_crs=wld_crs,
-                    warp_img_from_wld=[warp_img_from_wld.to_shapely()],
-                )),
-                how='cross'
-            )
-            gdfs.append(gdf)
-    gdf = pd.concat(gdfs, axis=0, ignore_index=True)
+    if reverse:
+        gdfs = []
+        for gid in coco_dset.images().gids:
+            aids = []
+            for ann in coco_dset.annots(image_id=gid).objs:
+                if 'segmentation_geos' in ann:
+                    if overwrite or ('segmentation' in ann):
+                        aids.append(ann['id'])
+            annots = coco_dset.annots(aids)
+            if len(annots) > 0:
+                # TODO: check crs properties (probably always crs84)
+                warp_img_from_wld, wld_crs = wld_info(coco_dset.coco_image(gid))
+                ssegs = annots.detections.data['segmentations']
+                warp_wld_from_img = warp_img_from_wld.inv()
 
-    gdf['wld_geom'] = gdf.groupby('wld_crs')['geometry'].apply(
-        lambda grp: grp.to_crs(grp.name))
+                gdf = gpd.GeoDataFrame(
+                    dict(
+                        geometry=[p.to_shapely() for p in ssegs],
+                        aid=annots.aids,
+                    ),
+                    crs=None,
+                )
+                gdf = gdf.join(
+                    pd.DataFrame(dict(
+                        gid=gid,
+                        wld_crs=wld_crs,
+                        warp_wld_from_img=[warp_wld_from_img.to_shapely()]
+                    )),
+                    how='cross'
+                )
+                gdfs.append(gdf)
+        if len(gdfs) > 0:
+            gdf = pd.concat(gdfs, axis=0, ignore_index=True)
 
-    gdf['img_geom'] = gdf.groupby('warp_img_from_wld')['wld_geom'].apply(
-        lambda grp: grp.affine_transform(grp.name))
+            gdf['wld_geom'] = gdf.groupby('warp_wld_from_img')['geometry'].apply(
+                lambda grp: grp.affine_transform(grp.name))
 
-    for aid, img_geom in zip(gdf['aid'], gdf['img_geom']):
-        sseg = kwimage.MultiPolygon.from_shapely(img_geom)
-        ann = coco_dset.anns[aid]
-        ann['segmentation'] = list(sseg.to_coco(style='new'))
-        ann['bbox'] = list(sseg.bounding_box().quantize().to_coco())[0]
+            gdf['geo_geom'] = gdf.groupby('wld_crs')['wld_geom'].apply(
+                lambda grp: grp.set_crs(grp.name).to_crs(crs84))
+
+            # this geojson rep also contains bboxes, but don't need to use them
+            geo_geoms = gdf['geo_geom'].__geo_interface__['features']
+            for aid, geo_geom in zip(gdf['aid'], geo_geoms):
+                ann = coco_dset.anns[aid]
+                ann['segmentation_geos'] = geo_geom
+                if 0:  # TODO check correctness
+                    geos_crs_info = {
+                        'axis_mapping': 'OAMS_TRADITIONAL_GIS_ORDER',
+                        'auth': ('EPSG', '4326')
+                    }
+                    ann['segmentation_geos']['properties'] = {
+                        'crs_info': geos_crs_info
+                    }
+
+    else:
+        gdfs = []
+        for gid in coco_dset.images().gids:
+            aids = []
+            for ann in coco_dset.annots(image_id=gid).objs:
+                if 'segmentation_geos' in ann:
+                    if overwrite or ('segmentation' in ann):
+                        aids.append(ann['id'])
+            annots = coco_dset.annots(aids)
+            if len(annots) > 0:
+                # TODO: check crs properties (probably always crs84)
+                sseg_geos = annots.lookup('segmentation_geos')
+                warp_img_from_wld, wld_crs = wld_info(coco_dset.coco_image(gid))
+                gdf = gpd.GeoDataFrame(
+                    dict(
+                        geometry=[shape(p) for p in sseg_geos],
+                        aid=annots.aids,
+                    ),
+                    crs=crs84)
+                gdf = gdf.join(
+                    pd.DataFrame(dict(
+                        gid=gid,
+                        wld_crs=wld_crs,
+                        warp_img_from_wld=[warp_img_from_wld.to_shapely()],
+                    )),
+                    how='cross'
+                )
+                gdfs.append(gdf)
+        if len(gdfs) > 0:
+            gdf = pd.concat(gdfs, axis=0, ignore_index=True)
+
+            gdf['wld_geom'] = gdf.groupby('wld_crs')['geometry'].apply(
+                lambda grp: grp.to_crs(grp.name))
+
+            gdf['img_geom'] = gdf.groupby('warp_img_from_wld')['wld_geom'].apply(
+                lambda grp: grp.affine_transform(grp.name))
+
+            for aid, img_geom in zip(gdf['aid'], gdf['img_geom']):
+                sseg = kwimage.MultiPolygon.from_shapely(img_geom)
+                ann = coco_dset.anns[aid]
+                ann['segmentation'] = list(sseg.to_coco(style='new'))
+                ann['bbox'] = list(sseg.bounding_box().quantize().to_coco())[0]
 
     if __debug__:
         for ann in coco_dset.dataset['annotations']:
             assert 'bbox' in ann
             assert 'segmentation' in ann
 
+
+def warp_annot_segmentations_to_geos(coco_dset, overwrite=True):
+    warp_annot_segmentations_from_geos(coco_dset, overwrite=overwrite, reverse=True)
 
 # def coco_geopandas_images(coco_dset):
 #     """

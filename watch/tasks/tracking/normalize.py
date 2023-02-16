@@ -1,14 +1,12 @@
 import kwcoco
 import kwimage
 import warnings
-from os.path import join
 import numpy as np
 import ubelt as ub
 from typing import Dict, List, Any
 from watch.utils.kwcoco_extensions import TrackidGenerator
-from watch.gis.geotiff import geotiff_crs_info
+from watch.utils.kwcoco_extensions import warp_annot_segmentations_to_geos
 from watch.tasks.tracking.utils import TrackFunction
-from watch.heuristics import SITE_SUMMARY_CNAME
 from watch.tasks.tracking.utils import check_only_bg
 from watch.utils.kwcoco_extensions import sorted_annots
 try:
@@ -37,88 +35,6 @@ def dedupe_annots(coco_dset):
             '''))
         aids_to_remove = list(annots.take(dup_idxs))
         coco_dset.remove_annotations(aids_to_remove, verbose=1)
-
-    return coco_dset
-
-
-@profile
-def add_geos(coco_dset, overwrite, max_workers=16):
-    '''
-    Add 'segmentation_geos' to every annotation in coco_dset with a
-    'segmentation'.
-
-    TODO serializable osr.CoordinateTransform+srcCRS+dstCRS obj
-
-    TODO how to handle cropped annotations from propagation?
-    Currently this will not correctly round-trip a ground truth site model
-    (IARPA -> kwcoco -> IARPA) due to these edge effects.
-    Could use 'orig' attr to fix this, but of course generated annotations
-    won't have this.
-    '''
-
-    if not overwrite:
-        if None not in coco_dset.annots().get('segmentation_geos', None):
-            return coco_dset
-
-    def needs_geos(ann):
-        return 'segmentation' in ann and (overwrite or
-                                          ('segmentation_geos' not in ann))
-
-    # find images containing at least 1 annotation that needs geo coords
-    annots = coco_dset.annots()
-    annots_to_fix = annots.compress(map(needs_geos, annots.objs))
-    gid_to_aids = ub.group_items(annots_to_fix,
-                                 annots_to_fix.lookup('image_id'))
-    images_to_fix = coco_dset.images(list(gid_to_aids.keys()))
-
-    # parallelize grabbing img CRS info
-    executor = ub.JobPool('thread', max_workers)
-
-    for gid in ub.ProgIter(images_to_fix, desc='submit crs jobs'):
-        coco_img: kwcoco.CocoImage = coco_dset.coco_image(gid)
-        # Hack: find an asset likely to have geoinfo
-        aux = coco_img.find_asset_obj('red|green|blue|panchromatic|pan')
-        if aux is None:
-            aux = coco_img.primary_asset()
-        fpath = join(coco_img.bundle_dpath, aux['file_name'])
-        job = executor.submit(geotiff_crs_info, fpath)
-        job.gid = gid
-        job.aux = aux
-
-    for job in executor.as_completed(desc='precomputing geo-segmentations'):
-        # job = executor.jobs[2]
-        info = job.result()
-        gid = job.gid
-        aux = job.aux
-        aids = gid_to_aids[gid]
-
-        anns = coco_dset.annots(aids=aids).objs
-        assert len(anns) > 0, f'image {gid} should have annotations!'
-        '''
-        # if this was encoded into the image dict ok, we can just use it there
-        # unfortunately info is still needed because wld_to_wgs84 may
-        # not be serializable
-        assert np.allclose(info['pxl_to_wld'], np.array(kwimage.Affine.coerce(
-            annotated_band(img)['wld_to_pxl']).inv()))
-        '''
-        img_anns = kwimage.SegmentationList(
-            [kwimage.Segmentation.coerce(ann['segmentation']) for ann in anns])
-
-        warp_img_from_aux = kwimage.Affine.coerce(
-            aux.get('warp_aux_to_img', None)).inv()
-        aux_anns = img_anns.warp(warp_img_from_aux)
-        wld_anns = aux_anns.warp(info['pxl_to_wld'])
-        wgs_anns = wld_anns.warp(info['wld_to_wgs84'])
-        # Flip into traditional CRS84 coordinates if we need to
-        if info['wgs84_crs_info'][
-                'axis_mapping'] == 'OAMS_AUTHORITY_COMPLIANT':
-            crs84_anns = [poly.swap_axes() for poly in wgs_anns]
-        else:
-            crs84_anns = wgs_anns
-        geojson_anns = [poly.to_geojson() for poly in crs84_anns]
-
-        for ann, geojson_ann in zip(anns, geojson_anns):
-            ann['segmentation_geos'] = geojson_ann
 
     return coco_dset
 
@@ -762,7 +678,7 @@ def normalize(
     def _normalize_annots(coco_dset, overwrite):
         print(f'coco_dset.n_anns={coco_dset.n_annots}')
         coco_dset = dedupe_annots(coco_dset)
-        coco_dset = add_geos(coco_dset, overwrite)
+        warp_annot_segmentations_to_geos(coco_dset, overwrite=overwrite)
         coco_dset = remove_small_annots(coco_dset,
                                         min_area_px=0,
                                         min_geo_precision=None)
