@@ -432,6 +432,7 @@ def predict(cmdline=False, **kwargs):
         ...     #'channels': 'auto',
         ...     'max_epochs': 1,
         ...     'time_steps': 2,
+        ...     'time_span': "2m",
         ...     'chip_size': 64,
         ...     'time_sampling': 'hardish3',
         ...     'global_change_weight': 1.0,
