@@ -831,12 +831,9 @@ def predict(cmdline=False, **kwargs):
     assert not list(util_json.find_json_unserializable(traintime_params))
 
     from watch.utils import process_context
-    import sys
     proc_context = process_context.ProcessContext(
         name='watch.tasks.fusion.predict',
         type='process',
-        args=sys.argv,
-        # args=jsonified_args,
         config=config_resolved,
         track_emissions=config['track_emissions'],
         extra={'fit_config': traintime_params}

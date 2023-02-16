@@ -210,10 +210,10 @@ def main(cmdline=True, **kwargs):
         >>> main(cmdline=False, **kwargs)
         >>> # TODO: visualize
     """
-
     from watch.utils import util_gis
-
-    config = MetricsConfig.legacy(cmdline=cmdline, data=kwargs)
+    from kwcoco.util import util_json
+    from watch.utils import process_context
+    config = MetricsConfig.cli(cmdline=cmdline, data=kwargs)
     args = config
 
     # args, _ = parser.parse_known_args(args)
@@ -232,20 +232,18 @@ def main(cmdline=True, **kwargs):
 
     # Record information about this process
     info = []
-    from kwcoco.util import util_json
-    from watch.utils import process_context
 
     # Args will be serialized in kwcoco, so make sure it can be coerced to json
-    jsonified_args = util_json.ensure_json_serializable(config_dict)
-    walker = ub.IndexableWalker(jsonified_args)
-    for problem in util_json.find_json_unserializable(jsonified_args):
+    jsonified_config = util_json.ensure_json_serializable(config_dict)
+    walker = ub.IndexableWalker(jsonified_config)
+    for problem in util_json.find_json_unserializable(jsonified_config):
         bad_data = problem['data']
         walker[problem['loc']] = str(bad_data)
 
     proc_context = process_context.ProcessContext(
         type='process',
         name='watch.cli.run_metrics_framework',
-        args=jsonified_args,
+        config=jsonified_config,
         extra={'iarpa_smart_metrics_version': iarpa_smart_metrics.__version__},
     )
     proc_context.start()

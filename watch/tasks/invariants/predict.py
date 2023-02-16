@@ -271,9 +271,7 @@ class Predictor(object):
         )
 
         from watch.utils import process_context
-        import sys
         self.proc_context = process_context.ProcessContext(
-            args=sys.argv,
             type='process',
             name='watch.tasks.invariants.predict',
             config=args.to_dict(),
