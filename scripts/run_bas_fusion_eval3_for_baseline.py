@@ -306,6 +306,7 @@ def run_bas_fusion_for_baseline(
         "thresh": bas_thresh,
         "moving_window_size": None,
         "polygon_simplify_tolerance": 1,
+        "min_area_square_meters": 7200,
         "max_area_behavior": 'ignore'}
 
     tracked_bas_kwcoco_path = '_tracked'.join(

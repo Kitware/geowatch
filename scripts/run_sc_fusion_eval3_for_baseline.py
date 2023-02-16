@@ -270,7 +270,7 @@ def run_sc_fusion_for_baseline(
       "chip_dims": "auto",
       "set_cover_algo": null,
       "resample_invalid_frames": 3,
-      "observable_threshold": 0.2,
+      "observable_threshold": 0,
       "mask_low_quality": true,
       "drop_unused_frames": true
 }
@@ -298,6 +298,7 @@ def run_sc_fusion_for_baseline(
             # 4. Compute tracks (SC)
             print("* Computing tracks (SC) *")
             sc_track_kwargs = {"boundaries_as": "polys",
+                               "min_area_square_meters": 7200,
                                "thresh": sc_thresh}
 
             tracked_sc_kwcoco_path = '_tracked'.join(
