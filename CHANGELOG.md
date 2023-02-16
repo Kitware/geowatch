@@ -23,6 +23,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Tracker now prefers arguments `min_area_square_meters` and `max_area_square_meters` for size thresholds
 * Tracker size thresholds now default to `None` (i.e. off)
 * Change the default of `mask_samecolor_method` to None
+* Change the default of `time_span` to None
 
 ### Fixed
 * issue in reproject annots when frames had no annotations

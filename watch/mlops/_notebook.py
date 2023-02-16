@@ -82,6 +82,11 @@ def _namek_eval():
     agg.primary_metric_cols = ['bas_poly_eval.metrics.bas_ppv', 'bas_poly_eval.metrics.bas_tpr']
     _ = agg.report_best()
 
+    from watch.mlops.aggregate import build_all_param_plots
+    # rois = {'KR_R001', 'KR_R002'}
+    rois = {'KR_R001'}
+    build_all_param_plots(agg, rois, config)
+
     # Find best dicefocal model
     from watch.utils import util_pandas
     col = util_pandas.DotDictDataFrame(agg.fit_params).find_column('saliency_loss')
@@ -111,8 +116,10 @@ def _timekernel_analysis():
     agg = eval_type_to_aggregator.get('bas_poly_eval', None)
 
     from watch.mlops.aggregate import build_all_param_plots
-    rois = {'KR_R001', 'KR_R002'}
-    # rois = {'KR_R001'}
+    # rois = {'KR_R001', 'KR_R002'}
+    rois = {'KR_R001'}
+    _ = agg.report_best()
+
     build_all_param_plots(agg, rois, config)
     from watch.mlops.aggregate import build_all_param_plots
     rois = {'KR_R001', 'KR_R002'}

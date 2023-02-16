@@ -223,9 +223,10 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             dilate_affinity
             ''')),
 
-        'time_span': scfg.Value('2y', help=ub.paragraph(
+        'time_span': scfg.Value(None, help=ub.paragraph(
             '''
-            how long a time window should roughly span by default
+            Roughly how much time should be between sample frames.
+            This argument needs reworking.
             ''')),
 
         'time_kernel': scfg.Value(None, type=str, help=ub.paragraph(
