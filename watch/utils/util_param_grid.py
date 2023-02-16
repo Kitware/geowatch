@@ -134,7 +134,7 @@ def prevalidate_param_grid(arg):
                         log_issue(k, p, 'might not be a valid path')
 
 
-def expand_param_grid(arg, max_configs=None, version=1):
+def expand_param_grid(arg, max_configs=None):
     """
     Our own method for specifying many combinations. Uses the github actions
     method under the hood with our own
@@ -188,7 +188,7 @@ def expand_param_grid(arg, max_configs=None, version=1):
                   - trk.pxl.model: trk_a
                     trk.pxl.data.input_space_scale: 10GSD
             ''')
-        >>> grid_items = expand_param_grid(arg)
+        >>> grid_items = list(expand_param_grid(arg))
         >>> print('grid_items = {}'.format(ub.repr2(grid_items, nl=1, sort=0)))
         >>> from watch.utils.util_dotdict import dotdict_to_nested
         >>> print(ub.repr2([dotdict_to_nested(p) for p in grid_items], nl=-3, sort=0))
@@ -196,29 +196,44 @@ def expand_param_grid(arg, max_configs=None, version=1):
     """
     prevalidate_param_grid(arg)
     action_matrices = coerce_list_of_action_matrices(arg)
-    grid_items = []
+    num_yeilded = 0
     for item in action_matrices:
-        grid_items += list(github_action_matrix(item, version=version))
-    if max_configs is not None:
-        # TODO: generator with early stop
-        return grid_items[:max_configs]
-    return grid_items
+        for grid_item in extended_github_action_matrix(item):
+            yield grid_item
+            num_yeilded += 1
+            if max_configs is not None:
+                if num_yeilded >= max_configs:
+                    return
 
 
-def github_action_matrix(arg, version=1):
+def github_action_matrix(arg):
     """
-    Try to implement the github method. Not sure if I like it.
+    Implements the github action matrix strategy exactly as described.
+
+    Unless I've implemented something incorrectly, I believe this method is
+    limited and have extended it in :func:`extended_github_action_matrix`.
+
+    Args:
+        arg (Dict | str): a dictionary or a yaml file that resolves to a
+            dictionary containing the keys "matrix", which maps parameters to a
+            list of possible values. For convinieince if a single scalar value
+            is detected it is converted to a list of 1 item. The matrix may
+            also include an "include" and "exclude" item, which are lists of
+            dictionaries that modify existing / add new matrix configurations
+            or remove them. The "include" and "exclude" parameter can also be
+            specified at the same level of "matrix" for convinience.
+
+    Yields:
+        item : a single entry in the grid.
 
     References:
         https://docs.github.com/en/actions/using-jobs/using-a-matrix-for-your-jobs#expanding-or-adding-matrix-configurations
 
     CommandLine:
-        xdoctest -m /home/joncrall/code/watch/watch/utils/util_param_grid.py github_action_matrix
-        xdoctest -m watch.utils.util_param_grid github_action_matrix:1
+        xdoctest -m watch.utils.util_param_grid github_action_matrix:2
 
     Example:
         >>> from watch.utils.util_param_grid import *  # NOQA
-        >>> from watch.utils import util_param_grid
         >>> arg = ub.codeblock(
                  '''
                    matrix:
@@ -236,7 +251,6 @@ def github_action_matrix(arg, version=1):
                  ''')
         >>> grid_items = list(github_action_matrix(arg))
         >>> print('grid_items = {}'.format(ub.urepr(grid_items, nl=1)))
-
         grid_items = [
             {'fruit': 'apple', 'animal': 'cat', 'color': 'pink', 'shape': 'circle'},
             {'fruit': 'apple', 'animal': 'dog', 'color': 'green', 'shape': 'circle'},
@@ -245,23 +259,6 @@ def github_action_matrix(arg, version=1):
             {'fruit': 'banana'},
             {'fruit': 'banana', 'animal': 'cat'},
         ]
-
-    Example:
-        >>> from watch.utils.util_param_grid import *  # NOQA
-        >>> from watch.utils import util_param_grid
-        >>> arg = ub.codeblock(
-                 '''
-                   matrix:
-                     ones: [1, 2]
-                     tens: [10, 20]
-                     include:
-                       - ones: 1
-                         color: green
-                       - ones: 1
-                         color: pink
-                 ''')
-        >>> grid_items = list(github_action_matrix(arg))
-        >>> print('grid_items = {}'.format(ub.urepr(grid_items, nl=1)))
 
 
     Example:
@@ -293,36 +290,22 @@ def github_action_matrix(arg, version=1):
             {'environment': 'production', 'os': 'windows-latest', 'version': 14},
         ]
 
-    Ignore:
-
-        arg = {'matrix': {'trk.pxl.model': 'unused',
-          'trk.pxl.data.test_dataset': 'unused',
-          'trk.pxl.data.window_space_scale': 'unused',
-          'trk.pxl.data.time_sampling': 'unused',
-          'trk.pxl.data.input_space_scale': 'unused',
-          'trk.poly.thresh': 'unused',
-          'crop.src': 'unused',
-          'crop.regions': 'truth',
-          'act.pxl.data.test_dataset': ['/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/Drop4-SC/data_vali_small.kwcoco.json'],
-          'act.pxl.data.input_space_scale': ['8GSD'],
-          'act.pxl.data.time_steps': ['auto'],
-          'act.pxl.data.chip_overlap': [0.3],
-          'act.poly.thresh': [0.07, 0.1, 0.13],
-          'act.poly.use_viterbi': [0],
-          'act.pxl.model': ['/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/Drop4_tune_V30_V2_epoch=1-step=23940.pt.pt',
-           '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/Drop4_tune_V30_V2_epoch=2-step=35910-v1.pt.pt',
-           '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt'],
-          'include': [
-               {'act.pxl.data.chip_dims': '256,256',
-                'act.pxl.data.window_space_scale': '8GSD',
-                'act.pxl.data.input_space_scale': '8GSD',
-                'act.pxl.data.output_space_scale': '8GSD'},
-               # {'act.pxl.data.chip_dims': '256,256',
-               #  'act.pxl.data.window_space_scale': '4GSD',
-               #  'act.pxl.data.input_space_scale': '4GSD',
-               #  'act.pxl.data.output_space_scale': '4GSD'}
-            ]}}
-
+    Example:
+        >>> from watch.utils.util_param_grid import *  # NOQA
+        >>> arg = ub.codeblock(
+                 '''
+                 matrix:
+                   old_variable:
+                       - null
+                       - auto
+                 include:
+                     - old_variable: null
+                       new_variable: 1
+                     - old_variable: null
+                       new_variable: 2
+                 ''')
+        >>> grid_items = list(github_action_matrix(arg))
+        >>> print('grid_items = {}'.format(ub.urepr(grid_items, nl=1)))
     """
     import ruamel.yaml
     if isinstance(arg, str):
@@ -333,16 +316,43 @@ def github_action_matrix(arg, version=1):
     matrix = data.pop('matrix').copy()
 
     include = matrix.pop('include', data.pop('include', []))
-    exclude = matrix.pop('include', data.pop('exclude', []))
+    exclude = matrix.pop('exclude', data.pop('exclude', []))
     include = list(map(ub.udict, include))
     exclude = list(map(ub.udict, exclude))
 
-    # include = [ub.udict(p) for p in matrix.pop('include', [])]
-    # exclude = [ub.udict(p) for p in matrix.pop('exclude', [])]
     matrix_ = {k: (v if ub.iterable(v) else [v])
                for k, v in matrix.items()}
 
+    orig_keys = set(matrix.keys())
+    include_idx_to_nvariants = {idx: 0 for idx in range(len(include))}
+
+    def include_modifiers(mat_item):
+        """
+        For each object in the include list, the key:value pairs in the object
+        will be added to each of the matrix combinations if none of the
+        key:value pairs overwrite any of the original matrix values. If the
+        object cannot be added to any of the matrix combinations, a new matrix
+        combination will be created instead. Note that the original matrix
+        values will not be overwritten, but added matrix values can be
+        overwritten.
+        """
+        grid_item = ub.udict(mat_item)
+        for include_idx, include_item in enumerate(include):
+            common_orig1 = (mat_item & include_item) & orig_keys
+            common_orig2 = (include_item & mat_item) & orig_keys
+            if common_orig1 == common_orig2:
+                include_idx_to_nvariants[include_idx] += 1
+                grid_item = grid_item | include_item
+        return grid_item
+
     def is_excluded(grid_item):
+        """
+        An excluded configuration only has to be a partial match for it to be
+        excluded. For example, the following workflow will run nine jobs: one
+        job for each of the 12 configurations, minus the one excluded job that
+        matches {os: macos-latest, version: 12, environment: production}, and
+        the two excluded jobs that match {os: windows-latest, version: 16}.
+        """
         for exclude_item in exclude:
             common1 = exclude_item & grid_item
             if common1:
@@ -350,70 +360,205 @@ def github_action_matrix(arg, version=1):
                 if common1 == common2 == exclude_item:
                     return True
 
-    orig_keys = set(matrix.keys())
-    include_idx_to_nvariants = ub.ddict(lambda: 0)
+    for mat_item in map(ub.udict, ub.named_product(matrix_)):
+        grid_item = include_modifiers(mat_item)
+        if not is_excluded(grid_item):
+            yield grid_item
 
-    def included_variants(mat_item):
+    for idx, n in include_idx_to_nvariants.items():
+        if n == 0:
+            grid_item = include[idx]
+            yield grid_item
+
+
+def extended_github_action_matrix(arg):
+    """
+    A variant of the github action matrix for our mlops framework that
+    overcomes some of the former limitations.
+
+    This keeps the same weird include / exclude semantics, but
+    adds an additional "submatrix" component that has the following semantics.
+
+    A submatrices is a list of dictionaries, but each dictionary may have more
+    than one value, and are expanded into a list of items, similarly to a
+    dictionary. In this respect the submatrix is "resolved" to a list of
+    dictionary items just like "include". The difference is that when a
+    common elements of a submatrix grid item matches a matrix grid item, it
+    updates it with its new values and yields it immediately. Subsequent
+    submatrix grid items can yield different variations of this item.
+    The actions include rules are then applied on top of this.
+
+    Args:
+        arg (Dict | str): See github_action_matrix, but with new submatrices
+
+    Yields:
+        item : a single entry in the grid.
+
+    CommandLine:
+        xdoctest -m watch.utils.util_param_grid extended_github_action_matrix:2
+
+    Example:
+        >>> from watch.utils.util_param_grid import *  # NOQA
+        >>> from watch.utils import util_param_grid
+        >>> arg = ub.codeblock(
+                 '''
+                   matrix:
+                     fruit: [apple, pear]
+                     animal: [cat, dog]
+                     submatrix:
+                       - color: green
+                       - color: pink
+                         animal: cat
+                       - fruit: apple
+                         shape: circle
+                       - fruit: banana
+                       - fruit: banana
+                         animal: cat
+                 ''')
+        >>> grid_items = list(extended_github_action_matrix(arg))
+        >>> print('grid_items = {}'.format(ub.urepr(grid_items, nl=1)))
+
+    Example:
+        >>> from watch.utils.util_param_grid import *  # NOQA
+        >>> arg = ub.codeblock(
+                '''
+                  matrix:
+                    os: [macos-latest, windows-latest]
+                    version: [12, 14, 16]
+                    environment: [staging, production]
+                    exclude:
+                      - os: macos-latest
+                        version: 12
+                        environment: production
+                      - os: windows-latest
+                        version: 16
+            ''')
+        >>> grid_items = list(extended_github_action_matrix(arg))
+        >>> print('grid_items = {}'.format(ub.repr2(grid_items, nl=1)))
+
+    Example:
+        >>> from watch.utils.util_param_grid import *  # NOQA
+        >>> from watch.utils import util_param_grid
+        >>> arg = ub.codeblock(
+                 '''
+                 matrix:
+                   common_variable:
+                       - a
+                       - b
+                   old_variable:
+                       - null
+                       - auto
+                 submatrices:
+                     - old_variable: null
+                       new_variable1:
+                           - 1
+                           - 2
+                       new_variable2:
+                           - 3
+                           - 4
+                     - old_variable: null
+                       new_variable2:
+                           - 33
+                           - 44
+                     # These wont be used because blag doesn't exist
+                     - old_variable: blag
+                       new_variable:
+                           - 10
+                           - 20
+                 ''')
+        >>> grid_items = list(extended_github_action_matrix(arg))
+        >>> print('grid_items = {}'.format(ub.urepr(grid_items, nl=1)))
+    """
+    import ruamel.yaml
+    if isinstance(arg, str):
+        data = ruamel.yaml.safe_load(arg)
+    else:
+        data = arg.copy()
+
+    matrix = data.pop('matrix').copy()
+
+    include = matrix.pop('include', data.pop('include', []))
+    exclude = matrix.pop('exclude', data.pop('exclude', []))
+    submatrices = matrix.pop('submatrices', data.pop('submatrices', []))
+    include = list(map(ub.udict, include))
+    exclude = list(map(ub.udict, exclude))
+    submatrices = list(map(ub.udict, submatrices))
+
+    submatrices_ = []
+    for submatrix in submatrices:
+        submatrix_ = {k: (v if ub.iterable(v) else [v])
+                      for k, v in submatrix.items()}
+        submatrices_.extend(list(map(ub.udict, ub.named_product(submatrix_))))
+
+    matrix_ = {k: (v if ub.iterable(v) else [v])
+               for k, v in matrix.items()}
+
+    orig_keys = set(matrix.keys())
+    include_idx_to_nvariants = {idx: 0 for idx in range(len(include))}
+
+    def include_modifiers(mat_item):
+        """
+        For each object in the include list, the key:value pairs in the object
+        will be added to each of the matrix combinations if none of the
+        key:value pairs overwrite any of the original matrix values. If the
+        object cannot be added to any of the matrix combinations, a new matrix
+        combination will be created instead. Note that the original matrix
+        values will not be overwritten, but added matrix values can be
+        overwritten.
+        """
         grid_item = ub.udict(mat_item)
         for include_idx, include_item in enumerate(include):
             common_orig1 = (mat_item & include_item) & orig_keys
             common_orig2 = (include_item & mat_item) & orig_keys
             if common_orig1 == common_orig2:
                 include_idx_to_nvariants[include_idx] += 1
-                # the key:value pairs in the object will be added to each of
-                # the [original] matrix combinations if none of the key:value
-                # pairs overwrite any of the original matrix values
-                #
-                # Note that the original matrix values will not be overwritten
-                # but added matrix values can be overwritten
                 grid_item = grid_item | include_item
+        return grid_item
+
+    def submatrix_variants(mat_item):
+        """
+        For each object in the include list, the key:value pairs in the object
+        will be added to each of the matrix combinations if none of the
+        key:value pairs overwrite any of the original matrix values. If the
+        object cannot be added to any of the matrix combinations, a new matrix
+        combination will be created instead. Note that the original matrix
+        values will not be overwritten, but added matrix values can be
+        overwritten.
+        """
+        grid_item = ub.udict(mat_item)
+        any_modified = False
+        for submat_item in submatrices_:
+            common_orig1 = (mat_item & submat_item) & orig_keys
+            common_orig2 = (submat_item & mat_item) & orig_keys
+            if common_orig1 == common_orig2:
+                grid_item = mat_item | submat_item
                 yield grid_item
+                any_modified = True
+        if not any_modified:
+            yield grid_item
 
-    NEW = version == 2
-    if NEW:
-        for mat_item in map(ub.udict, ub.named_product(matrix_)):
-            if not is_excluded(mat_item):
-                for grid_item in included_variants(mat_item):
-                    yield grid_item
+    def is_excluded(grid_item):
+        """
+        An excluded configuration only has to be a partial match for it to be
+        excluded. For example, the following workflow will run nine jobs: one
+        job for each of the 12 configurations, minus the one excluded job that
+        matches {os: macos-latest, version: 12, environment: production}, and
+        the two excluded jobs that match {os: windows-latest, version: 16}.
+        """
+        for exclude_item in exclude:
+            common1 = exclude_item & grid_item
+            if common1:
+                common2 = grid_item & exclude_item
+                if common1 == common2 == exclude_item:
+                    return True
 
-        for idx, n in include_idx_to_nvariants.items():
-            if n == 0:
-                grid_item = include[n]
-                yield grid_item
-    else:
-        grid_stage0 = list(map(ub.udict, ub.named_product(matrix_)))
+    for mat_item in map(ub.udict, ub.named_product(matrix_)):
+        for item in submatrix_variants(mat_item):
+            item = include_modifiers(item)
+            if not is_excluded(item):
+                yield item
 
-        # Note: All include combinations are processed after exclude. This allows
-        # you to use include to add back combinations that were previously
-        # excluded.
-
-        grid_stage1 = [p for p in grid_stage0 if not is_excluded(p)]
-
-        orig_keys = set(matrix.keys())
-        # Extra items are never modified by future include values include values
-        # will only modify non-conflicting original grid items or create one of
-        # these special immutable grid items.
-        appended_items = []
-
-        # For each object in the include list
-        for include_item in include:
-            ...
-            any_updated = False
-            for grid_item in grid_stage1:
-                common_orig1 = (grid_item & include_item) & orig_keys
-                common_orig2 = (include_item & grid_item) & orig_keys
-                if common_orig1 == common_orig2:
-                    # the key:value pairs in the object will be added to each of
-                    # the [original] matrix combinations if none of the key:value
-                    # pairs overwrite any of the original matrix values
-                    any_updated = True
-                    # Note that the original matrix values will not be overwritten
-                    # but added matrix values can be overwritten
-                    grid_item.update(include_item)
-            if not any_updated:
-                # If the object cannot be added to any of the matrix combinations, a
-                # new matrix combination will be created instead.
-                appended_items.append(include_item)
-        grid_items = grid_stage1 + appended_items
-
-        yield from grid_items
+    for idx, n in include_idx_to_nvariants.items():
+        if n == 0:
+            grid_item = include[idx]
+            yield grid_item

@@ -251,11 +251,9 @@ class ScheduleEvaluationConfig(scfg.DataConfig):
 
     max_configs = scfg.Value(None, help='if specified only run at most this many of the grid search configs')
 
-    print_commands = scfg.Value(1, isflag=True, help='enable / disable rprint before exec', alias=['rprint'])
-    print_varied_info = 0
-    print_queue = 0
-
-    matrix_version = 1
+    print_commands = scfg.Value('auto', isflag=True, help='enable / disable rprint before exec', alias=['rprint'])
+    print_varied = scfg.Value('auto', isflag=True, help='print the varied parameters')
+    print_queue = scfg.Value('auto', isflag=True, help='print the cmd queue DAG')
 
 
 @profile
@@ -310,11 +308,10 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
     # Expand paramater search grid
     if config['params'] is not None:
-        all_param_grid = expand_param_grid(
+        all_param_grid = list(expand_param_grid(
             config['params'],
             max_configs=config['max_configs'],
-            version=config['matrix_version']
-        )
+        ))
     else:
         all_param_grid = []
 
@@ -331,7 +328,34 @@ def schedule_evaluation(cmdline=False, **kwargs):
                 skip_existing=config['skip_existing'],
                 enable_links=config['enable_links'])
 
-    if config['print_varied_info']:
+    print('len(queue)={len(queue)}')
+
+    print_thresh = 30
+    if config['print_commands'] == 'auto':
+        if len(queue) < print_thresh:
+            config['print_commands'] = 1
+        else:
+            print(f'More than {print_thresh} jobs, skip queue.print_commands. '
+                  'If you want to see them explicitly specify print_commands=1')
+            config['print_commands'] = 0
+
+    if config['print_queue'] == 'auto':
+        if len(queue) < print_thresh:
+            config['print_queue'] = 1
+        else:
+            print(f'More than {print_thresh} jobs, skip queue.print_graph. '
+                  'If you want to see them explicitly specify print_queue=1')
+            config['print_queue'] = 0
+
+    if config['print_varied'] == 'auto':
+        if len(queue) < print_thresh:
+            config['print_varied'] = 1
+        else:
+            print(f'More than {print_thresh} jobs, skip print_varied. '
+                  'If you want to see them explicitly specify print_varied=1')
+            config['print_varied'] = 0
+
+    if config['print_varied']:
         # Print config info
         from watch.utils.result_analysis import varied_values
         longparams = pd.DataFrame(all_param_grid)
@@ -347,17 +371,13 @@ def schedule_evaluation(cmdline=False, **kwargs):
         displayable = relevant.applymap(pandas_preformat)
         rich.print(displayable.to_string())
 
-    # print('queue = {!r}'.format(queue))
-    # print(f'{len(queue)=}')
-    with_status = 0
-    with_rich = 0
-
     if config['print_queue']:
-        queue.write_network_text()
+        queue.print_graph()
 
     if config['print_commands']:
-        queue.rprint(with_status=with_status, with_rich=with_rich,
-                     with_locks=0, exclude_tags=['boilerplate'])
+        queue.print_commands(
+            with_status=0, with_rich=0, with_locks=0,
+            exclude_tags=['boilerplate'])
 
     for job in queue.jobs:
         # TODO: should be able to set this as a queue param.
