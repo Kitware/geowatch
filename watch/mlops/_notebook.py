@@ -79,8 +79,8 @@ def _namek_eval():
     agg.primary_metric_cols = ['bas_poly_eval.metrics.bas_f1']
     _ = agg.report_best()
 
-    agg.primary_metric_cols = ['bas_poly_eval.metrics.bas_ppv', 'bas_poly_eval.metrics.bas_tpr']
-    _ = agg.report_best()
+    # agg.primary_metric_cols = ['bas_poly_eval.metrics.bas_ppv', 'bas_poly_eval.metrics.bas_tpr']
+    # _ = agg.report_best()
 
     from watch.mlops.aggregate import build_all_param_plots
     # rois = {'KR_R001', 'KR_R002'}
@@ -119,6 +119,8 @@ def _timekernel_analysis():
     # rois = {'KR_R001', 'KR_R002'}
     rois = {'KR_R001'}
     _ = agg.report_best()
+
+    build_all_param_plots(agg, rois, config)
 
     build_all_param_plots(agg, rois, config)
     from watch.mlops.aggregate import build_all_param_plots

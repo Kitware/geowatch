@@ -59,7 +59,7 @@ def main(cmdline=True, **kwargs):
         >>> kwargs = {
         >>>     'root_dpath': expt_dvc_dpath / '_testpipe',
         >>>     'pipeline': 'bas',
-        >>>     'io_workers': 10,
+        >>>     'io_workers': 0,
         >>>     'freeze_cache': 0,
         >>>     # 'pipeline': 'joint_bas_sc_nocrop',
         >>>     # 'root_dpath': expt_dvc_dpath / '_testsc',
@@ -253,7 +253,7 @@ def build_all_param_plots(agg, rois, config):
     ax.set_title(f'BAS Per-Region Results (n={len(agg)})')
     ax.set_xscale('log')
     fpath = agg_group_dpath / 'single_results.png'
-    finalize_figure(fig, fpath)
+    finalize_figure.finalize(fig, fpath)
     # ax.set_xlim(0, np.quantile(agg.metrics[x], 0.99))
     # ax.set_xlim(1e-2, np.quantile(agg.metrics[x], 0.99))
 
@@ -261,13 +261,14 @@ def build_all_param_plots(agg, rois, config):
         fig = kwplot.figure(fnum=90, doclf=True)
         ax = sns.boxplot(data=single_table, x='region_id', y=main_metric)
         ax.set_title(f'BAS Per-Region Results (n={len(agg)})')
+        param_histogram = single_table.groupby('region_id').size().to_dict()
         util_kwplot.LabelModifier({
             param_value: f'{param_value}\n(n={num})'
-            for param_value, num in single_table.groupby('region_id').size().to_dict().items()
+            for param_value, num in param_histogram.items()
         }).relabel_xticks(ax)
         modifier.relabel(ax)
         fpath = agg_group_dpath / 'single_results_boxplot.png'
-        finalize_figure(fig, fpath)
+        finalize_figure.finalize(fig, fpath)
     except Exception:
         ...
 
@@ -281,7 +282,7 @@ def build_all_param_plots(agg, rois, config):
                  f'Macro Analysis over {ub.urepr(rois, sv=1, nl=0)}')
     ax.set_xscale(xscale)
     fpath = agg_group_dpath / 'macro_results.png'
-    finalize_figure(fig, fpath)
+    finalize_figure.finalize(fig, fpath)
     # ax.set_xlim(1e-2, npe.quantile(agg.metrics[x], 0.99))
     # ax.set_xlim(1e-2, 0.7)
 
@@ -307,9 +308,6 @@ def build_all_param_plots(agg, rois, config):
         import xdev
         xdev.view_directory(agg_group_dpath)
 
-    # if 1:
-    #     ranked_params = [p for p in ranked_params if 'resolution' in p]
-
     from kwcoco.metrics.drawing import concice_si_display
     for rank, param_name in ub.ProgIter(enumerate(ranked_params)):
         stats = param_name_to_stats[param_name]
@@ -321,10 +319,47 @@ def build_all_param_plots(agg, rois, config):
         if param_name in param_to_palette:
             snskw['palette'] = param_to_palette[param_name]
 
+        # Number of samples we have for each value of this parameter
+        param_histogram = ub.udict(macro_table.groupby(param_name).size().to_dict())
+        param_histogram = param_histogram.map_keys(str)
+
+        text_len_thresh = 20
+        param_labels = [str(p) for p in param_histogram]
+        text_label_size = len(''.join(param_labels))
+        if text_label_size > text_len_thresh:
+            had_value_remap = True
+            # Param names are too long. need to map parameter names to codes.
+            param_valname_map = {}
+            prefixchar = param_name.split('.')[-1][0].upper()
+            for idx, value in enumerate(sorted(param_histogram.keys())):
+                old_name = str(value)
+                new_name = f'{prefixchar}{idx:02d}'
+                param_valname_map[old_name] = new_name
+        else:
+            had_value_remap = False
+            param_valname_map = ub.dzip(param_labels, param_labels)
+
+        # Mapper for the scatterplot legend
+        if had_value_remap:
+            freq_mapper_scatter = util_kwplot.LabelModifier({
+                param_value: f'{param_value}\n{param_valname_map[param_value]} (n={num})'
+                for param_value, num in param_histogram.items()
+            })
+        else:
+            freq_mapper_scatter = util_kwplot.LabelModifier({
+                param_value: f'{param_value}\n(n={num})'
+                for param_value, num in param_histogram.items()
+            })
+
+        freq_mapper_box = util_kwplot.LabelModifier({
+            param_value: f'{param_valname_map[param_value]}\n(n={num})'
+            for param_value, num in param_histogram.items()
+        })
+
+        fname_prefix = f'macro_results_{rank:03d}_{param_name}'
+
         fig = kwplot.figure(fnum=4, doclf=True)
-        # ax = sns.scatterplot(data=macro_table, x=x, y=y, hue=agg.model_cols[0])
-        ax = sns.scatterplot(data=macro_table, x=x, y=y, hue=param_name, legend=False, **snskw)
-        # scatterplot_highlight(data=macro_table, x=x, y=y, highlight='is_star', ax=ax, size=300)
+        ax = sns.scatterplot(data=macro_table, x=x, y=y, hue=param_name, legend=True, **snskw)
         ax.set_title(f'BAS Results (n={len(macro_table)})\n'
                      f'Macro Analysis over {ub.urepr(rois, sv=1, nl=0)}\n'
                      f'Effect of {param_name}: anova_rank_p={concice_si_display(anova_rank_p)}')
@@ -332,21 +367,40 @@ def build_all_param_plots(agg, rois, config):
             scatterplot_highlight(data=macro_table, x=x, y=y, highlight='is_star', ax=ax, size=300)
         ax.set_xscale(xscale)
         modifier.relabel(ax)
-        fpath = agg_group_dpath / f'macro_results_{rank:03d}_{param_name}.png'
-        finalize_figure(fig, fpath)
+        fpath = agg_group_dpath / f'{fname_prefix}_scatter_legend.png'
+        finalize_figure.finalize(fig, fpath)
+
+        legend_ax = util_kwplot.extract_legend(ax)
+        fpath = agg_group_dpath / f'{fname_prefix}_scatter_onlylegend.png'
+        freq_mapper_scatter.relabel(legend_ax)
+        finalize_figure.finalize(legend_ax.figure, fpath)
+
+        ax.get_legend().remove()
+        fpath = agg_group_dpath / f'{fname_prefix}_scatter_nolegend.png'
+        finalize_figure.finalize(fig, fpath)
 
         fig = kwplot.figure(fnum=5, doclf=True)
         ax = sns.boxplot(data=macro_table, x=param_name, y=y, **snskw)
-        util_kwplot.LabelModifier({
-            param_value: f'{param_value}\n(n={num})'
-            for param_value, num in macro_table.groupby(param_name).size().to_dict().items()
-        }).relabel_xticks(ax)
+        freq_mapper_box.relabel_xticks(ax)
         ax.set_title(f'BAS Results (n={len(macro_table)})\n'
                      f'Macro Analysis over {ub.urepr(rois, sv=1, nl=0)}\n'
                      f'Effect of {param_name}: anova_rank_p={concice_si_display(anova_rank_p)}')
         modifier.relabel(ax)
         fpath = agg_group_dpath / f'macro_results_{rank:03d}_{param_name}_box.png'
-        finalize_figure(fig, fpath)
+        finalize_figure.finalize(fig, fpath)
+
+        if had_value_remap:
+            param_code_lut = []
+            for old_name, new_name in param_valname_map.items():
+                param_code_lut.append({
+                    'code': new_name,
+                    'value': old_name,
+                    'num': param_histogram[old_name],
+                })
+            fpath = agg_group_dpath / f'{fname_prefix}_value_lut.png'
+            finalize_figure.finalize(fig, fpath)
+            param_code_lut = pd.DataFrame(param_code_lut)
+            util_kwplot.dataframe_table(param_code_lut, fpath)
 
 
 def build_smart_label_modifier():
@@ -791,6 +845,7 @@ def build_aggregators(eval_type_to_results):
     eval_type_to_aggregator = {}
     for key, results in eval_type_to_results.items():
         agg = Aggregator(results, type=key)
+        # FIXME: if there are no results, don't try to build?
         agg.build()
         eval_type_to_aggregator[key] = agg
         # TODO : nicer replacement of long paths for params
@@ -830,6 +885,11 @@ class Aggregator(ub.NiceRepr):
 
     def __len__(self):
         return len(self.index)
+
+    def view_directory(agg):
+        import xdev
+        # TODO: make agg.dpath
+        xdev.view_directory(agg.dpath)
 
     @property
     def primary_macro_region(agg):

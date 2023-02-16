@@ -50,7 +50,10 @@ def cropwhite_ondisk(fpath):
     kwimage.imwrite(fpath, imdata)
 
 
-def dataframe_table(table_style, fpath, fontsize=12, fnum=None, show='eog'):
+def dataframe_table(table_style, fpath, fontsize=12, fnum=None, show=False):
+    """
+    Use dataframe_image (dfi) to render a pandas dataframe.
+    """
     import kwimage
     import kwplot
     import dataframe_image as dfi
@@ -198,30 +201,38 @@ class LabelModifier:
     """
 
     def __init__(self, mapping=None):
-        self._dict_mappers = []
+        self._dict_mapper = {}
         self._func_mappers = []
         self.add_mapping(mapping)
+
+    def copy(self):
+        new = self.__class__()
+        new.add_mapping(self._dict_mappem.copy())
+        for m in self._func_mappers:
+            new.add_mapping(m)
+        return new
 
     def add_mapping(self, mapping):
         if mapping is not None:
             if callable(mapping):
                 self._func_mappers.append(mapping)
             elif hasattr(mapping, 'get'):
-                self._dict_mappers.append(mapping)
+                self._dict_mapper.update(mapping)
+                self._dict_mapper.update(ub.udict(mapping).map_keys(str))
+        return self
 
     def update(self, dict_mapping):
-        if self._dict_mappers:
-            for d in self._dict_mappers:
-                d.update(dict_mapping)
-        else:
-            self.add_mapping(dict_mapping)
+        self._dict_mapper.update(dict_mapping)
+        self._dict_mapper.update(ub.udict(dict_mapping).map_keys(str))
+        return self
 
     def _modify_text(self, text: str):
         # Handles strings, which we call text by convention, but that is
         # confusing here.
         new_text = text
-        for mapper in self._dict_mappers:
-            new_text = mapper.get(new_text, mapper.get(str(new_text), new_text))
+        mapper = self._dict_mapper
+        new_text = mapper.get(str(new_text), new_text)
+        new_text = mapper.get(new_text, new_text)
         for mapper in self._func_mappers:
             new_text = mapper(new_text)
         return new_text
@@ -235,7 +246,11 @@ class LabelModifier:
 
     def modify_legend(self, legend):
         leg_title = legend.get_title()
-        self._modify_labels(leg_title)
+        if isinstance(leg_title, str):
+            new_leg_title = self._modify_text(leg_title)
+            legend.set_text(new_leg_title)
+        else:
+            self._modify_labels(leg_title)
         for label in legend.texts:
             self._modify_labels(label)
 
@@ -278,6 +293,9 @@ class LabelModifier:
 
 
 class FigureFinalizer:
+    """
+    Helper for defining where and how figures will be saved on disk.
+    """
     def __init__(
         self,
         dpath='.',
@@ -290,7 +308,7 @@ class FigureFinalizer:
     def update(self, *args, **kwargs):
         self.__dict__.update(*args, **kwargs)
 
-    def __call__(self, fig, fpath, **kwargs):
+    def finalize(self, fig, fpath, **kwargs):
         config = ub.udict(self.__dict__) | kwargs
         final_fpath = ub.Path(config['dpath']) / fpath
         if config['size_inches'] is not None:
@@ -299,6 +317,9 @@ class FigureFinalizer:
             fig.tight_layout()
         fig.savefig(final_fpath)
         cropwhite_ondisk(final_fpath)
+
+    def __call__(self, fig, fpath, **kwargs):
+        return self.finalize(fig, fpath, **kwargs)
 
 
 def fix_matplotlib_dates(dates):
@@ -329,3 +350,23 @@ def fix_matplotlib_timedeltas(deltas):
         #     n = mdates.num2timedelta(n)
         new.append(n)
     return new
+
+
+def extract_legend(ax):
+    """
+    Creates a new figure that contains the original legend.
+    """
+    # ax.get_legend().remove()
+    orig_legend = ax.get_legend()
+    orig_legend_title = orig_legend.get_title().get_text()
+    legend_handles = ax.get_legend_handles_labels()
+
+    # fnum = 321
+    import kwplot
+    fig_onlylegend = kwplot.figure(
+        fnum=str(ax.figure.number) + '_onlylegend', doclf=1)
+    new_ax = fig_onlylegend.gca()
+    new_ax.axis('off')
+    new_ax.legend(*legend_handles, title=orig_legend_title,
+                            loc='lower center')
+    return new_ax
