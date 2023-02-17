@@ -1,12 +1,15 @@
-Coding Oddities in the WATCH REPO
-=================================
-
+Coding Conventions in the WATCH REPO
+====================================
 
 This document is an effort to list concepts and patterns that you will see if
 you work in this repo that may cause confusion unless you have this prior
 knowledge. In some cases we may try to make the code more clear in the future,
 but in other cases these patterns bring enough of a benefit that we require
 prerequisite knowledge.
+
+This is not necesarilly a style guide, it simply documents the patterns that
+you will encounter. Some of these are recommended, while others we are
+modifying. When possible we will note this.
 
 
 NOTE: If you find a coding pattern or abbreviation that confused you at first,
@@ -20,11 +23,11 @@ Common abbreviations:
 
 Variable abbreviations:
 
-* ``aid`` - annotation id
+* ``aid`` - annotation id - try to use ``annot_id`` instead
 
-* ``gid`` - imaGe id -- The first weird one!
+* ``gid`` - imaGe id - try to use ``image_id`` instead
 
-* ``cid`` - category id 
+* ``cid`` - category id  - try to use ``category_id`` instead
 
 * A suffix of ``x`` or ``idx`` - an index (e.g. ``cx`` for category index)
 
@@ -32,13 +35,13 @@ Variable abbreviations:
 
 * The "xywh", "ltrb", and "cxywh" are codes indicating the format of bounding boxes for `kwimage.Boxes <https://kwimage.readthedocs.io/en/release/kwimage.structs.boxes.html#module-kwimage.structs.boxes>_`. They stand for "left-x, top-y, width, height", "left-x, top-y, right-x, bottom-y", and "center-x, center-y, width, height" respectively.
 
-* ``dsize`` - This ALWAYS means a (width, height) pair, usually a ``Tuple[int, int]``, but not always. In VERY rare circumstances, an individual width or height may be None to represent that it is not known or needed to be specified. 
+* ``dsize`` - This ALWAYS means a (width, height) pair, usually a ``Tuple[int, int]``, but not always. In VERY rare circumstances, an individual width or height may be None to represent that it is not known or needed to be specified. This is a recommended pattern; please follow this.
 
-* ``shape`` - This is going to be the row-major shape of an array usually. Often (h, w, channel) or just (h, w)
+* ``shape`` - This is going to be the row-major shape of an array usually. Often (h, w, channel) or just (h, w).  This is a recommended pattern; please follow this.
 
-* ``fpath`` - a "file" path. This is used to store a string of ``Path`` object representing a path that points to a file (i.e. not a directory).
+* ``fpath`` - a "file" path. This is used to store a string of ``Path`` object representing a path that points to a file (i.e. not a directory).  This is a recommended pattern; please follow this.
 
-* ``dpath`` - a "directory" path. This is used to store a string of ``Path`` object representing a path that points to a directory (i.e. not a file).
+* ``dpath`` - a "directory" path. This is used to store a string of ``Path`` object representing a path that points to a directory (i.e. not a file). This is a recommended pattern; please follow this.
 
 
 Notes on row-vs-column major coordinate axes:
