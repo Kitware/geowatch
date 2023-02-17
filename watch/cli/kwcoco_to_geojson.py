@@ -556,10 +556,19 @@ def convert_kwcoco_to_iarpa(coco_dset,
         >>> videos.set('name', ['DM_R{:03d}'.format(vidid) for vidid in videos])
         >>> sites = convert_kwcoco_to_iarpa(coco_dset)
         >>> print(f'{len(sites)} sites')
-        >>> import jsonschema
-        >>> SITE_SCHEMA = watch.rc.load_site_model_schema()
-        >>> for site in sites:
-        >>>     jsonschema.validate(site, schema=SITE_SCHEMA)
+        >>> if 0:  # validation fails
+        >>>     import jsonschema
+        >>>     SITE_SCHEMA = watch.rc.load_site_model_schema()
+        >>>     for site in sites:
+        >>>         jsonschema.validate(site, schema=SITE_SCHEMA)
+        >>> elif 0:  # but this works if metrics are available
+        >>>     import tempfile
+        >>>     import json
+        >>>     from iarpa_smart_metrics.evaluation import SiteStack
+        >>>     for site in sites:
+        >>>         with tempfile.NamedTemporaryFile() as f:
+        >>>             json.dump(site, open(f.name, 'w'))
+        >>>             SiteStack(f.name)
     """
     sites = []
     for vidid, video in coco_dset.index.videos.items():

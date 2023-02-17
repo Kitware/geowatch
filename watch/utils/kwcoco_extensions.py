@@ -1907,8 +1907,8 @@ def warp_annot_segmentations_from_geos(coco_dset):
         >>> warp_annot_segmentations_from_geos(coco_dset)
         >>> errors = []
         >>> for aid in coco_dset.annots():
-        >>>     ann0 = orig_dset.index.anns[aid]
-        >>>     ann1 = coco_dset.index.anns[aid]
+        >>>     ann1 = orig_dset.index.anns[aid]
+        >>>     ann2 = coco_dset.index.anns[aid]
         >>>     poly1 = kwimage.MultiPolygon.coerce(ann1['segmentation'])
         >>>     poly2 = kwimage.MultiPolygon.coerce(ann2['segmentation'])
         >>>     worked = (poly1.is_invalid() and poly2.is_invalid()) or poly1.iou(poly2) > 0.99
