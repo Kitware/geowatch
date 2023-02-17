@@ -29,10 +29,6 @@ class ColdPredictConfig(scfg.DataConfig):
     timestamp = scfg.Value(True, help='True: exporting cold result by timestamp, False: exporting cold result by year, Default is False')
     mode = scfg.Value('process', help='Can be process, serial, or thread')
     
-    #n_core #
-
-    # b_c2 = scfg.Value(True, help='indicate if it is c2 or not') 
-    
 def main(cmdline=1, **kwargs):
     """
 
