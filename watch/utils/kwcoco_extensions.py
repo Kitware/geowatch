@@ -1856,6 +1856,8 @@ def coco_img_wld_info(coco_img):
     """
     from watch.utils import util_gis
     asset = coco_img.primary_asset(requires=['geos_corners'])
+    if asset is None:
+        raise KeyError(f'Geo-referenced asset not found for {coco_img}')
     if 'wld_to_pxl' in asset:
         warp_aux_from_wld = kwimage.Affine.coerce(asset['wld_to_pxl'])
     elif 'warp_to_wld' in asset:
@@ -1897,6 +1899,7 @@ def warp_annot_segmentations_from_geos(coco_dset):
     Example:
         >>> from watch.utils.kwcoco_extensions import *  # NOQA
         >>> import watch
+        >>> # creating demodata also uses warp_annot_segmentations_to_geos
         >>> orig_dset = watch.coerce_kwcoco('watch-msi', geodata=True)
         >>> coco_dset = orig_dset.copy()
         >>> for ann in coco_dset.annots().objs:
