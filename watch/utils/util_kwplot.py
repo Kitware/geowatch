@@ -51,7 +51,7 @@ def cropwhite_ondisk(fpath):
 
 
 def dataframe_table(table, fpath, title=None, fontsize=12,
-                    table_conversion='chrome', fnum=None, show=False):
+                    table_conversion='auto', fnum=None, show=False):
     """
     Use dataframe_image (dfi) to render a pandas dataframe.
 
@@ -59,7 +59,8 @@ def dataframe_table(table, fpath, title=None, fontsize=12,
         table (pandas.DataFrame | pandas.io.formats.style.Styler)
         fpath (str | PathLike): where to save the image
         table_conversion (str):
-            can be chrome or matplotlib
+            can be auto, chrome, or matplotlib (auto tries to default to
+            chrome)
 
     Example:
         >>> # xdoctest: +REQUIRES(module:dataframe_image)
@@ -79,6 +80,12 @@ def dataframe_table(table, fpath, title=None, fontsize=12,
     import dataframe_image as dfi
     import pandas as pd
     # table_conversion = "chrome"  # matplotlib
+
+    if table_conversion == 'chrome':
+        if ub.find_exe('google-chrome'):
+            table_conversion = 'chrome'
+        else:
+            table_conversion = 'matplotlib'
 
     if isinstance(table, pd.DataFrame):
         style = table.style
