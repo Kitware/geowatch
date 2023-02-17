@@ -427,10 +427,15 @@ def time_aggregated_polys(
         scale_vid_from_trk = (1, 1)
 
     if tracking_gsd is None:
-        default_gsd = 30
+        if len(video_gids):
+            # Use whatever is in the kwcoco file as the default.
+            vidspace_resolution = first_coco_img.resolution(space='video')['mag']
+            default_gsd = np.mean(vidspace_resolution)
+        else:
+            default_gsd = 30
+            print(f'warning: video {video["name"]} in dset {sub_dset.tag} '
+                  f'has no listed resolution; assuming {default_gsd}')
         tracking_gsd = default_gsd
-        print(f'warning: video {video["name"]} in dset {sub_dset.tag} '
-              f'has no listed resolution; assuming {default_gsd}')
 
     if not any(has_requested_chans_list):
         raise KeyError(f'no imgs in dset {sub_dset.tag} '

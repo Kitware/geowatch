@@ -33,6 +33,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Removed `tensorboard` and `tensorflow` dependencies
 * Issue in `warp_annot_segmentations_from_geos`
 * Issue in `polygon_distance_transform`.
+* Issue in tracker where it would use 30GSD even if there was a default.
 
 ### Misc
 * Drop6 scripts in the dev folder
