@@ -8,18 +8,18 @@ help organize this are appreciated!
 
 To get started:
 
-* `onboarding guide guide <onboarding.rst>_`.
+* `onboarding guide guide <onboarding.rst>`_.
 
 
 For coding guides see:
 
 
-* `coding tips <coding_tips.rst>_`.
-* `coding conventions <coding_conventions.rst>_`.
-* `testing practices <testing_practices.rst>_`.
+* `coding tips <coding_tips.rst>`_.
+* `coding conventions <coding_conventions.rst>`_.
+* `testing practices <testing_practices.rst>`_.
 
 
 For contribution see:
 
-* `contribution instructions <contribution_instructions.rst>_`.
-* `rebasing procedure <rebasing_procedure.rst>_`.
+* `contribution instructions <contribution_instructions.rst>`_.
+* `rebasing procedure <rebasing_procedure.rst>`_.
