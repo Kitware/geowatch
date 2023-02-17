@@ -1880,7 +1880,7 @@ def coco_img_wld_info(coco_img):
     return warp_img_from_wld, wld_crs
 
 
-def warp_annot_segmentations_from_geos(coco_dset, reverse=False, overwrite=True):
+def warp_annot_segmentations_from_geos(coco_dset):
     """
     Uses the segmentation_geos property (which should be crs84) and warps it
     into image space based on available geo data.
@@ -1923,8 +1923,7 @@ def warp_annot_segmentations_from_geos(coco_dset, reverse=False, overwrite=True)
         aids = []
         for ann in coco_dset.annots(image_id=gid).objs:
             if 'segmentation_geos' in ann:
-                if overwrite or ('segmentation' in ann):
-                    aids.append(ann['id'])
+                aids.append(ann['id'])
         annots = coco_dset.annots(aids)
         if len(annots) > 0:
             # TODO: check crs properties (probably always crs84)
@@ -1972,7 +1971,7 @@ def warp_annot_segmentations_from_geos(coco_dset, reverse=False, overwrite=True)
             assert 'segmentation' in ann
 
 
-def warp_annot_segmentations_to_geos(coco_dset, overwrite=True):
+def warp_annot_segmentations_to_geos(coco_dset):
     """
 
     Example:
@@ -2003,8 +2002,7 @@ def warp_annot_segmentations_to_geos(coco_dset, overwrite=True):
         aids = []
         for ann in coco_dset.annots(image_id=gid).objs:
             if 'segmentation' in ann:
-                if overwrite or ('segmentation_geos' not in ann):
-                    aids.append(ann['id'])
+                aids.append(ann['id'])
         annots = coco_dset.annots(aids)
         if len(annots) > 0:
             # TODO: check crs properties (probably always crs84)
