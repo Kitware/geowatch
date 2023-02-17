@@ -429,6 +429,9 @@ def time_aggregated_polys(
     if tracking_gsd is None:
         if len(video_gids):
             # Use whatever is in the kwcoco file as the default.
+            first_gid = video_gids[0]
+            first_coco_img = sub_dset.coco_image(first_gid)
+            # (w, h)
             vidspace_resolution = first_coco_img.resolution(space='video')['mag']
             default_gsd = np.mean(vidspace_resolution)
         else:
@@ -974,14 +977,15 @@ class TimeAggregatedSC(NewTrackFunction):
             'polys': generated polys will be the boundaries
             'none': generated polys will ignore the boundaries
         '''
-        # TODO last use of Track here
         if self.boundaries_as == 'polys':
             tracks = pop_tracks(
                 sub_dset,
                 cnames=[SITE_SUMMARY_CNAME],
                 # these are SC scores, not BAS, so this is not a
                 # true reproduction of hybrid.
-                score_chan=kwcoco.ChannelSpec('|'.join(self.key)))
+                score_chan=kwcoco.ChannelSpec('|'.join(self.key)),
+                resolution=self.resolution,
+            )
             # hack in always-foreground instead
             # tracks[(score_chan, None)] = 1
 
