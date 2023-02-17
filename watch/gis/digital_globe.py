@@ -1,5 +1,21 @@
-"""
+r"""
 Helpers for reading data downloaded from digital globe
+
+
+Notes:
+    The data in the Core3D dataset is public and can be rehosted.
+
+    https://spacenet.ai/core3d/
+
+    AWS_PROFILE=iarpa aws s3 ls s3://spacenet-dataset/Hosted-Datasets/CORE3D-Public-Data/Satellite-Images/
+    AWS_PROFILE=iarpa aws s3 ls s3://spacenet-dataset/Hosted-Datasets/CORE3D-Public-Data/Tiled-Examples-for-Urban-3D-Challenge-Comparisons/02_Master/challenge-inputs/
+
+    AWS_PROFILE=iarpa aws s3 cp \
+            s3://spacenet-dataset/Hosted-Datasets/CORE3D-Public-Data/Tiled-Examples-for-Urban-3D-Challenge-Comparisons/02_Master/challenge-inputs/RIC_Tile_000_DSM.tif RIC_Tile_000_DSM.tif
+    AWS_PROFILE=iarpa aws s3 cp \
+            s3://spacenet-dataset/Hosted-Datasets/CORE3D-Public-Data/Tiled-Examples-for-Urban-3D-Challenge-Comparisons/02_Master/challenge-inputs/RIC_Tile_000_DTM.tif RIC_Tile_000_DTM.tif
+    AWS_PROFILE=iarpa aws s3 cp \
+            s3://spacenet-dataset/Hosted-Datasets/CORE3D-Public-Data/Tiled-Examples-for-Urban-3D-Challenge-Comparisons/02_Master/challenge-inputs/RIC_Tile_000_RGB.tif RIC_Tile_000_RGB.tif
 
 Requirements:
     pip install xmltodict

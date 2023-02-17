@@ -26,38 +26,38 @@ def custom_yaml_dump(data):
 set_dumper('yaml_unsafe_for_tuples', custom_yaml_dump)
 
 
-# class PartialWeightInitializer(pl.callbacks.Callback):
+class PartialWeightInitializer(pl.callbacks.Callback):
 
-#     def __init__(self, init='noop'):
-#         ...
+    def __init__(self, init='noop'):
+        ...
 
-#     def on_fit_start(self, trainer, pl_module):
-#         if 0:
-#             # TODO: make this work
-#             import ubelt as ub
-#             from watch.tasks.fusion.fit import coerce_initializer
-#             from watch.utils import util_pattern
-#             init_fpath = '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt'
-#             initializer = coerce_initializer(init_fpath)
-#             # other_model = getattr(initializer, 'other_model', None)
+    def on_fit_start(self, trainer, pl_module):
+        if 0:
+            # TODO: make this work
+            import ubelt as ub
+            from watch.tasks.fusion.fit import coerce_initializer
+            from watch.utils import util_pattern
+            init_fpath = '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt'
+            initializer = coerce_initializer(init_fpath)
+            # other_model = getattr(initializer, 'other_model', None)
 
-#             # Hack to preserve specific values
-#             print('Initializing weights')
-#             old_state = pl_module.state_dict()
-#             ignore_pattern = util_pattern.MultiPattern.coerce(['*tokenizers*.0.mean', '*tokenizers*.0.std'])
-#             ignore_keys = [key for key in old_state.keys() if ignore_pattern.match(key)]
-#             print('Finding keys to not initializer')
-#             to_preserve = ub.udict(old_state).subdict(ignore_keys).map_values(lambda v: v.clone())
+            # Hack to preserve specific values
+            print('Initializing weights')
+            old_state = pl_module.state_dict()
+            ignore_pattern = util_pattern.MultiPattern.coerce(['*tokenizers*.0.mean', '*tokenizers*.0.std'])
+            ignore_keys = [key for key in old_state.keys() if ignore_pattern.match(key)]
+            print('Finding keys to not initializer')
+            to_preserve = ub.udict(old_state).subdict(ignore_keys).map_values(lambda v: v.clone())
 
-#             initializer.association = 'embedding'
-#             info = initializer.forward(pl_module)  # NOQA
-#             if info:
-#                 mapping = info.get('mapping', None)
-#                 unset = info.get('self_unset', None)
-#                 unused = info.get('self_unused', None)
-#                 print('mapping = {}'.format(ub.repr2(mapping, nl=1)))
-#                 print(f'unused={unused}')
-#                 print(f'unset={unset}')
+            initializer.association = 'embedding'
+            info = initializer.forward(pl_module)  # NOQA
+            if info:
+                mapping = info.get('mapping', None)
+                unset = info.get('self_unset', None)
+                unused = info.get('self_unused', None)
+                print('mapping = {}'.format(ub.repr2(mapping, nl=1)))
+                print(f'unused={unused}')
+                print(f'unset={unset}')
 
 
 class SmartLightningCLI(LightningCLI_Extension):
