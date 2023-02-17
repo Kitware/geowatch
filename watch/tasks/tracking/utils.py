@@ -395,7 +395,8 @@ def gpd_compute_scores(gdf,
 def pop_tracks(coco_dset: kwcoco.CocoDataset,
                cnames: Iterable[str],
                remove: bool = True,
-               score_chan: Optional[kwcoco.ChannelSpec] = None):
+               score_chan: Optional[kwcoco.ChannelSpec] = None,
+               resolution: Optional[str] = None):
     '''
     Convert kwcoco annotations into tracks.
 
@@ -433,7 +434,8 @@ def pop_tracks(coco_dset: kwcoco.CocoDataset,
                            geometry='poly')
     if score_chan is not None:
         keys = {score_chan.spec: list(score_chan.unique())}
-        gdf = gpd_compute_scores(gdf, coco_dset, [None], keys, USE_DASK=False)
+        gdf = gpd_compute_scores(gdf, coco_dset, [None], keys, USE_DASK=False,
+                                 resolution=resolution)
     # TODO standard way to access sorted_gids
     sorted_gids = coco_dset.index._set_sorted_by_frame_index(
         np.unique(annots.gids))
