@@ -73,8 +73,6 @@ __getattr__ = lazy_import(
             'coerce_kwcoco',
             'demo_kwcoco_multisensor',
             'demo_kwcoco_with_heatmaps',
-            'demo_smart_aligned_kwcoco',
-            'demo_smart_raw_kwcoco',
             'hack_seed_geometadata_in_dset',
         ],
         'stac_demo': [
@@ -89,8 +87,7 @@ def __dir__():
 
 
 __all__ = ['DEFAULT_KEY', 'coerce_kwcoco', 'demo', 'demo_kwcoco_multisensor',
-           'demo_kwcoco_with_heatmaps', 'demo_smart_aligned_kwcoco',
-           'demo_smart_raw_kwcoco', 'dummy_demodata',
+           'demo_kwcoco_with_heatmaps', 'dummy_demodata',
            'dummy_rpc_geotiff_fpath', 'grab_landsat_product',
            'grab_nitf_fpath', 'grab_sentinel2_product',
            'hack_seed_geometadata_in_dset', 'landsat_demodata',

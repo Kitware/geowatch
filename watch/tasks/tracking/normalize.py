@@ -606,7 +606,6 @@ def dedupe_dates(coco_dset):
 def normalize(
         coco_dset,
         track_fn,
-        overwrite,
         gt_dset=None,
         viz_sc_bounds=False,
         viz_videos=False,
@@ -641,20 +640,18 @@ def normalize(
         >>> d.cats[1]['name'] = 'change'
         >>> d.images().set('channels', 'rgb')
         >>> # test everything except geo-info
-        >>> overwrite = False
-        >>> def _normalize_annots(coco_dset, overwrite):
+        >>> def _normalize_annots(coco_dset):
         >>>     coco_dset = dedupe_annots(coco_dset)
-        >>>     # coco_dset = add_geos(coco_dset, overwrite)
         >>>     coco_dset = remove_small_annots(coco_dset,
         >>>         min_geo_precision=None)
         >>>     return coco_dset
         >>> coco_dset = d.copy()
-        >>> coco_dset = _normalize_annots(coco_dset, overwrite)
+        >>> coco_dset = _normalize_annots(coco_dset)
         >>> assert coco_dset.anns == d.anns
         >>> coco_dset = ensure_videos(coco_dset)
         >>> assert coco_dset.index.vidid_to_gids[1] == coco_dset.imgs.keys()
         >>> n_existing_annots = coco_dset.n_annots
-        >>> coco_dset = OverlapTrack().apply_per_video(coco_dset, overwrite)
+        >>> coco_dset = OverlapTrack().apply_per_video(coco_dset)
         >>> assert set(coco_dset.annots().get('track_id')) == {1}
         >>> assert coco_dset.n_annots == n_existing_annots
         >>> coco_dset = dedupe_tracks(coco_dset)
@@ -675,10 +672,10 @@ def normalize(
 
     viz_out_dir = ub.Path('_assets/tracking_visualization')
 
-    def _normalize_annots(coco_dset, overwrite):
+    def _normalize_annots(coco_dset):
         print(f'coco_dset.n_anns={coco_dset.n_annots}')
         coco_dset = dedupe_annots(coco_dset)
-        warp_annot_segmentations_to_geos(coco_dset, overwrite=overwrite)
+        warp_annot_segmentations_to_geos(coco_dset)
         coco_dset = remove_small_annots(coco_dset,
                                         min_area_px=0,
                                         min_geo_precision=None)
@@ -688,7 +685,7 @@ def normalize(
         return coco_dset
 
     if len(coco_dset.anns) > 0:
-        coco_dset = _normalize_annots(coco_dset, overwrite)
+        coco_dset = _normalize_annots(coco_dset)
     coco_dset = ensure_videos(coco_dset)
 
     if DEBUG_JSON_SERIALIZABLE:
@@ -714,7 +711,7 @@ def normalize(
         debug_json_unserializable(out_dset.dataset, 'After apply_per_video: ')
 
     # normalize and add geo segmentations
-    out_dset = _normalize_annots(out_dset, overwrite=False)
+    out_dset = _normalize_annots(out_dset)
     out_dset._build_index()
     print('After normalizing: track ids',
           set(out_dset.annots().get('track_id', None)))

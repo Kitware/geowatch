@@ -537,21 +537,18 @@ def convert_kwcoco_to_iarpa(coco_dset,
             dictionary of json-style data in IARPA site format
 
     Example:
+        >>> import watch
         >>> from watch.cli.kwcoco_to_geojson import *  # NOQA
         >>> from watch.tasks.tracking.normalize import run_tracking_pipeline
         >>> from watch.tasks.tracking.from_polygon import MonoTrack
-        >>> from watch.demo import smart_kwcoco_demodata
         >>> import ubelt as ub
-        >>> import watch
         >>> coco_dset = watch.coerce_kwcoco('watch-msi', heatmap=True, geodata=True, dates=True)
-        >>> #coco_dset = smart_kwcoco_demodata.demo_smart_aligned_kwcoco()
         >>> coco_dset = run_tracking_pipeline(coco_dset, track_fn=MonoTrack, overwrite=False)
         >>> videos = coco_dset.videos()
         >>> videos.set('name', ['DM_R{:03d}'.format(vidid) for vidid in videos])
         >>> sites = convert_kwcoco_to_iarpa(coco_dset)
-        >>> print('sites = {}'.format(ub.repr2(sites, nl=7, sort=0)))
+        >>> print(f'{len(sites)} sites')
         >>> import jsonschema
-        >>> import watch
         >>> SITE_SCHEMA = watch.rc.load_site_model_schema()
         >>> for site in sites:
         >>>     jsonschema.validate(site, schema=SITE_SCHEMA)
@@ -871,7 +868,6 @@ def main(args=None, **kwargs):
         >>> # run BAS on demodata in a new place
         >>> import watch
         >>> coco_dset = watch.coerce_kwcoco('watch-msi', heatmap=True, geodata=True, dates=True)
-        >>> #coco_dset = smart_kwcoco_demodata.demo_smart_aligned_kwcoco()
         >>> dpath = ub.Path.appdir('watch', 'test', 'tracking', 'main0').ensuredir()
         >>> coco_dset.reroot(absolute=True)
         >>> coco_dset.fpath = dpath / 'bas_input.kwcoco.json'
@@ -1155,7 +1151,7 @@ def main(args=None, **kwargs):
     ../tasks/tracking/normalize.py
     """
     coco_dset = watch.tasks.tracking.normalize.run_tracking_pipeline(
-        coco_dset, track_fn=track_fn, overwrite=False, gt_dset=gt_dset,
+        coco_dset, track_fn=track_fn, gt_dset=gt_dset,
         **track_kwargs)
 
     # Measure how long tracking takes
