@@ -29,6 +29,10 @@ Example:
     >>> kwplot.imshow(canvas)
     >>> kwplot.show_if_requested()
 
+CommandLine:
+    USE_RTREE=1 DVC_DPATH=1 XDEV_PROFILE=1 xdoctest -m watch.tasks.fusion.datamodules.kwcoco_dataset __doc__:1
+    USE_RTREE=0 DVC_DPATH=1 XDEV_PROFILE=1 xdoctest -m watch.tasks.fusion.datamodules.kwcoco_dataset __doc__:1
+
 Example:
     >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
     >>> # Demo with real data
@@ -37,19 +41,19 @@ Example:
     >>> import kwcoco
     >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
     >>> #coco_fpath = dvc_dpath / 'Drop4-BAS/data_vali.kwcoco.json'
-    >>> coco_fpath = dvc_dpath / 'Drop4-BAS/data_train.kwcoco.json'
+    >>> coco_fpath = dvc_dpath / 'Drop6/data_vali_split1.kwcoco.zip'
     >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
     >>> ##'red|green|blue',
     >>> self = KWCocoVideoDataset(
     >>>     coco_dset,
-    >>>     time_dims=11, window_dims=(196, 196),
+    >>>     time_dims=7, window_dims=(196, 196),
     >>>     window_overlap=0,
     >>>     channels="(S2,L8):blue|green|red|nir",
     >>>     input_space_scale='10GSD',
     >>>     window_space_scale='10GSD',
     >>>     output_space_scale='10GSD',
     >>>     #normalize_peritem='nir',
-    >>>     dist_weights=1,
+    >>>     dist_weights=0,
     >>>     quality_threshold=0,
     >>>     neg_to_pos_ratio=0, time_sampling='soft2',
     >>> )
@@ -59,8 +63,10 @@ Example:
     >>> self.requested_tasks['boxes'] = 1
     >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][0]]
     >>> index['allow_augment'] = False
-
+    >>> item = self[index]
     >>> target = item['target']
+    >>> for idx in range(100):
+    ...     self[idx]
     >>> print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
     >>> # xdoctest: +REQUIRES(--show)
     >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0, rescale=0)
@@ -217,9 +223,10 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             dilate_affinity
             ''')),
 
-        'time_span': scfg.Value('2y', type=str, help=ub.paragraph(
+        'time_span': scfg.Value(None, help=ub.paragraph(
             '''
-            how long a time window should roughly span by default
+            Roughly how much time should be between sample frames.
+            This argument needs reworking.
             ''')),
 
         'time_kernel': scfg.Value(None, type=str, help=ub.paragraph(
@@ -405,7 +412,7 @@ class KWCocoVideoDatasetConfig(scfg.Config):
 
         'mask_low_quality': scfg.Value(False, help='if True, mask low quality pixels with nans'),
 
-        'mask_samecolor_method': scfg.Value('histogram', help=ub.paragraph(
+        'mask_samecolor_method': scfg.Value(None, help=ub.paragraph(
             '''
             If enabled, set as method to use for SAMECOLOR_QUALITY_HEURISTIC.
             Can be histogram or region.
@@ -627,6 +634,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             select_videos=config['select_videos'],
             time_sampling=config['time_sampling'],
             time_span=config['time_span'],
+            time_kernel=config['time_kernel'],
             window_space_scale=self.config['window_space_scale'],
             set_cover_algo=config['set_cover_algo'],
             workers=grid_workers,  # could configure this
@@ -1928,6 +1936,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             frame_items.append(frame_item)
         return frame_items
 
+    @profile
     def _populate_frame_labels(self, frame_item, gid, output_dsize, time_idx,
                                mode_to_invalid_mask, resolution_info, truth_info):
         """
@@ -2194,12 +2203,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         # frame_poly_weights = np.maximum(frame_poly_weights, self.min_spacetime_weight)
 
         if self.upweight_centers:
-            sigma = (
-                (4.8 * ((space_shape[1] - 1) * 0.5 - 1) + 0.8),
-                (4.8 * ((space_shape[0] - 1) * 0.5 - 1) + 0.8),
-            )
-            space_weights = kwarray.normalize(kwimage.gaussian_patch(space_shape, sigma=sigma))
-            # space_weights = util_kwimage.upweight_center_mask(space_shape)
+            space_weights = _space_weights(space_shape)
             space_weights = np.maximum(space_weights, self.min_spacetime_weight)
             spacetime_weights = space_weights * time_weights[time_idx]
         else:
@@ -2211,11 +2215,10 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         if self.config['downweight_nan_regions']:
             nodata_total = 0.0
             for mask in mode_to_invalid_mask.values():
-                if mask is None:
-                    nodata_total += 0
-                else:
+                if mask is not None:
                     if len(mask.shape) == 3:
-                        mask_ = ((mask.sum(axis=2) / mask.shape[2])).astype(float)
+                        mask_ = mask.mean(axis=2)
+                        # mask_ = ((mask.sum(axis=2) / mask.shape[2])).astype(float)
                     else:
                         mask_ = mask.astype(float)
                     mask_ = kwimage.imresize(mask_, dsize=output_dsize)
@@ -2849,6 +2852,16 @@ def worker_init_fn(worker_id):
         if hasattr(self.sampler.dset, 'connect'):
             # Reconnect to the backend if we are using SQL
             self.sampler.dset.connect(readonly=True)
+
+
+@ub.memoize
+def _space_weights(space_shape):
+    sigma = (
+        (4.8 * ((space_shape[1] - 1) * 0.5 - 1) + 0.8),
+        (4.8 * ((space_shape[0] - 1) * 0.5 - 1) + 0.8),
+    )
+    space_weights = kwarray.normalize(kwimage.gaussian_patch(space_shape, sigma=sigma))
+    return space_weights
 
 
 @functools.cache

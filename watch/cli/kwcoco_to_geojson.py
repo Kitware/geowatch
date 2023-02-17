@@ -1015,7 +1015,9 @@ def main(args=None, **kwargs):
         >>> demo(coco_dset, regions_dir, coco_dset_sc, sites_dir, cleanup=True)
 
     """
-    args = KWCocoToGeoJSONConfig.legacy(cmdline=args, data=kwargs)
+    from watch.utils import process_context
+    from kwcoco.util import util_json
+    args = KWCocoToGeoJSONConfig.cli(cmdline=args, data=kwargs)
     print('args = {}'.format(ub.repr2(dict(args), nl=1)))
 
     coco_fpath = ub.Path(args.in_file)
@@ -1075,24 +1077,19 @@ def main(args=None, **kwargs):
         'info': [],
         'files': [],
     }
-    from kwcoco.util import util_json
     # Args will be serailized in kwcoco, so make sure it can be coerced to json
-    jsonified_args = util_json.ensure_json_serializable(args.asdict())
-    walker = ub.IndexableWalker(jsonified_args)
-    for problem in util_json.find_json_unserializable(jsonified_args):
+    jsonified_config = util_json.ensure_json_serializable(args.asdict())
+    walker = ub.IndexableWalker(jsonified_config)
+    for problem in util_json.find_json_unserializable(jsonified_config):
         bad_data = problem['data']
         walker[problem['loc']] = str(bad_data)
 
     # TODO: ensure all args are resolved here.
     info = tracking_output['info']
 
-    # TODO: use process context instead
-    from watch.utils.process_context import ProcessContext
-    proc_context = ProcessContext(
+    proc_context = process_context.ProcessContext(
         name='watch.cli.kwcoco_to_geojson', type='process',
-        # args=jsonified_args,
-        args=sys.argv,
-        config=jsonified_args,
+        config=jsonified_config,
         extra={'pred_info': pred_info},
         track_emissions=False,
     )

@@ -8,7 +8,7 @@ from watch.utils.lightning_ext import util_globals  # NOQA
 import kwarray  # NOQA
 import networkx as nx
 import itertools as it
-from watch.utils.util_param_grid import dotdict_to_nested
+from watch.utils import util_dotdict
 
 
 def resolve_pipeline_row(grid_item_defaults, state, region_model_dpath, expt_dvc_dpath, item):
@@ -21,7 +21,7 @@ def resolve_pipeline_row(grid_item_defaults, state, region_model_dpath, expt_dvc
     state = ExperimentState(expt_dvc_dpath, '*')
     item = grid_item_defaults | item
     # print('item = {}'.format(ub.repr2(item, nl=1)))
-    nested = dotdict_to_nested(item)
+    nested = util_dotdict.dotdict_to_nested(item)
 
     condensed = {}
     paths = {}

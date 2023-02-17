@@ -10,16 +10,15 @@ import scriptconfig as scfg
 import ubelt as ub
 
 
-class TorchModelStatsConfig(scfg.Config):
+class TorchModelStatsConfig(scfg.DataConfig):
     """
     Print stats about a torch model.
 
     Currently some things are hard-coded for fusion models
     """
-    default = {
-        'src': scfg.PathList(help='path to one or more torch models', position=1),
-        'stem_stats': scfg.Value(help='if True, print more verbose model mean/std', position=2),
-    }
+    src = scfg.PathList(help='path to one or more torch models', position=1)
+    stem_stats = scfg.Value(True, isflag=True, help='if True, print more verbose model mean/std')
+    hparams = scfg.Value(True, isflag=True, help='if True, print fit hyperparameters')
 
 
 def main(cmdline=False, **kwargs):
@@ -38,8 +37,9 @@ def main(cmdline=False, **kwargs):
 
     """
     import watch
+    import rich
 
-    config = TorchModelStatsConfig(cmdline=cmdline, data=kwargs)
+    config = TorchModelStatsConfig.cli(cmdline=cmdline, data=kwargs)
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
     package_paths = config['src']
 
@@ -53,12 +53,16 @@ def main(cmdline=False, **kwargs):
 
     package_rows = []
     for package_fpath in package_paths:
+        print('--------')
         print(f'package_fpath={package_fpath}')
 
         stem_stats = config['stem_stats']
         row = torch_model_stats(package_fpath, stem_stats=stem_stats, dvc_dpath=dvc_dpath)
         model_stats = row.get('model_stats', None)
-        print('model_stats = {}'.format(ub.repr2(model_stats, nl=2, sort=0, precision=2)))
+        fit_config = row.pop('fit_config', None)
+        if config.hparams:
+            rich.print('fit_config = {}'.format(ub.urepr(fit_config, nl=1)))
+        rich.print('model_stats = {}'.format(ub.repr2(model_stats, nl=2, sort=0, precision=2)))
         package_rows.append(row)
 
     print('package_rows = {}'.format(ub.repr2(package_rows, nl=2, sort=0)))
@@ -230,6 +234,7 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
         'file_name': str(package_fpath),
         'sensors': sorted(unique_sensors),
         'train_dataset': str(train_dataset),
+        'fit_config': fit_config,
         'model_stats': model_stats,
         'prenorm_stats': prenorm_stats,
         'param_stats': param_stats_summary,

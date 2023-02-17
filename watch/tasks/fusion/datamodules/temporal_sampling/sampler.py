@@ -98,7 +98,7 @@ Example:
     >>> # xdoctest: +REQUIRES(--show)
     >>> import kwplot
     >>> plt = kwplot.autoplt()
-    >>> self.show_summary(samples_per_frame=5, fnum=1)
+    >>> self.show_summary(samples_per_frame=1, fnum=1)
     >>> chosen, info = self.show_procedure(fnum=4, idx=10)
     >>> plt.subplots_adjust(top=0.9)
 
@@ -455,6 +455,9 @@ class TimeWindowSampler(CommonSamplerMixin):
                  determenistic=False, gamma=1, time_span=None,
                  time_kernel=None, affkw=None, name='?'):
 
+        if isinstance(time_span, str) and time_span == 'None':
+            time_span = None
+
         if time_kernel is not None and time_span is not None:
             raise ValueError('time_span and time_kernel are mutex')
 
@@ -463,6 +466,7 @@ class TimeWindowSampler(CommonSamplerMixin):
             assert self.time_kernel is not None
             time_window = len(self.time_kernel)
             ...
+
         self.sensors = sensors
         self.unixtimes = unixtimes
         self.time_window = time_window

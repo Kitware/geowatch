@@ -152,6 +152,9 @@ class RichProgIter:
             # FIXME: remove circular reference
             self.manager.update_info(text)
 
+    def ensure_newline(self):
+        ...
+
     def set_postfix_str(self, text, refresh=True):
         self.extra = text
         parts = [self.desc]
@@ -213,6 +216,7 @@ class _RichProgIterManager(BaseProgIterManager):
         from rich.progress import BarColumn, TextColumn
         from rich.progress import Progress as richProgress
         from rich.progress import ProgressColumn, Text
+        # from rich.style import Style
 
         class ProgressRateColumn(ProgressColumn):
             """Renders human readable transfer speed."""
@@ -223,12 +227,13 @@ class _RichProgIterManager(BaseProgIterManager):
                 if _iters_per_second is not None:
                     rate_format = '4.2f' if _iters_per_second > .001 else 'g'
                     fmt = '{:' + rate_format + '} Hz'
-                    n = Text(fmt.format(_iters_per_second))
-                    return n
+                    text = fmt.format(_iters_per_second)
                 else:
-                    return '?'
-                # speed = task.finished_speed or task.speed
-                # return rich.progress.TaskProgressColumn.render_speed(speed)
+                    text = '?'
+                # style = Style(color="red")
+                style = 'progress.data.speed'
+                renderable = Text(text, style=style)
+                return renderable
 
         self.rich_manager = richProgress(
             TextColumn("{task.description}"),
@@ -236,9 +241,11 @@ class _RichProgIterManager(BaseProgIterManager):
             rich.progress.MofNCompleteColumn(),
             # "[progress.percentage]{task.percentage:>3.0f}%",
             # rich.progress.TransferSpeedColumn(),
-            rich.progress.TimeRemainingColumn(),
-            rich.progress.TimeElapsedColumn(),
             ProgressRateColumn(),
+            'eta',
+            rich.progress.TimeRemainingColumn(),
+            'total',
+            rich.progress.TimeElapsedColumn(),
         )
         self.info_panel = None
         # Panel('')
@@ -349,7 +356,7 @@ class ProgressManager(BaseProgIterManager):
         >>> from watch.utils.util_progress import ProgressManager
         >>> import time
         >>> delay = 0.00005
-        >>> N_inner = 1000
+        >>> N_inner = 300
         >>> N_outer = 11
         >>> self = pman = ProgressManager(backend='rich')
         >>> with pman:
@@ -369,7 +376,7 @@ class ProgressManager(BaseProgIterManager):
         >>> from watch.utils.util_progress import ProgressManager, ProgIter2
         >>> import time
         >>> delay = 0.000005
-        >>> N_inner = 1000
+        >>> N_inner = 300
         >>> N_outer = 11
         >>> basis = {
         >>>     'with_info': [0, 1],
@@ -416,7 +423,7 @@ class ProgressManager(BaseProgIterManager):
         >>> for i in range(100):
         >>>     task1.update()
         >>>     task2.update(2)
-        >>>     time.sleep(0.01)
+        >>>     time.sleep(0.001)
         >>> ProgressManager.stopall()
 
     Example:
@@ -431,9 +438,9 @@ class ProgressManager(BaseProgIterManager):
         >>> task1.update()
         >>> task2.update()
         >>> for i in range(10):
-        >>>     time.sleep(0.01)
+        >>>     time.sleep(0.001)
         >>>     task1.update()
-        >>>     time.sleep(0.01)
+        >>>     time.sleep(0.001)
         >>>     task2.update(2)
         >>> ProgressManager.stopall()
     """

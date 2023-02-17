@@ -597,7 +597,7 @@ def _merge_polys(p1, p2):
             _p2 = kwimage.Polygon.random().to_shapely()
             if 1 or _p1.intersects(_p2):
                 combo = unary_union([_p1, _p2])
-                if combo.type != 'Polygon':
+                if combo.geom_type != 'Polygon':
                     raise Exception('!')
     '''
     merged_polys = []
@@ -614,9 +614,9 @@ def _merge_polys(p1, p2):
                 continue
             if _p1.intersects(_p2):
                 combo = unary_union([_p1, _p2])
-                if combo.type == 'Polygon':
+                if combo.geom_type == 'Polygon':
                     merged_polys.append(combo)
-                elif combo.type == 'MultiPolygon':
+                elif combo.geom_type == 'MultiPolygon':
                     # Can this ever happen? It seems to have occurred in a test
                     # run. Bowties can cause this.
                     # import warnings
@@ -625,7 +625,7 @@ def _merge_polys(p1, p2):
                     merged_polys.extend(list(combo.geoms))
                 else:
                     raise AssertionError(
-                        f'Unexpected type {combo.type} from {_p1} and {_p2}')
+                        f'Unexpected type {combo.geom_type} from {_p1} and {_p2}')
 
                 p1_seen.add(j)
                 p2_seen.add(i)
@@ -904,8 +904,8 @@ class TimeAggregatedBAS(NewTrackFunction):
     thresh_hysteresis: Optional[float] = None
     moving_window_size: Optional[int] = None
 
-    min_area_sqkm: Optional[float] = None  # was 0.072  # 80px@30GSD
-    max_area_sqkm: Optional[float] = None  # was 2.25
+    min_area_sqkm: Optional[float] = None  # was 0.072  # 80px@30GSD  # deprecate
+    max_area_sqkm: Optional[float] = None  # was 2.25  # deprecate
 
     min_area_square_meters: Optional[float] = None  # was 7_200
     max_area_square_meters: Optional[float] = None  # was 2_250_000
@@ -949,8 +949,8 @@ class TimeAggregatedSC(NewTrackFunction):
     thresh_hysteresis: Optional[float] = None
     moving_window_size: Optional[int] = None
 
-    min_area_sqkm: Optional[float] = None
-    max_area_sqkm: Optional[float] = None
+    min_area_sqkm: Optional[float] = None  # deprecate
+    max_area_sqkm: Optional[float] = None  # deprecate
 
     min_area_square_meters: Optional[float] = None
     max_area_square_meters: Optional[float] = None

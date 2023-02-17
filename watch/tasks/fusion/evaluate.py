@@ -999,7 +999,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         if item.get('type', None) == 'process':
             proc_name = item.get('properties', {}).get('name', None)
             if proc_name == 'watch.tasks.fusion.predict':
-                package_fpath = item['properties']['args'].get('package_fpath')
+                package_fpath = item['properties']['config'].get('package_fpath')
                 if 'title' not in item:
                     item['title'] = ub.Path(package_fpath).stem
                 if 'package_name' not in item:

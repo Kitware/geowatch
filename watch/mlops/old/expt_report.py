@@ -243,7 +243,7 @@ class EvaluationReporter:
         # state = reporter.state
 
         colnames = ub.oset(reporter.orig_merged_df.columns)
-        # column_nestings = util_param_grid.dotkeys_to_nested(colnames)
+        # column_nestings = util_dotdict.dotkeys_to_nested(colnames)
         dotted = ub.oset([c for c in colnames if '.' in c])
         metric_cols = ub.oset([c for c in dotted if 'metrics.' in c])
         meta_cols = ub.oset([c for c in dotted if 'meta.' in c])
@@ -398,7 +398,7 @@ class EvaluationReporter:
             # rows that depend on it.
             # from watch.utils import util_param_grid
             # colnames = ub.oset(cleaned_df.columns)
-            # column_nestings = util_param_grid.dotkeys_to_nested(colnames)
+            # column_nestings = util_dotdict.dotkeys_to_nested(colnames)
             # non_nested = [k for k, v in column_nestings.items() if k == v]
             # column_nestings['trk']
             # column_nestings['act']

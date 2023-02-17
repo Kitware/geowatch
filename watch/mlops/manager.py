@@ -57,6 +57,9 @@ TODO:
     python -m watch.mlops.manager "pull packages" --model_pattern="${MODEL_OF_INTEREST}*"
     python -m watch.mlops.manager "pull evals" --model_pattern="${MODEL_OF_INTEREST}*"
     python -m watch.mlops.manager "status" --model_pattern="${MODEL_OF_INTEREST}*"
+
+    python -m watch.mlops.manager "status" --dataset_codes=Drop6
+    python -m watch.mlops.manager "add packages" --dataset_codes=Drop6
 """
 import pandas as pd
 import ubelt as ub
@@ -112,7 +115,8 @@ def main(cmdline=True, **kwargs):
     command = config['command']
 
     available_actions = [
-        'status', 'evaluate', 'push', 'pull', 'list', 'report',
+        'status', 'evaluate', 'push', 'pull', 'list',
+        'report', 'add',
     ]
     available_targets = [
         'packages',
@@ -130,9 +134,9 @@ def main(cmdline=True, **kwargs):
                 if t in c:
                     targets.append(t)
 
-    # print(f'actions={actions}')
-    # print(f'targets={targets}')
-    # print('config = {}'.format(ub.repr2(dict(config), nl=1)))
+    print(f'actions={actions}')
+    print(f'targets={targets}')
+    print('config = {}'.format(ub.repr2(dict(config), nl=1)))
 
     dvc_remote = config['dvc_remote']
 
@@ -152,6 +156,9 @@ def main(cmdline=True, **kwargs):
 
     if 'pull' in actions:
         manager.pull(targets)
+
+    if 'add' in actions and 'packages' in targets:
+        manager.add_packages()
 
     if 'push' in actions:
         raise NotImplementedError
@@ -256,6 +263,15 @@ class DVCExptManager(ub.NiceRepr):
             pull_df = pkg_df[pkg_df['needs_pull'].astype(bool)]
             pull_fpaths += pull_df['dvc'].tolist()
         manager.dvc.pull(pull_fpaths)
+
+    def add_packages(manager):
+        """
+        TODO: break this up into smaller components.
+        """
+        # from watch.tasks.fusion import repackage
+        # mode = 'commit'
+        for state in manager.states:
+            state.add_packages()
 
     def push_packages(manager):
         """
@@ -787,6 +803,16 @@ class ExperimentState(ub.NiceRepr):
             python -m watch.mlops.manager "pull packages" --dvc_dpath=$DVC_EXPT_DPATH
             python -m watch.mlops.manager "status packages" --dvc_dpath=$DVC_EXPT_DPATH
             """))
+
+    def add_packages(self):
+        """
+        This does what repackage used to do.
+        Repackages checkpoints as torch packages, copies them to the DVC repo,
+        and then adds them to DVC.
+        """
+        mode = 'all'
+        self.package_checkpoints(mode=mode)
+        self.copy_packages_to_dvc(mode=mode)
 
     def push_packages(self):
         """

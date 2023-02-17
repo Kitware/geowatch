@@ -9,6 +9,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * `smartwatch align` new argument `--minimum_size`: to ensure all regions have enough pixels
 * New `time_kernel` method for temporal sampling in `KWcocoVideoDataLoader`
 * New visualizations in `geojson_site_stats`
+* Add `submatrices` to MLOPs
 
 ### Changed
 * Renamed `project_annotations` to `reproject_annotations`
@@ -22,6 +23,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Added `utils.coerce_crs`.
 * Tracker now prefers arguments `min_area_square_meters` and `max_area_square_meters` for size thresholds
 * Tracker size thresholds now default to `None` (i.e. off)
+* Change the default of `mask_samecolor_method` to None
+* Change the default of `time_span` to None
+* Better legends and labeling in `aggregate.build_all_param_plots`
 
 ### Fixed
 * issue in reproject annots when frames had no annotations
@@ -29,6 +33,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Removed `tensorboard` and `tensorflow` dependencies
 * Issue in `warp_annot_segmentations_from_geos`
 * Issue in `polygon_distance_transform`.
+
+### Misc
+* Drop6 scripts in the dev folder
+* DVC cache surgery and improved `simple_dvc`
+* FFVC POC
+* Reworked `utils` to use `lazy_loader`.
+* New `util_kwplot` constructs
 
 ### Misc
 * Drop6 scripts in the dev folder

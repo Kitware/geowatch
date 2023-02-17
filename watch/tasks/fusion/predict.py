@@ -57,7 +57,7 @@ def make_predict_config(cmdline=False, **kwargs):
     # parser.add_argument('--pred_dpath', dest='pred_dpath', type=pathlib.Path, help='path to dump results. Deprecated, do not use.')
 
     parser.add_argument('--package_fpath', type=str)
-    parser.add_argument('--devices', default=None, help='lightning devices')
+    parser.add_argument('--devices', default=None, help='lightning devices')  # TODO accelerator and whatever
     parser.add_argument('--thresh', type=smartcast, default=0.01)
 
     parser.add_argument('--with_change', type=smartcast, default='auto')
@@ -115,6 +115,7 @@ def make_predict_config(cmdline=False, **kwargs):
         'time_steps',
         'time_sampling',
         'time_span',
+        'time_kernel',
         'input_space_scale',
         'window_space_scale',
         'output_space_scale',
@@ -431,6 +432,7 @@ def predict(cmdline=False, **kwargs):
         ...     #'channels': 'auto',
         ...     'max_epochs': 1,
         ...     'time_steps': 2,
+        ...     'time_span': "2m",
         ...     'chip_size': 64,
         ...     'time_sampling': 'hardish3',
         ...     'global_change_weight': 1.0,
@@ -719,7 +721,11 @@ def predict(cmdline=False, **kwargs):
 
     # Start background procs before we make threads
     batch_iter = iter(test_dataloader)
-    prog = ub.ProgIter(batch_iter, desc='predicting', verbose=1, freq=1)
+
+    from watch.utils import util_progress
+    pman = util_progress.ProgressManager(backend='rich')
+
+    # prog = ub.ProgIter(batch_iter, desc='predicting', verbose=1, freq=1)
 
     # Make threads after starting background proces.
     if args.write_workers == 'datamodule':
@@ -826,12 +832,9 @@ def predict(cmdline=False, **kwargs):
     assert not list(util_json.find_json_unserializable(traintime_params))
 
     from watch.utils import process_context
-    import sys
     proc_context = process_context.ProcessContext(
         name='watch.tasks.fusion.predict',
         type='process',
-        args=sys.argv,
-        # args=jsonified_args,
         config=config_resolved,
         track_emissions=config['track_emissions'],
         extra={'fit_config': traintime_params}
@@ -843,11 +846,13 @@ def predict(cmdline=False, **kwargs):
     proc_context.start()
     proc_context.add_disk_info(test_coco_dataset.fpath)
 
-    with torch.set_grad_enabled(False):
+    with torch.set_grad_enabled(False), pman:
         # FIXME: that data loader should not be producing incorrect sensor/mode
         # pairs in the first place!
         EMERGENCY_INPUT_AGREEMENT_HACK = 1 and hasattr(method, 'input_norms')
         # prog.set_extra(' <will populate stats after first video>')
+        # pman.start()
+        prog = pman.progiter(batch_iter, desc='predicting')
         _batch_iter = iter(prog)
         if 0:
             item = test_dataloader.dataset[0]
@@ -1006,6 +1011,7 @@ def predict(cmdline=False, **kwargs):
             for gid in head_stitcher.managed_image_ids():
                 head_stitcher.submit_finalize_image(gid)
         writer_queue.wait_until_finished()
+        # pman.stop()
 
     if DEBUG_PRED_SPATIAL_COVERAGE:
         coco_dset = test_dataloader.dataset.sampler.dset

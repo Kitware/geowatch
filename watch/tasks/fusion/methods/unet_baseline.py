@@ -141,7 +141,8 @@ class UNetBaseline(pl.LightningModule, WatchModuleMixins):
                 if stats is None:
                     input_norm = nh.layers.InputNorm()
                 else:
-                    input_norm = nh.layers.InputNorm(**stats)
+                    input_norm = nh.layers.InputNorm(
+                        **(ub.udict(stats) & {'mean', 'std'}))
 
             # key = sanitize_key(str((s, c)))
             key = f'{s}:{c}'

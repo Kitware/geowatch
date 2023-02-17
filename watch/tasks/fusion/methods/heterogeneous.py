@@ -445,7 +445,8 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                 if stats is None:
                     input_norm = nh.layers.InputNorm()
                 else:
-                    input_norm = nh.layers.InputNorm(**stats)
+                    input_norm = nh.layers.InputNorm(
+                        **(ub.udict(stats) & {'mean', 'std'}))
 
             if tokenizer == "simple_conv":
                 tokenizer_layer = nn.Sequential(

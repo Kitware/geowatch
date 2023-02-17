@@ -4,14 +4,17 @@ import os
 import functools
 from functools import cached_property
 from cmd_queue.util import util_networkx  # NOQA
-from watch.utils import util_param_grid  # NOQA
+from watch.utils import util_dotdict  # NOQA
 from typing import Union, Dict, Set, List, Any, Optional
 
 Collection = Optional[Union[Dict, Set, List]]
 Configurable = Optional[Dict[str, Any]]
 
 
-from xdev import profile  # NOQA
+try:
+    from xdev import profile  # NOQA
+except ImportError:
+    profile = ub.identity
 
 
 class PipelineDAG:
@@ -63,6 +66,7 @@ class PipelineDAG:
         if config:
             self.configure(config, root_dpath=root_dpath)
 
+    @profile
     def build_nx_graphs(self):
         if isinstance(self.nodes, dict):
             node_dict = self.nodes
@@ -109,6 +113,7 @@ class PipelineDAG:
                 for oi_node in onode.succ:
                     self.io_graph.add_edge(onode.key, oi_node.key)
 
+    @profile
     def inspect_configurables(self):
         """
         Show the user what config options should be specified.
@@ -183,6 +188,7 @@ class PipelineDAG:
         from watch.utils import util_yaml
         rich.print(util_yaml.yaml_dumps(default))
 
+    @profile
     def configure(self, config=None, root_dpath=None, cache=True):
         """
         Update the DAG configuration
@@ -200,7 +206,7 @@ class PipelineDAG:
             # print('CONFIGURE config = {}'.format(ub.repr2(config, nl=1)))
 
             # Set the configuration for each node in this pipeline.
-            dotconfig = util_param_grid.DotDict(config)
+            dotconfig = util_dotdict.DotDict(config)
             for node_name in nx.topological_sort(self.proc_graph):
                 node = self.proc_graph.nodes[node_name]['node']
                 node_config = dict(dotconfig.prefix_get(node.name, {}))
@@ -240,6 +246,7 @@ class PipelineDAG:
         print('IO Graph')
         util_networkx.write_network_text(self.io_graph, path=rich.print, end='')
 
+    @profile
     def submit_jobs(self, queue=None, skip_existing=False, enable_links=True,
                     write_invocations=True):
         """
@@ -275,8 +282,9 @@ class PipelineDAG:
             node.will_exist = ((node.enabled and ancestors_will_exist) or
                                node.does_exist)
             node.resolved_out_paths
-            print(f'node.resolved_out_paths={node.resolved_out_paths}')
-            print(f'Checking {node_name}, will_exist={node.will_exist}')
+            if 0:
+                print(f'node.resolved_out_paths={node.resolved_out_paths}')
+                print(f'Checking {node_name}, will_exist={node.will_exist}')
 
             if node.will_exist and node.enabled:
                 pred_node_procids = [n.process_id for n in pred_nodes
@@ -325,15 +333,16 @@ class PipelineDAG:
                     # execute this node.
                     invoke_fpath = node.resolved_node_dpath / 'invoke.sh'
 
-                    prefix_lines = []
-                    for depend_node in list(node.ancestor_process_nodes()):
-                        prefix_lines.append('# ' + depend_node.resolved_node_dpath)
-                    if prefix_lines:
-                        prefix_lines = ['# See Also: '] + prefix_lines
+                    invoke_lines = ['#!/bin/bash']
+                    depend_nodes = list(node.ancestor_process_nodes())
+                    if depend_nodes:
+                        invoke_lines.append('# See Also: ')
+                        for depend_node in list(node.ancestor_process_nodes()):
+                            invoke_lines.append('# ' + depend_node.resolved_node_dpath)
                     else:
-                        prefix_lines = ['# Root node']
-
-                    invoke_lines = ['#!/bin/bash'] + prefix_lines + [node.command()]
+                        invoke_lines.append('# Root node')
+                    invoke_command = node.command()
+                    invoke_lines.append(invoke_command)
                     invoke_text = '\n'.join(invoke_lines)
                     command = '\n'.join([
                         f'mkdir -p {invoke_fpath.parent} && \\',
@@ -379,7 +388,7 @@ class PipelineDAG:
                             node_job.depends.append(_job)
                     pass
 
-        print(f'queue={queue}')
+        # print(f'queue={queue}')
         return queue
 
 
@@ -979,14 +988,22 @@ class ProcessNode(Node):
         """
         Predecessor process nodes
         """
-        nodes = []
-        for k, v in self.inputs.items():
-            for pred in v.pred:
-                # assert isinstance(pred, OutputNode)
-                proc = pred.parent
-                assert proc.__node_type__ == 'process'
-                # assert isinstance(proc, ProcessNode)
-                nodes.append(proc)
+        # if 1:
+        # Faster?
+        nodes = [
+            pred.parent
+            for k, v in self.inputs.items()
+            for pred in v.pred
+        ]
+        # else:
+        #     nodes = []
+        #     for k, v in self.inputs.items():
+        #         for pred in v.pred:
+        #             # assert isinstance(pred, OutputNode)
+        #             proc = pred.parent
+        #             assert proc.__node_type__ == 'process'
+        #             # assert isinstance(proc, ProcessNode)
+        #             nodes.append(proc)
         return nodes
 
     @memoize_configured_method
@@ -995,14 +1012,19 @@ class ProcessNode(Node):
         """
         Predecessor process nodes
         """
-        nodes = []
-        for k, v in self.outputs.items():
-            for succ in v.succ:
-                # assert isinstance(pred, OutputNode)
-                proc = succ.parent
-                assert proc.__node_type__ == 'process'
-                # assert isinstance(proc, ProcessNode)
-                nodes.append(proc)
+        nodes = [
+            succ.parent
+            for k, v in self.outputs.items()
+            for succ in v.succ
+        ]
+        # nodes = []
+        # for k, v in self.outputs.items():
+        #     for succ in v.succ:
+        #         # assert isinstance(pred, OutputNode)
+        #         proc = succ.parent
+        #         assert proc.__node_type__ == 'process'
+        #         # assert isinstance(proc, ProcessNode)
+        #         nodes.append(proc)
         return nodes
 
     @memoize_configured_method
