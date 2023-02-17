@@ -467,6 +467,14 @@ def site_feature(coco_dset, region_id, site_id, trackid, gids, features, as_summ
     geom_list = [_single_geometry(feat['geometry']) for feat in features]
     geometry = _combined_geometries(geom_list)
 
+    # site and site_summary features must be polygons
+    if isinstance(geometry, shapely.geometry.MultiPolygon):
+        if len(geometry.geoms) == 1:
+            geometry = geometry.geoms[0]
+        else:
+            print(f'warning: {coco_dset=} {region_id=} {site_id=} {trackid=} has multi-part site geometry')
+            geometry = geometry.convex_hull
+
     centroid_coords = np.array(geometry.centroid.coords)
     if centroid_coords.size == 0:
         raise AssertionError('Empty geometry. What happened?')
