@@ -299,6 +299,7 @@ def run_sc_fusion_for_baseline(
             print("* Computing tracks (SC) *")
             sc_track_kwargs = {"boundaries_as": "polys",
                                "min_area_square_meters": 7200,
+                               "resolution": 8,  # Should match "window_space_scale" in SC fusion parameters  # noqa
                                "thresh": sc_thresh}
 
             tracked_sc_kwcoco_path = '_tracked'.join(

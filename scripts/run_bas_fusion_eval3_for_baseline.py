@@ -307,6 +307,7 @@ def run_bas_fusion_for_baseline(
         "moving_window_size": None,
         "polygon_simplify_tolerance": 1,
         "min_area_square_meters": 7200,
+        "resolution": 8,  # Should match "window_space_scale" in SC fusion parameters  # noqa
         "max_area_behavior": 'ignore'}
 
     tracked_bas_kwcoco_path = '_tracked'.join(
