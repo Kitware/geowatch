@@ -169,12 +169,40 @@ def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outlier
     out_dpath = ub.Path(train_dpath, 'monitor', 'tensorboard').ensuredir()
     tb_data = read_tensorboard_scalars(train_dpath, cache=0, verbose=0)
 
+    refresh_fpath = (out_dpath / 'redraw.sh')
+    refresh_fpath.write_text(ub.codeblock(
+        fr'''
+        #!/bin/bash
+        python -m watch.utils.lightning_ext.callbacks.tensorboard_plotter \
+            {train_dpath}
+        '''))
+    import stat
+    refresh_fpath.chmod(refresh_fpath.stat().st_mode | stat.S_IEXEC)
+
     if isinstance(smoothing, str) and smoothing == 'auto':
         smoothing_values = [0.6, 0.95]
     elif isinstance(smoothing, list):
         smoothing_values = [smoothing]
     else:
         smoothing_values = [smoothing]
+
+    plot_keys = [k for k in tb_data.keys() if '/' not in k]
+    y01_measures = [
+        '_acc', '_ap', '_mAP', '_auc', '_mcc', '_brier', '_mauc',
+        '_f1', '_iou',
+    ]
+    y0_measures = ['error', 'loss']
+
+    keys = set(tb_data.keys()).intersection(set(plot_keys))
+
+    # no idea what hp metric is, but it doesn't seem important
+    keys = keys - {'hp_metric'}
+
+    HACK_NO_SMOOTH = {'lr', 'momentum', 'epoch'}
+
+    if len(keys) == 0:
+        print('warning: no known keys to plot')
+        print(f'available keys: {list(tb_data.keys())}')
 
     with BackendContext('agg'):
         import seaborn as sns
@@ -185,20 +213,6 @@ def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outlier
         fig = kwplot.figure(fnum=1)
         fig.clf()
         ax = fig.gca()
-
-        plot_keys = [k for k in tb_data.keys() if '/' not in k]
-        y01_measures = [
-            '_acc', '_ap', '_mAP', '_auc', '_mcc', '_brier', '_mauc',
-            '_f1', '_iou',
-        ]
-        y0_measures = ['error', 'loss']
-
-        keys = set(tb_data.keys()).intersection(set(plot_keys))
-
-        # no idea what hp metric is, but it doesn't seem important
-        keys = keys - {'hp_metric'}
-
-        HACK_NO_SMOOTH = {'lr', 'momentum', 'epoch'}
 
         # import kwimage
         # color1 = kwimage.Color('kw_green').as01()
@@ -366,6 +380,8 @@ def redraw_cli(train_dpath):
     else:
         title = train_dpath.parent.parent.name
 
+    print(f'train_dpath={train_dpath}')
+    print(f'title={title}')
     _dump_measures(train_dpath, title, verbose=1)
 
 

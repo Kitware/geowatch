@@ -1,3 +1,6 @@
+
+https://pytorch-lightning.readthedocs.io/en/stable/extensions/callbacks.html
+
 on_configure_sharded_model(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
 on_before_accelerator_backend_setup(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
 on_init_start(self, trainer: "pl.Trainer") -> None:

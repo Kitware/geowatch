@@ -26,31 +26,55 @@ def custom_yaml_dump(data):
 set_dumper('yaml_unsafe_for_tuples', custom_yaml_dump)
 
 
-class PartialWeightInitializer(pl.callbacks.Callback):
+class SmartTrainer(pl.Trainer):
+    """
+    Simple trainer subclass so we can ensure a print happens directly before
+    the training loop. (so annoying that we can't reorder callbacks)
+    """
+    ...
 
-    def __init__(self, init='noop'):
-        ...
+    def _run_stage(self, *args, **kwargs):
+        # All I want is to print this  directly before training starts.
+        # Is that so hard to do?
+        print('trainer.logger.log_dir = {}'.format(self.logger.log_dir))
+        super()._run_stage(*args, **kwargs)
 
-    def on_fit_start(self, trainer, pl_module):
-        if 0:
-            # TODO: make this work
-            import ubelt as ub
+
+class WeightInitializer(pl.callbacks.Callback):
+    """
+    Netowrk weight initializer with support for partial weight loading.
+    """
+
+    def __init__(self, init='noop', association='embedding'):
+        self.init = init
+        self.association = association
+        self._did_once = False
+
+    def setup(self, trainer, pl_module, stage):
+        if self._did_once:
+            # Only weight initialize once, on whatever stage happens first.
+            return
+        self._did_once = True
+        if self.init != 'noop':
             from watch.tasks.fusion.fit import coerce_initializer
             from watch.utils import util_pattern
-            init_fpath = '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt'
-            initializer = coerce_initializer(init_fpath)
-            # other_model = getattr(initializer, 'other_model', None)
+            initializer = coerce_initializer(self.init)
 
-            # Hack to preserve specific values
+            model = pl_module
+
+            # Hack to always preserve specific values
+            # (TODO add to torch_liberator as an option, allow to be configured
+            # as argument to this class, or allow the model to set some property
+            # that says which weights should not be touched.)
             print('Initializing weights')
-            old_state = pl_module.state_dict()
+            old_state = model.state_dict()
             ignore_pattern = util_pattern.MultiPattern.coerce(['*tokenizers*.0.mean', '*tokenizers*.0.std'])
             ignore_keys = [key for key in old_state.keys() if ignore_pattern.match(key)]
             print('Finding keys to not initializer')
             to_preserve = ub.udict(old_state).subdict(ignore_keys).map_values(lambda v: v.clone())
 
-            initializer.association = 'embedding'
-            info = initializer.forward(pl_module)  # NOQA
+            initializer.association = self.association
+            info = initializer.forward(model)  # NOQA
             if info:
                 mapping = info.get('mapping', None)
                 unset = info.get('self_unset', None)
@@ -58,6 +82,10 @@ class PartialWeightInitializer(pl.callbacks.Callback):
                 print('mapping = {}'.format(ub.repr2(mapping, nl=1)))
                 print(f'unused={unused}')
                 print(f'unset={unset}')
+
+            print('Finalize initialization')
+            updated = model.state_dict() | to_preserve
+            model.load_state_dict(updated)
 
 
 class SmartLightningCLI(LightningCLI_Extension):
@@ -94,9 +122,13 @@ class SmartLightningCLI(LightningCLI_Extension):
 
     # TODO: import initialization code from fit.py
     def add_arguments_to_parser(self, parser):
+
         # TODO: separate final_package dir and fpath for more configuration
         # pl_ext.callbacks.Packager(package_fpath=args.package_fpath),
         parser.add_lightning_class_args(pl_ext.callbacks.Packager, "packager")
+
+        parser.add_lightning_class_args(WeightInitializer, "initializer")
+
         # parser.set_defaults({"packager.package_fpath": "???"}) # "$DEFAULT_ROOT_DIR"/final_package.pt
         parser.link_arguments(
             "trainer.default_root_dir",
@@ -165,19 +197,18 @@ def make_cli(config=None):
         config = nested_to_jsonnest(nested)
         print('config = {}'.format(ub.urepr(config, nl=1)))
 
-    manual_mode = False
     clikw = {'run': True}
     if config is not None:
         # overload the argument parsing with a programatic config
         clikw['args'] = config
-        clikw['run'] = False
-        # Note: we may not need manual mode once we have a deeper understanding
-        # of how lightning CLI works.
-        manual_mode = True
+        # Note: we may not need manual mode by setting run to False once we
+        # have a deeper understanding of how lightning CLI works.
+        # clikw['run'] = False
 
     cli = SmartLightningCLI(
         model_class=pl.LightningModule,  # TODO: factor out common components of the two models and put them in base class models inherit from
         datamodule_class=KWCocoVideoDataModule,
+        trainer_class=SmartTrainer,
         subclass_mode_model=True,
         # subclass_mode_data=True,
         parser_kwargs=dict(
@@ -193,12 +224,15 @@ def make_cli(config=None):
             # profiler=pl.profilers.AdvancedProfiler(dirpath=".", filename="perf_logs"),
 
             callbacks=[
+                # WeightInitializer(),
                 pl_ext.callbacks.BatchPlotter(  # Fixme: disabled for multi-gpu training with deepspeed
                     num_draw=2,  # args.num_draw,
                     draw_interval="5min",  # args.draw_interval
                 ),
+                pl.callbacks.RichProgressBar(),
+                pl_ext.callbacks.TensorboardPlotter(),
                 pl.callbacks.LearningRateMonitor(logging_interval='step', log_momentum=True),
-
+                pl.callbacks.LearningRateMonitor(logging_interval='epoch', log_momentum=True),
                 pl.callbacks.ModelCheckpoint(monitor='train_loss', mode='min', save_top_k=1),
                 # leaving always on breaks when correspinding metric isnt
                 # tracked because loss_weight==0
@@ -214,7 +248,6 @@ def make_cli(config=None):
         ),
         **clikw,
     )
-    cli.manual_mode = manual_mode
     return cli
 
 
@@ -226,23 +259,22 @@ def main(config=None):
             with the specified config.
 
     Example:
-        >>> # xdoctest: +SKIP(working on getting this right)
         >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
         >>> from watch.tasks.fusion.fit_lightning import *  # NOQA
         >>> disable_lightning_hardware_warnings()
         >>> dpath = ub.Path.appdir('watch/tests/test_fusion_fit/demo_main_noop').ensuredir()
         >>> config = {
-        >>>     'model': 'NoopModel',
-        >>>     'trainer.default_root_dir': dpath,
-        >>>     'data.train_dataset': 'special:vidshapes8-frames9-speed0.5-multispectral',
-        >>>     'data.vali_dataset': 'special:vidshapes4-frames9-speed0.5-multispectral',
-        >>>     'trainer.max_steps': 3,
-        >>>     'trainer.num_sanity_val_steps': 0,
+        >>>     'subcommand': 'fit',
+        >>>     'fit.model': 'NoopModel',
+        >>>     'fit.trainer.default_root_dir': dpath,
+        >>>     'fit.data.train_dataset': 'special:vidshapes8-frames9-speed0.5-multispectral',
+        >>>     'fit.data.vali_dataset': 'special:vidshapes4-frames9-speed0.5-multispectral',
+        >>>     'fit.trainer.max_steps': 3,
+        >>>     'fit.trainer.num_sanity_val_steps': 0,
         >>> }
         >>> main(config=config)
 
     Example:
-        >>> # xdoctest: +SKIP(working on getting this right)
         >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
         >>> from watch.tasks.fusion.fit_lightning import *  # NOQA
         >>> disable_lightning_hardware_warnings()
@@ -250,30 +282,20 @@ def main(config=None):
         >>> config = {
         >>>     # 'model': 'watch.tasks.fusion.methods.MultimodalTransformer',
         >>>     #'model': 'watch.tasks.fusion.methods.UNetBaseline',
-        >>>     'model.class_path': 'watch.tasks.fusion.methods.heterogeneous.HeterogeneousModel',
-        >>>     'model.init_args.position_encoder.class_path': 'watch.tasks.fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder',
-        >>>     'model.init_args.position_encoder.init_args.in_dims': 3,
-        >>>     'model.init_args.position_encoder.init_args.max_freq': 3,
-        >>>     'model.init_args.position_encoder.init_args.num_freqs': 10,
-        >>>     'model.init_args.backbone.class_path': 'watch.tasks.fusion.architectures.transformer.TransformerEncoderDecoder',
-        >>>     'optimizer.class_path': 'torch.optim.Adam',
-        >>>     'optimizer.init_args.lr': 1e-4,
-        >>>     'optimizer.init_args.weight_decay': 1e-2,
-        >>>     'optimizer.init_args.betas': [0.9, 0.98],
-        >>>     'optimizer.init_args.eps': 1e-12,
-        >>>     'trainer.default_root_dir': dpath,
-        >>>     'data.train_dataset': 'special:vidshapes8-frames9-speed0.5-multispectral',
-        >>>     'data.vali_dataset': 'special:vidshapes4-frames9-speed0.5-multispectral',
-        >>>     'trainer.max_steps': 3,
-        >>>     'trainer.num_sanity_val_steps': 0,
+        >>>     'subcommand': 'fit',
+        >>>     'fit.model.class_path': 'watch.tasks.fusion.methods.heterogeneous.HeterogeneousModel',
+        >>>     'fit.optimizer.class_path': 'torch.optim.SGD',
+        >>>     'fit.optimizer.init_args.lr': 1e-3,
+        >>>     'fit.trainer.default_root_dir': dpath,
+        >>>     'fit.data.train_dataset': 'special:vidshapes8-frames9-speed0.5-multispectral',
+        >>>     'fit.data.vali_dataset': 'special:vidshapes4-frames9-speed0.5-multispectral',
+        >>>     'fit.trainer.max_steps': 3,
+        >>>     'fit.trainer.num_sanity_val_steps': 0,
         >>> }
         >>> main(config=config)
     """
     cli = make_cli(config)
-    if cli.manual_mode:
-        # Do the running ourself
-        print('trainer.logger.log_dir = {!r}'.format(cli.trainer.logger.log_dir))
-        cli.trainer.fit(cli.model, cli.datamodule)
+    return cli
 
 
 if __name__ == "__main__":
