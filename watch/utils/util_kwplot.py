@@ -57,6 +57,9 @@ def dataframe_table(table, fpath, title=None, fontsize=12,
 
     Args:
         table (pandas.DataFrame | pandas.io.formats.style.Styler)
+        fpath (str | PathLike): where to save the image
+        table_conversion (str):
+            can be chrome or matplotlib
 
     Example:
         >>> # xdoctest: +REQUIRES(module:dataframe_image)
@@ -64,13 +67,12 @@ def dataframe_table(table, fpath, title=None, fontsize=12,
         >>> import ubelt as ub
         >>> dpath = ub.Path.appdir('kwplot/tests/test_dfi').ensuredir()
         >>> import pandas as pd
-        >>> df = pd.DataFrame({'foo': ['one', 'one', 'one', 'two', 'two',
-        ...                            'two'],
-        ...                    'bar': ['A', 'B', 'C', 'A', 'B', 'C'],
-        ...                    'baz': [1, 2, 3, 4, 5, 6],
-        ...                    'zoo': ['x', 'y', 'z', 'q', 'w', 't']})
+        >>> table = pd.DataFrame({'foo': ['one', 'one', 'one', 'two', 'two', 'two'],
+        ...                       'bar': ['A', 'B', 'C', 'A', 'B', 'C'],
+        ...                       'baz': [1, 2, 3, 4, 5, 6],
+        ...                       'zoo': ['x', 'y', 'z', 'q', 'w', 't']})
         >>> fpath = dpath / 'dfi.png'
-        >>> dataframe_table(style, fpath, title='A caption / title')
+        >>> dataframe_table(table, fpath, title='A caption / title')
     """
     import kwimage
     import kwplot
