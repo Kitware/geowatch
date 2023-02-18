@@ -171,11 +171,19 @@ def test_partial_init_callback():
     import ubelt as ub
     dpath1 = ub.Path.appdir('watch/tests/test_fusion_fit/partial_init/base_model').ensuredir()
     # Get the package we just trained and init from it
-    avail_package_fpaths = sorted((sorted((dpath1 / 'lightning_logs/').glob('*'))[-1] / 'packages').glob('*.pt'))
-    if len(avail_package_fpaths) == 0:
-        # Make an initializer package only if we need to.
-        config = ub.codeblock(
-            f'''
+    # avail_package_fpaths = (sorted((dpath1 / 'lightning_logs/').glob('*'))
+
+    # a = (sorted((dpath1 / 'lightning_logs/').glob('*')))
+    # if len(a):
+    #     avail_package_fpaths = (sorted(a[-1] / 'packages').glob('*.pt'))
+    # else:
+    #     avail_package_fpaths = []
+    # if len(avail_package_fpaths) == 0:
+    # Make an initializer package only if we need to.
+    config = ub.codeblock(
+        f'''
+        subcommand: fit
+        fit:
             model:
               class_path: watch.tasks.fusion.methods.HeterogeneousModel
             data:
@@ -191,10 +199,9 @@ def test_partial_init_callback():
                 lr: 1e-3
             trainer:
               default_root_dir: {dpath1}
-              max_steps: 3
-
-            ''')
-        fit_lightning.main(config=config)
+              max_steps: 2
+        ''')
+    fit_lightning.main(config=config)
 
     avail_package_fpaths = sorted((sorted((dpath1 / 'lightning_logs/').glob('*'))[-1] / 'packages').glob('*.pt'))
     package_fpath = avail_package_fpaths[-1]
@@ -202,6 +209,7 @@ def test_partial_init_callback():
     dpath2 = ub.Path.appdir('watch/tests/test_fusion_fit/partial_init/preinit_model').ensuredir()
     config = ub.codeblock(
         f'''
+        subcommand: fit
         fit:
             model:
               class_path: watch.tasks.fusion.methods.HeterogeneousModel
@@ -218,10 +226,9 @@ def test_partial_init_callback():
                 lr: 1e-3
             trainer:
               default_root_dir: {dpath2}
-              max_steps: 100
+              max_steps: 2
             initializer:
               init: {package_fpath}
-        subcommand: fit
         ''')
     cli = fit_lightning.main(config=config)
     print(f'cli={cli}')

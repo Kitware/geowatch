@@ -265,7 +265,7 @@ def main(config=None):
         >>> dpath = ub.Path.appdir('watch/tests/test_fusion_fit/demo_main_noop').ensuredir()
         >>> config = {
         >>>     'subcommand': 'fit',
-        >>>     'fit.model': 'NoopModel',
+        >>>     'fit.model': 'watch.tasks.fusion.methods.noop_model.NoopModel',
         >>>     'fit.trainer.default_root_dir': dpath,
         >>>     'fit.data.train_dataset': 'special:vidshapes8-frames9-speed0.5-multispectral',
         >>>     'fit.data.vali_dataset': 'special:vidshapes4-frames9-speed0.5-multispectral',
