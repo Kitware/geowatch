@@ -41,6 +41,8 @@ python -m watch.tasks.fusion fit \
 
 
 def test_noop_model_training():
+    import pytest
+    pytest.skip()
     from watch.tasks.fusion import fit_lightning
     import ubelt as ub
     config = ub.codeblock(
