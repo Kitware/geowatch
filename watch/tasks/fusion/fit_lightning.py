@@ -205,6 +205,35 @@ def make_cli(config=None):
         # have a deeper understanding of how lightning CLI works.
         # clikw['run'] = False
 
+    callbacks = [
+        # WeightInitializer(),
+        pl_ext.callbacks.BatchPlotter(  # Fixme: disabled for multi-gpu training with deepspeed
+            num_draw=2,  # args.num_draw,
+            draw_interval="5min",  # args.draw_interval
+        ),
+        pl.callbacks.RichProgressBar(),
+        pl.callbacks.LearningRateMonitor(logging_interval='step', log_momentum=True),
+        pl.callbacks.LearningRateMonitor(logging_interval='epoch', log_momentum=True),
+        pl.callbacks.ModelCheckpoint(monitor='train_loss', mode='min', save_top_k=1),
+        # leaving always on breaks when correspinding metric isnt
+        # tracked because loss_weight==0
+        # pl.callbacks.ModelCheckpoint(
+        #     monitor='val_change_f1', mode='max', save_top_k=4),
+        # pl.callbacks.ModelCheckpoint(
+        #     monitor='val_saliency_f1', mode='max', save_top_k=4),
+        # pl.callbacks.ModelCheckpoint(
+        #     monitor='val_class_f1_micro', mode='max', save_top_k=4),
+        # pl.callbacks.ModelCheckpoint(
+        #     monitor='val_class_f1_macro', mode='max', save_top_k=4),
+    ]
+    try:
+        import tesnorboard  # NOQA
+    except ImportError:
+        ...
+    else:
+        # Only use tensorboard if we have it.
+        callbacks.append(pl_ext.callbacks.TensorboardPlotter())
+
     cli = SmartLightningCLI(
         model_class=pl.LightningModule,  # TODO: factor out common components of the two models and put them in base class models inherit from
         datamodule_class=KWCocoVideoDataModule,
@@ -222,29 +251,7 @@ def make_cli(config=None):
             # without modifying source code.
             # TODO: find good way to reenable profiling, but not by default
             # profiler=pl.profilers.AdvancedProfiler(dirpath=".", filename="perf_logs"),
-
-            callbacks=[
-                # WeightInitializer(),
-                pl_ext.callbacks.BatchPlotter(  # Fixme: disabled for multi-gpu training with deepspeed
-                    num_draw=2,  # args.num_draw,
-                    draw_interval="5min",  # args.draw_interval
-                ),
-                pl.callbacks.RichProgressBar(),
-                pl_ext.callbacks.TensorboardPlotter(),
-                pl.callbacks.LearningRateMonitor(logging_interval='step', log_momentum=True),
-                pl.callbacks.LearningRateMonitor(logging_interval='epoch', log_momentum=True),
-                pl.callbacks.ModelCheckpoint(monitor='train_loss', mode='min', save_top_k=1),
-                # leaving always on breaks when correspinding metric isnt
-                # tracked because loss_weight==0
-                # pl.callbacks.ModelCheckpoint(
-                #     monitor='val_change_f1', mode='max', save_top_k=4),
-                # pl.callbacks.ModelCheckpoint(
-                #     monitor='val_saliency_f1', mode='max', save_top_k=4),
-                # pl.callbacks.ModelCheckpoint(
-                #     monitor='val_class_f1_micro', mode='max', save_top_k=4),
-                # pl.callbacks.ModelCheckpoint(
-                #     monitor='val_class_f1_macro', mode='max', save_top_k=4),
-            ]
+            callbacks=callbacks,
         ),
         **clikw,
     )
