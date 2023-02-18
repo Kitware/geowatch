@@ -94,7 +94,7 @@ def main(cmdline=1, **kwargs):
     from watch.tasks.cold.prepare_kwcoco import main
     from watch.tasks.cold.prepare_kwcoco import *
     kwargs= dict(        
-    coco_fpath = '/home/jws18003/data/dvc-repos/smart_data_dvc/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data.kwcoco.json',
+    coco_fpath = ub.Path.appdir('/home/jws18003/data/dvc-repos/smart_data_dvc/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/US_C000'),
     out_dpath = ub.Path.appdir('/gpfs/scratchfs1/zhz18039/jws18003/kwcoco'),
     adj_cloud = False,
     method = None,
