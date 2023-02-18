@@ -161,6 +161,11 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             deprecated chip_size, but in the future will be 128.
             '''), alias=['window_space_dims', 'window_dims', 'chip_size'], nargs='+'),
 
+        'fixed_resolution': scfg.Value(None, help=ub.paragraph(
+            '''
+            If specified, fixes resolution of window, output, and input space.
+            ''')),
+
         'window_space_scale': scfg.Value(None, help=ub.paragraph(
             '''
             Change the "scale" or resolution of the video space used by the
@@ -477,6 +482,11 @@ class KWCocoVideoDatasetConfig(scfg.Config):
         #     d = int(self['chip_size'])
         #     self['chip_dims'] = [d, d]  # has to be a list not a tuple for yaml
         # self['chip_size'] = None
+
+        if self['fixed_resolution'] not in {None, 'None', 'none', 'null'}:
+            self['window_space_scale'] = self['fixed_resolution']
+            self['input_space_scale'] = self['fixed_resolution']
+            self['output_space_scale'] = self['fixed_resolution']
 
         if self['input_space_scale'] in {None, 'None', 'window'}:
             self['input_space_scale'] = self['window_space_scale']

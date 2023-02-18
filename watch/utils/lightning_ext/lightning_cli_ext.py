@@ -12,7 +12,7 @@ import jsonargparse
 from jsonargparse.signatures import get_signature_parameters
 from jsonargparse.signatures import get_doc_short_description
 from jsonargparse.parameter_resolvers import ParamData
-from typing import List, Set, Union, Optional, Tuple, Type
+from typing import List, Set, Union, Optional, Tuple, Type, Any
 # from typing import Any, Dict  # NOQA
 # from pytorch_lightning.cli import _JSONARGPARSE_SIGNATURES_AVAILABLE  # NOQA
 try:
@@ -28,6 +28,54 @@ import inspect
 from argparse import SUPPRESS
 from jsonargparse.typing import is_final_class
 
+from jsonargparse.actions import _ActionConfigLoad  # NOQA
+from jsonargparse.optionals import get_doc_short_description # NOQA
+from jsonargparse.parameter_resolvers import (ParamData, get_parameter_origins, get_signature_parameters,)  # NOQA
+from jsonargparse.typehints import ActionTypeHint, LazyInitBaseClass, is_optional # NOQA
+from jsonargparse.typing import is_final_class # NOQA
+from jsonargparse.util import LoggerProperty, get_import_path, is_subclass, iter_to_set_str # NOQA
+from jsonargparse.signatures import is_factory_class, is_pure_dataclass
+
+
+kinds = inspect._ParameterKind
+inspect_empty = inspect._empty
+
+# class ActionConfigFile_Extension(ActionConfigFile):
+
+#     @staticmethod
+#     def apply_config(parser, cfg, dest, value) -> None:
+#         import xdev
+#         xdev.embed()
+#         from jsonargparse.actions import _ActionSubCommands
+#         from jsonargparse.actions import previous_config_context
+#         from jsonargparse.actions import get_config_read_mode
+#         from jsonargparse.actions import Path
+#         from jsonargparse.actions import load_value
+#         from jsonargparse.actions import get_loader_exceptions
+#         from jsonargparse.link_arguments import skip_apply_links
+
+#         value
+
+#         with _ActionSubCommands.not_single_subcommand(), previous_config_context(cfg), skip_apply_links():
+#             kwargs = {'env': False, 'defaults': False, '_skip_check': True, '_fail_no_subcommand': False}
+#             try:
+#                 cfg_path: Optional[Path] = Path(value, mode=get_config_read_mode())
+#             except TypeError as ex_path:
+#                 try:
+#                     if isinstance(load_value(value), str):
+#                         raise ex_path
+#                     cfg_path = None
+#                     cfg_file = parser.parse_string(value, **kwargs)
+#                 except (TypeError,) + get_loader_exceptions() as ex_str:
+#                     raise TypeError(f'Parser key "{dest}": {ex_str}') from ex_str
+#             else:
+#                 cfg_file = parser.parse_path(value, **kwargs)
+#             cfg_merged = parser.merge_config(cfg_file, cfg)
+#             cfg.__dict__.update(cfg_merged.__dict__)
+#             if cfg.get(dest) is None:
+#                 cfg[dest] = []
+#             cfg[dest].append(cfg_path)
+
 
 class LightningArgumentParser_Extension(LightningArgumentParser):
     """
@@ -40,28 +88,11 @@ class LightningArgumentParser_Extension(LightningArgumentParser):
 
     """
 
-    # #15038 is Fixed, so we don't need this anymore.
-    # def __init__(self, *args: Any, **kwargs: Any) -> None:
-    #     """Initialize argument parser that supports configuration file input.
+    """
+    Keep in sync with ~/code/watch/watch/utils/lightning_ext/lightning_cli_ext.py
 
-    #     For full details of accepted arguments see `ArgumentParser.__init__
-    #     <https://jsonargparse.readthedocs.io/en/stable/index.html#jsonargparse.ArgumentParser.__init__>`_.
-
-    #     Example:
-    #         >>> from watch.utils.lightning_ext.lightning_cli_ext import LightningCLI_Extension
-    #     """
-    #     if not _JSONARGPARSE_SIGNATURES_AVAILABLE:
-    #         raise ModuleNotFoundError(
-    #             f"{_JSONARGPARSE_SIGNATURES_AVAILABLE}. Try `pip install -U 'jsonargparse[signatures]'`."
-    #         )
-    #     super(LightningArgumentParser, self).__init__(*args, **kwargs)
-    #     # self.add_argument(
-    #     #     "-c", "--config", action=ActionConfigFile, help="Path to a configuration file in json or yaml format."
-    #     # )
-    #     self.callback_keys: List[str] = []
-    #     # separate optimizers and lr schedulers to know which were added
-    #     self._optimizers: Dict[str, Tuple[Union[Type, Tuple[Type, ...]], str]] = {}
-    #     self._lr_schedulers: Dict[str, Tuple[Union[Type, Tuple[Type, ...]], str]] = {}
+    See if we can do something to land this functionality upstream
+    """
 
     def add_subclass_arguments(
         self,
@@ -206,6 +237,8 @@ class LightningArgumentParser_Extension(LightningArgumentParser):
                     component=function_or_class.__init__,
                     parent=function_or_class,
                 )
+                param._scfg_value = value
+
                 # print(f'add scriptconfig {key=}')
                 params.append(param)
         else:
@@ -230,66 +263,141 @@ class LightningArgumentParser_Extension(LightningArgumentParser):
         # print('added_args = {}'.format(ub.repr2(added_args, nl=1)))
         return added_args
 
-    # def add_lightning_class_args(
-    #     self,
-    #     lightning_class: Union[
-    #         Callable[..., Union[Trainer, LightningModule, LightningDataModule, Callback]],
-    #         Type[Trainer],
-    #         Type[LightningModule],
-    #         Type[LightningDataModule],
-    #         Type[Callback],
-    #     ],
-    #     nested_key: str,
-    #     subclass_mode: bool = False,
-    #     required: bool = True,
-    # ) -> List[str]:
-    #     """Adds arguments from a lightning class to a nested key of the parser.
+    def _add_signature_parameter(
+        self,
+        group,
+        nested_key: Optional[str],
+        param,
+        added_args: List[str],
+        skip: Optional[Set[str]] = None,
+        fail_untyped: bool = True,
+        as_positional: bool = False,
+        sub_configs: bool = False,
+        instantiate: bool = True,
+        linked_targets: Optional[Set[str]] = None,
+        default: Any = inspect_empty,
+        **kwargs
+    ):
+        name = param.name
+        kind = param.kind
+        annotation = param.annotation
+        if default == inspect_empty:
+            default = param.default
+        is_required = default == inspect_empty
+        src = get_parameter_origins(param.component, param.parent)
+        skip_message = f'Skipping parameter "{name}" from "{src}" because of: '
+        if not fail_untyped and annotation == inspect_empty:
+            annotation = Any
+            default = None if is_required else default
+            is_required = False
+        if is_required and linked_targets is not None and name in linked_targets:
+            default = None
+            is_required = False
+        if kind in {kinds.VAR_POSITIONAL, kinds.VAR_KEYWORD} or \
+           (not is_required and name[0] == '_') or \
+           (annotation == inspect_empty and not is_required and default is None):
+            return
+        elif skip and name in skip:
+            self.logger.debug(skip_message + 'Parameter requested to be skipped.')
+            return
+        if is_factory_class(default):
+            default = param.parent.__dataclass_fields__[name].default_factory()
+        if annotation == inspect_empty and not is_required:
+            annotation = type(default)
+        if 'help' not in kwargs:
+            kwargs['help'] = param.doc
+        if not is_required:
+            kwargs['default'] = default
+            if default is None and not is_optional(annotation, object):
+                annotation = Optional[annotation]
+        elif not as_positional:
+            kwargs['required'] = True
+        is_subclass_typehint = False
+        is_final_class_typehint = is_final_class(annotation)
+        dest = (nested_key + '.' if nested_key else '') + name
+        args = [dest if is_required and as_positional else '--' + dest]
+        if param.origin:
+            group_name = '; '.join(str(o) for o in param.origin)
+            if group_name in group.parser.groups:
+                group = group.parser.groups[group_name]
+            else:
+                group = group.parser.add_argument_group(
+                    f'Conditional arguments [origins: {group_name}]',
+                    name=group_name,
+                )
+        if annotation in {str, int, float, bool} or \
+           is_subclass(annotation, (str, int, float)) or \
+           is_final_class_typehint or \
+           is_pure_dataclass(annotation):
+            kwargs['type'] = annotation
+        elif annotation != inspect_empty:
+            try:
+                is_subclass_typehint = ActionTypeHint.is_subclass_typehint(annotation, all_subtypes=False)
+                kwargs['type'] = annotation
+                sub_add_kwargs: dict = {'fail_untyped': fail_untyped, 'sub_configs': sub_configs}
+                if is_subclass_typehint:
+                    prefix = name + '.init_args.'
+                    subclass_skip = {s[len(prefix):] for s in skip or [] if s.startswith(prefix)}
+                    sub_add_kwargs['skip'] = subclass_skip
+                args = ActionTypeHint.prepare_add_argument(
+                    args=args,
+                    kwargs=kwargs,
+                    enable_path=is_subclass_typehint and sub_configs,
+                    container=group,
+                    logger=self.logger,
+                    sub_add_kwargs=sub_add_kwargs,
+                )
+            except ValueError as ex:
+                self.logger.debug(skip_message + str(ex))
+        if 'type' in kwargs or 'action' in kwargs:
+            sub_add_kwargs = {
+                'fail_untyped': fail_untyped,
+                'sub_configs': sub_configs,
+                'instantiate': instantiate,
+            }
+            if is_final_class_typehint:
+                kwargs.update(sub_add_kwargs)
 
-    #     Args:
-    #         lightning_class: A callable or any subclass of {Trainer, LightningModule, LightningDataModule, Callback}.
-    #         nested_key: Name of the nested namespace to store arguments.
-    #         subclass_mode: Whether allow any subclass of the given class.
-    #         required: Whether the argument group is required.
+            if hasattr(param, '_scfg_value'):
+                value = param._scfg_value
+                _value = value
+                def _resolve_alias(name, _value, fuzzy_hyphens):
+                    if _value is None:
+                        aliases = None
+                        short_aliases = None
+                    else:
+                        aliases = _value.alias
+                        short_aliases = _value.short_alias
+                    if isinstance(aliases, str):
+                        aliases = [aliases]
+                    if isinstance(short_aliases, str):
+                        short_aliases = [short_aliases]
+                    long_names = [name] + list((aliases or []))
+                    short_names = list(short_aliases or [])
+                    if fuzzy_hyphens:
+                        # Do we want to allow for people to use hyphens on the CLI?
+                        # Maybe, we can make it optional.
+                        unique_long_names = set(long_names)
+                        modified_long_names = {n.replace('_', '-') for n in unique_long_names}
+                        extra_long_names = modified_long_names - unique_long_names
+                        long_names += sorted(extra_long_names)
+                    nest_prefix = (nested_key + '.' if nested_key else '')
+                    short_option_strings = ['-' + nest_prefix + n for n in short_names]
+                    long_option_strings = ['--' + nest_prefix +  n for n in long_names]
+                    option_strings = short_option_strings + long_option_strings
+                    return option_strings
 
-    #     Returns:
-    #         A list with the names of the class arguments added.
-    #     """
-    #     print(f'[Lightning.CLI] Add args for lightning_class={lightning_class}')
-    #     if callable(lightning_class) and not isinstance(lightning_class, type):
-    #         lightning_class = class_from_function(lightning_class)
+                args = _resolve_alias(name, _value, fuzzy_hyphens=0)
+                # print(f'long_option_strings={long_option_strings}')
+                # print(f'short_option_strings={short_option_strings}')
 
-    #     if isinstance(lightning_class, type) and issubclass(
-    #         lightning_class, (Trainer, LightningModule, LightningDataModule, Callback)
-    #     ):
-    #         if issubclass(lightning_class, Callback):
-    #             self.callback_keys.append(nested_key)
-
-    #         # Try 2: Revert to original behavior
-    #         instantiate = not issubclass(lightning_class, Trainer)
-    #         # Try 1:
-    #         # Our extension will defer how the model is instantiated
-    #         # because we need the dataset to be setup before we create it.
-    #         # instantiate = not issubclass(lightning_class, (Trainer, LightningModule))
-
-    #         if subclass_mode:
-    #             return self.add_subclass_arguments(
-    #                 lightning_class, nested_key,
-    #                 fail_untyped=False,
-    #                 required=required,
-    #                 # instantiate=instantiate
-    #             )
-
-    #         return self.add_class_arguments(
-    #             lightning_class,
-    #             nested_key,
-    #             fail_untyped=False,
-    #             instantiate=instantiate,
-    #             sub_configs=True,
-    #         )
-    #     raise MisconfigurationException(
-    #         f"Cannot add arguments from: {lightning_class}. You should provide either a callable or a subclass of: "
-    #         "Trainer, LightningModule, LightningDataModule, or Callback."
-    #     )
+            action = group.add_argument(*args, **kwargs)
+            action.sub_add_kwargs = sub_add_kwargs
+            if is_subclass_typehint and len(subclass_skip) > 0:
+                action.sub_add_kwargs['skip'] = subclass_skip
+            added_args.append(dest)
+        elif is_required and fail_untyped:
+            raise ValueError(f'Required parameter without a type for "{src}" parameter "{name}".')
 
 
 # Monkey patch jsonargparse so its subcommands use our extended functionality
@@ -297,7 +405,7 @@ jsonargparse.ArgumentParser = LightningArgumentParser_Extension
 jsonargparse.core.ArgumentParser = LightningArgumentParser_Extension
 
 
-# Not needed anymore
+# Should try to patch into upstream
 class LightningCLI_Extension(LightningCLI):
     ...
 
@@ -310,7 +418,8 @@ class LightningCLI_Extension(LightningCLI):
         kwargs.setdefault("dump_header", [f"pytorch_lightning=={pl.__version__}"])
         parser = LightningArgumentParser_Extension(**kwargs)
         parser.add_argument(
-            "-c", "--config", action=ActionConfigFile, help="Path to a configuration file in json or yaml format."
+            "-c", "--config", action=ActionConfigFile,
+            help="Path to a configuration file in json or yaml format."
         )
         return parser
 
@@ -329,33 +438,3 @@ class LightningCLI_Extension(LightningCLI):
             self.config = parser.parse_object(args)
         else:
             self.config = parser.parse_args(args)
-
-    # def before_instantiate_classes(self) -> None:
-    #     """Implement to run some code before instantiating the classes."""
-
-    # def instantiate_classes(self) -> None:
-    #     """Instantiates the classes and sets their attributes."""
-    #     # datavars = self.config.fit.data.__dict__
-    #     # modelvars = self.config.fit.model.__dict__
-    #     self.config_init = self.parser.instantiate_classes(self.config)
-    #     self.datamodule = self._get(self.config_init, "data")
-
-    #     ### Try 1
-    #     # Call datamodule setup before instantiate
-    #     # TODO: only need to do this IF these aren't specified on the CLI,
-    #     # which could be a useful optimization (but also a shoegun).
-    #     # self.datamodule.setup('fit')
-    #     # self.config_init.fit.model.input_sensorchan = self.datamodule.input_sensorchan
-    #     # self.config_init.fit.model.classes = self.datamodule.classes
-
-    #     # Instantiate the model ourselves
-    #     # modelkw = self._get(self.config_init, "model")
-    #     # modelcls = self.model_class
-    #     # self.model = modelcls(**modelkw)
-
-    #     ### Try 2: Use unmodified instantiate_classes and put all the hacks
-    #     ### in the link_arguments call.
-    #     self.model = self._get(self.config_init, "model")
-
-    #     self._add_configure_optimizers_method_to_model(self.subcommand)
-    #     self.trainer = self.instantiate_trainer()
