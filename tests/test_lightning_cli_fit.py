@@ -59,7 +59,8 @@ def test_noop_model_training():
               time_steps: 2
               channels: B1,B10,B11
             trainer:
-              max_steps: 20
+              max_steps: 10
+              num_sanity_val_steps: 0
         ''')
     fit_lightning.main(config=config)
 
@@ -172,6 +173,7 @@ def test_partial_init_callback():
     from watch.tasks.fusion import fit_lightning
     import ubelt as ub
     dpath1 = ub.Path.appdir('watch/tests/test_fusion_fit/partial_init/base_model').ensuredir()
+    dpath1.delete().ensuredir()
     # Get the package we just trained and init from it
     # avail_package_fpaths = (sorted((dpath1 / 'lightning_logs/').glob('*'))
 
@@ -202,13 +204,18 @@ def test_partial_init_callback():
             trainer:
               default_root_dir: {dpath1}
               max_steps: 2
+              num_sanity_val_steps: 0
         ''')
     fit_lightning.main(config=config)
 
-    avail_package_fpaths = sorted((sorted((dpath1 / 'lightning_logs/').glob('*'))[-1] / 'packages').glob('*.pt'))
+    avail_package_fpaths = sorted(dpath1.glob('*.pt'))
+    if len(avail_package_fpaths) == 0:
+        raise AssertionError('We should have produced a trained model')
+
     package_fpath = avail_package_fpaths[-1]
 
-    dpath2 = ub.Path.appdir('watch/tests/test_fusion_fit/partial_init/preinit_model').ensuredir()
+    dpath2 = ub.Path.appdir('watch/tests/test_fusion_fit/partial_init/preinit_model')
+    dpath2.delete().ensuredir()
     config = ub.codeblock(
         f'''
         subcommand: fit
@@ -229,11 +236,14 @@ def test_partial_init_callback():
             trainer:
               default_root_dir: {dpath2}
               max_steps: 2
+              num_sanity_val_steps: 0
             initializer:
               init: {package_fpath}
         ''')
     cli = fit_lightning.main(config=config)
     print(f'cli={cli}')
+    dpath1.delete()
+    dpath2.delete()
 
 
 if __name__ == '__main__':

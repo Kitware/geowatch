@@ -269,7 +269,7 @@ def main(config=None):
         >>>     'fit.trainer.default_root_dir': dpath,
         >>>     'fit.data.train_dataset': 'special:vidshapes8-frames9-speed0.5-multispectral',
         >>>     'fit.data.vali_dataset': 'special:vidshapes4-frames9-speed0.5-multispectral',
-        >>>     'fit.trainer.max_steps': 3,
+        >>>     'fit.trainer.max_steps': 2,
         >>>     'fit.trainer.num_sanity_val_steps': 0,
         >>> }
         >>> main(config=config)
@@ -289,7 +289,7 @@ def main(config=None):
         >>>     'fit.trainer.default_root_dir': dpath,
         >>>     'fit.data.train_dataset': 'special:vidshapes8-frames9-speed0.5-multispectral',
         >>>     'fit.data.vali_dataset': 'special:vidshapes4-frames9-speed0.5-multispectral',
-        >>>     'fit.trainer.max_steps': 3,
+        >>>     'fit.trainer.max_steps': 2,
         >>>     'fit.trainer.num_sanity_val_steps': 0,
         >>> }
         >>> main(config=config)

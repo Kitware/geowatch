@@ -13,7 +13,7 @@ Example:
     >>> # Basic overview demo of the algorithm
     >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
     >>> import watch
-    >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, num_frames=128, image_size=(32, 32))
+    >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, num_frames=32, image_size=(32, 32))
     >>> vidid = dset.dataset['videos'][0]['id']
     >>> self = TimeWindowSampler.from_coco_video(
     >>>     dset, vidid,
@@ -31,7 +31,7 @@ Example:
     >>> # Demo multiple different settings
     >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
     >>> import watch
-    >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, num_frames=128, image_size=(32, 32))
+    >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, num_frames=32, image_size=(32, 32))
     >>> vidid = dset.dataset['videos'][0]['id']
     >>> self = TimeWindowSampler.from_coco_video(
     >>>     dset, vidid,
@@ -668,7 +668,7 @@ class TimeWindowSampler(CommonSamplerMixin):
             >>> import kwcoco
             >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
             >>> import watch
-            >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, num_frames=128, image_size=(32, 32))
+            >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, num_frames=32, image_size=(32, 32))
             >>> vidid = dset.dataset['videos'][0]['id']
             >>> self = TimeWindowSampler.from_coco_video(
             >>>     dset, vidid,
