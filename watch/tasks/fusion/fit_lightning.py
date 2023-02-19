@@ -239,6 +239,9 @@ def make_cli(config=None):
         datamodule_class=KWCocoVideoDataModule,
         trainer_class=SmartTrainer,
         subclass_mode_model=True,
+
+        save_config_overwrite=True,
+
         # subclass_mode_data=True,
         parser_kwargs=dict(
             parser_mode='yaml_unsafe_for_tuples',
