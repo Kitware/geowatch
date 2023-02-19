@@ -10,6 +10,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * New `time_kernel` method for temporal sampling in `KWcocoVideoDataLoader`
 * New visualizations in `geojson_site_stats`
 * Add `submatrices` to MLOPs
+* LightningCLI is now fully supported with partial weight loading and tensorboard plots
+* Scriptconfig aliases now hook up with LightningCLI
+* Added `fixed_resultion` arg to dataloader
 
 ### Changed
 * Renamed `project_annotations` to `reproject_annotations`

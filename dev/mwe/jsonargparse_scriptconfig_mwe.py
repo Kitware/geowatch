@@ -1,32 +1,15 @@
-"""
-This module is an exension of jsonargparse and lightning CLI that will respect
-scriptconfig style arguments
-
-References:
-    https://github.com/Lightning-AI/lightning/issues/15038
-"""
-from pytorch_lightning.cli import LightningCLI
-from pytorch_lightning.cli import LightningArgumentParser
 import jsonargparse
-# from pytorch_lightning import Callback, LightningDataModule, LightningModule, Trainer
+import inspect
+from jsonargparse.parameter_resolvers import ParamData
 from jsonargparse.signatures import get_signature_parameters
 from jsonargparse.signatures import get_doc_short_description
-from jsonargparse.parameter_resolvers import ParamData
 from typing import List, Set, Union, Optional, Tuple, Type, Any
-# from typing import Any, Dict  # NOQA
-# from pytorch_lightning.cli import _JSONARGPARSE_SIGNATURES_AVAILABLE  # NOQA
-try:
-    from pytorch_lightning.cli import ActionConfigFile
-except Exception:
-    from jsonargparse import ActionConfigFile  # NOQA
-from pytorch_lightning.cli import Namespace
 from jsonargparse.util import get_import_path, iter_to_set_str
-# from typing import Callable, List, Type, Union
-# from jsonargparse import class_from_function
-# from pytorch_lightning.utilities.exceptions import MisconfigurationException
-import inspect
 from argparse import SUPPRESS
 from jsonargparse.typing import is_final_class
+
+import scriptconfig as scfg
+
 
 from jsonargparse.actions import _ActionConfigLoad  # NOQA
 from jsonargparse.optionals import get_doc_short_description # NOQA
@@ -36,58 +19,11 @@ from jsonargparse.typing import is_final_class # NOQA
 from jsonargparse.util import LoggerProperty, get_import_path, is_subclass, iter_to_set_str # NOQA
 from jsonargparse.signatures import is_factory_class, is_pure_dataclass
 
-
 kinds = inspect._ParameterKind
 inspect_empty = inspect._empty
 
-# class ActionConfigFile_Extension(ActionConfigFile):
 
-#     @staticmethod
-#     def apply_config(parser, cfg, dest, value) -> None:
-#         import xdev
-#         xdev.embed()
-#         from jsonargparse.actions import _ActionSubCommands
-#         from jsonargparse.actions import previous_config_context
-#         from jsonargparse.actions import get_config_read_mode
-#         from jsonargparse.actions import Path
-#         from jsonargparse.actions import load_value
-#         from jsonargparse.actions import get_loader_exceptions
-#         from jsonargparse.link_arguments import skip_apply_links
-
-#         value
-
-#         with _ActionSubCommands.not_single_subcommand(), previous_config_context(cfg), skip_apply_links():
-#             kwargs = {'env': False, 'defaults': False, '_skip_check': True, '_fail_no_subcommand': False}
-#             try:
-#                 cfg_path: Optional[Path] = Path(value, mode=get_config_read_mode())
-#             except TypeError as ex_path:
-#                 try:
-#                     if isinstance(load_value(value), str):
-#                         raise ex_path
-#                     cfg_path = None
-#                     cfg_file = parser.parse_string(value, **kwargs)
-#                 except (TypeError,) + get_loader_exceptions() as ex_str:
-#                     raise TypeError(f'Parser key "{dest}": {ex_str}') from ex_str
-#             else:
-#                 cfg_file = parser.parse_path(value, **kwargs)
-#             cfg_merged = parser.merge_config(cfg_file, cfg)
-#             cfg.__dict__.update(cfg_merged.__dict__)
-#             if cfg.get(dest) is None:
-#                 cfg[dest] = []
-#             cfg[dest].append(cfg_path)
-
-
-class LightningArgumentParser_Extension(LightningArgumentParser):
-    """
-
-
-    Refactor references:
-        ~/.pyenv/versions/3.10.5/envs/pyenv3.10.5/lib/python3.10/site-packages/pytorch_lightning/cli.py
-        ~/.pyenv/versions/3.10.5/envs/pyenv3.10.5/lib/python3.10/site-packages/jsonargparse/core.py
-        ~/.pyenv/versions/3.10.5/envs/pyenv3.10.5/lib/python3.10/site-packages/jsonargparse/signatures.py
-
-    """
-
+class ScriptConfigArgumentParser(jsonargparse.ArgumentParser):
     """
     Keep in sync with ~/code/watch/watch/utils/lightning_ext/lightning_cli_ext.py
 
@@ -401,40 +337,39 @@ class LightningArgumentParser_Extension(LightningArgumentParser):
 
 
 # Monkey patch jsonargparse so its subcommands use our extended functionality
-jsonargparse.ArgumentParser = LightningArgumentParser_Extension
-jsonargparse.core.ArgumentParser = LightningArgumentParser_Extension
+jsonargparse.ArgumentParser = ScriptConfigArgumentParser
 
 
-# Should try to patch into upstream
-class LightningCLI_Extension(LightningCLI):
-    ...
+class MyClassConfig(scfg.DataConfig):
+    key1 = scfg.Value(1, alias=['key_one'], help='description1')
+    # key2 = scfg.Value(None, help='description1')
+    # key3 = scfg.Value(False, isflag=True, help='description1')
 
-    def init_parser(self, **kwargs):
-        # Hack in our modified parser
-        DEBUG = 0
-        if DEBUG:
-            kwargs['error_handler'] = None
-        import pytorch_lightning as pl
-        kwargs.setdefault("dump_header", [f"pytorch_lightning=={pl.__version__}"])
-        parser = LightningArgumentParser_Extension(**kwargs)
-        parser.add_argument(
-            "-c", "--config", action=ActionConfigFile,
-            help="Path to a configuration file in json or yaml format."
-        )
-        return parser
 
-    def parse_arguments(self, parser: LightningArgumentParser, args) -> None:
-        """Parses command line arguments and stores it in ``self.config``."""
-        import sys
-        if args is not None and len(sys.argv) > 1:
-            # Please let us shoot ourselves in the foot.
-            import warnings
-            warnings.warn(
-                "LightningCLI's args parameter is intended to run from within Python like if it were from the command "
-                "line. To prevent mistakes it is not allowed to provide both args and command line arguments, got: "
-                f"sys.argv[1:]={sys.argv[1:]}, args={args}."
-            )
-        if isinstance(args, (dict, Namespace)):
-            self.config = parser.parse_object(args)
-        else:
-            self.config = parser.parse_args(args)
+class MyClass:
+    __scriptconfig__ = MyClassConfig
+
+    def __init__(self, **kwargs):
+        self.config = MyClassConfig(**kwargs)
+
+
+def main():
+    parser = ScriptConfigArgumentParser()
+    parser.add_class_arguments(MyClass, nested_key='my_class', fail_untyped=False, sub_configs=True)
+    parser.add_argument('--foo', default='bar')
+    parser.add_argument('-b', '--baz', '--buzz', default='bar')
+    config = parser.parse_args()
+    instances = parser.instantiate_classes(config)
+    print(f'{instances.my_class.__dict__=}')
+
+
+if __name__ == '__main__':
+    """
+    CommandLine:
+        cd ~/code/watch/dev/mwe
+        python jsonargparse_scriptconfig_mwe.py --my_class.key1=foo
+        python jsonargparse_scriptconfig_mwe.py --my_class.key_one=foo
+        python jsonargparse_scriptconfig_mwe.py --buzz=1
+        python jsonargparse_scriptconfig_mwe.py --help
+    """
+    main()

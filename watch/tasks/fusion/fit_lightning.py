@@ -26,38 +26,68 @@ def custom_yaml_dump(data):
 set_dumper('yaml_unsafe_for_tuples', custom_yaml_dump)
 
 
-# class PartialWeightInitializer(pl.callbacks.Callback):
+class SmartTrainer(pl.Trainer):
+    """
+    Simple trainer subclass so we can ensure a print happens directly before
+    the training loop. (so annoying that we can't reorder callbacks)
+    """
+    ...
 
-#     def __init__(self, init='noop'):
-#         ...
+    def _run_stage(self, *args, **kwargs):
+        # All I want is to print this  directly before training starts.
+        # Is that so hard to do?
+        import rich
+        dpath = self.logger.log_dir
+        rich.print(f"Trainer log dpath:\n\n[link={dpath}]{dpath}[/link]\n")
+        super()._run_stage(*args, **kwargs)
 
-#     def on_fit_start(self, trainer, pl_module):
-#         if 0:
-#             # TODO: make this work
-#             import ubelt as ub
-#             from watch.tasks.fusion.fit import coerce_initializer
-#             from watch.utils import util_pattern
-#             init_fpath = '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt'
-#             initializer = coerce_initializer(init_fpath)
-#             # other_model = getattr(initializer, 'other_model', None)
 
-#             # Hack to preserve specific values
-#             print('Initializing weights')
-#             old_state = pl_module.state_dict()
-#             ignore_pattern = util_pattern.MultiPattern.coerce(['*tokenizers*.0.mean', '*tokenizers*.0.std'])
-#             ignore_keys = [key for key in old_state.keys() if ignore_pattern.match(key)]
-#             print('Finding keys to not initializer')
-#             to_preserve = ub.udict(old_state).subdict(ignore_keys).map_values(lambda v: v.clone())
+class WeightInitializer(pl.callbacks.Callback):
+    """
+    Netowrk weight initializer with support for partial weight loading.
+    """
 
-#             initializer.association = 'embedding'
-#             info = initializer.forward(pl_module)  # NOQA
-#             if info:
-#                 mapping = info.get('mapping', None)
-#                 unset = info.get('self_unset', None)
-#                 unused = info.get('self_unused', None)
-#                 print('mapping = {}'.format(ub.repr2(mapping, nl=1)))
-#                 print(f'unused={unused}')
-#                 print(f'unset={unset}')
+    def __init__(self, init='noop', association='embedding'):
+        self.init = init
+        self.association = association
+        self._did_once = False
+
+    def setup(self, trainer, pl_module, stage):
+        if self._did_once:
+            # Only weight initialize once, on whatever stage happens first.
+            return
+        self._did_once = True
+        if self.init != 'noop':
+            from watch.tasks.fusion.fit import coerce_initializer
+            from watch.utils import util_pattern
+            initializer = coerce_initializer(self.init)
+
+            model = pl_module
+
+            # Hack to always preserve specific values
+            # (TODO add to torch_liberator as an option, allow to be configured
+            # as argument to this class, or allow the model to set some property
+            # that says which weights should not be touched.)
+            print('Initializing weights')
+            old_state = model.state_dict()
+            ignore_pattern = util_pattern.MultiPattern.coerce(['*tokenizers*.0.mean', '*tokenizers*.0.std'])
+            ignore_keys = [key for key in old_state.keys() if ignore_pattern.match(key)]
+            print('Finding keys to not initializer')
+            to_preserve = ub.udict(old_state).subdict(ignore_keys).map_values(lambda v: v.clone())
+
+            initializer.association = self.association
+            info = initializer.forward(model)  # NOQA
+            if info:
+                mapping = info.get('mapping', None)
+                unset = info.get('self_unset', None)
+                unused = info.get('self_unused', None)
+                print('mapping = {}'.format(ub.repr2(mapping, nl=1)))
+                print(f'unused={unused}')
+                print(f'unset={unset}')
+
+            print('Finalize initialization')
+            updated = model.state_dict() | to_preserve
+            model.load_state_dict(updated)
 
 
 class SmartLightningCLI(LightningCLI_Extension):
@@ -92,11 +122,14 @@ class SmartLightningCLI(LightningCLI_Extension):
 
         return [optimizer], [lr_scheduler]
 
-    # TODO: import initialization code from fit.py
     def add_arguments_to_parser(self, parser):
+
         # TODO: separate final_package dir and fpath for more configuration
         # pl_ext.callbacks.Packager(package_fpath=args.package_fpath),
         parser.add_lightning_class_args(pl_ext.callbacks.Packager, "packager")
+
+        parser.add_lightning_class_args(WeightInitializer, "initializer")
+
         # parser.set_defaults({"packager.package_fpath": "???"}) # "$DEFAULT_ROOT_DIR"/final_package.pt
         parser.link_arguments(
             "trainer.default_root_dir",
@@ -141,6 +174,15 @@ class SmartLightningCLI(LightningCLI_Extension):
 
 
 def make_cli(config=None):
+    """
+    Note:
+        Currently, creating the CLI will invoke it. We could modify this
+        function to have the option to not invoke by specifying ``run=False``
+        to :class:`LightningCLI`, but for some reason that changes the expected
+        form of the config (you must specify subcommand if run=True but must
+        not if run=False). We need to understand exactly what's going on there
+        before we expose a way to set run=False.
+    """
 
     if isinstance(config, str):
         try:
@@ -156,29 +198,65 @@ def make_cli(config=None):
                 if not isinstance(v, (dict, list)):
                     k = '.'.join(list(map(str, p)))
                     config[k] = v
-                    # print('--' + k + '=' + str(v) + ' \\\\')
             return config
         from watch.utils import util_yaml
+        print('Passing string-based config:')
         print(ub.highlight_code(config, 'yaml'))
         nested = util_yaml.yaml_loads(config, backend='pyyaml')
-        print('nested = {}'.format(ub.urepr(nested, nl=1)))
+        # print('nested = {}'.format(ub.urepr(nested, nl=1)))
         config = nested_to_jsonnest(nested)
-        print('config = {}'.format(ub.urepr(config, nl=1)))
+        # print('config = {}'.format(ub.urepr(config, nl=1)))
 
-    manual_mode = False
     clikw = {'run': True}
     if config is not None:
         # overload the argument parsing with a programatic config
         clikw['args'] = config
-        clikw['run'] = False
-        # Note: we may not need manual mode once we have a deeper understanding
-        # of how lightning CLI works.
-        manual_mode = True
+        # Note: we may not need manual mode by setting run to False once we
+        # have a deeper understanding of how lightning CLI works.
+        # clikw['run'] = False
+
+    callbacks = [
+        # WeightInitializer(),  # can we integrate more intuitively?
+        # May need to declare in add_arguments_to_parser
+        pl_ext.callbacks.BatchPlotter(  # Fixme: disabled for multi-gpu training with deepspeed
+            num_draw=2,  # args.num_draw,
+            draw_interval="5min",  # args.draw_interval
+        ),
+        pl.callbacks.RichProgressBar(),
+        pl.callbacks.LearningRateMonitor(logging_interval='step', log_momentum=True),
+        pl.callbacks.LearningRateMonitor(logging_interval='epoch', log_momentum=True),
+        pl.callbacks.ModelCheckpoint(monitor='train_loss', mode='min', save_top_k=1),
+        # leaving always on breaks when correspinding metric isnt
+        # tracked because loss_weight==0
+        # FIXME: can we conditionally apply these if they make sense?
+        # or can we make them robust to the case where the key isn't logged?
+        # pl.callbacks.ModelCheckpoint(
+        #     monitor='val_change_f1', mode='max', save_top_k=4),
+        # pl.callbacks.ModelCheckpoint(
+        #     monitor='val_saliency_f1', mode='max', save_top_k=4),
+        # pl.callbacks.ModelCheckpoint(
+        #     monitor='val_class_f1_micro', mode='max', save_top_k=4),
+        # pl.callbacks.ModelCheckpoint(
+        #     monitor='val_class_f1_macro', mode='max', save_top_k=4),
+    ]
+    try:
+        # There has to be a tool with less dependencies the matplotlib
+        # auto-plotters can hook into.
+        import tesnorboard  # NOQA
+    except ImportError:
+        ...
+    else:
+        # Only use tensorboard if we have it.
+        callbacks.append(pl_ext.callbacks.TensorboardPlotter())
 
     cli = SmartLightningCLI(
         model_class=pl.LightningModule,  # TODO: factor out common components of the two models and put them in base class models inherit from
         datamodule_class=KWCocoVideoDataModule,
+        trainer_class=SmartTrainer,
         subclass_mode_model=True,
+
+        save_config_overwrite=True,
+
         # subclass_mode_data=True,
         parser_kwargs=dict(
             parser_mode='yaml_unsafe_for_tuples',
@@ -191,30 +269,10 @@ def make_cli(config=None):
             # without modifying source code.
             # TODO: find good way to reenable profiling, but not by default
             # profiler=pl.profilers.AdvancedProfiler(dirpath=".", filename="perf_logs"),
-
-            callbacks=[
-                pl_ext.callbacks.BatchPlotter(  # Fixme: disabled for multi-gpu training with deepspeed
-                    num_draw=2,  # args.num_draw,
-                    draw_interval="5min",  # args.draw_interval
-                ),
-                pl.callbacks.LearningRateMonitor(logging_interval='step', log_momentum=True),
-
-                pl.callbacks.ModelCheckpoint(monitor='train_loss', mode='min', save_top_k=1),
-                # leaving always on breaks when correspinding metric isnt
-                # tracked because loss_weight==0
-                # pl.callbacks.ModelCheckpoint(
-                #     monitor='val_change_f1', mode='max', save_top_k=4),
-                # pl.callbacks.ModelCheckpoint(
-                #     monitor='val_saliency_f1', mode='max', save_top_k=4),
-                # pl.callbacks.ModelCheckpoint(
-                #     monitor='val_class_f1_micro', mode='max', save_top_k=4),
-                # pl.callbacks.ModelCheckpoint(
-                #     monitor='val_class_f1_macro', mode='max', save_top_k=4),
-            ]
+            callbacks=callbacks,
         ),
         **clikw,
     )
-    cli.manual_mode = manual_mode
     return cli
 
 
@@ -225,55 +283,47 @@ def main(config=None):
             if specified disables sys.argv usage and executes a training run
             with the specified config.
 
+    CommandLine:
+        xdoctest -m watch.tasks.fusion.fit_lightning main:0
+
     Example:
-        >>> # xdoctest: +SKIP(working on getting this right)
         >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
         >>> from watch.tasks.fusion.fit_lightning import *  # NOQA
         >>> disable_lightning_hardware_warnings()
-        >>> dpath = ub.Path.appdir('watch/tests/test_fusion_fit/demo_main_noop').ensuredir()
+        >>> dpath = ub.Path.appdir('watch/tests/test_fusion_fit/demo_main_noop').delete().ensuredir()
         >>> config = {
-        >>>     'model': 'NoopModel',
-        >>>     'trainer.default_root_dir': dpath,
-        >>>     'data.train_dataset': 'special:vidshapes8-frames9-speed0.5-multispectral',
-        >>>     'data.vali_dataset': 'special:vidshapes4-frames9-speed0.5-multispectral',
-        >>>     'trainer.max_steps': 3,
-        >>>     'trainer.num_sanity_val_steps': 0,
+        >>>     'subcommand': 'fit',
+        >>>     'fit.model': 'watch.tasks.fusion.methods.noop_model.NoopModel',
+        >>>     'fit.trainer.default_root_dir': dpath,
+        >>>     'fit.data.train_dataset': 'special:vidshapes8-frames9-speed0.5-multispectral',
+        >>>     'fit.data.vali_dataset': 'special:vidshapes4-frames9-speed0.5-multispectral',
+        >>>     'fit.trainer.max_steps': 2,
+        >>>     'fit.trainer.num_sanity_val_steps': 0,
         >>> }
         >>> main(config=config)
 
     Example:
-        >>> # xdoctest: +SKIP(working on getting this right)
         >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
         >>> from watch.tasks.fusion.fit_lightning import *  # NOQA
         >>> disable_lightning_hardware_warnings()
-        >>> dpath = ub.Path.appdir('watch/tests/test_fusion_fit/demo_main_heterogeneous').ensuredir()
+        >>> dpath = ub.Path.appdir('watch/tests/test_fusion_fit/demo_main_heterogeneous').delete().ensuredir()
         >>> config = {
         >>>     # 'model': 'watch.tasks.fusion.methods.MultimodalTransformer',
         >>>     #'model': 'watch.tasks.fusion.methods.UNetBaseline',
-        >>>     'model.class_path': 'watch.tasks.fusion.methods.heterogeneous.HeterogeneousModel',
-        >>>     'model.init_args.position_encoder.class_path': 'watch.tasks.fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder',
-        >>>     'model.init_args.position_encoder.init_args.in_dims': 3,
-        >>>     'model.init_args.position_encoder.init_args.max_freq': 3,
-        >>>     'model.init_args.position_encoder.init_args.num_freqs': 10,
-        >>>     'model.init_args.backbone.class_path': 'watch.tasks.fusion.architectures.transformer.TransformerEncoderDecoder',
-        >>>     'optimizer.class_path': 'torch.optim.Adam',
-        >>>     'optimizer.init_args.lr': 1e-4,
-        >>>     'optimizer.init_args.weight_decay': 1e-2,
-        >>>     'optimizer.init_args.betas': [0.9, 0.98],
-        >>>     'optimizer.init_args.eps': 1e-12,
-        >>>     'trainer.default_root_dir': dpath,
-        >>>     'data.train_dataset': 'special:vidshapes8-frames9-speed0.5-multispectral',
-        >>>     'data.vali_dataset': 'special:vidshapes4-frames9-speed0.5-multispectral',
-        >>>     'trainer.max_steps': 3,
-        >>>     'trainer.num_sanity_val_steps': 0,
+        >>>     'subcommand': 'fit',
+        >>>     'fit.model.class_path': 'watch.tasks.fusion.methods.heterogeneous.HeterogeneousModel',
+        >>>     'fit.optimizer.class_path': 'torch.optim.SGD',
+        >>>     'fit.optimizer.init_args.lr': 1e-3,
+        >>>     'fit.trainer.default_root_dir': dpath,
+        >>>     'fit.data.train_dataset': 'special:vidshapes8-frames9-speed0.5-multispectral',
+        >>>     'fit.data.vali_dataset': 'special:vidshapes4-frames9-speed0.5-multispectral',
+        >>>     'fit.trainer.max_steps': 2,
+        >>>     'fit.trainer.num_sanity_val_steps': 0,
         >>> }
         >>> main(config=config)
     """
     cli = make_cli(config)
-    if cli.manual_mode:
-        # Do the running ourself
-        print('trainer.logger.log_dir = {!r}'.format(cli.trainer.logger.log_dir))
-        cli.trainer.fit(cli.model, cli.datamodule)
+    return cli
 
 
 if __name__ == "__main__":

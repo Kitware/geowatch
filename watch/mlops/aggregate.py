@@ -407,6 +407,7 @@ def build_all_param_plots(agg, rois, config):
             param_code_lut = param_code_lut.drop('code', axis=1)
         param_title = modifier._modify_text(param_name)
         lut_style = param_code_lut.style.set_caption('Key: ' + param_title)
+        fpath = agg_group_dpath / f'{fname_prefix}_PLT05_table.png'
         util_kwplot.dataframe_table(lut_style, fpath)
 
 

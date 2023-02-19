@@ -42,6 +42,26 @@ def yaml_dumps(data):
 
 
 def yaml_loads(text, backend='ruamel'):
+    """
+    Example:
+        >>> from watch.utils import util_yaml
+        >>> import ubelt as ub
+        >>> data = {
+        >>>     'a': 'hello world',
+        >>>     'b': ub.udict({'a': 3})
+        >>> }
+        >>> print('data = {}'.format(ub.urepr(data, nl=1)))
+        >>> print('---')
+        >>> text = util_yaml.yaml_dumps(data)
+        >>> print(ub.highlight_code(text, 'yaml'))
+        >>> print('---')
+        >>> data2 = util_yaml.yaml_loads(text)
+        >>> assert data == data2
+        >>> data3 = util_yaml.yaml_loads(text, backend='pyyaml')
+        >>> print('data2 = {}'.format(ub.urepr(data2, nl=1)))
+        >>> print('data3 = {}'.format(ub.urepr(data3, nl=1)))
+        >>> assert data == data3
+    """
     import io
     file = io.StringIO(text)
     # data = yaml.load(file, Loader=yaml.SafeLoader)
@@ -50,7 +70,8 @@ def yaml_loads(text, backend='ruamel'):
         data = ruamel.yaml.load(file, Loader=ruamel.yaml.RoundTripLoader, preserve_quotes=True)
     elif backend == 'pyyaml':
         import yaml
-        data = yaml.load(file)
+        # data = yaml.load(file, Loader=yaml.SafeLoader)
+        data = yaml.load(file, Loader=yaml.Loader)
     else:
         raise KeyError(backend)
     return data
