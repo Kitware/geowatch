@@ -194,7 +194,7 @@ py-cpuinfo>=8.0.0
 # todo: fixme: this spec was breaking our requirement parser, but 
 # we can just use a more recent version 
 # jsonargparse[signatures]!=4.15.0!=4.15.1>=4.13.3
-jsonargparse[signatures]>=4.15.2
+jsonargparse[signatures]>=4.19.0
 
 ruamel.yaml>=0.17.21
 
