@@ -269,7 +269,7 @@ def main(config=None):
         >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
         >>> from watch.tasks.fusion.fit_lightning import *  # NOQA
         >>> disable_lightning_hardware_warnings()
-        >>> dpath = ub.Path.appdir('watch/tests/test_fusion_fit/demo_main_noop').ensuredir()
+        >>> dpath = ub.Path.appdir('watch/tests/test_fusion_fit/demo_main_noop').delete().ensuredir()
         >>> config = {
         >>>     'subcommand': 'fit',
         >>>     'fit.model': 'watch.tasks.fusion.methods.noop_model.NoopModel',
@@ -285,7 +285,7 @@ def main(config=None):
         >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
         >>> from watch.tasks.fusion.fit_lightning import *  # NOQA
         >>> disable_lightning_hardware_warnings()
-        >>> dpath = ub.Path.appdir('watch/tests/test_fusion_fit/demo_main_heterogeneous').ensuredir()
+        >>> dpath = ub.Path.appdir('watch/tests/test_fusion_fit/demo_main_heterogeneous').delete().ensuredir()
         >>> config = {
         >>>     # 'model': 'watch.tasks.fusion.methods.MultimodalTransformer',
         >>>     #'model': 'watch.tasks.fusion.methods.UNetBaseline',

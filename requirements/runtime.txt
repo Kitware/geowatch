@@ -201,3 +201,18 @@ ruamel.yaml>=0.17.21
 ijson>=3.1.4
 
 lazy_loader>=0.1
+
+
+
+{channels: 'cold_red_cv.0:3|cold_red_a0|cold_red_a1|cold_red_b1|cold_red_c1|cold_red_rmse.0:7'},
+{channels: 'cold_blue_cv.0:3|cold_blue_a0|cold_blue_a1|cold_blue_b1|cold_blue_c1|cold_blue_rmse.0:7'},
+{channels: 'cold_green_cv.0:3|cold_green_a0|cold_green_a1|cold_green_b1|cold_green_c1|cold_green_rmse.0:7'},
+{channels: 'cold_nir_cv.0:3|cold_nir_a0|cold_nir_a1|cold_nir_b1|cold_nir_c1|cold_nir_rmse.0:7'},
+...
+
+
+channels = '(L8,S2):(red|green|blue),(L8):(cold_blue_cv.0:3|cold_blue_a0|cold_blue_a1|cold_blue_b1|cold_blue_c1|cold_blue_rmse.0:7|cold_nir_cv.0:3|cold_nir_a0|cold_nir_a1|cold_nir_b1|cold_nir_c1|cold_nir_rmse.0:7)'
+
+for stream in kwcoco.SensorChanSpec.coerce(channels).normalize().streams():
+    print(stream)
+
