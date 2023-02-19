@@ -36,7 +36,9 @@ class SmartTrainer(pl.Trainer):
     def _run_stage(self, *args, **kwargs):
         # All I want is to print this  directly before training starts.
         # Is that so hard to do?
-        print('trainer.logger.log_dir = {}'.format(self.logger.log_dir))
+        import rich
+        dpath = self.logger.log_dir
+        rich.print(f"Trainer log dpath:\n\n[link={dpath}]{dpath}[/link]\n")
         super()._run_stage(*args, **kwargs)
 
 
@@ -120,7 +122,6 @@ class SmartLightningCLI(LightningCLI_Extension):
 
         return [optimizer], [lr_scheduler]
 
-    # TODO: import initialization code from fit.py
     def add_arguments_to_parser(self, parser):
 
         # TODO: separate final_package dir and fpath for more configuration
@@ -173,6 +174,15 @@ class SmartLightningCLI(LightningCLI_Extension):
 
 
 def make_cli(config=None):
+    """
+    Note:
+        Currently, creating the CLI will invoke it. We could modify this
+        function to have the option to not invoke by specifying ``run=False``
+        to :class:`LightningCLI`, but for some reason that changes the expected
+        form of the config (you must specify subcommand if run=True but must
+        not if run=False). We need to understand exactly what's going on there
+        before we expose a way to set run=False.
+    """
 
     if isinstance(config, str):
         try:
@@ -188,14 +198,14 @@ def make_cli(config=None):
                 if not isinstance(v, (dict, list)):
                     k = '.'.join(list(map(str, p)))
                     config[k] = v
-                    # print('--' + k + '=' + str(v) + ' \\\\')
             return config
         from watch.utils import util_yaml
+        print('Passing string-based config:')
         print(ub.highlight_code(config, 'yaml'))
         nested = util_yaml.yaml_loads(config, backend='pyyaml')
-        print('nested = {}'.format(ub.urepr(nested, nl=1)))
+        # print('nested = {}'.format(ub.urepr(nested, nl=1)))
         config = nested_to_jsonnest(nested)
-        print('config = {}'.format(ub.urepr(config, nl=1)))
+        # print('config = {}'.format(ub.urepr(config, nl=1)))
 
     clikw = {'run': True}
     if config is not None:
@@ -206,7 +216,8 @@ def make_cli(config=None):
         # clikw['run'] = False
 
     callbacks = [
-        # WeightInitializer(),
+        # WeightInitializer(),  # can we integrate more intuitively?
+        # May need to declare in add_arguments_to_parser
         pl_ext.callbacks.BatchPlotter(  # Fixme: disabled for multi-gpu training with deepspeed
             num_draw=2,  # args.num_draw,
             draw_interval="5min",  # args.draw_interval
@@ -217,6 +228,8 @@ def make_cli(config=None):
         pl.callbacks.ModelCheckpoint(monitor='train_loss', mode='min', save_top_k=1),
         # leaving always on breaks when correspinding metric isnt
         # tracked because loss_weight==0
+        # FIXME: can we conditionally apply these if they make sense?
+        # or can we make them robust to the case where the key isn't logged?
         # pl.callbacks.ModelCheckpoint(
         #     monitor='val_change_f1', mode='max', save_top_k=4),
         # pl.callbacks.ModelCheckpoint(
@@ -227,6 +240,8 @@ def make_cli(config=None):
         #     monitor='val_class_f1_macro', mode='max', save_top_k=4),
     ]
     try:
+        # There has to be a tool with less dependencies the matplotlib
+        # auto-plotters can hook into.
         import tesnorboard  # NOQA
     except ImportError:
         ...
@@ -267,6 +282,9 @@ def main(config=None):
         config (None | Dict):
             if specified disables sys.argv usage and executes a training run
             with the specified config.
+
+    CommandLine:
+        xdoctest -m watch.tasks.fusion.fit_lightning main:0
 
     Example:
         >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
