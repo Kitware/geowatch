@@ -1,13 +1,7 @@
 """
 Extends kwcoco demodata to be more smart-like
 """
-from dateutil.parser import isoparse
-from os.path import dirname
-from os.path import join
-from watch.demo import landsat_demodata
-from watch.demo import sentinel2_demodata
-import datetime
-import geopandas as gpd
+import datetime as datetime_mod
 import kwarray
 import kwcoco
 import kwimage
@@ -147,8 +141,8 @@ def hack_in_heatmaps(coco_dset, heatmap_dname='dummy_heatmaps', with_nan=False, 
 
 def hack_in_timedata(coco_dset):
     from kwarray.distributions import Uniform
-    min_time = datetime.datetime(year=1970, month=1, day=1)
-    max_time = datetime.datetime(year=2101, month=1, day=1)
+    min_time = datetime_mod.datetime(year=1970, month=1, day=1)
+    max_time = datetime_mod.datetime(year=2101, month=1, day=1)
     time_distri = Uniform(min_time.timestamp(), max_time.timestamp())
 
     # Hack in other metadata
@@ -156,7 +150,7 @@ def hack_in_timedata(coco_dset):
         vid_gids = list(coco_dset.images(vidid=vidid))
         time_pool = sorted(time_distri.sample(len(vid_gids)))
         for gid, timestamp in zip(vid_gids, time_pool):
-            ts = datetime.datetime.fromtimestamp(timestamp)
+            ts = datetime_mod.datetime.fromtimestamp(timestamp)
             img = coco_dset.index.imgs[gid]
             img['date_captured'] = ts.isoformat()
 
@@ -180,8 +174,7 @@ def hack_seed_geometadata_in_dset(coco_dset, force=False, rng=None):
         img = coco_dset.images(vidid=vidid).peek()
         coco_img = coco_dset._coco_image(img['id'])
         obj = coco_img.primary_asset()
-        fpath = join(coco_dset.bundle_dpath, obj['file_name'])
-        # print('fpath = {!r}'.format(fpath))
+        fpath = str(ub.Path(coco_dset.bundle_dpath) / obj['file_name'])
 
         format_info = kwcoco_extensions.geotiff_format_info(fpath)
         if force or not format_info['has_geotransform']:
@@ -216,7 +209,6 @@ def _random_utm_box(rng=None):
     import kwarray
     from watch.utils import util_gis
     from osgeo import osr
-    import watch
     # stay away from edges and poles
     rng = kwarray.ensure_rng(rng)
     max_lat = 90 - 40
