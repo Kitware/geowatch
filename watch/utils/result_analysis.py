@@ -420,10 +420,15 @@ class ResultAnalysis(ub.NiceRepr):
         config_rows = [r.params for r in self.results]
         sentinel = object()
         # pd.DataFrame(config_rows).channels
-        varied = dict(varied_values(config_rows, default=sentinel, min_variations=2, dropna=True))
+        # varied = dict(varied_values(config_rows, default=sentinel, min_variations=2, dropna=True))
+        varied = dict(varied_value_counts(config_rows, default=sentinel, min_variations=2, dropna=True))
         # remove nans
+        # varied = {
+        #     k: {v for v in vs if not (isinstance(v, float) and math.isnan(v))}
+        #     for k, vs in varied.items()
+        # }
         varied = {
-            k: {v for v in vs if not (isinstance(v, float) and math.isnan(v))}
+            k: {v: c for v, c in vs.items() if not (isinstance(v, float) and math.isnan(v))}
             for k, vs in varied.items()
         }
         varied = {k: vs for k, vs in varied.items() if len(vs)}
@@ -1357,6 +1362,85 @@ def varied_values(longform, min_variations=0, default=ub.NoParam, dropna=False):
             if len(values) < min_variations:
                 varied.pop(key)
     return varied
+
+
+def varied_value_counts(longform, min_variations=0, default=ub.NoParam, dropna=False):
+    """
+    Given a list of dictionaries, find the values that differ between them.
+
+    Args:
+        longform (List[Dict[KT, VT]] | DataFrame):
+            This is longform data, as described in [SeabornLongform]_. It is a
+            list of dictionaries.
+
+            Each item in the list - or row - is a dictionary and can be thought
+            of as an observation. The keys in each dictionary are the columns.
+            The values of the dictionary must be hashable. Lists will be
+            converted into tuples.
+
+        min_variations (int, default=0):
+            "columns" with fewer than ``min_variations`` unique values are
+            removed from the result.
+
+        default (VT | NoParamType):
+            if specified, unspecified columns are given this value.
+            Defaults to NoParam.
+
+    Returns:
+        Dict[KT, Dict[VT, int]] :
+            a mapping from each "column" to the set of unique values it took
+            over each "row" and how many times it took that value. If a column
+            is not specified for each row, it is assumed to take a `default`
+            value, if it is specified.
+
+    Raises:
+        KeyError: If ``default`` is unspecified and all the rows
+            do not contain the same columns.
+
+    References:
+        .. [SeabornLongform] https://seaborn.pydata.org/tutorial/data_structure.html#long-form-data
+
+    Example:
+        longform = [
+            {'a': 'on',  'b': 'red'},
+            {'a': 'on',  'b': 'green'},
+            {'a': 'off', 'b': 'blue'},
+            {'a': 'off', 'b': 'black'},
+        ]
+    """
+    # Enumerate all defined columns
+    import numbers
+
+    if isinstance(longform, pd.DataFrame):
+        longform = longform.to_dict('records')
+
+    columns = set()
+    for row in longform:
+        if default is ub.NoParam and len(row) != len(columns) and len(columns):
+            missing = set(columns).symmetric_difference(set(row))
+            raise KeyError((
+                'No default specified and not every '
+                'row contains columns {}').format(missing))
+        columns.update(row.keys())
+
+    # Build up the set of unique values for each column
+    from collections import Counter
+    varied_counts = ub.ddict(Counter)
+    for row in longform:
+        for key in columns:
+            value = row.get(key, default)
+            if isinstance(value, list):
+                value = tuple(value)
+            if dropna and isinstance(value, numbers.Number) and math.isnan(value):
+                continue
+            varied_counts[key][value] += 1
+
+    # Remove any column that does not have enough variation
+    if min_variations > 0:
+        for key, values in list(varied_counts.items()):
+            if len(values) < min_variations:
+                varied_counts.pop(key)
+    return varied_counts
 
 
 if 1:

@@ -201,40 +201,43 @@ class LabelModifier:
     Registers multiple ways to relabel text on axes
 
     Example:
-        import sys, ubelt
-        from watch.utils.util_kwplot import *  # NOQA
-        import pandas as pd
-        import kwarray
-        rng = kwarray.ensure_rng(0)
-        models = ['category1', 'category2', 'category3']
-        data = pd.DataFrame([
-            {
-                'node.metrics.tpr': rng.rand(),
-                'node.metrics.fpr': rng.rand(),
-                'node.metrics.f1': rng.rand(),
-                'node.param.model': rng.choice(models),
-            } for _ in range(100)])
-        # xdoctest: +REQUIRES(env:PLOTTING_DOCTESTS)
-        import kwplot
-        sns = kwplot.autosns()
-        kwplot.figure(fnum=1, pnum=(1, 2, 1), doclf=1)
-        ax1 = sns.boxplot(data=data, x='node.param.model', y='node.metrics.f1')
-        ax1.set_title('My node.param.model boxplot')
-        kwplot.figure(fnum=1, pnum=(1, 2, 2))
-        ax2 = sns.scatterplot(data=data, x='node.metrics.tpr', y='node.metrics.f1', hue='node.param.model')
-        ax2.set_title('My node.param.model scatterplot')
-        ax = ax2
-
-        def mapping(text):
-            text = text.replace('node.param.', '')
-            text = text.replace('node.metrics.', '')
-            return text
-
-        self = LabelModifier(mapping)
-        self.add_mapping({'category2': 'FOO', 'category3': 'BAR'})
-
-        self.relabel(ax=ax1)
-        self.relabel(ax=ax2)
+        >>> # xdoctest: +SKIP
+        >>> import sys, ubelt
+        >>> from watch.utils.util_kwplot import *  # NOQA
+        >>> import pandas as pd
+        >>> import kwarray
+        >>> rng = kwarray.ensure_rng(0)
+        >>> models = ['category1', 'category2', 'category3']
+        >>> data = pd.DataFrame([
+        >>>     {
+        >>>         'node.metrics.tpr': rng.rand(),
+        >>>         'node.metrics.fpr': rng.rand(),
+        >>>         'node.metrics.f1': rng.rand(),
+        >>>         'node.param.model': rng.choice(models),
+        >>>     } for _ in range(100)])
+        >>> # xdoctest: +REQUIRES(env:PLOTTING_DOCTESTS)
+        >>> import kwplot
+        >>> sns = kwplot.autosns()
+        >>> fig = kwplot.figure(fnum=1, pnum=(1, 2, 1), doclf=1)
+        >>> ax1 = sns.boxplot(data=data, x='node.param.model', y='node.metrics.f1')
+        >>> ax1.set_title('My node.param.model boxplot')
+        >>> kwplot.figure(fnum=1, pnum=(1, 2, 2))
+        >>> ax2 = sns.scatterplot(data=data, x='node.metrics.tpr', y='node.metrics.f1', hue='node.param.model')
+        >>> ax2.set_title('My node.param.model scatterplot')
+        >>> ax = ax2
+        >>> #
+        >>> def mapping(text):
+        >>>     text = text.replace('node.param.', '')
+        >>>     text = text.replace('node.metrics.', '')
+        >>>     return text
+        >>> #
+        >>> self = LabelModifier(mapping)
+        >>> self.add_mapping({'category2': 'FOO', 'category3': 'BAR'})
+        >>> #fig.canvas.draw()
+        >>> #
+        >>> self.relabel(ax=ax1)
+        >>> self.relabel(ax=ax2)
+        >>> fig.canvas.draw()
     """
 
     def __init__(self, mapping=None):
@@ -281,7 +284,7 @@ class LabelModifier:
         label.set_text(new_text)
         return label
 
-    def modify_legend(self, legend):
+    def _modify_legend(self, legend):
         leg_title = legend.get_title()
         if isinstance(leg_title, str):
             new_leg_title = self._modify_text(leg_title)
@@ -294,36 +297,50 @@ class LabelModifier:
     def relabel_yticks(self, ax=None):
         old_ytick_labels = ax.get_yticklabels()
         new_yticklabels = [self._modify_labels(label) for label in old_ytick_labels]
+        ax.set_xticks(ax.get_xticks())
         ax.set_yticklabels(new_yticklabels)
 
     def relabel_xticks(self, ax=None):
+        # Set xticks and yticks first before setting tick labels
+        # https://stackoverflow.com/questions/63723514/userwarning-fixedformatter-should-only-be-used-together-with-fixedlocator
+        # print(f'new_xlabel={new_xlabel}')
+        # print(f'new_ylabel={new_ylabel}')
+        # print(f'old_xticks={old_xticks}')
+        # print(f'old_yticks={old_yticks}')
+        # print(f'old_xtick_labels={old_xtick_labels}')
+        # print(f'old_ytick_labels={old_ytick_labels}')
+        # print(f'new_xticklabels={new_xticklabels}')
+        # print(f'new_yticklabels={new_yticklabels}')
         old_xtick_labels = ax.get_xticklabels()
         new_xticklabels = [self._modify_labels(label) for label in old_xtick_labels]
+        ax.set_yticks(ax.get_yticks())
         ax.set_xticklabels(new_xticklabels)
 
-    def relabel(self, ax=None):
-        old_xtick_labels = ax.get_xticklabels()
-        old_ytick_labels = ax.get_yticklabels()
+    def relabel_axes_labels(self, ax=None):
         old_xlabel = ax.get_xlabel()
         old_ylabel = ax.get_ylabel()
         old_title = ax.get_title()
-
-        new_xticklabels = [self._modify_labels(label) for label in old_xtick_labels]
-        new_yticklabels = [self._modify_labels(label) for label in old_ytick_labels]
 
         new_xlabel = self._modify_text(old_xlabel)
         new_ylabel = self._modify_text(old_ylabel)
         new_title = self._modify_text(old_title)
 
-        ax.set_xticklabels(new_xticklabels)
-        ax.set_yticklabels(new_yticklabels)
-
         ax.set_xlabel(new_xlabel)
         ax.set_ylabel(new_ylabel)
         ax.set_title(new_title)
 
+    def relabel_legend(self, ax=None):
         if ax.legend_ is not None:
-            self.modify_legend(ax.legend_)
+            self._modify_legend(ax.legend_)
+
+    def relabel(self, ax=None, ticks=True, axes_labels=True, legend=True):
+        if axes_labels:
+            self.relabel_axes_labels(ax)
+        if ticks:
+            self.relabel_xticks(ax)
+            self.relabel_yticks(ax)
+        if legend:
+            self.relabel_legend(ax)
 
     def __call__(self, ax=None):
         self.relabel(ax)
