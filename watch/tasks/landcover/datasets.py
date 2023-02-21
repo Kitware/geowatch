@@ -56,7 +56,10 @@ class _CocoTorchDataset(torch.utils.data.Dataset):
             imresize(img, dsize=dsize, interpolation='linear')
             for img in channel_images
         ]
-        img = np.dstack(channel_images)
+        img = np.dstack(channel_images).astype(np.float32)
+
+        # set no data to nan
+        img[img == -9999] = np.nan
         return img
 
     def _try_load_channel(self, gid, channels):
@@ -133,47 +136,30 @@ class S2asWV3Dataset(_CocoTorchDataset):
 
 class S2Dataset(_CocoTorchDataset):
     """
-    Load S2 images an stack.
+    Load S2 images and stack.
     """
 
     def _include(self, gid):
         return self.dset.imgs[gid]['sensor_coarse'] == 'S2'
 
     def _load(self, gid):
-        all_channels = [
+        channels_list = [
             'coastal',
             'blue',
             'green',
             'red',
             'B05',
-            'B06', 'B07', 'nir',
-            ('B8A', 'B09'),  # some images don't have B8A.  Use B09 as closest substitute
+            'B06',
+            'B07',
+            'nir',
+            'B8A',
             'B09',
             'cirrus',
             'swir16',
-            ('swir22', 'swir16')
+            'swir22'
         ]
 
-        return self._load_channels_stacked(gid, all_channels)
-
-
-class S2L8CommonChannelsDataset(_CocoTorchDataset):
-    """
-    Load the channels tha S2 and L8 have in common as a stack.
-    """
-
-    def _include(self, gid):
-        return self.dset.imgs[gid]['sensor_coarse'] in ('S2', 'L8')
-
-    def _load(self, gid):
-        all_channels = [
-            'blue', 'green', 'red',
-            ('B8A', 'B09', 'nir'),
-            'swir16',
-            ('swir22', 'swir16')
-        ]
-
-        return self._load_channels_stacked(gid, all_channels)
+        return self._load_channels_stacked(gid, channels_list)
 
 
 def imresize(img, **kwargs):
