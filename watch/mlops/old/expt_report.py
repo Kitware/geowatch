@@ -99,7 +99,7 @@ class EvaluationReporter:
         reporter.metric_registry['type'] = 'metric'
 
         # TODO: add column types
-        column_meanings = smart.get_column_meanings()
+        column_meanings = get_column_meanings()
         reporter.column_meanings = column_meanings
 
     def status(reporter, table=None):
@@ -616,16 +616,16 @@ def load_extended_data(df, expt_dvc_dpath):
         fpath = row['raw']
         try:
             if row['type'] == 'eval_trk_pxl_fpath':
-                pxl_info = frp.load_pxl_eval(fpath, expt_dvc_dpath, arg_prefix='trk.')
+                pxl_info = frp.load_bas_pxl_eval(fpath, expt_dvc_dpath, arg_prefix='trk.')
                 big_row['info'] = pxl_info
             elif row['type'] == 'eval_act_pxl_fpath':
-                pxl_info = frp.load_pxl_eval(fpath, expt_dvc_dpath, arg_prefix='act.')
+                pxl_info = frp.load_bas_pxl_eval(fpath, expt_dvc_dpath, arg_prefix='act.')
                 big_row['info'] = pxl_info
             elif row['type'] == 'eval_act_poly_fpath':
-                sc_info = frp.load_eval_act_poly(fpath, expt_dvc_dpath)
+                sc_info = frp.load_sc_poly_eval(fpath, expt_dvc_dpath)
                 big_row['info'] = sc_info
             elif row['type'] == 'eval_trk_poly_fpath':
-                bas_info = frp.load_eval_trk_poly(fpath, expt_dvc_dpath)
+                bas_info = frp.load_bas_poly_eval(fpath, expt_dvc_dpath)
                 big_row['info'] = bas_info
             else:
                 raise KeyError('Unknown row type: ' + str(row['type']))
@@ -930,3 +930,26 @@ def my_nonstandard_merge(smaller, larger, smaller_keys, move_cols, mode=0):
 #     else:
 #         filt_df = raw_df.copy()
 #     return filt_df
+
+
+def get_column_meanings():
+    return [
+        {'name': 'raw', 'help': 'A full path to a file on disk that contains this info'},
+        {'name': 'dvc', 'help': 'A path to a DVC sidecar file if it exists.'},
+        {'name': 'type', 'help': 'The type of the row'},
+        {'name': 'step', 'help': 'The number of steps taken by the most recent training run associated with the row'},
+        {'name': 'total_steps', 'help': 'An estimate of the total number of steps the model associated with the row took over all training runs.'},
+        {'name': 'model', 'help': 'The name of the learned model associated with this row'},
+        # {'name': 'test_dset', 'help': 'The name of the test dataset used to compute a metric associated with this row'},
+        {'name': 'test_trk_dset', 'help': 'The name of the test BAS dataset used to compute a metric associated with this row'},
+        {'name': 'test_act_dset', 'help': 'The name of the test SC dataset used to compute a metric associated with this row'},
+
+        {'name': 'expt', 'help': 'The name of the experiment, i.e. training session that might have made several models'},
+        {'name': 'dataset_code', 'help': 'The higher level dataset code associated with this row'},
+
+        {'name': 'pred_cfg', 'help': 'A hash of the configuration used for pixel heatmap prediction'},
+        {'name': 'trk_cfg', 'help': 'A hash of the configuration used for BAS tracking'},
+        {'name': 'act_cfg', 'help': 'A hash of the configuration used for SC classification'},
+
+        {'name': 'total_steps', 'help': 'An estimate of the total number of steps the model associated with the row took over all training runs.'},
+    ]

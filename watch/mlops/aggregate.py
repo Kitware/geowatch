@@ -68,7 +68,8 @@ def main(cmdline=True, **kwargs):
 
         config = AggregateEvluationConfig.legacy(cmdline=cmdline, data=kwargs)
         eval_type_to_results = build_tables(config)
-        eval_type_to_aggregator = build_aggregators(eval_type_to_results)
+        agg_dpath = ub.Path(config['root_dpath']) / 'aggregate'
+        eval_type_to_aggregator = build_aggregators(eval_type_to_results, agg_dpath)
         agg = ub.peek(eval_type_to_aggregator.values())
         agg = eval_type_to_aggregator.get('bas_poly_eval', None)
 
@@ -884,15 +885,16 @@ def build_tables(config):
     # Hard coded nodes of interest to gather. Should abstract later.
     node_eval_infos = [
         {'name': 'bas_pxl_eval', 'out_key': 'eval_pxl_fpath',
-         'result_loader': smart_result_parser.load_pxl_eval},
+         'result_loader': smart_result_parser.load_bas_pxl_eval},
         {'name': 'sc_poly_eval', 'out_key': 'eval_fpath',
-         'result_loader': smart_result_parser.load_eval_act_poly},
+         'result_loader': smart_result_parser.load_sc_poly_eval},
         {'name': 'bas_poly_eval', 'out_key': 'eval_fpath',
-         'result_loader': smart_result_parser.load_eval_trk_poly},
+         'result_loader': smart_result_parser.load_bas_poly_eval},
     ]
 
     from concurrent.futures import as_completed
-    pman = util_progress.ProgressManager(backend='rich')
+    # pman = util_progress.ProgressManager(backend='rich')
+    pman = util_progress.ProgressManager(backend='progiter')
     with pman:
         eval_type_to_results = {}
         eval_node_prog = pman.progiter(node_eval_infos, desc='Loading node results')
@@ -972,13 +974,20 @@ def build_tables(config):
 
 
 def load_result_worker(fpath, node_name, out_node_key):
+    """
+    Ignore:
+        fpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_testpipe/eval/flat/bas_poly_eval/bas_poly_eval_id_1ad531cc/poly_eval.json')
+        node_name = 'bas_poly_eval'
+        out_node_key = 'bas_poly_eval.eval_fpath'
+
+    """
 
     if node_name == 'bas_pxl_eval':
-        result_loader_fn = smart_result_parser.load_pxl_eval
+        result_loader_fn = smart_result_parser.load_bas_pxl_eval
     elif node_name == 'bas_poly_eval':
-        result_loader_fn = smart_result_parser.load_eval_trk_poly
+        result_loader_fn = smart_result_parser.load_bas_poly_eval
     elif node_name == 'sc_poly_eval':
-        result_loader_fn = smart_result_parser.load_eval_act_poly
+        result_loader_fn = smart_result_parser.load_sc_poly_eval
     else:
         raise KeyError(node_name)
 

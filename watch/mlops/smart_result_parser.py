@@ -19,29 +19,6 @@ import io
 import pandas as pd
 
 
-def get_column_meanings():
-    return [
-        {'name': 'raw', 'help': 'A full path to a file on disk that contains this info'},
-        {'name': 'dvc', 'help': 'A path to a DVC sidecar file if it exists.'},
-        {'name': 'type', 'help': 'The type of the row'},
-        {'name': 'step', 'help': 'The number of steps taken by the most recent training run associated with the row'},
-        {'name': 'total_steps', 'help': 'An estimate of the total number of steps the model associated with the row took over all training runs.'},
-        {'name': 'model', 'help': 'The name of the learned model associated with this row'},
-        # {'name': 'test_dset', 'help': 'The name of the test dataset used to compute a metric associated with this row'},
-        {'name': 'test_trk_dset', 'help': 'The name of the test BAS dataset used to compute a metric associated with this row'},
-        {'name': 'test_act_dset', 'help': 'The name of the test SC dataset used to compute a metric associated with this row'},
-
-        {'name': 'expt', 'help': 'The name of the experiment, i.e. training session that might have made several models'},
-        {'name': 'dataset_code', 'help': 'The higher level dataset code associated with this row'},
-
-        {'name': 'pred_cfg', 'help': 'A hash of the configuration used for pixel heatmap prediction'},
-        {'name': 'trk_cfg', 'help': 'A hash of the configuration used for BAS tracking'},
-        {'name': 'act_cfg', 'help': 'A hash of the configuration used for SC classification'},
-
-        {'name': 'total_steps', 'help': 'An estimate of the total number of steps the model associated with the row took over all training runs.'},
-    ]
-
-
 def partition_params():
     pass
 
@@ -162,7 +139,7 @@ def load_iarpa_evaluation(fpath):
     return metrics, iarpa_info
 
 
-def load_eval_trk_poly(fpath, expt_dvc_dpath=None, arg_prefix='trk.'):
+def load_bas_poly_eval(fpath, expt_dvc_dpath=None, arg_prefix='trk.'):
     metrics, iarpa_info = load_iarpa_evaluation(fpath)
     tracker_info = iarpa_info['parent_info']
     param_types = parse_tracker_params(tracker_info, expt_dvc_dpath, arg_prefix=arg_prefix)
@@ -179,7 +156,7 @@ def load_eval_trk_poly(fpath, expt_dvc_dpath=None, arg_prefix='trk.'):
     return info
 
 
-def load_eval_act_poly(fpath, expt_dvc_dpath=None, arg_prefix='act.'):
+def load_sc_poly_eval(fpath, expt_dvc_dpath=None, arg_prefix='act.'):
     metrics, iarpa_info = load_iarpa_evaluation(fpath)
 
     tracker_info = iarpa_info.get('parent_info', None)
@@ -322,11 +299,7 @@ def _handle_process_item(item):
     return item
 
 
-def load_bas_pxl_eval(fpath, expt_dvc_dpath=None):
-    return load_pxl_eval(fpath, expt_dvc_dpath=expt_dvc_dpath, mode=0)
-
-
-def load_pxl_eval(fpath, expt_dvc_dpath=None, arg_prefix='', mode=0):
+def load_bas_pxl_eval(fpath, expt_dvc_dpath=None, arg_prefix='', mode=0):
     from kwcoco.coco_evaluator import CocoSingleResult
     from watch.utils import util_pattern
     # from watch.utils import result_analysis

@@ -285,7 +285,7 @@ def _load_json(fpath):
     return data
 
 
-def load_pxl_eval(fpath, dvc_dpath=None):
+def load_bas_pxl_eval(fpath, dvc_dpath=None):
     from kwcoco.coco_evaluator import CocoSingleResult
     from watch.utils import util_pattern
     # from watch.utils import result_analysis

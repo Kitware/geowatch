@@ -65,7 +65,8 @@ def _namek_eval():
     }
     config = AggregateEvluationConfig.legacy(cmdline=cmdline, data=kwargs)
     eval_type_to_results = build_tables(config)
-    eval_type_to_aggregator = build_aggregators(eval_type_to_results)
+    agg_dpath = ub.Path(config['root_dpath']) / 'aggregate'
+    eval_type_to_aggregator = build_aggregators(eval_type_to_results, agg_dpath)
     agg = ub.peek(eval_type_to_aggregator.values())
     agg = eval_type_to_aggregator.get('bas_poly_eval', None)
 
@@ -111,12 +112,13 @@ def _timekernel_analysis():
     }
     config = AggregateEvluationConfig.legacy(cmdline=cmdline, data=kwargs)
     eval_type_to_results = build_tables(config)
-    eval_type_to_aggregator = build_aggregators(eval_type_to_results)
+    agg_dpath = ub.Path(config['root_dpath']) / 'aggregate'
+    eval_type_to_aggregator = build_aggregators(eval_type_to_results, agg_dpath)
     agg = ub.peek(eval_type_to_aggregator.values())
     agg = eval_type_to_aggregator.get('bas_poly_eval', None)
 
     from watch.mlops.aggregate import build_all_param_plots
-    # rois = {'KR_R001', 'KR_R002'}
+    rois = {'KR_R001', 'KR_R002'}
     rois = {'KR_R001'}
     _ = agg.report_best()
 
@@ -147,7 +149,8 @@ def _setup_sc_analysis():
     }
     config = AggregateEvluationConfig.legacy(cmdline=cmdline, data=kwargs)
     eval_type_to_results = build_tables(config)
-    eval_type_to_aggregator = build_aggregators(eval_type_to_results)
+    agg_dpath = ub.Path(config['root_dpath']) / 'aggregate'
+    eval_type_to_aggregator = build_aggregators(eval_type_to_results, agg_dpath)
     agg = ub.peek(eval_type_to_aggregator.values())
     agg = eval_type_to_aggregator.get('sc_poly_eval', None)
     print(f'agg={agg}')
@@ -174,7 +177,8 @@ def _setup_bas():
     }
     config = AggregateEvluationConfig.legacy(cmdline=cmdline, data=kwargs)
     eval_type_to_results = build_tables(config)
-    eval_type_to_aggregator = build_aggregators(eval_type_to_results)
+    agg_dpath = ub.Path(config['root_dpath']) / 'aggregate'
+    eval_type_to_aggregator = build_aggregators(eval_type_to_results, agg_dpath)
     agg = ub.peek(eval_type_to_aggregator.values())
     agg = eval_type_to_aggregator.get('bas_poly_eval', None)
     print(f'agg={agg}')
@@ -560,7 +564,7 @@ def plot_stats_tables(agg, config):
     # from watch.mlops import smart_result_parser
     # for fpath in fpaths:
     #     ...
-    #     result = smart_result_parser.load_eval_act_poly(fpath, None)
+    #     result = smart_result_parser.load_sc_poly_eval(fpath, None)
     #     print(result['metrics']['sc_macro_f1'])
 
     import numpy as np

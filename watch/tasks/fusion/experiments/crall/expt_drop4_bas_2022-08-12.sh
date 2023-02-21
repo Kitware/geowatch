@@ -2722,3 +2722,81 @@ WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion.fit \
     --init="$DVC_EXPT_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt  \
     --limit_val_batches=0.25
     #--sqlview=sqlite \
+    
+
+export CUDA_VISIBLE_DEVICES=1
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop6
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_split2.kwcoco.zip
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_split2.kwcoco.zip
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_split2.kwcoco.zip
+CHANNELS="(L8,S2,PD):(blue|green|red|nir),(WV):(blue|green|red),(WV,WV1):pan"
+EXPERIMENT_NAME=Drop6_BAS_scratch_10GSD_split2
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+SELECT_VIDEOS='(.name | contains("_R"))'
+echo "SELECT_VIDEOS = $SELECT_VIDEOS"
+WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+data:
+    select_videos          : $SELECT_VIDEOS
+    num_workers            : 4
+    train_dataset          : $TRAIN_FPATH
+    vali_dataset           : $VALI_FPATH
+    time_steps             : 7
+    exclude_sensors        : 'WV,WV1,PD'
+    chip_dims              : 256,256
+    fixed_resolution       : 10.0GSD
+    neg_to_pos_ratio       : 1.0
+    batch_size             : 8
+    max_epoch_length       : 16384 
+    time_steps             : 7
+    channels               : '$CHANNELS'
+    time_sampling          : uniform-soft5-soft4-contiguous
+    time_kernel            : '(-1y,-2m,-1w,0,1w,2m,1y)'
+    min_spacetime_weight   : 0.6
+    temporal_dropout       : 0.5
+    mask_low_quality       : True
+    mask_samecolor_method  : None
+    observable_threshold   : 0.0
+    quality_threshold      : 0.0
+    weight_dilate          : 10
+    use_centered_positives : True
+    normalize_inputs       : 16384
+    balance_areas          : True
+model:
+    class_path: MultimodalTransformer
+    init_args:
+        saliency_weights       : auto 
+        class_weights          : auto 
+        tokenizer              : linconv 
+        arch_name              : smt_it_stm_p8 
+        decoder                : mlp 
+        positive_change_weight : 1 
+        negative_change_weight : 0.01 
+        stream_channels        : 16 
+        class_loss             : 'dicefocal' 
+        saliency_loss          : 'focal' 
+        saliency_head_hidden   : 5
+        change_head_hidden     : 5
+        global_change_weight   : 0.00 
+        global_class_weight    : 0.00 
+        global_saliency_weight : 1.00 
+optimizer: 
+    class_path: torch.optim.AdamW
+    init_args:
+        lr           : 1e-4
+        amsgrad      : true
+        weight_decay : 1e-6
+trainer:
+    default_root_dir     : $DEFAULT_ROOT_DIR
+    accelerator          : gpu 
+    devices              : 0,
+    #devices              : 0,1
+    #strategy             : ddp 
+    limit_val_batches    : 0.25
+    num_sanity_val_steps : 0 
+    max_epochs           : 360
+"
