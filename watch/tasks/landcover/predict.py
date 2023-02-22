@@ -1,3 +1,41 @@
+r"""
+Prediction script for landcover features
+
+CommandLine:
+
+    DVC_EXPT_DPATH=$(smartwatch_dvc --tags=phase2_expt --hardware=auto)
+    DVC_DATA_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware=auto)
+
+    KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6
+    DZYNE_LANDCOVER_MODEL_FPATH="$DVC_EXPT_DPATH/models/landcover/sentinel2.pt"
+
+    INPUT_DATASET_FPATH=$KWCOCO_BUNDLE_DPATH/imganns-KR_R001.kwcoco.zip
+    OUTPUT_DATASET_FPATH=$KWCOCO_BUNDLE_DPATH/imganns-KR_R001_landcover.kwcoco.zip
+
+    echo "
+    DVC_DATA_DPATH="$DVC_DATA_DPATH"
+    DVC_EXPT_DPATH="$DVC_EXPT_DPATH"
+
+    DZYNE_LANDCOVER_MODEL_FPATH="$DZYNE_LANDCOVER_MODEL_FPATH"
+
+    INPUT_DATASET_FPATH="$INPUT_DATASET_FPATH"
+    OUTPUT_DATASET_FPATH="$OUTPUT_DATASET_FPATH"
+    "
+
+    export CUDA_VISIBLE_DEVICES="1"
+    python -m watch.tasks.landcover.predict \
+        --dataset="$INPUT_DATASET_FPATH" \
+        --deployed="$DZYNE_LANDCOVER_MODEL_FPATH"  \
+        --device=0 \
+        --num_workers=4 \
+        --output="$OUTPUT_DATASET_FPATH"
+
+    smartwatch stats $KWCOCO_BUNDLE_DPATH/imganns-KR_R001.kwcoco_landcover.zip
+
+    smartwatch visualize $KWCOCO_BUNDLE_DPATH/imganns-KR_R001.kwcoco_landcover.zip \
+        --animate=True --channels="red|green|blue,barren|forest|water" --skip_missing=True \
+        --workers=4 --draw_anns=False --smart=True
+"""
 import datetime
 import warnings
 import ubelt as ub
@@ -11,6 +49,8 @@ from watch.utils import util_parallel
 from watch.utils import util_progress
 from . import detector
 from .model_info import lookup_model_info
+from .utils import setup_logging
+
 import scriptconfig as scfg
 
 
@@ -38,7 +78,7 @@ def predict(cmdline=1, **kwargs):
         >>> kwargs = {
         >>>     'dataset': dset.fpath,
         >>>     'deployed': deployed,
-        >>>     'output': ub.Path(dset.fpath).augment(stemsuffix='_landcover'),
+        >>>     'output': ub.Path(dset.fpath).augment(stemsuffix='_landcover', multidot=True),
         >>>     'select_images': '.sensor_coarse == "S2"',
         >>> }
         >>> cmdline = 0
@@ -179,34 +219,5 @@ def get_output_file(output):
 
 
 if __name__ == '__main__':
-    """
-    CommandLine:
-        export CUDA_VISIBLE_DEVICES="1"
-
-        DVC_EXPT_DPATH=$(smartwatch_dvc --tags=phase2_expt --hardware=auto)
-        DVC_DATA_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware=auto)
-        echo "
-        DVC_DATA_DPATH = $DVC_DATA_DPATH
-        DVC_EXPT_DPATH = $DVC_EXPT_DPATH
-        "
-
-        KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6
-        DZYNE_LANDCOVER_MODEL_FPATH="$DVC_EXPT_DPATH/models/landcover/sentinel2.pt"
-
-        DATASET_FPATH=$KWCOCO_BUNDLE_DPATH/imganns-KR_R001.kwcoco.zip
-
-        python -m watch.tasks.landcover.predict \
-            --dataset=$DATASET_FPATH \
-            --deployed=$DZYNE_LANDCOVER_MODEL_FPATH  \
-            --device=0 \
-            --num_workers=4 \
-            --output=$KWCOCO_BUNDLE_DPATH/imganns-KR_R001_landcover.kwcoco.zip
-
-        smartwatch stats $KWCOCO_BUNDLE_DPATH/data_dzyne_landcover.kwcoco.json
-
-        smartwatch visualize $KWCOCO_BUNDLE_DPATH/dzyne_depth.kwcoco.json \
-            --animate=True --channels="built_up|forest|water" --skip_missing=True \
-            --workers=4 --draw_anns=False
-
-    """
+    setup_logging()
     predict()
