@@ -26,10 +26,12 @@ class ExportColdKwcocoConfig(scfg.DataConfig):
     """
     The docstring will be the description in the CLI help
     """
+    rank = scfg.Value(None, help='rank id')
+    n_cores = scfg.Value(None, help='total cores assigned')
     stack_path = scfg.Value(None, help='folder directory of stacked data')
     reccg_path = scfg.Value(None, help='folder directory of cold processing result')
     coco_fpath = scfg.Value(None, help='file path of coco json')
-    mod_coco_fpath = scfg.Value(None, help='file path for modified coco json')
+    # mod_coco_fpath = scfg.Value(None, help='file path for modified coco json')
     meta_fpath = scfg.Value(None, help='file path of metadata json created by prepare_kwcoco script')    
     region_id = scfg.Value(None, help='region name of Kwcoco data, e.g., US_C000')    
     year_lowbound = scfg.Value(None, help='min year for saving geotiff, e.g., 2017')
@@ -58,12 +60,13 @@ def main(cmdline=1, **kwargs):
     >>> from watch.tasks.cold.export_cold_result_kwcoco import main
     >>> from watch.tasks.cold.export_cold_result_kwcoco import *
     >>> kwargs= dict(
-    >>>    stack_path = "/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/US_C000",
-    >>>    reccg_path = "/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/reccg/US_C000",
-    >>>    coco_fpath = ub.Path('/home/jws18003/data/dvc-repos/smart_data_dvc/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/US_C000/data_US_C000.kwcoco.json'),
-    >>>    mod_coco_fpath = ub.Path('/home/jws18003/data/dvc-repos/smart_data_dvc/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/US_C000/data_US_C000.kwcoco.modified.json'),
-    >>>    meta_fpath = '/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/US_C000/block_x9_y9/crop_20210716T150000Z_N38.904157W077.594580_N39.117177W077.375621_L8_0.json',
-    >>>    region_id = "US_C000",
+    >>>    rank = 0,
+    >>>    n_cores = 1,
+    >>>    stack_path = "/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/KR_R001",
+    >>>    reccg_path = "/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/reccg/KR_R001",
+    >>>    coco_fpath = ub.Path('/home/jws18003/data/dvc-repos/smart_data_dvc/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/imgonly-KR_R001.kwcoco.json'),    
+    >>>    meta_fpath = '/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/KR_R001/block_x10_y1/crop_20140115T020000Z_N37.643680E128.649453_N37.683356E128.734073_L8_0.json',
+    >>>    region_id = "KR_R001",
     >>>    coefs = ['cv'],
     >>>    year_lowbound = 2017,
     >>>    year_highbound = 2022,
@@ -73,18 +76,15 @@ def main(cmdline=1, **kwargs):
     >>> cmdline=0    
     >>> main(cmdline, **kwargs)
     """ 
-    #     >>>    reference_path = "/home/jws18003/Document/kwcoco_working/US_C000_rowcol2.tif",
-    #     >>>    out_path = "/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/reccg/US_C000",
-
-    rank = 0
-    n_cores = 1
+    #>>>    mod_coco_fpath = ub.Path('/home/jws18003/data/dvc-repos/smart_data_dvc/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/KR_R001/imgonly-KR_R001.kwcoco.modified.json'),
+   
     config_in = ExportColdKwcocoConfig.legacy(cmdline=cmdline, data=kwargs)
-    # rank = config_in['rank']
-    # n_cores = config_in['n_cores']
+    rank = config_in['rank']
+    n_cores = config_in['n_cores']
     stack_path = config_in['stack_path']
     reccg_path = config_in['reccg_path']
     coco_fpath = config_in['coco_fpath']
-    mod_coco_fpath = config_in['mod_coco_fpath']
+    # mod_coco_fpath = config_in['mod_coco_fpath']
     out_path = os.path.join(reccg_path, 'cold_feature')
     meta_fpath = config_in['meta_fpath']    
     region = config_in['region_id']
@@ -118,8 +118,6 @@ def main(cmdline=1, **kwargs):
     ref_image = gdal.Open(primary_fpath, gdal.GA_ReadOnly)
     trans = ref_image.GetGeoTransform()
     proj = ref_image.GetProjection()
-    # img_w = coco_img.img['width']
-    # img_h = coco_img.img['height']
     
     # Get original transform from projection to image space
     c, a, b, f, d, e = trans
@@ -142,8 +140,6 @@ def main(cmdline=1, **kwargs):
     block_width = int(n_cols / n_block_x)  # width of a block
     block_height = int(n_rows / n_block_y)  # height of a block
     n_blocks = n_block_x * n_block_y  # total number of blocks   
-    # vid_w = config['n_cols'] 
-    # vid_h = config['n_rows'] 
     
     log = open(os.path.join(reccg_path, 'log.json'))
     cold_param = json.load(log)
@@ -207,6 +203,7 @@ def main(cmdline=1, **kwargs):
 
     if not os.path.exists(out_path):
         os.makedirs(out_path)
+        
     # MPI mode
     # trans = comm.bcast(trans, root=0)
     # proj = comm.bcast(proj, root=0)
@@ -339,75 +336,75 @@ def main(cmdline=1, **kwargs):
     # comm.Barrier()
 
     # assemble     
-    if coefs is not None:
-        for day in range(len(ordinal_day_list)):
-            tmp_map_blocks = [np.load(
-                os.path.join(out_path, 'tmp_coefmap_block{}_{}.npy'.format(x + 1, ordinal_day_list[day])))
-                for x in range(n_blocks)]
+    # if coefs is not None:
+    #     for day in range(len(ordinal_day_list)):
+    #         tmp_map_blocks = [np.load(
+    #             os.path.join(out_path, 'tmp_coefmap_block{}_{}.npy'.format(x + 1, ordinal_day_list[day])))
+    #             for x in range(n_blocks)]
 
-            results = np.hstack(tmp_map_blocks)
-            results = np.vstack(np.hsplit(results, n_block_x))
-            ninput = 0
-            for band_idx, band_name in enumerate(coefs_bands):
-                for coef_index, coef in enumerate(coefs):
-                    # if coef == 'cv':
-                    #     results[results == -9999.0] = 0
+    #         results = np.hstack(tmp_map_blocks)
+    #         results = np.vstack(np.hsplit(results, n_block_x))
+    #         ninput = 0
+    #         for band_idx, band_name in enumerate(coefs_bands):
+    #             for coef_index, coef in enumerate(coefs):
+    #                 # if coef == 'cv':
+    #                 #     results[results == -9999.0] = 0
                         
-                    kwcoco_img_name = img_names[day]
-                    band = BAND_INFO[band_name]
-                    outname = '%s_%s_%s_%s.tif' % (
-                    kwcoco_img_name[:-4], band, method, coef)
-                    outfile = os.path.join(out_path, outname)
+    #                 kwcoco_img_name = img_names[day]
+    #                 band = BAND_INFO[band_name]
+    #                 outname = '%s_%s_%s_%s.tif' % (
+    #                 kwcoco_img_name[:-4], band, method, coef)
+    #                 outfile = os.path.join(out_path, outname)
 
-                    outdriver1 = gdal.GetDriverByName("GTiff")
-                    outdata = outdriver1.Create(outfile, vid_w, vid_h, 1, gdal.GDT_Float32)
-                    outdata.GetRasterBand(1).WriteArray(results[:vid_h, :vid_w, ninput])
-                    outdata.FlushCache()
-                    outdata.SetGeoTransform(new_gdal_transform)
-                    outdata.FlushCache()
-                    outdata.SetProjection(proj)
-                    outdata.FlushCache()
-                    ninput = ninput + 1
+    #                 outdriver1 = gdal.GetDriverByName("GTiff")
+    #                 outdata = outdriver1.Create(outfile, vid_w, vid_h, 1, gdal.GDT_Float32)
+    #                 outdata.GetRasterBand(1).WriteArray(results[:vid_h, :vid_w, ninput])
+    #                 outdata.FlushCache()
+    #                 outdata.SetGeoTransform(new_gdal_transform)
+    #                 outdata.FlushCache()
+    #                 outdata.SetProjection(proj)
+    #                 outdata.FlushCache()
+    #                 ninput = ninput + 1
 
-            for x in range(n_blocks):
-                os.remove(
-                    os.path.join(out_path, 'tmp_coefmap_block{}_{}.npy'.format(x + 1, ordinal_day_list[day])))
+    #         # for x in range(n_blocks):
+    #         #     os.remove(
+    #         #         os.path.join(out_path, 'tmp_coefmap_block{}_{}.npy'.format(x + 1, ordinal_day_list[day])))
     
-    logger.info('Generated COLD output geotiff')
+    # logger.info('Generated COLD output geotiff')
     
-    logger.info('Starting adding new asset to kwcoco json')
+    # logger.info('Starting adding new asset to kwcoco json')
     
-    # add new asset to each image
-    for image_id in coco_dset.images():
-        # Create a CocoImage object for each image.
-        coco_image: kwcoco.CocoImage = coco_dset.coco_image(image_id)
+    # # add new asset to each image
+    # for image_id in coco_dset.images():
+    #     # Create a CocoImage object for each image.
+    #     coco_image: kwcoco.CocoImage = coco_dset.coco_image(image_id)
 
-        image_name = coco_image.img['name']
-        img_w = coco_image.img['width']
-        img_h = coco_image.img['height']
+    #     image_name = coco_image.img['name']
+    #     img_w = coco_image.img['width']
+    #     img_h = coco_image.img['height']
 
-        asset_w = img_w
-        asset_h = img_h
+    #     asset_w = img_w
+    #     asset_h = img_h
         
-        for band_name in band_names:
-            for coef in coef_names:
-                band = BAND_INFO[band_name]
-                new_fpath = os.path.join(out_path, f'{image_name}_{band}_{method}_{coef}.tif')
-                if os.path.exists(new_fpath):
-                    channels = kwcoco.ChannelSpec.coerce(f'{band}_{method}_{coef}')
+    #     for band_name in band_names:
+    #         for coef in coef_names:
+    #             band = BAND_INFO[band_name]
+    #             new_fpath = os.path.join(out_path, f'{image_name}_{band}_{method}_{coef}.tif')
+    #             if os.path.exists(new_fpath):
+    #                 channels = kwcoco.ChannelSpec.coerce(f'{band}_{method}_{coef}')
                     
-                    # COLD output was wrote based on transform information of coco_dset, so it aligned
-                    warp_aux_to_img = coco_image.warp_img_from_vid
+    #                 # COLD output was wrote based on transform information of coco_dset, so it aligned
+    #                 warp_aux_to_img = coco_image.warp_img_from_vid
                     
-                    # Use the CocoImage helper which will augment the coco dictionary with
-                    # your information.
-                    coco_image.add_asset(new_fpath, channels=channels, width=asset_w,
-                                            height=asset_h, warp_aux_to_img=warp_aux_to_img) 
-                    logger.info(f'Added to the asset {new_fpath}')
+    #                 # Use the CocoImage helper which will augment the coco dictionary with
+    #                 # your information.
+    #                 coco_image.add_asset(new_fpath, channels=channels, width=asset_w,
+    #                                         height=asset_h, warp_aux_to_img=warp_aux_to_img) 
+    #                 logger.info(f'Added to the asset {new_fpath}')
     
-    # Write a modified kwcoco.json file
-    coco_dset.fpath = mod_coco_fpath
-    coco_dset.dump()
+    # # Write a modified kwcoco.json file
+    # coco_dset.fpath = mod_coco_fpath
+    # coco_dset.dump()
    
 # copy from /pycold/src/python/pycold/pyclassifier.py because MPI has conflicts with the pycold package in UCONN HPC.
 # Dirty approach!
