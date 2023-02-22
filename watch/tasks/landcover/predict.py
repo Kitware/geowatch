@@ -1,5 +1,8 @@
 r"""
-Prediction script for landcover features
+Prediction script for landcover features.
+
+Given a checkout of the model and drop6 data, the following demos computing and
+visualizing a subset of the features.
 
 CommandLine:
 
@@ -10,7 +13,7 @@ CommandLine:
     DZYNE_LANDCOVER_MODEL_FPATH="$DVC_EXPT_DPATH/models/landcover/sentinel2.pt"
 
     INPUT_DATASET_FPATH=$KWCOCO_BUNDLE_DPATH/imganns-KR_R001.kwcoco.zip
-    OUTPUT_DATASET_FPATH=$KWCOCO_BUNDLE_DPATH/imganns-KR_R001_landcover.kwcoco.zip
+    OUTPUT_DATASET_FPATH=$KWCOCO_BUNDLE_DPATH/imganns-KR_R001_landcover_small.kwcoco.zip
 
     echo "
     DVC_DATA_DPATH="$DVC_DATA_DPATH"
@@ -28,21 +31,23 @@ CommandLine:
         --deployed="$DZYNE_LANDCOVER_MODEL_FPATH"  \
         --device=0 \
         --num_workers=4 \
+        --select_images='(.frame_index < 100) and (.sensor_coarse == "S2")' \
+        --with_hidden=6 \
         --output="$OUTPUT_DATASET_FPATH"
 
-    smartwatch stats $KWCOCO_BUNDLE_DPATH/imganns-KR_R001.kwcoco_landcover.zip
+    smartwatch stats $OUTPUT_DATASET_FPATH
 
-    smartwatch visualize $KWCOCO_BUNDLE_DPATH/imganns-KR_R001.kwcoco_landcover.zip \
-        --animate=True --channels="red|green|blue,barren|forest|water" --skip_missing=True \
-        --workers=4 --draw_anns=False --smart=True
+    smartwatch visualize $OUTPUT_DATASET_FPATH \
+        --animate=True --channels="red|green|blue,barren|forest|water,landcover_hidden.0:3,landcover_hidden.3:6" \
+        --skip_missing=True --workers=4 --draw_anns=False --smart=True
 """
 import datetime
-import warnings
+# import warnings
 import ubelt as ub
 from pathlib import Path
 
 import kwcoco
-import kwimage
+# import kwimage
 from torch.utils.data import DataLoader
 
 from watch.utils import util_parallel
@@ -62,6 +67,8 @@ class LandcoverPredictConfig(scfg.DataConfig):
     device = scfg.Value('auto', type=str, help='auto, cpu, or integer of the device to use')
     select_images = scfg.Value(None, type=str, help='if specified, a jq operation to filter images')
     select_videos = scfg.Value(None, type=str, help='if specified, a jq operation to filter videos')
+    with_hidden = scfg.Value(None, type=int, help='if true, also write out this many of the hidden activations')
+    track_emissions = scfg.Value(True, help='Set to False to disable codecarbon')
 
 
 def predict(cmdline=1, **kwargs):
@@ -69,6 +76,7 @@ def predict(cmdline=1, **kwargs):
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> from watch.tasks.landcover.predict import *  # NOQA
+        >>> from watch.tasks.landcover.predict import _predict_single
         >>> import kwcoco
         >>> import watch
         >>> dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
@@ -118,26 +126,59 @@ def predict(cmdline=1, **kwargs):
 
     output_dset = input_dset.copy()
 
+    from watch.tasks.fusion.predict import CocoStitchingManager
+
+    # Create a queue that writes data to disk in the background
+    writer_queue = util_parallel.BlockingJobQueue(max_workers=num_workers)
+
+    landcover_stitcher = CocoStitchingManager(
+        output_dset,
+        'landcover',
+        chan_code='|'.join(model_info.model_outputs),
+        stiching_space='image',
+        writer_queue=writer_queue,
+    )
+
+    num_hidden = config.with_hidden
+    if config.with_hidden:
+        _register_hidden_layer_hook(model)
+
+        hidden_stitcher = CocoStitchingManager(
+            output_dset,
+            'landcover',
+            chan_code=f'landcover_hidden.0:{num_hidden}',
+            stiching_space='image',
+            writer_queue=writer_queue,
+        )
+        hidden_stitcher.num_hidden = num_hidden
+    else:
+        model._activation_cache = None
+        hidden_stitcher = None
+
+    from watch.utils import process_context
+    proc_context = process_context.ProcessContext(
+        type='process',
+        name='watch.tasks.invariants.predict',
+        config=config.to_dict(),
+        track_emissions=config.track_emissions,
+    )
+    proc_context.start()
+
     dataloader = DataLoader(ptdataset, num_workers=num_workers,
                             batch_size=None, collate_fn=lambda x: x)
 
     # Start the worker processes before we do threading
     dataloader_iter = iter(dataloader)
 
-    # Create a queue that writes data to disk in the background
-    writer = util_parallel.BlockingJobQueue(max_workers=num_workers)
-
     pman = util_progress.ProgressManager()
     with pman:
         for img_info in pman.progiter(dataloader_iter, total=len(dataloader)):
             try:
-                pred_filename, pred, nodata = _predict_single(
-                    img_info, model=model, model_outputs=model_info.model_outputs,
+                _predict_single(
+                    img_info, model, model_info.model_outputs,
+                    landcover_stitcher, hidden_stitcher,
                     output_dset=output_dset,
                     output_dir=output_dset_filename.parent)
-
-                if pred is not None:
-                    writer.submit(_write_worker, pred_filename, pred, nodata)
 
             except KeyboardInterrupt:
                 print('interrupted')
@@ -145,14 +186,37 @@ def predict(cmdline=1, **kwargs):
             except Exception as ex:
                 print('warning: ex = {}'.format(ub.urepr(ex, nl=1)))
                 print('Unable to load id:{} - {}'.format(img_info['id'], img_info['name']))
+                raise
 
-    writer.wait_until_finished()
+    writer_queue.wait_until_finished()
+
+    print('Finish process context')
+    proc_context.add_disk_info(ub.Path(input_dset.fpath).parent)
+    proc_context.add_device_info(device)
+    proc_context.stop()
+    output_dset.dataset['info'].append(proc_context.obj)
 
     output_dset.dump(str(output_dset_filename), indent=2)
     print('output written to {}'.format(output_dset_filename))
 
 
+def _register_hidden_layer_hook(model):
+    # TODO: generalize to other models
+    # Specific to UNetR model
+    # These are at half of the output image resolution.
+
+    model._activation_cache = {}
+    def record_hidden_activation(layer, input, output):
+        activation = output.detach()
+        model._activation_cache['hidden'] = activation
+
+    layer_of_interest = model.decoder1[3]
+    layer_of_interest._forward_hooks.clear()
+    layer_of_interest.register_forward_hook(record_hidden_activation)
+
+
 def _predict_single(img_info, model, model_outputs,
+                    landcover_stitcher, hidden_stitcher,
                     output_dset: kwcoco.CocoDataset,
                     output_dir: Path):
     """
@@ -160,7 +224,6 @@ def _predict_single(img_info, model, model_outputs,
     written to disk.
     """
     gid = img_info['id']
-    name = img_info['name']
     img = img_info['imgdata']
 
     pred = detector.run(model, img, img_info)
@@ -168,41 +231,21 @@ def _predict_single(img_info, model, model_outputs,
     if pred is None:
         return None, None
 
-    if img_info.get('file_name'):
-        dir = Path(img_info.get('file_name')).parent
-    else:
-        dir = Path(img_info['auxiliary'][0]['file_name']).parent
+    landcover_stitcher.accumulate_image(gid, None, pred)
+    landcover_stitcher.submit_finalize_image(gid)
 
-    pred_filename = output_dir.joinpath('_assets/landcover', dir, name + '_landcover.tif')
-
-    # Use the WATCH standards to transform float values with nans into
-    # uint16 with nodata.
-    from watch.tasks.fusion.predict import quantize_float01
-    quant_pred, quantization = quantize_float01(pred)
-    nodata = quantization['nodata']
-
-    info = {
-        'file_name': str(pred_filename.relative_to(output_dir)),
-        'channels': "|".join(model_outputs),
-        'height': pred.shape[0],
-        'width': pred.shape[1],
-        'num_bands': pred.shape[2],
-        'quantization': quantization,
-        'warp_aux_to_img': {'scale': [img_info['width'] / pred.shape[1],
-                                      img_info['height'] / pred.shape[0]],
-                            'type': 'affine'}
-    }
-
-    output_dset.imgs[gid]['auxiliary'].append(info)
-    return (pred_filename, quant_pred, nodata)
-
-
-def _write_worker(pred_filename, pred, nodata=None):
-    pred_filename.parent.mkdir(parents=True, exist_ok=True)
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore', UserWarning)
-        kwimage.imwrite(str(pred_filename), pred, backend='gdal',
-                        compress='DEFLATE', blocksize=128, nodata=nodata)
+    if model._activation_cache is not None:
+        # Lots of hardcoded things here.
+        # Hack to unpad here.
+        hidden_raw = model._activation_cache['hidden'].cpu().numpy()
+        hidden = hidden_raw[0].transpose(1, 2, 0)
+        h, w = pred.shape[0:2]
+        hidden_dsize = (w // 2, h // 2)
+        hidden = hidden[0:h // 2, 0:w // 2, 0:hidden_stitcher.num_hidden]
+        hidden_stitcher.accumulate_image(
+            gid, None, hidden, asset_dsize=hidden_dsize,
+            scale_asset_from_stitchspace=0.5)
+        hidden_stitcher.submit_finalize_image(gid)
 
 
 def get_output_file(output):

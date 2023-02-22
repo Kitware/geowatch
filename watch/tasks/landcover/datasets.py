@@ -73,10 +73,8 @@ class _CocoTorchDataset(torch.utils.data.Dataset):
             raise Exception('Unable to load any channels {} from image {}: {}'.format(channels, gid, str(ex))) from ex
         else:
             try:
-                # return self.dset.load_image(gid, channels)
-                # imdata = self.dset.load_image(gid, channels)
                 coco_img = self.dset.coco_image(gid)
-                imdata = coco_img.delay(channels, space='image').finalize(nodata='float')
+                imdata = coco_img.imdelay(channels, space='image').finalize(nodata='float')
                 return imdata
             except Exception as ex:
                 img = self.dset.imgs[gid]

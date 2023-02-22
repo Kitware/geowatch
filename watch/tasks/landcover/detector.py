@@ -32,6 +32,7 @@ def run(model, img, metadata):
 
 def pad(fn):
     def wrapped(img, *args, **kwargs):
+
         pads = [(c - s % c) % c for s, c in zip(img.shape, (512, 512, 1))]
         # log.debug('{} pad with {}'.format(img.shape, pads))
 
