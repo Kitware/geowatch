@@ -11,7 +11,6 @@ from watch.utils import util_parallel
 from watch.utils import util_progress
 from . import detector
 from .model_info import lookup_model_info
-from .utils import setup_logging
 import scriptconfig as scfg
 
 
@@ -103,7 +102,8 @@ def predict(cmdline=1, **kwargs):
             except KeyboardInterrupt:
                 print('interrupted')
                 break
-            except Exception:
+            except Exception as ex:
+                print('warning: ex = {}'.format(ub.urepr(ex, nl=1)))
                 print('Unable to load id:{} - {}'.format(img_info['id'], img_info['name']))
 
     writer.wait_until_finished()
@@ -209,5 +209,4 @@ if __name__ == '__main__':
             --workers=4 --draw_anns=False
 
     """
-    setup_logging()
     predict()
