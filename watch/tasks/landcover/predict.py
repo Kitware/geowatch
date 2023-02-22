@@ -1,66 +1,81 @@
 import datetime
-import logging
 import warnings
+import ubelt as ub
 from pathlib import Path
 
-import click
 import kwcoco
 import kwimage
 from torch.utils.data import DataLoader
-from tqdm import tqdm
 
 from watch.utils import util_parallel
-from watch.utils.lightning_ext import util_globals
+from watch.utils import util_progress
 from . import detector
 from .model_info import lookup_model_info
 from .utils import setup_logging
+import scriptconfig as scfg
 
-log = logging.getLogger(__name__)
+
+class LandcoverPredictConfig(scfg.DataConfig):
+    dataset = scfg.Value(None, required=True, help='input kwcoco dataset')
+    deployed = scfg.Value(None, required=True, help='pytorch weights file')
+    output = scfg.Value(None, required=True, help='output kwcoco dataset')
+    num_workers = scfg.Value(0, type=str, help='number of dataloading workers. Can be "auto"')
+    device = scfg.Value('auto', type=str, help='auto, cpu, or integer of the device to use')
+    select_images = scfg.Value(None, type=str, help='if specified, a jq operation to filter images')
+    select_videos = scfg.Value(None, type=str, help='if specified, a jq operation to filter videos')
 
 
-@click.command()
-@click.option('--dataset', required=True, type=click.Path(exists=True), help='input kwcoco dataset')
-@click.option('--deployed', required=True, type=click.Path(exists=True), help='pytorch weights file')
-@click.option('--output', required=False, type=click.Path(), help='output kwcoco dataset')
-@click.option('--num_workers', default=0, required=False, type=str, help='number of dataloading workers. Can be "auto"')
-@click.option('--device', default='auto', required=False, type=str, help='auto, cpu, or integer of the device to use')
-@click.option('--select_images', required=False, default=None, help='if specified, a jq operation to filter images')
-@click.option('--select_videos', required=False, default=None, help='if specified, a jq operation to filter videos')
-def predict(dataset, deployed, output, num_workers=0, device='auto', select_images=None, select_videos=None):
-    coco_dset_filename = dataset
-    weights_filename = Path(deployed)
-    output_dset_filename = get_output_file(output)
-    output_data_dir = output_dset_filename.parent.joinpath(
-        output_dset_filename.name.split('.')[0])
+def predict(cmdline=1, **kwargs):
+    """
+    Example:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> from watch.tasks.landcover.predict import *  # NOQA
+        >>> import kwcoco
+        >>> import watch
+        >>> dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> dvc_expt_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+        >>> dset = kwcoco.CocoDataset(dvc_data_dpath / 'Drop6/imganns-KR_R001.kwcoco.zip')
+        >>> deployed = dvc_expt_dpath / 'models/landcover/sentinel2.pt'
+        >>> kwargs = {
+        >>>     'dataset': dset.fpath,
+        >>>     'deployed': deployed,
+        >>>     'output': ub.Path(dset.fpath).augment(stemsuffix='_landcover'),
+        >>>     'select_images': '.sensor_coarse == "S2"',
+        >>> }
+        >>> cmdline = 0
+        >>> predict(cmdline, **kwargs)
+    """
+    config = LandcoverPredictConfig.cli(cmdline=cmdline, data=kwargs)
 
-    log.info('Input:          {}'.format(coco_dset_filename))
-    log.info('Weights:        {}'.format(weights_filename))
-    log.info('Output:         {}'.format(output_dset_filename))
-    log.info('Output Images:  {}'.format(output_data_dir))
+    print('config = {}'.format(ub.urepr(dict(config), align=':', nl=1)))
 
-    # try:
-    #     device = int(device)
-    # except Exception:
+    coco_dset_filename = config.dataset
+    weights_filename = Path(config.deployed)
+    output_dset_filename = get_output_file(config.output)
+
+    deployed = ub.Path(config.deployed)
+    if not deployed.is_file():
+        raise ValueError('Landcover model does not exist')
+
     from watch.utils.lightning_ext import util_device
-    device = util_device.coerce_devices(device)[0]
+    device = util_device.coerce_devices(config.device)[0]
+    print(f'device={device}')
 
-    log.info('device = {}'.format(device))
-
-    num_workers = util_globals.coerce_num_workers(num_workers)
+    num_workers = util_parallel.coerce_num_workers(config.num_workers)
 
     input_dset = kwcoco.CocoDataset.coerce(coco_dset_filename)
     from watch.utils import kwcoco_extensions
     filtered_gids = kwcoco_extensions.filter_image_ids(
         input_dset, include_sensors=None, exclude_sensors=None,
-        select_images=select_images, select_videos=select_videos)
+        select_images=config.select_images, select_videos=config.select_videos)
     input_dset = input_dset.subset(filtered_gids)
-    log.info('Selected input_dset = {!r}'.format(input_dset))
+    print('Selected input_dset = {!r}'.format(input_dset))
 
     model_info = lookup_model_info(weights_filename)
     ptdataset = model_info.create_dataset(input_dset)
     model = model_info.load_model(weights_filename, device)
 
-    log.info('Using {}'.format(type(model_info).__name__))
+    print('Using {}'.format(type(model_info).__name__))
 
     output_dset = input_dset.copy()
 
@@ -73,26 +88,28 @@ def predict(dataset, deployed, output, num_workers=0, device='auto', select_imag
     # Create a queue that writes data to disk in the background
     writer = util_parallel.BlockingJobQueue(max_workers=num_workers)
 
-    for img_info in tqdm(dataloader_iter, miniters=1):
-        try:
-            pred_filename, pred, nodata = _predict_single(
-                img_info, model=model, model_outputs=model_info.model_outputs,
-                output_dset=output_dset,
-                output_dir=output_dset_filename.parent)
+    pman = util_progress.ProgressManager()
+    with pman:
+        for img_info in pman.progiter(dataloader_iter, total=len(dataloader)):
+            try:
+                pred_filename, pred, nodata = _predict_single(
+                    img_info, model=model, model_outputs=model_info.model_outputs,
+                    output_dset=output_dset,
+                    output_dir=output_dset_filename.parent)
 
-            if pred is not None:
-                writer.submit(_write_worker, pred_filename, pred, nodata)
+                if pred is not None:
+                    writer.submit(_write_worker, pred_filename, pred, nodata)
 
-        except KeyboardInterrupt:
-            log.info('interrupted')
-            break
-        except Exception:
-            log.exception('Unable to load id:{} - {}'.format(img_info['id'], img_info['name']))
+            except KeyboardInterrupt:
+                print('interrupted')
+                break
+            except Exception:
+                print('Unable to load id:{} - {}'.format(img_info['id'], img_info['name']))
 
     writer.wait_until_finished()
 
     output_dset.dump(str(output_dset_filename), indent=2)
-    log.info('output written to {}'.format(output_dset_filename))
+    print('output written to {}'.format(output_dset_filename))
 
 
 def _predict_single(img_info, model, model_outputs,
@@ -165,42 +182,32 @@ if __name__ == '__main__':
     """
     CommandLine:
         export CUDA_VISIBLE_DEVICES="1"
-        DVC_DPATH=$(smartwatch_dvc)
-        KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15
-        DZYNE_LANDCOVER_MODEL_FPATH="$DVC_DPATH/models/landcover/visnav_remap_s2_subset.pt"
+
+        DVC_EXPT_DPATH=$(smartwatch_dvc --tags=phase2_expt --hardware=auto)
+        DVC_DATA_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware=auto)
+        echo "
+        DVC_DATA_DPATH = $DVC_DATA_DPATH
+        DVC_EXPT_DPATH = $DVC_EXPT_DPATH
+        "
+
+        KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6
+        DZYNE_LANDCOVER_MODEL_FPATH="$DVC_EXPT_DPATH/models/landcover/sentinel2.pt"
+
+        DATASET_FPATH=$KWCOCO_BUNDLE_DPATH/imganns-KR_R001.kwcoco.zip
+
         python -m watch.tasks.landcover.predict \
-            --dataset=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
+            --dataset=$DATASET_FPATH \
             --deployed=$DZYNE_LANDCOVER_MODEL_FPATH  \
             --device=0 \
-            --num_workers="avail" \
-            --output=$KWCOCO_BUNDLE_DPATH/data_dzyne_landcover.kwcoco.json
+            --num_workers=4 \
+            --output=$KWCOCO_BUNDLE_DPATH/imganns-KR_R001_landcover.kwcoco.zip
 
-        python -m watch stats $KWCOCO_BUNDLE_DPATH/data_dzyne_landcover.kwcoco.json
+        smartwatch stats $KWCOCO_BUNDLE_DPATH/data_dzyne_landcover.kwcoco.json
 
-        python -m watch visualize $KWCOCO_BUNDLE_DPATH/dzyne_depth.kwcoco.json \
+        smartwatch visualize $KWCOCO_BUNDLE_DPATH/dzyne_depth.kwcoco.json \
             --animate=True --channels="built_up|forest|water" --skip_missing=True \
             --workers=4 --draw_anns=False
 
-
-        # Drop3 Test
-        # ==========
-        export CUDA_VISIBLE_DEVICES="1"
-        DVC_DPATH_SSH=$(smartwatch_dvc --hardware=ssd)
-        DVC_DPATH_HDD=$(smartwatch_dvc --hardware=hdd)
-        KWCOCO_BUNDLE_DPATH=$DVC_DPATH_SSH/Aligned-Drop3-TA1-2022-03-10
-        DZYNE_LANDCOVER_MODEL_FPATH="$DVC_DPATH_HDD/models/landcover/visnav_remap_s2_subset.pt"
-        python -m watch.tasks.landcover.predict \
-            --dataset=$KWCOCO_BUNDLE_DPATH/data_nowv_vali.kwcoco.json \
-            --deployed=$DZYNE_LANDCOVER_MODEL_FPATH  \
-            --device=0 \
-            --num_workers="avail" \
-            --select_images '.sensor_coarse == "S2" and .frame_index < 100' \
-            --select_videos '.name == "KR_R001"' \
-            --output=$KWCOCO_BUNDLE_DPATH/test_data_dzyne_landcover.kwcoco.json
-
-        python -m watch visualize $KWCOCO_BUNDLE_DPATH/test_data_dzyne_landcover.kwcoco.json \
-            --animate=True --channels="built_up|forest|water" --skip_missing=True \
-            --workers=4 --draw_anns=False
     """
     setup_logging()
     predict()
