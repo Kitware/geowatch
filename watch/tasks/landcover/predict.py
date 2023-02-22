@@ -92,6 +92,11 @@ def predict(cmdline=1, **kwargs):
         >>> cmdline = 0
         >>> predict(cmdline, **kwargs)
     """
+    from watch.utils.lightning_ext import util_device
+    from watch.tasks.fusion.predict import CocoStitchingManager
+    from watch.utils import process_context
+    from watch.utils import kwcoco_extensions
+
     config = LandcoverPredictConfig.cli(cmdline=cmdline, data=kwargs)
 
     print('config = {}'.format(ub.urepr(dict(config), align=':', nl=1)))
@@ -104,14 +109,12 @@ def predict(cmdline=1, **kwargs):
     if not deployed.is_file():
         raise ValueError('Landcover model does not exist')
 
-    from watch.utils.lightning_ext import util_device
     device = util_device.coerce_devices(config.device)[0]
     print(f'device={device}')
 
     num_workers = util_parallel.coerce_num_workers(config.num_workers)
 
     input_dset = kwcoco.CocoDataset.coerce(coco_dset_filename)
-    from watch.utils import kwcoco_extensions
     filtered_gids = kwcoco_extensions.filter_image_ids(
         input_dset, include_sensors=None, exclude_sensors=None,
         select_images=config.select_images, select_videos=config.select_videos)
@@ -125,8 +128,6 @@ def predict(cmdline=1, **kwargs):
     print('Using {}'.format(type(model_info).__name__))
 
     output_dset = input_dset.copy()
-
-    from watch.tasks.fusion.predict import CocoStitchingManager
 
     # Create a queue that writes data to disk in the background
     writer_queue = util_parallel.BlockingJobQueue(max_workers=num_workers)
@@ -155,7 +156,6 @@ def predict(cmdline=1, **kwargs):
         model._activation_cache = None
         hidden_stitcher = None
 
-    from watch.utils import process_context
     proc_context = process_context.ProcessContext(
         type='process',
         name='watch.tasks.invariants.predict',
@@ -172,13 +172,14 @@ def predict(cmdline=1, **kwargs):
 
     pman = util_progress.ProgressManager()
     with pman:
-        for img_info in pman.progiter(dataloader_iter, total=len(dataloader)):
+        _prog = pman.progiter(dataloader_iter, total=len(dataloader),
+                              desc='predict landcover')
+        for img_info in _prog:
             try:
                 _predict_single(
                     img_info, model, model_info.model_outputs,
                     landcover_stitcher, hidden_stitcher,
-                    output_dset=output_dset,
-                    output_dir=output_dset_filename.parent)
+                    output_dset=output_dset)
 
             except KeyboardInterrupt:
                 print('interrupted')
@@ -215,10 +216,12 @@ def _register_hidden_layer_hook(model):
     layer_of_interest.register_forward_hook(record_hidden_activation)
 
 
-def _predict_single(img_info, model, model_outputs,
-                    landcover_stitcher, hidden_stitcher,
-                    output_dset: kwcoco.CocoDataset,
-                    output_dir: Path):
+def _predict_single(img_info,
+                    model,
+                    model_outputs,
+                    landcover_stitcher,
+                    hidden_stitcher,
+                    output_dset: kwcoco.CocoDataset):
     """
     Modifies the coco dataset inplace, returns the data that needs to be
     written to disk.

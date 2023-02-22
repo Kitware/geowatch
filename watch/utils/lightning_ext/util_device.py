@@ -36,7 +36,6 @@ def coerce_devices(gpus):
         >>> print(util_device.coerce_devices(None))
         >>> # xdoctest: +SKIP
         >>> # breaks without a cuda machine
-        >>> from watch.utils.lightning_ext import util_device
         >>> #print(util_device.coerce_devices("0"))
         >>> print(util_device.coerce_devices("1"))
         >>> print(util_device.coerce_devices("0"))
@@ -84,8 +83,9 @@ def coerce_devices(gpus):
         gpu_ids = auto_gpu_select.pick_multiple_gpus(gpus)
     elif needs_gpu_coerce:
         try:
-            from pytorch_lightning.utilities import device_parser
-            gpu_ids = device_parser.parse_gpu_ids(gpus)
+            from watch.utils.lightning_ext import old_parser_devices
+            # from pytorch_lightning.utilities import device_parser
+            gpu_ids = old_parser_devices.parse_gpu_ids(gpus)
         except Exception as ex:
             print(f'WARNING. Ignoring ex={ex}')
             gpu_ids = gpus
@@ -101,7 +101,8 @@ def coerce_devices(gpus):
 
 
 def _test_lightning_is_sane():
-    from pytorch_lightning.utilities import device_parser
+    from watch.utils.lightning_ext import old_parser_devices as device_parser
+    # from pytorch_lightning.utilities import device_parser
     import torch
     num_devices = torch.cuda.device_count()
 
@@ -148,17 +149,3 @@ def _test_coerce_is_sane():
         assert coerce_devices([0 , 1]) == [torch.device(0), torch.device(1)]
         assert coerce_devices('0, 1') == [torch.device(0), torch.device(1)]
         assert coerce_devices('auto:2') == [torch.device(0), torch.device(1)]
-
-
-def parse_gpu_ids(x):
-    """
-    import liberator
-    lib = liberator.Liberator()
-    from pytorch_lightning.utilities import device_parser
-    from lightning_lite.utilities.device_parser import _parse_gpu_ids
-
-    lib.add_dynamic(_parse_gpu_ids)
-    lib.expand(['lightning_lite'])
-
-    print(lib.current_sourcecode())
-    """

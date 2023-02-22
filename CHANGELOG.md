@@ -30,6 +30,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Change the default of `mask_samecolor_method` to None
 * Change the default of `time_span` to None
 * Better legends and labeling in `aggregate.build_all_param_plots`
+* Vendored lightning parse-gpu-devices
 
 ### Fixed
 * issue in reproject annots when frames had no annotations
