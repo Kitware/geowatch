@@ -180,7 +180,8 @@ def predict(cmdline=1, **kwargs):
     proc_context.start()
 
     print('Starting main predict loop')
-    pman = util_progress.ProgressManager('progiter')
+    # pman = util_progress.ProgressManager('progiter')
+    pman = util_progress.ProgressManager('rich')
     with pman, torch.no_grad():
         _prog = pman.progiter(dataloader_iter, total=len(dataloader),
                               desc='predict landcover')
