@@ -472,6 +472,10 @@ class ProgressManager(BaseProgIterManager):
     def stopall(self):
         """
         Stop all background progress threads (likely only 1 exists)
+
+        Ignore:
+            from watch.utils import util_progress
+            util_progress.ProgressManager.stopall()
         """
         for pman in LIVE_PROGRESS_MANAGERS.values():
             pman.stop()
