@@ -584,6 +584,8 @@ def normalize_sensors(coco_dset):
         'LE': 'Landsat 7',
         'LC': 'Landsat 8',
         'L8': 'Landsat 8',
+        'WV1': 'WorldView 1',
+        'PD': 'Planet',
     }
     good_sensors = set(sensor_dict.values())
 
@@ -599,6 +601,72 @@ def normalize_sensors(coco_dset):
             warnings.warn(
                 f'image has unknown sensor {sensor} in tag={coco_dset.tag}')
 
+    return coco_dset
+
+
+def dedupe_dates(coco_dset):
+    '''
+    Ensure a tracked kwcoco file has at most 1 annot per track per date. [1]
+
+    There are several potential ways to do this.
+     - take highest-resolution sensor [currently done]
+     - take image with best coverage (least nodata)
+     - take latest time
+     - majority-vote labels/average scores
+     - average heatmaps before polygons are created
+
+    Given that this probably has a minimal impact on scores, the safest method
+    is chosen.
+
+    References:
+        [1] https://smartgitlab.com/TE/metrics-and-test-framework/-/issues/63
+    '''
+    import pandas as pd
+    from dateutil.parser import parse
+
+    # aids_to_remove = []
+    gids_to_remove = []
+    sensor_priority = [
+        'Planet',
+        'WorldView',
+        'WorldView 1',
+        'Sentinel-2',
+        'Landsat 8',
+        'Landsat 7'
+    ]
+    sensor_priority = dict(zip(sensor_priority, range(len(sensor_priority))))
+
+    for trackid in coco_dset.index.trackid_to_aids.keys():
+        annots = coco_dset.annots(trackid=trackid)
+        dates = [parse(d).date() for d in annots.images.lookup('date_captured')]
+        tixs = annots.lookup('track_index')
+        fixs = annots.images.lookup('frame_index')
+
+        is_sorted = lambda arr: np.all(arr[:-1] <= arr[1:])
+        if not all(date_track_frame_sorted := (
+                    is_sorted(dates),
+                    is_sorted(tixs),
+                    is_sorted(fixs))):
+            # this should never print
+            print(f'WARNING: {trackid=} {date_track_frame_sorted=}')
+
+    # remove full images instead of iterating over tracks for efficiency
+    # not possible for some other removal methods, but it is for this one
+    for vidid in coco_dset.index.vidid_to_gids.keys():
+        images = coco_dset.images(vidid=vidid)
+        dates = [parse(d).date() for d in images.lookup('date_captured')]
+        sensors = images.lookup('sensor_coarse')
+        priorities = pd.Series(sensors).map(sensor_priority).values
+        vals, idx_start, count = np.unique(dates, return_index=True, return_counts=True)
+        for d, i, c in zip(vals, idx_start, count):
+            if c > 1:
+                print(f'removing {c-1} dup imgs from {d} in {vidid=}')
+                ixs = np.arange(i, i + c)
+                keep_ix = i + np.argmin(priorities[ixs])
+                gids_to_remove.extend(list(set(ixs) - {keep_ix}))
+
+    # coco_dset.remove_annotations(aids_to_remove, verbose=1)
+    coco_dset.remove_images(gids_to_remove, verbose=1)
     return coco_dset
 
 
@@ -753,6 +821,8 @@ def normalize(
 
     # HACK, ensure out_dset.index is up to date
     out_dset._build_index()
+
+    out_dset = dedupe_dates(out_dset)
 
     if DEBUG_JSON_SERIALIZABLE:
         debug_json_unserializable(out_dset.dataset, 'Output of normalize: ')
