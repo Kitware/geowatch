@@ -867,6 +867,10 @@ class Aggregator(ub.NiceRepr):
             vs = agg.table[col]
             if list in set(vs.apply(type)):
                 print(col)
+
+        fname = f'{agg.type}_{agg.agg_dpath.parent.name}.csv'
+        agg.table.to_csv(fpath, index_label=False)
+
         fpath = 'bas_results_2023-01.csv.zip'
         agg.table.to_csv(fpath, index_label=False)
 

@@ -519,8 +519,8 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
         raise NotImplementedError('REMOVED: use coco_add_watch_feilds '
                                   'as a secondary step instead')
 
-    from watch.utils.lightning_ext import util_globals
-    jobs = util_globals.coerce_num_workers(jobs)
+    from watch.utils import util_parallel
+    jobs = util_parallel.coerce_num_workers(jobs)
 
     if isinstance(input_stac_catalog, str):
         catalog = pystac.read_file(href=input_stac_catalog).full_copy()

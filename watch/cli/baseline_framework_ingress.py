@@ -301,8 +301,8 @@ def baseline_framework_ingress(input_path,
                                asset_selector=_default_asset_selector,
                                virtual=False):
 
-    from watch.utils.lightning_ext import util_globals
-    workers = util_globals.coerce_num_workers(jobs)
+    from watch.utils import util_parallel
+    workers = util_parallel.coerce_num_workers(jobs)
     print(f'Runing baseline_framework_ingress with workers={workers}')
 
     os.makedirs(outdir, exist_ok=True)

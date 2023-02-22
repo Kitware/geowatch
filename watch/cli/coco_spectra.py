@@ -207,7 +207,7 @@ def main(cmdline=True, **kwargs):
         >>> main(**kwargs)
     """
     from watch.utils import kwcoco_extensions
-    from watch.utils.lightning_ext import util_globals
+    from watch.utils import util_parallel
     import watch
     import kwplot
     kwplot.autosns()
@@ -227,7 +227,7 @@ def main(cmdline=True, **kwargs):
     )
 
     images = coco_dset.images(valid_gids)
-    workers = util_globals.coerce_num_workers(config['workers'])
+    workers = util_parallel.coerce_num_workers(config['workers'])
     print('workers = {!r}'.format(workers))
 
     if config['max_images'] is not None:

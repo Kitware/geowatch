@@ -284,8 +284,8 @@ def prep_feats(cmdline=True, **kwargs):
 
 def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundle_dpath, config):
 
-    from watch.utils.lightning_ext import util_globals
-    data_workers = util_globals.coerce_num_workers(config['data_workers'])
+    from watch.utils import util_parallel
+    data_workers = util_parallel.coerce_num_workers(config['data_workers'])
 
     model_fpaths = {
         'rutgers_materials': expt_dvc_dpath / 'models/rutgers/rutgers_peri_materials_v3/experiments_epoch_18_loss_59.014100193977356_valmF1_0.18694573888313187_valChangeF1_0.0_time_2022-02-01-01:53:20.pth',

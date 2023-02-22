@@ -11,7 +11,8 @@ import pytorch_lightning as pl
 import ubelt as ub
 import scriptconfig as scfg
 
-from watch.utils.lightning_ext import util_globals
+from watch.utils import util_globals
+from watch.utils import util_parallel
 from watch.tasks.fusion import utils
 from watch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDatasetConfig, KWCocoVideoDataset
 
@@ -249,7 +250,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
 
         self.test_dataset_config = self.train_dataset_config.copy()
 
-        self.num_workers = util_globals.coerce_num_workers(cfgdict['num_workers'])
+        self.num_workers = util_parallel.coerce_num_workers(cfgdict['num_workers'])
         self.dataset_stats = None
 
         # will only correspond to train

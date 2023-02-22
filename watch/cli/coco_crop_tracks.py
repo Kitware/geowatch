@@ -146,8 +146,8 @@ def main(cmdline=0, **kwargs):
     crop_job_iter = iter(crop_job_gen)
 
     keep = config['keep']
-    from watch.utils.lightning_ext import util_globals
-    workers = util_globals.coerce_num_workers(config['workers'])
+    from watch.utils import util_parallel
+    workers = util_parallel.coerce_num_workers(config['workers'])
     jobs = ub.JobPool(mode=config['mode'], max_workers=workers)
 
     prog = ub.ProgIter(desc='submit crop jobs')
