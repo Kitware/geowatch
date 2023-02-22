@@ -11,8 +11,6 @@ import datetime
 import numpy as np
 from datetime import datetime, timedelta
 from pytz import timezone
-# import click
-import yaml
 from scipy.stats import chi2
 import ubelt as ub
 import pycold
@@ -40,10 +38,8 @@ class TileProcessingKwcocoConfig(scfg.DataConfig):
     conse = scfg.Value(6, help='consecutive observation to confirm change, e.g., 6')
     cm_interval = scfg.Value(60, help='CM output inverval, e.g., 60')
     
-# def main(rank, n_cores, stack_path, reccg_path, method, year_lowbound, year_highbound, b_c2):    
 def main(cmdline=1, **kwargs):
-    """_summary_
-
+    """
     Args:
         n_cores (type=int): _description_
         stack_path (_type_): _description_
@@ -56,23 +52,29 @@ def main(cmdline=1, **kwargs):
         
     Ignore:
         python -m watch.tasks.cold.tile_processing_kwcoco --help
-        from watch.tasks.cold.tile_processing_kwcoco import main
-        from watch.tasks.cold.tile_processing_kwcoco import *
-        kwargs= dict(        
-        rank = 1,
-        n_cores = 1,
-        stack_path = ub.Path.appdir('/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/US_C000'), 
-        reccg_path = ub.Path.appdir('/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/COLD_result/COLD_parameter_test/COLD_US_C000_prob099_conse4'),
-        meta_fpath = '/home/jws18003/Document/pycold-uconnhpc/config_watch.yaml',
-        method = 'COLD',    
-        b_c2 = True,
-        prob = 0.99,
-        conse = 6,
-        cm_interval = 60,
-        )
-        cmdline=0    
-        main(cmdline, **kwargs)
+        TEST_COLD=1 xdoctest -m watch.tasks.cold.tile_processing_kwcoco main
+        
+    Example:
+    >>> # xdoctest: +REQUIRES(env:TEST_COLD)     
+    >>> from watch.tasks.cold.tile_processing_kwcoco import main
+    >>> from watch.tasks.cold.tile_processing_kwcoco import *
+    >>> kwargs= dict(        
+    >>>    rank = 1,
+    >>>    n_cores = 1,
+    >>>    stack_path = ub.Path('/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/KR_R001'), 
+    >>>    reccg_path = ub.Path('/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/reccg/KR_R001'),
+    >>>    meta_fpath = '/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/KR_R001/block_x10_y1/crop_20140115T020000Z_N37.643680E128.649453_N37.683356E128.734073_L8_0.json',
+    >>>    method = 'COLD',    
+    >>>    b_c2 = True,
+    >>>    prob = 0.99,
+    >>>    conse = 6,
+    >>>    cm_interval = 60,
+    >>> )
+    >>> cmdline=0    
+    >>> main(cmdline, **kwargs)
     """  
+    
+    # setting config    
     config_in = TileProcessingKwcocoConfig.legacy(cmdline=cmdline, data=kwargs)        
     rank = config_in['rank']
     n_cores = config_in['n_cores']
@@ -84,9 +86,6 @@ def main(cmdline=1, **kwargs):
     prob = config_in['prob']
     conse = config_in['conse']
     cm_output_interval = config_in['cm_interval']
-    print(config_in)
-    
-    # setting config
     
     meta = open(meta_fpath)
     config = json.load(meta)
@@ -98,20 +97,6 @@ def main(cmdline=1, **kwargs):
     block_height = int(n_rows / n_block_y)  # height of a block
     year_lowbound = None
     year_highbound = None
-    # n_cores = 8
-    # log = { 'stack_path': stack_path,
-    #         'reccg_path': reccg_path,
-    #         'algorithm': method,                
-    #         'prob': prob,
-    #         'conse': conse,     
-    #         'cm_interval': cm_output_interval,
-    #     }
-        
-    # log_fpath = reccg_path / 'log.json'
-    # print(log_fpath)
-    # with open(log_fpath, "w") as write_file:
-    #     json.dump(log, write_file)
-    # # Path(log_fpath).write_text(json.dump(log))
     
     tz = timezone('US/Eastern')
     start_time = datetime.now(tz)
@@ -124,26 +109,7 @@ def main(cmdline=1, **kwargs):
     if year_highbound is None:
         year_highbound = 0
     else:
-        year_high_ordinal = pd.Timestamp.toordinal(datetime(int(year_highbound + 1), 1, 1))
-
-    # Reading/Defining config
-    # config = {'n_cols': 660,
-    #           'n_rows': 780,
-    #           'n_block_x': 20,
-    #           'n_block_y': 20,
-    #           'probability_threshold': 0.99,
-    #           'conse': 6,
-    #           'CM_OUTPUT_INTERVAL': 60
-    #           }
-
-    # with open(yaml_path, 'r') as yaml_obj:
-    #     config = yaml.safe_load(yaml_obj)
-
-    # conse = int(config['conse'])
-    # cm_output_interval = int(config['CM_OUTPUT_INTERVAL'])
-    # probability_threshold = config['probability_threshold']
-    
-
+        year_high_ordinal = pd.Timestamp.toordinal(datetime(int(year_highbound + 1), 1, 1))  
     
     if (n_cols % block_width != 0) or (n_rows % block_height != 0):
         print('padded_n_cols, padded_n_rows must be divisible respectively by block_width, block_height! Please double '

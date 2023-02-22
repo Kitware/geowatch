@@ -1,9 +1,7 @@
 import scriptconfig as scfg
 import ubelt as ub
 import json
-import kwcoco
 import logging
-import os
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +51,7 @@ def main(cmdline=1, **kwargs):
         >>>   cm_interval = 60,        
         >>>   year_lowbound = None,
         >>>   year_highbound = None,
-        >>>   coefs = ['a0'],
+        >>>   coefs = ['a0', 'cv'],
         >>>   coefs_bands = [0, 1, 2, 3, 4, 5],
         >>>   timestamp = True,       
         >>>   mode = 'process',
@@ -97,26 +95,20 @@ def main(cmdline=1, **kwargs):
     
     for job in jobs.as_completed(desc='Collect tile jobs', progkw={'verbose': 3}):
         ret = job.result()    
-     
     
     logger.info('Writting tmp file of COLD output...')    
     export_kwargs = export_cold_result_kwcoco.ExportColdKwcocoConfig().to_dict()
     export_kwargs['stack_path'] = tile_kwargs['stack_path']
     export_kwargs['reccg_path'] = tile_kwargs['reccg_path']
-    export_kwargs['coco_fpath'] = coco_fpath
     export_kwargs['meta_fpath'] = meta_fpath
-    export_kwargs['region_id'] = metadata['region_id']
     export_kwargs['year_lowbound'] = config['year_lowbound']
     export_kwargs['year_highbound'] = config['year_highbound']
     export_kwargs['coefs'] = config['coefs']
     export_kwargs['coefs_bands'] = config['coefs_bands']
-    export_kwargs['timestamp'] = config['timestamp']
-    # export_cold_result_kwcoco.main(cmdline=0, **export_kwargs)  
+    export_kwargs['timestamp'] = config['timestamp']  
 
     jobs = ub.JobPool(mode=config['mode'], max_workers=workers)
-    for i in range(workers):        
-        #jobs.submit(func, arg1, arg2, arg3=34)
-        #func(arg, arg3, arg3=34)
+    for i in range(workers + 1):        
         export_kwargs['rank'] = i
         export_kwargs['n_cores'] = workers
         jobs.submit(export_cold_result_kwcoco.main, cmdline=0, **export_kwargs)    
@@ -131,7 +123,6 @@ def main(cmdline=1, **kwargs):
     assemble_kwargs['coco_fpath'] = coco_fpath
     assemble_kwargs['mod_coco_fpath'] = config['mod_coco_fpath']
     assemble_kwargs['meta_fpath'] = meta_fpath
-    assemble_kwargs['region_id'] = metadata['region_id']
     assemble_kwargs['year_lowbound'] = config['year_lowbound']
     assemble_kwargs['year_highbound'] = config['year_highbound']
     assemble_kwargs['coefs'] = config['coefs']
