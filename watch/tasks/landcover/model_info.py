@@ -5,7 +5,7 @@ from typing import Union
 
 import kwcoco
 import torch.utils.data
-from torch.utils.data import ConcatDataset
+# from torch.utils.data import ConcatDataset
 
 from . import detector
 from .datasets import S2Dataset
