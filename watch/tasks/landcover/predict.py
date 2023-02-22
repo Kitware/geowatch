@@ -145,7 +145,7 @@ def predict(cmdline=1, **kwargs):
 
         hidden_stitcher = CocoStitchingManager(
             output_dset,
-            'landcover',
+            'landcover_hidden',
             chan_code=f'landcover_hidden.0:{num_hidden}',
             stiching_space='image',
             writer_queue=writer_queue,

@@ -40,10 +40,6 @@ Example:
 
 Ignore:
 
-
-
-Ignore:
-
     # For Drop5
     DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
     DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt')
@@ -98,24 +94,20 @@ Ignore:
     smartwatch stats combo_vali_I.kwcoco.json combo_train_I.kwcoco.json
 
 
-    # Drop 4 SC
-
-
+    # Drop 6
+    export CUDA_VISIBLE_DEVICES="1"
     DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-    BUNDLE_DPATH=$DVC_DATA_DPATH/Drop4-SC
-    #KWCOCO_FPATH_PAT=$BUNDLE_DPATH/data_vali.kwcoco.json
-    KWCOCO_FPATH_PAT=$BUNDLE_DPATH/data_train.kwcoco.json
-    ls $KWCOCO_FPATH_PAT
+    BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6
     python -m watch.cli.prepare_teamfeats \
-        --base_fpath="$KWCOCO_FPATH_PAT" \
+        --base_fpath "$BUNDLE_DPATH"/imganns-*.kwcoco.zip \
         --expt_dpath="$DVC_EXPT_DPATH" \
-        --with_landcover=0 \
+        --with_landcover=1 \
         --with_materials=0 \
-        --with_invariants=1 \
+        --with_invariants=0 \
         --with_depth=0 \
         --do_splits=0 \
-        --skip_existing=0 \
-        --gres=1, --workers=1 --backend=serial --run=0
+        --skip_existing=1 \
+        --gres=1, --workers=1 --backend=serial --run=1
 
 
 """
@@ -136,7 +128,7 @@ class TeamFeaturePipelineConfig(scfg.Config):
     default = {
         'base_fpath': scfg.Value(None, nargs='+', help=ub.paragraph(
             '''
-            One ore more base coco files to compute team-features on.
+            One or more base coco files to compute team-features on.
             ''')),
         'expt_dvc_dpath': scfg.Value('auto', help=ub.paragraph(
             '''
@@ -290,7 +282,8 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
     model_fpaths = {
         'rutgers_materials': expt_dvc_dpath / 'models/rutgers/rutgers_peri_materials_v3/experiments_epoch_18_loss_59.014100193977356_valmF1_0.18694573888313187_valChangeF1_0.0_time_2022-02-01-01:53:20.pth',
         # 'rutgers_materials': dvc_dpath / 'models/rutgers/experiments_epoch_62_loss_0.09470022770735186_valmIoU_0.5901660531463717_time_2021101T16277.pth',
-        'dzyne_landcover': expt_dvc_dpath / 'models/landcover/visnav_remap_s2_subset.pt',
+        # 'dzyne_landcover': expt_dvc_dpath / 'models/landcover/visnav_remap_s2_subset.pt',
+        'dzyne_landcover': expt_dvc_dpath / 'models/landcover/sentinel2.pt',
 
         # 2022-02-11
         # 'uky_pretext': dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_pretext_model/pretext_package.pt',
@@ -355,6 +348,7 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
                 --deployed="{model_fpaths['dzyne_landcover']}" \
                 --output="{task['output_fpath']}" \
                 --num_workers="{data_workers}" \
+                --with_hidden=32 \
                 --select_images='.sensor_coarse == "S2"' \
                 --device=0
             ''')
