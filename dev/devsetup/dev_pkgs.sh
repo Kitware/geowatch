@@ -60,8 +60,16 @@ do
     fi
 done
 
+echo ""
+echo ""
+echo "Needs Uninstall:"
 bash_array_repr "${needs_uninstall[@]}"
+echo ""
+echo ""
+echo "Needs Install:"
 bash_array_repr "${needs_install[@]}"
+echo ""
+echo ""
 
 if [[ ${#needs_uninstall[@]} -gt 0 ]]; then
     pip uninstall -y "${needs_uninstall[@]}"

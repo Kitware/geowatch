@@ -25,24 +25,20 @@ Ignore:
 """
 import kwarray
 import math
-import parse
 import ubelt as ub
-from watch.mlops import smart_pipeline
-from watch.utils import util_pattern
-from watch.mlops import smart_result_parser
 from watch.utils import util_pandas
-from watch.utils import util_parallel
 from typing import Dict, Any
 import pandas as pd
-import json
 from scriptconfig import DataConfig, Value as _V
+
+from watch.mlops.aggregate_loader import build_tables
 
 
 class AggregateEvluationConfig(DataConfig):
     """
     Aggregates results from multiple DAG evaluations.
     """
-    root_dpath   = _V(None, help='The mlops output directory used in schedule evaluation'),
+    root_dpath   = _V(None, help='The mlops output directory used in schedule evaluation')
     pipeline     = _V('joint_bas_sc', help='the name of the pipeline to run')
     io_workers   = _V('avail', help='number of processes to load results')
     freeze_cache = _V(False, help='set to a specific cache string to freeze a cache with the current results')
@@ -59,7 +55,7 @@ def main(cmdline=True, **kwargs):
         >>> kwargs = {
         >>>     'root_dpath': expt_dvc_dpath / '_testpipe',
         >>>     'pipeline': 'bas',
-        >>>     'io_workers': 0,
+        >>>     'io_workers': 10,
         >>>     'freeze_cache': 0,
         >>>     # 'pipeline': 'joint_bas_sc_nocrop',
         >>>     # 'root_dpath': expt_dvc_dpath / '_testsc',
@@ -67,8 +63,9 @@ def main(cmdline=True, **kwargs):
         >>> }
 
         config = AggregateEvluationConfig.legacy(cmdline=cmdline, data=kwargs)
-        eval_type_to_results = build_tables(config)
         agg_dpath = ub.Path(config['root_dpath']) / 'aggregate'
+
+        eval_type_to_results = build_tables(config)
         eval_type_to_aggregator = build_aggregators(eval_type_to_results, agg_dpath)
         agg = ub.peek(eval_type_to_aggregator.values())
         agg = eval_type_to_aggregator.get('bas_poly_eval', None)
@@ -863,169 +860,10 @@ def generic_analysis(agg0, macro_groups=None, selector=None):
     return subagg2
 
 
-def build_tables(config):
-    import pandas as pd
-    from watch.utils import util_progress
-    print('config = {}'.format(ub.repr2(dict(config), nl=1)))
-    dag = smart_pipeline.make_smart_pipeline(config['pipeline'])
-    dag.print_graphs()
-    dag.configure(config=None, root_dpath=config['root_dpath'])
-
-    io_workers = util_parallel.coerce_num_workers(config.io_workers)
-    print(f'io_workers={io_workers}')
-
-    # patterns = {
-    #     'bas_pxl_id': '*',
-    #     'bas_poly_id': '*',
-    #     'bas_pxl_eval_id': '*',
-    #     'bas_poly_eval_id': '*',
-    #     'bas_poly_viz_id': '*',
-    # }
-
-    # Hard coded nodes of interest to gather. Should abstract later.
-    node_eval_infos = [
-        {'name': 'bas_pxl_eval', 'out_key': 'eval_pxl_fpath',
-         'result_loader': smart_result_parser.load_bas_pxl_eval},
-        {'name': 'sc_poly_eval', 'out_key': 'eval_fpath',
-         'result_loader': smart_result_parser.load_sc_poly_eval},
-        {'name': 'bas_poly_eval', 'out_key': 'eval_fpath',
-         'result_loader': smart_result_parser.load_bas_poly_eval},
-    ]
-
-    from concurrent.futures import as_completed
-    # pman = util_progress.ProgressManager(backend='rich')
-    pman = util_progress.ProgressManager(backend='progiter')
-    with pman:
-        eval_type_to_results = {}
-        eval_node_prog = pman.progiter(node_eval_infos, desc='Loading node results')
-
-        for node_eval_info in eval_node_prog:
-            node_name = node_eval_info['name']
-            out_key = node_eval_info['out_key']
-            # result_loader_fn = node_eval_info['result_loader']
-
-            if node_name not in dag.nodes:
-                continue
-
-            node = dag.nodes[node_name]
-            out_node = node.outputs[out_key]
-            out_node_key = out_node.key
-
-            fpaths = out_node_matching_fpaths(out_node)
-
-            # Pattern match
-            # node.template_out_paths[out_node.name]
-            cols = {
-                'metrics': [],
-                'index': [],
-                'params': [],
-                'specified_params': [],
-                'param_types': [],
-                'fpaths': [],
-                # 'json_info': [],
-            }
-            executor = ub.Executor(mode='process', max_workers=io_workers)
-            jobs = []
-            submit_prog = pman.progiter(
-                fpaths, desc=f'  * submit load jobs: {node_name}',
-                transient=True)
-            for fpath in submit_prog:
-                job = executor.submit(load_result_worker, fpath, node_name,
-                                      out_node_key)
-                jobs.append(job)
-
-            num_ignored = 0
-            job_iter = as_completed(jobs)
-            del jobs
-            collect_prog = pman.progiter(
-                job_iter, total=len(fpaths),
-                desc=f'  * loading node results: {node_name}')
-            for job in collect_prog:
-                job.result()
-                fpath, index, metrics, params, param_types = job.result()
-                if params:
-                    cols['metrics'].append(metrics)
-                    cols['params'].append(params)
-                    cols['index'].append(index)
-                    cols['param_types'].append(param_types)
-                    # To make hashing consistent we need to know which
-                    # parameters were explicitly specified
-                    cols['specified_params'].append({k: 1 for k in params})
-                    cols['fpaths'].append(fpath)
-                    # cols['json_info'].append(result['json_info'])
-                else:
-                    num_ignored += 1
-
-            params = pd.DataFrame(cols['params'])
-            # trunc_params, mappings = util_pandas.pandas_truncate_items(params)
-            results = {
-                # 'mappings': mappings,
-                'fpaths': pd.DataFrame(cols['fpaths'], columns=['fpath']),
-                'index': pd.DataFrame(cols['index']),
-                'metrics': pd.DataFrame(cols['metrics']),
-                'params': pd.DataFrame(cols['params']),
-                'specified_params': pd.DataFrame(cols['specified_params']),
-                # 'trunc_params': trunc_params,
-                'param_types': pd.DataFrame(cols['param_types']),
-            }
-            eval_type_to_results[node_name] = results
-
-    return eval_type_to_results
-
-
-def load_result_worker(fpath, node_name, out_node_key):
-    """
-    Ignore:
-        fpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_testpipe/eval/flat/bas_poly_eval/bas_poly_eval_id_1ad531cc/poly_eval.json')
-        node_name = 'bas_poly_eval'
-        out_node_key = 'bas_poly_eval.eval_fpath'
-
-    """
-
-    if node_name == 'bas_pxl_eval':
-        result_loader_fn = smart_result_parser.load_bas_pxl_eval
-    elif node_name == 'bas_poly_eval':
-        result_loader_fn = smart_result_parser.load_bas_poly_eval
-    elif node_name == 'sc_poly_eval':
-        result_loader_fn = smart_result_parser.load_sc_poly_eval
-    else:
-        raise KeyError(node_name)
-
-    result = result_loader_fn(fpath)
-
-    # TODO: better way to get config
-    job_config_fpath = fpath.parent / 'job_config.json'
-    if job_config_fpath.exists():
-        config_ = json.loads(job_config_fpath.read_text())
-    else:
-        config_ = {}
-
-    region_ids = result['json_info']['region_ids']
-    if True:
-        # Munge data to get the region ids we expect
-        import re
-        region_pat = re.compile(r'[A-Z][A-Z]_R\d\d\d')
-        region_ids = ','.join(list(region_pat.findall(region_ids)))
-
-    index = {
-        'type': out_node_key,
-        'region_id': region_ids,
-    }
-    metrics = smart_result_parser._add_prefix(node_name + '.metrics.', result['metrics'])
-    params = smart_result_parser._add_prefix(node_name + '.params.', config_)
-    # These are the old way of loading params, but they are also
-    # the resolved params, which we should take into account
-    param_types = result['param_types']
-    param_types = ub.udict.union({}, *list(param_types.values()))
-
-    return fpath, index, metrics, params, param_types
-
-
 def build_aggregators(eval_type_to_results, agg_dpath):
     eval_type_to_aggregator = {}
     for key, results in eval_type_to_results.items():
-        agg = Aggregator(results, type=key)
-        agg.agg_dpath = agg_dpath
+        agg = Aggregator(results, type=key, agg_dpath=agg_dpath)
         # FIXME: if there are no results, don't try to build?
         agg.build()
         eval_type_to_aggregator[key] = agg
@@ -1047,19 +885,37 @@ class Aggregator(ub.NiceRepr):
         agg.primary_metric_cols
         agg.display_metric_cols
     """
-    def __init__(agg, results, type=None,
-                 primary_metric_cols='auto',
-                 display_metric_cols='auto'):
+    def __init__(agg, results, type=None, agg_dpath=None,
+                 primary_metric_cols='auto', display_metric_cols='auto'):
+        agg.agg_dpath = agg_dpath
         agg.results = results
         agg.type = type
         agg.metrics = results['metrics']
-        agg.params = results['params']
+        agg.params = results['requested_params']
         agg.index = results['index']
-        agg.fpaths = results['fpaths']['fpath']
+        agg.fpaths = results['fpath']
+
         agg.config = {
             'display_metric_cols': display_metric_cols,
             'primary_metric_cols': primary_metric_cols,
         }
+
+    def __export(agg):
+        ...
+        ub.udict(agg.results).map_values(type)
+        agg.table = pd.concat(list(agg.results.values()), axis=1, verify_integrity=True)
+        for col in agg.table.columns:
+            vs = agg.table[col]
+            if list in set(vs.apply(type)):
+                print(col)
+
+        fpath = 'bas_results_2023-01.csv.zip'
+        agg.table.to_csv(fpath, index_label=False)
+        # csv_fpath = ub.Path('bas_results_2023-01.csv')
+        # csv_fpath.write_text(text)
+        # import io
+        # recon = pd.read_csv(io.StringIO(text))
+        # np.unique(list(map(str, agg.table.applymap(type).values.ravel())))
 
     def __nice__(self):
         return f'{self.type}, n={len(self)}'
@@ -1377,7 +1233,7 @@ class Aggregator(ub.NiceRepr):
 
         # For each unique set of effective parameters compute a hashid
         param_cols = ub.oset(effective_params.columns).difference(agg.test_dset_cols)
-        param_cols = list(param_cols - {'region_id', 'type'})
+        param_cols = list(param_cols - {'region_id', 'node'})
         hashids_v1 = pd.Series([None] * len(agg.index), index=agg.index.index)
         # hashids_v0 = pd.Series([None] * len(agg.index), index=agg.index.index)
         hashid_to_params = {}
@@ -1624,16 +1480,6 @@ def macro_aggregate(agg, group, aggregator):
     agg_parts['fit_params']  = aggregate_param_cols(group_parts['fit_params'])
     agg_parts['specified_params']  = aggregate_param_cols(group_parts['specified_params'], allow_nonuniform=True)
     return agg_parts
-
-
-def out_node_matching_fpaths(out_node):
-    out_template = out_node.template_value
-    parser = parse.Parser(str(out_template))
-    patterns = {n: '*' for n in parser.named_fields}
-    pat = out_template.format(**patterns)
-    mpat = util_pattern.Pattern.coerce(pat)
-    fpaths = list(mpat.paths())
-    return fpaths
 
 
 def hash_param(row, version=1):

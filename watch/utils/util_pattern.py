@@ -46,6 +46,24 @@ class PatternBase:
 #         return True
 
 
+def _maybe_expandable_glob(pat):
+    """
+    Determine if a string might be a expandable glob pattern by looking for
+    special glob characters: *, ? and [].
+
+    Note:
+        ! is also special, but always inside of a [] braket, so we dont need to
+        check it.
+
+    Returns:
+        bool: if False then the input is 100% not an expandable glob pattern
+            (although it could still be a glob pattern, but it is equivalant to
+            strict matching). if True, then there are special glob characters
+            in the string, but it is not guarenteed to be a valid glob pattern.
+    """
+    return ('*' in pat or '?' in pat or ('[' in pat and ']' in pat))
+
+
 class Pattern(PatternBase, ub.NiceRepr):
     """
     Provides a common API to several common pattern matching syntaxes.
@@ -139,12 +157,24 @@ class Pattern(PatternBase, ub.NiceRepr):
         return self
 
     @classmethod
-    def coerce_backend(cls, data, hint='glob'):
+    def coerce_backend(cls, data, hint='auto'):
+        """
+        Example:
+            >>> from watch.utils.util_pattern import *  # NOQA
+            >>> assert Pattern.coerce_backend('foo', hint='auto') == 'strict'
+            >>> assert Pattern.coerce_backend('foo*', hint='auto') == 'glob'
+            >>> assert Pattern.coerce_backend(re.compile('foo*'), hint='auto') == 'regex'
+        """
         if isinstance(data, RE_Pattern):
             backend = 'regex'
         elif isinstance(data, cls) or type(data).__name__ == cls.__name__:
             backend = data.backend
         else:
+            if hint == 'auto':
+                hint = 'glob'
+                if isinstance(data, str):
+                    if not _maybe_expandable_glob(data):
+                        hint = 'strict'
             backend = hint
         return backend
 
@@ -179,7 +209,7 @@ class Pattern(PatternBase, ub.NiceRepr):
             raise KeyError(self.backend)
 
     @classmethod
-    def coerce(cls, data, hint='glob'):
+    def coerce(cls, data, hint='auto'):
         """
         Example:
             >>> pat = Pattern.coerce('foo*', 'glob')
@@ -267,8 +297,17 @@ class MultiPattern(PatternBase, ub.NiceRepr):
         return new
 
     @classmethod
-    def coerce(cls, data, hint='glob', predicate='any'):
+    def coerce(cls, data, hint='auto', predicate='any'):
         """
+        Args:
+            data (str | List | Pattern | PathLike | MultiPattern)
+
+            hint (str):
+                can be 'glob', 'regex', 'strict' or 'auto'. In 'auto' we will
+                use 'glob' if the input is a string and '*' is in the pattern,
+                otherwise we will use strict. Pattern inputs keep their
+                existing interpretation.
+
         Example:
             >>> pat = MultiPattern.coerce('foo*', 'glob')
             >>> pat2 = MultiPattern.coerce(pat, 'regex')
@@ -278,6 +317,12 @@ class MultiPattern(PatternBase, ub.NiceRepr):
             >>> print('pat2 = {}'.format(ub.repr2(pat2, nl=1)))
             >>> print('pat3 = {!r}'.format(pat3))
             >>> print('pat4 = {!r}'.format(pat4))
+
+            >>> pat00 = MultiPattern.coerce('foo', 'glob')
+            >>> pat01 = MultiPattern.coerce('foo*', 'glob')
+            >>> pat02 = MultiPattern.coerce('foo*', 'regex')
+            >>> pat5 = MultiPattern.coerce(['foo', 'foo*', pat, pat00, pat01, pat02])
+            >>> print(f'pat5={pat5}')
 
         Example:
             >>> # Test all acceptable input types

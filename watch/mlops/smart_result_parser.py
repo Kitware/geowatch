@@ -17,6 +17,7 @@ import json
 import ubelt as ub
 import io
 import pandas as pd
+from watch.utils import util_pattern
 
 
 def partition_params():
@@ -28,10 +29,22 @@ def parse_json_header(fpath):
     Ideally the information we need is in the first few bytes of the json file
     """
     from watch.utils import ijson_ext
-    with open(fpath, 'r') as file:
+    import zipfile
+    if zipfile.is_zipfile(fpath):
+        # We have a compressed json file, but we can still read the header
+        # fairly quickly.
+        zfile = zipfile.ZipFile(fpath)
+        names = zfile.namelist()
+        assert len(names) == 1
+        member = names[0]
+        # Stream the header directly from the zipfile.
+        file = zfile.open(member, 'r')
+    else:
+        # Normal json file
+        file = open(fpath, 'r')
+
+    with file:
         # We only expect there to be one info section
-        # file.seek(0)
-        # iii = ijson_ext.items(file, '')
         info_section_iter = ijson_ext.items(file, prefix='info')
         info_section = next(info_section_iter)
     return info_section
@@ -49,7 +62,7 @@ def trace_json_lineage(fpath):
 
     # TODO:
     # uniqify by uuid
-    for proc in list(find_info_items(info_section, 'process')):
+    for proc in list(find_info_items(info_section, {'process', 'process_context'})):
         name = proc['properties']['name']
         if name not in {'coco_align_geotiffs'}:
             print(f'name={name}')
@@ -62,15 +75,26 @@ def trace_json_lineage(fpath):
 # def trace_kwcoco_lineage(fpath):
 def load_iarpa_evaluation(fpath):
     """
+    Args:
+        fpath (PathLike | str):
+            path to the IARPA summary json file
+
+    Returns:
+        Dict: containing keys:
+            metrics -
+                which just contains a flat Dict[str, float] metric dictionary
+            iarpa_info -
+                which contains ALL of the information parsed out of the summary json file.
+
     Ignore:
         fpath = '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-BAS/eval/trk/package_epoch0_step41.pt.pt/Drop4-BAS_KR_R001.kwcoco/trk_pxl_fd9e1a95/trk_poly_9f08fb8c/merged/summary2.json'
     """
-    iarpa_info = _load_json(fpath)
+    iarpa_json = _load_json(fpath)
     metrics = {}
     unique_regions = set()
-    if 'best_bas_rows' in iarpa_info:
+    if 'best_bas_rows' in iarpa_json:
         best_bas_rows = pd.read_json(
-            io.StringIO(json.dumps(iarpa_info['best_bas_rows'])),
+            io.StringIO(json.dumps(iarpa_json['best_bas_rows'])),
             orient='table')
         bas_row = best_bas_rows.loc['__macro__'].reset_index().iloc[0]
 
@@ -97,15 +121,15 @@ def load_iarpa_evaluation(fpath):
             best_bas_rows.index.levels[best_bas_rows.index.names.index('region_id')].difference({'__macro__', '__micro__'})
         )
 
-    if 'sc_df' in iarpa_info:
-        sc_json_data = iarpa_info['sc_df']
+    if 'sc_df' in iarpa_json:
+        sc_json_data = iarpa_json['sc_df']
         sc_json_text = json.dumps(sc_json_data)
         try:
             sc_df = pd.read_json(io.StringIO(sc_json_text), orient='table')
         except pd.errors.IntCastingNaNError:
             # This seems like a pandas bug. It looks like it can save a Int64
             # with NaN exteions, but it can't load it back in.
-            sc_json_data = iarpa_info['sc_df']
+            sc_json_data = iarpa_json['sc_df']
             walker = ub.IndexableWalker(sc_json_data)
             for path, val in walker:
                 if path[-1] == 'extDtype' and val == 'Int64':
@@ -134,24 +158,50 @@ def load_iarpa_evaluation(fpath):
 
     # quick and dirty way to get access to single-region results
     region_ids = ','.join(sorted(unique_regions))
-    iarpa_info['region_ids'] = region_ids
+    iarpa_json['region_ids'] = region_ids
 
-    return metrics, iarpa_info
+    iarpa_result = {
+        'metrics': metrics,
+        'iarpa_json': iarpa_json,
+    }
+    return iarpa_result
 
 
 def load_bas_poly_eval(fpath, expt_dvc_dpath=None, arg_prefix='trk.'):
-    metrics, iarpa_info = load_iarpa_evaluation(fpath)
-    tracker_info = iarpa_info['parent_info']
+    """
+    fpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_testpipe/eval/flat/bas_poly_eval/bas_poly_eval_id_1ad531cc/poly_eval.json')
+    expt_dvc_dpath = None
+    arg_prefix = ''
+    """
+    iarpa_result = load_iarpa_evaluation(fpath)
+    iarpa_json = iarpa_result['iarpa_json']
+    metrics = iarpa_result['metrics']
+
+    tracker_info = iarpa_json['parent_info']
+
+    if 0:
+        from watch.utils.util_dotdict import indexable_to_graph
+        data = tracker_info
+        graph = indexable_to_graph(data)
+        for n in graph.nodes:
+            name = n.split('.')[-1]
+            if name in {'args', 'config', 'machine', 'disk_info', 'device_info'}:
+                graph.nodes[n]['collapse'] = True
+        from cmd_queue.util.util_networkx import write_network_text
+        import rich
+        write_network_text(graph, path=rich.print, end='', max_depth=None)
+
     param_types = parse_tracker_params(tracker_info, expt_dvc_dpath, arg_prefix=arg_prefix)
-    extra_attrs = _add_prefix(arg_prefix + 'poly.metrics.', metrics)
+
+    # extra_attrs = _add_prefix(arg_prefix + 'poly.metrics.', metrics)
     info = {
         'fpath': fpath,
         'metrics': metrics,
         'param_types': param_types,
-        'other': {
-            'extra_attrs': extra_attrs,
-        },
-        'json_info': iarpa_info,
+        # 'other': {
+        #     'extra_attrs': extra_attrs,
+        # },
+        'json_info': iarpa_json,
     }
     return info
 
@@ -205,8 +255,11 @@ def _handle_crop_and_trk_params(param_types, expt_dvc_dpath):
         dset_source = 'tracker'
 
     crop_dataset = _load_json(act_pxl_test_dset)
-    crop_item = list(
-        find_info_items(crop_dataset['info'], 'process', 'coco_align_geotiffs'))[-1]
+    crop_item = list(find_info_items(
+        crop_dataset['info'],
+        {'process', 'process_context'},
+        'coco_align_geotiffs'
+    ))[-1]
     # This is the path to either truth or the tracks we cropped from
     region_fpath = crop_item['properties']['args']['regions']
 
@@ -236,12 +289,38 @@ def _handle_crop_and_trk_params(param_types, expt_dvc_dpath):
 
 def parse_tracker_params(tracker_info, expt_dvc_dpath=None, arg_prefix=''):
     """
+    Args:
+        tracker_info (List[Dict]):
+            This should be the "info" section of a tracker result (i.e. "info"
+            in the kwcoco json or geojson manifest file), which is a list of
+            process context dictionaries. One of these dictionaries will have a
+            process name "watch.cli.kwcoco_to_geojson" or
+            "watch.cli.run_tracker", and that item will contain the config used
+            to run the tracker. It may also contain an "extra.pred_info"
+            property containing the pixel prediction params, and that may
+            contain the training configuration.
+
     Note:
         This is tricky because we need to find a way to differentiate if this
         was a trk or bas tracker.
     """
     track_item = find_track_item(tracker_info)
+
     track_item = _handle_process_item(track_item)
+
+    if 0:
+        from watch.utils.util_dotdict import indexable_to_graph
+        graph = indexable_to_graph(track_item)
+        for n in graph.nodes:
+            name = n.split('.')[-1]
+            if name in {
+                    # 'args',
+                    # 'config',
+                    'machine', 'disk_info', 'device_info', 'fit_config', 'emissions'}:
+                graph.nodes[n]['collapse'] = True
+        from cmd_queue.util.util_networkx import write_network_text
+        import rich
+        write_network_text(graph, path=rich.print, end='', max_depth=None)
 
     if 'extra' in track_item['properties']:
         pred_info = track_item['properties']['extra']['pred_info']
@@ -299,9 +378,8 @@ def _handle_process_item(item):
     return item
 
 
-def load_bas_pxl_eval(fpath, expt_dvc_dpath=None, arg_prefix='', mode=0):
+def load_pxl_eval(fpath, expt_dvc_dpath=None, arg_prefix='', mode=0, with_param_types=True):
     from kwcoco.coco_evaluator import CocoSingleResult
-    from watch.utils import util_pattern
     # from watch.utils import result_analysis
     # from watch.utils import util_time
     measure_info = _load_json(fpath)
@@ -310,15 +388,6 @@ def load_bas_pxl_eval(fpath, expt_dvc_dpath=None, arg_prefix='', mode=0):
 
     pred_info = meta['info']
     dvc_dpath = expt_dvc_dpath
-    param_types = parse_pred_pxl_params(pred_info, dvc_dpath, arg_prefix=arg_prefix, mode=mode)
-
-    if mode == 0:
-        predict_args = param_types[arg_prefix + 'pxl']
-    else:
-        predict_args = None
-
-    if predict_args is None:
-        raise Exception('no prediction metadata')
 
     salient_measures = measure_info['nocls_measures']
     class_measures = measure_info['ovr_measures']
@@ -365,18 +434,37 @@ def load_bas_pxl_eval(fpath, expt_dvc_dpath=None, arg_prefix='', mode=0):
         metrics[class_row['catname'] + '_AUC'] = class_row['AUC']
 
     result = CocoSingleResult.from_json(measure_info)
+    json_info = measure_info.copy()
 
-    HACK_HANDLE_CROPPED_AND_TRACK_PARAMS = 1
-    if HACK_HANDLE_CROPPED_AND_TRACK_PARAMS and arg_prefix == 'act.':
-        try:
-            trk_param_types, extra_attrs = _handle_crop_and_trk_params(
-                param_types, expt_dvc_dpath)
-            param_types.update(trk_param_types)
-        except Exception:
+    if with_param_types:
+        param_types = parse_pred_pxl_params(pred_info, dvc_dpath, arg_prefix=arg_prefix, mode=mode)
+
+        if mode == 0:
+            predict_args = param_types[arg_prefix + 'pxl']
+        else:
+            predict_args = None
+
+        if predict_args is None:
+            raise Exception('no prediction metadata')
+
+        HACK_HANDLE_CROPPED_AND_TRACK_PARAMS = 1
+        if HACK_HANDLE_CROPPED_AND_TRACK_PARAMS and arg_prefix == 'act.':
+            try:
+                trk_param_types, extra_attrs = _handle_crop_and_trk_params(
+                    param_types, expt_dvc_dpath)
+                param_types.update(trk_param_types)
+            except Exception:
+                extra_attrs = {}
+        else:
             extra_attrs = {}
+        extra_attrs.update(_add_prefix(arg_prefix + 'pxl.metrics.', metrics))
+        # quick and dirty way to get access to single-region results
+        # This is not robust, done because it wasnt clear how to get
+        # the equivalent test dataset for polygon eval variants.
+        json_info['region_ids'] = ub.Path(predict_args['pxl.test_dataset']).name.split('.')[0]
     else:
         extra_attrs = {}
-    extra_attrs.update(_add_prefix(arg_prefix + 'pxl.metrics.', metrics))
+        param_types = None
 
     info = {
         'fpath': fpath,
@@ -389,13 +477,9 @@ def load_bas_pxl_eval(fpath, expt_dvc_dpath=None, arg_prefix='', mode=0):
             # 'sc_cm': sc_cm,
             # 'sc_df': sc_df,
         },
-        'json_info': measure_info.copy(),
+        'json_info': json_info,
     }
 
-    # quick and dirty way to get access to single-region results
-    # This is not robust, done because it wasnt clear how to get
-    # the equivalent test dataset for polygon eval variants.
-    info['json_info']['region_ids'] = ub.Path(predict_args['pxl.test_dataset']).name.split('.')[0]
     return info
 
 
@@ -537,7 +621,7 @@ def relevant_pred_pxl_config(pred_pxl_config, dvc_dpath=None, arg_prefix=''):
     return pred_config
 
 
-def relevant_fit_config(fit_config, arg_prefix=''):
+def relevant_fit_config(fit_config, arg_prefix='', add_prefix=True):
     ignore_params = {
         'default_root_dir', 'enable_progress_bar'
         'prepare_data_per_node', 'enable_model_summary', 'checkpoint_callback',
@@ -574,7 +658,8 @@ def relevant_fit_config(fit_config, arg_prefix=''):
     if 'init' in fit_config2:
         # hack to make init only use the filename
         fit_config2['init'] = fit_config2['init'].split('/')[-1]
-    fit_config2 = _add_prefix(arg_prefix + 'fit.', fit_config2)
+    if add_prefix:
+        fit_config2 = _add_prefix(arg_prefix + 'fit.', fit_config2)
     return fit_config2
 
 
@@ -584,7 +669,7 @@ def relevant_track_config(track_args, arg_prefix=''):
     return track_config
 
 
-def parse_resource_item(item, arg_prefix=''):
+def parse_resource_item(item, arg_prefix='', add_prefix=True):
     from watch.utils import util_time
 
     resources = {}
@@ -600,6 +685,9 @@ def parse_resource_item(item, arg_prefix=''):
     if iters_per_second is not None:
         resources['iters_per_second'] = iters_per_second
 
+    if 'duration' in pred_prop:
+        resources['duration'] = pred_prop['duration']
+
     try:
         vram = pred_prop['device_info']['allocated_vram']
         vram_gb = ureg.parse_expression(f'{vram} bytes').to('gigabytes').m
@@ -610,10 +698,11 @@ def parse_resource_item(item, arg_prefix=''):
     hardware_parts = []
 
     import re
-    cpu_name = pred_prop['machine']['cpu_brand']
-    cpu_name = re.sub('.*Gen Intel.R. Core.TM. ', '', cpu_name)
-    resources['cpu_name'] = cpu_name
-    hardware_parts.append(cpu_name)
+    if 'machine' in pred_prop:
+        cpu_name = pred_prop['machine']['cpu_brand']
+        cpu_name = re.sub('.*Gen Intel.R. Core.TM. ', '', cpu_name)
+        resources['cpu_name'] = cpu_name
+        hardware_parts.append(cpu_name)
 
     try:
         gpu_name = pred_prop['device_info']['device_name']
@@ -633,25 +722,45 @@ def parse_resource_item(item, arg_prefix=''):
         resources['disk_type'] = disk_type
 
     resources['hardware'] = ' '.join(hardware_parts)
-    resources = _add_prefix(arg_prefix + 'resource.', resources)
+    if add_prefix:
+        resources = _add_prefix(arg_prefix + 'resource.', resources)
     return resources
 
 
 def find_pred_pxl_item(pred_info):
-    pred_items = list(find_info_items(pred_info, 'process', 'watch.tasks.fusion.predict'))
+    pred_items = list(find_info_items(
+        pred_info,
+        {'process', 'process_context'},
+        'watch.tasks.fusion.predict'
+    ))
     assert len(pred_items) == 1
     pred_item = pred_items[0]
     return pred_item
 
 
+def matches(item, query):
+    ...
+
+
 def find_info_items(info, query_type, query_name=None):
+    from watch.utils import util_pattern
+    if query_name is None:
+        query_name = '*'
+    query_name_pattern = util_pattern.MultiPattern.coerce(query_name)
+    query_type_pattern = util_pattern.MultiPattern.coerce(query_type)
     for item in info:
-        if item['type'] == query_type:
-            if query_name is None or item['properties']['name'] == query_name:
+        if query_type_pattern.match(item['type']):
+            name = item['properties']['name']
+            if query_name_pattern.match(name):
                 yield item
 
 
 def parse_pred_pxl_params(pred_info, expt_dvc_dpath=None, arg_prefix='', mode=0):
+    """
+    Args:
+        pred_info (List[Dict]):
+            the info written to a heatmap prediction kwcoco
+    """
     pred_item = find_pred_pxl_item(pred_info)
     pred_item = _handle_process_item(pred_item)
 
@@ -703,10 +812,64 @@ def _load_json(fpath):
 
 
 def find_track_item(tracker_info):
-    track_items = list(find_info_items(tracker_info, 'process', 'watch.cli.kwcoco_to_geojson'))
-    assert len(track_items) == 1
+    tracker_alias = {
+        'watch.cli.kwcoco_to_geojson',
+        'watch.cli.run_tracker',
+    }
+    track_items = list(find_info_items(
+        tracker_info,
+        {'process', 'process_context'},
+        tracker_alias
+    ))
+    if len(track_items) != 1:
+        raise AssertionError(ub.paragraph(
+            f'''
+            We should be able to find exactly 1 tracker process item,
+            but instead we found {len(track_items)}
+            '''))
+        ...
     track_item = track_items[0]
     return track_item
+
+
+def find_metrics_framework_item(info):
+    task_aliases = {
+        'watch.cli.run_metrics_framework',
+    }
+    items = list(find_info_items(
+        info,
+        {'process', 'process_context'},
+        task_aliases
+    ))
+    if len(items) != 1:
+        raise AssertionError(ub.paragraph(
+            f'''
+            We should be able to find exactly 1 tracker process item,
+            but instead we found {len(items)}
+            '''))
+        ...
+    item = items[0]
+    return item
+
+
+def find_pxl_eval_item(info):
+    task_aliases = {
+        'watch.tasks.fusion.evaluate',
+    }
+    items = list(find_info_items(
+        info,
+        {'process', 'process_context'},
+        task_aliases
+    ))
+    if len(items) != 1:
+        raise AssertionError(ub.paragraph(
+            f'''
+            We should be able to find exactly 1 tracker process item,
+            but instead we found {len(items)}
+            '''))
+        ...
+    item = items[0]
+    return item
 
 
 def shrink_channels(x):

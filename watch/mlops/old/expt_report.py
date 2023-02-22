@@ -616,10 +616,10 @@ def load_extended_data(df, expt_dvc_dpath):
         fpath = row['raw']
         try:
             if row['type'] == 'eval_trk_pxl_fpath':
-                pxl_info = frp.load_bas_pxl_eval(fpath, expt_dvc_dpath, arg_prefix='trk.')
+                pxl_info = frp.load_pxl_eval(fpath, expt_dvc_dpath, arg_prefix='trk.')
                 big_row['info'] = pxl_info
             elif row['type'] == 'eval_act_pxl_fpath':
-                pxl_info = frp.load_bas_pxl_eval(fpath, expt_dvc_dpath, arg_prefix='act.')
+                pxl_info = frp.load_pxl_eval(fpath, expt_dvc_dpath, arg_prefix='act.')
                 big_row['info'] = pxl_info
             elif row['type'] == 'eval_act_poly_fpath':
                 sc_info = frp.load_sc_poly_eval(fpath, expt_dvc_dpath)
