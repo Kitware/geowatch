@@ -56,7 +56,7 @@ SENSOR_TO_INFO = {}
 SENSOR_TO_INFO['L8'] = {
     'sensor_name': 'Landsat-8',
     'intensity_channels': 'blue|green|red|nir|swir16|swir22|lwir11',
-    'quality_channels': 'cloudmask',
+    'quality_channels': 'quality',
     'quality_interpretation': 'FMASK'
     } # The name of quality_channels for Drop 4 is 'cloudmask'.
 
@@ -90,17 +90,20 @@ def main(cmdline=1, **kwargs):
         cmdline (int, optional): _description_. Defaults to 1. 
         
     Ignore:
-    python -m watch.tasks.cold.prepare_kwcoco --help
-    from watch.tasks.cold.prepare_kwcoco import main
-    from watch.tasks.cold.prepare_kwcoco import *
-    kwargs= dict(        
-    coco_fpath = ub.Path.appdir('/home/jws18003/data/dvc-repos/smart_data_dvc/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/US_C000'),
-    out_dpath = ub.Path.appdir('/gpfs/scratchfs1/zhz18039/jws18003/kwcoco'),
-    adj_cloud = False,
-    method = None,
-    )
-    cmdline=0    
-    main(cmdline, **kwargs)
+        python -m watch.tasks.cold.prepare_kwcoco --help
+        TEST_COLD=1 xdoctest -m watch.tasks.cold.prepare_kwcoco main
+
+    Example:
+    >>> from watch.tasks.cold.prepare_kwcoco import main
+    >>> from watch.tasks.cold.prepare_kwcoco import *
+    >>> kwargs= dict(        
+    >>>   coco_fpath = ub.Path('/home/jws18003/data/dvc-repos/smart_data_dvc/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/KR_R001/data_KR_R001.kwcoco.json'),
+    >>>   out_dpath = ub.Path.appdir('/gpfs/scratchfs1/zhz18039/jws18003/kwcoco'),
+    >>>   adj_cloud = False,
+    >>>   method = None,
+    >>> )
+    >>> cmdline=0    
+    >>> main(cmdline, **kwargs)
     """
     config = PrepareKwcocoConfig.legacy(cmdline=cmdline, data=kwargs)
     coco_fpath = config['coco_fpath']
@@ -141,7 +144,7 @@ def qa_decoding_no_boundary(qa_array):
     This function is modified from qabitval_array_HLS function
     (https://github.com/GERSL/pycold/blob/c5b380eccc2916e5c3aec0bbd2b1982e114b75b1/src/python/pycold/imagetool/prepare_ard.py#L74)
     """
-    unpacked = np.full(qa_array.shape, QA_INTERPRETATIONS['FMASK']['clear'])
+    unpacked = np.full(qa_array.shape, QA_INTERPRETATIONS['FMASK']['clear'])  
 
     QA_CLOUD_unpacked = geek.bitwise_and(qa_array, QA_BIT['cloud'])
     QA_CLOUD_ADJ = geek.bitwise_and(qa_array, QA_BIT['cloud_adj'])
@@ -264,23 +267,17 @@ def stack_kwcoco(coco_fpath, out_dir, adj_cloud, method):
     # Load the kwcoco dataset
     dset = kwcoco.CocoDataset.coerce(coco_fpath)
     videos = dset.videos()
-    # results = []
 
     for video_id in videos:
+        # Get the image ids of each image in this video seqeunce
+        for image_id in dset.images():
+            coco_image : kwcoco.CocoImage = dset.coco_image(image_id)
+            coco_image = coco_image.detach()
 
-        if video_id == 17: # testing for US_C000 site
-            # Get the image ids of each image in this video seqeunce
-            images = dset.images(video_id=video_id)
-
-            for image_id in images:
-                coco_image : kwcoco.CocoImage = dset.coco_image(image_id)
-                coco_image = coco_image.detach()
-
-                # For now, it supports only L8
-                if coco_image.img['sensor_coarse'] == 'L8':
-                    # Transform the image data into the desired block structure.
-                    result = process_one_coco_image(coco_image, out_dir, adj_cloud, method)
-                    # results.append(result)
+            # For now, it supports only L8
+            if coco_image.img['sensor_coarse'] == 'L8':
+                # Transform the image data into the desired block structure.
+                result = process_one_coco_image(coco_image, out_dir, adj_cloud, method)
 
     return result
 
@@ -339,7 +336,6 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
     # as well as align it with other images in the sequence.
     delayed_im = coco_image.delay(channels=intensity_channels, **delay_kwargs)
     delayed_qa = coco_image.delay(channels=quality_channels, **delay_kwargs)
-
     # Check what shape the data would be loaded with if we finalized right now.
     h, w = delayed_im.shape[0:2]
     # Determine if padding is necessary to properly break the data into blocks.
@@ -392,10 +388,7 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
         result['status'] = 'failed'
         return result
 
-    im_data = delayed_im.finalize(interpolation='cubic', antialias=True)
-
-    # NOTE: if we enable a nodata method, we will need to handle it here.
-    # NOTE: if any intensity modification needs to be done handle it here.
+    im_data = delayed_im.finalize(interpolation='cubic', antialias=True)   
     
     if method == 'ASI':
         Scale = 10000
@@ -439,9 +432,6 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
     
     result_fpaths = []
 
-    # TODO:
-    # save necessary metadata alongside the npy file so we don't have
-    # to rely on file names.
     metadata = {
         'image_name' : image_name,
         'date_captured': date_captured,
@@ -449,6 +439,8 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
         'region_id': video_name,
         'n_cols': n_cols,
         'n_rows': n_rows,
+        'video_w': w,
+        'video_h': h,
         'padded_n_cols': padded_w,
         'padded_n_rows': padded_h,
         'n_block_x': n_block_x,
