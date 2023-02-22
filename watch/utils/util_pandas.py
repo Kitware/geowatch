@@ -152,6 +152,9 @@ class DotDictDataFrame(pd.DataFrame):
 
     Is there another library out there that does this?
 
+    SeeAlso:
+        DotDict
+
     Example:
         >>> from watch.utils.util_pandas import *  # NOQA
         >>> rows = [
@@ -241,11 +244,31 @@ class DotDictDataFrame(pd.DataFrame):
     def lookup_suffix_columns(self, col):
         return self._column_suffix_trie.values(col)
 
+    def lookup_prefix_columns(self, col):
+        return self._column_prefix_trie.values(col)
+
     def find_columns(self, pat, hint='glob'):
         from watch.utils import util_pattern
         pat = util_pattern.Pattern.coerce(pat, hint=hint)
         found = [c for c in self.columns if pat.match(c)]
         return found
+
+    def subframe(self, key, drop_prefix=True):
+        """
+        Given a prefix key, return the subet columns that match it with the
+        stripped prefix.
+        """
+        lookup_keys = []
+        new_keys = []
+        for c in self.columns:
+            path = c.split('.')
+            if path[0] == key:
+                lookup_keys.append(c)
+                new_keys.append('.'.join(path[1:]))
+        new = self[lookup_keys]
+        if drop_prefix:
+            new.rename(ub.dzip(lookup_keys, new_keys), inplace=True, axis=1)
+        return new
 
     def __getitem__(self, cols):
         if isinstance(cols, str):

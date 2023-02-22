@@ -16,14 +16,15 @@ import warnings
 import json
 import ubelt as ub
 import io
+import xdev
 import pandas as pd
+import re
+from watch.utils import util_time
 from watch.utils import util_pattern
 
 
-def partition_params():
-    pass
-
-
+@ub.memoize
+@xdev.profile
 def parse_json_header(fpath):
     """
     Ideally the information we need is in the first few bytes of the json file
@@ -44,12 +45,23 @@ def parse_json_header(fpath):
         file = open(fpath, 'r')
 
     with file:
+        # import ijson
         # We only expect there to be one info section
+        # try:
+        #     # Try our extension if the main library fails (due to NaN)
+        #     info_section_iter = ijson.items(file, prefix='info')
+        #     info_section = next(info_section_iter)
+        # except ijson.IncompleteJSONError:
+        # Try our extension if the main library fails (due to NaN)
+        # file.seek(0)
+
+        # Nans are too frequent, only use our extension
         info_section_iter = ijson_ext.items(file, prefix='info')
         info_section = next(info_section_iter)
     return info_section
 
 
+@xdev.profile
 def trace_json_lineage(fpath):
     """
     We will expect a json file to contain a top-level "info" section that
@@ -73,6 +85,7 @@ def trace_json_lineage(fpath):
 
 
 # def trace_kwcoco_lineage(fpath):
+@xdev.profile
 def load_iarpa_evaluation(fpath):
     """
     Args:
@@ -167,6 +180,7 @@ def load_iarpa_evaluation(fpath):
     return iarpa_result
 
 
+@xdev.profile
 def load_bas_poly_eval(fpath, expt_dvc_dpath=None, arg_prefix='trk.'):
     """
     fpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_testpipe/eval/flat/bas_poly_eval/bas_poly_eval_id_1ad531cc/poly_eval.json')
@@ -206,6 +220,7 @@ def load_bas_poly_eval(fpath, expt_dvc_dpath=None, arg_prefix='trk.'):
     return info
 
 
+@xdev.profile
 def load_sc_poly_eval(fpath, expt_dvc_dpath=None, arg_prefix='act.'):
     metrics, iarpa_info = load_iarpa_evaluation(fpath)
 
@@ -238,6 +253,7 @@ def load_sc_poly_eval(fpath, expt_dvc_dpath=None, arg_prefix='act.'):
     return info
 
 
+@xdev.profile
 def _handle_crop_and_trk_params(param_types, expt_dvc_dpath):
     from watch.mlops import expt_manager
     act_pxl_test_dset = param_types['act.pxl']['act.pxl.test_dataset']
@@ -287,6 +303,7 @@ def _handle_crop_and_trk_params(param_types, expt_dvc_dpath):
     return trk_param_types, extra_attrs
 
 
+@xdev.profile
 def parse_tracker_params(tracker_info, expt_dvc_dpath=None, arg_prefix=''):
     """
     Args:
@@ -339,6 +356,7 @@ def parse_tracker_params(tracker_info, expt_dvc_dpath=None, arg_prefix=''):
     return param_types
 
 
+@xdev.profile
 def _handle_process_item(item):
     """
     Json data written by the process context has changed over time slightly.
@@ -378,6 +396,7 @@ def _handle_process_item(item):
     return item
 
 
+@xdev.profile
 def load_pxl_eval(fpath, expt_dvc_dpath=None, arg_prefix='', mode=0, with_param_types=True):
     from kwcoco.coco_evaluator import CocoSingleResult
     # from watch.utils import result_analysis
@@ -487,6 +506,7 @@ class Found(Exception):
     pass
 
 
+@xdev.profile
 def resolve_cross_machine_path(path, dvc_dpath=None):
     """
     HACK
@@ -562,10 +582,14 @@ def global_ureg():
     return ureg
 
 
+global_ureg()
+
+
 def _add_prefix(prefix, dict_):
     return {prefix + k: v for k, v in dict_.items()}
 
 
+@xdev.profile
 def relevant_pred_pxl_config(pred_pxl_config, dvc_dpath=None, arg_prefix=''):
     # TODO: better way of inferring what params are relevant
     # This should be metadata a scriptconfig object can hold.
@@ -621,6 +645,7 @@ def relevant_pred_pxl_config(pred_pxl_config, dvc_dpath=None, arg_prefix=''):
     return pred_config
 
 
+@xdev.profile
 def relevant_fit_config(fit_config, arg_prefix='', add_prefix=True):
     ignore_params = {
         'default_root_dir', 'enable_progress_bar'
@@ -663,15 +688,15 @@ def relevant_fit_config(fit_config, arg_prefix='', add_prefix=True):
     return fit_config2
 
 
+@xdev.profile
 def relevant_track_config(track_args, arg_prefix=''):
     track_config = json.loads(track_args['track_kwargs'])
     track_config = _add_prefix(arg_prefix + 'poly.', track_config)
     return track_config
 
 
+@xdev.profile
 def parse_resource_item(item, arg_prefix='', add_prefix=True):
-    from watch.utils import util_time
-
     resources = {}
 
     ureg = global_ureg()
@@ -697,7 +722,6 @@ def parse_resource_item(item, arg_prefix='', add_prefix=True):
 
     hardware_parts = []
 
-    import re
     if 'machine' in pred_prop:
         cpu_name = pred_prop['machine']['cpu_brand']
         cpu_name = re.sub('.*Gen Intel.R. Core.TM. ', '', cpu_name)
@@ -727,6 +751,7 @@ def parse_resource_item(item, arg_prefix='', add_prefix=True):
     return resources
 
 
+@xdev.profile
 def find_pred_pxl_item(pred_info):
     pred_items = list(find_info_items(
         pred_info,
@@ -738,10 +763,7 @@ def find_pred_pxl_item(pred_info):
     return pred_item
 
 
-def matches(item, query):
-    ...
-
-
+@xdev.profile
 def find_info_items(info, query_type, query_name=None):
     from watch.utils import util_pattern
     if query_name is None:
@@ -755,6 +777,7 @@ def find_info_items(info, query_type, query_name=None):
                 yield item
 
 
+@xdev.profile
 def parse_pred_pxl_params(pred_info, expt_dvc_dpath=None, arg_prefix='', mode=0):
     """
     Args:
@@ -811,6 +834,7 @@ def _load_json(fpath):
     return data
 
 
+@xdev.profile
 def find_track_item(tracker_info):
     tracker_alias = {
         'watch.cli.kwcoco_to_geojson',
@@ -832,6 +856,7 @@ def find_track_item(tracker_info):
     return track_item
 
 
+@xdev.profile
 def find_metrics_framework_item(info):
     task_aliases = {
         'watch.cli.run_metrics_framework',
@@ -852,6 +877,7 @@ def find_metrics_framework_item(info):
     return item
 
 
+@xdev.profile
 def find_pxl_eval_item(info):
     task_aliases = {
         'watch.tasks.fusion.evaluate',
@@ -872,6 +898,7 @@ def find_pxl_eval_item(info):
     return item
 
 
+@xdev.profile
 def shrink_channels(x):
     import kwcoco
     aliases = {
@@ -904,6 +931,7 @@ def shrink_channels(x):
     return x
 
 
+@xdev.profile
 def is_teamfeat(sensorchan):
     """
     Check if the sensorchan spec contains a hard coded value we know is a team

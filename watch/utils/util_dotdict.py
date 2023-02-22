@@ -33,6 +33,9 @@ class DotDict(ub.UDict):
     I'm sure this data structure exists on pypi.
     This should be replaced with that if we find it.
 
+    SeeAlso:
+        DotDictDataFrame
+
     Example:
         >>> from watch.utils.util_dotdict import *  # NOQA
         >>> self = DotDict({
@@ -91,13 +94,13 @@ class DotDict(ub.UDict):
             self._trie_cache['prefix_trie'] = _trie
         return self._trie_cache['prefix_trie']
 
-    @property
-    def _suffix_trie(self):
-        if self._trie_cache.get('prefix_trie', None) is None:
-            _trie_data = ub.dzip(self.keys(), self.keys())
-            _trie = pygtrie.StringTrie(_trie_data, separator='.')
-            self._trie_cache['prefix_trie'] = _trie
-        return self._trie_cache['prefix_trie']
+    # @property
+    # def _suffix_trie(self):
+    #     if self._trie_cache.get('suffix_trie', None) is None:
+    #         _trie_data = ub.dzip(self.keys(), self.keys())
+    #         _trie = pygtrie.StringTrie(_trie_data, separator='.')
+    #         self._trie_cache['suffix_trie'] = _trie
+    #     return self._trie_cache['suffix_trie']
 
     def prefix_get(self, key, default=ub.NoParam):
         try:
@@ -118,8 +121,67 @@ class DotDict(ub.UDict):
         """
         Adds a prefix to all items
         """
-        new = self.__class__([(prefix + k, v) for k, v in self.items()])
+        new = self.__class__([(prefix + '.' + k, v) for k, v in self.items()])
         return new
+
+    def insert_prefix(self, prefix, index):
+        """
+        Adds a prefix to all items
+
+        Args:
+            prefix (str): prefix to insert
+            index (int): the depth to insert the new param
+
+        Example:
+            >>> from watch.utils.util_dotdict import *  # NOQA
+            >>> self = DotDict({
+            >>>     'proc1.param1': 1,
+            >>>     'proc1.param2': 2,
+            >>>     'proc2.param1': 3,
+            >>>     'proc4.part1.param2': 8,
+            >>>     'proc4.part2.param2': 9,
+            >>>     'proc4.part2.param2': 10,
+            >>> })
+            >>> new = self.insert_prefix('foo', index=1)
+            >>> print('self = {}'.format(ub.urepr(self, nl=1)))
+            >>> print('new = {}'.format(ub.urepr(new, nl=1)))
+        """
+        def _generate_new_items():
+            sep = '.'
+            for k, v in self.items():
+                path = k.split(sep)
+                path.insert(index, prefix)
+                k2 = sep.join(path)
+                yield k2, v
+        new = self.__class__(_generate_new_items())
+        return new
+
+    def print_graph(self):
+        explore_nested_dict(self)
+
+    def query_keys(self, col):
+        """
+        Finds columns where one level has this key
+
+        Example:
+            >>> from watch.utils.util_dotdict import *  # NOQA
+            >>> self = DotDict({
+            >>>     'proc1.param1': 1,
+            >>>     'proc1.param2': 2,
+            >>>     'proc2.param1': 3,
+            >>>     'proc4.part1.param2': 8,
+            >>>     'proc4.part2.param2': 9,
+            >>>     'proc4.part2.param2': 10,
+            >>> })
+            >>> list(self.query_keys('param1'))
+
+        Ignore:
+            could use _trie_iteritems
+            trie = self._prefix_trie
+        """
+        for key in self.keys():
+            if col in set(key.split('.')):
+                yield key
 
     # def __contains__(self, key):
     #     if super().__contains__(key):

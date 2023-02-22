@@ -119,6 +119,21 @@ def _trie_iternodes(self):
     Generates all nodes in the trie
 
     # Hack into the internal structure and insert frequencies at each node
+
+    Ignore:
+            from watch.utils.util_dotdict import *  # NOQA
+            dat = DotDict({
+                'proc1.param1': 1,
+                'proc1.param2': 2,
+                'proc2.param1': 3,
+                'proc4.part1.param2': 8,
+                'proc4.part2.param2': 9,
+                'proc4.part2.param2': 10,
+            })
+            self = dat._prefix_trie
+            for n in list(_trie_iternodes(self)):
+                print(f'n.value={n.value}')
+                ...
     """
     from collections import deque
     stack = deque([[self._root]])
@@ -130,6 +145,42 @@ def _trie_iternodes(self):
                 stack.append(node.children.values())
             except AttributeError:
                 stack.append([v for k, v in node.children.iteritems()])
+
+
+def _trie_iteritems(self):
+    """
+    Generates all nodes in the trie
+
+    # Hack into the internal structure and insert frequencies at each node
+
+    Ignore:
+        from watch.utils.util_dotdict import *  # NOQA
+        from watch.utils.util_stringalgo import *  # NOQA
+        dat = DotDict({
+            'proc1.param1': 1,
+            'proc1.param2': 2,
+            'proc2.param1': 3,
+            'proc4.part1.param2': 8,
+            'proc4.part2.param2': 9,
+            'proc4.part2.param2': 10,
+        })
+        self = dat._prefix_trie
+        for k, v in list(_trie_iteritems(self)):
+            print(f'k={k}')
+    """
+    from collections import deque
+    sentinel = object()
+    stack = deque([[(sentinel, self._root)]])
+    while stack:
+        level = stack.pop()
+        for key, node in level:
+            if key is not sentinel:
+                yield key, node
+            # only works in pygtrie-2.2 broken in pygtrie-2.3.2
+            try:
+                stack.append(list(node.children.items()))
+            except AttributeError:
+                stack.append(list(node.children.iteritems()))
 
 
 def shortest_unique_suffixes(items, sep=None):

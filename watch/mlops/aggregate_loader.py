@@ -7,6 +7,7 @@ from watch.utils import util_parallel
 from watch.utils import util_dotdict
 import parse
 import json
+import xdev
 
 from watch.mlops import smart_pipeline
 from watch.mlops import smart_result_parser
@@ -126,6 +127,7 @@ def _lookup_result_loader(node_name):
     return result_loader_fn
 
 
+@xdev.profile
 def load_result_worker(fpath, node_name, out_node_key):
     """
     Ignore:
@@ -134,70 +136,79 @@ def load_result_worker(fpath, node_name, out_node_key):
         out_node_key = 'bas_poly_eval.eval_fpath'
     """
     import json
+    from watch.utils import util_json
+    import safer
     fpath = ub.Path(fpath)
-    resolved_json_fpath = fpath.parent / 'resolved_result_row_v3.json'
+    resolved_json_fpath = fpath.parent / 'resolved_result_row_v5.json'
     if resolved_json_fpath.exists():
         # Load the cached row data
         result = json.loads(resolved_json_fpath.read_text())
     else:
-        # TODO: better way to get config
-        job_config_fpath = fpath.parent / 'job_config.json'
+        node_dpath = fpath.parent
+
+        node_dpath = ub.Path(node_dpath)
+        # Read the requested config
+        job_config_fpath = node_dpath / 'job_config.json'
         if job_config_fpath.exists():
             _requested_params = json.loads(job_config_fpath.read_text())
         else:
             _requested_params = {}
 
-        requested_params = util_dotdict.DotDict(_requested_params).add_prefix('params.')
+        requested_params = util_dotdict.DotDict(_requested_params).add_prefix('params')
         specified_params = {'specified.' + k: 1 for k in requested_params}
 
-        # New stuff. Use the DAG to trace config lineage
-        node_dpath = fpath.parent
-        flat = load_result_resolved(node_dpath)
+        # Read the resolved config
+        # (Uses the DAG to trace the result lineage)
+        try:
+            flat = load_result_resolved(node_dpath)
 
-        if True:
-            # Munge data to get the region ids we expect
-            region_ids = None
-            for k, v in flat.items():
-                if 'meta.region_ids' in k:
-                    region_ids = v
-            assert region_ids is not None
-            import re
-            region_pat = re.compile(r'[A-Z][A-Z]_R\d\d\d')
-            region_ids = ','.join(list(region_pat.findall(region_ids)))
+            if True:
+                # Munge data to get the region ids we expect
+                candidate_keys = list(flat.query_keys('region_ids'))
+                region_ids = None
+                for k in candidate_keys:
+                    region_ids = flat[k]
+                assert region_ids is not None
+                import re
+                region_pat = re.compile(r'[A-Z][A-Z]_[A-Z]\d\d\d')
+                region_ids = ','.join(list(region_pat.findall(region_ids)))
 
-        resolved_params_keys = [k for k in flat if '.resolved_params.' in k]
-        metrics_keys = [k for k in flat if '.metrics.' in k]
+            resolved_params_keys = list(flat.query_keys('resolved_params'))
+            metrics_keys = list(flat.query_keys('metrics'))
+            resolved_params = flat & resolved_params_keys
+            metrics = flat & metrics_keys
 
-        resolved_params = flat & resolved_params_keys
-        metrics = flat & metrics_keys
+            other = flat - (resolved_params_keys + metrics_keys)
 
-        other = flat - (resolved_params_keys + metrics_keys)
+            index = {
+                # 'type': out_node_key,
+                'node': node_name,
+                'region_id': region_ids,
+            }
+            result = {
+                'fpath': fpath,
+                'index': index,
+                'metrics': metrics,
+                'requested_params': requested_params,
+                'resolved_params': resolved_params,
+                'specified_params': specified_params,
+                'other': other,
+            }
 
-        index = {
-            # 'type': out_node_key,
-            'node': node_name,
-            'region_id': region_ids,
-        }
-        result = {
-            'fpath': fpath,
-            'index': index,
-            'metrics': metrics,
-            'requested_params': requested_params,
-            'resolved_params': resolved_params,
-            'specified_params': specified_params,
-            'other': other,
-        }
+            # Cache this resolved row data
+            result = util_json.ensure_json_serializable(result)
+        except Exception:
+            print(f'Failed to load results for: {node_name}')
+            print(f'node_dpath={str(node_dpath)!r}')
+            raise
 
-        # Cache this resolved row data
-        from watch.utils import util_json
-        import safer
-        result = util_json.ensure_json_serializable(result)
         with safer.open(resolved_json_fpath, 'w') as file:
             json.dump(result, file)
 
     return result
 
 
+@xdev.profile
 def new_process_context_parser(proc_item):
     tracker_name_pat = util_pattern.MultiPattern.coerce({
         'watch.cli.kwcoco_to_geojson',
@@ -215,22 +226,23 @@ def new_process_context_parser(proc_item):
     # Node-specific hacks
     params = props['config']
     if tracker_name_pat.match(props['name']):
-        params.update(**json.loads(params.pop('track_kwargs')))
+        params.update(**json.loads(params.pop('track_kwargs', '{}')))
     elif heatmap_name_pat.match(props['name']):
         params.pop('datamodule_defaults', None)
     elif pxl_eval_pat.match(props['name']):
         from watch.tasks.fusion import evaluate
         # We can resolve the params to a dictionary in this instance
-        if isinstance(params, list):
-            params = evaluate.SegmentationEvalConfig().load(cmdline=params).to_dict()
+        if isinstance(params, list) or 'true_dataset' not in params:
+            args = props['args']
+            params = evaluate.SegmentationEvalConfig().load(cmdline=args).to_dict()
 
     resources = smart_result_parser.parse_resource_item(proc_item, add_prefix=False)
 
     output = {
         # TODO: better name for this
-        'meta': {
-            'uuid': props.get('uuid', None),
+        'context': {
             'task': props['name'],
+            'uuid': props.get('uuid', None),
             'start_timestamp': props.get('start_timestamp', None),
             'stop_timestamp': props.get('stop_timestamp', props.get('end_timestamp', None)),
         },
@@ -241,6 +253,7 @@ def new_process_context_parser(proc_item):
     return output
 
 
+@xdev.profile
 def load_result_resolved(node_dpath):
     """
     Recurse through the DAG filesytem structure and load resolved
@@ -251,6 +264,8 @@ def load_result_resolved(node_dpath):
     got = load_result_resolved(node_dpath)
 
     node_dpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_testpipe/eval/flat/bas_pxl_eval/bas_pxl_eval_id_6028edfe/')
+
+    node_dpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_timekernel_test_drop4/eval/flat/bas_pxl_eval/bas_pxl_eval_id_5d38c6b3')
     """
     # from watch.utils.util_dotdict import explore_nested_dict
 
@@ -265,7 +280,7 @@ def load_result_resolved(node_dpath):
         proc_item = smart_result_parser.find_pred_pxl_item(bas_pxl_info)
         nest_resolved = new_process_context_parser(proc_item)
         flat_resolved = util_dotdict.DotDict.from_nested(nest_resolved)
-        flat_resolved = flat_resolved.add_prefix(node_type + '.')
+        flat_resolved = flat_resolved.insert_prefix(node_type, index=1)
 
         # Hack: we should recurse into the model itself to introspect this, but
         # this is fine for now.
@@ -273,15 +288,13 @@ def load_result_resolved(node_dpath):
         fit_config = proc_item['properties']['extra']['fit_config']
         fit_config = smart_result_parser.relevant_fit_config(fit_config, add_prefix=False)
         fit_nested = {
-            'meta': {
-                'task': 'watch.tasks.fusion.fit',
-            },
+            'context': {'task': 'watch.tasks.fusion.fit'},
             'resolved_params': fit_config,
             'resources': {},
             'machine': {},
         }
         flat_fit_resolved = util_dotdict.DotDict.from_nested(fit_nested)
-        flat_fit_resolved = flat_fit_resolved.add_prefix(fit_node_type + '.')
+        flat_fit_resolved = flat_fit_resolved.insert_prefix(fit_node_type, index=1)
         flat_resolved |= flat_fit_resolved
 
     elif node_type in {'bas_poly', 'sc_poly'}:
@@ -299,7 +312,7 @@ def load_result_resolved(node_dpath):
         proc_item = smart_result_parser.find_track_item(bas_poly_info)
         nest_resolved = new_process_context_parser(proc_item)
         flat_resolved = util_dotdict.DotDict.from_nested(nest_resolved)
-        flat_resolved = flat_resolved.add_prefix(node_type + '.')
+        flat_resolved = flat_resolved.insert_prefix(node_type, index=1)
 
     elif node_type in {'bas_poly_eval', 'sc_poly_eval'}:
         fpath = node_dpath / 'poly_eval.json'
@@ -310,8 +323,8 @@ def load_result_resolved(node_dpath):
         nest_resolved['metrics'] = iarpa_result['metrics']
 
         flat_resolved = util_dotdict.DotDict.from_nested(nest_resolved)
-        flat_resolved['meta.region_ids'] = iarpa_result['iarpa_json']['region_ids']
-        flat_resolved = flat_resolved.add_prefix(node_type + '.')
+        flat_resolved['context.region_ids'] = iarpa_result['iarpa_json']['region_ids']
+        flat_resolved = flat_resolved.insert_prefix(node_type, 1)
 
     elif node_type in {'bas_pxl_eval', 'sc_pxl_eval'}:
         fpath = node_dpath / 'pxl_eval.json'
@@ -323,11 +336,11 @@ def load_result_resolved(node_dpath):
 
         nest_resolved = new_process_context_parser(proc_item)
         # Hack for region ids
-        nest_resolved['meta']['region_ids'] = ub.Path(nest_resolved['resolved_params']['true_dataset']).name.split('.')[0]
+        nest_resolved['context']['region_ids'] = ub.Path(nest_resolved['resolved_params']['true_dataset']).name.split('.')[0]
         nest_resolved['metrics'] = metrics
 
         flat_resolved = util_dotdict.DotDict.from_nested(nest_resolved)
-        flat_resolved = flat_resolved.add_prefix(node_type + '.')
+        flat_resolved = flat_resolved.insert_prefix(node_type, 1)
     else:
         raise NotImplementedError
 
@@ -341,6 +354,7 @@ def load_result_resolved(node_dpath):
     return flat_resolved
 
 
+@xdev.profile
 def out_node_matching_fpaths(out_node):
     out_template = out_node.template_value
     parser = parse.Parser(str(out_template))
