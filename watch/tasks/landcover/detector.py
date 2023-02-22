@@ -8,7 +8,7 @@ import torch
 # from shapely.geometry import shape
 # from torchvision.transforms.functional import to_tensor
 
-from .nets import LinkNet34
+from .nets import UNetR
 
 log = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ def run(model, img, metadata):
         log.warning('skipping all black image: gid:{}'.format(metadata['id']))
         return None
 
-    img = preprocess(img)
+    img = normalize(img)
     try:
         pred = predict_image(img, model)
     except Exception:
@@ -30,14 +30,9 @@ def run(model, img, metadata):
     return pred
 
 
-def preprocess(img):
-    img = img.astype(np.float32)
-    img = normalize(img)
-    return img
-
-
 def pad(fn):
     def wrapped(img, *args, **kwargs):
+
         pads = [(c - s % c) % c for s, c in zip(img.shape, (512, 512, 1))]
         # log.debug('{} pad with {}'.format(img.shape, pads))
 
@@ -178,48 +173,11 @@ def normalize(image, low=2, high=98) -> np.array:
     return np.stack(normalized_bands, 2)
 
 
-def get_nodata_mask(img, nodata=0):
+def get_nodata_mask(img):
     """
-    Get a mask of a continous no data region (or where there are nan values).
     Return an numpy array with values True for data, False for no data
-
-    Example:
-        >>> from watch.tasks.landcover.detector import *  # NOQA
-        >>> import kwimage
-        >>> # orig_image = np.random.rand(32, 32, 3)
-        >>> orig_image = kwimage.ensure_float01(kwimage.grab_test_image())
-        >>> nan_poly = kwimage.Polygon.random(rng=421).scale(orig_image.shape[0] // 2)
-        >>> # Note: the zero polygon will not be contiguous, so we wont see it in the output
-        >>> zero_poly = kwimage.Polygon.random(rng=49120).scale(orig_image.shape[0])
-        >>> img = orig_image.copy()
-        >>> img = zero_poly.fill(img, 0)
-        >>> img = nan_poly.fill(img, np.nan)
-        >>> # Set bands of regions to be -0
-        >>> img[10:100, :] = 0
-        >>> img[0:100, -250:] = 0
-        >>> img[:, -50:-10] = 0
-        >>> mask = get_nodata_mask(img)
-        >>> # xdoctest: +REQUIRES(--show)
-        >>> import kwplot
-        >>> # Note we expect extra streaks because the helmet is black
-        >>> kwplot.autompl()
-        >>> kwplot.imshow(img, pnum=(1, 2, 1), doclf=True)
-        >>> kwplot.imshow(mask, pnum=(1, 2, 2))
     """
-    invalid_mask = np.isnan(img)
-    # Initialize valid mask to nan regions
-    valid_mask = ~(invalid_mask.any(axis=2))
-    # img_nodata = img == nodata
-    # Ideally nodata is just a single value, hacking this to assume that any
-    # data <= 0 will be considered as nodata.
-    img_nodata = ((img <= nodata).all(axis=2) | ~valid_mask)  # HACK!
-
-    is_col_invalid = np.all(img_nodata, axis=0)
-    is_row_invalid = np.all(img_nodata, axis=1)
-
-    valid_mask[:, is_col_invalid] = False
-    valid_mask[is_row_invalid, :] = False
-    # valid_mask[is_row_invalid, :] = False
+    valid_mask = ~(np.isnan(img).any(axis=2))
     return valid_mask
 
 
@@ -239,7 +197,7 @@ def load_model(filename, num_outputs, num_channels, device='auto'):
     if isinstance(filename, str):
         filename = Path(filename)
     torch.hub.set_dir('/tmp')
-    model = LinkNet34(num_outputs=num_outputs, num_channels=num_channels)
+    model = UNetR(num_outputs=num_outputs, num_channels=num_channels)
     if device == 'auto':
         device = get_device()
     log.debug('  device {}'.format(device))
