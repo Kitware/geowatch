@@ -42,7 +42,7 @@ CommandLine:
         --skip_missing=True --workers=4 --draw_anns=False --smart=True
 """
 import datetime
-# import warnings
+import torch
 import ubelt as ub
 from pathlib import Path
 
@@ -64,6 +64,7 @@ class LandcoverPredictConfig(scfg.DataConfig):
     deployed = scfg.Value(None, required=True, help='pytorch weights file')
     output = scfg.Value(None, required=True, help='output kwcoco dataset')
     num_workers = scfg.Value(0, type=str, help='number of dataloading workers. Can be "auto"')
+    io_workers = scfg.Value('auto', type=str, help='Number of writer threads. Defaults to min(num_workers, 2)')
     device = scfg.Value('auto', type=str, help='auto, cpu, or integer of the device to use')
     select_images = scfg.Value(None, type=str, help='if specified, a jq operation to filter images')
     select_videos = scfg.Value(None, type=str, help='if specified, a jq operation to filter videos')
@@ -112,7 +113,10 @@ def predict(cmdline=1, **kwargs):
     device = util_device.coerce_devices(config.device)[0]
     print(f'device={device}')
 
-    num_workers = util_parallel.coerce_num_workers(config.num_workers)
+    config.num_workers = util_parallel.coerce_num_workers(config.num_workers)
+    if config.io_workers == 'auto':
+        config.io_workers = min(2, config.num_workers)
+    config.io_workers = util_parallel.coerce_num_workers(config.io_workers)
 
     input_dset = kwcoco.CocoDataset.coerce(coco_dset_filename)
     filtered_gids = kwcoco_extensions.filter_image_ids(
@@ -127,10 +131,20 @@ def predict(cmdline=1, **kwargs):
 
     print('Using {}'.format(type(model_info).__name__))
 
+    print('Creating output dataset')
     output_dset = input_dset.copy()
 
+    print('Initialize dataloader')
+    dataloader = DataLoader(ptdataset, num_workers=config.num_workers,
+                            batch_size=None, collate_fn=lambda x: x)
+
+    # Start the worker processes before we do threading
+    print('Initialize dataloader iter')
+    dataloader_iter = iter(dataloader)
+
     # Create a queue that writes data to disk in the background
-    writer_queue = util_parallel.BlockingJobQueue(max_workers=num_workers)
+    print('Initialize stitchers')
+    writer_queue = util_parallel.BlockingJobQueue(max_workers=config.io_workers)
 
     landcover_stitcher = CocoStitchingManager(
         output_dset,
@@ -156,6 +170,7 @@ def predict(cmdline=1, **kwargs):
         model._activation_cache = None
         hidden_stitcher = None
 
+    print('Initialize process context')
     proc_context = process_context.ProcessContext(
         type='process',
         name='watch.tasks.invariants.predict',
@@ -164,14 +179,9 @@ def predict(cmdline=1, **kwargs):
     )
     proc_context.start()
 
-    dataloader = DataLoader(ptdataset, num_workers=num_workers,
-                            batch_size=None, collate_fn=lambda x: x)
-
-    # Start the worker processes before we do threading
-    dataloader_iter = iter(dataloader)
-
-    pman = util_progress.ProgressManager()
-    with pman:
+    print('Starting main predict loop')
+    pman = util_progress.ProgressManager('progiter')
+    with pman, torch.no_grad():
         _prog = pman.progiter(dataloader_iter, total=len(dataloader),
                               desc='predict landcover')
         for img_info in _prog:
@@ -226,28 +236,53 @@ def _predict_single(img_info,
     Modifies the coco dataset inplace, returns the data that needs to be
     written to disk.
     """
+    import kwarray
+    import kwimage
     gid = img_info['id']
     img = img_info['imgdata']
 
-    pred = detector.run(model, img, img_info)
+    ## Hardcoded params
+    window_dims = (512, 512)
+    window_overlap = 0.3
+    hidden_scale = 0.5  # scale from raw predictions to hidden predictions
 
-    if pred is None:
-        return None, None
+    image_box = kwimage.Box.from_dsize(img.shape[0:2][::-1])
 
-    landcover_stitcher.accumulate_image(gid, None, pred)
+    if hidden_stitcher is not None:
+        hidden_box = image_box.scale(hidden_scale).astype(int)
+        hidden_dsize = hidden_box.dsize
+
+    # Need to run a sliding window so we can manage larger image
+    slider = kwarray.SlidingWindow(img.shape[0:2], window_dims,
+                                   overlap=window_overlap,
+                                   keepbound=True,
+                                   allow_overshoot=True)
+
+    for img_slice in slider:
+        subimg = img[img_slice]
+        pred = detector.run(model, subimg, img_info)
+        if pred is None:
+            continue
+
+        landcover_stitcher.accumulate_image(gid, img_slice, pred)
+
+        if model._activation_cache is not None:
+            # Lots of hardcoded things here.
+            # Hack to unpad here.
+            hidden_raw = model._activation_cache['hidden'].cpu().numpy()
+            hidden = hidden_raw[0].transpose(1, 2, 0)
+            h, w = pred.shape[0:2]
+            hidden = hidden[0:h // 2, 0:w // 2, 0:hidden_stitcher.num_hidden]
+
+            output_box = kwimage.Box.from_slice(img_slice)
+            hidden_box = output_box.scale(hidden_scale).astype(int)
+            hidden_slice = hidden_box.to_slice()
+            hidden_stitcher.accumulate_image(
+                gid, hidden_slice, hidden, asset_dsize=hidden_dsize,
+                scale_asset_from_stitchspace=hidden_scale)
+
     landcover_stitcher.submit_finalize_image(gid)
-
     if model._activation_cache is not None:
-        # Lots of hardcoded things here.
-        # Hack to unpad here.
-        hidden_raw = model._activation_cache['hidden'].cpu().numpy()
-        hidden = hidden_raw[0].transpose(1, 2, 0)
-        h, w = pred.shape[0:2]
-        hidden_dsize = (w // 2, h // 2)
-        hidden = hidden[0:h // 2, 0:w // 2, 0:hidden_stitcher.num_hidden]
-        hidden_stitcher.accumulate_image(
-            gid, None, hidden, asset_dsize=hidden_dsize,
-            scale_asset_from_stitchspace=0.5)
         hidden_stitcher.submit_finalize_image(gid)
 
 
