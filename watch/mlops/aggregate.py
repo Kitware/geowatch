@@ -226,7 +226,8 @@ class ParamPlotter:
         xscale = vantage['scale2']
 
         # main_metric = 'bas_poly_eval.metrics.bas_f1'
-        main_metric = 'bas_poly_eval.metrics.bas_faa_f1'
+        # main_metric = 'bas_poly_eval.metrics.bas_faa_f1'
+        main_metric = agg.primary_metric_cols[0]
 
         finalize_figure = util_kwplot.FigureFinalizer(
             dpath=vantage_dpath,
@@ -253,8 +254,8 @@ class ParamPlotter:
             }).relabel_xticks(ax)
             modifier.relabel(ax, ticks=False)
             finalize_figure.finalize(fig, 'single_results_boxplot.png')
-        except Exception:
-            ...
+        except Exception as ex:
+            print(f'ex={ex}')
 
         from watch.utils.util_kwplot import scatterplot_highlight
         fig = kwplot.figure(fnum=3, doclf=True)
@@ -409,7 +410,10 @@ class ParamPlotter:
             param_name_to_stats = {s['param_name']: s for s in ranked_stats}
             ranked_params = ub.oset(param_name_to_stats.keys())
         else:
-            ranked_params = resolved_params.columns
+            ranked_params = []
+            for col in resolved_params.columns:
+                if len(macro_table[col].unique()) > 1:
+                    ranked_params.append(col)
             param_name_to_stats = {}
 
         # ranked_params = ['bas_poly_eval.params.bas_pxl.package_fpath']
@@ -419,7 +423,7 @@ class ParamPlotter:
 
             param_dpath = (param_group_dpath / param_name).ensuredir()
 
-            stats = param_name_to_stats.get(param_name, None)
+            stats = param_name_to_stats.get(param_name, {})
             # stats['moments']
             anova_rank_p = stats.get('anova_rank_p', None)
             # param_name = stats['param_name']
@@ -497,17 +501,21 @@ class ParamPlotter:
             ub.symlink(real_path=vantage_fpath, link_path=param_fpath, overwrite=True)
 
             # Scatter legend  (doesnt care about the vantage)
-            param_fpath = param_dpath / f'{param_prefix}_PLT03_scatter_onlylegend.png'
-            vantage_fpath = vantage_dpath / f'{fname_prefix}_PLT03_scatter_onlylegend.png'
-            if not param_fpath.exists():
-                legend_ax = util_kwplot.extract_legend(ax)
-                freq_mapper_scatter.relabel(legend_ax, ticks=False)
-                finalize_figure.finalize(legend_ax.figure, param_fpath)
-            ub.symlink(real_path=param_fpath, link_path=vantage_fpath, overwrite=True)
+            try:
+                param_fpath = param_dpath / f'{param_prefix}_PLT03_scatter_onlylegend.png'
+                vantage_fpath = vantage_dpath / f'{fname_prefix}_PLT03_scatter_onlylegend.png'
+                if not param_fpath.exists():
+                    legend_ax = util_kwplot.extract_legend(ax)
+                    freq_mapper_scatter.relabel(legend_ax, ticks=False)
+                    finalize_figure.finalize(legend_ax.figure, param_fpath)
+                ub.symlink(real_path=param_fpath, link_path=vantage_fpath, overwrite=True)
+            except RuntimeError:
+                ...
+            else:
+                ax.get_legend().remove()
 
-            ax.get_legend().remove()
             vantage_fpath = vantage_dpath / f'{fname_prefix}_PLT02_scatter_nolegend.png'
-            param_fpath = param_dpath / f'{param_metric2_prefix}_PLT03_scatter_onlylegend.png'
+            param_fpath = param_dpath / f'{param_metric2_prefix}_PLT02_scatter_nolegend.png'
             finalize_figure.finalize(fig, vantage_fpath)
             ub.symlink(real_path=vantage_fpath, link_path=param_fpath, overwrite=True)
 

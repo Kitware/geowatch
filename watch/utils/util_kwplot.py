@@ -412,6 +412,8 @@ def extract_legend(ax):
     """
     # ax.get_legend().remove()
     orig_legend = ax.get_legend()
+    if orig_legend is None:
+        raise RuntimeError('no legend')
     orig_legend_title = orig_legend.get_title().get_text()
     legend_handles = ax.get_legend_handles_labels()
 
