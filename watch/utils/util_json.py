@@ -31,6 +31,8 @@ def ensure_json_serializable(dict_, normalize_containers=False, verbose=0):
             structures. Defaults to False.
 
     Example:
+        >>> from watch.utils.util_json import *  # NOQA
+        >>> from kwcoco.util import util_json
         >>> data = ub.ddict(lambda: int)
         >>> data['foo'] = ub.ddict(lambda: int)
         >>> data['bar'] = np.array([1, 2, 3])
@@ -38,10 +40,10 @@ def ensure_json_serializable(dict_, normalize_containers=False, verbose=0):
         >>> data['foo']['b'] = (1, np.array([1, 2, 3]), {3: np.int32(3), 4: np.float16(1.0)})
         >>> dict_ = data
         >>> print(ub.repr2(data, nl=-1))
-        >>> assert list(find_json_unserializable(data))
+        >>> assert list(util_json.find_json_unserializable(data))
         >>> result = ensure_json_serializable(data, normalize_containers=True)
         >>> print(ub.repr2(result, nl=-1))
-        >>> assert not list(find_json_unserializable(result))
+        >>> assert not list(util_json.find_json_unserializable(result))
         >>> assert type(result) is dict
     """
     dict_ = copy.deepcopy(dict_)
