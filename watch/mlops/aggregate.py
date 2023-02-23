@@ -40,7 +40,7 @@ Ignore:
         --stdout_report=True --rois KR_R001,KR_R002
 
     python -m watch.mlops.aggregate \
-        --target ./my_aggregate/*.csv.zip \
+        --target ./my_aggregate/bas_pxl_eval_2023-02-22T215702-5.csv.zip \
         --plot_params=True --rois KR_R001,KR_R002
 
 """
