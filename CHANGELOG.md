@@ -13,7 +13,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * LightningCLI is now fully supported with partial weight loading and tensorboard plots
 * Scriptconfig aliases now hook up with LightningCLI
 * Added `fixed_resultion` arg to dataloader
-* Support for image space stitching in CocoStitchingManager.
+* Support for image space stitching in `CocoStitchingManager`.
 
 ### Changed
 * Renamed `project_annotations` to `reproject_annotations`
