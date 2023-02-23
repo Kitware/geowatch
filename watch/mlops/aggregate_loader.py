@@ -13,15 +13,14 @@ from watch.mlops import smart_pipeline
 from watch.mlops import smart_result_parser
 
 
-def build_tables(config):
+def build_tables(root_dpath, pipeline, io_workers):
     import pandas as pd
     from watch.utils import util_progress
-    print('config = {}'.format(ub.repr2(dict(config), nl=1)))
-    dag = smart_pipeline.make_smart_pipeline(config['pipeline'])
+    dag = smart_pipeline.make_smart_pipeline(pipeline)
     dag.print_graphs()
-    dag.configure(config=None, root_dpath=config['root_dpath'])
+    dag.configure(config=None, root_dpath=root_dpath)
 
-    io_workers = util_parallel.coerce_num_workers(config.io_workers)
+    io_workers = util_parallel.coerce_num_workers(io_workers)
     print(f'io_workers={io_workers}')
 
     # patterns = {

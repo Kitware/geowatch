@@ -41,7 +41,11 @@ class SmartGlobalHelper:
 
         param_to_palette = {}
         for group_params in shared_palletes_groups:
-            unique_vals = np.unique(macro_table[group_params].values)
+            try:
+                unique_vals = np.unique(macro_table[group_params].values)
+            except TypeError:
+                unique_vals = set(macro_table[group_params].values.ravel())
+
             # 'Spectral'
             if len(unique_vals) > 5:
                 unique_colors = sns.color_palette('Spectral', n_colors=len(unique_vals))
@@ -125,58 +129,72 @@ class SmartGlobalHelper:
             pkgmap[pkg] = new_name
         macro_table['bas_pxl.package_fpath'] = macro_table['bas_pxl.package_fpath'].apply(lambda x: pkgmap.get(x, x))
 
-    def default_vantage_points(self):
-        vantage_points = [
-            {
-                'metric1': 'metrics.bas_poly_eval.bas_faa_f1',
-                'metric2': 'metrics.bas_poly_eval.bas_tpr',
+    def default_vantage_points(self, eval_type):
+        if eval_type == 'bas_poly_eval':
+            vantage_points = [
+                {
+                    'metric1': 'metrics.bas_poly_eval.bas_faa_f1',
+                    'metric2': 'metrics.bas_poly_eval.bas_tpr',
 
-                'scale1': 'linear',
-                'scale2': 'linear',
+                    'scale1': 'linear',
+                    'scale2': 'linear',
 
-                'objective1': 'maximize',
-            },
+                    'objective1': 'maximize',
+                },
 
-            {
-                'metric1': 'metrics.bas_poly_eval.bas_tpr',
-                'metric2': 'metrics.bas_poly_eval.bas_f1',
+                {
+                    'metric1': 'metrics.bas_poly_eval.bas_tpr',
+                    'metric2': 'metrics.bas_poly_eval.bas_f1',
 
-                'objective1': 'maximize',
+                    'objective1': 'maximize',
 
-                'scale1': 'linear',
-                'scale2': 'linear',
-            },
+                    'scale1': 'linear',
+                    'scale2': 'linear',
+                },
 
-            {
-                'metric1': 'metrics.bas_poly_eval.bas_ppv',
-                'metric2': 'metrics.bas_poly_eval.bas_tpr',
+                {
+                    'metric1': 'metrics.bas_poly_eval.bas_ppv',
+                    'metric2': 'metrics.bas_poly_eval.bas_tpr',
 
-                'scale1': 'linear',
-                'scale2': 'linear',
+                    'scale1': 'linear',
+                    'scale2': 'linear',
 
-                'objective1': 'maximize',
-            },
+                    'objective1': 'maximize',
+                },
 
-            {
-                'metric1': 'metrics.bas_poly_eval.bas_f1',
-                'metric2': 'metrics.bas_poly_eval.bas_ffpa',
+                {
+                    'metric1': 'metrics.bas_poly_eval.bas_f1',
+                    'metric2': 'metrics.bas_poly_eval.bas_ffpa',
 
-                'scale1': 'linear',
-                'scale2': 'linear',
+                    'scale1': 'linear',
+                    'scale2': 'linear',
 
-                'objective1': 'maximize',
-            },
+                    'objective1': 'maximize',
+                },
 
-            {
-                'metric1': 'metrics.bas_poly_eval.bas_space_FAR',
-                'metric2': 'metrics.bas_poly_eval.bas_tpr',
+                {
+                    'metric1': 'metrics.bas_poly_eval.bas_space_FAR',
+                    'metric2': 'metrics.bas_poly_eval.bas_tpr',
 
-                'scale1': 'linear',
-                'scale2': 'linear',
+                    'scale1': 'linear',
+                    'scale2': 'linear',
 
-                'objective1': 'minimize',
-            },
-        ]
+                    'objective1': 'minimize',
+                },
+            ]
+        elif eval_type == 'bas_pxl_eval':
+            vantage_points = [
+                {
+                    'metric1': 'metrics.bas_pxl_eval.salient_AP',
+                    'metric2': 'metrics.bas_pxl_eval.salient_AUC',
+
+                    'scale1': 'linear',
+                    'scale2': 'linear',
+
+                    'objective1': 'maximize',
+                },
+            ]
+
         return vantage_points
 
     def _default_metrics(self, agg):

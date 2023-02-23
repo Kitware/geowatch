@@ -160,9 +160,12 @@ def main(cmdline=True, **kwargs):
     if 'add' in actions and 'packages' in targets:
         manager.add_packages()
 
-    if 'push' in actions:
-        raise NotImplementedError
-        manager.push(targets)
+    if 'push' in actions and 'packages' in targets:
+        manager.push_packages()
+
+    # if 'push' in actions:
+    #     raise NotImplementedError
+    #     manager.push(targets)
 
     if 'status' in actions:
         manager.summarize()
@@ -756,8 +759,9 @@ class ExperimentState(ub.NiceRepr):
 
         for row in ub.ProgIter(needs_copy.to_dict('records'), desc='Copy packages to DVC dir'):
             src, dst = (row['spkg_fpath'], row['pkg_fpath'])
-            dst.parent.ensuredir()
-            ub.Path(src).copy(dst)
+            if src is not None:
+                dst.parent.ensuredir()
+                ub.Path(src).copy(dst)
 
     def add_packages_to_dvc(self, mode='interact'):
         from rich.prompt import Confirm

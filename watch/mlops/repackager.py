@@ -79,8 +79,11 @@ def repackage(checkpoint_fpath, force=False, dry=False):
             if not dry:
                 train_dpath_hint = context['train_dpath_hint']
                 model_config_fpath = context.get("config_fpath", None)
-                repackage_single_checkpoint(checkpoint_fpath, package_fpath,
-                                            train_dpath_hint, model_config_fpath)
+                try:
+                    repackage_single_checkpoint(checkpoint_fpath, package_fpath,
+                                                train_dpath_hint, model_config_fpath)
+                except Exception as ex:
+                    print('ERROR: Failed to package: {}'.format(ex))
         package_fpaths.append(os.fspath(package_fpath))
     print('package_fpaths = {}'.format(ub.repr2(package_fpaths, nl=1)))
     from watch.utils import util_yaml

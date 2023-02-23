@@ -265,7 +265,7 @@ class DotDictDataFrame(pd.DataFrame):
             if path[0] == key:
                 lookup_keys.append(c)
                 new_keys.append('.'.join(path[1:]))
-        new = self[lookup_keys]
+        new = self.loc[:, lookup_keys]
         if drop_prefix:
             new.rename(ub.dzip(lookup_keys, new_keys), inplace=True, axis=1)
         return new
@@ -283,5 +283,6 @@ class DotDictDataFrame(pd.DataFrame):
 
 
 def pandas_add_prefix(data, prefix):
-    mapper = {c: prefix + c for c in data.columns}
-    return data.rename(mapper, axis=1)
+    return data.add_prefix(prefix)
+    # mapper = {c: prefix + c for c in data.columns}
+    # return data.rename(mapper, axis=1)
