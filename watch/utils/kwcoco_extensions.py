@@ -565,14 +565,7 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
                 # print('info = {!r}'.format(info))
 
                 # WE NEED TO ACCOUNT FOR WLD_CRS TO USE THIS
-                # obj_to_wld = kwimage.Affine.coerce(info['pxl_to_wld'])
-
-                # FIXME: FOR NOW JUST USE THIS BIG HACK
-                xy1_man = info['pxl_corners'].data.astype(np.float64)
-                xy2_man = info['utm_corners'].data.astype(np.float64)
-                hack_aff = kwimage.Affine.fit(xy1_man, xy2_man)
-                obj_to_wld = kwimage.Affine.coerce(hack_aff)
-                # cv2.getAffineTransform(utm_corners, pxl_corners)
+                obj_to_wld = kwimage.Affine.coerce(info['pxl_to_wld'])
 
                 geos_corners = info['geos_corners']
                 wld_crs_info = ub.dict_diff(info['wld_crs_info'], {'type'})
@@ -1537,6 +1530,7 @@ def _execute_transfer_task(task):
     dst_ds = None
 
 
+# unused
 def _make_coco_img_from_geotiff(tiff_fpath, name=None):
     """
     Example:
@@ -1913,7 +1907,7 @@ def warp_annot_segmentations_from_geos(coco_dset):
         >>>     poly2 = kwimage.MultiPolygon.coerce(ann2['segmentation'])
         >>>     worked = (poly1.is_invalid() and poly2.is_invalid()) or poly1.iou(poly2) > 0.99
         >>>     errors.append(not worked)
-        >>> assert len(errors) == 0
+        >>> assert sum(errors) == 0
     """
     import pandas as pd
     import geopandas as gpd
@@ -1974,7 +1968,7 @@ def warp_annot_segmentations_from_geos(coco_dset):
             assert 'segmentation' in ann
 
 
-def warp_annot_segmentations_to_geos2(coco_dset):
+def warp_annot_segmentations_to_geos(coco_dset):
     """
 
     Example:
@@ -2060,7 +2054,7 @@ def warp_annot_segmentations_to_geos2(coco_dset):
                     ann['segmentation_geos'] = sseg_geos
 
 
-def warp_annot_segmentations_to_geos(coco_dset):
+def warp_annot_segmentations_to_geos_old(coco_dset):
     """
     Warps annotation segmentations in image pixel space into geos-space
     """

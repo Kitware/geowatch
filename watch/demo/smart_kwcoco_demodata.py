@@ -407,6 +407,7 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
         from watch.utils import kwcoco_extensions
         # Do a consistent transfer of the hacked seeded geodata to the other images
         kwcoco_extensions.ensure_transfered_geo_data(coco_dset)
+        kwcoco_extensions.coco_populate_geo_heuristics(coco_dset)
         kwcoco_extensions.warp_annot_segmentations_to_geos(coco_dset)
 
         # Also hack in an invalid region in the top left of some videos
