@@ -1240,7 +1240,6 @@ def transfer_geo_metadata(coco_dset, gid):
     """
     import watch
     from osgeo import gdal
-    import affine
     coco_img = coco_dset._coco_image(gid)
 
     assets_with_geo_info = {}
@@ -1300,15 +1299,10 @@ def transfer_geo_metadata(coco_dset, gid):
         # Choose an object to register to (not sure if it matters which one)
         # choose arbitrary one for now.
         geo_asset_idx, (geo_obj, geo_info) = ub.peek(assets_with_geo_info.items())
-        geo_fname = geo_obj.get('file_name', None)
-        geo_fpath = join(coco_img.dset.bundle_dpath, geo_fname)
 
         if geo_info['is_rpc']:
             raise NotImplementedError(
                 'Not sure how to do this if the target has RPC information')
-
-        geo_ds = gdal.Open(geo_fpath)
-        geo_ds.GetProjection()
 
         warp_geoimg_from_geoaux = kwimage.Affine.coerce(
             geo_obj.get('warp_aux_to_img', None))
@@ -1340,9 +1334,7 @@ def transfer_geo_metadata(coco_dset, gid):
                 warp_wld_from_img @ warp_img_from_aux)
 
             # Convert to gdal-style
-            a, b, c, d, e, f = warp_wld_from_aux.matrix.ravel()[0:6]
-            aff = affine.Affine(a, b, c, d, e, f)
-            aff_geo_transform = aff.to_gdal()
+            aff_geo_transform = warp_wld_from_aux.to_gdal()
 
             dst_ds = gdal.Open(fpath, gdal.GA_Update)
             if dst_ds is None:
@@ -1880,6 +1872,11 @@ def warp_annot_segmentations_from_geos(coco_dset):
     """
     Uses the segmentation_geos property (which should be crs84) and warps it
     into image space based on available geo data.
+
+    Args:
+        coco_dset (kwcoco.CocoDataset):
+            a CocoDataset where annotations contain a "segmentation_geos"
+            attribute. The "segmentation" attribute will be modified in-place.
 
     Ignore:
         # xdoctest: +REQUIRES(env:DVC_DPATH)
