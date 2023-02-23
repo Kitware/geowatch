@@ -1,3 +1,8 @@
+"""
+THIS IS AN OLD VARIANT OF PIPELINE, but is still used in some places.
+
+For the real mlops pipeline see pipeline_nodes.py
+"""
 import networkx as nx
 import itertools as it
 import ubelt as ub
@@ -121,6 +126,7 @@ class Pipeline:
                 command=step.command,
                 name=step.name,
                 depends=qdepends,
+                log=False,
             )
 
     def _populate_implicit_dependency_queue(self, queue, skip_existing=False):
@@ -147,7 +153,7 @@ class Pipeline:
             if step.will_exist and step.enabled:
                 step._qjob = queue.submit(
                     command=step.command, name=step.node_id, depends=depends,
-                    **common_submitkw)
+                    log=False, **common_submitkw)
 
     def _update_stage_otf_cache(self, cache):
         """

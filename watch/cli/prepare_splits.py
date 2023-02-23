@@ -123,7 +123,7 @@ def _submit_constructive_split_jobs(base_fpath, queue, depends=[]):
                 --src {vali_parts_str} \
                 --dst {vali_split_fpath}
             ''')
-        queue.submit(command, begin=1, depends=depends)
+        queue.submit(command, begin=1, depends=depends, log=False)
 
         command = ub.codeblock(
             fr'''
@@ -131,7 +131,7 @@ def _submit_constructive_split_jobs(base_fpath, queue, depends=[]):
                 --src {train_parts_str} \
                 --dst {train_split_fpath}
             ''')
-        queue.submit(command, depends=depends)
+        queue.submit(command, depends=depends, log=False)
 
     all_parts_Str = ' '.join([shlex.quote(str(p)) for p in partitioned_fpaths])
     command = ub.codeblock(
@@ -140,7 +140,7 @@ def _submit_constructive_split_jobs(base_fpath, queue, depends=[]):
             --src {all_parts_Str} \
             --dst {full_fpath}
         ''')
-    queue.submit(command, depends=depends)
+    queue.submit(command, depends=depends, log=False)
 
 
 def _submit_split_jobs(base_fpath, queue, depends=[]):
@@ -192,7 +192,7 @@ def _submit_split_jobs(base_fpath, queue, depends=[]):
                 --dst {splits[train_key]} \
                 --select_videos '{train_region_selector}'
             ''')
-        split_jobs['train'] = queue.submit(command, begin=1, depends=depends)
+        split_jobs['train'] = queue.submit(command, begin=1, depends=depends, log=False)
 
         # Perform vali/validation splits with and without worldview
         command = ub.codeblock(
@@ -202,7 +202,7 @@ def _submit_split_jobs(base_fpath, queue, depends=[]):
                 --dst {splits[vali_key]} \
                 --select_videos '{vali_region_selector}'
             ''')
-        split_jobs['vali'] = queue.submit(command, depends=depends)
+        split_jobs['vali'] = queue.submit(command, depends=depends, log=False)
     return queue
 
 

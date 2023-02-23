@@ -109,7 +109,7 @@ Ignore:
         --with_depth=0 \
         --do_splits=0 \
         --skip_existing=1 \
-        --gres=1, --workers=1 --backend=tmux --run=1
+        --gres=0, --workers=1 --backend=tmux --run=1
 
 
 """

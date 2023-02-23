@@ -158,6 +158,16 @@ def read_tensorboard_scalars(train_dpath, verbose=1, cache=1):
         cacher.save(datas)
     return datas
 
+python -m watch.tasks.landcover.predict \
+    --dataset="/home/local/KHQ/jon.crall/remote/yardrat/data/dvc-repos/smart_data_dvc-ssd/Drop6/imganns-US_R007.kwcoco.zip" \
+    --deployed="/home/local/KHQ/jon.crall/remote/yardrat/data/dvc-repos/smart_expt_dvc/models/landcover/sentinel2.pt" \
+    --output="/home/local/KHQ/jon.crall/remote/yardrat/data/dvc-repos/smart_data_dvc-ssd/Drop6/imganns-US_R007_dzyne_landcover.kwcoco.json" \
+    --num_workers="2" \
+    --with_hidden=32 \
+    --select_images='.sensor_coarse == "S2"' \
+    --device=0
+
+
 
 def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outliers=True, verbose=0):
     """
