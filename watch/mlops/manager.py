@@ -18,7 +18,8 @@ Example:
 
     python -m watch.mlops.manager "status" --dataset_codes Drop4-SC
 
-    python -m watch.mlops.manager "list"
+    python -m watch.mlops.manager "list" --dataset_codes Drop4-BAS
+    python -m watch.mlops.manager "list" --dataset_codes Drop6
 
     # On training machine
     python -m watch.mlops.manager "push packages"
@@ -694,9 +695,12 @@ class ExperimentState(ub.NiceRepr):
 
     def list(self):
         tables = self.cross_referenced_tables()
+        ready_packages = None
         if 'staging' in tables:
             todrop = ['expt_dvc_dpath', 'raw', 'ckpt_path', 'spkg_fpath', 'pkg_fpath', 'lightning_version', 'ckpt_exists']
             df = tables['staging']
+            ready_packages = df['pkg_fpath'].values.tolist()
+
             print(df.drop(ub.oset(todrop) & df.columns, axis=1).to_string())
 
         if 'versioned' in tables:
@@ -708,6 +712,9 @@ class ExperimentState(ub.NiceRepr):
             for type, subdf in type_to_versioned.items():
                 print(f'type={type}')
                 print(subdf.drop(ub.oset(todrop) & df.columns, axis=1).to_string())
+
+        if ready_packages is not None:
+            print('ready_packages = {}'.format(ub.urepr(ready_packages, nl=1)))
 
     def summarize(self):
         """
