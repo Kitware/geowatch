@@ -243,7 +243,7 @@ def _predict_single(img_info,
     img = img_info['imgdata']
 
     ## Hardcoded params
-    window_dims = (1024, 1024)
+    window_dims = (1536, 1536)
     window_overlap = 0.3
     hidden_scale = 0.5  # scale from raw predictions to hidden predictions
 
