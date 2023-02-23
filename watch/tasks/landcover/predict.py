@@ -267,23 +267,27 @@ def _predict_single(img_info,
 
         landcover_stitcher.accumulate_image(gid, img_slice, pred)
 
-        if model._activation_cache is not None:
+        if hidden_stitcher is not None:
             # Lots of hardcoded things here.
             # Hack to unpad here.
-            hidden_raw = model._activation_cache['hidden'].cpu().numpy()
-            hidden = hidden_raw[0].transpose(1, 2, 0)
-            h, w = pred.shape[0:2]
-            hidden = hidden[0:h // 2, 0:w // 2, 0:hidden_stitcher.num_hidden]
+            if 'hidden' not in model._activation_cache:
+                print('WARNING: we expected hidden, but its not there')
+            else:
+                hidden_raw = model._activation_cache['hidden'].cpu().numpy()
+                model._activation_cache.pop('hidden', None)
+                hidden = hidden_raw[0].transpose(1, 2, 0)
+                h, w = pred.shape[0:2]
+                hidden = hidden[0:h // 2, 0:w // 2, 0:hidden_stitcher.num_hidden]
 
-            output_box = kwimage.Box.from_slice(img_slice)
-            hidden_box = output_box.scale(hidden_scale).astype(int)
-            hidden_slice = hidden_box.to_slice()
-            hidden_stitcher.accumulate_image(
-                gid, hidden_slice, hidden, asset_dsize=hidden_dsize,
-                scale_asset_from_stitchspace=hidden_scale)
+                output_box = kwimage.Box.from_slice(img_slice)
+                hidden_box = output_box.scale(hidden_scale).astype(int)
+                hidden_slice = hidden_box.to_slice()
+                hidden_stitcher.accumulate_image(
+                    gid, hidden_slice, hidden, asset_dsize=hidden_dsize,
+                    scale_asset_from_stitchspace=hidden_scale)
 
     landcover_stitcher.submit_finalize_image(gid)
-    if model._activation_cache is not None:
+    if hidden_stitcher is not None:
         hidden_stitcher.submit_finalize_image(gid)
 
 
