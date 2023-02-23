@@ -699,7 +699,6 @@ class ExperimentState(ub.NiceRepr):
         if 'staging' in tables:
             todrop = ['expt_dvc_dpath', 'raw', 'ckpt_path', 'spkg_fpath', 'pkg_fpath', 'lightning_version', 'ckpt_exists']
             df = tables['staging']
-            ready_packages = df['pkg_fpath'].values.tolist()
 
             print(df.drop(ub.oset(todrop) & df.columns, axis=1).to_string())
 
@@ -709,6 +708,10 @@ class ExperimentState(ub.NiceRepr):
                       'needs_pull', 'needs_push']
             df = tables['versioned']
             type_to_versioned = dict(list(df.groupby('type')))
+
+            sub = df[df['type'] == 'pkg_fpath']
+            ready_packages = list(map(str, sub['raw'][sub['has_raw']].tolist()))
+
             for type, subdf in type_to_versioned.items():
                 print(f'type={type}')
                 print(subdf.drop(ub.oset(todrop) & df.columns, axis=1).to_string())
@@ -718,6 +721,10 @@ class ExperimentState(ub.NiceRepr):
 
     def summarize(self):
         """
+        from mlops.aggregate import Aggregate
+        agg = Aggregate(table)
+        agg.build()
+
         Ignore:
             >>> # xdoctest: +REQUIRES(env:DVC_EXPT_DPATH)
             >>> from watch.mlops.manager import *  # NOQA
