@@ -617,11 +617,13 @@ class ExperimentState(ub.NiceRepr):
         DEDUP = 1  # get rid of duplicate or near duplicate checkpoints
         if DEDUP:
             chosen = []
-            for _, group in staging_df.groupby(['expt', 'epoch', 'step']):
-                if len(group) > 1:
-                    group = group.sort_values('ckpt_ver').iloc[0:1]
-                chosen.append(group)
-            staging_df = pd.concat(chosen, axis=0).sort_index().reset_index(drop=True)
+            import xdev
+            with xdev.embed_on_exception_context:
+                for _, group in staging_df.groupby(['expt', 'epoch', 'step']):
+                    if len(group) > 1:
+                        group = group.sort_values('ckpt_ver').iloc[0:1]
+                    chosen.append(group)
+                staging_df = pd.concat(chosen, axis=0).sort_index().reset_index(drop=True)
 
         if len(staging_df) == 0:
             staging_df[self.STAGING_COLUMNS] = 0
