@@ -60,27 +60,38 @@ do
     fi
 done
 
-echo ""
-echo ""
-echo "Needs Uninstall:"
+echo "
+Needs Uninstall:"
 bash_array_repr "${needs_uninstall[@]}"
-echo ""
-echo ""
-echo "Needs Install:"
-bash_array_repr "${needs_install[@]}"
-echo ""
-echo ""
 
+
+echo "
+Needs Install:"
+bash_array_repr "${needs_install[@]}"
+
+echo "
+Uninstalling:
+"
 if [[ ${#needs_uninstall[@]} -gt 0 ]]; then
     pip uninstall -y "${needs_uninstall[@]}"
 fi
 
+echo "
+Finished Uninstalling.
+
+Installing:
+"
 if [[ ${#needs_install[@]} -gt 0 ]]; then
     pip install -e "${needs_install[@]}"
 fi
 
 
+echo "
+Finished Installing.
+
+Listing:
+"
 for name in "${mylibs[@]}" 
 do
-    python -c "import $name; print($name.__version__, $name.__file__)"
+    python -c "import $name; print(f'{$name.__name__:<16} - {$name.__version__} - {$name.__file__}')"
 done
