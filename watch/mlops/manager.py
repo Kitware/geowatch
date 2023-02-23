@@ -19,10 +19,11 @@ Example:
     python -m watch.mlops.manager "status" --dataset_codes Drop4-SC
 
     python -m watch.mlops.manager "list" --dataset_codes Drop4-BAS
-    python -m watch.mlops.manager "list" --dataset_codes Drop6
+    python -m watch.mlops.manager "list" --dataset_codes Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC
+    python -m watch.mlops.manager "list" --dataset_codes Drop6 Drop4-BAS
 
     # On training machine
-    python -m watch.mlops.manager "push packages"
+    python -m watch.mlops.manager "push packages" --dataset_codes Drop6
     python -m watch.mlops.manager "push packages" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
 
     # On testing machine
@@ -534,13 +535,18 @@ class ExperimentState(ub.NiceRepr):
                 row['is_packaged'] = True
                 row.update(_attrs)
 
+        final_rows = []
         for row in rows:
             fname = row['checkpoint']
 
             # Hack: making name assumptions
             info = checkpoint_filepath_info(fname)
-            row.update(info)
+            if info is None:
+                print('ERROR row = {}'.format(ub.urepr(row, nl=1)))
+                print(f'error: fname={fname}')
+                continue
 
+            row.update(info)
             row.pop('imodel', None)
             row.pop('smodel', None)
 
@@ -552,6 +558,7 @@ class ExperimentState(ub.NiceRepr):
             # This is the name we would version this with.
             row['pkg_fpath'] = ub.Path(self.templates['pkg_fpath'].format(**kw))
             row['is_copied'] = row['pkg_fpath'].exists()
+            final_rows.append(row)
 
         return rows
 
