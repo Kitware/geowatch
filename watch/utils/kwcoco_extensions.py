@@ -2051,47 +2051,6 @@ def warp_annot_segmentations_to_geos(coco_dset):
                     ann['segmentation_geos'] = sseg_geos
 
 
-def warp_annot_segmentations_to_geos_old(coco_dset):
-    """
-    Warps annotation segmentations in image pixel space into geos-space
-    """
-    import watch
-    # hack in segmentation_geos
-    for gid in coco_dset.images():
-        coco_img = coco_dset._coco_image(gid)
-        asset = coco_img.primary_asset()
-        fpath = join(coco_dset.bundle_dpath, asset['file_name'])
-        geo_meta = watch.gis.geotiff.geotiff_metadata(fpath)
-        warp_wld_from_aux = geo_meta['pxl_to_wld']
-        warp_img_from_aux = kwimage.Affine.coerce(asset.get('warp_aux_to_img', None))
-
-        warp_wgs84_from_wld = geo_meta['wld_to_wgs84']  # Could be a general CoordinateTransform!
-        wgs84_crs_info = geo_meta['wgs84_crs_info']
-        wgs84_axis_mapping = wgs84_crs_info['axis_mapping']
-        assert wgs84_crs_info['auth'] == ('EPSG', '4326')
-
-        warp_aux_from_img = warp_img_from_aux.inv()
-        warp_wld_from_img = warp_wld_from_aux @ warp_aux_from_img
-        for aid in coco_dset.annots(gid=gid):
-            ann = coco_dset.index.anns[aid]
-            sseg_img = kwimage.Segmentation.coerce(ann['segmentation'])
-            sseg_wld = sseg_img.warp(warp_wld_from_img)
-            sseg_wgs84 = sseg_wld.warp(warp_wgs84_from_wld)
-            if wgs84_axis_mapping == 'OAMS_AUTHORITY_COMPLIANT':
-                sseg_wgs84_lonlat = sseg_wgs84.swap_axes()
-            elif wgs84_axis_mapping == 'OAMS_TRADITIONAL_GIS_ORDER':
-                sseg_wgs84_lonlat = sseg_wgs84.copy()
-            else:
-                raise NotImplementedError(wgs84_axis_mapping)
-            ann['segmentation_geos'] = sseg_wgs84_lonlat.to_geojson()
-            geos_crs_info = {
-                'axis_mapping': 'OAMS_TRADITIONAL_GIS_ORDER',
-                'auth': ('EPSG', '4326')
-            }
-            ann['segmentation_geos']['properties'] = {
-                'crs_info': geos_crs_info
-            }
-
 # def coco_geopandas_images(coco_dset):
 #     """
 #     TODO:
