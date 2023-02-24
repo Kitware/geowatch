@@ -10,6 +10,7 @@ import ubelt as ub
 import warnings
 from abc import abstractmethod
 from scipy.ndimage import label as ndm_label
+from functools import lru_cache
 from typing import Union, Iterable, Optional, List, Dict
 
 
@@ -454,6 +455,13 @@ def pop_tracks(coco_dset: kwcoco.CocoDataset,
     return gdf
 
 
+@lru_cache(maxsize=512)
+def _rasterized_poly(shp_poly, h, w, pixels_are):
+    poly = kwimage.MultiPolygon.from_shapely(shp_poly)
+    mask = poly.to_mask((h, w), pixels_are=pixels_are).data
+    return mask
+
+
 @profile
 def score_poly(poly, probs, threshold=-1, use_rasterio=True):
     '''
@@ -470,8 +478,6 @@ def score_poly(poly, probs, threshold=-1, use_rasterio=True):
         in which case returns all of them.
 
     '''
-    # try converting from shapely
-    # TODO standard coerce fns between kwimage, shapely, and __geo_interface__
     if not isinstance(poly, (kwimage.Polygon, kwimage.MultiPolygon)):
         poly = kwimage.MultiPolygon.from_shapely(poly)  # 2.4% of runtime
 
@@ -490,7 +496,10 @@ def score_poly(poly, probs, threshold=-1, use_rasterio=True):
     # kwimage inverse
     # 95% of runtime... would batch be faster?
     rel_poly = poly.translate((-x, -y))
-    rel_mask = rel_poly.to_mask((h, w), pixels_are=pixels_are).data
+    # rel_mask = rel_poly.to_mask((h, w), pixels_are=pixels_are).data
+    # shapely polys hash correctly (based on shape, not memory location)
+    # kwimage polys don't
+    rel_mask = _rasterized_poly(rel_poly.to_shapely(), h, w, pixels_are)
     # Slice out the corresponding region of probabilities
     rel_probs = probs[..., y:y + h, x:x + w]
 
