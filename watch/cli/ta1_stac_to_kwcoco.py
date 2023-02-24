@@ -72,6 +72,7 @@ SUPPORTED_COARSE_PLATFORMS = {
 def normalize_str(s):
     return s.lower().replace('-', '_')
 
+
 PLATFORM_NORMALIZED_TO_PLATFORM_STANDARD_CASE = {
     normalize_str(v): v
     for vs in SUPPORTED_COARSE_PLATFORMS.values()

@@ -2,7 +2,7 @@ data:
   time_steps: 5
   chip_dims: 128
   # channels: "(WV):blue|green|red"
-  channels: "blue|green|red"
+  channels: "(L8,S2):blue|green|red"
   window_space_scale: 10GSD
   input_space_scale: 10GSD
   output_space_scale: 10GSD
@@ -23,14 +23,34 @@ data:
   verbose: 1
   max_epoch_length: 3200
   mask_low_quality: true
+  mask_samecolor_method: null
 model:
-  class_path: watch.tasks.fusion.methods.UNetBaseline
+  class_path: watch.tasks.fusion.methods.HeterogeneousModel
   init_args:
-    token_dim: 32
+    token_width: 8
+    token_dim: 64
+    position_encoder:
+      class_path: watch.tasks.fusion.methods.heterogeneous.MipNerfPositionalEncoder
+      init_args:
+        in_dims: 3
+        max_freq: 3
+        num_freqs: 16
+    backbone:
+      class_path: watch.tasks.fusion.architectures.transformer.TransformerEncoderDecoder
+      init_args:
+        encoder_depth: 6
+        decoder_depth: 0
+        dim: 160
+        queries_dim: 96
+        logits_dim: 64
+        latent_dim_head: 256
+    spatial_scale_base: 1.0
+    temporal_scale_base: 1.0
     global_change_weight: 0.0
     global_class_weight: 0.0
     global_saliency_weight: 1.0
-    saliency_loss: focal
+    saliency_loss: dicefocal
+    decoder: simple_conv
 optimizer:
   class_path: torch.optim.Adam
   init_args:

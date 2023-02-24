@@ -12,7 +12,7 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 
-EXPERIMENT_NAME=Drop4_BAS_S2L8_UNet
+EXPERIMENT_NAME=Drop4_BAS_S2L8_NoDecoderHetModel
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 python -m watch.tasks.fusion fit \
     --config=config_common.yaml \

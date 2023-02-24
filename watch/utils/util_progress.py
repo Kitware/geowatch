@@ -199,6 +199,7 @@ class _RichProgIterManager(BaseProgIterManager):
     """
     rich specific backend.
     """
+
     def __init__(self, **kwargs):
         self.prog_iters = []
         self.rich_manager = None
@@ -286,6 +287,7 @@ class _ProgIterManager(BaseProgIterManager):
     """
     progiter specific backend
     """
+
     def __init__(self, **kwargs):
         self.enabled = kwargs.get('enabled', True)
         # Default arguments for new progiters
@@ -450,6 +452,7 @@ class ProgressManager(BaseProgIterManager):
         >>>     task2.update(2)
         >>> ProgressManager.stopall()
     """
+
     def __init__(self, backend='rich', **kwargs):
         LIVE_PROGRESS_MANAGERS[id(self)] = self
 

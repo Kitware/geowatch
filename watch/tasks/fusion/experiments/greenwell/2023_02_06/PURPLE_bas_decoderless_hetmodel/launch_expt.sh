@@ -12,10 +12,11 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 
-EXPERIMENT_NAME=Drop4_BAS_S2L8_UNet
+EXPERIMENT_NAME=Drop4_BAS_S2L8_NoDecoderHetModel
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 python -m watch.tasks.fusion fit \
     --config=config_common.yaml \
+    --ckpt_path=$DEFAULT_ROOT_DIR/lightning_logs/version_1/checkpoints/epoch=363-step=9100.ckpt \
     --model.init_args.name=$EXPERIMENT_NAME \
     --data.train_dataset="$TRAIN_FPATH" \
     --data.vali_dataset="$VALI_FPATH" \

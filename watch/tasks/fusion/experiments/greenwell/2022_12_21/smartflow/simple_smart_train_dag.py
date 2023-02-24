@@ -137,7 +137,7 @@ with DAG(
                 """
             )
         ],
-        purpose="gpu-nvidia-t4-c32-m128-g1-od", # TODO: choose multi-gpu node
+        purpose="gpu-nvidia-t4-c32-m128-g1-od",  # TODO: choose multi-gpu node
         cpu_limit="31",
         memory_limit="120G",
         mount_dshm=True,
@@ -197,7 +197,7 @@ with DAG(
                 """
             )
         ],
-        purpose="gpu-nvidia-t4-c32-m128-g1-od", # TODO: choose single-gpu node
+        purpose="gpu-nvidia-t4-c32-m128-g1-od",  # TODO: choose single-gpu node
         cpu_limit="15",
         memory_limit="28G",
         mount_dshm=True,

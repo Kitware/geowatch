@@ -2,7 +2,7 @@ data:
   time_steps: 5
   chip_dims: 128
   # channels: "(WV):blue|green|red"
-  channels: "blue|green|red"
+  channels: "(L8,S2):blue|green|red"
   window_space_scale: 10GSD
   input_space_scale: 10GSD
   output_space_scale: 10GSD
@@ -23,6 +23,7 @@ data:
   verbose: 1
   max_epoch_length: 3200
   mask_low_quality: true
+  mask_samecolor_method: null
 model:
   class_path: watch.tasks.fusion.methods.UNetBaseline
   init_args:

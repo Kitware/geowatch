@@ -18,11 +18,15 @@ from jsonargparse import set_loader, set_dumper
 # TODO: yaml.SafeLoader + tuple parsing
 def custom_yaml_load(stream):
     return yaml.load(stream, Loader=yaml.FullLoader)
+
+
 set_loader('yaml_unsafe_for_tuples', custom_yaml_load)
 
 
 def custom_yaml_dump(data):
     return yaml.dump(data, Dumper=yaml.Dumper)
+
+
 set_dumper('yaml_unsafe_for_tuples', custom_yaml_dump)
 
 
@@ -192,6 +196,7 @@ def make_cli(config=None):
                 config = config.read_text()
         except Exception:
             ...
+
         def nested_to_jsonnest(nested):
             config = {}
             for p, v in ub.IndexableWalker(nested):

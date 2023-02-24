@@ -7,6 +7,7 @@ from einops.layers.torch import Rearrange
 from torchvision import models as tv_models
 from torchvision.models import feature_extraction
 from typing import Union
+import numpy as np
 
 import kwcoco
 import kwarray
@@ -893,6 +894,41 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             >>>             assert frame_pred.shape[1:] == frame[task_key].shape, f"{frame_pred.shape} should equal {frame[task_key].shape} for task '{task_key}'"
 
         Example:
+            >>> from watch.tasks import fusion
+            >>> from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+            >>> position_encoder = fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3)
+            >>> backbone = TransformerEncoderDecoder(
+            >>>     encoder_depth=1,
+            >>>     decoder_depth=0,
+            >>>     dim=position_encoder.output_dim + 16,
+            >>>     queries_dim=0,
+            >>>     logits_dim=16,
+            >>>     cross_heads=1,
+            >>>     latent_heads=1,
+            >>>     cross_dim_head=1,
+            >>>     latent_dim_head=1,
+            >>> )
+            >>> channels, classes, dataset_stats = fusion.methods.HeterogeneousModel.demo_dataset_stats()
+            >>> model = fusion.methods.HeterogeneousModel(
+            >>>     classes=classes,
+            >>>     dataset_stats=dataset_stats,
+            >>>     input_sensorchan=channels,
+            >>>     position_encoder=position_encoder,
+            >>>     backbone=backbone,
+            >>>     decoder="trans_conv",
+            >>> )
+            >>> batch = model.demo_batch(width=64, height=65)
+            >>> batch += model.demo_batch(width=55, height=75)
+            >>> outputs = model.forward(batch)
+            >>> for task_key, task_outputs in outputs.items():
+            >>>     if "probs" in task_key: continue
+            >>>     if task_key == "class": task_key = "class_idxs"
+            >>>     for task_pred, example in zip(task_outputs, batch):
+            >>>         for frame_idx, (frame_pred, frame) in enumerate(zip(task_pred, example["frames"])):
+            >>>             if (frame_idx == 0) and task_key.startswith("change"): continue
+            >>>             assert frame_pred.shape[1:] == frame[task_key].shape, f"{frame_pred.shape} should equal {frame[task_key].shape} for task '{task_key}'"
+
+        Example:
             >>> # xdoctest: +REQUIRES(module:mmseg)
             >>> from watch.tasks import fusion
             >>> from watch.tasks.fusion.architectures.transformer import MM_VITEncoderDecoder
@@ -923,11 +959,30 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
 
         """
 
-        # input sequences
-        orig_input_seqs = []
-        for example in batch:
-            input_tokens = self.process_input_tokens(example)
+        # ==================
+        # Compute input sequences and shapes
+        # ==================
 
+        # Lists to stash sequences and shapes
+        orig_input_shapes = []
+        orig_input_seqs = []
+
+        for example in batch:
+
+            # Each example, containing potentially more than one mode,
+            # is stemmed and then we save its original shape
+            input_tokens = self.process_input_tokens(example)
+            input_shapes = [
+                [
+                    mode_tokens.shape[1:]
+                    for mode_tokens in frame_tokens
+                ]
+                for frame_tokens in input_tokens
+            ]
+            orig_input_shapes.append(input_shapes)
+
+            # For the downstream transformer, we flatten and concatenate the
+            # stemmed tokens
             input_token_seq = torch.concat([
                 torch.concat([
                     einops.rearrange(mode_tokens, "chan ... -> (...) chan")
@@ -937,68 +992,140 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             ])
             orig_input_seqs.append(input_token_seq)
 
-        padding_value = -1000.0
+        # Each example may have a different number of tokens, so we perform
+        # some padding and compute a mask of where those padded tokens are
+        padding_value = -1000.0  # Magic placeholder value
         input_seqs = nn.utils.rnn.pad_sequence(
             orig_input_seqs,
             batch_first=True,
             padding_value=padding_value,
         )
+        # Remove the placeholder
         input_masks = input_seqs[..., 0] > padding_value
         input_seqs[~input_masks] = 0.
 
-        # query sequences
-        orig_query_shapes = []
-        orig_query_seqs = []
-        for example in batch:
-            query_tokens = self.process_query_tokens(example)
-            query_shapes = [
-                frame_tokens.shape[1:]
-                for frame_tokens in query_tokens
-            ]
-            query_token_seq = torch.concat([
-                einops.rearrange(frame_tokens, "chan ... -> (...) chan")
-                for frame_tokens in query_tokens
-            ])
+        # ==================
+        # Compute query sequences and shapes
+        # (Should be similar/identical to the input proceedure)
+        # BUT only if we need to
+        # ==================
 
-            orig_query_shapes.append(query_shapes)
-            orig_query_seqs.append(query_token_seq)
+        if self.backbone.has_decoder:
 
-        padding_value = -1000.0
-        query_seqs = nn.utils.rnn.pad_sequence(
-            orig_query_seqs,
-            batch_first=True,
-            padding_value=padding_value,
-        )
-        query_masks = query_seqs[..., 0] > padding_value
-        query_seqs[~query_masks] = 0.
+            # Lists to stash sequences and shapes
+            orig_query_shapes = []
+            orig_query_seqs = []
 
-        # forward pass!
-        output_seqs = self.backbone(
-            input_seqs,
-            mask=input_masks,
-            queries=query_seqs,
-        )
+            for example in batch:
 
-        # decompose outputs
+                # Each example, containing potentially more than one task,
+                # a map of query position tokens are computed and then we save
+                # their original shape
+                query_tokens = self.process_query_tokens(example)
+                query_shapes = [
+                    frame_tokens.shape[1:]
+                    for frame_tokens in query_tokens
+                ]
+                orig_query_shapes.append(query_shapes)
+
+                # For the downstream transformer, we flatten and concatenate
+                # the position embeddings
+                query_token_seq = torch.concat([
+                    einops.rearrange(frame_tokens, "chan ... -> (...) chan")
+                    for frame_tokens in query_tokens
+                ])
+                orig_query_seqs.append(query_token_seq)
+
+            # Each example may have a different number of queries, so we perform
+            # some padding and compute a mask of where those padded tokens are
+            padding_value = -1000.0  # Magic placeholder value
+            query_seqs = nn.utils.rnn.pad_sequence(
+                orig_query_seqs,
+                batch_first=True,
+                padding_value=padding_value,
+            )
+            # Remove the placeholder
+            query_masks = query_seqs[..., 0] > padding_value
+            query_seqs[~query_masks] = 0.
+
+        # ==================
+        # Forward pass!
+        # ==================
+        if self.backbone.has_decoder:
+            output_seqs = self.backbone(
+                input_seqs,
+                mask=input_masks,
+                queries=query_seqs,
+            )
+            output_shapes = orig_query_shapes
+            output_masks = query_masks
+        else:
+            output_seqs = self.backbone(
+                input_seqs,
+                mask=input_masks,
+            )
+            output_shapes = orig_input_shapes
+            output_masks = input_masks
+
+        # ==================
+        # Decompose outputs into the appropriate output shape
+        # ==================
+
+        # The container for all of our outputs
         outputs = dict()
+
         for task_name, task_head in self.heads.items():
             task_outputs = []
             task_probs = []
-            for output_seq, query_mask, frame_shapes, example in zip(output_seqs, query_masks, orig_query_shapes, batch):
+            for output_seq, query_mask, frame_shapes, example in zip(output_seqs, output_masks, output_shapes, batch):
                 output_seq = output_seq[query_mask]  # only want valid values we actually requested
 
                 seq_outputs = []
                 seq_probs = []
-                frame_sizes = [h * w for h, w in frame_shapes]
-                for output_frame_seq, (height, width), frame in zip(torch.split(output_seq, frame_sizes), frame_shapes, example["frames"]):
+                frame_sizes = [
+                    np.reshape(pos_shape_seq, [-1, 2]).prod(axis=1).sum()
+                    for pos_shape_seq in frame_shapes
+                ]
+                output_frame_seqs = torch.split(output_seq, frame_sizes)
+                for output_frame_seq, frame_shape, frame in zip(output_frame_seqs, frame_shapes, example["frames"]):
 
-                    output = einops.rearrange(
-                        output_frame_seq,
-                        "(height width) chan -> chan height width",
-                        height=height, width=width,
-                    )
-                    tar_height, tar_width = frame["output_dims"]
+                    if self.backbone.has_decoder:
+                        # Rearrange token subsequence into image shaped tensor
+                        height, width = frame_shape
+                        output = einops.rearrange(
+                            output_frame_seq,
+                            "(height width) chan -> chan height width",
+                            height=height, width=width,
+                        )
+
+                    else:
+                        max_mode_size = (
+                            max([h for h, _ in frame_shape]),
+                            max([w for _, w in frame_shape]),
+                        )
+                        mode_sizes = [h * w for h, w in frame_shape]
+                        output_mode_seqs = torch.split(output_frame_seq, mode_sizes)
+
+                        output = torch.mean(torch.concat([
+                            nn.functional.upsample_bilinear(
+                                einops.rearrange(
+                                    mode_seq,
+                                    "(height width) chan -> 1 chan height width",
+                                    height=mode_height, width=mode_width,
+                                ),
+                                size=max_mode_size,
+                            )
+                            for mode_seq, (mode_height, mode_width) in zip(output_mode_seqs, frame_shape)
+                        ], dim=0), dim=0)
+
+                        # # If we might need to upsample our predictions
+                        # output = nn.functional.upsample_bilinear(output[None], size=[tar_height, tar_width])[0]
+
+                    # Compute task preds
                     output = task_head(output[None])[0]
+
+                    # Clip to desired shape
+                    tar_height, tar_width = frame["output_dims"]
                     output = output[:, :tar_height, :tar_width]
 
                     probs = einops.rearrange(output, "chan height width -> height width chan")

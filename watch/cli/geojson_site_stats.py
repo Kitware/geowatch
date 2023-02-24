@@ -126,6 +126,7 @@ def main(cmdline=0, **kwargs):
         label_modifier.add_mapping({'rt_area': 'sqrt(area)'})
 
     fnum = 1
+
     def new_figure():
         fig = kwplot.figure(doclf=True, fnum=fnum)
         # if 0:

@@ -29,11 +29,11 @@ from argparse import SUPPRESS
 from jsonargparse.typing import is_final_class
 
 from jsonargparse.actions import _ActionConfigLoad  # NOQA
-from jsonargparse.optionals import get_doc_short_description # NOQA
+from jsonargparse.optionals import get_doc_short_description  # NOQA
 from jsonargparse.parameter_resolvers import (ParamData, get_parameter_origins, get_signature_parameters,)  # NOQA
-from jsonargparse.typehints import ActionTypeHint, LazyInitBaseClass, is_optional # NOQA
-from jsonargparse.typing import is_final_class # NOQA
-from jsonargparse.util import LoggerProperty, get_import_path, is_subclass, iter_to_set_str # NOQA
+from jsonargparse.typehints import ActionTypeHint, LazyInitBaseClass, is_optional  # NOQA
+from jsonargparse.typing import is_final_class  # NOQA
+from jsonargparse.util import LoggerProperty, get_import_path, is_subclass, iter_to_set_str  # NOQA
 from jsonargparse.signatures import is_factory_class, is_pure_dataclass
 
 
@@ -361,6 +361,7 @@ class LightningArgumentParser_Extension(LightningArgumentParser):
             if hasattr(param, '_scfg_value'):
                 value = param._scfg_value
                 _value = value
+
                 def _resolve_alias(name, _value, fuzzy_hyphens):
                     if _value is None:
                         aliases = None
