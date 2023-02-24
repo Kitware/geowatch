@@ -330,7 +330,7 @@ def coco_populate_geo_img_heuristics2(coco_img, overwrite=False,
         >>> assert 'geos_corners' in img
         >>> #assert 'default_nodata' in img
         >>> #assert 'default_nodata' in new_aux_attrs
-        >>> print(ub.varied_values(list(map(lambda x: ub.map_vals(json.dumps, x), coco_img.img['auxiliary']))))
+        >>> print(ub.varied_values(list(map(lambda x: ub.map_vals(json.dumps, x), coco_img.img['auxiliary'])), default=None))
 
     Example:
         >>> from watch.utils.kwcoco_extensions import *  # NOQA

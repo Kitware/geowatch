@@ -89,8 +89,8 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
         >>> img['height'] *= scale_factor
         >>> img['warp_img_to_vid']['scale'] = 1/scale_factor
         >>> for aux in img['auxiliary']:
-        >>>     aux['warp_aux_to_img']['scale'] = aux['warp_aux_to_img'].get(
-        >>>         'scale', 1) * scale_factor
+        >>>     aux['warp_aux_to_img']['scale'] = np.array(
+        >>>         aux['warp_aux_to_img'].get('scale', 1)) * scale_factor
         >>> annots = coco_dset.annots(gid=img['id'])
         >>> old_annots = deepcopy(annots)
         >>> dets = annots.detections.warp(aff)
@@ -313,12 +313,28 @@ def normalize_phases(coco_dset,
     Example:
         >>> # test baseline guess
         >>> from watch.tasks.tracking.normalize import normalize_phases
+        >>> from watch.tasks.tracking.normalize import normalize_phases
+        >>> from watch.demo import smart_kwcoco_demodata
+        >>> dset = smart_kwcoco_demodata.demo_kwcoco_with_heatmaps()
+        >>> dset.remove_categories([1,3,4,5])
+        >>> dset.cats[2]['name'] = 'salient'
+        >>> assert dset.cats == {2: {'id': 2, 'name': 'salient'}}
+        >>> # HACK, this shouldn't be needed?
+        >>> # TODO file bug report
+        >>> dset._build_index()
+        >>> dset = normalize_phases(dset)
+        >>> assert (dset.annots(trackid=1).cnames ==
+        >>>     ((['Site Preparation'] * 10) +
+        >>>      (['Active Construction'] * 9) +
+        >>>      (['Post Construction'])))
+        >>> # try again with smoothing
+        >>> dset = normalize_phases(dset, use_viterbi=True)
         >>> from watch.demo import smart_kwcoco_demodata
         >>> from watch.utils.kwcoco_extensions import sorted_annots
         >>> dset = smart_kwcoco_demodata.demo_kwcoco_with_heatmaps()
-        >>> dset.cats[3]['name'] = 'salient'
-        >>> dset.remove_categories([1,2])
-        >>> assert dset.cats == {3: {'id': 3, 'name': 'salient'}}
+        >>> dset.remove_categories([1,3,4,5])
+        >>> dset.cats[2]['name'] = 'salient'
+        >>> assert dset.cats == {2: {'id': 2, 'name': 'salient'}}
         >>> # HACK, this shouldn't be needed?
         >>> # TODO file bug report
         >>> dset._build_index()
@@ -721,6 +737,7 @@ def normalize(
 
     if viz_sc_bounds:
         from watch.tasks.tracking.visualize import keys_to_score_sc, viz_track_scores
+        from watch.heuristics import SITE_SUMMARY_CNAME
         track_cats = [SITE_SUMMARY_CNAME] + sorted(set(out_dset.annots().cnames))
         keys_to_score = keys_to_score_sc
         out_pth = viz_out_dir / 'track_scores.jpg'
