@@ -2448,7 +2448,12 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                         try:
                             perchan_stats = running.summarize(axis=(1, 2))
                         except RuntimeError:
-                            perchan_stats = {'mean': np.array([[[np.nan]]]), 'std': np.array([[[np.nan]]])}
+                            perchan_stats = {
+                                'mean': np.array([[[np.nan]]]),
+                                'std': np.array([[[np.nan]]]),
+                                'min': np.array([[[np.nan]]]),
+                                'max': np.array([[[np.nan]]]),
+                            }
                         chan_mean = perchan_stats['mean']
                         chan_std = perchan_stats['std']
                         chan_min = perchan_stats['min']
