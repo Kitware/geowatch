@@ -775,13 +775,18 @@ def normalize(
     if DEBUG_JSON_SERIALIZABLE:
         debug_json_unserializable(out_dset.dataset, 'Output of normalize: ')
 
-    if viz_out_dir is not None and gt_dset is not None:
+    if viz_out_dir is not None:
         # visualize predicted sites with true sites
-        # TODO needs a refactor
-        from watch.tasks.tracking.visualize import visualize_videos2
-        visualize_videos2(out_dset,
-                         gt_dset,
-                         viz_out_dir / 'gif')
+
+        # TODO think more about key handling
+        from watch.tasks.tracking.visualize import visualize_videos
+        from watch.tasks.tracking.utils import _validate_keys
+        from dataclasses import asdict
+        fg, bg = _validate_keys(
+            asdict(tracker).get('key', None),
+            asdict(tracker).get('bg_key', None))
+        keys = '|'.join([*fg, *bg])
+        visualize_videos(out_dset, viz_out_dir / 'gif', keys, gt_dset)
 
     return out_dset
 
