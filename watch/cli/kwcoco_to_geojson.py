@@ -44,6 +44,7 @@ import ubelt as ub
 import scriptconfig as scfg
 
 from watch.tasks.tracking import from_heatmap, from_polygon
+from watch.utils.kwcoco_extensions import sorted_annots
 
 _KNOWN_TRACK_FUNCS = {
     'saliency_heatmaps': from_heatmap.TimeAggregatedBAS,
@@ -367,7 +368,7 @@ def track_to_site(coco_dset,
     '''
 
     # get annotations in this track, sort them, and group them into features
-    annots = coco_dset.annots(trackid=trackid)
+    annots = sorted_annots(coco_dset, trackid)
     try:
         ixs, gids, anns = annots.lookup(
             'track_index'), annots.gids, annots.objs
@@ -478,7 +479,7 @@ def site_feature(coco_dset, region_id, site_id, trackid, gids, features, as_summ
     # system_confirmed, system_rejected, or system_proposed
     # TODO system_proposed pre val-net
     status = set(
-        coco_dset.annots(trackid=trackid).get('status',
+        sorted_annots(coco_dset, trackid).get('status',
                                               'system_confirmed'))
     assert len(status) == 1, f'inconsistent {status=} for {trackid=}'
     status = status.pop()
