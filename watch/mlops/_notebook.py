@@ -7,6 +7,19 @@ from watch.mlops.aggregate import fix_duplicate_param_hashids
 from watch.utils import util_pandas
 
 
+def _gather_all_results():
+    r"""
+    DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+    python -m watch.mlops.aggregate \
+        --target "
+            - $DVC_EXPT_DPATH/_timekernel_test_drop4
+            - $DVC_EXPT_DPATH/_namek_eval
+        " \
+        --export_tables=True \
+        --output_dpath="$DVC_EXPT_DPATH/namek_agg"
+    """
+
+
 def _check_high_tpr_case(agg, config):
     macro_results = agg.region_to_tables[agg.primary_macro_region].copy()
 
