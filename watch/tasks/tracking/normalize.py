@@ -629,9 +629,9 @@ def dedupe_dates(coco_dset):
     # aids_to_remove = []
     gids_to_remove = []
     sensor_priority = [
-        'Planet',
         'WorldView',
         'WorldView 1',
+        'Planet',
         'Sentinel-2',
         'Landsat 8',
         'Landsat 7'
