@@ -66,12 +66,12 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
     from watch.cli import gifify
     import ubelt as ub
     import kwcoco
-    from watch.utils.lightning_ext import util_globals
+    from watch.utils import util_parallel
 
     if channels is not None:
         channels = kwcoco.ChannelSpec.coerce(channels)
 
-    workers = util_globals.coerce_num_workers(workers)
+    workers = util_parallel.coerce_num_workers(workers)
     viz_dpath = ub.Path(viz_dpath)
 
     if video_names is None:

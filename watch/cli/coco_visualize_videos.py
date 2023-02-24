@@ -233,7 +233,8 @@ def main(cmdline=True, **kwargs):
             'src': src,
         }
     """
-    from watch.utils.lightning_ext import util_globals
+    from watch.utils import util_parallel
+    from watch.utils import util_resources
     from watch.utils import kwcoco_extensions
     config = CocoVisualizeConfig(data=kwargs, cmdline=cmdline and {'strict': True})
     space = config['space']
@@ -262,9 +263,9 @@ def main(cmdline=True, **kwargs):
         ub.schedule_deprecation(
             'watch', 'max_workers', 'argument to coco_visualize_videos',
             deprecate='now', error='later', remove='later')
-        max_workers = util_globals.coerce_num_workers(config['max_workers'])
+        max_workers = util_parallel.coerce_num_workers(config['max_workers'])
     else:
-        max_workers = util_globals.coerce_num_workers(config['workers'])
+        max_workers = util_parallel.coerce_num_workers(config['workers'])
     print('max_workers = {!r}'.format(max_workers))
 
     coco_dset = kwcoco.CocoDataset.coerce(config['src'])
@@ -336,7 +337,7 @@ def main(cmdline=True, **kwargs):
         coco_dset.index.videos.items(), total=len(coco_dset.index.videos),
         desc='viz videos', verbose=3)
 
-    util_globals.request_nofile_limits()
+    util_resources.request_nofile_limits()
 
     pool = ub.JobPool(mode='thread', max_workers=max_workers)
 

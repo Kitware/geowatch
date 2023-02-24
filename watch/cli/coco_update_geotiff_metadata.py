@@ -89,8 +89,8 @@ def main(cmdline=True, **kwargs):
         select_videos=config['select_videos'],
     )
 
-    from watch.utils.lightning_ext import util_globals
-    workers = util_globals.coerce_num_workers(config['workers'])
+    from watch.utils import util_parallel
+    workers = util_parallel.coerce_num_workers(config['workers'])
 
     mode = config['mode']
     assert mode == 'thread', 'must be thread for now'

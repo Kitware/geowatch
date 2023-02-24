@@ -274,10 +274,11 @@ def main(cmdline=True, **kwargs):
                               training=False)
     print(dataset.__len__())
 
-    from watch.utils.lightning_ext import util_globals
-    num_workers = util_globals.coerce_num_workers(args.num_workers)
+    from watch.utils import util_resources
+    from watch.utils import util_parallel
+    num_workers = util_parallel.coerce_num_workers(args.num_workers)
     if num_workers > 0:
-        util_globals.request_nofile_limits()
+        util_resources.request_nofile_limits()
 
     eval_dataloader = dataset.make_loader(
         batch_size=args.batch_size,

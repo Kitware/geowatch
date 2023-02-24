@@ -197,15 +197,15 @@ def main(cmdline=1, **kwargs):
         cmdline = 0
         kwargs = {'src': coco_fpath, 'workers': 'avail'}
     """
-    from watch.utils import util_globals
+    from watch.utils import util_parallel
 
-    config = CleanGeotiffConfig.legacy(cmdline=cmdline, data=kwargs)
+    config = CleanGeotiffConfig.cli(cmdline=cmdline, data=kwargs)
     print('config = {}'.format(ub.urepr(dict(config), nl=1)))
 
     print('Loading dataset')
     coco_dset = kwcoco.CocoDataset.coerce(config['src'])
 
-    workers = util_globals.coerce_num_workers(config['workers'])
+    workers = util_parallel.coerce_num_workers(config['workers'])
     print('workers = {}'.format(ub.urepr(workers, nl=1)))
     jobs = ub.JobPool(mode='process', max_workers=workers)
 

@@ -45,8 +45,8 @@ def main(cmdline=True, **kwargs):
     config = RemoveEmptyImagesConfig(cmdline=cmdline, data=kwargs)
     mode = config['mode']
 
-    from watch.utils.lightning_ext import util_globals
-    workers = util_globals.coerce_num_workers(config['workers'])
+    from watch.utils import util_parallel
+    workers = util_parallel.coerce_num_workers(config['workers'])
 
     main_channels = config['channels']
     if main_channels is not None:

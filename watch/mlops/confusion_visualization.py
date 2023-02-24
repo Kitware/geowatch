@@ -22,7 +22,7 @@ def bas_poly_eval_confusion_analysis(eval_fpath):
     assert len(poly_pred_dpaths) == 1
     poly_pred_dpath = ub.Path(poly_pred_dpaths[0])
 
-    info = smart_result_parser.load_eval_trk_poly(eval_fpath)
+    info = smart_result_parser.load_bas_poly_eval(eval_fpath)
     bas_row = info['json_info']['best_bas_rows']['data'][0]
     region_id = bas_row['region_id']
     rho = bas_row['rho']

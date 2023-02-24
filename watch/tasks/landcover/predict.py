@@ -42,7 +42,7 @@ CommandLine:
         --skip_missing=True --workers=4 --draw_anns=False --smart=True
 """
 import datetime
-# import warnings
+import torch
 import ubelt as ub
 from pathlib import Path
 
@@ -64,6 +64,7 @@ class LandcoverPredictConfig(scfg.DataConfig):
     deployed = scfg.Value(None, required=True, help='pytorch weights file')
     output = scfg.Value(None, required=True, help='output kwcoco dataset')
     num_workers = scfg.Value(0, type=str, help='number of dataloading workers. Can be "auto"')
+    io_workers = scfg.Value('auto', type=str, help='Number of writer threads. Defaults to min(num_workers, 2)')
     device = scfg.Value('auto', type=str, help='auto, cpu, or integer of the device to use')
     select_images = scfg.Value(None, type=str, help='if specified, a jq operation to filter images')
     select_videos = scfg.Value(None, type=str, help='if specified, a jq operation to filter videos')
@@ -92,6 +93,11 @@ def predict(cmdline=1, **kwargs):
         >>> cmdline = 0
         >>> predict(cmdline, **kwargs)
     """
+    from watch.utils.lightning_ext import util_device
+    from watch.tasks.fusion.predict import CocoStitchingManager
+    from watch.utils import process_context
+    from watch.utils import kwcoco_extensions
+
     config = LandcoverPredictConfig.cli(cmdline=cmdline, data=kwargs)
 
     print('config = {}'.format(ub.urepr(dict(config), align=':', nl=1)))
@@ -104,14 +110,15 @@ def predict(cmdline=1, **kwargs):
     if not deployed.is_file():
         raise ValueError('Landcover model does not exist')
 
-    from watch.utils.lightning_ext import util_device
     device = util_device.coerce_devices(config.device)[0]
     print(f'device={device}')
 
-    num_workers = util_parallel.coerce_num_workers(config.num_workers)
+    config.num_workers = util_parallel.coerce_num_workers(config.num_workers)
+    if config.io_workers == 'auto':
+        config.io_workers = min(2, config.num_workers)
+    config.io_workers = util_parallel.coerce_num_workers(config.io_workers)
 
     input_dset = kwcoco.CocoDataset.coerce(coco_dset_filename)
-    from watch.utils import kwcoco_extensions
     filtered_gids = kwcoco_extensions.filter_image_ids(
         input_dset, include_sensors=None, exclude_sensors=None,
         select_images=config.select_images, select_videos=config.select_videos)
@@ -124,12 +131,20 @@ def predict(cmdline=1, **kwargs):
 
     print('Using {}'.format(type(model_info).__name__))
 
+    print('Creating output dataset')
     output_dset = input_dset.copy()
 
-    from watch.tasks.fusion.predict import CocoStitchingManager
+    print('Initialize dataloader')
+    dataloader = DataLoader(ptdataset, num_workers=config.num_workers,
+                            batch_size=None, collate_fn=lambda x: x)
+
+    # Start the worker processes before we do threading
+    print('Initialize dataloader iter')
+    dataloader_iter = iter(dataloader)
 
     # Create a queue that writes data to disk in the background
-    writer_queue = util_parallel.BlockingJobQueue(max_workers=num_workers)
+    print('Initialize stitchers')
+    writer_queue = util_parallel.BlockingJobQueue(max_workers=config.io_workers)
 
     landcover_stitcher = CocoStitchingManager(
         output_dset,
@@ -145,7 +160,7 @@ def predict(cmdline=1, **kwargs):
 
         hidden_stitcher = CocoStitchingManager(
             output_dset,
-            'landcover',
+            'landcover_hidden',
             chan_code=f'landcover_hidden.0:{num_hidden}',
             stiching_space='image',
             writer_queue=writer_queue,
@@ -155,7 +170,7 @@ def predict(cmdline=1, **kwargs):
         model._activation_cache = None
         hidden_stitcher = None
 
-    from watch.utils import process_context
+    print('Initialize process context')
     proc_context = process_context.ProcessContext(
         type='process',
         name='watch.tasks.invariants.predict',
@@ -164,21 +179,18 @@ def predict(cmdline=1, **kwargs):
     )
     proc_context.start()
 
-    dataloader = DataLoader(ptdataset, num_workers=num_workers,
-                            batch_size=None, collate_fn=lambda x: x)
-
-    # Start the worker processes before we do threading
-    dataloader_iter = iter(dataloader)
-
-    pman = util_progress.ProgressManager()
-    with pman:
-        for img_info in pman.progiter(dataloader_iter, total=len(dataloader)):
+    print('Starting main predict loop')
+    # pman = util_progress.ProgressManager('progiter')
+    pman = util_progress.ProgressManager('rich')
+    with pman, torch.no_grad():
+        _prog = pman.progiter(dataloader_iter, total=len(dataloader),
+                              desc='predict landcover')
+        for img_info in _prog:
             try:
                 _predict_single(
                     img_info, model, model_info.model_outputs,
                     landcover_stitcher, hidden_stitcher,
-                    output_dset=output_dset,
-                    output_dir=output_dset_filename.parent)
+                    output_dset=output_dset)
 
             except KeyboardInterrupt:
                 print('interrupted')
@@ -215,36 +227,67 @@ def _register_hidden_layer_hook(model):
     layer_of_interest.register_forward_hook(record_hidden_activation)
 
 
-def _predict_single(img_info, model, model_outputs,
-                    landcover_stitcher, hidden_stitcher,
-                    output_dset: kwcoco.CocoDataset,
-                    output_dir: Path):
+def _predict_single(img_info,
+                    model,
+                    model_outputs,
+                    landcover_stitcher,
+                    hidden_stitcher,
+                    output_dset: kwcoco.CocoDataset):
     """
     Modifies the coco dataset inplace, returns the data that needs to be
     written to disk.
     """
+    import kwarray
+    import kwimage
     gid = img_info['id']
     img = img_info['imgdata']
 
-    pred = detector.run(model, img, img_info)
+    ## Hardcoded params
+    window_dims = (1536, 1536)
+    window_overlap = 0.3
+    hidden_scale = 0.5  # scale from raw predictions to hidden predictions
 
-    if pred is None:
-        return None, None
+    image_box = kwimage.Box.from_dsize(img.shape[0:2][::-1])
 
-    landcover_stitcher.accumulate_image(gid, None, pred)
+    if hidden_stitcher is not None:
+        hidden_box = image_box.scale(hidden_scale).astype(int)
+        hidden_dsize = hidden_box.dsize
+
+    # Need to run a sliding window so we can manage larger image
+    slider = kwarray.SlidingWindow(img.shape[0:2], window_dims,
+                                   overlap=window_overlap,
+                                   keepbound=True,
+                                   allow_overshoot=True)
+
+    for img_slice in slider:
+        subimg = img[img_slice]
+        pred = detector.run(model, subimg, img_info)
+        if pred is None:
+            continue
+
+        landcover_stitcher.accumulate_image(gid, img_slice, pred)
+
+        if hidden_stitcher is not None:
+            # Lots of hardcoded things here.
+            # Hack to unpad here.
+            if 'hidden' not in model._activation_cache:
+                print('WARNING: we expected hidden, but its not there')
+            else:
+                hidden_raw = model._activation_cache['hidden'].cpu().numpy()
+                model._activation_cache.pop('hidden', None)
+                hidden = hidden_raw[0].transpose(1, 2, 0)
+                h, w = pred.shape[0:2]
+                hidden = hidden[0:h // 2, 0:w // 2, 0:hidden_stitcher.num_hidden]
+
+                output_box = kwimage.Box.from_slice(img_slice)
+                hidden_box = output_box.scale(hidden_scale).astype(int)
+                hidden_slice = hidden_box.to_slice()
+                hidden_stitcher.accumulate_image(
+                    gid, hidden_slice, hidden, asset_dsize=hidden_dsize,
+                    scale_asset_from_stitchspace=hidden_scale)
+
     landcover_stitcher.submit_finalize_image(gid)
-
-    if model._activation_cache is not None:
-        # Lots of hardcoded things here.
-        # Hack to unpad here.
-        hidden_raw = model._activation_cache['hidden'].cpu().numpy()
-        hidden = hidden_raw[0].transpose(1, 2, 0)
-        h, w = pred.shape[0:2]
-        hidden_dsize = (w // 2, h // 2)
-        hidden = hidden[0:h // 2, 0:w // 2, 0:hidden_stitcher.num_hidden]
-        hidden_stitcher.accumulate_image(
-            gid, None, hidden, asset_dsize=hidden_dsize,
-            scale_asset_from_stitchspace=0.5)
+    if hidden_stitcher is not None:
         hidden_stitcher.submit_finalize_image(gid)
 
 

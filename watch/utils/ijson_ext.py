@@ -27,6 +27,26 @@ Example:
     >>> #
     >>> file = io.StringIO(text)
     >>> list(ijson_ext.items(file, 'bbox'))
+
+    >>> import ijson
+    >>> # Regular ijson does not support NaN
+    >>> text = ub.codeblock(
+    >>>     '''
+    >>>     {"id": 246, "image_id": 123, "flag": true, "empty": null, "category_id": 2, "bbox": [ null, 5, 130, 290 ] }
+    >>>     ''')
+
+
+    import timerit
+    ti = timerit.Timerit(100, bestof=10, verbose=2)
+    for timer in ti.reset('time'):
+        with timer:
+            file = io.StringIO(text)
+            list(ijson.items(file, 'bbox'))
+
+    for timer in ti.reset('time'):
+        with timer:
+            file = io.StringIO(text)
+            list(ijson_ext.items(file, 'bbox'))
 """
 from json.decoder import scanstring
 import re

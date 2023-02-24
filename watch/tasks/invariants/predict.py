@@ -27,21 +27,15 @@ Basline Example:
 SeeAlso:
     ~/code/watch/watch/cli/prepare_teamfeats.py
 """
-# import kwimage
-# import kwarray
 import torch
 import ubelt as ub
-# import os
-# local imports
-from .pretext_model import pretext
 from .data.datasets import GriddedDataset
-from watch.utils.lightning_ext import util_globals
-from watch.utils.lightning_ext import util_device
+from .pretext_model import pretext
 from .segmentation_model import segmentation_model as seg_model
-from watch.utils import util_kwimage  # NOQA
-
 from watch.tasks.fusion.predict import CocoStitchingManager
-# from watch.tasks.fusion.predict import quantize_float01
+from watch.utils import util_kwimage  # NOQA
+from watch.utils import util_parallel
+from watch.utils.lightning_ext import util_device
 
 import scriptconfig as scfg
 
@@ -166,10 +160,10 @@ class Predictor(object):
 
         self.tasks = args.tasks
 
-        self.num_workers = util_globals.coerce_num_workers(args.num_workers)
+        self.num_workers = util_parallel.coerce_num_workers(args.num_workers)
         print('self.num_workers = {!r}'.format(self.num_workers))
 
-        self.write_workers = util_globals.coerce_num_workers(args.write_workers)
+        self.write_workers = util_parallel.coerce_num_workers(args.write_workers)
         print(f'self.write_workers={self.write_workers}')
 
         self.devices = util_device.coerce_devices(args.device)

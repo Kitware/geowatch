@@ -104,7 +104,13 @@ class RichProgIter:
                 ...
         self.total = total
         self.desc = desc
-        self.task_id = self.manager.rich_manager.add_task(desc, total=self.total)
+        addtask_kw = {}
+        if desc is not None:
+            addtask_kw['description'] = desc
+        else:
+            addtask_kw['description'] = ''
+        addtask_kw['total'] = self.total
+        self.task_id = self.manager.rich_manager.add_task(**addtask_kw)
         self.transient = transient
         self.extra = None
 
@@ -157,7 +163,7 @@ class RichProgIter:
 
     def set_postfix_str(self, text, refresh=True):
         self.extra = text
-        parts = [self.desc]
+        parts = [self.desc] if self.desc is not None else []
         if self.extra is not None:
             parts.append(self.extra)
         if self.enabled:
@@ -446,6 +452,9 @@ class ProgressManager(BaseProgIterManager):
     """
     def __init__(self, backend='rich', **kwargs):
         LIVE_PROGRESS_MANAGERS[id(self)] = self
+
+        # TODO: check if we are being tee-d and use progiter instead if we are.
+
         if PROGITER_NOTHREAD:
             backend = 'progiter'
         if backend == 'rich':

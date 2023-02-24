@@ -1,6 +1,14 @@
 """
 Cleanup old local branches
 
+
+CommandLine:
+
+    python ~/local/git_tools/git_devbranch.py --help
+    python ~/local/git_tools/git_devbranch.py clean --help
+
+    python ~/local/git_tools/git_devbranch.py clean --remove_merged
+
 See Also:
 
     Erotemic/local:

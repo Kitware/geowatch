@@ -57,14 +57,13 @@ def main(cmdline=1, **kwargs):
     import ubelt as ub
     from watch.utils import util_pattern
     from watch.utils import util_parallel
-    from watch.utils import util_globals
-    config = SplitVideoConfig.legacy(cmdline=cmdline, data=kwargs)
+    config = SplitVideoConfig.cli(cmdline=cmdline, data=kwargs)
     print('config = {}'.format(ub.repr2(config, nl=1)))
 
     coco_fpaths = list(util_pattern.MultiPattern.coerce(config.src).paths())
     print(f'coco_fpaths={coco_fpaths}')
 
-    io_workers = util_globals.coerce_num_workers(config.io_workers)
+    io_workers = util_parallel.coerce_num_workers(config.io_workers)
     writer = util_parallel.BlockingJobQueue(max_workers=io_workers)
 
     writen_fpaths = set()

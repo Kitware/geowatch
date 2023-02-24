@@ -380,8 +380,8 @@ def sample_video_spacetime_targets(dset,
         # Given an video
         all_vid_ids = sorted(set(selected_vidid_to_gids.keys()))
 
-        from watch.utils.lightning_ext import util_globals
-        workers = util_globals.coerce_num_workers(workers)
+        from watch.utils import util_parallel
+        workers = util_parallel.coerce_num_workers(workers)
         workers = min(len(all_vid_ids), workers)
         if workers == 1:
             workers = 0

@@ -11,7 +11,6 @@ import ubelt as ub
 import scriptconfig as scfg
 import numpy as np
 import kwimage
-from watch.utils import kwcoco_extensions
 
 
 class AddWatchFieldsConfig(scfg.Config):
@@ -96,6 +95,9 @@ def main(cmdline=True, **kwargs):
         kwargs['src'] = kwargs['dst']
         main(**kwargs)
     """
+    from watch import heuristics
+    from watch.utils import util_parallel
+    from watch.utils import kwcoco_extensions
     config = AddWatchFieldsConfig(kwargs, cmdline=cmdline)
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
 
@@ -110,14 +112,12 @@ def main(cmdline=True, **kwargs):
     # )
 
     # hack in colors
-    from watch import heuristics
-    from watch.utils.lightning_ext import util_globals
     heuristics.ensure_heuristic_coco_colors(dset)
 
     print('start populate')
 
     populate_kw = ub.compatible(config, kwcoco_extensions.populate_watch_fields)
-    populate_kw['workers'] = util_globals.coerce_num_workers(config['workers'])
+    populate_kw['workers'] = util_parallel.coerce_num_workers(config['workers'])
 
     kwcoco_extensions.populate_watch_fields(dset, **populate_kw)
     print('dset.index.videos = {}'.format(ub.repr2(dset.index.videos, nl=2, precision=4)))
