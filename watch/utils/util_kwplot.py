@@ -350,6 +350,7 @@ class FigureFinalizer:
     """
     Helper for defining where and how figures will be saved on disk.
     """
+
     def __init__(
         self,
         dpath='.',

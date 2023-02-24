@@ -1446,10 +1446,12 @@ def varied_value_counts(longform, min_variations=0, default=ub.NoParam, dropna=F
 if 1:
     # Fix pandas groupby so it uses the new behavior with a list of len 1
     import wrapt
+
     class GroupbyFutureWrapper(wrapt.ObjectProxy):
         """
         Wraps a groupby object to get the new behavior sooner.
         """
+
         def __iter__(self):
             keys = self.keys
             if isinstance(keys, list) and len(keys) == 1:

@@ -994,7 +994,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
 
         # Each example may have a different number of tokens, so we perform
         # some padding and compute a mask of where those padded tokens are
-        padding_value = -1000.0 # Magic placeholder value
+        padding_value = -1000.0  # Magic placeholder value
         input_seqs = nn.utils.rnn.pad_sequence(
             orig_input_seqs,
             batch_first=True,
@@ -1003,7 +1003,6 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         # Remove the placeholder
         input_masks = input_seqs[..., 0] > padding_value
         input_seqs[~input_masks] = 0.
-
 
         # ==================
         # Compute query sequences and shapes
@@ -1039,7 +1038,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
 
             # Each example may have a different number of queries, so we perform
             # some padding and compute a mask of where those padded tokens are
-            padding_value = -1000.0 # Magic placeholder value
+            padding_value = -1000.0  # Magic placeholder value
             query_seqs = nn.utils.rnn.pad_sequence(
                 orig_query_seqs,
                 batch_first=True,
@@ -1048,7 +1047,6 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             # Remove the placeholder
             query_masks = query_seqs[..., 0] > padding_value
             query_seqs[~query_masks] = 0.
-
 
         # ==================
         # Forward pass!
@@ -1068,7 +1066,6 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             )
             output_shapes = orig_input_shapes
             output_masks = input_masks
-
 
         # ==================
         # Decompose outputs into the appropriate output shape
@@ -1120,7 +1117,6 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                             )
                             for mode_seq, (mode_height, mode_width) in zip(output_mode_seqs, frame_shape)
                         ], dim=0), dim=0)
-
 
                         # # If we might need to upsample our predictions
                         # output = nn.functional.upsample_bilinear(output[None], size=[tar_height, tar_width])[0]

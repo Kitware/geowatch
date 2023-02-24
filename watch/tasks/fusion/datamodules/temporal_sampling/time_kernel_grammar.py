@@ -76,9 +76,9 @@ def _global_multi_time_kernel_parser():
     import lark
     try:
         import lark_cython
-        parser = lark.Lark(MULTI_TIME_KERNEL_GRAMMAR,  start='start', parser='lalr', _plugins=lark_cython.plugins)
+        parser = lark.Lark(MULTI_TIME_KERNEL_GRAMMAR, start='start', parser='lalr', _plugins=lark_cython.plugins)
     except ImportError:
-        parser = lark.Lark(MULTI_TIME_KERNEL_GRAMMAR,  start='start', parser='lalr')
+        parser = lark.Lark(MULTI_TIME_KERNEL_GRAMMAR, start='start', parser='lalr')
     return parser
 
 

@@ -762,6 +762,7 @@ def _fill_missing_colors(label_to_color):
         final[key] = tuple(map(float, new_color))
     return final
 
+
 _SubConfig = CocoSpectraConfig
 
 if __name__ == '__main__':

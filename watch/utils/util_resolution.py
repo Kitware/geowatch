@@ -82,9 +82,9 @@ class ExtendedTransformer(Transformer):
         import lark
         try:
             import lark_cython
-            parser = lark.Lark(cls.__grammar__,  start='start', parser='lalr', _plugins=lark_cython.plugins)
+            parser = lark.Lark(cls.__grammar__, start='start', parser='lalr', _plugins=lark_cython.plugins)
         except ImportError:
-            parser = lark.Lark(cls.__grammar__,  start='start', parser='lalr')
+            parser = lark.Lark(cls.__grammar__, start='start', parser='lalr')
         return parser
 
     @classmethod

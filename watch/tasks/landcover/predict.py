@@ -218,6 +218,7 @@ def _register_hidden_layer_hook(model):
     # These are at half of the output image resolution.
 
     model._activation_cache = {}
+
     def record_hidden_activation(layer, input, output):
         activation = output.detach()
         model._activation_cache['hidden'] = activation

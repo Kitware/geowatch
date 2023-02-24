@@ -517,7 +517,7 @@ def _handle_degenerate_weights(affinity, chosen, exclude_indices, errors,
                 zero_weight_method = 'random'
             else:
                 chosen_neighbor_idxs = np.hstack([np.array(chosen) + 1, np.array(chosen) - 1])
-                chosen_neighbor_idxs = np.unique(np.clip(chosen_neighbor_idxs, 0,  len(current_weights) - 1))
+                chosen_neighbor_idxs = np.unique(np.clip(chosen_neighbor_idxs, 0, len(current_weights) - 1))
                 ideal_idxs = np.setdiff1d(chosen_neighbor_idxs, chosen)
                 if len(ideal_idxs) == 0:
                     ideal_idxs = chosen_neighbor_idxs

@@ -36,7 +36,6 @@ def _check_high_tpr_case(agg, config):
             ub.symlink(real_path=eval_dpath, link_path=link_dpath)
             ...
 
-
         agg.index['param_hashid'] == param_hashid
 
         subagg.fpaths.tolist()
@@ -96,6 +95,7 @@ def _namek_eval():
     agg.primary_metric_cols = ['bas_poly_eval.metrics.bas_ppv', 'bas_poly_eval.metrics.bas_tpr']
     _ = subagg1.report_best()
 
+
 def _timekernel_analysis():
     from watch.mlops.aggregate import AggregateEvluationConfig
     from watch.mlops.aggregate import build_tables
@@ -132,6 +132,7 @@ def _timekernel_analysis():
 
     agg = eval_type_to_aggregator.get('bas_pxl_eval', None)
 
+
 def _setup_sc_analysis():
     from watch.mlops.aggregate import AggregateEvluationConfig
     from watch.mlops.aggregate import build_tables
@@ -157,7 +158,6 @@ def _setup_sc_analysis():
     print(f'agg={agg}')
     rois = {'KR_R001', 'KR_R002', 'BR_R002'}
     print(f'rois={rois}')
-
 
 
 def _setup_bas():
@@ -194,7 +194,6 @@ def _setup_bas():
     rois = {'KR_R001', 'KR_R002'}
     # rois = {'KR_R001', 'KR_R002', 'BR_R002'}
     print(f'rois={rois}')
-
 
 
 def _resource_table(eval_type_to_aggregator):
@@ -284,7 +283,6 @@ def generate_kr2_heatmaps(agg):
     from watch.mlops import confusion_visualization
     confusion_visualization.bas_poly_eval_confusion_analysis(eval_fpath)
 
-
     rois = {'KR_R001', 'KR_R002', 'BR_R002'}
     agg1 = agg.filterto(models=['Drop4_BAS_2022_12_15GSD_BGRN_V10_epoch=0-step=4305'])
     # agg1 = agg.filterto(param_hashids=['cvvlwbictocz'])
@@ -298,6 +296,7 @@ def generate_kr2_heatmaps(agg):
 
     from watch.mlops import confusion_visualization
     confusion_visualization.bas_poly_eval_confusion_analysis(eval_fpath)
+
 
 def check_baseline(eval_type_to_aggregator):
     from watch.utils.util_pandas import DotDictDataFrame
@@ -813,7 +812,6 @@ def custom_analysis(eval_type_to_aggregator, config):
         # final_scores = final_agg.report_best()
         # region_id_to_summary = subagg.report_best()
         # region_id_to_summary['macro_02_19bfe3']
-
 
 
 def quick_heatmap_viz():
