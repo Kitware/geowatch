@@ -617,28 +617,10 @@ def find_local_meter_epsg_crs(geom_crs84):
         - [ ] Fix edge cases
     """
 
-    if 0:
-        # TODO: probably can do this via: GeoDataFrame.estimate_utm_crs
-        # But ours is faster. Not sure if its more correct though.
-        import geopandas as gpd
-        utm_crs = gpd.array.from_shapely([geom_crs84], 'crs84').estimate_utm_crs()
-        epsg_zone = utm_crs.to_epsg()
+    import geopandas as gpd
+    utm_crs = gpd.array.from_shapely([geom_crs84], 'crs84').estimate_utm_crs()
+    epsg_zone = utm_crs.to_epsg()
 
-    lonmin, latmin, lonmax, latmax = geom_crs84.bounds
-    # Hack: this doesnt work on boundries (or for larger regions)
-    # correct way of doing this would be lookup candiate CRS zones,
-    # and find the one with highest intersection area weighted by distance
-    # to the center of the valid region.
-    latmid = (latmin + latmax) / 2
-    lonmid = (lonmin + lonmax) / 2
-    candidate_utm_codes = [
-        utm_epsg_from_latlon(latmin, lonmin),
-        utm_epsg_from_latlon(latmax, lonmax),
-        utm_epsg_from_latlon(latmax, lonmin),
-        utm_epsg_from_latlon(latmin, lonmax),
-        utm_epsg_from_latlon(latmid, lonmid),
-    ]
-    epsg_zone = ub.argmax(ub.dict_hist(candidate_utm_codes))
     return epsg_zone
 
 
