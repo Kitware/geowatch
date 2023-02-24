@@ -14,6 +14,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Scriptconfig aliases now hook up with LightningCLI
 * Added `fixed_resultion` arg to dataloader
 * Support for image space stitching in `CocoStitchingManager`.
+* Tracker now ensures at most one site observation per day
 
 ### Changed
 * Renamed `project_annotations` to `reproject_annotations`
@@ -39,6 +40,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Issue in `warp_annot_segmentations_from_geos`
 * Issue in `polygon_distance_transform`.
 * Issue in tracker where it would use 30GSD even if there was a default.
+* Issue where kwcoco annotations in a track may not be sorted; use `sorted_annots`
 
 ### Misc
 * Drop6 scripts in the dev folder
