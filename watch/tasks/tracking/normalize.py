@@ -10,6 +10,7 @@ from watch.gis.geotiff import geotiff_crs_info
 from watch.tasks.tracking.utils import TrackFunction
 from watch.heuristics import SITE_SUMMARY_CNAME
 from watch.tasks.tracking.utils import check_only_bg
+from watch.utils.kwcoco_extensions import sorted_annots
 try:
     from xdev import profile
 except Exception:
@@ -330,7 +331,7 @@ def dedupe_tracks(coco_dset):
     new_trackids = TrackidGenerator(coco_dset)
 
     for trackid in coco_dset.index.trackid_to_aids.keys():
-        annots = coco_dset.annots(trackid=trackid)
+        annots = sorted_annots(coco_dset, trackid)
 
         # split each video into a separate track
         for idx, (vidid, aids) in enumerate(
@@ -351,7 +352,7 @@ def add_track_index(coco_dset):
     entries per image)
     '''
     for trackid in coco_dset.index.trackid_to_aids.keys():
-        annots = coco_dset.annots(trackid=trackid)
+        annots = sorted_annots(coco_dset, trackid)
 
         # order the track by track_index
         sorted_gids = coco_dset.index._set_sorted_by_frame_index(annots.gids)
@@ -397,6 +398,7 @@ def normalize_phases(coco_dset,
         >>> # test baseline guess
         >>> from watch.tasks.tracking.normalize import normalize_phases
         >>> from watch.demo import smart_kwcoco_demodata
+        >>> from watch.utils.kwcoco_extensions import sorted_annots
         >>> dset = smart_kwcoco_demodata.demo_kwcoco_with_heatmaps()
         >>> dset.cats[3]['name'] = 'salient'
         >>> dset.remove_categories([1,2])
@@ -405,7 +407,7 @@ def normalize_phases(coco_dset,
         >>> # TODO file bug report
         >>> dset._build_index()
         >>> dset = normalize_phases(dset)
-        >>> assert (dset.annots(trackid=1).cnames ==
+        >>> assert (sorted_annots(dset, trackid=1).cnames ==
         >>>     ((['Site Preparation'] * 10) +
         >>>      (['Active Construction'] * 9) +
         >>>      (['Post Construction'])))
@@ -462,7 +464,7 @@ def normalize_phases(coco_dset,
     for trackid, annot_ids in coco_dset.index.trackid_to_aids.items():
         n_anns = len(annot_ids)
         if n_anns > 1:
-            annots = coco_dset.annots(annot_ids)
+            annots = sorted_annots(coco_dset, trackid)
             has_missing_labels = bool(set(annots.cnames) - cnames_to_score)
             has_good_labels = bool(set(annots.cnames) - cnames_to_replace)
             if has_missing_labels and has_good_labels:
@@ -489,7 +491,7 @@ def normalize_phases(coco_dset,
 
     for trackid, annot_ids in coco_dset.index.trackid_to_aids.items():
         n_anns = len(annot_ids)
-        annots = coco_dset.annots(annot_ids)
+        annots = sorted_annots(coco_dset, trackid)
 
         if n_anns > 1:
 
@@ -512,7 +514,7 @@ def normalize_phases(coco_dset,
             # coco_dset = phase.dedupe_background_anns(coco_dset, trackid)
             coco_dset = phase.ensure_post(coco_dset, trackid)
 
-        annots = coco_dset.annots(trackid=trackid)
+        annots = sorted_annots(coco_dset, trackid)
         is_empty = check_only_bg(annots.cnames)
         EMPTY_TRACK_BEHAVIOR = 'ignore'
 
@@ -554,7 +556,7 @@ def normalize_phases(coco_dset,
             annots.set(ann_field, phase_transition_days)
         else:
             for trackid in coco_dset.index.trackid_to_aids.keys():
-                _annots = coco_dset.annots(trackid=trackid)
+                _annots = sorted_annots(coco_dset, trackid)
                 phase_transition_days = phase.phase_prediction_baseline(_annots)
                 _annots.set(ann_field, phase_transition_days)
 
@@ -584,6 +586,8 @@ def normalize_sensors(coco_dset):
         'LE': 'Landsat 7',
         'LC': 'Landsat 8',
         'L8': 'Landsat 8',
+        'WV1': 'WorldView 1',
+        'PD': 'Planet',
     }
     good_sensors = set(sensor_dict.values())
 
@@ -599,6 +603,73 @@ def normalize_sensors(coco_dset):
             warnings.warn(
                 f'image has unknown sensor {sensor} in tag={coco_dset.tag}')
 
+    return coco_dset
+
+
+def dedupe_dates(coco_dset):
+    '''
+    Ensure a tracked kwcoco file has at most 1 annot per track per date. [1]
+
+    There are several potential ways to do this.
+     - take highest-resolution sensor [currently done]
+     - take image with best coverage (least nodata)
+     - take latest time
+     - majority-vote labels/average scores
+     - average heatmaps before polygons are created
+
+    Given that this probably has a minimal impact on scores, the safest method
+    is chosen.
+
+    References:
+        [1] https://smartgitlab.com/TE/metrics-and-test-framework/-/issues/63
+    '''
+    import pandas as pd
+    from dateutil.parser import parse
+
+    # aids_to_remove = []
+    gids_to_remove = []
+    sensor_priority = [
+        'Planet',
+        'WorldView',
+        'WorldView 1',
+        'Sentinel-2',
+        'Landsat 8',
+        'Landsat 7'
+    ]
+    sensor_priority = dict(zip(sensor_priority, range(len(sensor_priority))))
+
+    for trackid in coco_dset.index.trackid_to_aids.keys():
+        annots = sorted_annots(coco_dset, trackid)
+        dates = [parse(d).date() for d in annots.images.lookup('date_captured')]
+        tixs = annots.lookup('track_index')
+        fixs = annots.images.lookup('frame_index')
+
+        is_sorted = lambda arr: np.all(arr[:-1] <= arr[1:])  # noqa
+        if not all(date_track_frame_sorted := (
+                    is_sorted(dates),
+                    is_sorted(tixs),
+                    is_sorted(fixs))):
+            # this should never print
+            print(f'WARNING: {trackid=} {date_track_frame_sorted=}')
+
+    # remove full images instead of iterating over tracks for efficiency
+    # not possible for some other removal methods, but it is for this one
+    for vidid in coco_dset.index.vidid_to_gids.keys():
+        images = coco_dset.images(vidid=vidid)
+        dates = [parse(d).date() for d in images.lookup('date_captured')]
+        sensors = images.lookup('sensor_coarse')
+        priorities = pd.Series(sensors).map(sensor_priority).values
+        vals, idx_start, count = np.unique(dates, return_index=True, return_counts=True)
+        for d, i, c in zip(vals, idx_start, count):
+            if c > 1:
+                ixs = np.arange(i, i + c)
+                keep_ix = i + np.argmin(priorities[ixs])
+                remove_ixs = list(set(ixs) - {keep_ix})
+                print(f'removing {len(remove_ixs)} dup imgs from {d} in {vidid=}')
+                gids_to_remove.extend(remove_ixs)
+
+    # coco_dset.remove_annotations(aids_to_remove, verbose=1)
+    coco_dset.remove_images(gids_to_remove, verbose=2)
     return coco_dset
 
 
@@ -753,6 +824,8 @@ def normalize(
 
     # HACK, ensure out_dset.index is up to date
     out_dset._build_index()
+
+    out_dset = dedupe_dates(out_dset)
 
     if DEBUG_JSON_SERIALIZABLE:
         debug_json_unserializable(out_dset.dataset, 'Output of normalize: ')

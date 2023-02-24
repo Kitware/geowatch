@@ -24,6 +24,24 @@ except Exception:
     profile = ub.identity
 
 
+def sorted_annots(coco_dset, trackid):
+    '''
+    Same as coco_dset.annots(trackid=trackid) but guaranteed sorted
+
+    TODO add to kwcoco
+
+    References:
+        https://gitlab.kitware.com/smart/watch/-/merge_requests/405#note_1324492
+    '''
+    annots = coco_dset.annots(trackid=trackid)
+    try:
+        # Ensure annots are sorted by frame index
+        annots = coco_dset.annots(list(ub.take(list(annots), ub.argsort(annots.images.lookup('frame_index')))))
+    except KeyError:
+        warnings.warn(f'{coco_dset=} {trackid=} has no frame index to use for sorting; returning unsorted')
+    return annots
+
+
 def filter_image_ids(coco_dset, gids=None, include_sensors=None,
                      exclude_sensors=None, select_images=None,
                      select_videos=None):
