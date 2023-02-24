@@ -644,7 +644,7 @@ def dedupe_dates(coco_dset):
         tixs = annots.lookup('track_index')
         fixs = annots.images.lookup('frame_index')
 
-        is_sorted = lambda arr: np.all(arr[:-1] <= arr[1:])
+        is_sorted = lambda arr: np.all(arr[:-1] <= arr[1:])  # noqa
         if not all(date_track_frame_sorted := (
                     is_sorted(dates),
                     is_sorted(tixs),

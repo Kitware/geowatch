@@ -42,7 +42,6 @@ def sorted_annots(coco_dset, trackid):
     return annots
 
 
-
 def filter_image_ids(coco_dset, gids=None, include_sensors=None,
                      exclude_sensors=None, select_images=None,
                      select_videos=None):
