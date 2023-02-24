@@ -144,7 +144,6 @@ def coerce_patterned_paths(data, expected_extension=None):
         else:
             resolved_globs.append(data)
 
-    print(f'resolved_globs={resolved_globs}')
     datas = list(map(os.fspath, resolved_globs))
     paths = []
     for data_ in resolved_globs:
@@ -154,7 +153,7 @@ def coerce_patterned_paths(data, expected_extension=None):
         else:
             globpats = [data_]
         for globpat in globpats:
-            paths.extend(list(glob.glob(globpat, recursive=True)))
+            paths.extend(list(glob.glob(os.fspath(globpat), recursive=True)))
     paths = [ub.Path(p) for p in paths]
     return paths
 

@@ -9,15 +9,60 @@ from watch.utils import util_pandas
 
 def _gather_all_results():
     r"""
+    # On Namek
     DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
     python -m watch.mlops.aggregate \
+        --pipeline=bas \
         --target "
             - $DVC_EXPT_DPATH/_timekernel_test_drop4
             - $DVC_EXPT_DPATH/_namek_eval
         " \
         --export_tables=True \
         --output_dpath="$DVC_EXPT_DPATH/namek_agg"
+
+    # On Toothbrush
+    DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+    rsync -avprPR namek:data/dvc-repos/smart_expt_dvc/./namek_agg "$DVC_EXPT_DPATH"
+
+    python -m watch.mlops.aggregate \
+        --pipeline=bas \
+        --target "
+            - namek_agg/*.csv.zip
+            - $DVC_EXPT_DPATH/_timekernel_test_drop4
+            - $DVC_EXPT_DPATH/_testpipe
+            - $DVC_EXPT_DPATH/_evaluations
+            - $DVC_EXPT_DPATH/_testpipe2
+        " \
+        --export_tables=True \
+        --output_dpath="$DVC_EXPT_DPATH/all_agg_2022-02-24"
+
+    python -m watch.mlops.aggregate \
+        --pipeline=bas \
+        --target "
+            - all_agg_2022-02-24/*.csv.zip
+        " \
+        --stdout_report=True \
+        --output_dpath="$DVC_EXPT_DPATH/all_agg_2022-02-24/reports"
     """
+    from watch.mlops.aggregate import AggregateEvluationConfig
+    from watch.mlops.aggregate import coerce_aggregators
+    import watch
+    expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+    cmdline = 0
+    kwargs = {
+        'target': expt_dvc_dpath / 'all_agg_2022-02-24/*.csv.zip',
+        'pipeline': 'bas',
+        'io_workers': 20,
+    }
+    config = AggregateEvluationConfig.cli(cmdline=cmdline, data=kwargs)
+    eval_type_to_aggregator = coerce_aggregators(config)
+
+    agg = eval_type_to_aggregator.get('bas_pxl_eval', None)
+    agg = eval_type_to_aggregator.get('bas_poly_eval', None)
+
+    from watch.mlops.aggregate import coerce_aggregators
+    build_all_param_plots(agg, rois, config)
+
 
 
 def _check_high_tpr_case(agg, config):
@@ -75,7 +120,7 @@ def _namek_eval():
         # 'root_dpath': expt_dvc_dpath / '_testsc',
         #'pipeline': 'sc',
     }
-    config = AggregateEvluationConfig.legacy(cmdline=cmdline, data=kwargs)
+    config = AggregateEvluationConfig.cli(cmdline=cmdline, data=kwargs)
     eval_type_to_results = build_tables(config)
     agg_dpath = ub.Path(config['root_dpath']) / 'aggregate'
     eval_type_to_aggregator = build_aggregators(eval_type_to_results, agg_dpath)
@@ -123,7 +168,7 @@ def _timekernel_analysis():
         'io_workers': 10,
         'freeze_cache': 0,
     }
-    config = AggregateEvluationConfig.legacy(cmdline=cmdline, data=kwargs)
+    config = AggregateEvluationConfig.cli(cmdline=cmdline, data=kwargs)
     eval_type_to_results = build_tables(config)
     agg_dpath = ub.Path(config['root_dpath']) / 'aggregate'
     eval_type_to_aggregator = build_aggregators(eval_type_to_results, agg_dpath)
@@ -162,7 +207,7 @@ def _setup_sc_analysis():
         # 'root_dpath': expt_dvc_dpath / '_testsc',
         #'pipeline': 'sc',
     }
-    config = AggregateEvluationConfig.legacy(cmdline=cmdline, data=kwargs)
+    config = AggregateEvluationConfig.cli(cmdline=cmdline, data=kwargs)
     eval_type_to_results = build_tables(config)
     agg_dpath = ub.Path(config['root_dpath']) / 'aggregate'
     eval_type_to_aggregator = build_aggregators(eval_type_to_results, agg_dpath)
@@ -189,7 +234,7 @@ def _setup_bas():
         # 'root_dpath': expt_dvc_dpath / '_testsc',
         #'pipeline': 'sc',
     }
-    config = AggregateEvluationConfig.legacy(cmdline=cmdline, data=kwargs)
+    config = AggregateEvluationConfig.cli(cmdline=cmdline, data=kwargs)
     eval_type_to_results = build_tables(config)
     agg_dpath = ub.Path(config['root_dpath']) / 'aggregate'
     eval_type_to_aggregator = build_aggregators(eval_type_to_results, agg_dpath)
