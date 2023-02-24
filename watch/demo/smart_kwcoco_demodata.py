@@ -17,9 +17,6 @@ def demo_kwcoco_with_heatmaps(num_videos=1, num_frames=20, image_size=(512, 512)
     DEPRECATED:
         Instead use watch.coerce_kwcoco('watch-msi-geodata-dates-heatmap-videos1-frames20-gsize512') or something similar
 
-    TODO:
-        rename
-
     Example:
         >>> from watch.demo.smart_kwcoco_demodata import *  # NOQA
         >>> coco_dset = demo_kwcoco_with_heatmaps()
@@ -36,41 +33,9 @@ def demo_kwcoco_with_heatmaps(num_videos=1, num_frames=20, image_size=(512, 512)
             import kwplot
             kwplot.imshow(vid_stack)
     """
-    import kwarray
-    import kwcoco
-    from kwarray.distributions import DiscreteUniform  # NOQA
-
-    rng = 101893676  # random seed
-    rng = kwarray.ensure_rng(rng)
-
-    # img_w = DiscreteUniform(256, 512, rng=rng)
-    # img_h = DiscreteUniform(256, 512, rng=rng)
-    # image_size = (img_w, img_h)
-
-    coco_dset = kwcoco.CocoDataset.demo(
-        'vidshapes', num_videos=num_videos, num_frames=num_frames,
-        multispectral=True, image_size=image_size)
-
-    # from kwcoco.demo import perterb
-    # perterb_config = {
-    #     'box_noise': 0.5,
-    #     'n_fp': 3,
-    #     # 'with_probs': 1,
-    # }
-    # perterb.perterb_coco(coco_dset, **perterb_config)
-
-    hack_in_heatmaps(coco_dset, rng=rng)
-    hack_in_timedata(coco_dset)
-
-    # Hack in geographic info
-    hack_seed_geometadata_in_dset(coco_dset, force=True, rng=rng)
-
-    from watch.utils import kwcoco_extensions
-    # Do a consistent transfer of the hacked seeded geodat to the other images
-    kwcoco_extensions.ensure_transfered_geo_data(coco_dset)
-
-    kwcoco_extensions.warp_annot_segmentations_to_geos(coco_dset)
-    return coco_dset
+    assert image_size[0] == image_size[1]
+    return coerce_kwcoco(
+        f'watch-msi-geodata-dates-heatmap-videos{num_videos}-frames{num_frames}-gsize{image_size[0]}')
 
 
 def hack_in_heatmaps(coco_dset, heatmap_dname='dummy_heatmaps', with_nan=False, rng=None):
