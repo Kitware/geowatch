@@ -16,8 +16,6 @@ import ubelt as ub
 import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
-from packaging.version import parse as Version
-PL_VERSION = Version(pl.__version__)
 
 
 __all__ = ['TensorboardPlotter']
@@ -108,18 +106,14 @@ class TensorboardPlotter(pl.callbacks.Callback):
         else:
             func(*args)
 
-    if PL_VERSION < Version('1.6'):
-        def on_epoch_end(self, trainer, logs=None):
-            return self._on_epoch_end(trainer, logs=logs)
-    else:
-        def on_train_epoch_end(self, trainer, logs=None):
-            return self._on_epoch_end(trainer, logs=logs)
+    def on_train_epoch_end(self, trainer, logs=None):
+        return self._on_epoch_end(trainer, logs=logs)
 
-        def on_validation_epoch_end(self, trainer, logs=None):
-            return self._on_epoch_end(trainer, logs=logs)
+    def on_validation_epoch_end(self, trainer, logs=None):
+        return self._on_epoch_end(trainer, logs=logs)
 
-        def on_test_epoch_end(self, trainer, logs=None):
-            return self._on_epoch_end(trainer, logs=logs)
+    def on_test_epoch_end(self, trainer, logs=None):
+        return self._on_epoch_end(trainer, logs=logs)
 
 
 def read_tensorboard_scalars(train_dpath, verbose=1, cache=1):
@@ -189,7 +183,7 @@ def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outlier
     refresh_fpath.write_text(ub.codeblock(
         fr'''
         #!/bin/bash
-        python -m watch.utils.lightning_ext.callbacks.tensorboard_plotter \
+        WATCH_PREIMPORT=0 python -m watch.utils.lightning_ext.callbacks.tensorboard_plotter \
             {train_dpath_}
         '''))
     import stat

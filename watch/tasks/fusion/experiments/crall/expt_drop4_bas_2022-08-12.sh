@@ -3151,7 +3151,7 @@ trainer:
 
 
 # On Toothbrush (back to smt)
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=0
 DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
@@ -3161,7 +3161,7 @@ KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_split2.kwcoco.zip
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_split2.kwcoco.zip
 CHANNELS="(L8,S2,PD):(blue|green|red|nir),(WV):(blue|green|red),(WV,WV1):pan"
-EXPERIMENT_NAME=Drop6_BAS_scratch_raw_10GSD_split2_smt8
+EXPERIMENT_NAME=Drop6_BAS_scratch_raw_10GSD_split2_smt8_cont2
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=1e-4
 MAX_STEPS=50000
@@ -3175,7 +3175,7 @@ data:
     chip_dims: 128
     fixed_resolution       : 10.0GSD
     channels               : '$CHANNELS'
-    batch_size: 4
+    batch_size: 24
     chip_overlap: 0
     dist_weights: 0
     min_spacetime_weight   : 0.6
@@ -3238,8 +3238,8 @@ trainer:
   default_root_dir     : $DEFAULT_ROOT_DIR
   accelerator          : gpu 
   devices              : 0,
-  #devices              : 0,1
-  #strategy             : ddp 
+  #devices             : 0,1
+  #strategy            : ddp 
   check_val_every_n_epoch: 1
   enable_checkpointing: true
   enable_model_summary: true
@@ -3249,4 +3249,9 @@ trainer:
   num_sanity_val_steps: 0
   replace_sampler_ddp: true
   track_grad_norm: 2
+
+initializer:
+    init: /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6/runs/Drop6_BAS_scratch_raw_10GSD_split2_smt8_cont/lightning_logs/version_2/package-interupt/package_epoch79_step7900.pt
 "
+
+cd /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6/runs/Drop6_BAS_scratch_raw_10GSD_split2_smt8_cont/lightning_logs/version_2

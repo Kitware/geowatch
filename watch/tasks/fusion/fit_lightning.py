@@ -247,7 +247,7 @@ def make_cli(config=None):
     try:
         # There has to be a tool with less dependencies the matplotlib
         # auto-plotters can hook into.
-        import tesnorboard  # NOQA
+        import tensorboard  # NOQA
     except ImportError:
         ...
     else:
@@ -260,7 +260,10 @@ def make_cli(config=None):
         trainer_class=SmartTrainer,
         subclass_mode_model=True,
 
-        save_config_overwrite=True,
+        # save_config_overwrite=True,
+        save_config_kwargs={
+            'overwrite': True,
+        },
 
         # subclass_mode_data=True,
         parser_kwargs=dict(
