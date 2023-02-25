@@ -97,7 +97,7 @@ Ignore:
 
 
     # Drop 6
-    export CUDA_VISIBLE_DEVICES="1"
+    export CUDA_VISIBLE_DEVICES="3"
     DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
     BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6
     python -m watch.cli.prepare_teamfeats \
@@ -109,7 +109,7 @@ Ignore:
         --with_depth=0 \
         --do_splits=0 \
         --skip_existing=1 \
-        --gres=0,1 --workers=2 --backend=tmux --run=1
+        --gres=0, --workers=1 --backend=tmux --run=1
 
 
 """

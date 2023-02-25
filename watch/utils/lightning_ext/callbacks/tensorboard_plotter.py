@@ -168,6 +168,8 @@ def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outlier
     import kwplot
     from kwplot.auto_backends import BackendContext
 
+    train_dpath = ub.Path(train_dpath)
+
     if not (train_dpath / 'monitor').exists():
         if (train_dpath / '../monitor').exists():
             train_dpath = (train_dpath / '..')

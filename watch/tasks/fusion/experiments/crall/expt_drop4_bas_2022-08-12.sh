@@ -3175,7 +3175,7 @@ data:
     chip_dims: 128
     fixed_resolution       : 10.0GSD
     channels               : '$CHANNELS'
-    batch_size: 24
+    batch_size: 32
     chip_overlap: 0
     dist_weights: 0
     min_spacetime_weight   : 0.6
