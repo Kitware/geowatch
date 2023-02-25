@@ -1107,13 +1107,15 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                         output_mode_seqs = torch.split(output_frame_seq, mode_sizes)
 
                         output = torch.mean(torch.concat([
-                            nn.functional.upsample_bilinear(
+                            torch.nn.functional.interpolate(
                                 einops.rearrange(
                                     mode_seq,
                                     "(height width) chan -> 1 chan height width",
                                     height=mode_height, width=mode_width,
                                 ),
                                 size=max_mode_size,
+                                mode='bilinear',
+                                align_corners=True,
                             )
                             for mode_seq, (mode_height, mode_width) in zip(output_mode_seqs, frame_shape)
                         ], dim=0), dim=0)
