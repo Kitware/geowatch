@@ -116,6 +116,7 @@ def coerce_patterned_paths(data, expected_extension=None):
         ...     ''', expected_extension='.txt')
         >>> paths = [p.shrinkuser() for p in paths]
         >>> print('paths = {}'.format(ub.urepr(paths, nl=1)))
+
         paths = [
             Path('~/.cache/watch/test/utils/path/file1.txt'),
             Path('~/.cache/watch/test/utils/path/dir/subfile1.txt'),

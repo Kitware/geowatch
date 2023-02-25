@@ -922,6 +922,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             ub.oset(['red', 'green', 'blue']),
             ub.oset(['Dred', 'Dgreen', 'Dblue']),
             ub.oset(['r', 'g', 'b']),
+            ub.oset(['impervious', 'forest', 'water']),
+            ub.oset(['baren', 'field', 'water']),
+            ub.oset(['landcover_hidden.0', 'landcover_hidden.1', 'landcover_hidden.2']),
         ] + heuristics.HUERISTIC_COMBINABLE_CHANNELS
 
     @property
