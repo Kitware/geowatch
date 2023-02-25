@@ -174,15 +174,23 @@ def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outlier
     import kwplot
     from kwplot.auto_backends import BackendContext
 
+    if not (train_dpath / 'monitor').exists():
+        if (train_dpath / '../monitor').exists():
+            train_dpath = (train_dpath / '..')
+        elif (train_dpath / '../../monitor').exists():
+            train_dpath = (train_dpath / '../..')
+
     out_dpath = ub.Path(train_dpath, 'monitor', 'tensorboard').ensuredir()
+
     tb_data = read_tensorboard_scalars(train_dpath, cache=0, verbose=0)
 
     refresh_fpath = (out_dpath / 'redraw.sh')
+    train_dpath_ = train_dpath.resolve().shrinkuser()
     refresh_fpath.write_text(ub.codeblock(
         fr'''
         #!/bin/bash
         python -m watch.utils.lightning_ext.callbacks.tensorboard_plotter \
-            {train_dpath}
+            {train_dpath_}
         '''))
     import stat
     refresh_fpath.chmod(refresh_fpath.stat().st_mode | stat.S_IEXEC)
