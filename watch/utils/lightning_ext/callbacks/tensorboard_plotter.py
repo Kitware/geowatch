@@ -140,10 +140,17 @@ def read_tensorboard_scalars(train_dpath, verbose=1, cache=1):
     datas = cacher.tryload()
     if datas is None:
         datas = {}
-        for p in ub.ProgIter(list(reversed(event_paths)), desc='read tensorboard', enabled=verbose):
+        for p in ub.ProgIter(list(reversed(event_paths)), desc='read tensorboard',
+                             enabled=verbose, verbose=verbose * 3):
             p = os.fspath(p)
+            if verbose:
+                print('reading tensorboard scalars')
             ea = event_accumulator.EventAccumulator(p)
+            if verbose:
+                print('loading tensorboard scalars')
             ea.Reload()
+            if verbose:
+                print('iterate over scalars')
             for key in ea.scalars.Keys():
                 if key not in datas:
                     datas[key] = {'xdata': [], 'ydata': [], 'wall': []}
@@ -178,10 +185,9 @@ def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outlier
         elif (train_dpath / '../../monitor').exists():
             train_dpath = (train_dpath / '../..')
 
+    tb_data = read_tensorboard_scalars(train_dpath, cache=0, verbose=verbose)
+
     out_dpath = ub.Path(train_dpath, 'monitor', 'tensorboard').ensuredir()
-
-    tb_data = read_tensorboard_scalars(train_dpath, cache=0, verbose=0)
-
     refresh_fpath = (out_dpath / 'redraw.sh')
     train_dpath_ = train_dpath.resolve().shrinkuser()
     refresh_fpath.write_text(ub.codeblock(
@@ -208,6 +214,7 @@ def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outlier
     y0_measures = ['error', 'loss']
 
     keys = set(tb_data.keys()).intersection(set(plot_keys))
+    # unused = set(tb_data.keys()) - set(keys)
 
     # no idea what hp metric is, but it doesn't seem important
     keys = keys - {'hp_metric'}
@@ -292,15 +299,22 @@ def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outlier
                 print('Begin plot')
             # NOTE: this is actually pretty slow
             ax.cla()
-            sns.lineplot(data=df, **snskw)
-            title = nice + '\n' + key
+            try:
+                sns.lineplot(data=df, **snskw)
+            except Exception as ex:
+                title = nice + '\n' + key + str(ex)
+            else:
+                title = nice + '\n' + key
+                initial_ylim = ax.get_ylim()
+                if kw.get('ymax', None) is None:
+                    kw['ymax'] = initial_ylim[1]
+                if kw.get('ymin', None) is None:
+                    kw['ymin'] = initial_ylim[0]
+                try:
+                    ax.set_ylim(kw['ymin'], kw['ymax'])
+                except Exception:
+                    ...
             ax.set_title(title)
-            initial_ylim = ax.get_ylim()
-            if kw.get('ymax', None) is None:
-                kw['ymax'] = initial_ylim[1]
-            if kw.get('ymin', None) is None:
-                kw['ymin'] = initial_ylim[0]
-            ax.set_ylim(kw['ymin'], kw['ymax'])
 
             # png is smaller than jpg for this kind of plot
             fpath = out_dpath / (key + '.png')

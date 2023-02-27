@@ -3371,7 +3371,7 @@ initializer:
 cd /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6/runs/Drop6_BAS_scratch_raw_10GSD_split2_smt8_cont/lightning_logs/version_2
 
 
-# On Yardrat (train longer)
+# On Yardrat (train longer, f16, cos aneal, adamw)
 export CUDA_VISIBLE_DEVICES=0
 DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
@@ -3385,7 +3385,7 @@ CHANNELS="(L8,S2,PD):(blue|green|red|nir),(WV):(blue|green|red),(WV,WV1):pan,(S2
 EXPERIMENT_NAME=Drop6_BAS_scratch_landcover_10GSD_split2_V5
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=1e-4
-MAX_STEPS=50000
+MAX_STEPS=500000
 WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
 data:
   num_workers            : 4
