@@ -3382,7 +3382,7 @@ KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_split2.kwcoco.zip
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_split2.kwcoco.zip
 CHANNELS="(L8,S2,PD):(blue|green|red|nir),(WV):(blue|green|red),(WV,WV1):pan,(S2):(water|forest|field|impervious|barren|landcover_hidden.0:32)"
-EXPERIMENT_NAME=Drop6_BAS_scratch_landcover_10GSD_split2_V5
+EXPERIMENT_NAME=Drop6_BAS_scratch_landcover_10GSD_split2_V8
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=1e-4
 MAX_STEPS=500000
@@ -3480,4 +3480,4 @@ trainer:
   track_grad_norm: 2
   precision: 16
 "
-rsync -avprPR yardrat:data/dvc-repos/smart_expt_dvc/./training/yardrat/jon.crall/Drop6/runs/Drop6_BAS_scratch_landcover_10GSD_split2_V5 "$DVC_EXPT_DPATH"
+#rsync -avprPR yardrat:data/dvc-repos/smart_expt_dvc/./training/yardrat/jon.crall/Drop6/runs/Drop6_BAS_scratch_landcover_10GSD_split2_V5 "$DVC_EXPT_DPATH"
