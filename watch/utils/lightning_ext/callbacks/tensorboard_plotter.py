@@ -1,4 +1,4 @@
-"""
+r"""
 Parses an existing tensorboard event file and draws the plots as pngs on disk
 in the monitor/tensorboard directory.
 
@@ -6,8 +6,10 @@ Derived from netharn/mixins.py for dumping tensorboard plots to disk
 
 CommandLine:
     # cd into training directory
-    python -m watch.utils.lightning_ext.callbacks.tensorboard_plotter .
-    python -m watch.utils.lightning_ext.callbacks.tensorboard_plotter /data/joncrall/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6/runs/Drop6_BAS_scratch_landcover_10GSD_split2_V4/lightning_logs/version_4/
+    WATCH_PREIMPORT=0 python -m watch.utils.lightning_ext.callbacks.tensorboard_plotter .
+
+    python -m watch.utils.lightning_ext.callbacks.tensorboard_plotter \
+        /data/joncrall/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6/runs/Drop6_BAS_scratch_landcover_10GSD_split2_V4/lightning_logs/version_4/
 
 """
 # from distutils.version import LooseVersion
