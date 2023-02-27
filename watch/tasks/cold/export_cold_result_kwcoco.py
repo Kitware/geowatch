@@ -7,14 +7,14 @@ See original code: ~/code/pycold/src/python/pycold/imagetool/export_change_map.p
 import os
 import numpy as np
 import pandas as pd
-from osgeo import gdal
+from osgeo import gdal  # NOQA
 import datetime as datetime
 from os.path import join
 import json
 import scriptconfig as scfg
-import ubelt as ub
 import logging
 logger = logging.getLogger(__name__)
+
 
 class ExportColdKwcocoConfig(scfg.DataConfig):
     """
@@ -24,25 +24,26 @@ class ExportColdKwcocoConfig(scfg.DataConfig):
     n_cores = scfg.Value(None, help='total cores assigned')
     stack_path = scfg.Value(None, help='folder directory of stacked data')
     reccg_path = scfg.Value(None, help='folder directory of cold processing result')
-    meta_fpath = scfg.Value(None, help='file path of metadata json created by prepare_kwcoco script')    
+    meta_fpath = scfg.Value(None, help='file path of metadata json created by prepare_kwcoco script')
     year_lowbound = scfg.Value(None, help='min year for saving geotiff, e.g., 2017')
     year_highbound = scfg.Value(None, help='max year for saving geotiff, e.g., 2022')
     coefs = scfg.Value(None, help="list of COLD coefficients for saving geotiff, e.g., ['a0', 'c1', 'a1', 'b1', 'a2', 'b2', 'a3', 'b3', 'cv', 'rmse']")
     coefs_bands = scfg.Value(None, help='indicate the ba_nds for output coefs_bands, e.g., [0, 1, 2, 3, 4, 5]')
-    timestamp = scfg.Value(True, help='True: exporting cold result by timestamp, False: exporting cold result by year, Default is False') 
- 
+    timestamp = scfg.Value(True, help='True: exporting cold result by timestamp, False: exporting cold result by year, Default is False')
+
+
 def main(cmdline=1, **kwargs):
     """_summary_
 
     Args:
         cmdline (int, optional): _description_. Defaults to 1.
-        
+
     Ignore:
         python -m watch.tasks.cold.export_cold_result_kwcoco --help
         TEST_COLD=1 xdoctest -m watch.tasks.cold.export_cold_result_kwcoco main
-        
+
     Example:
-    >>> # xdoctest: +REQUIRES(env:TEST_COLD) 
+    >>> # xdoctest: +REQUIRES(env:TEST_COLD)
     >>> from watch.tasks.cold.export_cold_result_kwcoco import main
     >>> from watch.tasks.cold.export_cold_result_kwcoco import *
     >>> kwargs= dict(
@@ -56,22 +57,22 @@ def main(cmdline=1, **kwargs):
     >>>    year_highbound = 2022,
     >>>    coefs_bands = [0, 1, 2, 3, 4, 5],
     >>>    timestamp = True,
-    >>>    )    
-    >>> cmdline=0    
+    >>>    )
+    >>> cmdline=0
     >>> main(cmdline, **kwargs)
-    """    
+    """
     config_in = ExportColdKwcocoConfig.legacy(cmdline=cmdline, data=kwargs)
     rank = config_in['rank']
     n_cores = config_in['n_cores']
     stack_path = config_in['stack_path']
     reccg_path = config_in['reccg_path']
-    meta_fpath = config_in['meta_fpath']    
+    meta_fpath = config_in['meta_fpath']
     year_lowbound = config_in['year_lowbound']
     year_highbound = config_in['year_highbound']
     coefs = config_in['coefs']
     coefs_bands = config_in['coefs_bands']
     timestamp = config_in['timestamp']
-    
+
     # TODO: MPI mode
     # if config_in['rank'] == 'MPI':
     #     ## MPI mode
@@ -82,44 +83,44 @@ def main(cmdline=1, **kwargs):
     #     n_cores = comm.Get_size()
     # else:
     #     rank = config_in['rank']
-    #     n_cores = config_in['n_cores']                    
-   
+    #     n_cores = config_in['n_cores']
+
     # define variables
     meta = open(meta_fpath)
-    config = json.load(meta)    
+    config = json.load(meta)
     n_cols = config['padded_n_cols']
     n_rows = config['padded_n_rows']
     n_block_x = config['n_block_x']
-    n_block_y = config['n_block_y']        
+    n_block_y = config['n_block_y']
     block_width = int(n_cols / n_block_x)  # width of a block
     block_height = int(n_rows / n_block_y)  # height of a block
-    n_blocks = n_block_x * n_block_y  # total number of blocks   
-    
+    n_blocks = n_block_x * n_block_y  # total number of blocks
+
     log = open(os.path.join(reccg_path, 'log.json'))
     cold_param = json.load(log)
     method = cold_param['algorithm']
-        
+
     coef_names = ['cv', 'rmse', 'a0', 'a1', 'b1', 'a2', 'b2', 'a3', 'b3', 'c1']
     band_names = [0, 1, 2, 3, 4, 5]
-    SLOPE_SCALE = 10000
 
-    BAND_INFO = {0: 'blue',
-                1: 'green',
-                2: 'red',
-                3: 'nir',
-                4: 'swir16',
-                5: 'swir22'}         
-            
+    # SLOPE_SCALE = 10000
+    # BAND_INFO = {0: 'blue',
+    #              1: 'green',
+    #              2: 'red',
+    #              3: 'nir',
+    #              4: 'swir16',
+    #              5: 'swir22'}
+
     if coefs is not None:
         try:
             coefs = list(coefs.split(","))
-        except:
+        except Exception:
             print("Illegal coefs inputs: example, --coefs='a0, c1, a1, b1, a2, b2, a3, b3, cv, rmse'")
 
         try:
             coefs_bands = list(coefs_bands.split(","))
             coefs_bands = [int(coefs_band) for coefs_band in coefs_bands]
-        except:
+        except Exception:
             print("Illegal coefs_bands inputs: example, --coefs_bands='0, 1, 2, 3, 4, 5, 6'")
 
     dt = np.dtype([('t_start', np.int32),
@@ -141,7 +142,7 @@ def main(cmdline=1, **kwargs):
 
     if not os.path.exists(out_path):
         os.makedirs(out_path)
-        
+
     # MPI mode
     # trans = comm.bcast(trans, root=0)
     # proj = comm.bcast(proj, root=0)
@@ -165,13 +166,13 @@ def main(cmdline=1, **kwargs):
 
         block_folder = os.path.join(stack_path, 'block_x{}_y{}'.format(current_block_x, current_block_y))
 
-        if timestamp == True:
+        if timestamp:
             meta_files = [m for m in os.listdir(block_folder) if m.endswith('.json')]
-            
+
             # sort image files by ordinal dates
             img_dates = []
             img_names = []
-            
+
             # read metadata and
             for meta in meta_files:
                 metadata = open(join(block_folder, meta))
@@ -180,21 +181,21 @@ def main(cmdline=1, **kwargs):
                 img_name = meta_config['image_name'] + '.npy'
                 img_dates.append(ordinal_date)
                 img_names.append(img_name)
-            
+
             if year_lowbound is None:
                 year_low_ordinal = min(img_dates)
                 year_lowbound = pd.Timestamp.fromordinal(year_low_ordinal).year
-            else:                
+            else:
                 year_low_ordinal = pd.Timestamp.toordinal(datetime.datetime(int(year_lowbound), 1, 1))
-            
+
             img_dates, img_names = zip(*filter(lambda x: x[0] >= year_low_ordinal,
                                                 zip(img_dates, img_names)))
             if year_highbound is None:
-                year_high_ordinal = max(img_dates)                
+                year_high_ordinal = max(img_dates)
                 year_highbound = pd.Timestamp.fromordinal(year_high_ordinal).year
             else:
                 year_high_ordinal = pd.Timestamp.toordinal(datetime.datetime(int(year_highbound + 1), 1, 1))
-            
+
             img_dates, img_names = zip(*filter(lambda x: x[0] < year_high_ordinal,
                                                    zip(img_dates, img_names)))
             img_dates = sorted(img_dates)
@@ -210,7 +211,7 @@ def main(cmdline=1, **kwargs):
 
             print('processing the rec_cg file {}'.format(os.path.join(reccg_path, filename)))
             if not os.path.exists(os.path.join(reccg_path, filename)):
-                print('the rec_cg file {} is missing'.format(os.path.join(reccg_path, filename)))                
+                print('the rec_cg file {} is missing'.format(os.path.join(reccg_path, filename)))
 
         cold_block = np.array(np.load(os.path.join(reccg_path, filename)), dtype=dt)
 
@@ -262,7 +263,7 @@ def main(cmdline=1, **kwargs):
                             feature_row[index]
 
         # save the temp dataset out
-        if timestamp == True:
+        if timestamp:
             for day in range(len(ordinal_day_list)):
                 if coefs is not None:
                     outfile = os.path.join(out_path,
@@ -272,7 +273,8 @@ def main(cmdline=1, **kwargs):
 
     # MPI mode (wait for all processes)
     # comm.Barrier()
-   
+
+
 # copy from /pycold/src/python/pycold/pyclassifier.py because MPI has conflicts with the pycold package in UCONN HPC.
 # Dirty approach!
 def extract_features(cold_plot, band, ordinal_day_list, nan_val, timestamp, feature_outputs=['a0', 'a1', 'b1']):
@@ -345,7 +347,7 @@ def extract_features(cold_plot, band, ordinal_day_list, nan_val, timestamp, feat
                     elif feature == 'rmse':
                         features[n][index] = cold_curve['rmse'][band]
                         if np.isnan(features[n][index]):
-                            features[n][index] = 0                    
+                            features[n][index] = 0
                 break
 
         if 'cv' in feature_outputs:
@@ -356,7 +358,7 @@ def extract_features(cold_plot, band, ordinal_day_list, nan_val, timestamp, feat
                     if (cold_curve['t_break'] == 0) or (cold_curve['change_prob'] != 100):
                         continue
                     break_year = pd.Timestamp.fromordinal(cold_curve['t_break']).year
-                    if timestamp == True:
+                    if timestamp:
                         if ordinal_day == cold_curve['t_break']:
                             features[feature_outputs.index('cv')][index] = cold_curve['magnitude'][band]
                             continue
@@ -380,6 +382,7 @@ def getcategory_cold(cold_plot, i_curve):
             return 2  # regrowth
     else:
         return 1  # land disturbance
+
 
 def getcategory_obcold(cold_plot, i_curve, last_dist_type):
     t_c = -250
@@ -407,5 +410,5 @@ def getcategory_obcold(cold_plot, i_curve, last_dist_type):
         else:
             return 1  # land disturbance
 
-if __name__ == '__main__':    
+if __name__ == '__main__':
     main()

@@ -21,7 +21,8 @@ Limitations:
     * Configurations are hard-coded
 """
 import kwcoco
-import os, json
+import os
+import json
 import numpy as np
 import einops
 import functools
@@ -35,11 +36,12 @@ import scriptconfig as scfg
 
 logger = logging.getLogger(__name__)
 
+
 class PrepareKwcocoConfig(scfg.DataConfig):
     """
     The docstring will be the description in the CLI help
     """
-    
+
     coco_fpath = scfg.Value(None, help=ub.paragraph(
         '''
         a path to a file to input kwcoco file
@@ -58,52 +60,54 @@ SENSOR_TO_INFO['L8'] = {
     'intensity_channels': 'blue|green|red|nir|swir16|swir22|lwir11',
     'quality_channels': 'quality',
     'quality_interpretation': 'FMASK'
-    } # The name of quality_channels for Drop 4 is 'cloudmask'.
+}  # The name of quality_channels for Drop 4 is 'cloudmask'.
 
 # Register different quality bit standards.
 QA_INTERPRETATIONS = {}
 
 # These are specs for TA1 processed data
 QA_BIT = {
-    'clear'         : 1 << 0,
-    'cloud'         : 1 << 1,
-    'cloud_adj'     : 1 << 2,
-    'shadow'        : 1 << 3,
-    'snow'          : 1 << 4,
-    'water'         : 1 << 5,
+    'clear': 1 << 0,
+    'cloud': 1 << 1,
+    'cloud_adj': 1 << 2,
+    'shadow': 1 << 3,
+    'snow': 1 << 4,
+    'water': 1 << 5,
 }
 
 QA_INTERPRETATIONS['FMASK'] = {
-    'clear'         : 0,
-    'water'         : 1,
-    'cloud_shadow'  : 2,
-    'snow'          : 3,
-    'cloud'         : 4,
-    'no_obs'        : 255,
+    'clear': 0,
+    'water': 1,
+    'cloud_shadow': 2,
+    'snow': 3,
+    'cloud': 4,
+    'no_obs': 255,
 }
 QUALITY_BIT_INTERPRETATIONS = {}
-    
+
+
 def main(cmdline=1, **kwargs):
     """_summary_
 
     Args:
-        cmdline (int, optional): _description_. Defaults to 1. 
-        
+        cmdline (int, optional): _description_. Defaults to 1.
+
     Ignore:
         python -m watch.tasks.cold.prepare_kwcoco --help
         TEST_COLD=1 xdoctest -m watch.tasks.cold.prepare_kwcoco main
 
     Example:
-    >>> from watch.tasks.cold.prepare_kwcoco import main
-    >>> from watch.tasks.cold.prepare_kwcoco import *
-    >>> kwargs= dict(        
-    >>>   coco_fpath = ub.Path('/home/jws18003/data/dvc-repos/smart_data_dvc/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/KR_R001/data_KR_R001.kwcoco.json'),
-    >>>   out_dpath = ub.Path.appdir('/gpfs/scratchfs1/zhz18039/jws18003/kwcoco'),
-    >>>   adj_cloud = False,
-    >>>   method = None,
-    >>> )
-    >>> cmdline=0    
-    >>> main(cmdline, **kwargs)
+        >>> # xdoctest: +SKIP
+        >>> from watch.tasks.cold.prepare_kwcoco import main
+        >>> from watch.tasks.cold.prepare_kwcoco import *
+        >>> kwargs= dict(
+        >>>   coco_fpath = ub.Path('/home/jws18003/data/dvc-repos/smart_data_dvc/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/KR_R001/data_KR_R001.kwcoco.json'),
+        >>>   out_dpath = ub.Path.appdir('/gpfs/scratchfs1/zhz18039/jws18003/kwcoco'),
+        >>>   adj_cloud = False,
+        >>>   method = None,
+        >>> )
+        >>> cmdline=0
+        >>> main(cmdline, **kwargs)
     """
     config = PrepareKwcocoConfig.legacy(cmdline=cmdline, data=kwargs)
     coco_fpath = config['coco_fpath']
@@ -113,7 +117,6 @@ def main(cmdline=1, **kwargs):
     out_dir = dpath / 'stacked'
     meta_fpath = stack_kwcoco(coco_fpath, out_dir, adj_cloud, method)
     return meta_fpath
-
 
 
 # function for decoding HLS qa band
@@ -132,19 +135,22 @@ def qa_decoding(qa_array):
 
     unpacked[QA_WATER_unpacked > 0] = QA_INTERPRETATIONS['FMASK']['water']
     unpacked[QA_SNOW_unpacked > 0] = QA_INTERPRETATIONS['FMASK']['snow']
-    unpacked[QA_SHADOW_unpacked > 0] = QA_INTERPRETATIONS['FMASK']['cloud_shadow']
+    unpacked[QA_SHADOW_unpacked >
+             0] = QA_INTERPRETATIONS['FMASK']['cloud_shadow']
     unpacked[QA_CLOUD_ADJ > 0] = QA_INTERPRETATIONS['FMASK']['cloud']
     unpacked[QA_CLOUD_unpacked > 0] = QA_INTERPRETATIONS['FMASK']['cloud']
-    unpacked[qa_array == QA_INTERPRETATIONS['FMASK']['no_obs']] = QA_INTERPRETATIONS['FMASK']['no_obs']
+    unpacked[qa_array == QA_INTERPRETATIONS['FMASK']
+             ['no_obs']] = QA_INTERPRETATIONS['FMASK']['no_obs']
 
     return unpacked
+
 
 def qa_decoding_no_boundary(qa_array):
     """
     This function is modified from qabitval_array_HLS function
     (https://github.com/GERSL/pycold/blob/c5b380eccc2916e5c3aec0bbd2b1982e114b75b1/src/python/pycold/imagetool/prepare_ard.py#L74)
     """
-    unpacked = np.full(qa_array.shape, QA_INTERPRETATIONS['FMASK']['clear'])  
+    unpacked = np.full(qa_array.shape, QA_INTERPRETATIONS['FMASK']['clear'])
 
     QA_CLOUD_unpacked = geek.bitwise_and(qa_array, QA_BIT['cloud'])
     QA_CLOUD_ADJ = geek.bitwise_and(qa_array, QA_BIT['cloud_adj'])
@@ -154,21 +160,25 @@ def qa_decoding_no_boundary(qa_array):
 
     unpacked[QA_WATER_unpacked > 0] = QA_INTERPRETATIONS['FMASK']['water']
     unpacked[QA_SNOW_unpacked > 0] = QA_INTERPRETATIONS['FMASK']['snow']
-    unpacked[QA_SHADOW_unpacked > 0] = QA_INTERPRETATIONS['FMASK']['cloud_shadow']
+    unpacked[QA_SHADOW_unpacked >
+             0] = QA_INTERPRETATIONS['FMASK']['cloud_shadow']
     unpacked[QA_CLOUD_unpacked > 0] = QA_INTERPRETATIONS['FMASK']['cloud']
     unpacked[QA_CLOUD_ADJ > 0] = QA_INTERPRETATIONS['FMASK']['clear']
-    unpacked[qa_array == QA_INTERPRETATIONS['FMASK']['no_obs']] = QA_INTERPRETATIONS['FMASK']['no_obs']
+    unpacked[qa_array == QA_INTERPRETATIONS['FMASK']
+             ['no_obs']] = QA_INTERPRETATIONS['FMASK']['no_obs']
 
     return unpacked
+
 
 def setup_logging():
     # TODO: handle HPC things here in addition to stdout for doctests
     logging.basicConfig(level='INFO')
 
-####################################################################################
+
+##########################################################################
 #                   Functions for Artificial Surface Index (ASI)                   #
 #  See original code: https://github.com/GERSL/ASI_py/blob/main/ASI_standalone.py  #
-####################################################################################
+##########################################################################
 
 def hist_cut(band, mask, fill_value=-9999, k=3, minmax='std'):
     if minmax == 'std':
@@ -177,7 +187,7 @@ def hist_cut(band, mask, fill_value=-9999, k=3, minmax='std'):
         low_val = (mean - k * std)
         high_val = (mean + k * std)
     else:
-        low_val, high_val = minmax # use specified value range.
+        low_val, high_val = minmax  # use specified value range.
     is_low = band < low_val
     is_high = band > high_val
     mask_invalid_index = is_low | is_high
@@ -192,13 +202,16 @@ def minmax_norm(band, mask, fill_value=-9999):
     if extent != 0:
         shifted = band - min_val
         scaled = shifted / extent
-        band[mask] = scaled[mask]    
+        band[mask] = scaled[mask]
     band[~mask] = fill_value
     return band
 
-# Artificial Surface Index (ASI) is designed based the surface reflectance imagery of Landsat 8.
-def artificial_surface_index(Blue, Green, Red, NIR, SWIR1, SWIR2, Scale, MaskValid_Obs, fillV):
-    ##### The calculation chain.
+
+# Artificial Surface Index (ASI) is designed based the surface reflectance
+# imagery of Landsat 8.
+def artificial_surface_index(
+        Blue, Green, Red, NIR, SWIR1, SWIR2, Scale, MaskValid_Obs, fillV):
+    # The calculation chain.
 
     # Artificial surface Factor (AF).
     AF = (NIR - Blue) / (NIR + Blue) + 0.000001
@@ -207,11 +220,13 @@ def artificial_surface_index(Blue, Green, Red, NIR, SWIR1, SWIR2, Scale, MaskVal
     AF_Norm = minmax_norm(AF, MaskValid_AF_U, fillV)
 
     # Vegetation Suppressing Factor (VSF).
-    MSAVI = ( (2*NIR+1*Scale) - np.sqrt((2*NIR+1*Scale)**2 - 8*(NIR-Red)) ) / 2 # Modified Soil Adjusted Vegetation Index (MSAVI).
-    MSAVI, MaskValid_MSAVI = hist_cut( MSAVI, MaskValid_Obs, fillV, 6, [-1, 1])
+    # Modified Soil Adjusted Vegetation Index (MSAVI).
+    MSAVI = ((2 * NIR + 1 * Scale) -
+             np.sqrt((2 * NIR + 1 * Scale)**2 - 8 * (NIR - Red))) / 2
+    MSAVI, MaskValid_MSAVI = hist_cut(MSAVI, MaskValid_Obs, fillV, 6, [-1, 1])
     NDVI = (NIR - Red) / (NIR + Red) + 0.000001
-    NDVI, MaskValid_NDVI  = hist_cut(NDVI, MaskValid_Obs, fillV, 6, [-1, 1])
-    VSF = 1 - MSAVI*NDVI
+    NDVI, MaskValid_NDVI = hist_cut(NDVI, MaskValid_Obs, fillV, 6, [-1, 1])
+    VSF = 1 - MSAVI * NDVI
     MaskValid_VSF = MaskValid_MSAVI & MaskValid_NDVI & MaskValid_Obs
     VSF_Norm = minmax_norm(VSF, MaskValid_VSF, fillV)
 
@@ -222,7 +237,7 @@ def artificial_surface_index(Blue, Green, Red, NIR, SWIR1, SWIR2, Scale, MaskVal
     # Deriving Enhanced-MBI based on MBI and MNDWI.
     MNDWI = (Green - SWIR1) / (Green + SWIR1) + 0.000001
     MNDWI, MaskValid_MNDWI = hist_cut(MNDWI, MaskValid_Obs, fillV, 6, [-1, 1])
-    EMBI = ((MBI+0.5) - (MNDWI+1)) / ((MBI+0.5) + (MNDWI+1))
+    EMBI = ((MBI + 0.5) - (MNDWI + 1)) / ((MBI + 0.5) + (MNDWI + 1))
     EMBI, MaskValid_EMBI = hist_cut(EMBI, MaskValid_Obs, fillV, 6, [-1, 1])
     # Derive SSF.
     SSF = (1 - EMBI)
@@ -237,11 +252,12 @@ def artificial_surface_index(Blue, Green, Red, NIR, SWIR1, SWIR2, Scale, MaskVal
 
     # Derive Artificial Surface Index (ASI).
     ASI = AF_Norm * SSF_Norm * VSF_Norm * MF_Norm
-    MaskValid_ASI = MaskValid_AF_U & MaskValid_VSF & MaskValid_SSF & MaskValid_MF_U & MaskValid_Obs    
+    MaskValid_ASI = MaskValid_AF_U & MaskValid_VSF & MaskValid_SSF & MaskValid_MF_U & MaskValid_Obs
     ASI[~MaskValid_ASI] = fillV
-    
+
     return ASI
-    
+
+
 def stack_kwcoco(coco_fpath, out_dir, adj_cloud, method):
     """
     Args:
@@ -254,13 +270,14 @@ def stack_kwcoco(coco_fpath, out_dir, adj_cloud, method):
         List[Dict]: a list of dictionary result objects
 
     Example:
+        >>> # xdoctest: +SKIP
         >>> from pycold.imagetool.prepare_kwcoco import *  # NOQA
         >>> setup_logging()
         >>> coco_fpath = grab_demo_kwcoco_dataset()
         >>> dpath = ub.Path.appdir('pycold/tests/stack_kwcoco').ensuredir()
         >>> out_dir = dpath / 'stacked'
         >>> results = stack_kwcoco(coco_fpath, out_dir)
-    """   
+    """
     # TODO: configure
     out_dir = ub.Path(out_dir)
 
@@ -271,15 +288,17 @@ def stack_kwcoco(coco_fpath, out_dir, adj_cloud, method):
     for video_id in videos:
         # Get the image ids of each image in this video seqeunce
         for image_id in dset.images():
-            coco_image : kwcoco.CocoImage = dset.coco_image(image_id)
+            coco_image: kwcoco.CocoImage = dset.coco_image(image_id)
             coco_image = coco_image.detach()
 
             # For now, it supports only L8
             if coco_image.img['sensor_coarse'] == 'L8':
                 # Transform the image data into the desired block structure.
-                result = process_one_coco_image(coco_image, out_dir, adj_cloud, method)
+                result = process_one_coco_image(
+                    coco_image, out_dir, adj_cloud, method)
 
     return result
+
 
 def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
     """
@@ -308,8 +327,9 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
 
     # Other relevant coco metadata
     date_captured = coco_image.img['date_captured']
-    ordinal_date = datetime.strptime(date_captured[:10], '%Y-%m-%d').toordinal()
-    frame_index = coco_image.img['frame_index']
+    ordinal_date = datetime.strptime(
+        date_captured[:10], '%Y-%m-%d').toordinal()
+    # frame_index = coco_image.img['frame_index']
     n_cols = coco_image.img['width']
     n_rows = coco_image.img['height']
     # Determine what sensor the image is from.
@@ -355,7 +375,7 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
     # antialiased, whereas the intensity bands should be.
     qa_data = delayed_qa.finalize(interpolation='nearest', antialias=False)
     # Decoding QA band
-    if adj_cloud == True:
+    if adj_cloud:
         qa_unpacked = qa_decoding(qa_data)
     else:
         qa_unpacked = qa_decoding_no_boundary(qa_data)
@@ -388,8 +408,8 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
         result['status'] = 'failed'
         return result
 
-    im_data = delayed_im.finalize(interpolation='cubic', antialias=True)   
-    
+    im_data = delayed_im.finalize(interpolation='cubic', antialias=True)
+
     if method == 'ASI':
         Scale = 10000
         fill_value = 0
@@ -399,41 +419,52 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
         B4 = im_data[:, :, 3]
         B5 = im_data[:, :, 4]
         B6 = im_data[:, :, 5]
-        MaskValid_Obs = ((B1>0) & (B1<1*Scale) &
-                        (B2>0) & (B2<1*Scale) &
-                        (B3>0) & (B3<1*Scale) &
-                        (B4>0) & (B4<1*Scale) &
-                        (B5>0) & (B5<1*Scale) &
-                        (B6>0) & (B6<1*Scale)
-                        )
-        
+        MaskValid_Obs = ((B1 > 0) & (B1 < 1 * Scale) &
+                         (B2 > 0) & (B2 < 1 * Scale) &
+                         (B3 > 0) & (B3 < 1 * Scale) &
+                         (B4 > 0) & (B4 < 1 * Scale) &
+                         (B5 > 0) & (B5 < 1 * Scale) &
+                         (B6 > 0) & (B6 < 1 * Scale)
+                         )
+
         # Calculating ASI
-        ASI = artificial_surface_index(B1.astype(np.float32), B2.astype(np.float32), B3.astype(np.float32), B4.astype(np.float32), B5.astype(np.float32), B6.astype(np.float32), Scale, MaskValid_Obs, fill_value)
-        # Get land mask.        
+        ASI = artificial_surface_index(
+            B1.astype(
+                np.float32), B2.astype(
+                np.float32), B3.astype(
+                np.float32), B4.astype(
+                    np.float32), B5.astype(
+                        np.float32), B6.astype(
+                            np.float32), Scale, MaskValid_Obs, fill_value)
+        # Get land mask.
         MNDWI = (B2 - B5) / (B2 + B5)
-        MNDWI, MaskValid_MNDWI = hist_cut(MNDWI, MaskValid_Obs, fill_value, 6, [-1, 1])
-        Water_Th = 0; # Water threshold for MNDWI (may need to be adjusted for different study areas).
-        MaskLand = (MNDWI<Water_Th)
+        MNDWI, MaskValid_MNDWI = hist_cut(
+            MNDWI, MaskValid_Obs, fill_value, 6, [-1, 1])
+        # Water threshold for MNDWI (may need to be adjusted for different
+        # study areas).
+        Water_Th = 0
+        MaskLand = (MNDWI < Water_Th)
 
         # Convert dtype from float32 to int16
         ASI = ASI * Scale
         ASI = ASI.astype('int16')
-        ASI[ASI == 0] = fill_value     
+        ASI[ASI == 0] = fill_value
 
         # Exclude water pixels.
         ASI[~MaskLand] = fill_value
         ASI = ASI.reshape(ASI.shape[0], ASI.shape[1], 1)
         false_band = np.full((ASI.shape[0], ASI.shape[1], 1), 0)
         # input for Hybrid-COLD (with ASI) = B2, B3, B4, B5, B6, ASI
-        data = np.concatenate([im_data[:,:,1:6], ASI, false_band, qa_unpacked], axis=2)
+        data = np.concatenate(
+            [im_data[:, :, 1:6], ASI, false_band, qa_unpacked], axis=2)
 
     else:
         data = np.concatenate([im_data, qa_unpacked], axis=2)
-    
+
     result_fpaths = []
 
     metadata = {
-        'image_name' : image_name,
+        'image_name': image_name,
         'date_captured': date_captured,
         'ordinal_date': ordinal_date,
         'region_id': video_name,
@@ -475,8 +506,8 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
 
             block_dname = 'block_x{}_y{}'.format(i + 1, j + 1)
             block_dpath = (video_dpath / block_dname).ensuredir()
-            block_fpath = block_dpath / (image_name + '.npy')           
-            
+            block_fpath = block_dpath / (image_name + '.npy')
+
             metadata.update({
                 'x': i + 1,
                 'y': j + 1,
@@ -485,30 +516,33 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
             })
             meta_fpath = block_dpath / (image_name + '.json')
             if not os.path.exists(block_fpath):
-                meta_fpath.write_text(json.dumps(metadata))                
+                meta_fpath.write_text(json.dumps(metadata))
                 np.save(block_fpath, block)
                 result_fpaths.append(block_fpath)
                 result_fpaths.append(meta_fpath)
-        logger.info('Stacked blocked image {}/{}'.format(video_name, image_name))
+        logger.info(
+            'Stacked blocked image {}/{}'.format(video_name, image_name))
     else:
-        
+
         metadata.update({
             'total_pixels': int(np.prod(data.shape[0:2])),
             'total_bands': int(data.shape[-1]),
         })
-    
+
         full_fpath = video_dpath / (image_name + '.npy')
         meta_fpath = video_dpath / (image_name + '.json')
         if not os.path.exists(block_fpath):
-            meta_fpath.write_text(json.dumps(metadata))        
+            meta_fpath.write_text(json.dumps(metadata))
             np.save(full_fpath, data)
             result_fpaths.append(full_fpath)
             result_fpaths.append(meta_fpath)
-            logger.info('Stacked full image {}/{}'.format(video_name, image_name))
+            logger.info(
+                'Stacked full image {}/{}'.format(video_name, image_name))
 
     result['status'] = 'passed'
     result['fpaths'] = result_fpaths
     return meta_fpath
+
 
 if __name__ == '__main__':
     main()

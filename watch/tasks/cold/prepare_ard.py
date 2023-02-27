@@ -358,7 +358,7 @@ def single_image_stacking_hls(source_dir, out_dir, logger, config, folder, is_pa
 
 
 def single_image_stacking_hls14(out_dir, logger, config, folder, is_partition=True, clear_threshold=0,
-                              low_date_bound=None, upp_date_bound=None):
+                                low_date_bound=None, upp_date_bound=None):
     """
     unzip single image, convert bit-pack qa to byte value, and save as numpy
     :param source_dir: the parent folder to save image 'folder'
@@ -399,7 +399,7 @@ def single_image_stacking_hls14(out_dir, logger, config, folder, is_partition=Tr
             if pd.Timestamp.toordinal(parse((dt.datetime(int(year), 1, 1) +
                                              dt.timedelta(int(doy) - 1)).strftime('%Y-%m-%d'))) < low_date_bound:
                 return True
-            
+
         if upp_date_bound is not None:
             if pd.Timestamp.toordinal(parse((dt.datetime(int(year), 1, 1) +
                                              dt.timedelta(int(doy) - 1)).strftime('%Y-%m-%d'))) > upp_date_bound:
@@ -1294,8 +1294,8 @@ def main(source_dir, out_dir, clear_threshold, single_path, rank, n_cores, is_pa
                 break
             folder = folder_list[new_rank]
             single_image_stacking_hls14(out_dir, logger, config, folder, clear_threshold=clear_threshold,
-                                      is_partition=is_partition, low_date_bound=low_date_bound,
-                                      upp_date_bound=upp_date_bound)
+                                        is_partition=is_partition, low_date_bound=low_date_bound,
+                                        upp_date_bound=upp_date_bound)
     # create an empty file for signaling the core that has been finished
     with open(os.path.join(out_dir, 'rank{}_finished.txt'.format(rank)), 'w'):
         pass

@@ -3,25 +3,26 @@ This script is for running COLD algorithm with kwcoco dataset.
 See original code: ~/code/pycold/src/python/pycold/imagetool/tile_processing.py
 """
 
-import os, time
+import os
+import time
 import json
 from os.path import join
 import pandas as pd
-import datetime
+# import datetime
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime
 from pytz import timezone
 from scipy.stats import chi2
-import ubelt as ub
-import pycold
-from pycold import cold_detect, sccd_detect
-from pycold.utils import get_rowcol_intile, get_doy, assemble_cmmaps, unindex_sccdpack
+import ubelt as ub  # NOQA
+import pycold  # NOQA
+from pycold import cold_detect
+from pycold.utils import get_rowcol_intile, get_doy, assemble_cmmaps
 from pycold.ob_analyst import ObjectAnalystHPC
-from pycold.pyclassifier import PyClassifierHPC
-from pycold.app import defaults
-import kwcoco
+# from pycold.pyclassifier import PyClassifierHPC
+# from pycold.app import defaults
+# import kwcoco
 import scriptconfig as scfg
-from pathlib import Path
+
 
 class TileProcessingKwcocoConfig(scfg.DataConfig):
     """
@@ -32,12 +33,13 @@ class TileProcessingKwcocoConfig(scfg.DataConfig):
     stack_path = scfg.Value(None, help='directory of stacked data')
     reccg_path = scfg.Value(None, help='directory where cold record will be saved')
     meta_fpath = scfg.Value(None, help='json file created by prepare_kwcoco.py')
-    method = scfg.Value('COLD', choices=['COLD', 'HybridCOLD', 'OBCOLD'], help='type of COLD algorithms, e.g., COLD, HybridCOLD, OBCOLD')    
+    method = scfg.Value('COLD', choices=['COLD', 'HybridCOLD', 'OBCOLD'], help='type of COLD algorithms, e.g., COLD, HybridCOLD, OBCOLD')
     b_c2 = scfg.Value(True, help='indicate if it is c2 or not')
     prob = scfg.Value(0.99, help='change probability of chi-distribution, e.g., 0.99')
     conse = scfg.Value(6, help='consecutive observation to confirm change, e.g., 6')
     cm_interval = scfg.Value(60, help='CM output inverval, e.g., 60')
-    
+
+
 def main(cmdline=1, **kwargs):
     """
     Args:
@@ -49,33 +51,33 @@ def main(cmdline=1, **kwargs):
         year_highbound (_type_): _description_
         b_c2 (_type_): _description_
         cmdline (int, optional): _description_. Defaults to 1.
-        
+
     Ignore:
         python -m watch.tasks.cold.tile_processing_kwcoco --help
         TEST_COLD=1 xdoctest -m watch.tasks.cold.tile_processing_kwcoco main
-        
+
     Example:
-    >>> # xdoctest: +REQUIRES(env:TEST_COLD)     
+    >>> # xdoctest: +REQUIRES(env:TEST_COLD)
     >>> from watch.tasks.cold.tile_processing_kwcoco import main
     >>> from watch.tasks.cold.tile_processing_kwcoco import *
-    >>> kwargs= dict(        
+    >>> kwargs= dict(
     >>>    rank = 1,
     >>>    n_cores = 1,
-    >>>    stack_path = ub.Path('/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/KR_R001'), 
+    >>>    stack_path = ub.Path('/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/KR_R001'),
     >>>    reccg_path = ub.Path('/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/reccg/KR_R001'),
     >>>    meta_fpath = '/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/KR_R001/block_x10_y1/crop_20140115T020000Z_N37.643680E128.649453_N37.683356E128.734073_L8_0.json',
-    >>>    method = 'COLD',    
+    >>>    method = 'COLD',
     >>>    b_c2 = True,
     >>>    prob = 0.99,
     >>>    conse = 6,
     >>>    cm_interval = 60,
     >>> )
-    >>> cmdline=0    
+    >>> cmdline=0
     >>> main(cmdline, **kwargs)
-    """  
-    
-    # setting config    
-    config_in = TileProcessingKwcocoConfig.legacy(cmdline=cmdline, data=kwargs)        
+    """
+
+    # setting config
+    config_in = TileProcessingKwcocoConfig.legacy(cmdline=cmdline, data=kwargs)
     rank = config_in['rank']
     n_cores = config_in['n_cores']
     stack_path = config_in['stack_path']
@@ -86,18 +88,18 @@ def main(cmdline=1, **kwargs):
     prob = config_in['prob']
     conse = config_in['conse']
     cm_output_interval = config_in['cm_interval']
-    
+
     meta = open(meta_fpath)
     config = json.load(meta)
     n_cols = config['padded_n_cols']
     n_rows = config['padded_n_rows']
     n_block_x = config['n_block_x']
-    n_block_y = config['n_block_y']        
+    n_block_y = config['n_block_y']
     block_width = int(n_cols / n_block_x)  # width of a block
     block_height = int(n_rows / n_block_y)  # height of a block
     year_lowbound = None
     year_highbound = None
-    
+
     tz = timezone('US/Eastern')
     start_time = datetime.now(tz)
 
@@ -105,12 +107,13 @@ def main(cmdline=1, **kwargs):
     if year_lowbound is None:
         year_lowbound = 0
     else:
-        year_low_ordinal = pd.Timestamp.toordinal(datetime(int(year_lowbound), 1, 1))
+        year_lowbound = pd.Timestamp.toordinal(datetime(int(year_lowbound), 1, 1))
+
     if year_highbound is None:
         year_highbound = 0
     else:
-        year_high_ordinal = pd.Timestamp.toordinal(datetime(int(year_highbound + 1), 1, 1))  
-    
+        year_highbound = pd.Timestamp.toordinal(datetime(int(year_highbound + 1), 1, 1))
+
     if (n_cols % block_width != 0) or (n_rows % block_height != 0):
         print('padded_n_cols, padded_n_rows must be divisible respectively by block_width, block_height! Please double '
               'check your config yaml')
@@ -147,7 +150,7 @@ def main(cmdline=1, **kwargs):
     #                        per-pixel COLD procedure                       #
     #########################################################################
     threshold = chi2.ppf(prob, 5)
-    
+
     nblock_eachcore = int(np.ceil(n_block_x * n_block_y * 1.0 / n_cores))
     for i in range(nblock_eachcore):
         block_id = n_cores * i + rank  # started from 1, i.e., rank, rank + n_cores, rank + 2 * n_cores
@@ -193,8 +196,7 @@ def main(cmdline=1, **kwargs):
                                                                      img_tstack[pos, 5, :].astype(np.int64),
                                                                      img_tstack[pos, 6, :].astype(np.int64),
                                                                      img_tstack[pos, 7, :].astype(np.int64),
-                                                                     pos= n_cols * (original_row - 1) +
-                                                                         original_col,
+                                                                     pos=n_cols * (original_row - 1) + original_col,
                                                                      conse=conse,
                                                                      starting_date=starting_date,
                                                                      n_cm=n_cm_maps, b_c2=b_c2,
@@ -257,7 +259,7 @@ def main(cmdline=1, **kwargs):
     # for i in os.listdir(reccg_path):
     #     if i.endswith('.txt'):
     #         os.remove(os.path.join(reccg_path, i))
-    
+
     #################################################################################
     #                        the below is object-based process                      #
     #################################################################################
@@ -360,23 +362,23 @@ def main(cmdline=1, **kwargs):
     # if rank == 1:
     #     # tile_based report
     log = {
-        'algorithm': method,                
+        'algorithm': method,
         'prob': prob,
-        'conse': conse,            
+        'conse': conse,
     }
-    
+
     log_fpath = reccg_path / 'log.json'
     log_fpath.write_text(json.dumps(log))
-        
-        # if method == 'OBCOLD':
-        #     tileprocessing_report(join(reccg_path, 'tile_processing_report.log'),
-        #                           stack_path, pycold.__version__, method, config, start_time, cold_timepoint, tz,
-        #                           n_cores, starting_date, n_cm_maps, year_lowbound, year_highbound)
-        # else:
-        #     tileprocessing_report(join(reccg_path, 'tile_processing_report.log'), stack_path, pycold.__version__,
-        #                           method, config, start_time, cold_timepoint, tz, n_cores)
-        # print("The whole procedure finished: {}".format(datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')))
-  
+
+    # if method == 'OBCOLD':
+    #     tileprocessing_report(join(reccg_path, 'tile_processing_report.log'),
+    #                           stack_path, pycold.__version__, method, config, start_time, cold_timepoint, tz,
+    #                           n_cores, starting_date, n_cm_maps, year_lowbound, year_highbound)
+    # else:
+    #     tileprocessing_report(join(reccg_path, 'tile_processing_report.log'), stack_path, pycold.__version__,
+    #                           method, config, start_time, cold_timepoint, tz, n_cores)
+    # print("The whole procedure finished: {}".format(datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')))
+
 
 # def tileprocessing_report(result_log_path, stack_path, version, algorithm, config, startpoint, cold_timepoint, tz,
 #                           n_cores, starting_date=0, n_cm_maps=0, year_lowbound=0, year_highbound=0):
@@ -434,6 +436,7 @@ def is_finished_cold_blockfinished(reccg_path, nblocks):
             return False
     return True
 
+
 def get_stack_date(block_x, block_y, stack_path, year_lowbound=0, year_highbound=0, nband=8):
     """
     :param block_x: block id at x axis
@@ -460,7 +463,7 @@ def get_stack_date(block_x, block_y, stack_path, year_lowbound=0, year_highbound
         img_name = config['image_name'] + '.npy'
         img_dates.append(ordinal_date)
         img_files.append(img_name)
-    
+
     if len(img_files) == 0:
         return None, None
 
@@ -484,9 +487,11 @@ def get_stack_date(block_x, block_y, stack_path, year_lowbound=0, year_highbound
                             for f in img_files_sorted])
     return img_tstack, img_dates_sorted
 
+
 #########################################################################
 #                     function for OB-COLD procedure                    #
 #########################################################################
+
 
 def reading_start_dates_nmaps(stack_path, year_lowbound, year_highbound, cm_interval):
     """
@@ -533,6 +538,7 @@ def reading_start_dates_nmaps(stack_path, year_lowbound, year_highbound, cm_inte
         n_cm_maps = int((ending_date - starting_date + 1) / cm_interval) + 1
         return starting_date, n_cm_maps
 
+
 def is_finished_assemble_cmmaps(cmmap_path, n_cm, starting_date, cm_interval):
     """
     Parameters
@@ -560,6 +566,5 @@ def is_finished_assemble_cmmaps(cmmap_path, n_cm, starting_date, cm_interval):
     return True
 
 
-        
 if __name__ == '__main__':
     main()
