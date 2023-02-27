@@ -3147,7 +3147,9 @@ trainer:
   replace_sampler_ddp: true
   track_grad_norm: 2
 "
-rsync -avprPR yardrat:data/dvc-repos/smart_expt_dvc/./training/yardrat/jon.crall/Drop6/runs/Drop6_BAS_scratch_landcover_10GSD_split2_V6 "$DVC_EXPT_DPATH"
+
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+rsync -avprPR yardrat:data/dvc-repos/smart_expt_dvc/./training/yardrat/jon.crall/Drop6/runs/ "$DVC_EXPT_DPATH"
 
 
 
