@@ -1347,10 +1347,10 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                         loss_labels_[None],
                     )
 
-                    if loss.isnan().any():
-                        print(loss)
-                        print(pred)
-                        print(frame)
+                    # if loss.isnan().any():
+                    #     print(loss)
+                    #     print(pred)
+                    #     print(frame)
 
                     loss *= task_weights_
                     frame_losses.append(
