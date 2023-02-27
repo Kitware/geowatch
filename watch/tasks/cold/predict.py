@@ -1,5 +1,26 @@
 """
 Main prediction script for cold
+
+CommandLine:
+
+    DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="auto")
+    EXPT_DVC_DPATH=$(smartwatch_dvc --tags=phase2_expt --hardware="auto")
+    python -m watch.tasks.cold.predict \
+        --coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly-KR_R001.kwcoco.json" \
+        --out_dpath="$DATA_DVC_DPATH/Drop6/_pycold" \
+        --mod_coco_fpath="$DATA_DVC_DPATH/Drop6/_pycold/imgonly-KR_R001-cold.kwcoco.json" \
+        --adj_cloud=False \
+        --method='COLD' \
+        --prob=0.99 \
+        --conse=6 \
+        --cm_interval=60 \
+        --year_lowbound=None \
+        --year_highbound=None \
+        --coefs=cv,a0,a1,b1,c1,rmse \
+        --coefs_bands=0,1,2,3,4,5 \
+        --timestamp=True \
+        --mode='process'
+
 """
 import scriptconfig as scfg
 import ubelt as ub
@@ -26,8 +47,8 @@ class ColdPredictConfig(scfg.DataConfig):
     cm_interval = scfg.Value(None, help='CM output inverval, e.g., 60')
     year_lowbound = scfg.Value(None, help='min year for saving geotiff, e.g., 2017')
     year_highbound = scfg.Value(None, help='max year for saving geotiff, e.g., 2022')
-    coefs = scfg.Value(None, help="list of COLD coefficients for saving geotiff, e.g., ['a0', 'c1', 'a1', 'b1', 'a2', 'b2', 'a3', 'b3', 'cv', 'rmse']")
-    coefs_bands = scfg.Value(None, help='indicate the ba_nds for output coefs_bands, e.g., [0, 1, 2, 3, 4, 5]')
+    coefs = scfg.Value(None, type=str, help="list of COLD coefficients for saving geotiff, e.g., a0,c1,a1,b1,a2,b2,a3,b3,cv,rmse")
+    coefs_bands = scfg.Value(None, type=str, help='indicate the ba_nds for output coefs_bands, e.g., 0,1,2,3,4,5')
     timestamp = scfg.Value(True, help='True: exporting cold result by timestamp, False: exporting cold result by year, Default is False')
     mode = scfg.Value('process', help='Can be process, serial, or thread')
     mod_coco_fpath = scfg.Value(None, help='file path for modified coco json')
@@ -71,6 +92,7 @@ def main(cmdline=1, **kwargs):
     from watch.tasks.cold import assemble_cold_result_kwcoco
 
     config = ColdPredictConfig.legacy(cmdline=cmdline, data=kwargs)
+    print('config = {}'.format(ub.urepr(dict(config), nl=1)))
     coco_fpath = config['coco_fpath']
     out_dpath = ub.Path(config['out_dpath']).ensuredir()
     adj_cloud = config['adj_cloud']

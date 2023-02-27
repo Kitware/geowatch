@@ -27,8 +27,8 @@ class ExportColdKwcocoConfig(scfg.DataConfig):
     meta_fpath = scfg.Value(None, help='file path of metadata json created by prepare_kwcoco script')
     year_lowbound = scfg.Value(None, help='min year for saving geotiff, e.g., 2017')
     year_highbound = scfg.Value(None, help='max year for saving geotiff, e.g., 2022')
-    coefs = scfg.Value(None, help="list of COLD coefficients for saving geotiff, e.g., ['a0', 'c1', 'a1', 'b1', 'a2', 'b2', 'a3', 'b3', 'cv', 'rmse']")
-    coefs_bands = scfg.Value(None, help='indicate the ba_nds for output coefs_bands, e.g., [0, 1, 2, 3, 4, 5]')
+    coefs = scfg.Value(None, type=str, help="list of COLD coefficients for saving geotiff, e.g., a0,c1,a1,b1,a2,b2,a3,b3,cv,rmse")
+    coefs_bands = scfg.Value(None, type=str, help='indicate the ba_nds for output coefs_bands, e.g., 0,1,2,3,4,5')
     timestamp = scfg.Value(True, help='True: exporting cold result by timestamp, False: exporting cold result by year, Default is False')
 
 
@@ -115,13 +115,17 @@ def main(cmdline=1, **kwargs):
         try:
             coefs = list(coefs.split(","))
         except Exception:
+            print(f'coefs={coefs}')
             print("Illegal coefs inputs: example, --coefs='a0, c1, a1, b1, a2, b2, a3, b3, cv, rmse'")
+            raise
 
         try:
             coefs_bands = list(coefs_bands.split(","))
             coefs_bands = [int(coefs_band) for coefs_band in coefs_bands]
         except Exception:
+            print(f'coefs_bands={coefs_bands}')
             print("Illegal coefs_bands inputs: example, --coefs_bands='0, 1, 2, 3, 4, 5, 6'")
+            raise
 
     dt = np.dtype([('t_start', np.int32),
                    ('t_end', np.int32),
