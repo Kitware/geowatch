@@ -103,6 +103,34 @@ def _check_high_tpr_case(agg, config):
     ...
 
 
+def _namek_check_pipeline_status():
+    from watch.mlops import aggregate_loader
+    import watch
+    expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+    root_dpath = expt_dvc_dpath / '_namek_eval'
+    pipeline = 'bas'
+    io_workers = 16
+    # eval_type_to_results = aggregate_loader.build_tables(root_dpath, pipeline, io_workers)
+    # eval_type_to_results['bas_pxl_eval']
+
+    from watch.mlops import smart_pipeline
+    dag = smart_pipeline.make_smart_pipeline(pipeline)
+    dag.print_graphs()
+    dag.configure(config=None, root_dpath=root_dpath)
+
+    node_to_fpaths = {}
+    for node_name, node in ub.ProgIter(dag.nodes.items()):
+        node_fpaths = {}
+        for out_node_key, out_node in node.outputs.items():
+            node_fpaths[out_node_key] = aggregate_loader.out_node_matching_fpaths(out_node)
+        node_to_fpaths[node_name] = node_fpaths
+
+    node_to_fpaths =ub.udict(node_to_fpaths).map_values(ub.udict)
+    num_existing_outs = node_to_fpaths.map_values(lambda x: x.map_values(len))
+
+
+
+
 def _namek_eval():
     from watch.mlops.aggregate import AggregateEvluationConfig
     from watch.mlops.aggregate import build_tables

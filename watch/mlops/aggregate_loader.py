@@ -43,7 +43,7 @@ def build_tables(root_dpath, pipeline, io_workers):
 
     from concurrent.futures import as_completed
     pman = util_progress.ProgressManager(backend='rich')
-    pman = util_progress.ProgressManager(backend='progiter')
+    # pman = util_progress.ProgressManager(backend='progiter')
     with pman:
         eval_type_to_results = {}
         eval_node_prog = pman.progiter(node_eval_infos, desc='Loading node results')
