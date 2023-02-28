@@ -338,7 +338,7 @@ def generate_crop_jobs(coco_dset, dst_bundle_dpath, channels=None, context_facto
     Generator that yields parameters to be used to call gdal_translate
 
     Benchmark:
-        # Test kwimage versus shapley warp
+        # Test kwimage versus shapely warp
 
         kw_poly = kwimage.Polygon.random()
         kw_poly = kwimage.Boxes.random(1).to_polygons()[0]
@@ -473,7 +473,7 @@ def generate_crop_jobs(coco_dset, dst_bundle_dpath, channels=None, context_facto
             # Ensure we dont crop past the edges
             video_bounds_sh = kwimage.Boxes([
                 [0, 0, video['width'], video['height']]
-            ], 'xywh').to_shapley()[0]
+            ], 'xywh').to_shapely()[0]
             vid_track_poly_sh = vid_track_poly_sh.intersection(video_bounds_sh)
 
         # vid_track_poly = vid_track_poly.scale(1.1, about='center')

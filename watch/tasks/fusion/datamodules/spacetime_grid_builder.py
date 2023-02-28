@@ -874,7 +874,7 @@ def _refine_time_sample(dset, main_idx_to_gids, vidspace_box, refine_iosa_thresh
         # probably an issue. treat it as if it didn't specify a valid
         # region.
         if vidspace_valid_poly is not None and vidspace_valid_poly.area > 0:
-            vidspace_box_poly = vidspace_box.to_shapley()[0]
+            vidspace_box_poly = vidspace_box.to_shapely()[0]
             # Intersection over smaller area
             isect = vidspace_valid_poly.intersection(vidspace_box_poly)
             iosa = isect.area / min(vidspace_box_poly.area, vidspace_valid_poly.area)

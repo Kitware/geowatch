@@ -1305,7 +1305,7 @@ def find_low_overlap_covering_boxes(polygons, scale, min_box_dim, max_box_dim, m
         # ws = hs = np.full(len(xs), fill_value=site_meters)
         # utm_boxes = kwimage.Boxes(np.stack([xs, ys, ws, hs], axis=1), 'cxywh').to_xywh()
 
-        boxes_gdf = gpd.GeoDataFrame(geometry=candidate_bbs.to_shapley(), crs=polygons_gdf.crs)
+        boxes_gdf = gpd.GeoDataFrame(geometry=candidate_bbs.to_shapely(), crs=polygons_gdf.crs)
         box_poly_overlap = util_gis.geopandas_pairwise_overlaps(boxes_gdf, polygons_gdf, predicate='contains')
         cover_idxs = list(kwarray.setcover(box_poly_overlap).keys())
         keep_bbs = candidate_bbs.take(cover_idxs)
@@ -1335,7 +1335,7 @@ def find_low_overlap_covering_boxes(polygons, scale, min_box_dim, max_box_dim, m
             unused = sorted(set(range(len(keep_bbs))) - used)
             post_merge_bbs = kwimage.Boxes.concatenate([keep_bbs.take(unused)] + merged_boxes)
 
-            boxes_gdf = gpd.GeoDataFrame(geometry=post_merge_bbs.to_shapley(), crs=polygons_gdf.crs)
+            boxes_gdf = gpd.GeoDataFrame(geometry=post_merge_bbs.to_shapely(), crs=polygons_gdf.crs)
             box_poly_overlap = util_gis.geopandas_pairwise_overlaps(boxes_gdf, polygons_gdf, predicate='contains')
             cover_idxs = list(kwarray.setcover(box_poly_overlap).keys())
             new_cand_bbs = post_merge_bbs.take(cover_idxs)
@@ -1620,7 +1620,7 @@ def find_low_overlap_covering_boxes_optimize(polygons, scale, min_box_dim, max_b
                 raise ex
 
     # polygon_boxes.tensor()
-    # boxes_gdf = gpd.GeoDataFrame(geometry=candidate_bbs.to_shapley(), crs=polygons_gdf.crs)
+    # boxes_gdf = gpd.GeoDataFrame(geometry=candidate_bbs.to_shapely(), crs=polygons_gdf.crs)
     # box_poly_overlap = util_gis.geopandas_pairwise_overlaps(boxes_gdf, polygons_gdf, predicate='contains')
     # cover_idxs = list(kwarray.setcover(box_poly_overlap).keys())
     # keep_bbs = candidate_bbs.take(cover_idxs)

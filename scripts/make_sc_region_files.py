@@ -111,7 +111,7 @@ def main():
         # # ws = hs = np.full(len(xs), fill_value=site_meters)
         # # utm_boxes = kwimage.Boxes(np.stack([xs, ys, ws, hs], axis=1), 'cxywh').to_xywh()
 
-        # boxes_df = gpd.GeoDataFrame(geometry=candidate_bbs.to_shapley(), crs=region_sites_utm.crs)
+        # boxes_df = gpd.GeoDataFrame(geometry=candidate_bbs.to_shapely(), crs=region_sites_utm.crs)
         # box_poly_overlap = util_gis.geopandas_pairwise_overlaps(boxes_df, region_sites_utm, predicate='contains')
         # import kwarray
         # cover_idxs = list(kwarray.setcover(box_poly_overlap).keys())
@@ -121,7 +121,7 @@ def main():
         #     print(f'removed={removed}')
         # total_area[site_meters_min] += keep_bbs.area.sum()
 
-        keep_boxes_df = gpd.GeoDataFrame(geometry=keep_bbs.to_shapley(), crs=region_sites_utm.crs)
+        keep_boxes_df = gpd.GeoDataFrame(geometry=keep_bbs.to_shapely(), crs=region_sites_utm.crs)
         keep_boxes_df['site_idxs'] = overlap_idxs
         keep_boxes_crs84_df = keep_boxes_df.to_crs(util_gis._get_crs84())
 
@@ -291,7 +291,7 @@ def find_low_overlap_covering_boxes(polygons, scale, min_box_dim, max_box_dim, m
         # ws = hs = np.full(len(xs), fill_value=site_meters)
         # utm_boxes = kwimage.Boxes(np.stack([xs, ys, ws, hs], axis=1), 'cxywh').to_xywh()
 
-        boxes_gdf = gpd.GeoDataFrame(geometry=candidate_bbs.to_shapley(), crs=polygons_gdf.crs)
+        boxes_gdf = gpd.GeoDataFrame(geometry=candidate_bbs.to_shapely(), crs=polygons_gdf.crs)
         box_poly_overlap = util_gis.geopandas_pairwise_overlaps(boxes_gdf, polygons_gdf, predicate='contains')
         cover_idxs = list(kwarray.setcover(box_poly_overlap).keys())
         keep_bbs = candidate_bbs.take(cover_idxs)
@@ -321,7 +321,7 @@ def find_low_overlap_covering_boxes(polygons, scale, min_box_dim, max_box_dim, m
             unused = sorted(set(range(len(keep_bbs))) - used)
             post_merge_bbs = kwimage.Boxes.concatenate([keep_bbs.take(unused)] + merged_boxes)
 
-            boxes_gdf = gpd.GeoDataFrame(geometry=post_merge_bbs.to_shapley(), crs=polygons_gdf.crs)
+            boxes_gdf = gpd.GeoDataFrame(geometry=post_merge_bbs.to_shapely(), crs=polygons_gdf.crs)
             box_poly_overlap = util_gis.geopandas_pairwise_overlaps(boxes_gdf, polygons_gdf, predicate='contains')
             cover_idxs = list(kwarray.setcover(box_poly_overlap).keys())
             new_cand_bbs = post_merge_bbs.take(cover_idxs)
