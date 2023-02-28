@@ -139,12 +139,11 @@ def grab_landsat_product(product_id=None, demo_index=0):
     item_suffixes = sat_code_to_suffixes[sat_code]
 
     # By default cache to the $XDG_CACHE_HOME/watch
-    import os
     dset_dpath = ub.Path.appdir('watch/demo/landsat').ensuredir()
-    dset_dpath = os.fspath(dset_dpath)
 
     # Cache the scene using the same path used by google cloud storage
-    scene_dpath = ub.ensuredir((dset_dpath, scene_path))
+    scene_dpath = dset_dpath / scene_path
+    scene_dpath.ensuredir()
 
     product = {
         'bands': [],

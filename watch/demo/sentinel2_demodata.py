@@ -1,3 +1,6 @@
+"""
+Grab specific sentinel2 images for testing
+"""
 import ubelt as ub
 import os
 import pathlib
@@ -57,6 +60,14 @@ def grab_sentinel2_product(index=0, overwrite=False):
         not safe_dpath.exists() or not list(safe_dpath.glob('*'))
     )
 
+    """
+    # We could vendor code from fels if we wanted.
+    import liberator
+    from fels.sentinel2 import get_sentinel2_image
+    lib = liberator.Liberator()
+    lib.add_dynamic(get_sentinel2_image)
+    print(lib.current_sourcecode()
+    """
     try:
         from fels.sentinel2 import get_sentinel2_image
     except ImportError:
