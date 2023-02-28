@@ -317,7 +317,12 @@ def extract_features(cold_plot, band, ordinal_day_list, nan_val, timestamp, feat
                 max_days = datetime_mod.date(last_year, 12, 31).toordinal()
             else:
                 max_days = cold_plot[idx + 1]['t_start']
-            break_year = pd.Timestamp.fromordinal(cold_curve['t_break']).year if(cold_curve['t_break'] > 0 and cold_curve['change_prob'] == 100) else -9999
+
+            break_year = (
+                pd.Timestamp.fromordinal(cold_curve['t_break']).year
+                if (cold_curve['t_break'] > 0 and cold_curve['change_prob'] == 100)
+                else -9999
+            )
 
             if cold_curve['t_start'] <= ordinal_day < max_days:
                 for n, feature in enumerate(feature_outputs):

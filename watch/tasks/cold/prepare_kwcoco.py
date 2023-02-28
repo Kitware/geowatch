@@ -19,6 +19,9 @@ Limitations:
     * Nodata values are currently not masked or handled
 
     * Configurations are hard-coded
+
+TODO:
+    - [ ] Incorporate watch/tasks/fusion/datamodules/qa_bands.py
 """
 import kwcoco
 import os
@@ -553,4 +556,4 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
 
 
 if __name__ == '__main__':
-    main()
+    prepare_kwcoco_main()
