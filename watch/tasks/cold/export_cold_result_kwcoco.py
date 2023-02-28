@@ -146,14 +146,15 @@ def export_cold_main(cmdline=1, **kwargs):
                    ('rmse', np.float32, 7),
                    ('magnitude', np.float32, 7)])
 
-    if coefs is not None:
-        assert all(elem in coef_names for elem in coefs)
-        assert all(elem in band_names for elem in coefs_bands)
+    # if coefs is not None:
+    #     assert all(elem in coef_names for elem in coefs)
+    #     assert all(elem in band_names for elem in coefs_bands)
 
     out_path = os.path.join(reccg_path, 'cold_feature')
 
-    if not os.path.exists(out_path):
-        os.makedirs(out_path)
+    if rank == 0:
+        if not os.path.exists(out_path):
+            os.makedirs(out_path)
 
     # MPI mode
     # trans = comm.bcast(trans, root=0)
@@ -367,22 +368,22 @@ def extract_features(cold_plot, band, ordinal_day_list, nan_val, timestamp, feat
                             features[n][index] = 0
                 break
 
-        if 'cv' in feature_outputs:
-            # ordinal_day_years = [pd.Timestamp.fromordinal(day).year for day in ordinal_day_list]
-            for index, ordinal_day in enumerate(ordinal_day_list):
-                ordinal_year = pd.Timestamp.fromordinal(ordinal_day).year
-                for cold_curve in cold_plot:
-                    if (cold_curve['t_break'] == 0) or (cold_curve['change_prob'] != 100):
+    if 'cv' in feature_outputs:
+        # ordinal_day_years = [pd.Timestamp.fromordinal(day).year for day in ordinal_day_list]
+        for index, ordinal_day in enumerate(ordinal_day_list):
+            ordinal_year = pd.Timestamp.fromordinal(ordinal_day).year
+            for cold_curve in cold_plot:
+                if (cold_curve['t_break'] == 0) or (cold_curve['change_prob'] != 100):
+                    continue
+                break_year = pd.Timestamp.fromordinal(cold_curve['t_break']).year
+                if timestamp:
+                    if ordinal_day == cold_curve['t_break']:
+                        features[feature_outputs.index('cv')][index] = cold_curve['magnitude'][band]
                         continue
-                    break_year = pd.Timestamp.fromordinal(cold_curve['t_break']).year
-                    if timestamp:
-                        if ordinal_day == cold_curve['t_break']:
-                            features[feature_outputs.index('cv')][index] = cold_curve['magnitude'][band]
-                            continue
-                    else:
-                        if break_year == ordinal_year:
-                            features[feature_outputs.index('cv')][index] = cold_curve['magnitude'][band]
-                            continue
+                else:
+                    if break_year == ordinal_year:
+                        features[feature_outputs.index('cv')][index] = cold_curve['magnitude'][band]
+                        continue
 
     return features
 
