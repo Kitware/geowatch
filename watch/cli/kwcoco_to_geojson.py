@@ -302,7 +302,10 @@ def geojson_feature(anns, coco_dset, with_properties=True):
             if isinstance(geom, shapely.geometry.Polygon):
                 return 1  # this is probably the case
             elif isinstance(geom, shapely.geometry.MultiPolygon):
-                return len(geom)
+                try:
+                    return len(geom)
+                except TypeError:
+                    return len(geom.geoms)
             else:
                 raise TypeError(type(geom))
 

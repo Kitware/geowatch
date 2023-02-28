@@ -278,7 +278,7 @@ def main(cmdline=True, **kwargs):
     if len(pred_sites) == 0:
         # FIXME: when the tracker produces no results, we fail to score here.
         # Is there a way to produce a valid empty file in the tracker?
-        raise Exception('No input sites were given')
+        raise Exception('No input predicted sites were given')
 
     name = args.name
     true_site_dpath = args.true_site_dpath

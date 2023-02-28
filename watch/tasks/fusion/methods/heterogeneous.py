@@ -374,18 +374,34 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         if isinstance(position_encoder, str) and position_encoder == 'auto':
             position_encoder = ScaleAgnostictPositionalEncoder(3, 8)
 
-        if isinstance(backbone, str) and backbone == 'auto':
-            backbone = TransformerEncoderDecoder(
-                encoder_depth=1,
-                decoder_depth=1,
-                dim=position_encoder.output_dim + 16,
-                queries_dim=position_encoder.output_dim,
-                logits_dim=16,
-                cross_heads=1,
-                latent_heads=1,
-                cross_dim_head=1,
-                latent_dim_head=1,
-            )
+        if isinstance(backbone, str):
+            if backbone == 'auto':
+                backbone = TransformerEncoderDecoder(
+                    encoder_depth=1,
+                    decoder_depth=1,
+                    dim=position_encoder.output_dim + 16,
+                    queries_dim=position_encoder.output_dim,
+                    logits_dim=16,
+                    cross_heads=1,
+                    latent_heads=1,
+                    cross_dim_head=1,
+                    latent_dim_head=1,
+                )
+            elif backbone == 'vit_B_16_imagenet1k':
+                """
+                pip install pytorch_pretrained_vit
+                """
+                from pytorch_pretrained_vit import ViT
+                vit_model = ViT('B_16_imagenet1k', pretrained=True)
+                backbone = vit_model.transformer
+                # assert token_dim == 708
+            elif backbone == 'vit_B_16':
+                from pytorch_pretrained_vit import ViT
+                vit_model = ViT('B_16', pretrained=True)
+                backbone = vit_model.transformer
+                # assert token_dim == 708
+            else:
+                raise KeyError(backbone)
 
         super().__init__()
         self.save_hyperparameters(ignore=["position_encoder"])
@@ -957,6 +973,64 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             >>>             if (frame_idx == 0) and task_key.startswith("change"): continue
             >>>             assert frame_pred.shape[1:] == frame[task_key].shape, f"{frame_pred.shape} should equal {frame[task_key].shape} for task '{task_key}'"
 
+        Example:
+            >>> # xdoctest: +REQUIRES(module:mmseg)
+            >>> from watch.tasks import fusion
+            >>> position_encoder = fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3)
+            >>> channels, classes, dataset_stats = fusion.methods.HeterogeneousModel.demo_dataset_stats()
+            >>> self = fusion.methods.HeterogeneousModel(
+            >>>     classes=classes,
+            >>>     dataset_stats=dataset_stats,
+            >>>     input_sensorchan=channels,
+            >>>     #token_dim=708,
+            >>>     token_dim=768 - 60,
+            >>>     backbone='vit_B_16_imagenet1k',
+            >>>     position_encoder=position_encoder,
+            >>> )
+            >>> batch = self.demo_batch(width=64, height=65)
+            >>> batch += self.demo_batch(width=55, height=75)
+            >>> outputs = self.forward(batch)
+            >>> for task_key, task_outputs in outputs.items():
+            >>>     if "probs" in task_key: continue
+            >>>     if task_key == "class": task_key = "class_idxs"
+            >>>     for task_pred, example in zip(task_outputs, batch):
+            >>>         for frame_idx, (frame_pred, frame) in enumerate(zip(task_pred, example["frames"])):
+            >>>             if (frame_idx == 0) and task_key.startswith("change"): continue
+            >>>             assert frame_pred.shape[1:] == frame[task_key].shape, f"{frame_pred.shape} should equal {frame[task_key].shape} for task '{task_key}'"
+
+        Ignore:
+            from watch.tasks import fusion
+            from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+            position_encoder = watch.tasks.fusion.methods.heterogeneous.MipNerfPositionalEncoder(in_dims=3, max_freq=3, num_freqs=16)
+            token_dim = 256
+            backbone = TransformerEncoderDecoder(
+                encoder_depth=6,
+                decoder_depth=0,
+                dim=position_encoder.output_dim + token_dim,
+                queries_dim=position_encoder.output_dim,
+                logits_dim=token_dim,
+                latent_dim_head=1024,
+            )
+            channels, classes, dataset_stats = fusion.methods.HeterogeneousModel.demo_dataset_stats()
+            model = fusion.methods.HeterogeneousModel(
+                token_dim=token_dim,
+                token_width=8,
+                classes=classes,
+                dataset_stats=dataset_stats,
+                input_sensorchan=channels,
+                position_encoder=position_encoder,
+                backbone=backbone,
+                spatial_scale_base=1,
+                global_change_weight=0,
+                global_class_weight=0,
+                global_saliency_weight=1,
+                decoder="simple_conv",
+            )
+            batch = model.demo_batch(width=64, height=65)
+            batch += model.demo_batch(width=55, height=75)
+            outputs = model.forward(batch)
+
+
         """
 
         # ==================
@@ -992,6 +1066,11 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             ])
             orig_input_seqs.append(input_token_seq)
 
+        if len(orig_input_seqs) == 0:
+            print(f'batch={batch}')
+            print('Skipping batch')
+            return None
+
         # Each example may have a different number of tokens, so we perform
         # some padding and compute a mask of where those padded tokens are
         padding_value = -1000.0  # Magic placeholder value
@@ -1010,8 +1089,9 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         # BUT only if we need to
         # ==================
 
-        if self.backbone.has_decoder:
-
+        has_decoder = getattr(self.backbone, 'has_decoder', False)
+        self.backbone.has_decoder = has_decoder
+        if has_decoder:
             # Lists to stash sequences and shapes
             orig_query_shapes = []
             orig_query_seqs = []
@@ -1061,11 +1141,16 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             output_masks = query_masks
         else:
             output_seqs = self.backbone(
-                input_seqs,
+                input_seqs,  # [:, :, 0:768],
                 mask=input_masks,
             )
             output_shapes = orig_input_shapes
             output_masks = input_masks
+
+            # print(f'output_seqs.shape={output_seqs.shape}')
+            if output_seqs.shape[2] != self.hparams.token_dim:
+                # hack for VIT
+                output_seqs = output_seqs[:, :, 0:self.hparams.token_dim]
 
         # ==================
         # Decompose outputs into the appropriate output shape
@@ -1107,13 +1192,15 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                         output_mode_seqs = torch.split(output_frame_seq, mode_sizes)
 
                         output = torch.mean(torch.concat([
-                            nn.functional.upsample_bilinear(
+                            torch.nn.functional.interpolate(
                                 einops.rearrange(
                                     mode_seq,
                                     "(height width) chan -> 1 chan height width",
                                     height=mode_height, width=mode_width,
                                 ),
                                 size=max_mode_size,
+                                mode='bilinear',
+                                align_corners=True,
                             )
                             for mode_seq, (mode_height, mode_width) in zip(output_mode_seqs, frame_shape)
                         ], dim=0), dim=0)
@@ -1293,7 +1380,11 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             # and (len(ex["frames"]) > 0)
         ]
 
+        batch_size = len(batch)
+
         outputs = self(batch)
+        if outputs is None:
+            return None
 
         if not with_loss:
             return outputs
@@ -1306,7 +1397,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                     task_labels_key = self.task_to_keynames[task_name]["labels"]
                     labels = frame[task_labels_key]
 
-                    self.log(f"{stage}_{task_name}_logit_mean", pred.mean())
+                    self.log(f"{stage}_{task_name}_logit_mean", pred.mean(), batch_size=batch_size)
 
                     if labels is None:
                         continue
@@ -1345,10 +1436,10 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                         loss_labels_[None],
                     )
 
-                    if loss.isnan().any():
-                        print(loss)
-                        print(pred)
-                        print(frame)
+                    # if loss.isnan().any():
+                    #     print(loss)
+                    #     print(pred)
+                    #     print(frame)
 
                     loss *= task_weights_
                     frame_losses.append(
@@ -1361,10 +1452,11 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                             labels.flatten().long(),
                         ),
                         prog_bar=True,
+                        batch_size=batch_size,
                     )
 
         outputs["loss"] = sum(frame_losses) / len(frame_losses)
-        self.log(f"{stage}_loss", outputs["loss"], prog_bar=True)
+        self.log(f"{stage}_loss", outputs["loss"], prog_bar=True, batch_size=batch_size)
         return outputs
 
 #     def shared_step(self, batch, batch_idx=None, with_loss=True):

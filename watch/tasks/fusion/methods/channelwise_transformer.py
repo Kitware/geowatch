@@ -1028,6 +1028,8 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
         item_losses = []
 
+        batch_size = len(batch)
+
         # Initialize truth and probs for each head / item that will be stacked
         batch_head_truths = {k: [] for k in self.heads.keys()}
         batch_head_probs = {k: [] for k in self.heads.keys()}
@@ -1111,8 +1113,8 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                                 item_metrics[f'{stage}_{head_key}_{metric_key}'] = val
 
                     for key, val in item_metrics.items():
-                        self.log(key, val, prog_bar=True)
-                    self.log(f'{stage}_loss', total_loss, prog_bar=True)
+                        self.log(key, val, prog_bar=True, batch_size=batch_size)
+                    self.log(f'{stage}_loss', total_loss, prog_bar=True, batch_size=batch_size)
 
                 # Detach the itemized losses
                 for _path, val in ub.IndexableWalker(item_losses):

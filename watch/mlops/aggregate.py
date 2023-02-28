@@ -55,6 +55,11 @@ from scriptconfig import DataConfig, Value
 from watch.mlops.aggregate_loader import build_tables
 from watch.mlops.smart_global_helper import SMART_HELPER
 
+try:
+    from xdev import profile
+except ImportError:
+    profile = ub.identity
+
 
 class AggregateEvluationConfig(DataConfig):
     """
@@ -121,6 +126,9 @@ def main(cmdline=True, **kwargs):
     rois = config.rois
     # rois = {'KR_R001', 'KR_R002', 'BR_R002'}
 
+    for type, agg in eval_type_to_aggregator.items():
+        print(f'agg={agg}')
+
     timestamp = ub.timestamp()
     if config.export_tables:
         for type, agg in eval_type_to_aggregator.items():
@@ -142,6 +150,7 @@ def main(cmdline=True, **kwargs):
     # automated_analysis(eval_type_to_aggregator, config)
 
 
+@profile
 def coerce_aggregators(config):
     from watch.utils import util_path
     input_targets = util_path.coerce_patterned_paths(config.target)
@@ -172,6 +181,7 @@ def coerce_aggregators(config):
     return eval_type_to_aggregator
 
 
+@profile
 def build_all_param_plots(agg, rois, config):
     resolved_params = util_pandas.DotDictDataFrame(agg.resolved_params)
 
@@ -1208,7 +1218,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         if rois is None:
             rois = 'max'
         if isinstance(rois, str):
-            if rois == 'max':
+            if rois == 'max' or rois == 'auto':
                 regions_of_interest = ub.argmax(agg.macro_compatible, key=len)
         else:
             regions_of_interest = rois
@@ -1225,6 +1235,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         else:
             agg.build_single_macro_table(rois)
 
+    @profile
     def build_single_macro_table(agg, rois):
         """
         Builds a single macro table for a choice of regions.
@@ -1272,6 +1283,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             return macro_table
 
 
+@profile
 def aggregate_param_cols(df, aggregator=None, hash_cols=None, allow_nonuniform=False):
     """
     Aggregates parameter columns. Specified hash_cols should be
@@ -1325,6 +1337,7 @@ def aggregate_param_cols(df, aggregator=None, hash_cols=None, allow_nonuniform=F
     return agg_row
 
 
+@profile
 def macro_aggregate(agg, group, aggregator):
     """
     Helper function

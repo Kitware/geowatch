@@ -753,9 +753,6 @@ class ProcessNode(Node):
             self.root_dpath = '.'
         self.root_dpath = ub.Path(self.root_dpath)
 
-        # self._dirtype = 'tree'
-        self._dirtype = 'flat'
-
         self.templates = None
 
         self.template_outdir = None
@@ -938,12 +935,13 @@ class ProcessNode(Node):
     def template_root_dpath(self):
         return self.root_dpath
 
+    @property
+    def template_node_group_dpath(self):
+        return self.root_dpath / self.group_dname / 'flat' / self.name
+
     @memoize_configured_property
     def template_node_dpath(self):
-        if self._dirtype == 'flat':
-            return self.root_dpath / self.group_dname / 'flat' / self.name / ('{' + self.name + '_id}')
-        else:
-            return self.root_dpath / self.group_dname / self.template_dag_dname
+        return self.template_node_group_dpath / ('{' + self.name + '_id}')
 
     @memoize_configured_property
     @profile

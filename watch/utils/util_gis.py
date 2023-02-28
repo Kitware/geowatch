@@ -689,7 +689,7 @@ def coerce_geojson_datas(arg, format='dataframe', allow_raw=False, workers=0,
 
         format (str):
             Indicates the returned format of the data. Can be 'dataframe' where
-            the 'data' key will be a GeoDataFrame, or 'dict' where the raw json
+            the 'data' key will be a GeoDataFrame, or 'json' where the raw json
             data will be returned.
 
         allow_raw (bool):
@@ -1016,6 +1016,9 @@ def load_geojson_datas(geojson_fpaths, format='dataframe', workers=0,
     Args:
         geojson_fpaths (Iterable[PathLike]):
             geojson paths to load
+
+        format (str):
+            Can be "dataframe" (for pandas) or "json" (for nested dict / list)
 
         workers (int):
             number of background loading workers

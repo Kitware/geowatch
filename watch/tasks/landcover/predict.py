@@ -70,6 +70,7 @@ class LandcoverPredictConfig(scfg.DataConfig):
     select_videos = scfg.Value(None, type=str, help='if specified, a jq operation to filter videos')
     with_hidden = scfg.Value(None, type=int, help='if true, also write out this many of the hidden activations')
     track_emissions = scfg.Value(True, help='Set to False to disable codecarbon')
+    window_dim = scfg.Value(1024, help='Set to False to disable codecarbon')
 
 
 def predict(cmdline=1, **kwargs):
@@ -182,6 +183,9 @@ def predict(cmdline=1, **kwargs):
     print('Starting main predict loop')
     # pman = util_progress.ProgressManager('progiter')
     pman = util_progress.ProgressManager('rich')
+
+    window_dim = config.window_dim
+
     with pman, torch.no_grad():
         _prog = pman.progiter(dataloader_iter, total=len(dataloader),
                               desc='predict landcover')
@@ -190,7 +194,7 @@ def predict(cmdline=1, **kwargs):
                 _predict_single(
                     img_info, model, model_info.model_outputs,
                     landcover_stitcher, hidden_stitcher,
-                    output_dset=output_dset)
+                    output_dset=output_dset, window_dim=window_dim)
 
             except KeyboardInterrupt:
                 print('interrupted')
@@ -233,7 +237,7 @@ def _predict_single(img_info,
                     model_outputs,
                     landcover_stitcher,
                     hidden_stitcher,
-                    output_dset: kwcoco.CocoDataset):
+                    output_dset: kwcoco.CocoDataset, window_dim=1024):
     """
     Modifies the coco dataset inplace, returns the data that needs to be
     written to disk.
@@ -244,7 +248,7 @@ def _predict_single(img_info,
     img = img_info['imgdata']
 
     ## Hardcoded params
-    window_dims = (1536, 1536)
+    window_dims = (window_dim, window_dim)
     window_overlap = 0.3
     hidden_scale = 0.5  # scale from raw predictions to hidden predictions
 

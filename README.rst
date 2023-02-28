@@ -129,7 +129,7 @@ As a researcher / developer / user the most important commands for you to know a
 
 * ``smartwatch geotiffs_to_kwcoco`` - Create a kwcoco file from a set of on-disk geotiffs.
 
-* ``smartwatch_dvc`` - Helper to register / retreive your DVC paths so scripts can be written agnostic to filesystem layouts.
+* ``smartwatch_dvc`` - Helper to register / retreive your DVC paths so scripts can be written agnostic to filesystem layouts. See `docs <~/code/watch/docs/using_smartwatch_dvc.rst>`_ for more details.
 
 
 For more details about the WATCH CLI and other CLI tools included in this package see:
@@ -157,7 +157,7 @@ For quick reference, a list of current documentation files is:
 
   + `Supporting Projects <docs/supporting_projects.rst>`_
 
-  + `Coding Oddities <docs/coding_oddities.rst>`_
+  + `Coding Conventions <docs/coding_conventions.rst>`_
 
 * Installing: 
 

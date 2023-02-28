@@ -73,7 +73,8 @@ def coerce_patterned_paths(data, expected_extension=None):
 
     Args:
         data (str | List[str]):
-            a glob pattern or list of glob patterns
+            a glob pattern or list of glob patterns or a yaml list of glob
+            patterns
 
     Returns:
         List[ubelt.Path]: Multiple paths that match the query
@@ -97,7 +98,32 @@ def coerce_patterned_paths(data, expected_extension=None):
         >>> import watch
         >>> empty_fpaths = coerce_patterned_paths(None)
         >>> assert len(empty_fpaths) == 0
+
+    Example:
+        >>> from watch.utils.util_path import *  # NOQA
+        >>> import watch
+        >>> import ubelt as ub
+        >>> dpath = ub.Path.appdir('watch/test/utils/path/').ensuredir()
+        >>> (dpath / 'file1.txt').touch()
+        >>> (dpath / 'dir').ensuredir()
+        >>> (dpath / 'dir' / 'subfile1.txt').touch()
+        >>> (dpath / 'dir' / 'subfile2.txt').touch()
+        >>> paths = coerce_patterned_paths(
+        ...     f'''
+        ...     - {dpath / 'file1.txt'}
+        ...     - {dpath / 'file2.txt'}
+        ...     - {dpath / 'dir'}
+        ...     ''', expected_extension='.txt')
+        >>> paths = [p.shrinkuser() for p in paths]
+        >>> print('paths = {}'.format(ub.urepr(paths, nl=1)))
+
+        paths = [
+            Path('~/.cache/watch/test/utils/path/file1.txt'),
+            Path('~/.cache/watch/test/utils/path/dir/subfile1.txt'),
+            Path('~/.cache/watch/test/utils/path/dir/subfile2.txt'),
+        ]
     """
+    from watch.utils import util_yaml
     from os.path import isdir, join
     import glob
 
@@ -108,16 +134,27 @@ def coerce_patterned_paths(data, expected_extension=None):
     else:
         datas = [data]
 
-    datas = list(map(os.fspath, datas))
+    # Resolve any yaml
+    resolved_globs = []
+    for data in datas:
+        if isinstance(data, str):
+            loaded = util_yaml.yaml_loads(data)
+            if isinstance(loaded, str):
+                loaded = [loaded]
+            resolved_globs.extend(loaded)
+        else:
+            resolved_globs.append(data)
+
+    datas = list(map(os.fspath, resolved_globs))
     paths = []
-    for data_ in datas:
+    for data_ in resolved_globs:
         if expected_extension is not None and isdir(data_):
             exts = expected_extension if ub.iterable(expected_extension) else [expected_extension]
             globpats = [join(data_, '*' + e) for e in exts]
         else:
             globpats = [data_]
         for globpat in globpats:
-            paths.extend(list(glob.glob(globpat, recursive=True)))
+            paths.extend(list(glob.glob(os.fspath(globpat), recursive=True)))
     paths = [ub.Path(p) for p in paths]
     return paths
 

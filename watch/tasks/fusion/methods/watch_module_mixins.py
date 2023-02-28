@@ -445,3 +445,188 @@ class WatchModuleMixins:
         self.unique_sensor_modes = unique_sensor_modes
         self.input_sensorchan = input_sensorchan
         return input_stats
+
+    def overfit(self, batch):
+        """
+        Overfit script and demo
+
+        CommandLine:
+            python -m xdoctest -m watch.tasks.fusion.methods.channelwise_transformer MultimodalTransformer.overfit --overfit-demo
+
+        Example:
+            >>> # xdoctest: +REQUIRES(--overfit-demo)
+            >>> # ============
+            >>> # DEMO OVERFIT:
+            >>> # ============
+            >>> from watch.tasks.fusion.methods.heterogeneous import *  # NOQA
+            >>> from watch.tasks.fusion import methods
+            >>> from watch.tasks.fusion import datamodules
+            >>> from watch.utils.util_data import find_smart_dvc_dpath
+            >>> import watch
+            >>> import kwcoco
+            >>> from os.path import join
+            >>> import os
+            >>> if 0:
+            >>>     '''
+            >>>     # Generate toy datasets
+            >>>     DATA_DPATH=$HOME/data/work/toy_change
+            >>>     TRAIN_FPATH=$DATA_DPATH/vidshapes_msi_train/data.kwcoco.json
+            >>>     mkdir -p "$DATA_DPATH"
+            >>>     kwcoco toydata --key=vidshapes-videos8-frames5-randgsize-speed0.2-msi-multisensor --bundle_dpath "$DATA_DPATH/vidshapes_msi_train" --verbose=5
+            >>>     '''
+            >>>     coco_fpath = ub.expandpath('$HOME/data/work/toy_change/vidshapes_msi_train/data.kwcoco.json')
+            >>>     coco_dset = kwcoco.CocoDataset.coerce(coco_fpath)
+            >>>     channels="B11,r|g|b,B1|B8|B11"
+            >>> if 1:
+            >>>     dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+            >>>     coco_dset = (dvc_dpath / 'Drop6') / 'imganns-KR_R001.kwcoco.zip'
+            >>>     channels='blue|green|red|nir'
+            >>> if 0:
+            >>>     coco_dset = watch.demo.demo_kwcoco_multisensor(max_speed=0.5)
+            >>>     # coco_dset = 'special:vidshapes8-frames9-speed0.5-multispectral'
+            >>>     #channels='B1|B11|B8|r|g|b|gauss'
+            >>>     channels='X.2|Y:2:6,B1|B8|B8a|B10|B11,r|g|b,disparity|gauss,flowx|flowy|distri'
+            >>> coco_dset = kwcoco.CocoDataset.coerce(coco_dset)
+            >>> datamodule = datamodules.KWCocoVideoDataModule(
+            >>>     train_dataset=coco_dset,
+            >>>     chip_size=128, batch_size=1, time_steps=5,
+            >>>     channels=channels,
+            >>>     normalize_peritem='blue|green|red|nir',
+            >>>     normalize_inputs=32, neg_to_pos_ratio=0,
+            >>>     num_workers='avail/2',
+            >>>     mask_low_quality=True,
+            >>>     observable_threshold=0.6,
+            >>>     use_grid_positives=False, use_centered_positives=True,
+            >>> )
+            >>> datamodule.setup('fit')
+            >>> dataset = torch_dset = datamodule.torch_datasets['train']
+            >>> torch_dset.disable_augmenter = True
+            >>> dataset_stats = datamodule.dataset_stats
+            >>> input_sensorchan = datamodule.input_sensorchan
+            >>> classes = datamodule.classes
+            >>> print('dataset_stats = {}'.format(ub.repr2(dataset_stats, nl=3)))
+            >>> print('input_sensorchan = {}'.format(input_sensorchan))
+            >>> print('classes = {}'.format(classes))
+            >>> # Choose subclass to test this with (does not cover all cases)
+            >>> self = methods.HeterogeneousModel(
+            >>>     classes=classes,
+            >>>     dataset_stats=dataset_stats,
+            >>>     input_sensorchan=channels,
+            >>>     #token_dim=708,
+            >>>     token_dim=768 - 60,
+            >>>     backbone='vit_B_16_imagenet1k',
+            >>>     position_encoder=position_encoder,
+            >>>     )
+            >>> self.datamodule = datamodule
+            >>> datamodule._notify_about_tasks(model=self)
+            >>> # Run one visualization
+            >>> loader = datamodule.train_dataloader()
+            >>> # Load one batch and show it before we do anything
+            >>> batch = next(iter(loader))
+            >>> print(ub.urepr(dataset.summarize_item(batch[0]), nl=3))
+            >>> import kwplot
+            >>> plt = kwplot.autoplt(force='Qt5Agg')
+            >>> plt.ion()
+            >>> canvas = datamodule.draw_batch(batch, max_channels=5, overlay_on_image=0)
+            >>> kwplot.imshow(canvas, fnum=1)
+            >>> # Run overfit
+            >>> device = 0
+            >>> self.overfit(batch)
+
+        nh.initializers.KaimingNormal()(self)
+        nh.initializers.Orthogonal()(self)
+        """
+        import kwplot
+        # import torch_optimizer
+        import xdev
+        import kwimage
+        import pandas as pd
+        # import netharn as nh
+        from watch.utils.slugify_ext import smart_truncate
+        from kwplot.mpl_make import render_figure_to_image
+
+        sns = kwplot.autosns()
+        datamodule = self.datamodule
+        device = 0
+        self = self.to(device)
+        # loader = datamodule.train_dataloader()
+        # batch = next(iter(loader))
+        walker = ub.IndexableWalker(batch)
+        for path, val in walker:
+            if isinstance(val, torch.Tensor):
+                walker[path] = val.to(device)
+        outputs = self.training_step(batch)
+        max_channels = 3
+        canvas = datamodule.draw_batch(batch, outputs=outputs, max_channels=max_channels, overlay_on_image=0)
+        kwplot.imshow(canvas)
+
+        loss_records = []
+        loss_records = [g[0] for g in ub.group_items(loss_records, lambda x: x['step']).values()]
+        step = 0
+        _frame_idx = 0
+        # dpath = ub.ensuredir('_overfit_viz09')
+
+        # optim_cls, optim_kw = nh.api.Optimizer.coerce(
+        #     optim='RAdam', lr=1e-3, weight_decay=0,
+        #     params=self.parameters())
+        try:
+            [optim], [sched] = self.configure_optimizers()
+        except Exception:
+            # optim = torch.optim.SGD(self.parameters(), lr=1e-4)
+            optim = torch.optim.AdamW(self.parameters(), lr=1e-4)
+
+        # optim = torch_optimizer.RAdam(self.parameters(), lr=self.learning_rate, weight_decay=1e-5)
+
+        fnum = 2
+        fig = kwplot.figure(fnum=fnum, doclf=True)
+        fig.set_size_inches(15, 6)
+        fig.subplots_adjust(left=0.05, top=0.9)
+        prev = None
+        for _frame_idx in xdev.InteractiveIter(list(range(_frame_idx + 1, 1000))):
+            # for _frame_idx in list(range(_frame_idx, 1000)):
+            num_steps = 20
+            ex = None
+            for _i in ub.ProgIter(range(num_steps), desc='overfit'):
+                optim.zero_grad()
+                outputs = self.training_step(batch)
+                # outputs['item_losses']
+                loss = outputs['loss']
+                if torch.any(torch.isnan(loss)):
+                    print('NAN OUTPUT!!!')
+                    print('loss = {!r}'.format(loss))
+                    print('prev = {!r}'.format(prev))
+                    ex = Exception('prev = {!r}'.format(prev))
+                    break
+                # elif loss > 1e4:
+                #     # Turn down the learning rate when loss gets huge
+                #     scale = (loss / 1e4).detach()
+                #     loss /= scale
+                prev = loss
+                # item_losses_ = nh.data.collate.default_collate(outputs['item_losses'])
+                # item_losses = ub.map_vals(lambda x: sum(x).item(), item_losses_)
+                loss.backward()
+                item_losses = {'loss': loss.detach().cpu().numpy().ravel().mean()}
+                loss_records.extend([{'part': key, 'val': val, 'step': step} for key, val in item_losses.items()])
+                optim.step()
+                step += 1
+            canvas = datamodule.draw_batch(batch, outputs=outputs, max_channels=max_channels, overlay_on_image=0, max_items=4)
+            kwplot.imshow(canvas, pnum=(1, 2, 1), fnum=fnum)
+            fig = kwplot.figure(fnum=fnum, pnum=(1, 2, 2))
+            #kwplot.imshow(canvas, pnum=(1, 2, 1))
+            ax = sns.lineplot(data=pd.DataFrame(loss_records), x='step', y='val', hue='part')
+            try:
+                ax.set_yscale('logit')
+            except Exception:
+                ...
+            fig.suptitle(smart_truncate(str(optim).replace('\n', ''), max_length=64))
+            img = render_figure_to_image(fig)
+            img = kwimage.convert_colorspace(img, src_space='bgr', dst_space='rgb')
+            # fpath = join(dpath, 'frame_{:04d}.png'.format(_frame_idx))
+            #kwimage.imwrite(fpath, img)
+            xdev.InteractiveIter.draw()
+            if ex:
+                raise ex
+        # TODO: can we get this batch to update in real time?
+        # TODO: start a server process that listens for new images
+        # as it gets new images, it starts playing through the animation
+        # looping as needed
