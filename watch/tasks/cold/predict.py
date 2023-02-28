@@ -59,6 +59,7 @@ class ColdPredictConfig(scfg.DataConfig):
     mode = scfg.Value('process', help='Can be process, serial, or thread')
     mod_coco_fpath = scfg.Value(None, help='file path for modified coco json')
     track_emissions = scfg.Value(True, help='if True use codecarbon for emission tracking')
+    workers = scfg.Value(16, help='total number of workers')
 
 
 @profile
@@ -103,6 +104,7 @@ def cold_predict_main(cmdline=1, **kwargs):
     print('config = {}'.format(ub.urepr(dict(config), nl=1)))
 
     from watch.utils import process_context
+    from watch.utils import util_parallel
     from watch.utils import util_json
     resolved_config = config.to_dict()
     resolved_config = util_json.ensure_json_serializable(resolved_config)
@@ -118,6 +120,7 @@ def cold_predict_main(cmdline=1, **kwargs):
     out_dpath = ub.Path(config['out_dpath']).ensuredir()
     adj_cloud = config['adj_cloud']
     method = config['method']
+    workers = util_parallel.coerce_num_workers(config['workers'])
 
     proc_context.start()
     proc_context.add_disk_info(out_dpath)
@@ -138,13 +141,12 @@ def cold_predict_main(cmdline=1, **kwargs):
     tile_kwargs['conse'] = config['conse']
     tile_kwargs['cm_interval'] = config['cm_interval']
 
-    workers = 16
     jobs = ub.JobPool(mode=config['mode'], max_workers=workers)
     for i in range(workers + 1):
         #jobs.submit(func, arg1, arg2, arg3=34)
         #func(arg, arg3, arg3=34)
         tile_kwargs['rank'] = i
-        tile_kwargs['n_cores'] = workers
+        tile_kwargs['n_cores'] = max(workers, 1)
         jobs.submit(tile_processing_kwcoco.tile_process_main, cmdline=0, **tile_kwargs)
 
     for job in jobs.as_completed(desc='Collect tile jobs', progkw={'verbose': 3}):
@@ -164,7 +166,7 @@ def cold_predict_main(cmdline=1, **kwargs):
     jobs = ub.JobPool(mode=config['mode'], max_workers=workers)
     for i in range(workers + 1):
         export_kwargs['rank'] = i
-        export_kwargs['n_cores'] = workers
+        export_kwargs['n_cores'] = max(workers, 1)
         jobs.submit(export_cold_result_kwcoco.export_cold_main, cmdline=0, **export_kwargs)
 
     for job in jobs.as_completed(desc='Collect tmp jobs', progkw={'verbose': 3}):
