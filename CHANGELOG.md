@@ -3,7 +3,7 @@
 This changelog follows the specifications detailed in: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
-## Version 0.3.10 - Target 2023-01-xx
+## Version 0.3.10 - Target 2023-02-xx
 
 ### Added
 * `smartwatch align` new argument `--minimum_size`: to ensure all regions have enough pixels
@@ -13,8 +13,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * LightningCLI is now fully supported with partial weight loading and tensorboard plots
 * Scriptconfig aliases now hook up with LightningCLI
 * Added `fixed_resultion` arg to dataloader
-* Support for image space stitching in `CocoStitchingManager`.
 * Tracker now ensures at most one site observation per day
+* Support for image space stitching in `CocoStitchingManager`
+* Pretrained VIT support in heterogeneous model.
+* Decoderless support in heterogeneous model.
+* Landcover features predictor with sliding window and hidden feature support.
 
 ### Changed
 * Renamed `project_annotations` to `reproject_annotations`
@@ -32,6 +35,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Change the default of `time_span` to None
 * Better legends and labeling in `aggregate.build_all_param_plots`
 * Vendored lightning parse-gpu-devices
+* Refactored `CocoStitchingManager` into its own module.
 
 ### Fixed
 * issue in reproject annots when frames had no annotations

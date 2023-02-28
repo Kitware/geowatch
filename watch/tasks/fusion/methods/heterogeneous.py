@@ -395,6 +395,11 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                 vit_model = ViT('B_16_imagenet1k', pretrained=True)
                 backbone = vit_model.transformer
                 # assert token_dim == 708
+            elif backbone == 'vit_B_16':
+                from pytorch_pretrained_vit import ViT
+                vit_model = ViT('B_16', pretrained=True)
+                backbone = vit_model.transformer
+                # assert token_dim == 708
             else:
                 raise KeyError(backbone)
 
@@ -993,6 +998,39 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             >>>             if (frame_idx == 0) and task_key.startswith("change"): continue
             >>>             assert frame_pred.shape[1:] == frame[task_key].shape, f"{frame_pred.shape} should equal {frame[task_key].shape} for task '{task_key}'"
 
+        Ignore:
+            from watch.tasks import fusion
+            from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+            position_encoder = watch.tasks.fusion.methods.heterogeneous.MipNerfPositionalEncoder(in_dims=3, max_freq=3, num_freqs=16)
+            token_dim = 256
+            backbone = TransformerEncoderDecoder(
+                encoder_depth=6,
+                decoder_depth=0,
+                dim=position_encoder.output_dim + token_dim,
+                queries_dim=position_encoder.output_dim,
+                logits_dim=token_dim,
+                latent_dim_head=1024,
+            )
+            channels, classes, dataset_stats = fusion.methods.HeterogeneousModel.demo_dataset_stats()
+            model = fusion.methods.HeterogeneousModel(
+                token_dim=token_dim,
+                token_width=8,
+                classes=classes,
+                dataset_stats=dataset_stats,
+                input_sensorchan=channels,
+                position_encoder=position_encoder,
+                backbone=backbone,
+                spatial_scale_base=1,
+                global_change_weight=0,
+                global_class_weight=0,
+                global_saliency_weight=1,
+                decoder="simple_conv",
+            )
+            batch = model.demo_batch(width=64, height=65)
+            batch += model.demo_batch(width=55, height=75)
+            outputs = model.forward(batch)
+
+
         """
 
         # ==================
@@ -1027,6 +1065,11 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                 for frame_tokens in input_tokens
             ])
             orig_input_seqs.append(input_token_seq)
+
+        if len(orig_input_seqs) == 0:
+            print(f'batch={batch}')
+            print('Skipping batch')
+            return None
 
         # Each example may have a different number of tokens, so we perform
         # some padding and compute a mask of where those padded tokens are
@@ -1337,7 +1380,11 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             # and (len(ex["frames"]) > 0)
         ]
 
+        batch_size = len(batch)
+
         outputs = self(batch)
+        if outputs is None:
+            return None
 
         if not with_loss:
             return outputs
@@ -1350,7 +1397,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                     task_labels_key = self.task_to_keynames[task_name]["labels"]
                     labels = frame[task_labels_key]
 
-                    self.log(f"{stage}_{task_name}_logit_mean", pred.mean())
+                    self.log(f"{stage}_{task_name}_logit_mean", pred.mean(), batch_size=batch_size)
 
                     if labels is None:
                         continue
@@ -1405,10 +1452,11 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                             labels.flatten().long(),
                         ),
                         prog_bar=True,
+                        batch_size=batch_size,
                     )
 
         outputs["loss"] = sum(frame_losses) / len(frame_losses)
-        self.log(f"{stage}_loss", outputs["loss"], prog_bar=True)
+        self.log(f"{stage}_loss", outputs["loss"], prog_bar=True, batch_size=batch_size)
         return outputs
 
 #     def shared_step(self, batch, batch_idx=None, with_loss=True):
