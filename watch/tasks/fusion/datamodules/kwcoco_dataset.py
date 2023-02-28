@@ -1426,7 +1426,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             'saliency_weights', 'change_weights'
         ]
         annotwise_truth_keys = [
-            'box_ltrb', 'box_tids', 'box_cidx', 'box_weight',
+            'box_ltrb',
+            # 'box_tids',
+            'box_cidx', 'box_weight',
         ]
         coord_truth_keys = [
             'box_ltrb',
@@ -2044,7 +2046,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         if wants_boxes:
             box_labels = {
                 'box_ltrb': [],
-                'box_tids': [],
+                # 'box_tids': [],
                 'box_cidxs': [],
                 'box_class_weights': [],
                 'box_saliency_weights': [],
@@ -2055,14 +2057,14 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 new_class_catname = task_tid_to_cnames['class'][tid][time_idx]
                 new_class_cidx = self.classes.node_to_idx[new_class_catname]
                 box_labels['box_ltrb'].append(ltrb)
-                box_labels['box_tids'].append(-1 if tid is None else tid)
+                # box_labels['box_tids'].append(-1 if tid is None else tid)
                 box_labels['box_cidxs'].append(new_class_cidx)
                 box_labels['box_saliency_weights'].append(
                     float(new_salient_catname in self.salient_classes))
                 box_labels['box_class_weights'].append(
                     float(new_class_catname in self.class_foreground_classes))
             box_labels['box_ltrb'] = np.array(box_labels['box_ltrb']).astype(np.float32)
-            box_labels['box_tids'] = np.array(box_labels['box_tids']).astype(np.int64)
+            # box_labels['box_tids'] = np.array(box_labels['box_tids']).astype(np.int64)
             box_labels['box_cidxs'] = np.array(box_labels['box_cidxs']).astype(np.int64)
             box_labels['box_class_weights'] = np.array(box_labels['box_class_weights']).astype(np.float32)
             box_labels['box_saliency_weights'] = np.array(box_labels['box_saliency_weights']).astype(np.float32)
