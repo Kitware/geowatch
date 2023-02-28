@@ -87,7 +87,7 @@ PHASE_STATUS_TO_KWCOCO_CATNAME = {
 
     'positive_annotated'        : None,  # This must have a category already do not map
     'positive_annotated_static' : None,  # This must have a category already do not map
-    'positive_excluded'         : 'ignore',    # This is positive, but is not "big" enough
+    'positive_excluded'         : 'positive',    # This is positive, but is not "big" enough
     'positive_partial'          : 'positive',  # Does not have phase labels
     'positive_pending'          : 'positive',  # Does not have phase labels
 
