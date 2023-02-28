@@ -8,9 +8,8 @@ import time
 import json
 from os.path import join
 import pandas as pd
-# import datetime
 import numpy as np
-from datetime import datetime
+from datetime import datetime as datetime_cls
 from pytz import timezone
 from scipy.stats import chi2
 import ubelt as ub  # NOQA
@@ -18,9 +17,6 @@ import pycold  # NOQA
 from pycold import cold_detect
 from pycold.utils import get_rowcol_intile, get_doy, assemble_cmmaps
 from pycold.ob_analyst import ObjectAnalystHPC
-# from pycold.pyclassifier import PyClassifierHPC
-# from pycold.app import defaults
-# import kwcoco
 import scriptconfig as scfg
 
 
@@ -29,7 +25,7 @@ class TileProcessingKwcocoConfig(scfg.DataConfig):
     The docstring will be the description in the CLI help
     """
     rank = scfg.Value(None, help='rank id')
-    n_cores = scfg.Value(None, help='total cores assigned')
+    n_cores = scfg.Value(None, help='total cores assigned (parent context, not workers used by this process)')
     stack_path = scfg.Value(None, help='directory of stacked data')
     reccg_path = scfg.Value(None, help='directory where cold record will be saved')
     meta_fpath = scfg.Value(None, help='json file created by prepare_kwcoco.py')
@@ -40,7 +36,7 @@ class TileProcessingKwcocoConfig(scfg.DataConfig):
     cm_interval = scfg.Value(60, help='CM output inverval, e.g., 60')
 
 
-def main(cmdline=1, **kwargs):
+def tile_process_main(cmdline=1, **kwargs):
     """
     Args:
         n_cores (type=int): _description_
@@ -54,11 +50,11 @@ def main(cmdline=1, **kwargs):
 
     Ignore:
         python -m watch.tasks.cold.tile_processing_kwcoco --help
-        TEST_COLD=1 xdoctest -m watch.tasks.cold.tile_processing_kwcoco main
+        TEST_COLD=1 xdoctest -m watch.tasks.cold.tile_processing_kwcoco tile_process_main
 
     Example:
     >>> # xdoctest: +REQUIRES(env:TEST_COLD)
-    >>> from watch.tasks.cold.tile_processing_kwcoco import main
+    >>> from watch.tasks.cold.tile_processing_kwcoco import tile_process_main
     >>> from watch.tasks.cold.tile_processing_kwcoco import *
     >>> kwargs= dict(
     >>>    rank = 1,
@@ -73,11 +69,11 @@ def main(cmdline=1, **kwargs):
     >>>    cm_interval = 60,
     >>> )
     >>> cmdline=0
-    >>> main(cmdline, **kwargs)
+    >>> tile_process_main(cmdline, **kwargs)
     """
 
     # setting config
-    config_in = TileProcessingKwcocoConfig.legacy(cmdline=cmdline, data=kwargs)
+    config_in = TileProcessingKwcocoConfig.cli(cmdline=cmdline, data=kwargs)
     rank = config_in['rank']
     n_cores = config_in['n_cores']
     stack_path = config_in['stack_path']
@@ -101,18 +97,18 @@ def main(cmdline=1, **kwargs):
     year_highbound = None
 
     tz = timezone('US/Eastern')
-    start_time = datetime.now(tz)
+    start_time = datetime_cls.now(tz)
 
     # Define year_low_ordinal and year_high_ordinal to filter year for COLD processing
     if year_lowbound is None:
         year_lowbound = 0
     else:
-        year_lowbound = pd.Timestamp.toordinal(datetime(int(year_lowbound), 1, 1))
+        year_lowbound = pd.Timestamp.toordinal(datetime_cls(int(year_lowbound), 1, 1))
 
     if year_highbound is None:
         year_highbound = 0
     else:
-        year_highbound = pd.Timestamp.toordinal(datetime(int(year_highbound + 1), 1, 1))
+        year_highbound = pd.Timestamp.toordinal(datetime_cls(int(year_highbound + 1), 1, 1))
 
     if (n_cols % block_width != 0) or (n_rows % block_height != 0):
         print('padded_n_cols, padded_n_rows must be divisible respectively by block_width, block_height! Please double '
@@ -143,7 +139,7 @@ def main(cmdline=1, **kwargs):
 
         if not os.path.exists(stack_path):
             print("Failed to locate stack folders. The program ends: {}".format(
-                datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')))
+                datetime_cls.now(tz).strftime('%Y-%m-%d %H:%M:%S')))
             return
 
     #########################################################################
@@ -160,7 +156,7 @@ def main(cmdline=1, **kwargs):
         block_x = int((block_id - 1) % n_block_x ) + 1
         if os.path.exists(join(reccg_path, 'COLD_block{}_finished.txt'.format(block_id))):
             print("Per-pixel COLD processing is finished for block_x{}_y{} ({})".format(block_x, block_y,
-                                                                                        datetime.now(tz).strftime(
+                                                                                        datetime_cls.now(tz).strftime(
                                                                                             '%Y-%m-%d %H:%M:%S')))
             continue
         img_tstack, img_dates_sorted = get_stack_date(block_x, block_y, stack_path, year_lowbound,
@@ -218,7 +214,7 @@ def main(cmdline=1, **kwargs):
 
                     except RuntimeError:
                         print("COLD fails at original_row {}, original_col {} ({})".format(original_row, original_col,
-                                                                                           datetime.now(tz)
+                                                                                           datetime_cls.now(tz)
                                                                                            .strftime('%Y-%m-%d %H:%M:%S')))
                     except Exception:
                         if method == 'OBCOLD':
@@ -247,7 +243,7 @@ def main(cmdline=1, **kwargs):
                 pass
 
             print("Per-pixel COLD processing is finished for block_x{}_y{} ({})"
-                  .format(block_x, block_y, datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')))
+                  .format(block_x, block_y, datetime_cls.now(tz).strftime('%Y-%m-%d %H:%M:%S')))
 
     # wait for all cores to be finished
     if method == 'OBCOLD':
@@ -255,7 +251,7 @@ def main(cmdline=1, **kwargs):
             time.sleep(30)
 
     # if rank == 1:
-    #     cold_timepoint = datetime.now(tz)
+    #     cold_timepoint = datetime_cls.now(tz)
     # for i in os.listdir(reccg_path):
     #     if i.endswith('.txt'):
     #         os.remove(os.path.join(reccg_path, i))
@@ -302,7 +298,7 @@ def main(cmdline=1, **kwargs):
         # if seedmap_path is not None:  # we used thematic info
         #     if not pyclassifier.is_finished_step4_assemble():
         #         if rank == 1:
-        #             print("Starts predicting features: {}".format(datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')))
+        #             print("Starts predicting features: {}".format(datetime_cls.now(tz).strftime('%Y-%m-%d %H:%M:%S')))
         #         for i in range(nblock_eachcore):
         #             if n_cores * i + rank > config['n_block_x'] * config['n_block_y']:
         #                 break
@@ -310,7 +306,7 @@ def main(cmdline=1, **kwargs):
 
         #         if rank == 1:  # serial mode for producing rf
         #             pyclassifier.step2_train_rf()
-        #             print("Training rf ends: {}".format(datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')))
+        #             print("Training rf ends: {}".format(datetime_cls.now(tz).strftime('%Y-%m-%d %H:%M:%S')))
 
         #         for i in range(nblock_eachcore):
         #             if n_cores * i + rank > config['n_block_x'] * config['n_block_y']:
@@ -322,7 +318,7 @@ def main(cmdline=1, **kwargs):
         #     while not pyclassifier.is_finished_step4_assemble():
         #         time.sleep(15)
         #     if rank == 1:
-        #         print("Assemble classification map ends: {}".format(datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')))
+        #         print("Assemble classification map ends: {}".format(datetime_cls.now(tz).strftime('%Y-%m-%d %H:%M:%S')))
         #########################################################################
         #                      object-based image analysis                      #
         #########################################################################
@@ -342,7 +338,7 @@ def main(cmdline=1, **kwargs):
                                                                        cm_output_interval)):
                 time.sleep(15)
         if rank == 1:
-            print("OBIA ends: {}".format(datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')))
+            print("OBIA ends: {}".format(datetime_cls.now(tz).strftime('%Y-%m-%d %H:%M:%S')))
 
         #########################################################################
         #                        reconstruct change records                     #
@@ -377,7 +373,7 @@ def main(cmdline=1, **kwargs):
     # else:
     #     tileprocessing_report(join(reccg_path, 'tile_processing_report.log'), stack_path, pycold.__version__,
     #                           method, config, start_time, cold_timepoint, tz, n_cores)
-    # print("The whole procedure finished: {}".format(datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')))
+    # print("The whole procedure finished: {}".format(datetime_cls.now(tz).strftime('%Y-%m-%d %H:%M:%S')))
 
 
 # def tileprocessing_report(result_log_path, stack_path, version, algorithm, config, startpoint, cold_timepoint, tz,
@@ -403,7 +399,7 @@ def main(cmdline=1, **kwargs):
 #     Returns
 #     -------
 #     """
-#     endpoint = datetime.now(tz)
+#     endpoint = datetime_cls.now(tz)
 #     file = open(result_log_path, "w")
 #     file.write("PYCOLD V{} \n".format(version))
 #     file.write("Author: Su Ye(remoteseningsuy@gmail.com)\n")
@@ -416,7 +412,7 @@ def main(cmdline=1, **kwargs):
 #     file.write("The program starts at {}\n".format(startpoint.strftime('%Y-%m-%d %H:%M:%S')))
 #     file.write("The COLD ends at {}\n".format(cold_timepoint.strftime('%Y-%m-%d %H:%M:%S')))
 #     file.write("The program ends at {}\n".format(endpoint.strftime('%Y-%m-%d %H:%M:%S')))
-#     file.write("The program lasts for {:.2f}mins\n".format((endpoint - startpoint) / datetime.timedelta(minutes=1)))
+#     file.write("The program lasts for {:.2f}mins\n".format((endpoint - startpoint) / datetime_cls.timedelta(minutes=1)))
 #     file.close()
 
 def is_finished_cold_blockfinished(reccg_path, nblocks):
@@ -472,11 +468,11 @@ def get_stack_date(block_x, block_y, stack_path, year_lowbound=0, year_highbound
     block_height = sample_np.shape[0]
 
     if year_lowbound > 0:
-        year_low_ordinal = pd.Timestamp.toordinal(datetime(int(year_lowbound), 1, 1))
+        year_low_ordinal = pd.Timestamp.toordinal(datetime_cls(int(year_lowbound), 1, 1))
         img_dates, img_files = zip(*filter(lambda x: x[0] >= year_low_ordinal,
                                            zip(img_dates, img_files)))
     if year_highbound > 0:
-        year_high_ordinal = pd.Timestamp.toordinal(datetime(int(year_highbound + 1), 1, 1))
+        year_high_ordinal = pd.Timestamp.toordinal(datetime_cls(int(year_highbound + 1), 1, 1))
         img_dates, img_files = zip(*filter(lambda x: x[0] < year_high_ordinal,
                                            zip(img_dates, img_files)))
 
@@ -524,10 +520,10 @@ def reading_start_dates_nmaps(stack_path, year_lowbound, year_highbound, cm_inte
         sorted_img_dates = sorted(img_dates)
 
         if year_lowbound > 0:
-            year_low_ordinal = pd.Timestamp.toordinal(datetime(int(year_lowbound), 1, 1))
+            year_low_ordinal = pd.Timestamp.toordinal(datetime_cls(int(year_lowbound), 1, 1))
             img_dates = (lambda x: x >= year_low_ordinal, img_dates)
         if year_highbound > 0:
-            year_high_ordinal = pd.Timestamp.toordinal(datetime(int(year_highbound + 1), 1, 1))
+            year_high_ordinal = pd.Timestamp.toordinal(datetime_cls(int(year_highbound + 1), 1, 1))
             img_dates = (lambda x: x < year_high_ordinal, img_dates)
 
     except IOError:
@@ -567,4 +563,4 @@ def is_finished_assemble_cmmaps(cmmap_path, n_cm, starting_date, cm_interval):
 
 
 if __name__ == '__main__':
-    main()
+    tile_process_main()

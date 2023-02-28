@@ -7,13 +7,20 @@ See original code: ~/code/pycold/src/python/pycold/imagetool/export_change_map.p
 import os
 import numpy as np
 import pandas as pd
-from osgeo import gdal  # NOQA
-import datetime as datetime
+# from osgeo import gdal  # NOQA
+import datetime as datetime_mod
 from os.path import join
 import json
 import scriptconfig as scfg
 import logging
+import ubelt as ub
 logger = logging.getLogger(__name__)
+
+
+try:
+    from xdev import profile
+except ImportError:
+    profile = ub.identity
 
 
 class ExportColdKwcocoConfig(scfg.DataConfig):
@@ -32,7 +39,8 @@ class ExportColdKwcocoConfig(scfg.DataConfig):
     timestamp = scfg.Value(True, help='True: exporting cold result by timestamp, False: exporting cold result by year, Default is False')
 
 
-def main(cmdline=1, **kwargs):
+@profile
+def export_cold_main(cmdline=1, **kwargs):
     """_summary_
 
     Args:
@@ -40,11 +48,11 @@ def main(cmdline=1, **kwargs):
 
     Ignore:
         python -m watch.tasks.cold.export_cold_result_kwcoco --help
-        TEST_COLD=1 xdoctest -m watch.tasks.cold.export_cold_result_kwcoco main
+        TEST_COLD=1 xdoctest -m watch.tasks.cold.export_cold_result_kwcoco export_cold_main
 
     Example:
     >>> # xdoctest: +REQUIRES(env:TEST_COLD)
-    >>> from watch.tasks.cold.export_cold_result_kwcoco import main
+    >>> from watch.tasks.cold.export_cold_result_kwcoco import export_cold_main
     >>> from watch.tasks.cold.export_cold_result_kwcoco import *
     >>> kwargs= dict(
     >>>    rank = 0,
@@ -59,9 +67,9 @@ def main(cmdline=1, **kwargs):
     >>>    timestamp = True,
     >>>    )
     >>> cmdline=0
-    >>> main(cmdline, **kwargs)
+    >>> export_cold_main(cmdline, **kwargs)
     """
-    config_in = ExportColdKwcocoConfig.legacy(cmdline=cmdline, data=kwargs)
+    config_in = ExportColdKwcocoConfig.cli(cmdline=cmdline, data=kwargs)
     rank = config_in['rank']
     n_cores = config_in['n_cores']
     stack_path = config_in['stack_path']
@@ -190,7 +198,7 @@ def main(cmdline=1, **kwargs):
                 year_low_ordinal = min(img_dates)
                 year_lowbound = pd.Timestamp.fromordinal(year_low_ordinal).year
             else:
-                year_low_ordinal = pd.Timestamp.toordinal(datetime.datetime(int(year_lowbound), 1, 1))
+                year_low_ordinal = pd.Timestamp.toordinal(datetime_mod.datetime(int(year_lowbound), 1, 1))
 
             img_dates, img_names = zip(*filter(lambda x: x[0] >= year_low_ordinal,
                                                 zip(img_dates, img_names)))
@@ -198,7 +206,7 @@ def main(cmdline=1, **kwargs):
                 year_high_ordinal = max(img_dates)
                 year_highbound = pd.Timestamp.fromordinal(year_high_ordinal).year
             else:
-                year_high_ordinal = pd.Timestamp.toordinal(datetime.datetime(int(year_highbound + 1), 1, 1))
+                year_high_ordinal = pd.Timestamp.toordinal(datetime_mod.datetime(int(year_highbound + 1), 1, 1))
 
             img_dates, img_names = zip(*filter(lambda x: x[0] < year_high_ordinal,
                                                    zip(img_dates, img_names)))
@@ -248,7 +256,7 @@ def main(cmdline=1, **kwargs):
             if break_year < year_lowbound or break_year > year_highbound:
                 continue
             results_block[break_year - year_lowbound][i_row][i_col] = current_dist_type * 1000 + curve['t_break'] - \
-                (pd.Timestamp.toordinal(datetime.date(break_year, 1, 1))) + 1
+                (pd.Timestamp.toordinal(datetime_mod.date(break_year, 1, 1))) + 1
 
         if coefs is not None:
             cold_block_split = np.split(cold_block, np.argwhere(np.diff(cold_block['pos']) != 0)[:, 0] + 1)
@@ -306,7 +314,7 @@ def extract_features(cold_plot, band, ordinal_day_list, nan_val, timestamp, feat
         for idx, cold_curve in enumerate(cold_plot):
             if idx == len(cold_plot) - 1:
                 last_year = pd.Timestamp.fromordinal(cold_plot[idx]['t_end']).year
-                max_days = datetime.date(last_year, 12, 31).toordinal()
+                max_days = datetime_mod.date(last_year, 12, 31).toordinal()
             else:
                 max_days = cold_plot[idx + 1]['t_start']
             break_year = pd.Timestamp.fromordinal(cold_curve['t_break']).year if(cold_curve['t_break'] > 0 and cold_curve['change_prob'] == 100) else -9999
@@ -415,4 +423,4 @@ def getcategory_obcold(cold_plot, i_curve, last_dist_type):
             return 1  # land disturbance
 
 if __name__ == '__main__':
-    main()
+    export_cold_main()

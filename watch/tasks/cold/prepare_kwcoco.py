@@ -30,11 +30,17 @@ import operator
 import ubelt as ub
 import itertools as it
 import logging
-from datetime import datetime
+from datetime import datetime as datetime_cls
 import numpy as geek
 import scriptconfig as scfg
 
 logger = logging.getLogger(__name__)
+
+
+try:
+    from xdev import profile
+except ImportError:
+    profile = ub.identity
 
 
 class PrepareKwcocoConfig(scfg.DataConfig):
@@ -86,7 +92,8 @@ QA_INTERPRETATIONS['FMASK'] = {
 QUALITY_BIT_INTERPRETATIONS = {}
 
 
-def main(cmdline=1, **kwargs):
+@profile
+def prepare_kwcoco_main(cmdline=1, **kwargs):
     """_summary_
 
     Args:
@@ -94,11 +101,11 @@ def main(cmdline=1, **kwargs):
 
     Ignore:
         python -m watch.tasks.cold.prepare_kwcoco --help
-        TEST_COLD=1 xdoctest -m watch.tasks.cold.prepare_kwcoco main
+        TEST_COLD=1 xdoctest -m watch.tasks.cold.prepare_kwcoco prepare_kwcoco_main
 
     Example:
-        >>> # xdoctest: +SKIP
-        >>> from watch.tasks.cold.prepare_kwcoco import main
+        >>> # xdoctest: +REQUIRES(env:TEST_COLD)
+        >>> from watch.tasks.cold.prepare_kwcoco import prepare_kwcoco_main
         >>> from watch.tasks.cold.prepare_kwcoco import *
         >>> kwargs= dict(
         >>>   coco_fpath = ub.Path('/home/jws18003/data/dvc-repos/smart_data_dvc/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/KR_R001/data_KR_R001.kwcoco.json'),
@@ -107,9 +114,9 @@ def main(cmdline=1, **kwargs):
         >>>   method = None,
         >>> )
         >>> cmdline=0
-        >>> main(cmdline, **kwargs)
+        >>> prepare_kwcoco_main(cmdline, **kwargs)
     """
-    config = PrepareKwcocoConfig.legacy(cmdline=cmdline, data=kwargs)
+    config = PrepareKwcocoConfig.cli(cmdline=cmdline, data=kwargs)
     coco_fpath = config['coco_fpath']
     dpath = ub.Path(config['out_dpath']).ensuredir()
     adj_cloud = config['adj_cloud']
@@ -271,6 +278,7 @@ def stack_kwcoco(coco_fpath, out_dir, adj_cloud, method):
 
     Example:
         >>> # xdoctest: +SKIP
+        >>> # TODO: readd this doctest
         >>> from pycold.imagetool.prepare_kwcoco import *  # NOQA
         >>> setup_logging()
         >>> coco_fpath = grab_demo_kwcoco_dataset()
@@ -327,7 +335,7 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
 
     # Other relevant coco metadata
     date_captured = coco_image.img['date_captured']
-    ordinal_date = datetime.strptime(
+    ordinal_date = datetime_cls.strptime(
         date_captured[:10], '%Y-%m-%d').toordinal()
     # frame_index = coco_image.img['frame_index']
     n_cols = coco_image.img['width']

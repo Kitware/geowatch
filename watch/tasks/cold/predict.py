@@ -5,7 +5,7 @@ CommandLine:
 
     DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="auto")
     EXPT_DVC_DPATH=$(smartwatch_dvc --tags=phase2_expt --hardware="auto")
-    python -m watch.tasks.cold.predict \
+    XDEV_PROFILE=1 python -m watch.tasks.cold.predict \
         --coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly-KR_R001.kwcoco.json" \
         --out_dpath="$DATA_DVC_DPATH/Drop6/_pycold" \
         --mod_coco_fpath="$DATA_DVC_DPATH/Drop6/_pycold/imgonly-KR_R001-cold.kwcoco.json" \
@@ -30,6 +30,12 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+try:
+    from xdev import profile
+except ImportError:
+    profile = ub.identity
+
+
 class ColdPredictConfig(scfg.DataConfig):
     """
     The docstring will be the description in the CLI help
@@ -52,20 +58,22 @@ class ColdPredictConfig(scfg.DataConfig):
     timestamp = scfg.Value(True, help='True: exporting cold result by timestamp, False: exporting cold result by year, Default is False')
     mode = scfg.Value('process', help='Can be process, serial, or thread')
     mod_coco_fpath = scfg.Value(None, help='file path for modified coco json')
+    track_emissions = scfg.Value(True, help='if True use codecarbon for emission tracking')
 
 
-def main(cmdline=1, **kwargs):
+@profile
+def cold_predict_main(cmdline=1, **kwargs):
     """
     Args:
         cmdline (int, optional): _description_. Defaults to 1.
 
     Ignore:
         python -m watch.tasks.cold.predict --help
-        TEST_COLD=1 xdoctest -m watch.tasks.cold.predict main
+        TEST_COLD=1 xdoctest -m watch.tasks.cold.predict cold_predict_main
 
      Example:
         >>> # xdoctest: +REQUIRES(env:TEST_COLD)
-        >>> from watch.tasks.cold.predict import main
+        >>> from watch.tasks.cold.predict import cold_predict_main
         >>> from watch.tasks.cold.predict import *
         >>> kwargs= dict(
         >>>   coco_fpath = ub.Path('/home/jws18003/data/dvc-repos/smart_data_dvc/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/imgonly-KR_R001.kwcoco.json'),
@@ -84,22 +92,41 @@ def main(cmdline=1, **kwargs):
         >>>   mod_coco_fpath = ub.Path('/home/jws18003/data/dvc-repos/smart_data_dvc/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/KR_R001/imgonly-KR_R001.kwcoco.modified.json'),
         >>> )
         >>> cmdline=0
-        >>> main(cmdline, **kwargs)
+        >>> cold_predict_main(cmdline, **kwargs)
     """
     from watch.tasks.cold import prepare_kwcoco
     from watch.tasks.cold import tile_processing_kwcoco
     from watch.tasks.cold import export_cold_result_kwcoco
     from watch.tasks.cold import assemble_cold_result_kwcoco
 
-    config = ColdPredictConfig.legacy(cmdline=cmdline, data=kwargs)
+    config = ColdPredictConfig.cli(cmdline=cmdline, data=kwargs)
     print('config = {}'.format(ub.urepr(dict(config), nl=1)))
+
+    from watch.utils import process_context
+    from watch.utils import util_json
+    resolved_config = config.to_dict()
+    resolved_config = util_json.ensure_json_serializable(resolved_config)
+
+    proc_context = process_context.ProcessContext(
+        name='watch.tasks.cold.predict',
+        type='process',
+        config=resolved_config,
+        track_emissions=config['track_emissions'],
+    )
+
     coco_fpath = config['coco_fpath']
     out_dpath = ub.Path(config['out_dpath']).ensuredir()
     adj_cloud = config['adj_cloud']
     method = config['method']
-    meta_fpath = prepare_kwcoco.main(cmdline=0, coco_fpath=coco_fpath, out_dpath=out_dpath, adj_cloud=adj_cloud, method=method)
-    meta = open(meta_fpath)
-    metadata = json.load(meta)
+
+    proc_context.start()
+    proc_context.add_disk_info(out_dpath)
+
+    meta_fpath = prepare_kwcoco.prepare_kwcoco_main(
+        cmdline=0, coco_fpath=coco_fpath, out_dpath=out_dpath,
+        adj_cloud=adj_cloud, method=method)
+    with open(meta_fpath, 'r') as meta:
+        metadata = json.load(meta)
 
     logger.info('Starting COLD tile-processing...')
     tile_kwargs = tile_processing_kwcoco.TileProcessingKwcocoConfig().to_dict()
@@ -118,7 +145,7 @@ def main(cmdline=1, **kwargs):
         #func(arg, arg3, arg3=34)
         tile_kwargs['rank'] = i
         tile_kwargs['n_cores'] = workers
-        jobs.submit(tile_processing_kwcoco.main, cmdline=0, **tile_kwargs)
+        jobs.submit(tile_processing_kwcoco.tile_process_main, cmdline=0, **tile_kwargs)
 
     for job in jobs.as_completed(desc='Collect tile jobs', progkw={'verbose': 3}):
         job.result()
@@ -138,7 +165,7 @@ def main(cmdline=1, **kwargs):
     for i in range(workers + 1):
         export_kwargs['rank'] = i
         export_kwargs['n_cores'] = workers
-        jobs.submit(export_cold_result_kwcoco.main, cmdline=0, **export_kwargs)
+        jobs.submit(export_cold_result_kwcoco.export_cold_main, cmdline=0, **export_kwargs)
 
     for job in jobs.as_completed(desc='Collect tmp jobs', progkw={'verbose': 3}):
         job.result()
@@ -155,7 +182,8 @@ def main(cmdline=1, **kwargs):
     assemble_kwargs['coefs'] = config['coefs']
     assemble_kwargs['coefs_bands'] = config['coefs_bands']
     assemble_kwargs['timestamp'] = config['timestamp']
-    assemble_cold_result_kwcoco.main(cmdline=0, **assemble_kwargs)
+    assemble_cold_result_kwcoco.assemble_main(
+        cmdline=0, proc_context=proc_context, **assemble_kwargs)
 
 if __name__ == '__main__':
-    main()
+    cold_predict_main()

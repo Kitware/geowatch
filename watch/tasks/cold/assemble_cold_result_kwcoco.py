@@ -11,6 +11,11 @@ import scriptconfig as scfg
 import ubelt as ub
 import logging
 
+try:
+    from xdev import profile
+except ImportError:
+    profile = ub.identity
+
 logger = logging.getLogger(__name__)
 
 
@@ -30,7 +35,8 @@ class AssembleColdKwcocoConfig(scfg.DataConfig):
     timestamp = scfg.Value(True, help='True: exporting cold result by timestamp, False: exporting cold result by year, Default is False')
 
 
-def main(cmdline=1, **kwargs):
+@profile
+def assemble_main(cmdline=1, **kwargs):
     """_summary_
 
     Args:
@@ -38,11 +44,11 @@ def main(cmdline=1, **kwargs):
 
     Ignore:
         python -m watch.tasks.cold.export_cold_result_kwcoco --help
-        TEST_COLD=1 xdoctest -m watch.tasks.cold.export_cold_result_kwcoco main
+        TEST_COLD=1 xdoctest -m watch.tasks.cold.export_cold_result_kwcoco assemble_main
 
     Example:
     >>> # xdoctest: +REQUIRES(env:TEST_COLD)
-    >>> from watch.tasks.cold.export_cold_result_kwcoco import main
+    >>> from watch.tasks.cold.export_cold_result_kwcoco import assemble_main
     >>> from watch.tasks.cold.export_cold_result_kwcoco import *
     >>> kwargs= dict(
     >>>    stack_path = "/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/KR_R001",
@@ -57,9 +63,13 @@ def main(cmdline=1, **kwargs):
     >>>    timestamp = True,
     >>>    )
     >>> cmdline=0
-    >>> main(cmdline, **kwargs)
+    >>> assemble_main(cmdline, **kwargs)
     """
-    config_in = AssembleColdKwcocoConfig.legacy(cmdline=cmdline, data=kwargs)
+    # a hacky way to pass the process context from the caller when this is
+    # called as a subroutine
+    proc_context = kwargs.pop('proc_context', None)
+
+    config_in = AssembleColdKwcocoConfig.cli(cmdline=cmdline, data=kwargs)
     stack_path = config_in['stack_path']
     reccg_path = config_in['reccg_path']
     coco_fpath = config_in['coco_fpath']
@@ -131,12 +141,13 @@ def main(cmdline=1, **kwargs):
     trans = ref_image.GetGeoTransform()
     proj = ref_image.GetProjection()
 
-    c, a, b, f, d, e = trans
-    original = kwimage.Affine(np.array([
-        [a, b, c],
-        [d, e, f],
-        [0, 0, 1],
-    ]))
+    original = kwimage.Affine.from_gdal(trans)
+    # c, a, b, f, d, e = trans
+    # original = kwimage.Affine(np.array([
+    #     [a, b, c],
+    #     [d, e, f],
+    #     [0, 0, 1],
+    # ]))
 
     warp_vid_from_img = kwimage.Affine.coerce(coco_img.img['warp_img_to_vid']).inv()
     new_geotrans =  original @ warp_vid_from_img
@@ -212,6 +223,9 @@ def main(cmdline=1, **kwargs):
                     ninput = ninput + 1
 
             for x in range(n_blocks):
+                # TODO: would be nice to have a structure that controls these
+                # name formats so we can use padded inter suffixes for nicer
+                # sorting, or nest files to keep folder sizes small
                 os.remove(
                     os.path.join(out_path, 'tmp_coefmap_block{}_{}.npy'.format(x + 1, ordinal_day_list[day])))
 
@@ -241,6 +255,10 @@ def main(cmdline=1, **kwargs):
                     coco_image.add_asset(new_fpath, channels=channels, width=asset_w,
                                             height=asset_h, warp_aux_to_img=warp_aux_to_img)
                     logger.info(f'Added to the asset {new_fpath}')
+
+    if proc_context is not None:
+        context_info = proc_context.stop()
+        coco_dset.dataset['info'].append(context_info)
 
     # Write a modified kwcoco.json file
     coco_dset.fpath = mod_coco_fpath
