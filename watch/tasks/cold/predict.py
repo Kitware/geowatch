@@ -5,7 +5,7 @@ CommandLine:
 
     DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="auto")
     EXPT_DVC_DPATH=$(smartwatch_dvc --tags=phase2_expt --hardware="auto")
-    XDEV_PROFILE=1 python -m watch.tasks.cold.predict \
+    python -m watch.tasks.cold.predict \
         --coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly-KR_R001.kwcoco.json" \
         --out_dpath="$DATA_DVC_DPATH/Drop6/_pycold" \
         --mod_coco_fpath="$DATA_DVC_DPATH/Drop6/_pycold/imgonly-KR_R001-cold.kwcoco.json" \
@@ -74,7 +74,7 @@ def cold_predict_main(cmdline=1, **kwargs):
         TEST_COLD=1 xdoctest -m watch.tasks.cold.predict cold_predict_main
 
      Example:
-        >>> # xdoctest: +REQUIRES(env:TEST_COLD)
+        >>> # xdoctest: +REQUIRES(gg:TEST_COLD)
         >>> from watch.tasks.cold.predict import cold_predict_main
         >>> from watch.tasks.cold.predict import *
         >>> kwargs= dict(
