@@ -1,3 +1,9 @@
+"""
+The core pipeline data structure for MLOps
+
+TODO:
+    rename "resolved" to something else, the term is overloaded
+"""
 import ubelt as ub
 import networkx as nx
 import os
@@ -17,22 +23,190 @@ except ImportError:
     profile = ub.identity
 
 
+def demo_pipeline():
+    """
+    A simple test pipeline.
+
+    Example:
+        >>> # Self test
+        >>> from watch.mlops.pipeline_nodes import *  # NOQA
+        >>> demo_pipeline()
+    """
+    dpath = ub.Path.appdir('watch/tests/mlops/pipeline').ensuredir()
+    dpath.delete().ensuredir()
+    script_dpath = (dpath / 'src').ensuredir()
+    inputs_dpath = (dpath / 'inputs').ensuredir()
+    runs_dpath = (dpath / 'runs').ensuredir()
+
+    # Make simple scripts to stand in for the more complex processes that we
+    # will orchestrate. The important thing is they have CLI input and output
+    # paths / arguments.
+    fpath1 = script_dpath / 'demo_script1.py'
+    fpath2 = script_dpath / 'demo_script2.py'
+    fpath3 = script_dpath / 'demo_script3.py'
+    fpath1.write_text(ub.codeblock(
+        '''
+        import ubelt as ub
+        src = ub.Path(ub.argval('--src'))
+        dst = ub.Path(ub.argval('--dst'))
+        dst.parent.ensuredir()
+        algo_param1 = ub.argval('--algo_param1', default='')
+        perf_param1 = ub.argval('--perf_param1', default='')
+        dst.write_text(src.read_text() + algo_param1)
+        '''))
+    fpath2.write_text(ub.codeblock(
+        '''
+        import ubelt as ub
+        src1 = ub.Path(ub.argval('--src1'))
+        src2 = ub.Path(ub.argval('--src2'))
+        dst1 = ub.Path(ub.argval('--dst1'))
+        dst2 = ub.Path(ub.argval('--dst2'))
+        dst1.parent.ensuredir()
+        dst2.parent.ensuredir()
+        algo_param2 = ub.argval('--algo_param2', default='')
+        perf_param2 = ub.argval('--perf_param2', default='')
+        dst1.write_text(src1.read_text() + algo_param2)
+        dst2.write_text(src2.read_text() + algo_param2)
+        '''))
+    fpath3.write_text(ub.codeblock(
+        '''
+        import ubelt as ub
+        src1 = ub.Path(ub.argval('--src1'))
+        src2 = ub.Path(ub.argval('--src2'))
+        dst = ub.Path(ub.argval('--dst'))
+        dst.parent.ensuredir()
+        algo_param3 = ub.argval('--algo_param3', default='')
+        perf_param3 = ub.argval('--perf_param3', default='')
+        dst.write_text(src1.read_text() + algo_param3 + src2.read_text())
+        '''))
+    executable1 = f'python {fpath1}'
+    executable2 = f'python {fpath2}'
+    executable3 = f'python {fpath3}'
+
+    # Now that we have executables we need to create a ProcessNode that
+    # describes how each process might be run. This can be done via inheritence
+    # or specifying constructor variables.
+    node_A1 = ProcessNode(
+        name='node_A1',
+        in_paths={
+            'src',
+        },
+        algo_params={
+            'algo_param1': '',
+        },
+        perf_params={
+            'perf_param1': '',
+        },
+        out_paths={
+            'dst': 'out.txt'
+        },
+        executable=executable1
+    )
+    node_A2 = ProcessNode(
+        name='node_A2',
+        in_paths={
+            'src',
+        },
+        algo_params={
+            'algo_param1': '',
+        },
+        perf_params={
+            'perf_param1': '',
+        },
+        out_paths={
+            'dst': 'out.txt'
+        },
+        executable=executable1
+    )
+    node_B1 = ProcessNode(
+        name='node_B1',
+        in_paths={
+            'src1',
+            'src2'
+        },
+        algo_params={
+            'algo_param2': '',
+        },
+        perf_params={
+            'perf_param2': '',
+        },
+        out_paths={
+            'dst1': 'out1.txt',
+            'dst2': 'out2.txt'
+        },
+        executable=executable2
+    )
+    node_C1 = ProcessNode(
+        name='node_C1',
+        in_paths={
+            'src1',
+            'src2'
+        },
+        algo_params={
+            'algo_param3': '',
+        },
+        perf_params={
+            'perf_param3': '',
+        },
+        out_paths={
+            'dst': 'out.txt'
+        },
+        executable=executable3
+    )
+
+    # Given the process nodes we need to connect their inputs / outputs for
+    # form a pipeline.
+    node_A1.outputs['dst'].connect(node_B1.inputs['src1'])
+    node_A2.outputs['dst'].connect(node_B1.inputs['src2'])
+    node_A2.inputs['src'].connect(node_C1.inputs['src1'])
+    node_B1.outputs['dst1'].connect(node_C1.inputs['src2'])
+
+    # The pipeline is just a container for the nodes
+    nodes = [node_A1, node_A2, node_B1, node_C1]
+    dag = PipelineDAG(nodes=nodes)
+
+    # Given a dag, there will often be top level input parameters that must be
+    # configured along with any other algorithm or performance parameters
+
+    # Create the inputs and configure the graph
+    input1_fpath = inputs_dpath / 'input1.txt'
+    input2_fpath = inputs_dpath / 'input2.txt'
+    input1_fpath.write_text('spam')
+    input2_fpath.write_text('eggs')
+
+    dag.configure({
+        'node_A1.src': str(input1_fpath),
+        'node_A2.src': str(input2_fpath),
+    }, root_dpath=runs_dpath, cache=False)
+
+    dag.print_graphs()
+    dag.inspect_configurables()
+
+    # The jobs can now be submitted to a command queue which can be
+    # executed or inspected at your leasure.
+    queue = dag.submit_jobs(queue=ub.udict({
+        'backend': 'serial',
+    }))
+
+    queue.print_commands(exclude_tags='boilerplate', with_locks=False)
+    queue.run()
+
+
 class PipelineDAG:
     """
     A container for a group of nodes that have been connected, but need to be
     configured.
 
-
     Example:
         >>> from watch.mlops.pipeline_nodes import *  # NOQA
-        >>> node_A1 = ProcessNode(name='node_A1', in_paths={'src'}, out_paths={'dst'}, executable='node_A1')
-        >>> node_A2 = ProcessNode(name='node_A2', in_paths={'src'}, out_paths={'dst'}, executable='node_A2')
-        >>> node_A3 = ProcessNode(name='node_A3', in_paths={'src'}, out_paths={'dst'}, executable='node_A3')
-        >>> node_B1 = ProcessNode(name='node_B1', in_paths={'path1'}, out_paths={'path2'}, executable='node_B1')
-        >>> node_B2 = ProcessNode(name='node_B2', in_paths={'path2'}, out_paths={'path3'}, executable='node_B2')
-        >>> node_B3 = ProcessNode(name='node_B3', in_paths={'path3'}, out_paths={'path4'}, executable='node_B3')
-        >>> node_C1 = ProcessNode(name='node_C1', in_paths={'src1', 'src2'}, out_paths={'dst1', 'dst2'}, executable='node_C1')
-        >>> node_C2 = ProcessNode(name='node_C2', in_paths={'src1', 'src2'}, out_paths={'dst1', 'dst2'}, executable='node_C2')
+        >>> node_A1 = ProcessNode(name='node_A1', in_paths={'src'}, out_paths={'dst': 'dst.txt'}, executable='node_A1')
+        >>> node_A2 = ProcessNode(name='node_A2', in_paths={'src'}, out_paths={'dst': 'dst.txt'}, executable='node_A2')
+        >>> node_A3 = ProcessNode(name='node_A3', in_paths={'src'}, out_paths={'dst': 'dst.txt'}, executable='node_A3')
+        >>> node_B1 = ProcessNode(name='node_B1', in_paths={'path1'}, out_paths={'path2': 'dst.txt'}, executable='node_B1')
+        >>> node_B2 = ProcessNode(name='node_B2', in_paths={'path2'}, out_paths={'path3': 'dst.txt'}, executable='node_B2')
+        >>> node_B3 = ProcessNode(name='node_B3', in_paths={'path3'}, out_paths={'path4': 'dst.txt'}, executable='node_B3')
+        >>> node_C1 = ProcessNode(name='node_C1', in_paths={'src1', 'src2'}, out_paths={'dst1': 'dst.txt', 'dst2': 'dst.txt'}, executable='node_C1')
+        >>> node_C2 = ProcessNode(name='node_C2', in_paths={'src1', 'src2'}, out_paths={'dst1': 'dst.txt', 'dst2': 'dst.txt'}, executable='node_C2')
         >>> # You can connect outputs -> inputs directly
         >>> node_A1.outputs['dst'].connect(node_A2.inputs['src'])
         >>> node_A2.outputs['dst'].connect(node_A3.inputs['src'])
@@ -51,7 +225,6 @@ class PipelineDAG:
         >>> nodes = [node_A1, node_A2, node_A3, node_B1, node_B2, node_B3, node_C1, node_C2]
         >>> self = PipelineDAG(nodes=nodes)
         >>> self.print_graphs()
-
     """
 
     def __init__(self, nodes=[], config=None, root_dpath=None):
@@ -66,15 +239,19 @@ class PipelineDAG:
         if config:
             self.configure(config, root_dpath=root_dpath)
 
-    @profile
-    def build_nx_graphs(self):
+    @property
+    def node_dict(self):
         if isinstance(self.nodes, dict):
             node_dict = self.nodes
         else:
             node_names = [node.name for node in self.nodes]
             assert len(node_names) == len(set(node_names))
             node_dict = dict(zip(node_names, self.nodes))
+        return node_dict
 
+    @profile
+    def build_nx_graphs(self):
+        node_dict = self.node_dict
         # if __debug__:
         #     for name, node in node_dict.values():
         #         assert node.name == name, (
@@ -133,7 +310,7 @@ class PipelineDAG:
         # }
 
         rows = []
-        for node in self.nodes.values():
+        for node in self.node_dict.values():
             # Build up information about each node option
 
             # TODO: determine if a source input node is required or not
@@ -197,7 +374,7 @@ class PipelineDAG:
         if root_dpath is not None:
             root_dpath = ub.Path(root_dpath)
             self.root_dpath = root_dpath
-            for node in self.nodes.values():
+            for node in self.node_dict.values():
                 node.root_dpath = root_dpath
                 node._configured_cache.clear()  # hack, make more elegant
 
@@ -213,6 +390,9 @@ class PipelineDAG:
                 node.configure(node_config, cache=cache)
 
     def print_graphs(self):
+        """
+        Prints the Process and IO graph for the DAG.
+        """
 
         def labelize_graph(graph):
             # # self.io_graph.add_node(name + '.proc', node=node)
@@ -248,7 +428,7 @@ class PipelineDAG:
 
     @profile
     def submit_jobs(self, queue=None, skip_existing=False, enable_links=True,
-                    write_invocations=True):
+                    write_invocations=True, write_configs=True):
         """
         Submits the jobs to an existing command queue or creates a new one.
         """
@@ -258,10 +438,18 @@ class PipelineDAG:
         import networkx as nx
 
         if queue is None:
+            queue = {}
+
+        if isinstance(queue, dict):
             # Create a simple serial queue if an existing one isn't given.
-            queue = cmd_queue.Queue.create(
-                backend='serial', name='smart-pipeline-v3',
-                size=1, gres=None)
+            default_queue_kw = {
+                'backend': 'serial',
+                'name': 'unnamed-mlops-pipeline',
+                'size': 1,
+                'gres': None,
+            }
+            queue_kw = ub.udict(default_queue_kw) | queue
+            queue = cmd_queue.Queue.create(**queue_kw)
 
         for node_name in list(nx.topological_sort(self.proc_graph)):
             node = self.proc_graph.nodes[node_name]['node']
@@ -301,7 +489,6 @@ class PipelineDAG:
                 # We might want to execute a few boilerplate instructions
                 # before running each node.
                 before_node_commands = []
-                write_configs = 1  # parameterize
 
                 # Add symlink jobs that make the graph structure traversable in
                 # the flat output directories.
@@ -341,7 +528,7 @@ class PipelineDAG:
                             invoke_lines.append('# ' + depend_node.resolved_node_dpath)
                     else:
                         invoke_lines.append('# Root node')
-                    invoke_command = node.command()
+                    invoke_command = node._raw_command()
                     invoke_lines.append(invoke_command)
                     invoke_text = '\n'.join(invoke_lines)
                     command = '\n'.join([
@@ -390,6 +577,14 @@ class PipelineDAG:
 
         # print(f'queue={queue}')
         return queue
+
+    def find_outputs(self):
+        """
+        Look in the DAG root path for output paths that are complete or
+        unfinished
+        """
+        dag = self
+        ...
 
 
 @ub.memoize
@@ -524,6 +719,19 @@ class OutputNode(IONode):
     @property
     def template_value(self):
         return self.parent.template_out_paths[self.name]
+
+    @profile
+    def matching_fpaths(self):
+        """
+        Find all paths for this node.
+        """
+        out_template = self.template_value
+        parser = parse.Parser(str(out_template))
+        patterns = {n: '*' for n in parser.named_fields}
+        pat = out_template.format(**patterns)
+        mpat = util_pattern.Pattern.coerce(pat)
+        fpaths = list(mpat.paths())
+        return fpaths
 
 
 def _classvar_init(self, args, fallbacks):
@@ -828,6 +1036,10 @@ class ProcessNode(Node):
 
     @memoize_configured_property
     def resolved_config(self):
+        """
+        This is not really "resolved" in the aggregate sense.
+        It is more of a "finalized" requested config.
+        """
         resolved_config = self.config.copy()
         resolved_config.update(self.resolved_in_paths)
         resolved_config.update(self.resolved_out_paths)
@@ -1102,7 +1314,7 @@ class ProcessNode(Node):
     @profile
     def _make_argstr(config):
         parts = [f'    --{k}="{v}" \\' for k, v in config.items()]
-        return chr(10).join(parts).lstrip().rstrip('\\')
+        return '\n'.join(parts).lstrip().rstrip('\\')
 
     @cached_property
     @profile
@@ -1128,8 +1340,11 @@ class ProcessNode(Node):
         """
         Basic version of command, can be overwritten
         """
-        argstr = self._make_argstr(self.config)
-        command = self.executable + ' ' + argstr
+        argstr = self._make_argstr(self.resolved_config)
+        if argstr:
+            command = self.executable + ' \\\n    ' + argstr
+        else:
+            command = self.executable
         return command
 
     @profile
@@ -1145,12 +1360,16 @@ class ProcessNode(Node):
         # return all(self.out_paths.map_values(lambda p: p.exists()).values())
         return all(ub.Path(p).expand().exists() for p in self.resolved_out_paths.values())
 
-    @profile
-    def resolved_command(self):
+    def _raw_command(self):
         command = self.command
         if not isinstance(command, str):
             assert callable(command)
             command = command()
+        return command
+
+    @profile
+    def resolved_command(self):
+        command = self._raw_command()
 
         # Cleanup the command
         base_command = command.rstrip().rstrip('\\').rstrip()
@@ -1165,9 +1384,3 @@ class ProcessNode(Node):
 
 def _add_prefix(prefix, dict_):
     return {prefix + k: v for k, v in dict_.items()}
-
-
-try:
-    profile.add_module()
-except Exception:
-    pass
