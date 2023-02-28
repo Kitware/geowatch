@@ -108,8 +108,8 @@ def export_cold_main(cmdline=1, **kwargs):
     cold_param = json.load(log)
     method = cold_param['algorithm']
 
-    coef_names = ['cv', 'rmse', 'a0', 'a1', 'b1', 'a2', 'b2', 'a3', 'b3', 'c1']
-    band_names = [0, 1, 2, 3, 4, 5]
+    # coef_names = ['cv', 'rmse', 'a0', 'a1', 'b1', 'a2', 'b2', 'a3', 'b3', 'c1']
+    # band_names = [0, 1, 2, 3, 4, 5]
 
     # SLOPE_SCALE = 10000
     # BAND_INFO = {0: 'blue',
