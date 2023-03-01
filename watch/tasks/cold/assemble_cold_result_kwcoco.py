@@ -236,12 +236,12 @@ def assemble_main(cmdline=1, **kwargs):
                     outdata.FlushCache()
                     ninput = ninput + 1
 
-            for x in range(n_blocks):
+            # for x in range(n_blocks):
                 # TODO: would be nice to have a structure that controls these
                 # name formats so we can use padded inter suffixes for nicer
                 # sorting, or nest files to keep folder sizes small
-                os.remove(
-                    os.path.join(out_path, 'tmp_coefmap_block{}_{}.npy'.format(x + 1, ordinal_day_list[day])))
+        os.remove(
+            os.path.join(out_path, 'tmp_coefmap_*.npy'))
 
     logger.info('Starting adding new asset to kwcoco json')
 
