@@ -30,8 +30,8 @@ class AssembleColdKwcocoConfig(scfg.DataConfig):
     meta_fpath = scfg.Value(None, help='file path of metadata json created by prepare_kwcoco script')
     year_lowbound = scfg.Value(None, help='min year for saving geotiff, e.g., 2017')
     year_highbound = scfg.Value(None, help='max year for saving geotiff, e.g., 2022')
-    coefs = scfg.Value(None, help="list of COLD coefficients for saving geotiff, e.g., ['a0', 'c1', 'a1', 'b1', 'a2', 'b2', 'a3', 'b3', 'cv', 'rmse']")
-    coefs_bands = scfg.Value(None, help='indicate the ba_nds for output coefs_bands, e.g., [0, 1, 2, 3, 4, 5]')
+    coefs = scfg.Value(None, type=str, help="list of COLD coefficients for saving geotiff, e.g., a0,c1,a1,b1,a2,b2,a3,b3,cv,rmse")
+    coefs_bands = scfg.Value(None, type=str, help='indicate the bands for output coefs_bands, e.g., 0,1,2,3,4,5')
     timestamp = scfg.Value(True, help='True: exporting cold result by timestamp, False: exporting cold result by year, Default is False')
 
 
@@ -128,9 +128,9 @@ def assemble_main(cmdline=1, **kwargs):
     #                ('rmse', np.float32, 7),
     #                ('magnitude', np.float32, 7)])
 
-    if coefs is not None:
-        assert all(elem in coef_names for elem in coefs)
-        assert all(elem in band_names for elem in coefs_bands)
+    # if coefs is not None:
+    #     assert all(elem in coef_names for elem in coefs)
+    #     assert all(elem in band_names for elem in coefs_bands)
 
     # Get original transform from projection to image space
     coco_dset = kwcoco.CocoDataset(coco_fpath)

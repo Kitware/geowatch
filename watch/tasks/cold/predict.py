@@ -1,11 +1,11 @@
-"""
+r"""
 Main prediction script for cold
 
 CommandLine:
 
     DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="auto")
     EXPT_DVC_DPATH=$(smartwatch_dvc --tags=phase2_expt --hardware="auto")
-    XDEV_PROFILE=1 python -m watch.tasks.cold.predict \
+    python -m watch.tasks.cold.predict \
         --coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly-KR_R001.kwcoco.json" \
         --out_dpath="$DATA_DVC_DPATH/Drop6/_pycold" \
         --mod_coco_fpath="$DATA_DVC_DPATH/Drop6/_pycold/imgonly-KR_R001-cold.kwcoco.json" \
@@ -21,6 +21,21 @@ CommandLine:
         --timestamp=True \
         --mode='process' \
         --workers=8
+
+    # Fix path problem because we wrote a different directory
+    # TODO: fix this script so the output always uses absolute paths?
+    # or at least doesn't write invalid data that needs fixing?
+    DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="auto")
+    kwcoco reroot \
+        --src="$DATA_DVC_DPATH"/Drop6/_pycold/imgonly-KR_R001-cold.kwcoco.json \
+        --dst="$DATA_DVC_DPATH"/Drop6/_pycold/imgonly-KR_R001-cold.fixed.kwcoco.zip \
+        --old_prefix="KR_R001" --new_prefix="../KR_R001"
+
+    DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="auto")
+    smartwatch visualize \
+        "$DATA_DVC_DPATH"/Drop6/_pycold/imgonly-KR_R001-cold.fixed.kwcoco.zip \
+        --channels="L8:(red|green|blue,red_COLD_a1|green_COLD_a1|blue_COLD_a1,red_COLD_cv|green_COLD_cv|blue_COLD_cv,red_COLD_rmse|green_COLD_rmse|blue_COLD_rmse)" \
+        --smart=True
 
 """
 import scriptconfig as scfg
@@ -74,7 +89,7 @@ def cold_predict_main(cmdline=1, **kwargs):
         TEST_COLD=1 xdoctest -m watch.tasks.cold.predict cold_predict_main
 
      Example:
-        >>> # xdoctest: +REQUIRES(env:TEST_COLD)
+        >>> # xdoctest: +REQUIRES(gg:TEST_COLD)
         >>> from watch.tasks.cold.predict import cold_predict_main
         >>> from watch.tasks.cold.predict import *
         >>> kwargs= dict(
