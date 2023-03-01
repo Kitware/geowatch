@@ -7,6 +7,14 @@ easier for us to go back and make the code robust.
 """
 import ubelt as ub
 
+HEURISTIC_START_STATES = {
+    'No Activity',
+}
+
+HEURISTIC_END_STATES = {
+    'Post Construction'
+}
+
 
 # # FIXME: Hard-coded category aliases.
 # https://smartgitlab.com/TE/standards
@@ -87,7 +95,7 @@ PHASE_STATUS_TO_KWCOCO_CATNAME = {
 
     'positive_annotated'        : None,  # This must have a category already do not map
     'positive_annotated_static' : None,  # This must have a category already do not map
-    'positive_excluded'         : 'ignore',    # This is positive, but is not "big" enough
+    'positive_excluded'         : 'ignore',  # This is positive, but is not "big" enough
     'positive_partial'          : 'positive',  # Does not have phase labels
     'positive_pending'          : 'positive',  # Does not have phase labels
 

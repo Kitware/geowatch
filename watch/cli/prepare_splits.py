@@ -56,6 +56,8 @@ class PrepareSplitsConfig(scfg.Config):
 
         'verbose': scfg.Value(1, help=''),
         'workers': scfg.Value(2, help=''),
+
+        'suffix': scfg.Value('', help='suffix for the output split filenames'),
     }
 
 
@@ -90,7 +92,7 @@ IGNORE_REGIONS = {
 }
 
 
-def _submit_constructive_split_jobs(base_fpath, queue, depends=[]):
+def _submit_constructive_split_jobs(base_fpath, suffix, queue, depends=[]):
     """
     new method for splits to construct them from previouly partitioned files
     """
@@ -104,6 +106,12 @@ def _submit_constructive_split_jobs(base_fpath, queue, depends=[]):
     for split, vali_regions in VALI_REGIONS_SPLITS.items():
         train_split_fpath = dpath / f'data_train_{split}.kwcoco.zip'
         vali_split_fpath = dpath / f'data_vali_{split}.kwcoco.zip'
+        if suffix:
+            train_split_fpath = dpath / f'data_train_{suffix}_{split}.kwcoco.zip'
+            vali_split_fpath = dpath / f'data_vali_{suffix}_{split}.kwcoco.zip'
+        else:
+            train_split_fpath = dpath / f'data_train_{split}.kwcoco.zip'
+            vali_split_fpath = dpath / f'data_vali_{split}.kwcoco.zip'
         train_parts = []
         vali_parts = []
         for fpath in partitioned_fpaths:
@@ -238,7 +246,7 @@ def prep_splits(cmdline=False, **kwargs):
         queue.add_header_command(config['virtualenv_cmd'])
 
     if config['constructive_mode']:
-        _submit_constructive_split_jobs(base_fpath, queue)
+        _submit_constructive_split_jobs(base_fpath, config['suffix'], queue)
     else:
         _submit_split_jobs(base_fpath, queue)
 
@@ -246,8 +254,7 @@ def prep_splits(cmdline=False, **kwargs):
         queue.rprint()
 
     if config['run']:
-        queue.run(block=True, with_textual=config['with_textual'],
-                  other_session_handler=config['other_session_handler'])
+        queue.run(block=True, with_textual=config['with_textual'])
 
     return queue
 
