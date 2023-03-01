@@ -10,19 +10,19 @@ CommandLine:
     # annotations script multiple times, preloading this work will make it
     # faster
     python -m watch add_fields \
-        --src $DVC_DATA_DPATH/Drop4-BAS/data.kwcoco.json \
-        --dst $DVC_DATA_DPATH/Drop4-BAS/data.kwcoco.json \
+        --src $DVC_DATA_DPATH/Drop6/data.kwcoco.json \
+        --dst $DVC_DATA_DPATH/Drop6/data.kwcoco.json \
         --overwrite=warp --workers 10
 
     # Update to whatever the state of the annotations submodule is
     python -m watch reproject_annotations \
-        --src $DVC_DATA_DPATH/Drop4-BAS/data.kwcoco.json \
-        --dst $DVC_DATA_DPATH/Drop4-BAS/data.kwcoco.json \
-        --viz_dpath $DVC_DATA_DPATH/Drop4-BAS/_viz_propogate \
-        --site_models="$DVC_DATA_DPATH/annotations/site_models/*.geojson"
+        --src $DVC_DATA_DPATH/Drop6/data.kwcoco.json \
+        --dst $DVC_DATA_DPATH/Drop6/data.kwcoco.json \
+        --viz_dpath $DVC_DATA_DPATH/Drop6/_viz_propogate \
+        --site_models="$DVC_DATA_DPATH/annotations/drop6/site_models/*.geojson"
 
     python -m watch visualize \
-        --src $DVC_DATA_DPATH/Drop4-BAS/data.kwcoco.json \
+        --src $DVC_DATA_DPATH/Drop6/data.kwcoco.json \
         --space="video" \
         --num_workers=avail \
         --any3="only" --draw_anns=True --draw_imgs=False --animate=True
@@ -122,10 +122,10 @@ def main(cmdline=False, **kwargs):
         >>> from watch.cli.reproject_annotations import *  # NOQA
         >>> import watch
         >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-        >>> coco_fpath = dvc_dpath / 'Drop4-BAS/data_vali.kwcoco.json'
+        >>> coco_fpath = dvc_dpath / 'Drop6/imgonly-KR_R001.kwcoco.json'
         >>> dpath = ub.Path.appdir('watch/tests/project_annots').ensuredir()
         >>> cmdline = False
-        >>> output_fpath = dpath / 'data.kwcoco.json'
+        >>> output_fpath = dpath / 'test_project_data.kwcoco.json'
         >>> viz_dpath = (dpath / 'viz').ensuredir()
         >>> kwargs = {
         >>>     'src': coco_fpath,
@@ -138,6 +138,7 @@ def main(cmdline=False, **kwargs):
     """
     import geopandas as gpd  # NOQA
     from watch.utils import util_gis
+    from watch.utils import util_parallel
     config = ReprojectAnnotationsConfig(data=kwargs, cmdline=cmdline)
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
 
@@ -156,9 +157,11 @@ def main(cmdline=False, **kwargs):
             geo_preprop = not any('geos_corners' in obj for obj in coco_img.iter_asset_objs())
             print('auto-choose geo_preprop = {!r}'.format(geo_preprop))
 
+    workers = util_parallel.coerce_num_workers(config['workers'])
+
     if geo_preprop:
         kwcoco_extensions.coco_populate_geo_heuristics(
-            coco_dset, overwrite={'warp'}, workers=config['workers'],
+            coco_dset, overwrite={'warp'}, workers=workers,
             keep_geotiff_metadata=False,
         )
 
@@ -168,7 +171,8 @@ def main(cmdline=False, **kwargs):
         'HACK_HANDLE_DUPLICATE_SITE_ROWS', default=True)
 
     site_model_infos = list(util_gis.coerce_geojson_datas(
-        config['site_models'], desc='load site models', allow_raw=True))
+        config['site_models'], desc='load site models', allow_raw=True,
+        workers=workers))
 
     sites = []
     for info in site_model_infos:
@@ -187,7 +191,7 @@ def main(cmdline=False, **kwargs):
     if config['region_models'] is not None:
         region_model_infos = list(util_gis.coerce_geojson_datas(
             config['region_models'], desc='load geojson region-models',
-            allow_raw=True))
+            allow_raw=True, workers=workers))
         for info in region_model_infos:
             gdf = info['data']
             regions.append(gdf)
@@ -930,7 +934,11 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy,
 
     site_rows_list = site_rows.to_dict(orient='records')
 
+    PROJECT_ENDSTATE = True
+    BACKPROJECT_START_STATES = 0  # turn off back-projection
+
     if propogate_strategy == 'SMART':
+        # TODO: This should be replaced with NEW-SMART
         # The original, but inflexible, propogate strategy
 
         # To future-propogate:
@@ -968,15 +976,6 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy,
         # Convert this into the "new" simpler format where each site row is
         # simply associated with the frames it will propogate to.
         obs_associated_gxs = []
-        PROJECT_ENDSTATE = True
-        BACKPROJECT_START_STATES = 0  # turn off back-projection
-        # TODO: use heuristic module
-        HEURISTIC_START_STATES = {
-            'No Activity',
-        }
-        HEURISTIC_END_STATES = {
-            'Post Construction'
-        }
         _iter = zip(forward_image_idxs_per_observation,
                     backward_image_idxs_per_observation,
                     site_rows_list)
@@ -994,12 +993,12 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy,
             current_gxs = current_and_forward_gxs[0:1]
             propogate_gxs.extend(current_gxs)
             # Determine if this subsite propogates forward and/or backward
-            if PROJECT_ENDSTATE or catname not in HEURISTIC_END_STATES:
+            if PROJECT_ENDSTATE or catname not in heuristics.HEURISTIC_END_STATES:
                 propogate_gxs.extend(forward_gxs)
 
             if BACKPROJECT_START_STATES:
                 # Only need to backpropogate the first label (and maybe even not that?)
-                if annot_idx == 0 and catname in HEURISTIC_START_STATES:
+                if annot_idx == 0 and catname in heuristics.HEURISTIC_START_STATES:
                     propogate_gxs.extend(backward_gxs)
             obs_associated_gxs.append(propogate_gxs)
 
@@ -1009,7 +1008,36 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy,
         obs_associated_gxs = keyframe_interpolate(image_times, key_infos)
 
     elif propogate_strategy == "NEW-SMART":
-        raise NotImplementedError('TODO: use the new logic, but with smart heuristics for the behavior')
+        raise NotImplementedError(
+            'TODO: use the new logic, but with smart heuristics for the behavior. '
+            'Need to vet that the following code is equivalent to the above code'
+        )
+
+        # For each annotation determine how it propogates in time.
+        site_rows_list
+        image_times = [t.timestamp() for t in region_image_dates]
+        key_infos = []
+        for annot_idx, (dt, site_row) in enumerate(zip(observation_dates, site_rows_list)):
+            # SMART annotations apply to the future by default.
+            applies = 'future'
+            # But we may change that based on category
+            catname = site_row['current_phase']
+            if catname is None:
+                catname = heuristics.PHASE_STATUS_TO_KWCOCO_CATNAME[status]
+            if not PROJECT_ENDSTATE:
+                if catname in heuristics.HEURISTIC_END_STATES:
+                    raise NotImplementedError(
+                        'need a applies strategy for only the next frame'
+                    )
+            if BACKPROJECT_START_STATES:
+                if annot_idx == 0 and catname in heuristics.HEURISTIC_START_STATES:
+                    applies = 'past'
+
+            key_infos.append({
+                'time': t.timestamp(),
+                'applies': applies,
+            })
+        obs_associated_gxs = keyframe_interpolate(image_times, key_infos)
     else:
         raise KeyError(propogate_strategy)
 
@@ -1182,6 +1210,10 @@ def keyframe_interpolate(image_times, key_infos):
     # * exactly one keyframe after it and maybe one directly on it.
     # * a keyframe before and after it and maybe one directly on it.
     # * exactly one keyframe before it and maybe one directly on it.
+    #
+    # We encode this by pointing to the index of the keyframe
+    # before the image, on the image, or after the image. If one of these
+    # keyframes doesn't exist we use a -1
     prev_idxs = padded_prev_idxs - 1
     curr_idxs = padded_curr_idxs - 1
     next_idxs = padded_next_idxs - 1
@@ -1189,6 +1221,7 @@ def keyframe_interpolate(image_times, key_infos):
     if 0:
         import pandas as pd
         print(pd.DataFrame({
+            'image_time': image_times,
             'prev': prev_idxs,
             'curr': curr_idxs,
             'next': next_idxs,
@@ -1210,6 +1243,9 @@ def keyframe_interpolate(image_times, key_infos):
     keyidx_to_imageidxs = [[] for _ in range(len(key_infos))]
     # Now we have groups of images corresponding to each unique keyframe case.
     for rowx, image_groupx in zip(unique_rowxs, groupxs):
+        # In each iteration we have a group of images that all have the same
+        # relationship to a set of up to 3 keyframes. We first gather what
+        # keyframes these are.
         prev_idx, curr_idx, next_idx = pcn_rows[rowx]
 
         prev_keyinfo = key_infos[prev_idx] if prev_idx >= 0 else None
@@ -1228,6 +1264,10 @@ def keyframe_interpolate(image_times, key_infos):
             if prev_is_relevant and next_is_relevant:
                 # This is a conflicting case, and we need to guess which one to
                 # use, use the nearest in time.
+                #
+                # TODO: If a keyframe has a duration property filter to the set
+                # of images in this group that it applies to.
+                # key_duration = next_keyinfo.get('duration', float('inf'))
                 group_times = image_times[image_groupx]
                 d1 = np.abs(group_times - prev_keyinfo['time'])
                 d2 = np.abs(group_times - next_keyinfo['time'])
@@ -1238,9 +1278,19 @@ def keyframe_interpolate(image_times, key_infos):
                 keyidx_to_imageidxs[next_idx].extend(next_groupx)
             elif next_is_relevant:
                 # Simple case, only have a relevant next keyframe
+                #
+                # TODO: If a keyframe has a duration property filter to the set
+                # of images in this group that it applies to.
+                # key_duration = next_keyinfo.get('duration', float('inf'))
+                # group_times = image_times[image_groupx]
                 keyidx_to_imageidxs[next_idx].extend(image_groupx)
             elif prev_is_relevant:
                 # Simple case, only have a relevant prev keyframe
+                #
+                # TODO: If a keyframe has a duration property filter to the set
+                # of images in this group that it applies to.
+                # key_duration = next_keyinfo.get('duration', float('inf'))
+                # group_times = image_times[image_groupx]
                 keyidx_to_imageidxs[prev_idx].extend(image_groupx)
             else:
                 # It is ok if neither keyframe is relevant that is a hole in

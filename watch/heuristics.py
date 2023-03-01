@@ -7,6 +7,14 @@ easier for us to go back and make the code robust.
 """
 import ubelt as ub
 
+HEURISTIC_START_STATES = {
+    'No Activity',
+}
+
+HEURISTIC_END_STATES = {
+    'Post Construction'
+}
+
 
 # # FIXME: Hard-coded category aliases.
 # https://smartgitlab.com/TE/standards
