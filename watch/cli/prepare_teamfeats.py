@@ -167,8 +167,7 @@ class TeamFeaturePipelineConfig(scfg.Config):
         'skip_existing': scfg.Value(True, help='if True skip completed results'),
 
         'do_splits': scfg.Value(False, help='if True also make splits. BROKEN'),
-
-        'follow': scfg.Value(True),
+        # 'follow': scfg.Value(True),
 
         'serial': scfg.Value(False, help='if True use serial mode'),
 
@@ -227,11 +226,7 @@ def prep_feats(cmdline=True, **kwargs):
     if workers == 0:
         gres = None
 
-    if gres is None:
-        size = max(1, workers)
-    else:
-        size = len(gres)
-
+    size = max(1, workers)
     from watch.mlops.pipeline import Pipeline
     pipeline = Pipeline()
 
@@ -391,7 +386,7 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
                 --coefs_bands=0,1,2,3,4,5 \
                 --timestamp=True \
                 --mode='process' \
-                --workers="{data_workers}"
+                --workers="{config['cold_workers']}"
             ''')
         combo_code_parts.append(codes[key])
         job = pipeline.submit(
@@ -595,7 +590,7 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
         f'    --src {src_lines} \\',
         f'    --dst {base_combo_fpath}'
     ])
-    print('task_jobs = {!r}'.format(task_jobs))
+    # print('task_jobs = {!r}'.format(task_jobs))
     pipeline.submit(
         name='combine_features' + name_suffix,
         command=command,

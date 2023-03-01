@@ -52,9 +52,9 @@ CommandLine:
         --with_depth=0 \
         --do_splits=0 \
         --skip_existing=1 \
-        --cold_workers=2 \
-        --workers=4 \
-        --backend=tmux --run=0
+        --cold_workers=8 \
+        --workers=1 \
+        --backend=tmux --run=1
 
 """
 import scriptconfig as scfg
