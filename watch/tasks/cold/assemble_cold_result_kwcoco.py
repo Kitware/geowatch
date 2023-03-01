@@ -43,13 +43,13 @@ def assemble_main(cmdline=1, **kwargs):
         cmdline (int, optional): _description_. Defaults to 1.
 
     Ignore:
-        python -m watch.tasks.cold.export_cold_result_kwcoco --help
-        TEST_COLD=1 xdoctest -m watch.tasks.cold.export_cold_result_kwcoco assemble_main
+        python -m watch.tasks.cold.assemble_cold_result_kwcoco --help
+        TEST_COLD=1 xdoctest -m watch.tasks.cold.assemble_cold_result_kwcoco assemble_main
 
     Example:
     >>> # xdoctest: +REQUIRES(env:TEST_COLD)
-    >>> from watch.tasks.cold.export_cold_result_kwcoco import assemble_main
-    >>> from watch.tasks.cold.export_cold_result_kwcoco import *
+    >>> from watch.tasks.cold.assemble_cold_result_kwcoco import assemble_main
+    >>> from watch.tasks.cold.assemble_cold_result_kwcoco import *
     >>> kwargs= dict(
     >>>    stack_path = "/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/KR_R001",
     >>>    reccg_path = "/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/reccg/KR_R001",
@@ -138,17 +138,19 @@ def assemble_main(cmdline=1, **kwargs):
     if len(video_ids) != 1:
         raise AssertionError('currently expecting one video per coco file; todo: be robust to this')
     video_id = video_ids[0]
+
     # Get all the images in the first video.
     images = coco_dset.images(video_id=video_id)
     sensors = images.lookup('sensor_coarse', None)
     is_landsat = [s == 'L8' for s in sensors]
+
     # Filter to only the landsat images
     landsat_images = images.compress(is_landsat)
     if len(landsat_images) == 0:
         raise RuntimeError(f'Video {video_id} in {coco_dset} contains no landsat images')
+
     # Take the first landsat image
     coco_img = landsat_images.coco_images[0]
-
     primary_asset = coco_img.primary_asset()
     primary_fpath = os.path.join(ub.Path(coco_img.bundle_dpath), primary_asset['file_name'])
     ref_image = gdal.Open(primary_fpath, gdal.GA_ReadOnly)
