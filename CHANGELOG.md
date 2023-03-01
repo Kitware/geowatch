@@ -18,6 +18,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Pretrained VIT support in heterogeneous model.
 * Decoderless support in heterogeneous model.
 * Landcover features predictor with sliding window and hidden feature support.
+* Add COLD to `prepare_teamfeatures`
 
 ### Changed
 * Renamed `project_annotations` to `reproject_annotations`
