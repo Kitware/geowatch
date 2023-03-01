@@ -4,10 +4,16 @@ import ubelt as ub
 
 queue = cmd_queue.Queue.create(backend='tmux', size=1)
 
-geojson_annot_dpath = pathlib.Path("/flash/smart_data_dvc/annotations/drop6/")
-hdd_bundle_dpath = pathlib.Path("/flash/smart_data_dvc/Drop6/")
+data_dvc_dpath = pathlib.Path("/flash/smart_data_dvc")
 
-imgonly_fpaths = list(hdd_bundle_dpath.glob('imgonly*.kwcoco.*'))
+if 0:
+    import watch
+    data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+
+geojson_annot_dpath = data_dvc_dpath / "annotations/drop6/"
+bundle_dpath = data_dvc_dpath / "Drop6/"
+
+imgonly_fpaths = list(bundle_dpath.glob('imgonly*.kwcoco.*'))
 for imgonly_fpath in imgonly_fpaths:
     region_id = imgonly_fpath.name.split('.')[0].split('-')[1]
     region_id = region_id
@@ -21,6 +27,7 @@ for imgonly_fpath in imgonly_fpaths:
             --src "{str(imgonly_fpath)}" \
             --dst "{str(imganns_fpath)}" \
             --propogate_strategy="SMART" \
+            --status_to_catname="positive_excluded: positive" \
             --site_models="{geojson_annot_dpath}/site_models/{region_id}_*" \
             --region_models="{geojson_annot_dpath}/region_models/{region_id}*"
         ''')

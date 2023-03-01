@@ -108,6 +108,15 @@ class ReprojectAnnotationsConfig(scfg.Config):
         'geospace_lookup': scfg.Value('auto', help='if False assumes region-ids can be used to lookup association'),
 
         'workers': scfg.Value(0, help='number of workers for geo-preprop if done'),
+
+        'status_to_catname': scfg.Value(None, help=ub.paragraph(
+            '''
+            Can be yaml or a path to a yaml file containing a mapping from
+            status to kwcoco category names. This partially overwrites behavior
+            in heuristics.PHASE_STATUS_TO_KWCOCO_CATNAME, so only the
+            difference mapping needs to be specified.
+            E.g. "{positive_excluded: positive}".
+            '''))
     }
 
 
@@ -139,6 +148,7 @@ def main(cmdline=False, **kwargs):
     import geopandas as gpd  # NOQA
     from watch.utils import util_gis
     from watch.utils import util_parallel
+    from watch.utils import util_yaml
     config = ReprojectAnnotationsConfig(data=kwargs, cmdline=cmdline)
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
 
@@ -174,6 +184,11 @@ def main(cmdline=False, **kwargs):
         config['site_models'], desc='load site models', allow_raw=True,
         workers=workers))
 
+    status_to_catname_default = ub.udict(heuristics.PHASE_STATUS_TO_KWCOCO_CATNAME)
+    status_to_catname = util_yaml.coerce_yaml(config['status_to_catname'])
+    if status_to_catname is not None:
+        status_to_catname = status_to_catname_default | status_to_catname
+
     sites = []
     for info in site_model_infos:
         gdf = info['data']
@@ -207,7 +222,8 @@ def main(cmdline=False, **kwargs):
 
     propogated_annotations, all_drawable_infos = assign_sites_to_images(
         coco_dset, region_id_to_sites, propogate_strategy,
-        geospace_lookup=geospace_lookup, want_viz=want_viz)
+        geospace_lookup=geospace_lookup, want_viz=want_viz,
+        status_to_catname=status_to_catname)
 
     if config['role'] is not None:
         _role = config['role']
@@ -687,7 +703,8 @@ def validate_site_dataframe(site_df):
 
 
 def assign_sites_to_images(coco_dset, region_id_to_sites, propogate_strategy,
-                           geospace_lookup='auto', want_viz=1):
+                           geospace_lookup='auto', want_viz=1,
+                           status_to_catname=None):
     """
     Given a coco dataset (with geo information) and a list of geojson sites,
     determines which images each site-annotations should go on.
@@ -838,7 +855,7 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate_strategy,
             site_anns, drawable_summary = propogate_site(
                 coco_dset, site_gdf, subimg_df, propogate_strategy,
                 region_image_dates, region_image_indexes, region_gids,
-                status_to_color, want_viz)
+                status_to_color, want_viz, status_to_catname=status_to_catname)
             propogated_annotations.extend(site_anns)
             if want_viz:
                 drawable_region_sites.append(drawable_summary)
@@ -864,7 +881,7 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate_strategy,
 
 def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy,
                    region_image_dates, region_image_indexes, region_gids,
-                   status_to_color, want_viz):
+                   status_to_color, want_viz, status_to_catname):
     """
     Given a set of site observations determines how to propogate them onto
     potential images in the assigned region.
@@ -985,7 +1002,7 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy,
             if catname is None:
                 # Based on the status choose a kwcoco category name
                 # using the watch heuristics
-                catname = heuristics.PHASE_STATUS_TO_KWCOCO_CATNAME[status]
+                catname = status_to_catname[status]
             current_and_forward_gxs = sorted(
                 forward_gxs,
                 key=lambda gx: util_time.coerce_datetime(coco_dset.imgs[region_gids[gx]]['date_captured']))
@@ -1023,7 +1040,7 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy,
             # But we may change that based on category
             catname = site_row['current_phase']
             if catname is None:
-                catname = heuristics.PHASE_STATUS_TO_KWCOCO_CATNAME[status]
+                catname = status_to_catname[status]
             if not PROJECT_ENDSTATE:
                 if catname in heuristics.HEURISTIC_END_STATES:
                     raise NotImplementedError(
@@ -1068,7 +1085,7 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy,
         if catname is None:
             # Based on the status choose a kwcoco category name
             # using the watch heuristics
-            catname = heuristics.PHASE_STATUS_TO_KWCOCO_CATNAME[status]
+            catname = status_to_catname[status]
 
         if catname is None:
             HACK_TO_PASS = 1

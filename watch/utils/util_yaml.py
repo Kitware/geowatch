@@ -147,6 +147,10 @@ def coerce_yaml(data, backend='ruamel'):
         [4, 5, 6]
         >>> coerce_yaml(str(fpath))
         [4, 5, 6]
+        >>> dict(coerce_yaml('{a: b, c: d}'))
+        {'a': 'b', 'c': 'd'}
+        >>> coerce_yaml(None)
+        None
     """
     if isinstance(data, str):
         maybe_path = None
