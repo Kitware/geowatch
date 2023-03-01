@@ -37,6 +37,25 @@ CommandLine:
         --channels="L8:(red|green|blue,red_COLD_a1|green_COLD_a1|blue_COLD_a1,red_COLD_cv|green_COLD_cv|blue_COLD_cv,red_COLD_rmse|green_COLD_rmse|blue_COLD_rmse)" \
         --smart=True
 
+
+    ### Multiple Regions:
+
+    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+    BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6
+    python -m watch.cli.prepare_teamfeats \
+        --base_fpath "$BUNDLE_DPATH"/imganns-*.kwcoco.zip \
+        --expt_dpath="$DVC_EXPT_DPATH" \
+        --with_cold=1 \
+        --with_landcover=0 \
+        --with_materials=0 \
+        --with_invariants=0 \
+        --with_depth=0 \
+        --do_splits=0 \
+        --skip_existing=1 \
+        --cold_workers=2 \
+        --workers=4 \
+        --backend=tmux --run=0
+
 """
 import scriptconfig as scfg
 import ubelt as ub
@@ -61,7 +80,7 @@ class ColdPredictConfig(scfg.DataConfig):
         '''
         a path to a file to input kwcoco file
         '''))
-    out_dpath = scfg.Value(None, help='output directory for the output')
+    out_dpath = scfg.Value(None, help='output directory for the output. If unspecified uses the output kwcoco bundle')
     adj_cloud = scfg.Value(False, help='How to treat QA band, default is False: ignoring adj. cloud class')
     method = scfg.Value('COLD', choices=['COLD', 'HybridCOLD', 'OBCOLD'], help='type of cold algorithms')
     prob = scfg.Value(None, help='change probability of chi-distribution, e.g., 0.99')
@@ -132,7 +151,9 @@ def cold_predict_main(cmdline=1, **kwargs):
         track_emissions=config['track_emissions'],
     )
 
-    coco_fpath = config['coco_fpath']
+    coco_fpath = ub.Path(config['coco_fpath'])
+    if config['out_dpath'] is None:
+        config['out_dpath'] = coco_fpath.parent
     out_dpath = ub.Path(config['out_dpath']).ensuredir()
     adj_cloud = config['adj_cloud']
     method = config['method']

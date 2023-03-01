@@ -145,6 +145,7 @@ class TeamFeaturePipelineConfig(scfg.Config):
         'with_invariants': scfg.Value(True, help='Include UKY invariant features'),
         'with_invariants2': scfg.Value(0, help='Include UKY invariant features'),
         'with_depth': scfg.Value(True, help='Include DZYNE WorldView depth features'),
+        'with_cold': scfg.Value(True, help='Include COLD features'),
 
         'invariant_segmentation': scfg.Value(False, help='Enable/Disable segmentation part of invariants'),
         'invariant_pca': scfg.Value(0, help='Enable/Disable invariant PCA'),
@@ -156,6 +157,7 @@ class TeamFeaturePipelineConfig(scfg.Config):
             does not start it by default.''')),
 
         'data_workers': scfg.Value(2, help='dataloader workers for each proc'),
+        'cold_workers': scfg.Value(4, help='workers for pycold'),
         'depth_workers': scfg.Value(2, help='workers for depth only. On systems with < 32GB RAM might need to set to 0'),
 
         'keep_sessions': scfg.Value(False, help='if True does not close tmux sessions'),
@@ -318,6 +320,7 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
         'dzyne_landcover': aligned_bundle_dpath / (subset_name + '_dzyne_landcover' + config['kwcoco_ext']),
         'dzyne_depth': aligned_bundle_dpath / (subset_name + '_dzyne_depth' + config['kwcoco_ext']),
         'uky_invariants': aligned_bundle_dpath / (subset_name + '_uky_invariants' + config['kwcoco_ext']),
+        'cold': aligned_bundle_dpath / (subset_name + '_cold' + config['kwcoco_ext']),
     }
 
     print('Exist check: ')
@@ -331,6 +334,7 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
         'with_materials': 'M',
         'with_invariants': 'I',
         'with_invariants2': 'I2',
+        'with_cold': 'C',
     }
 
     # tmux queue is still limited. The order of submission matters.
@@ -357,6 +361,41 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
         combo_code_parts.append(codes[key])
         job = pipeline.submit(
             name='landcover' + name_suffix,
+            command=task['command'],
+            in_paths=[base_fpath],
+            out_paths={
+                'output_fpath': task['output_fpath']
+            },
+        )
+        task_jobs.append(job)
+
+    key = 'with_cold'
+    if config[key]:
+        # Landcover is fairly fast to run, do it first
+        task = {}
+        task['output_fpath'] = outputs['cold']
+        task['gpus'] = 0
+        task['command'] = ub.codeblock(
+            fr'''
+            python -m watch.tasks.cold.predict \
+                --coco_fpath="{base_fpath}" \
+                --mod_coco_fpath="{task['output_fpath']}" \
+                --adj_cloud=False \
+                --method='COLD' \
+                --prob=0.99 \
+                --conse=6 \
+                --cm_interval=60 \
+                --year_lowbound=None \
+                --year_highbound=None \
+                --coefs=cv,a0,a1,b1,c1,rmse \
+                --coefs_bands=0,1,2,3,4,5 \
+                --timestamp=True \
+                --mode='process' \
+                --workers="{data_workers}"
+            ''')
+        combo_code_parts.append(codes[key])
+        job = pipeline.submit(
+            name='cold' + name_suffix,
             command=task['command'],
             in_paths=[base_fpath],
             out_paths={
