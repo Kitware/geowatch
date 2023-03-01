@@ -2,6 +2,10 @@
 """
 Compute semantic segmentation evaluation metrics
 
+TODO::
+- RRMSE (relative root mean squared error) RMSE normalized by root mean sqare value where each residual is scaled against the actual value
+  sqrt((1 / n) * sum((y - y_hat) ** 2) / sum(y ** 2))
+
 TODO:
     - [ ] Move to kwcoco proper
 """
