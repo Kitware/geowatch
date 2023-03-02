@@ -398,6 +398,28 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
 
                     import torch
                     model_state = torch.load(pretrained_fpath)
+
+                    from watch.tasks.fusion.methods.heterogeneous import HeterogeneousModel, ScaleAgnostictPositionalEncoder
+                    from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+                    position_encoder = ScaleAgnostictPositionalEncoder(3, 8)
+                    channels, classes, dataset_stats = HeterogeneousModel.demo_dataset_stats()
+                    model = HeterogeneousModel(
+                      token_dim=208,
+                      input_sensorchan=channels,
+                      classes=classes,
+                      dataset_stats=dataset_stats,
+                      position_encoder=position_encoder,
+                      backbone='sits-former',
+                    )
+
+                    from watch.tasks.fusion.fit import coerce_initializer
+                    from watch.utils import util_pattern
+                    initializer = coerce_initializer(str(pretrained_fpath))
+                    initializer.forward(model)
+
+                    batch = model.demo_batch(width=64, height=65)
+                    batch += model.demo_batch(width=55, height=75)
+                    outputs = model.forward(batch)
                 """
                 from watch.tasks.fusion.architectures import sits
                 bert_config = {
@@ -409,6 +431,11 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                 }
                 bert = sits.BERT(**bert_config)
                 backbone = bert.transformer_encoder
+                # Hack to denote that we need to not use batch first for this
+                # model.
+                backbone.is_sits_bert = True
+                backbone.batch_first = backbone.layers[0].self_attn.batch_first
+
                 # sits_config = {
                 #     'patch_size': 5,
                 #     'num_classes': 15,
@@ -1167,17 +1194,35 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             output_shapes = orig_query_shapes
             output_masks = query_masks
         else:
-            output_seqs = self.backbone(
-                input_seqs,  # [:, :, 0:768],
-                mask=input_masks,
-            )
-            output_shapes = orig_input_shapes
-            output_masks = input_masks
+            # batch_first = getattr(self.backbone, 'batch_first', True)
+            is_sits_bert = getattr(self.backbone, 'is_sits_bert', False)
+            if is_sits_bert:
+                # Special case for pretrained BERT
+                # TODO: wrap the model to conform to the API here instead
+                # of directly hacking this function.
+                _input_seqs = input_seqs.transpose(0, 1)
+                # _input_masks = input_masks.transpose(0, 1)
+                _output_seqs = self.backbone(
+                    _input_seqs,
+                    src_key_padding_mask=~input_masks,
+                )
+                output_seqs = _output_seqs.transpose(0, 1)
+                output_shapes = orig_input_shapes
+                output_masks = input_masks
+            else:
+                # Normal case.
+                output_seqs = self.backbone(
+                    input_seqs,
+                    mask=input_masks,
+                )
+                output_shapes = orig_input_shapes
+                output_masks = input_masks
 
-            # print(f'output_seqs.shape={output_seqs.shape}')
-            if output_seqs.shape[2] != self.hparams.token_dim:
-                # hack for VIT
-                output_seqs = output_seqs[:, :, 0:self.hparams.token_dim]
+            HACK_TOKEN_DIMS = 1
+            if HACK_TOKEN_DIMS:
+                # hack for VIT. Drops feature dims to allow for running
+                if output_seqs.shape[2] != self.hparams.token_dim:
+                    output_seqs = output_seqs[:, :, 0:self.hparams.token_dim]
 
         # ==================
         # Decompose outputs into the appropriate output shape

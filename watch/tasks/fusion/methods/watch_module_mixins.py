@@ -92,7 +92,7 @@ class WatchModuleMixins:
         rng = kwarray.ensure_rng(rng)
 
         B = batch_size
-        C = len(self.hparams.classes)
+        C = len(self.classes)
         T = num_timesteps
         batch = []
 
@@ -513,8 +513,10 @@ class WatchModuleMixins:
             >>>     dataset_stats=dataset_stats,
             >>>     input_sensorchan=channels,
             >>>     #token_dim=708,
-            >>>     token_dim=768 - 60,
-            >>>     backbone='vit_B_16_imagenet1k',
+            >>>     #token_dim=768 - 60,
+            >>>     #backbone='vit_B_16_imagenet1k',
+            >>>     token_dim=208,
+            >>>     backbone='sits-former',
             >>>     position_encoder=position_encoder,
             >>>     )
             >>> self.datamodule = datamodule
