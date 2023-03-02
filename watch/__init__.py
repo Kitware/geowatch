@@ -1,5 +1,9 @@
 """
 The SMART WATCH module
+
+Useful environs:
+    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+    DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
 """
 import os
 import ubelt as ub
