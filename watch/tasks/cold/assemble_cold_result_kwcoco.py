@@ -10,6 +10,7 @@ import kwimage
 import scriptconfig as scfg
 import ubelt as ub
 import logging
+import fnmatch
 
 try:
     from xdev import profile
@@ -242,8 +243,11 @@ def assemble_main(cmdline=1, **kwargs):
                 # TODO: would be nice to have a structure that controls these
                 # name formats so we can use padded inter suffixes for nicer
                 # sorting, or nest files to keep folder sizes small
-        os.remove(
-            os.path.join(out_path, 'tmp_coefmap_*.npy'))
+    
+    # Remove tmp files
+    for file in os.listdir(out_path):
+        if fnmatch.fnmatch(file, 'tmp_coefmap*'):
+            os.remove(os.path.join(out_path, file))
 
     logger.info('Starting adding new asset to kwcoco json')
 
