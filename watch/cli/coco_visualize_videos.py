@@ -428,7 +428,7 @@ def main(cmdline=True, **kwargs):
                 s = max(1, len(coco_imgs) // 10)
                 obs = []
                 for coco_img in coco_imgs[::s]:
-                    rawdata = coco_img.delay(channels=chan).prepare().optimize().finalize()
+                    rawdata = coco_img.imdelay(channels=chan).prepare().optimize().finalize()
                     mask = rawdata != 0
                     obs.append(rawdata[mask].ravel())
                 allobs = np.hstack(obs)
@@ -912,20 +912,15 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
     }
 
     if 1:
-        RESOLUTION_KEY = 'resolution'
-        if coco_img.video is not None:
-            if 'target_gsd' in coco_img.video:
-                RESOLUTION_KEY = 'target_gsd'
         if resolution is None:
             factor = 1
         else:
             factor = coco_img._scalefactor_for_resolution(
-                space=space, resolution=resolution,
-                RESOLUTION_KEY=RESOLUTION_KEY)
+                space=space, resolution=resolution)
         warp_viz_from_space = kwimage.Affine.scale(factor)
 
-    delayed = coco_img.delay(space=space, resolution=resolution,
-                             RESOLUTION_KEY=RESOLUTION_KEY, **finalize_opts)
+    delayed = coco_img.imdelay(space=space, resolution=resolution,
+                               **finalize_opts)
 
     warp_vid_from_img = coco_img.warp_vid_from_img
     if space == 'video':
