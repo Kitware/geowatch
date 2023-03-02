@@ -387,6 +387,33 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                     cross_dim_head=1,
                     latent_dim_head=1,
                 )
+            elif backbone == 'sits-former':
+                """
+                Ignore:
+                    import watch
+                    from watch.utils.simple_dvc import SimpleDVC
+                    expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
+                    expt_dvc = SimpleDVC(expt_dvc_dpath)
+                    pretrained_fpath = expt_dvc_dpath / 'models/pretrained/sits-former/checkpoint.bert.tar'
+
+                    import torch
+                    model_state = torch.load(pretrained_fpath)
+                """
+                from watch.tasks.fusion.architectures import sits
+                bert_config = {
+                    'num_features': 10,
+                    'hidden': 256,
+                    'n_layers': 3,
+                    'attn_heads': 8,
+                    'dropout': 0.1,
+                }
+                bert = sits.BERT(**bert_config)
+                backbone = bert.transformer_encoder
+                # sits_config = {
+                #     'patch_size': 5,
+                #     'num_classes': 15,
+                # }
+                # sits.BERTClassification()
             elif backbone == 'vit_B_16_imagenet1k':
                 """
                 pip install pytorch_pretrained_vit

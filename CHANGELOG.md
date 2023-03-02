@@ -3,7 +3,15 @@
 This changelog follows the specifications detailed in: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
-## Version 0.3.10 - Target 2023-02-xx
+
+## Version 0.4.0 - Target 2023-03-x
+
+
+### Added
+
+* Add SITS-former 
+
+## Version 0.3.10 - Target 2023-02-28
 
 ### Added
 * `smartwatch align` new argument `--minimum_size`: to ensure all regions have enough pixels
@@ -46,13 +54,6 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Issue in `polygon_distance_transform`.
 * Issue in tracker where it would use 30GSD even if there was a default.
 * Issue where kwcoco annotations in a track may not be sorted; use `sorted_annots`
-
-### Misc
-* Drop6 scripts in the dev folder
-* DVC cache surgery and improved `simple_dvc`
-* FFVC POC
-* Reworked `utils` to use `lazy_loader`.
-* New `util_kwplot` constructs
 
 ### Misc
 * Drop6 scripts in the dev folder
