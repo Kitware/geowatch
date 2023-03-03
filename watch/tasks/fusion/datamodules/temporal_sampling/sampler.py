@@ -89,7 +89,7 @@ Example:
     >>> self = TimeWindowSampler.from_coco_video(
     >>>     dset, vidid,
     >>>     time_kernel='-1y,-8m,-2w,0,2w,8m,1y',
-    >>>     affinity_type='soft3', update_rule='', determenistic=True
+    >>>     affinity_type='soft4', update_rule='', determenistic=True
     >>>     #time_window=5,
     >>>     #affinity_type='hardish3', time_span='3m', update_rule='pairwise+distribute', determenistic=True
     >>> )

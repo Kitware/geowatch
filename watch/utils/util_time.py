@@ -340,3 +340,10 @@ def coerce_timedelta(delta):
     else:
         raise TimeTypeError(type(delta))
     return delta
+
+
+def _format_timedelta():
+    """
+    TODO format time deltas at some resolution granularity
+    """
+    ...
