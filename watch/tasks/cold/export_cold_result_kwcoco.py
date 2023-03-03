@@ -312,16 +312,9 @@ def extract_features(cold_plot, band, ordinal_day_list, nan_val, timestamp, feat
         for day_idx, ordinal_day in enumerate(ordinal_day_list)
     ]
 
-    # # --- A  # NOQA
-    # for day_idx, ordinal_day, ord_year in idx_day_year_list:
-    #     for idx, cold_curve in enumerate(cold_plot):
-    # # --- A  # NOQA
-
-    # --- B  # NOQA
     idxs_iter = itertools.product(idx_day_year_list, enumerate(cold_plot))
     try:
         for (day_idx, ordinal_day, ord_year), (idx, cold_curve) in idxs_iter:
-    # --- B  # NOQA
 
             if cold_curve['t_start'] <= ordinal_day < max_days_list[idx]:
                 if a0_idx is not None:
@@ -343,22 +336,11 @@ def extract_features(cold_plot, band, ordinal_day_list, nan_val, timestamp, feat
                         break_year = break_year_list[idx]
                         if (timestamp and ordinal_day == cold_curve['t_break']) or (not timestamp and break_year == ord_year):
                             features[cv_idx][day_idx] = cold_curve['magnitude'][band]
-    # --- B  # NOQA
-                            # Pretty sure this exception logic is equivalent to the
-                            # loop with the else
+                            # In this case, we didn't find a matching cold
+                            # curve for the current ordinal day, stop processing.
                             raise NoMatchingColdCurve
     except NoMatchingColdCurve:
         ...
-    # --- B  # NOQA
-
-    # # ---A  # NOQA
-    #                         break
-    #     else:
-    #         # This else block runs only if the loop completed without a break statement being executed
-    #         # In this case, we didn't find a matching cold curve for the current ordinal day
-    #         continue
-    #     break
-    # # ---A  # NOQA
 
     return features
 
