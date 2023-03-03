@@ -3,7 +3,6 @@ import numpy as np
 import pandas as pd
 from osgeo import gdal
 import datetime as datetime
-from os.path import join
 import json
 import kwcoco
 import kwimage
@@ -71,12 +70,12 @@ def assemble_main(cmdline=1, **kwargs):
     proc_context = kwargs.pop('proc_context', None)
 
     config_in = AssembleColdKwcocoConfig.cli(cmdline=cmdline, data=kwargs)
-    stack_path = config_in['stack_path']
-    reccg_path = config_in['reccg_path']
-    coco_fpath = config_in['coco_fpath']
-    mod_coco_fpath = config_in['mod_coco_fpath']
-    out_path = os.path.join(reccg_path, 'cold_feature')
-    meta_fpath = config_in['meta_fpath']
+    stack_path = ub.Path(config_in['stack_path'])
+    reccg_path = ub.Path(config_in['reccg_path'])
+    coco_fpath = ub.Path(config_in['coco_fpath'])
+    mod_coco_fpath = ub.Path(config_in['mod_coco_fpath'])
+    out_path = reccg_path / 'cold_feature'
+    meta_fpath = ub.Path(config_in['meta_fpath'])
     year_lowbound = config_in['year_lowbound']
     year_highbound = config_in['year_highbound']
     coefs = config_in['coefs']
@@ -84,16 +83,14 @@ def assemble_main(cmdline=1, **kwargs):
     timestamp = config_in['timestamp']
 
     # define variables
-    meta = open(meta_fpath)
-    config = json.load(meta)
+    config = json.loads(meta_fpath.read_text())
     vid_w = config['video_w']
     vid_h = config['video_h']
     n_block_x = config['n_block_x']
     n_block_y = config['n_block_y']
     n_blocks = n_block_x * n_block_y  # total number of blocks
 
-    log = open(os.path.join(reccg_path, 'log.json'))
-    cold_param = json.load(log)
+    cold_param = json.loads((reccg_path / 'log.json').read_text())
     method = cold_param['algorithm']
 
     coef_names = ['cv', 'rmse', 'a0', 'a1', 'b1', 'a2', 'b2', 'a3', 'b3', 'c1']
@@ -153,8 +150,8 @@ def assemble_main(cmdline=1, **kwargs):
     # Take the first landsat image
     coco_img = landsat_images.coco_images[0]
     primary_asset = coco_img.primary_asset()
-    primary_fpath = os.path.join(ub.Path(coco_img.bundle_dpath), primary_asset['file_name'])
-    ref_image = gdal.Open(primary_fpath, gdal.GA_ReadOnly)
+    primary_fpath = ub.Path(coco_img.bundle_dpath) / primary_asset['file_name']
+    ref_image = gdal.Open(os.fspath(primary_fpath), gdal.GA_ReadOnly)
     trans = ref_image.GetGeoTransform()
     proj = ref_image.GetProjection()
 
@@ -172,7 +169,7 @@ def assemble_main(cmdline=1, **kwargs):
     new_gdal_transform = (c, a, b, f, d, e)
 
     # Get ordinal day list
-    block_folder = os.path.join(stack_path, 'block_x1_y1')
+    block_folder = stack_path / 'block_x1_y1'
 
     if timestamp:
         meta_files = [m for m in os.listdir(block_folder) if m.endswith('.json')]
@@ -183,8 +180,7 @@ def assemble_main(cmdline=1, **kwargs):
 
         # read metadata and
         for meta in meta_files:
-            metadata = open(join(block_folder, meta))
-            meta_config = json.load(metadata)
+            meta_config = json.loads((block_folder / meta).read_text())
             ordinal_date = meta_config['ordinal_date']
             img_name = meta_config['image_name'] + '.npy'
             img_dates.append(ordinal_date)
@@ -216,7 +212,7 @@ def assemble_main(cmdline=1, **kwargs):
     if coefs is not None:
         for day in range(len(ordinal_day_list)):
             tmp_map_blocks = [np.load(
-                os.path.join(out_path, 'tmp_coefmap_block{}_{}.npy'.format(x + 1, ordinal_day_list[day])))
+                out_path / f'tmp_coefmap_block{x + 1}_{ordinal_day_list[day]}.npy')
                 for x in range(n_blocks)]
 
             results = np.hstack(tmp_map_blocks)
@@ -227,10 +223,10 @@ def assemble_main(cmdline=1, **kwargs):
                     kwcoco_img_name = img_names[day]
                     band = BAND_INFO[band_name]
                     outname = '%s_%s_%s_%s.tif' % (kwcoco_img_name[:-4], band, method, coef)
-                    outfile = os.path.join(out_path, outname)
+                    outfile = out_path / outname
 
                     outdriver1 = gdal.GetDriverByName("GTiff")
-                    outdata = outdriver1.Create(outfile, vid_w, vid_h, 1, gdal.GDT_Float32)
+                    outdata = outdriver1.Create(os.fspath(outfile), vid_w, vid_h, 1, gdal.GDT_Float32)
                     outdata.GetRasterBand(1).WriteArray(results[:vid_h, :vid_w, ninput])
                     outdata.FlushCache()
                     outdata.SetGeoTransform(new_gdal_transform)
@@ -243,11 +239,11 @@ def assemble_main(cmdline=1, **kwargs):
                 # TODO: would be nice to have a structure that controls these
                 # name formats so we can use padded inter suffixes for nicer
                 # sorting, or nest files to keep folder sizes small
-    
+
     # Remove tmp files
     for file in os.listdir(out_path):
         if fnmatch.fnmatch(file, 'tmp_coefmap*'):
-            os.remove(os.path.join(out_path, file))
+            os.remove(out_path / file)
 
     logger.info('Starting adding new asset to kwcoco json')
 
@@ -263,8 +259,8 @@ def assemble_main(cmdline=1, **kwargs):
         for band_name in band_names:
             for coef in coef_names:
                 band = BAND_INFO[band_name]
-                new_fpath = os.path.join(out_path, f'{image_name}_{band}_{method}_{coef}.tif')
-                if os.path.exists(new_fpath):
+                new_fpath = out_path / f'{image_name}_{band}_{method}_{coef}.tif'
+                if new_fpath.exists():
                     channels = kwcoco.ChannelSpec.coerce(f'{band}_{method}_{coef}')
 
                     # COLD output was wrote based on transform information of coco_dset, so it aligned

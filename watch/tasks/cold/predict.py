@@ -54,7 +54,7 @@ CommandLine:
         --skip_existing=1 \
         --cold_workers=8 \
         --workers=1 \
-        --backend=tmux --run=1
+        --backend=tmux --run=0
 
 """
 import scriptconfig as scfg

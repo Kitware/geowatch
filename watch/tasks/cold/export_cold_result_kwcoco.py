@@ -7,9 +7,7 @@ See original code: ~/code/pycold/src/python/pycold/imagetool/export_change_map.p
 import os
 import numpy as np
 import pandas as pd
-# from osgeo import gdal  # NOQA
 import datetime as datetime_mod
-from os.path import join
 import json
 import scriptconfig as scfg
 import logging
@@ -72,9 +70,9 @@ def export_cold_main(cmdline=1, **kwargs):
     config_in = ExportColdKwcocoConfig.cli(cmdline=cmdline, data=kwargs)
     rank = config_in['rank']
     n_cores = config_in['n_cores']
-    stack_path = config_in['stack_path']
-    reccg_path = config_in['reccg_path']
-    meta_fpath = config_in['meta_fpath']
+    stack_path = ub.Path(config_in['stack_path'])
+    reccg_path = ub.Path(config_in['reccg_path'])
+    meta_fpath = ub.Path(config_in['meta_fpath'])
     year_lowbound = config_in['year_lowbound']
     year_highbound = config_in['year_highbound']
     coefs = config_in['coefs']
@@ -94,8 +92,7 @@ def export_cold_main(cmdline=1, **kwargs):
     #     n_cores = config_in['n_cores']
 
     # define variables
-    meta = open(meta_fpath)
-    config = json.load(meta)
+    config = json.loads(meta_fpath.read_text())
     n_cols = config['padded_n_cols']
     n_rows = config['padded_n_rows']
     n_block_x = config['n_block_x']
@@ -104,8 +101,7 @@ def export_cold_main(cmdline=1, **kwargs):
     block_height = int(n_rows / n_block_y)  # height of a block
     n_blocks = n_block_x * n_block_y  # total number of blocks
 
-    log = open(os.path.join(reccg_path, 'log.json'))
-    cold_param = json.load(log)
+    cold_param = json.loads((reccg_path / 'log.json').read_text())
     method = cold_param['algorithm']
 
     # coef_names = ['cv', 'rmse', 'a0', 'a1', 'b1', 'a2', 'b2', 'a3', 'b3', 'c1']
@@ -150,11 +146,10 @@ def export_cold_main(cmdline=1, **kwargs):
     #     assert all(elem in coef_names for elem in coefs)
     #     assert all(elem in band_names for elem in coefs_bands)
 
-    out_path = os.path.join(reccg_path, 'cold_feature')
+    out_path = reccg_path / 'cold_feature'
 
     if rank == 0:
-        if not os.path.exists(out_path):
-            os.makedirs(out_path)
+        out_path.ensuredir()
 
     # MPI mode
     # trans = comm.bcast(trans, root=0)
@@ -162,9 +157,9 @@ def export_cold_main(cmdline=1, **kwargs):
     # cols = comm.bcast(cols, root=0)
     # rows = comm.bcast(rows, root=0)
     # config = comm.bcast(config, root=0)
-    
+
     # Get ordinal list from sample block_folder
-    block_folder = os.path.join(stack_path, 'block_x1_y1')
+    block_folder = stack_path / 'block_x1_y1'
     if timestamp:
         meta_files = [m for m in os.listdir(block_folder) if m.endswith('.json')]
 
@@ -174,8 +169,7 @@ def export_cold_main(cmdline=1, **kwargs):
 
         # read metadata and
         for meta in meta_files:
-            metadata = open(join(block_folder, meta))
-            meta_config = json.load(metadata)
+            meta_config = json.loads((block_folder / meta).read_text())
             ordinal_date = meta_config['ordinal_date']
             img_name = meta_config['image_name'] + '.npy'
             img_dates.append(ordinal_date)
@@ -200,7 +194,7 @@ def export_cold_main(cmdline=1, **kwargs):
         img_dates = sorted(img_dates)
         img_names = sorted(img_names)
         ordinal_day_list = img_dates
-        
+
     ranks_percore = int(np.ceil(n_blocks / n_cores))
     for i in range(ranks_percore):
         iblock = n_cores * i + rank
@@ -209,13 +203,14 @@ def export_cold_main(cmdline=1, **kwargs):
         current_block_y = int(np.floor(iblock / n_block_x)) + 1
         current_block_x = iblock % n_block_x + 1
         if method == 'OBCOLD':
-            filename = 'record_change_x{}_y{}_obcold.npy'.format(current_block_x, current_block_y)
+            filename = f'record_change_x{current_block_x}_y{current_block_y}_obcold.npy'
         elif method == 'COLD':
-            filename = 'record_change_x{}_y{}_cold.npy'.format(current_block_x, current_block_y)
+            filename = f'record_change_x{current_block_x}_y{current_block_y}_cold.npy'
         elif method == 'HybridCOLD':
-            filename = 'record_change_x{}_y{}_hybridcold.npy'.format(current_block_x, current_block_y)
+            filename = f'record_change_x{current_block_x}_y{current_block_y}_hybridcold.npy'
 
-        block_folder = os.path.join(stack_path, 'block_x{}_y{}'.format(current_block_x, current_block_y))
+        block_folder = stack_path / f'block_x{current_block_x}_y{current_block_y}'
+        reccg_fpath = reccg_path / filename
 
         if timestamp:
             if coefs is not None:
@@ -223,11 +218,11 @@ def export_cold_main(cmdline=1, **kwargs):
                     (block_height, block_width, len(coefs) * len(coefs_bands),
                      len(ordinal_day_list)), -9999, dtype=np.float32)
 
-            print('processing the rec_cg file {}'.format(os.path.join(reccg_path, filename)))
-            if not os.path.exists(os.path.join(reccg_path, filename)):
-                print('the rec_cg file {} is missing'.format(os.path.join(reccg_path, filename)))
+            print(f'processing the rec_cg file {reccg_fpath}')
+            if not reccg_fpath.exists():
+                print(f'the rec_cg file {reccg_fpath} is missing')
 
-        cold_block = np.array(np.load(os.path.join(reccg_path, filename)), dtype=dt)
+        cold_block = np.array(np.load(reccg_fpath), dtype=dt)
 
         if coefs is not None:
             cold_block_split = np.split(cold_block, np.argwhere(np.diff(cold_block['pos']) != 0)[:, 0] + 1)
@@ -249,12 +244,11 @@ def export_cold_main(cmdline=1, **kwargs):
         if timestamp:
             for day in range(len(ordinal_day_list)):
                 if coefs is not None:
-                    outfile = os.path.join(out_path,
-                                            'tmp_coefmap_block{}_{}.npy'.format(iblock + 1,
-                                                                                ordinal_day_list[day]))
+                    outfile = out_path / f'tmp_coefmap_block{iblock + 1}_{ordinal_day_list[day]}.npy'
                     np.save(outfile, results_block_coefs[:, :, :, day])
     # MPI mode (wait for all processes)
     # comm.Barrier()
+
 
 def extract_features(cold_plot, band, ordinal_day_list, nan_val, timestamp, feature_outputs=['a0', 'a1', 'b1']):
     feature_set = set(feature_outputs)

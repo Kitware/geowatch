@@ -6,7 +6,6 @@ See original code: ~/code/pycold/src/python/pycold/imagetool/tile_processing.py
 import os
 import time
 import json
-from os.path import join
 import pandas as pd
 import numpy as np
 from datetime import datetime as datetime_cls
@@ -18,6 +17,7 @@ from pycold import cold_detect
 from pycold.utils import get_rowcol_intile, get_doy, assemble_cmmaps
 from pycold.ob_analyst import ObjectAnalystHPC
 import scriptconfig as scfg
+from pathlib import Path
 
 
 class TileProcessingKwcocoConfig(scfg.DataConfig):
@@ -76,17 +76,16 @@ def tile_process_main(cmdline=1, **kwargs):
     config_in = TileProcessingKwcocoConfig.cli(cmdline=cmdline, data=kwargs)
     rank = config_in['rank']
     n_cores = config_in['n_cores']
-    stack_path = config_in['stack_path']
-    reccg_path = config_in['reccg_path']
-    meta_fpath = config_in['meta_fpath']
+    stack_path = Path(config_in['stack_path'])
+    reccg_path = Path(config_in['reccg_path'])
+    meta_fpath = Path(config_in['meta_fpath'])
     method = config_in['method']
     b_c2 = config_in['b_c2']
     prob = config_in['prob']
     conse = config_in['conse']
     cm_output_interval = config_in['cm_interval']
 
-    meta = open(meta_fpath)
-    config = json.load(meta)
+    config = json.loads(meta_fpath.read_text())
     n_cols = config['padded_n_cols']
     n_rows = config['padded_n_rows']
     n_block_x = config['n_block_x']
@@ -125,21 +124,20 @@ def tile_process_main(cmdline=1, **kwargs):
             year_highbound = pd.Timestamp.fromordinal(
                 starting_date + (n_cm_maps - 1) * cm_output_interval).year
         except IOError:
-            print("reading start dates errors: {}".format(start_time.strftime('%Y-%m-%d %H:%M:%S')))
+            print(f"reading start dates errors: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
             exit()
 
     # logging and folder preparation
     if rank == 1:
-        if not os.path.exists(reccg_path):
-            os.makedirs(reccg_path)
+        reccg_path.mkdir(parents=True, exist_ok=True)
         if method == 'OBCOLD':
-            if not os.path.exists(join(reccg_path, 'cm_maps')):
-                os.makedirs(join(reccg_path, 'cm_maps'))
-        print("The per-pixel time series processing begins: {}".format(start_time.strftime('%Y-%m-%d %H:%M:%S')))
+            cm_maps_fpath = reccg_path / 'cm_maps'
+            cm_maps_fpath.mkdir(parents=True, exist_ok=True)
+        print(f"The per-pixel time series processing begins: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
 
-        if not os.path.exists(stack_path):
-            print("Failed to locate stack folders. The program ends: {}".format(
-                datetime_cls.now(tz).strftime('%Y-%m-%d %H:%M:%S')))
+        if not stack_path.exists():
+            print("Failed to locate stack folders. The program ends: "
+                  f"{datetime_cls.now(tz).strftime('%Y-%m-%d %H:%M:%S')}")
             return
 
     #########################################################################
@@ -154,10 +152,11 @@ def tile_process_main(cmdline=1, **kwargs):
             break
         block_y = int((block_id - 1) / n_block_x ) + 1  # note that block_x and block_y start from 1
         block_x = int((block_id - 1) % n_block_x ) + 1
-        if os.path.exists(join(reccg_path, 'COLD_block{}_finished.txt'.format(block_id))):
-            print("Per-pixel COLD processing is finished for block_x{}_y{} ({})".format(block_x, block_y,
-                                                                                        datetime_cls.now(tz).strftime(
-                                                                                            '%Y-%m-%d %H:%M:%S')))
+
+        finished_fpath = reccg_path / f'COLD_block{block_id}_finished.txt'
+        if finished_fpath.exists():
+            now = datetime_cls.now(tz).strftime('%Y-%m-%d %H:%M:%S')
+            print(f"Per-pixel COLD processing is finished for block_x{block_x}_y{block_y} ({now})")
             continue
         img_tstack, img_dates_sorted = get_stack_date(block_x, block_y, stack_path, year_lowbound,
                                                       year_highbound)
@@ -172,8 +171,8 @@ def tile_process_main(cmdline=1, **kwargs):
                 for pos in range(block_width * block_height):
                     CM_collect.append(np.full(n_cm_maps, -9999, dtype=np.short))
                     date_collect.append(np.full(n_cm_maps, -9999, dtype=np.short))
-                np.save(join(reccg_path, 'CM_date_x{}_y{}.npy'.format(block_x, block_y)), np.hstack(date_collect))
-                np.save(join(reccg_path, 'CM_x{}_y{}.npy'.format(block_x, block_y)), np.hstack(CM_collect))
+                np.save(reccg_path / f'CM_date_x{block_x}_y{block_y}.npy', np.hstack(date_collect))
+                np.save(reccg_path / f'CM_x{block_x}_y{block_y}.npy', np.hstack(CM_collect))
 
         else:
             # start looping every pixel in the block
@@ -213,9 +212,8 @@ def tile_process_main(cmdline=1, **kwargs):
                                                       pos=n_cols * (original_row - 1) + original_col)
 
                     except RuntimeError:
-                        print("COLD fails at original_row {}, original_col {} ({})".format(original_row, original_col,
-                                                                                           datetime_cls.now(tz)
-                                                                                           .strftime('%Y-%m-%d %H:%M:%S')))
+                        now = datetime_cls.now(tz).strftime('%Y-%m-%d %H:%M:%S')
+                        print(f"COLD fails at original_row {original_row}, original_col {original_col} ({now})")
                     except Exception:
                         if method == 'OBCOLD':
                             CM = np.full(n_cm_maps, -9999, dtype=np.short)
@@ -230,20 +228,20 @@ def tile_process_main(cmdline=1, **kwargs):
                 # save the dataset
                 if len(result_collect) > 0:
                     if method == 'HybridCOLD':
-                        np.save(join(reccg_path, 'record_change_x{}_y{}_hybridcold.npy'.format(block_x, block_y)),
+                        np.save(reccg_path / f'record_change_x{block_x}_y{block_y}_hybridcold.npy',
                                 np.hstack(result_collect))
                     else:
-                        np.save(join(reccg_path, 'record_change_x{}_y{}_cold.npy'.format(block_x, block_y)),
+                        np.save(reccg_path / f'record_change_x{block_x}_y{block_y}_cold.npy',
                                 np.hstack(result_collect))
                 if method == 'OBCOLD':
-                    np.save(join(reccg_path, 'CM_date_x{}_y{}.npy'.format(block_x, block_y)), np.hstack(date_collect))
-                    np.save(join(reccg_path, 'CM_x{}_y{}.npy'.format(block_x, block_y)), np.hstack(CM_collect))
+                    np.save(reccg_path / 'CM_date_x{block_x}_y{block_y}.npy', np.hstack(date_collect))
+                    np.save(reccg_path / 'CM_x{block_x}_y{block_y}.npy', np.hstack(CM_collect))
 
-            with open(join(reccg_path, 'COLD_block{}_finished.txt'.format(block_id)), 'w'):
+            with open(reccg_path / f'COLD_block{block_id}_finished.txt', 'w'):
                 pass
 
-            print("Per-pixel COLD processing is finished for block_x{}_y{} ({})"
-                  .format(block_x, block_y, datetime_cls.now(tz).strftime('%Y-%m-%d %H:%M:%S')))
+            now = datetime_cls.now(tz).strftime('%Y-%m-%d %H:%M:%S')
+            print(f"Per-pixel COLD processing is finished for block_x{block_x}_y{block_y} ({now})")
 
     # wait for all cores to be finished
     if method == 'OBCOLD':
@@ -254,7 +252,7 @@ def tile_process_main(cmdline=1, **kwargs):
     #     cold_timepoint = datetime_cls.now(tz)
     # for i in os.listdir(reccg_path):
     #     if i.endswith('.txt'):
-    #         os.remove(os.path.join(reccg_path, i))
+    #         os.remove(reccg_path / i)
 
     #################################################################################
     #                        the below is object-based process                      #
@@ -267,7 +265,7 @@ def tile_process_main(cmdline=1, **kwargs):
         #     pyclassifier = PyClassifierHPC(config, record_path=reccg_path, year_lowbound=year_lowbound,
         #                                    year_uppbound=year_highbound, seedmap_path=seedmap_path)
         #     ob_analyst = ObjectAnalystHPC(config, starting_date=starting_date, stack_path=stack_path,
-        #                                   result_path=reccg_path, thematic_path=join(reccg_path, 'feature_maps'))
+        #                                   result_path=reccg_path, thematic_path=reccg_path / 'feature_maps')
         if rank == 1:
             # need to create folders first
             # if seedmap_path is not None:
@@ -278,17 +276,17 @@ def tile_process_main(cmdline=1, **kwargs):
         #                        reorganize cm snapshots                        #
         #########################################################################
 
-        if not is_finished_assemble_cmmaps(join(reccg_path, 'cm_maps'), n_cm_maps,
+        if not is_finished_assemble_cmmaps(reccg_path / 'cm_maps', n_cm_maps,
                                            starting_date, cm_output_interval):
             if rank == 1:
-                assemble_cmmaps(config, reccg_path, join(reccg_path, 'cm_maps'), starting_date, n_cm_maps, 'CM',
+                assemble_cmmaps(config, reccg_path, reccg_path / 'cm_maps', starting_date, n_cm_maps, 'CM',
                                 clean=False)
             elif rank == 2:
-                assemble_cmmaps(config, reccg_path, join(reccg_path, 'cm_maps'), starting_date, n_cm_maps,
+                assemble_cmmaps(config, reccg_path, reccg_path / 'cm_maps', starting_date, n_cm_maps,
                                 'CM_date',
                                 clean=False)
 
-            while not is_finished_assemble_cmmaps(join(reccg_path, 'cm_maps'), n_cm_maps,
+            while not is_finished_assemble_cmmaps(reccg_path / 'cm_maps', n_cm_maps,
                                                   starting_date, cm_output_interval):
                 time.sleep(15)
 
@@ -338,7 +336,7 @@ def tile_process_main(cmdline=1, **kwargs):
                                                                        cm_output_interval)):
                 time.sleep(15)
         if rank == 1:
-            print("OBIA ends: {}".format(datetime_cls.now(tz).strftime('%Y-%m-%d %H:%M:%S')))
+            print(f"OBIA ends: {datetime_cls.now(tz).strftime('%Y-%m-%d %H:%M:%S')}")
 
         #########################################################################
         #                        reconstruct change records                     #
@@ -367,11 +365,11 @@ def tile_process_main(cmdline=1, **kwargs):
     log_fpath.write_text(json.dumps(log))
 
     # if method == 'OBCOLD':
-    #     tileprocessing_report(join(reccg_path, 'tile_processing_report.log'),
+    #     tileprocessing_report(reccg_path / 'tile_processing_report.log',
     #                           stack_path, pycold.__version__, method, config, start_time, cold_timepoint, tz,
     #                           n_cores, starting_date, n_cm_maps, year_lowbound, year_highbound)
     # else:
-    #     tileprocessing_report(join(reccg_path, 'tile_processing_report.log'), stack_path, pycold.__version__,
+    #     tileprocessing_report(reccg_path / 'tile_processing_report.log', stack_path, pycold.__version__,
     #                           method, config, start_time, cold_timepoint, tz, n_cores)
     # print("The whole procedure finished: {}".format(datetime_cls.now(tz).strftime('%Y-%m-%d %H:%M:%S')))
 
@@ -428,7 +426,8 @@ def is_finished_cold_blockfinished(reccg_path, nblocks):
         True -> all block finished
     """
     for n in range(nblocks):
-        if not os.path.exists(os.path.join(reccg_path, 'COLD_block{}_finished.txt'.format(n + 1))):
+        fpath = reccg_path / f'COLD_block{n + 1}_finished.txt'
+        if not fpath.exists():
             return False
     return True
 
@@ -444,7 +443,7 @@ def get_stack_date(block_x, block_y, stack_path, year_lowbound=0, year_highbound
         img_tstack, img_dates_sorted
         img_tstack - 3-d array (block_width * block_height, nband, nimage)
     """
-    block_folder = join(stack_path, 'block_x{}_y{}'.format(block_x, block_y))
+    block_folder = stack_path / f'block_x{block_x}_y{block_y}'
     meta_files = [m for m in os.listdir(block_folder) if m.endswith('.json')]
 
     # sort image files by ordinal dates
@@ -453,8 +452,7 @@ def get_stack_date(block_x, block_y, stack_path, year_lowbound=0, year_highbound
 
     # read metadata and
     for meta in meta_files:
-        metadata = open(join(block_folder, meta))
-        config = json.load(metadata)
+        config = json.loads((block_folder / meta).read_text())
         ordinal_date = config['ordinal_date']
         img_name = config['image_name'] + '.npy'
         img_dates.append(ordinal_date)
@@ -463,7 +461,7 @@ def get_stack_date(block_x, block_y, stack_path, year_lowbound=0, year_highbound
     if len(img_files) == 0:
         return None, None
 
-    sample_np = np.load(join(block_folder, img_files[0]))
+    sample_np = np.load(block_folder / img_files[0])
     block_width = sample_np.shape[1]
     block_height = sample_np.shape[0]
 
@@ -479,7 +477,7 @@ def get_stack_date(block_x, block_y, stack_path, year_lowbound=0, year_highbound
     files_date_zip = sorted(zip(img_dates, img_files))
     img_files_sorted = [x[1] for x in files_date_zip]
     img_dates_sorted = np.asarray([x[0] for x in files_date_zip])
-    img_tstack = np.dstack([np.load(join(block_folder, f)).reshape(block_width * block_height, nband)
+    img_tstack = np.dstack([np.load(block_folder / f).reshape(block_width * block_height, nband)
                             for f in img_files_sorted])
     return img_tstack, img_dates_sorted
 
@@ -505,7 +503,7 @@ def reading_start_dates_nmaps(stack_path, year_lowbound, year_highbound, cm_inte
     """
     # read starting and ending dates, note that all blocks only has one starting and last date (mainly for obcold)
     try:
-        block_folder = join(stack_path, 'block_x1_y1')
+        block_folder = stack_path / 'block_x1_y1'
         meta_files = [m for m in os.listdir(block_folder) if m.endswith('.json')]
 
         # sort image files by ordinal dates
@@ -513,8 +511,7 @@ def reading_start_dates_nmaps(stack_path, year_lowbound, year_highbound, cm_inte
 
         # read metadata and
         for meta in meta_files:
-            metadata = open(join(block_folder, meta))
-            config = json.load(metadata)
+            config = json.loads((block_folder / meta).read_text())
             ordinal_date = config['ordinal_date']
             img_dates.append(ordinal_date)
         sorted_img_dates = sorted(img_dates)
@@ -549,15 +546,13 @@ def is_finished_assemble_cmmaps(cmmap_path, n_cm, starting_date, cm_interval):
     """
     for count in range(n_cm):
         ordinal_date = starting_date + count * cm_interval
-        if not os.path.exists(join(cmmap_path,
-                                   'CM_maps_{}_{}{}.npy'.format(str(ordinal_date),
-                                                                pd.Timestamp.fromordinal(ordinal_date).year,
-                                                                get_doy(ordinal_date)))):
+        year = pd.Timestamp.fromordinal(ordinal_date).year
+        doy = get_doy(ordinal_date)
+        cm_fpath = cmmap_path / f'CM_maps_{str(ordinal_date)}_{year}{doy}.npy'
+        cm_date_fpath = cmmap_path / 'CM_date_maps_{str(ordinal_date)}_{year}{doy}.npy'
+        if not cm_fpath.exists():
             return False
-        if not os.path.exists(join(cmmap_path,
-                                   'CM_date_maps_{}_{}{}.npy'.format(str(ordinal_date),
-                                                                     pd.Timestamp.fromordinal(ordinal_date).year,
-                                                                     get_doy(ordinal_date)))):
+        if not cm_date_fpath.exists():
             return False
     return True
 
