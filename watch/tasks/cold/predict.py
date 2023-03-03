@@ -23,6 +23,7 @@ CommandLine:
     python -m watch.tasks.cold.predict \
         --coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly-KR_R001.kwcoco.json" \
         --out_dpath="$DATA_DVC_DPATH/Drop6/_pycold" \
+        --sensors='L8, S2' \
         --mod_coco_fpath="$DATA_DVC_DPATH/Drop6/_pycold/imgonly-KR_R001-cold.kwcoco.json" \
         --adj_cloud=False \
         --method='COLD' \
@@ -96,6 +97,7 @@ class ColdPredictConfig(scfg.DataConfig):
         a path to a file to input kwcoco file
         '''))
     out_dpath = scfg.Value(None, help='output directory for the output. If unspecified uses the output kwcoco bundle')
+    sensors = scfg.Value('L8', type=str, help='sensor type, default is "L8"')
     adj_cloud = scfg.Value(False, help='How to treat QA band, default is False: ignoring adj. cloud class')
     method = scfg.Value('COLD', choices=['COLD', 'HybridCOLD', 'OBCOLD'], help='type of cold algorithms')
     prob = scfg.Value(None, help='change probability of chi-distribution, e.g., 0.99')
@@ -129,6 +131,7 @@ def cold_predict_main(cmdline=1, **kwargs):
         >>> kwargs= dict(
         >>>   coco_fpath = ub.Path('/home/jws18003/data/dvc-repos/smart_data_dvc/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/imgonly-KR_R001.kwcoco.json'),
         >>>   out_dpath = ub.Path.appdir('/gpfs/scratchfs1/zhz18039/jws18003/kwcoco'),
+        >>>   sensors = 'L8, S2',
         >>>   adj_cloud = False,
         >>>   method = 'COLD',
         >>>   prob = 0.99,
@@ -136,8 +139,8 @@ def cold_predict_main(cmdline=1, **kwargs):
         >>>   cm_interval = 60,
         >>>   year_lowbound = None,
         >>>   year_highbound = None,
-        >>>   coefs = ['a0', 'cv'],
-        >>>   coefs_bands = [0, 1, 2, 3, 4, 5],
+        >>>   coefs = 'a0', 'cv',
+        >>>   coefs_bands = '0, 1, 2, 3, 4, 5',
         >>>   timestamp = True,
         >>>   workermode = 'process',
         >>>   mod_coco_fpath = ub.Path('/home/jws18003/data/dvc-repos/smart_data_dvc/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/KR_R001/imgonly-KR_R001.kwcoco.modified.json'),
@@ -171,6 +174,7 @@ def cold_predict_main(cmdline=1, **kwargs):
     if config['out_dpath'] is None:
         config['out_dpath'] = coco_fpath.parent
     out_dpath = ub.Path(config['out_dpath']).ensuredir()
+    sensors = config['sensors']
     adj_cloud = config['adj_cloud']
     method = config['method']
     workers = util_parallel.coerce_num_workers(config['workers'])
@@ -187,7 +191,7 @@ def cold_predict_main(cmdline=1, **kwargs):
         # ============
         main_prog.set_postfix('Prepare KWCOCO')
         meta_fpath = prepare_kwcoco.prepare_kwcoco_main(
-            cmdline=0, coco_fpath=coco_fpath, out_dpath=out_dpath,
+            cmdline=0, coco_fpath=coco_fpath, out_dpath=out_dpath, sensors=sensors,
             adj_cloud=adj_cloud, method=method, workers=workers)
         with open(meta_fpath, 'r') as meta:
             metadata = json.load(meta)
