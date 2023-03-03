@@ -224,9 +224,9 @@ def cold_predict_main(cmdline=1, **kwargs):
     assemble_kwargs['timestamp'] = config['timestamp']
     assemble_cold_result_kwcoco.assemble_main(
         cmdline=0, proc_context=proc_context, **assemble_kwargs)
-    
+
     # remove stacked image
     shutil.rmtree(tile_kwargs['stack_path'])
-    
+
 if __name__ == '__main__':
     cold_predict_main()
