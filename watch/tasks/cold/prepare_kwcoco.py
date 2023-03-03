@@ -70,6 +70,7 @@ class PrepareKwcocoConfig(scfg.DataConfig):
         a path to a file to input kwcoco file
         '''))
     out_dpath = scfg.Value(None, help='output directory for the output')
+    sensors = scfg.Value('L8', type=str, help='sensor type, default is "L8"')
     adj_cloud = scfg.Value(False, help='How to treat QA band, default is False: ignoring adj. cloud class')
     method = scfg.Value(None, help=ub.paragraph(
         '''
@@ -90,6 +91,13 @@ SENSOR_TO_INFO['L8'] = {
     'quality_channels': 'quality',
     'quality_interpretation': 'FMASK'
 }  # The name of quality_channels for Drop 4 is 'cloudmask'.
+
+SENSOR_TO_INFO['S2'] = {
+    'sensor_name': 'Sentinel-2',
+    'intensity_channels': 'blue|green|red|nir|swir16|swir22|lwir11',
+    'quality_channels': 'quality',
+    'quality_interpretation': 'FMASK'
+} 
 
 # Register different quality bit standards.
 QA_INTERPRETATIONS = {}
@@ -131,8 +139,9 @@ def prepare_kwcoco_main(cmdline=1, **kwargs):
         >>> from watch.tasks.cold.prepare_kwcoco import prepare_kwcoco_main
         >>> from watch.tasks.cold.prepare_kwcoco import *
         >>> kwargs= dict(
-        >>>   coco_fpath = ub.Path('/home/jws18003/data/dvc-repos/smart_data_dvc/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/KR_R001/data_KR_R001.kwcoco.json'),
+        >>>   coco_fpath = ub.Path('/home/jws18003/data/dvc-repos/smart_data_dvc/Drop6/data_vali_split1_KR_R001.kwcoco.json'),
         >>>   out_dpath = ub.Path.appdir('/gpfs/scratchfs1/zhz18039/jws18003/kwcoco'),
+        >>>   sensors = 'L8,S2',
         >>>   adj_cloud = False,
         >>>   method = None,
         >>> )
@@ -143,11 +152,12 @@ def prepare_kwcoco_main(cmdline=1, **kwargs):
     config = PrepareKwcocoConfig.cli(cmdline=cmdline, data=kwargs)
     coco_fpath = config['coco_fpath']
     dpath = ub.Path(config['out_dpath']).ensuredir()
+    sensors = config['sensors']
     adj_cloud = config['adj_cloud']
     method = config['method']
     out_dir = dpath / 'stacked'
     workers = config['workers']
-    meta_fpath = stack_kwcoco(coco_fpath, out_dir, adj_cloud, method, pman, workers)
+    meta_fpath = stack_kwcoco(coco_fpath, out_dir, sensors, adj_cloud, method, pman, workers)
     return meta_fpath
 
 
@@ -290,7 +300,7 @@ def artificial_surface_index(
     return ASI
 
 
-def stack_kwcoco(coco_fpath, out_dir, adj_cloud, method, pman=None, workers=0):
+def stack_kwcoco(coco_fpath, out_dir, sensors, adj_cloud, method, pman=None, workers=0):
     """
     Args:
         coco_fpath (str | PathLike | CocoDataset):
@@ -323,7 +333,8 @@ def stack_kwcoco(coco_fpath, out_dir, adj_cloud, method, pman=None, workers=0):
     all_images = dset.images(list(ub.flatten(dset.videos().images)))
 
     # For now, it supports only L8
-    flags = [s in {'L8'} for s in all_images.lookup('sensor_coarse')]
+    # flags = [s in {'L8'} for s in all_images.lookup('sensor_coarse')]
+    flags = [s in sensors for s in all_images.lookup('sensor_coarse')]
     all_images = all_images.compress(flags)
 
     image_id_iter = iter(all_images)
@@ -385,7 +396,7 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
     # Note: if kwcoco needs to register more fine-grained sensor
     # information we can do that.
     sensor = coco_image.img['sensor_coarse']
-    assert sensor == 'L8', 'MWE only supports landsat-8 for now'
+    # assert sensor == 'L8', 'MWE only supports landsat-8 for now'
 
     # Given the sensor, determine what the intensity and quality band
     # we should request are.
@@ -403,8 +414,8 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
     # Construct delayed images. These represent a tree of image
     # operations that will resample the image at the desired resolution
     # as well as align it with other images in the sequence.
-    delayed_im = coco_image.delay(channels=intensity_channels, **delay_kwargs)
-    delayed_qa = coco_image.delay(channels=quality_channels, **delay_kwargs)
+    delayed_im = coco_image.imdelay(channels=intensity_channels, resolution='30GSD', **delay_kwargs)
+    delayed_qa = coco_image.imdelay(channels=quality_channels, resolution='30GSD', **delay_kwargs)
     # Check what shape the data would be loaded with if we finalized right now.
     h, w = delayed_im.shape[0:2]
     # Determine if padding is necessary to properly break the data into blocks.
