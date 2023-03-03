@@ -319,8 +319,7 @@ def extract_features(cold_plot, band, ordinal_day_list, nan_val, timestamp, feat
     # # --- B  # NOQA
 
     # --- A  # NOQA
-    for day_idx, ordinal_day in idx_day_year_list:
-        ord_year = pd.Timestamp.fromordinal(ordinal_day).year
+    for day_idx, ordinal_day, ord_year in idx_day_year_list:
         for idx, cold_curve in enumerate(cold_plot):
     # --- A  # NOQA
 
