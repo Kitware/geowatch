@@ -701,8 +701,6 @@ def quantize_image(imdata, old_min=None, old_max=None, quantize_dtype=np.int16):
                 if old_max is None:
                     old_max = int(np.ceil(valid_data.max()))
 
-    # old_min = 0
-    # old_max = 1
     quantize_iinfo = np.iinfo(quantize_dtype)
     quantize_max = quantize_iinfo.max
     if quantize_iinfo.kind == 'u':
