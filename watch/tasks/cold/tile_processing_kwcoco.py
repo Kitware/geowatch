@@ -1,4 +1,19 @@
 """
+This is step 2/4 in predict.py
+
+
+SeeAlso:
+
+    predict.py
+
+    prepare_kwcoco.py
+
+    tile_processing_kwcoco.py *
+
+    export_cold_result_kwcoco.py
+
+    assemble_cold_result_kwcoco.py
+
 This script is for running COLD algorithm with kwcoco dataset.
 See original code: ~/code/pycold/src/python/pycold/imagetool/tile_processing.py
 """
@@ -71,6 +86,8 @@ def tile_process_main(cmdline=1, **kwargs):
     >>> cmdline=0
     >>> tile_process_main(cmdline, **kwargs)
     """
+    # Hacky way to pass in progress manager
+    pman = kwargs.pop('pman', None)
 
     # setting config
     config_in = TileProcessingKwcocoConfig.cli(cmdline=cmdline, data=kwargs)
@@ -146,7 +163,12 @@ def tile_process_main(cmdline=1, **kwargs):
     threshold = chi2.ppf(prob, 5)
 
     nblock_eachcore = int(np.ceil(n_block_x * n_block_y * 1.0 / n_cores))
-    for i in range(nblock_eachcore):
+
+    i_iter = range(nblock_eachcore)
+    if pman is not None:
+        i_iter = pman.progiter(i_iter, desc=f'Process Tile: Rank {rank}',
+                               total=nblock_eachcore, transient=True)
+    for i in i_iter:
         block_id = n_cores * i + rank  # started from 1, i.e., rank, rank + n_cores, rank + 2 * n_cores
         if block_id > n_block_x * n_block_y :
             break

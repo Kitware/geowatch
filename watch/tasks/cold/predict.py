@@ -1,6 +1,19 @@
 r"""
 Main prediction script for cold
 
+
+SeeAlso:
+
+    predict.py *
+
+    prepare_kwcoco.py
+
+    tile_processing_kwcoco.py
+
+    export_cold_result_kwcoco.py
+
+    assemble_cold_result_kwcoco.py
+
 CommandLine:
 
     DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="auto")
@@ -55,7 +68,6 @@ CommandLine:
         --cold_workers=8 \
         --workers=1 \
         --backend=tmux --run=0
-
 """
 import scriptconfig as scfg
 import ubelt as ub
@@ -141,6 +153,7 @@ def cold_predict_main(cmdline=1, **kwargs):
 
     from watch.utils import process_context
     from watch.utils import util_parallel
+    from watch.utils import util_progress
     from watch.utils import util_json
     resolved_config = config.to_dict()
     resolved_config = util_json.ensure_json_serializable(resolved_config)
@@ -163,70 +176,104 @@ def cold_predict_main(cmdline=1, **kwargs):
     proc_context.start()
     proc_context.add_disk_info(out_dpath)
 
-    meta_fpath = prepare_kwcoco.prepare_kwcoco_main(
-        cmdline=0, coco_fpath=coco_fpath, out_dpath=out_dpath,
-        adj_cloud=adj_cloud, method=method)
-    with open(meta_fpath, 'r') as meta:
-        metadata = json.load(meta)
+    pman = util_progress.ProgressManager(backend='rich')
+    with pman:
+        main_prog = pman.progiter(total=4, desc='Predict PyCOLD. Stage: ')
 
-    logger.info('Starting COLD tile-processing...')
-    tile_kwargs = tile_processing_kwcoco.TileProcessingKwcocoConfig().to_dict()
-    tile_kwargs['stack_path'] = out_dpath / 'stacked' / metadata['region_id']
-    tile_kwargs['reccg_path'] = out_dpath / 'reccg' / metadata['region_id']
-    tile_kwargs['meta_fpath'] = meta_fpath
-    tile_kwargs['method'] = method
-    tile_kwargs['prob'] = config['prob']
-    tile_kwargs['conse'] = config['conse']
-    tile_kwargs['cm_interval'] = config['cm_interval']
+        # ============
+        # 1 / 4 Prepare Step
+        # ============
+        main_prog.set_postfix('Prepare KWCOCO')
+        meta_fpath = prepare_kwcoco.prepare_kwcoco_main(
+            cmdline=0, coco_fpath=coco_fpath, out_dpath=out_dpath,
+            adj_cloud=adj_cloud, method=method, workers=workers)
+        with open(meta_fpath, 'r') as meta:
+            metadata = json.load(meta)
+        main_prog.step()
 
-    jobs = ub.JobPool(mode=config['mode'], max_workers=workers)
-    for i in range(workers + 1):
-        #jobs.submit(func, arg1, arg2, arg3=34)
-        #func(arg, arg3, arg3=34)
-        tile_kwargs['rank'] = i
-        tile_kwargs['n_cores'] = max(workers, 1)
-        jobs.submit(tile_processing_kwcoco.tile_process_main, cmdline=0, **tile_kwargs)
+        # =========
+        # 2 / 4 Tile Step
+        # =========
+        main_prog.set_postfix('Process Tiles')
+        logger.info('Starting COLD tile-processing...')
+        tile_kwargs = tile_processing_kwcoco.TileProcessingKwcocoConfig().to_dict()
+        tile_kwargs['stack_path'] = out_dpath / 'stacked' / metadata['region_id']
+        tile_kwargs['reccg_path'] = out_dpath / 'reccg' / metadata['region_id']
+        tile_kwargs['meta_fpath'] = meta_fpath
+        tile_kwargs['method'] = method
+        tile_kwargs['prob'] = config['prob']
+        tile_kwargs['conse'] = config['conse']
+        tile_kwargs['cm_interval'] = config['cm_interval']
+        if config['mode'] != 'process':
+            tile_kwargs['pman'] = pman
 
-    for job in jobs.as_completed(desc='Collect tile jobs', progkw={'verbose': 3}):
-        job.result()
+        jobs = ub.JobPool(mode=config['mode'], max_workers=workers)
+        with jobs:
+            for i in pman.progiter(range(workers + 1), desc='submit tile jobs'):
+                tile_kwargs['rank'] = i
+                tile_kwargs['n_cores'] = max(workers, 1)
+                jobs.submit(tile_processing_kwcoco.tile_process_main, cmdline=0, **tile_kwargs)
 
-    logger.info('Writting tmp file of COLD output...')
-    export_kwargs = export_cold_result_kwcoco.ExportColdKwcocoConfig().to_dict()
-    export_kwargs['stack_path'] = tile_kwargs['stack_path']
-    export_kwargs['reccg_path'] = tile_kwargs['reccg_path']
-    export_kwargs['meta_fpath'] = meta_fpath
-    export_kwargs['year_lowbound'] = config['year_lowbound']
-    export_kwargs['year_highbound'] = config['year_highbound']
-    export_kwargs['coefs'] = config['coefs']
-    export_kwargs['coefs_bands'] = config['coefs_bands']
-    export_kwargs['timestamp'] = config['timestamp']
+            tile_iter = pman.progiter(jobs.as_completed(), desc='Collect tile jobs', total=len(jobs))
+            for job in tile_iter:
+                job.result()
+        main_prog.step()
 
-    jobs = ub.JobPool(mode=config['mode'], max_workers=workers)
-    for i in range(workers + 1):
-        export_kwargs['rank'] = i
-        export_kwargs['n_cores'] = max(workers, 1)
-        jobs.submit(export_cold_result_kwcoco.export_cold_main, cmdline=0, **export_kwargs)
+        # ===========
+        # 3 / 4 Export Step
+        # ===========
+        main_prog.set_postfix('Export Temporary Results')
+        logger.info('Writting tmp file of COLD output...')
+        export_kwargs = export_cold_result_kwcoco.ExportColdKwcocoConfig().to_dict()
+        export_kwargs['stack_path'] = tile_kwargs['stack_path']
+        export_kwargs['reccg_path'] = tile_kwargs['reccg_path']
+        export_kwargs['meta_fpath'] = meta_fpath
+        export_kwargs['year_lowbound'] = config['year_lowbound']
+        export_kwargs['year_highbound'] = config['year_highbound']
+        export_kwargs['coefs'] = config['coefs']
+        export_kwargs['coefs_bands'] = config['coefs_bands']
+        export_kwargs['timestamp'] = config['timestamp']
+        if config['mode'] != 'process':
+            export_kwargs['pman'] = pman
 
-    for job in jobs.as_completed(desc='Collect tmp jobs', progkw={'verbose': 3}):
-        job.result()
+        jobs = ub.JobPool(mode=config['mode'], max_workers=workers)
+        with jobs:
+            for i in pman.progiter(range(workers + 1), desc='submit tmp jobs'):
+                export_kwargs['rank'] = i
+                export_kwargs['n_cores'] = max(workers, 1)
+                jobs.submit(export_cold_result_kwcoco.export_cold_main, cmdline=0, **export_kwargs)
 
-    logger.info('Writting geotiff of COLD output...')
-    assemble_kwargs = assemble_cold_result_kwcoco.AssembleColdKwcocoConfig().to_dict()
-    assemble_kwargs['stack_path'] = tile_kwargs['stack_path']
-    assemble_kwargs['reccg_path'] = tile_kwargs['reccg_path']
-    assemble_kwargs['coco_fpath'] = coco_fpath
-    assemble_kwargs['mod_coco_fpath'] = config['mod_coco_fpath']
-    assemble_kwargs['meta_fpath'] = meta_fpath
-    assemble_kwargs['year_lowbound'] = config['year_lowbound']
-    assemble_kwargs['year_highbound'] = config['year_highbound']
-    assemble_kwargs['coefs'] = config['coefs']
-    assemble_kwargs['coefs_bands'] = config['coefs_bands']
-    assemble_kwargs['timestamp'] = config['timestamp']
-    assemble_cold_result_kwcoco.assemble_main(
-        cmdline=0, proc_context=proc_context, **assemble_kwargs)
+            tmp_iter = pman.progiter(jobs.as_completed(), desc='Collect tmp jobs', total=len(jobs))
+            for job in tmp_iter:
+                job.result()
+        main_prog.step()
 
-    # remove stacked image
-    shutil.rmtree(tile_kwargs['stack_path'])
+        # =============
+        # 4 / 4 Assemble Step
+        # =============
+        main_prog.set_postfix('Assemble Final Results')
+        logger.info('Writting geotiff of COLD output...')
+        assemble_kwargs = assemble_cold_result_kwcoco.AssembleColdKwcocoConfig().to_dict()
+        assemble_kwargs['stack_path'] = tile_kwargs['stack_path']
+        assemble_kwargs['reccg_path'] = tile_kwargs['reccg_path']
+        assemble_kwargs['coco_fpath'] = coco_fpath
+        assemble_kwargs['mod_coco_fpath'] = config['mod_coco_fpath']
+        assemble_kwargs['meta_fpath'] = meta_fpath
+        assemble_kwargs['year_lowbound'] = config['year_lowbound']
+        assemble_kwargs['year_highbound'] = config['year_highbound']
+        assemble_kwargs['coefs'] = config['coefs']
+        assemble_kwargs['coefs_bands'] = config['coefs_bands']
+        assemble_kwargs['timestamp'] = config['timestamp']
+        if True:
+            assemble_kwargs['pman'] = pman
+        assemble_cold_result_kwcoco.assemble_main(
+            cmdline=0, proc_context=proc_context, **assemble_kwargs)
+        main_prog.step()
+
+        # remove stacked image
+        main_prog.set_postfix('Cleanup')
+        shutil.rmtree(tile_kwargs['stack_path'])
+        main_prog.step()
 
 if __name__ == '__main__':
     cold_predict_main()

@@ -1,3 +1,18 @@
+"""
+This is step 4/4 in predict.py
+
+SeeAlso:
+
+    predict.py
+
+    prepare_kwcoco.py
+
+    tile_processing_kwcoco.py
+
+    export_cold_result_kwcoco.py
+
+    assemble_cold_result_kwcoco.py *
+"""
 import os
 import numpy as np
 import pandas as pd
@@ -21,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 class AssembleColdKwcocoConfig(scfg.DataConfig):
     """
-    The docstring will be the description in the CLI help
+    TODO: write docs
     """
     stack_path = scfg.Value(None, help='folder directory of stacked data')
     reccg_path = scfg.Value(None, help='folder directory of cold processing result')
@@ -65,8 +80,9 @@ def assemble_main(cmdline=1, **kwargs):
     >>> cmdline=0
     >>> assemble_main(cmdline, **kwargs)
     """
-    # a hacky way to pass the process context from the caller when this is
-    # called as a subroutine
+    # a hacky way to pass the process context and progress manager from the
+    # caller when this is called as a subroutine
+    pman = kwargs.pop('pman', None)
     proc_context = kwargs.pop('proc_context', None)
 
     config_in = AssembleColdKwcocoConfig.cli(cmdline=cmdline, data=kwargs)
@@ -210,7 +226,10 @@ def assemble_main(cmdline=1, **kwargs):
     logger.info('Generating COLD output geotiff')
 
     if coefs is not None:
-        for day in range(len(ordinal_day_list)):
+        day_iter = range(len(ordinal_day_list))
+        if pman is not None:
+            day_iter = pman.progiter(day_iter, total=len(ordinal_day_list))
+        for day in day_iter:
             tmp_map_blocks = [np.load(
                 out_path / f'tmp_coefmap_block{x + 1}_{ordinal_day_list[day]}.npy')
                 for x in range(n_blocks)]
@@ -222,7 +241,8 @@ def assemble_main(cmdline=1, **kwargs):
                 for coef_index, coef in enumerate(coefs):
                     kwcoco_img_name = img_names[day]
                     band = BAND_INFO[band_name]
-                    outname = '%s_%s_%s_%s.tif' % (kwcoco_img_name[:-4], band, method, coef)
+                    name_parts = list(map(str, (kwcoco_img_name[:-4], band, method, coef)))
+                    outname = '_'.join(name_parts) + '.tif'
                     outfile = out_path / outname
 
                     outdriver1 = gdal.GetDriverByName("GTiff")
@@ -277,5 +297,7 @@ def assemble_main(cmdline=1, **kwargs):
         coco_dset.dataset['info'].append(context_info)
 
     # Write a modified kwcoco.json file
+    logger.info('Writing kwcoco file to: {mod_coco_fpath}')
     coco_dset.fpath = mod_coco_fpath
     coco_dset.dump()
+    logger.info('Finished writing kwcoco file to: {mod_coco_fpath}')

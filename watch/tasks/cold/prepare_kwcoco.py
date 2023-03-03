@@ -1,4 +1,18 @@
 """
+This is step 1 / 4 in predict.py
+
+SeeAlso:
+
+    predict.py
+
+    prepare_kwcoco.py *
+
+    tile_processing_kwcoco.py
+
+    export_cold_result_kwcoco.py
+
+    assemble_cold_result_kwcoco.py
+
 This is a proof-of-concept for converting kwcoco files into the
 expected data structures for pycold.
 
@@ -57,7 +71,13 @@ class PrepareKwcocoConfig(scfg.DataConfig):
         '''))
     out_dpath = scfg.Value(None, help='output directory for the output')
     adj_cloud = scfg.Value(False, help='How to treat QA band, default is False: ignoring adj. cloud class')
-    method = scfg.Value(None, help='stacking mode for original COLD or Hybrid, default is None, if HybridCOLD then stacked data include g, r, nir, swir16, swir22, ASI, tir, QA')
+    method = scfg.Value(None, help=ub.paragraph(
+        '''
+        stacking mode for original COLD or Hybrid, default is None, if
+        HybridCOLD then stacked data include g, r, nir, swir16, swir22, ASI,
+        tir, QA
+        '''))
+    workers = scfg.Value(0, help='number of parallel workers')
 
 
 # TODO:
@@ -119,13 +139,15 @@ def prepare_kwcoco_main(cmdline=1, **kwargs):
         >>> cmdline=0
         >>> prepare_kwcoco_main(cmdline, **kwargs)
     """
+    pman = kwargs.pop('pman', None)
     config = PrepareKwcocoConfig.cli(cmdline=cmdline, data=kwargs)
     coco_fpath = config['coco_fpath']
     dpath = ub.Path(config['out_dpath']).ensuredir()
     adj_cloud = config['adj_cloud']
     method = config['method']
     out_dir = dpath / 'stacked'
-    meta_fpath = stack_kwcoco(coco_fpath, out_dir, adj_cloud, method)
+    workers = config['workers']
+    meta_fpath = stack_kwcoco(coco_fpath, out_dir, adj_cloud, method, pman, workers)
     return meta_fpath
 
 
@@ -268,7 +290,7 @@ def artificial_surface_index(
     return ASI
 
 
-def stack_kwcoco(coco_fpath, out_dir, adj_cloud, method):
+def stack_kwcoco(coco_fpath, out_dir, adj_cloud, method, pman=None, workers=0):
     """
     Args:
         coco_fpath (str | PathLike | CocoDataset):
@@ -284,7 +306,9 @@ def stack_kwcoco(coco_fpath, out_dir, adj_cloud, method):
         >>> # TODO: readd this doctest
         >>> from pycold.imagetool.prepare_kwcoco import *  # NOQA
         >>> setup_logging()
-        >>> coco_fpath = grab_demo_kwcoco_dataset()
+        >>> coco_dset = watch.coerce_kwcoco('watch-msi')
+        >>> coco_fpath = coco_dset.fpath
+        >>> #coco_fpath = grab_demo_kwcoco_dataset()
         >>> dpath = ub.Path.appdir('pycold/tests/stack_kwcoco').ensuredir()
         >>> out_dir = dpath / 'stacked'
         >>> results = stack_kwcoco(coco_fpath, out_dir)
@@ -294,21 +318,35 @@ def stack_kwcoco(coco_fpath, out_dir, adj_cloud, method):
 
     # Load the kwcoco dataset
     dset = kwcoco.CocoDataset.coerce(coco_fpath)
-    videos = dset.videos()
 
-    for video_id in videos:
-        # Get the image ids of each image in this video seqeunce
-        for image_id in dset.images():
-            coco_image: kwcoco.CocoImage = dset.coco_image(image_id)
-            coco_image = coco_image.detach()
+    # Get all images ids sorted in temporal order per video
+    all_images = dset.images(list(ub.flatten(dset.videos().images)))
 
-            # For now, it supports only L8
-            if coco_image.img['sensor_coarse'] == 'L8':
-                # Transform the image data into the desired block structure.
-                result = process_one_coco_image(
+    # For now, it supports only L8
+    flags = [s in {'L8'} for s in all_images.lookup('sensor_coarse')]
+    all_images = all_images.compress(flags)
+
+    image_id_iter = iter(all_images)
+
+    # For now, it supports only L8
+    jobs = ub.JobPool(mode='process', max_workers=workers)
+    if pman is not None:
+        image_id_iter = pman.progiter(image_id_iter, desc='submit prepare jobs', transient=True)
+    for image_id in image_id_iter:
+        coco_image: kwcoco.CocoImage = dset.coco_image(image_id)
+        coco_image = coco_image.detach()
+        # Transform the image data into the desired block structure.
+        jobs.submit(process_one_coco_image,
                     coco_image, out_dir, adj_cloud, method)
 
-    return result
+    job_iter = jobs.as_completed()
+    if pman is not None:
+        job_iter = pman.progiter(job_iter, desc='collect prepare jobs')
+
+    for job in job_iter:
+        meta_fpath = job.result()
+
+    return meta_fpath
 
 
 def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
