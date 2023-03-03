@@ -361,7 +361,6 @@ def extract_features(cold_plot, band, ordinal_day_list, nan_val, timestamp, feat
     #     ...
     # # --- B  # NOQA
 
-
     return features
 
 

@@ -4,6 +4,8 @@ Main prediction script for cold
 
 SeeAlso:
 
+    ../../cli/prepare_teamfeats.py
+
     predict.py *
 
     prepare_kwcoco.py
@@ -66,7 +68,7 @@ CommandLine:
         --do_splits=0 \
         --skip_existing=1 \
         --cold_workers=8 \
-        --workers=1 \
+        --workers=2 \
         --backend=tmux --run=0
 """
 import scriptconfig as scfg
@@ -104,10 +106,10 @@ class ColdPredictConfig(scfg.DataConfig):
     coefs = scfg.Value(None, type=str, help="list of COLD coefficients for saving geotiff, e.g., a0,c1,a1,b1,a2,b2,a3,b3,cv,rmse")
     coefs_bands = scfg.Value(None, type=str, help='indicate the ba_nds for output coefs_bands, e.g., 0,1,2,3,4,5')
     timestamp = scfg.Value(True, help='True: exporting cold result by timestamp, False: exporting cold result by year, Default is False')
-    mode = scfg.Value('process', help='Can be process, serial, or thread')
     mod_coco_fpath = scfg.Value(None, help='file path for modified coco json')
     track_emissions = scfg.Value(True, help='if True use codecarbon for emission tracking')
     workers = scfg.Value(16, help='total number of workers')
+    workermode = scfg.Value('process', help='Can be process, serial, or thread')
 
 
 @profile
@@ -137,7 +139,7 @@ def cold_predict_main(cmdline=1, **kwargs):
         >>>   coefs = ['a0', 'cv'],
         >>>   coefs_bands = [0, 1, 2, 3, 4, 5],
         >>>   timestamp = True,
-        >>>   mode = 'process',
+        >>>   workermode = 'process',
         >>>   mod_coco_fpath = ub.Path('/home/jws18003/data/dvc-repos/smart_data_dvc/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/KR_R001/imgonly-KR_R001.kwcoco.modified.json'),
         >>> )
         >>> cmdline=0
@@ -204,10 +206,10 @@ def cold_predict_main(cmdline=1, **kwargs):
         tile_kwargs['prob'] = config['prob']
         tile_kwargs['conse'] = config['conse']
         tile_kwargs['cm_interval'] = config['cm_interval']
-        if config['mode'] != 'process':
+        if config['workermode'] != 'process':
             tile_kwargs['pman'] = pman
 
-        jobs = ub.JobPool(mode=config['mode'], max_workers=workers)
+        jobs = ub.JobPool(mode=config['workermode'], max_workers=workers)
         with jobs:
             for i in pman.progiter(range(workers + 1), desc='submit tile jobs'):
                 tile_kwargs['rank'] = i
@@ -233,10 +235,10 @@ def cold_predict_main(cmdline=1, **kwargs):
         export_kwargs['coefs'] = config['coefs']
         export_kwargs['coefs_bands'] = config['coefs_bands']
         export_kwargs['timestamp'] = config['timestamp']
-        if config['mode'] != 'process':
+        if config['workermode'] != 'process':
             export_kwargs['pman'] = pman
 
-        jobs = ub.JobPool(mode=config['mode'], max_workers=workers)
+        jobs = ub.JobPool(mode=config['workermode'], max_workers=workers)
         with jobs:
             for i in pman.progiter(range(workers + 1), desc='submit tmp jobs'):
                 export_kwargs['rank'] = i
