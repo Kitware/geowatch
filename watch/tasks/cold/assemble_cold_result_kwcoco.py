@@ -148,41 +148,43 @@ def assemble_main(cmdline=1, **kwargs):
 
     # Get original transform from projection to image space
     coco_dset = kwcoco.CocoDataset(coco_fpath)
-    video_ids = list(coco_dset.videos())
-    if len(video_ids) != 1:
-        raise AssertionError('currently expecting one video per coco file; todo: be robust to this')
-    video_id = video_ids[0]
+    L8_new_gdal_transform, proj = get_gdal_transform(coco_dset, 'L8')
+    S2_new_gdal_transform, proj = get_gdal_transform(coco_dset, 'S2')
+    # video_ids = list(coco_dset.videos())
+    # if len(video_ids) != 1:
+    #     raise AssertionError('currently expecting one video per coco file; todo: be robust to this')
+    # video_id = video_ids[0]
 
-    # Get all the images in the first video.
-    images = coco_dset.images(video_id=video_id)
-    sensors = images.lookup('sensor_coarse', None)
-    is_landsat = [s == 'L8' for s in sensors]
+    # # Get all the images in the first video.
+    # images = coco_dset.images(video_id=video_id)
+    # sensors = images.lookup('sensor_coarse', None)
+    # is_landsat = [s == 'L8' for s in sensors]
 
-    # Filter to only the landsat images
-    landsat_images = images.compress(is_landsat)
-    if len(landsat_images) == 0:
-        raise RuntimeError(f'Video {video_id} in {coco_dset} contains no landsat images')
+    # # Filter to only the landsat images
+    # landsat_images = images.compress(is_landsat)
+    # if len(landsat_images) == 0:
+    #     raise RuntimeError(f'Video {video_id} in {coco_dset} contains no landsat images')
 
-    # Take the first landsat image
-    coco_img = landsat_images.coco_images[0]
-    primary_asset = coco_img.primary_asset()
-    primary_fpath = ub.Path(coco_img.bundle_dpath) / primary_asset['file_name']
-    ref_image = gdal.Open(os.fspath(primary_fpath), gdal.GA_ReadOnly)
-    trans = ref_image.GetGeoTransform()
-    proj = ref_image.GetProjection()
+    # # Take the first landsat image
+    # coco_img = landsat_images.coco_images[0]
+    # primary_asset = coco_img.primary_asset()
+    # primary_fpath = ub.Path(coco_img.bundle_dpath) / primary_asset['file_name']
+    # ref_image = gdal.Open(os.fspath(primary_fpath), gdal.GA_ReadOnly)
+    # trans = ref_image.GetGeoTransform()
+    # proj = ref_image.GetProjection()
 
-    original = kwimage.Affine.from_gdal(trans)
-    # c, a, b, f, d, e = trans
-    # original = kwimage.Affine(np.array([
-    #     [a, b, c],
-    #     [d, e, f],
-    #     [0, 0, 1],
-    # ]))
+    # original = kwimage.Affine.from_gdal(trans)
+    # # c, a, b, f, d, e = trans
+    # # original = kwimage.Affine(np.array([
+    # #     [a, b, c],
+    # #     [d, e, f],
+    # #     [0, 0, 1],
+    # # ]))
 
-    warp_vid_from_img = kwimage.Affine.coerce(coco_img.img['warp_img_to_vid']).inv()
-    new_geotrans =  original @ warp_vid_from_img
-    a, b, c, d, e, f, g, h, i = np.array(new_geotrans).ravel().tolist()
-    new_gdal_transform = (c, a, b, f, d, e)
+    # warp_vid_from_img = kwimage.Affine.coerce(coco_img.img['warp_img_to_vid']).inv()
+    # new_geotrans =  original @ warp_vid_from_img
+    # a, b, c, d, e, f, g, h, i = np.array(new_geotrans).ravel().tolist()
+    # new_gdal_transform = (c, a, b, f, d, e)
 
     # Get ordinal day list
     block_folder = stack_path / 'block_x1_y1'
@@ -236,7 +238,7 @@ def assemble_main(cmdline=1, **kwargs):
 
             results = np.hstack(tmp_map_blocks)
             results = np.vstack(np.hsplit(results, n_block_x))
-            ninput = 0
+            # ninput = 0
             for band_idx, band_name in enumerate(coefs_bands):
                 for coef_index, coef in enumerate(coefs):
                     kwcoco_img_name = img_names[day]
@@ -244,16 +246,34 @@ def assemble_main(cmdline=1, **kwargs):
                     name_parts = list(map(str, (kwcoco_img_name[:-4], band, method, coef)))
                     outname = '_'.join(name_parts) + '.tif'
                     outfile = out_path / outname
-
-                    outdriver1 = gdal.GetDriverByName("GTiff")
-                    outdata = outdriver1.Create(os.fspath(outfile), vid_w, vid_h, 1, gdal.GDT_Float32)
-                    outdata.GetRasterBand(1).WriteArray(results[:vid_h, :vid_w, ninput])
-                    outdata.FlushCache()
-                    outdata.SetGeoTransform(new_gdal_transform)
-                    outdata.FlushCache()
-                    outdata.SetProjection(proj)
-                    outdata.FlushCache()
-                    ninput = ninput + 1
+                    # outdriver1 = gdal.GetDriverByName("GTiff")
+                    # outdata = outdriver1.Create(os.fspath(outfile), vid_w, vid_h, 1, gdal.GDT_Float32)
+                    # outdata.GetRasterBand(1).WriteArray(results[:vid_h, :vid_w, ninput])
+                    # outdata.FlushCache()
+                    # outdata.SetGeoTransform(new_gdal_transform)
+                    # outdata.FlushCache()
+                    # outdata.SetProjection(proj)
+                    # outdata.FlushCache()
+                    # ninput = ninput + 1
+                    if '_L8_' in outname:
+                        outdriver_L8 = gdal.GetDriverByName('GTiff')
+                        outdata_L8 = outdriver_L8.Create(os.fspath(outfile), vid_w, vid_h, 1, gdal.GDT_Float32)
+                        outdata_L8.GetRasterBand(1).WriteArray(results[:vid_h, :vid_w, coef_index])
+                        outdata_L8.FlushCache()
+                        outdata_L8.SetGeoTransform(L8_new_gdal_transform)
+                        outdata_L8.FlushCache()
+                        outdata_L8.SetProjection(proj)
+                        outdata_L8.FlushCache()
+                        
+                    if '_S2_' in outname:
+                        outdriver_S2 = gdal.GetDriverByName('GTiff')
+                        outdata_S2 = outdriver_S2.Create(os.fspath(outfile), vid_w, vid_h, 1, gdal.GDT_Float32)
+                        outdata_S2.GetRasterBand(1).WriteArray(results[:vid_h, :vid_w, coef_index])
+                        outdata_S2.FlushCache()
+                        outdata_S2.SetGeoTransform(S2_new_gdal_transform)
+                        outdata_S2.FlushCache()
+                        outdata_S2.SetProjection(proj)                        
+                        outdata_S2.FlushCache()
 
             # for x in range(n_blocks):
                 # TODO: would be nice to have a structure that controls these
@@ -297,7 +317,42 @@ def assemble_main(cmdline=1, **kwargs):
         coco_dset.dataset['info'].append(context_info)
 
     # Write a modified kwcoco.json file
-    logger.info('Writing kwcoco file to: {mod_coco_fpath}')
+    logger.info(f'Writing kwcoco file to: {mod_coco_fpath}')
     coco_dset.fpath = mod_coco_fpath
     coco_dset.dump()
-    logger.info('Finished writing kwcoco file to: {mod_coco_fpath}')
+    logger.info(f'Finished writing kwcoco file to: {mod_coco_fpath}')
+
+def get_gdal_transform(coco_dset, sensor_name):
+    video_ids = list(coco_dset.videos())
+    if len(video_ids) != 1:
+        raise AssertionError('currently expecting one video per coco file; todo: be robust to this')
+    video_id = video_ids[0]
+
+    # Get all the images in the video.
+    images = coco_dset.images(video_id=video_id)
+    sensors = images.lookup('sensor_coarse', None)
+    is_target_sensor = [s == sensor_name for s in sensors]
+
+    # Filter to only the images from target sensor
+    target_images = images.compress(is_target_sensor)
+    if len(target_images) == 0:
+        raise RuntimeError(f'Video {video_id} in {coco_dset} contains no {sensor_name} images')
+
+    # Take the first target image
+    target_coco_img = target_images.coco_images[0]
+    target_primary_asset = target_coco_img.primary_asset()
+    target_primary_fpath = os.path.join(ub.Path(target_coco_img.bundle_dpath), target_primary_asset['file_name'])
+    ref_image = gdal.Open(target_primary_fpath, gdal.GA_ReadOnly)
+    trans = ref_image.GetGeoTransform()
+    proj = ref_image.GetProjection()
+
+    # Calculate the new GDAL transform
+    original_affine = kwimage.Affine.from_gdal(trans)
+    warp_affine = kwimage.Affine.coerce(target_coco_img.img['warp_img_to_vid']).inv()
+    new_affine = original_affine @ warp_affine
+    new_geotrans = tuple(new_affine.to_gdal())
+    
+    return new_geotrans, proj
+
+if __name__ == '__main__':
+    assemble_main()
