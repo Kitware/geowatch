@@ -49,6 +49,11 @@ class CocoStitchingManager(object):
         quantize (bool):
             if True quantize heatmaps before writing them to disk
 
+        expected_minmax (Tuple[float, float]):
+            The expected minimum and maximum values allowed in the output
+            to be stitched -- i.e. (0, 1) for probabilities. If unspecified
+            this is infered per image.
+
         writer_queue (None | BlockingJobQueue):
             if specified, uses this shared writer queue, otherwise creates
             its own.
@@ -133,7 +138,8 @@ class CocoStitchingManager(object):
                  stiching_space='video', device='numpy', thresh=0.5,
                  write_probs=True, write_preds=False, num_bands='auto',
                  prob_compress='DEFLATE', polygon_categories=None,
-                 quantize=True, writer_queue=None):
+                 expected_min=None, expected_minmax=None, quantize=True,
+                 writer_queue=None):
         self.short_code = short_code
         self.result_dataset = result_dataset
         self.device = device
@@ -143,6 +149,7 @@ class CocoStitchingManager(object):
         self.prob_compress = prob_compress
         self.polygon_categories = polygon_categories
         self.quantize = quantize
+        self.expected_minmax = expected_minmax
 
         if writer_queue is None:
             # basic queue if nothing fancy is given
@@ -547,7 +554,7 @@ class CocoStitchingManager(object):
 
             if self.quantize:
                 # Quantize
-                quant_probs, quantization = quantize_float01(final_probs)
+                quant_probs, quantization = quantize_image(final_probs)
                 aux['quantization'] = quantization
 
                 kwimage.imwrite(
@@ -600,8 +607,132 @@ class CocoStitchingManager(object):
         return info
 
 
+def quantize_image(imdata, old_min=None, old_max=None, quantize_dtype=np.int16):
+    """
+    New version of quantize_float01
+
+    TODO:
+        - [ ] How does this live relative to dequantize in delayed image?
+        It seems they should be tied somehow.
+
+    Args:
+        imdata (ndarray): image data to quantize
+
+        old_min (float | None):
+            a stanard floor for minimum values to make quantization consistent
+            across images. If unspecified chooses the minimum value in the
+            data.
+
+        old_max (float | None):
+            a stanard ceiling for maximum values to make quantization
+            consistent across images. If unspecified chooses the maximum value
+            in the data.
+
+        quantize_dtype (dtype):
+            which type of integer to quantize as
+
+    Returns:
+        Tuple[ndarray, Dict] - new data with encoding information
+
+    Note:
+        Setting old_min / old_max indicates the possible extend of the input
+        data (and it will be clipped to it). It does not mean that the input
+        data has to have those min and max values, but it should be between
+        them.
+
+    Example:
+        >>> from watch.tasks.fusion.coco_stitcher import *  # NOQA
+        >>> from delayed_image.helpers import dequantize
+        >>> # Test error when input is not nicely between 0 and 1
+        >>> imdata = (np.random.randn(32, 32, 3) - 1.) * 2.5
+        >>> quant1, quantization1 = quantize_image(imdata)
+        >>> recon1 = dequantize(quant1, quantization1)
+        >>> error1 = np.abs((recon1 - imdata)).sum()
+        >>> print('error1 = {!r}'.format(error1))
+        >>> #
+        >>> for i in range(1, 20):
+        >>>     print('i = {!r}'.format(i))
+        >>>     quant2, quantization2 = quantize_image(imdata, old_min=-i, old_max=i)
+        >>>     recon2 = dequantize(quant2, quantization2)
+        >>>     error2 = np.abs((recon2 - imdata)).sum()
+        >>>     print('error2 = {!r}'.format(error2))
+
+    Example:
+        >>> # Test dequantize with uint8
+        >>> from watch.tasks.fusion.coco_stitcher import *  # NOQA
+        >>> from delayed_image.helpers import dequantize
+        >>> imdata = np.random.randn(32, 32, 3)
+        >>> quant1, quantization1 = quantize_image(imdata, quantize_dtype=np.uint8)
+        >>> recon1 = dequantize(quant1, quantization1)
+        >>> error1 = np.abs((recon1 - imdata)).sum()
+        >>> print('error1 = {!r}'.format(error1))
+
+    Example:
+        >>> # Test quantization with different signed / unsigned combos
+        >>> from watch.tasks.fusion.coco_stitcher import *  # NOQA
+        >>> print(quantize_image(None, 0, 1, np.int16))
+        >>> print(quantize_image(None, 0, 1, np.int8))
+        >>> print(quantize_image(None, 0, 1, np.uint8))
+        >>> print(quantize_image(None, 0, 1, np.uint16))
+    """
+    if imdata is None:
+        if old_min is None and old_max is None:
+            old_min = 0
+            old_max = 1
+        elif old_min is None:
+            old_min = old_max - 1
+        elif old_max is None:
+            old_max = old_min + 1
+    else:
+        invalid_mask = np.isnan(imdata)
+        if old_min is None or old_max is None:
+            valid_data = imdata[~invalid_mask].ravel()
+            if len(valid_data) > 0:
+                if old_min is None:
+                    old_min = valid_data.min()
+                if old_max is None:
+                    old_max = valid_data.max()
+
+    # old_min = 0
+    # old_max = 1
+    quantize_iinfo = np.iinfo(quantize_dtype)
+    quantize_max = quantize_iinfo.max
+    if quantize_iinfo.kind == 'u':
+        # Unsigned quantize
+        quantize_nan = 0
+        quantize_min = 1
+    elif quantize_iinfo.kind == 'i':
+        # Signed quantize
+        quantize_min = 0
+        quantize_nan = max(-9999, quantize_iinfo.min)
+
+    quantization = {
+        'orig_min': old_min,
+        'orig_max': old_max,
+        'quant_min': quantize_min,
+        'quant_max': quantize_max,
+        'nodata': quantize_nan,
+    }
+
+    old_extent = (old_max - old_min)
+    new_extent = (quantize_max - quantize_min)
+    quant_factor = new_extent / old_extent
+
+    if imdata is not None:
+        invalid_mask = np.isnan(imdata)
+        new_imdata = (imdata.clip(old_min, old_max) - old_min) * quant_factor + quantize_min
+        new_imdata = new_imdata.astype(quantize_dtype)
+        new_imdata[invalid_mask] = quantize_nan
+    else:
+        new_imdata = None
+
+    return new_imdata, quantization
+
+
 def quantize_float01(imdata, old_min=0, old_max=1, quantize_dtype=np.int16):
     """
+    DEPRECATE IN FAVOR OF quantize_image
+
     Note:
         Setting old_min / old_max indicates the possible extend of the input
         data (and it will be clipped to it). It does not mean that the input

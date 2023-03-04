@@ -153,6 +153,7 @@ def predict(cmdline=1, **kwargs):
         chan_code='|'.join(model_info.model_outputs),
         stiching_space='image',
         writer_queue=writer_queue,
+        expected_minmax=(0, 1),
     )
 
     num_hidden = config.with_hidden
