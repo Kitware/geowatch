@@ -58,6 +58,7 @@ RUN pip install awscli
 COPY . /src/watch
 
 RUN conda activate watch && \
-    pip install --no-deps -e /src/watch
+    pip install --no-deps -e /src/watch && \
+        conda install -c conda-forge tmux
 
 # docker build --build-arg BUILD_STRICT=1 .
