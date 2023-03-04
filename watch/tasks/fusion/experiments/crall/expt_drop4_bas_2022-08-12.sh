@@ -1,4 +1,12 @@
 #!/bin/bash
+__doc__='
+
+# Sync yardrat
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags=phase2_expt --hardware=auto)
+rsync -avprPR yardrat:data/dvc-repos/smart_expt_dvc/./training/yardrat/jon.crall/Drop6/runs/ "$DVC_EXPT_DPATH"
+
+'
+
 # Register wherever your data lives
 smartwatch_dvc add --name=smart_data --path="$HOME"/data/dvc-repos/smart_data_dvc --hardware=hdd --priority=100 --tags=phase2_data
 smartwatch_dvc add --name=smart_expt --path="$HOME"/data/dvc-repos/smart_expt_dvc --hardware=hdd --priority=100 --tags=phase2_expt
