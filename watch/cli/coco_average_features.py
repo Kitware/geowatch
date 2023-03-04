@@ -142,7 +142,7 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         >>> import watch
         >>> from kwcoco.demo.perterb import perterb_coco
         >>> dpath = ub.Path.appdir('watch/test/coco_average_features')
-        >>> base_dset = watch.demo.coerce_kwcoco('watch-msi')
+        >>> base_dset = watch.coerce_kwcoco('watch-msi')
         >>> # Construct two copies of the same data with slightly different heatmaps
         >>> dset1 = perterb_coco(base_dset.copy(), box_noise=0.5, cls_noise=0.5, n_fp=10, n_fn=10, rng=32)
         >>> dset2 = base_dset.copy()
@@ -213,7 +213,7 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         >>> import watch
         >>> from kwcoco.demo.perterb import perterb_coco
         >>> dpath = ub.Path.appdir('watch/test/coco_average_features')
-        >>> base_dset = watch.demo.coerce_kwcoco('watch-msi', geodata=True, dates=True)
+        >>> base_dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True)
         >>> # Construct two copies of the same data with slightly different heatmaps
         >>> dset1 = perterb_coco(base_dset.copy(), box_noise=0.5, cls_noise=0.5, n_fp=10, n_fn=10, rng=32)
         >>> dset2 = base_dset.copy()

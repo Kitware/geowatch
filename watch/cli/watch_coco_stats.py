@@ -71,7 +71,7 @@ class WatchCocoStats(scfg.Config):
         all_sensors = set()
         for fpath in ub.ProgIter(fpaths, verbose=3, desc='Load dataset stats'):
             print('\n--- Single Dataset Stats ---')
-            dset = watch.demo.coerce_kwcoco(fpath)
+            dset = watch.coerce_kwcoco(fpath)
             print('dset = {!r}'.format(dset))
             stat_info = coco_watch_stats(
                 dset, with_video_info=config['with_video_info'])

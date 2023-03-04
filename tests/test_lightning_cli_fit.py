@@ -67,9 +67,6 @@ def test_noop_model_training():
 
 def test_fit_cli_training():
     """
-    smartwatch stats watch-msi-dates-geodata-gsize128-videos5-frames10
-    smartwatch stats watch-msi-dates-geodata-gsize128-videos2-frames10
-
     python -m watch.tasks.fusion fit --model.help
     """
     import pytest

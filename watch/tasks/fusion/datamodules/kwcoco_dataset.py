@@ -516,7 +516,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         >>> import ndsampler
         >>> import kwcoco
         >>> import watch
-        >>> coco_dset = watch.demo.coerce_kwcoco('watch-multisensor-msi', geodata=True)
+        >>> coco_dset = watch.coerce_kwcoco('watch-multisensor-msi', geodata=True)
         >>> print({c.get('sensor_coarse') for c in coco_dset.images().coco_images})
         >>> print({c.channels.spec for c in coco_dset.images().coco_images})
         >>> sampler = ndsampler.CocoSampler(coco_dset)
@@ -546,7 +546,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         >>> import ndsampler
         >>> import kwcoco
         >>> import watch
-        >>> coco_dset = watch.demo.coerce_kwcoco('watch', geodata=True)
+        >>> coco_dset = watch.coerce_kwcoco('watch', geodata=True)
         >>> print({c.get('sensor_coarse') for c in coco_dset.images().coco_images})
         >>> print({c.channels.spec for c in coco_dset.images().coco_images})
         >>> sampler = ndsampler.CocoSampler(coco_dset)

@@ -319,7 +319,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                     print(f'Read {_key} kwcoco dataset')
                 # Use the demo coerce function to read the kwcoco file because
                 # it allows for special demo inputs useful in doctests.
-                _coco_output = watch.demo.coerce_kwcoco(_coco_input, sqlview=sqlview)
+                _coco_output = watch.coerce_kwcoco(_coco_input, sqlview=sqlview)
                 self.coco_datasets[_key] = _coco_output
             return _coco_output
 

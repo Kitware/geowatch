@@ -16,7 +16,7 @@ def kwcoco_resample_example():
 
     USE_TOYDATA = 0
     if USE_TOYDATA:
-        src_coco_dset = watch.demo.coerce_kwcoco()
+        src_coco_dset = watch.coerce_kwcoco()
     else:
         dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         kwcoco_fpath = dvc_dpath / 'Drop4-BAS/data_vali.kwcoco.json'

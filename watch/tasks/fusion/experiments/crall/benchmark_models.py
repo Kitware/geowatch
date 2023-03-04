@@ -44,7 +44,7 @@ def benchmark_models():
     import watch
     from watch.tasks.fusion import datamodules
     if 1:
-        coco_dset = watch.demo.coerce_kwcoco('watch-msi')
+        coco_dset = watch.coerce_kwcoco('watch-msi')
         channels = "B11,r|g|b,B1|B8|B11"
         datamodule = datamodules.KWCocoVideoDataModule(
             train_dataset=coco_dset,
