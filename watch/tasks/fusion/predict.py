@@ -159,6 +159,7 @@ def build_stitching_managers(config, method, result_dataset, writer_queue=None):
         write_preds=config['write_preds'],
         prob_compress=config['compress'],
         quantize=config['quantize'],
+        expected_minmax=(0, 1),
         writer_queue=writer_queue,
     )
 
