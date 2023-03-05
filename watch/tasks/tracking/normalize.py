@@ -656,6 +656,7 @@ def dedupe_dates(coco_dset):
     # not possible for some other removal methods, but it is for this one
     for vidid in coco_dset.index.vidid_to_gids.keys():
         images = coco_dset.images(vidid=vidid)
+        gids = np.asarray([x for x in images.gids])
         dates = [parse(d).date() for d in images.lookup('date_captured')]
         sensors = images.lookup('sensor_coarse')
         priorities = pd.Series(sensors).map(sensor_priority).values
@@ -666,7 +667,7 @@ def dedupe_dates(coco_dset):
                 keep_ix = i + np.argmin(priorities[ixs])
                 remove_ixs = list(set(ixs) - {keep_ix})
                 print(f'removing {len(remove_ixs)} dup imgs from {d} in {vidid=}')
-                gids_to_remove.extend(remove_ixs)
+                gids_to_remove.extend(gids[remove_ixs])
 
     # coco_dset.remove_annotations(aids_to_remove, verbose=1)
     coco_dset.remove_images(gids_to_remove, verbose=2)
