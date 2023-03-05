@@ -29,7 +29,7 @@ import fnmatch
 try:
     from xdev import profile
 except ImportError:
-    profile = ub.identity
+    from ubelt import identity as profile
 
 logger = logging.getLogger(__name__)
 
@@ -264,7 +264,7 @@ def assemble_main(cmdline=1, **kwargs):
                         outdata_L8.FlushCache()
                         outdata_L8.SetProjection(proj)
                         outdata_L8.FlushCache()
-                        
+
                     if '_S2_' in outname:
                         outdriver_S2 = gdal.GetDriverByName('GTiff')
                         outdata_S2 = outdriver_S2.Create(os.fspath(outfile), vid_w, vid_h, 1, gdal.GDT_Float32)
@@ -272,7 +272,7 @@ def assemble_main(cmdline=1, **kwargs):
                         outdata_S2.FlushCache()
                         outdata_S2.SetGeoTransform(S2_new_gdal_transform)
                         outdata_S2.FlushCache()
-                        outdata_S2.SetProjection(proj)                        
+                        outdata_S2.SetProjection(proj)
                         outdata_S2.FlushCache()
 
             # for x in range(n_blocks):
@@ -322,6 +322,8 @@ def assemble_main(cmdline=1, **kwargs):
     coco_dset.dump()
     logger.info(f'Finished writing kwcoco file to: {mod_coco_fpath}')
 
+
+@profile
 def get_gdal_transform(coco_dset, sensor_name):
     video_ids = list(coco_dset.videos())
     if len(video_ids) != 1:
@@ -351,7 +353,7 @@ def get_gdal_transform(coco_dset, sensor_name):
     warp_affine = kwimage.Affine.coerce(target_coco_img.img['warp_img_to_vid']).inv()
     new_affine = original_affine @ warp_affine
     new_geotrans = tuple(new_affine.to_gdal())
-    
+
     return new_geotrans, proj
 
 if __name__ == '__main__':

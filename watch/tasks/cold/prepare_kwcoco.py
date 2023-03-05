@@ -57,7 +57,7 @@ logger = logging.getLogger(__name__)
 try:
     from xdev import profile
 except ImportError:
-    profile = ub.identity
+    from ubelt import identity as profile
 
 
 class PrepareKwcocoConfig(scfg.DataConfig):
@@ -97,7 +97,7 @@ SENSOR_TO_INFO['S2'] = {
     'intensity_channels': 'blue|green|red|nir|swir16|swir22|lwir11',
     'quality_channels': 'quality',
     'quality_interpretation': 'FMASK'
-} 
+}
 
 # Register different quality bit standards.
 QA_INTERPRETATIONS = {}
@@ -360,6 +360,7 @@ def stack_kwcoco(coco_fpath, out_dir, sensors, adj_cloud, method, pman=None, wor
     return meta_fpath
 
 
+@profile
 def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
     """
     Args:

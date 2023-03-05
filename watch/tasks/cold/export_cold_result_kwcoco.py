@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 try:
     from xdev import profile
 except ImportError:
-    profile = ub.identity
+    from ubelt import identity as profile
 
 
 class ExportColdKwcocoConfig(scfg.DataConfig):
@@ -208,7 +208,7 @@ def export_cold_main(cmdline=1, **kwargs):
     i_iter = range(ranks_percore)
     if pman is not None:
         i_iter = pman.progiter(i_iter, total=ranks_percore,
-                               desc=f'Export COLD: Rank {rank}', transient=True)
+                               desc=f'Export COLD \\[rank {rank}]', transient=True)
 
     for i in i_iter:
         iblock = n_cores * i + rank
@@ -253,7 +253,7 @@ def export_cold_main(cmdline=1, **kwargs):
             rcb_iter = itertools.product(rcs, enumerate(coefs_bands))
             if pman is not None:
                 rcb_total = len(rcs) * len(coefs_bands)
-                rcb_iter = pman.progiter(rcb_iter, desc=f'Extract COLD Rank {rank}', total=rcb_total)
+                rcb_iter = pman.progiter(rcb_iter, desc=f'Extract COLD \\[rank {rank} part {i}]', total=rcb_total, transient=True)
 
             nan_val = -9999
             feature_outputs = coefs
@@ -283,6 +283,7 @@ class NoMatchingColdCurve(Exception):
     ...
 
 
+@profile
 def extract_features(cold_plot, band, ordinal_day_list, nan_val, timestamp, feature_outputs, feature_set):
 
     features = np.full((len(feature_outputs), len(ordinal_day_list)), nan_val, dtype=np.double)

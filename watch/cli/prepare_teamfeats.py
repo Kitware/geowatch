@@ -455,7 +455,7 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
                 --coefs=cv,a0,a1,b1,c1,rmse \
                 --coefs_bands=0,1,2,3,4,5 \
                 --timestamp=True \
-                --workermode=thread \
+                --workermode=process \
                 --workers="{config.cold_workers}"
             ''')
         combo_code_parts.append(codes[key])

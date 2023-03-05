@@ -1,5 +1,5 @@
 """
-This is step 2/4 in predict.py
+This is step 2/4 in predict.py and the step that runs pycold
 
 
 SeeAlso:
@@ -34,6 +34,11 @@ from pycold.ob_analyst import ObjectAnalystHPC
 import scriptconfig as scfg
 from pathlib import Path
 
+try:
+    from xdev import profile
+except ImportError:
+    from ubelt import identity as profile
+
 
 class TileProcessingKwcocoConfig(scfg.DataConfig):
     """
@@ -51,6 +56,7 @@ class TileProcessingKwcocoConfig(scfg.DataConfig):
     cm_interval = scfg.Value(60, help='CM output inverval, e.g., 60')
 
 
+@profile
 def tile_process_main(cmdline=1, **kwargs):
     """
     Args:
@@ -166,7 +172,7 @@ def tile_process_main(cmdline=1, **kwargs):
 
     i_iter = range(nblock_eachcore)
     if pman is not None:
-        i_iter = pman.progiter(i_iter, desc=f'Process Tile: Rank {rank}',
+        i_iter = pman.progiter(i_iter, desc=f'Process Tile \\[rank {rank}]',
                                total=nblock_eachcore, transient=True)
     for i in i_iter:
         block_id = n_cores * i + rank  # started from 1, i.e., rank, rank + n_cores, rank + 2 * n_cores
@@ -435,6 +441,7 @@ def tile_process_main(cmdline=1, **kwargs):
 #     file.write("The program lasts for {:.2f}mins\n".format((endpoint - startpoint) / datetime_cls.timedelta(minutes=1)))
 #     file.close()
 
+@profile
 def is_finished_cold_blockfinished(reccg_path, nblocks):
     """
     check if the COLD algorithm finishes all blocks
@@ -454,6 +461,7 @@ def is_finished_cold_blockfinished(reccg_path, nblocks):
     return True
 
 
+@profile
 def get_stack_date(block_x, block_y, stack_path, year_lowbound=0, year_highbound=0, nband=8):
     """
     :param block_x: block id at x axis
@@ -509,6 +517,7 @@ def get_stack_date(block_x, block_y, stack_path, year_lowbound=0, year_highbound
 #########################################################################
 
 
+@profile
 def reading_start_dates_nmaps(stack_path, year_lowbound, year_highbound, cm_interval):
     """
     Parameters
@@ -554,6 +563,7 @@ def reading_start_dates_nmaps(stack_path, year_lowbound, year_highbound, cm_inte
         return starting_date, n_cm_maps
 
 
+@profile
 def is_finished_assemble_cmmaps(cmmap_path, n_cm, starting_date, cm_interval):
     """
     Parameters
