@@ -383,6 +383,10 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
     if video_name is None:
         video_name = 'vid_{:06d}'.format(coco_image.video['id'])
 
+    # Preconstruct the file names used in the inner loops
+    fname_json = (image_name + '.json')
+    fname_npy = (image_name + '.npy')
+
     video_dpath = (out_dir / video_name).ensuredir()
 
     # Other relevant coco metadata
@@ -457,16 +461,10 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
     else:
         clear_ratio = 1
 
-    result = {
-        'status': None,
-        'fpaths': None,
-    }
-
     if clear_ratio <= clear_threshold:
         logger.warn('Not enough clear observations for {}/{}'.format(
             video_name, image_name))
-        result['status'] = 'failed'
-        return result
+        return
 
     im_data = delayed_im.finalize(interpolation='cubic', antialias=True)
 
@@ -567,8 +565,8 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
                     continue
 
             block_dname = 'block_x{}_y{}'.format(i + 1, j + 1)
-            block_dpath = (video_dpath / block_dname)
-            block_fpath = block_dpath / (image_name + '.npy')
+            block_dpath = video_dpath / block_dname
+            block_fpath = block_dpath / fname_npy
 
             metadata.update({
                 'x': i + 1,
@@ -578,7 +576,7 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
             })
             if not block_fpath.exists():
                 block_dpath.mkdir(exist_ok=True)
-                meta_fpath = block_dpath / (image_name + '.json')
+                meta_fpath = block_dpath / fname_json
                 meta_fpath.write_text(json.dumps(metadata))
                 np.save(block_fpath, block)
                 result_fpaths.append(block_fpath)
@@ -594,9 +592,9 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
             'total_bands': int(data.shape[-1]),
         })
 
-        full_fpath = video_dpath / (image_name + '.npy')
+        full_fpath = video_dpath / fname_npy
         if not block_fpath.exists():
-            meta_fpath = video_dpath / (image_name + '.json')
+            meta_fpath = video_dpath / fname_json
             meta_fpath.write_text(json.dumps(metadata))
             np.save(full_fpath, data)
             result_fpaths.append(full_fpath)
@@ -604,8 +602,9 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
             logger.info(
                 'Stacked full image {}/{}'.format(video_name, image_name))
 
-    result['status'] = 'passed'
-    result['fpaths'] = result_fpaths
+    # FIXME: It seems strange that we return one of the metadata paths for just
+    # one of the blocks instead of having a metadata file for all blocks.
+    meta_fpath = block_dpath / (image_name + '.json')
     return meta_fpath
 
 
