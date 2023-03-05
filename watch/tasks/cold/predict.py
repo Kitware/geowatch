@@ -72,7 +72,7 @@ CommandLine:
         --skip_existing=1 \
         --cold_workers=8 \
         --workers=4 \
-        --backend=tmux --run=0
+        --backend=tmux --run=1
 """
 import scriptconfig as scfg
 import ubelt as ub

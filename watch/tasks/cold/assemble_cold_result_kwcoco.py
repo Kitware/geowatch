@@ -319,6 +319,7 @@ def assemble_main(cmdline=1, **kwargs):
     # Write a modified kwcoco.json file
     logger.info(f'Writing kwcoco file to: {mod_coco_fpath}')
     coco_dset.fpath = mod_coco_fpath
+    coco_dset._ensure_json_serializable()
     coco_dset.dump()
     logger.info(f'Finished writing kwcoco file to: {mod_coco_fpath}')
 
