@@ -11,7 +11,6 @@ from typing import Any
 
 import yaml
 from jsonargparse import set_loader, set_dumper
-# , lazy_instance
 
 
 # Not very safe, but needed to parse tuples e.g. datamodule.dataset_stats
@@ -303,8 +302,9 @@ def main(config=None):
         >>>     'subcommand': 'fit',
         >>>     'fit.model': 'watch.tasks.fusion.methods.noop_model.NoopModel',
         >>>     'fit.trainer.default_root_dir': dpath,
-        >>>     'fit.data.train_dataset': 'special:vidshapes8-frames9-speed0.5-multispectral',
-        >>>     'fit.data.vali_dataset': 'special:vidshapes4-frames9-speed0.5-multispectral',
+        >>>     'fit.data.train_dataset': 'special:vidshapes8-frames9-gsize64-speed0.5-multispectral',
+        >>>     'fit.data.vali_dataset': 'special:vidshapes4-frames9-gsize64-speed0.5-multispectral',
+        >>>     'fit.data.chip_dims': 64,
         >>>     'fit.trainer.max_steps': 2,
         >>>     'fit.trainer.num_sanity_val_steps': 0,
         >>> }
@@ -323,8 +323,9 @@ def main(config=None):
         >>>     'fit.optimizer.class_path': 'torch.optim.SGD',
         >>>     'fit.optimizer.init_args.lr': 1e-3,
         >>>     'fit.trainer.default_root_dir': dpath,
-        >>>     'fit.data.train_dataset': 'special:vidshapes8-frames9-speed0.5-multispectral',
-        >>>     'fit.data.vali_dataset': 'special:vidshapes4-frames9-speed0.5-multispectral',
+        >>>     'fit.data.train_dataset': 'special:vidshapes8-gsize64-frames9-speed0.5-multispectral',
+        >>>     'fit.data.vali_dataset': 'special:vidshapes4-gsize64-frames9-speed0.5-multispectral',
+        >>>     'fit.data.chip_dims': 64,
         >>>     'fit.trainer.max_steps': 2,
         >>>     'fit.trainer.num_sanity_val_steps': 0,
         >>> }

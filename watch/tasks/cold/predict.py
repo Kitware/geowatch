@@ -108,7 +108,7 @@ def cold_predict_main(cmdline=1, **kwargs):
         TEST_COLD=1 xdoctest -m watch.tasks.cold.predict cold_predict_main
 
      Example:
-        >>> # xdoctest: +REQUIRES(gg:TEST_COLD)
+        >>> # xdoctest: +REQUIRES(env:TEST_COLD)
         >>> from watch.tasks.cold.predict import cold_predict_main
         >>> from watch.tasks.cold.predict import *
         >>> kwargs= dict(

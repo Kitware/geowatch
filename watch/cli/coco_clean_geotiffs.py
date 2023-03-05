@@ -1,11 +1,7 @@
 #!/usr/bin/env python
 import scriptconfig as scfg
 import ubelt as ub
-import kwimage
-import kwcoco
-import kwarray
 import numpy as np
-from watch.utils import util_kwimage
 
 
 class CleanGeotiffConfig(scfg.DataConfig):
@@ -142,7 +138,9 @@ def main(cmdline=1, **kwargs):
     Example:
         >>> # Generate a dataset that has bad nodata values
         >>> from watch.cli.coco_clean_geotiffs import *  # NOQA
+        >>> import kwimage
         >>> import watch
+        >>> import kwarray
         >>> # Create a copy of the test dataset to clean inplace
         >>> orig_dset = watch.coerce_kwcoco('watch-msi', geodata=True, bad_nodata=True)
         >>> orig_dpath = ub.Path(orig_dset.bundle_dpath)
@@ -182,22 +180,9 @@ def main(cmdline=1, **kwargs):
         >>> kwplot.autompl()
         >>> kwplot.imshow(canvas1, pnum=(1, 2, 1), title='before')
         >>> kwplot.imshow(canvas2, pnum=(1, 2, 2), title='after')
-
-    Ignore:
-
-    Ignore:
-        import watch
-        import sys, ubelt
-        sys.path.append(ubelt.expandpath('~/code/watch'))
-        from watch.cli.coco_clean_geotiffs import *  # NOQA
-        dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-        coco_fpath = dvc_dpath / 'Drop4-BAS' / 'data_vali.kwcoco.json'
-        coco_fpath = dvc_dpath / 'Drop4-BAS' / 'data_train.kwcoco.json'
-        # coco_fpath = dvc_dpath / 'Drop4-BAS' / 'combo_train_I2.kwcoco.json'
-        cmdline = 0
-        kwargs = {'src': coco_fpath, 'workers': 'avail'}
     """
     from watch.utils import util_parallel
+    import kwcoco
 
     config = CleanGeotiffConfig.cli(cmdline=cmdline, data=kwargs)
     print('config = {}'.format(ub.urepr(dict(config), nl=1)))
@@ -213,9 +198,6 @@ def main(cmdline=1, **kwargs):
     if have_transience:
         jobs.transient = True
 
-    # channels = kwcoco.ChannelSpec.coerce('red')
-    # channels = kwcoco.ChannelSpec.coerce('red|blue|nir')
-    # channels = kwcoco.ChannelSpec.coerce('nir')
     if config['channels'] is None or config['channels'] == '*':
         channels = None
     else:
@@ -318,9 +300,6 @@ def main(cmdline=1, **kwargs):
             needs_fix = list(needs_fix)
         else:
             needs_fix = iter(needs_fix)
-        #     total = len(needs_fix)
-        # else:
-        #     total = len(coco_imgs)
 
         if not config['dry']:
             correct_nodata_value = config['nodata_value']
@@ -412,6 +391,7 @@ def probe_image_issues(coco_img, channels=None, prefilter_channels=None, scale=N
         >>>     min_region_size=min_region_size)
         >>> print(f'image_summary={image_summary}')
     """
+    import kwcoco
     if channels is None:
         request_channels = coco_img.channels.fuse()
     else:
@@ -577,6 +557,7 @@ def _probe_correct_nodata_value(fpath, band_idxs, nodata_value=-9999):
 
 def probe_asset_imdata(imdata, band_idxs, min_region_size_=256,
                        possible_nodata_values=None):
+    import kwarray
     asset_summary = {}
     asset_summary['band_idxs'] = band_idxs
     band_summaries = []
@@ -597,6 +578,7 @@ def probe_asset_imdata(imdata, band_idxs, min_region_size_=256,
 
 def probe_band_imdata(band_imdata, min_region_size_=256,
                       possible_nodata_values=None):
+    from watch.utils import util_kwimage
 
     band_imdata = np.ascontiguousarray(band_imdata)
     is_samecolor = util_kwimage.find_samecolor_regions(
@@ -673,6 +655,7 @@ def fix_geotiff_ondisk(asset_summary, correct_nodata_value=-9999):
     Example:
         >>> from watch.cli.coco_clean_geotiffs import *  # NOQA
         >>> from watch.demo.metrics_demo.demo_rendering import write_demo_geotiff
+        >>> import kwimage
         >>> dpath = ub.Path.appdir('watch/tests/clean_geotiff').ensuredir()
         >>> fpath1 = dpath / 'test_geotiff.tif'
         >>> fpath2 = fpath1.augment(stemsuffix='_fixed')
@@ -711,6 +694,7 @@ def fix_geotiff_ondisk(asset_summary, correct_nodata_value=-9999):
     Example:
         >>> from watch.cli.coco_clean_geotiffs import *  # NOQA
         >>> from watch.demo.metrics_demo.demo_rendering import write_demo_geotiff
+        >>> import kwimage
         >>> dpath = ub.Path.appdir('watch/tests/clean_geotiff').ensuredir()
         >>> fpath1 = dpath / 'test_geotiff.tif'
         >>> fpath2 = fpath1.augment(stemsuffix='_fixed')
@@ -809,19 +793,6 @@ def fix_geotiff_ondisk(asset_summary, correct_nodata_value=-9999):
         num_overviews = bandprop['num_overviews']
     else:
         raise AssertionError('should have this info')
-        # src_band = src_dset.GetRasterBand(1)
-        # blocksize = src_band.GetBlockSize()
-        # num_overviews = src_band.GetOverviewCount()
-
-    # FIXME: the returned band size from the gdal calls doesnt seem correct.
-    # For multi-band images I get 256x1 blocksizes when gdalinfo reports
-    # 256,256. For now just always use a 256x256 blocksize and at least 3
-    # overviews.
-    # ANS: seems to be because I was reading from a copy
-    # HACK_FIX_BAND_METADATA = True
-    # if HACK_FIX_BAND_METADATA:
-    #     blocksize = (256, 256)
-    #     num_overviews = max(num_overviews, 3)
 
     ### Rebuild overviews
     overviewlist = (2 ** np.arange(1, num_overviews + 1)).tolist()
@@ -861,6 +832,8 @@ def fix_geotiff_ondisk(asset_summary, correct_nodata_value=-9999):
 
 
 def draw_asset_summary(coco_img, asset_summary):
+    from watch.utils import util_kwimage
+    import kwimage
     is_samecolor = asset_summary['is_samecolor']
     data = coco_img.delay(channels=asset_summary['channels'], space='asset',
                           nodata_method='float').finalize()

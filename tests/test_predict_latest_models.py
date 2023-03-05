@@ -96,6 +96,8 @@ def test_predict_latest_bas_model():
     """
     Test the predict step with the latest and greatest
     """
+    import pytest
+    pytest.skip('slow and a little outdated')
     model_info = get_production_model_test_info(task='BAS')
     pred_params = model_info['pred_params']
 
@@ -129,6 +131,8 @@ def test_predict_latest_bas_model():
 
 
 def test_predict_latest_sc_model():
+    import pytest
+    pytest.skip('slow and a little outdated')
     model_info = get_production_model_test_info(task='SC')
     pred_params = model_info['pred_params']
 

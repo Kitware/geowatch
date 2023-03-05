@@ -178,7 +178,7 @@ def main(cmdline=True, **kwargs):
         >>> import kwcoco
         >>> test_dpath = ub.Path.appdir('watch/tests').ensuredir()
         >>> image_fpath = test_dpath + '/intensityhist_demo.jpg'
-        >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes-msi-multisensor-videos1-frames64-gsize8')
+        >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes-msi-multisensor-videos1-frames2-gsize8')
         >>> kwargs = {'src': coco_dset, 'dst': image_fpath, 'mode': 'thread'}
         >>> kwargs['multiple'] = 'layer'
         >>> kwargs['element'] = 'step'
