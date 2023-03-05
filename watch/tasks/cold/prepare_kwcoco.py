@@ -38,7 +38,6 @@ TODO:
     - [ ] Incorporate watch/tasks/fusion/datamodules/qa_bands.py
 """
 import kwcoco
-import os
 import json
 import numpy as np
 import einops
@@ -550,11 +549,13 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
         blocks = einops.rearrange(
             data, '(nby bh) (nbx bw) c -> nbx nby bh bw c', bw=bw, bh=bh)
 
+        # FIXME: Disable skipping until QA bands are handled correctly
+        SKIP_BLOCKS_WITH_QA = False
+
         for i, j in it.product(range(n_block_y), range(n_block_x)):
             block = blocks[i, j]
+            bh, bw = block.shape[0:2]
 
-            # FIXME: Disable skipping until QA bands are handled correctly
-            SKIP_BLOCKS_WITH_QA = False
             if SKIP_BLOCKS_WITH_QA:
                 # check if no valid pixels in the chip, then eliminate
                 qa_unique = np.unique(block[..., -1])
@@ -566,17 +567,18 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
                     continue
 
             block_dname = 'block_x{}_y{}'.format(i + 1, j + 1)
-            block_dpath = (video_dpath / block_dname).ensuredir()
+            block_dpath = (video_dpath / block_dname)
             block_fpath = block_dpath / (image_name + '.npy')
 
             metadata.update({
                 'x': i + 1,
                 'y': j + 1,
-                'total_pixels': int(np.prod(block.shape[0:2])),
+                'total_pixels': bw * bh,
                 'total_bands': int(block.shape[-1]),
             })
-            meta_fpath = block_dpath / (image_name + '.json')
-            if not os.path.exists(block_fpath):
+            if not block_fpath.exists():
+                block_dpath.mkdir(exist_ok=True)
+                meta_fpath = block_dpath / (image_name + '.json')
                 meta_fpath.write_text(json.dumps(metadata))
                 np.save(block_fpath, block)
                 result_fpaths.append(block_fpath)
@@ -584,6 +586,8 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
         logger.info(
             'Stacked blocked image {}/{}'.format(video_name, image_name))
     else:
+        # FIXME: seems broken. Comment on why and raise a NotImplementedError
+        # if this is true.
 
         metadata.update({
             'total_pixels': int(np.prod(data.shape[0:2])),
@@ -591,8 +595,8 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
         })
 
         full_fpath = video_dpath / (image_name + '.npy')
-        meta_fpath = video_dpath / (image_name + '.json')
-        if not os.path.exists(block_fpath):
+        if not block_fpath.exists():
+            meta_fpath = video_dpath / (image_name + '.json')
             meta_fpath.write_text(json.dumps(metadata))
             np.save(full_fpath, data)
             result_fpaths.append(full_fpath)

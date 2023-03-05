@@ -285,6 +285,7 @@ class NoMatchingColdCurve(Exception):
 
 @profile
 def extract_features(cold_plot, band, ordinal_day_list, nan_val, timestamp, feature_outputs, feature_set):
+    # NOTE: this function is a bottleneck, speedups are needed here
 
     features = np.full((len(feature_outputs), len(ordinal_day_list)), nan_val, dtype=np.double)
     SLOPE_SCALE = 10000
@@ -308,35 +309,39 @@ def extract_features(cold_plot, band, ordinal_day_list, nan_val, timestamp, feat
     rmse_idx = fk_to_idx.get('rmse', None)
     cv_idx = fk_to_idx.get('cv', None)
 
+    # Precompute as much as possible before running the product
     idx_day_year_list = [
         (day_idx, ordinal_day, pd.Timestamp.fromordinal(ordinal_day).year)
         for day_idx, ordinal_day in enumerate(ordinal_day_list)
     ]
 
-    idxs_iter = itertools.product(idx_day_year_list, enumerate(cold_plot))
-    try:
-        for (day_idx, ordinal_day, ord_year), (idx, cold_curve) in idxs_iter:
+    mday_byear_curve_list = [
+        (max_days_list[idx], break_year_list[idx], cold_curve)
+        for idx, cold_curve in enumerate(cold_plot)]
 
-            if cold_curve['t_start'] <= ordinal_day < max_days_list[idx]:
+    try:
+        idxs_iter = itertools.product(idx_day_year_list, mday_byear_curve_list)
+        for (day_idx, ordinal_day, ord_year), (max_day, break_year, cold_curve) in idxs_iter:
+            if cold_curve['t_start'] <= ordinal_day < max_day:
                 if a0_idx is not None:
-                    features[a0_idx][day_idx] = (
-                        cold_curve['coefs'][band][0] +
-                        cold_curve['coefs'][band][1] *
+                    features[a0_idx, day_idx] = (
+                        cold_curve['coefs'][band, 0] +
+                        cold_curve['coefs'][band, 1] *
                         ordinal_day / SLOPE_SCALE)
                 if c1_idx is not None:
-                    features[c1_idx][day_idx] = cold_curve['coefs'][band][1] / SLOPE_SCALE
+                    features[c1_idx, day_idx] = cold_curve['coefs'][band, 1] / SLOPE_SCALE
                 if a1_idx is not None:
-                    features[a1_idx][day_idx] = cold_curve['coefs'][band][2]
+                    features[a1_idx, day_idx] = cold_curve['coefs'][band, 2]
                 if b1_idx is not None:
-                    features[b1_idx][day_idx] = cold_curve['coefs'][band][3]
+                    features[b1_idx, day_idx] = cold_curve['coefs'][band, 3]
                 if rmse_idx is not None:
-                    features[rmse_idx][day_idx] = cold_curve['rmse'][band]
+                    features[rmse_idx, day_idx] = cold_curve['rmse'][band]
 
                 if cv_idx is not None:
                     if cold_curve['t_break'] != 0 and cold_curve['change_prob'] == 100:
-                        break_year = break_year_list[idx]
+                        break_year = break_year
                         if (timestamp and ordinal_day == cold_curve['t_break']) or (not timestamp and break_year == ord_year):
-                            features[cv_idx][day_idx] = cold_curve['magnitude'][band]
+                            features[cv_idx, day_idx] = cold_curve['magnitude'][band]
                             # In this case, we didn't find a matching cold
                             # curve for the current ordinal day, stop processing.
                             raise NoMatchingColdCurve
