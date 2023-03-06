@@ -880,6 +880,7 @@ def specialized_index_bands2(delayed=None):
         >>>     kwplot.imshow(value, title=key, pnum=pnum_(), cmap=None if key == 'MaskValid' else 'viridis', data_colorbar=True)
 
     Ignore:
+        >>> # xdoctest: +SKIP("Something is wrong with grabbing L8 images")
         >>> from watch.utils.util_bands import *  # NOQA
         >>> import watch
         >>> dset = watch.demo.demo_smart_raw_kwcoco()
