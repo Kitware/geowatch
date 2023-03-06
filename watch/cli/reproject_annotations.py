@@ -149,6 +149,7 @@ def main(cmdline=False, **kwargs):
     from watch.utils import util_gis
     from watch.utils import util_parallel
     from watch.utils import util_yaml
+    from watch import heuristics
     config = ReprojectAnnotationsConfig(data=kwargs, cmdline=cmdline)
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
 
@@ -1051,7 +1052,7 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy,
                     applies = 'past'
 
             key_infos.append({
-                'time': t.timestamp(),
+                'time': dt.timestamp(),
                 'applies': applies,
             })
         obs_associated_gxs = keyframe_interpolate(image_times, key_infos)

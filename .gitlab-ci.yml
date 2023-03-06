@@ -153,6 +153,8 @@ stages:
         - conda env create -f conda_env_strict.yml --prefix ".cache/conda/envs/strict-watch-env"
         - conda activate ".cache/conda/envs/strict-watch-env"
         - pip install -e .
+        # Test with IARPA metrics
+        # - pip install git+ssh://git@gitlab.kitware.com/smart/metrics-and-test-framework.git -U
     script:
         # Run a few quick checks first
         # 

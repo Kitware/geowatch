@@ -86,6 +86,11 @@ class MetricsConfig(scfg.DataConfig):
         enable the cache until this is fixed.
         '''))
 
+    enable_sc_viz = scfg.Value(False, isflag=1, help=ub.paragraph(
+        '''
+        If true, enables our SC visualization
+        '''))
+
     load_workers = scfg.Value(0, help=ub.paragraph(
         '''
         The number of workers used to load site models.
@@ -395,17 +400,32 @@ def main(cmdline=True, **kwargs):
             '--sm_dir', os.fspath(pred_site_sub_dpath),
             '--image_dir', os.fspath(image_dpath),
             '--output_dir', os.fspath(out_dir),
-            '--cache_dir', os.fspath(cache_dpath),
             ## Restrict to make this faster
             #'--tau', '0.2',
             #'--rho', '0.5',
             '--activity', 'overall',
             #'--loglevel', 'error',
-            '--name', name,
-            '--serial',
-            # '--no-db',
-            # '--sequestered_id', 'seq',  # default None broken on autogen branch
         ]
+
+        # print(f'METRICS_VERSION={METRICS_VERSION}')
+        if METRICS_VERSION >= version.Version('1.0.0'):
+            run_eval_command += [
+                '--performer=kit',  # parameterize
+                '--eval_num=0',
+                '--eval_run_num=0',
+                '--serial',
+                # '--no-db',
+                '--sequestered_id', 'seq',  # default None broken on autogen branch
+            ]
+        else:
+            run_eval_command += [
+                '--cache_dir', os.fspath(cache_dpath),
+                '--name', name,
+                '--serial',
+                # '--no-db',
+                # '--sequestered_id', 'seq',  # default None broken on autogen branch
+            ]
+
         run_eval_command += viz_flags
         # run metrics framework
         cmd = shlex.join(run_eval_command)
@@ -444,6 +464,7 @@ def main(cmdline=True, **kwargs):
     if args.merge and out_dirs:
         from watch.tasks.metrics.merge_iarpa_metrics import merge_metrics_results
         from watch.tasks.metrics.merge_iarpa_metrics import iarpa_bas_color_legend
+        import kwimage
 
         if args.merge_fpath is None:
             merge_dpath = (main_out_dir / 'merged').ensuredir()
@@ -476,7 +497,6 @@ def main(cmdline=True, **kwargs):
         # Write a legend to go with the BAS viz
         legend_img = iarpa_bas_color_legend()
         legend_fpath = (combined_viz_dpath / 'bas_legend.png')
-        import kwimage
         kwimage.imwrite(legend_fpath, legend_img)
 
         bas_df.to_pickle(merge_dpath / 'bas_df.pkl')
@@ -491,9 +511,8 @@ def main(cmdline=True, **kwargs):
             viz_link = viz_fpath.augment(dpath=combined_viz_dpath)
             ub.symlink(viz_fpath, viz_link, verbose=1)
 
-        sc_viz = True
         # viz SC
-        if sc_viz:
+        if config.enable_sc_viz:
             from watch.tasks.metrics.viz_sc_results import viz_sc
             viz_sc(region_dpaths, true_site_dpath, true_region_dpath, combined_viz_dpath)
 
