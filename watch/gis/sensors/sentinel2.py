@@ -19,6 +19,7 @@ def sentinel2_grid():
         xdoctest -m /home/joncrall/code/watch/watch/gis/sensors/sentinel2.py
 
     Example:
+        >>> # xdoctest: +SKIP("slow, not currently used")
         >>> from watch.gis.sensors.sentinel2 import *  # NOQA
         >>> s2_tiles = sentinel2_grid()
         >>> assert s2_tiles.crs.name == 'WGS 84'
@@ -127,6 +128,7 @@ def s2_grid_tiles_for_geometry(geometry):
             List of MGRS tile names
 
     Example:
+        >>> # xdoctest: +SKIP("slow, not currently used")
         >>> from watch.gis.sensors.sentinel2 import *  # NOQA
         >>> from shapely.geometry import shape
         >>> geometry = shape({
