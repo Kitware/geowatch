@@ -4840,7 +4840,7 @@ VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_L_fixed_split2.kwcoco.zip
 CHANNELS="(L8,S2,PD):(blue|green|red|nir),(WV):(blue|green|red),(WV,WV1):pan"
 EXPERIMENT_NAME=Drop6_BAS_sits_raw_eGSD_split2_V23
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-TARGET_LR=5e-5
+TARGET_LR=1e-3
 MAX_STEPS=100000
 WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
 data:
@@ -4900,7 +4900,7 @@ optimizer:
   class_path: torch.optim.AdamW
   init_args:
     lr: $TARGET_LR
-    weight_decay: 5e-7
+    weight_decay: 1e-5
     betas:
       - 0.9
       - 0.99
@@ -4927,6 +4927,7 @@ trainer:
   num_sanity_val_steps: 0
   replace_sampler_ddp: true
   track_grad_norm: 2
+  limit_val_batches: 10
 initializer:
   init: $DVC_EXPT_DPATH/models/pretrained/sits-former/checkpoint.bert.tar
 "
