@@ -1,11 +1,9 @@
 import ubelt as ub
 import numpy as np
-from os.path import relpath
 import kwimage
 import kwarray
-from watch.tasks.tracking.utils import mask_to_polygons
-from watch.utils import util_parallel
-from watch.utils import util_kwimage
+import warnings
+from os.path import relpath
 
 
 class CocoStitchingManager(object):
@@ -140,6 +138,7 @@ class CocoStitchingManager(object):
                  prob_compress='DEFLATE', polygon_categories=None,
                  expected_min=None, expected_minmax=None, quantize=True,
                  writer_queue=None):
+        from watch.utils import util_parallel
         self.short_code = short_code
         self.result_dataset = result_dataset
         self.device = device
@@ -326,6 +325,7 @@ class CocoStitchingManager(object):
         """
         TODO: refactor
         """
+        from watch.utils import util_kwimage
         weights = util_kwimage.upweight_center_mask(data.shape[0:2])
 
         is_2d = len(data.shape) == 2
@@ -467,7 +467,9 @@ class CocoStitchingManager(object):
         scale_asset_from_stitchspace = self._image_scales.pop(gid)
 
         # Get the final stitched feature for this image
-        final_probs = stitcher.finalize()
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', 'invalid value encountered in true_divide')
+            final_probs = stitcher.finalize()
         final_probs = kwarray.atleast_nd(final_probs, 3)
         # is_nodata = np.isnan(final_probs)
         # final_probs = np.nan_to_num(final_probs)
@@ -573,6 +575,7 @@ class CocoStitchingManager(object):
                 )
 
         if self.write_preds:
+            from watch.tasks.tracking.utils import mask_to_polygons
             ub.schedule_deprecation(
                 'watch', 'write_preds', 'needs a different abstraction.',
                 deprecate='now')

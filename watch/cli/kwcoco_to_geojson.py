@@ -542,10 +542,12 @@ def convert_kwcoco_to_iarpa(coco_dset,
         >>> from watch.tasks.tracking.from_polygon import MonoTrack
         >>> from watch.demo import smart_kwcoco_demodata
         >>> import ubelt as ub
-        >>> coco_dset = smart_kwcoco_demodata.demo_smart_aligned_kwcoco()
+        >>> import watch
+        >>> coco_dset = watch.coerce_kwcoco('watch-msi', heatmap=True, geodata=True, dates=True)
+        >>> #coco_dset = smart_kwcoco_demodata.demo_smart_aligned_kwcoco()
         >>> coco_dset = run_tracking_pipeline(coco_dset, track_fn=MonoTrack, overwrite=False)
-        >>> region_ids = ['KR_R001', 'KR_R002']
-        >>> coco_dset.videos().set('name', region_ids)
+        >>> videos = coco_dset.videos()
+        >>> videos.set('name', ['DM_R{:03d}'.format(vidid) for vidid in videos])
         >>> sites = convert_kwcoco_to_iarpa(coco_dset)
         >>> print('sites = {}'.format(ub.repr2(sites, nl=7, sort=0)))
         >>> import jsonschema

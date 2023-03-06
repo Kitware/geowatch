@@ -25,6 +25,7 @@ def grab_sentinel2_product(index=0, overwrite=False):
         )
 
     Example:
+        >>> # xdoctest: +SKIP("too many https errors")
         >>> # xdoctest: +REQUIRES(--network)
         >>> from watch.demo.sentinel2_demodata import *  # NOQA
         >>> from watch.utils.util_rgdc import bands_sentinel2

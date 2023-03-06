@@ -27,4 +27,11 @@ def disable_lightning_hardware_warnings():
         message='.*You defined a `validation_step` but have no `val_dataloader`.*',
         module=r'.*lightning.*'
     )
+
+    warnings.filterwarnings(
+        action='ignore',
+        message='.*The `srun` command is available on your system but is not used.*',
+        module=r'.*lightning.*'
+    )
+    # warnings.warn("FILTERING WARNINGS")
     # warnings.warn("FILTERING WARNINGS")
