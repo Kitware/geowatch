@@ -694,9 +694,9 @@ def quantize_image(imdata, old_min=None, old_max=None, quantize_dtype=np.int16):
             valid_data = imdata[~invalid_mask].ravel()
             if len(valid_data) > 0:
                 if old_min is None:
-                    old_min = valid_data.min()
+                    old_min = int(np.floor(valid_data.min()))
                 if old_max is None:
-                    old_max = valid_data.max()
+                    old_max = int(np.ceil(valid_data.max()))
 
     # old_min = 0
     # old_max = 1
