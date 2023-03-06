@@ -555,9 +555,11 @@ class CocoStitchingManager(object):
             if self.quantize:
                 # Quantize
                 if self.expected_minmax is None:
-                    quant_probs, quantization = quantize_image(final_probs)
+                    old_min, old_max = None, None
                 else:
-                    quant_probs, quantization = quantize_image(final_probs, *self.expected_minmax)
+                    old_min, old_max = self.expected_minmax
+                quant_probs, quantization = quantize_image(
+                    final_probs, old_min=old_min, old_max=old_max)
                 aux['quantization'] = quantization
 
                 kwimage.imwrite(
