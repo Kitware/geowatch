@@ -30,7 +30,7 @@ openpyxl>=3.0.9
 # openskill>=1.0.2
 
 textual>=0.1.18
-cmd_queue >= 0.1.6
+cmd_queue >= 0.1.7
 
 # Pygments>=2.2.0
 
