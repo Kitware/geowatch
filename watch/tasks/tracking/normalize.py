@@ -4,7 +4,7 @@ import warnings
 from os.path import join
 import numpy as np
 import ubelt as ub
-
+from typing import Dict, List, Any
 from watch.utils.kwcoco_extensions import TrackidGenerator
 from watch.gis.geotiff import geotiff_crs_info
 from watch.tasks.tracking.utils import TrackFunction
@@ -622,26 +622,36 @@ def dedupe_dates(coco_dset):
 
     References:
         [1] https://smartgitlab.com/TE/metrics-and-test-framework/-/issues/63
+
+    Example:
+        >>> from watch.tasks.tracking.normalize import *  # NOQA
+        >>> import watch
+        >>> import kwarray
+        >>> coco_dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True)
+        >>> # Add 0-4 duplicate images to each video
+        >>> rng = kwarray.ensure_rng(613544)
+        >>> gids_to_duplicate = list(ub.flatten([rng.choice(gs, rng.randint(0, 4)) for gs in coco_dset.videos().images]))
+        >>> for gid in gids_to_duplicate:
+        >>>     img1 = ub.udict(coco_dset.index.imgs[gid]) - {'id'}
+        >>>     img1['name'] = img1['name'] + '_duplicated'
+        >>>     coco_dset.add_image(**img1)
+        >>> coco_dset_with_dups = coco_dset.copy()
+        >>> coco_dset_fixed = dedupe_dates(coco_dset.copy())
+        >>> assert coco_dset_fixed.n_images < coco_dset_with_dups.n_images
     '''
-    import pandas as pd
-    from dateutil.parser import parse
-
-    # aids_to_remove = []
-    gids_to_remove = []
-    sensor_priority = [
-        'WorldView',
-        'WorldView 1',
-        'Planet',
-        'Sentinel-2',
-        'Landsat 8',
-        'Landsat 7'
-    ]
-    sensor_priority = dict(zip(sensor_priority, range(len(sensor_priority))))
-
+    from watch.utils import util_time
+    sensor_priority = {
+        'WorldView': 6,
+        'WorldView 1': 5,
+        'Planet': 4,
+        'Sentinel-2': 3,
+        'Landsat 8': 2,
+        'Landsat 7': 1
+    }
     for trackid in coco_dset.index.trackid_to_aids.keys():
         annots = sorted_annots(coco_dset, trackid)
-        dates = [parse(d).date() for d in annots.images.lookup('date_captured')]
-        tixs = annots.lookup('track_index')
+        dates = [util_time.coerce_datetime(d).date() for d in annots.images.lookup('date_captured')]
+        tixs = annots.lookup('track_index', None)  # Can we remove track-index here?
         fixs = annots.images.lookup('frame_index')
 
         is_sorted = lambda arr: np.all(arr[:-1] <= arr[1:])  # noqa
@@ -654,19 +664,22 @@ def dedupe_dates(coco_dset):
 
     # remove full images instead of iterating over tracks for efficiency
     # not possible for some other removal methods, but it is for this one
+    gids_to_remove = []
     for vidid in coco_dset.index.vidid_to_gids.keys():
         images = coco_dset.images(vidid=vidid)
-        dates = [parse(d).date() for d in images.lookup('date_captured')]
-        sensors = images.lookup('sensor_coarse')
-        priorities = pd.Series(sensors).map(sensor_priority).values
-        vals, idx_start, count = np.unique(dates, return_index=True, return_counts=True)
-        for d, i, c in zip(vals, idx_start, count):
-            if c > 1:
-                ixs = np.arange(i, i + c)
-                keep_ix = i + np.argmin(priorities[ixs])
-                remove_ixs = list(set(ixs) - {keep_ix})
-                print(f'removing {len(remove_ixs)} dup imgs from {d} in {vidid=}')
-                gids_to_remove.extend(remove_ixs)
+        dates = [util_time.coerce_datetime(d).date() for d in images.lookup('date_captured')]
+        dup_dates_to_idxs: Dict[Any, List[int]] = ub.find_duplicates(dates)
+        # If we have any duplicates for a day, lookup their priorities and
+        # remove all but the one with the highest priority.
+        for date, dup_idxs in dup_dates_to_idxs.items():
+            dup_images = images.take(dup_idxs)
+            dup_sensors = dup_images.lookup('sensor_coarse')
+            dup_priorities = [
+                sensor_priority.get(s, -1) for s in dup_sensors]
+            keep_idx = ub.argmax(dup_priorities)
+            remove_gids = list(set(dup_images) - {dup_images[keep_idx]})
+            print(f'removing {len(remove_gids)} dup imgs from {date} in {vidid=}')
+            gids_to_remove.extend(remove_gids)
 
     # coco_dset.remove_annotations(aids_to_remove, verbose=1)
     coco_dset.remove_images(gids_to_remove, verbose=2)
