@@ -239,6 +239,11 @@ class Pattern(PatternBase, ub.NiceRepr):
             with util_path.ChDir(cwd):
                 yield from map(ub.Path, glob.glob(
                     self.pattern, recursive=recursive))
+        elif self.backend == 'strict':
+            with util_path.ChDir(cwd):
+                p  = ub.Path(self.pattern)
+                if p.exists():
+                    yield p
         else:
             raise NotImplementedError
 
