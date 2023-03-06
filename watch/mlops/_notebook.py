@@ -29,8 +29,27 @@ def _namek_check_pipeline_status():
             node_fpaths[out_node_key] = aggregate_loader.out_node_matching_fpaths(out_node)
         node_to_fpaths[node_name] = node_fpaths
 
-    node_to_fpaths =ub.udict(node_to_fpaths).map_values(ub.udict)
+    node_to_fpaths = ub.udict(node_to_fpaths).map_values(ub.udict)
     num_existing_outs = node_to_fpaths.map_values(lambda x: x.map_values(len))
+
+    self = node = dag.nodes['bas_pxl_eval']
+    node.find_template_outputs()
+
+    pxl_rows = find_template_outputs(dag.nodes['bas_pxl'])
+    pxl_eval_rows = find_template_outputs(dag.nodes['bas_pxl_eval'])
+    poly_rows = find_template_outputs(dag.nodes['bas_poly'])
+    poly_eval_rows = find_template_outputs(dag.nodes['bas_poly_eval'])
+
+    from watch.utils.util_pandas import DotDictDataFrame
+    pxl_df = DotDictDataFrame(pxl_rows)
+    pxl_eval_df = DotDictDataFrame(pxl_eval_rows)
+    poly_df = DotDictDataFrame(poly_rows)
+    poly_eval_df = DotDictDataFrame(poly_eval_rows)
+
+    df1 = pxl_df.subframe('request.bas_pxl')
+    df2 = pxl_eval_df.subframe('request.bas_pxl_eval')
+
+    node_fpaths = node_to_fpaths['bas_pxl']
 
 
 def _gather_all_results():

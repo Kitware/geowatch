@@ -578,13 +578,71 @@ class PipelineDAG:
         # print(f'queue={queue}')
         return queue
 
-    def find_outputs(self):
+    def find_template_outputs(self):
         """
         Look in the DAG root path for output paths that are complete or
         unfinished
         """
-        dag = self
+        import json
+        template = self.template_node_dpath
+        existing_dpaths = list(glob_templated_path(template))
+        # Figure out which ones are finished / unfinished
+
+        rows = []
+        for dpath in ub.ProgIter(existing_dpaths, desc='parsing templates'):
+
+            out_fpaths = {}
+            for out_key, out_fname in self.out_paths.items():
+                out_fpath = dpath / out_fname
+                out_fpaths[out_key] = out_fpath
+
+            is_finished = all(p.exists() for p in out_fpaths.values())
+            config_fpath = (dpath / 'job_config.json')
+            has_config = config_fpath.exists()
+            if has_config:
+                request_config = json.loads(config_fpath.read_text())
+                request_config = util_dotdict.DotDict(request_config).add_prefix('request')
+            else:
+                request_config = {}
+
+            rows.append({
+                'dpath': dpath,
+                'is_finished': is_finished,
+                'has_config': has_config,
+                **request_config,
+            })
+
+        num_configured = sum([r['has_config'] for r in rows])
+        num_finished = sum([r['has_config'] for r in rows])
+        num_started = len(rows)
+        print(f'num_configured={num_configured}')
+        print(f'num_finished={num_finished}')
+        print(f'num_started={num_started}')
+        return rows
+
         ...
+
+
+def glob_templated_path(template):
+    """
+    Given an unformated templated path, replace the format parts with "*" and
+    return a glob.
+
+    Args:
+        template (str | PathLike): a path with a {} template pattern
+
+    Example:
+        template = '/foo{}/bar'
+        glob_templated_path(template)
+    """
+    import parse
+    from watch.utils import util_pattern
+    parser = parse.Parser(str(template))
+    patterns = {n: '*' for n in parser.named_fields}
+    pat = os.fspath(template).format(**patterns)
+    mpat = util_pattern.Pattern.coerce(pat)
+    fpaths = list(mpat.paths())
+    return fpaths
 
 
 @ub.memoize
@@ -726,12 +784,7 @@ class OutputNode(IONode):
         Find all paths for this node.
         """
         out_template = self.template_value
-        parser = parse.Parser(str(out_template))
-        patterns = {n: '*' for n in parser.named_fields}
-        pat = out_template.format(**patterns)
-        mpat = util_pattern.Pattern.coerce(pat)
-        fpaths = list(mpat.paths())
-        return fpaths
+        return glob_templated_path(out_template)
 
 
 def _classvar_init(self, args, fallbacks):
