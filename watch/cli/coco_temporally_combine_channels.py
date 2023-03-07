@@ -14,12 +14,14 @@ from watch.utils import util_progress
 
 
 class TimeAverageConfig(scfg.DataConfig):
-    kwcoco_fpath = '/data4/datasets/dvc-repos/smart_data_dvc/Drop4-BAS/baseline_fusion_valid_M2.kwcoco.json'
+    kwcoco_fpath = '/data4/datasets/dvc-repos/smart_data_dvc/Drop4-BAS/data_vali_KR_R001.kwcoco.json'
     output_kwcoco_fpath = '/data4/datasets/dvc-repos/smart_data_dvc/Drop4-BAS/M2_time_merge_1month_mean_10GSD.kwcoco.json'
     channels = 'salient'
     temporal_window_duration = '1month'
     merge_method = 'mean'
     resolution = '10GSD'
+    filter_with_cloudmasks = True
+    s2_weight_factor = 1.0
     workers = 0
 
 
@@ -37,7 +39,7 @@ def main(cmdline=1, **kwargs):
         >>> kwargs = dict(
         >>>     kwcoco_fpath=data_dvc_dpath / 'Drop6/imgonly-KR_R001.kwcoco.json',
         >>>     output_kwcoco_fpath=data_dvc_dpath / 'Drop6/test-timeave-imgonly-KR_R001.kwcoco.json',
-        >>>     workers=16,
+        >>>     workers=0,
         >>>     temporal_window_duration='1 year',
         >>>     channels='red|green|blue',
         >>> )
@@ -47,6 +49,123 @@ def main(cmdline=1, **kwargs):
         DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
         smartwatch stats $DVC_DATA_DPATH/Drop6/test-timeave-imgonly-KR_R001.kwcoco.json
         smartwatch visualize $DVC_DATA_DPATH/Drop6/test-timeave-imgonly-KR_R001.kwcoco.json --smart=True
+
+    Example:
+        >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
+        >>> from watch.cli.coco_temporally_combine_channels import *  # NOQA
+        >>> import watch
+        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> cmdline = 0
+        >>> kwargs = dict(
+        >>>     kwcoco_fpath=data_dvc_dpath / 'Drop4-BAS/data_vali_KR_R001.kwcoco.json',
+        >>>     output_kwcoco_fpath=data_dvc_dpath / 'Drop4-BAS/test-timeave-KR_R001.kwcoco.json',
+        >>>     workers=11,
+        >>>     temporal_window_duration='1 year',
+        >>>     channels='red|green|blue',
+        >>>     filter_with_cloudmasks=False,
+        >>>     resolution='10GSD',
+        >>> )
+        >>> output_coco_dset = main(cmdline=cmdline, **kwargs)
+
+    Ignore:
+        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+        smartwatch stats $DVC_DATA_DPATH/Drop4-BAS/test-timeave-KR_R001.kwcoco.json
+        smartwatch visualize $DVC_DATA_DPATH/Drop4-BAS/test-timeave-KR_R001.kwcoco.json --smart=True
+        
+    Example:
+        >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
+        >>> from watch.cli.coco_temporally_combine_channels import *  # NOQA
+        >>> import watch
+        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> cmdline = 0
+        >>> kwargs = dict(
+        >>>     kwcoco_fpath=data_dvc_dpath / 'Drop4-BAS/data_vali_KR_R001.kwcoco.json',
+        >>>     output_kwcoco_fpath=data_dvc_dpath / 'Drop4-BAS/test-timeave-KR_R001-cloudmask.kwcoco.json',
+        >>>     workers=11,
+        >>>     temporal_window_duration='1 year',
+        >>>     channels='red|green|blue',
+        >>>     filter_with_cloudmasks=True,
+        >>>     resolution='10GSD',
+        >>> )
+        >>> output_coco_dset = main(cmdline=cmdline, **kwargs)
+        
+    Ignore:
+        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+        smartwatch stats $DVC_DATA_DPATH/Drop4-BAS/test-timeave-KR_R001-cloudmask.kwcoco.json
+        smartwatch visualize $DVC_DATA_DPATH/Drop4-BAS/test-timeave-KR_R001-cloudmask.kwcoco.json --smart=True
+        
+
+
+    Example:
+        >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
+        >>> from watch.cli.coco_temporally_combine_channels import *  # NOQA
+        >>> import watch
+        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> cmdline = 0
+        >>> kwargs = dict(
+        >>>     kwcoco_fpath=data_dvc_dpath / 'Drop4-BAS/data_vali_KR_R001.kwcoco.json',
+        >>>     output_kwcoco_fpath=data_dvc_dpath / 'Drop4-BAS/test-timeave-KR_R001-median.kwcoco.json',
+        >>>     workers=11,
+        >>>     merge_method='median',
+        >>>     temporal_window_duration='1 year',
+        >>>     channels='red|green|blue',
+        >>>     filter_with_cloudmasks=False,
+        >>>     resolution='10GSD',
+        >>> )
+        >>> output_coco_dset = main(cmdline=cmdline, **kwargs)
+
+    Ignore:
+        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+        smartwatch stats $DVC_DATA_DPATH/Drop4-BAS/test-timeave-KR_R001-median.kwcoco.json
+        smartwatch visualize $DVC_DATA_DPATH/Drop4-BAS/test-timeave-KR_R001-median.kwcoco.json --smart=True
+        
+    Example:
+        >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
+        >>> from watch.cli.coco_temporally_combine_channels import *  # NOQA
+        >>> import watch
+        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> cmdline = 0
+        >>> kwargs = dict(
+        >>>     kwcoco_fpath=data_dvc_dpath / 'Drop4-BAS/data_vali_KR_R001.kwcoco.json',
+        >>>     output_kwcoco_fpath=data_dvc_dpath / 'Drop4-BAS/test-timeave-KR_R001-cloudmask-median.kwcoco.json',
+        >>>     workers=11,
+        >>>     merge_method='median',
+        >>>     temporal_window_duration='1 year',
+        >>>     channels='red|green|blue',
+        >>>     filter_with_cloudmasks=True,
+        >>>     resolution='10GSD',
+        >>> )
+        >>> output_coco_dset = main(cmdline=cmdline, **kwargs)
+        
+    Ignore:
+        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+        smartwatch stats $DVC_DATA_DPATH/Drop4-BAS/test-timeave-KR_R001-cloudmask-median.kwcoco.json
+        smartwatch visualize $DVC_DATA_DPATH/Drop4-BAS/test-timeave-KR_R001-cloudmask-median.kwcoco.json --smart=True
+        
+    Example:
+        >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
+        >>> from watch.cli.coco_temporally_combine_channels import *  # NOQA
+        >>> import watch
+        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> cmdline = 0
+        >>> kwargs = dict(
+        >>>     kwcoco_fpath=data_dvc_dpath / 'Drop4-BAS/data_vali_KR_R001.kwcoco.json',
+        >>>     output_kwcoco_fpath=data_dvc_dpath / 'Drop4-BAS/test-timeave-KR_R001-cloudmask-s2w_3.kwcoco.json',
+        >>>     workers=11,
+        >>>     merge_method='mean',
+        >>>     temporal_window_duration='1 year',
+        >>>     channels='red|green|blue',
+        >>>     filter_with_cloudmasks=True,
+        >>>     resolution='10GSD',
+        >>>     s2_weight_factor=10.0,
+        >>> )
+        >>> output_coco_dset = main(cmdline=cmdline, **kwargs)
+        
+    Ignore:
+        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+        smartwatch stats $DVC_DATA_DPATH/Drop4-BAS/test-timeave-KR_R001-cloudmask-s2w_10.kwcoco.json
+        smartwatch visualize $DVC_DATA_DPATH/Drop4-BAS/test-timeave-KR_R001-cloudmask-s2w_10.kwcoco.json --smart=True
+        
     """
     config = TimeAverageConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
     print('config = ' + ub.urepr(dict(config), nl=1))
@@ -58,7 +177,7 @@ def main(cmdline=1, **kwargs):
     return output_coco_dset
 
     # config = TimeAverageConfig(
-    #     kwcoco_fpath='/data4/datasets/dvc-repos/smart_data_dvc/Drop4-BAS/baseline_fusion_valid_M2.kwcoco.json',
+    #     kwcoco_fpath='/data4/datasets/dvc-repos/smart_data_dvc/Drop4-BAS/data_vali_KR_R001.kwcoco.json',
     #     output_kwcoco_fpath='/data4/datasets/dvc-repos/smart_data_dvc/Drop4-BAS/M2_time_merge_1month_mean_5GSD.kwcoco.json',
     #     channel_name='salient',
     #     temporal_window_duration=365 / 12,  # 1 month on average.
@@ -77,7 +196,7 @@ def main(cmdline=1, **kwargs):
     #                                    merge_method, resolution)
 
     # Baseline: Year
-    # kwcoco_fpath = '/data4/datasets/dvc-repos/smart_data_dvc/Drop4-BAS/baseline_fusion_valid_M2.kwcoco.json'
+    # kwcoco_fpath = '/data4/datasets/dvc-repos/smart_data_dvc/Drop4-BAS/data_vali_KR_R001.kwcoco.json'
     # output_kwcoco_fpath = '/data4/datasets/dvc-repos/smart_data_dvc/Drop4-BAS/M2_time_merge_1year_mean_10GSD.kwcoco.json'
     # channel_name = 'salient'
     # temporal_window_duration = 365
@@ -96,7 +215,7 @@ def main(cmdline=1, **kwargs):
     #                                    merge_method, resolution)
 
     # # Baseline: 1/2 year
-    # kwcoco_fpath = '/data4/datasets/dvc-repos/smart_data_dvc/Drop4-BAS/baseline_fusion_valid_M2.kwcoco.json'
+    # kwcoco_fpath = '/data4/datasets/dvc-repos/smart_data_dvc/Drop4-BAS/data_vali_KR_R001.kwcoco.json'
     # output_kwcoco_fpath = '/data4/datasets/dvc-repos/smart_data_dvc/Drop4-BAS/M2_time_merge_6month_mean_10GSD.kwcoco.json'
     # channel_name = 'salient'
     # temporal_window_duration = 365 / 2
@@ -115,9 +234,15 @@ def main(cmdline=1, **kwargs):
     #                                    merge_method, resolution)
 
 
-def combine_kwcoco_channels_temporally(kwcoco_fpath, output_kwcoco_fpath,
-                                       channels, temporal_window_duration,
-                                       merge_method, resolution, workers):
+def combine_kwcoco_channels_temporally(kwcoco_fpath,
+                                       output_kwcoco_fpath,
+                                       channels,
+                                       temporal_window_duration,
+                                       merge_method,
+                                       resolution,
+                                       filter_with_cloudmasks,
+                                       workers,
+                                       s2_weight_factor=1.0):
     """Combine spatial data within a temporal window from a kwcoco dataset and save the result to a new kwcoco dataset.
 
     High level steps:
@@ -127,20 +252,26 @@ def combine_kwcoco_channels_temporally(kwcoco_fpath, output_kwcoco_fpath,
     4. Save the combined image result to a new kwcoco dataset.
 
     Args:
-        kwcoco_fpath (str): _description_
-        output_kwcoco_fpath (str): _description_
-        channels (str): _description_
-        temporal_window_duration (int): How many days the window should be.
-        merge_method (str): _description_
-        resolution (str): _description_
+        kwcoco_fpath (str): The path to the kwcoco file containing the image data to be combined.
+        output_kwcoco_fpath (str): The path where the combined image data will be saved to in a kwcoco file.
+        channels (str): The channels to get and combine the spatial data from. E.g. 'red|green|blue'. Note: Separate channels with '|'.
+        temporal_window_duration (int): The amount of time the temporal window should cover in days. E.g. 365 for a year.
+        merge_method (str): The combine method to use. Choices: 'mean', 'median'.
+        resolution (str): The resolution the imagery will be loaded during the combination operation and saved to the output kwcoco file.
+        filter_with_cloudmasks (bool): If active the cloudmasks will be used to filter out pixels with too much cloud coverage or missing data.
+        s2_weight_factor (float): A weighting factor to scale the impact of Sentinel-2 pixels during the combination operation. Note: Only effects the merge method 'mean'.
+        workers (int): The number of CPU cores to compute the combination operation with.
     """
     # Check inputs.
     space = 'video'
-    # space = 'image'
 
     ## Check input kwcoco file path exists.
     if os.path.exists(kwcoco_fpath) is False:
         raise FileNotFoundError(f'Input kwcoco file path does not exist: {kwcoco_fpath}')
+
+    ## Check the S2 weight factor and merge method combination.
+    if s2_weight_factor != 1.0 and merge_method != 'mean':
+        print('WARNING: S2 weight factor only effects the merge method "mean".')
 
     # 1. Load kwcoco dataset.
     coco_dset = kwcoco.CocoDataset.coerce(kwcoco_fpath)
@@ -162,8 +293,8 @@ def combine_kwcoco_channels_temporally(kwcoco_fpath, output_kwcoco_fpath,
 
     video_ids = [vid for vid in coco_dset.videos()]
 
-    pman = util_progress.ProgressManager(backend='rich')
-    # pman = util_progress.ProgressManager(backend='progiter')  # uncomment if you need to embed
+    # pman = util_progress.ProgressManager(backend='rich')
+    pman = util_progress.ProgressManager(backend='progiter')  # uncomment if you need to embed
 
     with pman:
 
@@ -186,8 +317,7 @@ def combine_kwcoco_channels_temporally(kwcoco_fpath, output_kwcoco_fpath,
             image_merge_channels = list(ub.compress(image_merge_channels, flags))
             images = images.compress(flags)
 
-            image_datetimes = list(map(util_time.coerce_datetime,
-                                       images.lookup('timestamp')))
+            image_datetimes = list(map(util_time.coerce_datetime, images.lookup('timestamp')))
 
             image_unixtimes = np.array([t.timestamp() for t in image_datetimes])
 
@@ -214,7 +344,7 @@ def combine_kwcoco_channels_temporally(kwcoco_fpath, output_kwcoco_fpath,
             unique_groupids, grouped_idxs = kwarray.group_indices(image_groupids)
             groupid_to_idxs = dict(zip(unique_groupids, grouped_idxs))
 
-            # Print the distribution of images per window.
+            # DEBUG: Print the distribution of images per window.
             if 0:
                 region_name = coco_dset.index.videos[vid]['name']
                 # Get the histogram for the number of images per window.
@@ -228,18 +358,17 @@ def combine_kwcoco_channels_temporally(kwcoco_fpath, output_kwcoco_fpath,
 
             # 3. For each temporal window, combine the spatial data from each channel.
             chunk_image_idxs = list(groupid_to_idxs.values())
-            prog = pman.progiter(chunk_image_idxs, transient=True,
-                                 desc='Submit combine within temporal windows jobs')
+            prog = pman.progiter(chunk_image_idxs, transient=True, desc='Submit combine within temporal windows jobs')
             for chunk_image_idxs in prog:
                 window_image = images.take(chunk_image_idxs)
                 window_coco_images = window_image.coco_images
                 # Detach for process parallelization
                 window_coco_images = [g.detach() for g in window_coco_images]
-                jobs.submit(merge_images, window_coco_images, merge_method,
-                            requested_chans, space, resolution,
-                            save_assest_dir)
+                jobs.submit(merge_images, window_coco_images, merge_method, requested_chans, space, resolution,
+                            save_assest_dir, filter_with_cloudmasks, s2_weight_factor)
 
-            for job in pman.progiter(jobs.as_completed(), total=len(jobs),
+            for job in pman.progiter(jobs.as_completed(),
+                                     total=len(jobs),
                                      desc='Collect combine within temporal windows jobs'):
                 new_img = job.result()
                 output_coco_dset.add_image(**new_img)
@@ -252,7 +381,8 @@ def combine_kwcoco_channels_temporally(kwcoco_fpath, output_kwcoco_fpath,
     return output_coco_dset
 
 
-def merge_images(window_coco_images, merge_method, requested_chans, space, resolution, save_assest_dir):
+def merge_images(window_coco_images, merge_method, requested_chans, space, resolution, save_assest_dir,
+                 filter_with_cloudmasks, s2_weight_factor):
     """
     Args:
         window_coco_images (List[kwcoco.CocoImage]): images with channels to merge
@@ -278,10 +408,11 @@ def merge_images(window_coco_images, merge_method, requested_chans, space, resol
     assert space == 'video'
 
     first_coco_img = window_coco_images[0]
-    scale = first_coco_img._scalefactor_for_resolution(resolution='10GSD', space='video')
-    canvas_dsize = kwimage.Box.from_dsize((first_coco_img.video['width'], first_coco_img.video['height'])).scale(scale).quantize().dsize
+    scale = first_coco_img._scalefactor_for_resolution(resolution=resolution, space='video')
+    canvas_dsize = kwimage.Box.from_dsize(
+        (first_coco_img.video['width'], first_coco_img.video['height'])).scale(scale).quantize().dsize
     canvas_dims = canvas_dsize[::-1]
-    canvas_shape = canvas_dims + (merge_chans.numel(),)
+    canvas_shape = canvas_dims + (merge_chans.numel(), )
 
     # Load and combine the images within this range.
     if merge_method == 'mean':
@@ -291,28 +422,52 @@ def merge_images(window_coco_images, merge_method, requested_chans, space, resol
         for coco_img in window_coco_images:
             delayed = coco_img.imdelay(merge_chans, space=space, resolution=resolution)
             image_data = delayed.finalize(nodata_method='float')
-            pxl_weight = (1 - np.isnan(image_data))
+
+            pxl_weight = (1 - np.isnan(image_data)).astype(np.float32)
+
+            if filter_with_cloudmasks:
+                # Find pixels that are valid in the cloud mask.
+                cloud_mask_data = coco_img.imdelay('cloudmask', space=space,
+                                                   resolution=resolution).finalize(nodata_method='float')
+                quality_mask = ((0.5 < cloud_mask_data) & (cloud_mask_data < 1.9)) | ((32.5 < cloud_mask_data) &
+                                                                                      (cloud_mask_data < 33.5))
+
+                # Update pixel weights based on quality pixel values.
+                pxl_weight *= quality_mask
+
+            if coco_img['sensor_coarse'] == 'S2':
+                pxl_weight *= s2_weight_factor
+
             image_data = np.nan_to_num(image_data)
             accum.add((slice(None), slice(None)), image_data, pxl_weight)
 
-            # if __debug__:
-            #     axes[count].imshow(np.nan_to_num(image_data), vmin=0, vmax=0.5)
-            #     count += 1
         import warnings
         with warnings.catch_warnings():
             warnings.filterwarnings('ignore', 'invalid')
             combined_image_data = accum.finalize()
-        # if __debug__:
-        #     axes[count].imshow(np.nan_to_num(combined_image_data), vmin=0, vmax=0.5)
-        #     axes[count].set_title('combined')
-        #     plt.savefig(f'debug_temp_combine_{space}_{region_name}_{w_index}_{resolution}_new.png')
-        #     w_index += 1
-
-        #     if w_index == 20:
-        #         return None
 
     elif merge_method == 'median':
-        raise NotImplementedError
+        # TODO: Make this less computationally expensive.
+        median_stack = []
+        for coco_img in window_coco_images:
+            delayed = coco_img.imdelay(merge_chans, space=space, resolution=resolution)
+            image_data = delayed.finalize(nodata_method='float')
+
+            if filter_with_cloudmasks:
+                # Find pixels that are valid in the cloud mask.
+                cloud_mask_data = coco_img.imdelay('cloudmask', space=space,
+                                                   resolution=resolution).finalize(nodata_method='float')
+                quality_mask = ((0.5 < cloud_mask_data) & (cloud_mask_data < 1.9)) | ((32.5 < cloud_mask_data) &
+                                                                                      (cloud_mask_data < 33.5))
+
+                # Update pixel weights based on quality pixel values.
+                M = np.ma.masked_array(data=image_data, mask=~np.repeat(quality_mask, repeats=3, axis=2))
+                image_data = M.filled(np.nan)
+
+            median_stack.append(image_data)
+
+        combined_image_data = np.nanmedian(median_stack, axis=0)
+
     else:
         raise NotImplementedError
 
@@ -377,17 +532,8 @@ def merge_images(window_coco_images, merge_method, requested_chans, space, resol
 
     # TODO: Possibly add `wld_crs_info` to write_kwargs.
     # Write the averaged image data
-    kwimage.imwrite(
-        average_fpath, writeable_imdata, backend="gdal",
-        nodata=nodata,
-        **write_kwargs)
+    kwimage.imwrite(average_fpath, writeable_imdata, backend="gdal", nodata=nodata, **write_kwargs)
 
-    # Update all channels with projection info.
-    # try:
-    #     transfer_geo_metadata(output_coco_dset, first_gid)
-    # except exceptions.GeoMetadataNotFound as ex:
-    #     print("warning ex = {!r}".format(ex))
-    #     pass
     return new_coco_img.img
 
 
