@@ -1,5 +1,30 @@
-"""
+r"""
 POC for a better ProgIter with rich support
+
+CommandLine:
+    DEMO_PROGRESS=1 xdoctest -m watch.utils.util_progress __doc__:0
+
+Example:
+    >>> # xdoctest: +REQUIRES(env:DEMO_PROGRESS)
+    >>> from watch.utils.util_progress import ProgressManager
+    >>> import time
+    >>> delay = 0.05
+    >>> # Can use plain progiter or rich
+    >>> # The usecase for plain progiter is when threads / live output
+    >>> # is not desirable and you just want plain stdout progress
+    >>> for backend in ['rich', 'progiter']:
+    >>>     print(f'\n\n -- starting {backend} --\n\n')
+    >>>     pman = ProgressManager(backend=backend)
+    >>>     with pman:
+    >>>         pbar1 = pman.progiter(range(5), desc='outer loop', verbose=3)
+    >>>         for i in pbar1:
+    >>>             pbar1.set_postfix(f'\[step {i}]', refresh=False)
+    >>>             for j1 in pman.progiter(range(100), desc=f'prepare inner loop {i}', transient=True):
+    >>>                 time.sleep(delay / 3)
+    >>>             for j2 in pman.progiter(range(100), desc=f'execute inner loop {i}'):
+    >>>                 time.sleep(delay)
+    >>>             for j3 in pman.progiter(range(100), desc=f'shutdown inner loop {i}', transient=True):
+    >>>                 time.sleep(delay / 3)
 """
 import ubelt as ub
 import os
@@ -53,6 +78,8 @@ class ProgIter2(ProgIter):
     def display_message(self):
         super().display_message()
 
+    set_postfix = ProgIter.set_postfix_str
+
 
 class RichProgIter:
     """
@@ -79,7 +106,7 @@ class RichProgIter:
                  eta_window=64, clearline=True, adjust=True, time_thresh=2.0,
                  show_times=True, show_wall=False, enabled=True, verbose=None,
                  stream=None, chunksize=None, rel_adjust_limit=4.0,
-                 transient=False, manager=None, **kwargs):
+                 transient=False, manager=None, spinner=False, **kwargs):
 
         unhandled = {
             'eta_window', 'clearline', 'adjust', 'time_thresh', 'show_times',
@@ -97,6 +124,7 @@ class RichProgIter:
         self.manager = manager
         self.iterable = iterable
         self.enabled = enabled
+        self.spinner = spinner
         if total is None:
             try:
                 total = len(iterable)
@@ -132,6 +160,8 @@ class RichProgIter:
 
     def update(self, n=1):
         self.manager.rich_manager.update(self.task_id, advance=n)
+
+    step = update
 
     def __iter__(self):
         if not self.enabled:
@@ -171,6 +201,8 @@ class RichProgIter:
             self.manager.rich_manager.update(
                 self.task_id, description=description, refresh=refresh)
 
+    set_postfix = set_postfix_str
+
 
 class BaseProgIterManager:
     def new(self, *args, **kw):
@@ -206,12 +238,12 @@ class _RichProgIterManager(BaseProgIterManager):
         self.enabled = kwargs.get('enabled', True)
         self.setup_rich()
 
-    def progiter(self, iterable=None, total=None, desc=None, transient=False, verbose='auto', **kw):
+    def progiter(self, iterable=None, total=None, desc=None, transient=False, spinner=False, verbose='auto', **kw):
         # Fixme remove circular ref
         self.rich_manager.pman = self
         prog = RichProgIter(
             manager=self, iterable=iterable, total=total, desc=desc,
-            transient=transient, **kw)
+            transient=transient, spinner=spinner, **kw)
         self.prog_iters.append(prog)
         return prog
 
@@ -222,6 +254,7 @@ class _RichProgIterManager(BaseProgIterManager):
         from rich.live import Live
         from rich.progress import BarColumn, TextColumn
         from rich.progress import Progress as richProgress
+        from rich.progress import SpinnerColumn
         from rich.progress import ProgressColumn, Text
         # from rich.style import Style
 
@@ -244,9 +277,10 @@ class _RichProgIterManager(BaseProgIterManager):
 
         self.rich_manager = richProgress(
             TextColumn("{task.description}"),
+            SpinnerColumn(),
             BarColumn(),
+            "[progress.percentage]{task.percentage:>3.0f}%",
             rich.progress.MofNCompleteColumn(),
-            # "[progress.percentage]{task.percentage:>3.0f}%",
             # rich.progress.TransferSpeedColumn(),
             ProgressRateColumn(),
             'eta',
@@ -255,7 +289,6 @@ class _RichProgIterManager(BaseProgIterManager):
             rich.progress.TimeElapsedColumn(),
         )
         self.info_panel = None
-        # Panel('')
         self.progress_group = Group(
             # self.info_panel,
             self.rich_manager,
@@ -296,7 +329,7 @@ class _ProgIterManager(BaseProgIterManager):
         }) | ub.udict(kwargs)
         self.prog_iters = []
 
-    def progiter(self, iterable=None, total=None, desc=None, transient=False, verbose='auto', **kw):
+    def progiter(self, iterable=None, total=None, desc=None, transient=False, spinner=False, verbose='auto', **kw):
         progkw = self.default_progkw.copy()
         progkw.update(kw)
         progkw['verbose'] = verbose
@@ -346,7 +379,7 @@ class ProgressManager(BaseProgIterManager):
         >>> with pman:
         >>>     oprog = pman.progiter(range(20), desc='outer loop', verbose=3)
         >>>     for i in oprog:
-        >>>         oprog.set_postfix_str(f'Doing step {i}', refresh=False)
+        >>>         oprog.set_postfix(f'Doing step {i}', refresh=False)
         >>>         for i in pman.progiter(range(100), desc=f'inner loop {i}'):
         >>>             pass
         >>> #
@@ -355,7 +388,7 @@ class ProgressManager(BaseProgIterManager):
         >>> with pman:
         >>>     oprog = pman.progiter(range(20), desc='outer loop', verbose=3)
         >>>     for i in oprog:
-        >>>         oprog.set_postfix_str(f'Doing step {i}', refresh=False)
+        >>>         oprog.set_postfix(f'Doing step {i}', refresh=False)
         >>>         for i in pman.progiter(range(100), desc=f'inner loop {i}'):
         >>>             pass
 
@@ -374,7 +407,7 @@ class ProgressManager(BaseProgIterManager):
         >>>             self.update_info(f'The info panel gives detailed updates\nWe are now at step {i}\nWe are just about done now')
         >>>         elif i > 5:
         >>>             self.update_info(f'The info panel gives detailed updates\nWe are now at step {i}')
-        >>>         oprog.set_postfix_str(f'Doing step {i}')
+        >>>         oprog.set_postfix(f'Doing step {i}')
         >>>         N = 1000
         >>>         for j in pman(iter(range(N_inner)), total=None if i % 2 == 0 else N_inner, desc=f'inner loop {i}', transient=i < 4):
         >>>             time.sleep(delay)
@@ -408,7 +441,7 @@ class ProgressManager(BaseProgIterManager):
         >>>                     outer_prog.update_info(f'The info panel gives detailed updates\nWe are now at step {i}\nWe are just about done now')
         >>>                 elif i > 5:
         >>>                     outer_prog.update_info(f'The info panel gives detailed updates\nWe are now at step {i}')
-        >>>             outer_prog.set_postfix_str(f'Doing step {i}')
+        >>>             outer_prog.set_postfix(f'Doing step {i}')
         >>>             inner_kwargs = dict(
         >>>                 total=None if i % 2 == 0 else N_inner,
         >>>                 transient=i < 4,
