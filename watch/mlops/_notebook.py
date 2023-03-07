@@ -46,11 +46,11 @@ def _namek_check_pipeline_status():
     poly_df = DotDictDataFrame(poly_rows)
     poly_eval_df = DotDictDataFrame(poly_eval_rows)
 
-    df1 = pxl_df.subframe('request.bas_pxl')
-    df2 = pxl_eval_df.subframe('request.bas_pxl')
+    df1 = pxl_df.subframe('request')
+    df2 = pxl_eval_df.subframe('request')
 
-    df1 = df1[~df1['package_fpath'].isnull()]
-    df2 = df2[~df2['package_fpath'].isnull()]
+    df1 = df1[~df1['bas_pxl.package_fpath'].isnull()]
+    df2 = df2[~df2['bas_pxl.package_fpath'].isnull()]
 
     from kwcoco._helpers import _delitems
 
@@ -90,24 +90,63 @@ def _namek_check_pipeline_status():
     assert len(missing1) == 0, 'should not be possible without error'
 
     missing2 = hashids1 - hashids2
-
     # These have not had a computation done for them.
     missing_df = df1.loc[missing2]
 
-    missing_df['package_fpath'].unique()
-    missing_df['test_dataset'].unique()
 
-    df1['test_dataset'].unique()
+    # WANTED: Algorithm that takes a list of grid points and determines if any
+    # of the rows can be expressed conciesly as a matrix.
+    """
+    given = [
+        {'x': 1, 'y': 1, 'z': 1},
+        {'x': 1, 'y': 2, 'z': 1},
+        {'x': 1, 'y': 3, 'z': 1},
+        {'x': 2, 'y': 1, 'z': 2},
+        {'x': 2, 'y': 2, 'z': 2},
+        {'x': 2, 'y': 3, 'z': 2},
+        {'x': 3, 'y': 1, 'z': 2},
+        {'x': 4, 'y': 3, 'z': 2},
+        {'x': 4, 'y': 4, 'z': 2},
+        {'x': 4, 'y': 3, 'z': 3},
+        {'x': 4, 'y': 4, 'z': 3},
+    ]
 
-    groups = df1.groupby(['package_fpath', 'test_dataset'])
+    should output:
+        - x: [1, 2]
+          y: [1, 2, 3]
+          z: [1, 2]
+        - x: [3]
+          y: [1]
+          z: [2]
+        - x: [4]
+          y: [3, 4]
+          z: [2, 3]
 
-    df1
+    It seems like a solution here is non-unique, or at least the greedy way of
+    finding the solution will result in different answers depending on which
+    variable you try to collapse first. Is this a well-studied algorithm? Seems
+    like a decomposition problem.
+    """
+
+    import sys, ubelt
+    from watch.utils.result_analysis import varied_value_counts
+
+    submatrices = []
+    for _, group in missing_df.groupby('bas_pxl.test_dataset'):
+        group_records = group.to_dict('records')
+        group_varied = varied_value_counts(group_records)
+        for row in group_records:
+            row = {k: v for k, v in row.items() if not isinstance(v, float) or not math.isnan(v)}
+            submatrices.append(row)
+
+    from watch.utils import util_yaml
+    print(util_yaml.yaml_dumps(submatrices))
+        ...
 
 
     # For two levels in the node figure out:
     # What paths on the parent are are in common.
     # What paths on the child have yet to be computed.
-
     node_fpaths = node_to_fpaths['bas_pxl']
 
 
