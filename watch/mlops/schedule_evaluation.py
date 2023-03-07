@@ -266,8 +266,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
     from watch.mlops import smart_pipeline
     from watch.utils import util_progress
     import pandas as pd
-    config = ScheduleEvaluationConfig.legacy(cmdline=cmdline, data=kwargs)
-    print('ScheduleEvaluationConfig config = {}'.format(ub.repr2(dict(config), nl=1, si=1)))
+    config = ScheduleEvaluationConfig.cli(cmdline=cmdline, data=kwargs)
+    print('ScheduleEvaluationConfig config = {}'.format(ub.repr2(dict(config), nl=1, sv=1)))
 
     if config['root_dpath'] in {None, 'auto'}:
         expt_dvc_dpath = watch.find_smart_dvc_dpath(tags='phase2_expt', hardware='auto')
@@ -308,27 +308,40 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
     # Expand paramater search grid
     if config['params'] is not None:
+        from watch.utils import util_yaml
+        param_arg = util_yaml.coerce_yaml(config['params'])
         all_param_grid = list(expand_param_grid(
-            config['params'],
+            param_arg,
             max_configs=config['max_configs'],
         ))
     else:
         all_param_grid = []
 
+    if len(all_param_grid) == 0:
+        print('WARNING: PARAM GRID IS EMPTY')
+
     # Configure a DAG for each row.
     pman = util_progress.ProgressManager()
+    configured_stats = []
     with pman:
         for row_config in pman.progiter(all_param_grid, desc='configure dags', verbose=3):
             dag.configure(
                 config=row_config,
                 root_dpath=root_dpath,
                 cache=config['cache'])
-            dag.submit_jobs(
+            summary = dag.submit_jobs(
                 queue=queue,
                 skip_existing=config['skip_existing'],
                 enable_links=config['enable_links'])
+            configured_stats.append(summary)
 
-    print('len(queue)={len(queue)}')
+    # if 0:
+    #     rows = []
+    #     for s in configured_stats:
+    #         rows.append(s['node_status'])
+    #     pd.DataFrame(rows)
+
+    print(f'len(queue)={len(queue)}')
 
     print_thresh = 30
     if config['print_commands'] == 'auto':

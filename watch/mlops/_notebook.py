@@ -32,13 +32,11 @@ def _namek_check_pipeline_status():
     node_to_fpaths = ub.udict(node_to_fpaths).map_values(ub.udict)
     num_existing_outs = node_to_fpaths.map_values(lambda x: x.map_values(len))
 
-    self = node = dag.nodes['bas_pxl_eval']
-    node.find_template_outputs()
-
-    pxl_rows = find_template_outputs(dag.nodes['bas_pxl'])
-    pxl_eval_rows = find_template_outputs(dag.nodes['bas_pxl_eval'])
-    poly_rows = find_template_outputs(dag.nodes['bas_poly'])
-    poly_eval_rows = find_template_outputs(dag.nodes['bas_poly_eval'])
+    stages_of_interest = ['bas_pxl', 'bas_pxl_eval', 'bas_poly', 'bas_poly_eval']
+    existing = {}
+    for stage in stages_of_interest:
+        rows = dag.nodes[stage].find_template_outputs(workers=8)
+        existing[stage] = rows
 
     from watch.utils.util_pandas import DotDictDataFrame
     pxl_df = DotDictDataFrame(pxl_rows)
@@ -137,11 +135,31 @@ def _namek_check_pipeline_status():
         group_varied = varied_value_counts(group_records)
         for row in group_records:
             row = {k: v for k, v in row.items() if not isinstance(v, float) or not math.isnan(v)}
+            row['bas_pxl.enabled'] = False
+            row['bas_pxl_eval.enabled'] = True
+            row['bas_poly.enabled'] = True
+            row['bas_poly_eval.enabled'] = True
             submatrices.append(row)
 
     from watch.utils import util_yaml
-    print(util_yaml.yaml_dumps(submatrices))
-        ...
+    submat_text = util_yaml.yaml_dumps({'submatrices': submatrices})
+    fpath = ub.Path('foo.yaml').absolute()
+    fpath.write_text(submat_text)
+
+    # Generate code to run the missing experiments
+    invocation = ub.codeblock(
+        fr'''
+        python -m watch.mlops.schedule_evaluation \
+            --params={fpath} \
+            --root_dpath="{root_dpath}" \
+            --devices="0,1" --queue_size=4 \
+            --backend=tmux --queue_name "_explicit_recompute" \
+            --pipeline=bas --skip_existing=0 \
+            --print_varied=1 \
+            --run=0
+        ''')
+    print(invocation)
+
 
 
     # For two levels in the node figure out:

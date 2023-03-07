@@ -451,12 +451,25 @@ class PipelineDAG:
             queue_kw = ub.udict(default_queue_kw) | queue
             queue = cmd_queue.Queue.create(**queue_kw)
 
-        for node_name in list(nx.topological_sort(self.proc_graph)):
+        node_order = list(nx.topological_sort(self.proc_graph))
+        for node_name in node_order:
             node = self.proc_graph.nodes[node_name]['node']
             node.will_exist = None
 
-        for node_name in list(nx.topological_sort(self.proc_graph)):
+        summary = {
+            'queue': queue,
+            'node_status': {}
+        }
+        node_status = summary['node_status']
+
+        for node_name in node_order:
             node = self.proc_graph.nodes[node_name]['node']
+
+            if not node.enabled:
+                node_status[node_name] = 'disabled'
+                node.will_exist = node.does_exist
+                continue
+
             pred_node_names = list(self.proc_graph.predecessors(node_name))
             pred_nodes = [
                 self.proc_graph.nodes[n]['node']
@@ -469,22 +482,33 @@ class PipelineDAG:
 
             node.will_exist = ((node.enabled and ancestors_will_exist) or
                                node.does_exist)
-            node.resolved_out_paths
-            if 0:
+            if 1:
                 print(f'node.resolved_out_paths={node.resolved_out_paths}')
                 print(f'Checking {node_name}, will_exist={node.will_exist}')
 
-            if node.will_exist and node.enabled:
-                pred_node_procids = [n.process_id for n in pred_nodes
-                                     if n.enabled]
+            skip_node = not (node.will_exist and node.enabled)
+
+            if skip_node:
+                node_status[node_name] = 'skipped'
+            else:
                 node_procid = node.process_id
                 node_job = None
+
+                # Another configuration may have submitted this job already
                 if node_procid not in queue.named_jobs:
+                    pred_node_procids = [n.process_id for n in pred_nodes
+                                         if n.enabled]
                     # Submit a primary queue process
                     node_command = node.resolved_command()
                     node_job = queue.submit(command=node_command,
                                             depends=pred_node_procids,
                                             name=node_procid)
+                    node_status[node_name] = 'new_submission'
+                else:
+                    # Some other config submitted this job, we can skip the
+                    # rest of the work for this node.
+                    node_status[node_name] = 'duplicate_submission'
+                    continue
 
                 # We might want to execute a few boilerplate instructions
                 # before running each node.
@@ -573,54 +597,9 @@ class PipelineDAG:
                         )
                         if node_job is not None:
                             node_job.depends.append(_job)
-                    pass
 
         # print(f'queue={queue}')
-        return queue
-
-    def find_template_outputs(self):
-        """
-        Look in the DAG root path for output paths that are complete or
-        unfinished
-        """
-        import json
-        template = self.template_node_dpath
-        existing_dpaths = list(glob_templated_path(template))
-        # Figure out which ones are finished / unfinished
-
-        rows = []
-        for dpath in ub.ProgIter(existing_dpaths, desc='parsing templates'):
-
-            out_fpaths = {}
-            for out_key, out_fname in self.out_paths.items():
-                out_fpath = dpath / out_fname
-                out_fpaths[out_key] = out_fpath
-
-            is_finished = all(p.exists() for p in out_fpaths.values())
-            config_fpath = (dpath / 'job_config.json')
-            has_config = config_fpath.exists()
-            if has_config:
-                request_config = json.loads(config_fpath.read_text())
-                request_config = util_dotdict.DotDict(request_config).add_prefix('request')
-            else:
-                request_config = {}
-
-            rows.append({
-                'dpath': dpath,
-                'is_finished': is_finished,
-                'has_config': has_config,
-                **request_config,
-            })
-
-        num_configured = sum([r['has_config'] for r in rows])
-        num_finished = sum([r['has_config'] for r in rows])
-        num_started = len(rows)
-        print(f'num_configured={num_configured}')
-        print(f'num_finished={num_finished}')
-        print(f'num_started={num_started}')
-        return rows
-
-        ...
+        return summary
 
 
 def glob_templated_path(template):
@@ -1433,6 +1412,62 @@ class ProcessNode(Node):
             return self.test_is_computed_command() + ' || ' + base_command
         else:
             return base_command
+
+    def find_template_outputs(self, workers=8):
+        """
+        Look in the DAG root path for output paths that are complete or
+        unfinished
+        """
+        template = self.template_node_dpath
+        existing_dpaths = list(glob_templated_path(template))
+        # Figure out which ones are finished / unfinished
+
+        json_jobs = ub.Executor(mode='thread', max_workers=workers)
+
+        rows = []
+        for dpath in ub.ProgIter(existing_dpaths, desc='parsing templates'):
+
+            out_fpaths = {}
+            for out_key, out_fname in self.out_paths.items():
+                out_fpath = dpath / out_fname
+                out_fpaths[out_key] = out_fpath
+
+            is_finished = all(p.exists() for p in out_fpaths.values())
+            config_fpath = (dpath / 'job_config.json')
+            has_config = config_fpath.exists()
+            if has_config:
+                job = json_jobs.submit(_load_json, config_fpath)
+            else:
+                job = None
+                request_config = {}
+
+            rows.append({
+                'dpath': dpath,
+                'is_finished': is_finished,
+                'has_config': has_config,
+                'job': job,
+            })
+
+        for row in ub.ProgIter(rows, desc='finalize templates'):
+            job = row.pop('job')
+            if job is not None:
+                request_config = job.result()
+                request_config = util_dotdict.DotDict(request_config).add_prefix('request')
+                row.update(request_config)
+
+        num_configured = sum([r['has_config'] for r in rows])
+        num_finished = sum([r['has_config'] for r in rows])
+        num_started = len(rows)
+        print(f'num_configured={num_configured}')
+        print(f'num_finished={num_finished}')
+        print(f'num_started={num_started}')
+        return rows
+
+
+def _load_json(fpath):
+    import json
+    with open(fpath, 'r') as file:
+        return json.load(file)
 
 
 def _add_prefix(prefix, dict_):

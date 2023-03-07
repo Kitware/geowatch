@@ -97,7 +97,7 @@ Ignore:
 
 
     # Drop 6
-    export CUDA_VISIBLE_DEVICES="0"
+    export CUDA_VISIBLE_DEVICES="0,1"
     DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
     BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6
     python -m watch.cli.prepare_teamfeats \
@@ -110,7 +110,7 @@ Ignore:
         --with_cold=0 \
         --do_splits=0 \
         --skip_existing=1 \
-        --gres=0, --workers=4 --backend=tmux --run=1
+        --gres=0,1 --workers=4 --backend=tmux --run=1
 
 
 """
@@ -275,8 +275,8 @@ def prep_feats(cmdline=True, **kwargs):
 
 
 def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundle_dpath, config):
-
     from watch.utils import util_parallel
+    from watch.utils import simple_dvc
     data_workers = util_parallel.coerce_num_workers(config['data_workers'])
 
     model_fpaths = {
@@ -339,6 +339,8 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
     combo_code_parts = []
     key = 'with_landcover'
     if config[key]:
+        simple_dvc.SimpleDVC().request(model_fpaths['dzyne_landcover'])
+
         # Landcover is fairly fast to run, do it first
         task = {}
         task['output_fpath'] = outputs['dzyne_landcover']
@@ -402,6 +404,8 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
 
     key = 'with_depth'
     if config[key]:
+        simple_dvc.SimpleDVC().request(model_fpaths['dzyne_depth'])
+
         # Landcover is fairly fast to run, do it first
         task = {}
         # Only need 1 worker to minimize lag between images, task is GPU bound
@@ -450,6 +454,8 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
     # Run materials while landcover is running
     key = 'with_materials'
     if config[key]:
+        simple_dvc.SimpleDVC().request(model_fpaths['rutgers_materials'])
+
         task = {}
         task['output_fpath'] = outputs['rutgers_materials']
         task['gpus'] = 1
@@ -481,6 +487,7 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
     key = 'with_invariants'
     if config[key]:
         task = {}
+        simple_dvc.SimpleDVC().request(model_fpaths['uky_pretext'])
 
         if config['invariant_segmentation']:
             # segmentation_parts = [
@@ -525,6 +532,7 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
 
     key = 'with_invariants2'
     if config[key]:
+        simple_dvc.SimpleDVC().request(model_fpaths['uky_pretext2'])
         task = {}
         if not model_fpaths['uky_pretext2'].exists():
             print('Warning: UKY pretext model does not exist')
