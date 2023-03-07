@@ -480,6 +480,7 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
         'geodata': geodata,
         'heatmap': heatmap,
         'bad_nodata': bad_nodata,
+        'version': 1,
     }
 
     bundle_name = 'watch_vidshapes_' + ub.hash_data(depends)[0:8]
@@ -541,6 +542,9 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
         hack_in_timedata(coco_dset)
 
     if geodata:
+        for ann in coco_dset.anns.values():
+            assert ann['segmentation'] is not None
+
         # Hack in geographic info
         hack_seed_geometadata_in_dset(coco_dset, force=True, rng=rng)
         from watch.utils import kwcoco_extensions
@@ -626,6 +630,7 @@ def coerce_kwcoco(data='watch-msi', **kwargs):
             'multisensor': True,
             'max_speed': 0.01,
         }
+        defaults.update(ub.udict(kwargs) & ub.udict(defaults))
         defaults.update(dict(
             num_videos=kwargs.get('num_videos', 4),
             num_frames=kwargs.get('num_frames', 10),

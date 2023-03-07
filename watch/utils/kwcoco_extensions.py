@@ -1874,23 +1874,27 @@ def warp_annot_segmentations_to_geos(coco_dset):
         warp_wld_from_img = warp_wld_from_aux @ warp_aux_from_img
         for aid in coco_dset.annots(gid=gid):
             ann = coco_dset.index.anns[aid]
-            sseg_img = kwimage.Segmentation.coerce(ann['segmentation'])
-            sseg_wld = sseg_img.warp(warp_wld_from_img)
-            sseg_wgs84 = sseg_wld.warp(warp_wgs84_from_wld)
-            if wgs84_axis_mapping == 'OAMS_AUTHORITY_COMPLIANT':
-                sseg_wgs84_lonlat = sseg_wgs84.swap_axes()
-            elif wgs84_axis_mapping == 'OAMS_TRADITIONAL_GIS_ORDER':
-                sseg_wgs84_lonlat = sseg_wgs84.copy()
+            try:
+                sseg_img = kwimage.Segmentation.coerce(ann['segmentation'])
+            except TypeError:
+                assert len(ann['segmentation']) == 0, 'only except on bad segmentation'
             else:
-                raise NotImplementedError(wgs84_axis_mapping)
-            ann['segmentation_geos'] = sseg_wgs84_lonlat.to_geojson()
-            geos_crs_info = {
-                'axis_mapping': 'OAMS_TRADITIONAL_GIS_ORDER',
-                'auth': ('EPSG', '4326')
-            }
-            ann['segmentation_geos']['properties'] = {
-                'crs_info': geos_crs_info
-            }
+                sseg_wld = sseg_img.warp(warp_wld_from_img)
+                sseg_wgs84 = sseg_wld.warp(warp_wgs84_from_wld)
+                if wgs84_axis_mapping == 'OAMS_AUTHORITY_COMPLIANT':
+                    sseg_wgs84_lonlat = sseg_wgs84.swap_axes()
+                elif wgs84_axis_mapping == 'OAMS_TRADITIONAL_GIS_ORDER':
+                    sseg_wgs84_lonlat = sseg_wgs84.copy()
+                else:
+                    raise NotImplementedError(wgs84_axis_mapping)
+                ann['segmentation_geos'] = sseg_wgs84_lonlat.to_geojson()
+                geos_crs_info = {
+                    'axis_mapping': 'OAMS_TRADITIONAL_GIS_ORDER',
+                    'auth': ('EPSG', '4326')
+                }
+                ann['segmentation_geos']['properties'] = {
+                    'crs_info': geos_crs_info
+                }
 
 
 def warp_annot_segmentations_from_geos(coco_dset):
