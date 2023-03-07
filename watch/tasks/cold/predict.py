@@ -31,8 +31,16 @@ CommandLine:
         --dst "$DATA_DVC_DPATH/Drop6-SMALL/imgonly-KR_R001.kwcoco.json" \
         --select_images '(.sensor_coarse == "L8")'
 
+    codeblock()
+    {
+        __doc__='
+        helper for python -c
+        '
+        echo "$1" | python -c "import sys; from textwrap import dedent; print(dedent(sys.stdin.read()).strip('\n'))"
+    }
+
     # Pull out a small selection of images just so we can test.
-    python -c "$(xdev codeblock "
+    python -c "$(codeblock "
     import ubelt as ub
     import kwcoco
     dset = kwcoco.CocoDataset('$DATA_DVC_DPATH/Drop6-SMALL/imgonly-KR_R001.kwcoco.json')
