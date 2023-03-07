@@ -18,6 +18,58 @@ SeeAlso:
 
 CommandLine:
 
+    ##############
+    ### SMALL TEST
+    ##############
+
+    DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="auto")
+    EXPT_DVC_DPATH=$(smartwatch_dvc --tags=phase2_expt --hardware="auto")
+
+    mkdir -p $DATA_DVC_DPATH/Drop6-SMALL
+    kwcoco subset \
+        --src "$DATA_DVC_DPATH/Drop6/imgonly-KR_R001.kwcoco.json" \
+        --dst "$DATA_DVC_DPATH/Drop6-SMALL/imgonly-KR_R001.kwcoco.json" \
+        --select_images '(.sensor_coarse == "L8")'
+
+    # Pull out a small selection of images just so we can test.
+    python -c "$(xdev codeblock "
+    import ubelt as ub
+    import kwcoco
+    dset = kwcoco.CocoDataset('$DATA_DVC_DPATH/Drop6-SMALL/imgonly-KR_R001.kwcoco.json')
+    from watch.utils import util_time
+    images = dset.images()
+    dates = list(map(util_time.coerce_datetime, images.lookup('date_captured')))
+    month_to_gids = ub.group_items(images, [(d.year, d.month) for d in dates])
+    chosen = [gids[0] for (year, month), gids in month_to_gids.items() if month % 2 == 0 and year < 2018]
+    sub = dset.subset(chosen)
+    sub.fpath = dset.fpath
+    sub.dump()
+    ")"
+
+    DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="auto")
+    EXPT_DVC_DPATH=$(smartwatch_dvc --tags=phase2_expt --hardware="auto")
+    python -m watch.tasks.cold.predict \
+        --coco_fpath="$DATA_DVC_DPATH/Drop6-SMALL/imgonly-KR_R001.kwcoco.json" \
+        --out_dpath="$DATA_DVC_DPATH/Drop6-SMALL/_pycold" \
+        --sensors='L8, S2' \
+        --mod_coco_fpath="$DATA_DVC_DPATH/Drop6-SMALL/_pycold/imgonly-KR_R001-cold.kwcoco.json" \
+        --adj_cloud=False \
+        --method='COLD' \
+        --prob=0.99 \
+        --conse=6 \
+        --cm_interval=60 \
+        --year_lowbound=None \
+        --year_highbound=None \
+        --coefs=cv,a0,a1,b1,c1,rmse \
+        --coefs_bands=0,1,2,3,4,5 \
+        --timestamp=True \
+        --mode='thread' \
+        --workers=0
+
+    ####################
+    ### FULL REGION TEST
+    ####################
+
     DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="auto")
     EXPT_DVC_DPATH=$(smartwatch_dvc --tags=phase2_expt --hardware="auto")
     python -m watch.tasks.cold.predict \
@@ -54,9 +106,12 @@ CommandLine:
         --smart=True
 
 
-    ### Multiple Regions:
-
+    ########################
+    ### MULTIPLE REGION TEST
+    ########################
     DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+
+    echo "$DVC_DATA_DPATH"
     BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6
     python -m watch.cli.prepare_teamfeats \
         --base_fpath \
@@ -219,7 +274,7 @@ def cold_predict_main(cmdline=1, **kwargs):
 
         jobs = ub.JobPool(mode=config['workermode'], max_workers=workers)
         with jobs:
-            for i in pman.progiter(range(workers + 1), desc='submit process jobs', transient=True):
+            for i in pman.progiter(range(1, workers + 1), desc='submit process jobs', transient=True):
                 tile_kwargs['rank'] = i
                 tile_kwargs['n_cores'] = max(workers, 1)
                 jobs.submit(tile_processing_kwcoco.tile_process_main, cmdline=0, **tile_kwargs)
@@ -248,7 +303,7 @@ def cold_predict_main(cmdline=1, **kwargs):
 
         jobs = ub.JobPool(mode=config['workermode'], max_workers=workers)
         with jobs:
-            for i in pman.progiter(range(workers + 1), desc='submit export jobs', transient=True):
+            for i in pman.progiter(range(1, workers + 1), desc='submit export jobs', transient=True):
                 export_kwargs['rank'] = i
                 export_kwargs['n_cores'] = max(workers, 1)
                 jobs.submit(export_cold_result_kwcoco.export_cold_main, cmdline=0, **export_kwargs)

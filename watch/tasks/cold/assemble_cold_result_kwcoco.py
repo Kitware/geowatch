@@ -148,8 +148,13 @@ def assemble_main(cmdline=1, **kwargs):
 
     # Get original transform from projection to image space
     coco_dset = kwcoco.CocoDataset(coco_fpath)
-    L8_new_gdal_transform, proj = get_gdal_transform(coco_dset, 'L8')
-    S2_new_gdal_transform, proj = get_gdal_transform(coco_dset, 'S2')
+    L8_new_gdal_transform, L8_proj = get_gdal_transform(coco_dset, 'L8')
+    S2_new_gdal_transform, S2_proj = get_gdal_transform(coco_dset, 'S2')
+
+    available_transforms = [L8_new_gdal_transform, S2_new_gdal_transform]
+    if all(t is None for t in available_transforms):
+        raise RuntimeError('There are no images of known sensors')
+
     # video_ids = list(coco_dset.videos())
     # if len(video_ids) != 1:
     #     raise AssertionError('currently expecting one video per coco file; todo: be robust to this')
@@ -262,7 +267,7 @@ def assemble_main(cmdline=1, **kwargs):
                         outdata_L8.FlushCache()
                         outdata_L8.SetGeoTransform(L8_new_gdal_transform)
                         outdata_L8.FlushCache()
-                        outdata_L8.SetProjection(proj)
+                        outdata_L8.SetProjection(L8_proj)
                         outdata_L8.FlushCache()
 
                     if '_S2_' in outname:
@@ -272,7 +277,7 @@ def assemble_main(cmdline=1, **kwargs):
                         outdata_S2.FlushCache()
                         outdata_S2.SetGeoTransform(S2_new_gdal_transform)
                         outdata_S2.FlushCache()
-                        outdata_S2.SetProjection(proj)
+                        outdata_S2.SetProjection(S2_proj)
                         outdata_S2.FlushCache()
 
             # for x in range(n_blocks):
@@ -339,6 +344,7 @@ def get_gdal_transform(coco_dset, sensor_name):
     # Filter to only the images from target sensor
     target_images = images.compress(is_target_sensor)
     if len(target_images) == 0:
+        return None, None
         raise RuntimeError(f'Video {video_id} in {coco_dset} contains no {sensor_name} images')
 
     # Take the first target image
