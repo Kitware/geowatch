@@ -47,7 +47,66 @@ def _namek_check_pipeline_status():
     poly_eval_df = DotDictDataFrame(poly_eval_rows)
 
     df1 = pxl_df.subframe('request.bas_pxl')
-    df2 = pxl_eval_df.subframe('request.bas_pxl_eval')
+    df2 = pxl_eval_df.subframe('request.bas_pxl')
+
+    df1 = df1[~df1['package_fpath'].isnull()]
+    df2 = df2[~df2['package_fpath'].isnull()]
+
+    from kwcoco._helpers import _delitems
+
+    hashids1 = [ub.hash_data(row) for row in df1.to_dict('records')]
+    hashids2 = [ub.hash_data(row) for row in df2.to_dict('records')]
+
+    # There shouldn't be duplicates here, except in pathological circumstances
+    to_drop1 = []
+    for _, idxs in ub.find_duplicates(hashids1).items():
+        print('Dropping')
+        print(df1.iloc[idxs])
+        to_drop1.extend(idxs)
+    to_drop2 = []
+    for _, idxs in ub.find_duplicates(hashids2).items():
+        print('Dropping')
+        print(df2.iloc[idxs])
+        to_drop2.extend(idxs)
+    df1 = df1.drop(df1.index[to_drop1], axis=0)
+    df2 = df2.drop(df2.index[to_drop2], axis=0)
+    _delitems(hashids1, to_drop1)
+    _delitems(hashids2, to_drop2)
+
+    assert not ub.find_duplicates(hashids1)
+    assert not ub.find_duplicates(hashids2)
+
+    hashids1 = ub.oset(hashids1)
+    hashids2 = ub.oset(hashids2)
+
+    df1['hashid'] = hashids1
+    df2['hashid'] = hashids2
+    common = hashids1 & hashids2
+
+    df1 = df1.set_index('hashid')
+    df2 = df2.set_index('hashid')
+
+    missing1 = hashids2 - hashids1
+    assert len(missing1) == 0, 'should not be possible without error'
+
+    missing2 = hashids1 - hashids2
+
+    # These have not had a computation done for them.
+    missing_df = df1.loc[missing2]
+
+    missing_df['package_fpath'].unique()
+    missing_df['test_dataset'].unique()
+
+    df1['test_dataset'].unique()
+
+    groups = df1.groupby(['package_fpath', 'test_dataset'])
+
+    df1
+
+
+    # For two levels in the node figure out:
+    # What paths on the parent are are in common.
+    # What paths on the child have yet to be computed.
 
     node_fpaths = node_to_fpaths['bas_pxl']
 
