@@ -41,18 +41,18 @@ CommandLine:
 
     # Pull out a small selection of images just so we can test.
     python -c "$(codeblock "
-    import ubelt as ub
-    import kwcoco
-    dset = kwcoco.CocoDataset('$DATA_DVC_DPATH/Drop6-SMALL/imgonly-KR_R001.kwcoco.json')
-    from watch.utils import util_time
-    images = dset.images()
-    dates = list(map(util_time.coerce_datetime, images.lookup('date_captured')))
-    month_to_gids = ub.group_items(images, [(d.year, d.month) for d in dates])
-    chosen = [gids[0] for (year, month), gids in month_to_gids.items() if month % 2 == 0 and year < 2018]
-    sub = dset.subset(chosen)
-    sub.fpath = dset.fpath
-    sub.dump()
-    ")"
+        import ubelt as ub
+        import kwcoco
+        dset = kwcoco.CocoDataset('$DATA_DVC_DPATH/Drop6-SMALL/imgonly-KR_R001.kwcoco.json')
+        from watch.utils import util_time
+        images = dset.images()
+        dates = list(map(util_time.coerce_datetime, images.lookup('date_captured')))
+        month_to_gids = ub.group_items(images, [(d.year, d.month) for d in dates])
+        chosen = [gids[0] for (year, month), gids in month_to_gids.items() if month % 1 == 0 and year < 2020]
+        sub = dset.subset(chosen)
+        sub.fpath = dset.fpath
+        sub.dump()
+        ")"
 
     DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="auto")
     EXPT_DVC_DPATH=$(smartwatch_dvc --tags=phase2_expt --hardware="auto")
