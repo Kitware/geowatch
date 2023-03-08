@@ -6,9 +6,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Version 0.4.0 - Target 2023-03-x
 
+### Changed
+* Lightning Packager callback now saves checkpoints on errors in addition to packages.
+* Updated tutorials to LightningCLI
 
 ### Added
-
 * Add SITS-former 
 
 ## Version 0.3.10 - Target 2023-02-28
