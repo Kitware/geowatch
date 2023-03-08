@@ -151,17 +151,17 @@ def tile_process_main(cmdline=1, **kwargs):
             exit()
 
     # logging and folder preparation
-    if rank == 1:
-        reccg_path.mkdir(parents=True, exist_ok=True)
-        if method == 'OBCOLD':
-            cm_maps_fpath = reccg_path / 'cm_maps'
-            cm_maps_fpath.mkdir(parents=True, exist_ok=True)
-        print(f"The per-pixel time series processing begins: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    # if rank == 0:
+    reccg_path.mkdir(parents=True, exist_ok=True)
+    if method == 'OBCOLD':
+        cm_maps_fpath = reccg_path / 'cm_maps'
+        cm_maps_fpath.mkdir(parents=True, exist_ok=True)
+    print(f"The per-pixel time series processing begins: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
 
-        if not stack_path.exists():
-            print("Failed to locate stack folders. The program ends: "
-                  f"{datetime_cls.now(tz).strftime('%Y-%m-%d %H:%M:%S')}")
-            return
+    if not stack_path.exists():
+        print("Failed to locate stack folders. The program ends: "
+                f"{datetime_cls.now(tz).strftime('%Y-%m-%d %H:%M:%S')}")
+        return
 
     #########################################################################
     #                        per-pixel COLD procedure                       #
