@@ -449,7 +449,7 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
 
             # This cherry-picks a threshold per image!
             if viz_thresh == 'auto':
-                cherry_picked_thresh = maximized_info['f1']['viz_thresh']
+                cherry_picked_thresh = maximized_info['f1']['thresh']
                 saliency_thresh = cherry_picked_thresh
             else:
                 saliency_thresh = viz_thresh

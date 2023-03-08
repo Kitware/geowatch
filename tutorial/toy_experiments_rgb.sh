@@ -100,48 +100,92 @@ Training, Prediction, and Evaluation
 
 Now that we are more comfortable with kwcoco files, lets get into the simplest
 and most direct way of training a fusion model. This is done by simply calling
-'watch.tasks.fusion.fit' as the main module. We will specify:
+'watch.tasks.fusion' as the main module. We will specify:
+
+Data arguments:
 
 * paths to the training and validation kwcoco files
 * what channels we want to early / late fuse (given by a kwcoco sensorchan spec)
 * information about the input chip size and temporal window
-* the underlying architecture
-* other deep learning hyperparameters
 
-In this tutorial we will use 'cpu' as our lightning accelerator. If you have an
-available gpu and want to use it, change this to 'gpu' and add the argument
-'--devices=0,'
+Model arguments:
+
+* the underlying architecture
+
+Other arguments:
+
+* learning rate schedulers
+* optimizers
+* training strategies
+
+In this tutorial we will use 'gpu' as our lightning accelerator. 
+Please read the lightning docs for other available trainer settings:
+https://pytorch-lightning.readthedocs.io/en/stable/common/trainer.html#devices
 
 We will also specify a work directory that will be similar to directories used
 when real watch models are trained.
 "
-# Fit 
+
+
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 EXPERIMENT_NAME=ToyRGB_Demo_V001
 DATASET_CODE=ToyRGB
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
-    --name="$EXPERIMENT_NAME" \
-    --default_root_dir="$DEFAULT_ROOT_DIR" \
-    --train_dataset="$TRAIN_FPATH" \
-    --vali_dataset="$VALI_FPATH" \
-    --channels="r|g|b" \
-    --time_steps=2 \
-    --chip_size=128 \
-    --method=MultimodalTransformer \
-    --arch_name=smt_it_stm_p8 \
-    --window_size=8 \
-    --learning_rate=3e-4 \
-    --weight_decay=1e-5 \
-    --dropout=0.1 \
-    --batch_size=1 \
-    --max_epochs=1 \
-    --accelerator="cpu" \
-    --init="noop" \
-    --sqlview=postgresql \
-    --num_workers=4 \
-    --accumulate_grad_batches=1 \
-    --package_fpath="$DEFAULT_ROOT_DIR"/final_package.pt
+MAX_STEPS=100
+TARGET_LR=3e-4
+python -m watch.tasks.fusion fit --config "
+    data:
+        num_workers          : 4
+        train_dataset        : $TRAIN_FPATH
+        vali_dataset         : $VALI_FPATH
+        channels             : 'r|g|b'
+        time_steps           : 5
+        chip_dims            : 128
+        batch_size           : 2
+    model:
+        class_path: MultimodalTransformer
+        init_args:
+            name        : $EXPERIMENT_NAME
+            arch_name   : smt_it_stm_p8 
+            window_size : 8
+            dropout     : 0.1
+    lr_scheduler:
+      class_path: torch.optim.lr_scheduler.OneCycleLR
+      init_args:
+        max_lr: $TARGET_LR
+        total_steps: $MAX_STEPS
+        anneal_strategy: linear
+        pct_start: 0.05
+    optimizer:
+      class_path: torch.optim.Adam
+      init_args:
+        lr: $TARGET_LR
+        weight_decay: 1e-5
+        betas:
+          - 0.9
+          - 0.99
+    trainer:
+      accumulate_grad_batches: 1
+      default_root_dir     : $DEFAULT_ROOT_DIR
+      accelerator          : gpu 
+      devices              : 0,
+      #devices             : 0,1
+      #strategy            : ddp 
+      check_val_every_n_epoch: 1
+      enable_checkpointing: true
+      enable_model_summary: true
+      log_every_n_steps: 5
+      logger: true
+      max_steps: $MAX_STEPS
+      num_sanity_val_steps: 0
+      replace_sampler_ddp: true
+      track_grad_norm: 2
+    initializer:
+        init: noop
+"
+
+# For more options with this particular model see:
+# python -m watch.tasks.fusion fit --model.help=MultimodalTransformer
 
 
 echo '
@@ -171,6 +215,11 @@ We provide a CLI tool to summarize the info contained in a torch model via
 '
 
 smartwatch torch_model_stats "$DEFAULT_ROOT_DIR"/final_package.pt --stem_stats=True
+
+# NOTE: There are other model weights available in the
+# $DEFAULT_ROOT_DIR/*/*/checkpoints directory that can be converted into
+# packages using the watch.mlops.repackager script. The final package may not
+# be the best model.
 
 
 echo '
@@ -236,7 +285,7 @@ visualize"
 '
 
 # Visualize the channels in the prediction file
-smartwatch visualize "$DVC_EXPT_DPATH"/predictions/pred.kwcoco.json
+smartwatch visualize "$DVC_EXPT_DPATH"/predictions/pred.kwcoco.json --stack=True
 
 
 echo '

@@ -264,6 +264,88 @@ def _gather_all_results():
     build_all_param_plots(agg, rois, config)
 
 
+def resource_usage_report(agg):
+    import pandas as pd
+    from watch.utils import util_time
+    table = agg.table.copy()
+    resources = agg.resources
+
+    duration_cols = [
+        k for k in agg.resources.keys()
+        if k.endswith('.duration')
+    ]
+    for k in duration_cols:
+        table.loc[:, k] = table.loc[:, k].apply(lambda x: util_time.coerce_timedelta(x) if not pd.isnull(x) else x)
+
+    resource_summary = []
+    for k in duration_cols:
+        a, b, c = k.split('.')
+        uuid_key = f'context.{b}.uuid'
+
+        chosen = []
+        for _, group in table.groupby(uuid_key):
+            idx = group[k].idxmax()
+            chosen.append(idx)
+
+        unique_rows = table.loc[chosen]
+        row = {
+            'node': b,
+            'resource': c,
+            'total': unique_rows[k].sum(),
+            'mean': unique_rows[k].mean(),
+            'num': len(chosen),
+        }
+        resource_summary.append(row)
+
+        co2_key = f'{a}.{b}.co2_kg'
+        if co2_key in table:
+            unique_rows[co2_key]
+            row = {
+                'node': b,
+                'resource': 'co2_kg',
+                'total': unique_rows[co2_key].sum(),
+                'mean': unique_rows[co2_key].mean(),
+                'num': len(chosen),
+            }
+            resource_summary.append(row)
+
+        co2_key = f'{a}.{b}.kwh'
+        if co2_key in table:
+            unique_rows[co2_key]
+            row = {
+                'node': b,
+                'resource': 'kwh',
+                'total': unique_rows[co2_key].sum(),
+                'mean': unique_rows[co2_key].mean(),
+                'num': len(chosen),
+            }
+            resource_summary.append(row)
+    pd.DataFrame(resource_summary)
+
+    agg.resources['resources.bas_poly_eval.duration']
+    agg.resources['resources.bas_poly.duration']
+    agg.resources['resources.bas_poly.co2_kg']
+
+    unique_resources = {}
+    unique_resources['bas_pxl'] = poly_agg.table.groupby('context.bas_pxl.uuid')
+    unique_resources['bas_poly'] = poly_agg.table.groupby('context.bas_poly.uuid')
+    unique_resources['bas_poly_eval'] = poly_agg.table.groupby('context.bas_poly_eval.uuid')
+
+    for k, v in unique_resources.items():
+        v[f'resources.{k}.duration'].max().apply(util_time.coerce_timedelta).sum()
+        co2_key = f'resources.{k}.co2_kg'
+        if co2_key in v:
+            ...
+        v[].max().sum()
+
+    pxl_time = poly_agg.table.groupby('context.bas_pxl.uuid')['resources.bas_pxl.duration'].max().apply(util_time.coerce_timedelta).sum()
+    poly_time = poly_agg.table.groupby('context.bas_poly.uuid')['resources.bas_poly.duration'].max().apply(util_time.coerce_timedelta).sum()
+    poly_eval_time = poly_agg.table.groupby('context.bas_poly_eval.uuid')['resources.bas_poly.duration'].max().apply(util_time.coerce_timedelta).sum()
+    total_time = pxl_time + poly_time + poly_eval_time
+
+    poly_agg.table['context.bas_poly.uuid']
+    poly_agg.table['context.bas_poly_eval.uuid']
+
 
 def _check_high_tpr_case(agg, config):
     macro_results = agg.region_to_tables[agg.primary_macro_region].copy()
@@ -337,8 +419,6 @@ def _namek_eval():
         if co2_key in v:
             ...
         v[].max().sum()
-
-
 
     pxl_time = poly_agg.table.groupby('context.bas_pxl.uuid')['resources.bas_pxl.duration'].max().apply(util_time.coerce_timedelta).sum()
     poly_time = poly_agg.table.groupby('context.bas_poly.uuid')['resources.bas_poly.duration'].max().apply(util_time.coerce_timedelta).sum()
