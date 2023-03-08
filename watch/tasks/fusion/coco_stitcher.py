@@ -566,11 +566,19 @@ class CocoStitchingManager(object):
 
                 kwimage.imwrite(
                     str(new_fpath), quant_probs, space=None, backend='gdal',
+                    metadata={
+                        'quantization': quantization,
+                        'channels': self.chan_code,
+                    },
                     nodata=quantization['nodata'], **write_kwargs,
                 )
             else:
                 kwimage.imwrite(
                     str(new_fpath), final_probs, space=None, backend='gdal',
+                    metadata={
+                        'channels': self.chan_code,
+                        'quantization': None,
+                    },
                     **write_kwargs,
                 )
 
