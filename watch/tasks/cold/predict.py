@@ -48,8 +48,10 @@ CommandLine:
         images = dset.images()
         dates = list(map(util_time.coerce_datetime, images.lookup('date_captured')))
         month_to_gids = ub.group_items(images, [(d.year, d.month) for d in dates])
-        chosen = [gids[0] for (year, month), gids in month_to_gids.items() if month % 1 == 0 and year < 2020]
-        sub = dset.subset(chosen)
+        # chosen = [gids[0] for (year, month), gids in month_to_gids.items() if month % 1 == 0 and year < 2020]
+        chosen = [gids for (year, month), gids in month_to_gids.items() if year < 2017]
+        flat_chosen = [item for sublist in chosen for item in sublist]
+        sub = dset.subset(flat_chosen)
         sub.fpath = dset.fpath
         sub.dump()
         ")"
@@ -59,7 +61,7 @@ CommandLine:
     python -m watch.tasks.cold.predict \
         --coco_fpath="$DATA_DVC_DPATH/Drop6-SMALL/imgonly-KR_R001.kwcoco.json" \
         --out_dpath="$DATA_DVC_DPATH/Drop6-SMALL/_pycold" \
-        --sensors='L8, S2' \
+        --sensors='L8' \
         --mod_coco_fpath="$DATA_DVC_DPATH/Drop6-SMALL/_pycold/imgonly-KR_R001-cold.kwcoco.json" \
         --adj_cloud=False \
         --method='COLD' \
@@ -71,8 +73,8 @@ CommandLine:
         --coefs=cv,a0,a1,b1,c1,rmse \
         --coefs_bands=0,1,2,3,4,5 \
         --timestamp=True \
-        --mode='thread' \
-        --workers=0
+        --mode='process' \
+        --workers=8
 
     ####################
     ### FULL REGION TEST
