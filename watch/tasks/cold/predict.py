@@ -282,7 +282,7 @@ def cold_predict_main(cmdline=1, **kwargs):
 
         jobs = ub.JobPool(mode=config['workermode'], max_workers=workers)
         with jobs:
-            for i in pman.progiter(range(1, workers + 1), desc='submit process jobs', transient=True):
+            for i in pman.progiter(range(workers + 1), desc='submit process jobs', transient=True):
                 tile_kwargs['rank'] = i
                 tile_kwargs['n_cores'] = max(workers, 1)
                 jobs.submit(tile_processing_kwcoco.tile_process_main, cmdline=0, **tile_kwargs)
@@ -311,7 +311,7 @@ def cold_predict_main(cmdline=1, **kwargs):
 
         jobs = ub.JobPool(mode=config['workermode'], max_workers=workers)
         with jobs:
-            for i in pman.progiter(range(1, workers + 1), desc='submit export jobs', transient=True):
+            for i in pman.progiter(range(workers + 1), desc='submit export jobs', transient=True):
                 export_kwargs['rank'] = i
                 export_kwargs['n_cores'] = max(workers, 1)
                 jobs.submit(export_cold_result_kwcoco.export_cold_main, cmdline=0, **export_kwargs)
