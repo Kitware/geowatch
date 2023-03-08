@@ -156,9 +156,11 @@ def export_cold_main(cmdline=1, **kwargs):
     #     assert all(elem in band_names for elem in coefs_bands)
 
     out_path = reccg_path / 'cold_feature'
-
+    tmp_path = reccg_path / 'cold_feature' / 'tmp'
+    
     if rank == 0:
         out_path.ensuredir()
+        tmp_path.ensuredir()
 
     # MPI mode
     # trans = comm.bcast(trans, root=0)
@@ -273,7 +275,7 @@ def export_cold_main(cmdline=1, **kwargs):
         if timestamp:
             for day in range(len(ordinal_day_list)):
                 if coefs is not None:
-                    outfile = out_path / f'tmp_coefmap_block{iblock + 1}_{ordinal_day_list[day]}.npy'
+                    outfile = tmp_path / f'tmp_coefmap_block{iblock + 1}_{ordinal_day_list[day]}.npy'
                     np.save(outfile, results_block_coefs[:, :, :, day])
     # MPI mode (wait for all processes)
     # comm.Barrier()
