@@ -25,6 +25,7 @@ import scriptconfig as scfg
 import ubelt as ub
 import logging
 import fnmatch
+import shutil
 
 try:
     from xdev import profile
@@ -91,6 +92,7 @@ def assemble_main(cmdline=1, **kwargs):
     coco_fpath = ub.Path(config_in['coco_fpath'])
     mod_coco_fpath = ub.Path(config_in['mod_coco_fpath'])
     out_path = reccg_path / 'cold_feature'
+    tmp_path = out_path / 'tmp'
     meta_fpath = ub.Path(config_in['meta_fpath'])
     year_lowbound = config_in['year_lowbound']
     year_highbound = config_in['year_highbound']
@@ -238,7 +240,7 @@ def assemble_main(cmdline=1, **kwargs):
             day_iter = pman.progiter(day_iter, total=len(ordinal_day_list))
         for day in day_iter:
             tmp_map_blocks = [np.load(
-                out_path / f'tmp_coefmap_block{x + 1}_{ordinal_day_list[day]}.npy')
+                tmp_path / f'tmp_coefmap_block{x + 1}_{ordinal_day_list[day]}.npy')
                 for x in range(n_blocks)]
 
             results = np.hstack(tmp_map_blocks)
@@ -286,9 +288,10 @@ def assemble_main(cmdline=1, **kwargs):
                 # sorting, or nest files to keep folder sizes small
 
     # Remove tmp files
-    for file in os.listdir(out_path):
-        if fnmatch.fnmatch(file, 'tmp_coefmap*'):
-            os.remove(out_path / file)
+    # for file in os.listdir(out_path):
+    #     if fnmatch.fnmatch(file, 'tmp_coefmap*'):
+    #         os.remove(out_path / file)
+    shutil.rmtree(tmp_path)
 
     logger.info('Starting adding new asset to kwcoco json')
 
