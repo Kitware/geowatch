@@ -38,14 +38,22 @@ def _namek_check_pipeline_status():
         rows = dag.nodes[stage].find_template_outputs(workers=8)
         existing[stage] = rows
 
-    from watch.utils.util_pandas import DotDictDataFrame
-    pxl_df = DotDictDataFrame(pxl_rows)
-    pxl_eval_df = DotDictDataFrame(pxl_eval_rows)
-    poly_df = DotDictDataFrame(poly_rows)
-    poly_eval_df = DotDictDataFrame(poly_eval_rows)
+    stage = 'bas_pxl'
+    from watch.utils import util_dotdict  # NOQA
+    for row in existing[stage]:
+        node = dag.nodes[stage]
+        row = util_dotdict.DotDict(row)
+        config = row.prefix_get('request')
+        node.configure(config)
+        ...
 
-    df1 = pxl_df.subframe('request')
-    df2 = pxl_eval_df.subframe('request')
+    dfs = {}
+    from watch.utils.util_pandas import DotDictDataFrame
+    for stage in stages_of_interest:
+        dfs[stage] = DotDictDataFrame(existing[stage])
+
+    df1 = dfs['bas_pxl'].subframe('request')
+    df2 = dfs['bas_pxl_eval'].subframe('request')
 
     df1 = df1[~df1['bas_pxl.package_fpath'].isnull()]
     df2 = df2[~df2['bas_pxl.package_fpath'].isnull()]

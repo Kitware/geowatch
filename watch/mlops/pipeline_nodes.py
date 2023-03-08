@@ -2,7 +2,7 @@
 The core pipeline data structure for MLOps
 
 TODO:
-    rename "resolved" to something else, the term is overloaded
+    rename "final" to something else, the term is overloaded
 """
 import ubelt as ub
 import networkx as nx
@@ -483,7 +483,7 @@ class PipelineDAG:
             node.will_exist = ((node.enabled and ancestors_will_exist) or
                                node.does_exist)
             if 1:
-                print(f'node.resolved_out_paths={node.resolved_out_paths}')
+                print(f'node.final_out_paths={node.final_out_paths}')
                 print(f'Checking {node_name}, will_exist={node.will_exist}')
 
             skip_node = not (node.will_exist and node.enabled)
@@ -499,7 +499,7 @@ class PipelineDAG:
                     pred_node_procids = [n.process_id for n in pred_nodes
                                          if n.enabled]
                     # Submit a primary queue process
-                    node_command = node.resolved_command()
+                    node_command = node.final_command()
                     node_job = queue.submit(command=node_command,
                                             depends=pred_node_procids,
                                             name=node_procid)
@@ -523,10 +523,10 @@ class PipelineDAG:
                     # TODO: should we filter the nodes where they are only linked
                     # via inputs?
                     for pred in node.predecessor_process_nodes():
-                        link_path1 = pred.resolved_node_dpath / '.succ' / node.name / node.process_id
-                        target_path1 = node.resolved_node_dpath
-                        link_path2 = node.resolved_node_dpath / '.pred' / pred.name / pred.process_id
-                        target_path2 = pred.resolved_node_dpath
+                        link_path1 = pred.final_node_dpath / '.succ' / node.name / node.process_id
+                        target_path1 = node.final_node_dpath
+                        link_path2 = node.final_node_dpath / '.pred' / pred.name / pred.process_id
+                        target_path2 = pred.final_node_dpath
                         target_path1 = os.path.relpath(target_path1.absolute(), link_path1.absolute().parent)
                         target_path2 = os.path.relpath(target_path2.absolute(), link_path2.absolute().parent)
 
@@ -542,14 +542,14 @@ class PipelineDAG:
                 if write_invocations:
                     # Add a job that writes a file with the command used to
                     # execute this node.
-                    invoke_fpath = node.resolved_node_dpath / 'invoke.sh'
+                    invoke_fpath = node.final_node_dpath / 'invoke.sh'
 
                     invoke_lines = ['#!/bin/bash']
                     depend_nodes = list(node.ancestor_process_nodes())
                     if depend_nodes:
                         invoke_lines.append('# See Also: ')
                         for depend_node in list(node.ancestor_process_nodes()):
-                            invoke_lines.append('# ' + depend_node.resolved_node_dpath)
+                            invoke_lines.append('# ' + depend_node.final_node_dpath)
                     else:
                         invoke_lines.append('# Root node')
                     invoke_command = node._raw_command()
@@ -568,7 +568,7 @@ class PipelineDAG:
                         depends_config.update(_add_prefix(depend_node.name + '.', depend_node.config))
                     # Add a job that writes a file with the command used to
                     # execute this node.
-                    job_config_fpath = node.resolved_node_dpath / 'job_config.json'
+                    job_config_fpath = node.final_node_dpath / 'job_config.json'
                     json_text = json.dumps(depends_config)
                     if _has_jq():
                         command = '\n'.join([
@@ -721,22 +721,22 @@ class IONode(Node):
     def __init__(self, name, parent):
         super().__init__(name)
         self.parent = parent
-        self._resolved_value = None
+        self._final_value = None
         self._template_value = None
 
     @property
-    def resolved_value(self):
-        value = self._resolved_value
+    def final_value(self):
+        value = self._final_value
         if value is None:
             preds = list(self.pred)
             if preds:
                 assert len(preds) == 1
-                value = preds[0].resolved_value
+                value = preds[0].final_value
         return value
 
-    @resolved_value.setter
-    def resolved_value(self, value):
-        self._resolved_value = value
+    @final_value.setter
+    def final_value(self, value):
+        self._final_value = value
 
     @property
     def key(self):
@@ -749,9 +749,9 @@ class InputNode(IONode):
 
 class OutputNode(IONode):
     @property
-    def resolved_value(self):
-        # return self.parent._resolve_templates()['out_paths'][self.name]
-        return self.parent.resolved_out_paths[self.name]
+    def final_value(self):
+        # return self.parent._finalize_templates()['out_paths'][self.name]
+        return self.parent.final_out_paths[self.name]
 
     @property
     def template_value(self):
@@ -868,10 +868,6 @@ def memoize_configured_property(fget):
 # memoize_configured_property = property
 
 
-def _resolve_config(config, default_set_or_dict):
-    pass
-
-
 # @dataclass(kw_only=True)  # makes things harder
 class ProcessNode(Node):
     """
@@ -917,13 +913,13 @@ class ProcessNode(Node):
         >>>     executable=f'python -c "{chr(10)}{pycode}{chr(10)}"',
         >>>     root_dpath=dpath,
         >>> )
-        >>> self._resolve_templates()
+        >>> self._finalize_templates()
         >>> print('self.command = {}'.format(ub.urepr(self.command, nl=1, sv=1)))
         >>> print(f'self.algo_id={self.algo_id}')
         >>> print(f'self.root_dpath={self.root_dpath}')
         >>> print(f'self.template_node_dpath={self.template_node_dpath}')
         >>> print('self.templates = {}'.format(ub.urepr(self.templates, nl=2)))
-        >>> print('self.resolved = {}'.format(ub.urepr(self.resolved, nl=2)))
+        >>> print('self.final = {}'.format(ub.urepr(self.final, nl=2)))
         >>> print('self.condensed = {}'.format(ub.urepr(self.condensed, nl=2)))
     """
     __node_type__ = 'process'
@@ -998,8 +994,8 @@ class ProcessNode(Node):
         self.template_outdir = None
         self.template_opaths = None
 
-        self.resolved_outdir = None
-        self.resolved_opaths = None
+        self.final_outdir = None
+        self.final_opaths = None
         self.enabled = True
         self.cache = True
 
@@ -1020,10 +1016,10 @@ class ProcessNode(Node):
         # self.algo_params = set(self.config) - non_algo_keys
         in_path_keys = self.config & set(self.in_paths)
         for key in in_path_keys:
-            self.inputs[key].resolved_value = self.config[key]
+            self.inputs[key].final_value = self.config[key]
 
         self._build_templates()
-        self._resolve_templates()
+        self._finalize_templates()
 
     @memoize_configured_property
     @profile
@@ -1049,46 +1045,46 @@ class ProcessNode(Node):
 
     @memoize_configured_method
     @profile
-    def _resolve_templates(self):
+    def _finalize_templates(self):
         templates = self.templates
         condensed = self.condensed
-        resolved = {}
+        final = {}
         try:
-            resolved['root_dpath'] = self.resolved_root_dpath
-            resolved['node_dpath'] = self.resolved_node_dpath
-            resolved['out_paths'] = self.resolved_out_paths
-            resolved['in_paths'] = self.resolved_in_paths
+            final['root_dpath'] = self.final_root_dpath
+            final['node_dpath'] = self.final_node_dpath
+            final['out_paths'] = self.final_out_paths
+            final['in_paths'] = self.final_in_paths
         except KeyError as ex:
             print('ERROR: {}'.format(ub.urepr(ex, nl=1)))
             print('condensed = {}'.format(ub.urepr(condensed, nl=1, sort=0)))
             print('templates = {}'.format(ub.urepr(templates, nl=1, sort=0)))
             raise
-        self.resolved = resolved
-        return self.resolved
+        self.final = final
+        return self.final
 
     @memoize_configured_property
-    def resolved_config(self):
+    def final_config(self):
         """
-        This is not really "resolved" in the aggregate sense.
+        This is not really "final" in the aggregate sense.
         It is more of a "finalized" requested config.
         """
-        resolved_config = self.config.copy()
-        resolved_config.update(self.resolved_in_paths)
-        resolved_config.update(self.resolved_out_paths)
-        resolved_config.update(self.resolved_perf_config)
-        return resolved_config
+        final_config = self.config.copy()
+        final_config.update(self.final_in_paths)
+        final_config.update(self.final_out_paths)
+        final_config.update(self.final_perf_config)
+        return final_config
 
     @memoize_configured_property
-    def resolved_perf_config(self):
-        resolved_perf_config = self.config & set(self.perf_params)
+    def final_perf_config(self):
+        final_perf_config = self.config & set(self.perf_params)
         if isinstance(self.perf_params, dict):
             for k, v in self.perf_params.items():
-                if k not in resolved_perf_config:
-                    resolved_perf_config[k] = v
-        return resolved_perf_config
+                if k not in final_perf_config:
+                    final_perf_config[k] = v
+        return final_perf_config
 
     @memoize_configured_property
-    def resolved_algo_config(self):
+    def final_algo_config(self):
         # TODO: Any node that does not have its inputs connected have to
         # include the configured input paths - or ideally the hash of their
         # contents - in the algo config.
@@ -1108,37 +1104,37 @@ class ProcessNode(Node):
             if not input_node.pred:
                 unconnected_inputs.append(input_node.name)
 
-        unconnected_in_paths = ub.udict(self.resolved_in_paths) & unconnected_inputs
-        resolved_algo_config = (self.config - self.non_algo_keys) | unconnected_in_paths
+        unconnected_in_paths = ub.udict(self.final_in_paths) & unconnected_inputs
+        final_algo_config = (self.config - self.non_algo_keys) | unconnected_in_paths
 
         if isinstance(self.algo_params, dict):
             for k, v in self.algo_params.items():
-                if k not in resolved_algo_config:
-                    resolved_algo_config[k] = v
-        return resolved_algo_config
+                if k not in final_algo_config:
+                    final_algo_config[k] = v
+        return final_algo_config
 
     @memoize_configured_property
-    def resolved_in_paths(self):
-        resolved_in_paths = self.in_paths
-        if resolved_in_paths is None:
-            resolved_in_paths = {}
-        elif isinstance(resolved_in_paths, dict):
-            resolved_in_paths = resolved_in_paths.copy()
+    def final_in_paths(self):
+        final_in_paths = self.in_paths
+        if final_in_paths is None:
+            final_in_paths = {}
+        elif isinstance(final_in_paths, dict):
+            final_in_paths = final_in_paths.copy()
         else:
-            resolved_in_paths = {k: None for k in resolved_in_paths}
+            final_in_paths = {k: None for k in final_in_paths}
 
         for key, input_node in self.inputs.items():
-            resolved_in_paths[key] = input_node.resolved_value
+            final_in_paths[key] = input_node.final_value
             # preds = list(input_node.pred)
             # if preds:
             #     assert len(preds) == 1
             #     pred = preds[0]
-            #     value = pred.resolved_value
-            #     # parent._resolve_templates()['out_paths'][pred.name]
-            #     resolved_in_paths[key] = value
+            #     value = pred.final_value
+            #     # parent._finalize_templates()['out_paths'][pred.name]
+            #     final_in_paths[key] = value
             # else:
-            #     resolved_in_paths[key] = self.config.get(key, None)
-        return resolved_in_paths
+            #     final_in_paths[key] = self.config.get(key, None)
+        return final_in_paths
 
     @memoize_configured_property
     def template_out_paths(self):
@@ -1154,25 +1150,25 @@ class ProcessNode(Node):
         return template_out_paths
 
     @memoize_configured_property
-    def resolved_out_paths(self):
+    def final_out_paths(self):
         condensed = self.condensed
         template_out_paths = self.template_out_paths
-        resolved_out_paths = {
+        final_out_paths = {
             k: ub.Path(v.format(**condensed))
             for k, v in template_out_paths.items()
         }
-        return resolved_out_paths
+        return final_out_paths
 
     @memoize_configured_property
     def template_dag_dname(self):
         return self.template_depends_dname / self.node_dname
 
     @memoize_configured_property
-    def resolved_node_dpath(self):
+    def final_node_dpath(self):
         return ub.Path(str(self.template_node_dpath).format(**self.condensed))
 
     @memoize_configured_property
-    def resolved_root_dpath(self):
+    def final_root_dpath(self):
         return ub.Path(str(self.template_root_dpath).format(**self.condensed))
 
     @memoize_configured_property
@@ -1192,7 +1188,7 @@ class ProcessNode(Node):
     def depends_config(self):
         # Any manually specified inputs need to be inserted into this
         # dictionary. Derived inputs can be ignored.
-        depends_config = self.resolved_algo_config.copy()
+        depends_config = self.final_algo_config.copy()
         return depends_config
         # return self.config & self.algo_params
 
@@ -1206,7 +1202,7 @@ class ProcessNode(Node):
         """
         from watch.utils.reverse_hashid import condense_config
         algo_id = condense_config(
-            self.resolved_algo_config, self.name + '_algo_id', register=False)
+            self.final_algo_config, self.name + '_algo_id', register=False)
         return algo_id
 
     @memoize_configured_property
@@ -1372,7 +1368,7 @@ class ProcessNode(Node):
         """
         Basic version of command, can be overwritten
         """
-        argstr = self._make_argstr(self.resolved_config)
+        argstr = self._make_argstr(self.final_config)
         if argstr:
             command = self.executable + ' \\\n    ' + argstr
         else:
@@ -1382,7 +1378,7 @@ class ProcessNode(Node):
     @profile
     def test_is_computed_command(step):
         test_expr = ' -a '.join(
-            [f'-e "{p}"' for p in step.resolved_out_paths.values()])
+            [f'-e "{p}"' for p in step.final_out_paths.values()])
         test_cmd = 'test ' +  test_expr
         return test_cmd
 
@@ -1390,7 +1386,7 @@ class ProcessNode(Node):
     @profile
     def does_exist(self):
         # return all(self.out_paths.map_values(lambda p: p.exists()).values())
-        return all(ub.Path(p).expand().exists() for p in self.resolved_out_paths.values())
+        return all(ub.Path(p).expand().exists() for p in self.final_out_paths.values())
 
     def _raw_command(self):
         command = self.command
@@ -1400,7 +1396,7 @@ class ProcessNode(Node):
         return command
 
     @profile
-    def resolved_command(self):
+    def final_command(self):
         command = self._raw_command()
 
         # Cleanup the command

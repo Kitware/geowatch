@@ -44,8 +44,8 @@ Example:
     >>>     print(f'{node.algo_params=}')
     >>>     print('node.depends = {}'.format(ub.repr2(node.depends, nl=1, sort=0)))
     >>>     #print('node.node_info = {}'.format(ub.repr2(node.node_info, nl=3, sort=0)))
-    >>>     resolved = node._resolve_templates()
-    >>>     print('resolved = {}'.format(ub.repr2(resolved, nl=2)))
+    >>>     final = node._finalize_templates()
+    >>>     print('final = {}'.format(ub.repr2(final, nl=2)))
     >>>     print('---')
     >>> dag.print_graphs()
     >>> print('dag.config = {}'.format(ub.repr2(dag.config, nl=1)))
@@ -53,7 +53,7 @@ Example:
     >>> dag_paths = {}
     >>> for node in dag.nodes.values():
     >>>     dag_templates[node.name] = node._build_templates()['node_dpath']
-    >>>     dag_paths[node.name] = node._resolve_templates()['node_dpath']
+    >>>     dag_paths[node.name] = node._finalize_templates()['node_dpath']
     >>>     print(node.command())
     >>> import rich
     >>> rich.print('dag_templates = {}'.format(
@@ -193,9 +193,9 @@ class HeatmapPrediction(ProcessNode):
 
     @profile
     def command(self):
-        fmtkw = self.resolved_config.copy()
-        perf_config = self.resolved_perf_config
-        algo_config = self.resolved_algo_config - {
+        fmtkw = self.final_config.copy()
+        perf_config = self.final_perf_config
+        algo_config = self.final_algo_config - {
             'package_fpath', 'test_dataset', 'pred_dataset'}
         fmtkw['params_argstr'] = self._make_argstr(algo_config)
         fmtkw['perf_argstr'] = self._make_argstr(perf_config)
@@ -236,9 +236,9 @@ class PolygonPrediction(ProcessNode):
 
     @profile
     def command(self):
-        fmtkw = self.resolved_config.copy()
+        fmtkw = self.final_config.copy()
         fmtkw['default_track_fn'] = self.default_track_fn
-        track_kwargs = self.resolved_algo_config.copy() - {'site_summary'}
+        track_kwargs = self.final_algo_config.copy() - {'site_summary'}
         fmtkw['kwargs_str'] = shlex.quote(json.dumps(track_kwargs))
         command = ub.codeblock(
             r'''
@@ -276,10 +276,10 @@ class PolygonEvaluation(ProcessNode):
     def command(self):
         # self.tmp_dpath = self.paths['eval_dpath'] / 'tmp'
         # self.tmp_dpath = self.paths['eval_dpath'] / 'tmp'
-        fmtkw = self.resolved_config.copy()
-        fmtkw['params_argstr'] = self._make_argstr(self.resolved_algo_config)
-        fmtkw['perf_argstr'] = self._make_argstr(self.resolved_perf_config)
-        fmtkw['tmp_dpath'] = self.resolved_node_dpath / 'tmp'
+        fmtkw = self.final_config.copy()
+        fmtkw['params_argstr'] = self._make_argstr(self.final_algo_config)
+        fmtkw['perf_argstr'] = self._make_argstr(self.final_perf_config)
+        fmtkw['tmp_dpath'] = self.final_node_dpath / 'tmp'
 
         # Hack:
         if fmtkw['true_site_dpath'] is None:
@@ -332,7 +332,7 @@ class HeatmapEvaluation(ProcessNode):
     @profile
     def command(self):
         # TODO: better score space
-        fmtkw = self.resolved_config.copy()
+        fmtkw = self.final_config.copy()
         extra_opts = {
             'draw_curves': True,
             'draw_heatmaps': True,
@@ -373,7 +373,7 @@ class KWCocoVisualization(ProcessNode):
 
     @profile
     def command(self):
-        fmtkw = self.resolved_config.copy()
+        fmtkw = self.final_config.copy()
         name_parts = {
             k: v for k, v in sorted(self.condensed.items())
             if 'eval' not in k and (('algo_id' in k) or ('id' not in v))
@@ -495,11 +495,11 @@ class BAS_PolygonPrediction(PolygonPrediction):
     default_track_fn = 'saliency_heatmaps'
 
     @property
-    def resolved_algo_config(self):
+    def final_algo_config(self):
         return ub.udict({
             # 'boundaries_as': 'polys'
             "agg_fn": "probs",
-        }) | super().resolved_algo_config
+        }) | super().final_algo_config
 
 
 class SC_PolygonPrediction(PolygonPrediction):
@@ -508,10 +508,10 @@ class SC_PolygonPrediction(PolygonPrediction):
     default_track_fn = 'class_heatmaps'
 
     @property
-    def resolved_algo_config(self):
+    def final_algo_config(self):
         return ub.udict({
             'boundaries_as': 'polys'
-        }) | super().resolved_algo_config
+        }) | super().final_algo_config
 
 # ---
 
@@ -601,12 +601,12 @@ class SiteCropping(ProcessNode):
 
     @profile
     def command(self):
-        fmtkw = self.resolved_config.copy()
-        algo_config = self.resolved_algo_config - {'crop_src_fpath'}
+        fmtkw = self.final_config.copy()
+        algo_config = self.final_algo_config - {'crop_src_fpath'}
         fmtkw['crop_algo_argstr'] = self._make_argstr(algo_config)
-        fmtkw['crop_perf_argstr'] = self._make_argstr(self.resolved_perf_config)
-        fmtkw.update(self.resolved_in_paths)
-        fmtkw.update(self.resolved_out_paths)
+        fmtkw['crop_perf_argstr'] = self._make_argstr(self.final_perf_config)
+        fmtkw.update(self.final_in_paths)
+        fmtkw.update(self.final_out_paths)
 
         command = ub.codeblock(
             r'''
