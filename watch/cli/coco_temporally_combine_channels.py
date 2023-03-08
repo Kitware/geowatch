@@ -9,20 +9,43 @@ import ubelt as ub
 # from watch.tasks.fusion.predict import quantize_float01
 # from watch.utils.kwcoco_extensions import transfer_geo_metadata
 import scriptconfig as scfg
-from watch.utils import util_time
 from watch.utils import util_progress
+from watch.utils import util_time, kwcoco_extensions
 
 
 class TimeAverageConfig(scfg.DataConfig):
-    kwcoco_fpath = '/data4/datasets/dvc-repos/smart_data_dvc/Drop4-BAS/data_vali_KR_R001.kwcoco.json'
-    output_kwcoco_fpath = '/data4/datasets/dvc-repos/smart_data_dvc/Drop4-BAS/M2_time_merge_1month_mean_10GSD.kwcoco.json'
-    channels = 'salient'
-    temporal_window_duration = '1month'
-    merge_method = 'mean'
-    resolution = '10GSD'
-    filter_with_cloudmasks = True
-    s2_weight_factor = 1.0
-    workers = 0
+    """_summary_
+    """
+    kwcoco_fpath = scfg.Value(None, help='The path to the kwcoco file containing the image data to be combined.')
+    output_kwcoco_fpath = scfg.Value(None,
+                                     help='The path where the combined image data will be saved to in a kwcoco file.')
+    channels = scfg.Value(
+        'red|green|blue',
+        help=
+        'The channels to get and combine the spatial data from. E.g. "red|green|blue". Note: Separate channels with "|".'
+    )
+    temporal_window_duration = scfg.Value(
+        '1month', help='The amount of time the temporal window should cover in days. E.g. 365 for a year.')
+    merge_method = scfg.Value('mean', help='The combine method to use. Choices: "mean", "median".')
+    resolution = scfg.Value(
+        '10GSD',
+        help=
+        'The resolution the imagery will be loaded during the combination operation and saved to the output kwcoco file.'
+    )
+    filter_with_cloudmasks = scfg.Value(
+        True,
+        isflag=True,
+        help='If active the cloudmasks will be used to filter out pixels with too much cloud coverage or missing data.')
+    s2_weight_factor = scfg.Value(1.0,
+                                  help=ub.paragraph("""A weighting factor to scale the impact of Sentinel-2
+                                                       pixels during the combination operation. Note: Only
+                                                       effects the merge method "mean"."""))
+    separate_sensors = scfg.Value(True, isflag=True, help='Combine images by sensor separately.')
+    workers = scfg.Value(0, help='The number of CPU cores to compute the combination operation with.')
+    include_sensors = scfg.Value(None, help='A list of sensors to include in the combination operation.')
+    exclude_sensors = scfg.Value('WV', help='A list of sensors to exclude from the combination operation.')
+    select_images = scfg.Value(None, help='TODO:')
+    select_videos = scfg.Value(None, help='TODO:')
 
 
 def main(cmdline=1, **kwargs):
@@ -31,6 +54,7 @@ def main(cmdline=1, **kwargs):
         DEVEL_TEST=1 xdoctest -m watch.cli.coco_temporally_combine_channels main
 
     Example:
+        >>> # 0: Baseline run.
         >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
         >>> from watch.cli.coco_temporally_combine_channels import *  # NOQA
         >>> import watch
@@ -39,72 +63,76 @@ def main(cmdline=1, **kwargs):
         >>> kwargs = dict(
         >>>     kwcoco_fpath=data_dvc_dpath / 'Drop6/imgonly-KR_R001.kwcoco.json',
         >>>     output_kwcoco_fpath=data_dvc_dpath / 'Drop6/test-timeave-imgonly-KR_R001.kwcoco.json',
-        >>>     workers=0,
+        >>>     workers=11,
+        >>>     filter_with_cloudmasks=False,
         >>>     temporal_window_duration='1 year',
         >>>     channels='red|green|blue',
         >>> )
         >>> output_coco_dset = main(cmdline=cmdline, **kwargs)
+        >>> from watch.cli import coco_visualize_videos
+        >>> coco_visualize_videos.main(cmdline=0, src=kwargs['output_kwcoco_fpath'], smart=True)
 
     Ignore:
         DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
         smartwatch stats $DVC_DATA_DPATH/Drop6/test-timeave-imgonly-KR_R001.kwcoco.json
-        smartwatch visualize $DVC_DATA_DPATH/Drop6/test-timeave-imgonly-KR_R001.kwcoco.json --smart=True
 
     Example:
+        >>> # 1: Check cloudmasking.
         >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
         >>> from watch.cli.coco_temporally_combine_channels import *  # NOQA
         >>> import watch
         >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> cmdline = 0
         >>> kwargs = dict(
-        >>>     kwcoco_fpath=data_dvc_dpath / 'Drop4-BAS/data_vali_KR_R001.kwcoco.json',
-        >>>     output_kwcoco_fpath=data_dvc_dpath / 'Drop4-BAS/test-timeave-KR_R001.kwcoco.json',
-        >>>     workers=11,
-        >>>     temporal_window_duration='1 year',
-        >>>     channels='red|green|blue',
-        >>>     filter_with_cloudmasks=False,
-        >>>     resolution='10GSD',
-        >>> )
-        >>> output_coco_dset = main(cmdline=cmdline, **kwargs)
-
-    Ignore:
-        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-        smartwatch stats $DVC_DATA_DPATH/Drop4-BAS/test-timeave-KR_R001.kwcoco.json
-        smartwatch visualize $DVC_DATA_DPATH/Drop4-BAS/test-timeave-KR_R001.kwcoco.json --smart=True
-        
-    Example:
-        >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
-        >>> from watch.cli.coco_temporally_combine_channels import *  # NOQA
-        >>> import watch
-        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-        >>> cmdline = 0
-        >>> kwargs = dict(
-        >>>     kwcoco_fpath=data_dvc_dpath / 'Drop4-BAS/data_vali_KR_R001.kwcoco.json',
-        >>>     output_kwcoco_fpath=data_dvc_dpath / 'Drop4-BAS/test-timeave-KR_R001-cloudmask.kwcoco.json',
+        >>>     kwcoco_fpath=data_dvc_dpath / 'Drop6/imgonly-KR_R001.kwcoco.json',
+        >>>     output_kwcoco_fpath=data_dvc_dpath / 'Drop6/test-timeave-KR_R001-cloudmask.kwcoco.json',
         >>>     workers=11,
         >>>     temporal_window_duration='1 year',
         >>>     channels='red|green|blue',
         >>>     filter_with_cloudmasks=True,
-        >>>     resolution='10GSD',
         >>> )
         >>> output_coco_dset = main(cmdline=cmdline, **kwargs)
-        
+        >>> from watch.cli import coco_visualize_videos
+        >>> coco_visualize_videos.main(cmdline=0, src=kwargs['output_kwcoco_fpath'], smart=True)
+
     Ignore:
         DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-        smartwatch stats $DVC_DATA_DPATH/Drop4-BAS/test-timeave-KR_R001-cloudmask.kwcoco.json
-        smartwatch visualize $DVC_DATA_DPATH/Drop4-BAS/test-timeave-KR_R001-cloudmask.kwcoco.json --smart=True
+        smartwatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001.kwcoco.json
         
-
-
     Example:
+        >>> # 2: Check that resolution can be updated.
         >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
         >>> from watch.cli.coco_temporally_combine_channels import *  # NOQA
         >>> import watch
         >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> cmdline = 0
         >>> kwargs = dict(
-        >>>     kwcoco_fpath=data_dvc_dpath / 'Drop4-BAS/data_vali_KR_R001.kwcoco.json',
-        >>>     output_kwcoco_fpath=data_dvc_dpath / 'Drop4-BAS/test-timeave-KR_R001-median.kwcoco.json',
+        >>>     kwcoco_fpath=data_dvc_dpath / 'Drop6/imgonly-KR_R001.kwcoco.json',
+        >>>     output_kwcoco_fpath=data_dvc_dpath / 'Drop6/test-timeave-KR_R001-cloudmask-5GSD.kwcoco.json',
+        >>>     workers=11,
+        >>>     temporal_window_duration='1 year',
+        >>>     channels='red|green|blue',
+        >>>     filter_with_cloudmasks=True,
+        >>>     resolution='5GSD',
+        >>> )
+        >>> output_coco_dset = main(cmdline=cmdline, **kwargs)
+        >>> from watch.cli import coco_visualize_videos
+        >>> coco_visualize_videos.main(cmdline=0, src=kwargs['output_kwcoco_fpath'], smart=True)
+
+    Ignore:
+        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+        smartwatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001-cloudmask.kwcoco.json
+
+    Example:
+        >>> # 3: Median combining.
+        >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
+        >>> from watch.cli.coco_temporally_combine_channels import *  # NOQA
+        >>> import watch
+        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> cmdline = 0
+        >>> kwargs = dict(
+        >>>     kwcoco_fpath=data_dvc_dpath / 'Drop6/imgonly-KR_R001.kwcoco.json',
+        >>>     output_kwcoco_fpath=data_dvc_dpath / 'Drop6/test-timeave-KR_R001-median.kwcoco.json',
         >>>     workers=11,
         >>>     merge_method='median',
         >>>     temporal_window_duration='1 year',
@@ -113,21 +141,23 @@ def main(cmdline=1, **kwargs):
         >>>     resolution='10GSD',
         >>> )
         >>> output_coco_dset = main(cmdline=cmdline, **kwargs)
-
+        >>> from watch.cli import coco_visualize_videos
+        >>> coco_visualize_videos.main(cmdline=0, src=kwargs['output_kwcoco_fpath'], smart=True)
+        
     Ignore:
         DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-        smartwatch stats $DVC_DATA_DPATH/Drop4-BAS/test-timeave-KR_R001-median.kwcoco.json
-        smartwatch visualize $DVC_DATA_DPATH/Drop4-BAS/test-timeave-KR_R001-median.kwcoco.json --smart=True
+        smartwatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001-median.kwcoco.json
         
     Example:
+        >>> # 4: Median combining with cloudmask.
         >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
         >>> from watch.cli.coco_temporally_combine_channels import *  # NOQA
         >>> import watch
         >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> cmdline = 0
         >>> kwargs = dict(
-        >>>     kwcoco_fpath=data_dvc_dpath / 'Drop4-BAS/data_vali_KR_R001.kwcoco.json',
-        >>>     output_kwcoco_fpath=data_dvc_dpath / 'Drop4-BAS/test-timeave-KR_R001-cloudmask-median.kwcoco.json',
+        >>>     kwcoco_fpath=data_dvc_dpath / 'Drop6/imgonly-KR_R001.kwcoco.json',
+        >>>     output_kwcoco_fpath=data_dvc_dpath / 'Drop6/test-timeave-KR_R001-cloudmask-median.kwcoco.json',
         >>>     workers=11,
         >>>     merge_method='median',
         >>>     temporal_window_duration='1 year',
@@ -136,21 +166,49 @@ def main(cmdline=1, **kwargs):
         >>>     resolution='10GSD',
         >>> )
         >>> output_coco_dset = main(cmdline=cmdline, **kwargs)
+        >>> from watch.cli import coco_visualize_videos
+        >>> coco_visualize_videos.main(cmdline=0, src=kwargs['output_kwcoco_fpath'], smart=True)
         
     Ignore:
         DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-        smartwatch stats $DVC_DATA_DPATH/Drop4-BAS/test-timeave-KR_R001-cloudmask-median.kwcoco.json
-        smartwatch visualize $DVC_DATA_DPATH/Drop4-BAS/test-timeave-KR_R001-cloudmask-median.kwcoco.json --smart=True
+        smartwatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001-cloudmask-median.kwcoco.json
         
     Example:
+        >>> # 5: Dont separate sensors.
         >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
         >>> from watch.cli.coco_temporally_combine_channels import *  # NOQA
         >>> import watch
         >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> cmdline = 0
         >>> kwargs = dict(
-        >>>     kwcoco_fpath=data_dvc_dpath / 'Drop4-BAS/data_vali_KR_R001.kwcoco.json',
-        >>>     output_kwcoco_fpath=data_dvc_dpath / 'Drop4-BAS/test-timeave-KR_R001-cloudmask-s2w_3.kwcoco.json',
+        >>>     kwcoco_fpath=data_dvc_dpath / 'Drop6/imgonly-KR_R001.kwcoco.json',
+        >>>     output_kwcoco_fpath=data_dvc_dpath / 'Drop6/test-timeave-KR_R001-cloudmask-no_sensor_separate.kwcoco.json',
+        >>>     workers=11,
+        >>>     merge_method='mean',
+        >>>     temporal_window_duration='1 year',
+        >>>     channels='red|green|blue',
+        >>>     filter_with_cloudmasks=True,
+        >>>     resolution='10GSD',
+        >>>     separate_sensors=False,
+        >>> )
+        >>> output_coco_dset = main(cmdline=cmdline, **kwargs)
+        >>> from watch.cli import coco_visualize_videos
+        >>> coco_visualize_videos.main(cmdline=0, src=kwargs['output_kwcoco_fpath'], smart=True)
+        
+    Ignore:
+        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+        smartwatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001-cloudmask-no_sensor_separate.kwcoco.json
+        
+    Example:
+        >>> # 6: Adjust the effect of S2 imagery.
+        >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
+        >>> from watch.cli.coco_temporally_combine_channels import *  # NOQA
+        >>> import watch
+        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> cmdline = 0
+        >>> kwargs = dict(
+        >>>     kwcoco_fpath=data_dvc_dpath / 'Drop6/imgonly-KR_R001.kwcoco.json',
+        >>>     output_kwcoco_fpath=data_dvc_dpath / 'Drop6/test-timeave-KR_R001-cloudmask-s2w_10.kwcoco.json',
         >>>     workers=11,
         >>>     merge_method='mean',
         >>>     temporal_window_duration='1 year',
@@ -158,22 +216,20 @@ def main(cmdline=1, **kwargs):
         >>>     filter_with_cloudmasks=True,
         >>>     resolution='10GSD',
         >>>     s2_weight_factor=10.0,
+        >>>     separate_sensors=False,
         >>> )
         >>> output_coco_dset = main(cmdline=cmdline, **kwargs)
+        >>> from watch.cli import coco_visualize_videos
+        >>> coco_visualize_videos.main(cmdline=0, src=kwargs['output_kwcoco_fpath'], smart=True)
         
     Ignore:
         DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-        smartwatch stats $DVC_DATA_DPATH/Drop4-BAS/test-timeave-KR_R001-cloudmask-s2w_10.kwcoco.json
-        smartwatch visualize $DVC_DATA_DPATH/Drop4-BAS/test-timeave-KR_R001-cloudmask-s2w_10.kwcoco.json --smart=True
-        
+        smartwatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001-cloudmask-s2w_10.kwcoco.json
     """
     config = TimeAverageConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
     print('config = ' + ub.urepr(dict(config), nl=1))
 
-    if 0:
-        globals().update(**config)
-
-    output_coco_dset = combine_kwcoco_channels_temporally(**config)
+    output_coco_dset = combine_kwcoco_channels_temporally(config)
     return output_coco_dset
 
     # config = TimeAverageConfig(
@@ -234,15 +290,7 @@ def main(cmdline=1, **kwargs):
     #                                    merge_method, resolution)
 
 
-def combine_kwcoco_channels_temporally(kwcoco_fpath,
-                                       output_kwcoco_fpath,
-                                       channels,
-                                       temporal_window_duration,
-                                       merge_method,
-                                       resolution,
-                                       filter_with_cloudmasks,
-                                       workers,
-                                       s2_weight_factor=1.0):
+def combine_kwcoco_channels_temporally(config):
     """Combine spatial data within a temporal window from a kwcoco dataset and save the result to a new kwcoco dataset.
 
     High level steps:
@@ -250,45 +298,46 @@ def combine_kwcoco_channels_temporally(kwcoco_fpath,
     2. Divide the dataset into temporal windows.
     3. For each temporal window, combine the spatial data from each channel.
     4. Save the combined image result to a new kwcoco dataset.
-
-    Args:
-        kwcoco_fpath (str): The path to the kwcoco file containing the image data to be combined.
-        output_kwcoco_fpath (str): The path where the combined image data will be saved to in a kwcoco file.
-        channels (str): The channels to get and combine the spatial data from. E.g. 'red|green|blue'. Note: Separate channels with '|'.
-        temporal_window_duration (int): The amount of time the temporal window should cover in days. E.g. 365 for a year.
-        merge_method (str): The combine method to use. Choices: 'mean', 'median'.
-        resolution (str): The resolution the imagery will be loaded during the combination operation and saved to the output kwcoco file.
-        filter_with_cloudmasks (bool): If active the cloudmasks will be used to filter out pixels with too much cloud coverage or missing data.
-        s2_weight_factor (float): A weighting factor to scale the impact of Sentinel-2 pixels during the combination operation. Note: Only effects the merge method 'mean'.
-        workers (int): The number of CPU cores to compute the combination operation with.
     """
     # Check inputs.
     space = 'video'
 
     ## Check input kwcoco file path exists.
-    if os.path.exists(kwcoco_fpath) is False:
-        raise FileNotFoundError(f'Input kwcoco file path does not exist: {kwcoco_fpath}')
+    if os.path.exists(config.kwcoco_fpath) is False:
+        raise FileNotFoundError(f'Input kwcoco file path does not exist: {config.kwcoco_fpath}')
 
     ## Check the S2 weight factor and merge method combination.
-    if s2_weight_factor != 1.0 and merge_method != 'mean':
+    if config.s2_weight_factor != 1.0 and config.merge_method != 'mean':
         print('WARNING: S2 weight factor only effects the merge method "mean".')
 
     # 1. Load kwcoco dataset.
-    coco_dset = kwcoco.CocoDataset.coerce(kwcoco_fpath)
+    coco_dset = kwcoco.CocoDataset.coerce(config.kwcoco_fpath)
+
+    selected_gids = kwcoco_extensions.filter_image_ids(
+        coco_dset,
+        include_sensors=config['include_sensors'],
+        exclude_sensors=config['exclude_sensors'],
+        select_images=config['select_images'],
+        select_videos=config['select_videos'],
+    )
+
+    if selected_gids is not None:
+        coco_dset = coco_dset.subset(selected_gids)
+
     output_coco_dset = coco_dset.copy()
     output_coco_dset.clear_images()  # we will write all new images
 
-    requested_sensorchan = kwcoco.SensorChanSpec.coerce(channels)
+    requested_sensorchan = kwcoco.SensorChanSpec.coerce(config.channels)
     requested_chans = requested_sensorchan.chans
 
     ## Get saved asset directory.
-    output_kwcoco_fpath = ub.Path(output_kwcoco_fpath)
+    output_kwcoco_fpath = ub.Path(config.output_kwcoco_fpath)
     save_assest_dir = (output_kwcoco_fpath.parent / "_assets").ensuredir()
 
     # 2. Divide the dataset into temporal windows (per video).
 
     ## Convert temporal_window_duration from days to seconds.
-    time_delta = util_time.coerce_timedelta(temporal_window_duration)
+    time_delta = util_time.coerce_timedelta(config.temporal_window_duration)
     time_delta_seconds = time_delta.total_seconds()
 
     video_ids = [vid for vid in coco_dset.videos()]
@@ -333,16 +382,17 @@ def combine_kwcoco_channels_temporally(kwcoco_fpath,
 
             # groupers['channels'] = image_merge_channels  # not sure if we do this or not
 
-            RESPECT_SENSOR = True
-            if RESPECT_SENSOR:
+            if config.separate_sensors:
                 image_sensors = images.lookup('sensor_coarse', None)
                 groupers['sensor'] = image_sensors
 
             # Construct a group-id for each image
             image_groupids = list(zip(*groupers.values()))
+
             # Group all image-indexes within the same group-id together.
-            unique_groupids, grouped_idxs = kwarray.group_indices(image_groupids)
-            groupid_to_idxs = dict(zip(unique_groupids, grouped_idxs))
+            # unique_groupids, grouped_idxs = kwarray.group_indices(image_groupids)
+            # groupid_to_idxs = dict(zip(unique_groupids, grouped_idxs))
+            groupid_to_idxs = ub.group_items(range(len(image_groupids)), image_groupids)
 
             # DEBUG: Print the distribution of images per window.
             if 0:
@@ -354,7 +404,7 @@ def combine_kwcoco_channels_temporally(kwcoco_fpath,
                 print('Histogram: = {}'.format(ub.urepr(bucket_to_num_images, nl=1)))
                 print('N images per window: = {}'.format(ub.urepr(bucket_stats, nl=1)))
 
-            jobs = ub.JobPool(mode='process', max_workers=workers)
+            jobs = ub.JobPool(mode='process', max_workers=config.workers)
 
             # 3. For each temporal window, combine the spatial data from each channel.
             chunk_image_idxs = list(groupid_to_idxs.values())
@@ -364,8 +414,8 @@ def combine_kwcoco_channels_temporally(kwcoco_fpath,
                 window_coco_images = window_image.coco_images
                 # Detach for process parallelization
                 window_coco_images = [g.detach() for g in window_coco_images]
-                jobs.submit(merge_images, window_coco_images, merge_method, requested_chans, space, resolution,
-                            save_assest_dir, filter_with_cloudmasks, s2_weight_factor)
+                jobs.submit(merge_images, window_coco_images, config.merge_method, requested_chans, space,
+                            config.resolution, save_assest_dir, config.filter_with_cloudmasks, config.s2_weight_factor)
 
             for job in pman.progiter(jobs.as_completed(),
                                      total=len(jobs),
@@ -426,11 +476,31 @@ def merge_images(window_coco_images, merge_method, requested_chans, space, resol
             pxl_weight = (1 - np.isnan(image_data)).astype(np.float32)
 
             if filter_with_cloudmasks:
-                # Find pixels that are valid in the cloud mask.
-                cloud_mask_data = coco_img.imdelay('cloudmask', space=space,
-                                                   resolution=resolution).finalize(nodata_method='float')
-                quality_mask = ((0.5 < cloud_mask_data) & (cloud_mask_data < 1.9)) | ((32.5 < cloud_mask_data) &
-                                                                                      (cloud_mask_data < 33.5))
+                qa_data = coco_img.imdelay('quality',
+                                           space=space,
+                                           interpolation='nearest',
+                                           antialias=False,
+                                           resolution=resolution).finalize()
+
+                from watch.tasks.fusion.datamodules.qa_bands import QA_SPECS
+                # We don't have the exact right information here, so we can
+                # punt for now and assume "Drop4"
+                iffy_qa_names = [
+                    'cloud',
+                    'cloud_adjacent',
+                    'cloud_shadow',
+                ]
+                spec_name = 'ACC-1'
+                sensor = coco_img.img.get('sensor_coarse', '*')
+                try:
+                    table = QA_SPECS.find_table(spec_name, sensor)
+                except AssertionError as ex:
+                    print(f'warning ex={ex}')
+                    is_iffy = None
+                else:
+                    is_iffy = table.mask_any(qa_data, iffy_qa_names)
+
+                quality_mask = (1 - is_iffy)
 
                 # Update pixel weights based on quality pixel values.
                 pxl_weight *= quality_mask
@@ -454,11 +524,31 @@ def merge_images(window_coco_images, merge_method, requested_chans, space, resol
             image_data = delayed.finalize(nodata_method='float')
 
             if filter_with_cloudmasks:
-                # Find pixels that are valid in the cloud mask.
-                cloud_mask_data = coco_img.imdelay('cloudmask', space=space,
-                                                   resolution=resolution).finalize(nodata_method='float')
-                quality_mask = ((0.5 < cloud_mask_data) & (cloud_mask_data < 1.9)) | ((32.5 < cloud_mask_data) &
-                                                                                      (cloud_mask_data < 33.5))
+                qa_data = coco_img.imdelay('quality',
+                                           space=space,
+                                           interpolation='nearest',
+                                           antialias=False,
+                                           resolution=resolution).finalize()
+
+                from watch.tasks.fusion.datamodules.qa_bands import QA_SPECS
+                # We don't have the exact right information here, so we can
+                # punt for now and assume "Drop4"
+                iffy_qa_names = [
+                    'cloud',
+                    'cloud_adjacent',
+                    'cloud_shadow',
+                ]
+                spec_name = 'ACC-1'
+                sensor = coco_img.img.get('sensor_coarse', '*')
+                try:
+                    table = QA_SPECS.find_table(spec_name, sensor)
+                except AssertionError as ex:
+                    print(f'warning ex={ex}')
+                    is_iffy = None
+                else:
+                    is_iffy = table.mask_any(qa_data, iffy_qa_names)
+
+                quality_mask = (1 - is_iffy)
 
                 # Update pixel weights based on quality pixel values.
                 M = np.ma.masked_array(data=image_data, mask=~np.repeat(quality_mask, repeats=3, axis=2))
@@ -542,5 +632,7 @@ if __name__ == '__main__':
 
     CommandLine:
         python -m watch.cli.coco_temporally_combine_channels
+
+        
     """
     main()
