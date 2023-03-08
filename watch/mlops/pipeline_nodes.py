@@ -1083,7 +1083,8 @@ class ProcessNode(Node):
     def _depends_config(self):
         """
         The dag config that specifies the parameters this node depends on.
-        This is what we write to "job_config.json"
+        This is what we write to "job_config.json". Note: this output must be
+        passed to dag.config, not node.config.
         """
         depends_config = {}
         for depend_node in list(self.ancestor_process_nodes()) + [self]:
@@ -1192,27 +1193,14 @@ class ProcessNode(Node):
         key = self.name + '_id'
         return self.template_node_group_dpath / ('{' + key + '}')
 
-    @memoize_configured_property
-    @profile
-    def depends_config(self):
-        # Any manually specified inputs need to be inserted into this
-        # dictionary. Derived inputs can be ignored.
-        depends_config = self.final_algo_config.copy()
-        return depends_config
-        # return self.config & self.algo_params
-
-    @memoize_configured_property
-    @profile
-    def algo_id(self):
-        """
-        A unique id to represent the output of a deterministic process.
-
-        This does NOT have a dependency on the larger the DAG.
-        """
-        from watch.utils.reverse_hashid import condense_config
-        algo_id = condense_config(
-            self.final_algo_config, self.name + '_algo_id', register=False)
-        return algo_id
+    # @memoize_configured_property
+    # @profile
+    # def depends_config(self):
+    #     # Any manually specified inputs need to be inserted into this
+    #     # dictionary. Derived inputs can be ignored.
+    #     depends_config = self.final_algo_config.copy()
+    #     return depends_config
+    #     # return self.config & self.algo_params
 
     @memoize_configured_property
     def template_dag_dname(self):
@@ -1285,6 +1273,7 @@ class ProcessNode(Node):
     @memoize_configured_method
     @profile
     def ancestor_process_nodes(self):
+        # TODO: we need to ensure that this returns a consistent order
         seen = {}
         stack = [self]
         while stack:
@@ -1301,6 +1290,10 @@ class ProcessNode(Node):
     @memoize_configured_property
     @profile
     def depends(self):
+        """
+        The mapping from ancestor and self node names to their algorithm ids
+        Should probably rename.
+        """
         ancestors = self.ancestor_process_nodes()
         # TODO:
         # We need to know what input paths have not been represented.  This
@@ -1315,29 +1308,16 @@ class ProcessNode(Node):
 
     @memoize_configured_property
     @profile
-    def node_info(self):
-        ancestors = self.ancestor_process_nodes()
-        # TODO:
-        # We need to know what input paths have not been represented.  This
-        # involves finding input paths that are not connected to the output of
-        # a node involved in building this id.
-        info = {
-            'node': self.name,
-            'process_id': self.process_id,
-            'algo_id': self.algo_id,
-            'depends': self.depends,
-            'config': self.config,
-            'ancestors': []
-        }
-        for node in ancestors[::-1]:
-            info['ancestors'].append({
-                'node': node.name,
-                'process_id': node.process_id,
-                'algo_id': node.algo_id,
-                'config': node.config,
-                'depends': node.depends,
-            })
-        return info
+    def algo_id(self):
+        """
+        A unique id to represent the output of a deterministic process.
+
+        This does NOT have a dependency on the larger the DAG.
+        """
+        from watch.utils.reverse_hashid import condense_config
+        algo_id = condense_config(
+            self.final_algo_config, self.name + '_algo_id', register=False)
+        return algo_id
 
     @memoize_configured_property
     @profile
@@ -1475,6 +1455,33 @@ class ProcessNode(Node):
         print(f'num_finished={num_finished}')
         print(f'num_started={num_started}')
         return rows
+
+    @memoize_configured_property
+    @profile
+    def node_info(self):
+        # Can probably remove
+        ancestors = self.ancestor_process_nodes()
+        # TODO:
+        # We need to know what input paths have not been represented.  This
+        # involves finding input paths that are not connected to the output of
+        # a node involved in building this id.
+        info = {
+            'node': self.name,
+            'process_id': self.process_id,
+            'algo_id': self.algo_id,
+            'depends': self.depends,
+            'config': self.config,
+            'ancestors': []
+        }
+        for node in ancestors[::-1]:
+            info['ancestors'].append({
+                'node': node.name,
+                'process_id': node.process_id,
+                'algo_id': node.algo_id,
+                'config': node.config,
+                'depends': node.depends,
+            })
+        return info
 
 
 def _load_json(fpath):

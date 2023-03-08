@@ -43,7 +43,6 @@ Example:
     >>>     print(f'{node.resources=}')
     >>>     print(f'{node.algo_params=}')
     >>>     print('node.depends = {}'.format(ub.repr2(node.depends, nl=1, sort=0)))
-    >>>     #print('node.node_info = {}'.format(ub.repr2(node.node_info, nl=3, sort=0)))
     >>>     final = node._finalize_templates()
     >>>     print('final = {}'.format(ub.repr2(final, nl=2)))
     >>>     print('---')

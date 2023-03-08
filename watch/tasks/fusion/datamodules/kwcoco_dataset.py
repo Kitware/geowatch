@@ -51,7 +51,7 @@ Example:
     >>>     channels="(S2,L8):blue|green|red|nir",
     >>>     input_space_scale='10GSD',
     >>>     window_space_scale='10GSD',
-    >>>     output_space_scale='10GSD',
+    >>>     output_space_scale='1000GSD',
     >>>     #normalize_peritem='nir',
     >>>     dist_weights=0,
     >>>     quality_threshold=0,
@@ -69,7 +69,7 @@ Example:
     ...     self[idx]
     >>> print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
     >>> # xdoctest: +REQUIRES(--show)
-    >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0, rescale=0)
+    >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0, rescale=1)
     >>> import kwplot
     >>> kwplot.autompl()
     >>> kwplot.imshow(canvas, fnum=1)
@@ -1542,9 +1542,19 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         resolved_input_scale = resolution_info['resolved_input_scale']
         resolved_output_scale = resolution_info['resolved_output_scale']
+
+        # Future directions:
+        # Currently we submit items based on the idea that the outputs will be
+        # alignable to the inputs. This need not be the case.  This should
+        # provide the input sequence as well as what the desired output
+        # sequence should be. The requested output sequence could be disjoint
+        # from the input sequence. It could also be aligned, or perhaps it is
+        # just a single classification prediction over the entire sequence.
         item = {
             'index': index,
             'frames': frame_items,
+            # '_new_inputs': ...,
+            # '_new_outputs': ...,
             'positional_tensors': positional_tensors,
             'video_id': vidid,
             'video_name': video['name'],

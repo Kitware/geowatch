@@ -19,48 +19,69 @@ def _namek_check_pipeline_status():
 
     from watch.mlops import smart_pipeline
     dag = smart_pipeline.make_smart_pipeline(pipeline)
-    dag.print_graphs()
     dag.configure(config=None, root_dpath=root_dpath)
+    # node_to_fpaths = {}
+    # for node_name, node in ub.ProgIter(dag.nodes.items()):
+    #     node_fpaths = {}
+    #     for out_node_key, out_node in node.outputs.items():
+    #         node_fpaths[out_node_key] = aggregate_loader.out_node_matching_fpaths(out_node)
+    #     node_to_fpaths[node_name] = node_fpaths
+    # node_to_fpaths = ub.udict(node_to_fpaths).map_values(ub.udict)
+    # num_existing_outs = node_to_fpaths.map_values(lambda x: x.map_values(len))
 
-    node_to_fpaths = {}
-    for node_name, node in ub.ProgIter(dag.nodes.items()):
-        node_fpaths = {}
-        for out_node_key, out_node in node.outputs.items():
-            node_fpaths[out_node_key] = aggregate_loader.out_node_matching_fpaths(out_node)
-        node_to_fpaths[node_name] = node_fpaths
-
-    node_to_fpaths = ub.udict(node_to_fpaths).map_values(ub.udict)
-    num_existing_outs = node_to_fpaths.map_values(lambda x: x.map_values(len))
-
-    stages_of_interest = ['bas_pxl', 'bas_pxl_eval', 'bas_poly', 'bas_poly_eval']
+    # stages_of_interest = ['bas_pxl', 'bas_pxl_eval', 'bas_poly', 'bas_poly_eval']
+    stages_of_interest = ['bas_pxl', 'bas_pxl_eval']
     existing = {}
     for stage in stages_of_interest:
         rows = dag.nodes[stage].find_template_outputs(workers=8)
+        if 1:
+            rows = [row for row in rows if row.get('request.bas_pxl.test_dataset', None) is not None]
         existing[stage] = rows
 
-    stage = 'bas_pxl'
-    agree = 0
-    from watch.utils import util_dotdict  # NOQA
-    for row in existing[stage]:
-        ...
-        node = dag.nodes[stage]
-        row = util_dotdict.DotDict(row)
-        config = row.prefix_get('request')
-        node.configure(config)
-
-        node.process_id
-
-        row_dpath = ub.Path(row['dpath'])
-        print('----')
-        print(f'{row_dpath.name}')
-        print(f'{node.final_node_dpath.name}')
-        if node.final_node_dpath == row['dpath']:
-            agree += 1
+    bad_rows = []
+    for stage in stages_of_interest:
+        from watch.utils import util_dotdict  # NOQA
+        for row in ub.ProgIter(existing[stage]):
+            node = dag.nodes[stage]
+            row = util_dotdict.DotDict(row)
+            config = row.prefix_get('request')
+            dag.configure(config, cache=False)
+            row_dpath = ub.Path(row['dpath'])
+            row['process_id'] = node.process_id
+            # print(node.final_command())
+            if node.final_node_dpath != row['dpath']:
+                # print('config = {}'.format(ub.urepr(config, nl=1)))
+                # print((row_dpath / 'job_config.json').read_text())
+                # print((row_dpath / 'invoke.sh').read_text())
+                # print(node.final_command())
+                bad_rows.append(row)
 
     dfs = {}
     from watch.utils.util_pandas import DotDictDataFrame
     for stage in stages_of_interest:
         dfs[stage] = DotDictDataFrame(existing[stage])
+
+    stage1 = 'bas_pxl'
+    stage2 = 'bas_pxl_eval'
+    df1 = dfs[stage1]
+    df2 = dfs[stage2]
+
+    from watch.utils import util_dotdict  # NOQA
+    bad_rows = []
+    for row in existing[stage1]:
+        wanted_succ = ub.Path(row['dpath']) / '.succ' / stage2
+        if not wanted_succ.exists():
+            node = dag.nodes[stage]
+            row = util_dotdict.DotDict(row)
+            config = row.prefix_get('request')
+            dag.configure(config, cache=False)
+            if node.does_exist:
+                raise Exception
+
+        node1 = dag.nodes[stage1]
+        node2 = dag.nodes[stage2]
+        ...
+
 
     df1 = dfs['bas_pxl'].subframe('request')
     df2 = dfs['bas_pxl_eval'].subframe('request')
@@ -284,28 +305,51 @@ def _check_high_tpr_case(agg, config):
 
 def _namek_eval():
     from watch.mlops.aggregate import AggregateEvluationConfig
-    from watch.mlops.aggregate import build_tables
-    from watch.mlops.aggregate import build_aggregators
+    from watch.mlops.aggregate import coerce_aggregators
     import watch
     data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
     expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
     cmdline = 0
     kwargs = {
-        'root_dpath': expt_dvc_dpath / '_namek_eval',
+        'target': expt_dvc_dpath / '_namek_eval',
         'pipeline': 'bas',
         'io_workers': 10,
-        'freeze_cache': 0,
-        # 'pipeline': 'joint_bas_sc_nocrop',
-        # 'root_dpath': expt_dvc_dpath / '_testsc',
-        #'pipeline': 'sc',
     }
     config = AggregateEvluationConfig.cli(cmdline=cmdline, data=kwargs)
-    eval_type_to_results = build_tables(config)
-    agg_dpath = ub.Path(config['root_dpath']) / 'aggregate'
-    eval_type_to_aggregator = build_aggregators(eval_type_to_results, agg_dpath)
-    agg = ub.peek(eval_type_to_aggregator.values())
-    agg = eval_type_to_aggregator.get('bas_poly_eval', None)
+    eval_type_to_aggregator = coerce_aggregators(config)
 
+    poly_agg = eval_type_to_aggregator.get('bas_poly_eval', None)
+    pxl_agg = eval_type_to_aggregator.get('bas_pxl_eval', None)
+
+    poly_agg.resources['resources.bas_poly_eval.duration']
+    poly_agg.resources['resources.bas_poly.duration']
+    poly_agg.resources['resources.bas_poly.co2_kg']
+
+    from watch.utils import util_time
+    unique_resources = {}
+    unique_resources['bas_pxl'] = poly_agg.table.groupby('context.bas_pxl.uuid')
+    unique_resources['bas_poly'] = poly_agg.table.groupby('context.bas_poly.uuid')
+    unique_resources['bas_poly_eval'] = poly_agg.table.groupby('context.bas_poly_eval.uuid')
+
+    for k, v in unique_resources.items():
+        v[f'resources.{k}.duration'].max().apply(util_time.coerce_timedelta).sum()
+        co2_key = f'resources.{k}.co2_kg'
+        if co2_key in v:
+            ...
+        v[].max().sum()
+
+
+
+    pxl_time = poly_agg.table.groupby('context.bas_pxl.uuid')['resources.bas_pxl.duration'].max().apply(util_time.coerce_timedelta).sum()
+    poly_time = poly_agg.table.groupby('context.bas_poly.uuid')['resources.bas_poly.duration'].max().apply(util_time.coerce_timedelta).sum()
+    poly_eval_time = poly_agg.table.groupby('context.bas_poly_eval.uuid')['resources.bas_poly.duration'].max().apply(util_time.coerce_timedelta).sum()
+    total_time = pxl_time + poly_time + poly_eval_time
+
+    poly_agg.table['context.bas_poly.uuid']
+    poly_agg.table['context.bas_poly_eval.uuid']
+
+
+    agg = ub.peek(eval_type_to_aggregator.values())
     agg.build_macro_tables()
 
     agg.primary_display_cols = ['bas_poly_eval.metrics.bas_faa_f1', 'bas_poly_eval.metrics.bas_f1', 'bas_poly_eval.metrics.bas_tpr', 'bas_poly_eval.metrics.bas_ppv']

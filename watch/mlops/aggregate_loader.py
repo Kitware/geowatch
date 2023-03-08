@@ -267,7 +267,6 @@ def load_result_resolved(node_dpath):
     node_dpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_timekernel_test_drop4/eval/flat/bas_pxl_eval/bas_pxl_eval_id_5d38c6b3')
     """
     # from watch.utils.util_dotdict import explore_nested_dict
-
     node_dpath = ub.Path(node_dpath)
     node_type_dpath = node_dpath.parent
     node_type = node_type_dpath.name

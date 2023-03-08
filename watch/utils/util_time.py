@@ -331,7 +331,8 @@ def coerce_timedelta(delta):
                 delta = datetime_mod.timedelta(seconds=float(magnitude))
             else:
                 import pytimeparse  #
-                print('warning: pytimeparse fallback')
+                import warnings
+                warnings.warn('warning: pytimeparse fallback')
                 seconds = pytimeparse.parse(delta)
                 if seconds is None:
                     raise Exception(delta)
