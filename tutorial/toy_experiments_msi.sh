@@ -5,7 +5,7 @@ This demonstrates an end-to-end pipeline on multispectral toydata
 This walks through the entire process of fit -> predict -> evaluate and the
 output if you run this should end with something like
 
-source ~/code/watch/watch/tasks/fusion/experiments/crall/toy_experiments_msi.sh
+source ~/code/watch/tutorial/toy_experiments_msi.sh
 """
 
 # Define wherever you want to store results
@@ -88,7 +88,6 @@ echo "CHANNELS = $CHANNELS"
 DATASET_CODE=ToyDataMSI
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 EXPERIMENT_NAME=ToyDataMSI_Demo_V001
-DATASET_CODE=ToyDataMSI
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 MAX_STEPS=100
 TARGET_LR=3e-4
@@ -116,7 +115,7 @@ python -m watch.tasks.fusion fit --config "
       init_args:
         max_lr: $TARGET_LR
         total_steps: $MAX_STEPS
-        anneal_strategy: linear
+        anneal_strategy: cos
         pct_start: 0.05
     optimizer:
       class_path: torch.optim.Adam

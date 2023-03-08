@@ -141,17 +141,18 @@ class SmartLightningCLI(LightningCLI_Extension):
             # apply_on="instantiate",
         )
 
-        parser.add_argument(
-            '--profile',
-            action='store_true',
-            help=ub.paragraph(
-                '''
-                Fit does nothing with this flag. This just allows for `@xdev.profile`
-                profiling which checks sys.argv separately.
+        # We can remove this
+        # parser.add_argument(
+        #     '--profile',
+        #     action='store_true',
+        #     help=ub.paragraph(
+        #         '''
+        #         Fit does nothing with this flag. This just allows for `@xdev.profile`
+        #         profiling which checks sys.argv separately.
 
-                DEPRECATED: there is no longer any reason to use this. Set the
-                XDEV_PROFILE environment variable instead.
-                '''))
+        #         DEPRECATED: there is no longer any reason to use this. Set the
+        #         XDEV_PROFILE environment variable instead.
+        #         '''))
 
         def data_value_getter(key):
             # Hack to call setup on the datamodule before linking args
@@ -248,7 +249,7 @@ def make_cli(config=None):
         # auto-plotters can hook into.
         import tensorboard  # NOQA
     except ImportError:
-        ...
+        print('warning: tensorboard not available')
     else:
         # Only use tensorboard if we have it.
         callbacks.append(pl_ext.callbacks.TensorboardPlotter())
