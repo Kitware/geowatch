@@ -25,13 +25,13 @@ generate_data(){
     mkdir -p "$DVC_DATA_DPATH"
 
     kwcoco toydata --key="vidshapes${NUM_TOY_TRAIN_VIDS}-frames5-randgsize-speed0.2-msi-multisensor" \
-        --bundle_dpath "$DVC_DATA_DPATH/vidshapes_msi_train${NUM_TOY_TRAIN_VIDS}" --verbose=4
+        --bundle_dpath "$DVC_DATA_DPATH/vidshapes_msi_train${NUM_TOY_TRAIN_VIDS}" --verbose=1
 
     kwcoco toydata --key="vidshapes${NUM_TOY_VALI_VIDS}-frames5-randgsize-speed0.2-msi-multisensor" \
-        --bundle_dpath "$DVC_DATA_DPATH/vidshapes_msi_vali${NUM_TOY_VALI_VIDS}"  --verbose=4
+        --bundle_dpath "$DVC_DATA_DPATH/vidshapes_msi_vali${NUM_TOY_VALI_VIDS}"  --verbose=1
 
     kwcoco toydata --key="vidshapes${NUM_TOY_TEST_VIDS}-frames6-randgsize-speed0.2-msi-multisensor" \
-        --bundle_dpath "$DVC_DATA_DPATH/vidshapes_msi_test${NUM_TOY_TEST_VIDS}" --verbose=4
+        --bundle_dpath "$DVC_DATA_DPATH/vidshapes_msi_test${NUM_TOY_TEST_VIDS}" --verbose=1
 }
 
 
@@ -71,24 +71,7 @@ demo_visualize_toydata(){
 }
 
 
-#function join_by {
-#    # https://stackoverflow.com/questions/1527049/how-can-i-join-elements-of-an-array-in-bash
-#    local d=${1-} f=${2-}
-#    if shift 2; then
-#      printf %s "$f" "${@/#/$d}"
-#    fi
-#}
-#STREAMS=(
-#    "disparity|gauss"
-#    "X.2|Y:2:6"
-#    "B1|B8a"
-#    "flowx|flowy|distri"
-#)
-#CHANNELS=$(join_by , "${STREAMS[@]}")
-
-
-# Define the arch and channels we want to use
-ARCH=smt_it_stm_p8
+# Define the channels we want to use
 # The sensors and channels are specified by the kwcoco SensorChanSpec 
 # in this example the data does not contain sensor metadata, so we 
 # use a "*" to indicate a generic sensor.
@@ -101,46 +84,71 @@ CHANNELS="(*):(disparity|gauss,X.2|Y:2:6,B1|B8a,flowx|flowy|distri)"
 echo "CHANNELS = $CHANNELS"
 
 
+# Fit 
 DATASET_CODE=ToyDataMSI
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
-
-# Configure training hyperparameters to a baseline config file
-TRAIN_CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/train_$EXPERIMENT_NAME.yml 
-python -m watch.tasks.fusion.fit \
-    --channels="$CHANNELS" \
-    --method=MultimodalTransformer \
-    --arch_name=$ARCH \
-    --window_size=8 \
-    --learning_rate=3e-4 \
-    --weight_decay=1e-5 \
-    --dropout=0.1 \
-    --time_steps=5 \
-    --chip_size=256 \
-    --batch_size=1 \
-    --tokenizer=linconv \
-    --global_saliency_weight=1.0 \
-    --global_change_weight=1.0 \
-    --global_class_weight=1.0 \
-    --time_sampling=soft2 \
-    --time_span=1y \
-    --devices='auto' \
-    --accelerator='auto' \
-    --accumulate_grad_batches=1 \
-    --dump="$TRAIN_CONFIG_FPATH"
-
-# Fit 
-# Specify the expected input / output files
-EXPERIMENT_NAME=ToyFusion_${ARCH}_v001
+EXPERIMENT_NAME=ToyDataMSI_Demo_V001
+DATASET_CODE=ToyDataMSI
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package.pt 
-python -u -m watch.tasks.fusion.fit \
-           --config="$TRAIN_CONFIG_FPATH" \
-    --name="$EXPERIMENT_NAME" \
-    --default_root_dir="$DEFAULT_ROOT_DIR" \
-       --package_fpath="$PACKAGE_FPATH" \
-        --train_dataset="$TRAIN_FPATH" \
-         --vali_dataset="$VALI_FPATH" \
-          --num_workers="2" || echo "Fit command failed with bad return code"
+MAX_STEPS=100
+TARGET_LR=3e-4
+python -m watch.tasks.fusion fit --config "
+    data:
+        num_workers          : 4
+        train_dataset        : $TRAIN_FPATH
+        vali_dataset         : $VALI_FPATH
+        channels             : '$CHANNELS'
+        time_steps           : 5
+        chip_dims            : 128
+        batch_size           : 2
+    model:
+        class_path: MultimodalTransformer
+        init_args:
+            name        : $EXPERIMENT_NAME
+            arch_name   : smt_it_stm_p8 
+            window_size : 8
+            dropout     : 0.1
+            global_saliency_weight: 1.0 
+            global_class_weight:    1.0 
+            global_change_weight:   0.0 
+    lr_scheduler:
+      class_path: torch.optim.lr_scheduler.OneCycleLR
+      init_args:
+        max_lr: $TARGET_LR
+        total_steps: $MAX_STEPS
+        anneal_strategy: linear
+        pct_start: 0.05
+    optimizer:
+      class_path: torch.optim.Adam
+      init_args:
+        lr: $TARGET_LR
+        weight_decay: 1e-5
+        betas:
+          - 0.9
+          - 0.99
+    trainer:
+      accumulate_grad_batches: 1
+      default_root_dir     : $DEFAULT_ROOT_DIR
+      accelerator          : gpu 
+      devices              : 0,
+      #devices             : 0,1
+      #strategy            : ddp 
+      check_val_every_n_epoch: 1
+      enable_checkpointing: true
+      enable_model_summary: true
+      log_every_n_steps: 5
+      logger: true
+      max_steps: $MAX_STEPS
+      num_sanity_val_steps: 0
+      replace_sampler_ddp: true
+      track_grad_norm: 2
+    initializer:
+        init: noop
+"
+
+# This is the default final package that is done at the end of training.
+# See comments inside of demo_force_repackage
+PACKAGE_FPATH="$DEFAULT_ROOT_DIR"/final_package.pt
 
 
 demo_force_repackage(){
@@ -165,29 +173,25 @@ demo_force_repackage(){
 }
 
 
-# TODO: update to the watch.mlops version of this 
-# The "suggest" tool will determine paths that will help keep experimental
-# results organized and separated from one another. 
-SUGGESTIONS=$(
-    python -m watch.tasks.fusion.organize suggest_paths  \
-        --package_fpath="$PACKAGE_FPATH"  \
-        --test_dataset="$TEST_FPATH")
-PRED_FPATH="$(echo "$SUGGESTIONS" | jq -r .pred_dataset)"
-EVAL_DPATH="$(echo "$SUGGESTIONS" | jq -r .eval_dpath)"
+# Define where we will output predictions / evaluations
+# Later we will see how mlops.schedule_evaluation will do this for you, but in
+# this tutorial we are going to run prediction and evaluation manually.
+PRED_FPATH=$DEFAULT_ROOT_DIR/predictions/pred.kwcoco.json
+EVAL_DPATH=$DEFAULT_ROOT_DIR/evaluation
 
 # Predict using one of the packaged models
 python -m watch.tasks.fusion.predict \
-        --write_preds=True \
-        --write_probs=True \
-        --test_dataset="$TEST_FPATH" \
        --package_fpath="$PACKAGE_FPATH" \
+        --test_dataset="$TEST_FPATH" \
         --pred_dataset="$PRED_FPATH" \
-        --write_probs=True
 
 # Dump stats of truth vs prediction.
 # We should see soft segmentation masks in pred, but not in truth
-python -m kwcoco stats "$TEST_FPATH" "$PRED_FPATH"
-python -m watch stats "$TEST_FPATH" "$PRED_FPATH"
+kwcoco stats "$TEST_FPATH" "$PRED_FPATH"
+smartwatch stats "$TEST_FPATH" "$PRED_FPATH"
+
+# Visualize pixel predictions with a raw band, predicted saliency, and predicted class.
+smartwatch visualize "$PRED_FPATH" --channels='B11,salient,star|superstar|eff' --smart=True
 
 # Evaluate the predictions
 python -m watch.tasks.fusion.evaluate \

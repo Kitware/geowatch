@@ -205,7 +205,7 @@ def coco_watch_stats(dset, with_video_info=False):
             dt = util_time.coerce_datetime(img.get('date_captured', None))
             image_rows.append({
                 'video': video['name'],
-                'year': dt.year,
+                'year': None if dt is None else dt.year,
                 'sensor': img.get('sensor_coarse', None)
             })
 
@@ -267,6 +267,41 @@ def coco_watch_stats(dset, with_video_info=False):
     # _ = ub.cmd('gdalinfo {}'.format(fpath), verbose=3)
 
     image_df = pd.DataFrame(image_rows)
+    try:
+        year_pivot = build_year_summary(image_df)
+    except TypeError:
+        print('unable to build year analysis')
+        year_pivot = None
+    else:
+        rich.print('Sensor Date Range Histograms')
+        rich.print(year_pivot.to_string(max_rows=500))
+
+    sensorchan_gsd_stats = coco_sensorchan_gsd_stats(dset)
+    rich.print(sensorchan_gsd_stats.to_string(max_rows=500))
+
+    sensor_hist = ub.dict_hist(all_sensor_entries)
+    rich.print('Sensor Histogram = {}'.format(ub.repr2(sensor_hist, nl=1, sort=0)))
+
+    print('MSI channel stats')
+    info = kwcoco_extensions.coco_channel_stats(dset)
+    rich.print(ub.repr2(info, nl=4, sort=0))
+
+    dset_bundle_suffix = '/'.join(ub.Path(dset.fpath).parts[-2:])
+
+    stat_info = {
+        'dset': dset_bundle_suffix,
+        'basic_stats': basic_stats,
+        'chan_hist': info['chan_hist'],
+        'sensor_hist': info['sensor_hist'],
+        'sensorchan_hist2': info['sensorchan_hist2'],
+        'video_summary_rows': video_summary_rows,
+        'year_pivot': year_pivot,
+    }
+    return stat_info
+
+
+def build_year_summary(image_df):
+    import pandas as pd
     import numpy as np
     _, year_bins = np.histogram(image_df['year'])
     year_bins = sorted(np.unique(np.ceil(year_bins)))
@@ -297,31 +332,7 @@ def coco_watch_stats(dset, with_video_info=False):
 
     year_pivot = year_summary_df.pivot(['video', 'sensor'], ['time'], ['count'])
     year_pivot = year_pivot.fillna('0').astype(int)
-    rich.print('Sensor Date Range Histograms')
-    rich.print(year_pivot.to_string(max_rows=500))
-
-    sensorchan_gsd_stats = coco_sensorchan_gsd_stats(dset)
-    rich.print(sensorchan_gsd_stats.to_string(max_rows=500))
-
-    sensor_hist = ub.dict_hist(all_sensor_entries)
-    rich.print('Sensor Histogram = {}'.format(ub.repr2(sensor_hist, nl=1, sort=0)))
-
-    print('MSI channel stats')
-    info = kwcoco_extensions.coco_channel_stats(dset)
-    rich.print(ub.repr2(info, nl=4, sort=0))
-
-    dset_bundle_suffix = '/'.join(ub.Path(dset.fpath).parts[-2:])
-
-    stat_info = {
-        'dset': dset_bundle_suffix,
-        'basic_stats': basic_stats,
-        'chan_hist': info['chan_hist'],
-        'sensor_hist': info['sensor_hist'],
-        'sensorchan_hist2': info['sensorchan_hist2'],
-        'video_summary_rows': video_summary_rows,
-        'year_pivot': year_pivot,
-    }
-    return stat_info
+    return year_pivot
 
 
 def coco_sensorchan_gsd_stats(coco_dset):
