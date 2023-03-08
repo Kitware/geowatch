@@ -39,13 +39,23 @@ def _namek_check_pipeline_status():
         existing[stage] = rows
 
     stage = 'bas_pxl'
+    agree = 0
     from watch.utils import util_dotdict  # NOQA
     for row in existing[stage]:
+        ...
         node = dag.nodes[stage]
         row = util_dotdict.DotDict(row)
         config = row.prefix_get('request')
         node.configure(config)
-        ...
+
+        node.process_id
+
+        row_dpath = ub.Path(row['dpath'])
+        print('----')
+        print(f'{row_dpath.name}')
+        print(f'{node.final_node_dpath.name}')
+        if node.final_node_dpath == row['dpath']:
+            agree += 1
 
     dfs = {}
     from watch.utils.util_pandas import DotDictDataFrame

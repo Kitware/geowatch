@@ -563,9 +563,7 @@ class PipelineDAG:
                     before_node_commands.append(command)
 
                 if write_configs:
-                    depends_config = {}
-                    for depend_node in list(node.ancestor_process_nodes()) + [node]:
-                        depends_config.update(_add_prefix(depend_node.name + '.', depend_node.config))
+                    depends_config = node._depends_config()
                     # Add a job that writes a file with the command used to
                     # execute this node.
                     job_config_fpath = node.final_node_dpath / 'job_config.json'
@@ -1005,9 +1003,13 @@ class ProcessNode(Node):
     def configure(self, config=None, cache=True, enabled=True):
         """
         Update the node configuration.
+
+        This rebuilds the templates and formats them so the "final" variables
+        take on directory names based on the given configuration. This a
+
         """
         self.cache = cache
-        self._configured_cache.clear()
+        self._configured_cache.clear()  # Reset memoization caches
         if config is None:
             config = {}
         self.enabled = config.pop('enabled', enabled)
@@ -1024,6 +1026,10 @@ class ProcessNode(Node):
     @memoize_configured_property
     @profile
     def condensed(self):
+        """
+        This is the dictionary that supplies the templated strings with the
+        values we will finalize them with. We may want to change the name.
+        """
         condensed = {}
         for node in self.predecessor_process_nodes():
             condensed.update(node.condensed)
@@ -1073,6 +1079,16 @@ class ProcessNode(Node):
         final_config.update(self.final_out_paths)
         final_config.update(self.final_perf_config)
         return final_config
+
+    def _depends_config(self):
+        """
+        The dag config that specifies the parameters this node depends on.
+        This is what we write to "job_config.json"
+        """
+        depends_config = {}
+        for depend_node in list(self.ancestor_process_nodes()) + [self]:
+            depends_config.update(_add_prefix(depend_node.name + '.', depend_node.config))
+        return depends_config
 
     @memoize_configured_property
     def final_perf_config(self):
@@ -1160,10 +1176,6 @@ class ProcessNode(Node):
         return final_out_paths
 
     @memoize_configured_property
-    def template_dag_dname(self):
-        return self.template_depends_dname / self.node_dname
-
-    @memoize_configured_property
     def final_node_dpath(self):
         return ub.Path(str(self.template_node_dpath).format(**self.condensed))
 
@@ -1171,17 +1183,14 @@ class ProcessNode(Node):
     def final_root_dpath(self):
         return ub.Path(str(self.template_root_dpath).format(**self.condensed))
 
-    @memoize_configured_property
-    def template_root_dpath(self):
-        return self.root_dpath
-
     @property
     def template_node_group_dpath(self):
         return self.root_dpath / self.group_dname / 'flat' / self.name
 
     @memoize_configured_property
     def template_node_dpath(self):
-        return self.template_node_group_dpath / ('{' + self.name + '_id}')
+        key = self.name + '_id'
+        return self.template_node_group_dpath / ('{' + key + '}')
 
     @memoize_configured_property
     @profile
@@ -1204,6 +1213,14 @@ class ProcessNode(Node):
         algo_id = condense_config(
             self.final_algo_config, self.name + '_algo_id', register=False)
         return algo_id
+
+    @memoize_configured_property
+    def template_dag_dname(self):
+        return self.template_depends_dname / self.node_dname
+
+    @memoize_configured_property
+    def template_root_dpath(self):
+        return self.root_dpath
 
     @memoize_configured_property
     @profile
