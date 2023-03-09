@@ -674,7 +674,6 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, blocksize=256,
         >>> # xdoctest: +REQUIRES(--slow)
         >>> # Uses data from the data cube with extra=1
         >>> from watch.utils.util_gdal import *  # NOQA
-        >>> from watch.cli.coco_align_geotiffs import *  # NOQA
         >>> import ubelt as ub
         >>> cube, region_df = SimpleDataCube.demo(with_region=True, extra=True)
         >>> local_epsg = 32635

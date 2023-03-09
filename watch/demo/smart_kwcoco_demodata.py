@@ -4,8 +4,6 @@ Extends kwcoco demodata to be more smart-like
 from dateutil.parser import isoparse
 from os.path import dirname
 from os.path import join
-from watch.cli import coco_align_geotiffs
-from watch.cli import geotiffs_to_kwcoco
 from watch.demo import landsat_demodata
 from watch.demo import sentinel2_demodata
 import datetime
@@ -30,6 +28,7 @@ def demo_smart_raw_kwcoco():
         >>> raw_coco_dset = demo_smart_raw_kwcoco()
         >>> print('raw_coco_dset = {!r}'.format(raw_coco_dset))
     """
+    from watch.cli import geotiffs_to_kwcoco
     cache_dpath = ub.Path.appdir('watch', 'demo', 'kwcoco').ensuredir()
     raw_coco_fpath = join(cache_dpath, 'demo_smart_raw.kwcoco.json')
     stamp = ub.CacheStamp('raw_stamp', dpath=cache_dpath, depends=['v4'],
@@ -138,7 +137,8 @@ def demo_smart_aligned_kwcoco():
                           product=[aligned_coco_fpath])
     if stamp.expired():
         raw_coco_dset = demo_smart_raw_kwcoco()
-        coco_align_geotiffs.main(
+        from watch.cli import coco_align
+        coco_align.main(
             src=raw_coco_dset,
             regions='annots',
             max_workers=0,

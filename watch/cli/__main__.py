@@ -19,7 +19,7 @@ def main(cmdline=True, **kw):
 
     modnames = [
         'coco_add_watch_fields',
-        'coco_align_geotiffs',
+        'coco_align',
         'watch_coco_stats',
         'reproject_annotations',
         'coco_visualize_videos',
@@ -58,7 +58,7 @@ def main(cmdline=True, **kw):
         'watch.cli.torch_model_stats': ['model_stats', 'model_info'],
         'watch.cli.watch_coco_stats': ['stats'],
         'watch.cli.coco_visualize_videos': ['visualize'],
-        'watch.cli.coco_align_geotiffs': ['align'],
+        'watch.cli.coco_align': ['align', 'coco_align_geotiffs'],
         'watch.cli.reproject_annotations': ['reproject', 'project'],
         'watch.cli.coco_add_watch_fields': ['add_fields'],
         'watch.cli.coco_spectra': ['spectra', 'intensity_histograms'],

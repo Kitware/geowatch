@@ -44,7 +44,7 @@ Notes:
         --target_gsd=10
 
     # Execute alignment / crop script
-    python -m watch.cli.coco_align_geotiffs \
+    python -m watch.cli.coco_align \
         --src $INPUT_COCO_FPATH.prepped \
         --dst $OUTPUT_COCO_FPATH \
         --regions $REGION_FPATH \
@@ -245,11 +245,11 @@ class CocoAlignGeotiffConfig(scfg.Config):
 @profile
 def main(cmdline=True, **kw):
     """
-    Main function for coco_align_geotiffs.
+    Main function for coco_align.
     See :class:``CocoAlignGeotiffConfig` for details
 
     Ignore:
-        from watch.cli.coco_align_geotiffs import *  # NOQA
+        from watch.cli.coco_align import *  # NOQA
         import kwcoco
         cmdline = False
         src = ub.expandpath('~/data/dvc-repos/smart_watch_dvc/drop1/data.kwcoco.json')
@@ -265,7 +265,7 @@ def main(cmdline=True, **kw):
         }
 
     Ignore:
-        from watch.cli.coco_align_geotiffs import *  # NOQA
+        from watch.cli.coco_align import *  # NOQA
         import watch
         dvc_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
         base_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json'
@@ -281,10 +281,10 @@ def main(cmdline=True, **kw):
         }
 
     CommandLine:
-        xdoctest -m watch.cli.coco_align_geotiffs main:0
+        xdoctest -m watch.cli.coco_align main:0
 
     Example:
-        >>> from watch.cli.coco_align_geotiffs import *  # NOQA
+        >>> from watch.cli.coco_align import *  # NOQA
         >>> from watch.demo.landsat_demodata import grab_landsat_product
         >>> from watch.gis.geotiff import geotiff_metadata
         >>> # Create a dead simple coco dataset with one image
@@ -308,7 +308,7 @@ def main(cmdline=True, **kw):
         >>>     image_id=gid, bbox=[0, 0, 0, 0], segmentation_geos=sseg_geos)
         >>> #
         >>> # Create arguments to the script
-        >>> dpath = ub.Path.appdir('watch/test/coco_align_geotiff').ensuredir()
+        >>> dpath = ub.Path.appdir('watch/test/coco_align').ensuredir()
         >>> dst = ub.ensuredir((dpath, 'align_bundle1'))
         >>> ub.delete(dst)
         >>> dst = ub.ensuredir(dst)
@@ -330,7 +330,7 @@ def main(cmdline=True, **kw):
 
     Example:
         >>> # Confirm expected behavior of `force_min_gsd` keyword argument
-        >>> from watch.cli.coco_align_geotiffs import *  # NOQA
+        >>> from watch.cli.coco_align import *  # NOQA
         >>> from watch.demo.landsat_demodata import grab_landsat_product
         >>> from watch.gis.geotiff import geotiff_metadata, geotiff_crs_info
         >>> # Create a dead simple coco dataset with one image
@@ -354,7 +354,7 @@ def main(cmdline=True, **kw):
         >>>     image_id=gid, bbox=[0, 0, 0, 0], segmentation_geos=sseg_geos)
         >>> #
         >>> # Create arguments to the script
-        >>> dpath = ub.Path.appdir('watch/test/coco_align_geotiff').ensuredir()
+        >>> dpath = ub.Path.appdir('watch/test/coco_align').ensuredir()
         >>> dst = ub.ensuredir((dpath, 'align_bundle1_force_gsd'))
         >>> ub.delete(dst)
         >>> dst = ub.ensuredir(dst)
@@ -382,10 +382,10 @@ def main(cmdline=True, **kw):
 
     Example:
         >>> # xdoctest: +REQUIRES(--slow)
-        >>> from watch.cli.coco_align_geotiffs import *  # NOQA
+        >>> from watch.cli.coco_align import *  # NOQA
         >>> from watch.demo.smart_kwcoco_demodata import demo_kwcoco_with_heatmaps
         >>> coco_dset = demo_kwcoco_with_heatmaps(num_videos=2, num_frames=2)
-        >>> dpath = ub.Path.appdir('watch/test/coco_align_geotiff2').ensuredir()
+        >>> dpath = ub.Path.appdir('watch/test/coco_align2').ensuredir()
         >>> dst = (dpath / 'align_bundle2').delete().ensuredir()
         >>> # Create a dummy region file to crop to.
         >>> first_img = coco_dset.images().take([0]).coco_images[0]
@@ -473,7 +473,7 @@ def main(cmdline=True, **kw):
     process_info = {
         'type': 'process',
         'properties': {
-            'name': 'coco_align_geotiffs',
+            'name': 'coco_align',
             'args': config_dict,
             'hostname': socket.gethostname(),
             'cwd': os.getcwd(),
@@ -882,7 +882,7 @@ class SimpleDataCube(object):
                 subdirectories in the extract step.
 
         Example:
-            >>> from watch.cli.coco_align_geotiffs import *  # NOQA
+            >>> from watch.cli.coco_align import *  # NOQA
             >>> cube, region_df = SimpleDataCube.demo(with_region=True)
             >>> to_extract = cube.query_image_overlaps(region_df)
         """
@@ -1103,9 +1103,9 @@ class SimpleDataCube(object):
 
         Example:
             >>> # xdoctest: +REQUIRES(--slow)
-            >>> from watch.cli.coco_align_geotiffs import *  # NOQA
+            >>> from watch.cli.coco_align import *  # NOQA
             >>> cube, region_df = SimpleDataCube.demo(with_region=True)
-            >>> extract_dpath = ub.Path.appdir('watch/test/coco_align_geotiff/demo_extract_overlaps').ensuredir()
+            >>> extract_dpath = ub.Path.appdir('watch/test/coco_align/demo_extract_overlaps').ensuredir()
             >>> rpc_align_method = 'orthorectify'
             >>> new_dset = kwcoco.CocoDataset()
             >>> write_subsets = True
@@ -1119,9 +1119,9 @@ class SimpleDataCube(object):
 
         Example:
             >>> # xdoctest: +REQUIRES(--slow)
-            >>> from watch.cli.coco_align_geotiffs import *  # NOQA
+            >>> from watch.cli.coco_align import *  # NOQA
             >>> cube, region_df = SimpleDataCube.demo(with_region=True, extra=True)
-            >>> extract_dpath = ub.Path.appdir('watch/test/coco_align_geotiff/demo_extract_overlaps2').ensuredir()
+            >>> extract_dpath = ub.Path.appdir('watch/test/coco_align/demo_extract_overlaps2').ensuredir()
             >>> rpc_align_method = 'orthorectify'
             >>> write_subsets = True
             >>> visualize = True
@@ -2160,6 +2160,6 @@ __config__ = CocoAlignGeotiffConfig
 if __name__ == '__main__':
     """
     CommandLine:
-        python -m watch.cli.coco_align_geotiffs --help
+        python -m watch.cli.coco_align --help
     """
     main()

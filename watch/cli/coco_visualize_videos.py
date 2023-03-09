@@ -1455,22 +1455,4 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
 
 
 if __name__ == '__main__':
-    """
-    xdoctest ~/code/watch/watch/cli/coco_align_geotiffs.py main:0 2> error.txt 1> output.txt
-
-    DVC_DPATH=$(smartwatch_dvc)
-    KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15
-    python -m watch visualize $KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
-        --animate=True --channels="red|green|blue" --skip_missing=True \
-        --select_images '.sensor_coarse == "S2"' --workers=4 --draw_anns=False
-
-    DVC_DPATH=$(smartwatch_dvc)
-    KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/
-    python -m watch visualize $KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
-        --animate=True --channels="red|green|blue" --skip_missing=True \
-        --select_videos '.name == "BR_R002"' --workers=4 --draw_anns=True
-
-    CommandLine:
-        python ~/code/watch/watch/cli/coco_visualize_videos.py
-    """
     main(cmdline=True)

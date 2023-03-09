@@ -1,15 +1,11 @@
 """
-TODO: Deprecate coco_align_geotiffs and use this filename.
+DEPRECATED: Use coco_align instead
 """
 # flake8: noqa
-from watch.cli.coco_align_geotiffs import *
-from watch.cli.coco_align_geotiffs import __config__
-from watch.cli.coco_align_geotiffs import _CLI
+from watch.cli.coco_align import *
+from watch.cli.coco_align import __config__
+from watch.cli.coco_align import _CLI
 
 
 if __name__ == '__main__':
-    """
-    CommandLine:
-        python -m watch.cli.coco_align --help
-    """
     main()

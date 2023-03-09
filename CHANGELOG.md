@@ -9,6 +9,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Changed
 * Lightning Packager callback now saves checkpoints on errors in addition to packages.
 * Updated tutorials to LightningCLI
+* Renamed `coco_align_geotiff` to `coco_align`
 
 ### Added
 * Add SITS-former 
