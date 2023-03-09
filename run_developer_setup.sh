@@ -140,6 +140,7 @@ fix_opencv_conflicts(){
 }
 
 torch_on_3090(){
+    # NO LONGER NEEDED
     # https://github.com/pytorch/pytorch/issues/31285
     # Seems like we need to work from source:
     git clone --recursive https://github.com/pytorch/pytorch
@@ -175,6 +176,15 @@ check_metrics_framework(){
     fi
 }
 check_metrics_framework
+
+
+check_gpu_ops_work(){
+    # quick check to ensure that GPU operations are generally functional
+    
+    xdoctest -m torch --style=google --global-exec "from torch import nn\nimport torch.nn.functional as F\nimport torch" --options="+IGNORE_WHITESPACE"
+
+    python -c "import torch; print(torch.nn.modules.Linear(10, 5).to(0)(torch.rand(10, 10).to(0)).sum().backward())"
+}
 
 # Simple tests
 set -x

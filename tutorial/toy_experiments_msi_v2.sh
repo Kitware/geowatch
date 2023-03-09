@@ -101,6 +101,9 @@ python -m watch.tasks.fusion fit --config "
 
 
 
+
+rm -rf "$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME"
+
 # Training with the HeterogeneousModel using a very small backbone
 #
 # TODO:
@@ -114,6 +117,7 @@ MAX_STEPS=10000
 TARGET_LR=3e-4
 CHANNELS="(*):(disparity|gauss,X.2|Y:2:6,B1|B8a,flowx|flowy|distri)"
 python -m watch.tasks.fusion fit --config "
+    seed_everything: 123
     data:
         num_workers          : 4
         train_dataset        : $TRAIN_FPATH
@@ -163,9 +167,9 @@ python -m watch.tasks.fusion fit --config "
       init_args:
         lr: $TARGET_LR
         weight_decay: 1e-5
-        betas:
-          - 0.9
-          - 0.99
+        #betas:
+        #  - 0.9
+        #  - 0.99
     trainer:
       accumulate_grad_batches: 1
       default_root_dir     : $DEFAULT_ROOT_DIR
@@ -187,9 +191,8 @@ python -m watch.tasks.fusion fit --config "
 "
 
 
-# If you Ctrl+C the previous model (or it crashes) it will save a checkpoint
-# and package before it exists.  By pointing at the checkpoint you should be
-# able to restart training
+# If you Ctrl+C the previous model after it has saved an end-of-epoch
+# checkpoint, you can restart by pointing at that checkpoint.
 # NOTE: CURRENTLY BUGGED AND NOT SURE WHY IT IS NOT WORKING
 #CKPT_FPATH=$(python -c "import pathlib; print(list(pathlib.Path('$DEFAULT_ROOT_DIR/lightning_logs').glob('*/package-interupt/*.ckpt'))[0])")
 CKPT_FPATH=$(python -c "import pathlib; print(list(pathlib.Path('$DEFAULT_ROOT_DIR/lightning_logs').glob('*/checkpoints/*.ckpt'))[0])")

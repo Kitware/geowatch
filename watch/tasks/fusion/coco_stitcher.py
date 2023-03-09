@@ -136,8 +136,7 @@ class CocoStitchingManager(object):
                  stiching_space='video', device='numpy', thresh=0.5,
                  write_probs=True, write_preds=False, num_bands='auto',
                  prob_compress='DEFLATE', polygon_categories=None,
-                 expected_min=None, expected_minmax=None, quantize=True,
-                 writer_queue=None):
+                 expected_minmax=None, quantize=True, writer_queue=None):
         from watch.utils import util_parallel
         self.short_code = short_code
         self.result_dataset = result_dataset
