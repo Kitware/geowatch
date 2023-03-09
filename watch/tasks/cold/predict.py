@@ -70,7 +70,7 @@ CommandLine:
         --year_highbound=None \
         --coefs=cv \
         --coefs_bands=0,1,2,3,4,5 \
-        --timestamp=True \
+        --timestamp=False \
         --mode='process' \
         --workers=8
 
@@ -102,9 +102,9 @@ CommandLine:
         --cm_interval=60 \
         --year_lowbound=None \
         --year_highbound=None \
-        --coefs=cv,a0,a1,b1,c1,rmse \
+        --coefs=cv \
         --coefs_bands=0,1,2,3,4,5 \
-        --timestamp=True \
+        --timestamp=False \
         --mode='process' \
         --workers=8
 
