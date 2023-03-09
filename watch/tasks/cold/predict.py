@@ -47,11 +47,9 @@ CommandLine:
         from watch.utils import util_time
         images = dset.images()
         dates = list(map(util_time.coerce_datetime, images.lookup('date_captured')))
-        month_to_gids = ub.group_items(images, [(d.year, d.month) for d in dates])
-        # chosen = [gids[0] for (year, month), gids in month_to_gids.items() if month % 1 == 0 and year < 2020]
-        chosen = [gids for (year, month), gids in month_to_gids.items() if year < 2017]
-        flat_chosen = [item for sublist in chosen for item in sublist]
-        sub = dset.subset(flat_chosen)
+        flags = [d.year < 2017 for d in dates]
+        chosen = images.compress(flags)
+        sub = dset.subset(chosen)
         sub.fpath = dset.fpath
         sub.dump()
         ")"
@@ -75,6 +73,16 @@ CommandLine:
         --timestamp=True \
         --mode='thread' \
         --workers=0
+
+    kwcoco reroot \
+        --src="$DATA_DVC_DPATH"/Drop6-SMALL/_pycold/imgonly-KR_R001-cold.kwcoco.json \
+        --dst="$DATA_DVC_DPATH"/Drop6-SMALL/_pycold/imgonly-KR_R001-cold.fixed.kwcoco.zip \
+        --old_prefix="KR_R001" --new_prefix="../KR_R001"
+
+    smartwatch visualize \
+        "$DATA_DVC_DPATH"/Drop6-SMALL/_pycold/imgonly-KR_R001-cold.fixed.kwcoco.zip \
+        --channels="L8:(red|green|blue,red_COLD_a1|green_COLD_a1|blue_COLD_a1,red_COLD_cv|green_COLD_cv|blue_COLD_cv,red_COLD_rmse|green_COLD_rmse|blue_COLD_rmse)" \
+        --smart=True
 
     ####################
     ### FULL REGION TEST
