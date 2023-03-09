@@ -184,10 +184,10 @@ def demo_pipeline():
 
     # The jobs can now be submitted to a command queue which can be
     # executed or inspected at your leasure.
-    queue = dag.submit_jobs(queue=ub.udict({
+    status = dag.submit_jobs(queue=ub.udict({
         'backend': 'serial',
     }))
-
+    queue = status['queue']
     queue.print_commands(exclude_tags='boilerplate', with_locks=False)
     queue.run()
 
