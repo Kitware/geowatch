@@ -138,7 +138,7 @@ def coerce_datetime(data, default_timezone='utc', nan_behavior='return-None',
     Example:
         >>> from watch.utils.util_time import *  # NOQA
         >>> assert coerce_datetime(None) is None
-        >>> assert coerce_datetime(np.nan) is None
+        >>> assert coerce_datetime(float('nan')) is None
         >>> assert coerce_datetime('2020-01-01') == datetime_cls(2020, 1, 1, 0, 0, tzinfo=datetime_mod.timezone.utc)
         >>> assert coerce_datetime(datetime_cls(2020, 1, 1, 0, 0)) == datetime_cls(2020, 1, 1, 0, 0, tzinfo=datetime_mod.timezone.utc)
         >>> assert coerce_datetime(datetime_cls(2020, 1, 1, 0, 0).date()) == datetime_cls(2020, 1, 1, 0, 0, tzinfo=datetime_mod.timezone.utc)
