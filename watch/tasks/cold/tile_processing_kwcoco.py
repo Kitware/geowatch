@@ -169,8 +169,7 @@ def tile_process_main(cmdline=1, **kwargs):
     threshold = chi2.ppf(prob, 5)
 
     nblock_eachcore = int(np.ceil(n_block_x * n_block_y * 1.0 / n_cores))
-
-    i_iter = range(nblock_eachcore)
+    i_iter = range(nblock_eachcore + 1)
     if pman is not None:
         i_iter = pman.progiter(i_iter, desc=f'Process Tile \\[rank {rank}]',
                                total=nblock_eachcore, transient=True)
