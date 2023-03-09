@@ -124,7 +124,7 @@ python -m watch.tasks.fusion fit --config "
         channels             : '$CHANNELS'
         time_steps           : 5
         chip_dims            : 128
-        batch_size           : 8
+        batch_size           : 4
         max_epoch_length     : 1024
     model:
       class_path: watch.tasks.fusion.methods.HeterogeneousModel

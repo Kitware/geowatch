@@ -120,6 +120,8 @@ class Packager(pl.callbacks.Callback):
         TODO:
             - [ ] Write out the uninitialized topology
         """
+        if trainer.global_rank != 0:
+            return
         if False:
             print('Training is starting, checking that the model can be packaged')
             package_dpath = (ub.Path(trainer.log_dir) / 'packages').ensuredir()
@@ -139,6 +141,8 @@ class Packager(pl.callbacks.Callback):
             - [ ] Symlink to "BEST" package at the end.
             - [ ] write some script such that any checkpoint can be packaged.
         """
+        if trainer.global_rank != 0:
+            return
         if trainer.log_dir is None:
             print('Trainer run without a log_dir, cannot save package')
             return
@@ -175,6 +179,8 @@ class Packager(pl.callbacks.Callback):
             - [X] Package current model state
             - [ ] Package "best" model state
         """
+        if trainer.global_rank != 0:
+            return
         if self.package_on_interrupt:
             print('Attempting to package model before exiting')
             # First save a checkpoint...

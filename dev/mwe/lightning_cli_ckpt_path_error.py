@@ -1,3 +1,6 @@
+"""
+https://gist.github.com/Erotemic/dfaadf5cf9fa4910beb901ae6c93867b
+"""
 import torch
 import torch.nn
 from torch import nn

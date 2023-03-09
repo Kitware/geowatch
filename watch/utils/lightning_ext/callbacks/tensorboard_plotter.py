@@ -112,12 +112,18 @@ class TensorboardPlotter(pl.callbacks.Callback):
             func(*args)
 
     def on_train_epoch_end(self, trainer, logs=None):
+        if trainer.global_rank != 0:
+            return
         return self._on_epoch_end(trainer, logs=logs)
 
     def on_validation_epoch_end(self, trainer, logs=None):
+        if trainer.global_rank != 0:
+            return
         return self._on_epoch_end(trainer, logs=logs)
 
     def on_test_epoch_end(self, trainer, logs=None):
+        if trainer.global_rank != 0:
+            return
         return self._on_epoch_end(trainer, logs=logs)
 
 

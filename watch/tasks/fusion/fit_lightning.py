@@ -39,9 +39,10 @@ class SmartTrainer(pl.Trainer):
     def _run_stage(self, *args, **kwargs):
         # All I want is to print this  directly before training starts.
         # Is that so hard to do?
-        import rich
-        dpath = self.logger.log_dir
-        rich.print(f"Trainer log dpath:\n\n[link={dpath}]{dpath}[/link]\n")
+        if self.global_rank == 0:
+            import rich
+            dpath = self.logger.log_dir
+            rich.print(f"Trainer log dpath:\n\n[link={dpath}]{dpath}[/link]\n")
         super()._run_stage(*args, **kwargs)
 
 
