@@ -28,6 +28,8 @@ import scriptconfig as scfg
 import logging
 import itertools
 import ubelt as ub
+from pytz import timezone
+from datetime import datetime as datetime_cls
 logger = logging.getLogger(__name__)
 
 
@@ -157,7 +159,9 @@ def export_cold_main(cmdline=1, **kwargs):
 
     out_path = reccg_path / 'cold_feature'
     tmp_path = reccg_path / 'cold_feature' / 'tmp'
-    
+
+    tz = timezone('US/Eastern')
+
     if rank == 0:
         out_path.ensuredir()
         tmp_path.ensuredir()
@@ -234,7 +238,8 @@ def export_cold_main(cmdline=1, **kwargs):
                     (block_height, block_width, len(coefs) * len(coefs_bands),
                      len(ordinal_day_list)), -9999, dtype=np.float32)
 
-            print(f'processing the rec_cg file {reccg_fpath}')
+            now = datetime_cls.now(tz).strftime('%Y-%m-%d %H:%M:%S')
+            print(f'processing the rec_cg file {reccg_fpath} ({now})')
             if not reccg_fpath.exists():
                 print(f'the rec_cg file {reccg_fpath} is missing')
 

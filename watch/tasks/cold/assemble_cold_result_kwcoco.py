@@ -24,7 +24,6 @@ import kwimage
 import scriptconfig as scfg
 import ubelt as ub
 import logging
-import fnmatch
 import shutil
 
 try:
@@ -316,8 +315,10 @@ def assemble_main(cmdline=1, **kwargs):
 
                     # Use the CocoImage helper which will augment the coco dictionary with
                     # your information.
-                    coco_image.add_asset(new_fpath, channels=channels, width=asset_w,
-                                            height=asset_h, warp_aux_to_img=warp_aux_to_img)
+                    coco_image.add_asset(os.fspath(new_fpath),
+                                         channels=channels, width=asset_w,
+                                         height=asset_h,
+                                         warp_aux_to_img=warp_aux_to_img)
                     logger.info(f'Added to the asset {new_fpath}')
 
     if proc_context is not None:

@@ -73,8 +73,8 @@ CommandLine:
         --coefs=cv,a0,a1,b1,c1,rmse \
         --coefs_bands=0,1,2,3,4,5 \
         --timestamp=True \
-        --mode='process' \
-        --workers=8
+        --mode='thread' \
+        --workers=0
 
     ####################
     ### FULL REGION TEST
