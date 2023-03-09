@@ -488,6 +488,7 @@ def probe_asset(coco_img, obj, band_idxs=None, scale=None,
     Inspect a specific single-file asset possibily with multiple bands for
     fixable nodata values.
     """
+    import kwcoco
     asset_channels = kwcoco.FusedChannelSpec.coerce(obj['channels'])
     if band_idxs is None:
         band_idxs = list(range(asset_channels.numel()))
