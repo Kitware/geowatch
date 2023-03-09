@@ -327,13 +327,13 @@ def stack_kwcoco(coco_fpath, out_dir, sensors, adj_cloud, method, pman=None, wor
 
     # Load the kwcoco dataset
     dset = kwcoco.CocoDataset.coerce(coco_fpath)
-
+    
     # Get all images ids sorted in temporal order per video
     all_images = dset.images(list(ub.flatten(dset.videos().images)))
 
     # For now, it supports only L8
-    # flags = [s in {'L8'} for s in all_images.lookup('sensor_coarse')]
-    flags = [s in sensors for s in all_images.lookup('sensor_coarse')]
+    flags = [s in {'L8'} for s in all_images.lookup('sensor_coarse')]
+    # flags = [s in sensors for s in all_images.lookup('sensor_coarse')]
     all_images = all_images.compress(flags)
 
     image_id_iter = iter(all_images)
@@ -418,8 +418,9 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
     # Construct delayed images. These represent a tree of image
     # operations that will resample the image at the desired resolution
     # as well as align it with other images in the sequence.
-    delayed_im = coco_image.imdelay(channels=intensity_channels, resolution='30GSD', **delay_kwargs)
-    delayed_qa = coco_image.imdelay(channels=quality_channels, resolution='30GSD', **delay_kwargs)
+    # NOTE: Issue occurs when setting resolution argument in imdelay
+    delayed_im = coco_image.imdelay(channels=intensity_channels, **delay_kwargs)  #resolution='30GSD', 
+    delayed_qa = coco_image.imdelay(channels=quality_channels,  **delay_kwargs) #, 
     # Check what shape the data would be loaded with if we finalized right now.
     h, w = delayed_im.shape[0:2]
     # Determine if padding is necessary to properly break the data into blocks.
