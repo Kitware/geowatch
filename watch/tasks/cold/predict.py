@@ -68,11 +68,11 @@ CommandLine:
         --cm_interval=60 \
         --year_lowbound=None \
         --year_highbound=None \
-        --coefs=cv,a0,a1,b1,c1,rmse \
+        --coefs=cv \
         --coefs_bands=0,1,2,3,4,5 \
         --timestamp=True \
-        --mode='thread' \
-        --workers=0
+        --mode='process' \
+        --workers=8
 
     kwcoco reroot \
         --src="$DATA_DVC_DPATH"/Drop6-SMALL/_pycold/imgonly-KR_R001-cold.kwcoco.json \
