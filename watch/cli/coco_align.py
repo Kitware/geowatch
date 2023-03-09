@@ -94,7 +94,7 @@ except Exception:
     profile = ub.identity
 
 
-class CocoAlignGeotiffConfig(scfg.Config):
+class CocoAlignGeotiffConfig(scfg.DataConfig):
     """
     Create a dataset of aligned temporal sequences around objects of interest
     in an unstructured collection of annotated geotiffs.
@@ -105,132 +105,144 @@ class CocoAlignGeotiffConfig(scfg.Config):
         * Orthorectify (or warp) the selected spatial region and its
           annotations to a cannonical space.
     """
-    default = {
-        'src': scfg.Value('in.geojson.json', help='input dataset to chip'),
+    __command__ = 'align'
+    __alias__ = ['coco_align', 'coco_align_geotiff']
 
-        'dst': scfg.Value(None, help='bundle directory or kwcoco json file for the output'),
+    src = scfg.Value('in.geojson.json', help='input dataset to chip')
+    dst = scfg.Value(None, help=ub.paragraph(
+            '''
+            bundle directory or kwcoco json file for the output
+            '''))
+    workers = scfg.Value(0, type=str, help=ub.paragraph(
+            '''
+            number of parallel procs. This can also be an expression
+            accepted by coerce_num_workers.
+            '''), alias=['max_workers'])
 
-        'workers': scfg.Value(0, type=str, help='number of parallel procs. This can also be an expression accepted by coerce_num_workers.'),
-        'max_workers': scfg.Value(None, type=str, help='DEPRECATED USE workers'),
-        'aux_workers': scfg.Value(0, type=str, help='additional inner threads for aux imgs'),
-
-        'context_factor': scfg.Value(1.0, help=ub.paragraph(
+    aux_workers = scfg.Value(0, type=str, help='additional inner threads for aux imgs')
+    context_factor = scfg.Value(1.0, help=ub.paragraph(
             '''
             Scale factor to expand each ROI by crop regions by.
+            '''))
+    minimum_size = scfg.Value(None, help=ub.paragraph(
             '''
-        )),
-
-        'minimum_size': scfg.Value(None, help=ub.paragraph(
-            '''
-            Minimum (bounding-box) size of each ROI.
-            Must be specified as ``<w> x <h> @ <magnitude> <resolution>``.
-            E.g. ``128x128@10GSD`` eill ensure a region polygon is at least
+            Minimum (bounding-box) size of each ROI. Must be specified
+            as ``<w> x <h> @ <magnitude> <resolution>``. E.g.
+            ``128x128@10GSD`` eill ensure a region polygon is at least
             1280 meters tall and wide.
-            ''')),
-
-        'convexify_regions': scfg.Value(False, help=ub.paragraph(
+            '''))
+    convexify_regions = scfg.Value(False, help=ub.paragraph(
             '''
             if True, ensure that the regions are convex
-            ''')),
-
-        'regions': scfg.Value('annots', help=ub.paragraph(
+            '''))
+    regions = scfg.Value('annots', help=ub.paragraph(
             '''
-            Strategy for extracting regions, if annots, uses the convex hulls
-            of clustered annotations. Can also be a path to a geojson file
-            to use pre-defined regions.
-            ''')),
-
-        'site_summary': scfg.Value(False, help='Crop to site summaries instead'),
-
-        # TODO: change this name to just align-method or something
-        'rpc_align_method': scfg.Value('orthorectify', help=ub.paragraph(
+            Strategy for extracting regions, if annots, uses the convex
+            hulls of clustered annotations. Can also be a path to a
+            geojson file to use pre-defined regions.
+            '''))
+    site_summary = scfg.Value(False, help='Crop to site summaries instead')
+    rpc_align_method = scfg.Value('orthorectify', help=ub.paragraph(
             '''
-            Can be one of:
-                (1) orthorectify - which uses gdalwarp with -rpc if available
-                    otherwise falls back to affine transform,
-                (2) pixel_crop - which warps annotations onto pixel with RPCs
-                    but only crops the original image without distortion,
-                (3) affine_warp - which ignores RPCs and uses the affine
-                    transform in the geotiff metadata.
+            Can be one of: (1) orthorectify - which uses gdalwarp with
+            -rpc if available otherwise falls back to affine transform,
+            (2) pixel_crop - which warps annotations onto pixel with
+            RPCs but only crops the original image without distortion,
+            (3) affine_warp - which ignores RPCs and uses the affine
+            transform in the geotiff metadata.
+            '''))
+    write_subsets = scfg.Value(True, isflag=1, help=ub.paragraph(
             '''
-        )),
-
-        'write_subsets': scfg.Value(True, isflag=1, help=ub.paragraph(
+            if True, writes a separate kwcoco file for every discovered
+            ROI in addition to the final kwcoco file.
+            '''))
+    visualize = scfg.Value(False, isflag=1, help=ub.paragraph(
             '''
-            if True, writes a separate kwcoco file for every discovered ROI
-            in addition to the final kwcoco file.
+            if True, normalize and draw image / annotation sequences
+            when extracting.
+            '''))
+    debug_valid_regions = scfg.Value(False, isflag=1, help=ub.paragraph(
             '''
-        )),
-
-        'visualize': scfg.Value(False, isflag=1, help=ub.paragraph(
+            write valid region visualizations to help debug "black
+            images" issues.
+            '''))
+    keep = scfg.Value(None, help=ub.paragraph(
             '''
-            if True, normalize and draw image / annotation sequences when
-            extracting.
+            Level of detail to overwrite existing data at, since this is
+            slow. "none": overwrite all, including existing images
+            "img": only add new images "roi": only add new ROIs "roi-
+            img": only add new ROIs and only new images within those
+            ROIs (good for rerunning failed jobs)
+            '''))
+    skip_geo_preprop = scfg.Value(False, help='DEPRECATED use geo_preop instead')
+    geo_preprop = scfg.Value('auto', help='force if we check geo properties or not')
+    include_sensors = scfg.Value(None, help=ub.paragraph(
             '''
-        )),
-
-        'debug_valid_regions': scfg.Value(False, isflag=1, help=ub.paragraph(
+            if specified can be comma separated valid sensors
+            '''))
+    exclude_sensors = scfg.Value(None, help=ub.paragraph(
             '''
-            write valid region visualizations to help debug "black images"
-            issues.
+            if specified can be comma separated invalid sensors
+            '''))
+    target_gsd = scfg.Value(10, help=ub.paragraph(
             '''
-        )),
-
-        'keep': scfg.Value('none', help=ub.paragraph(
+            initial gsd to use for the output video files
+            '''))
+    edit_geotiff_metadata = scfg.Value(False, help=ub.paragraph(
             '''
-            Level of detail to overwrite existing data at, since this is slow.
-            "none": overwrite all, including existing images
-            "img": only add new images
-            "roi": only add new ROIs
-            "roi-img": only add new ROIs and only new images within those ROIs (good for rerunning failed jobs)
+            if True MODIFIES THE UNDERLYING IMAGES to ensure geodata is
+            propogated
+            '''))
+    max_frames = scfg.Value(None, help=None)
+    warp_tries = scfg.Value(2, help=ub.paragraph(
             '''
-        )),
+            The maximum number of times to retry failed gdal warp
+            commands before stopping.
+            '''))
 
-        'skip_geo_preprop': scfg.Value(False, help='DEPRECATED use geo_preop instead'),
-        'geo_preprop': scfg.Value('auto', help='force if we check geo properties or not'),
-
-        'include_sensors': scfg.Value(None, help='if specified can be comma separated valid sensors'),
-        'exclude_sensors': scfg.Value(None, help='if specified can be comma separated invalid sensors'),
-
-        'target_gsd': scfg.Value(10, help=ub.paragraph('initial gsd to use for the output video files')),
-
-        'edit_geotiff_metadata': scfg.Value(
-            False, help='if True MODIFIES THE UNDERLYING IMAGES to ensure geodata is propogated'),
-
-        'max_frames': scfg.Value(None),
-
-        'warp_tries': scfg.Value(2, help='The maximum number of times to retry failed gdal warp commands before stopping.'),
-
-        # FIXME: asset and image timeouts are not handled correctly.
-        'image_timeout': scfg.Value('8hours', help='The maximum amount of time to spend pulling down a all image assets before giving up'),
-        'asset_timeout': scfg.Value('4hours', help='The maximum amount of time to spend pulling down a single image asset before giving up'),
-
-        'include_channels': scfg.Value(None, help='If specified only align the given channels'),
-        'exclude_channels': scfg.Value(None, help='If specified ignore these channels'),
-
-        'verbose': scfg.Value(0, help='Note: no silent mode, 0 is just least verbose.'),
-        'force_nodata': scfg.Value(None, help=('if specified, forces nodata to this value (e.g. -9999) '
-                                               'Ideally this is not needed and all source geotiffs properly specify nodata')),
-
-        'force_min_gsd': scfg.Value(None, help=ub.paragraph(
+    # TODO: change this name to just align-method or something
+    image_timeout = scfg.Value('8hours', help=ub.paragraph(
             '''
-            Force output crops to be at least this minimum GSD (e.g. if set to
-            10.0 an input image with a 30.0 GSD will have an output GSD of
-            30.0, whereas in input image with a 0.5 GSD will have it set to
-            10.0 during cropping)'''
-        )),
-
-        'hack_lazy': scfg.Value(False, isflag=True, help=ub.paragraph(
+            The maximum amount of time to spend pulling down a all image
+            assets before giving up
+            '''))
+    asset_timeout = scfg.Value('4hours', help=ub.paragraph(
             '''
-            Hack lazy is a proof of concept with the intent on speeding up the
-            download / cropping of data by flattening the gdal processing into
-            a single queue of parallel processes executed via a command queue.
-
-            By running once with this flag on, it will execute the command
-            queue, and then running again, it should see all of the data as
-            existing and construct the aligned kwcoco dataset as normal.
-            ''')),
-    }
+            The maximum amount of time to spend pulling down a single
+            image asset before giving up
+            '''))
+    include_channels = scfg.Value(None, help=ub.paragraph(
+            '''
+            If specified only align the given channels
+            '''))
+    exclude_channels = scfg.Value(None, help='If specified ignore these channels')
+    verbose = scfg.Value(0, help=ub.paragraph(
+            '''
+            Note: no silent mode, 0 is just least verbose.
+            '''))
+    force_nodata = scfg.Value(None, help=ub.paragraph(
+            '''
+            if specified, forces nodata to this value (e.g. -9999)
+            Ideally this is not needed and all source geotiffs properly
+            specify nodata
+            '''))
+    force_min_gsd = scfg.Value(None, help=ub.paragraph(
+            '''
+            Force output crops to be at least this minimum GSD (e.g. if
+            set to 10.0 an input image with a 30.0 GSD will have an
+            output GSD of 30.0, whereas in input image with a 0.5 GSD
+            will have it set to 10.0 during cropping)
+            '''))
+    hack_lazy = scfg.Value(False, isflag=True, help=ub.paragraph(
+            '''
+            Hack lazy is a proof of concept with the intent on speeding
+            up the download / cropping of data by flattening the gdal
+            processing into a single queue of parallel processes
+            executed via a command queue. By running once with this flag
+            on, it will execute the command queue, and then running
+            again, it should see all of the data as existing and
+            construct the aligned kwcoco dataset as normal.
+            '''))
 
     def normalize(config):
         if isinstance(config['target_gsd'], str):
@@ -453,7 +465,7 @@ def main(cmdline=True, **kw):
     import pandas as pd
     import warnings
 
-    config = CocoAlignGeotiffConfig(default=kw, cmdline=cmdline)
+    config = CocoAlignGeotiffConfig.cli(data=kw, cmdline=cmdline)
 
     # Store that this dataset is a result of a process.
     # Note what the process is, what its arguments are, and where the process
