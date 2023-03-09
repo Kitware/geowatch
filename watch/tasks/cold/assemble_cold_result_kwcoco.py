@@ -25,7 +25,7 @@ import scriptconfig as scfg
 import ubelt as ub
 import logging
 import shutil
-
+import gc
 try:
     from xdev import profile
 except ImportError:
@@ -71,11 +71,11 @@ def assemble_main(cmdline=1, **kwargs):
     >>>    coco_fpath = ub.Path('/home/jws18003/data/dvc-repos/smart_data_dvc/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/imgonly-KR_R001.kwcoco.json'),
     >>>    mod_coco_fpath = ub.Path('/home/jws18003/data/dvc-repos/smart_data_dvc/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/KR_R001/imgonly-KR_R001.kwcoco.modified.json'),
     >>>    meta_fpath = '/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/KR_R001/block_x10_y1/crop_20140115T020000Z_N37.643680E128.649453_N37.683356E128.734073_L8_0.json',
-    >>>    coefs = ['cv'],
-    >>>    year_lowbound = 2017,
-    >>>    year_highbound = 2022,
-    >>>    coefs_bands = [0, 1, 2, 3, 4, 5],
-    >>>    timestamp = True,
+    >>>    coefs = 'cv',
+    >>>    year_lowbound = None,
+    >>>    year_highbound = None,
+    >>>    coefs_bands = '0,1,2,3,4,5',
+    >>>    timestamp = False,
     >>>    )
     >>> cmdline=0
     >>> assemble_main(cmdline, **kwargs)
@@ -195,41 +195,56 @@ def assemble_main(cmdline=1, **kwargs):
     # Get ordinal day list
     block_folder = stack_path / 'block_x1_y1'
 
-    if timestamp:
-        meta_files = [m for m in os.listdir(block_folder) if m.endswith('.json')]
+    # if timestamp:
+    meta_files = [m for m in os.listdir(block_folder) if m.endswith('.json')]
 
-        # sort image files by ordinal dates
-        img_dates = []
-        img_names = []
+    # sort image files by ordinal dates
+    img_dates = []
+    img_names = []
 
-        # read metadata and
-        for meta in meta_files:
-            meta_config = json.loads((block_folder / meta).read_text())
-            ordinal_date = meta_config['ordinal_date']
-            img_name = meta_config['image_name'] + '.npy'
-            img_dates.append(ordinal_date)
-            img_names.append(img_name)
+    # read metadata and
+    for meta in meta_files:
+        meta_config = json.loads((block_folder / meta).read_text())
+        ordinal_date = meta_config['ordinal_date']
+        img_name = meta_config['image_name'] + '.npy'
+        img_dates.append(ordinal_date)
+        img_names.append(img_name)
 
-        if year_lowbound is None:
-            year_low_ordinal = min(img_dates)
-            year_lowbound = pd.Timestamp.fromordinal(year_low_ordinal).year
-        else:
-            year_low_ordinal = pd.Timestamp.toordinal(datetime.datetime(int(year_lowbound), 1, 1))
+    if year_lowbound is None:
+        year_low_ordinal = min(img_dates)
+        year_lowbound = pd.Timestamp.fromordinal(year_low_ordinal).year
+    else:
+        year_low_ordinal = pd.Timestamp.toordinal(datetime.datetime(int(year_lowbound), 1, 1))
 
-        img_dates, img_names = zip(*filter(lambda x: x[0] >= year_low_ordinal,
+    img_dates, img_names = zip(*filter(lambda x: x[0] >= year_low_ordinal,
+                                        zip(img_dates, img_names)))
+    if year_highbound is None:
+        year_high_ordinal = max(img_dates)
+        year_highbound = pd.Timestamp.fromordinal(year_high_ordinal).year
+    else:
+        year_high_ordinal = pd.Timestamp.toordinal(datetime.datetime(int(year_highbound + 1), 1, 1))
+
+    img_dates, img_names = zip(*filter(lambda x: x[0] < year_high_ordinal,
                                             zip(img_dates, img_names)))
-        if year_highbound is None:
-            year_high_ordinal = max(img_dates)
-            year_highbound = pd.Timestamp.fromordinal(year_high_ordinal).year
-        else:
-            year_high_ordinal = pd.Timestamp.toordinal(datetime.datetime(int(year_highbound + 1), 1, 1))
-
-        img_dates, img_names = zip(*filter(lambda x: x[0] < year_high_ordinal,
-                                                zip(img_dates, img_names)))
-        img_dates = sorted(img_dates)
-        img_names = sorted(img_names)
+    img_dates = sorted(img_dates)
+    img_names = sorted(img_names)
+    if timestamp:
         ordinal_day_list = img_dates
-
+    else:
+        # Get only the first ordinal date of each year
+        first_ordinal_dates = []
+        first_img_names = []
+        last_year = None
+        for ordinal_day, img_name in zip(img_dates, img_names):
+            year = pd.Timestamp.fromordinal(ordinal_day).year
+            if year != last_year:
+                first_ordinal_dates.append(ordinal_day)
+                first_img_names.append(img_name)
+                last_year = year
+        
+        ordinal_day_list = first_ordinal_dates
+        img_names = first_img_names
+        
     # assemble
     logger.info('Generating COLD output geotiff')
 
@@ -332,6 +347,7 @@ def assemble_main(cmdline=1, **kwargs):
     coco_dset.dump()
     logger.info(f'Finished writing kwcoco file to: {mod_coco_fpath}')
 
+    gc.collect()
 
 @profile
 def get_gdal_transform(coco_dset, sensor_name):
