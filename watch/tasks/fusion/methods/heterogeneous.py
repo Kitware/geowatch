@@ -504,7 +504,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         else:
             sensor_modes = set(self.unique_sensor_modes)
 
-        for s, c in sensor_modes:
+        for s, c in sorted(sensor_modes):
             mode_code = kwcoco.FusedChannelSpec.coerce(c)
             # For each mode make a network that should learn to tokenize
             in_chan = mode_code.numel()
