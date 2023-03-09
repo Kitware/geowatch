@@ -14,7 +14,7 @@ def test_watch_tasks_fusion_datamodules_kwcoco_dataset_full_KWCocoVideoDataset()
     """
     converted from /home/joncrall/code/watch/watch/tasks/fusion/datamodules/_orig_kwcoco_dataset_full.py::KWCocoVideoDataset:1
     """
-    coco_dset = watch.demo.coerce_kwcoco('watch')
+    coco_dset = watch.coerce_kwcoco('watch')
     print({c.get('sensor_coarse') for c in coco_dset.images().coco_images})
     print({c.channels.spec for c in coco_dset.images().coco_images})
     sampler = ndsampler.CocoSampler(coco_dset)

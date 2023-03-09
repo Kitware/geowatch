@@ -134,7 +134,21 @@ def assemble_main(cmdline=1, **kwargs):
 
     # Get original transform from projection to image space
     coco_dset = kwcoco.CocoDataset(coco_fpath)
-    coco_img = coco_dset.images().coco_images[0]
+    video_ids = list(coco_dset.videos())
+    if len(video_ids) != 1:
+        raise AssertionError('currently expecting one video per coco file; todo: be robust to this')
+    video_id = video_ids[0]
+    # Get all the images in the first video.
+    images = coco_dset.images(video_id=video_id)
+    sensors = images.lookup('sensor_coarse', None)
+    is_landsat = [s == 'L8' for s in sensors]
+    # Filter to only the landsat images
+    landsat_images = images.compress(is_landsat)
+    if len(landsat_images) == 0:
+        raise RuntimeError(f'Video {video_id} in {coco_dset} contains no landsat images')
+    # Take the first landsat image
+    coco_img = landsat_images.coco_images[0]
+
     primary_asset = coco_img.primary_asset()
     primary_fpath = os.path.join(ub.Path(coco_img.bundle_dpath), primary_asset['file_name'])
     ref_image = gdal.Open(primary_fpath, gdal.GA_ReadOnly)

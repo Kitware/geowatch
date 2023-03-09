@@ -76,7 +76,7 @@ def trace_json_lineage(fpath):
     # uniqify by uuid
     for proc in list(find_info_items(info_section, {'process', 'process_context'})):
         name = proc['properties']['name']
-        if name not in {'coco_align_geotiffs'}:
+        if name not in {'coco_align_geotiffs', 'coco_align'}:
             print(f'name={name}')
             print(proc['properties']['start_timestamp'])
             print(proc['properties']['emissions']['run_id'])
@@ -274,7 +274,7 @@ def _handle_crop_and_trk_params(param_types, expt_dvc_dpath):
     crop_item = list(find_info_items(
         crop_dataset['info'],
         {'process', 'process_context'},
-        'coco_align_geotiffs'
+        {'coco_align_geotiffs', 'coco_align'}
     ))[-1]
     # This is the path to either truth or the tracks we cropped from
     region_fpath = crop_item['properties']['args']['regions']

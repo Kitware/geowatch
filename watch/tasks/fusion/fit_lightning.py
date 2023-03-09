@@ -11,7 +11,6 @@ from typing import Any
 
 import yaml
 from jsonargparse import set_loader, set_dumper
-# , lazy_instance
 
 
 # Not very safe, but needed to parse tuples e.g. datamodule.dataset_stats
@@ -142,17 +141,18 @@ class SmartLightningCLI(LightningCLI_Extension):
             # apply_on="instantiate",
         )
 
-        parser.add_argument(
-            '--profile',
-            action='store_true',
-            help=ub.paragraph(
-                '''
-                Fit does nothing with this flag. This just allows for `@xdev.profile`
-                profiling which checks sys.argv separately.
+        # We can remove this
+        # parser.add_argument(
+        #     '--profile',
+        #     action='store_true',
+        #     help=ub.paragraph(
+        #         '''
+        #         Fit does nothing with this flag. This just allows for `@xdev.profile`
+        #         profiling which checks sys.argv separately.
 
-                DEPRECATED: there is no longer any reason to use this. Set the
-                XDEV_PROFILE environment variable instead.
-                '''))
+        #         DEPRECATED: there is no longer any reason to use this. Set the
+        #         XDEV_PROFILE environment variable instead.
+        #         '''))
 
         def data_value_getter(key):
             # Hack to call setup on the datamodule before linking args
@@ -249,7 +249,7 @@ def make_cli(config=None):
         # auto-plotters can hook into.
         import tensorboard  # NOQA
     except ImportError:
-        ...
+        print('warning: tensorboard not available')
     else:
         # Only use tensorboard if we have it.
         callbacks.append(pl_ext.callbacks.TensorboardPlotter())
@@ -303,8 +303,9 @@ def main(config=None):
         >>>     'subcommand': 'fit',
         >>>     'fit.model': 'watch.tasks.fusion.methods.noop_model.NoopModel',
         >>>     'fit.trainer.default_root_dir': dpath,
-        >>>     'fit.data.train_dataset': 'special:vidshapes8-frames9-speed0.5-multispectral',
-        >>>     'fit.data.vali_dataset': 'special:vidshapes4-frames9-speed0.5-multispectral',
+        >>>     'fit.data.train_dataset': 'special:vidshapes8-frames9-gsize64-speed0.5-multispectral',
+        >>>     'fit.data.vali_dataset': 'special:vidshapes4-frames9-gsize64-speed0.5-multispectral',
+        >>>     'fit.data.chip_dims': 64,
         >>>     'fit.trainer.max_steps': 2,
         >>>     'fit.trainer.num_sanity_val_steps': 0,
         >>> }
@@ -323,8 +324,9 @@ def main(config=None):
         >>>     'fit.optimizer.class_path': 'torch.optim.SGD',
         >>>     'fit.optimizer.init_args.lr': 1e-3,
         >>>     'fit.trainer.default_root_dir': dpath,
-        >>>     'fit.data.train_dataset': 'special:vidshapes8-frames9-speed0.5-multispectral',
-        >>>     'fit.data.vali_dataset': 'special:vidshapes4-frames9-speed0.5-multispectral',
+        >>>     'fit.data.train_dataset': 'special:vidshapes8-gsize64-frames9-speed0.5-multispectral',
+        >>>     'fit.data.vali_dataset': 'special:vidshapes4-gsize64-frames9-speed0.5-multispectral',
+        >>>     'fit.data.chip_dims': 64,
         >>>     'fit.trainer.max_steps': 2,
         >>>     'fit.trainer.num_sanity_val_steps': 0,
         >>> }

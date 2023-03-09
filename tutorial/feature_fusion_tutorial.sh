@@ -182,7 +182,6 @@ EXPERIMENT_NAME=Drop4_BAS_my_feature_experiment_$(date --iso-8601)
 # These are the paths to the kwcoco files that should contain your features
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_invariants.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_invariants.kwcoco.json
-TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_invariants.kwcoco.json
 
 # The pretrained state should be checked out of DVC.  This is the best BAS
 # model as of 2022-12-21, we will partially initialize a subset of the network
@@ -225,54 +224,78 @@ CHANNELS="(S2,L8):(blue|green|red|nir|swir16|swir22),(S2,L8):(invariants.0:17)"
 WORKDIR=$EXPT_DVC_DPATH/training/$HOSTNAME/$USER
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 
-# Invoke the training command.
-python -m watch.tasks.fusion.fit \
-    --default_root_dir="$DEFAULT_ROOT_DIR" \
-    --name="$EXPERIMENT_NAME" \
-    --train_dataset="$TRAIN_FPATH" \
-    --vali_dataset="$VALI_FPATH" \
-    --test_dataset="$TEST_FPATH" \
-    --saliency_weights="1:70" \
-    --class_loss='focal' \
-    --saliency_loss='focal' \
-    --global_change_weight=0.00 \
-    --global_class_weight=0.00 \
-    --global_saliency_weight=1.00 \
-    --learning_rate=5e-5 \
-    --weight_decay=1e-3 \
-    --chip_dims=224,224 \
-    --window_space_scale="10GSD" \
-    --input_space_scale="10GSD" \
-    --output_space_scale="10GSD" \
-    --accumulate_grad_batches=8 \
-    --batch_size=2 \
-    --max_epochs=160 \
-    --patience=160 \
-    --num_workers=3 \
-    --dist_weights=False \
-    --time_steps=5 \
-    --channels="$CHANNELS" \
-    --neg_to_pos_ratio=0.1 \
-    --time_sampling=soft2-contiguous-hardish3\
-    --time_span=3m-6m-1y \
-    --tokenizer=linconv \
-    --optimizer=AdamW \
-    --arch_name=smt_it_stm_p8 \
-    --decoder=mlp \
-    --draw_interval=5min \
-    --num_draw=4 \
-    --use_centered_positives=True \
-    --normalize_inputs=128 \
-    --stream_channels=16 \
-    --temporal_dropout=0.5 \
-    --accelerator="gpu" \
-    --devices "0," \
-    --amp_backend=apex \
-    --resample_invalid_frames=1 \
-    --quality_threshold=0.8 \
-    --num_sanity_val_steps=0 \
-    --max_epoch_length=16384 \
-    --init="$PRETRAINED_STATE"
+MAX_STEPS=10000
+TARGET_LR=5e-5
+python -m watch.tasks.fusion fit --config "
+    data:
+        num_workers             : 3
+        train_dataset           : $TRAIN_FPATH
+        vali_dataset            : $VALI_FPATH
+        channels                : '$CHANNELS'
+        time_steps              : 5
+        chip_dims               : '224,224'
+        batch_size              : 2
+        window_space_scale      : 10GSD 
+        input_space_scale       : 10GSD
+        output_space_scale      : 10GSD 
+        dist_weights            : false
+        neg_to_pos_ratio        : 0.1
+        time_sampling           : soft2-contiguous-hardish3
+        time_span               : '3m-6m-1y' 
+        use_centered_positives  : true
+        normalize_inputs        : 128
+        temporal_dropout        : 0.5
+        resample_invalid_frames : 1
+        quality_threshold       : 0.8
+    model:
+        class_path: MultimodalTransformer
+        init_args:
+            name                   : $EXPERIMENT_NAME
+            arch_name              : smt_it_stm_p8 
+            tokenizer              : linconv
+            decoder                : mlp
+            stream_channels        : 16
+            stream_channels        : 16
+            saliency_weights       : 1:70 
+            class_loss             : focal
+            saliency_loss          : focal
+            global_change_weight   : 0.00 
+            global_class_weight    : 0.00 
+            global_saliency_weight : 1.00 
+    lr_scheduler:
+      class_path: torch.optim.lr_scheduler.OneCycleLR
+      init_args:
+        max_lr: $TARGET_LR
+        total_steps: $MAX_STEPS
+        anneal_strategy: linear
+        pct_start: 0.05
+    optimizer:
+      class_path: torch.optim.Adam
+      init_args:
+        lr: $TARGET_LR
+        weight_decay: 1e-3
+        betas:
+          - 0.9
+          - 0.99
+    trainer:
+      accumulate_grad_batches: 8
+      default_root_dir     : $DEFAULT_ROOT_DIR
+      accelerator          : gpu 
+      devices              : 0,
+      #devices             : 0,1
+      #strategy            : ddp 
+      check_val_every_n_epoch: 1
+      enable_checkpointing: true
+      enable_model_summary: true
+      log_every_n_steps: 5
+      logger: true
+      max_steps: $MAX_STEPS
+      num_sanity_val_steps: 0
+      replace_sampler_ddp: true
+      track_grad_norm: 2
+    initializer:
+        init: $PRETRAINED_STATE
+"
 
 
 # The result of training will output a list of checkpoints in the lightning

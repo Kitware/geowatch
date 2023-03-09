@@ -13,7 +13,7 @@ Example:
     >>> # Basic overview demo of the algorithm
     >>> from watch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
     >>> import watch
-    >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, num_frames=32, image_size=(32, 32))
+    >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, num_frames=16, image_size=(8, 8))
     >>> vidid = dset.dataset['videos'][0]['id']
     >>> self = TimeWindowSampler.from_coco_video(
     >>>     dset, vidid,
@@ -31,11 +31,11 @@ Example:
     >>> # Demo multiple different settings
     >>> from watch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
     >>> import watch
-    >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, num_frames=32, image_size=(32, 32))
+    >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, num_frames=16, image_size=(8, 8))
     >>> vidid = dset.dataset['videos'][0]['id']
     >>> self = TimeWindowSampler.from_coco_video(
     >>>     dset, vidid,
-    >>>     time_window=11,
+    >>>     time_window=7,
     >>>     affinity_type='uniform', time_span='8m', update_rule='',
     >>> )
     >>> # xdoctest: +REQUIRES(--show)
@@ -61,7 +61,7 @@ Example:
     >>> # Demo corner case where there are too few observations
     >>> from watch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
     >>> import watch
-    >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, num_frames=1, num_videos=1, image_size=(32, 32))
+    >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, num_frames=1, num_videos=1, image_size=(8, 8))
     >>> vidid = dset.dataset['videos'][0]['id']
     >>> self = TimeWindowSampler.from_coco_video(
     >>>     dset, vidid,
@@ -89,7 +89,7 @@ Example:
     >>> self = TimeWindowSampler.from_coco_video(
     >>>     dset, vidid,
     >>>     time_kernel='-1y,-8m,-2w,0,2w,8m,1y',
-    >>>     affinity_type='soft3', update_rule='', determenistic=True
+    >>>     affinity_type='soft4', update_rule='', determenistic=True
     >>>     #time_window=5,
     >>>     #affinity_type='hardish3', time_span='3m', update_rule='pairwise+distribute', determenistic=True
     >>> )

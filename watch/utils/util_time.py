@@ -109,30 +109,47 @@ def _format_offset(off):
 
 
 @profile
-def coerce_datetime(data, default_timezone='utc', strict=False):
+def coerce_datetime(data, default_timezone='utc', nan_behavior='return-None',
+                    none_behavior='return-None'):
     """
     Parses a timestamp and always returns a timestamp with a timezone.
     If only a date is specified, the time is defaulted to 00:00:00
     If one is not discoverable a specified default is used.
-    A None input is returned as-is unless strict is True.
+    A nan or None input depends on nan_behavior and none_behavior.
 
     Args:
         data (None | str | datetime.datetime | datetime.date)
+
         default_timezone (str): defaults to utc.
-        strict (bool): if True we error if the input data is None.
+
+        none_behavior (str):
+            How None inputs are handled. Can be:
+                'cast-to-none': returns None
+                'error': raises an error
+
+        nan_behavior (str):
+            How nan inputs are handled. Can be:
+                'cast-to-none': returns None
+                'error': raises an error
 
     Returns:
-        None | datetime.datetime
+        datetime.datetime | None
 
     Example:
         >>> from watch.utils.util_time import *  # NOQA
         >>> assert coerce_datetime(None) is None
+        >>> assert coerce_datetime(np.nan) is None
         >>> assert coerce_datetime('2020-01-01') == datetime_cls(2020, 1, 1, 0, 0, tzinfo=datetime_mod.timezone.utc)
         >>> assert coerce_datetime(datetime_cls(2020, 1, 1, 0, 0)) == datetime_cls(2020, 1, 1, 0, 0, tzinfo=datetime_mod.timezone.utc)
         >>> assert coerce_datetime(datetime_cls(2020, 1, 1, 0, 0).date()) == datetime_cls(2020, 1, 1, 0, 0, tzinfo=datetime_mod.timezone.utc)
     """
     if data is None:
-        return data
+        if none_behavior == 'return-None':
+            return None
+        elif none_behavior == 'error':
+            raise TimeTypeError('cannot cast None to a datetime')
+        else:
+            raise KeyError(none_behavior)
     elif isinstance(data, str):
         # Canse use ubelt.timeparse(data, default_timezone=default_timezone) here.
         if data == 'now':
@@ -143,7 +160,14 @@ def coerce_datetime(data, default_timezone='utc', strict=False):
         dt = data
     elif isinstance(data, datetime_mod.date):
         dt = dateutil.parser.parse(data.isoformat())
-    elif isinstance(data, (float, int)):
+    elif isinstance(data, numbers.Number):
+        if math.isnan(data):
+            if nan_behavior == 'return-None':
+                return None
+            elif nan_behavior == 'error':
+                raise TimeTypeError('cannot cast nan to a datetime')
+            else:
+                raise KeyError(nan_behavior)
         dt = datetime_cls.fromtimestamp(data)
     else:
         raise TimeTypeError('unhandled {}'.format(data))
@@ -152,86 +176,20 @@ def coerce_datetime(data, default_timezone='utc', strict=False):
 
 
 @profile
-def ensure_timezone(dt, default='utc'):
-    """
-    Gives a datetime_mod a timezone (utc by default) if it doesnt have one
-
-    Arguments:
-        dt (datetime.datetime): the datetime to fix
-        default (str): the timezone to use if it does not have one.
-
-    Example:
-        >>> from watch.utils.util_time import *  # NOQA
-        >>> dt = ensure_timezone(datetime_cls.now(), datetime_mod.timezone(datetime_mod.timedelta(hours=+5)))
-        >>> print('dt = {!r}'.format(dt))
-        >>> dt = ensure_timezone(datetime_cls.utcnow())
-        >>> print('dt = {!r}'.format(dt))
-        >>> ensure_timezone(datetime_cls.utcnow(), 'utc')
-        >>> ensure_timezone(datetime_cls.utcnow(), 'local')
-    """
-    if dt.tzinfo is not None:
-        return dt
-    else:
-        if isinstance(default, datetime_mod.timezone):
-            tzinfo = default
-        else:
-            if default == 'utc':
-                tzinfo = datetime_mod.timezone.utc
-            elif default == 'local':
-                tzinfo = datetime_mod.timezone(datetime_mod.timedelta(seconds=-time.timezone))
-            else:
-                raise NotImplementedError
-        return dt.replace(tzinfo=tzinfo)
-
-
-@ub.memoize
-def _time_unit_registery():
-    import pint
-    # Empty registry
-    ureg = pint.UnitRegistry(None)
-    ureg.define('second = []')
-    ureg.define('minute = 60 * second')
-    ureg.define('hour = 60 * minute')
-
-    ureg.define('day = 24 * hour')
-    ureg.define('month = 30.437 * day')
-    ureg.define('year = 365 * day')
-
-    ureg.define('min = minute')
-    ureg.define('mon = month')
-    ureg.define('sec = second')
-
-    ureg.define('S = second')
-    ureg.define('M = minute')
-    ureg.define('H = hour')
-
-    ureg.define('d = day')
-    ureg.define('m = month')
-    ureg.define('y = year')
-
-    ureg.define('s = second')
-
-    ureg.define('millisecond = second / 1000')
-    ureg.define('microsecond = second / 1000000')
-
-    ureg.define('ms = millisecond')
-    ureg.define('us = microsecond')
-    return ureg
-
-
-_time_unit_registery()
-
-
-@profile
 def coerce_timedelta(delta):
     """
-    TODO:
-        move to a util
+    Parses data that could be associated with a time delta
 
     Args:
         delta (str | int | float):
             If given as a string, attempt to parse out a time duration.
             Otherwise, interpret pure magnitudes in seconds.
+
+    Returns:
+        datetime.timedelta
+
+    TODO:
+        move to a util
 
     Example:
         >>> from watch.utils.util_time import *  # NOQA
@@ -331,12 +289,117 @@ def coerce_timedelta(delta):
                 delta = datetime_mod.timedelta(seconds=float(magnitude))
             else:
                 import pytimeparse  #
-                print('warning: pytimeparse fallback')
+                import warnings
+                warnings.warn('warning: pytimeparse fallback')
                 seconds = pytimeparse.parse(delta)
                 if seconds is None:
                     raise Exception(delta)
                 delta = datetime_mod.timedelta(seconds=seconds)
                 return delta
     else:
-        raise TimeTypeError(type(delta))
+        raise TimeTypeError(f'cannot cast {type(delta)} to a timedelta')
     return delta
+
+
+@profile
+def ensure_timezone(dt, default='utc'):
+    """
+    Gives a datetime_mod a timezone (utc by default) if it doesnt have one
+
+    Arguments:
+        dt (datetime.datetime): the datetime to fix
+        default (str): the timezone to use if it does not have one.
+
+    Example:
+        >>> from watch.utils.util_time import *  # NOQA
+        >>> dt = ensure_timezone(datetime_cls.now(), datetime_mod.timezone(datetime_mod.timedelta(hours=+5)))
+        >>> print('dt = {!r}'.format(dt))
+        >>> dt = ensure_timezone(datetime_cls.utcnow())
+        >>> print('dt = {!r}'.format(dt))
+        >>> ensure_timezone(datetime_cls.utcnow(), 'utc')
+        >>> ensure_timezone(datetime_cls.utcnow(), 'local')
+    """
+    if dt.tzinfo is not None:
+        return dt
+    else:
+        if isinstance(default, datetime_mod.timezone):
+            tzinfo = default
+        else:
+            if default == 'utc':
+                tzinfo = datetime_mod.timezone.utc
+            elif default == 'local':
+                tzinfo = datetime_mod.timezone(datetime_mod.timedelta(seconds=-time.timezone))
+            else:
+                raise NotImplementedError
+        return dt.replace(tzinfo=tzinfo)
+
+
+@ub.memoize
+def _time_unit_registery():
+    import pint
+    # Empty registry
+    ureg = pint.UnitRegistry(None)
+    ureg.define('second = []')
+    ureg.define('minute = 60 * second')
+    ureg.define('hour = 60 * minute')
+
+    ureg.define('day = 24 * hour')
+    ureg.define('month = 30.437 * day')
+    ureg.define('year = 365 * day')
+
+    ureg.define('min = minute')
+    ureg.define('mon = month')
+    ureg.define('sec = second')
+
+    ureg.define('S = second')
+    ureg.define('M = minute')
+    ureg.define('H = hour')
+
+    ureg.define('d = day')
+    ureg.define('m = month')
+    ureg.define('y = year')
+
+    ureg.define('s = second')
+
+    ureg.define('millisecond = second / 1000')
+    ureg.define('microsecond = second / 1000000')
+
+    ureg.define('ms = millisecond')
+    ureg.define('us = microsecond')
+    return ureg
+
+
+_time_unit_registery()
+
+
+def _format_timedelta(delta, resolution=None):
+    """
+    TODO format time deltas at some resolution granularity
+
+    Args:
+        delta (datetime.timedelta): The timedelta to format
+
+        resolution (Coerceable[datetime.timedelta] | None):
+            minimum temporal resolution. If unspecified returns
+            an isoformat
+
+    Example:
+        >>> from watch.utils.util_time import *  # NOQA
+        >>> delta = coerce_timedelta('13months')
+        >>> # delta = coerce_timedelta('13months', 'year')
+
+    """
+    if resolution is None:
+        return str(delta)
+    else:
+        resolution = coerce_timedelta(resolution)
+
+        # TODO: unit, precision?
+        delta / resolution
+        raise NotImplementedError
+        # s = 13420
+        # hours, remainder = divmod(s, 3600)
+        # minutes, seconds = divmod(remainder, 60)
+        # print('{:02}:{:02}:{:02}'.format(int(hours), int(minutes), int(seconds)))
+        # # result: 03:43:40
+        # ...

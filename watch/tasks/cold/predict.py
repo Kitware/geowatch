@@ -52,9 +52,9 @@ CommandLine:
         --with_depth=0 \
         --do_splits=0 \
         --skip_existing=1 \
-        --cold_workers=2 \
-        --workers=4 \
-        --backend=tmux --run=0
+        --cold_workers=8 \
+        --workers=1 \
+        --backend=tmux --run=1
 
 """
 import scriptconfig as scfg
@@ -108,7 +108,7 @@ def cold_predict_main(cmdline=1, **kwargs):
         TEST_COLD=1 xdoctest -m watch.tasks.cold.predict cold_predict_main
 
      Example:
-        >>> # xdoctest: +REQUIRES(gg:TEST_COLD)
+        >>> # xdoctest: +REQUIRES(env:TEST_COLD)
         >>> from watch.tasks.cold.predict import cold_predict_main
         >>> from watch.tasks.cold.predict import *
         >>> kwargs= dict(

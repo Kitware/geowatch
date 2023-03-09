@@ -52,14 +52,15 @@ def test_noop_model_training():
             model:
               class_path: NoopModel
             data:
-              train_dataset: watch-msi-dates-geodata-gsize128-videos5-frames10
-              vali_dataset: watch-msi-dates-geodata-gsize128-videos2-frames10
+              train_dataset: watch-msi-dates-geodata-gsize64-videos5-frames10
+              vali_dataset: watch-msi-dates-geodata-gsize64-videos2-frames10
+              chip_size: 64
               num_workers: 0
               batch_size: 1
               time_steps: 2
               channels: B1,B10,B11
             trainer:
-              max_steps: 10
+              max_steps: 2
               num_sanity_val_steps: 0
         ''')
     fit_lightning.main(config=config)
@@ -67,9 +68,6 @@ def test_noop_model_training():
 
 def test_fit_cli_training():
     """
-    smartwatch stats watch-msi-dates-geodata-gsize128-videos5-frames10
-    smartwatch stats watch-msi-dates-geodata-gsize128-videos2-frames10
-
     python -m watch.tasks.fusion fit --model.help
     """
     import pytest
@@ -93,8 +91,8 @@ def real_test_train():
         subcommand: fit
         fit:
             data:
-              train_dataset: watch-msi-dates-geodata-gsize128-videos5-frames10
-              vali_dataset: watch-msi-dates-geodata-gsize128-videos2-frames10
+              train_dataset: watch-msi-dates-geodata-gsize64-videos5-frames10
+              vali_dataset: watch-msi-dates-geodata-gsize64-videos2-frames10
               num_workers: 8
               batch_size: 16
               time_steps: 2
@@ -191,8 +189,8 @@ def test_partial_init_callback():
             model:
               class_path: watch.tasks.fusion.methods.HeterogeneousModel
             data:
-              train_dataset: watch-msi-dates-geodata-gsize128-videos5-frames10
-              vali_dataset: watch-msi-dates-geodata-gsize128-videos2-frames10
+              train_dataset: watch-msi-dates-geodata-gsize64-videos5-frames10
+              vali_dataset: watch-msi-dates-geodata-gsize64-videos2-frames10
               num_workers: 0
               batch_size: 1
               time_steps: 2
@@ -223,8 +221,8 @@ def test_partial_init_callback():
             model:
               class_path: watch.tasks.fusion.methods.HeterogeneousModel
             data:
-              train_dataset: watch-msi-dates-geodata-gsize128-videos5-frames10
-              vali_dataset: watch-msi-dates-geodata-gsize128-videos2-frames10
+              train_dataset: watch-msi-dates-geodata-gsize64-videos5-frames10
+              vali_dataset: watch-msi-dates-geodata-gsize64-videos2-frames10
               num_workers: 0
               batch_size: 1
               time_steps: 2

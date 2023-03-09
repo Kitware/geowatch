@@ -124,7 +124,7 @@ def prevalidate_param_grid(arg):
         print(f'Key {k} with {p=} {msg}')
 
     for item in action_matrices:
-        matrix = item['matrix']
+        matrix = item.get('matrix', {})
         for k in src_pathlike_keys:
             if k in matrix:
                 v = matrix[k]
@@ -313,7 +313,7 @@ def github_action_matrix(arg):
     else:
         data = arg.copy()
 
-    matrix = data.pop('matrix').copy()
+    matrix = data.pop('matrix', {}).copy()
 
     include = matrix.pop('include', data.pop('include', []))
     exclude = matrix.pop('exclude', data.pop('exclude', []))
@@ -439,6 +439,31 @@ def extended_github_action_matrix(arg):
     Example:
         >>> from watch.utils.util_param_grid import *  # NOQA
         >>> from watch.utils import util_param_grid
+        >>> # Specifying an explicit list of things to run
+        >>> arg = ub.codeblock(
+                 '''
+                 submatrices:
+                    - common_variable: a
+                      old_variable: a
+                    - common_variable: a
+                      old_variable: null
+                      new_variable: 1
+                    - common_variable: a
+                      old_variable: null
+                      new_variable: 11
+                    - common_variable: a
+                      old_variable: null
+                      new_variable: 2
+                    - common_variable: b
+                      old_variable: null
+                      new_variable: 22
+                 ''')
+        >>> grid_items = list(extended_github_action_matrix(arg))
+        >>> print('grid_items = {}'.format(ub.urepr(grid_items, nl=1)))
+
+    Example:
+        >>> from watch.utils.util_param_grid import *  # NOQA
+        >>> from watch.utils import util_param_grid
         >>> arg = ub.codeblock(
                  '''
                  matrix:
@@ -475,7 +500,7 @@ def extended_github_action_matrix(arg):
     else:
         data = arg.copy()
 
-    matrix = data.pop('matrix').copy()
+    matrix = data.pop('matrix', {}).copy()
 
     include = matrix.pop('include', data.pop('include', []))
     exclude = matrix.pop('exclude', data.pop('exclude', []))

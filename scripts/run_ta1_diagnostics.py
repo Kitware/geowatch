@@ -141,7 +141,7 @@ def run_diagnostics(input_path,
     ta1_cropped_dir = '/tmp/cropped_kwcoco/'
     ta1_cropped_kwcoco_path = os.path.join(ta1_cropped_dir,
                                            'cropped_kwcoco.json')
-    subprocess.run(['python', '-m', 'watch.cli.coco_align_geotiffs',
+    subprocess.run(['python', '-m', 'watch.cli.coco_align',
                     '--visualize', 'False',
                     '--src', ta1_kwcoco_path,
                     '--dst', ta1_cropped_kwcoco_path,

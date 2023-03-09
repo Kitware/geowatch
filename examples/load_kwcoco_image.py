@@ -18,7 +18,7 @@ if 0:
     dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
     coco_fpath = dvc_data_dpath / 'Drop4-BAS/data_vali.kwcoco.json'
 
-dset : kwcoco.CocoDataset = watch.demo.coerce_kwcoco()
+dset : kwcoco.CocoDataset = watch.coerce_kwcoco()
 
 
 # Loop over videos

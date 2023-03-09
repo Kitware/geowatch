@@ -10,7 +10,7 @@ from tqdm import tqdm
 import scriptconfig as scfg
 
 from watch import exceptions
-from watch.tasks.fusion.predict import quantize_float01
+from watch.tasks.fusion.coco_stitcher import quantize_image
 from watch.utils.kwcoco_extensions import transfer_geo_metadata
 
 
@@ -142,7 +142,7 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         >>> import watch
         >>> from kwcoco.demo.perterb import perterb_coco
         >>> dpath = ub.Path.appdir('watch/test/coco_average_features')
-        >>> base_dset = watch.demo.coerce_kwcoco('watch-msi')
+        >>> base_dset = watch.coerce_kwcoco('watch-msi')
         >>> # Construct two copies of the same data with slightly different heatmaps
         >>> dset1 = perterb_coco(base_dset.copy(), box_noise=0.5, cls_noise=0.5, n_fp=10, n_fn=10, rng=32)
         >>> dset2 = base_dset.copy()
@@ -213,7 +213,7 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         >>> import watch
         >>> from kwcoco.demo.perterb import perterb_coco
         >>> dpath = ub.Path.appdir('watch/test/coco_average_features')
-        >>> base_dset = watch.demo.coerce_kwcoco('watch-msi', geodata=True, dates=True)
+        >>> base_dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True)
         >>> # Construct two copies of the same data with slightly different heatmaps
         >>> dset1 = perterb_coco(base_dset.copy(), box_noise=0.5, cls_noise=0.5, n_fp=10, n_fn=10, rng=32)
         >>> dset2 = base_dset.copy()
@@ -468,7 +468,9 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         warp_target_from_img = scale_target_from_vid @ coco_img.warp_vid_from_img
         warp_img_from_target = warp_target_from_img.inv()
 
-        quant_data, quantization = quantize_float01(average_image_data)
+        # TODO: probably want to use the CocoStitcher directly.
+        # TODO: if we know the min/max range, specify it.
+        quant_data, quantization = quantize_image(average_image_data)
 
         if output_obj is not None:
             # Overwrite the data in the output auxiliary item.
@@ -502,7 +504,7 @@ def merge_kwcoco_channels(kwcoco_file_paths,
             pass
 
     # Save kwcoco file.
-    merge_kwcoco.validate()
+    # merge_kwcoco.validate()
     merge_kwcoco.dump(output_kwcoco_path)
     print(f"Saved merged kwcoco file to: {output_kwcoco_path}")
 
