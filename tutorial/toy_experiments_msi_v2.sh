@@ -122,6 +122,7 @@ python -m watch.tasks.fusion fit --config "
         time_steps           : 5
         chip_dims            : 128
         batch_size           : 2
+        max_epoch_length     : 5
     model:
       class_path: watch.tasks.fusion.methods.HeterogeneousModel
       init_args:
@@ -150,13 +151,13 @@ python -m watch.tasks.fusion fit --config "
         global_saliency_weight : 1.0
         saliency_loss          : dicefocal
         decoder                : simple_conv
-    lr_scheduler:
-      class_path: torch.optim.lr_scheduler.OneCycleLR
-      init_args:
-        max_lr: $TARGET_LR
-        total_steps: $MAX_STEPS
-        anneal_strategy: cos
-        pct_start: 0.05
+    #lr_scheduler:
+    #  class_path: torch.optim.lr_scheduler.OneCycleLR
+    #  init_args:
+    #    max_lr: $TARGET_LR
+    #    total_steps: $MAX_STEPS
+    #    anneal_strategy: cos
+    #    pct_start: 0.05
     optimizer:
       class_path: torch.optim.Adam
       init_args:
@@ -190,7 +191,8 @@ python -m watch.tasks.fusion fit --config "
 # and package before it exists.  By pointing at the checkpoint you should be
 # able to restart training
 # NOTE: CURRENTLY BUGGED AND NOT SURE WHY IT IS NOT WORKING
-CKPT_FPATH=$(python -c "import pathlib; print(list(pathlib.Path('$DEFAULT_ROOT_DIR/lightning_logs').glob('*/package-interupt/*.ckpt'))[0])")
+#CKPT_FPATH=$(python -c "import pathlib; print(list(pathlib.Path('$DEFAULT_ROOT_DIR/lightning_logs').glob('*/package-interupt/*.ckpt'))[0])")
+CKPT_FPATH=$(python -c "import pathlib; print(list(pathlib.Path('$DEFAULT_ROOT_DIR/lightning_logs').glob('*/checkpoints/*.ckpt'))[0])")
 CONFIG_FPATH=$(python -c "import pathlib; print(sorted(pathlib.Path('$DEFAULT_ROOT_DIR/lightning_logs').glob('*/config.yaml'))[-1])")
 echo "CONFIG_FPATH = $CONFIG_FPATH"
 echo "CKPT_FPATH = $CKPT_FPATH"
