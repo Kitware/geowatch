@@ -372,8 +372,34 @@ def _time_unit_registery():
 _time_unit_registery()
 
 
-def _format_timedelta():
+def _format_timedelta(delta, resolution=None):
     """
     TODO format time deltas at some resolution granularity
+
+    Args:
+        delta (datetime.timedelta): The timedelta to format
+
+        resolution (Coerceable[datetime.timedelta] | None):
+            minimum temporal resolution. If unspecified returns
+            an isoformat
+
+    Example:
+        >>> from watch.utils.util_time import *  # NOQA
+        >>> delta = coerce_timedelta('13months')
+        >>> # delta = coerce_timedelta('13months', 'year')
+
     """
-    ...
+    if resolution is None:
+        return str(delta)
+    else:
+        resolution = coerce_timedelta(resolution)
+
+        # TODO: unit, precision?
+        delta / resolution
+        raise NotImplementedError
+        # s = 13420
+        # hours, remainder = divmod(s, 3600)
+        # minutes, seconds = divmod(remainder, 60)
+        # print('{:02}:{:02}:{:02}'.format(int(hours), int(minutes), int(seconds)))
+        # # result: 03:43:40
+        # ...

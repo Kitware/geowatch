@@ -503,7 +503,7 @@ def main(cmdline=True, **kw):
 
     dst = ub.Path(ub.expandpath(dst))
     # TODO: handle this coercion of directories or bundles in kwcoco itself
-    if 'json' in dst.name.split('.'):
+    if 'json' in dst.name.split('.') or 'kwcoco' in dst.name.split('.'):
         output_bundle_dpath = str(dst.parent)
         dst_fpath = str(dst)
     else:
@@ -997,15 +997,17 @@ class SimpleDataCube(object):
 
                 if query_start_date is not None:
                     query_start_datetime = util_time.coerce_datetime(query_start_date)
-                    flags = [dt >= query_start_datetime for dt in cand_datetimes]
-                    cand_datetimes = list(ub.compress(cand_datetimes, flags))
-                    cand_gids = list(ub.compress(cand_gids, flags))
+                    if query_start_datetime is not None:
+                        flags = [dt >= query_start_datetime for dt in cand_datetimes]
+                        cand_datetimes = list(ub.compress(cand_datetimes, flags))
+                        cand_gids = list(ub.compress(cand_gids, flags))
 
                 if query_end_date is not None:
                     query_end_datetime = util_time.coerce_datetime(query_end_date)
-                    flags = [dt <= query_end_datetime for dt in cand_datetimes]
-                    cand_datetimes = list(ub.compress(cand_datetimes, flags))
-                    cand_gids = list(ub.compress(cand_gids, flags))
+                    if query_end_datetime is not None:
+                        flags = [dt <= query_end_datetime for dt in cand_datetimes]
+                        cand_datetimes = list(ub.compress(cand_datetimes, flags))
+                        cand_gids = list(ub.compress(cand_gids, flags))
 
                 if len(cand_gids) == 0:
                     print('Warning: No temporal matches to {}'.format(video_name))
