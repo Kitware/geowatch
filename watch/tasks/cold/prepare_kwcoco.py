@@ -77,6 +77,7 @@ class PrepareKwcocoConfig(scfg.DataConfig):
         HybridCOLD then stacked data include g, r, nir, swir16, swir22, ASI,
         tir, QA
         '''))
+    resolution = scfg.Value('30GSD', help='if specified then data is processed at this resolution')
     workers = scfg.Value(0, help='number of parallel workers')
 
 
@@ -156,7 +157,9 @@ def prepare_kwcoco_main(cmdline=1, **kwargs):
     method = config['method']
     out_dir = dpath / 'stacked'
     workers = config['workers']
-    meta_fpath = stack_kwcoco(coco_fpath, out_dir, sensors, adj_cloud, method, pman, workers)
+    resolution = config.resolution
+    meta_fpath = stack_kwcoco(coco_fpath, out_dir, sensors, adj_cloud, method,
+                              pman, workers, resolution)
     return meta_fpath
 
 
@@ -299,7 +302,8 @@ def artificial_surface_index(
     return ASI
 
 
-def stack_kwcoco(coco_fpath, out_dir, sensors, adj_cloud, method, pman=None, workers=0):
+def stack_kwcoco(coco_fpath, out_dir, sensors, adj_cloud, method, pman=None,
+                 workers=0, resolution=None):
     """
     Args:
         coco_fpath (str | PathLike | CocoDataset):
@@ -327,7 +331,7 @@ def stack_kwcoco(coco_fpath, out_dir, sensors, adj_cloud, method, pman=None, wor
 
     # Load the kwcoco dataset
     dset = kwcoco.CocoDataset.coerce(coco_fpath)
-    
+
     # Get all images ids sorted in temporal order per video
     all_images = dset.images(list(ub.flatten(dset.videos().images)))
 
@@ -347,7 +351,7 @@ def stack_kwcoco(coco_fpath, out_dir, sensors, adj_cloud, method, pman=None, wor
         coco_image = coco_image.detach()
         # Transform the image data into the desired block structure.
         jobs.submit(process_one_coco_image,
-                    coco_image, out_dir, adj_cloud, method)
+                    coco_image, out_dir, adj_cloud, method, resolution)
 
     job_iter = jobs.as_completed()
     if pman is not None:
@@ -360,11 +364,14 @@ def stack_kwcoco(coco_fpath, out_dir, sensors, adj_cloud, method, pman=None, wor
 
 
 @profile
-def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
+def process_one_coco_image(coco_image, out_dir, adj_cloud, method, resolution):
     """
     Args:
         coco_image (kwcoco.CocoImage): the image to process
+
         out_dir (Path): path to write the image data
+
+        resolution (str | None): resolution to process at (e.g. 30GSD).
 
     Returns:
         Dict: result dictionary with keys:
@@ -413,14 +420,16 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
     delay_kwargs = {
         'nodata_method': None,
         'space': 'video',
+        'resolution': resolution,
     }
 
     # Construct delayed images. These represent a tree of image
     # operations that will resample the image at the desired resolution
     # as well as align it with other images in the sequence.
     # NOTE: Issue occurs when setting resolution argument in imdelay
-    delayed_im = coco_image.imdelay(channels=intensity_channels, **delay_kwargs)  #resolution='30GSD', 
-    delayed_qa = coco_image.imdelay(channels=quality_channels,  **delay_kwargs) #, 
+    delayed_im = coco_image.imdelay(channels=intensity_channels, **delay_kwargs)
+    delayed_qa = coco_image.imdelay(channels=quality_channels,  **delay_kwargs)
+
     # Check what shape the data would be loaded with if we finalized right now.
     h, w = delayed_im.shape[0:2]
     # Determine if padding is necessary to properly break the data into blocks.

@@ -60,6 +60,7 @@ CommandLine:
         --coco_fpath="$DATA_DVC_DPATH/Drop6-SMALL/imgonly-KR_R001.kwcoco.json" \
         --out_dpath="$DATA_DVC_DPATH/Drop6-SMALL/_pycold" \
         --sensors='L8' \
+        --resolution=30GSD \
         --mod_coco_fpath="$DATA_DVC_DPATH/Drop6-SMALL/_pycold/imgonly-KR_R001-cold.kwcoco.json" \
         --adj_cloud=False \
         --method='COLD' \
@@ -71,8 +72,8 @@ CommandLine:
         --coefs=cv \
         --coefs_bands=0,1,2,3,4,5 \
         --timestamp=False \
-        --mode='process' \
-        --workers=8
+        --workermode='process' \
+        --workers=16
 
     kwcoco reroot \
         --src="$DATA_DVC_DPATH"/Drop6-SMALL/_pycold/imgonly-KR_R001-cold.kwcoco.json \
@@ -81,8 +82,9 @@ CommandLine:
 
     smartwatch visualize \
         "$DATA_DVC_DPATH"/Drop6-SMALL/_pycold/imgonly-KR_R001-cold.fixed.kwcoco.zip \
-        --channels="L8:(red|green|blue,red_COLD_a1|green_COLD_a1|blue_COLD_a1,red_COLD_cv|green_COLD_cv|blue_COLD_cv,red_COLD_rmse|green_COLD_rmse|blue_COLD_rmse)" \
-        --smart=True
+        --channels="L8:(red|green|blue,red_COLD_cv|green_COLD_cv|blue_COLD_cv)" \
+        --exclude_sensors="S2" \
+        --smart=True --skip_aggressive=True
 
     ####################
     ### FULL REGION TEST
@@ -105,7 +107,7 @@ CommandLine:
         --coefs=cv \
         --coefs_bands=0,1,2,3,4,5 \
         --timestamp=False \
-        --mode='process' \
+        --workermode='process' \
         --workers=8
 
     # Fix path problem because we wrote a different directory
@@ -185,6 +187,7 @@ class ColdPredictConfig(scfg.DataConfig):
     timestamp = scfg.Value(True, help='True: exporting cold result by timestamp, False: exporting cold result by year, Default is False')
     mod_coco_fpath = scfg.Value(None, help='file path for modified coco json')
     track_emissions = scfg.Value(True, help='if True use codecarbon for emission tracking')
+    resolution = scfg.Value('30GSD', help='if specified then data is processed at this resolution')
     workers = scfg.Value(16, help='total number of workers')
     workermode = scfg.Value('process', help='Can be process, serial, or thread')
 
@@ -269,7 +272,9 @@ def cold_predict_main(cmdline=1, **kwargs):
         main_prog.set_postfix('Step 1: Prepare')
         meta_fpath = prepare_kwcoco.prepare_kwcoco_main(
             cmdline=0, coco_fpath=coco_fpath, out_dpath=out_dpath, sensors=sensors,
-            adj_cloud=adj_cloud, method=method, workers=workers)
+            adj_cloud=adj_cloud, method=method, workers=workers,
+            resolution=config.resolution,
+        )
         with open(meta_fpath, 'r') as meta:
             metadata = json.load(meta)
         main_prog.step()
@@ -347,6 +352,8 @@ def cold_predict_main(cmdline=1, **kwargs):
         assemble_kwargs['coefs'] = config['coefs']
         assemble_kwargs['coefs_bands'] = config['coefs_bands']
         assemble_kwargs['timestamp'] = config['timestamp']
+        assemble_kwargs['resolution'] = config.resolution
+
         if True:
             assemble_kwargs['pman'] = pman
         assemble_cold_result_kwcoco.assemble_main(

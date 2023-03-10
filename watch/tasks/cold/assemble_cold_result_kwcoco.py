@@ -48,6 +48,12 @@ class AssembleColdKwcocoConfig(scfg.DataConfig):
     coefs = scfg.Value(None, type=str, help="list of COLD coefficients for saving geotiff, e.g., a0,c1,a1,b1,a2,b2,a3,b3,cv,rmse")
     coefs_bands = scfg.Value(None, type=str, help='indicate the bands for output coefs_bands, e.g., 0,1,2,3,4,5')
     timestamp = scfg.Value(True, help='True: exporting cold result by timestamp, False: exporting cold result by year, Default is False')
+    resolution = scfg.Value('30GSD', help=ub.paragraph(
+        '''
+        the resolution used when preparing the kwcoco data. Note: results will
+        be wrong if this does not agree with what was used in
+        PrepareKwcocoConfig
+        '''))
 
 
 @profile
@@ -98,6 +104,7 @@ def assemble_main(cmdline=1, **kwargs):
     coefs = config_in['coefs']
     coefs_bands = config_in['coefs_bands']
     timestamp = config_in['timestamp']
+    resolution = config_in['resolution']
 
     # define variables
     config = json.loads(meta_fpath.read_text())
@@ -149,8 +156,8 @@ def assemble_main(cmdline=1, **kwargs):
 
     # Get original transform from projection to image space
     coco_dset = kwcoco.CocoDataset(coco_fpath)
-    L8_new_gdal_transform, L8_proj = get_gdal_transform(coco_dset, 'L8')
-    S2_new_gdal_transform, S2_proj = get_gdal_transform(coco_dset, 'S2')
+    L8_new_gdal_transform, L8_proj = get_gdal_transform(coco_dset, 'L8', resolution=resolution)
+    S2_new_gdal_transform, S2_proj = get_gdal_transform(coco_dset, 'S2', resolution=resolution)
 
     available_transforms = [L8_new_gdal_transform, S2_new_gdal_transform]
     if all(t is None for t in available_transforms):
@@ -241,10 +248,10 @@ def assemble_main(cmdline=1, **kwargs):
                 first_ordinal_dates.append(ordinal_day)
                 first_img_names.append(img_name)
                 last_year = year
-        
+
         ordinal_day_list = first_ordinal_dates
         img_names = first_img_names
-        
+
     # assemble
     logger.info('Generating COLD output geotiff')
 
@@ -325,15 +332,25 @@ def assemble_main(cmdline=1, **kwargs):
                 if new_fpath.exists():
                     channels = kwcoco.ChannelSpec.coerce(f'{band}_{method}_{coef}')
 
-                    # COLD output was wrote based on transform information of coco_dset, so it aligned
-                    warp_aux_to_img = coco_image.warp_img_from_vid
+                    # COLD output was wrote based on transform information of
+                    # coco_dset, so it aligned to a scaled video space.
+                    warp_img_from_vid = coco_image.warp_img_from_vid
+
+                    if resolution is None:
+                        scale_asset_from_vid = (1., 1.)
+                    else:
+                        scale_asset_from_vid = coco_image._scalefactor_for_resolution(
+                            space='video', resolution=resolution)
+                    warp_asset_from_vid = kwimage.Affine.scale(scale_asset_from_vid)
+                    warp_vid_from_asset = warp_asset_from_vid.inv()
+                    warp_img_from_asset = warp_img_from_vid @ warp_vid_from_asset
 
                     # Use the CocoImage helper which will augment the coco dictionary with
                     # your information.
                     coco_image.add_asset(os.fspath(new_fpath),
                                          channels=channels, width=asset_w,
                                          height=asset_h,
-                                         warp_aux_to_img=warp_aux_to_img)
+                                         warp_aux_to_img=warp_img_from_asset)
                     logger.info(f'Added to the asset {new_fpath}')
 
     if proc_context is not None:
@@ -349,8 +366,9 @@ def assemble_main(cmdline=1, **kwargs):
 
     gc.collect()
 
+
 @profile
-def get_gdal_transform(coco_dset, sensor_name):
+def get_gdal_transform(coco_dset, sensor_name, resolution=None):
     video_ids = list(coco_dset.videos())
     if len(video_ids) != 1:
         raise AssertionError('currently expecting one video per coco file; todo: be robust to this')
@@ -369,18 +387,37 @@ def get_gdal_transform(coco_dset, sensor_name):
 
     # Take the first target image
     target_coco_img = target_images.coco_images[0]
+
+    # Get the transform for the original asset
     target_primary_asset = target_coco_img.primary_asset()
     target_primary_fpath = os.path.join(ub.Path(target_coco_img.bundle_dpath), target_primary_asset['file_name'])
     ref_image = gdal.Open(target_primary_fpath, gdal.GA_ReadOnly)
-    trans = ref_image.GetGeoTransform()
-    proj = ref_image.GetProjection()
+    proj = ref_image.GetProjection()     # This transforms from world space to CRS84
+    trans = ref_image.GetGeoTransform()  # This transforms from the underlying asset to world space.
+    warp_wld_from_primary = kwimage.Affine.from_gdal(trans)
+    warp_img_from_primary = kwimage.Affine.coerce(target_primary_asset['warp_aux_to_img'])
 
-    # Calculate the new GDAL transform
-    original_affine = kwimage.Affine.from_gdal(trans)
-    warp_affine = kwimage.Affine.coerce(target_coco_img.img['warp_img_to_vid']).inv()
-    new_affine = original_affine @ warp_affine
-    new_geotrans = tuple(new_affine.to_gdal())
+    # If we requested a specific processing resolution, our *new* asset on disk
+    # will differ by a scale factor.
+    if resolution is None:
+        scale_asset_from_vid = (1.0, 1.0)
+    else:
+        scale_asset_from_vid = target_coco_img._scalefactor_for_resolution(
+            space='video', resolution=resolution)
+    warp_asset_from_vid = kwimage.Affine.scale(scale_asset_from_vid)
+    warp_img_from_vid = target_coco_img.warp_img_from_vid
 
+    warp_vid_from_asset = warp_asset_from_vid.inv()
+    warp_primary_from_img = warp_img_from_primary.inv()
+
+    #
+    # Calculate the new GDAL transform mapping our new asset on disk to the
+    # world space
+    warp_wld_from_asset = (
+        warp_wld_from_primary @ warp_primary_from_img @
+        warp_img_from_vid @ warp_vid_from_asset
+    )
+    new_geotrans = tuple(warp_wld_from_asset.to_gdal())
     return new_geotrans, proj
 
 if __name__ == '__main__':
