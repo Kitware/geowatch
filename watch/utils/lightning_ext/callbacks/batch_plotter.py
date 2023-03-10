@@ -131,9 +131,11 @@ class BatchPlotter(pl.callbacks.Callback):
             model_cfgstr = model.get_cfgstr()
         else:
             from watch.utils.slugify_ext import smart_truncate
+            from watch.utils.lightning_ext import util_model
+            hparams = util_model.model_hparams(model)
             model_config = {
                 'type': str(model.__class__),
-                'hp': smart_truncate(ub.repr2(model.hparams, compact=1, nl=0), max_length=8),
+                'hp': smart_truncate(ub.repr2(hparams, compact=1, nl=0), max_length=8),
             }
             model_cfgstr = smart_truncate(ub.repr2(
                 model_config, compact=1, nl=0), max_length=64)

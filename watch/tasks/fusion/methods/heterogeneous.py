@@ -682,6 +682,8 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             for stage in ["train", "val", "test"]
         })
 
+        self._prev_batch_size = None
+
     def process_input_tokens(self, example):
         """
         Example:
@@ -1124,6 +1126,8 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             print(f'batch={batch}')
             print('Skipping batch')
             return None
+
+        self._prev_batch_size = len(orig_input_seqs)
 
         # Each example may have a different number of tokens, so we perform
         # some padding and compute a mask of where those padded tokens are
@@ -1585,6 +1589,15 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
 
     # this is a special thing for the predict step
     forward_step = shared_step
+
+    def log_grad_norm(self, grad_norm_dict) -> None:
+        """Override this method to change the default behaviour of ``log_grad_norm``.
+
+        Overloads log_grad_norm so we can supress the batch_size warning
+        """
+        self.log_dict(grad_norm_dict, on_step=True, on_epoch=True,
+                      prog_bar=False, logger=True,
+                      batch_size=self._prev_batch_size)
 
     def save_package(self, package_path, verbose=1):
         """

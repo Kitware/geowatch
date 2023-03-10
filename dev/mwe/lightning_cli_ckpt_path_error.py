@@ -4,6 +4,7 @@ from torch import nn
 from torch.utils.data import Dataset
 import numpy as np
 import pytorch_lightning as pl
+from pytorch_lightning.cli import LightningCLI
 from typing import List, Dict
 
 
@@ -14,19 +15,32 @@ class MWE_HeterogeneousModel(pl.LightningModule):
         >>> dataset = MWE_HeterogeneousDataset()
         >>> self = MWE_HeterogeneousModel()
         >>> batch = [dataset[i] for i in range(2)]
+        >>> self.forward(batch)
     """
     def __init__(self):
         super().__init__()
         self.save_hyperparameters()
 
+        if dataset_stats is None:
+            raise ValueError('must be given dataset stats')
+
         self.d_model = 16
         self.num_classes = 5
 
         self.stems = torch.nn.ModuleDict()
-        self.stems['sensor1'] = torch.nn.ModuleDict()
-        self.stems['sensor2'] = torch.nn.ModuleDict()
-        self.stems['sensor1']['rgb'] = torch.nn.Conv2d(3, self.d_model, kernel_size=1)
-        self.stems['sensor2']['depth'] = torch.nn.Conv2d(1, self.d_model, kernel_size=1)
+        self.dataset_stats = dataset_stats
+
+        # THIS IS THE ISSUE
+        # USING A SET HERE CAN RESULT IN INCONSISTENT ORDER AND
+        # TORCH OR LIGHTNING DOESNT LIKE THAT
+        self.known_sensorchan = {
+            (mode['sensor'], mode['channels'], mode['num_bands'])
+            for mode in self.dataset_stats['known_modalities']
+        }
+        for sensor, channels, num_bands in self.known_sensorchan:
+            if sensor not in self.stems:
+                self.stems[sensor] = torch.nn.ModuleDict()
+            self.stems[sensor][channels] = torch.nn.Conv2d(num_bands, self.d_model, kernel_size=1)
 
         self.backbone = torch.nn.Transformer(
             d_model=self.d_model,
@@ -45,12 +59,12 @@ class MWE_HeterogeneousModel(pl.LightningModule):
         for key, item in self.state_dict().items():
             return item.device
 
-    def tokenize_inputs(self, item):
+    def tokenize_inputs(self, item: Dict):
         device = self.device
 
         input_sequence = []
         for input_item in item['inputs']:
-            stem = self.stems[input_item['sensor']][input_item['mode']]
+            stem = self.stems[input_item['sensor_code']][input_item['channel_code']]
             out = stem(input_item['data'])
             tokens = out.view(self.d_model, -1).T
             input_sequence.append(tokens)
@@ -128,7 +142,7 @@ class MWE_HeterogeneousModel(pl.LightningModule):
             batch_logits.append(item_logits)
         return batch_logits
 
-    def forward_step(self, batch, with_loss=False, stage='unspecified'):
+    def forward_step(self, batch: List[Dict], with_loss=False, stage='unspecified'):
         """
         Generic forward step used for test / train / validation
         """
@@ -174,11 +188,17 @@ class MWE_HeterogeneousDatamodule(pl.LightningDataModule):
         super().__init__()
         self.save_hyperparameters()
         self.torch_datasets = {}
+        self.dataset_stats = None
+        self._did_setup = False
 
     def setup(self, stage):
+        if self._did_setup:
+            return
         self.torch_datasets['train'] = MWE_HeterogeneousDataset()
         self.torch_datasets['test'] = MWE_HeterogeneousDataset()
         self.torch_datasets['vali'] = MWE_HeterogeneousDataset()
+        self.dataset_stats = self.torch_datasets['train']
+        self._did_setup = True
 
     def train_dataloader(self):
         return self._make_dataloader('train', shuffle=True)
@@ -211,6 +231,24 @@ class MWE_HeterogeneousDatamodule(pl.LightningDataModule):
         return loader
 
 
+# Global hack because having a hard time linking the args
+dataset_stats =  {
+    'known_modalities': [
+        {'sensor': 'sensor1', 'channels': 'rgb', 'num_bands': 3},
+        {'sensor': 'sensor2', 'channels': 'rgb', 'num_bands': 3},
+        {'sensor': 'sensor3', 'channels': 'rgb', 'num_bands': 3},
+        {'sensor': 'sensor4', 'channels': 'rgb', 'num_bands': 3},
+        {'sensor': 'sensor1', 'channels': 'rgb', 'num_bands': 3},
+        {'sensor': 'sensor2', 'channels': 'ir', 'num_bands': 3},
+        {'sensor': 'sensor2', 'channels': 'depth', 'num_bands': 3},
+        {'sensor': 'sensor4', 'channels': 'flowxy', 'num_bands': 2},
+    ],
+    'known_tasks': [
+        {'name': 'class'},
+    ]
+}
+
+
 class MWE_HeterogeneousDataset(Dataset):
     """
     A dataset that produces heterogeneous outputs
@@ -223,43 +261,64 @@ class MWE_HeterogeneousDataset(Dataset):
     def __init__(self):
         super().__init__()
         self.rng = np.random
-        ...
+        # In practice the dataset computes stats about itself.
+        # In this example we just hard code it.
+        self.dataset_stats = dataset_stats
 
     def __len__(self):
         return 100
 
     def __getitem__(self, index):
+        """
+        Constructs a sequence of:
+            * inputs - a list of observations
+            * outputs - a list of what we want to predict
+            * labels - ground truth if we have it
+        """
         inputs = []
         outputs = []
         labels = []
         num_frames = self.rng.randint(1, 10)
         for frame_index in range(num_frames):
             had_input = 0
-            if self.rng.rand() > 0.5:
-                had_input = 1
-                inputs.append({
-                    'frame_index': frame_index,
-                    'mode': 'rgb',
-                    'sensor': 'sensor1',
-                    'data': torch.rand(3, 10, 10),
-                })
-            if self.rng.rand() > 0.5:
-                had_input = 1
-                inputs.append({
-                    'frame_index': frame_index,
-                    'mode': 'depth',
-                    'sensor': 'sensor2',
-                    'data': torch.rand(1, 5, 5),
-                })
+            # In general we may have any number of observations per frame
+            for modality in self.dataset_stats['known_modalities']:
+                sensor = modality['sensor']
+                channels = modality['channels']
+                num_bands = modality['num_bands']
+
+                # Randomly include each sensorchan on each frame
+                if self.rng.rand() > 0.5:
+                    had_input = 1
+                    c = num_bands
+                    if channels == 'rgb':
+                        h, w = 10, 10
+                        if sensor == 'sensor3':
+                            h, w = 17, 17
+                    elif channels == 'ir':
+                        h, w = 5, 5
+                    elif channels == 'depth':
+                        h, w = 7, 7
+                    inputs.append({
+                        'type': 'input',
+                        'channel_code': channels,
+                        'sensor_code': sensor,
+                        'frame_index': frame_index,
+                        'data': torch.rand(c, h, w),
+                    })
             if had_input:
+                task = 'class'
+                oh, ow = 3, 3
                 outputs.append({
+                    'type': 'output',
+                    'head': task,
                     'frame_index': frame_index,
-                    'head': 'class',
-                    'dims': (3, 3),
+                    'dims': (oh, ow),
                 })
                 labels.append({
+                    'type': 'label',
+                    'head': task,
                     'frame_index': frame_index,
-                    'head': 'class',
                     'data': torch.rand(5, 3, 3),
                 })
         item = {
@@ -287,9 +346,35 @@ class MWE_HeterogeneousDataset(Dataset):
         return loader
 
 
+class MWE_LightningCLI(LightningCLI):
+    ...
+
+    # Having trouble linking the dataset stats to the model
+    # def add_arguments_to_parser(self, parser):
+    #     def data_value_getter(key):
+    #         # Hack to call setup on the datamodule before linking args
+    #         def get_value(data):
+    #             if not data._did_setup:
+    #                 data.setup('fit')
+    #             return getattr(data, key)
+    #         return get_value
+
+    #     # pass dataset stats to model after initialization datamodule
+    #     parser.link_arguments(
+    #         "data",
+    #         "model.init_args.dataset_stats",
+    #         compute_fn=data_value_getter('dataset_stats'),
+    #         apply_on="instantiate")
+    #     # parser.link_arguments(
+    #     #     "data",
+    #     #     "model.init_args.classes",
+    #     #     compute_fn=data_value_getter('classes'),
+    #     #     apply_on="instantiate")
+    #     super().add_arguments_to_parser(parser)
+
+
 def main():
-    from pytorch_lightning.cli import LightningCLI
-    LightningCLI(
+    MWE_LightningCLI(
         model_class=MWE_HeterogeneousModel,
         datamodule_class=MWE_HeterogeneousDatamodule,
     )
@@ -339,11 +424,11 @@ if __name__ == '__main__':
               limit_val_batches: 10
         "
 
-    CKPT_FPATH=$(python -c "import pathlib; print(list(pathlib.Path('$DEFAULT_ROOT_DIR/lightning_logs').glob('*/checkpoints/*.ckpt'))[0])")
-    CONFIG_FPATH=$(python -c "import pathlib; print(sorted(pathlib.Path('$DEFAULT_ROOT_DIR/lightning_logs').glob('*/config.yaml'))[-1])")
-    echo "CONFIG_FPATH = $CONFIG_FPATH"
-    echo "CKPT_FPATH = $CKPT_FPATH"
+        CKPT_FPATH=$(python -c "import pathlib; print(list(pathlib.Path('$DEFAULT_ROOT_DIR/lightning_logs').glob('*/checkpoints/*.ckpt'))[0])")
+        CONFIG_FPATH=$(python -c "import pathlib; print(sorted(pathlib.Path('$DEFAULT_ROOT_DIR/lightning_logs').glob('*/config.yaml'))[-1])")
+        echo "CONFIG_FPATH = $CONFIG_FPATH"
+        echo "CKPT_FPATH = $CKPT_FPATH"
 
-    python lightning_cli_ckpt_path_error.py fit --config "$CONFIG_FPATH" --ckpt_path="$CKPT_FPATH"
+        python lightning_cli_ckpt_path_error.py fit --config "$CONFIG_FPATH" --ckpt_path="$CKPT_FPATH"
     """
     main()
