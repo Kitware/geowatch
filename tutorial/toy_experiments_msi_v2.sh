@@ -37,9 +37,13 @@ if [[ ! -e "$TRAIN_FPATH" ]]; then
 fi
 
 
+__doc__="
+
 ###############################################
 # DEMO: MultimodalTransformer with LightningCLI
 ###############################################
+
+"
 
 # Training with the baseline MultiModalModel
 DATASET_CODE=ToyDataMSI
@@ -103,11 +107,16 @@ python -m watch.tasks.fusion fit --config "
         init: noop
 "
 
+
+__doc__="
+
 #########################
 # DEMO: MultiGPU Training
 #########################
 
-# Training a HeterogeneousModel model on two GPUs with DDP
+The following command trains a HeterogeneousModel model on two GPUs with DDP
+"
+
 DATASET_CODE=ToyDataMSI
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 EXPERIMENT_NAME=ToyDataMSI_Demo_V002
@@ -116,7 +125,7 @@ MAX_STEPS=10000
 TARGET_LR=3e-4
 CHANNELS="(*):(disparity|gauss,X.2|Y:2:6,B1|B8a,flowx|flowy|distri)"
 python -m watch.tasks.fusion fit --config "
-    seed_everything: 123
+    seed_everything: 8675309
     data:
         num_workers          : 4
         train_dataset        : $TRAIN_FPATH
@@ -129,69 +138,47 @@ python -m watch.tasks.fusion fit --config "
     model:
       class_path: watch.tasks.fusion.methods.HeterogeneousModel
       init_args:
-        name        : $EXPERIMENT_NAME
-        token_width : 8
-        token_dim: 256
-        position_encoder:
-          class_path: watch.tasks.fusion.methods.heterogeneous.MipNerfPositionalEncoder
-          init_args:
-            in_dims   : 3
-            max_freq  : 3
-            num_freqs : 16
-        backbone:
-          class_path: watch.tasks.fusion.architectures.transformer.TransformerEncoderDecoder
-          init_args:
-              encoder_depth: 2
-              decoder_depth: 0
-              dim: 352
-              queries_dim: 352
-              logits_dim: 352
-              latent_dim_head: 512
-        spatial_scale_base     : 1.0
-        temporal_scale_base    : 1.0
+        name                   : $EXPERIMENT_NAME
+        token_width            : 8
+        token_dim              : 256
+        position_encoder       : auto
+        backbone               : small
         global_change_weight   : 0.0
         global_class_weight    : 0.0
         global_saliency_weight : 1.0
-        saliency_loss          : dicefocal
+        saliency_loss          : focal
         decoder                : simple_conv
     lr_scheduler:
       class_path: torch.optim.lr_scheduler.OneCycleLR
       init_args:
-        max_lr: $TARGET_LR
-        total_steps: $MAX_STEPS
-        anneal_strategy: cos
-        pct_start: 0.05
+        max_lr          : $TARGET_LR
+        total_steps     : $MAX_STEPS
+        anneal_strategy : cos
+        pct_start       : 0.05
     optimizer:
       class_path: torch.optim.Adam
       init_args:
-        lr: $TARGET_LR
-        weight_decay: 1e-5
-        betas:
-          - 0.9
-          - 0.99
+        lr           : $TARGET_LR
+        weight_decay : 1e-5
     trainer:
-      accumulate_grad_batches: 1
-      default_root_dir     : $DEFAULT_ROOT_DIR
-      accelerator          : gpu 
-      devices             : 0,1
-      strategy            : ddp 
-      check_val_every_n_epoch: 1
-      enable_checkpointing: true
-      enable_model_summary: true
-      log_every_n_steps: 5
-      logger: true
-      max_steps: $MAX_STEPS
-      num_sanity_val_steps: 0
-      replace_sampler_ddp: true
-      track_grad_norm: 2
-    initializer:
-        init: noop
+      default_root_dir : $DEFAULT_ROOT_DIR
+      max_steps        : $MAX_STEPS
+      accelerator      : gpu 
+      devices          : 0,1
+      strategy        : ddp 
 "
 
 
+__doc__="
 ###############################################
 # DEMO: Restarting from an existing checkpoint
 ###############################################
+
+The following demo illustrates how to restart from an end-of-epoch checkpoint.
+To run this demo you will need to run the training command, wait for it to
+complete one epoch (which is only a few seconds), and then kill the job with
+ctrl+C. Then it shows how to restart given the checkpoint that was written.
+"
 
 # Training with the HeterogeneousModel using a very small backbone
 DATASET_CODE=ToyDataMSI
@@ -199,7 +186,7 @@ WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 EXPERIMENT_NAME=ToyDataMSI_Demo_V003
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 # Fresh start
-rm -rf "$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME"
+rm -rf "$DEFAULT_ROOT_DIR"
 #
 # Write a config to disk:
 mkdir -p "$DEFAULT_ROOT_DIR"
@@ -217,7 +204,7 @@ echo "
         time_steps           : 5
         chip_dims            : 128
         batch_size           : 2
-        max_epoch_length     : 5
+        max_epoch_length     : 100
     model:
       class_path: watch.tasks.fusion.methods.HeterogeneousModel
       init_args:
@@ -266,8 +253,6 @@ echo "
       default_root_dir     : $DEFAULT_ROOT_DIR
       accelerator          : gpu 
       devices              : 0,
-      #devices             : 0,1
-      #strategy            : ddp 
       check_val_every_n_epoch: 1
       enable_checkpointing: true
       enable_model_summary: true

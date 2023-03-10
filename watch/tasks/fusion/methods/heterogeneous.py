@@ -371,17 +371,34 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         assert tokenizer in {"simple_conv", "resnet18"}, "Tokenizer not implemented yet."
         assert decoder in {"upsample", "simple_conv", "trans_conv"}, "Decoder not implemented yet."
 
-        if isinstance(position_encoder, str) and position_encoder == 'auto':
-            position_encoder = ScaleAgnostictPositionalEncoder(3, 8)
+        if isinstance(position_encoder, str):
+            if position_encoder == 'auto':
+                position_encoder = ScaleAgnostictPositionalEncoder(3, 8)
+            else:
+                raise KeyError(position_encoder)
 
         if isinstance(backbone, str):
             if backbone == 'auto':
+                # TODO: set this to a "reasonable" default.
+                backbone = TransformerEncoderDecoder(
+                    encoder_depth=3,
+                    decoder_depth=3,
+                    dim=position_encoder.output_dim + token_dim,
+                    queries_dim=position_encoder.output_dim,
+                    logits_dim=token_dim,
+                    cross_heads=1,
+                    latent_heads=1,
+                    cross_dim_head=1,
+                    latent_dim_head=1,
+                )
+            elif backbone == 'small':
+                # This should be a reasonable small network for testing
                 backbone = TransformerEncoderDecoder(
                     encoder_depth=1,
                     decoder_depth=1,
-                    dim=position_encoder.output_dim + 16,
+                    dim=position_encoder.output_dim + token_dim,
                     queries_dim=position_encoder.output_dim,
-                    logits_dim=16,
+                    logits_dim=token_dim,
                     cross_heads=1,
                     latent_heads=1,
                     cross_dim_head=1,

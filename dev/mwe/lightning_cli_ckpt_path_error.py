@@ -16,21 +16,18 @@ class MWE_HeterogeneousModel(pl.LightningModule):
     Example:
         >>> from lightning_cli_ckpt_path_error import *  # NOQA
         >>> dataset = MWE_HeterogeneousDataset()
-        >>> self = MWE_HeterogeneousModel()
+        >>> self = MWE_HeterogeneousModel(dataset_stats=dataset.dataset_stats)
         >>> batch = [dataset[i] for i in range(2)]
         >>> self.forward(batch)
     """
-    def __init__(self):
+    def __init__(self, sorting=False, dataset_stats=None, d_model=16):
         super().__init__()
         self.save_hyperparameters()
 
         if dataset_stats is None:
             raise ValueError('must be given dataset stats')
 
-        self.d_model = 16
-        self.num_classes = 5
-
-        self.stems = torch.nn.ModuleDict()
+        self.d_model = d_model
         self.dataset_stats = dataset_stats
 
         # THIS IS THE ISSUE
@@ -40,11 +37,19 @@ class MWE_HeterogeneousModel(pl.LightningModule):
             (mode['sensor'], mode['channels'], mode['num_bands'])
             for mode in self.dataset_stats['known_modalities']
         }
+        self.known_tasks = self.dataset_stats['known_tasks']
+        if sorting:
+            self.known_sensorchan = sorted(self.known_sensorchan)
+            self.known_tasks = sorted(self.known_tasks, key=lambda t: t['name'])
+
+        # Construct stems based on the dataset
+        self.stems = torch.nn.ModuleDict()
         for sensor, channels, num_bands in self.known_sensorchan:
             if sensor not in self.stems:
                 self.stems[sensor] = torch.nn.ModuleDict()
             self.stems[sensor][channels] = torch.nn.Conv2d(num_bands, self.d_model, kernel_size=1)
 
+        # Backbone is generic
         self.backbone = torch.nn.Transformer(
             d_model=self.d_model,
             nhead=4,
@@ -54,15 +59,26 @@ class MWE_HeterogeneousModel(pl.LightningModule):
             batch_first=True
         )
 
+        # Construct heads based on the dataset
         self.heads = torch.nn.ModuleDict()
-        self.heads['class'] = torch.nn.Conv2d(self.d_model, self.num_classes, kernel_size=1)
+        for head_info in self.known_tasks:
+            head_name = head_info['name']
+            head_classes = head_info['classes']
+            num_classes = len(head_classes)
+            self.heads[head_name] = torch.nn.Conv2d(
+                self.d_model, num_classes, kernel_size=1)
 
     @property
     def main_device(self):
+        # Helper to get a device for the model.
         for key, item in self.state_dict().items():
             return item.device
 
     def tokenize_inputs(self, item: Dict):
+        """
+        Process a single batch item's heterogeneous sequence into a flat list
+        if tokens for the encoder and decoder.
+        """
         device = self.device
 
         input_sequence = []
@@ -84,6 +100,12 @@ class MWE_HeterogeneousModel(pl.LightningModule):
         return in_tokens, out_tokens
 
     def forward(self, batch: List[Dict]) -> List[Dict]:
+        """
+        Runs prediction on multiple batch items. The input is assumed to an
+        uncollated list of dictionaries, each containing information about some
+        heterogeneous sequence. The output is a corresponding list of
+        dictionaries containing the logits for each head.
+        """
         batch_in_tokens = []
         batch_out_tokens = []
 
@@ -200,7 +222,7 @@ class MWE_HeterogeneousDatamodule(pl.LightningDataModule):
         self.torch_datasets['train'] = MWE_HeterogeneousDataset()
         self.torch_datasets['test'] = MWE_HeterogeneousDataset()
         self.torch_datasets['vali'] = MWE_HeterogeneousDataset()
-        self.dataset_stats = self.torch_datasets['train']
+        self.dataset_stats = self.torch_datasets['train'].dataset_stats
         self._did_setup = True
 
     def train_dataloader(self):
@@ -234,24 +256,6 @@ class MWE_HeterogeneousDatamodule(pl.LightningDataModule):
         return loader
 
 
-# Global hack because having a hard time linking the args
-dataset_stats =  {
-    'known_modalities': [
-        {'sensor': 'sensor1', 'channels': 'rgb', 'num_bands': 3},
-        {'sensor': 'sensor2', 'channels': 'rgb', 'num_bands': 3},
-        {'sensor': 'sensor3', 'channels': 'rgb', 'num_bands': 3},
-        {'sensor': 'sensor4', 'channels': 'rgb', 'num_bands': 3},
-        {'sensor': 'sensor1', 'channels': 'rgb', 'num_bands': 3},
-        {'sensor': 'sensor2', 'channels': 'ir', 'num_bands': 3},
-        {'sensor': 'sensor2', 'channels': 'depth', 'num_bands': 3},
-        {'sensor': 'sensor4', 'channels': 'flowxy', 'num_bands': 2},
-    ],
-    'known_tasks': [
-        {'name': 'class'},
-    ]
-}
-
-
 class MWE_HeterogeneousDataset(Dataset):
     """
     A dataset that produces heterogeneous outputs
@@ -266,17 +270,32 @@ class MWE_HeterogeneousDataset(Dataset):
         self.rng = np.random
         # In practice the dataset computes stats about itself.
         # In this example we just hard code it.
-        self.dataset_stats = dataset_stats
+        self.dataset_stats =  {
+            'known_modalities': [
+                {'sensor': 'sensor1', 'channels': 'rgb', 'num_bands': 3, 'dims': (10, 10)},
+                {'sensor': 'sensor2', 'channels': 'rgb', 'num_bands': 3, 'dims': (10, 10)},
+                {'sensor': 'sensor3', 'channels': 'rgb', 'num_bands': 3, 'dims': (17, 17)},
+                {'sensor': 'sensor4', 'channels': 'rgb', 'num_bands': 3, 'dims': (10, 10)},
+                {'sensor': 'sensor1', 'channels': 'rgb', 'num_bands': 3, 'dims': (10, 10)},
+                {'sensor': 'sensor2', 'channels': 'ir', 'num_bands': 3, 'dims': (5, 5)},
+                {'sensor': 'sensor2', 'channels': 'depth', 'num_bands': 3, 'dims': (7, 7)},
+                {'sensor': 'sensor4', 'channels': 'flowxy', 'num_bands': 2, 'dims': (10, 10)},
+            ],
+            'known_tasks': [
+                {'name': 'class', 'classes': ['a', 'b', 'c', 'd', 'e']},
+            ]
+        }
 
     def __len__(self):
         return 100
 
-    def __getitem__(self, index):
+    def __getitem__(self, index) -> Dict:
         """
-        Constructs a sequence of:
-            * inputs - a list of observations
-            * outputs - a list of what we want to predict
-            * labels - ground truth if we have it
+        Returns:
+            Dict: containing
+                * inputs - a list of observations
+                * outputs - a list of what we want to predict
+                * labels - ground truth if we have it
         """
         inputs = []
         outputs = []
@@ -288,20 +307,12 @@ class MWE_HeterogeneousDataset(Dataset):
             for modality in self.dataset_stats['known_modalities']:
                 sensor = modality['sensor']
                 channels = modality['channels']
-                num_bands = modality['num_bands']
+                c = modality['num_bands']
+                h, w = modality['dims']
 
                 # Randomly include each sensorchan on each frame
                 if self.rng.rand() > 0.5:
                     had_input = 1
-                    c = num_bands
-                    if channels == 'rgb':
-                        h, w = 10, 10
-                        if sensor == 'sensor3':
-                            h, w = 17, 17
-                    elif channels == 'ir':
-                        h, w = 5, 5
-                    elif channels == 'depth':
-                        h, w = 7, 7
                     inputs.append({
                         'type': 'input',
                         'channel_code': channels,
@@ -331,49 +342,40 @@ class MWE_HeterogeneousDataset(Dataset):
         }
         return item
 
-    def make_loader(self, subset=None, batch_size=1, num_workers=0, shuffle=False,
+    def make_loader(self, batch_size=1, num_workers=0, shuffle=False,
                     pin_memory=False):
         """
-        Use this to make the dataloader so we ensure that we have the right
-        worker init function.
+        Create a dataloader option with sensible defaults for the problem
         """
-        if subset is None:
-            dataset = self
-        else:
-            dataset = subset
         loader = torch.utils.data.DataLoader(
-            dataset, batch_size=batch_size, num_workers=num_workers,
+            self, batch_size=batch_size, num_workers=num_workers,
             shuffle=shuffle, pin_memory=pin_memory,
-            collate_fn=lambda x: x  # disable collation
+            collate_fn=lambda x: x
         )
         return loader
 
 
 class MWE_LightningCLI(LightningCLI):
-    ...
+    """
+    Customized LightningCLI to ensure the expected model inputs / outputs are
+    coupled with the what the dataset is able to provide.
+    """
 
-    # Having trouble linking the dataset stats to the model
-    # def add_arguments_to_parser(self, parser):
-    #     def data_value_getter(key):
-    #         # Hack to call setup on the datamodule before linking args
-    #         def get_value(data):
-    #             if not data._did_setup:
-    #                 data.setup('fit')
-    #             return getattr(data, key)
-    #         return get_value
-
-    #     # pass dataset stats to model after initialization datamodule
-    #     parser.link_arguments(
-    #         "data",
-    #         "model.init_args.dataset_stats",
-    #         compute_fn=data_value_getter('dataset_stats'),
-    #         apply_on="instantiate")
-    #     # parser.link_arguments(
-    #     #     "data",
-    #     #     "model.init_args.classes",
-    #     #     compute_fn=data_value_getter('classes'),
-    #     #     apply_on="instantiate")
-    #     super().add_arguments_to_parser(parser)
+    def add_arguments_to_parser(self, parser):
+        def data_value_getter(key):
+            # Hack to call setup on the datamodule before linking args
+            def get_value(data):
+                if not data._did_setup:
+                    data.setup('fit')
+                return getattr(data, key)
+            return get_value
+        # pass dataset stats to model after datamodule initialization
+        parser.link_arguments(
+            "data",
+            "model.dataset_stats",
+            compute_fn=data_value_getter('dataset_stats'),
+            apply_on="instantiate")
+        super().add_arguments_to_parser(parser)
 
 
 def main():
@@ -390,7 +392,12 @@ if __name__ == '__main__':
 
         DEFAULT_ROOT_DIR=./mwe_train_dir
 
+        # Setting sorting=False, will expose the error. Setting sorting=True
+        # will work around it.
+
         python lightning_cli_ckpt_path_error.py fit --config "
+            model:
+                sorting: True
             data:
                 num_workers: 2
             optimizer:
@@ -403,27 +410,14 @@ if __name__ == '__main__':
                 gamma: 0.1
             trainer:
               accumulate_grad_batches: 16
-              callbacks:
-                - class_path: pytorch_lightning.callbacks.ModelCheckpoint
-                  init_args:
-                    monitor: val_loss
-                    mode: min
-                    save_top_k: 5
-                    auto_insert_metric_name: true
               default_root_dir     : $DEFAULT_ROOT_DIR
               accelerator          : gpu
-              devices              : 0,
-              #devices              : 0,1
-              #strategy             : ddp
+              # devices              : 0,
+              devices              : 0,1
+              strategy             : ddp
               check_val_every_n_epoch: 1
-              enable_checkpointing: true
-              enable_model_summary: true
-              log_every_n_steps: 5
-              logger: true
               max_steps: 10000
               num_sanity_val_steps: 0
-              replace_sampler_ddp: true
-              track_grad_norm: -1
               limit_val_batches: 10
         "
 

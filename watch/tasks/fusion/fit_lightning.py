@@ -43,6 +43,7 @@ class SmartTrainer(pl.Trainer):
     def _run_stage(self, *args, **kwargs):
         # All I want is to print this  directly before training starts.
         # Is that so hard to do?
+        print(f'self.global_rank={self.global_rank}')
         if self.global_rank == 0:
             import rich
             dpath = self.logger.log_dir
@@ -225,7 +226,7 @@ def make_cli(config=None):
         # have a deeper understanding of how lightning CLI works.
         # clikw['run'] = False
 
-    callbacks = [
+    default_callbacks = [
         # WeightInitializer(),  # can we integrate more intuitively?
         # May need to declare in add_arguments_to_parser
         pl_ext.callbacks.BatchPlotter(  # Fixme: disabled for multi-gpu training with deepspeed
@@ -257,7 +258,7 @@ def make_cli(config=None):
         print('warning: tensorboard not available')
     else:
         # Only use tensorboard if we have it.
-        callbacks.append(pl_ext.callbacks.TensorboardPlotter())
+        default_callbacks.append(pl_ext.callbacks.TensorboardPlotter())
 
     cli = SmartLightningCLI(
         model_class=pl.LightningModule,  # TODO: factor out common components of the two models and put them in base class models inherit from
@@ -282,7 +283,7 @@ def make_cli(config=None):
             # without modifying source code.
             # TODO: find good way to reenable profiling, but not by default
             # profiler=pl.profilers.AdvancedProfiler(dirpath=".", filename="perf_logs"),
-            callbacks=callbacks,
+            callbacks=default_callbacks,
         ),
         **clikw,
     )
