@@ -105,15 +105,19 @@ class Packager(pl.callbacks.Callback):
     def _after_initialization(self, trainer):
         # Rectify paths if we need to
         # print('on_init_start')
-        print('setup/(previously on_init_end)')
+        if trainer.global_rank == 0:
+            print('setup/(previously on_init_end)')
+
         if self.package_fpath == 'auto':
             root_dir = ub.Path(trainer.default_root_dir)
             self.package_fpath =  root_dir / 'final_package.pt'
-            print('setting auto self.package_fpath = {!r}'.format(self.package_fpath))
+            if trainer.global_rank == 0:
+                print('setting auto self.package_fpath = {!r}'.format(self.package_fpath))
 
         # Hack this in. TODO: what is the best way to expose this?
         trainer.package_fpath = self.package_fpath
-        print('will save trainer.package_fpath = {!r}'.format(trainer.package_fpath))
+        if trainer.global_rank == 0:
+            print('will save trainer.package_fpath = {!r}'.format(trainer.package_fpath))
 
     def on_fit_start(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
         """

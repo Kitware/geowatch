@@ -57,6 +57,8 @@ class TensorboardPlotter(pl.callbacks.Callback):
         # The following function draws the tensorboard result. This might take
         # a some non-trivial amount of time so we attempt to run in a separate
         # process.
+        if trainer.global_rank != 0:
+            return
         serial = False
 
         # train_dpath = trainer.logger.log_dir
@@ -112,18 +114,12 @@ class TensorboardPlotter(pl.callbacks.Callback):
             func(*args)
 
     def on_train_epoch_end(self, trainer, logs=None):
-        if trainer.global_rank != 0:
-            return
         return self._on_epoch_end(trainer, logs=logs)
 
     def on_validation_epoch_end(self, trainer, logs=None):
-        if trainer.global_rank != 0:
-            return
         return self._on_epoch_end(trainer, logs=logs)
 
     def on_test_epoch_end(self, trainer, logs=None):
-        if trainer.global_rank != 0:
-            return
         return self._on_epoch_end(trainer, logs=logs)
 
 

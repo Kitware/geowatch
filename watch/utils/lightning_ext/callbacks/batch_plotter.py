@@ -119,6 +119,8 @@ class BatchPlotter(pl.callbacks.Callback):
     @profile
     def draw_batch(self, trainer, outputs, batch, batch_idx):
         from watch.utils import util_kwimage
+        if trainer.global_rank != 0:
+            return
 
         if trainer.log_dir is None:
             import warnings
@@ -184,8 +186,6 @@ class BatchPlotter(pl.callbacks.Callback):
 
     #  New
     def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
-        if trainer.global_rank != 0:
-            return
         try:
             self.draw_if_ready(trainer, pl_module, outputs, batch, batch_idx)
         except Exception as e:
@@ -199,8 +199,6 @@ class BatchPlotter(pl.callbacks.Callback):
     #     self.draw_if_ready(trainer, pl_module, outputs, batch, batch_idx)
 
     def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0):
-        if trainer.global_rank != 0:
-            return
         try:
             self.draw_if_ready(trainer, pl_module, outputs, batch, batch_idx)
         except Exception as e:
@@ -210,8 +208,6 @@ class BatchPlotter(pl.callbacks.Callback):
             print(e)
 
     def on_test_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0):
-        if trainer.global_rank != 0:
-            return
         try:
             self.draw_if_ready(trainer, pl_module, outputs, batch, batch_idx)
         except Exception as e:

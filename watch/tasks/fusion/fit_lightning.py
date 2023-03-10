@@ -12,6 +12,10 @@ from typing import Any
 import yaml
 from jsonargparse import set_loader, set_dumper
 
+if 1:
+    import torch
+    torch.set_float32_matmul_precision('medium')
+
 
 # Not very safe, but needed to parse tuples e.g. datamodule.dataset_stats
 # TODO: yaml.SafeLoader + tuple parsing

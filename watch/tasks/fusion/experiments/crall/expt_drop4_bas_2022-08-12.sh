@@ -5056,9 +5056,10 @@ DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=5e-5
 MAX_STEPS=80000
 WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+seed_everything: 1104562820436
 data:
-  batch_size              : 4
-  num_workers             : 8
+  batch_size              : 6
+  num_workers             : 6
   train_dataset           : $TRAIN_FPATH
   vali_dataset            : $VALI_FPATH
   time_steps              : 5
@@ -5096,7 +5097,7 @@ model:
     backbone:
       class_path: watch.tasks.fusion.architectures.transformer.TransformerEncoderDecoder
       init_args:
-        encoder_depth: 6
+        encoder_depth: 4
         decoder_depth: 0
         dim: 160
         queries_dim: 96
@@ -5125,7 +5126,7 @@ optimizer:
       - 0.9
       - 0.99
 trainer:
-  accumulate_grad_batches: 32
+  accumulate_grad_batches: 8
   callbacks:
     - class_path: pytorch_lightning.callbacks.ModelCheckpoint
       init_args:
@@ -5135,6 +5136,7 @@ trainer:
         auto_insert_metric_name: true
   default_root_dir     : $DEFAULT_ROOT_DIR
   accelerator          : gpu 
+  #devices              : 0,
   devices              : 0,1
   strategy             : ddp 
   check_val_every_n_epoch: 1
@@ -5145,5 +5147,7 @@ trainer:
   max_steps: $MAX_STEPS
   num_sanity_val_steps: 0
   replace_sampler_ddp: true
-  track_grad_norm: 2
+  track_grad_norm: -1
+  limit_val_batches: 64
+  precision: bf16
 "
