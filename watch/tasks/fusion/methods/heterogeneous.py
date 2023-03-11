@@ -1490,7 +1490,8 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                     task_labels_key = self.task_to_keynames[task_name]["labels"]
                     labels = frame[task_labels_key]
 
-                    self.log(f"{stage}_{task_name}_logit_mean", pred.mean(), batch_size=batch_size)
+                    self.log(f"{stage}_{task_name}_logit_mean", pred.mean(),
+                             batch_size=batch_size, rank_zero_only=True)
 
                     if labels is None:
                         continue
@@ -1529,21 +1530,27 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                         loss_labels_[None],
                     )
 
-                    # if loss.isnan().any():
-                    #     print(loss)
-                    #     print(pred)
-                    #     print(frame)
+                    if loss.isnan().any():
+                        print('!!!!!!!!!!!!!!!!!!!')
+                        print('!!!!!!!!!!!!!!!!!!!')
+                        print('Discovered NaN loss')
+                        print('loss = {}'.format(ub.urepr(loss, nl=1)))
+                        print('pred = {}'.format(ub.urepr(pred, nl=1)))
+                        print('frame = {}'.format(ub.urepr(frame, nl=1)))
+                        print('!!!!!!!!!!!!!!!!!!!')
+                        print('!!!!!!!!!!!!!!!!!!!')
 
                     loss *= task_weights_
                     frame_losses.append(
                         self.global_head_weights[task_name] * loss.mean()
                     )
+                    metric_values = self.head_metrics[f"{stage}_stage"][task_name](
+                        pred.argmax(dim=0).flatten(),
+                        # pred[None],
+                        labels.flatten().long(),
+                    )
                     self.log_dict(
-                        self.head_metrics[f"{stage}_stage"][task_name](
-                            pred.argmax(dim=0).flatten(),
-                            # pred[None],
-                            labels.flatten().long(),
-                        ),
+                        metric_values,
                         prog_bar=True,
                         batch_size=batch_size,
                     )

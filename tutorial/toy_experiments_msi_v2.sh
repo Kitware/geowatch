@@ -115,7 +115,31 @@ __doc__="
 #########################
 
 The following command trains a HeterogeneousModel model on two GPUs with DDP
+
+It seems to be the case that something in our system can cause DDP to hang with
+100% reported GPU utilization (even though it really isn't doing anything).
+
+References:
+    https://github.com/Lightning-AI/lightning/issues/11242
+    https://github.com/Lightning-AI/lightning/issues/10947
+    https://github.com/Lightning-AI/lightning/issues/5319
+    https://github.com/Lightning-AI/lightning/discussions/6501#discussioncomment-553152
+
+So far we may be able to avoid this if we do some combination of the following:
+    * Disable pl_ext.callbacks.BatchPlotter 
+        - does cause the issue by itself, but seemingly only if we try to put
+          in rank guards.
+
+    * Disable pl.callbacks.LearningRateMonitor
+    * Disable pl.callbacks.ModelCheckpoint
 "
+
+DVC_DATA_DPATH=$HOME/data/dvc-repos/toy_data_dvc
+DVC_EXPT_DPATH=$HOME/data/dvc-repos/toy_expt_dvc
+NUM_TOY_TRAIN_VIDS="${NUM_TOY_TRAIN_VIDS:-100}"  # If variable not set or null, use default.
+NUM_TOY_VALI_VIDS="${NUM_TOY_VALI_VIDS:-5}"  # If variable not set or null, use default.
+TRAIN_FPATH=$DVC_DATA_DPATH/vidshapes_msi_train${NUM_TOY_TRAIN_VIDS}/data.kwcoco.json
+VALI_FPATH=$DVC_DATA_DPATH/vidshapes_msi_vali${NUM_TOY_VALI_VIDS}/data.kwcoco.json
 
 DATASET_CODE=ToyDataMSI
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
@@ -127,7 +151,7 @@ CHANNELS="(*):(disparity|gauss,X.2|Y:2:6,B1|B8a,flowx|flowy|distri)"
 python -m watch.tasks.fusion fit --config "
     seed_everything: 8675309
     data:
-        num_workers          : 4
+        num_workers          : 2
         train_dataset        : $TRAIN_FPATH
         vali_dataset         : $VALI_FPATH
         channels             : '$CHANNELS'

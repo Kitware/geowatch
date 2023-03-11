@@ -11,6 +11,7 @@ from typing import Any
 
 import yaml
 from jsonargparse import set_loader, set_dumper
+# from pytorch_lightning.utilities.rank_zero import rank_zero_only
 
 if 1:
     import torch
@@ -139,6 +140,12 @@ class SmartLightningCLI(LightningCLI_Extension):
 
         parser.add_lightning_class_args(WeightInitializer, "initializer")
 
+        parser.add_lightning_class_args(pl_ext.callbacks.BatchPlotter, "batch_plotter")
+        # pl_ext.callbacks.BatchPlotter(  # Fixme: disabled for multi-gpu training with deepspeed
+        #     num_draw=2,  # args.num_draw,
+        #     draw_interval="5min",  # args.draw_interval
+        # ),
+
         # parser.set_defaults({"packager.package_fpath": "???"}) # "$DEFAULT_ROOT_DIR"/final_package.pt
         parser.link_arguments(
             "trainer.default_root_dir",
@@ -229,14 +236,18 @@ def make_cli(config=None):
     default_callbacks = [
         # WeightInitializer(),  # can we integrate more intuitively?
         # May need to declare in add_arguments_to_parser
-        pl_ext.callbacks.BatchPlotter(  # Fixme: disabled for multi-gpu training with deepspeed
-            num_draw=2,  # args.num_draw,
-            draw_interval="5min",  # args.draw_interval
-        ),
+
+        # pl_ext.callbacks.BatchPlotter(  # Fixme: disabled for multi-gpu training with deepspeed
+        #     num_draw=2,  # args.num_draw,
+        #     draw_interval="5min",  # args.draw_interval
+        # ),
+
         pl.callbacks.RichProgressBar(),
-        pl.callbacks.LearningRateMonitor(logging_interval='step', log_momentum=True),
+        # pl.callbacks.LearningRateMonitor(logging_interval='step', log_momentum=True),
+
         pl.callbacks.LearningRateMonitor(logging_interval='epoch', log_momentum=True),
-        pl.callbacks.ModelCheckpoint(monitor='train_loss', mode='min', save_top_k=1),
+        # pl.callbacks.ModelCheckpoint(monitor='train_loss', mode='min', save_top_k=1),
+
         # leaving always on breaks when correspinding metric isnt
         # tracked because loss_weight==0
         # FIXME: can we conditionally apply these if they make sense?
@@ -283,6 +294,7 @@ def make_cli(config=None):
             # without modifying source code.
             # TODO: find good way to reenable profiling, but not by default
             # profiler=pl.profilers.AdvancedProfiler(dirpath=".", filename="perf_logs"),
+
             callbacks=default_callbacks,
         ),
         **clikw,
