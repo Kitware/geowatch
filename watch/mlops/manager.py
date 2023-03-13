@@ -14,7 +14,7 @@ Example:
     python -m watch.mlops.manager "status" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
     python -m watch.mlops.manager "status" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
     python -m watch.mlops.manager "pull packages evals" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
-    python -m watch.mlops.manager "push packages evals"
+    python -m watch.mlops.manager "push packages"
 
     python -m watch.mlops.manager "status" --dataset_codes Drop4-SC
 
@@ -89,7 +89,7 @@ class ManagerConfig(scfg.DataConfig):
 
     model_pattern = scfg.Value('*', help='if specified restrict to models matching this name pattern')
 
-    dataset_codes = scfg.Value(None, nargs='+', help=ub.paragraph(
+    dataset_codes = scfg.Value('*', nargs='+', help=ub.paragraph(
         '''
         if unset, will use the defaults, otherwise this should be a list of
         the DVC dataset bundle names that we want to consider.  Note: we do
@@ -142,10 +142,10 @@ def main(cmdline=True, **kwargs):
 
     dvc_remote = config['dvc_remote']
 
-    if config['dataset_codes'] is None:
-        dataset_codes = heuristics.DATASET_CODES
-    else:
-        dataset_codes = config['dataset_codes']
+    # if config['dataset_codes'] is None:
+    #     dataset_codes = heuristics.DATASET_CODES
+    # else:
+    dataset_codes = config['dataset_codes']
 
     if config['expt_dvc_dpath'] == 'auto':
         config['expt_dvc_dpath'] = heuristics.auto_expt_dvc()
@@ -220,7 +220,7 @@ class DVCExptManager(ub.NiceRepr):
     def __nice__(manager):
         return str(manager.dvc)
 
-    def __init__(manager, expt_dvc_dpath, dvc_remote='aws', dataset_codes=None,
+    def __init__(manager, expt_dvc_dpath, dvc_remote='aws', dataset_codes='*',
                  model_pattern='*'):
         manager.model_pattern = model_pattern
         manager.expt_dvc_dpath = expt_dvc_dpath
@@ -245,9 +245,9 @@ class DVCExptManager(ub.NiceRepr):
         if expt_dvc_dpath is None:
             expt_dvc_dpath = watch.find_smart_dvc_dpath()
         dvc_remote = 'aws'
-        dataset_codes = heuristics.DATASET_CODES
+        # dataset_codes = heuristics.DATASET_CODES
         manager = cls(expt_dvc_dpath=expt_dvc_dpath, dvc_remote=dvc_remote,
-                      dataset_codes=dataset_codes)
+                      dataset_codes='*')
         return manager
 
     def _build_states(manager):
@@ -542,7 +542,7 @@ class ExperimentState(ub.NiceRepr):
             # Hack: making name assumptions
             info = checkpoint_filepath_info(fname)
             if info is None:
-                print('ERROR row = {}'.format(ub.urepr(row, nl=1)))
+                print('ERROR (no filepath info) row = {}'.format(ub.urepr(row, nl=1)))
                 print(f'error: fname={fname}')
                 continue
 

@@ -2910,7 +2910,9 @@ def worker_init_fn(worker_id):
     worker_info = torch.utils.data.get_worker_info()  # TODO
     # print('worker_info = {}'.format(ub.urepr(worker_info, nl=1)))
     self = worker_info.dataset
-    self.reseed()
+
+    if isinstance(self, torch.utils.data.Subset):
+        self = self.dataset
 
     if hasattr(self, 'sampler'):
         if hasattr(self.sampler.dset, 'connect'):
