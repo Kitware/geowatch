@@ -185,6 +185,7 @@ def main(cmdline=False, **kwargs):
         config['site_models'], desc='load site models', allow_raw=True,
         workers=workers))
 
+    from watch import heuristics
     status_to_catname_default = ub.udict(heuristics.PHASE_STATUS_TO_KWCOCO_CATNAME)
     status_to_catname = util_yaml.coerce_yaml(config['status_to_catname'])
     if status_to_catname is not None:
