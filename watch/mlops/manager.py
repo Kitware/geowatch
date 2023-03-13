@@ -12,9 +12,15 @@ Example:
     cd $DVC_EXPT_DPATH
 
     python -m watch.mlops.manager "status" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
-    python -m watch.mlops.manager "status" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
-    python -m watch.mlops.manager "pull packages evals" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
+
+    python -m watch.mlops.manager "status" --dataset_codes "Drop6"
+    python -m watch.mlops.manager "add packages" --dataset_codes "Drop6"
+    python -m watch.mlops.manager "push packages" --dataset_codes "Drop6"
+
+    python -m watch.mlops.manager "pull packages" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
+
     python -m watch.mlops.manager "push packages"
+    python -m watch.mlops.manager "status packages"
 
     python -m watch.mlops.manager "status" --dataset_codes Drop4-SC
 
@@ -310,13 +316,13 @@ class ExperimentState(ub.NiceRepr):
         >>> import watch
         >>> expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
         >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
-        >>> dataset_code = 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC'
+        >>> #dataset_code = 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC'
         >>> dataset_code = '*'
-        >>> dataset_code = 'Drop4-BAS'
+        >>> #dataset_code = 'Drop4-BAS'
         >>> #dataset_code = 'Drop4-SC'
         >>> dvc_remote = 'aws'
         >>> self = ExperimentState(expt_dvc_dpath, dataset_code, dvc_remote, data_dvc_dpath)
-        >>> self.list()
+        >>> #self.list()
         >>> self.summarize()
 
     Ignore:
@@ -381,6 +387,7 @@ class ExperimentState(ub.NiceRepr):
             'lightning_version': '*',
             'checkpoint': '*',  # hack, should have ext
             'stage_model': '*',  # hack, should have ext
+            'pkgprefix': '*',
             ### Deprecated
             'model': model_pattern,  # hack, should have ext
             'imodel': model_pattern,
@@ -400,7 +407,7 @@ class ExperimentState(ub.NiceRepr):
         }
 
         self.versioned_templates = {
-            'pkg_fpath'            : 'packages/{expt}/{expt}_{ckpt_ver}_epoch{epoch}_step{step}.pt',  # by default packages dont know what task they have (because they may have multiple)
+            'pkg_fpath'            : 'packages/{expt}/{pkgprefix}epoch{epoch}_step{step}.pt',  # by default packages dont know what task they have (because they may have multiple)
         }
 
         # that will cause a row to be ignored if it has one of those values
@@ -431,6 +438,19 @@ class ExperimentState(ub.NiceRepr):
             })
             for patterns in self._pattern_matrix
         ]
+
+        # The expt_dvc_dpath and storage_dpath should be given as full paths
+        # So we take those out of the template.
+        from watch.utils.partial_format import partial_format
+        import os
+        partialkw = {
+            'expt_dvc_dpath': os.fspath(self.expt_dvc_dpath),
+            'storage_dpath': os.fspath(self.storage_dpath),
+        }
+        self.partial_templates = {
+            k: partial_format(v, **partialkw)
+            for k, v in self.templates.items()
+        }
         # print('self.path_patterns_matrix = {}'.format(ub.repr2(self.path_patterns_matrix, nl=1)))
 
     def __nice__(self):
@@ -478,7 +498,7 @@ class ExperimentState(ub.NiceRepr):
                 row['is_packaged'] = False
                 row['ckpt_exists'] = True
 
-                _attrs = self._parse_pattern_attrs(self.templates[key], ckpt_path)
+                _attrs = self._parse_pattern_attrs(self.partial_templates[key], ckpt_path)
                 row.update(_attrs)
                 rows.append(row)
                 _id_to_row[ckpt_path] = row
@@ -489,11 +509,11 @@ class ExperimentState(ub.NiceRepr):
             mpat = util_pattern.Pattern.coerce(pat)
             for spkg_fpath in list(mpat.paths()):
                 # Does this correspond to an existing checkpoint?
-                _attrs = self._parse_pattern_attrs(self.templates[key], spkg_fpath)
+                _attrs = self._parse_pattern_attrs(self.partial_templates[key], spkg_fpath)
 
                 # Hack: making assumption about naming pattern
                 spkg_stem = spkg_fpath.stem
-                ckpt_stem = ''.join(spkg_stem.partition('_epoch')[-2:])[1:]
+                ckpt_stem = ''.join(spkg_stem.partition('epoch')[-2:])[:]
                 ckpt_path = spkg_fpath.parent / (ckpt_stem + '.ckpt')
 
                 if ckpt_path.exists():
@@ -516,7 +536,7 @@ class ExperimentState(ub.NiceRepr):
             mpat = util_pattern.Pattern.coerce(pat)
             for spkg_fpath in list(mpat.paths()):
                 # Does this correspond to an existing checkpoint?
-                _attrs = self._parse_pattern_attrs(self.templates[key], spkg_fpath)
+                _attrs = self._parse_pattern_attrs(self.partial_templates[key], spkg_fpath)
 
                 # Hack: making assumption about naming pattern
                 spkg_stem = spkg_fpath.stem
@@ -538,6 +558,8 @@ class ExperimentState(ub.NiceRepr):
         final_rows = []
         for row in rows:
             fname = row['checkpoint']
+            if not fname:
+                fname = str(row['spkg_fpath'])
 
             # Hack: making name assumptions
             info = checkpoint_filepath_info(fname)
@@ -553,10 +575,12 @@ class ExperimentState(ub.NiceRepr):
             # Where would we expect to put this file?
             kw = ub.udict(row).subdict({'expt', 'ckpt_ver', 'epoch', 'step'})
             kw['expt_dvc_dpath'] = self.expt_dvc_dpath
-            kw['dataset_code'] = self.dataset_code
+            # kw['dataset_code'] = self.dataset_code
+            kw['dataset_code'] = row['dataset_code']
             kw['storage_dpath'] = self.storage_dpath
+            kw['pkgprefix'] = kw['expt'] + '_'
             # This is the name we would version this with.
-            row['pkg_fpath'] = ub.Path(self.templates['pkg_fpath'].format(**kw))
+            row['pkg_fpath'] = ub.Path(self.partial_templates['pkg_fpath'].format(**kw))
             row['is_copied'] = row['pkg_fpath'].exists()
             final_rows.append(row)
 
@@ -577,6 +601,10 @@ class ExperimentState(ub.NiceRepr):
             keys = types
         if notypes is not None:
             keys = list(ub.oset(keys) - set(notypes))
+
+        assert notypes is None, 'support removed'
+        assert keys == ['pkg_fpath'], 'we removed support for everything except packages'
+
         for key in keys:
             for pat in [p[key] for p in self.path_patterns_matrix]:
                 found = list(util_path.sidecar_glob(
@@ -595,8 +623,9 @@ class ExperimentState(ub.NiceRepr):
                             path = row['raw']
                         else:
                             path = row['dvc'].augment(ext='')
-                        row['dataset_code'] = self.dataset_code
-                        _attrs = self._parse_pattern_attrs(self.templates[key], path)
+
+                        # row['dataset_code'] = self.dataset_code
+                        _attrs = self._parse_pattern_attrs(self.partial_templates[key], path)
 
                         if self.blocklists is not None:
                             blocked = False
@@ -738,8 +767,8 @@ class ExperimentState(ub.NiceRepr):
             >>> import watch
             >>> expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
             >>> #expt_dvc_dpath = watch.find_smart_dvc_dpath(hardware='ssd')
-            >>> dataset_code = 'Cropped-Drop3-TA1-2022-03-10'
-            >>> self = ExperimentState(expt_dvc_dpath, dataset_code)
+            >>> #dataset_code = 'Cropped-Drop3-TA1-2022-03-10'
+            >>> self = ExperimentState(expt_dvc_dpath)
             >>> self.summarize()
         """
         tables = self.cross_referenced_tables()
@@ -750,7 +779,6 @@ class ExperimentState(ub.NiceRepr):
         staging_df = self.staging_table()
         needs_package = staging_df[~staging_df['is_packaged']]
 
-        print(f'There are {len(needs_package)} checkpoints that need to be repackaged')
         if mode == 'interact' and len(needs_package):
             flag = Confirm.ask('Do you want to repackage?')
             if not flag:
@@ -764,7 +792,7 @@ class ExperimentState(ub.NiceRepr):
         if to_repackage:
             # NOTE: THIS RELIES ON KNOWING ABOUT THE SPECIFIC MODEL CODE.
             # IT WOULD BE NICE IF WE DIDN'T NEED THAT HERE.
-            repackager.repackage(to_repackage)
+            _ = repackager.repackage(to_repackage)
 
     def copy_packages_to_dvc(self, mode='interact'):
         from rich.prompt import Confirm
@@ -796,7 +824,7 @@ class ExperimentState(ub.NiceRepr):
         needs_add_flags = (~versioned_df['has_dvc'] | versioned_df['unprotected'])
         needs_dvc_add = versioned_df[needs_add_flags]
         print(needs_dvc_add)
-        print(f'There are {len(needs_dvc_add)} packages that need DVC add/push')
+        print(f'There are {len(needs_dvc_add)} / {len(versioned_df)} packages that need DVC add/push')
         if len(needs_dvc_add):
             if mode == 'interact':
                 flag = Confirm.ask('Do you want to run DVC add/push?')
@@ -810,9 +838,10 @@ class ExperimentState(ub.NiceRepr):
 
             toadd_pkg_fpaths = needs_dvc_add['raw'].to_list()
 
+            dvc_api.add(toadd_pkg_fpaths, verbose=1)
+
             dvc_api.git_commitpush(f'new packaged models from {hostname}')
 
-            dvc_api.add(toadd_pkg_fpaths, verbose=1)
             dvc_api.push(
                 toadd_pkg_fpaths, remote=self.dvc_remote,
                 jobs=perf_config['push_workers'],
