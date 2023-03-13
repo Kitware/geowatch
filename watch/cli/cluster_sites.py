@@ -1,10 +1,55 @@
-"""
-UNFINISHED
+r"""
+Semi-finished.
+
+Given a set of site summaries, clusters them into groups, ideally with small
+overlap. Writes new regions to a specified directory using the hash of the
+contained sites as a subregion identifier.
+
+Limitations:
+    - The clustering algorithm is overly simple
+    - Requires magic numbers that should be parameterized
 
 Example:
+    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
+    python -m watch.cli.cluster_sites \
+            --src "$DVC_DATA_DPATH/annotations/drop6/region_models/KR_R002.geojson" \
+            --dst_dpath $DVC_DATA_DPATH/ValiRegionSmall/geojson \
+            --draw_clusters True
 
     DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-    DVC_DATA_DPATH
+    python -m watch.cli.coco_align \
+        --src $DVC_DATA_DPATH/Drop6/combo_imganns-KR_R002_L.kwcoco.json \
+        --dst $DVC_DATA_DPATH/ValiRegionSmall/small_KR_R002_odarcigm.kwcoco.zip \
+        --regions $DVC_DATA_DPATH/ValiRegionSmall/geojson/SUB_KR_R002_n007_odarcigm.geojson \
+        --minimum_size="128x128@10GSD" \
+        --context_factor=1 \
+        --geo_preprop=auto \
+        --force_nodata=-9999 \
+        --site_summary=False \
+        --target_gsd=5 \
+        --aux_workers=8 \
+        --workers=8
+
+
+    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
+    python -m watch.cli.cluster_sites \
+            --src "$DVC_DATA_DPATH/annotations/drop6/region_models/BR_R002.geojson" \
+            --dst_dpath $DVC_DATA_DPATH/ValiRegionSmall/geojson/BR_R002 \
+            --draw_clusters True
+
+    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
+    python -m watch.cli.coco_align \
+        --src $DVC_DATA_DPATH/Drop6/combo_imganns-KR_R002_L.kwcoco.json \
+        --dst $DVC_DATA_DPATH/ValiRegionSmall/small_KR_R002_odarcigm.kwcoco.zip \
+        --regions $DVC_DATA_DPATH/ValiRegionSmall/geojson/SUB_KR_R002_n007_odarcigm.geojson \
+        --minimum_size="128x128@10GSD" \
+        --context_factor=1 \
+        --geo_preprop=auto \
+        --force_nodata=-9999 \
+        --site_summary=False \
+        --target_gsd=5 \
+        --aux_workers=8 \
+        --workers=8
 """
 import scriptconfig as scfg
 import ubelt as ub
@@ -14,32 +59,30 @@ import kwimage
 class ClusterSiteConfig(scfg.DataConfig):
     """
     Creates a new region file that groups nearby sites.
+    """
+    src = scfg.Value(None, help='input region files with site summaries')
+    dst_dpath = scfg.Value(None, help='output path to store the resulting region files')
+    io_workers = scfg.Value(10, help='number of io workers')
+    draw_clusters = scfg.Value(False, isflag=True, help='if True draw the clusters')
+    crop_time = scfg.Value(True, isflag=True, help='if True also crops temporal extent to the sites, otherwise uses the region extent')
 
+
+def main(cmdline=0, **kwargs):
+    """
     Ignore:
         import sys, ubelt
         sys.path.append(ubelt.expandpath('~/code/watch'))
         from watch.cli.cluster_sites import *  # NOQA
         import watch
         data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-        src = data_dpath / 'annotations/drop6/region_models/KR_R001.geojson'
+        src = data_dpath / 'annotations/drop6/region_models/KR_R002.geojson'
         dst_dpath = data_dpath / 'ValiRegionSmall/geojson'
         kwargs = dict(src=src, dst_dpath=dst_dpath, draw_clusters=True)
         main(**kwargs)
     """
-    src = scfg.Value(None, help='input region files with site summaries')
-    dst_dpath = scfg.Value(None, help='output path to store the resulting region files')
-    io_workers = 10
-    draw_clusters = scfg.Value(False, help='if True draw the clusters')
-
-
-def main(cmdline=0, **kwargs):
-    """
-    kwargs = dict(
-        src='/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/_testdag/pred/flat/bas_poly/bas_poly_id_d3d1d348/site_summaries_manifest.json'
-    )
-    """
     from watch.utils import util_gis
     config = ClusterSiteConfig.cli(data=kwargs)
+    print('config = {}'.format(ub.urepr(dict(config), nl=1)))
     dst_dpath = ub.Path(config.dst_dpath)
 
     site_results = list(util_gis.coerce_geojson_datas(
@@ -76,8 +119,6 @@ def main(cmdline=0, **kwargs):
     min_box_dim = 384
     max_box_dim = 384 * 4
 
-    crop_time = True
-
     import pandas as pd
     from watch.utils import util_kwimage
 
@@ -92,15 +133,6 @@ def main(cmdline=0, **kwargs):
 
         keep_bbs, overlap_idxs = util_kwimage.find_low_overlap_covering_boxes(polygons, scale, min_box_dim, max_box_dim, max_iters=100)
 
-        if 0:
-            import kwplot
-            plt = kwplot.autoplt()
-            kwplot.figure(fnum=1, doclf=1)
-            polygons.draw(color='pink')
-            # candidate_bbs.draw(color='blue', setlim=1)
-            keep_bbs.draw(color='orange', setlim=1)
-            plt.gca().set_title('find_low_overlap_covering_boxes')
-
         region_rows_ = region_id_to_regions[region_id]
         assert len(region_rows_)
         region_row = region_rows_[0]
@@ -114,6 +146,7 @@ def main(cmdline=0, **kwargs):
         subregion_suffix_list = []
 
         import geopandas as gpd
+        import json
         for utm_box in keep_bbs.to_shapely():
 
             region_utm = region_row.to_crs(utm_crs)
@@ -142,16 +175,15 @@ def main(cmdline=0, **kwargs):
             # Drop columns that dont go in site summaries
             # contained_sites = contained_sites.drop(['region_id', 'comments'], axis=1)
 
-            import json
             json.loads(contained_sites.to_json())
             site_summaries = json.loads(contained_sites.to_json(drop_id=True))['features']
 
-            if len(start_dates) and crop_time:
+            if len(start_dates) and config.crop_time:
                 start_date = start_dates.min()
             else:
                 region_row['start_date'].iloc[0]
 
-            if len(end_dates) and crop_time:
+            if len(end_dates) and config.crop_time:
                 end_date = end_dates.max()
             else:
                 region_row['end_date'].iloc[0]
@@ -169,7 +201,7 @@ def main(cmdline=0, **kwargs):
             fpath = dst_dpath / (subregion_id + '.geojson')
             fpath.write_text(json.dumps(sub_region_))
 
-        SHOW_SUBREGIONS = 1
+        SHOW_SUBREGIONS = config.draw_clusters
         if SHOW_SUBREGIONS:
             import kwplot
             plt = kwplot.autoplt()
@@ -232,3 +264,11 @@ class RegionModel:
         lat = self.geometry.centroid.xy[1][0]
         mgrs_code = mgrs.MGRS().toMGRS(lat, lon, MGRSPrecision=0)
         self.properties['mgrs_code'] = mgrs_code
+
+
+if __name__ == '__main__':
+    """
+    CommandLine:
+        python ~/code/watch/watch/cli/cluster_sites.py
+    """
+    main(cmdline=True)
