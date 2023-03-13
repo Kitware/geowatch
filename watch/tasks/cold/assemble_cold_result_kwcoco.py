@@ -391,9 +391,12 @@ def get_gdal_transform(coco_dset, sensor_name, resolution=None):
     # Get the transform for the original asset
     target_primary_asset = target_coco_img.primary_asset()
     target_primary_fpath = os.path.join(ub.Path(target_coco_img.bundle_dpath), target_primary_asset['file_name'])
-    ref_image = gdal.Open(target_primary_fpath, gdal.GA_ReadOnly)
-    proj = ref_image.GetProjection()     # This transforms from world space to CRS84
-    trans = ref_image.GetGeoTransform()  # This transforms from the underlying asset to world space.
+    try:
+        ref_image = gdal.Open(target_primary_fpath, gdal.GA_ReadOnly)    
+        proj = ref_image.GetProjection()     # This transforms from world space to CRS84
+        trans = ref_image.GetGeoTransform()  # This transforms from the underlying asset to world space.
+    except AttributeError:
+        return None, None
     warp_wld_from_primary = kwimage.Affine.from_gdal(trans)
     warp_img_from_primary = kwimage.Affine.coerce(target_primary_asset['warp_aux_to_img'])
 
