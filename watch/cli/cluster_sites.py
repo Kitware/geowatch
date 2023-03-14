@@ -147,6 +147,7 @@ def main(cmdline=0, **kwargs):
 
         import geopandas as gpd
         import json
+        from watch import heuristics
         for utm_box in keep_bbs.to_shapely():
 
             region_utm = region_row.to_crs(utm_crs)
@@ -203,10 +204,19 @@ def main(cmdline=0, **kwargs):
 
         SHOW_SUBREGIONS = config.draw_clusters
         if SHOW_SUBREGIONS:
+            status_list = region_sites_utm['status']
+            color_list = []
+            for status in status_list:
+                info = heuristics.IARPA_STATUS_TO_INFO.get(status, {})
+                color = kwimage.Color.coerce(info.get('color', 'pink')).as255()
+                color_list.append(color)
+
             import kwplot
             plt = kwplot.autoplt()
             kwplot.figure(fnum=1, doclf=1)
-            polygons.draw(color='pink')
+            # polygons.draw(color='pink')
+            for poly, color in zip(polygons, color_list):
+                poly.draw(color=color)
             # candidate_bbs.draw(color='blue', setlim=1)
             keep_bbs.draw(color='orange', setlim=1, labels=subregion_suffix_list)
             plt.gca().set_title('find_low_overlap_covering_boxes')
