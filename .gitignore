@@ -96,3 +96,7 @@ ENV/
 profile_output.*
 _skbuild
 pip-wheel-metadata/
+
+lightning_logs
+aggregate
+emissions.csv
