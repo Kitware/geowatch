@@ -485,6 +485,8 @@ def predict(cmdline=False, **kwargs):
         >>> # assert pred2.max() > 1
 
     Example:
+        >>> # xdoctest: +REQUIRES(env:SLOW_DOCTEST)
+        >>> # FIXME: why does this test hang on the strict dashboard?
         >>> # Train a demo model (in the future grab a pretrained demo model)
         >>> from watch.tasks.fusion.fit import fit_model  # NOQA
         >>> from watch.tasks.fusion.predict import *  # NOQA

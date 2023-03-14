@@ -207,6 +207,24 @@ def _namek_check_pipeline_status():
     node_fpaths = node_to_fpaths['bas_pxl']
 
 
+def _gather_namek_shortlist_results():
+    from watch.mlops.aggregate import AggregateEvluationConfig
+    from watch.mlops.aggregate import coerce_aggregators
+    import watch
+    expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+    cmdline = 0
+    kwargs = {
+        'target': expt_dvc_dpath / '_namek_split1_eval_small',
+        'pipeline': 'bas',
+        'io_workers': 20,
+    }
+    config = AggregateEvluationConfig.cli(cmdline=cmdline, data=kwargs)
+    eval_type_to_aggregator = coerce_aggregators(config)
+    agg = eval_type_to_aggregator['bas_pxl_eval']
+
+    _ = agg.report_best(100)
+
+
 def _gather_all_results():
     r"""
     # On Namek
