@@ -295,8 +295,8 @@ def prep_feats(cmdline=True, **kwargs):
         gres = None
 
     size = max(1, workers)
-    from watch.mlops.pipeline import Pipeline
-    pipeline = Pipeline()
+    from watch.mlops.old import pipeline_v1
+    pipeline = pipeline_v1.Pipeline()
 
     base_fpath_pat = config['base_fpath']
     for base_fpath in util_path.coerce_patterned_paths(base_fpath_pat):

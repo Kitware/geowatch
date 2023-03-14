@@ -6,6 +6,24 @@ from watch.mlops.aggregate import hash_param
 from watch.mlops.aggregate import fix_duplicate_param_hashids
 from watch.utils import util_pandas
 
+def _gather_namek_shortlist_results():
+    from watch.mlops.aggregate import AggregateEvluationConfig
+    from watch.mlops.aggregate import coerce_aggregators
+    import watch
+    expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+    cmdline = 0
+    kwargs = {
+        # 'target': expt_dvc_dpath / '_namek_split1_eval_small',
+        'target': expt_dvc_dpath / '_namek_split2_eval_small',
+        'pipeline': 'bas',
+        'io_workers': 20,
+    }
+    config = AggregateEvluationConfig.cli(cmdline=cmdline, data=kwargs)
+    eval_type_to_aggregator = coerce_aggregators(config)
+    agg = eval_type_to_aggregator['bas_pxl_eval']
+
+    _ = agg.report_best(100)
+
 
 def _namek_check_pipeline_status():
     from watch.mlops import aggregate_loader
@@ -205,24 +223,6 @@ def _namek_check_pipeline_status():
     # What paths on the parent are are in common.
     # What paths on the child have yet to be computed.
     node_fpaths = node_to_fpaths['bas_pxl']
-
-
-def _gather_namek_shortlist_results():
-    from watch.mlops.aggregate import AggregateEvluationConfig
-    from watch.mlops.aggregate import coerce_aggregators
-    import watch
-    expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
-    cmdline = 0
-    kwargs = {
-        'target': expt_dvc_dpath / '_namek_split1_eval_small',
-        'pipeline': 'bas',
-        'io_workers': 20,
-    }
-    config = AggregateEvluationConfig.cli(cmdline=cmdline, data=kwargs)
-    eval_type_to_aggregator = coerce_aggregators(config)
-    agg = eval_type_to_aggregator['bas_pxl_eval']
-
-    _ = agg.report_best(100)
 
 
 def _gather_all_results():

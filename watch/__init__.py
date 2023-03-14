@@ -12,6 +12,7 @@ import warnings
 
 __version__ = '0.4.0'
 # git shortlog -e --summary --numbered
+# ~/code/watch/dev/maintain/generate_authors.py
 __author__ = 'WATCH Developers, Kitware Inc., Jon Crall, David Joy, Matthew Bernstein, Benjamin Brodie, Usman Rafique, Jacob DeRosa, Connor Greenwell, Peri Akiva, Matthew Purri, Ajay Upadhyaya'
 __author_email__ = 'kitware@kitware.com, jon.crall@kitware.com'
 __url__ = 'https://gitlab.kitware.com/watch/watch'
@@ -33,7 +34,7 @@ def _handle_hidden_commands():
     """
     Hidden developer features
     """
-    if ub.argflag('--warntb'):
+    if ub.argflag('--warntb') or os.environ.get('WARN_WITH_TRACEBACK', ''):
         import xdev
         xdev.make_warnings_print_tracebacks()
 
