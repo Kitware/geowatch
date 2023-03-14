@@ -436,7 +436,7 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method, resolution):
     padded_w = int(np.ceil(w / n_block_x) * n_block_x)
     padded_h = int(np.ceil(h / n_block_y) * n_block_y)
 
-    if padded_w != h or padded_h != h:
+    if padded_w != w or padded_h != h:
         # cropping using an oversized slice with clip=False and wrap=False is
         # equivalent to padding. In the future a more efficient pad operation
         # where the padding value can be specified will be added, but this will
@@ -478,6 +478,16 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method, resolution):
 
     im_data = delayed_im.finalize(interpolation='cubic', antialias=True)
 
+    # Check if padding could cause not running cold algorithm
+    # if (padded_w - w >= 13) or (padded_h - h >= 13):       
+    padding_value_col = im_data[:, :padded_w - w]
+    im_data[:, w:] = padding_value_col
+    padding_value_row = im_data[:padded_h - h, :]
+    im_data[h:] = padding_value_row
+        # print(im_data)
+    # else:
+    #     im_data
+    
     if method == 'ASI':
         Scale = 10000
         fill_value = 0
