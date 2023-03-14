@@ -13,10 +13,6 @@ import yaml
 from jsonargparse import set_loader, set_dumper
 # from pytorch_lightning.utilities.rank_zero import rank_zero_only
 
-if 1:
-    import torch
-    torch.set_float32_matmul_precision('medium')
-
 
 # Not very safe, but needed to parse tuples e.g. datamodule.dataset_stats
 # TODO: yaml.SafeLoader + tuple parsing
@@ -50,6 +46,23 @@ class SmartTrainer(pl.Trainer):
             dpath = self.logger.log_dir
             rich.print(f"Trainer log dpath:\n\n[link={dpath}]{dpath}[/link]\n")
         super()._run_stage(*args, **kwargs)
+
+
+class TorchGlobals(pl.callbacks.Callback):
+    """
+    Callback to setup torch globals
+
+    Args:
+        float32_matmul_precision (str): can be medium or high (default)
+    """
+
+    def __init__(self, float32_matmul_precision='default'):
+        self.float32_matmul_precision = float32_matmul_precision
+
+    def setup(self, trainer, pl_module, stage):
+        import torch
+        if self.float32_matmul_precision != 'default':
+            torch.set_float32_matmul_precision(self.float32_matmul_precision)
 
 
 class WeightInitializer(pl.callbacks.Callback):
@@ -140,6 +153,8 @@ class SmartLightningCLI(LightningCLI_Extension):
 
         parser.add_lightning_class_args(WeightInitializer, "initializer")
 
+        parser.add_lightning_class_args(TorchGlobals, "torch_globals")
+
         parser.add_lightning_class_args(pl_ext.callbacks.BatchPlotter, "batch_plotter")
         # pl_ext.callbacks.BatchPlotter(  # Fixme: disabled for multi-gpu training with deepspeed
         #     num_draw=2,  # args.num_draw,
@@ -153,19 +168,6 @@ class SmartLightningCLI(LightningCLI_Extension):
             compute_fn=lambda root: None if root is None else str(ub.Path(root) / "final_package.pt")
             # apply_on="instantiate",
         )
-
-        # We can remove this
-        # parser.add_argument(
-        #     '--profile',
-        #     action='store_true',
-        #     help=ub.paragraph(
-        #         '''
-        #         Fit does nothing with this flag. This just allows for `@xdev.profile`
-        #         profiling which checks sys.argv separately.
-
-        #         DEPRECATED: there is no longer any reason to use this. Set the
-        #         XDEV_PROFILE environment variable instead.
-        #         '''))
 
         def data_value_getter(key):
             # Hack to call setup on the datamodule before linking args
@@ -234,14 +236,6 @@ def make_cli(config=None):
         # clikw['run'] = False
 
     default_callbacks = [
-        # WeightInitializer(),  # can we integrate more intuitively?
-        # May need to declare in add_arguments_to_parser
-
-        # pl_ext.callbacks.BatchPlotter(  # Fixme: disabled for multi-gpu training with deepspeed
-        #     num_draw=2,  # args.num_draw,
-        #     draw_interval="5min",  # args.draw_interval
-        # ),
-
         pl.callbacks.RichProgressBar(),
         # pl.callbacks.LearningRateMonitor(logging_interval='step', log_momentum=True),
 
