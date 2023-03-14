@@ -457,6 +457,7 @@ def main(cmdline=1, **kwargs):
     """
     Example:
         >>> # xdoctest: +SKIP
+        >>> # xdoctest: +REQUIRES(env:SLOW_DOCTEST)
         >>> from watch.stac.stac_search_builder import main
         >>> cmdline = 0
         >>> kwargs = {
