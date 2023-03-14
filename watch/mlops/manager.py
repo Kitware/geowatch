@@ -753,7 +753,11 @@ class ExperimentState(ub.NiceRepr):
                 print(subdf.drop(ub.oset(todrop) & df.columns, axis=1).to_string())
 
         if ready_packages is not None:
-            print('ready_packages = {}'.format(ub.urepr(ready_packages, nl=1)))
+            from watch.utils import util_yaml
+            print(util_yaml.yaml_dumps({
+                'ready_packages': ready_packages,
+            }))
+            # print('ready_packages = {}'.format(ub.urepr(ready_packages, nl=1)))
 
     def summarize(self):
         """
