@@ -1,16 +1,15 @@
 import os
+
 import kwcoco
 import kwarray
 import kwimage
 import numpy as np
 import ubelt as ub
-# from tqdm import tqdm
-# from watch import exceptions
-# from watch.tasks.fusion.predict import quantize_float01
-# from watch.utils.kwcoco_extensions import transfer_geo_metadata
 import scriptconfig as scfg
+
 from watch.utils import util_progress
 from watch.utils import util_time, kwcoco_extensions
+from watch.tasks.fusion.coco_stitcher import CocoStitchingManager
 
 
 class TimeAverageConfig(scfg.DataConfig):
@@ -43,7 +42,7 @@ class TimeAverageConfig(scfg.DataConfig):
     separate_sensors = scfg.Value(True, isflag=True, help='Combine images by sensor separately.')
     workers = scfg.Value(0, help='The number of CPU cores to compute the combination operation with.')
     include_sensors = scfg.Value(None, help='A list of sensors to include in the combination operation.')
-    exclude_sensors = scfg.Value('WV', help='A list of sensors to exclude from the combination operation.')
+    exclude_sensors = scfg.Value(None, help='A list of sensors to exclude from the combination operation.')
     select_images = scfg.Value(None, help='TODO:')
     select_videos = scfg.Value(None, help='TODO:')
 
@@ -232,63 +231,6 @@ def main(cmdline=1, **kwargs):
     output_coco_dset = combine_kwcoco_channels_temporally(config)
     return output_coco_dset
 
-    # config = TimeAverageConfig(
-    #     kwcoco_fpath='/data4/datasets/dvc-repos/smart_data_dvc/Drop4-BAS/data_vali_KR_R001.kwcoco.json',
-    #     output_kwcoco_fpath='/data4/datasets/dvc-repos/smart_data_dvc/Drop4-BAS/M2_time_merge_1month_mean_5GSD.kwcoco.json',
-    #     channel_name='salient',
-    #     temporal_window_duration=365 / 12,  # 1 month on average.
-    #     merge_method='mean',
-    #     resolution='5GSD',
-    # )
-    # combine_kwcoco_channels_temporally(**config)
-
-    # kwcoco_fpath = '/data4/datasets/dvc-repos/smart_data_dvc/Drop4-BAS/baseline_fusion_valid_M3.kwcoco.json'
-    # output_kwcoco_fpath = '/data4/datasets/dvc-repos/smart_data_dvc/Drop4-BAS/M3_time_merge_1month_mean_15GSD.kwcoco.json'
-    # channel_name = 'salient'
-    # temporal_window_duration = 365 / 12  # 1 month on average.
-    # merge_method = 'mean'
-    # resolution = '15GSD'
-    # combine_kwcoco_channels_temporally(kwcoco_fpath, output_kwcoco_fpath, channel_name, temporal_window_duration,
-    #                                    merge_method, resolution)
-
-    # Baseline: Year
-    # kwcoco_fpath = '/data4/datasets/dvc-repos/smart_data_dvc/Drop4-BAS/data_vali_KR_R001.kwcoco.json'
-    # output_kwcoco_fpath = '/data4/datasets/dvc-repos/smart_data_dvc/Drop4-BAS/M2_time_merge_1year_mean_10GSD.kwcoco.json'
-    # channel_name = 'salient'
-    # temporal_window_duration = 365
-    # merge_method = 'mean'
-    # resolution = '10GSD'
-    # combine_kwcoco_channels_temporally(kwcoco_fpath, output_kwcoco_fpath, channel_name, temporal_window_duration,
-    #                                    merge_method, resolution)
-
-    # kwcoco_fpath = '/data4/datasets/dvc-repos/smart_data_dvc/Drop4-BAS/baseline_fusion_valid_M3.kwcoco.json'
-    # output_kwcoco_fpath = '/data4/datasets/dvc-repos/smart_data_dvc/Drop4-BAS/M3_time_merge_1year_mean_15GSD.kwcoco.json'
-    # channel_name = 'salient'
-    # temporal_window_duration = 365
-    # merge_method = 'mean'
-    # resolution = '15GSD'
-    # combine_kwcoco_channels_temporally(kwcoco_fpath, output_kwcoco_fpath, channel_name, temporal_window_duration,
-    #                                    merge_method, resolution)
-
-    # # Baseline: 1/2 year
-    # kwcoco_fpath = '/data4/datasets/dvc-repos/smart_data_dvc/Drop4-BAS/data_vali_KR_R001.kwcoco.json'
-    # output_kwcoco_fpath = '/data4/datasets/dvc-repos/smart_data_dvc/Drop4-BAS/M2_time_merge_6month_mean_10GSD.kwcoco.json'
-    # channel_name = 'salient'
-    # temporal_window_duration = 365 / 2
-    # merge_method = 'mean'
-    # resolution = '10GSD'
-    # combine_kwcoco_channels_temporally(kwcoco_fpath, output_kwcoco_fpath, channel_name, temporal_window_duration,
-    #                                    merge_method, resolution)
-
-    # kwcoco_fpath = '/data4/datasets/dvc-repos/smart_data_dvc/Drop4-BAS/baseline_fusion_valid_M3.kwcoco.json'
-    # output_kwcoco_fpath = '/data4/datasets/dvc-repos/smart_data_dvc/Drop4-BAS/M3_time_merge_6month_mean_15GSD.kwcoco.json'
-    # channel_name = 'salient'
-    # temporal_window_duration = 365 / 2
-    # merge_method = 'mean'
-    # resolution = '15GSD'
-    # combine_kwcoco_channels_temporally(kwcoco_fpath, output_kwcoco_fpath, channel_name, temporal_window_duration,
-    #                                    merge_method, resolution)
-
 
 def combine_kwcoco_channels_temporally(config):
     """Combine spatial data within a temporal window from a kwcoco dataset and save the result to a new kwcoco dataset.
@@ -414,8 +356,10 @@ def combine_kwcoco_channels_temporally(config):
                 window_coco_images = window_image.coco_images
                 # Detach for process parallelization
                 window_coco_images = [g.detach() for g in window_coco_images]
+                # video_id = window_coco_images[0]['video_id']
                 jobs.submit(merge_images, window_coco_images, config.merge_method, requested_chans, space,
-                            config.resolution, save_assest_dir, config.filter_with_cloudmasks, config.s2_weight_factor)
+                            config.resolution, save_assest_dir, config.filter_with_cloudmasks, config.s2_weight_factor,
+                            config.kwcoco_fpath)
 
             for job in pman.progiter(jobs.as_completed(),
                                      total=len(jobs),
@@ -432,7 +376,7 @@ def combine_kwcoco_channels_temporally(config):
 
 
 def merge_images(window_coco_images, merge_method, requested_chans, space, resolution, save_assest_dir,
-                 filter_with_cloudmasks, s2_weight_factor):
+                 filter_with_cloudmasks, s2_weight_factor, og_kwcoco_fpath):
     """
     Args:
         window_coco_images (List[kwcoco.CocoImage]): images with channels to merge
@@ -584,6 +528,8 @@ def merge_images(window_coco_images, merge_method, requested_chans, space, resol
         'resolution': resolution,
         'space': space,
         'version': 0,
+        'og_coco_path': og_kwcoco_fpath,
+        'merge_method': merge_method,
     }
     hashid = ub.hash_data(hash_depends)[0:16]
 
@@ -624,7 +570,20 @@ def merge_images(window_coco_images, merge_method, requested_chans, space, resol
     # Write the averaged image data
     kwimage.imwrite(average_fpath, writeable_imdata, backend="gdal", nodata=nodata, **write_kwargs)
 
-    return new_coco_img.img
+    # TODO: Figure out how to add geo-metadata to the new image from previous images.
+    transient_dset = kwcoco.CocoDataset()
+    transient_dset.add_video(**first_coco_img.video)
+    transient_dset.add_image(**new_coco_img.img)
+    stitch_manager = CocoStitchingManager(transient_dset, short_code=dname, chan_code=requested_chans.spec)
+
+    first_image_id_in_window = window_coco_images[0]['id']
+    stitch_manager.accumulate_image(first_image_id_in_window, None, combined_image_data)
+    stitch_manager.finalize_image(first_image_id_in_window)
+    final_img = transient_dset.imgs[first_image_id_in_window]
+
+    final_img['sensor_coarse'] = '_'.join(list(set([coco_img['sensor_coarse'] for coco_img in window_coco_images])))
+
+    return final_img
 
 
 if __name__ == '__main__':
