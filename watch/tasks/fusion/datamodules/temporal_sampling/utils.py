@@ -163,6 +163,7 @@ def coerce_multi_time_kernel(pattern):
     if pattern is None:
         return [None]
     from watch.tasks.fusion.datamodules.temporal_sampling.time_kernel_grammar import parse_multi_time_kernel
+    from watch.utils.util_time import coerce_timedelta
     if isinstance(pattern, str):
         multi_kernel = parse_multi_time_kernel(pattern)
     elif ub.iterable(pattern):
@@ -173,9 +174,16 @@ def coerce_multi_time_kernel(pattern):
             if ub.iterable(first):
                 # Assume we are given a list of pre-parsed kernels
                 multi_kernel = pattern
+                # multi_kernel = [coerce_timedelta(d) for d in pattern]
             else:
-                # Assume we are given a list of parseable kernels
-                multi_kernel = [coerce_time_kernel(p) for p in pattern]
+                # We might be given a list of multiple kernels
+                try:
+                    multi_kernel = [coerce_time_kernel(p) for p in pattern]
+                except Exception:
+                    # Or we might be given just a single kernel.
+                    multi_kernel = [[coerce_timedelta(d) for d in pattern]]
+                    ...
+
     else:
         print(f'error: pattern={pattern}')
         raise TypeError(type(pattern))
