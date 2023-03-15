@@ -224,6 +224,7 @@ class TeamFeaturePipelineConfig(scfg.DataConfig):
             '''), nargs=None)
     data_workers = scfg.Value(2, help='dataloader workers for each proc', nargs=None)
     cold_workers = scfg.Value(4, help='workers for pycold', nargs=None)
+    cold_workermode = scfg.Value('process', help='workers mode for pycold', nargs=None)
     depth_workers = scfg.Value(2, help=ub.paragraph(
             '''
             workers for depth only. On systems with < 32GB RAM might
@@ -456,7 +457,7 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
                 --coefs=cv \
                 --coefs_bands=0,1,2,3,4,5 \
                 --timestamp=True \
-                --workermode=process \
+                --workermode="{config.cold_workermode}" \
                 --workers="{config.cold_workers}"
             ''')
         # --coefs=cv,a0,a1,b1,c1,rmse \
