@@ -7,6 +7,11 @@ from watch.mlops.aggregate import fix_duplicate_param_hashids
 from watch.utils import util_pandas
 
 def _gather_namek_shortlist_results():
+    """
+
+    smartwatch model_stats models/fusion/Drop4-BAS/packages/Drop4_BAS_2022_12_15GSD_BGRNSH_BGR_V4/Drop4_BAS_2022_12_15GSD_BGRNSH_BGR_V4_v0_epoch44_step46014.pt
+
+    """
     from watch.mlops.aggregate import AggregateEvluationConfig
     from watch.mlops.aggregate import coerce_aggregators
     import watch
@@ -413,7 +418,7 @@ def _namek_eval():
     kwargs = {
         'target': expt_dvc_dpath / '_namek_eval',
         'pipeline': 'bas',
-        'io_workers': 10,
+        'io_workers': 0,
     }
     config = AggregateEvluationConfig.cli(cmdline=cmdline, data=kwargs)
     eval_type_to_aggregator = coerce_aggregators(config)
@@ -450,15 +455,24 @@ def _namek_eval():
 
         joined_table[['metrics.bas_poly_eval.bas_f1', 'metrics.bas_pxl_eval.salient_AP']]
 
+        joined_table[['resolved_params.bas_poly.agg_fn']]
+
         import kwplot
         if 0:
             sns = kwplot.autosns()
             plt = kwplot.autoplt()
+            # sns.scatterplot(
+            #     data=joined_table,
+            #     x='metrics.bas_poly_eval.bas_f1',
+            #     y='metrics.bas_pxl_eval.salient_AP',
+            #     hue='params.bas_pxl.package_fpath',
+            #     legend=False,
+            # )
             sns.scatterplot(
                 data=joined_table,
                 x='metrics.bas_poly_eval.bas_f1',
                 y='metrics.bas_pxl_eval.salient_AP',
-                hue='params.bas_pxl.package_fpath',
+                hue='resolved_params.bas_poly.agg_fn',
                 legend=False,
             )
 

@@ -377,6 +377,9 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             else:
                 raise KeyError(position_encoder)
 
+        pre_backbone = None
+        post_backbone = None
+
         if isinstance(backbone, str):
             if backbone == 'auto':
                 # TODO: set this to a "reasonable" default.
@@ -410,14 +413,15 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                     from watch.utils.simple_dvc import SimpleDVC
                     expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
                     expt_dvc = SimpleDVC(expt_dvc_dpath)
-                    pretrained_fpath = expt_dvc_dpath / 'models/wu/MAE-2023-02-09/goldenMae-epoch=07-val_loss=0.23.ckpt'
+                    ckpt_fpath = expt_dvc_dpath / 'models/wu/MAE-2023-02-09/goldenMae-epoch=07-val_loss=0.23.ckpt'
 
                     from watch.tasks.fusion.methods.heterogeneous import HeterogeneousModel, ScaleAgnostictPositionalEncoder
                     from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
                     position_encoder = ScaleAgnostictPositionalEncoder(3, 8)
                     channels, classes, dataset_stats = HeterogeneousModel.demo_dataset_stats()
                     model = HeterogeneousModel(
-                      token_dim=768,
+                      # token_dim=768,
+                      # token_dim=768,
                       input_sensorchan=channels,
                       classes=classes,
                       dataset_stats=dataset_stats,
@@ -435,6 +439,9 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                     outputs = model.forward(batch)
                 """
                 from watch.tasks.fusion.architectures import wu_mae
+                pre_backbone = nn.Linear(token_dim + position_encoder.output_dim, 16)
+                # post_backbone = nn.Linear(16, token_dim + position_encoder.output_dim)
+                post_backbone = nn.Linear(16, token_dim)
                 backbone = wu_mae.wu_backbone().transformer
             elif backbone == 'sits-former':
                 """
@@ -601,7 +608,9 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         # self.position_encoder = RandomFourierPositionalEncoder(3, 16)
         # position_dim = self.position_encoder.output_dim
 
+        self.pre_backbone = pre_backbone
         self.backbone = backbone
+        self.post_backbone = post_backbone
         # self.backbone = TransformerEncoderDecoder(
         #     encoder_depth=backbone_encoder_depth,
         #     decoder_depth=backbone_decoder_depth,
@@ -1196,6 +1205,12 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         # BUT only if we need to
         # ==================
 
+        B, S, D = input_seqs.shape
+
+        if self.pre_backbone is not None:
+            # Fixup dims for the backbone
+            input_seqs = self.pre_backbone(input_seqs.view(-1, D)).view(B, S, -1)
+
         has_decoder = getattr(self.backbone, 'has_decoder', False)
         self.backbone.has_decoder = has_decoder
         if has_decoder:
@@ -1264,6 +1279,8 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                 output_masks = input_masks
             else:
                 # Normal case.
+                print(f'input_masks.shape={input_masks.shape}')
+                print(f'input_seqs.shape={input_seqs.shape}')
                 output_seqs = self.backbone(
                     input_seqs,
                     mask=input_masks,
@@ -1271,11 +1288,17 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                 output_shapes = orig_input_shapes
                 output_masks = input_masks
 
-            HACK_TOKEN_DIMS = 1
-            if HACK_TOKEN_DIMS:
-                # hack for VIT. Drops feature dims to allow for running
-                if output_seqs.shape[2] != self.hparams.token_dim:
-                    output_seqs = output_seqs[:, :, 0:self.hparams.token_dim]
+            # Uncomment if old sits models need repackaing
+            # HACK_TOKEN_DIMS = 1
+            # if HACK_TOKEN_DIMS:
+            #     # hack for VIT. Drops feature dims to allow for running
+            #     if output_seqs.shape[2] != self.hparams.token_dim:
+            #         output_seqs = output_seqs[:, :, 0:self.hparams.token_dim]
+
+        if self.post_backbone is not None:
+            # Fixup dims for the backbone
+            output_seqs = self.post_backbone(output_seqs.view(-1, output_seqs.shape[-1]))
+            output_seqs = output_seqs.view(B, S, -1)
 
         # ==================
         # Decompose outputs into the appropriate output shape

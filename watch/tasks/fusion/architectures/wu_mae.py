@@ -11,11 +11,11 @@ lib.add_dynamic(pred_features.ViT)
 lib.expand(['pred_features'])
 print(lib.current_sourcecode())
 """
-
 from einops.layers.torch import Rearrange
 import torch.nn as nn
 import torch
 from einops import rearrange
+from einops import repeat
 
 
 class PreNorm(nn.Module):
@@ -39,7 +39,7 @@ class FeedForward(nn.Module):
             nn.Dropout(dropout)
         )
 
-    def forward(self, x):
+    def forward(self, x, mask):
         return self.net(x)
 
 
@@ -62,14 +62,20 @@ class Attention(nn.Module):
             nn.Dropout(dropout)
         ) if project_out else nn.Identity()
 
-    def forward(self, x):
+    def forward(self, x, mask):
         qkv = self.to_qkv(x).chunk(3, dim=-1)
         q, k, v = map(
             lambda t: rearrange(
                 t, 'b n (h d) -> b h n d', h=self.heads), qkv)
 
-        dots = torch.matmul(q, k.transpose(-1, -2)) * self.scale
-
+        #dots = torch.matmul(q, k.transpose(-1, -2)) * self.scale
+        dots = torch.einsum('ijkd,ijld->ijkl', q, k) * self.scale
+        attn = torch.einsum('ijkl,ijkl->ijkl',
+                            dots,
+                            repeat(mask,
+                                   'b n -> b h n d',
+                                   h=self.heads,
+                                   d=dots.shape[-1]))
         attn = self.attend(dots)
         attn = self.dropout(attn)
 
@@ -83,6 +89,19 @@ def pair(t):
 
 
 class Transformer(nn.Module):
+    """
+    Example:
+        >>> dim = 4
+        >>> depth = 3
+        >>> heads = 2
+        >>> dim_head = 2
+        >>> mlp_dim = 2
+        >>> self = Transformer(dim, depth, heads, dim_head, mlp_dim)
+        >>> x = torch.rand(2, 3, dim)
+        >>> mask = torch.rand(2, 3) > 0
+        >>> out = self.forward(x, mask)
+        >>> print(f'out.shape={out.shape}')
+    """
     def __init__(self, dim, depth, heads, dim_head, mlp_dim, dropout=0.):
         super().__init__()
         self.layers = nn.ModuleList([])
@@ -98,10 +117,10 @@ class Transformer(nn.Module):
                 PreNorm(dim, FeedForward(dim, mlp_dim, dropout=dropout))
             ]))
 
-    def forward(self, x):
+    def forward(self, x, mask):
         for attn, ff in self.layers:
-            x = attn(x) + x
-            x = ff(x) + x
+            x = attn(x, mask=mask) + x
+            x = ff(x, mask=mask) + x
         return x
 
 

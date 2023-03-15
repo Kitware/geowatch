@@ -36,8 +36,8 @@ def load_model_from_package(package_path):
     Ignore:
         >>> from watch.tasks.fusion.utils import *  # NOQA
         >>> import watch
-        >>> dvc_dpath = watch.utils.util_data.find_smart_dvc_dpath()
-        >>> package_path = dvc_dpath / 'models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_weighted_rgb_v26/SC_smt_it_stm_p8_newanns_weighted_rgb_v26_epoch=101-step=4366925.pt'
+        >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
+        >>> package_path = dvc_dpath / 'models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt'
         >>> model = load_model_from_package(package_path)
     """
     from watch.monkey import monkey_torchmetrics
