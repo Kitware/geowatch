@@ -1106,7 +1106,8 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             tostack = []
             for item in _stack:
                 if item is None:
-                    print('warning: None stack item')
+                    ...
+                    # print('warning: None stack item')
                 else:
                     canvas = item['im']
                     chan = item['chan']

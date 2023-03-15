@@ -49,9 +49,9 @@ Example:
     >>>     time_dims=7, window_dims=(196, 196),
     >>>     window_overlap=0,
     >>>     channels="(S2,L8):blue|green|red|nir",
-    >>>     input_space_scale='10GSD',
-    >>>     window_space_scale='10GSD',
-    >>>     output_space_scale='1000GSD',
+    >>>     input_space_scale='3.3GSD',
+    >>>     window_space_scale='3.3GSD',
+    >>>     output_space_scale='1GSD',
     >>>     #normalize_peritem='nir',
     >>>     dist_weights=0,
     >>>     quality_threshold=0,
@@ -61,12 +61,12 @@ Example:
     >>> self.requested_tasks['saliency'] = 1
     >>> self.requested_tasks['class'] = 0
     >>> self.requested_tasks['boxes'] = 1
-    >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][0]]
+    >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
     >>> index['allow_augment'] = False
     >>> item = self[index]
     >>> target = item['target']
-    >>> for idx in range(100):
-    ...     self[idx]
+    >>> #for idx in range(100):
+    ... #    self[idx]
     >>> print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
     >>> # xdoctest: +REQUIRES(--show)
     >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0, rescale=1)

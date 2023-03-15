@@ -256,7 +256,7 @@ torch_globals:
 
 
 # MAE Backbone
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=1
 DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"

@@ -525,6 +525,7 @@ class TimmEncoder:
     """
 
     Example:
+        >>> # xdoctest: +REQUIRES(module:timm)
         >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
         >>> import torch
         >>> in_features = 7
@@ -640,6 +641,7 @@ class DeiTEncoder(nn.Module):
     https://pytorch.org/tutorials/beginner/vt_tutorial.html
 
     Example:
+        >>> # xdoctest: +REQUIRES(module:timm)
         >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
         >>> import torch
         >>> in_features = 7
