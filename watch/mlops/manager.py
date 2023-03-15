@@ -14,7 +14,6 @@ Example:
     python -m watch.mlops.manager "status" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
 
     python -m watch.mlops.manager "status" --dataset_codes "Drop6"
-    python -m watch.mlops.manager "add packages" --dataset_codes "Drop6"
     python -m watch.mlops.manager "push packages" --dataset_codes "Drop6"
 
     python -m watch.mlops.manager "pull packages" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
@@ -113,6 +112,8 @@ class ManagerConfig(scfg.DataConfig):
         NOTE: THIS SPECIFIC FORMAT IS IN HIGH FLUX. DOCS MAY BE OUTDATED
         '''))
 
+    yes = scfg.Value(False, isflag=True, help='if True, run in non-interactive mode and answer yes to all interactive questions')
+
 
 def main(cmdline=True, **kwargs):
     """
@@ -166,10 +167,10 @@ def main(cmdline=True, **kwargs):
         manager.pull(targets)
 
     if 'add' in actions and 'packages' in targets:
-        manager.add_packages()
+        manager.add_packages(yes=config.yes)
 
     if 'push' in actions and 'packages' in targets:
-        manager.push_packages()
+        manager.push_packages(yes=config.yes)
 
     # if 'push' in actions:
     #     raise NotImplementedError
@@ -275,31 +276,31 @@ class DVCExptManager(ub.NiceRepr):
             pull_fpaths += pull_df['dvc'].tolist()
         manager.dvc.pull(pull_fpaths)
 
-    def add_packages(manager):
+    def add_packages(manager, yes=None):
         """
         TODO: break this up into smaller components.
         """
         # from watch.tasks.fusion import repackage
         # mode = 'commit'
         for state in manager.states:
-            state.add_packages()
+            state.add_packages(yes=yes)
 
-    def push_packages(manager):
+    def push_packages(manager, yes=None):
         """
         TODO: break this up into smaller components.
         """
         # from watch.tasks.fusion import repackage
         # mode = 'commit'
         for state in manager.states:
-            state.push_packages()
+            state.push_packages(yes=yes)
 
-    def push(manager, targets):
+    def push(manager, targets, yes=None):
         if 'packages' in targets:
-            manager.push_packages()
+            manager.push_packages(yes=yes)
 
-    def pull(manager, targets):
+    def pull(manager, targets, yes=None):
         if 'packages' in targets:
-            manager.pull_packages()
+            manager.pull_packages(yes=yes)
 
     def reverse_hash_lookup(manager, key):
         # This probably doesn't belong here
@@ -778,13 +779,14 @@ class ExperimentState(ub.NiceRepr):
         tables = self.cross_referenced_tables()
         summarize_tables(tables)
 
-    def package_checkpoints(self, mode='interact'):
+    def package_checkpoints(self, yes=None):
         from rich.prompt import Confirm
         staging_df = self.staging_table()
         needs_package = staging_df[~staging_df['is_packaged']]
 
-        if mode == 'interact' and len(needs_package):
-            flag = Confirm.ask('Do you want to repackage?')
+        print(f'There are {len(needs_package)} / {len(staging_df)} checkpoints that need packaging')
+        if len(needs_package):
+            flag = yes or Confirm.ask('Do you want to repackage?')
             if not flag:
                 raise UserAbort
 
@@ -798,7 +800,7 @@ class ExperimentState(ub.NiceRepr):
             # IT WOULD BE NICE IF WE DIDN'T NEED THAT HERE.
             _ = repackager.repackage(to_repackage)
 
-    def copy_packages_to_dvc(self, mode='interact'):
+    def copy_packages_to_dvc(self, yes=None):
         from rich.prompt import Confirm
         # Rebuild the tables to ensure we are up to date
         tables = self.cross_referenced_tables()
@@ -806,8 +808,9 @@ class ExperimentState(ub.NiceRepr):
         needs_copy = staging_df[~staging_df['is_copied']]
         print(needs_copy)
         print(f'There are {len(needs_copy)} packages that need to be copied')
-        if mode == 'interact':
-            flag = Confirm.ask('Do you want to copy?')
+
+        if len(needs_copy):
+            flag = yes or Confirm.ask('Do you want to copy?')
             if not flag:
                 raise UserAbort
 
@@ -817,7 +820,7 @@ class ExperimentState(ub.NiceRepr):
                 dst.parent.ensuredir()
                 ub.Path(src).copy(dst)
 
-    def add_packages_to_dvc(self, mode='interact'):
+    def add_packages_to_dvc(self, yes=None):
         from rich.prompt import Confirm
         perf_config = {
             'push_workers': 8,
@@ -830,10 +833,9 @@ class ExperimentState(ub.NiceRepr):
         print(needs_dvc_add)
         print(f'There are {len(needs_dvc_add)} / {len(versioned_df)} packages that need DVC add/push')
         if len(needs_dvc_add):
-            if mode == 'interact':
-                flag = Confirm.ask('Do you want to run DVC add/push?')
-                if not flag:
-                    raise UserAbort
+            flag = yes or Confirm.ask('Do you want to run DVC add/push?')
+            if not flag:
+                raise UserAbort
 
             import platform
             from watch.utils.simple_dvc import SimpleDVC
@@ -863,17 +865,16 @@ class ExperimentState(ub.NiceRepr):
             python -m watch.mlops.manager "status packages" --dvc_dpath=$DVC_EXPT_DPATH
             """))
 
-    def add_packages(self):
+    def add_packages(self, yes=None):
         """
         This does what repackage used to do.
         Repackages checkpoints as torch packages, copies them to the DVC repo,
         and then adds them to DVC.
         """
-        mode = 'all'
-        self.package_checkpoints(mode=mode)
-        self.copy_packages_to_dvc(mode=mode)
+        self.package_checkpoints(yes=yes)
+        self.copy_packages_to_dvc(yes=yes)
 
-    def push_packages(self):
+    def push_packages(self, yes=None):
         """
         This does what repackage used to do.
         Repackages checkpoints as torch packages, copies them to the DVC repo,
@@ -888,10 +889,9 @@ class ExperimentState(ub.NiceRepr):
         >>> self = ExperimentState(expt_dvc_dpath, dataset_code, data_dvc_dpath)
         >>> self.summarize()
         """
-        mode = 'all'
-        self.package_checkpoints(mode=mode)
-        self.copy_packages_to_dvc(mode=mode)
-        self.add_packages_to_dvc(mode=mode)
+        self.package_checkpoints(yes=yes)
+        self.copy_packages_to_dvc(yes=yes)
+        self.add_packages_to_dvc(yes=yes)
 
 
 def checkpoint_filepath_info(fname):
