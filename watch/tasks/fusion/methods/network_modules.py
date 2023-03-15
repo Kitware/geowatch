@@ -538,7 +538,7 @@ def coerce_criterion(loss_code, weights):
     loss_classcode = loss_code.split('-')[0]
     parsed = parse_delimited_argstr(loss_code)
     losskw = ub.udict(parsed) & {"gamma"}
-    print(f'losskw={losskw}')
+    # print(f'losskw={losskw}')
     if loss_classcode == 'cce':
         criterion = torch.nn.CrossEntropyLoss(
             weight=weights, reduction='none')
