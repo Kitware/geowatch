@@ -52,6 +52,22 @@ def main(cmdline=1, **kwargs):
     CommandLine:
         DEVEL_TEST=1 xdoctest -m watch.cli.coco_temporally_combine_channels main
 
+        from watch.cli.coco_temporally_combine_channels import *  # NOQA
+        import watch
+        data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        cmdline = 0
+        channels='red|green|blue'
+        kwargs = dict(
+            kwcoco_fpath=data_dvc_dpath / 'Drop6/imgonly-KR_R001.kwcoco.json',
+            output_kwcoco_fpath=data_dvc_dpath / 'TestAveDrop6/test-timeave-valid_split1_1yr_mean_test.kwcoco.json',
+            workers=4,
+            filter_with_cloudmasks=True,
+            temporal_window_duration='1 year',
+            channels=channels,
+        )
+        output_coco_dset = main(cmdline=cmdline, **kwargs)
+        coco_visualize_videos.main(cmdline=cmdline, src=kwargs['output_kwcoco_fpath'], smart=True)
+
     Example:
         >>> # 0: Baseline run.
         >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
@@ -97,7 +113,7 @@ def main(cmdline=1, **kwargs):
     Ignore:
         DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
         smartwatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001.kwcoco.json
-        
+
     Example:
         >>> # 2: Check that resolution can be updated.
         >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
@@ -142,11 +158,11 @@ def main(cmdline=1, **kwargs):
         >>> output_coco_dset = main(cmdline=cmdline, **kwargs)
         >>> from watch.cli import coco_visualize_videos
         >>> coco_visualize_videos.main(cmdline=0, src=kwargs['output_kwcoco_fpath'], smart=True)
-        
+
     Ignore:
         DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
         smartwatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001-median.kwcoco.json
-        
+
     Example:
         >>> # 4: Median combining with cloudmask.
         >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
@@ -167,11 +183,11 @@ def main(cmdline=1, **kwargs):
         >>> output_coco_dset = main(cmdline=cmdline, **kwargs)
         >>> from watch.cli import coco_visualize_videos
         >>> coco_visualize_videos.main(cmdline=0, src=kwargs['output_kwcoco_fpath'], smart=True)
-        
+
     Ignore:
         DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
         smartwatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001-cloudmask-median.kwcoco.json
-        
+
     Example:
         >>> # 5: Dont separate sensors.
         >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
@@ -193,11 +209,11 @@ def main(cmdline=1, **kwargs):
         >>> output_coco_dset = main(cmdline=cmdline, **kwargs)
         >>> from watch.cli import coco_visualize_videos
         >>> coco_visualize_videos.main(cmdline=0, src=kwargs['output_kwcoco_fpath'], smart=True)
-        
+
     Ignore:
         DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
         smartwatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001-cloudmask-no_sensor_separate.kwcoco.json
-        
+
     Example:
         >>> # 6: Adjust the effect of S2 imagery.
         >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
@@ -220,7 +236,7 @@ def main(cmdline=1, **kwargs):
         >>> output_coco_dset = main(cmdline=cmdline, **kwargs)
         >>> from watch.cli import coco_visualize_videos
         >>> coco_visualize_videos.main(cmdline=0, src=kwargs['output_kwcoco_fpath'], smart=True)
-        
+
     Ignore:
         DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
         smartwatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001-cloudmask-s2w_10.kwcoco.json
@@ -274,7 +290,8 @@ def combine_kwcoco_channels_temporally(config):
 
     ## Get saved asset directory.
     output_kwcoco_fpath = ub.Path(config.output_kwcoco_fpath)
-    save_assest_dir = (output_kwcoco_fpath.parent / "_assets").ensuredir()
+    new_bundle_dpath = output_kwcoco_fpath.parent
+    new_bundle_dpath.ensuredir()
 
     # 2. Divide the dataset into temporal windows (per video).
 
@@ -357,8 +374,16 @@ def combine_kwcoco_channels_temporally(config):
                 # Detach for process parallelization
                 window_coco_images = [g.detach() for g in window_coco_images]
                 # video_id = window_coco_images[0]['video_id']
+
+                # (window_coco_images, merge_method, requested_chans, space, resolution, save_assest_dir,
+                #  filter_with_cloudmasks, s2_weight_factor, og_kwcoco_fpath) = (
+                #      window_coco_images, config.merge_method, requested_chans,
+                #      space, config.resolution, save_assest_dir,
+                #      config.filter_with_cloudmasks, config.s2_weight_factor,
+                #      config.kwcoco_fpath)
+
                 jobs.submit(merge_images, window_coco_images, config.merge_method, requested_chans, space,
-                            config.resolution, save_assest_dir, config.filter_with_cloudmasks, config.s2_weight_factor,
+                            config.resolution, new_bundle_dpath, config.filter_with_cloudmasks, config.s2_weight_factor,
                             config.kwcoco_fpath)
 
             for job in pman.progiter(jobs.as_completed(),
@@ -369,13 +394,14 @@ def combine_kwcoco_channels_temporally(config):
 
     # Save kwcoco file.
     print(f"Saving ouput kwcoco file to: {output_kwcoco_fpath}")
+    output_coco_dset.fpath = output_kwcoco_fpath
     output_coco_dset.validate()
-    output_coco_dset.dump(output_kwcoco_fpath)
+    output_coco_dset.dump()
     print(f"Saved ouput kwcoco file to: {output_kwcoco_fpath}")
     return output_coco_dset
 
 
-def merge_images(window_coco_images, merge_method, requested_chans, space, resolution, save_assest_dir,
+def merge_images(window_coco_images, merge_method, requested_chans, space, resolution, new_bundle_dpath,
                  filter_with_cloudmasks, s2_weight_factor, og_kwcoco_fpath):
     """
     Args:
@@ -402,9 +428,13 @@ def merge_images(window_coco_images, merge_method, requested_chans, space, resol
     assert space == 'video'
 
     first_coco_img = window_coco_images[0]
-    scale = first_coco_img._scalefactor_for_resolution(resolution=resolution, space='video')
+    # Scales to the resolution from the requested (i.e. video space)
+    scale_asset_from_vid = first_coco_img._scalefactor_for_resolution(
+        resolution=resolution, space='video')
+    # warp_asset_from_vid = kwimage.Affine.scale(scale_asset_from_vid)
+
     canvas_dsize = kwimage.Box.from_dsize(
-        (first_coco_img.video['width'], first_coco_img.video['height'])).scale(scale).quantize().dsize
+        (first_coco_img.video['width'], first_coco_img.video['height'])).scale(scale_asset_from_vid).quantize().dsize
     canvas_dims = canvas_dsize[::-1]
     canvas_shape = canvas_dims + (merge_chans.numel(), )
 
@@ -519,7 +549,8 @@ def merge_images(window_coco_images, merge_method, requested_chans, space, resol
     # We are currently writing all merged assets in video space, so
     # the transform from asset space to image space is the transform
     # from video to image space.
-    new_warp_img_from_asset = first_coco_img.warp_img_from_vid
+    # warp_vid_from_asset = warp_asset_from_vid.inv()
+    # new_warp_img_from_asset = first_coco_img.warp_img_from_vid @ warp_vid_from_asset
 
     # Create the same image name.
     hash_depends = {
@@ -537,51 +568,44 @@ def merge_images(window_coco_images, merge_method, requested_chans, space, resol
     chanstr = merge_chans.path_sanitize()
     new_name = f'ave_{timestr}_{len(window_coco_images):03d}_{chanstr}_{hashid}'
     new_coco_img.img['name'] = new_name
+    new_coco_img.img['sensor_coarse'] = '_'.join(sorted(set([coco_img['sensor_coarse'] for coco_img in window_coco_images])))
+    # new_coco_img.bundle_dapth = new_bundle_dpath
     dname = f'ave_{merge_chans.path_sanitize()}'
-    average_fpath = (save_assest_dir / dname).ensuredir() / new_name + '.tif'
+    # average_rel_fpath = ub.Path('_assets') / dname / new_name + '.tif'
+    # average_fpath = new_bundle_dpath / average_rel_fpath
+    # average_fpath.parent.ensuredir()
 
-    new_coco_img.add_asset(
-        file_name=average_fpath,
-        channels=merge_chans,
-        warp_aux_to_img=new_warp_img_from_asset,
-        width=combined_image_data.shape[1],
-        height=combined_image_data.shape[0],
-    )
-    new_asset = new_coco_img.img['auxiliary'][-1]
-
-    DO_QUANTIZATION = 0
-    if DO_QUANTIZATION:
-        # TODO: quantization
-        # NOTE: We will be able to use CocoStitchingManager after quantization bugs are fixed.
-        quantization = ...
-        new_asset['quantization'] = quantization
-        nodata = quantization['nodata']
-        writeable_imdata = ...
-    else:
-        writeable_imdata = combined_image_data
-        nodata = None
-        ...
-    # Get default kwargs from ../tasks/fusion/predict.py:CocoStitchingManager.finalize_image
-    write_kwargs = {}
-    write_kwargs['blocksize'] = 128
-    write_kwargs['compress'] = 'DEFLATE'
-
-    # TODO: Possibly add `wld_crs_info` to write_kwargs.
-    # Write the averaged image data
-    kwimage.imwrite(average_fpath, writeable_imdata, backend="gdal", nodata=nodata, **write_kwargs)
+    # TODO: this should be set to the union of any valid_region_utms in the
+    # input images.
+    new_coco_img.img.pop('valid_region_utm', None)
+    # new_coco_img.add_asset(
+    #     file_name=os.fspath(average_rel_fpath),
+    #     channels=merge_chans,
+    #     warp_aux_to_img=new_warp_img_from_asset,
+    #     width=combined_image_data.shape[1],
+    #     height=combined_image_data.shape[0],
+    # )
 
     # TODO: Figure out how to add geo-metadata to the new image from previous images.
-    transient_dset = kwcoco.CocoDataset()
-    transient_dset.add_video(**first_coco_img.video)
-    transient_dset.add_image(**new_coco_img.img)
-    stitch_manager = CocoStitchingManager(transient_dset, short_code=dname, chan_code=requested_chans.spec)
+    tmp_dset = kwcoco.CocoDataset()
+    tmp_dset.bundle_dpath = new_bundle_dpath
+    tmp_dset.add_video(**first_coco_img.video)
+    tmp_dset.add_image(**new_coco_img.img)
+    stitch_manager = CocoStitchingManager(
+        tmp_dset,
+        short_code=dname,
+        chan_code=merge_chans.spec,
+        stiching_space='video',
+        # quantize=
+        # expected_minmax=
+    )
 
-    first_image_id_in_window = window_coco_images[0]['id']
-    stitch_manager.accumulate_image(first_image_id_in_window, None, combined_image_data)
-    stitch_manager.finalize_image(first_image_id_in_window)
-    final_img = transient_dset.imgs[first_image_id_in_window]
-
-    final_img['sensor_coarse'] = '_'.join(list(set([coco_img['sensor_coarse'] for coco_img in window_coco_images])))
+    gid = new_coco_img.img['id']
+    stitch_manager.accumulate_image(gid, None, combined_image_data,
+                                    asset_dsize=canvas_dsize,
+                                    scale_asset_from_stitchspace=scale_asset_from_vid)
+    stitch_manager.finalize_image(gid)
+    final_img = tmp_dset.imgs[gid]
 
     return final_img
 
@@ -592,6 +616,6 @@ if __name__ == '__main__':
     CommandLine:
         python -m watch.cli.coco_temporally_combine_channels
 
-        
+
     """
     main()
