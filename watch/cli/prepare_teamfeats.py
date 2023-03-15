@@ -445,6 +445,7 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
             python -m watch.tasks.cold.predict \
                 --coco_fpath="{base_fpath}" \
                 --mod_coco_fpath="{task['output_fpath']}" \
+                --sensors='L8' \
                 --adj_cloud=False \
                 --method='COLD' \
                 --prob=0.99 \
@@ -452,12 +453,13 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
                 --cm_interval=60 \
                 --year_lowbound=None \
                 --year_highbound=None \
-                --coefs=cv,a0,a1,b1,c1,rmse \
+                --coefs=cv \
                 --coefs_bands=0,1,2,3,4,5 \
                 --timestamp=True \
                 --workermode=process \
                 --workers="{config.cold_workers}"
             ''')
+        # --coefs=cv,a0,a1,b1,c1,rmse \
         combo_code_parts.append(codes[key])
         job = pipeline.submit(
             name='cold' + name_suffix,
