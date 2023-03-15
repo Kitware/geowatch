@@ -63,6 +63,10 @@ class TorchGlobals(pl.callbacks.Callback):
         import torch
         if self.float32_matmul_precision != 'default':
             # TODO: can we set auto and detect Ampere tensor cores?
+            # Need to know which device is being used.
+            # major, _ = torch.cuda.get_device_capability(device)
+            # ampere_or_later = major >= 8  # Ampere and later leverage tensor cores, where this setting becomes useful
+
             torch.set_float32_matmul_precision(self.float32_matmul_precision)
 
 
