@@ -404,6 +404,39 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                     cross_dim_head=1,
                     latent_dim_head=1,
                 )
+            elif backbone == 'wu-vit':
+                """
+                    import watch
+                    from watch.utils.simple_dvc import SimpleDVC
+                    expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
+                    expt_dvc = SimpleDVC(expt_dvc_dpath)
+                    pretrained_fpath = expt_dvc_dpath / 'models/wu/MAE-2023-02-09/goldenMae-epoch=07-val_loss=0.23.ckpt'
+
+                    from watch.tasks.fusion.methods.heterogeneous import HeterogeneousModel, ScaleAgnostictPositionalEncoder
+                    from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+                    position_encoder = ScaleAgnostictPositionalEncoder(3, 8)
+                    channels, classes, dataset_stats = HeterogeneousModel.demo_dataset_stats()
+                    model = HeterogeneousModel(
+                      token_dim=768,
+                      input_sensorchan=channels,
+                      classes=classes,
+                      dataset_stats=dataset_stats,
+                      position_encoder=position_encoder,
+                      backbone='wu-vit',
+                    )
+
+                    from watch.tasks.fusion.fit import coerce_initializer
+                    from watch.utils import util_pattern
+                    initializer = coerce_initializer(str(ckpt_fpath))
+                    initializer.forward(model)
+
+                    batch = model.demo_batch(width=64, height=65)
+                    batch += model.demo_batch(width=55, height=75)
+                    outputs = model.forward(batch)
+                """
+                import sys, ubelt
+                from watch.tasks.fusion.architectures import wu_mae
+                backbone = wu_mae.wu_backbone().transformer
             elif backbone == 'sits-former':
                 """
                 Ignore:
