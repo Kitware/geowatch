@@ -478,15 +478,13 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method, resolution):
 
     im_data = delayed_im.finalize(interpolation='cubic', antialias=True)
 
-    # Check if padding could cause not running cold algorithm
-    # if (padded_w - w >= 13) or (padded_h - h >= 13):       
+    # Zero padding affects margin block not to process COLD, leading missing npy in the second step.
+    # To avoid this issue, filled with fake data in the padding area.
+    # This will fix predict script running forever without raising error.
     padding_value_col = im_data[:, :padded_w - w]
     im_data[:, w:] = padding_value_col
     padding_value_row = im_data[:padded_h - h, :]
-    im_data[h:] = padding_value_row
-        # print(im_data)
-    # else:
-    #     im_data
+    im_data[h:] = padding_value_row   
     
     if method == 'ASI':
         Scale = 10000
