@@ -672,6 +672,8 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             'saliency': global_saliency_weight,
         }
 
+        self.magic_padding_value = -99999999.0  # Magic placeholder value
+
         for prop in head_properties:
             head_name = prop['name']
             global_weight = self.global_head_weights[head_name]
@@ -1189,14 +1191,14 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
 
         # Each example may have a different number of tokens, so we perform
         # some padding and compute a mask of where those padded tokens are
-        padding_value = -1000.0  # Magic placeholder value
+
         input_seqs = nn.utils.rnn.pad_sequence(
             orig_input_seqs,
             batch_first=True,
-            padding_value=padding_value,
+            padding_value=self.magic_padding_value,
         )
         # Remove the placeholder
-        input_masks = input_seqs[..., 0] > padding_value
+        input_masks = input_seqs[..., 0] > self.magic_padding_value
         input_seqs[~input_masks] = 0.
 
         # ==================
@@ -1240,14 +1242,13 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
 
             # Each example may have a different number of queries, so we perform
             # some padding and compute a mask of where those padded tokens are
-            padding_value = -1000.0  # Magic placeholder value
             query_seqs = nn.utils.rnn.pad_sequence(
                 orig_query_seqs,
                 batch_first=True,
-                padding_value=padding_value,
+                padding_value=self.magic_padding_value,
             )
             # Remove the placeholder
-            query_masks = query_seqs[..., 0] > padding_value
+            query_masks = query_seqs[..., 0] > self.magic_padding_value
             query_seqs[~query_masks] = 0.
 
         # ==================
@@ -1279,8 +1280,6 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                 output_masks = input_masks
             else:
                 # Normal case.
-                print(f'input_masks.shape={input_masks.shape}')
-                print(f'input_seqs.shape={input_seqs.shape}')
                 output_seqs = self.backbone(
                     input_seqs,
                     mask=input_masks,
@@ -1289,11 +1288,11 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                 output_masks = input_masks
 
             # Uncomment if old sits models need repackaing
-            # HACK_TOKEN_DIMS = 1
-            # if HACK_TOKEN_DIMS:
-            #     # hack for VIT. Drops feature dims to allow for running
-            #     if output_seqs.shape[2] != self.hparams.token_dim:
-            #         output_seqs = output_seqs[:, :, 0:self.hparams.token_dim]
+            HACK_TOKEN_DIMS = self.post_backbone is None
+            if HACK_TOKEN_DIMS:
+                # hack for VIT. Drops feature dims to allow for running
+                if output_seqs.shape[2] != self.hparams.token_dim:
+                    output_seqs = output_seqs[:, :, 0:self.hparams.token_dim]
 
         if self.post_backbone is not None:
             # Fixup dims for the backbone

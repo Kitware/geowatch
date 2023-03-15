@@ -623,6 +623,19 @@ def predict(cmdline=False, **kwargs):
     # Hack to fix GELU issue
     monkey_torch.fix_gelu_issue(method)
 
+    # Fix issue with pre-2023-02 heterogeneous models
+    if method.__class__.__name__ == 'HeterogeneousModel':
+        if not hasattr(method, 'magic_padding_value'):
+            from watch.tasks.fusion.methods.heterogeneous import HeterogeneousModel
+            new_method = HeterogeneousModel(
+                **method.hparams,
+                position_encoder=method.position_encoder
+            )
+            old_state = method.state_dict()
+            new_method.load_state_dict(old_state)
+            new_method.config_cli_yaml = method.config_cli_yaml
+            method = new_method
+
     method.eval()
     method.freeze()
 
@@ -930,6 +943,11 @@ def predict(cmdline=False, **kwargs):
                 print(msg)
                 import warnings
                 warnings.warn(msg)
+                from watch.utils import util_environ
+                import xdev
+                xdev.embed()
+                if util_environ.envflag('WATCH_STRICT_PREDICT'):
+                    raise
                 continue
 
             outputs = {head_key_mapping.get(k, k): v for k, v in outputs.items()}
