@@ -481,10 +481,11 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method, resolution):
     # Zero padding affects margin block not to process COLD, leading missing npy in the second step.
     # To avoid this issue, filled with fake data in the padding area.
     # This will fix predict script running forever without raising error.
-    padding_value_col = im_data[:, :padded_w - w]
-    im_data[:, w:] = padding_value_col
-    padding_value_row = im_data[:padded_h - h, :]
-    im_data[h:] = padding_value_row   
+    # This issue will be addressed in export_cold_result_kwcoco.py, not here
+    # padding_value_col = im_data[:, :padded_w - w]
+    # im_data[:, w:] = padding_value_col
+    # padding_value_row = im_data[:padded_h - h, :]
+    # im_data[h:] = padding_value_row   
     
     if method == 'ASI':
         Scale = 10000
