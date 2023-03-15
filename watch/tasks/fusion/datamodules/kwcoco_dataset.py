@@ -472,6 +472,19 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             '''
             Drops frames in a fraction of training batches
             ''')),
+
+        'reseed_fit_random_generators': scfg.Value(True, type=float, help=ub.paragraph(
+            '''
+            This option forces the dataloader random number generator to reseed
+            itself, effectively ignoring any global seed in non-test mode.  In
+            test mode, this has no effect. The reason this defaults to True is
+            because of our balanced sampling approach, where the index of a
+            sample passed to getitem is ignored and we randomly return an item
+            acording to the balanced distribution. This relies on randomness
+            and if this was set to False dataloader clones for ddp or multiple
+            workers would generate the same sequence of data regardless of
+            split indexes.
+            ''')),
     }
 
     def normalize(self):
@@ -776,7 +789,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     all_chunks.extend(rechunked_video_pool)
 
                 self.nested_pool = data_utils.NestedPool(all_chunks)
-                self.reseed()
+                if self.config['reseed_fit_random_generators']:
+                    self.reseed()
 
             self.length = len(self.nested_pool)
 
@@ -2913,6 +2927,9 @@ def worker_init_fn(worker_id):
 
     if isinstance(self, torch.utils.data.Subset):
         self = self.dataset
+
+    if self.config['reseed_fit_random_generators']:
+        self.reseed()
 
     if hasattr(self, 'sampler'):
         if hasattr(self.sampler.dset, 'connect'):

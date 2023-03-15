@@ -434,7 +434,6 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                     batch += model.demo_batch(width=55, height=75)
                     outputs = model.forward(batch)
                 """
-                import sys, ubelt
                 from watch.tasks.fusion.architectures import wu_mae
                 backbone = wu_mae.wu_backbone().transformer
             elif backbone == 'sits-former':

@@ -62,6 +62,7 @@ class TorchGlobals(pl.callbacks.Callback):
     def setup(self, trainer, pl_module, stage):
         import torch
         if self.float32_matmul_precision != 'default':
+            # TODO: can we set auto and detect Ampere tensor cores?
             torch.set_float32_matmul_precision(self.float32_matmul_precision)
 
 

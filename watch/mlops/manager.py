@@ -33,7 +33,7 @@ Example:
     python -m watch.mlops.manager "push packages" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
 
     # On testing machine
-    python -m watch.mlops.manager "pull packages"
+    python -m watch.mlops.manager "pull packages" --dataset_codes Drop6
     python -m watch.mlops.manager "status"
 
     # Run evals on testing machine
