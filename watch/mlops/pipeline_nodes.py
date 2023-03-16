@@ -1,8 +1,22 @@
 """
-The core pipeline data structure for MLOps
+The core pipeline data structure for MLOps.
 
-TODO:
-    rename "final" to something else, the term is overloaded
+This module outlines the structure for a generic DAG of bash process nodes.  It
+contains examples of generic test pipelines. For the SMART instantiation of
+project-specific dags see: smart_pipeline.py
+
+The basic idea is that each bash process knows about:
+
+    * its filepath inputs
+    * its filepath outputs
+    * algorithm parameters
+    * performance parameters
+    * the command that invokes the job
+
+Given a set of processes, a DAG is built by connecting process ouputs to
+process inputs. This DAG can then be configured with customized input paths and
+parameters. The resulting jobs can then be submitted to a cmd_queue.Queue for
+actual execution.
 """
 import ubelt as ub
 import networkx as nx

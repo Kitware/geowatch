@@ -206,15 +206,14 @@ def main(cmdline=True, **kwargs):
     """
 
     Example:
-        >>> import ubelt as ub
-        >>> dpath = ub.Path.appdir('watch/test/viz_video').delete().ensuredir()
         >>> import kwcoco
         >>> from watch.utils import kwcoco_extensions
-        >>> dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral', num_frames=2)
+        >>> from watch.cli.coco_visualize_videos import *  # NOQA
+        >>> import ubelt as ub
+        >>> dpath = ub.Path.appdir('watch/test/viz_video').delete().ensuredir()
+        >>> dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral', num_frames=2, image_size=(64, 64), num_videos=2)
         >>> img = dset.dataset['images'][0]
         >>> coco_img = dset.coco_image(img['id'])
-        >>> #channel_chunks = list(ub.chunks(coco_img.channels.fuse().parsed, chunksize=3))
-        >>> #channels = ','.join(['|'.join(p) for p in channel_chunks])
         >>> kwargs = {
         >>>     'src': dset.fpath,
         >>>     'viz_dpath': dpath,
@@ -222,7 +221,6 @@ def main(cmdline=True, **kwargs):
         >>>     'channels': None,
         >>>     'zoom_to_tracks': True,
         >>> }
-        >>> from watch.cli.coco_visualize_videos import *  # NOQA
         >>> cmdline = False
         >>> main(cmdline=cmdline, **kwargs)
 
@@ -1108,7 +1106,8 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             tostack = []
             for item in _stack:
                 if item is None:
-                    print('warning: None stack item')
+                    ...
+                    # print('warning: None stack item')
                 else:
                     canvas = item['im']
                     chan = item['chan']

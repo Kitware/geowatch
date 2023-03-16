@@ -49,9 +49,9 @@ Example:
     >>>     time_dims=7, window_dims=(196, 196),
     >>>     window_overlap=0,
     >>>     channels="(S2,L8):blue|green|red|nir",
-    >>>     input_space_scale='10GSD',
-    >>>     window_space_scale='10GSD',
-    >>>     output_space_scale='1000GSD',
+    >>>     input_space_scale='3.3GSD',
+    >>>     window_space_scale='3.3GSD',
+    >>>     output_space_scale='1GSD',
     >>>     #normalize_peritem='nir',
     >>>     dist_weights=0,
     >>>     quality_threshold=0,
@@ -61,12 +61,12 @@ Example:
     >>> self.requested_tasks['saliency'] = 1
     >>> self.requested_tasks['class'] = 0
     >>> self.requested_tasks['boxes'] = 1
-    >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][0]]
+    >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
     >>> index['allow_augment'] = False
     >>> item = self[index]
     >>> target = item['target']
-    >>> for idx in range(100):
-    ...     self[idx]
+    >>> #for idx in range(100):
+    ... #    self[idx]
     >>> print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
     >>> # xdoctest: +REQUIRES(--show)
     >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0, rescale=1)
@@ -91,6 +91,7 @@ Ignore:
     >>> kwplot.imshow(canvas2, fnum=3, pnum=(2, 1, 2), title='per-item normalization (across time)')
 """
 import einops
+import os
 import warnings
 import kwarray
 import kwcoco
@@ -471,6 +472,19 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             '''
             Drops frames in a fraction of training batches
             ''')),
+
+        'reseed_fit_random_generators': scfg.Value(True, type=float, help=ub.paragraph(
+            '''
+            This option forces the dataloader random number generator to reseed
+            itself, effectively ignoring any global seed in non-test mode.  In
+            test mode, this has no effect. The reason this defaults to True is
+            because of our balanced sampling approach, where the index of a
+            sample passed to getitem is ignored and we randomly return an item
+            acording to the balanced distribution. This relies on randomness
+            and if this was set to False dataloader clones for ddp or multiple
+            workers would generate the same sequence of data regardless of
+            split indexes.
+            ''')),
     }
 
     def normalize(self):
@@ -775,6 +789,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     all_chunks.extend(rechunked_video_pool)
 
                 self.nested_pool = data_utils.NestedPool(all_chunks)
+                if self.config['reseed_fit_random_generators']:
+                    self.reseed()
 
             self.length = len(self.nested_pool)
 
@@ -926,6 +942,24 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             ub.oset(['baren', 'field', 'water']),
             ub.oset(['landcover_hidden.0', 'landcover_hidden.1', 'landcover_hidden.2']),
         ] + heuristics.HUERISTIC_COMBINABLE_CHANNELS
+
+    def reseed(self):
+        """
+        Reinitialize the random number generator
+        """
+        # Randomize across DDP workers
+        if hasattr(self, 'nested_pool'):
+            rng = kwarray.ensure_rng(rng=None)
+            import secrets
+            import time
+            # Really try to be random
+            rng_seed = rng.randint(0, int(2 ** 32 - 2))
+            rank_seed = int(ub.hash_data(int(os.environ.get('LOCAL_RANK', '0')), base=10)[0:9])
+            secret_seed = secrets.randbits(22) + int(time.time())
+            seed = secret_seed ^ rank_seed ^ rng_seed
+            rng = kwarray.ensure_rng(rng=seed)
+            self.nested_pool.rng = rng
+        ...
 
     @property
     def coco_dset(self):
@@ -1550,8 +1584,12 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         # sequence should be. The requested output sequence could be disjoint
         # from the input sequence. It could also be aligned, or perhaps it is
         # just a single classification prediction over the entire sequence.
+        LOCAL_RANK = os.environ.get('LOCAL_RANK', '0')
         item = {
-            'index': index,
+            'producer_mode': self.mode,
+            'producer_rank': LOCAL_RANK,
+            'requested_index': target.get('requested_index', None),
+            'resolved_index': target.get('resolved_index', None),
             'frames': frame_items,
             # '_new_inputs': ...,
             # '_new_outputs': ...,
@@ -1560,7 +1598,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             'video_name': video['name'],
             'input_gsd': resolved_input_scale.get('gsd', None),
             'output_gsd': resolved_output_scale.get('gsd', None),
-            'target': tr_subset
+            'target': tr_subset,
         }
         return item
 
@@ -1571,23 +1609,31 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         # The index can be specified as either
         # * directly as a target (target) dictionary, or
         # * an integer index
+
         if isinstance(index, dict):
+            print(f'index={index}')
             target = index
-            index = 'given-as-dictionary'
+            requested_index = 'given-as-dictionary'
+            resolved_index = 'given-as-dictionary'
         else:
+            requested_index = index
             if self.mode == 'test':
                 # In test-mode the index directly determines the grid location.
-                target = self.new_sample_grid['targets'][index]
+                resolved_index = requested_index
             else:
                 # In non-test-mode we discard the user index and randomly
                 # sample a grid location to achive balanced sampling.
                 try:
-                    tr_idx = self.nested_pool.sample()
+                    resolved_index = self.nested_pool.sample()
                 except Exception as ex:
                     raise FailedSample(f'Failed to sample grid location: {ex=}')
-                else:
-                    target = self.new_sample_grid['targets'][tr_idx]
+            target = self.new_sample_grid['targets'][resolved_index]
 
+        target = target.copy()
+        target['requested_index'] = requested_index
+        target['resolved_index'] = resolved_index
+        # LOCAL_RANK = os.environ.get('LOCAL_RANK', '0')
+        # print(f'{LOCAL_RANK=}, {index=} {self.mode=}  {self.nested_pool.sample()} {target=}')
         if target is None:
             raise FailedSample('no target')
         return target
@@ -2876,7 +2922,14 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
 def worker_init_fn(worker_id):
     worker_info = torch.utils.data.get_worker_info()  # TODO
+    # print('worker_info = {}'.format(ub.urepr(worker_info, nl=1)))
     self = worker_info.dataset
+
+    if isinstance(self, torch.utils.data.Subset):
+        self = self.dataset
+
+    if self.config['reseed_fit_random_generators']:
+        self.reseed()
 
     if hasattr(self, 'sampler'):
         if hasattr(self.sampler.dset, 'connect'):

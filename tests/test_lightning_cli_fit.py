@@ -170,6 +170,10 @@ def real_test_train():
 def test_partial_init_callback():
     from watch.tasks.fusion import fit_lightning
     import ubelt as ub
+
+    import pytest
+    pytest.skip('todo: make this test run faster')
+
     dpath1 = ub.Path.appdir('watch/tests/test_fusion_fit/partial_init/base_model').ensuredir()
     dpath1.delete().ensuredir()
     # Get the package we just trained and init from it

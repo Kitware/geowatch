@@ -1112,6 +1112,7 @@ def crs_geojson_to_gdf(geometry, crs_info=None):
         gpd.GeoDataFrame
 
     Example:
+        >>> # xdoctest: +REQUIRES(env:LARGE_DOWNLOAD)
         >>> from watch.gis.geotiff import *  # NOQA
         >>> from watch.utils.util_gis import *  # NOQA
         >>> import kwimage

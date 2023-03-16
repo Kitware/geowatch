@@ -2,9 +2,16 @@ import pytorch_lightning as pl
 import ubelt as ub
 import numpy as np
 import kwimage
+from watch.utils import util_kwimage
+from watch.utils.slugify_ext import smart_truncate
+import warnings
+from watch.utils.lightning_ext import util_model
+from watch.utils import util_time
 # import pytimeparse
 # import numbers
 # import datetime
+
+# from pytorch_lightning.utilities.rank_zero import rank_zero_only
 
 try:
     import xdev
@@ -67,11 +74,10 @@ class BatchPlotter(pl.callbacks.Callback):
         https://pytorch-lightning.readthedocs.io/en/latest/extensions/callbacks.html
     """
 
-    def __init__(self, num_draw=4, draw_interval='1minute'):
+    def __init__(self, num_draw=2, draw_interval='5minutes'):
         super().__init__()
         self.num_draw = num_draw
 
-        from watch.utils import util_time
         delta = util_time.coerce_timedelta(draw_interval)
         num_seconds = delta.total_seconds()
 
@@ -118,10 +124,7 @@ class BatchPlotter(pl.callbacks.Callback):
 
     @profile
     def draw_batch(self, trainer, outputs, batch, batch_idx):
-        from watch.utils import util_kwimage
-
         if trainer.log_dir is None:
-            import warnings
             warnings.warn('The trainer logdir is not set. Cannot dump a batch plot')
             return
 
@@ -130,10 +133,10 @@ class BatchPlotter(pl.callbacks.Callback):
         if hasattr(model, 'get_cfgstr'):
             model_cfgstr = model.get_cfgstr()
         else:
-            from watch.utils.slugify_ext import smart_truncate
+            hparams = util_model.model_hparams(model)
             model_config = {
                 'type': str(model.__class__),
-                'hp': smart_truncate(ub.repr2(model.hparams, compact=1, nl=0), max_length=8),
+                'hp': smart_truncate(ub.repr2(hparams, compact=1, nl=0), max_length=8),
             }
             model_cfgstr = smart_truncate(ub.repr2(
                 model_config, compact=1, nl=0), max_length=64)
@@ -154,7 +157,10 @@ class BatchPlotter(pl.callbacks.Callback):
         # This is more trouble than it's worth
         # if stage.startswith('val'):
         #     title = f'{stage}_bx{batch_idx:04d}_epoch{epoch:08d}_step{step:08d}'
-        title = f'{stage}_epoch{epoch:08d}_step{step:08d}_bx{batch_idx:04d}'
+
+        fstem = f'{stage}_epoch{epoch:08d}_step{step:08d}_bx{batch_idx:04d}'
+        if trainer.global_rank is not None:
+            fstem += '_' + str(trainer.global_rank)
 
         canvas = util_kwimage.draw_header_text(
             image=canvas,
@@ -162,23 +168,36 @@ class BatchPlotter(pl.callbacks.Callback):
             stack=True,
         )
 
+        title = fstem + '\n' + f'batch_size={len(batch)}'
         canvas = util_kwimage.draw_header_text(image=canvas, text=title,
                                                stack=True)
 
         log_dpath = ub.Path(trainer.log_dir)
         dump_dpath = (log_dpath / 'monitor' / stage / 'batch').ensuredir()
-        fpath = dump_dpath / f'pred_{title}.jpg'
-        # print('write to fpath = {!r}'.format(fpath))
+        fpath = dump_dpath / f'pred_{fstem}.jpg'
+
+        # print(f'[rank {trainer.global_rank}] write to fpath = {fpath}')
         kwimage.imwrite(fpath, canvas)
 
     # def draw_if_ready(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
+    # @rank_zero_only
     def draw_if_ready(self, trainer, pl_module, outputs, batch, batch_idx):
+        # print(f'IN DRAW BATCH: trainer.global_rank={trainer.global_rank}')
+        # if trainer.global_rank != 0:
+        #     return
         do_draw = batch_idx < self.num_draw
         if self.draw_interval_seconds > 0:
             do_draw |= self.draw_timer.toc() > self.draw_interval_seconds
+        if trainer.log_dir is not None:
+            # By making this file we can let the user see a lot of batches
+            # quickly.
+            if (ub.Path(trainer.log_dir) / 'please_draw').exists():
+                do_draw = True
+        # print(f'[rank {trainer.global_rank}] do_draw={do_draw}')
         if do_draw:
             self.draw_batch(trainer, outputs, batch, batch_idx)
             self.draw_timer.tic()
+        # print(f'FINISH DRAW BATCH: trainer.global_rank={trainer.global_rank}')
 
     #  New
     def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):

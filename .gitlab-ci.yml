@@ -117,7 +117,7 @@ stages:
 
     script:
         - EAGER_IMPORT=1 python -c "import watch; print(watch.__version__)"
-        - ./run_tests.py --network watch tests --capture=no --verbose
+        - ./run_tests.py --network watch tests --verbose
 
     after_script:
         - du -sh .cache/*
@@ -160,7 +160,7 @@ stages:
         # 
         #- python -c "from pyproj import CRS ; print(CRS.from_user_input('crs84'))"
         #- python -c "from pyproj import CRS ; print(CRS.from_user_input('epsg:4326'))"
-        - ./run_tests.py --network watch tests --capture=no --verbose
+        - ./run_tests.py --network watch tests --verbose
 
     after_script:
         - du -sh .cache/*
@@ -321,7 +321,7 @@ test_full_strict/conda-linux:
             pip install --prefer-binary -e .[runtime-strict,headless-strict,development-strict]
             EAGER_IMPORT=1 python -c "import watch; print(watch.__version__)"
             python -c "import torch; print(torch.cuda.is_available())"
-            ./run_tests.py --network -s -v watch/tasks/fusion/predict.py
+            ./run_tests.py --network -v watch/tasks/fusion/predict.py
             xdoctest watch/tasks/fusion/predict.py
 
             # NEW PYENV STRICT DEVELOPER VARIANT

@@ -74,13 +74,13 @@ xxhash>=3.0.0     ; python_version < '3.11' and python_version >= '3.10'    # Py
 xxhash>=3.0.0     ; python_version < '3.10' and python_version >= '3.9'     # Python 3.9
 xxhash>=1.4.4     ; python_version <= '3.8'    # Python 3.8
 
-# python ~/local/tools/supported_python_versions_pip.py numexpr
+# xdev availpkg numexpr
 numexpr>=2.8.4     ; python_version < '4.0'  and python_version >= '3.11'    # Python 3.11+
 numexpr>=2.8.1     ; python_version < '3.11' and python_version >= '3.10'    # Python 3.10
 numexpr>=2.7.3     ; python_version < '3.10' and python_version >= '3.9'    # Python 3.9
 numexpr>=2.7.3     ; python_version < '3.9'  and python_version >= '3.8'    # Python 3.8
 
-# python ~/local/tools/supported_python_versions_pip.py mgrs
+# xdev availpkg mgrs
 mgrs>=1.4.3     ; python_version < '4.0'  and python_version >= '3.10'    # Python 3.10+
 mgrs>=1.4.3     ; python_version < '3.10' and python_version >= '3.9'     # Python 3.9
 mgrs>=1.4.3     ; python_version < '3.10' and python_version >= '3.9'    # Python 3.9
@@ -128,7 +128,7 @@ girder_client>=3.1.15
 lxml>=4.6.3
 tempenv>=0.2.0
 pystac_client>=0.5.1
-scriptconfig>=0.7.2
+scriptconfig>=0.7.3
 pygtrie>=2.3.3
 # protobuf>=3.15.8
 networkx>=2.7.0
@@ -143,8 +143,8 @@ lark_cython >= 0.0.12
 
 # Imaging
 distinctipy>=1.2.1
-kwimage>=0.9.12
-kwcoco>=0.5.6
+kwimage>=0.9.13
+kwcoco>=0.5.7
 delayed_image>=0.2.4
 albumentations>=1.0.0
 ndsampler>=0.7.3
@@ -178,13 +178,13 @@ torchmetrics>=0.11.0
 torch_liberator>=0.2.1
 # pytorch_lightning>=1.7.1,<1.8
 # pytorch_lightning>=1.7.1
-pytorch_lightning[extra]>=1.8.6
-lightning_lite>=1.8.6
+pytorch_lightning[extra]>=1.8.6,<2.0.0
+# lightning_lite>=1.8.6
 monai>=0.6.0
 torch_optimizer>=0.1.0
 netharn>=0.6.1
 
-timm>=0.4.12
+# timm>=0.4.12
 # Do we need to pin this?
 kornia<=0.5
 segmentation-models-pytorch>=0.2.0  ; python_version < '3.11'

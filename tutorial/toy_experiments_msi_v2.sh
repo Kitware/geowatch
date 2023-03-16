@@ -37,6 +37,14 @@ if [[ ! -e "$TRAIN_FPATH" ]]; then
 fi
 
 
+__doc__="
+
+###############################################
+# DEMO: MultimodalTransformer with LightningCLI
+###############################################
+
+"
+
 # Training with the baseline MultiModalModel
 DATASET_CODE=ToyDataMSI
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
@@ -100,15 +108,39 @@ python -m watch.tasks.fusion fit --config "
 "
 
 
+__doc__="
 
+#########################
+# DEMO: MultiGPU Training
+#########################
 
-rm -rf "$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME"
+The following command trains a HeterogeneousModel model on two GPUs with DDP
 
-# Training with the HeterogeneousModel using a very small backbone
-#
-# TODO:
-# * Debug why ddp isn't working
-# * Debug why checkpoint restart isn't working
+It seems to be the case that something in our system can cause DDP to hang with
+100% reported GPU utilization (even though it really isn't doing anything).
+
+References:
+    https://github.com/Lightning-AI/lightning/issues/11242
+    https://github.com/Lightning-AI/lightning/issues/10947
+    https://github.com/Lightning-AI/lightning/issues/5319
+    https://github.com/Lightning-AI/lightning/discussions/6501#discussioncomment-553152
+
+So far we may be able to avoid this if we do some combination of the following:
+    * Disable pl_ext.callbacks.BatchPlotter 
+        - does cause the issue by itself, but seemingly only if we try to put
+          in rank guards.
+
+    * Disable pl.callbacks.LearningRateMonitor
+    * Disable pl.callbacks.ModelCheckpoint
+"
+
+DVC_DATA_DPATH=$HOME/data/dvc-repos/toy_data_dvc
+DVC_EXPT_DPATH=$HOME/data/dvc-repos/toy_expt_dvc
+NUM_TOY_TRAIN_VIDS="${NUM_TOY_TRAIN_VIDS:-100}"  # If variable not set or null, use default.
+NUM_TOY_VALI_VIDS="${NUM_TOY_VALI_VIDS:-5}"  # If variable not set or null, use default.
+TRAIN_FPATH=$DVC_DATA_DPATH/vidshapes_msi_train${NUM_TOY_TRAIN_VIDS}/data.kwcoco.json
+VALI_FPATH=$DVC_DATA_DPATH/vidshapes_msi_vali${NUM_TOY_VALI_VIDS}/data.kwcoco.json
+
 DATASET_CODE=ToyDataMSI
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 EXPERIMENT_NAME=ToyDataMSI_Demo_V002
@@ -117,6 +149,76 @@ MAX_STEPS=10000
 TARGET_LR=3e-4
 CHANNELS="(*):(disparity|gauss,X.2|Y:2:6,B1|B8a,flowx|flowy|distri)"
 python -m watch.tasks.fusion fit --config "
+    seed_everything: 8675309
+    data:
+        num_workers          : 2
+        train_dataset        : $TRAIN_FPATH
+        vali_dataset         : $VALI_FPATH
+        channels             : '$CHANNELS'
+        time_steps           : 5
+        chip_dims            : 128
+        batch_size           : 4
+        max_epoch_length     : 1024
+    model:
+      class_path: watch.tasks.fusion.methods.HeterogeneousModel
+      init_args:
+        name                   : $EXPERIMENT_NAME
+        token_width            : 8
+        token_dim              : 256
+        position_encoder       : auto
+        backbone               : small
+        global_change_weight   : 0.0
+        global_class_weight    : 0.0
+        global_saliency_weight : 1.0
+        saliency_loss          : focal
+        decoder                : simple_conv
+    lr_scheduler:
+      class_path: torch.optim.lr_scheduler.OneCycleLR
+      init_args:
+        max_lr          : $TARGET_LR
+        total_steps     : $MAX_STEPS
+        anneal_strategy : cos
+        pct_start       : 0.05
+    optimizer:
+      class_path: torch.optim.Adam
+      init_args:
+        lr           : $TARGET_LR
+        weight_decay : 1e-5
+    trainer:
+      default_root_dir : $DEFAULT_ROOT_DIR
+      max_steps        : $MAX_STEPS
+      accelerator      : gpu 
+      devices          : 0,1
+      strategy        : ddp 
+"
+
+
+__doc__="
+###############################################
+# DEMO: Restarting from an existing checkpoint
+###############################################
+
+The following demo illustrates how to restart from an end-of-epoch checkpoint.
+To run this demo you will need to run the training command, wait for it to
+complete one epoch (which is only a few seconds), and then kill the job with
+ctrl+C. Then it shows how to restart given the checkpoint that was written.
+"
+
+# Training with the HeterogeneousModel using a very small backbone
+DATASET_CODE=ToyDataMSI
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
+EXPERIMENT_NAME=ToyDataMSI_Demo_V003
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+# Fresh start
+rm -rf "$DEFAULT_ROOT_DIR"
+#
+# Write a config to disk:
+mkdir -p "$DEFAULT_ROOT_DIR"
+CONFIG_FPATH="$DEFAULT_ROOT_DIR"/restart_demo_config.yaml
+CHANNELS="(*):(disparity|gauss,X.2|Y:2:6,B1|B8a,flowx|flowy|distri)"
+MAX_STEPS=10000
+TARGET_LR=3e-4
+echo "
     seed_everything: 123
     data:
         num_workers          : 4
@@ -126,7 +228,7 @@ python -m watch.tasks.fusion fit --config "
         time_steps           : 5
         chip_dims            : 128
         batch_size           : 2
-        max_epoch_length     : 5
+        max_epoch_length     : 100
     model:
       class_path: watch.tasks.fusion.methods.HeterogeneousModel
       init_args:
@@ -155,28 +257,26 @@ python -m watch.tasks.fusion fit --config "
         global_saliency_weight : 1.0
         saliency_loss          : dicefocal
         decoder                : simple_conv
-    #lr_scheduler:
-    #  class_path: torch.optim.lr_scheduler.OneCycleLR
-    #  init_args:
-    #    max_lr: $TARGET_LR
-    #    total_steps: $MAX_STEPS
-    #    anneal_strategy: cos
-    #    pct_start: 0.05
+    lr_scheduler:
+      class_path: torch.optim.lr_scheduler.OneCycleLR
+      init_args:
+        max_lr: $TARGET_LR
+        total_steps: $MAX_STEPS
+        anneal_strategy: cos
+        pct_start: 0.05
     optimizer:
       class_path: torch.optim.Adam
       init_args:
         lr: $TARGET_LR
         weight_decay: 1e-5
-        #betas:
-        #  - 0.9
-        #  - 0.99
+        betas:
+          - 0.9
+          - 0.99
     trainer:
       accumulate_grad_batches: 1
       default_root_dir     : $DEFAULT_ROOT_DIR
       accelerator          : gpu 
       devices              : 0,
-      #devices             : 0,1
-      #strategy            : ddp 
       check_val_every_n_epoch: 1
       enable_checkpointing: true
       enable_model_summary: true
@@ -188,17 +288,16 @@ python -m watch.tasks.fusion fit --config "
       track_grad_norm: 2
     initializer:
         init: noop
-"
+" > "$CONFIG_FPATH"
 
+# Train with the above config for at least 1 epoch (should be very short)
+# And then Ctrl+C to kill it
+python -m watch.tasks.fusion fit --config "$CONFIG_FPATH"
 
-# If you Ctrl+C the previous model after it has saved an end-of-epoch
-# checkpoint, you can restart by pointing at that checkpoint.
-# NOTE: CURRENTLY BUGGED AND NOT SURE WHY IT IS NOT WORKING
-#CKPT_FPATH=$(python -c "import pathlib; print(list(pathlib.Path('$DEFAULT_ROOT_DIR/lightning_logs').glob('*/package-interupt/*.ckpt'))[0])")
+# The following command should grab the most recent checkpoint 
 CKPT_FPATH=$(python -c "import pathlib; print(list(pathlib.Path('$DEFAULT_ROOT_DIR/lightning_logs').glob('*/checkpoints/*.ckpt'))[0])")
-CONFIG_FPATH=$(python -c "import pathlib; print(sorted(pathlib.Path('$DEFAULT_ROOT_DIR/lightning_logs').glob('*/config.yaml'))[-1])")
-echo "CONFIG_FPATH = $CONFIG_FPATH"
 echo "CKPT_FPATH = $CKPT_FPATH"
 
-python -m watch.tasks.fusion fit --config "$CONFIG_FPATH" \
-    --ckpt_path="$CKPT_FPATH"
+# Calling fit again, but passing in the checkpoint should restart training from
+# where it left off. 
+python -m watch.tasks.fusion fit --config "$CONFIG_FPATH" --ckpt_path="$CKPT_FPATH"

@@ -18,6 +18,7 @@ import ubelt as ub
 import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
+from watch.utils.lightning_ext import util_model
 
 
 __all__ = ['TensorboardPlotter']
@@ -26,6 +27,7 @@ __all__ = ['TensorboardPlotter']
 class TensorboardPlotter(pl.callbacks.Callback):
     """
     Asynchronously dumps PNGs to disk visualize tensorboard scalars.
+    exit
 
     CommandLine:
         xdoctest -m watch.utils.lightning_ext.callbacks.tensorboard_plotter TensorboardPlotter
@@ -55,6 +57,8 @@ class TensorboardPlotter(pl.callbacks.Callback):
         # The following function draws the tensorboard result. This might take
         # a some non-trivial amount of time so we attempt to run in a separate
         # process.
+        if trainer.global_rank != 0:
+            return
         serial = False
 
         # train_dpath = trainer.logger.log_dir
@@ -72,9 +76,10 @@ class TensorboardPlotter(pl.callbacks.Callback):
             model_cfgstr = model.get_cfgstr()
         else:
             from watch.utils.slugify_ext import smart_truncate
+            hparams = util_model.model_hparams(model)
             model_config = {
                 'type': str(model.__class__),
-                'hp': smart_truncate(ub.repr2(model.hparams, compact=1, nl=0), max_length=8),
+                'hp': smart_truncate(ub.repr2(hparams, compact=1, nl=0), max_length=8),
             }
             model_cfgstr = smart_truncate(ub.repr2(
                 model_config, compact=1, nl=0), max_length=64)
@@ -238,7 +243,6 @@ def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outlier
         # import kwimage
         # color1 = kwimage.Color('kw_green').as01()
         # color2 = kwimage.Color('kw_green').as01()
-
         prog = ub.ProgIter(keys, desc='dump plots', verbose=verbose * 3)
         for key in prog:
             prog.set_extra(key)
@@ -249,6 +253,8 @@ def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outlier
 
             d = tb_data[key]
             df_orig = pd.DataFrame({key: d['ydata'], 'step': d['xdata']})
+            num_non_nan = (~df_orig[key].isnull()).sum()
+            num_nan = (df_orig[key].isnull()).sum()
             df_orig['smoothing'] = 0.0
             variants = [df_orig]
             if key not in HACK_NO_SMOOTH and smoothing_values:
@@ -290,7 +296,7 @@ def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outlier
             elif any(m.lower() in key.lower() for m in y0_measures):
                 ydata = df[key]
                 kw['ymin'] = min(0.0, ydata.min())
-                if ignore_outliers:
+                if ignore_outliers and num_non_nan > 3:
                     if verbose:
                         print('Finding outliers')
                     low, kw['ymax'] = tensorboard_inlier_ylim(ydata)
@@ -300,7 +306,10 @@ def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outlier
             # NOTE: this is actually pretty slow
             ax.cla()
             try:
-                sns.lineplot(data=df, **snskw)
+                if num_non_nan <= 1:
+                    sns.scatterplot(data=df, **snskw)
+                else:
+                    sns.lineplot(data=df, **snskw)
             except Exception as ex:
                 title = nice + '\n' + key + str(ex)
             else:
@@ -314,6 +323,9 @@ def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outlier
                     ax.set_ylim(kw['ymin'], kw['ymax'])
                 except Exception:
                     ...
+            if num_nan > 0:
+                title += '(num_nan={})'.format(num_nan)
+
             ax.set_title(title)
 
             # png is smaller than jpg for this kind of plot

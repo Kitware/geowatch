@@ -173,6 +173,7 @@ class SimpleDVC(ub.NiceRepr):
                 self.git_push()
             except Exception:
                 if pull_on_fail:
+                    print('Initial push failed, will pull and then try once more')
                     self.git_pull()
                     self.git_push()
                 else:

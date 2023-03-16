@@ -11,6 +11,7 @@ from typing import Any
 
 import yaml
 from jsonargparse import set_loader, set_dumper
+# from pytorch_lightning.utilities.rank_zero import rank_zero_only
 
 
 # Not very safe, but needed to parse tuples e.g. datamodule.dataset_stats
@@ -39,10 +40,34 @@ class SmartTrainer(pl.Trainer):
     def _run_stage(self, *args, **kwargs):
         # All I want is to print this  directly before training starts.
         # Is that so hard to do?
-        import rich
-        dpath = self.logger.log_dir
-        rich.print(f"Trainer log dpath:\n\n[link={dpath}]{dpath}[/link]\n")
+        print(f'self.global_rank={self.global_rank}')
+        if self.global_rank == 0:
+            import rich
+            dpath = self.logger.log_dir
+            rich.print(f"Trainer log dpath:\n\n[link={dpath}]{dpath}[/link]\n")
         super()._run_stage(*args, **kwargs)
+
+
+class TorchGlobals(pl.callbacks.Callback):
+    """
+    Callback to setup torch globals
+
+    Args:
+        float32_matmul_precision (str): can be medium or high (default)
+    """
+
+    def __init__(self, float32_matmul_precision='default'):
+        self.float32_matmul_precision = float32_matmul_precision
+
+    def setup(self, trainer, pl_module, stage):
+        import torch
+        if self.float32_matmul_precision != 'default':
+            # TODO: can we set auto and detect Ampere tensor cores?
+            # Need to know which device is being used.
+            # major, _ = torch.cuda.get_device_capability(device)
+            # ampere_or_later = major >= 8  # Ampere and later leverage tensor cores, where this setting becomes useful
+
+            torch.set_float32_matmul_precision(self.float32_matmul_precision)
 
 
 class WeightInitializer(pl.callbacks.Callback):
@@ -133,6 +158,14 @@ class SmartLightningCLI(LightningCLI_Extension):
 
         parser.add_lightning_class_args(WeightInitializer, "initializer")
 
+        parser.add_lightning_class_args(TorchGlobals, "torch_globals")
+
+        parser.add_lightning_class_args(pl_ext.callbacks.BatchPlotter, "batch_plotter")
+        # pl_ext.callbacks.BatchPlotter(  # Fixme: disabled for multi-gpu training with deepspeed
+        #     num_draw=2,  # args.num_draw,
+        #     draw_interval="5min",  # args.draw_interval
+        # ),
+
         # parser.set_defaults({"packager.package_fpath": "???"}) # "$DEFAULT_ROOT_DIR"/final_package.pt
         parser.link_arguments(
             "trainer.default_root_dir",
@@ -140,19 +173,6 @@ class SmartLightningCLI(LightningCLI_Extension):
             compute_fn=lambda root: None if root is None else str(ub.Path(root) / "final_package.pt")
             # apply_on="instantiate",
         )
-
-        # We can remove this
-        # parser.add_argument(
-        #     '--profile',
-        #     action='store_true',
-        #     help=ub.paragraph(
-        #         '''
-        #         Fit does nothing with this flag. This just allows for `@xdev.profile`
-        #         profiling which checks sys.argv separately.
-
-        #         DEPRECATED: there is no longer any reason to use this. Set the
-        #         XDEV_PROFILE environment variable instead.
-        #         '''))
 
         def data_value_getter(key):
             # Hack to call setup on the datamodule before linking args
@@ -220,17 +240,13 @@ def make_cli(config=None):
         # have a deeper understanding of how lightning CLI works.
         # clikw['run'] = False
 
-    callbacks = [
-        # WeightInitializer(),  # can we integrate more intuitively?
-        # May need to declare in add_arguments_to_parser
-        pl_ext.callbacks.BatchPlotter(  # Fixme: disabled for multi-gpu training with deepspeed
-            num_draw=2,  # args.num_draw,
-            draw_interval="5min",  # args.draw_interval
-        ),
+    default_callbacks = [
         pl.callbacks.RichProgressBar(),
-        pl.callbacks.LearningRateMonitor(logging_interval='step', log_momentum=True),
+        # pl.callbacks.LearningRateMonitor(logging_interval='step', log_momentum=True),
+
         pl.callbacks.LearningRateMonitor(logging_interval='epoch', log_momentum=True),
-        pl.callbacks.ModelCheckpoint(monitor='train_loss', mode='min', save_top_k=1),
+        # pl.callbacks.ModelCheckpoint(monitor='train_loss', mode='min', save_top_k=1),
+
         # leaving always on breaks when correspinding metric isnt
         # tracked because loss_weight==0
         # FIXME: can we conditionally apply these if they make sense?
@@ -252,7 +268,7 @@ def make_cli(config=None):
         print('warning: tensorboard not available')
     else:
         # Only use tensorboard if we have it.
-        callbacks.append(pl_ext.callbacks.TensorboardPlotter())
+        default_callbacks.append(pl_ext.callbacks.TensorboardPlotter())
 
     cli = SmartLightningCLI(
         model_class=pl.LightningModule,  # TODO: factor out common components of the two models and put them in base class models inherit from
@@ -277,7 +293,8 @@ def make_cli(config=None):
             # without modifying source code.
             # TODO: find good way to reenable profiling, but not by default
             # profiler=pl.profilers.AdvancedProfiler(dirpath=".", filename="perf_logs"),
-            callbacks=callbacks,
+
+            callbacks=default_callbacks,
         ),
         **clikw,
     )

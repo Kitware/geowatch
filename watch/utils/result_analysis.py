@@ -223,6 +223,96 @@ class Result(ub.NiceRepr):
         return self
 
 
+class ResultTable:
+    """
+    An object that stores two tables of corresponding metrics and parameters.
+
+    Helps abstract away the old Result object.
+
+    Example:
+        >>> from watch.utils.result_analysis import *  # NOQA
+        >>> self = ResultTable.demo()
+        >>> print(self.table)
+    """
+
+    def __init__(self, params, metrics):
+        self.params = params
+        self.metrics = metrics
+        self._cache = {}
+
+    def __len__(self):
+        return len(self.params)
+
+    @property
+    def table(self):
+        if 'table' not in self._cache:
+            self._cache['table'] = pd.concat([self.params, self.metrics], axis=1)
+        return self._cache['table']
+
+    @property
+    def result_list(self):
+        if 'result_list' not in self._cache:
+            new_results = [
+                Result(name=f'expt_{idx:04d}', metrics=metrics, params=params)
+                for idx, (metrics, params) in
+                enumerate(zip(self.metrics.to_dict('records'),
+                              self.params.to_dict('records')))
+            ]
+            self._cache['result_list'] = new_results
+        return self._cache['result_list']
+
+    @classmethod
+    def demo(cls, num=10, mode="null", rng=None):
+        import kwarray
+        rng = kwarray.ensure_rng(rng)
+        results = [Result.demo(mode=mode, rng=rng) for _ in range(num)]
+        self = cls.coerce(results)
+        return self
+
+    @classmethod
+    def coerce(cls, data, param_cols=None, metric_cols=None):
+        _cache = {}
+        if isinstance(data, cls):
+            return data
+        elif isinstance(data, list):
+            results = data
+            params = pd.DataFrame([r.params for r in results])
+            metrics = pd.DataFrame([r.metrics for r in results])
+            _cache['result_list'] = results
+        elif isinstance(data, dict):
+            params = data['params']
+            metrics = data['metrics']
+        elif isinstance(data, pd.DataFrame):
+            if param_cols is None or metric_cols is None:
+                raise Exception('Both param_cols and metric_cols must be given when input is a single data frame')
+            params = data[param_cols]
+            metrics = data[metric_cols]
+            _cache['table'] = data
+        else:
+            raise NotImplementedError
+        self = cls(params, metrics)
+        self._cache.update(_cache)
+        return self
+
+    @ub.memoize_property
+    def varied(self):
+        sentinel = object()
+        # pd.DataFrame(config_rows).channels
+        # varied = dict(varied_values(config_rows, default=sentinel, min_variations=2, dropna=True))
+        varied = dict(varied_value_counts(self.params, default=sentinel, min_variations=2, dropna=True))
+        # remove nans
+        # varied = {
+        #     k: {v for v in vs if not (isinstance(v, float) and math.isnan(v))}
+        #     for k, vs in varied.items()
+        # }
+        varied = {
+            k: {v: c for v, c in vs.items() if not (isinstance(v, float) and math.isnan(v))}
+            for k, vs in varied.items()
+        }
+        varied = {k: vs for k, vs in varied.items() if len(vs)}
+        return varied
+
+
 class ResultAnalysis(ub.NiceRepr):
     """
     Groups and runs stats on results
@@ -230,8 +320,8 @@ class ResultAnalysis(ub.NiceRepr):
     Runs statistical tests on sets of configuration-metrics pairs
 
     Attributes:
-        results (List[Result] | DataFrame): list of results,
-            or something coercable to one.
+        results (List[Result] | DataFrame):
+            list of results, or something coercable to one.
 
         ignore_metrics (Set[str]): metrics to ignore
 
@@ -268,7 +358,8 @@ class ResultAnalysis(ub.NiceRepr):
     Example:
         >>> # Given a list of experiments, configs, and results
         >>> # Create a ResultAnalysis object
-        >>> results = ResultAnalysis([
+        >>> from watch.utils.result_analysis import *  # NOQA
+        >>> result_table = ResultTable.coerce([
         >>>     Result('expt0', {'param1': 2, 'param3': 'b'}, {'f1': 0.75}),
         >>>     Result('expt1', {'param1': 0, 'param3': 'c'}, {'f1': 0.92}),
         >>>     Result('expt2', {'param1': 1, 'param3': 'b'}, {'f1': 0.77}),
@@ -280,8 +371,9 @@ class ResultAnalysis(ub.NiceRepr):
         >>>     Result('expt8', {'param1': 1, 'param3': 'a'}, {'f1': 0.64}),
         >>>     Result('expt9', {'param1': 0, 'param3': 'b'}, {'f1': 0.95}),
         >>> ])
+        >>> analysis = ResultAnalysis(result_table)
         >>> # Calling the analysis method prints something like the following
-        >>> results.analysis()
+        >>> analysis.analysis()
 
         PARAMETER 'param1' - f1
         =======================
@@ -338,23 +430,9 @@ class ResultAnalysis(ub.NiceRepr):
         default_objective="max",
         p_threshold=0.05,
     ):
-        if isinstance(results, dict):
-            orig_results = results
-            new_results = [
-                Result(name=f'expt_{idx:04d}', metrics=metrics, params=params)
-                for idx, (metrics, params) in
-                enumerate(zip(orig_results['metrics'].to_dict('records'),
-                              orig_results['params'].to_dict('records')))
-            ]
-            results = new_results
-        elif isinstance(results, pd.DataFrame):
-            # Probably could use the data frame as-is
-            results = [
-                Result(name, row)
-                for name, row in results.iterrows()]
-            raise NotImplementedError
+        self.result_table = ResultTable.coerce(
+            results, metric_cols=metrics, param_cols=params)
 
-        self.results = results
         if ignore_metrics is None:
             ignore_metrics = set()
         if ignore_params is None:
@@ -371,14 +449,14 @@ class ResultAnalysis(ub.NiceRepr):
         self.metric_objectives = DEFAULT_METRIC_TO_OBJECTIVE.copy()
         self.metric_objectives.update(metric_objectives)
 
-        self.params = params
-        self.metrics = metrics
+        self.params = params  # todo: rename to param_cols
+        self.metrics = metrics  # todo: rename to metric_cols
         self.statistics = None
         self.p_threshold = p_threshold
 
         self._description = {}
         self._description["built"] = False
-        self._description["num_results"] = len(self.results)
+        self._description["num_results"] = len(self.result_table)
 
     def __nice__(self):
         return ub.repr2(self._description, si=1, sv=1)
@@ -404,35 +482,16 @@ class ResultAnalysis(ub.NiceRepr):
         self.build()
         self.report()
 
-    @ub.memoize_property
+    @property
     def table(self):
-        rows = [r.to_dict() for r in self.results]
-        table = pd.DataFrame(rows)
-        return table
+        return self.result_table.table
 
     def metric_table(self):
-        rows = [r.to_dict() for r in self.results]
-        table = pd.DataFrame(rows)
-        return table
+        return self.result_table.metrics
 
     @ub.memoize_property
     def varied(self):
-        config_rows = [r.params for r in self.results]
-        sentinel = object()
-        # pd.DataFrame(config_rows).channels
-        # varied = dict(varied_values(config_rows, default=sentinel, min_variations=2, dropna=True))
-        varied = dict(varied_value_counts(config_rows, default=sentinel, min_variations=2, dropna=True))
-        # remove nans
-        # varied = {
-        #     k: {v for v in vs if not (isinstance(v, float) and math.isnan(v))}
-        #     for k, vs in varied.items()
-        # }
-        varied = {
-            k: {v: c for v, c in vs.items() if not (isinstance(v, float) and math.isnan(v))}
-            for k, vs in varied.items()
-        }
-        varied = {k: vs for k, vs in varied.items() if len(vs)}
-        return varied
+        return self.result_table.varied
 
     def abalation_groups(self, param_group, k=2):
         """
@@ -459,8 +518,7 @@ class ResultAnalysis(ub.NiceRepr):
         if not ub.iterable(param_group):
             param_group = [param_group]
         table = self.table
-        config_rows = [r.params for r in self.results]
-        config_keys = list(map(set, config_rows))
+        config_keys = [set(self.result_table.params.columns.tolist())]
         # if self.params:
         #     config_keys = list(self.params)
         if self.ignore_params:
@@ -518,8 +576,7 @@ class ResultAnalysis(ub.NiceRepr):
         tuner = tune.Tuner(objective, param_space=search_space)
         results = tuner.fit()
         print(results.get_best_result(metric="score", mode="min").config)
-
-        pass
+        raise NotImplementedError
 
     def abalate(self, param_group, metrics=None, use_openskill='auto'):
         """
@@ -575,9 +632,7 @@ class ResultAnalysis(ub.NiceRepr):
             metrics = self.metrics
 
         if metrics is None:
-            avail_metrics = set.intersection(
-                *[set(r.metrics.keys()) for r in self.results]
-            )
+            avail_metrics = set(self.result_table.metrics.columns)
             metrics_of_interest = sorted(avail_metrics - set(self.ignore_metrics))
         else:
             metrics_of_interest = metrics
@@ -679,8 +734,9 @@ class ResultAnalysis(ub.NiceRepr):
         # We use these to select comparable rows for pairwise t-tests
         nuisance_cols = sorted(set(self.varied.keys()) - set(param_group))
 
-        for param_value, group in fix_groupby(self.table.groupby(param_group)):
-            metric_group = group[["name", metric_key] + varied_cols]
+        grouper = fix_groupby(self.table.groupby(param_group))
+        for param_value, group in grouper:
+            metric_group = group[[metric_key] + varied_cols]
             metric_vals = metric_group[metric_key]
             metric_vals = metric_vals.dropna()
             if len(metric_vals) > 0:
@@ -839,7 +895,7 @@ class ResultAnalysis(ub.NiceRepr):
     def build(self):
         import itertools as it
 
-        if len(self.results) < 2:
+        if len(self.result_table) < 2:
             raise Exception("need at least 2 results")
 
         varied = self.varied.copy()
@@ -866,9 +922,7 @@ class ResultAnalysis(ub.NiceRepr):
             )
 
         if self.metrics is None:
-            avail_metrics = set.intersection(
-                *[set(r.metrics.keys()) for r in self.results]
-            )
+            avail_metrics = set(self.result_table.metrics.columns)
             metrics_of_interest = sorted(avail_metrics - set(self.ignore_metrics))
         else:
             metrics_of_interest = self.metrics

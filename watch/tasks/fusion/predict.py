@@ -273,8 +273,6 @@ def resolve_datamodule(config, method, datamodule_defaults):
     else:
         traintime_params = {}
         if datamodule_vars['channels'] in {None, 'auto'}:
-            # import xdev
-            # xdev.embed()
             print('Warning have to make assumptions. Might not always work')
             raise NotImplementedError('TODO: needs to be sensorchan if we do this')
             if hasattr(method, 'input_channels'):
@@ -485,6 +483,8 @@ def predict(cmdline=False, **kwargs):
         >>> # assert pred2.max() > 1
 
     Example:
+        >>> # xdoctest: +REQUIRES(env:SLOW_DOCTEST)
+        >>> # FIXME: why does this test hang on the strict dashboard?
         >>> # Train a demo model (in the future grab a pretrained demo model)
         >>> from watch.tasks.fusion.fit import fit_model  # NOQA
         >>> from watch.tasks.fusion.predict import *  # NOQA
@@ -620,6 +620,19 @@ def predict(cmdline=False, **kwargs):
 
     # Hack to fix GELU issue
     monkey_torch.fix_gelu_issue(method)
+
+    # Fix issue with pre-2023-02 heterogeneous models
+    if method.__class__.__name__ == 'HeterogeneousModel':
+        if not hasattr(method, 'magic_padding_value'):
+            from watch.tasks.fusion.methods.heterogeneous import HeterogeneousModel
+            new_method = HeterogeneousModel(
+                **method.hparams,
+                position_encoder=method.position_encoder
+            )
+            old_state = method.state_dict()
+            new_method.load_state_dict(old_state)
+            new_method.config_cli_yaml = method.config_cli_yaml
+            method = new_method
 
     method.eval()
     method.freeze()
@@ -928,6 +941,11 @@ def predict(cmdline=False, **kwargs):
                 print(msg)
                 import warnings
                 warnings.warn(msg)
+                from watch.utils import util_environ
+                import xdev
+                xdev.embed()
+                if util_environ.envflag('WATCH_STRICT_PREDICT'):
+                    raise
                 continue
 
             outputs = {head_key_mapping.get(k, k): v for k, v in outputs.items()}

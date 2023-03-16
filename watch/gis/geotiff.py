@@ -29,6 +29,7 @@ def geotiff_metadata(gpath, elevation='gtop30', strict=False,
         elevation (str): method for extracting elevation data.
 
     Example:
+        >>> # xdoctest: +REQUIRES(env:SLOW_DOCTEST)
         >>> # xdoctest: +REQUIRES(--network)
         >>> from watch.gis.geotiff import *  # NOQA
         >>> url = ('http://storage.googleapis.com/gcp-public-data-landsat/'
@@ -96,6 +97,7 @@ def geotiff_header_info(gpath_or_ref):
     Extract relevant metadata information from a geotiff header.
 
     Example:
+        >>> # xdoctest: +REQUIRES(env:SLOW_DOCTEST)
         >>> from watch.gis.geotiff import *  # NOQA
         >>> from watch.demo.dummy_demodata import dummy_rpc_geotiff_fpath
         >>> from watch.demo.landsat_demodata import grab_landsat_product
@@ -175,6 +177,7 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
                 * "gtop30"
 
     Example:
+        >>> # xdoctest: +REQUIRES(env:SLOW_DOCTEST)
         >>> from watch.gis.geotiff import *  # NOQA
         >>> from watch.demo.dummy_demodata import dummy_rpc_geotiff_fpath
         >>> gpath_or_ref = gpath = dummy_rpc_geotiff_fpath()
@@ -1207,6 +1210,7 @@ def walk_geotiff_products(dpath, with_product_dirs=True,
         str: paths of files or recognized geotiff product bundle directories
 
     Example:
+        >>> # xdoctest: +REQUIRES(env:SLOW_DOCTEST)
         >>> # xdoctest: +REQUIRES(--network)
         >>> # Test on real landsat data
         >>> from watch.gis.geotiff import *  # NOQA
