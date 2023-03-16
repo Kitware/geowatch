@@ -60,7 +60,7 @@ from watch.utils.util_environ import envflag
 class ReprojectAnnotationsConfig(scfg.Config):
     """
     Projects annotations from geospace onto a kwcoco dataset and optionally
-    propogates them forward in time.
+    propogates them across time.
 
     References:
         https://smartgitlab.com/TE/annotations/-/wikis/Alternate-Site-Type
@@ -115,7 +115,7 @@ class ReprojectAnnotationsConfig(scfg.Config):
 
         'geospace_lookup': scfg.Value('auto', help='if False assumes region-ids can be used to lookup association'),
 
-        'workers': scfg.Value(0, help='number of workers for geo-preprop if done'),
+        'workers': scfg.Value(0, help='number of workers for geo-preprop / geojson io'),
 
         'status_to_catname': scfg.Value(None, help=ub.paragraph(
             '''
@@ -148,6 +148,7 @@ def main(cmdline=False, **kwargs):
         >>>     'src': coco_fpath,
         >>>     'dst': output_fpath,
         >>>     'viz_dpath': viz_dpath,
+        >>>     'workers': 4,
         >>>     'site_models': dvc_dpath / 'annotations/site_models',
         >>>     'region_models': dvc_dpath / 'annotations/region_models',
         >>> }
@@ -329,7 +330,8 @@ def separate_region_model_types(regions):
                 'site-summaries do not have region ids (unless we make them)')
         except AssertionError:
             print(sites_part['type'].unique())
-            embed_if_requested()
+            import xdev
+            xdev.embed_if_requested()
             raise
         region_id_to_site_summaries[region_id] = sites_part
 
@@ -554,6 +556,10 @@ def expand_site_models_with_site_summaries(sites, regions):
 
 
 def make_pseudo_sitemodels(region_row, sitesummaries):
+    """
+    In the case that only site sumaries are provided, this creates a dummy site
+    model so it can follow the same codepath in keyframe propogation.
+    """
     import geojson
     import json
     from watch.utils import util_gis
@@ -568,8 +574,8 @@ def make_pseudo_sitemodels(region_row, sitesummaries):
         'end_date', 'originator', 'score', 'validated', 'misc_info',
         'region_id', 'site_id']
     # Use region start/end date if the site does not have them
-    region_start_date = region_row['start_date'] or DUMMY_START_DATE
-    region_end_date = region_row['end_date'] or DUMMY_END_DATE
+    region_start_date = coerce_datetime2(region_row['start_date']) or coerce_datetime2(DUMMY_START_DATE)
+    region_end_date = coerce_datetime2(region_row['end_date']) or coerce_datetime2(DUMMY_END_DATE)
 
     region_start_date, region_end_date = sorted(
         [region_start_date, region_end_date], key=util_time.coerce_datetime)
@@ -585,7 +591,8 @@ def make_pseudo_sitemodels(region_row, sitesummaries):
             poly_json = kwimage.Polygon.from_shapely(geom.convex_hull).to_geojson()
         except Exception as ex:
             print(f'ex={ex}')
-            embed_if_requested()
+            import xdev
+            xdev.embed_if_requested()
             raise
         mpoly_json = kwimage.MultiPolygon.from_shapely(geom).to_geojson()
 
@@ -594,20 +601,18 @@ def make_pseudo_sitemodels(region_row, sitesummaries):
         psudo_site_prop = site_summary[has_keys].to_dict()
         psudo_site_prop['type'] = 'site'
         # TODO: how to handle missing start / end dates?
-        start_date = site_summary['start_date'] or region_start_date
-        end_date = site_summary['end_date'] or region_end_date
+        start_date = coerce_datetime2(site_summary['start_date']) or region_start_date
+        end_date = coerce_datetime2(site_summary['end_date']) or region_end_date
 
         # hack
-        start_date, end_date = sorted(
-            [start_date, end_date], key=util_time.coerce_datetime)
+        start_date, end_date = sorted([start_date, end_date])
+        assert start_date <= end_date
 
-        psudo_site_prop['start_date'] = start_date
-        psudo_site_prop['end_date'] = end_date
+        start_date_iso = start_date.date().isoformat()
+        end_date_iso = end_date.date().isoformat()
 
-        start_datetime = util_time.coerce_datetime(start_date)
-        end_datetime = util_time.coerce_datetime(end_date)
-
-        assert start_datetime <= end_datetime
+        psudo_site_prop['start_date'] = start_date_iso
+        psudo_site_prop['end_date'] = end_date_iso
 
         score = site_summary.get('score', None)
         try:
@@ -635,7 +640,7 @@ def make_pseudo_sitemodels(region_row, sitesummaries):
         psudo_site_features.append(
             geojson.Feature(
                 properties=ub.dict_union(observation_prop_template, {
-                    'observation_date': start_date,
+                    'observation_date': start_date_iso,
                     'current_phase': None,
                 }),
                 geometry=mpoly_json)
@@ -643,7 +648,7 @@ def make_pseudo_sitemodels(region_row, sitesummaries):
         psudo_site_features.append(
             geojson.Feature(
                 properties=ub.dict_union(observation_prop_template, {
-                    'observation_date': end_date,
+                    'observation_date': end_date_iso,
                     'current_phase': None,
                 }),
                 geometry=mpoly_json)
@@ -663,6 +668,9 @@ def make_pseudo_sitemodels(region_row, sitesummaries):
 
 
 def validate_site_dataframe(site_df):
+    """
+    Debugging tool to ensure our assumptions about site models are satisfied.
+    """
     from watch.utils import util_time
     import numpy as np
     dummy_start_date = '1970-01-01'  # hack, could be more robust here
@@ -1504,6 +1512,9 @@ def plot_image_and_site_times(coco_dset, region_image_dates, drawable_region_sit
 
 
 def draw_geospace(dvc_dpath, sites):
+    """
+    Developer function
+    """
     from watch.utils import util_gis
     import geopandas as gpd
     import kwplot
@@ -1531,23 +1542,6 @@ def draw_geospace(dvc_dpath, sites):
 
 
 _SubConfig = ReprojectAnnotationsConfig
-
-
-def embed_if_requested(n=0):
-    """
-    Calls xdev.embed conditionally based on the environment.
-
-    Useful in cases where you want to leave the embed call around, but you dont
-    want it to trigger in normal circumstances.
-
-    Specifically, embed is only called if the environment variable XDEV_EMBED
-    exists or if --xdev-embed is in sys.argv.
-    """
-    import os
-    import ubelt as ub
-    import xdev
-    if os.environ.get('XDEV_EMBED', '') or ub.argflag('--xdev-embed'):
-        xdev.embed(n=n + 1)
 
 
 def reorder_columns(df, columns):
