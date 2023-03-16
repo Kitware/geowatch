@@ -185,11 +185,12 @@ def main(cmdline=False, **kwargs):
         config['site_models'], desc='load site models', allow_raw=True,
         workers=workers))
 
-    from watch import heuristics
     status_to_catname_default = ub.udict(heuristics.PHASE_STATUS_TO_KWCOCO_CATNAME)
     status_to_catname = util_yaml.coerce_yaml(config['status_to_catname'])
     if status_to_catname is not None:
         status_to_catname = status_to_catname_default | status_to_catname
+    else:
+        status_to_catname = status_to_catname_default
 
     sites = []
     for info in site_model_infos:
@@ -350,7 +351,6 @@ def expand_site_models_with_site_summaries(sites, regions):
             real and/or pseudo.
     """
     import pandas as pd
-    # import watch
 
     if __debug__:
         check_sitemodel_assumptions(sites)

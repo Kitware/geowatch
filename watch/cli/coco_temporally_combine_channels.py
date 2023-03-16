@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import os
 
 import kwcoco
@@ -13,37 +14,76 @@ from watch.tasks.fusion.coco_stitcher import CocoStitchingManager
 
 
 class TimeAverageConfig(scfg.DataConfig):
-    """_summary_
     """
-    kwcoco_fpath = scfg.Value(None, help='The path to the kwcoco file containing the image data to be combined.')
-    output_kwcoco_fpath = scfg.Value(None,
-                                     help='The path where the combined image data will be saved to in a kwcoco file.')
-    channels = scfg.Value(
-        'red|green|blue',
-        help=
-        'The channels to get and combine the spatial data from. E.g. "red|green|blue". Note: Separate channels with "|".'
-    )
-    temporal_window_duration = scfg.Value(
-        '1month', help='The amount of time the temporal window should cover in days. E.g. 365 for a year.')
-    merge_method = scfg.Value('mean', help='The combine method to use. Choices: "mean", "median".')
-    resolution = scfg.Value(
-        '10GSD',
-        help=
-        'The resolution the imagery will be loaded during the combination operation and saved to the output kwcoco file.'
-    )
-    filter_with_cloudmasks = scfg.Value(
-        True,
-        isflag=True,
-        help='If active the cloudmasks will be used to filter out pixels with too much cloud coverage or missing data.')
-    s2_weight_factor = scfg.Value(1.0,
-                                  help=ub.paragraph("""A weighting factor to scale the impact of Sentinel-2
-                                                       pixels during the combination operation. Note: Only
-                                                       effects the merge method "mean"."""))
+    Averages kwcoco images over a sliding temporal window in a video.
+    """
+    kwcoco_fpath = scfg.Value(None, help=ub.paragraph(
+            '''
+            The path to the kwcoco file containing the image data to be
+            combined.
+            '''))
+
+    output_kwcoco_fpath = scfg.Value(None, help=ub.paragraph(
+            '''
+            The path where the combined image data will be saved to in a
+            kwcoco file.
+            '''))
+
+    channels = scfg.Value('red|green|blue', help=ub.paragraph(
+            '''
+            The channels to get and combine the spatial data from. E.g.
+            "red|green|blue". Note: Separate channels with "|".
+            '''))
+
+    temporal_window_duration = scfg.Value('1month', help=ub.paragraph(
+            '''
+            The amount of time the temporal window should cover in days.
+            E.g. 365 for a year.
+            '''))
+
+    merge_method = scfg.Value('mean', help=ub.paragraph(
+            '''
+            The combine method to use. Choices: "mean", "median".
+            '''))
+
+    resolution = scfg.Value('10GSD', help=ub.paragraph(
+            '''
+            The resolution the imagery will be loaded during the
+            combination operation and saved to the output kwcoco file.
+            '''))
+
+    filter_with_cloudmasks = scfg.Value(True, isflag=True, help=ub.paragraph(
+            '''
+            If active the cloudmasks will be used to filter out pixels
+            with too much cloud coverage or missing data.
+            '''))
+
+    s2_weight_factor = scfg.Value(1.0, help=ub.paragraph(
+            '''
+            A weighting factor to scale the impact of Sentinel-2 pixels
+            during the combination operation. Note: Only effects the
+            merge method "mean".
+            '''))
     separate_sensors = scfg.Value(True, isflag=True, help='Combine images by sensor separately.')
-    workers = scfg.Value(0, help='The number of CPU cores to compute the combination operation with.')
-    include_sensors = scfg.Value(None, help='A list of sensors to include in the combination operation.')
-    exclude_sensors = scfg.Value(None, help='A list of sensors to exclude from the combination operation.')
+
+    workers = scfg.Value(0, help=ub.paragraph(
+            '''
+            The number of CPU cores to compute the combination operation
+            with.
+            '''))
+
+    include_sensors = scfg.Value(None, help=ub.paragraph(
+            '''
+            A list of sensors to include in the combination operation.
+            '''))
+
+    exclude_sensors = scfg.Value(None, help=ub.paragraph(
+            '''
+            A list of sensors to exclude from the combination operation.
+            '''))
+
     select_images = scfg.Value(None, help='TODO:')
+
     select_videos = scfg.Value(None, help='TODO:')
 
 
