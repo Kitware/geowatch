@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 r"""
-Assigns geospace annotation to image pixels and frames
+Projects annotations from geojson files onto a kwcoco file.
+
+This finds geojson regions that spatially overlap geo-registered kwcoco videos
+and then projects the CRS84 geojson annotations into image-space annotations
+for the assigned video. Tracked annotations in the geojson files are treated as
+keyframes and propogated across time based on the ``propogate_strategy``
+argument.
 
 CommandLine:
     # Update a dataset with new annotations
@@ -14,13 +20,15 @@ CommandLine:
         --dst $DVC_DATA_DPATH/Drop6/data.kwcoco.json \
         --overwrite=warp --workers 10
 
-    # Update to whatever the state of the annotations submodule is
+    # Update to whatever the state of the annotations submodule is.  The
+    # viz_dpath argument can be specified to visualize the algorithm details.
     python -m watch reproject_annotations \
         --src $DVC_DATA_DPATH/Drop6/data.kwcoco.json \
         --dst $DVC_DATA_DPATH/Drop6/data.kwcoco.json \
         --viz_dpath $DVC_DATA_DPATH/Drop6/_viz_propogate \
         --site_models="$DVC_DATA_DPATH/annotations/drop6/site_models/*.geojson"
 
+    # Finally we can review the polygons.
     python -m watch visualize \
         --src $DVC_DATA_DPATH/Drop6/data.kwcoco.json \
         --space="video" \
