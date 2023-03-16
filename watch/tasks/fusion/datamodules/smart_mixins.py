@@ -7,6 +7,9 @@ class SMARTDataMixin:
 
     def check_nested_pool(self, num=4096):
         """
+        Developer function to check statistics about how the nested pool is
+        sampling regions.
+
         Example:
             >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
             >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
@@ -133,6 +136,8 @@ class SMARTDataMixin:
 
     def _interpret_quality_mask(self, sampler, coco_img, tr_frame):
         """
+        Construct a binary good/bad mask from the quality band in a coco image.
+
         Ignore:
             >>> from watch.mlops.smart_pipeline import *  # NOQA
             >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
@@ -314,6 +319,9 @@ class SMARTDataMixin:
 
 
 def draw_cloudmask_viz(qa_data, rgb_data):
+    """
+    Helper visualization
+    """
 
     import kwimage
     import numpy as np
