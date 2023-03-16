@@ -47,13 +47,25 @@ class ExportColdKwcocoConfig(scfg.DataConfig):
     rank = scfg.Value(None, help='rank id')
     n_cores = scfg.Value(None, help='total cores assigned')
     stack_path = scfg.Value(None, help='folder directory of stacked data')
-    reccg_path = scfg.Value(None, help='folder directory of cold processing result')
-    meta_fpath = scfg.Value(None, help='file path of metadata json created by prepare_kwcoco script')
-    year_lowbound = scfg.Value(None, help='min year for saving geotiff, e.g., 2017')
-    year_highbound = scfg.Value(None, help='max year for saving geotiff, e.g., 2022')
-    coefs = scfg.Value(None, type=str, help="list of COLD coefficients for saving geotiff, e.g., a0,c1,a1,b1,a2,b2,a3,b3,cv,rmse")
-    coefs_bands = scfg.Value(None, type=str, help='indicate the ba_nds for output coefs_bands, e.g., 0,1,2,3,4,5')
-    timestamp = scfg.Value(True, help='True: exporting cold result by timestamp, False: exporting cold result by year, Default is False')
+    reccg_path = scfg.Value(
+        None, help='folder directory of cold processing result')
+    meta_fpath = scfg.Value(
+        None, help='file path of metadata json created by prepare_kwcoco script')
+    year_lowbound = scfg.Value(
+        None, help='min year for saving geotiff, e.g., 2017')
+    year_highbound = scfg.Value(
+        None, help='max year for saving geotiff, e.g., 2022')
+    coefs = scfg.Value(
+        None,
+        type=str,
+        help="list of COLD coefficients for saving geotiff, e.g., a0,c1,a1,b1,a2,b2,a3,b3,cv,rmse")
+    coefs_bands = scfg.Value(
+        None,
+        type=str,
+        help='indicate the ba_nds for output coefs_bands, e.g., 0,1,2,3,4,5')
+    timestamp = scfg.Value(
+        True,
+        help='True: exporting cold result by timestamp, False: exporting cold result by year, Default is False')
 
 
 @profile
@@ -132,7 +144,8 @@ def export_cold_main(cmdline=1, **kwargs):
             coefs = list(coefs.split(","))
         except Exception:
             print(f'coefs={coefs}')
-            print("Illegal coefs inputs: example, --coefs='a0, c1, a1, b1, a2, b2, a3, b3, cv, rmse'")
+            print(
+                "Illegal coefs inputs: example, --coefs='a0, c1, a1, b1, a2, b2, a3, b3, cv, rmse'")
             raise
 
         try:
@@ -140,7 +153,8 @@ def export_cold_main(cmdline=1, **kwargs):
             coefs_bands = [int(coefs_band) for coefs_band in coefs_bands]
         except Exception:
             print(f'coefs_bands={coefs_bands}')
-            print("Illegal coefs_bands inputs: example, --coefs_bands='0, 1, 2, 3, 4, 5, 6'")
+            print(
+                "Illegal coefs_bands inputs: example, --coefs_bands='0, 1, 2, 3, 4, 5, 6'")
             raise
 
     dt = np.dtype([('t_start', np.int32),
@@ -150,7 +164,8 @@ def export_cold_main(cmdline=1, **kwargs):
                    ('num_obs', np.int32),
                    ('category', np.short),
                    ('change_prob', np.short),
-                   ('coefs', np.float32, (7, 8)),   # note that the slope coefficient was scaled up by 10000
+                   # note that the slope coefficient was scaled up by 10000
+                   ('coefs', np.float32, (7, 8)),
                    ('rmse', np.float32, 7),
                    ('magnitude', np.float32, 7)])
 
@@ -194,20 +209,21 @@ def export_cold_main(cmdline=1, **kwargs):
         year_low_ordinal = min(img_dates)
         year_lowbound = pd.Timestamp.fromordinal(year_low_ordinal).year
     else:
-        year_low_ordinal = pd.Timestamp.toordinal(datetime_mod.datetime(int(year_lowbound), 1, 1))
+        year_low_ordinal = pd.Timestamp.toordinal(
+            datetime_mod.datetime(int(year_lowbound), 1, 1))
 
-    
     if year_highbound is None:
         year_high_ordinal = max(img_dates)
         year_highbound = pd.Timestamp.fromordinal(year_high_ordinal).year
     else:
-        year_high_ordinal = pd.Timestamp.toordinal(datetime_mod.datetime(int(year_highbound + 1), 1, 1))
-    
+        year_high_ordinal = pd.Timestamp.toordinal(
+            datetime_mod.datetime(int(year_highbound + 1), 1, 1))
+
     img_dates, img_names = zip(*filter(lambda x: x[0] >= year_low_ordinal,
-                                    zip(img_dates, img_names)))
+                                       zip(img_dates, img_names)))
     img_dates, img_names = zip(*filter(lambda x: x[0] < year_high_ordinal,
-                                        zip(img_dates, img_names)))
-    
+                                       zip(img_dates, img_names)))
+
     img_dates = sorted(img_dates)
     img_names = sorted(img_names)
     if timestamp:
@@ -223,9 +239,9 @@ def export_cold_main(cmdline=1, **kwargs):
                 first_ordinal_dates.append(ordinal_day)
                 first_img_names.append(img_name)
                 last_year = year
-        
+
         ordinal_day_list = first_ordinal_dates
-        
+
     ranks_percore = int(np.ceil(n_blocks / n_cores))
     i_iter = range(ranks_percore)
     if pman is not None:
@@ -245,7 +261,8 @@ def export_cold_main(cmdline=1, **kwargs):
         elif method == 'HybridCOLD':
             filename = f'record_change_x{current_block_x}_y{current_block_y}_hybridcold.npy'
 
-        block_folder = stack_path / f'block_x{current_block_x}_y{current_block_y}'
+        block_folder = stack_path / \
+            f'block_x{current_block_x}_y{current_block_y}'
         reccg_fpath = reccg_path / filename
 
         # if timestamp:
@@ -260,32 +277,38 @@ def export_cold_main(cmdline=1, **kwargs):
             print(f'the rec_cg file {reccg_fpath} is missing')
 
         cold_block = np.array(np.load(reccg_fpath), dtype=dt)
-  
+
         if coefs is not None:
-            cold_block_split = np.split(cold_block, np.argwhere(np.diff(cold_block['pos']) != 0)[:, 0] + 1)
+            cold_block_split = np.split(
+                cold_block, np.argwhere(
+                    np.diff(
+                        cold_block['pos']) != 0)[
+                    :, 0] + 1)
 
             nan_val = -9999
             feature_outputs = coefs
             feature_set = set(feature_outputs)
-            
-            if not feature_set.issubset({'a0', 'c1', 'a1', 'b1', 'a2', 'b2', 'a3', 'b3', 'cv', 'rmse'}):
-                raise Exception('the outputted feature must be in [a0, c1, a1, b1, a2, b2, a3, b3, cv, rmse]')
-            
+
+            if not feature_set.issubset(
+                    {'a0', 'c1', 'a1', 'b1', 'a2', 'b2', 'a3', 'b3', 'cv', 'rmse'}):
+                raise Exception(
+                    'the outputted feature must be in [a0, c1, a1, b1, a2, b2, a3, b3, cv, rmse]')
+
             for element in cold_block_split:
                 # the relative column number in the block
                 i_col = int((element[0]["pos"] - 1) % n_cols) - \
-                        (current_block_x - 1) * block_width
+                    (current_block_x - 1) * block_width
                 i_row = int((element[0]["pos"] - 1) / n_cols) - \
-                        (current_block_y - 1) * block_height
-                
+                    (current_block_y - 1) * block_height
+
                 for band_idx, band in enumerate(coefs_bands):
                     feature_row = extract_features(element, band, ordinal_day_list, nan_val, timestamp,
-                                                    feature_outputs, feature_set)                    
+                                                   feature_outputs, feature_set)
                     # Degugging mode
                     # if current_block_x == 10 and current_block_y == 11:
                     #     print((current_block_x, current_block_y), (i_col, i_row), (band_idx, band))
                     #     print(feature_row)
-                    
+
                     for index, coef in enumerate(coefs):
                         results_block_coefs[i_row][i_col][index + band_idx * len(coefs)][:] = \
                             feature_row[index]
@@ -294,26 +317,37 @@ def export_cold_main(cmdline=1, **kwargs):
         # if timestamp:
         for day in range(len(ordinal_day_list)):
             if coefs is not None:
-                outfile = tmp_path / f'tmp_coefmap_block{iblock + 1}_{ordinal_day_list[day]}.npy'
+                outfile = tmp_path / \
+                    f'tmp_coefmap_block{iblock + 1}_{ordinal_day_list[day]}.npy'
                 np.save(outfile, results_block_coefs[:, :, :, day])
     # MPI mode (wait for all processes)
-    # comm.Barrier()    
+    # comm.Barrier()
 
     gc.collect()
-    
+
+
 class NoMatchingColdCurve(Exception):
     ...
 
 
 @profile
-def extract_features(cold_plot, band, ordinal_day_list, nan_val, timestamp, feature_outputs, feature_set):
+def extract_features(cold_plot, band, ordinal_day_list,
+                     nan_val, timestamp, feature_outputs, feature_set):
     # NOTE: this function is a bottleneck, speedups are needed here
 
-    features = np.full((len(feature_outputs), len(ordinal_day_list)), nan_val, dtype=np.double)
+    features = np.full(
+        (len(feature_outputs),
+         len(ordinal_day_list)),
+        nan_val,
+        dtype=np.double)
     SLOPE_SCALE = 10000
 
     last_year = pd.Timestamp.fromordinal(cold_plot[-1]['t_end']).year
-    max_days_list = [datetime_mod.date(last_year, 12, 31).toordinal()] * len(cold_plot)
+    max_days_list = [
+        datetime_mod.date(
+            last_year,
+            12,
+            31).toordinal()] * len(cold_plot)
     break_year_list = [-9999 if not (curve['t_break'] > 0 and curve['change_prob'] == 100) else
                        pd.Timestamp.fromordinal(curve['t_break']).year for curve in cold_plot]
 
@@ -343,7 +377,8 @@ def extract_features(cold_plot, band, ordinal_day_list, nan_val, timestamp, feat
 
     try:
         idxs_iter = itertools.product(idx_day_year_list, mday_byear_curve_list)
-        for (day_idx, ordinal_day, ord_year), (max_day, break_year, cold_curve) in idxs_iter:
+        for (day_idx, ordinal_day, ord_year), (max_day,
+                                               break_year, cold_curve) in idxs_iter:
             if cold_curve['t_start'] <= ordinal_day < max_day:
                 if a0_idx is not None:
                     features[a0_idx, day_idx] = (
@@ -351,7 +386,9 @@ def extract_features(cold_plot, band, ordinal_day_list, nan_val, timestamp, feat
                         cold_curve['coefs'][band, 1] *
                         ordinal_day / SLOPE_SCALE)
                 if c1_idx is not None:
-                    features[c1_idx, day_idx] = cold_curve['coefs'][band, 1] / SLOPE_SCALE
+                    features[c1_idx,
+                             day_idx] = cold_curve['coefs'][band,
+                                                            1] / SLOPE_SCALE
                 if a1_idx is not None:
                     features[a1_idx, day_idx] = cold_curve['coefs'][band, 2]
                 if b1_idx is not None:
@@ -362,15 +399,19 @@ def extract_features(cold_plot, band, ordinal_day_list, nan_val, timestamp, feat
                 if cv_idx is not None:
                     if cold_curve['t_break'] != 0 and cold_curve['change_prob'] == 100:
                         break_year = break_year
-                        if (timestamp and ordinal_day == cold_curve['t_break']) or (not timestamp and break_year == ord_year):
-                            features[cv_idx, day_idx] = cold_curve['magnitude'][band]
+                        if (timestamp and ordinal_day == cold_curve['t_break']) or (
+                                not timestamp and break_year == ord_year):
+                            features[cv_idx,
+                                     day_idx] = cold_curve['magnitude'][band]
                             # In this case, we didn't find a matching cold
-                            # curve for the current ordinal day, stop processing.
+                            # curve for the current ordinal day, stop
+                            # processing.
                             raise NoMatchingColdCurve
     except NoMatchingColdCurve:
         ...
 
     return features
+
 
 if __name__ == '__main__':
     export_cold_main()

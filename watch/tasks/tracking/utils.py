@@ -1,21 +1,22 @@
-import kwimage
-import numpy as np
-import kwcoco
-import shapely.geometry
-import ubelt as ub
-import pandas as pd
+import collections
 import geopandas as gpd
 import itertools
-import collections
-from abc import abstractmethod
-from typing import Union, Iterable, Optional, List, Dict
+import kwcoco
+import kwimage
+import numpy as np
+import pandas as pd
+import shapely.geometry
+import ubelt as ub
 import warnings
+from abc import abstractmethod
+from scipy.ndimage import label as ndm_label
+from typing import Union, Iterable, Optional, List, Dict
+
 
 try:
-    from scipy.ndimage import label as ndm_label
-except ImportError:
-    # the `scipy.ndimage.measurements` namespace is deprecated.
-    from scipy.ndimage.measurements import label as ndm_label
+    from xdev import profile
+except Exception:
+    profile = ub.identity
 
 
 def trackid_is_default(trackid):
@@ -30,12 +31,6 @@ def trackid_is_default(trackid):
         return True
     except ValueError:
         return False
-
-
-try:
-    from xdev import profile
-except Exception:
-    profile = ub.identity
 
 Poly = Union[kwimage.Polygon, kwimage.MultiPolygon]
 
@@ -651,19 +646,35 @@ def build_heatmaps(sub_dset: kwcoco.CocoDataset,
 
     Args:
         sub_dset (kwcoco.CocoDataset): must have exactly 1 video
+
         gids: List[image id]
+
         key: List[str] list of channel names
-        space: 'video' or 'image'
+
+        space (str):
+            The "space" the heatmaps are loaded in.
+            Can be 'video' or 'image'. Should generally be "video".
+
         missing: behavior for missing keys.
             'fill': return probs and chan_probs of zeros
             'skip': return probs of zeros, skip chan_probs
             'raise': raise exception
+
         skipped: behavior for missing keys across gids.
             'interpolate': use heatmap from last gid
             'zeros': insert zeros
             # 'remove': do not return this gid  # TODO w/ different signature
+
         video_id (int | None): if specified, get heatmaps for this video
             otherwise assert that there is exactly one video
+
+        resolution (str | None):
+            desired resolution (e.g. 10GSD) that will define a scale factor
+            on top of the "space" (i.e. video space) used to build the heatmaps.
+
+    SeeAlso:
+        :func:`build_heatmap`
+        :func:`build_heatmaps`
 
     Returns:
         Dict : {key: [heatmap for each gid]}
@@ -671,7 +682,7 @@ def build_heatmaps(sub_dset: kwcoco.CocoDataset,
     Example:
         >>> from watch.tasks.tracking.utils import *  # NOQA
         >>> import watch
-        >>> dset = watch.coerce_kwcoco('watch-msi', heatmap=True, geodata=True)
+        >>> dset = watch.coerce_kwcoco('watch-msi', heatmap=True, geodata=True, dates=True)
         >>> keys = 'salient|notsalient|distri'
         >>> videos = dset.videos()
         >>> video_id = videos._ids[0]
@@ -782,6 +793,10 @@ def build_heatmap(dset,
             'skip': return probs of zeros, skip chan_probs
             'raise': raise exception
 
+    SeeAlso:
+        :func:`build_heatmap`
+        :func:`build_heatmaps`
+
     Example:
         >>> from watch.tasks.tracking.utils import *  # NOQA
         >>> import watch
@@ -806,7 +821,7 @@ def build_heatmap(dset,
     Example:
         >>> from watch.tasks.tracking.utils import *  # NOQA
         >>> import watch
-        >>> dset = watch.coerce_kwcoco(data='watch-msi', heatmap=True, geodata=True)
+        >>> dset = watch.coerce_kwcoco(data='watch-msi', heatmap=True, geodata=True, dates=True)
         >>> gid = dset.images()[0]
         >>> key = 'salient'
         >>> # Test dynamic resolution

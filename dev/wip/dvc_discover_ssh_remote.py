@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """
 The idea is ssh into the remote, check where the cache dir is, and then set it
 correctly on our end. This requires that the DVC repo is in the same location

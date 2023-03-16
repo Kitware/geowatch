@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # flake8: noqa
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 import argparse

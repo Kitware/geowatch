@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 __dev__ = """
 mkinit ~/code/watch/watch/tasks/template/__init__.py --noattrs --lazy -w
 """

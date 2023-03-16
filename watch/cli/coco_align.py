@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 r"""
 Given the raw data in kwcoco format, this script will extract orthorectified
 regions around areas of intere/t across time.

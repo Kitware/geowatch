@@ -10,7 +10,7 @@ import ubelt as ub
 import warnings
 
 
-__version__ = '0.4.1'
+__version__ = '0.4.2'
 # git shortlog -e --summary --numbered
 # ~/code/watch/dev/maintain/generate_authors.py
 
