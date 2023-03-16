@@ -79,6 +79,7 @@ import parse
 from watch.utils import util_pattern
 from watch.utils import util_path
 from watch.mlops import repackager
+from rich.prompt import Confirm
 
 
 class ManagerConfig(scfg.DataConfig):
@@ -266,15 +267,23 @@ class DVCExptManager(ub.NiceRepr):
             states.append(state)
         manager.states = states
 
-    def pull_packages(manager):
+    def pull_packages(manager, yes=None):
         # Assume just one git repo and manually pull
+        print('We need to git pull to check if there are updates')
+        if not yes and not Confirm.ask('Do a git pull?'):
+            raise UserAbort
         manager.dvc.git_pull()
         pull_fpaths = []
         for state in manager.states:
             pkg_df = state.versioned_table(types=['pkg_fpath'])
             pull_df = pkg_df[pkg_df['needs_pull'].astype(bool)]
             pull_fpaths += pull_df['dvc'].tolist()
-        manager.dvc.pull(pull_fpaths)
+
+        if len(pull_fpaths):
+            print(f'There are {len(pull_fpaths)} packages that need DVC pull')
+            if not yes and not Confirm.ask('Do a DVC pull?'):
+                raise UserAbort
+            manager.dvc.pull(pull_fpaths)
 
     def add_packages(manager, yes=None):
         """
@@ -780,7 +789,6 @@ class ExperimentState(ub.NiceRepr):
         summarize_tables(tables)
 
     def package_checkpoints(self, yes=None):
-        from rich.prompt import Confirm
         staging_df = self.staging_table()
         needs_package = staging_df[~staging_df['is_packaged']]
 
@@ -801,7 +809,6 @@ class ExperimentState(ub.NiceRepr):
             _ = repackager.repackage(to_repackage)
 
     def copy_packages_to_dvc(self, yes=None):
-        from rich.prompt import Confirm
         # Rebuild the tables to ensure we are up to date
         tables = self.cross_referenced_tables()
         staging_df, versioned_df = ub.take(tables, ['staging', 'versioned'])
@@ -821,7 +828,6 @@ class ExperimentState(ub.NiceRepr):
                 ub.Path(src).copy(dst)
 
     def add_packages_to_dvc(self, yes=None):
-        from rich.prompt import Confirm
         perf_config = {
             'push_workers': 8,
         }

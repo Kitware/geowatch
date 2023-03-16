@@ -509,13 +509,27 @@ def extended_github_action_matrix(arg):
     exclude = list(map(ub.udict, exclude))
     submatrices = list(map(ub.udict, submatrices))
 
+    from watch.utils import util_yaml
+    import os
+
+    def coerce_matrix_value(v):
+        if not ub.iterable(v):
+            v = [v]
+        final = []
+        for item in v:
+            if isinstance(item, (str, os.PathLike)) and str(item).endswith(('.yaml', '.yml')):
+                final.extend(util_yaml.yaml_load(item))
+            else:
+                final.append(item)
+        return final
+
     submatrices_ = []
     for submatrix in submatrices:
-        submatrix_ = {k: (v if ub.iterable(v) else [v])
+        submatrix_ = {k: coerce_matrix_value(v)
                       for k, v in submatrix.items()}
         submatrices_.extend(list(map(ub.udict, ub.named_product(submatrix_))))
 
-    matrix_ = {k: (v if ub.iterable(v) else [v])
+    matrix_ = {k: coerce_matrix_value(v)
                for k, v in matrix.items()}
 
     orig_keys = set(matrix.keys())
