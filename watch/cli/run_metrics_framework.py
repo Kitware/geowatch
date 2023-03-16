@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """
 TODO:
     - [ ] Rename to run_polygon_evaluation.py? Or run_iarpa_metrics.py?

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 r"""
 Performs the stac search to create the .input file needed for
 prepare_ta2_dataset
