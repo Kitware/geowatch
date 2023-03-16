@@ -273,8 +273,6 @@ def resolve_datamodule(config, method, datamodule_defaults):
     else:
         traintime_params = {}
         if datamodule_vars['channels'] in {None, 'auto'}:
-            # import xdev
-            # xdev.embed()
             print('Warning have to make assumptions. Might not always work')
             raise NotImplementedError('TODO: needs to be sensorchan if we do this')
             if hasattr(method, 'input_channels'):

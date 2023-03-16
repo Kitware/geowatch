@@ -1527,7 +1527,9 @@ python -m watch.mlops.schedule_evaluation --params="
         bas_poly_viz.enabled: 0
     " \
     --root_dpath="$DVC_EXPT_DPATH/_namek_split2_eval_small" \
-    --devices="0,1" --queue_size=2 \
+    --devices="0,1" --queue_size=4 \
     --backend=tmux --queue_name "_namek_split2_eval_small" \
     --pipeline=bas --skip_existing=1 \
     --run=1
+
+

@@ -255,7 +255,7 @@ torch_globals:
 
 
 
-# MAE Backbone
+# MAE Backbone (toothbrush)
 export CUDA_VISIBLE_DEVICES=1
 DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
@@ -271,7 +271,7 @@ EXPERIMENT_NAME=Drop6_BAS_WUMAE_validation_3GSD_split1_V35
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=1e-4
 MAX_STEPS=50000
-WATCH_GRID_WORKERS=2 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
 data:
   batch_size              : 4
   num_workers             : 4
@@ -352,6 +352,211 @@ trainer:
   limit_train_batches: 500
 torch_globals:
     float32_matmul_precision: medium
+initializer:
+    init: $DVC_EXPT_DPATH/models/wu/MAE-2023-02-09/goldenMae-epoch=07-val_loss=0.23.ckpt
+"
+
+
+# MAE Backbone (toothbrush)
+export CUDA_VISIBLE_DEVICES=0
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop6
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_fixquant_split1.kwcoco.zip
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_fixquant_split1.kwcoco.zip
+CHANNELS="(L8,S2,PD):(blue|green|red|nir),(WV):(blue|green|red),(WV,WV1):pan"
+#water|forest|field|impervious|barren
+EXPERIMENT_NAME=Drop6_BAS_WUMAE_validation_3GSD_split1_V37
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+TARGET_LR=1e-4
+MAX_STEPS=50000
+WATCH_GRID_WORKERS=2 python -m watch.tasks.fusion fit --config "
+data:
+  batch_size              : 1
+  num_workers             : 4
+  train_dataset           : $TRAIN_FPATH
+  vali_dataset            : $VALI_FPATH
+  time_steps              : 7
+  chip_dims               : 128
+  window_space_scale      : 10GSD
+  input_space_scale       : 10GSD
+  output_space_scale      : 100.0GSD
+  channels                : '$CHANNELS'
+  chip_overlap            : 0
+  dist_weights            : 0
+  min_spacetime_weight    : 0.5
+  neg_to_pos_ratio        : 0.5
+  normalize_inputs        : 16384
+  normalize_perframe      : false
+  normalize_peritem       : true
+  resample_invalid_frames : true
+  temporal_dropout        : 0.5
+  time_sampling           : uniform-soft5-soft4-contiguous
+  time_kernel             : '(-1y,-6w,-2w,0,2w,6w,1y)'
+  upweight_centers        : true
+  use_centered_positives  : True
+  use_grid_positives      : true
+  verbose                 : 1
+  max_epoch_length        : 16384
+  mask_low_quality        : true
+  mask_samecolor_method   : null
+model:
+  class_path: watch.tasks.fusion.methods.HeterogeneousModel
+  init_args:
+    token_width: 8
+    token_dim: 16
+    position_encoder:
+      class_path: watch.tasks.fusion.methods.heterogeneous.MipNerfPositionalEncoder
+      init_args:
+        in_dims: 3
+        max_freq: 3
+        num_freqs: 16
+    backbone: wu-vit
+    spatial_scale_base: 1.0
+    temporal_scale_base: 1.0
+    global_change_weight: 0.0
+    global_class_weight: 0.0
+    global_saliency_weight: 1.0
+    saliency_loss: focal
+    decoder: simple_conv
+lr_scheduler:
+  class_path: torch.optim.lr_scheduler.OneCycleLR
+  init_args:
+    max_lr: $TARGET_LR
+    total_steps: $MAX_STEPS
+    anneal_strategy: cos
+    pct_start: 0.05
+optimizer:
+  class_path: torch.optim.AdamW
+  init_args:
+    lr: $TARGET_LR
+    weight_decay: 1e-6
+    betas:
+      - 0.9
+      - 0.99
+trainer:
+  accumulate_grad_batches: 8
+  default_root_dir     : $DEFAULT_ROOT_DIR
+  accelerator          : gpu 
+  devices              : 0,
+  check_val_every_n_epoch: 1
+  enable_checkpointing: true
+  enable_model_summary: true
+  log_every_n_steps: 50
+  logger: true
+  max_steps: $MAX_STEPS
+  num_sanity_val_steps: 0
+  replace_sampler_ddp: true
+  track_grad_norm: -1
+  limit_val_batches: 128
+  limit_train_batches: 1024
+torch_globals:
+    float32_matmul_precision: medium
+initializer:
+    init: $DVC_EXPT_DPATH/models/wu/MAE-2023-02-09/goldenMae-epoch=07-val_loss=0.23.ckpt
+"
+
+
+# MAE Backbone (ooo)
+export CUDA_VISIBLE_DEVICES=1
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop6
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_split1.kwcoco.zip
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_split1.kwcoco.zip
+CHANNELS="(L8,S2,PD):(blue|green|red|nir),(WV):(blue|green|red),(WV,WV1):pan"
+#water|forest|field|impervious|barren
+EXPERIMENT_NAME=Drop6_BAS_WUMAE_10GSD_split1_V36
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+TARGET_LR=1e-4
+MAX_STEPS=50000
+WATCH_GRID_WORKERS=2 python -m watch.tasks.fusion fit --config "
+data:
+  batch_size              : 1
+  num_workers             : 4
+  train_dataset           : $TRAIN_FPATH
+  vali_dataset            : $VALI_FPATH
+  time_steps              : 9
+  chip_dims               : 96
+  window_space_scale      : 10.0GSD
+  input_space_scale       : 10.0GSD
+  output_space_scale      : 10.0GSD
+  channels                : '$CHANNELS'
+  chip_overlap            : 0
+  dist_weights            : 0
+  min_spacetime_weight    : 0.5
+  neg_to_pos_ratio        : 0.5
+  normalize_inputs        : 16384
+  normalize_perframe      : false
+  resample_invalid_frames : true
+  temporal_dropout        : 0.5
+  time_sampling           : uniform-soft5-soft4-contiguous
+  time_kernel             : '(-1y,-6m,-6w,-2w,0,2w,6w,6m,1y)'
+  upweight_centers        : true
+  use_centered_positives  : True
+  use_grid_positives      : true
+  verbose                 : 1
+  max_epoch_length        : 16384
+  mask_low_quality        : true
+  mask_samecolor_method   : null
+model:
+  class_path: watch.tasks.fusion.methods.HeterogeneousModel
+  init_args:
+    token_width: 8
+    token_dim: 16
+    position_encoder:
+      class_path: watch.tasks.fusion.methods.heterogeneous.MipNerfPositionalEncoder
+      init_args:
+        in_dims: 3
+        max_freq: 3
+        num_freqs: 16
+    backbone: wu-vit
+    spatial_scale_base: 1.0
+    temporal_scale_base: 1.0
+    global_change_weight: 0.0
+    global_class_weight: 0.0
+    global_saliency_weight: 1.0
+    saliency_loss: focal
+    decoder: simple_conv
+lr_scheduler:
+  class_path: torch.optim.lr_scheduler.OneCycleLR
+  init_args:
+    max_lr: $TARGET_LR
+    total_steps: $MAX_STEPS
+    anneal_strategy: cos
+    pct_start: 0.05
+optimizer:
+  class_path: torch.optim.AdamW
+  init_args:
+    lr: $TARGET_LR
+    weight_decay: 1e-6
+    betas:
+      - 0.9
+      - 0.99
+trainer:
+  accumulate_grad_batches: 6
+  default_root_dir     : $DEFAULT_ROOT_DIR
+  accelerator          : gpu 
+  devices              : 0,
+  check_val_every_n_epoch: 1
+  enable_checkpointing: true
+  enable_model_summary: true
+  log_every_n_steps: 50
+  logger: true
+  max_steps: $MAX_STEPS
+  num_sanity_val_steps: 0
+  replace_sampler_ddp: true
+  track_grad_norm: -1
+  limit_val_batches: 128
+  limit_train_batches: 1024
+#torch_globals:
+#    float32_matmul_precision: medium
 initializer:
     init: $DVC_EXPT_DPATH/models/wu/MAE-2023-02-09/goldenMae-epoch=07-val_loss=0.23.ckpt
 "

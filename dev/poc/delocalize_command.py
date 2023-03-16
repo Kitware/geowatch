@@ -3,6 +3,10 @@
 Ignore:
     python ~/code/watch/dev/poc/delocalize_command.py -- python -m watch.tasks.fusion.predict --package_fpath=/home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6/packages/Drop6_BAS_scratch_landcover_10GSD_split2_V33/Drop6_BAS_scratch_landcover_10GSD_split2_V33_epoch604_step38115.pt --test_dataset=/home/joncrall/remote/namek/data/dvc-repos/smart_data_dvc/ValiRegionSmall/combo_small_NZ_R001_swnykmah_I2.kwcoco.zip --pred_dataset=/home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc/_namek_split2_eval_small/pred/flat/bas_pxl/bas_pxl_id_b742b70c/pred.kwcoco.zip --chip_overlap=0.3 --chip_dims=auto --time_span=auto --time_sampling=auto --drop_unused_frames=True --num_workers=2 --devices=0, --batch_size=1 --with_saliency=True --with_class=False
 
+
+    python ~/code/watch/dev/poc/delocalize_command.py -- python -m watch.tasks.fusion.predict --package_fpath=/home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6/packages/Drop6_BAS_scratch_raw_10GSD_split2_smt8_cont2/Drop6_BAS_scratch_raw_10GSD_split2_smt8_cont2_epoch16_step1700.pt --test_dataset=/home/joncrall/remote/namek/data/dvc-repos/smart_data_dvc/ValiRegionSmall/combo_small_NZ_R001_swnykmah_I2.kwcoco.zip --pred_dataset=/home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc/_namek_split2_eval_small/pred/flat/bas_pxl/bas_pxl_id_eaba5207/pred.kwcoco.zip --chip_overlap=0.3 --chip_dims=auto --time_span=auto --time_sampling=auto --drop_unused_frames=True --num_workers=2 --devices=0, --batch_size=1 --with_saliency=True --with_class=False --with_change=False
+
+
 """
 import os
 import scriptconfig as scfg
@@ -92,13 +96,23 @@ def maybe_path(p):
 
 def delocalize_path(path, replaceable_paths):
     orig = ub.Path(path)
-    for i in range(1, len(orig.parts)):
+    for i in range(2, len(orig.parts)):
         for key, base in replaceable_paths.items():
             tail = ub.Path(*orig.parts[i:])
             cand = base / tail
             if cand.exists():
                 found = cand
                 return key, found, tail
+
+    known_relative_paths = {
+        'DVC_DATA_DPATH': '/home/joncrall/remote/namek/data/dvc-repos/smart_data_dvc',
+        'DVC_EXPT_DPATH': '/home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc',
+    }
+    for key, cand_base in known_relative_paths.items():
+        if str(orig).startswith(cand_base):
+            tail = orig.relative_to(cand_base)
+            found = base / tail
+            return key, found, tail
     return None, path, None
 
 if __name__ == '__main__':
