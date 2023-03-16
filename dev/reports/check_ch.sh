@@ -2,11 +2,12 @@ DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
 
 python -m watch.cli.prepare_teamfeats \
-    --base_fpath="$DVC_DATA_DPATH/Drop6/imganns-CH_R001.kwcoco.zip" \
+    --base_fpath="$DVC_DATA_DPATH/Drop6/imganns-*_R001.kwcoco.zip" \
     --expt_dpath="$DVC_EXPT_DPATH" \
     --with_landcover=0 \
     --with_materials=0 \
-    --with_invariants=1 \
+    --with_invariants=0 \
+    --with_invariants2=1 \
     --with_cold=0 \
     --with_depth=0 \
     --do_splits=0 \
@@ -53,11 +54,35 @@ python -m watch.mlops.schedule_evaluation --params="
         bas_poly_viz.enabled: 0
     " \
     --root_dpath="$DVC_EXPT_DPATH/_check_ch" \
-    --devices="0,1" --queue_size=8 --print_commands=0 \
+    --devices="0,1" --queue_size=2 --print_commands=0 \
     --backend=tmux --queue_name "_check_ch" \
     --pipeline=bas --skip_existing=1 \
     --run=1
 
+
+    # viz_dpath argument can be specified to visualize the algorithm details.
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+python -m watch reproject_annotations \
+    --src "$DVC_EXPT_DPATH"/_check_ch/pred/flat/bas_pxl/bas_pxl_id_ac952ddc/pred.kwcoco.zip \
+    --dst "$DVC_EXPT_DPATH"/_check_ch/pred/flat/bas_pxl/bas_pxl_id_ac952ddc/pred_with_truth.kwcoco.zip \
+    --workers=4 \
+    --site_models="$DVC_DATA_DPATH/annotations/drop6/site_models/*.geojson"
+
+smartwatch visualize "$DVC_EXPT_DPATH"/_check_ch/pred/flat/bas_pxl/bas_pxl_id_ac952ddc/pred_with_truth.kwcoco.zip --smart
+
+
+
+# viz_dpath argument can be specified to visualize the algorithm details.
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+python -m watch reproject_annotations \
+    --src "$DVC_EXPT_DPATH"/_check_ch/pred/flat/bas_pxl/bas_pxl_id_790d666a/pred.kwcoco.zip \
+    --dst "$DVC_EXPT_DPATH"/_check_ch/pred/flat/bas_pxl/bas_pxl_id_790d666a/pred_with_truth.kwcoco.zip \
+    --workers=4 \
+    --site_models="$DVC_DATA_DPATH/annotations/drop6/site_models/*.geojson"
+
+smartwatch visualize "$DVC_EXPT_DPATH"/_check_ch/pred/flat/bas_pxl/bas_pxl_id_790d666a/pred_with_truth.kwcoco.zip --smart
 
 #python -m watch.cli.run_tracker \
 #    /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_check_ch/pred/flat/bas_pxl/bas_pxl_id_790d666a/pred.kwcoco.zip \
@@ -70,3 +95,26 @@ python -m watch.mlops.schedule_evaluation --params="
 #    --out_sites_fpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_check_ch/pred/flat/bas_poly/bas_poly_id_0836eaa2/sites_manifest.json \
 #    --out_sites_dir /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_check_ch/pred/flat/bas_poly/bas_poly_id_0836eaa2/sites \
 #    --out_kwcoco /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_check_ch/pred/flat/bas_poly/bas_poly_id_0836eaa2/poly.kwcoco.zip
+
+
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+cmd_queue new "my_spectra_queue"
+cmd_queue submit 'my_spectra_queue' --command "smartwatch spectra --channels 'red|green|blue' --valid_range=0:10000 '$DVC_DATA_DPATH'/Drop6/imgonly-AE_R001.kwcoco.json --workers=4 --dst spectra-AE_R001.png"
+cmd_queue submit 'my_spectra_queue' --command "smartwatch spectra --channels 'red|green|blue' --valid_range=0:10000 '$DVC_DATA_DPATH'/Drop6/imgonly-BH_R001.kwcoco.json --workers=4 --dst spectra-BH_R001.png"
+cmd_queue submit 'my_spectra_queue' --command "smartwatch spectra --channels 'red|green|blue' --valid_range=0:10000 '$DVC_DATA_DPATH'/Drop6/imgonly-BR_R001.kwcoco.json --workers=4 --dst spectra-BR_R001.png"
+cmd_queue submit 'my_spectra_queue' --command "smartwatch spectra --channels 'red|green|blue' --valid_range=0:10000 '$DVC_DATA_DPATH'/Drop6/imgonly-BR_R002.kwcoco.json --workers=4 --dst spectra-BR_R002.png"
+cmd_queue submit 'my_spectra_queue' --command "smartwatch spectra --channels 'red|green|blue' --valid_range=0:10000 '$DVC_DATA_DPATH'/Drop6/imgonly-BR_R004.kwcoco.json --workers=4 --dst spectra-BR_R004.png"
+cmd_queue submit 'my_spectra_queue' --command "smartwatch spectra --channels 'red|green|blue' --valid_range=0:10000 '$DVC_DATA_DPATH'/Drop6/imgonly-BR_R005.kwcoco.json --workers=4 --dst spectra-BR_R005.png"
+cmd_queue submit 'my_spectra_queue' --command "smartwatch spectra --channels 'red|green|blue' --valid_range=0:10000 '$DVC_DATA_DPATH'/Drop6/imgonly-CH_R001.kwcoco.json --workers=4 --dst spectra-CH_R001.png"
+cmd_queue submit 'my_spectra_queue' --command "smartwatch spectra --channels 'red|green|blue' --valid_range=0:10000 '$DVC_DATA_DPATH'/Drop6/imgonly-KR_R001.kwcoco.json --workers=4 --dst spectra-KR_R001.png"
+cmd_queue submit 'my_spectra_queue' --command "smartwatch spectra --channels 'red|green|blue' --valid_range=0:10000 '$DVC_DATA_DPATH'/Drop6/imgonly-KR_R002.kwcoco.json --workers=4 --dst spectra-KR_R002.png"
+cmd_queue submit 'my_spectra_queue' --command "smartwatch spectra --channels 'red|green|blue' --valid_range=0:10000 '$DVC_DATA_DPATH'/Drop6/imgonly-LT_R001.kwcoco.json --workers=4 --dst spectra-LT_R001.png"
+cmd_queue submit 'my_spectra_queue' --command "smartwatch spectra --channels 'red|green|blue' --valid_range=0:10000 '$DVC_DATA_DPATH'/Drop6/imgonly-NZ_R001.kwcoco.json --workers=4 --dst spectra-NZ_R001.png"
+cmd_queue submit 'my_spectra_queue' --command "smartwatch spectra --channels 'red|green|blue' --valid_range=0:10000 '$DVC_DATA_DPATH'/Drop6/imgonly-PE_R001.kwcoco.json --workers=4 --dst spectra-PE_R001.png"
+cmd_queue submit 'my_spectra_queue' --command "smartwatch spectra --channels 'red|green|blue' --valid_range=0:10000 '$DVC_DATA_DPATH'/Drop6/imgonly-US_R001.kwcoco.json --workers=4 --dst spectra-US_R001.png"
+cmd_queue submit 'my_spectra_queue' --command "smartwatch spectra --channels 'red|green|blue' --valid_range=0:10000 '$DVC_DATA_DPATH'/Drop6/imgonly-US_R004.kwcoco.json --workers=4 --dst spectra-US_R004.png"
+cmd_queue submit 'my_spectra_queue' --command "smartwatch spectra --channels 'red|green|blue' --valid_range=0:10000 '$DVC_DATA_DPATH'/Drop6/imgonly-US_R005.kwcoco.json --workers=4 --dst spectra-US_R005.png"
+cmd_queue submit 'my_spectra_queue' --command "smartwatch spectra --channels 'red|green|blue' --valid_range=0:10000 '$DVC_DATA_DPATH'/Drop6/imgonly-US_R006.kwcoco.json --workers=4 --dst spectra-US_R006.png"
+cmd_queue submit 'my_spectra_queue' --command "smartwatch spectra --channels 'red|green|blue' --valid_range=0:10000 '$DVC_DATA_DPATH'/Drop6/imgonly-US_R007.kwcoco.json --workers=4 --dst spectra-US_R007.png"
+cmd_queue show "my_spectra_queue"
+cmd_queue run "my_spectra_queue" --backend=tmux --workers=8

@@ -241,43 +241,47 @@ def main(cmdline=True, **kwargs):
     exclude_channels = None if exclude_channels is None else kwcoco.FusedChannelSpec.coerce(exclude_channels)
 
     jobs = ub.JobPool(mode=config['mode'], max_workers=workers)
-    for coco_img in ub.ProgIter(images.coco_images, desc='submit stats jobs'):
-        coco_img.detach()
-        job = jobs.submit(ensure_intensity_stats, coco_img,
-                          include_channels=include_channels,
-                          exclude_channels=exclude_channels)
-        job.coco_img = coco_img
+    from watch.utils import util_progress
+    pman = util_progress.ProgressManager()
+    with pman:
 
-    if config['valid_range'] is not None:
-        valid_min, valid_max = map(float, config['valid_range'].split(':'))
-    else:
-        valid_min = -math.inf
-        valid_max = math.inf
+        for coco_img in pman.progiter(images.coco_images, desc='submit stats jobs'):
+            coco_img.detach()
+            job = jobs.submit(ensure_intensity_stats, coco_img,
+                              include_channels=include_channels,
+                              exclude_channels=exclude_channels)
+            job.coco_img = coco_img
 
-    accum = HistAccum()
-    for job in jobs.as_completed(desc='accumulate stats'):
-        intensity_stats = job.result()
-        sensor = job.coco_img.get('sensor_coarse', job.coco_img.get('sensor', 'unknown_sensor'))
-        for band_stats in intensity_stats['bands']:
-            band_name = band_stats['band_name']
-            intensity_hist = band_stats['intensity_hist']
-            intensity_hist = {k: v for k, v in intensity_hist.items()
-                              if k >= valid_min and k <= valid_max}
-            accum.update(intensity_hist, sensor, band_name)
+        if config['valid_range'] is not None:
+            valid_min, valid_max = map(float, config['valid_range'].split(':'))
+        else:
+            valid_min = -math.inf
+            valid_max = math.inf
 
-    full_df = accum.finalize()
+        accum = HistAccum()
+        for job in pman.progiter(jobs.as_completed(), total=len(jobs), desc='accumulate stats'):
+            intensity_stats = job.result()
+            sensor = job.coco_img.get('sensor_coarse', job.coco_img.get('sensor', 'unknown_sensor'))
+            for band_stats in intensity_stats['bands']:
+                band_name = band_stats['band_name']
+                intensity_hist = band_stats['intensity_hist']
+                intensity_hist = {k: v for k, v in intensity_hist.items()
+                                  if k >= valid_min and k <= valid_max}
+                accum.update(intensity_hist, sensor, band_name)
 
-    sensor_chan_stats, distance_metrics = sensor_stats_tables(full_df)
+        full_df = accum.finalize()
 
-    COMPARSE_SENSORS = True
-    if COMPARSE_SENSORS:
-        request_columns = ['emd', 'energy_dist', 'mean_diff', 'std_diff']
-        have_columns = list(ub.oset(request_columns) & ub.oset(distance_metrics.columns))
-        harmony_scores = distance_metrics[have_columns].mean()
-        extra_text = ub.repr2(harmony_scores.to_dict(), precision=4, compact=1)
-        print('extra_text = {!r}'.format(extra_text))
-    else:
-        extra_text = None
+        sensor_chan_stats, distance_metrics = sensor_stats_tables(full_df)
+
+        COMPARSE_SENSORS = True
+        if COMPARSE_SENSORS:
+            request_columns = ['emd', 'energy_dist', 'mean_diff', 'std_diff']
+            have_columns = list(ub.oset(request_columns) & ub.oset(distance_metrics.columns))
+            harmony_scores = distance_metrics[have_columns].mean()
+            extra_text = ub.repr2(harmony_scores.to_dict(), precision=4, compact=1)
+            print('extra_text = {!r}'.format(extra_text))
+        else:
+            extra_text = None
 
     if config['draw']:
         fig = plot_intensity_histograms(full_df, config)
@@ -287,6 +291,7 @@ def main(cmdline=True, **kwargs):
         if title is not None:
             title_lines.append(title)
 
+        title_lines.append(ub.Path(coco_dset.fpath).name)
         if extra_text is not None:
             title_lines.append(extra_text)
 
