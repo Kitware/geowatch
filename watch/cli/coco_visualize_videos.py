@@ -333,7 +333,15 @@ def main(cmdline=True, **kwargs):
         viz_dpath = bundle_dpath / '_viz_{}'.format(dset_idstr)
     print('viz_dpath = {!r}'.format(viz_dpath))
 
-    prog = ub.ProgIter(
+    from watch.utils import util_progress
+    pman = util_progress.ProgressManager()
+    pman.__enter__()
+
+    # prog = ub.ProgIter(
+    #     coco_dset.index.videos.items(), total=len(coco_dset.index.videos),
+    #     desc='viz videos', verbose=3)
+
+    prog = pman.progiter(
         coco_dset.index.videos.items(), total=len(coco_dset.index.videos),
         desc='viz videos', verbose=3)
 
@@ -518,7 +526,8 @@ def main(cmdline=True, **kwargs):
                             **common_kw
                             )
 
-        for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='write imgs'):
+        # for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='write imgs'):
+        for job in pman.progiter(pool.as_completed(), total=len(pool), desc='write imgs'):
             try:
                 job.result()
             except SkipFrame:
@@ -526,6 +535,7 @@ def main(cmdline=True, **kwargs):
 
         pool.jobs.clear()
 
+    pman.__exit__(None, None, None)
     print('Wrote images to viz_dpath = {!r}'.format(viz_dpath))
 
     if config['animate']:
@@ -1200,13 +1210,13 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
             raise SkipFrame
         raise SkipChanGroup
 
-    if skip_aggressive:
-        is_bad = np.isnan(raw_canvas).ravel()
-        percent_bad = is_bad.sum() / len(is_bad)
-        if percent_bad > 0.15:
-            print('Skip because some is nan')
-            print('skip')
-            raise SkipFrame
+    # if skip_aggressive:
+    #     is_bad = np.isnan(raw_canvas).ravel()
+    #     percent_bad = is_bad.sum() / len(is_bad)
+    #     if percent_bad > 0.5:
+    #         print('Skip because some is nan')
+    #         print('skip')
+    #         raise SkipFrame
 
     if 0 and str(chan_group) == 'salient':
         # blur1 = kwarray.atleast_nd(kwimage.gaussian_blur(raw_canvas, sigma=1.6), n=3)
@@ -1450,22 +1460,4 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
 
 
 if __name__ == '__main__':
-    """
-    xdoctest ~/code/watch/watch/cli/coco_align_geotiffs.py main:0 2> error.txt 1> output.txt
-
-    DVC_DPATH=$(smartwatch_dvc)
-    KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15
-    python -m watch visualize $KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
-        --animate=True --channels="red|green|blue" --skip_missing=True \
-        --select_images '.sensor_coarse == "S2"' --workers=4 --draw_anns=False
-
-    DVC_DPATH=$(smartwatch_dvc)
-    KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/
-    python -m watch visualize $KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
-        --animate=True --channels="red|green|blue" --skip_missing=True \
-        --select_videos '.name == "BR_R002"' --workers=4 --draw_anns=True
-
-    CommandLine:
-        python ~/code/watch/watch/cli/coco_visualize_videos.py
-    """
     main(cmdline=True)

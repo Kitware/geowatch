@@ -11,9 +11,9 @@ CommandLine:
 
 Example:
     >>> # Basic overview demo of the algorithm
-    >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
+    >>> from watch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
     >>> import watch
-    >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, num_frames=32, image_size=(32, 32))
+    >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, num_frames=16, image_size=(8, 8))
     >>> vidid = dset.dataset['videos'][0]['id']
     >>> self = TimeWindowSampler.from_coco_video(
     >>>     dset, vidid,
@@ -29,13 +29,13 @@ Example:
 
 Example:
     >>> # Demo multiple different settings
-    >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
+    >>> from watch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
     >>> import watch
-    >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, num_frames=32, image_size=(32, 32))
+    >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, num_frames=16, image_size=(8, 8))
     >>> vidid = dset.dataset['videos'][0]['id']
     >>> self = TimeWindowSampler.from_coco_video(
     >>>     dset, vidid,
-    >>>     time_window=11,
+    >>>     time_window=7,
     >>>     affinity_type='uniform', time_span='8m', update_rule='',
     >>> )
     >>> # xdoctest: +REQUIRES(--show)
@@ -59,9 +59,9 @@ Example:
 
 Example:
     >>> # Demo corner case where there are too few observations
-    >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
+    >>> from watch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
     >>> import watch
-    >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, num_frames=1, num_videos=1, image_size=(32, 32))
+    >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, num_frames=1, num_videos=1, image_size=(8, 8))
     >>> vidid = dset.dataset['videos'][0]['id']
     >>> self = TimeWindowSampler.from_coco_video(
     >>>     dset, vidid,
@@ -80,7 +80,7 @@ Example:
 
 Example:
     >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
-    >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
+    >>> from watch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
     >>> import watch
     >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
     >>> coco_fpath = data_dvc_dpath / 'Drop6/imganns-KR_R001.kwcoco.zip'
@@ -89,7 +89,7 @@ Example:
     >>> self = TimeWindowSampler.from_coco_video(
     >>>     dset, vidid,
     >>>     time_kernel='-1y,-8m,-2w,0,2w,8m,1y',
-    >>>     affinity_type='soft3', update_rule='', determenistic=True
+    >>>     affinity_type='soft4', update_rule='', determenistic=True
     >>>     #time_window=5,
     >>>     #affinity_type='hardish3', time_span='3m', update_rule='pairwise+distribute', determenistic=True
     >>> )
@@ -178,13 +178,13 @@ class MultiTimeWindowSampler(CommonSamplerMixin):
     affinity matrices to increase the diversity of temporal sampling.
 
     Example:
-        >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
+        >>> from watch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
         >>> import datetime as datetime_mod
         >>> from datetime import datetime as datetime_cls
         >>> low = datetime_cls.now().timestamp()
         >>> high = low + datetime_mod.timedelta(days=365 * 5).total_seconds()
         >>> rng = kwarray.ensure_rng(0)
-        >>> unixtimes = np.array(sorted(rng.randint(low, high, 113)), dtype=float)
+        >>> unixtimes = np.array(sorted(rng.randint(low, high, 32)), dtype=float)
         >>> sensors = ['a' for _ in range(len(unixtimes))]
         >>> time_window = 5
         >>> self = MultiTimeWindowSampler(
@@ -199,13 +199,13 @@ class MultiTimeWindowSampler(CommonSamplerMixin):
         >>> self.show_summary(10)
 
     Example:
-        >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
+        >>> from watch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
         >>> import datetime as datetime_mod
         >>> from datetime import datetime as datetime_cls
         >>> low = datetime_cls.now().timestamp()
         >>> high = low + datetime_mod.timedelta(days=365 * 5).total_seconds()
         >>> rng = kwarray.ensure_rng(0)
-        >>> unixtimes = np.array(sorted(rng.randint(low, high, 113)), dtype=float)
+        >>> unixtimes = np.array(sorted(rng.randint(low, high, 32)), dtype=float)
         >>> sensors = ['a' for _ in range(len(unixtimes))]
         >>> time_window = 5
         >>> self = MultiTimeWindowSampler(
@@ -432,7 +432,7 @@ class TimeWindowSampler(CommonSamplerMixin):
     Example:
         >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
         >>> import os
-        >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
+        >>> from watch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
         >>> import kwcoco
         >>> import watch
         >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
@@ -488,7 +488,7 @@ class TimeWindowSampler(CommonSamplerMixin):
         Example:
             >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
             >>> import os
-            >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
+            >>> from watch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
             >>> import watch
             >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
             >>> coco_fpath = dvc_dpath / 'Drop4-SC/data_vali.kwcoco.json'
@@ -647,7 +647,7 @@ class TimeWindowSampler(CommonSamplerMixin):
             >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
             >>> import os
             >>> import kwcoco
-            >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
+            >>> from watch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
             >>> from watch.utils.util_data import find_smart_dvc_dpath
             >>> dvc_dpath = find_smart_dvc_dpath()
             >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json'
@@ -666,7 +666,7 @@ class TimeWindowSampler(CommonSamplerMixin):
         Example:
             >>> import os
             >>> import kwcoco
-            >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
+            >>> from watch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
             >>> import watch
             >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, num_frames=32, image_size=(32, 32))
             >>> vidid = dset.dataset['videos'][0]['id']
@@ -677,6 +677,7 @@ class TimeWindowSampler(CommonSamplerMixin):
             >>>     affinity_type='soft2',
             >>>     update_rule='distribute+pairwise')
             >>> self.determenistic = True
+            >>> # xdoctest: +REQUIRES(--show)
             >>> self.show_summary(samples_per_frame=1 if self.determenistic else 10, fnum=1)
             >>> self.show_procedure(fnum=2)
 

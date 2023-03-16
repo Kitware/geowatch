@@ -40,7 +40,7 @@ class PrepareSplitsConfig(scfg.Config):
 
     """
     default = {
-        'base_fpath': scfg.Value(None, help='base coco file to split or a globstring in constructive mode', position=1),
+        'base_fpath': scfg.Value(None, nargs='+', help='base coco file to split or a globstring in constructive mode', position=1),
         'virtualenv_cmd': scfg.Value(None, type=str, help=ub.paragraph(
             '''
             Command to start the appropriate virtual environment if your bashrc
@@ -85,6 +85,9 @@ VALI_REGIONS_SPLITS = {
         'US_R001',
         'CH_R001',
     },
+    'split6': {
+        'KR_R002',  # can we do better on KR2 by training on KR1?
+    },
 }
 
 IGNORE_REGIONS = {
@@ -99,7 +102,8 @@ def _submit_constructive_split_jobs(base_fpath, suffix, queue, depends=[]):
     from watch.utils import util_path
     import shlex
     partitioned_fpaths = util_path.coerce_patterned_paths(base_fpath)
-    dpath = ub.Path(base_fpath).parent
+    dpath = ub.Path(partitioned_fpaths[0]).parent  # Hack
+    print('partitioned_fpaths = {}'.format(ub.urepr(partitioned_fpaths, nl=1)))
 
     full_fpath = dpath / 'data.kwcoco.zip'
 
@@ -166,6 +170,7 @@ def _submit_split_jobs(base_fpath, queue, depends=[]):
         'train_split3': base_fpath.augment(stemsuffix='_train_split3', multidot=True),
         'train_split4': base_fpath.augment(stemsuffix='_train_split4', multidot=True),
         'train_split5': base_fpath.augment(stemsuffix='_train_split5', multidot=True),
+        'train_split6': base_fpath.augment(stemsuffix='_train_split6', multidot=True),
         # 'nowv_train': base_fpath.augment(stemsuffix='_nowv_train', multidot=True),
         # 'wv_train': base_fpath.augment(stemsuffix='_wv_train', multidot=True),
         # 's2_wv_train': base_fpath.augment(stemsuffix='_s2_wv_train', multidot=True),
@@ -175,6 +180,7 @@ def _submit_split_jobs(base_fpath, queue, depends=[]):
         'vali_split3': base_fpath.augment(stemsuffix='_vali_split3', multidot=True),
         'vali_split4': base_fpath.augment(stemsuffix='_vali_split4', multidot=True),
         'vali_split5': base_fpath.augment(stemsuffix='_vali_split5', multidot=True),
+        'vali_split6': base_fpath.augment(stemsuffix='_vali_split6', multidot=True),
         # 'nowv_vali': base_fpath.augment(stemsuffix='_nowv_vali', multidot=True),
         # 'wv_vali': base_fpath.augment(stemsuffix='_wv_vali', multidot=True),
         # 's2_wv_vali': base_fpath.augment(stemsuffix='_s2_wv_vali', multidot=True),
@@ -225,6 +231,7 @@ def prep_splits(cmdline=False, **kwargs):
     """
     config = PrepareSplitsConfig(cmdline=cmdline)
     config.update(kwargs)
+    print('config = {}'.format(ub.urepr(dict(config), nl=1)))
 
     if config['base_fpath'] == 'auto':
         # Auto hack.
@@ -234,7 +241,7 @@ def prep_splits(cmdline=False, **kwargs):
         # base_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/data.kwcoco.json'
         base_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json'
     else:
-        base_fpath = ub.Path(config['base_fpath'])
+        base_fpath = config['base_fpath']
 
     import cmd_queue
     queue = cmd_queue.Queue.create(

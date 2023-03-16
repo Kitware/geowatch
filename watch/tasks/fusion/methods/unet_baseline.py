@@ -404,6 +404,7 @@ class UNetBaseline(pl.LightningModule, WatchModuleMixins):
     def shared_step(self, batch, batch_idx=None, stage="train", with_loss=True):
         """
         Example:
+            >>> # xdoctest: +REQUIRES(env:SLOW_TESTS)
             >>> from watch.tasks import fusion
             >>> import torch
             >>> channels, classes, dataset_stats = fusion.methods.UNetBaseline.demo_dataset_stats()
@@ -421,6 +422,7 @@ class UNetBaseline(pl.LightningModule, WatchModuleMixins):
             >>> optimizer.step()
 
         Example:
+            >>> # xdoctest: +REQUIRES(env:SLOW_TESTS)
             >>> from watch.tasks import fusion
             >>> import torch
             >>> channels, classes, dataset_stats = fusion.methods.UNetBaseline.demo_dataset_stats()

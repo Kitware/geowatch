@@ -177,6 +177,15 @@ class Packager(pl.callbacks.Callback):
         """
         if self.package_on_interrupt:
             print('Attempting to package model before exiting')
+            # First save a checkpoint...
+            log_dir = ub.Path(trainer.log_dir)
+            package_dpath = (log_dir / 'package-interupt').ensuredir()
+            checkpoint_fpath = package_dpath / (
+                'checkpoint_epoch{}_step{}.ckpt'.format(
+                    trainer.current_epoch, trainer.global_step))
+            trainer.save_checkpoint(checkpoint_fpath)
+
+            # Then try to save the model
             package_fpath = self._make_package_fpath(
                 trainer, dname='package-interupt')
             self._save_package(pl_module, package_fpath)

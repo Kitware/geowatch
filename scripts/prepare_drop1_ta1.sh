@@ -93,7 +93,7 @@ crop_to_regions(){
     source ~/code/watch/scripts/prep_drop1_ta1.sh
     "
     # Crop the unstructured data into "videos" aligned to each region.
-    python -m watch.cli.coco_align_geotiffs \
+    python -m watch.cli.coco_align \
         --src "$UNCROPPED_KWCOCO_FPATH" \
         --dst "$ALIGNED_KWCOCO_FPATH" \
         --regions "$REGION_FPATH" \

@@ -1,4 +1,18 @@
 """
+This is step 1 / 4 in predict.py
+
+SeeAlso:
+
+    predict.py
+
+    prepare_kwcoco.py *
+
+    tile_processing_kwcoco.py
+
+    export_cold_result_kwcoco.py
+
+    assemble_cold_result_kwcoco.py
+
 This is a proof-of-concept for converting kwcoco files into the
 expected data structures for pycold.
 
@@ -24,7 +38,6 @@ TODO:
     - [ ] Incorporate watch/tasks/fusion/datamodules/qa_bands.py
 """
 import kwcoco
-import os
 import json
 import numpy as np
 import einops
@@ -43,7 +56,7 @@ logger = logging.getLogger(__name__)
 try:
     from xdev import profile
 except ImportError:
-    profile = ub.identity
+    from ubelt import identity as profile
 
 
 class PrepareKwcocoConfig(scfg.DataConfig):
@@ -56,8 +69,16 @@ class PrepareKwcocoConfig(scfg.DataConfig):
         a path to a file to input kwcoco file
         '''))
     out_dpath = scfg.Value(None, help='output directory for the output')
+    sensors = scfg.Value('L8', type=str, help='sensor type, default is "L8"')
     adj_cloud = scfg.Value(False, help='How to treat QA band, default is False: ignoring adj. cloud class')
-    method = scfg.Value(None, help='stacking mode for original COLD or Hybrid, default is None, if HybridCOLD then stacked data include g, r, nir, swir16, swir22, ASI, tir, QA')
+    method = scfg.Value(None, help=ub.paragraph(
+        '''
+        stacking mode for original COLD or Hybrid, default is None, if
+        HybridCOLD then stacked data include g, r, nir, swir16, swir22, ASI,
+        tir, QA
+        '''))
+    resolution = scfg.Value('30GSD', help='if specified then data is processed at this resolution')
+    workers = scfg.Value(0, help='number of parallel workers')
 
 
 # TODO:
@@ -70,6 +91,13 @@ SENSOR_TO_INFO['L8'] = {
     'quality_channels': 'quality',
     'quality_interpretation': 'FMASK'
 }  # The name of quality_channels for Drop 4 is 'cloudmask'.
+
+SENSOR_TO_INFO['S2'] = {
+    'sensor_name': 'Sentinel-2',
+    'intensity_channels': 'blue|green|red|nir|swir16|swir22|lwir11',
+    'quality_channels': 'quality',
+    'quality_interpretation': 'FMASK'
+}
 
 # Register different quality bit standards.
 QA_INTERPRETATIONS = {}
@@ -111,21 +139,27 @@ def prepare_kwcoco_main(cmdline=1, **kwargs):
         >>> from watch.tasks.cold.prepare_kwcoco import prepare_kwcoco_main
         >>> from watch.tasks.cold.prepare_kwcoco import *
         >>> kwargs= dict(
-        >>>   coco_fpath = ub.Path('/home/jws18003/data/dvc-repos/smart_data_dvc/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/KR_R001/data_KR_R001.kwcoco.json'),
+        >>>   coco_fpath = ub.Path('/home/jws18003/data/dvc-repos/smart_data_dvc/Drop6/data_vali_split1_KR_R001.kwcoco.json'),
         >>>   out_dpath = ub.Path.appdir('/gpfs/scratchfs1/zhz18039/jws18003/kwcoco'),
+        >>>   sensors = 'L8,S2',
         >>>   adj_cloud = False,
         >>>   method = None,
         >>> )
         >>> cmdline=0
         >>> prepare_kwcoco_main(cmdline, **kwargs)
     """
+    pman = kwargs.pop('pman', None)
     config = PrepareKwcocoConfig.cli(cmdline=cmdline, data=kwargs)
     coco_fpath = config['coco_fpath']
     dpath = ub.Path(config['out_dpath']).ensuredir()
+    sensors = config['sensors']
     adj_cloud = config['adj_cloud']
     method = config['method']
     out_dir = dpath / 'stacked'
-    meta_fpath = stack_kwcoco(coco_fpath, out_dir, adj_cloud, method)
+    workers = config['workers']
+    resolution = config.resolution
+    meta_fpath = stack_kwcoco(coco_fpath, out_dir, sensors, adj_cloud, method,
+                              pman, workers, resolution)
     return meta_fpath
 
 
@@ -268,7 +302,8 @@ def artificial_surface_index(
     return ASI
 
 
-def stack_kwcoco(coco_fpath, out_dir, adj_cloud, method):
+def stack_kwcoco(coco_fpath, out_dir, sensors, adj_cloud, method, pman=None,
+                 workers=0, resolution=None):
     """
     Args:
         coco_fpath (str | PathLike | CocoDataset):
@@ -284,7 +319,9 @@ def stack_kwcoco(coco_fpath, out_dir, adj_cloud, method):
         >>> # TODO: readd this doctest
         >>> from pycold.imagetool.prepare_kwcoco import *  # NOQA
         >>> setup_logging()
-        >>> coco_fpath = grab_demo_kwcoco_dataset()
+        >>> coco_dset = watch.coerce_kwcoco('watch-msi')
+        >>> coco_fpath = coco_dset.fpath
+        >>> #coco_fpath = grab_demo_kwcoco_dataset()
         >>> dpath = ub.Path.appdir('pycold/tests/stack_kwcoco').ensuredir()
         >>> out_dir = dpath / 'stacked'
         >>> results = stack_kwcoco(coco_fpath, out_dir)
@@ -294,28 +331,47 @@ def stack_kwcoco(coco_fpath, out_dir, adj_cloud, method):
 
     # Load the kwcoco dataset
     dset = kwcoco.CocoDataset.coerce(coco_fpath)
-    videos = dset.videos()
 
-    for video_id in videos:
-        # Get the image ids of each image in this video seqeunce
-        for image_id in dset.images():
-            coco_image: kwcoco.CocoImage = dset.coco_image(image_id)
-            coco_image = coco_image.detach()
+    # Get all images ids sorted in temporal order per video
+    all_images = dset.images(list(ub.flatten(dset.videos().images)))
 
-            # For now, it supports only L8
-            if coco_image.img['sensor_coarse'] == 'L8':
-                # Transform the image data into the desired block structure.
-                result = process_one_coco_image(
-                    coco_image, out_dir, adj_cloud, method)
+    # For now, it supports only L8
+    flags = [s in {'L8'} for s in all_images.lookup('sensor_coarse')]
+    # flags = [s in sensors for s in all_images.lookup('sensor_coarse')]
+    all_images = all_images.compress(flags)
 
-    return result
+    image_id_iter = iter(all_images)
+
+    # For now, it supports only L8
+    jobs = ub.JobPool(mode='process', max_workers=workers)
+    if pman is not None:
+        image_id_iter = pman.progiter(image_id_iter, desc='submit prepare jobs', transient=True)
+    for image_id in image_id_iter:
+        coco_image: kwcoco.CocoImage = dset.coco_image(image_id)
+        coco_image = coco_image.detach()
+        # Transform the image data into the desired block structure.
+        jobs.submit(process_one_coco_image,
+                    coco_image, out_dir, adj_cloud, method, resolution)
+
+    job_iter = jobs.as_completed()
+    if pman is not None:
+        job_iter = pman.progiter(job_iter, desc='collect prepare jobs')
+
+    for job in job_iter:
+        meta_fpath = job.result()
+
+    return meta_fpath
 
 
-def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
+@profile
+def process_one_coco_image(coco_image, out_dir, adj_cloud, method, resolution):
     """
     Args:
         coco_image (kwcoco.CocoImage): the image to process
+
         out_dir (Path): path to write the image data
+
+        resolution (str | None): resolution to process at (e.g. 30GSD).
 
     Returns:
         Dict: result dictionary with keys:
@@ -334,6 +390,10 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
     if video_name is None:
         video_name = 'vid_{:06d}'.format(coco_image.video['id'])
 
+    # Preconstruct the file names used in the inner loops
+    fname_json = (image_name + '.json')
+    fname_npy = (image_name + '.npy')
+
     video_dpath = (out_dir / video_name).ensuredir()
 
     # Other relevant coco metadata
@@ -347,7 +407,7 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
     # Note: if kwcoco needs to register more fine-grained sensor
     # information we can do that.
     sensor = coco_image.img['sensor_coarse']
-    assert sensor == 'L8', 'MWE only supports landsat-8 for now'
+    # assert sensor == 'L8', 'MWE only supports landsat-8 for now'
 
     # Given the sensor, determine what the intensity and quality band
     # we should request are.
@@ -360,13 +420,16 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
     delay_kwargs = {
         'nodata_method': None,
         'space': 'video',
+        'resolution': resolution,
     }
 
     # Construct delayed images. These represent a tree of image
     # operations that will resample the image at the desired resolution
     # as well as align it with other images in the sequence.
-    delayed_im = coco_image.delay(channels=intensity_channels, **delay_kwargs)
-    delayed_qa = coco_image.delay(channels=quality_channels, **delay_kwargs)
+    # NOTE: Issue occurs when setting resolution argument in imdelay
+    delayed_im = coco_image.imdelay(channels=intensity_channels, **delay_kwargs)
+    delayed_qa = coco_image.imdelay(channels=quality_channels,  **delay_kwargs)
+
     # Check what shape the data would be loaded with if we finalized right now.
     h, w = delayed_im.shape[0:2]
     # Determine if padding is necessary to properly break the data into blocks.
@@ -408,16 +471,10 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
     else:
         clear_ratio = 1
 
-    result = {
-        'status': None,
-        'fpaths': None,
-    }
-
     if clear_ratio <= clear_threshold:
         logger.warn('Not enough clear observations for {}/{}'.format(
             video_name, image_name))
-        result['status'] = 'failed'
-        return result
+        return
 
     im_data = delayed_im.finalize(interpolation='cubic', antialias=True)
 
@@ -500,11 +557,13 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
         blocks = einops.rearrange(
             data, '(nby bh) (nbx bw) c -> nbx nby bh bw c', bw=bw, bh=bh)
 
+        # FIXME: Disable skipping until QA bands are handled correctly
+        SKIP_BLOCKS_WITH_QA = False
+
         for i, j in it.product(range(n_block_y), range(n_block_x)):
             block = blocks[i, j]
+            bh, bw = block.shape[0:2]
 
-            # FIXME: Disable skipping until QA bands are handled correctly
-            SKIP_BLOCKS_WITH_QA = False
             if SKIP_BLOCKS_WITH_QA:
                 # check if no valid pixels in the chip, then eliminate
                 qa_unique = np.unique(block[..., -1])
@@ -516,17 +575,18 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
                     continue
 
             block_dname = 'block_x{}_y{}'.format(i + 1, j + 1)
-            block_dpath = (video_dpath / block_dname).ensuredir()
-            block_fpath = block_dpath / (image_name + '.npy')
+            block_dpath = video_dpath / block_dname
+            block_fpath = block_dpath / fname_npy
 
             metadata.update({
                 'x': i + 1,
                 'y': j + 1,
-                'total_pixels': int(np.prod(block.shape[0:2])),
+                'total_pixels': bw * bh,
                 'total_bands': int(block.shape[-1]),
             })
-            meta_fpath = block_dpath / (image_name + '.json')
-            if not os.path.exists(block_fpath):
+            if not block_fpath.exists():
+                block_dpath.mkdir(exist_ok=True)
+                meta_fpath = block_dpath / fname_json
                 meta_fpath.write_text(json.dumps(metadata))
                 np.save(block_fpath, block)
                 result_fpaths.append(block_fpath)
@@ -534,15 +594,17 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
         logger.info(
             'Stacked blocked image {}/{}'.format(video_name, image_name))
     else:
+        # FIXME: seems broken. Comment on why and raise a NotImplementedError
+        # if this is true.
 
         metadata.update({
             'total_pixels': int(np.prod(data.shape[0:2])),
             'total_bands': int(data.shape[-1]),
         })
 
-        full_fpath = video_dpath / (image_name + '.npy')
-        meta_fpath = video_dpath / (image_name + '.json')
-        if not os.path.exists(block_fpath):
+        full_fpath = video_dpath / fname_npy
+        if not block_fpath.exists():
+            meta_fpath = video_dpath / fname_json
             meta_fpath.write_text(json.dumps(metadata))
             np.save(full_fpath, data)
             result_fpaths.append(full_fpath)
@@ -550,8 +612,9 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method):
             logger.info(
                 'Stacked full image {}/{}'.format(video_name, image_name))
 
-    result['status'] = 'passed'
-    result['fpaths'] = result_fpaths
+    # FIXME: It seems strange that we return one of the metadata paths for just
+    # one of the blocks instead of having a metadata file for all blocks.
+    meta_fpath = block_dpath / (image_name + '.json')
     return meta_fpath
 
 

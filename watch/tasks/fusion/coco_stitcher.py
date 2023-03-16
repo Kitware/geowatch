@@ -136,8 +136,7 @@ class CocoStitchingManager(object):
                  stiching_space='video', device='numpy', thresh=0.5,
                  write_probs=True, write_preds=False, num_bands='auto',
                  prob_compress='DEFLATE', polygon_categories=None,
-                 expected_min=None, expected_minmax=None, quantize=True,
-                 writer_queue=None):
+                 expected_minmax=None, quantize=True, writer_queue=None):
         from watch.utils import util_parallel
         self.short_code = short_code
         self.result_dataset = result_dataset
@@ -566,11 +565,19 @@ class CocoStitchingManager(object):
 
                 kwimage.imwrite(
                     str(new_fpath), quant_probs, space=None, backend='gdal',
+                    metadata={
+                        'quantization': quantization,
+                        'channels': self.chan_code,
+                    },
                     nodata=quantization['nodata'], **write_kwargs,
                 )
             else:
                 kwimage.imwrite(
                     str(new_fpath), final_probs, space=None, backend='gdal',
+                    metadata={
+                        'channels': self.chan_code,
+                        'quantization': None,
+                    },
                     **write_kwargs,
                 )
 
@@ -701,8 +708,6 @@ def quantize_image(imdata, old_min=None, old_max=None, quantize_dtype=np.int16):
                 if old_max is None:
                     old_max = int(np.ceil(valid_data.max()))
 
-    # old_min = 0
-    # old_max = 1
     quantize_iinfo = np.iinfo(quantize_dtype)
     quantize_max = quantize_iinfo.max
     if quantize_iinfo.kind == 'u':

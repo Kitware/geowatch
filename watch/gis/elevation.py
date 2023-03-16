@@ -134,6 +134,7 @@ class DEM_Collection(ElevationDatabase):
 
     Example:
         >>> # xdoctest: +REQUIRES(--network)
+        >>> # xdoctest: +REQUIRES(--slow)
         >>> # Use the gtop30 DEM dataset from GIRDER to find elevation.
         >>> from watch.gis.elevation import *  # NOQA
         >>> dems = DEM_Collection.gtop30()
@@ -142,6 +143,7 @@ class DEM_Collection(ElevationDatabase):
         499.0
 
         >>> # Running one query on the CI is good enough
+        >>> # xdoctest: +REQUIRES(--slow)
         >>> # xdoctest: +REQUIRES(--slow)
         >>> lat, lon = (37.7280555555556, 129.008888888889)
         >>> print(dems.query(lat, lon))
@@ -250,6 +252,7 @@ class DEM_Collection(ElevationDatabase):
 
         Example:
             >>> # xdoctest: +REQUIRES(--network)
+            >>> # xdoctest: +REQUIRES(--slow)
             >>> dems = DEM_Collection.gtop30()
             >>> lats = [1, 2, 3]
             >>> lons = [1, 2, 3]

@@ -5,9 +5,10 @@ CommandLine:
     xdoctest -m watch.cli.prepare_teamfeats __doc__
 
 SeeAlso:
-    ~/code/watch/watch/tasks/invariants/predict.py
-    ~/code/watch/watch/tasks/landcover/predict.py
-    ~/code/watch/watch/tasks/depth/predict.py
+    ../tasks/invariants/predict.py
+    ../tasks/landcover/predict.py
+    ../tasks/depth/predict.py
+    ../tasks/cold/predict.py
 
 Example:
     >>> from watch.cli.prepare_teamfeats import *  # NOQA
@@ -97,7 +98,7 @@ Ignore:
 
 
     # Drop 6
-    export CUDA_VISIBLE_DEVICES="3"
+    export CUDA_VISIBLE_DEVICES="0,1"
     DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
     BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6
     python -m watch.cli.prepare_teamfeats \
@@ -107,9 +108,10 @@ Ignore:
         --with_materials=0 \
         --with_invariants=0 \
         --with_depth=0 \
+        --with_cold=0 \
         --do_splits=0 \
         --skip_existing=1 \
-        --gres=0, --workers=1 --backend=tmux --run=1
+        --gres=0,1 --workers=4 --backend=tmux --run=1
 
 
 """
@@ -119,66 +121,131 @@ import scriptconfig as scfg
 import ubelt as ub
 
 
-class TeamFeaturePipelineConfig(scfg.Config):
+# class TeamFeaturePipelineConfig(scfg.Config):
+#     """
+#     This generates the bash commands necessary to run team feature computation,
+#     followed by aggregation and then splitting out train / val datasets.
+
+#     Note:
+#         The models and parameters to use are hard coded in this script.
+#     """
+#     default = {
+#         'base_fpath': scfg.Value(None, nargs='+', help=ub.paragraph(
+#             '''
+#             One or more base coco files to compute team-features on.
+#             ''')),
+#         'expt_dvc_dpath': scfg.Value('auto', help=ub.paragraph(
+#             '''
+#             The DVC directory where team feature model weights can be found.
+#             If "auto" uses the ``watch.find_dvc_dpath(tags='phase2_expt')``
+#             mechanism to infer the location.
+#             ''')),
+#         'gres': scfg.Value('auto', help='comma separated list of gpus or auto'),
+
+#         'with_landcover': scfg.Value(True, help='Include DZYNE landcover features'),
+#         'with_materials': scfg.Value(True, help='Include Rutgers material features'),
+#         'with_invariants': scfg.Value(True, help='Include UKY invariant features'),
+#         'with_invariants2': scfg.Value(0, help='Include UKY invariant features'),
+#         'with_depth': scfg.Value(True, help='Include DZYNE WorldView depth features'),
+#         'with_cold': scfg.Value(True, help='Include COLD features'),
+
+#         'invariant_segmentation': scfg.Value(False, help='Enable/Disable segmentation part of invariants'),
+#         'invariant_pca': scfg.Value(0, help='Enable/Disable invariant PCA'),
+#         'invariant_resolution': scfg.Value('10GSD', help='GSD for invariants'),
+
+#         'virtualenv_cmd': scfg.Value(None, type=str, help=ub.paragraph(
+#             '''
+#             Command to start the appropriate virtual environment if your bashrc
+#             does not start it by default.''')),
+
+#         'data_workers': scfg.Value(2, help='dataloader workers for each proc'),
+#         'cold_workers': scfg.Value(4, help='workers for pycold'),
+#         'depth_workers': scfg.Value(2, help='workers for depth only. On systems with < 32GB RAM might need to set to 0'),
+
+#         'keep_sessions': scfg.Value(False, help='if True does not close tmux sessions'),
+
+#         'workers': scfg.Value('auto', help='Maximum number of parallel jobs, 0 is no-nonsense serial mode. '),
+#         'run': scfg.Value(0, help='if True execute the pipeline'),
+#         'skip_existing': scfg.Value(True, help='if True skip completed results'),
+
+#         'do_splits': scfg.Value(False, help='if True also make splits. BROKEN'),
+#         # 'follow': scfg.Value(True),
+
+#         'serial': scfg.Value(False, help='if True use serial mode'),
+
+#         'backend': scfg.Value('tmux', help=None),
+
+#         'check': scfg.Value(True, help='if True check files exist where we can'),
+#         'verbose': scfg.Value(1, help=''),
+
+#         'kwcoco_ext': scfg.Value('.kwcoco.json', help='use .kwcoco.json or .kwcoco.zip for outputs'),
+#     }
+
+
+class TeamFeaturePipelineConfig(scfg.DataConfig):
     """
     This generates the bash commands necessary to run team feature computation,
     followed by aggregation and then splitting out train / val datasets.
 
     Note:
         The models and parameters to use are hard coded in this script.
+
+    TODO:
+        - [ ] jsonargparse use-case: specifying parmeters of the subalgos
     """
-    default = {
-        'base_fpath': scfg.Value(None, nargs='+', help=ub.paragraph(
+    base_fpath = scfg.Value(None, help=ub.paragraph(
             '''
             One or more base coco files to compute team-features on.
-            ''')),
-        'expt_dvc_dpath': scfg.Value('auto', help=ub.paragraph(
+            '''), nargs='+')
+    expt_dvc_dpath = scfg.Value('auto', help=ub.paragraph(
             '''
-            The DVC directory where team feature model weights can be found.
-            If "auto" uses the ``watch.find_dvc_dpath(tags='phase2_expt')``
-            mechanism to infer the location.
-            ''')),
-        'gres': scfg.Value('auto', help='comma separated list of gpus or auto'),
-
-        'with_landcover': scfg.Value(True, help='Include DZYNE landcover features'),
-        'with_materials': scfg.Value(True, help='Include Rutgers material features'),
-        'with_invariants': scfg.Value(True, help='Include UKY invariant features'),
-        'with_invariants2': scfg.Value(0, help='Include UKY invariant features'),
-        'with_depth': scfg.Value(True, help='Include DZYNE WorldView depth features'),
-        'with_cold': scfg.Value(True, help='Include COLD features'),
-
-        'invariant_segmentation': scfg.Value(False, help='Enable/Disable segmentation part of invariants'),
-        'invariant_pca': scfg.Value(0, help='Enable/Disable invariant PCA'),
-        'invariant_resolution': scfg.Value('10GSD', help='GSD for invariants'),
-
-        'virtualenv_cmd': scfg.Value(None, type=str, help=ub.paragraph(
+            The DVC directory where team feature model weights can be
+            found. If "auto" uses the
+            ``watch.find_dvc_dpath(tags='phase2_expt')`` mechanism to
+            infer the location.
+            '''), nargs=None)
+    gres = scfg.Value('auto', help='comma separated list of gpus or auto', nargs=None)
+    with_landcover = scfg.Value(True, help='Include DZYNE landcover features', nargs=None)
+    with_materials = scfg.Value(True, help='Include Rutgers material features', nargs=None)
+    with_invariants = scfg.Value(True, help='Include UKY invariant features', nargs=None)
+    with_invariants2 = scfg.Value(0, help='Include UKY invariant features', nargs=None)
+    with_depth = scfg.Value(True, help='Include DZYNE WorldView depth features', nargs=None)
+    with_cold = scfg.Value(True, help='Include COLD features', nargs=None)
+    invariant_segmentation = scfg.Value(False, help=ub.paragraph(
             '''
-            Command to start the appropriate virtual environment if your bashrc
-            does not start it by default.''')),
-
-        'data_workers': scfg.Value(2, help='dataloader workers for each proc'),
-        'cold_workers': scfg.Value(4, help='workers for pycold'),
-        'depth_workers': scfg.Value(2, help='workers for depth only. On systems with < 32GB RAM might need to set to 0'),
-
-        'keep_sessions': scfg.Value(False, help='if True does not close tmux sessions'),
-
-        'workers': scfg.Value('auto', help='Maximum number of parallel jobs, 0 is no-nonsense serial mode. '),
-        'run': scfg.Value(0, help='if True execute the pipeline'),
-        'skip_existing': scfg.Value(True, help='if True skip completed results'),
-
-        'do_splits': scfg.Value(False, help='if True also make splits. BROKEN'),
-
-        'follow': scfg.Value(True),
-
-        'serial': scfg.Value(False, help='if True use serial mode'),
-
-        'backend': scfg.Value('tmux', help=None),
-
-        'check': scfg.Value(True, help='if True check files exist where we can'),
-        'verbose': scfg.Value(1, help=''),
-
-        'kwcoco_ext': scfg.Value('.kwcoco.json', help='use .kwcoco.json or .kwcoco.zip for outputs'),
-    }
+            Enable/Disable segmentation part of invariants
+            '''), nargs=None)
+    invariant_pca = scfg.Value(0, help='Enable/Disable invariant PCA', nargs=None)
+    invariant_resolution = scfg.Value('10GSD', help='GSD for invariants', nargs=None)
+    virtualenv_cmd = scfg.Value(None, type=str, help=ub.paragraph(
+            '''
+            Command to start the appropriate virtual environment if your
+            bashrc does not start it by default.
+            '''), nargs=None)
+    data_workers = scfg.Value(2, help='dataloader workers for each proc', nargs=None)
+    cold_workers = scfg.Value(4, help='workers for pycold', nargs=None)
+    depth_workers = scfg.Value(2, help=ub.paragraph(
+            '''
+            workers for depth only. On systems with < 32GB RAM might
+            need to set to 0
+            '''), nargs=None)
+    keep_sessions = scfg.Value(False, help='if True does not close tmux sessions', nargs=None)
+    workers = scfg.Value('auto', help=ub.paragraph(
+            '''
+            Maximum number of parallel jobs, 0 is no-nonsense serial
+            mode.
+            '''), nargs=None)
+    run = scfg.Value(0, help='if True execute the pipeline', nargs=None)
+    skip_existing = scfg.Value(True, help='if True skip completed results', nargs=None)
+    do_splits = scfg.Value(False, help='if True also make splits. BROKEN', nargs=None)
+    serial = scfg.Value(False, help='if True use serial mode', nargs=None)
+    backend = scfg.Value('tmux', help=None, nargs=None)
+    check = scfg.Value(True, help='if True check files exist where we can', nargs=None)
+    verbose = scfg.Value(1, help='', nargs=None)
+    kwcoco_ext = scfg.Value('.kwcoco.json', help=ub.paragraph(
+            '''
+            use .kwcoco.json or .kwcoco.zip for outputs
+            '''), nargs=None)
 
 
 def prep_feats(cmdline=True, **kwargs):
@@ -194,7 +261,7 @@ def prep_feats(cmdline=True, **kwargs):
     import cmd_queue
     from watch.utils import util_path
 
-    config = TeamFeaturePipelineConfig(cmdline=cmdline, data=kwargs)
+    config = TeamFeaturePipelineConfig.cli(cmdline=cmdline, data=kwargs)
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
 
     gres = config['gres']
@@ -227,11 +294,7 @@ def prep_feats(cmdline=True, **kwargs):
     if workers == 0:
         gres = None
 
-    if gres is None:
-        size = max(1, workers)
-    else:
-        size = len(gres)
-
+    size = max(1, workers)
     from watch.mlops.pipeline import Pipeline
     pipeline = Pipeline()
 
@@ -279,8 +342,8 @@ def prep_feats(cmdline=True, **kwargs):
 
 
 def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundle_dpath, config):
-
     from watch.utils import util_parallel
+    from watch.utils import simple_dvc
     data_workers = util_parallel.coerce_num_workers(config['data_workers'])
 
     model_fpaths = {
@@ -343,6 +406,8 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
     combo_code_parts = []
     key = 'with_landcover'
     if config[key]:
+        simple_dvc.SimpleDVC().request(model_fpaths['dzyne_landcover'])
+
         # Landcover is fairly fast to run, do it first
         task = {}
         task['output_fpath'] = outputs['dzyne_landcover']
@@ -390,8 +455,8 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
                 --coefs=cv,a0,a1,b1,c1,rmse \
                 --coefs_bands=0,1,2,3,4,5 \
                 --timestamp=True \
-                --mode='process' \
-                --workers="{data_workers}"
+                --workermode=process \
+                --workers="{config.cold_workers}"
             ''')
         combo_code_parts.append(codes[key])
         job = pipeline.submit(
@@ -406,6 +471,8 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
 
     key = 'with_depth'
     if config[key]:
+        simple_dvc.SimpleDVC().request(model_fpaths['dzyne_depth'])
+
         # Landcover is fairly fast to run, do it first
         task = {}
         # Only need 1 worker to minimize lag between images, task is GPU bound
@@ -454,6 +521,8 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
     # Run materials while landcover is running
     key = 'with_materials'
     if config[key]:
+        simple_dvc.SimpleDVC().request(model_fpaths['rutgers_materials'])
+
         task = {}
         task['output_fpath'] = outputs['rutgers_materials']
         task['gpus'] = 1
@@ -485,6 +554,7 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
     key = 'with_invariants'
     if config[key]:
         task = {}
+        simple_dvc.SimpleDVC().request(model_fpaths['uky_pretext'])
 
         if config['invariant_segmentation']:
             # segmentation_parts = [
@@ -529,6 +599,7 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
 
     key = 'with_invariants2'
     if config[key]:
+        simple_dvc.SimpleDVC().request(model_fpaths['uky_pretext2'])
         task = {}
         if not model_fpaths['uky_pretext2'].exists():
             print('Warning: UKY pretext model does not exist')
@@ -595,7 +666,7 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
         f'    --src {src_lines} \\',
         f'    --dst {base_combo_fpath}'
     ])
-    print('task_jobs = {!r}'.format(task_jobs))
+    # print('task_jobs = {!r}'.format(task_jobs))
     pipeline.submit(
         name='combine_features' + name_suffix,
         command=command,

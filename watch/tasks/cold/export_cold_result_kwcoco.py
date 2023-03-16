@@ -1,4 +1,19 @@
 """
+This is step 3/4 in predict.py
+
+
+SeeAlso:
+
+    predict.py
+
+    prepare_kwcoco.py
+
+    tile_processing_kwcoco.py
+
+    export_cold_result_kwcoco.py *
+
+    assemble_cold_result_kwcoco.py
+
 This script is for exporting COLD algorithm results (change vector, coefficients, RMSEs)
 to geotiff raster with kwcoco dataset.
 See original code: ~/code/pycold/src/python/pycold/imagetool/export_change_map.py
@@ -7,20 +22,22 @@ See original code: ~/code/pycold/src/python/pycold/imagetool/export_change_map.p
 import os
 import numpy as np
 import pandas as pd
-# from osgeo import gdal  # NOQA
 import datetime as datetime_mod
-from os.path import join
 import json
 import scriptconfig as scfg
 import logging
+import itertools
 import ubelt as ub
+from pytz import timezone
+from datetime import datetime as datetime_cls
+import gc
 logger = logging.getLogger(__name__)
 
 
 try:
     from xdev import profile
 except ImportError:
-    profile = ub.identity
+    from ubelt import identity as profile
 
 
 class ExportColdKwcocoConfig(scfg.DataConfig):
@@ -60,21 +77,22 @@ def export_cold_main(cmdline=1, **kwargs):
     >>>    stack_path = "/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/KR_R001",
     >>>    reccg_path = "/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/reccg/KR_R001",
     >>>    meta_fpath = '/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/KR_R001/block_x10_y1/crop_20140115T020000Z_N37.643680E128.649453_N37.683356E128.734073_L8_0.json',
-    >>>    coefs = ['cv'],
-    >>>    year_lowbound = 2017,
-    >>>    year_highbound = 2022,
-    >>>    coefs_bands = [0, 1, 2, 3, 4, 5],
-    >>>    timestamp = True,
+    >>>    coefs = 'cv',
+    >>>    year_lowbound = None,
+    >>>    year_highbound = None,
+    >>>    coefs_bands = '0,1,2,3,4,5',
+    >>>    timestamp = False,
     >>>    )
     >>> cmdline=0
     >>> export_cold_main(cmdline, **kwargs)
     """
+    pman = kwargs.pop('pman', None)
     config_in = ExportColdKwcocoConfig.cli(cmdline=cmdline, data=kwargs)
     rank = config_in['rank']
     n_cores = config_in['n_cores']
-    stack_path = config_in['stack_path']
-    reccg_path = config_in['reccg_path']
-    meta_fpath = config_in['meta_fpath']
+    stack_path = ub.Path(config_in['stack_path'])
+    reccg_path = ub.Path(config_in['reccg_path'])
+    meta_fpath = ub.Path(config_in['meta_fpath'])
     year_lowbound = config_in['year_lowbound']
     year_highbound = config_in['year_highbound']
     coefs = config_in['coefs']
@@ -94,8 +112,7 @@ def export_cold_main(cmdline=1, **kwargs):
     #     n_cores = config_in['n_cores']
 
     # define variables
-    meta = open(meta_fpath)
-    config = json.load(meta)
+    config = json.loads(meta_fpath.read_text())
     n_cols = config['padded_n_cols']
     n_rows = config['padded_n_rows']
     n_block_x = config['n_block_x']
@@ -104,20 +121,11 @@ def export_cold_main(cmdline=1, **kwargs):
     block_height = int(n_rows / n_block_y)  # height of a block
     n_blocks = n_block_x * n_block_y  # total number of blocks
 
-    log = open(os.path.join(reccg_path, 'log.json'))
-    cold_param = json.load(log)
+    cold_param = json.loads((reccg_path / 'log.json').read_text())
     method = cold_param['algorithm']
 
     # coef_names = ['cv', 'rmse', 'a0', 'a1', 'b1', 'a2', 'b2', 'a3', 'b3', 'c1']
     # band_names = [0, 1, 2, 3, 4, 5]
-
-    # SLOPE_SCALE = 10000
-    # BAND_INFO = {0: 'blue',
-    #              1: 'green',
-    #              2: 'red',
-    #              3: 'nir',
-    #              4: 'swir16',
-    #              5: 'swir22'}
 
     if coefs is not None:
         try:
@@ -150,11 +158,14 @@ def export_cold_main(cmdline=1, **kwargs):
     #     assert all(elem in coef_names for elem in coefs)
     #     assert all(elem in band_names for elem in coefs_bands)
 
-    out_path = os.path.join(reccg_path, 'cold_feature')
+    out_path = reccg_path / 'cold_feature'
+    tmp_path = reccg_path / 'cold_feature' / 'tmp'
+
+    tz = timezone('US/Eastern')
 
     if rank == 0:
-        if not os.path.exists(out_path):
-            os.makedirs(out_path)
+        out_path.ensuredir()
+        tmp_path.ensuredir()
 
     # MPI mode
     # trans = comm.bcast(trans, root=0)
@@ -163,270 +174,203 @@ def export_cold_main(cmdline=1, **kwargs):
     # rows = comm.bcast(rows, root=0)
     # config = comm.bcast(config, root=0)
 
+    # Get ordinal list from sample block_folder
+    block_folder = stack_path / 'block_x1_y1'
+    meta_files = [m for m in os.listdir(block_folder) if m.endswith('.json')]
+
+    # sort image files by ordinal dates
+    img_dates = []
+    img_names = []
+
+    # read metadata and
+    for meta in meta_files:
+        meta_config = json.loads((block_folder / meta).read_text())
+        ordinal_date = meta_config['ordinal_date']
+        img_name = meta_config['image_name'] + '.npy'
+        img_dates.append(ordinal_date)
+        img_names.append(img_name)
+
+    if year_lowbound is None:
+        year_low_ordinal = min(img_dates)
+        year_lowbound = pd.Timestamp.fromordinal(year_low_ordinal).year
+    else:
+        year_low_ordinal = pd.Timestamp.toordinal(datetime_mod.datetime(int(year_lowbound), 1, 1))
+
+    
+    if year_highbound is None:
+        year_high_ordinal = max(img_dates)
+        year_highbound = pd.Timestamp.fromordinal(year_high_ordinal).year
+    else:
+        year_high_ordinal = pd.Timestamp.toordinal(datetime_mod.datetime(int(year_highbound + 1), 1, 1))
+    
+    img_dates, img_names = zip(*filter(lambda x: x[0] >= year_low_ordinal,
+                                    zip(img_dates, img_names)))
+    img_dates, img_names = zip(*filter(lambda x: x[0] < year_high_ordinal,
+                                        zip(img_dates, img_names)))
+    
+    img_dates = sorted(img_dates)
+    img_names = sorted(img_names)
+    if timestamp:
+        ordinal_day_list = img_dates
+    else:
+        # Get only the first ordinal date of each year
+        first_ordinal_dates = []
+        first_img_names = []
+        last_year = None
+        for ordinal_day, img_name in zip(img_dates, img_names):
+            year = pd.Timestamp.fromordinal(ordinal_day).year
+            if year != last_year:
+                first_ordinal_dates.append(ordinal_day)
+                first_img_names.append(img_name)
+                last_year = year
+        
+        ordinal_day_list = first_ordinal_dates
+        
     ranks_percore = int(np.ceil(n_blocks / n_cores))
-    for i in range(ranks_percore):
+    i_iter = range(ranks_percore)
+    if pman is not None:
+        i_iter = pman.progiter(i_iter, total=ranks_percore,
+                               desc=f'Export COLD \\[rank {rank}]', transient=True)
+
+    for i in i_iter:
         iblock = n_cores * i + rank
         if iblock >= n_blocks:
             break
         current_block_y = int(np.floor(iblock / n_block_x)) + 1
         current_block_x = iblock % n_block_x + 1
         if method == 'OBCOLD':
-            filename = 'record_change_x{}_y{}_obcold.npy'.format(current_block_x, current_block_y)
+            filename = f'record_change_x{current_block_x}_y{current_block_y}_obcold.npy'
         elif method == 'COLD':
-            filename = 'record_change_x{}_y{}_cold.npy'.format(current_block_x, current_block_y)
+            filename = f'record_change_x{current_block_x}_y{current_block_y}_cold.npy'
         elif method == 'HybridCOLD':
-            filename = 'record_change_x{}_y{}_hybridcold.npy'.format(current_block_x, current_block_y)
+            filename = f'record_change_x{current_block_x}_y{current_block_y}_hybridcold.npy'
 
-        block_folder = os.path.join(stack_path, 'block_x{}_y{}'.format(current_block_x, current_block_y))
+        block_folder = stack_path / f'block_x{current_block_x}_y{current_block_y}'
+        reccg_fpath = reccg_path / filename
 
-        if timestamp:
-            meta_files = [m for m in os.listdir(block_folder) if m.endswith('.json')]
+        # if timestamp:
+        if coefs is not None:
+            results_block_coefs = np.full(
+                (block_height, block_width, len(coefs) * len(coefs_bands),
+                    len(ordinal_day_list)), -9999, dtype=np.float32)
 
-            # sort image files by ordinal dates
-            img_dates = []
-            img_names = []
+        now = datetime_cls.now(tz).strftime('%Y-%m-%d %H:%M:%S')
+        print(f'processing the rec_cg file {reccg_fpath} ({now})')
+        if not reccg_fpath.exists():
+            print(f'the rec_cg file {reccg_fpath} is missing')
 
-            # read metadata and
-            for meta in meta_files:
-                metadata = open(join(block_folder, meta))
-                meta_config = json.load(metadata)
-                ordinal_date = meta_config['ordinal_date']
-                img_name = meta_config['image_name'] + '.npy'
-                img_dates.append(ordinal_date)
-                img_names.append(img_name)
-
-            if year_lowbound is None:
-                year_low_ordinal = min(img_dates)
-                year_lowbound = pd.Timestamp.fromordinal(year_low_ordinal).year
-            else:
-                year_low_ordinal = pd.Timestamp.toordinal(datetime_mod.datetime(int(year_lowbound), 1, 1))
-
-            img_dates, img_names = zip(*filter(lambda x: x[0] >= year_low_ordinal,
-                                                zip(img_dates, img_names)))
-            if year_highbound is None:
-                year_high_ordinal = max(img_dates)
-                year_highbound = pd.Timestamp.fromordinal(year_high_ordinal).year
-            else:
-                year_high_ordinal = pd.Timestamp.toordinal(datetime_mod.datetime(int(year_highbound + 1), 1, 1))
-
-            img_dates, img_names = zip(*filter(lambda x: x[0] < year_high_ordinal,
-                                                   zip(img_dates, img_names)))
-            img_dates = sorted(img_dates)
-            img_names = sorted(img_names)
-            ordinal_day_list = img_dates
-            results_block = [np.full((block_height, block_width), -9999, dtype=np.int16)
-                             for t in range(len(ordinal_day_list))]
-
-            if coefs is not None:
-                results_block_coefs = np.full(
-                    (block_height, block_width, len(coefs) * len(coefs_bands),
-                     len(ordinal_day_list)), -9999, dtype=np.float32)
-
-            print('processing the rec_cg file {}'.format(os.path.join(reccg_path, filename)))
-            if not os.path.exists(os.path.join(reccg_path, filename)):
-                print('the rec_cg file {} is missing'.format(os.path.join(reccg_path, filename)))
-
-        cold_block = np.array(np.load(os.path.join(reccg_path, filename)), dtype=dt)
-
-        cold_block.sort(order='pos')
-        current_processing_pos = cold_block[0]['pos']
-        current_dist_type = 0
-
-        for count, curve in enumerate(cold_block):
-            if curve['pos'] != current_processing_pos:
-                current_processing_pos = curve['pos']
-                current_dist_type = 0
-
-            if curve['change_prob'] < 100 or curve['t_break'] == 0 or count == (len(cold_block) - 1):  # last segment
-                continue
-
-            i_col = int((curve["pos"] - 1) % n_cols) - \
-                    (current_block_x - 1) * block_width
-            i_row = int((curve["pos"] - 1) / n_cols) - \
-                    (current_block_y - 1) * block_height
-            if i_col < 0:
-                dat_pth = '?'
-                print('Processing {} failed: i_row={}; i_col={} for {}'.format(filename, i_row, i_col, dat_pth))
-                return
-
-            if method == 'OBCOLD':
-                current_dist_type = getcategory_obcold(cold_block, count, current_dist_type)
-            else:
-                current_dist_type = getcategory_cold(cold_block, count)
-            break_year = pd.Timestamp.fromordinal(curve['t_break']).year
-            if break_year < year_lowbound or break_year > year_highbound:
-                continue
-            results_block[break_year - year_lowbound][i_row][i_col] = current_dist_type * 1000 + curve['t_break'] - \
-                (pd.Timestamp.toordinal(datetime_mod.date(break_year, 1, 1))) + 1
-
+        cold_block = np.array(np.load(reccg_fpath), dtype=dt)
+  
         if coefs is not None:
             cold_block_split = np.split(cold_block, np.argwhere(np.diff(cold_block['pos']) != 0)[:, 0] + 1)
+
+            nan_val = -9999
+            feature_outputs = coefs
+            feature_set = set(feature_outputs)
+            
+            if not feature_set.issubset({'a0', 'c1', 'a1', 'b1', 'a2', 'b2', 'a3', 'b3', 'cv', 'rmse'}):
+                raise Exception('the outputted feature must be in [a0, c1, a1, b1, a2, b2, a3, b3, cv, rmse]')
+            
             for element in cold_block_split:
                 # the relative column number in the block
                 i_col = int((element[0]["pos"] - 1) % n_cols) - \
                         (current_block_x - 1) * block_width
                 i_row = int((element[0]["pos"] - 1) / n_cols) - \
                         (current_block_y - 1) * block_height
-
+                
                 for band_idx, band in enumerate(coefs_bands):
-                    feature_row = extract_features(element, band, ordinal_day_list, -9999, timestamp,
-                                                    feature_outputs=coefs)
+                    feature_row = extract_features(element, band, ordinal_day_list, nan_val, timestamp,
+                                                    feature_outputs, feature_set)                    
+                    # Degugging mode
+                    # if current_block_x == 10 and current_block_y == 11:
+                    #     print((current_block_x, current_block_y), (i_col, i_row), (band_idx, band))
+                    #     print(feature_row)
+                    
                     for index, coef in enumerate(coefs):
                         results_block_coefs[i_row][i_col][index + band_idx * len(coefs)][:] = \
                             feature_row[index]
 
         # save the temp dataset out
-        if timestamp:
-            for day in range(len(ordinal_day_list)):
-                if coefs is not None:
-                    outfile = os.path.join(out_path,
-                                            'tmp_coefmap_block{}_{}.npy'.format(iblock + 1,
-                                                                                ordinal_day_list[day]))
-                    np.save(outfile, results_block_coefs[:, :, :, day])
-
+        # if timestamp:
+        for day in range(len(ordinal_day_list)):
+            if coefs is not None:
+                outfile = tmp_path / f'tmp_coefmap_block{iblock + 1}_{ordinal_day_list[day]}.npy'
+                np.save(outfile, results_block_coefs[:, :, :, day])
     # MPI mode (wait for all processes)
-    # comm.Barrier()
+    # comm.Barrier()    
+
+    gc.collect()
+    
+class NoMatchingColdCurve(Exception):
+    ...
 
 
-# copy from /pycold/src/python/pycold/pyclassifier.py because MPI has conflicts with the pycold package in UCONN HPC.
-# Dirty approach!
-def extract_features(cold_plot, band, ordinal_day_list, nan_val, timestamp, feature_outputs=['a0', 'a1', 'b1']):
-    """
-    generate features for classification based on a plot-based rec_cg and a list of days to be predicted
-    Parameters
-    ----------
-    cold_plot: nested array
-        plot-based rec_cg
-    band: integer
-        the predicted band number range from 0 to 6
-    ordinal_day_list: list
-        a list of days that this function will predict every days as a list as output
-    nan_val: integer
-        NA value assigned to the output
-    feature_outputs: a list of outputted feature name
-        it must be within [a0, c1, a1, b1, a2, b2, a3, b3, cv, rmse]
-    Returns
-    -------
-        feature: a list (length = n_feature) of 1-array [len(ordinal_day_list)]
-    """
-    features = [np.full(len(ordinal_day_list), nan_val, dtype=np.double) for x in range(len(feature_outputs))]
+@profile
+def extract_features(cold_plot, band, ordinal_day_list, nan_val, timestamp, feature_outputs, feature_set):
+    # NOTE: this function is a bottleneck, speedups are needed here
+
+    features = np.full((len(feature_outputs), len(ordinal_day_list)), nan_val, dtype=np.double)
     SLOPE_SCALE = 10000
-    for index, ordinal_day in enumerate(ordinal_day_list):
-        for idx, cold_curve in enumerate(cold_plot):
-            if idx == len(cold_plot) - 1:
-                last_year = pd.Timestamp.fromordinal(cold_plot[idx]['t_end']).year
-                max_days = datetime_mod.date(last_year, 12, 31).toordinal()
-            else:
-                max_days = cold_plot[idx + 1]['t_start']
 
-            break_year = (
-                pd.Timestamp.fromordinal(cold_curve['t_break']).year
-                if (cold_curve['t_break'] > 0 and cold_curve['change_prob'] == 100)
-                else -9999
-            )
+    last_year = pd.Timestamp.fromordinal(cold_plot[-1]['t_end']).year
+    max_days_list = [datetime_mod.date(last_year, 12, 31).toordinal()] * len(cold_plot)
+    break_year_list = [-9999 if not (curve['t_break'] > 0 and curve['change_prob'] == 100) else
+                       pd.Timestamp.fromordinal(curve['t_break']).year for curve in cold_plot]
 
-            if cold_curve['t_start'] <= ordinal_day < max_days:
-                for n, feature in enumerate(feature_outputs):
-                    if feature not in feature_outputs:
-                        raise Exception('the outputted feature must be in [a0, c1, a1, b1,a2, b2, a3, b3, cv, rmse]')
-                    if feature == 'a0':
-                        features[n][index] = cold_curve['coefs'][band][0] + cold_curve['coefs'][band][1] * \
-                                             ordinal_day / SLOPE_SCALE
-                        if np.isnan(features[n][index]):
-                            features[n][index] = 0
-                    elif feature == 'c1':
-                        features[n][index] = cold_curve['coefs'][band][1] / SLOPE_SCALE
-                        if np.isnan(features[n][index]):
-                            features[n][index] = 0
-                    elif feature == 'a1':
-                        features[n][index] = cold_curve['coefs'][band][2]
-                        if np.isnan(features[n][index]):
-                            features[n][index] = 0
-                    elif feature == 'b1':
-                        features[n][index] = cold_curve['coefs'][band][3]
-                        if np.isnan(features[n][index]):
-                            features[n][index] = 0
-                    elif feature == 'a2':
-                        features[n][index] = cold_curve['coefs'][band][4]
-                        if np.isnan(features[n][index]):
-                            features[n][index] = 0
-                    elif feature == 'b2':
-                        features[n][index] = cold_curve['coefs'][band][5]
-                        if np.isnan(features[n][index]):
-                            features[n][index] = 0
-                    elif feature == 'a3':
-                        features[n][index] = cold_curve['coefs'][band][6]
-                        if np.isnan(features[n][index]):
-                            features[n][index] = 0
-                    elif feature == 'b3':
-                        features[n][index] = cold_curve['coefs'][band][7]
-                        if np.isnan(features[n][index]):
-                            features[n][index] = 0
-                    elif feature == 'rmse':
-                        features[n][index] = cold_curve['rmse'][band]
-                        if np.isnan(features[n][index]):
-                            features[n][index] = 0
-                break
+    possible_features = ['a0', 'c1', 'a1', 'b1', 'rmse', 'cv']
+    fk_to_idx = {
+        fk: feature_outputs.index(fk)
+        for fk in possible_features
+        if fk in feature_set
+    }
 
-    if 'cv' in feature_outputs:
-        # ordinal_day_years = [pd.Timestamp.fromordinal(day).year for day in ordinal_day_list]
-        for index, ordinal_day in enumerate(ordinal_day_list):
-            ordinal_year = pd.Timestamp.fromordinal(ordinal_day).year
-            for cold_curve in cold_plot:
-                if (cold_curve['t_break'] == 0) or (cold_curve['change_prob'] != 100):
-                    continue
-                break_year = pd.Timestamp.fromordinal(cold_curve['t_break']).year
-                if timestamp:
-                    if ordinal_day == cold_curve['t_break']:
-                        features[feature_outputs.index('cv')][index] = cold_curve['magnitude'][band]
-                        continue
-                else:
-                    if break_year == ordinal_year:
-                        features[feature_outputs.index('cv')][index] = cold_curve['magnitude'][band]
-                        continue
+    a0_idx = fk_to_idx.get('a0', None)
+    c1_idx = fk_to_idx.get('c1', None)
+    a1_idx = fk_to_idx.get('a1', None)
+    b1_idx = fk_to_idx.get('b1', None)
+    rmse_idx = fk_to_idx.get('rmse', None)
+    cv_idx = fk_to_idx.get('cv', None)
+
+    # Precompute as much as possible before running the product
+    idx_day_year_list = [
+        (day_idx, ordinal_day, pd.Timestamp.fromordinal(ordinal_day).year)
+        for day_idx, ordinal_day in enumerate(ordinal_day_list)
+    ]
+
+    mday_byear_curve_list = [
+        (max_days_list[idx], break_year_list[idx], cold_curve)
+        for idx, cold_curve in enumerate(cold_plot)]
+
+    try:
+        idxs_iter = itertools.product(idx_day_year_list, mday_byear_curve_list)
+        for (day_idx, ordinal_day, ord_year), (max_day, break_year, cold_curve) in idxs_iter:
+            if cold_curve['t_start'] <= ordinal_day < max_day:
+                if a0_idx is not None:
+                    features[a0_idx, day_idx] = (
+                        cold_curve['coefs'][band, 0] +
+                        cold_curve['coefs'][band, 1] *
+                        ordinal_day / SLOPE_SCALE)
+                if c1_idx is not None:
+                    features[c1_idx, day_idx] = cold_curve['coefs'][band, 1] / SLOPE_SCALE
+                if a1_idx is not None:
+                    features[a1_idx, day_idx] = cold_curve['coefs'][band, 2]
+                if b1_idx is not None:
+                    features[b1_idx, day_idx] = cold_curve['coefs'][band, 3]
+                if rmse_idx is not None:
+                    features[rmse_idx, day_idx] = cold_curve['rmse'][band]
+
+                if cv_idx is not None:
+                    if cold_curve['t_break'] != 0 and cold_curve['change_prob'] == 100:
+                        break_year = break_year
+                        if (timestamp and ordinal_day == cold_curve['t_break']) or (not timestamp and break_year == ord_year):
+                            features[cv_idx, day_idx] = cold_curve['magnitude'][band]
+                            # In this case, we didn't find a matching cold
+                            # curve for the current ordinal day, stop processing.
+                            raise NoMatchingColdCurve
+    except NoMatchingColdCurve:
+        ...
 
     return features
-
-
-def getcategory_cold(cold_plot, i_curve):
-    t_c = -200
-    if cold_plot[i_curve]['magnitude'][3] > t_c and cold_plot[i_curve]['magnitude'][2] < -t_c and \
-            cold_plot[i_curve]['magnitude'][4] < -t_c:
-        if cold_plot[i_curve + 1]['coefs'][3, 1] > np.abs(cold_plot[i_curve]['coefs'][3, 1]) and \
-                cold_plot[i_curve + 1]['coefs'][2, 1] < -np.abs(cold_plot[i_curve]['coefs'][2, 1]) and \
-                cold_plot[i_curve + 1]['coefs'][4, 1] < -np.abs(cold_plot[i_curve]['coefs'][4, 1]):
-            return 3  # aforestation
-        else:
-            return 2  # regrowth
-    else:
-        return 1  # land disturbance
-
-
-def getcategory_obcold(cold_plot, i_curve, last_dist_type):
-    t_c = -250
-    if cold_plot[i_curve]['magnitude'][3] > t_c and cold_plot[i_curve]['magnitude'][2] < -t_c and \
-            cold_plot[i_curve]['magnitude'][4] < -t_c:
-        if cold_plot[i_curve + 1]['coefs'][3, 1] > np.abs(cold_plot[i_curve]['coefs'][3, 1]) and \
-                cold_plot[i_curve + 1]['coefs'][2, 1] < -np.abs(cold_plot[i_curve]['coefs'][2, 1]) and \
-                cold_plot[i_curve + 1]['coefs'][4, 1] < -np.abs(cold_plot[i_curve]['coefs'][4, 1]):
-            return 3  # aforestation
-        else:
-            return 2  # regrowth
-    else:
-        if i_curve > 0:
-            if (cold_plot[i_curve]['t_break'] - cold_plot[i_curve - 1]['t_break'] > 365.25 * 5) or (
-                    last_dist_type != 1):
-                return 1
-            flip_count = 0
-            for b in range(5):
-                if cold_plot[i_curve]['magnitude'][b + 1] * cold_plot[i_curve - 1]['magnitude'][b + 1] < 0:
-                    flip_count = flip_count + 1
-            if flip_count >= 4:
-                return 4
-            else:
-                return 1
-        else:
-            return 1  # land disturbance
 
 if __name__ == '__main__':
     export_cold_main()

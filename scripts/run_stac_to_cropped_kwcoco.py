@@ -284,7 +284,7 @@ def run_stac_to_cropped_kwcoco(input_path,
     ta1_cropped_kwcoco_path = os.path.join(ta1_cropped_dir,
                                            'cropped_kwcoco_for_bas.json')
     include_channels = 'blue|green|red|nir|swir16|swir22|quality'
-    subprocess.run(['python', '-m', 'watch.cli.coco_align_geotiffs',
+    subprocess.run(['python', '-m', 'watch.cli.coco_align',
                     '--visualize', 'False',
                     '--src', ta1_bas_kwcoco_path,
                     '--dst', ta1_cropped_kwcoco_path,

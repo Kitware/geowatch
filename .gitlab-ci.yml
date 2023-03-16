@@ -117,7 +117,7 @@ stages:
 
     script:
         - EAGER_IMPORT=1 python -c "import watch; print(watch.__version__)"
-        - ./run_tests.py --network watch tests scripts
+        - ./run_tests.py --network watch tests --capture=no --verbose
 
     after_script:
         - du -sh .cache/*
@@ -135,7 +135,7 @@ stages:
             
             #- .cache/conda/envs/loose-watch-env  # better with or without this?
             - .cache/pip
-            - .cache/xdg_cache
+            #- .cache/xdg_cache
 
 
 .test_strict_template:
@@ -160,7 +160,7 @@ stages:
         # 
         #- python -c "from pyproj import CRS ; print(CRS.from_user_input('crs84'))"
         #- python -c "from pyproj import CRS ; print(CRS.from_user_input('epsg:4326'))"
-        - ./run_tests.py --network watch tests scripts
+        - ./run_tests.py --network watch tests --capture=no --verbose
 
     after_script:
         - du -sh .cache/*
@@ -180,7 +180,7 @@ stages:
             #- .cache/conda/envs/strict-watch-env  # better with or without this?
             - .cache/conda/pkgs
             - .cache/pip
-            - .cache/xdg_cache
+            #- .cache/xdg_cache
 
 
 #### JOBS ###

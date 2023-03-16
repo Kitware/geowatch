@@ -7,6 +7,206 @@ from watch.mlops.aggregate import fix_duplicate_param_hashids
 from watch.utils import util_pandas
 
 
+def _namek_check_pipeline_status():
+    from watch.mlops import aggregate_loader
+    import watch
+    expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+    root_dpath = expt_dvc_dpath / '_namek_eval'
+    pipeline = 'bas'
+    io_workers = 16
+    # eval_type_to_results = aggregate_loader.build_tables(root_dpath, pipeline, io_workers)
+    # eval_type_to_results['bas_pxl_eval']
+
+    from watch.mlops import smart_pipeline
+    dag = smart_pipeline.make_smart_pipeline(pipeline)
+    dag.configure(config=None, root_dpath=root_dpath)
+    # node_to_fpaths = {}
+    # for node_name, node in ub.ProgIter(dag.nodes.items()):
+    #     node_fpaths = {}
+    #     for out_node_key, out_node in node.outputs.items():
+    #         node_fpaths[out_node_key] = aggregate_loader.out_node_matching_fpaths(out_node)
+    #     node_to_fpaths[node_name] = node_fpaths
+    # node_to_fpaths = ub.udict(node_to_fpaths).map_values(ub.udict)
+    # num_existing_outs = node_to_fpaths.map_values(lambda x: x.map_values(len))
+
+    # stages_of_interest = ['bas_pxl', 'bas_pxl_eval', 'bas_poly', 'bas_poly_eval']
+    stages_of_interest = ['bas_pxl', 'bas_pxl_eval']
+    existing = {}
+    for stage in stages_of_interest:
+        rows = dag.nodes[stage].find_template_outputs(workers=8)
+        if 1:
+            rows = [row for row in rows if row.get('request.bas_pxl.test_dataset', None) is not None]
+        existing[stage] = rows
+
+    bad_rows = []
+    for stage in stages_of_interest:
+        from watch.utils import util_dotdict  # NOQA
+        for row in ub.ProgIter(existing[stage]):
+            node = dag.nodes[stage]
+            row = util_dotdict.DotDict(row)
+            config = row.prefix_get('request')
+            dag.configure(config, cache=False)
+            row_dpath = ub.Path(row['dpath'])
+            row['process_id'] = node.process_id
+            # print(node.final_command())
+            if node.final_node_dpath != row['dpath']:
+                # print('config = {}'.format(ub.urepr(config, nl=1)))
+                # print((row_dpath / 'job_config.json').read_text())
+                # print((row_dpath / 'invoke.sh').read_text())
+                # print(node.final_command())
+                bad_rows.append(row)
+
+    dfs = {}
+    from watch.utils.util_pandas import DotDictDataFrame
+    for stage in stages_of_interest:
+        dfs[stage] = DotDictDataFrame(existing[stage])
+
+    stage1 = 'bas_pxl'
+    stage2 = 'bas_pxl_eval'
+    df1 = dfs[stage1]
+    df2 = dfs[stage2]
+
+    from watch.utils import util_dotdict  # NOQA
+    bad_rows = []
+    for row in existing[stage1]:
+        wanted_succ = ub.Path(row['dpath']) / '.succ' / stage2
+        if not wanted_succ.exists():
+            node = dag.nodes[stage]
+            row = util_dotdict.DotDict(row)
+            config = row.prefix_get('request')
+            dag.configure(config, cache=False)
+            if node.does_exist:
+                raise Exception
+
+        node1 = dag.nodes[stage1]
+        node2 = dag.nodes[stage2]
+        ...
+
+
+    df1 = dfs['bas_pxl'].subframe('request')
+    df2 = dfs['bas_pxl_eval'].subframe('request')
+
+    df1 = df1[~df1['bas_pxl.package_fpath'].isnull()]
+    df2 = df2[~df2['bas_pxl.package_fpath'].isnull()]
+
+    from kwcoco._helpers import _delitems
+
+    hashids1 = [ub.hash_data(row) for row in df1.to_dict('records')]
+    hashids2 = [ub.hash_data(row) for row in df2.to_dict('records')]
+
+    # There shouldn't be duplicates here, except in pathological circumstances
+    to_drop1 = []
+    for _, idxs in ub.find_duplicates(hashids1).items():
+        print('Dropping')
+        print(df1.iloc[idxs])
+        to_drop1.extend(idxs)
+    to_drop2 = []
+    for _, idxs in ub.find_duplicates(hashids2).items():
+        print('Dropping')
+        print(df2.iloc[idxs])
+        to_drop2.extend(idxs)
+    df1 = df1.drop(df1.index[to_drop1], axis=0)
+    df2 = df2.drop(df2.index[to_drop2], axis=0)
+    _delitems(hashids1, to_drop1)
+    _delitems(hashids2, to_drop2)
+
+    assert not ub.find_duplicates(hashids1)
+    assert not ub.find_duplicates(hashids2)
+
+    hashids1 = ub.oset(hashids1)
+    hashids2 = ub.oset(hashids2)
+
+    df1['hashid'] = hashids1
+    df2['hashid'] = hashids2
+    common = hashids1 & hashids2
+
+    df1 = df1.set_index('hashid')
+    df2 = df2.set_index('hashid')
+
+    missing1 = hashids2 - hashids1
+    assert len(missing1) == 0, 'should not be possible without error'
+
+    missing2 = hashids1 - hashids2
+    # These have not had a computation done for them.
+    missing_df = df1.loc[missing2]
+
+
+    # WANTED: Algorithm that takes a list of grid points and determines if any
+    # of the rows can be expressed conciesly as a matrix.
+    """
+    given = [
+        {'x': 1, 'y': 1, 'z': 1},
+        {'x': 1, 'y': 2, 'z': 1},
+        {'x': 1, 'y': 3, 'z': 1},
+        {'x': 2, 'y': 1, 'z': 2},
+        {'x': 2, 'y': 2, 'z': 2},
+        {'x': 2, 'y': 3, 'z': 2},
+        {'x': 3, 'y': 1, 'z': 2},
+        {'x': 4, 'y': 3, 'z': 2},
+        {'x': 4, 'y': 4, 'z': 2},
+        {'x': 4, 'y': 3, 'z': 3},
+        {'x': 4, 'y': 4, 'z': 3},
+    ]
+
+    should output:
+        - x: [1, 2]
+          y: [1, 2, 3]
+          z: [1, 2]
+        - x: [3]
+          y: [1]
+          z: [2]
+        - x: [4]
+          y: [3, 4]
+          z: [2, 3]
+
+    It seems like a solution here is non-unique, or at least the greedy way of
+    finding the solution will result in different answers depending on which
+    variable you try to collapse first. Is this a well-studied algorithm? Seems
+    like a decomposition problem.
+    """
+
+    import sys, ubelt
+    from watch.utils.result_analysis import varied_value_counts
+
+    submatrices = []
+    for _, group in missing_df.groupby('bas_pxl.test_dataset'):
+        group_records = group.to_dict('records')
+        group_varied = varied_value_counts(group_records)
+        for row in group_records:
+            row = {k: v for k, v in row.items() if not isinstance(v, float) or not math.isnan(v)}
+            row['bas_pxl.enabled'] = False
+            row['bas_pxl_eval.enabled'] = True
+            row['bas_poly.enabled'] = True
+            row['bas_poly_eval.enabled'] = True
+            submatrices.append(row)
+
+    from watch.utils import util_yaml
+    submat_text = util_yaml.yaml_dumps({'submatrices': submatrices})
+    fpath = ub.Path('foo.yaml').absolute()
+    fpath.write_text(submat_text)
+
+    # Generate code to run the missing experiments
+    invocation = ub.codeblock(
+        fr'''
+        python -m watch.mlops.schedule_evaluation \
+            --params={fpath} \
+            --root_dpath="{root_dpath}" \
+            --devices="0,1" --queue_size=4 \
+            --backend=tmux --queue_name "_explicit_recompute" \
+            --pipeline=bas --skip_existing=0 \
+            --print_varied=1 \
+            --run=0
+        ''')
+    print(invocation)
+
+
+
+    # For two levels in the node figure out:
+    # What paths on the parent are are in common.
+    # What paths on the child have yet to be computed.
+    node_fpaths = node_to_fpaths['bas_pxl']
+
+
 def _gather_all_results():
     r"""
     # On Namek
@@ -64,6 +264,88 @@ def _gather_all_results():
     build_all_param_plots(agg, rois, config)
 
 
+def resource_usage_report(agg):
+    import pandas as pd
+    from watch.utils import util_time
+    table = agg.table.copy()
+    resources = agg.resources
+
+    duration_cols = [
+        k for k in agg.resources.keys()
+        if k.endswith('.duration')
+    ]
+    for k in duration_cols:
+        table.loc[:, k] = table.loc[:, k].apply(lambda x: util_time.coerce_timedelta(x) if not pd.isnull(x) else x)
+
+    resource_summary = []
+    for k in duration_cols:
+        a, b, c = k.split('.')
+        uuid_key = f'context.{b}.uuid'
+
+        chosen = []
+        for _, group in table.groupby(uuid_key):
+            idx = group[k].idxmax()
+            chosen.append(idx)
+
+        unique_rows = table.loc[chosen]
+        row = {
+            'node': b,
+            'resource': c,
+            'total': unique_rows[k].sum(),
+            'mean': unique_rows[k].mean(),
+            'num': len(chosen),
+        }
+        resource_summary.append(row)
+
+        co2_key = f'{a}.{b}.co2_kg'
+        if co2_key in table:
+            unique_rows[co2_key]
+            row = {
+                'node': b,
+                'resource': 'co2_kg',
+                'total': unique_rows[co2_key].sum(),
+                'mean': unique_rows[co2_key].mean(),
+                'num': len(chosen),
+            }
+            resource_summary.append(row)
+
+        co2_key = f'{a}.{b}.kwh'
+        if co2_key in table:
+            unique_rows[co2_key]
+            row = {
+                'node': b,
+                'resource': 'kwh',
+                'total': unique_rows[co2_key].sum(),
+                'mean': unique_rows[co2_key].mean(),
+                'num': len(chosen),
+            }
+            resource_summary.append(row)
+    pd.DataFrame(resource_summary)
+
+    agg.resources['resources.bas_poly_eval.duration']
+    agg.resources['resources.bas_poly.duration']
+    agg.resources['resources.bas_poly.co2_kg']
+
+    unique_resources = {}
+    unique_resources['bas_pxl'] = poly_agg.table.groupby('context.bas_pxl.uuid')
+    unique_resources['bas_poly'] = poly_agg.table.groupby('context.bas_poly.uuid')
+    unique_resources['bas_poly_eval'] = poly_agg.table.groupby('context.bas_poly_eval.uuid')
+
+    for k, v in unique_resources.items():
+        v[f'resources.{k}.duration'].max().apply(util_time.coerce_timedelta).sum()
+        co2_key = f'resources.{k}.co2_kg'
+        if co2_key in v:
+            ...
+        v[].max().sum()
+
+    pxl_time = poly_agg.table.groupby('context.bas_pxl.uuid')['resources.bas_pxl.duration'].max().apply(util_time.coerce_timedelta).sum()
+    poly_time = poly_agg.table.groupby('context.bas_poly.uuid')['resources.bas_poly.duration'].max().apply(util_time.coerce_timedelta).sum()
+    poly_eval_time = poly_agg.table.groupby('context.bas_poly_eval.uuid')['resources.bas_poly.duration'].max().apply(util_time.coerce_timedelta).sum()
+    total_time = pxl_time + poly_time + poly_eval_time
+
+    poly_agg.table['context.bas_poly.uuid']
+    poly_agg.table['context.bas_poly_eval.uuid']
+
 
 def _check_high_tpr_case(agg, config):
     macro_results = agg.region_to_tables[agg.primary_macro_region].copy()
@@ -103,58 +385,51 @@ def _check_high_tpr_case(agg, config):
     ...
 
 
-def _namek_check_pipeline_status():
-    from watch.mlops import aggregate_loader
-    import watch
-    expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
-    root_dpath = expt_dvc_dpath / '_namek_eval'
-    pipeline = 'bas'
-    io_workers = 16
-    # eval_type_to_results = aggregate_loader.build_tables(root_dpath, pipeline, io_workers)
-    # eval_type_to_results['bas_pxl_eval']
-
-    from watch.mlops import smart_pipeline
-    dag = smart_pipeline.make_smart_pipeline(pipeline)
-    dag.print_graphs()
-    dag.configure(config=None, root_dpath=root_dpath)
-
-    node_to_fpaths = {}
-    for node_name, node in ub.ProgIter(dag.nodes.items()):
-        node_fpaths = {}
-        for out_node_key, out_node in node.outputs.items():
-            node_fpaths[out_node_key] = aggregate_loader.out_node_matching_fpaths(out_node)
-        node_to_fpaths[node_name] = node_fpaths
-
-    node_to_fpaths =ub.udict(node_to_fpaths).map_values(ub.udict)
-    num_existing_outs = node_to_fpaths.map_values(lambda x: x.map_values(len))
-
-
-
-
 def _namek_eval():
     from watch.mlops.aggregate import AggregateEvluationConfig
-    from watch.mlops.aggregate import build_tables
-    from watch.mlops.aggregate import build_aggregators
+    from watch.mlops.aggregate import coerce_aggregators
     import watch
     data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
     expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
     cmdline = 0
     kwargs = {
-        'root_dpath': expt_dvc_dpath / '_namek_eval',
+        'target': expt_dvc_dpath / '_namek_eval',
         'pipeline': 'bas',
         'io_workers': 10,
-        'freeze_cache': 0,
-        # 'pipeline': 'joint_bas_sc_nocrop',
-        # 'root_dpath': expt_dvc_dpath / '_testsc',
-        #'pipeline': 'sc',
     }
     config = AggregateEvluationConfig.cli(cmdline=cmdline, data=kwargs)
-    eval_type_to_results = build_tables(config)
-    agg_dpath = ub.Path(config['root_dpath']) / 'aggregate'
-    eval_type_to_aggregator = build_aggregators(eval_type_to_results, agg_dpath)
-    agg = ub.peek(eval_type_to_aggregator.values())
-    agg = eval_type_to_aggregator.get('bas_poly_eval', None)
+    eval_type_to_aggregator = coerce_aggregators(config)
 
+    poly_agg = eval_type_to_aggregator.get('bas_poly_eval', None)
+    pxl_agg = eval_type_to_aggregator.get('bas_pxl_eval', None)
+
+    poly_agg.resources['resources.bas_poly_eval.duration']
+    poly_agg.resources['resources.bas_poly.duration']
+    poly_agg.resources['resources.bas_poly.co2_kg']
+
+    from watch.utils import util_time
+    unique_resources = {}
+    unique_resources['bas_pxl'] = poly_agg.table.groupby('context.bas_pxl.uuid')
+    unique_resources['bas_poly'] = poly_agg.table.groupby('context.bas_poly.uuid')
+    unique_resources['bas_poly_eval'] = poly_agg.table.groupby('context.bas_poly_eval.uuid')
+
+    for k, v in unique_resources.items():
+        v[f'resources.{k}.duration'].max().apply(util_time.coerce_timedelta).sum()
+        co2_key = f'resources.{k}.co2_kg'
+        if co2_key in v:
+            ...
+        v[].max().sum()
+
+    pxl_time = poly_agg.table.groupby('context.bas_pxl.uuid')['resources.bas_pxl.duration'].max().apply(util_time.coerce_timedelta).sum()
+    poly_time = poly_agg.table.groupby('context.bas_poly.uuid')['resources.bas_poly.duration'].max().apply(util_time.coerce_timedelta).sum()
+    poly_eval_time = poly_agg.table.groupby('context.bas_poly_eval.uuid')['resources.bas_poly.duration'].max().apply(util_time.coerce_timedelta).sum()
+    total_time = pxl_time + poly_time + poly_eval_time
+
+    poly_agg.table['context.bas_poly.uuid']
+    poly_agg.table['context.bas_poly_eval.uuid']
+
+
+    agg = ub.peek(eval_type_to_aggregator.values())
     agg.build_macro_tables()
 
     agg.primary_display_cols = ['bas_poly_eval.metrics.bas_faa_f1', 'bas_poly_eval.metrics.bas_f1', 'bas_poly_eval.metrics.bas_tpr', 'bas_poly_eval.metrics.bas_ppv']

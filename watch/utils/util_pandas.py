@@ -260,11 +260,14 @@ class DotDictDataFrame(pd.DataFrame):
         """
         lookup_keys = []
         new_keys = []
+        key_parts = key.split('.')
+        nlevel = len(key_parts)
         for c in self.columns:
             path = c.split('.')
-            if path[0] == key:
+            if path[0:nlevel] == key_parts:
                 lookup_keys.append(c)
-                new_keys.append('.'.join(path[1:]))
+                if drop_prefix:
+                    new_keys.append('.'.join(path[nlevel:]))
         new = self.loc[:, lookup_keys]
         if drop_prefix:
             new.rename(ub.dzip(lookup_keys, new_keys), inplace=True, axis=1)

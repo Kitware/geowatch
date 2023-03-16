@@ -620,7 +620,7 @@ def main(cmdline=False, **kwargs):
             rf'''
             # MAIN WORKHORSE CROP IMAGES
             # Crop big images to the geojson regions
-            {job_environ_str}python -m watch.cli.coco_align_geotiffs \
+            {job_environ_str}python -m watch.cli.coco_align \
                 --src "{uncropped_fielded_fpath}" \
                 --dst "{aligned_imgonly_fpath}" \
                 --regions "{region_globstr}" \
