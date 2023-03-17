@@ -74,6 +74,44 @@ Example:
     >>> kwplot.imshow(canvas, fnum=1)
     >>> kwplot.show_if_requested()
 
+Example:
+    >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+    >>> # This shows how you can use the dataloader to sample an arbitrary
+    >>> # spacetime volume.
+    >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+    >>> import watch
+    >>> import kwcoco
+    >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+    >>> #coco_fpath = dvc_dpath / 'Drop4-BAS/data_vali.kwcoco.json'
+    >>> coco_fpath = dvc_dpath / 'Drop6/data_vali_split1.kwcoco.zip'
+    >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+    >>> ##'red|green|blue',
+    >>> self = KWCocoVideoDataset(
+    >>>     coco_dset,
+    >>>     time_dims=7, window_dims=(196, 196),
+    >>>     window_overlap=0,
+    >>>     channels="(S2,L8):blue|green|red|nir",
+    >>>     input_space_scale='3.3GSD',
+    >>>     window_space_scale='3.3GSD',
+    >>>     output_space_scale='1GSD',
+    >>>     #normalize_peritem='nir',
+    >>>     dist_weights=0,
+    >>>     quality_threshold=0,
+    >>>     neg_to_pos_ratio=0, time_sampling='soft2',
+    >>> )
+    >>> self.requested_tasks['change'] = 1
+    >>> self.requested_tasks['saliency'] = 1
+    >>> self.requested_tasks['class'] = 0
+    >>> self.requested_tasks['boxes'] = 1
+    >>> target = {
+    >>>     'video_id': 3,
+    >>>     'gids': [529, 555, 607, 697, 719, 730, 768],
+    >>>     'main_idx': 3,
+    >>>     'space_slice': (slice(0, 65, None), slice(130, 195, None)),
+    >>> }
+    >>> item = self[target]
+
+
 Ignore:
     >>> self.disable_augmenter = True
     >>> self.normalize_peritem = None
