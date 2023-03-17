@@ -10,6 +10,7 @@ import kwimage
 import kwarray
 import kwcoco
 import numpy as np
+import pandas as pd
 import ubelt as ub
 import geopandas as gpd
 import itertools
@@ -17,7 +18,8 @@ import math
 from typing import Iterable, Tuple, Union, Optional, Literal
 from dataclasses import dataclass
 from shapely.ops import unary_union
-from watch.tasks.tracking.utils import (NewTrackFunction, mask_to_polygons,
+from watch.tasks.tracking.utils import (NewTrackFunction, NoOpTrackFunction,
+                                        mask_to_polygons,
                                         Poly, _validate_keys, pop_tracks,
                                         trackid_is_default,
                                         gpd_sort_by_gid, gpd_len,
@@ -397,6 +399,41 @@ def _add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
         from watch.utils.util_json import debug_json_unserializable
         debug_json_unserializable(sub_dset.dataset)
 
+    return sub_dset
+
+
+def site_validation(
+    sub_dset,
+    thresh=0.25,
+    span_steps=15,
+    ):
+
+    # Turn annotations into table we can query
+    annots = pd.DataFrame(sub_dset.dataset["annotations"])
+    ann_ids_to_drop = []
+
+    if "track_idx" in annots.columns:
+        groups = annots.groupby('track_idx', axis=0)
+    else:
+        groups = [(0, annots)]
+
+    for group in groups:
+
+        # Scores are inherently noisy. We smooth them out with a
+        # `span_steps`-wide weighted moving average. The maximum
+        # value of this
+        scores = annots.groupby("track_id")[["score"]] \
+                       .ewm(span=span_steps).mean() \
+                       .groupby("track_id").max()
+        track_ids_to_keep = scores[
+            scores["score"] > thresh
+        ].index.to_numpy()
+
+        ann_ids_to_drop.extend([
+            ~annots["track_id"].isin(track_ids_to_keep)
+        ]["id"].tolist())
+
+    sub_dset.remove_annotations(ann_ids_to_drop)
     return sub_dset
 
 
@@ -1138,6 +1175,10 @@ class TimeAggregatedBAS(NewTrackFunction):
     inner_window_size : Optional[str] = None
     inner_agg_fn : Optional[str] = None
 
+    site_validation: bool = False
+    site_validation_span_steps: int = 120
+    site_validation_thresh: float = 0.1
+
     def __post_init__(self):
         _resolve_deprecated_args(self)
         _resolve_arg_values(self)
@@ -1154,6 +1195,12 @@ class TimeAggregatedBAS(NewTrackFunction):
 
     def add_tracks_to_dset(self, sub_dset, tracks):
         sub_dset = _add_tracks_to_dset(sub_dset, tracks, self.thresh, self.key)
+        if self.site_validation:
+            sub_dset = site_validation(
+                sub_dset,
+                thresh=self.site_validation_thresh,
+                span_steps=self.site_validation_span_steps,
+            )
         return sub_dset
 
 
@@ -1192,6 +1239,10 @@ class TimeAggregatedSC(NewTrackFunction):
 
     inner_window_size : Optional[str] = None
     inner_agg_fn : Optional[str] = None
+
+    site_validation: bool = False
+    site_validation_span_steps: int = 120
+    site_validation_thresh: float = 0.1
 
     def __post_init__(self):
         _resolve_deprecated_args(self)
@@ -1246,5 +1297,103 @@ class TimeAggregatedSC(NewTrackFunction):
             tracks.rename(columns=col_map, inplace=True)
         sub_dset = _add_tracks_to_dset(sub_dset, tracks, self.thresh, self.key,
                                        self.bg_key, **kwargs)
+        if self.site_validation:
+            sub_dset = site_validation(
+                sub_dset,
+                thresh=self.site_validation_thresh,
+                span_steps=self.site_validation_span_steps,
+            )
+
+        return sub_dset
+
+
+@dataclass
+class TimeAggregatedSV(NewTrackFunction):
+    '''
+    Wrapper for Site Validation that looks for phase heatmaps.
+
+    Alias: class_heatmaps
+
+    Note:
+        This is a valid choice of `track_fn` in ../../cli/kwcoco_to_geojson.py
+    '''
+    thresh: float = 0.01
+    morph_kernel: int = 3
+    time_thresh: Optional[float] = None
+    response_thresh: Optional[float] = None
+    key: str = 'salient'
+    bg_key: Tuple[str] = tuple(CNAMES_DCT['negative']['scored'])
+    boundaries_as: Literal['bounds', 'polys', 'none'] = 'polys'
+    norm_ord: Optional[Union[int, str]] = 1
+    agg_fn: str = 'probs'
+    thresh_hysteresis: Optional[float] = None
+    moving_window_size: Optional[int] = None
+
+    min_area_sqkm: Optional[float] = None  # deprecate
+    max_area_sqkm: Optional[float] = None  # deprecate
+
+    min_area_square_meters: Optional[float] = None
+    max_area_square_meters: Optional[float] = None
+
+    max_area_behavior: str = 'drop'
+    polygon_simplify_tolerance: Union[None, float] = None
+    resolution: Optional[str] = None
+
+    site_validation_span_steps: int = 120
+    site_validation_thresh: float = 0.1
+
+    def __post_init__(self):
+        _resolve_deprecated_args(self)
+
+    def create_tracks(self, sub_dset):
+        '''
+        boundaries_as: use for Site Boundary annots in coco_dset
+            'bounds': generated polys will lie inside the boundaries
+            'polys': generated polys will be the boundaries
+            'none': generated polys will ignore the boundaries
+        '''
+        if self.boundaries_as == 'polys':
+            tracks = pop_tracks(
+                sub_dset,
+                cnames=[SITE_SUMMARY_CNAME],
+                # these are SC scores, not BAS, so this is not a
+                # true reproduction of hybrid.
+                score_chan=kwcoco.ChannelSpec('|'.join(self.key)),
+                resolution=self.resolution,
+            )
+            # hack in always-foreground instead
+            # tracks[(score_chan, None)] = 1
+
+            # try to ignore this error
+            tracks['poly'] = tracks['poly'].map(
+                kwimage.MultiPolygon.from_shapely)
+
+        else:
+            aggkw = ub.compatible(self.__dict__, time_aggregated_polys)
+            aggkw['use_boundaries'] = aggkw.get('boundaries_as', 'none') != 'none'
+            tracks = time_aggregated_polys(sub_dset, **aggkw)
+        return tracks
+
+    def add_tracks_to_dset(self, sub_dset, tracks, **kwargs):
+        if self.boundaries_as != 'polys':
+            col_map = {}
+            for c in tracks.columns:
+                if c[0] == 'fg':
+                    k = kwcoco.ChannelSpec('|'.join(self.key)).spec
+                    col_map[c] = (k, *c[1:])
+                elif c[0] == 'bg':
+                    k = kwcoco.ChannelSpec('|'.join(self.bg_key)).spec
+                    col_map[c] = (k, *c[1:])
+            # weird effect here - reassignment casts from GeoDataFrame to
+            # DataFrame. Related to invalid geometry column?
+            # tracks = tracks.rename(columns=col_map)
+            tracks.rename(columns=col_map, inplace=True)
+        sub_dset = _add_tracks_to_dset(sub_dset, tracks, self.thresh, self.key,
+                                       self.bg_key, **kwargs)
+        sub_dset = site_validation(
+            sub_dset,
+            thresh=self.site_validation_thresh,
+            span_steps=self.site_validation_span_steps,
+        )
 
         return sub_dset
