@@ -121,67 +121,6 @@ import scriptconfig as scfg
 import ubelt as ub
 
 
-# class TeamFeaturePipelineConfig(scfg.Config):
-#     """
-#     This generates the bash commands necessary to run team feature computation,
-#     followed by aggregation and then splitting out train / val datasets.
-
-#     Note:
-#         The models and parameters to use are hard coded in this script.
-#     """
-#     default = {
-#         'base_fpath': scfg.Value(None, nargs='+', help=ub.paragraph(
-#             '''
-#             One or more base coco files to compute team-features on.
-#             ''')),
-#         'expt_dvc_dpath': scfg.Value('auto', help=ub.paragraph(
-#             '''
-#             The DVC directory where team feature model weights can be found.
-#             If "auto" uses the ``watch.find_dvc_dpath(tags='phase2_expt')``
-#             mechanism to infer the location.
-#             ''')),
-#         'gres': scfg.Value('auto', help='comma separated list of gpus or auto'),
-
-#         'with_landcover': scfg.Value(True, help='Include DZYNE landcover features'),
-#         'with_materials': scfg.Value(True, help='Include Rutgers material features'),
-#         'with_invariants': scfg.Value(True, help='Include UKY invariant features'),
-#         'with_invariants2': scfg.Value(0, help='Include UKY invariant features'),
-#         'with_depth': scfg.Value(True, help='Include DZYNE WorldView depth features'),
-#         'with_cold': scfg.Value(True, help='Include COLD features'),
-
-#         'invariant_segmentation': scfg.Value(False, help='Enable/Disable segmentation part of invariants'),
-#         'invariant_pca': scfg.Value(0, help='Enable/Disable invariant PCA'),
-#         'invariant_resolution': scfg.Value('10GSD', help='GSD for invariants'),
-
-#         'virtualenv_cmd': scfg.Value(None, type=str, help=ub.paragraph(
-#             '''
-#             Command to start the appropriate virtual environment if your bashrc
-#             does not start it by default.''')),
-
-#         'data_workers': scfg.Value(2, help='dataloader workers for each proc'),
-#         'cold_workers': scfg.Value(4, help='workers for pycold'),
-#         'depth_workers': scfg.Value(2, help='workers for depth only. On systems with < 32GB RAM might need to set to 0'),
-
-#         'keep_sessions': scfg.Value(False, help='if True does not close tmux sessions'),
-
-#         'workers': scfg.Value('auto', help='Maximum number of parallel jobs, 0 is no-nonsense serial mode. '),
-#         'run': scfg.Value(0, help='if True execute the pipeline'),
-#         'skip_existing': scfg.Value(True, help='if True skip completed results'),
-
-#         'do_splits': scfg.Value(False, help='if True also make splits. BROKEN'),
-#         # 'follow': scfg.Value(True),
-
-#         'serial': scfg.Value(False, help='if True use serial mode'),
-
-#         'backend': scfg.Value('tmux', help=None),
-
-#         'check': scfg.Value(True, help='if True check files exist where we can'),
-#         'verbose': scfg.Value(1, help=''),
-
-#         'kwcoco_ext': scfg.Value('.kwcoco.json', help='use .kwcoco.json or .kwcoco.zip for outputs'),
-#     }
-
-
 class TeamFeaturePipelineConfig(scfg.DataConfig):
     """
     This generates the bash commands necessary to run team feature computation,
@@ -663,13 +602,20 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
     # depends on everything before this
     # queue.sync()
 
+    if config.skip_existing:
+        request_jobs = []
+        for job in task_jobs:
+            if not all(p.exists() for p in job.out_paths.values()):
+                request_jobs.append(job)
+    else:
+        request_jobs = task_jobs
+
     src_lines = ' \\\n        '.join(tocombine)
     command = '\n'.join([
         'python -m watch.cli.coco_combine_features \\',
         f'    --src {src_lines} \\',
         f'    --dst {base_combo_fpath}'
     ])
-    # print('task_jobs = {!r}'.format(task_jobs))
     pipeline.submit(
         name='combine_features' + name_suffix,
         command=command,
@@ -677,7 +623,7 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
         out_paths={
             'combo_fpath': base_combo_fpath,
         },
-        depends=task_jobs
+        depends=request_jobs
     )
 
     # TODO: union?

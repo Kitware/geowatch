@@ -11,7 +11,7 @@ python -m watch.cli.prepare_teamfeats \
     --with_cold=0 \
     --with_depth=0 \
     --do_splits=0 \
-    --skip_existing=0 \
+    --skip_existing=1 \
     --gres=0,1 --workers=4 --backend=tmux --run=1
 
 python -m watch.mlops.schedule_evaluation --params="
@@ -22,7 +22,12 @@ python -m watch.mlops.schedule_evaluation --params="
             #- $DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_BAS_2022_12_10GSD_BGRN_V11/Drop4_BAS_2022_12_10GSD_BGRN_V11_v0_epoch0_step108.pt
             #- $DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_BAS_2022_12_10GSD_BGRN_V11/Drop4_BAS_2022_12_10GSD_BGRN_V11_v0_epoch100_step51712.pt
         bas_pxl.test_dataset:
-            - $DVC_DATA_DPATH/Drop6/combo_imganns-CH_R001_I.kwcoco.json
+            #- $DVC_DATA_DPATH/Drop6/combo_imganns-CH_R001_I.kwcoco.json
+            - $DVC_DATA_DPATH/Drop6/combo_imganns-BH_R001_I2.kwcoco.json
+            - $DVC_DATA_DPATH/Drop6/combo_imganns-KR_R001_I2.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6/combo_imganns-KR_R002_I2.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6/combo_imganns-LT_R001_I2.kwcoco.json
+            - $DVC_DATA_DPATH/Drop6/combo_imganns-NZ_R001_I2.kwcoco.json
         bas_pxl.chip_overlap: 0.3
         bas_pxl.chip_dims:
             - auto

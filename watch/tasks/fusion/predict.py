@@ -737,7 +737,7 @@ def predict(cmdline=False, **kwargs):
     from watch.utils import util_progress
     pman = util_progress.ProgressManager(backend='rich')
 
-    # prog = ub.ProgIter(batch_iter, desc='predicting', verbose=1, freq=1)
+    # prog = ub.ProgIter(batch_iter, desc='fusion predict', verbose=1, freq=1)
 
     # Make threads after starting background proces.
     if args.write_workers == 'datamodule':
@@ -864,7 +864,7 @@ def predict(cmdline=False, **kwargs):
         EMERGENCY_INPUT_AGREEMENT_HACK = 1 and hasattr(method, 'input_norms')
         # prog.set_extra(' <will populate stats after first video>')
         # pman.start()
-        prog = pman.progiter(batch_iter, desc='predicting')
+        prog = pman.progiter(batch_iter, desc='fusion predict')
         _batch_iter = iter(prog)
         if 0:
             item = test_dataloader.dataset[0]
