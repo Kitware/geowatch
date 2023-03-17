@@ -445,8 +445,6 @@ def ensure_post(coco_dset,
 
                 post_ann = ann.copy()
                 post_ann.pop('id')
-                if 'track_index' in post_ann:
-                    post_ann['track_index'] += 1
                 post_ann.update(
                     dict(image_id=next_gid,
                          category_id=post_cid,

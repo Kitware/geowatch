@@ -260,23 +260,6 @@ def dedupe_tracks(coco_dset):
     return coco_dset
 
 
-def add_track_index(coco_dset):
-    '''
-    Ensure each track's track_index is fully populated with strictly
-    increasing but not-necessarily-unique values (can have multiple track
-    entries per image)
-    '''
-    for trackid in coco_dset.index.trackid_to_aids.keys():
-        annots = coco_dset.annots(coco_dset, trackid)
-
-        # order the track by track_index
-        sorted_gids = coco_dset.index._set_sorted_by_frame_index(annots.gids)
-        track_index_dict = dict(zip(sorted_gids, range(len(sorted_gids))))
-        annots.set('track_index', map(track_index_dict.get, annots.gids))
-
-    return coco_dset
-
-
 def shapely_round(geom, precision):
     """
     References:
@@ -581,16 +564,14 @@ def dedupe_dates(coco_dset):
     for trackid in coco_dset.index.trackid_to_aids.keys():
         annots = coco_dset.annots(trackid=trackid)
         dates = [util_time.coerce_datetime(d).date() for d in annots.images.lookup('date_captured')]
-        tixs = annots.lookup('track_index', None)  # Can we remove track-index here?
         fixs = annots.images.lookup('frame_index')
 
         is_sorted = lambda arr: np.all(arr[:-1] <= arr[1:])  # noqa
-        if not all(date_track_frame_sorted := (
+        if not all(date_frame_sorted := (
                     is_sorted(dates),
-                    is_sorted(tixs),
                     is_sorted(fixs))):
             # this should never print
-            print(f'WARNING: {trackid=} {date_track_frame_sorted=}')
+            print(f'WARNING: {trackid=} {date_frame_sorted=}')
 
     # remove full images instead of iterating over tracks for efficiency
     # not possible for some other removal methods, but it is for this one
@@ -669,8 +650,6 @@ def normalize(
         >>> assert coco_dset.n_annots == n_existing_annots
         >>> coco_dset = dedupe_tracks(coco_dset)
         >>> assert set(coco_dset.annots().get('track_id')) == {1}
-        >>> coco_dset = add_track_index(coco_dset)
-        >>> assert coco_dset.annots().get('track_index') == [0,1,2]
         >>> coco_dset = normalize_phases(coco_dset, baseline_keys={'change'})
         >>> assert (coco_dset.annots().cnames ==
         >>> ['Site Preparation', 'Site Preparation', 'Post Construction'])
@@ -736,7 +715,6 @@ def normalize(
           set(out_dset.annots().get('track_id', None)))
 
     out_dset = dedupe_tracks(out_dset)
-    out_dset = add_track_index(out_dset)
 
     if viz_out_dir is not None:
         from watch.tasks.tracking.visualize import viz_track_scores

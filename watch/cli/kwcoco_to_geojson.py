@@ -370,17 +370,9 @@ def track_to_site(coco_dset,
     Turn a kwcoco track into an IARPA site model or site summary
     '''
 
-    # get annotations in this track, sort them, and group them into features
+    # get annotations in this track sorted by frame_index
     annots = coco_dset.annots(trackid=trackid)
-    try:
-        ixs, gids, anns = annots.lookup(
-            'track_index'), annots.gids, annots.objs
-        # HACK because track_index isn't unique, need tiebreaker key to sort on
-        # _, gids, anns = zip(*sorted(zip(ixs, gids, anns)))
-        _, _, gids, anns = zip(*sorted(zip(ixs, range(len(ixs)), gids, anns)))
-    except KeyError:
-        # if track_index is missing, assume they're already sorted
-        gids, anns = annots.gids, annots.objs
+    gids, anns = annots.gids, annots.objs
 
     features = [
         geojson_feature(_anns, coco_dset, with_properties=(not as_summary))
