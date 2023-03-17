@@ -139,7 +139,8 @@ class GriddedDataset(torch.utils.data.Dataset):
         print('filter dataset')
         # Filter out worldview images (better to use subset than remove)
         images: kwcoco.coco_objects1d.Images = self.coco_dset.images()
-        flags = [s != 'WV' for s in images.lookup('sensor_coarse')]
+        requested_sensors = set(sensor)
+        flags = [s in requested_sensors for s in images.lookup('sensor_coarse')]
         valid_image_ids : list[int] = list(images.compress(flags))
         self.coco_dset = self.coco_dset.subset(valid_image_ids)
 

@@ -310,3 +310,6 @@ kwplot.imshow(final)
 kwimage.imwrite('final.png', final)
 
 "
+
+
+python -m watch.tasks.invariants.predict --input_kwcoco /home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_data_dvc/Drop6/imganns-BH_R001.kwcoco.zip --output_kwcoco /home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_data_dvc/Drop6/imganns-BH_R001_uky_invariants.kwcoco.json --pretext_package_path /home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_expt_dvc/models/uky/uky_invariants_2022_12_17/TA1_pretext_model/pretext_package.pt --pca_projection_path /home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_expt_dvc/models/uky/uky_invariants_2022_03_21/pretext_model/pretext_pca_104.pt --input_resolution=30GSD --window_resolution=30GSD --patch_size=256 --do_pca 0 --patch_overlap=0.3 --num_workers=2 --write_workers 0 --tasks before_after pretext
