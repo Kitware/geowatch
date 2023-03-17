@@ -86,10 +86,10 @@ def export_cold_main(cmdline=1, **kwargs):
     >>> kwargs= dict(
     >>>    rank = 0,
     >>>    n_cores = 1,
-    >>>    stack_path = "/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/AE_C003",
-    >>>    reccg_path = "/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/reccg/AE_C003/",
-    >>>    meta_fpath = '/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/AE_C003/block_x9_y9/crop_20210825T060000Z_N24.944869E055.093915_N25.018136E055.224691_L8_0.json',
-    >>>    coefs = 'cv',
+    >>>    stack_path = "/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/KR_R001",
+    >>>    reccg_path = "/gpfs/sharedfs1/zhulab/Jiwon/kwcoco/reccg/KR_R001/",
+    >>>    meta_fpath = '/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/KR_R001/block_x9_y9/crop_20210807T010000Z_N37.643680E128.649453_N37.683356E128.734073_L8_0.json',
+    >>>    coefs = 'rmse',
     >>>    year_lowbound = None,
     >>>    year_highbound = None,
     >>>    coefs_bands = '0,1,2,3,4,5',
@@ -342,12 +342,23 @@ def extract_features(cold_plot, band, ordinal_day_list,
         dtype=np.double)
     SLOPE_SCALE = 10000
 
+<<<<<<< HEAD
     last_year = pd.Timestamp.fromordinal(cold_plot[-1]['t_end']).year
     max_days_list = [
         datetime_mod.date(
             last_year,
             12,
             31).toordinal()] * len(cold_plot)
+=======
+    max_days_list = []
+    for i in range(len(cold_plot)):
+        last_year = pd.Timestamp.fromordinal(cold_plot[i]['t_end']).year
+        max_days_list.append(datetime_mod.date(last_year, 12, 31).toordinal())
+
+    # last_year = pd.Timestamp.fromordinal(cold_plot[i]['t_end']).year
+    # max_days_list = [datetime_mod.date(last_year, 12, 31).toordinal()] * len(cold_plot)
+  
+>>>>>>> 2d2ea402 (fixed a bug in max_days_list)
     break_year_list = [-9999 if not (curve['t_break'] > 0 and curve['change_prob'] == 100) else
                        pd.Timestamp.fromordinal(curve['t_break']).year for curve in cold_plot]
 
@@ -382,17 +393,21 @@ def extract_features(cold_plot, band, ordinal_day_list,
             if cold_curve['t_start'] <= ordinal_day < max_day:
                 if a0_idx is not None:
                     features[a0_idx, day_idx] = (
-                        cold_curve['coefs'][band, 0] +
-                        cold_curve['coefs'][band, 1] *
+                        cold_curve['coefs'][band][0] +
+                        cold_curve['coefs'][band][1] *
                         ordinal_day / SLOPE_SCALE)
                 if c1_idx is not None:
+<<<<<<< HEAD
                     features[c1_idx,
                              day_idx] = cold_curve['coefs'][band,
                                                             1] / SLOPE_SCALE
+=======
+                    features[c1_idx, day_idx] = cold_curve['coefs'][band][1] / SLOPE_SCALE
+>>>>>>> 2d2ea402 (fixed a bug in max_days_list)
                 if a1_idx is not None:
-                    features[a1_idx, day_idx] = cold_curve['coefs'][band, 2]
+                    features[a1_idx, day_idx] = cold_curve['coefs'][band][2]
                 if b1_idx is not None:
-                    features[b1_idx, day_idx] = cold_curve['coefs'][band, 3]
+                    features[b1_idx, day_idx] = cold_curve['coefs'][band][3]
                 if rmse_idx is not None:
                     features[rmse_idx, day_idx] = cold_curve['rmse'][band]
 
