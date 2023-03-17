@@ -157,7 +157,7 @@ class GriddedDataset(torch.utils.data.Dataset):
             time_sampling='hardish3', time_span='1y',
             use_annot_info=False,
             keepbound=True,
-            exclude_sensors=['WV'],
+            # exclude_sensors=['WV'],
             use_centered_positives=False,
             # set_cover_algo='approx',
             set_cover_algo=None,
