@@ -226,7 +226,9 @@ class Predictor(object):
 
         ###
         print('build grid dataset')
-        self.dataset = GriddedDataset(self.coco_dset, args.bands,
+        self.dataset = GriddedDataset(self.coco_dset,
+                                      sensor=args.sensor,
+                                      bands=args.bands,
                                       patch_size=args.patch_size,
                                       patch_overlap=args.patch_overlap,
                                       window_space_scale=args.window_space_scale,
