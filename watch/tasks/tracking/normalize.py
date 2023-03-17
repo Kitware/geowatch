@@ -8,7 +8,6 @@ from watch.utils.kwcoco_extensions import TrackidGenerator
 from watch.utils.kwcoco_extensions import warp_annot_segmentations_to_geos
 from watch.tasks.tracking.utils import TrackFunction
 from watch.tasks.tracking.utils import check_only_bg
-from watch.utils.kwcoco_extensions import sorted_annots
 try:
     from xdev import profile
 except Exception:
@@ -247,7 +246,7 @@ def dedupe_tracks(coco_dset):
     new_trackids = TrackidGenerator(coco_dset)
 
     for trackid in coco_dset.index.trackid_to_aids.keys():
-        annots = sorted_annots(coco_dset, trackid)
+        annots = coco_dset.annots(coco_dset, trackid)
 
         # split each video into a separate track
         for idx, (vidid, aids) in enumerate(
@@ -268,7 +267,7 @@ def add_track_index(coco_dset):
     entries per image)
     '''
     for trackid in coco_dset.index.trackid_to_aids.keys():
-        annots = sorted_annots(coco_dset, trackid)
+        annots = coco_dset.annots(coco_dset, trackid)
 
         # order the track by track_index
         sorted_gids = coco_dset.index._set_sorted_by_frame_index(annots.gids)
@@ -330,7 +329,6 @@ def normalize_phases(coco_dset,
         >>> # try again with smoothing
         >>> dset = normalize_phases(dset, use_viterbi=True)
         >>> from watch.demo import smart_kwcoco_demodata
-        >>> from watch.utils.kwcoco_extensions import sorted_annots
         >>> dset = smart_kwcoco_demodata.demo_kwcoco_with_heatmaps()
         >>> dset.remove_categories([1,3,4,5])
         >>> dset.cats[2]['name'] = 'salient'
@@ -339,7 +337,7 @@ def normalize_phases(coco_dset,
         >>> # TODO file bug report
         >>> dset._build_index()
         >>> dset = normalize_phases(dset)
-        >>> assert (sorted_annots(dset, trackid=1).cnames ==
+        >>> assert (dset.annots(trackid=1).cnames ==
         >>>     ((['Site Preparation'] * 10) +
         >>>      (['Active Construction'] * 9) +
         >>>      (['Post Construction'])))
@@ -396,7 +394,7 @@ def normalize_phases(coco_dset,
     for trackid, annot_ids in coco_dset.index.trackid_to_aids.items():
         n_anns = len(annot_ids)
         if n_anns > 1:
-            annots = sorted_annots(coco_dset, trackid)
+            annots = coco_dset.annots(trackid=trackid)
             has_missing_labels = bool(set(annots.cnames) - cnames_to_score)
             has_good_labels = bool(set(annots.cnames) - cnames_to_replace)
             if has_missing_labels and has_good_labels:
@@ -423,7 +421,7 @@ def normalize_phases(coco_dset,
 
     for trackid, annot_ids in coco_dset.index.trackid_to_aids.items():
         n_anns = len(annot_ids)
-        annots = sorted_annots(coco_dset, trackid)
+        annots = coco_dset.annots(trackid=trackid)
 
         if n_anns > 1:
 
@@ -446,7 +444,7 @@ def normalize_phases(coco_dset,
             # coco_dset = phase.dedupe_background_anns(coco_dset, trackid)
             coco_dset = phase.ensure_post(coco_dset, trackid)
 
-        annots = sorted_annots(coco_dset, trackid)
+        annots = coco_dset.annots(trackid=trackid)
         is_empty = check_only_bg(annots.cnames)
         EMPTY_TRACK_BEHAVIOR = 'ignore'
 
@@ -488,7 +486,7 @@ def normalize_phases(coco_dset,
             annots.set(ann_field, phase_transition_days)
         else:
             for trackid in coco_dset.index.trackid_to_aids.keys():
-                _annots = sorted_annots(coco_dset, trackid)
+                _annots = coco_dset.annots(trackid=trackid)
                 phase_transition_days = phase.phase_prediction_baseline(_annots)
                 _annots.set(ann_field, phase_transition_days)
 
@@ -581,7 +579,7 @@ def dedupe_dates(coco_dset):
         'Landsat 7': 1
     }
     for trackid in coco_dset.index.trackid_to_aids.keys():
-        annots = sorted_annots(coco_dset, trackid)
+        annots = coco_dset.annots(trackid=trackid)
         dates = [util_time.coerce_datetime(d).date() for d in annots.images.lookup('date_captured')]
         tixs = annots.lookup('track_index', None)  # Can we remove track-index here?
         fixs = annots.images.lookup('frame_index')
