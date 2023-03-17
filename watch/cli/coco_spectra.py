@@ -654,6 +654,10 @@ def plot_intensity_histograms(full_df, config):
             print(sensor_df)
             raise
             pass
+        if config['valid_range'] is not None:
+            valid_min, valid_max = map(float, config['valid_range'].split(':'))
+            ax.set_xlim(valid_min, valid_max)
+
         ax.set_title(sensor_name)
         # maxx = sensor_df.intensity_bin.max()
         # maxx = sensor_maxes[sensor_name]
