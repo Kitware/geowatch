@@ -173,3 +173,14 @@ def coerce_yaml(data, backend='ruamel'):
         # Probably already parsed. Return the input
         result = data
     return result
+
+
+def YamlInlineList(items):
+    """
+    References:
+        .. [SO56937691] https://stackoverflow.com/questions/56937691/making-yaml-ruamel-yaml-always-dump-lists-inline
+    """
+    import ruamel.yaml
+    ret = ruamel.yaml.comments.CommentedSeq(items)
+    ret.fa.set_flow_style()
+    return ret

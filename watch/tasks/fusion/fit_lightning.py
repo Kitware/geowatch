@@ -323,6 +323,37 @@ def main(config=None):
     CommandLine:
         xdoctest -m watch.tasks.fusion.fit_lightning main:0
 
+    Ignore:
+        ...
+
+        # export stats
+        input_stats = cli.trainer.datamodule.dataset_stats['input_stats']
+        rows = []
+        for sensorchan, stats in input_stats.items():
+            mean = list(map(float, stats['mean'].ravel().tolist()))
+            std = list(map(float, stats['std'].ravel().tolist()))
+            row = {
+                'sensor': sensorchan[0],
+                'channels': sensorchan[1],
+                'mean': YamlInlineList(mean),
+                'std': YamlInlineList(std),
+            }
+            rows.append(row)
+        from watch.utils import util_yaml
+        import ruamel.yaml
+        import io
+        file = io.StringIO()
+        ruamel.yaml.round_trip_dump(rows, file, Dumper=ruamel.yaml.RoundTripDumper)
+        print(file.getvalue())
+        dataset_stats = ub.codeblock(
+            '''
+            - sensor: '*'
+              channels: r|g|b
+              mean: [87.572401, 87.572401, 87.572401]
+              std: [99.449996, 99.449996, 99.449996]
+            ''')
+
+
     Example:
         >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
         >>> from watch.tasks.fusion.fit_lightning import *  # NOQA
@@ -332,13 +363,13 @@ def main(config=None):
         >>>     'subcommand': 'fit',
         >>>     'fit.model': 'watch.tasks.fusion.methods.noop_model.NoopModel',
         >>>     'fit.trainer.default_root_dir': dpath,
-        >>>     'fit.data.train_dataset': 'special:vidshapes8-frames9-gsize64-speed0.5-multispectral',
-        >>>     'fit.data.vali_dataset': 'special:vidshapes4-frames9-gsize64-speed0.5-multispectral',
-        >>>     'fit.data.chip_dims': 64,
+        >>>     'fit.data.train_dataset': 'special:vidshapes4-frames9-gsize32',
+        >>>     'fit.data.vali_dataset': 'special:vidshapes1-frames9-gsize32',
+        >>>     'fit.data.chip_dims': 32,
         >>>     'fit.trainer.max_steps': 2,
         >>>     'fit.trainer.num_sanity_val_steps': 0,
         >>> }
-        >>> main(config=config)
+        >>> cli = main(config=config)
 
     Example:
         >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
