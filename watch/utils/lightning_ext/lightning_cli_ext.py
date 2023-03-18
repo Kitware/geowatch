@@ -400,10 +400,155 @@ class LightningArgumentParser_Extension(LightningArgumentParser):
         elif is_required and fail_untyped:
             raise ValueError(f'Required parameter without a type for "{src}" parameter "{name}".')
 
+    def _apply_actions(
+        self,
+        cfg,
+        parent_key: str = '',
+        prev_cfg=None,
+        skip_fn=None,
+    ) -> Namespace:
+        """
+        Runs _check_value_key on actions present in config.
+
+        Helper for config aliases
+
+        References:
+            https://github.com/omni-us/jsonargparse/pull/255/files
+        """
+        from jsonargparse.core import _find_action_and_subcommand
+        from jsonargparse.core import ActionJsonnet
+        from jsonargparse.core import _ActionSubCommands
+        from jsonargparse.core import parser_context
+        from jsonargparse.core import ActionJsonnetExtVars
+
+        if isinstance(cfg, dict):
+            cfg = Namespace(cfg)
+        if parent_key:
+            cfg_branch = cfg
+            cfg = Namespace()
+            cfg[parent_key] = cfg_branch
+            keys = [parent_key + '.' + k for k in cfg_branch.__dict__.keys()]
+        else:
+            keys = list(cfg.__dict__.keys())
+
+        if prev_cfg:
+            prev_cfg = prev_cfg.clone()
+        else:
+            prev_cfg = Namespace()
+
+        config_keys: Set[str] = set()
+        num = 0
+        while num < len(keys):
+            key = keys[num]
+            exclude = _ActionConfigLoad if key in config_keys else None
+            action, subcommand = _find_action_and_subcommand(self, key, exclude=exclude)
+
+            if isinstance(action, ActionJsonnet):
+                ext_vars_key = action._ext_vars
+                if ext_vars_key and ext_vars_key not in keys[:num]:
+                    keys = keys[:num] + [ext_vars_key] + [k for k in keys[num:] if k != ext_vars_key]
+                    continue
+
+            num += 1
+
+            if action is None or isinstance(action, _ActionSubCommands):
+                value = cfg[key]
+                if isinstance(value, dict):
+                    value = Namespace(value)
+                if isinstance(value, Namespace):
+                    new_keys = value.__dict__.keys()
+                    keys += [key + '.' + k for k in new_keys if key + '.' + k not in keys]
+                cfg[key] = value
+                continue
+
+            action_dest = action.dest if subcommand is None else subcommand + '.' + action.dest
+            ALLOW_ALIAS = 1
+            try:
+                value = cfg[action_dest]
+            except KeyError:
+                # from jsonargparse.actions import get_alias_dest
+                if ALLOW_ALIAS:
+                    # If the main key isn't in the config, check if it exists
+                    # under an alias.
+                    found = None
+                    for alias in get_alias_dest(action):
+                        if alias in cfg:
+                            value = cfg[alias]
+                            found = True
+                            break
+                    if not found:
+                        raise
+                else:
+                    raise
+                    ...
+            if skip_fn and skip_fn(value):
+                continue
+            with parser_context(parent_parser=self, lenient_check=True):
+                value = self._check_value_key(action, value, action_dest, prev_cfg)
+            if isinstance(action, _ActionConfigLoad):
+                config_keys.add(action_dest)
+                keys.append(action_dest)
+            elif isinstance(action, ActionJsonnetExtVars):
+                prev_cfg[action_dest] = value
+            cfg[action_dest] = value
+        return cfg[parent_key] if parent_key else cfg
+
+
+def _find_action_and_subcommand(parser, dest: str, exclude=None):
+    """Finds an action in a parser given its destination key.
+
+    References:
+        https://github.com/omni-us/jsonargparse/pull/255/files
+
+    Args:
+        parser: A parser where to search.
+        dest: The destination key to search with.
+
+    Returns:
+        The action if found, otherwise None.
+    """
+    from jsonargparse.actions import filter_default_actions
+    from jsonargparse.actions import _ActionSubCommands
+    from jsonargparse.actions import split_key_root
+    actions = filter_default_actions(parser._actions)
+    if exclude is not None:
+        actions = [a for a in actions if not isinstance(a, exclude)]
+    fallback_action = None
+
+    ALLOW_ALIAS = True
+
+    for action in actions:
+        if action.dest == dest or (ALLOW_ALIAS and dest in get_alias_dest(action)):
+            if isinstance(action, _ActionConfigLoad):
+                fallback_action = action
+            else:
+                return action, None
+        elif isinstance(action, _ActionSubCommands):
+            if dest in action._name_parser_map:
+                return action, None
+            elif split_key_root(dest)[0] in action._name_parser_map:
+                subcommand, subdest = split_key_root(dest)
+                subparser = action._name_parser_map[subcommand]
+                subaction, subsubcommand = _find_action_and_subcommand(subparser, subdest, exclude=exclude)
+                if subsubcommand is not None:
+                    subcommand += '.' + subsubcommand
+                return subaction, subcommand
+    return fallback_action, None
+
+
+def get_alias_dest(action):
+    def option_string_to_var(optstr):
+        " normalize a cli key as a variable "
+        return optstr.lstrip('-').replace('-', '_')
+
+    return [option_string_to_var(optstr) for optstr in action.option_strings]
+
 
 # Monkey patch jsonargparse so its subcommands use our extended functionality
 jsonargparse.ArgumentParser = LightningArgumentParser_Extension
 jsonargparse.core.ArgumentParser = LightningArgumentParser_Extension
+jsonargparse.core._find_action_and_subcommand = _find_action_and_subcommand
+jsonargparse.actions._find_action_and_subcommand = _find_action_and_subcommand
 
 
 # Should try to patch into upstream

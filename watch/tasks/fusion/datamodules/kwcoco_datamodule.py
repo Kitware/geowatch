@@ -50,9 +50,8 @@ class KWCocoVideoDataModuleConfig(scfg.Config):
 
         'num_workers': scfg.Value(4, type=str, help=ub.paragraph(
             '''
-            number of background workers. Can be auto or an avail
-            expression. TODO: rename to data_workers?
-            ''')),
+            number of background workers. Can be auto or an avail expression.
+            '''), alias=['workers']),
 
         'torch_sharing_strategy': scfg.Value('default', help=ub.paragraph(
             '''
