@@ -637,8 +637,8 @@ def time_aggregated_polys(
 
     # TODO dask gives different results on polys that overlap nodata area, need
     # to debug this. (6% of polygons in KR_R001, so not a huge difference)
-    # _TRACKS = gpd_compute_scores(_TRACKS, sub_dset, thrs, ks, USE_DASK=True)
-    _TRACKS = gpd_compute_scores(_TRACKS, sub_dset, thrs, ks, USE_DASK=False)
+    # _TRACKS = gpd_compute_scores(_TRACKS, sub_dset, thrs, ks, USE_DASK=True, resolution=resolution)
+    _TRACKS = gpd_compute_scores(_TRACKS, sub_dset, thrs, ks, USE_DASK=False, resolution=resolution)
 
     if _TRACKS.empty:
         return _TRACKS

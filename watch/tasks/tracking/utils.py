@@ -335,6 +335,7 @@ def gpd_compute_scores(
             scores = grp['poly'].apply(
                 lambda p: pd.Series(dict(zip(
                     score_cols,
+                    # awk, making this serializable for kwcoco dataset
                     list(ub.flatten(score_poly(p, heatmaps, threshold=thrs)))))
                 ))
             grp[score_cols] = scores
@@ -481,6 +482,10 @@ def score_poly(poly, probs, threshold=-1, use_rasterio=True):
     if not isinstance(poly, (kwimage.Polygon, kwimage.MultiPolygon)):
         poly = kwimage.MultiPolygon.from_shapely(poly)  # 2.4% of runtime
 
+    _return_list = isinstance(threshold, Iterable)
+    if not _return_list:
+        threshold = [threshold]
+
     # First compute the valid bounds of the polygon
     # And create a mask for only the valid region of the polygon
     box = poly.bounding_box().quantize().to_xywh()
@@ -490,7 +495,8 @@ def score_poly(poly, probs, threshold=-1, use_rasterio=True):
     if box.area[0][0] == 0:
         warnings.warn(
             'warning: scoring a polygon against an img with no overlap!')
-        return 0
+        zeros = np.zeros(probs.shape[:-2])
+        return [zeros] * len(threshold) if _return_list else zeros
     x, y, w, h = box.data[0]
     pixels_are = 'areas' if use_rasterio else 'points'
     # kwimage inverse
@@ -503,9 +509,6 @@ def score_poly(poly, probs, threshold=-1, use_rasterio=True):
     # Slice out the corresponding region of probabilities
     rel_probs = probs[..., y:y + h, x:x + w]
 
-    _return_list = isinstance(threshold, Iterable)
-    if not _return_list:
-        threshold = [threshold]
     result = []
 
     # handle nans
@@ -515,11 +518,11 @@ def score_poly(poly, probs, threshold=-1, use_rasterio=True):
             result.append(np.nan * np.ones(rel_probs.shape[:-2]))
         elif t == -1:
             mskd = np.ma.array(rel_probs, mask=~msk)
-            result.append(mskd.mean(axis=(-2, -1)))
+            result.append(mskd.mean(axis=(-2, -1)).filled(0))
         else:
             hard_prob = rel_probs > t
             mskd = np.ma.array(hard_prob, mask=~msk)
-            result.append(mskd.mean(axis=(-2, -1)))
+            result.append(mskd.mean(axis=(-2, -1)).filled(0))
 
     return result if _return_list else result[0]
 
