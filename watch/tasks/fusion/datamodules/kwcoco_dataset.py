@@ -2462,8 +2462,12 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> self.input_sensorchan
             >>> stats = self.compute_dataset_stats(batch_size=1)
 
+        Ignore:
+            import sys, ubelt
+            sys.path.append(ubelt.expandpath('~/code/watch'))
+            globals().update(xdev.get_func_kwargs(KWCocoVideoDataset.compute_dataset_stats))
+
         """
-        from watch.utils.slugify_ext import smart_truncate
         num = num if isinstance(num, int) and num is not True else 1000
         if not with_class and not with_intensity:
             num = 1  # efficiency hack
@@ -2473,11 +2477,17 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         # Hack: disable augmentation if we are doing that
         self.disable_augmenter = True
 
+        from typing import NamedTuple
+        class NormalizationUnit(NamedTuple):
+            sensor: None
+            channels: None
+            video_name: None
+
         loader = self.make_loader(subset=stats_subset, num_workers=num_workers,
                                   shuffle=True, batch_size=batch_size)
 
         # Track moving average of each fused channel stream
-        channel_stats = ub.ddict(lambda: ub.ddict(kwarray.RunningStats))
+        norm_stats = ub.ddict(kwarray.RunningStats)
 
         classes = self.classes
         num_classes = len(classes)
@@ -2516,118 +2526,77 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             track_class_freq = None
             annot_class_freq = None
 
-        WITH_PROG_POSTFIX_TEXT = 1
-        if WITH_PROG_POSTFIX_TEXT:
-            # Create timer to periodically summarize intermediate results while
-            # full dataset stats are accumulating
-            timer = ub.Timer().tic()
-            timer._first = True
-            postfix_update_threshold = 5  # seconds
-
         def current_input_stats():
             """
             Summarizes current stats estimates either for display or for the
             final output.
             """
             input_stats = {}
-            for sensor, submodes in channel_stats.items():
-                for chan_key, running in submodes.items():
-                    if is_native:
-                        # ensure we have the expected shape
-                        try:
-                            perchan_stats = running.summarize(axis=ub.NoParam, keepdims=True)
-                        except RuntimeError:
-                            perchan_stats = {'mean': np.array([np.nan]), 'std': np.array([np.nan])}
-                        chan_mean = perchan_stats['mean'][:, None, None]
-                        chan_std = perchan_stats['std'][:, None, None]
-                        chan_min = perchan_stats['min'][:, None, None]
-                        chan_max = perchan_stats['max'][:, None, None]
-                    else:
-                        try:
-                            perchan_stats = running.summarize(axis=(1, 2))
-                        except RuntimeError:
-                            perchan_stats = {
-                                'mean': np.array([[[np.nan]]]),
-                                'std': np.array([[[np.nan]]]),
-                                'min': np.array([[[np.nan]]]),
-                                'max': np.array([[[np.nan]]]),
-                            }
-                        chan_mean = perchan_stats['mean']
-                        chan_std = perchan_stats['std']
-                        chan_min = perchan_stats['min']
-                        chan_max = perchan_stats['max']
+            for norm_unit, running in norm_stats.items():
+                if is_native:
+                    # ensure we have the expected shape
+                    try:
+                        perchan_stats = running.summarize(axis=ub.NoParam, keepdims=True)
+                    except RuntimeError:
+                        perchan_stats = {'mean': np.array([np.nan]), 'std': np.array([np.nan])}
+                    chan_mean = perchan_stats['mean'][:, None, None]
+                    chan_std = perchan_stats['std'][:, None, None]
+                    chan_min = perchan_stats['min'][:, None, None]
+                    chan_max = perchan_stats['max'][:, None, None]
+                else:
+                    try:
+                        perchan_stats = running.summarize(axis=(1, 2))
+                    except RuntimeError:
+                        perchan_stats = {
+                            'mean': np.array([[[np.nan]]]),
+                            'std': np.array([[[np.nan]]]),
+                            'min': np.array([[[np.nan]]]),
+                            'max': np.array([[[np.nan]]]),
+                        }
+                    chan_mean = perchan_stats['mean']
+                    chan_std = perchan_stats['std']
+                    chan_min = perchan_stats['min']
+                    chan_max = perchan_stats['max']
 
-                    # For nans, set the mean to zero and set the std to a huge
-                    # number if we dont have any data on it. That will prevent
-                    # the network from doing much with it which is really the
-                    # best we can do here.
-                    chan_mean[np.isnan(chan_mean)] = 0
-                    chan_std[np.isnan(chan_std)] = 1e8
+                # For nans, set the mean to zero and set the std to a huge
+                # number if we dont have any data on it. That will prevent
+                # the network from doing much with it which is really the
+                # best we can do here.
+                chan_mean[np.isnan(chan_mean)] = 0
+                chan_std[np.isnan(chan_std)] = 1e8
 
-                    chan_mean = chan_mean.round(6)
-                    chan_std = chan_std.round(6)
-                    # print('perchan_stats = {}'.format(ub.repr2(perchan_stats, nl=1)))
-                    input_stats[(sensor, chan_key)] = {
-                        'mean': chan_mean,
-                        'std': chan_std,
-                        'min': chan_min,
-                        'max': chan_max,
-                    }
+                chan_mean = chan_mean.round(6)
+                chan_std = chan_std.round(6)
+                # print('perchan_stats = {}'.format(ub.repr2(perchan_stats, nl=1)))
+                input_stats[norm_unit] = {
+                    'mean': chan_mean,
+                    'std': chan_std,
+                    'min': chan_min,
+                    'max': chan_max,
+                }
             return input_stats
 
-        from watch.utils import util_progress
-        from watch.utils import util_environ
-        USE_RICH_UPDATES = util_environ.envflag('USE_RICH_UPDATES', 1)
-        pman = util_progress.ProgressManager(
-            backend='rich' if USE_RICH_UPDATES else 'progiter')
-
-        def update_displayed_estimates():
+        def update_displayed_estimates(pman):
             """
             Build an intermediate summary to display to the user while this is
             running.
             """
-            if USE_RICH_UPDATES:
-                stat_lines = ['Current Estimated Dataset Statistics: ']
-                if with_intensity:
-                    input_stats = current_input_stats()
-                    input_stats2 = {sc: {k: v.ravel() for k, v in stats.items()} for sc, stats in input_stats.items()}
-                    intensity_info_text = 'Spectra Stats: ' + ub.urepr(input_stats2, with_dtype=False, precision=4)
-                    stat_lines.append(intensity_info_text)
-                if with_class:
-                    class_stats = ub.sorted_vals(ub.dzip(classes, total_freq), reverse=True)
-                    class_info_text = 'Class Stats: ' + ub.urepr(class_stats)
-                    stat_lines.append(class_info_text)
-                stat_lines.append('Unique Image Samples: {}'.format(len(image_id_histogram)))
-                stat_lines.append('Unique Video Samples: {}'.format(len(video_id_histogram)))
-                info_text = '\n'.join(stat_lines).strip()
-                if info_text:
-                    pman.update_info(info_text)
-            else:
-                if with_class:
-                    intermediate = ub.sorted_vals(ub.dzip(classes, total_freq), reverse=True)
-                    intermediate_text = ub.repr2(intermediate, compact=1)
-                    intermediate_text_trunc = smart_truncate(intermediate_text, max_length=40, trunc_loc=0.8)
-                else:
-                    intermediate_text = ''
-                    intermediate_text_trunc = ''
-
-                if with_intensity:
-                    try:
-                        # Broken in general, only looks at one sensorchan, but
-                        # not sure how to do better. This is off by default
-                        # anyway.
-                        input_stats = current_input_stats()
-                        input_stats2 = {sc: {k: v.ravel() for k, v in stats.items()} for sc, stats in input_stats.items()}
-                        curr = ub.peek(input_stats2.values())
-                    except RuntimeError:
-                        curr = {}
-                    else:
-                        curr = curr & {'mean', 'std', 'max', 'min'}
-                        curr = curr.map_values(float)
-                    text = ub.repr2(curr, compact=1, precision=1, nl=0) + ' ' + intermediate_text_trunc
-                else:
-                    text = intermediate_text_trunc
-                prog.set_postfix_str(text)
+            stat_lines = ['Current Estimated Dataset Statistics: ']
+            if with_intensity:
+                input_stats = current_input_stats()
+                input_stats2 = {sc: {k: v.ravel() for k, v in stats.items()}
+                                for sc, stats in input_stats.items()}
+                intensity_info_text = 'Spectra Stats: ' + ub.urepr(input_stats2, with_dtype=False, precision=4)
+                stat_lines.append(intensity_info_text)
+            if with_class:
+                class_stats = ub.sorted_vals(ub.dzip(classes, total_freq), reverse=True)
+                class_info_text = 'Class Stats: ' + ub.urepr(class_stats)
+                stat_lines.append(class_info_text)
+            stat_lines.append('Unique Image Samples: {}'.format(len(image_id_histogram)))
+            stat_lines.append('Unique Video Samples: {}'.format(len(video_id_histogram)))
+            info_text = '\n'.join(stat_lines).strip()
+            if info_text:
+                pman.update_info(info_text)
 
         def update_intensity_estimates(frame_item):
             # Update pixel-level intensity histogram
@@ -2635,8 +2604,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             modes = frame_item['modes']
 
             for mode_code, mode_val in modes.items():
+                norm_unit = NormalizationUnit(sensor_code, mode_code, None)
                 sensor_mode_hist[(sensor_code, mode_code)] += 1
-                running = channel_stats[sensor_code][mode_code]
+                running = norm_stats[norm_unit]
                 val = mode_val.numpy().astype(intensity_dtype)
                 weights = np.isfinite(val).astype(intensity_dtype)
                 # kwarray can handle nans now
@@ -2647,6 +2617,16 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     running.update_many(flat_vals, weights=flat_weights)
                 else:
                     running.update(val, weights=weights)
+
+        from watch.utils import util_progress
+        from watch.utils import util_environ
+        pman = util_progress.ProgressManager()
+
+        # Create timer to periodically summarize intermediate results while
+        # full dataset stats are accumulating
+        timer = ub.Timer().tic()
+        timer._first = True
+        timer.postfix_update_threshold = 5  # seconds
 
         # TODO: we can compute the intensity histogram more efficiently by
         # only doing it for unique channels (which might be duplicated)
@@ -2674,13 +2654,12 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                         if with_intensity:
                             update_intensity_estimates(frame_item)
 
-                if WITH_PROG_POSTFIX_TEXT and timer._first or timer.toc() > postfix_update_threshold:
-                    update_displayed_estimates()
+                if timer._first or timer.toc() > timer.postfix_update_threshold:
+                    update_displayed_estimates(pman)
                     timer._first = 0
                     timer.tic()
 
-            if WITH_PROG_POSTFIX_TEXT:
-                update_displayed_estimates()
+            update_displayed_estimates(pman)
 
         # TODO: we should ensure we include at least one sample from each type
         # of modality.  Note: the requested order of the channels could be
@@ -2736,13 +2715,22 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         if with_intensity:
             input_stats = current_input_stats()
+            grouped_stats = ub.group_items(input_stats.values(), [
+                (u.sensor, u.channels) for u in input_stats.keys()])
+            old_input_stats = {}
+            for (sensor, chan), group in grouped_stats.items():
+                old_input_stats.setdefault(sensor, {})
+                combo = {}
+                combo['mean'] = np.stack([m['mean'] for m in group], axis=0).mean(axis=0)
+                combo['std'] = np.stack([m['std'] for m in group], axis=0).mean(axis=0)
+                old_input_stats[sensor][chan] = combo
         else:
-            input_stats = None
+            old_input_stats = None
 
         dataset_stats = {
             'unique_sensor_modes': unique_sensor_modes,
             'sensor_mode_hist': dict(sensor_mode_hist),
-            'input_stats': input_stats,
+            'input_stats': old_input_stats,
             'class_freq': class_freq,  # pixelwise
 
             'annot_class_freq': annot_class_freq,

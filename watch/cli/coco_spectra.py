@@ -16,6 +16,9 @@ CommandLine:
     smartwatch spectra --src special:photos --show=True --fill=False
     smartwatch spectra --src special:shapes8 --show=True --stat=count --cumulative=True --multiple=stack
 
+    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
+    smartwatch spectra --src $DVC_DATA_DPATH/Drop6/data_vali_split1.kwcoco.zip
+
     DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
     KWCOCO_FPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L_nowv_vali.kwcoco.json
     smartwatch spectra --src $KWCOCO_FPATH --show=True --show=True --include_channels="forest|water|bare_ground"
@@ -137,6 +140,7 @@ class HistAccum:
         self.n += 1
         if sensor not in self.accum:
             self.accum[sensor] = {}
+        # TODO: video / month
         sensor_accum = self.accum[sensor]
         if channel not in sensor_accum:
             sensor_accum[channel] = ub.ddict(lambda: 0)
@@ -240,11 +244,10 @@ def main(cmdline=True, **kwargs):
     include_channels = None if include_channels is None else kwcoco.FusedChannelSpec.coerce(include_channels)
     exclude_channels = None if exclude_channels is None else kwcoco.FusedChannelSpec.coerce(exclude_channels)
 
-    jobs = ub.JobPool(mode=config['mode'], max_workers=workers)
+    jobs = ub.JobPool(mode=config['mode'], max_workers=workers, transient=True)
     from watch.utils import util_progress
     pman = util_progress.ProgressManager()
     with pman:
-
         for coco_img in pman.progiter(images.coco_images, desc='submit stats jobs'):
             coco_img.detach()
             job = jobs.submit(ensure_intensity_stats, coco_img,
@@ -259,15 +262,22 @@ def main(cmdline=True, **kwargs):
             valid_max = math.inf
 
         accum = HistAccum()
+        seen_props = ub.ddict(set)
         for job in pman.progiter(jobs.as_completed(), total=len(jobs), desc='accumulate stats'):
             intensity_stats = job.result()
             sensor = job.coco_img.get('sensor_coarse', job.coco_img.get('sensor', 'unknown_sensor'))
             for band_stats in intensity_stats['bands']:
-                band_name = band_stats['band_name']
                 intensity_hist = band_stats['intensity_hist']
+                band_props = band_stats['properties']
+                for k, v in band_props.items():
+                    seen_props[k].add(v)
+                band_name = band_props['band_name']
                 intensity_hist = {k: v for k, v in intensity_hist.items()
                                   if k >= valid_min and k <= valid_max}
                 accum.update(intensity_hist, sensor, band_name)
+            pman.update_info(
+                ('seen_props = {}'.format(ub.urepr(seen_props, nl=1)))
+            )
 
         full_df = accum.finalize()
 
@@ -477,8 +487,11 @@ def ensure_intensity_sidecar(fpath, recompute=False):
         imdata = kwarray.atleast_nd(imdata, 3)
         # TODO: even better float handling
         if imdata.dtype.kind == 'f':
-            # Round floats to 3 decimals to keep things semi-managable
-            imdata = imdata.round(3)
+            precision = 2
+            # Round floats to p decimals to keep things semi-managable
+            # binning floats is necessary due to fundamental limitations
+            # We may need to decrease our resolution even further.
+            imdata = imdata.round(precision)
         stats_info = {'bands': []}
         for imband in imdata.transpose(2, 0, 1):
             masked_data = imband.ravel()
@@ -489,7 +502,8 @@ def ensure_intensity_sidecar(fpath, recompute=False):
             stats_info['bands'].append({
                 'intensity_hist': intensity_hist,
             })
-        with open(stats_fpath, 'wb') as file:
+        import safer
+        with safer.open(stats_fpath, 'wb') as file:
             pickle.dump(stats_info, file)
     return stats_fpath
 
@@ -561,6 +575,20 @@ def ensure_intensity_stats(coco_img, recompute=False, include_channels=None, exc
                     dequant_values = dequantize(quant_values, quantization)
                     band_stat['intensity_hist'] = ub.odict(zip(dequant_values, counts))
                 if alwaysappend or band_name in requested_channels:
+                    band_stat['properties'] = props = {
+                        'video_name': None,
+                        'band_name': band_name,
+                        'month': None,
+                    }
+                    try:
+                        props['video_name'] = coco_img.video['name']
+                    except Exception:
+                        ...
+                    try:
+                        from watch.utils import util_time
+                        props['month'] = util_time.coerce_datetime(coco_img.img['date_captured']).month
+                    except Exception:
+                        ...
                     band_stat['band_name'] = band_name
                     intensity_stats['bands'].append(band_stat)
     return intensity_stats

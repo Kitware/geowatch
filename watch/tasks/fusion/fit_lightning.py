@@ -437,12 +437,18 @@ if __name__ == "__main__":
             --optimizer.class_path=torch.optim.Adam \
             --trainer.default_root_dir ./demo_train
 
-        JSONARGPARSE_DEBUG=1 python -m watch.tasks.fusion.fit_lightning fit --config="
+        python -m watch.tasks.fusion.fit_lightning fit --config="
             data:
                 train_dataset: special:vidshapes8-frames9-speed0.5
                 window_dims: 64
                 workers: 4
                 batch_size: 4
+                normalize_inputs:
+                    input_stats:
+                        - sensor: '*'
+                          channels: r|g|b
+                          mean: [87.572401, 87.572401, 87.572401]
+                          std: [99.449996, 99.449996, 99.449996]
             trainer:
                 accelerator: gpu
                 strategy: ddp

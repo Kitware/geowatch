@@ -42,6 +42,7 @@ class KWCocoVideoDataModuleConfig(scfg.Config):
         'test_dataset': scfg.Value(None, help='path to the test kwcoco file'),
 
         'batch_size': scfg.Value(4, type=int),
+
         'normalize_inputs': scfg.Value(True, help=ub.paragraph(
             '''
             if True, computes the mean/std for this dataset on each mode
@@ -356,6 +357,10 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 'num_workers': self.num_workers,
                 'batch_size': self.batch_size,
             }
+            if isinstance(self.normalize_inputs, list):
+                # The user specified normalization info
+                ...
+
             if self.normalize_inputs:
                 if isinstance(self.normalize_inputs, str):
                     if self.normalize_inputs == 'transfer':
