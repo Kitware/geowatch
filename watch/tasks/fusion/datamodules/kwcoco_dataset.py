@@ -143,6 +143,7 @@ from torch.utils import data
 from typing import Dict
 import functools
 import scriptconfig as scfg
+from typing import NamedTuple
 from os import getenv
 
 from watch import heuristics
@@ -394,20 +395,59 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             runs quicker.
             ''')),
 
+        ############################
+        # DATA NORMALIZATION OPTIONS
+        ############################
+
+        'prenormalize_inputs': scfg.Value(None, help=ub.paragraph(
+            '''
+            New in 0.4.3: Can specified as list of dictionaries that
+            effectively contains the dataset statistics to use. Details of that
+            will be documented as the feature matures.
+
+            See the watch.cli.coco_spectra script to help determine reasonable
+            values for this.
+
+            These normalizations are applied at the dataloader getitem level.
+
+            This should be specified as a list of dictionaries each containing:
+                * mean:
+                * std:
+                * min:
+                * max:
+
+            As well as the domain to which the normalization applies, e.g.:
+                * video_name
+                * channels
+                * sensor
+
+            If set to True, then we try to automatically compute these values.
+            ''')),
+
+        'normalize_perframe': scfg.Value(False, help=ub.paragraph(
+            '''
+            Applies a pre-normalizaiton that normalizes each frame by itself.
+            This is not recommended unless you have a larger chip size
+            because there needs to be enough data within a frame for
+            the normalization to be effective.
+            ''')),
+
+        'normalize_peritem': scfg.Value(None, type=str, help=ub.paragraph(
+            '''
+            Applies a pre-normalization across all frames in an item.  This
+            preserves relative temporal variations.
+
+            Can be specified as a ChannelSpec, and in this case will only be
+            applied to these channels. If True all channels are normalized this
+            way.
+            ''')),
+
         ###################
         # WEIGHTING OPTIONS
         ###################
 
         'ignore_dilate': scfg.Value(0, help='Dilation applied to ignore masks.'),
         'weight_dilate': scfg.Value(0, help='Dilation applied to weight masks.'),
-
-        'normalize_perframe': scfg.Value(False, help='undocumented - ignored'),
-
-        'normalize_peritem': scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            if specified normalize these bands/channels on a per-batch-item
-            level across time. if True normalize all bands.
-            ''')),
 
         'min_spacetime_weight': scfg.Value(0.9, help=ub.paragraph(
             '''
@@ -981,6 +1021,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             ub.oset(['landcover_hidden.0', 'landcover_hidden.1', 'landcover_hidden.2']),
         ] + heuristics.HUERISTIC_COMBINABLE_CHANNELS
 
+        if self.config.prenormalize_inputs is True:
+            raise NotImplementedError('need to compute prenormaliztions')
+
     def reseed(self):
         """
         Reinitialize the random number generator
@@ -1397,6 +1440,10 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         frame_items = self._build_frame_items(final_gids, gid_to_sample,
                                               truth_info, resolution_info)
+
+
+        if self.prenormalize_inputs is not None:
+            ...
 
         if self.normalize_perframe:
             for frame_item in frame_items:
@@ -2478,12 +2525,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         # Hack: disable augmentation if we are doing that
         self.disable_augmenter = True
 
-        from typing import NamedTuple
-        class NormalizationUnit(NamedTuple):
-            sensor: None
-            channels: None
-            video_name: None
-
         loader = self.make_loader(subset=stats_subset, num_workers=num_workers,
                                   shuffle=True, batch_size=batch_size)
 
@@ -2533,7 +2574,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             final output.
             """
             input_stats = {}
-            for norm_unit, running in norm_stats.items():
+            for domain, running in norm_stats.items():
                 if is_native:
                     # ensure we have the expected shape
                     try:
@@ -2569,7 +2610,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 chan_mean = chan_mean.round(6)
                 chan_std = chan_std.round(6)
                 # print('perchan_stats = {}'.format(ub.repr2(perchan_stats, nl=1)))
-                input_stats[norm_unit] = {
+                input_stats[domain] = {
                     'mean': chan_mean,
                     'std': chan_std,
                     'min': chan_min,
@@ -2605,9 +2646,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             modes = frame_item['modes']
 
             for mode_code, mode_val in modes.items():
-                norm_unit = NormalizationUnit(sensor_code, mode_code, None)
+                domain = Domain(sensor_code, mode_code, None)
                 sensor_mode_hist[(sensor_code, mode_code)] += 1
-                running = norm_stats[norm_unit]
+                running = norm_stats[domain]
                 val = mode_val.numpy().astype(intensity_dtype)
                 weights = np.isfinite(val).astype(intensity_dtype)
                 # kwarray can handle nans now
@@ -3050,3 +3091,12 @@ def apply_robust_normalizer(normalizer, imdata, imdata_valid, mask, dtype, copy=
     else:
         raise KeyError(normalizer['type'])
     return imdata_normalized
+
+
+class Domain(NamedTuple):
+    """
+    A normalization domain
+    """
+    sensor: str
+    channels: str
+    video_name: str

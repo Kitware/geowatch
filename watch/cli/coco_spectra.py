@@ -17,7 +17,7 @@ CommandLine:
     smartwatch spectra --src special:shapes8 --show=True --stat=count --cumulative=True --multiple=stack
 
     DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-    smartwatch spectra --src $DVC_DATA_DPATH/Drop6/data_vali_split1.kwcoco.zip
+    smartwatch spectra --src $DVC_DATA_DPATH/Drop6/data.kwcoco.zip --channels='red|green|blue|nir' --workers=11
 
     DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
     KWCOCO_FPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L_nowv_vali.kwcoco.json

@@ -357,7 +357,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 'num_workers': self.num_workers,
                 'batch_size': self.batch_size,
             }
-            if isinstance(self.normalize_inputs, list):
+            if isinstance(self.prenormalize_inputs, list):
                 # The user specified normalization info
                 ...
 

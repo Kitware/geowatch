@@ -18,8 +18,8 @@ def _gather_namek_shortlist_results():
     expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
     cmdline = 0
     kwargs = {
-        # 'target': expt_dvc_dpath / '_namek_split1_eval_small',
-        'target': expt_dvc_dpath / '_namek_split2_eval_small',
+        'target': expt_dvc_dpath / '_namek_split1_eval_small',
+        # 'target': expt_dvc_dpath / '_namek_split2_eval_small',
         'pipeline': 'bas',
         'io_workers': 20,
     }
@@ -28,6 +28,11 @@ def _gather_namek_shortlist_results():
     agg = eval_type_to_aggregator['bas_pxl_eval']
 
     _ = agg.report_best(100)
+
+    is_highres = [float(a.split('G')[0]) < 8 for a in agg.table['resolved_params.bas_pxl_fit.window_space_scale']]
+    has_wv = ['WV' in a for a in agg.table['resolved_params.bas_pxl_fit.channels']]
+    flags = (np.array(has_wv) & np.array(is_highres))
+    subagg = agg.compress(flags)
 
 
 def _namek_check_pipeline_status():

@@ -447,6 +447,7 @@ if __name__ == "__main__":
                     input_stats:
                         - sensor: '*'
                           channels: r|g|b
+                          video: video1
                           mean: [87.572401, 87.572401, 87.572401]
                           std: [99.449996, 99.449996, 99.449996]
             trainer:
