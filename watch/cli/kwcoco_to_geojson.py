@@ -49,6 +49,7 @@ _KNOWN_TRACK_FUNCS = {
     'saliency_heatmaps': from_heatmap.TimeAggregatedBAS,
     'saliency_polys': from_polygon.OverlapTrack,
     'class_heatmaps': from_heatmap.TimeAggregatedSC,
+    'site_validation': from_heatmap.TimeAggregatedSV,
     'class_polys': from_polygon.OverlapTrack,
     'mono_track': from_polygon.MonoTrack,
 }

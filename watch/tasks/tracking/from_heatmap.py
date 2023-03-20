@@ -402,36 +402,60 @@ def _add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
     return sub_dset
 
 
+@profile
 def site_validation(
     sub_dset,
     thresh=0.25,
     span_steps=15,
     ):
+    """
+    Example:
+        >>> import watch
+        >>> from watch.tasks.tracking.from_heatmap import *  # NOQA
+        >>> coco_dset = watch.coerce_kwcoco(
+        >>>     'watch-msi', heatmap=True, geodata=True, dates=True)
+        >>> vid_id = coco_dset.videos()[0]
+        >>> sub_dset = coco_dset.subset(list(coco_dset.images(video_id=vid_id)))
+        >>> import numpy as np
+        >>> for ann in sub_dset.anns.values():
+        >>>     ann['score'] = float(np.random.rand())
+        >>> sub_dset.remove_annotations(sub_dset.index.trackid_to_aids[None])
+        >>> sub_dset = site_validation(sub_dset)
+    """
 
     # Turn annotations into table we can query
-    annots = pd.DataFrame(sub_dset.dataset["annotations"])
+    # annots = pd.DataFrame([
+    #     (ub.udict(ann) & {'score', 'track_id', 'track_idx'})
+    #     # {
+    #     #     'score': ann['score'],
+    #     #     'track_id': ann.get('track_id', None),
+    #     #     'track_idx': ann.get('track_idx', None),
+    #     # }
+    #     for ann in sub_dset.dataset["annotations"]
+    # ])
+    imgs = pd.DataFrame(preds.dataset["images"])
+    annots = pd.DataFrame(preds.dataset["annotations"])
+    if "track_id" not in annots:
+        annots["track_id"] = 0
+
+    annots = annots[[
+        "id", "image_id", "track_id", "track_index", "score"
+    ]].join(
+        imgs[["timestamp"]],
+        on="image_id",
+    )
+
     ann_ids_to_drop = []
 
-    if "track_idx" in annots.columns:
-        groups = annots.groupby('track_idx', axis=0)
-    else:
-        groups = [(0, annots)]
-
-    for group in groups:
+    for track_id, track_group in annots.groupby('track_id', axis=0):
 
         # Scores are inherently noisy. We smooth them out with a
         # `span_steps`-wide weighted moving average. The maximum
-        # value of this
-        scores = annots.groupby("track_id")[["score"]] \
-                       .ewm(span=span_steps).mean() \
-                       .groupby("track_id").max()
-        track_ids_to_keep = scores[
-            scores["score"] > thresh
-        ].index.to_numpy()
-
-        ann_ids_to_drop.extend([
-            ~annots["track_id"].isin(track_ids_to_keep)
-        ]["id"].tolist())
+        # value of this decides whether to keep the track.
+        # TODO: do something more elegant here?
+        score = track_group["score"].ewm(span=span_steps).mean().max()
+        if score < thresh:
+            ann_ids_to_drop.extend(track_group["id"].tolist())
 
     sub_dset.remove_annotations(ann_ids_to_drop)
     return sub_dset
@@ -1322,7 +1346,7 @@ class TimeAggregatedSV(NewTrackFunction):
     time_thresh: Optional[float] = None
     response_thresh: Optional[float] = None
     key: str = 'salient'
-    bg_key: Tuple[str] = tuple(CNAMES_DCT['negative']['scored'])
+    # bg_key: Tuple[str] = tuple(CNAMES_DCT['negative']['scored'])
     boundaries_as: Literal['bounds', 'polys', 'none'] = 'polys'
     norm_ord: Optional[Union[int, str]] = 1
     agg_fn: str = 'probs'
@@ -1369,27 +1393,29 @@ class TimeAggregatedSV(NewTrackFunction):
                 kwimage.MultiPolygon.from_shapely)
 
         else:
-            aggkw = ub.compatible(self.__dict__, time_aggregated_polys)
-            aggkw['use_boundaries'] = aggkw.get('boundaries_as', 'none') != 'none'
-            tracks = time_aggregated_polys(sub_dset, **aggkw)
+            raise NotImplementedError
+            # aggkw = ub.compatible(self.__dict__, time_aggregated_polys)
+            # aggkw['use_boundaries'] = aggkw.get('boundaries_as', 'none') != 'none'
+            # tracks = time_aggregated_polys(sub_dset, **aggkw)
         return tracks
 
     def add_tracks_to_dset(self, sub_dset, tracks, **kwargs):
-        if self.boundaries_as != 'polys':
-            col_map = {}
-            for c in tracks.columns:
-                if c[0] == 'fg':
-                    k = kwcoco.ChannelSpec('|'.join(self.key)).spec
-                    col_map[c] = (k, *c[1:])
-                elif c[0] == 'bg':
-                    k = kwcoco.ChannelSpec('|'.join(self.bg_key)).spec
-                    col_map[c] = (k, *c[1:])
-            # weird effect here - reassignment casts from GeoDataFrame to
-            # DataFrame. Related to invalid geometry column?
-            # tracks = tracks.rename(columns=col_map)
-            tracks.rename(columns=col_map, inplace=True)
+        # if self.boundaries_as != 'polys':
+        #     col_map = {}
+        #     for c in tracks.columns:
+        #         if c[0] == 'fg':
+        #             k = kwcoco.ChannelSpec('|'.join(self.key)).spec
+        #             col_map[c] = (k, *c[1:])
+        #         elif c[0] == 'bg':
+        #             k = kwcoco.ChannelSpec('|'.join(self.bg_key)).spec
+        #             col_map[c] = (k, *c[1:])
+        #     # weird effect here - reassignment casts from GeoDataFrame to
+        #     # DataFrame. Related to invalid geometry column?
+        #     # tracks = tracks.rename(columns=col_map)
+        #     tracks.rename(columns=col_map, inplace=True)
+
         sub_dset = _add_tracks_to_dset(sub_dset, tracks, self.thresh, self.key,
-                                       self.bg_key, **kwargs)
+                                       **kwargs)
         sub_dset = site_validation(
             sub_dset,
             thresh=self.site_validation_thresh,
