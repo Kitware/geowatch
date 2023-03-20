@@ -643,6 +643,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         window_overlap = config['chip_overlap']
 
         self.config = config
+        print('self.config = {}'.format(ub.urepr(dict(self.config), nl=1)))
         # TODO: maintain instance variables xor items in the config, not both.
         self.__dict__.update(self.config.to_dict())
         self.sampler = sampler
