@@ -433,18 +433,17 @@ def site_validation(
     #     # }
     #     for ann in sub_dset.dataset["annotations"]
     # ])
-    imgs = pd.DataFrame(preds.dataset["images"])
-    annots = pd.DataFrame(preds.dataset["annotations"])
-    if "track_id" not in annots:
-        annots["track_id"] = 0
+    imgs = pd.DataFrame(sub_dset.dataset["images"])
+    annots = pd.DataFrame(sub_dset.dataset["annotations"])
 
     annots = annots[[
-        "id", "image_id", "track_id", "track_index", "score"
+        "id", "image_id", "track_id", "score"
     ]].join(
         imgs[["timestamp"]],
         on="image_id",
     )
 
+    track_ids_to_drop = []
     ann_ids_to_drop = []
 
     for track_id, track_group in annots.groupby('track_id', axis=0):
@@ -455,8 +454,10 @@ def site_validation(
         # TODO: do something more elegant here?
         score = track_group["score"].ewm(span=span_steps).mean().max()
         if score < thresh:
+            track_ids_to_drop.append(track_id)
             ann_ids_to_drop.extend(track_group["id"].tolist())
 
+    print(f"Dropping {len(ann_ids_to_drop)} annotations from {len(track_ids_to_drop)} tracks.")
     sub_dset.remove_annotations(ann_ids_to_drop)
     return sub_dset
 
