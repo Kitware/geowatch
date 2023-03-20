@@ -434,7 +434,14 @@ def site_validation(
     #     for ann in sub_dset.dataset["annotations"]
     # ])
     imgs = pd.DataFrame(sub_dset.dataset["images"])
+    if "timestamp" not in imgs.columns:
+        imgs["timestamp"] = imgs["id"]
+
     annots = pd.DataFrame(sub_dset.dataset["annotations"])
+
+    if annots.shape[0] == 0:
+        print("Nothing to filter")
+        return sub_dset
 
     annots = annots[[
         "id", "image_id", "track_id", "score"
@@ -458,7 +465,9 @@ def site_validation(
             ann_ids_to_drop.extend(track_group["id"].tolist())
 
     print(f"Dropping {len(ann_ids_to_drop)} annotations from {len(track_ids_to_drop)} tracks.")
-    sub_dset.remove_annotations(ann_ids_to_drop)
+    if len(ann_ids_to_drop) > 0:
+        sub_dset.remove_annotations(ann_ids_to_drop)
+
     return sub_dset
 
 
@@ -1200,6 +1209,7 @@ class TimeAggregatedBAS(NewTrackFunction):
     inner_window_size : Optional[str] = None
     inner_agg_fn : Optional[str] = None
 
+    use_boundaries: bool = False
     site_validation: bool = False
     site_validation_span_steps: int = 120
     site_validation_thresh: float = 0.1
@@ -1347,6 +1357,7 @@ class TimeAggregatedSV(NewTrackFunction):
     time_thresh: Optional[float] = None
     response_thresh: Optional[float] = None
     key: str = 'salient'
+    # key: Tuple[str] = tuple(CNAMES_DCT['positive']['scored'])
     # bg_key: Tuple[str] = tuple(CNAMES_DCT['negative']['scored'])
     boundaries_as: Literal['bounds', 'polys', 'none'] = 'polys'
     norm_ord: Optional[Union[int, str]] = 1
@@ -1364,8 +1375,8 @@ class TimeAggregatedSV(NewTrackFunction):
     polygon_simplify_tolerance: Union[None, float] = None
     resolution: Optional[str] = None
 
-    site_validation_span_steps: int = 120
-    site_validation_thresh: float = 0.1
+    span_steps: int = 120
+    thresh: float = 0.1
 
     def __post_init__(self):
         _resolve_deprecated_args(self)
@@ -1383,7 +1394,7 @@ class TimeAggregatedSV(NewTrackFunction):
                 cnames=[SITE_SUMMARY_CNAME],
                 # these are SC scores, not BAS, so this is not a
                 # true reproduction of hybrid.
-                score_chan=kwcoco.ChannelSpec('|'.join(self.key)),
+                score_chan=kwcoco.ChannelSpec('|'.join((self.key,))),
                 resolution=self.resolution,
             )
             # hack in always-foreground instead
@@ -1419,8 +1430,8 @@ class TimeAggregatedSV(NewTrackFunction):
                                        **kwargs)
         sub_dset = site_validation(
             sub_dset,
-            thresh=self.site_validation_thresh,
-            span_steps=self.site_validation_span_steps,
+            thresh=self.thresh,
+            span_steps=self.span_steps,
         )
 
         return sub_dset
