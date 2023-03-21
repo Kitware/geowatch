@@ -34,14 +34,98 @@ except Exception:
 
 
 def _norm(heatmaps, norm_ord):
+    """
+    Computes the generalized mean over axis=0.
+
+    Args:
+        heatmaps (List[ndarray]) pixel aligned heatmaps
+        norm_ord (int | float): the exponent of the generalized mean.
+
+    Returns:
+        ndarray : the axis=0 is marginalized over.
+
+    Notes:
+        like np.linalg.norm but with special nan handling and a division factor
+
+    References:
+        https://en.wikipedia.org/wiki/Generalized_mean
+        https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.pmean.html
+
+    Example:
+        >>> from watch.tasks.tracking.from_heatmap import *  # NOQA
+        >>> from watch.tasks.tracking.from_heatmap import _norm
+        >>> num_frames = 16
+        >>> num_sequences = 6
+        >>> # Setup 5 sequences to norm
+        >>> heatmaps = [np.empty(num_sequences) for _ in range(num_frames)]
+        >>> heatmaps = np.array(heatmaps)
+        >>> # Sequence 0 is all nan
+        >>> heatmaps[:, 0] = np.nan
+        >>> # Sequence 1 is random
+        >>> heatmaps[:, 1] = np.random.rand(num_frames)
+        >>> # Sequence 2 is Sequence1, but half of the data is nan
+        >>> heatmaps[0:, 2] = heatmaps[:, 1]
+        >>> heatmaps[0:num_frames // 2, 2] = np.nan
+        >>> # Sequence 3 is all zero except for an impulse
+        >>> heatmaps[0:, 3] = 0
+        >>> heatmaps[num_frames // 2, 3] = 1
+        >>> # Sequence 4 is a gaussian response
+        >>> heatmaps[0:, 4] = kwimage.gaussian_patch(shape=(1, num_frames))[0]
+        >>> # Sequence 5 is a a gaussian response 1 / 4 nans
+        >>> heatmaps[0:, 5] = kwimage.gaussian_patch(shape=(1, num_frames))[0]
+        >>> heatmaps[0:num_frames // 4, 5] = np.nan
+        >>> norm_ord = 1
+        >>> x = _norm(heatmaps, norm_ord)
+        >>> y = np.linalg.norm(heatmaps, ord=norm_ord, axis=0)
+        >>> print('heatmaps = {}'.format(ub.urepr(heatmaps, nl=1, precision=2)))
+        >>> print(x)
+        >>> print(y)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> # Visualize how this works for random signals
+        >>> import kwplot
+        >>> sns = kwplot.sns
+        >>> kwplot.plt.ion()
+        >>> # kwplot.close_figures()
+        >>> # Add in the original signals
+        >>> rows = []
+        >>> for c in range(num_sequences):
+        >>>     for x in range(num_frames):
+        >>>         rows.append(
+        >>>             {'x': x, 'col': c, 'ord': 'raw-signal', 'value': heatmaps[x, c]})
+        >>> #
+        >>> import pandas as pd
+        >>> import scipy.stats
+        >>> for norm_ord in [1, 2, 3, float('inf')]:
+        >>>     v1 = _norm(heatmaps, norm_ord)
+        >>>     v2 = scipy.stats.pmean(heatmaps, p=norm_ord, axis=0, nan_policy='omit')
+        >>>     print(f'norm_ord={norm_ord}')
+        >>>     print(f'v1={v1}')
+        >>>     print(f'v2={v2}')
+        >>>     for c in range(num_sequences):
+        >>>         for x in range(num_frames):
+        >>>             rows.append({'x': x, 'col': c, 'ord': norm_ord, 'value': v1[c]})
+        >>>     ...
+        >>> df = pd.DataFrame(rows)
+        >>> pnum_ = kwplot.PlotNums(nSubplots=num_sequences)
+        >>> for c in range(num_sequences):
+        >>>     kwplot.figure(fnum=1, pnum=pnum_())
+        >>>     subdata = df[df['col'] == c]
+        >>>     sns.lineplot(data=subdata, x='x', y='value', hue='ord')
+    """
     heatmaps = np.array(heatmaps)
-    if norm_ord == np.inf:
-        probs = np.nansum(heatmaps)
+    if norm_ord == 0:
+        import scipy.stats
+        probs = scipy.stats.pmean(heatmaps, p=norm_ord, axis=0, nan_policy='omit')
+        probs = np.nan_to_num(probs)
+    elif norm_ord == np.inf:
+        probs = np.nanmax(heatmaps, axis=0)
     else:
+        # The np.linalg.norm part
         probs = np.power(np.nansum(np.power(heatmaps, norm_ord), axis=0),
                          1. / norm_ord)
         if norm_ord > 0:
             n_nonzero = np.count_nonzero(~np.isnan(heatmaps), axis=0)
+            # Force the denominator to be positive.
             n_nonzero[n_nonzero == 0] = 1
             probs /= np.power(n_nonzero, 1. / norm_ord)
     return probs
@@ -316,6 +400,8 @@ def time_aggregated_polys(
         thresh_hysteresis=None,
         polygon_simplify_tolerance=None,
         resolution=None,
+        inner_window_size=None,
+        inner_agg_fn=None,
         ):
     '''
     Track function.
@@ -467,6 +553,8 @@ def time_aggregated_polys(
                              thresh_hysteresis=thresh_hysteresis,
                              norm_ord=norm_ord,
                              moving_window_size=moving_window_size,
+                             inner_window_size=inner_window_size,
+                             inner_agg_fn=inner_agg_fn,
                              resolution=resolution,
                              bounds=use_boundaries)
     orig_gid_polys = list(gids_polys)  # 26% of runtime
@@ -655,10 +743,14 @@ def _merge_polys(p1, p2):
 
 @profile
 def heatmaps_to_polys(heatmaps, bounds, agg_fn, thresh, morph_kernel,
-                      thresh_hysteresis, norm_ord, moving_window_size):
+                      thresh_hysteresis, norm_ord, moving_window_size,
+                      inner_window_size=None, inner_agg_fn=None,
+                      heatmap_dates=None):
     '''
     Use parameters: agg_fn, thresh, morph_kernel, thresh_hysteresis, norm_ord
     '''
+
+    # TODO: rename moving window size to "outer_window_size"
 
     def convert_to_shapely(polys):
         return [p.to_shapely() for p in polys]
@@ -681,8 +773,33 @@ def heatmaps_to_polys(heatmaps, bounds, agg_fn, thresh, morph_kernel,
                              bounds=bounds))
         return polygons
 
+    if isinstance(inner_window_size, float) and math.isnan(inner_window_size):
+        inner_window_size = None
+
     if isinstance(moving_window_size, float) and math.isnan(moving_window_size):
         moving_window_size = None
+
+    if isinstance(inner_window_size, str):
+        # TODO: generalize if needed
+        assert inner_agg_fn == 'mean'
+        assert heatmap_dates is not None
+        # Do inner aggregation before outer aggregation
+        from watch.utils import util_time
+        import kwarray
+        delta = util_time.coerce_timedelta(inner_window_size).total_seconds()
+        image_unixtimes = np.array([d.timestamp() for d in heatmap_dates])
+        bucket_ids = (image_unixtimes // delta).astype(int)
+        unique_ids, groupxs = kwarray.group_indices(bucket_ids)
+        new_heatmaps = []
+        for idxs in groupxs:
+            inner = _norm(heatmaps[idxs], norm_ord=1)
+            new_heatmaps.append(inner)
+        new_heatmaps = np.array(new_heatmaps)
+        heatmaps = new_heatmaps
+    else:
+        if inner_window_size is not None:
+            raise NotImplementedError(
+                'only temporal deltas for inner agg window for now')
 
     # calculate number of moving-window steps, based on window_size and number
     # of heatmaps
@@ -722,7 +839,40 @@ def _gids_polys(
         norm_ord,
         resolution=None,
         moving_window_size=None,  # 150
+        inner_window_size=None,
+        inner_agg_fn='mean',
         bounds=False) -> Iterable[Union[int, Poly]]:
+    """
+    Example:
+        >>> from watch.tasks.tracking.from_heatmap import *  # NOQA
+        >>> from watch.tasks.tracking.from_heatmap import _gids_polys
+        >>> import watch
+        >>> coco_dset = watch.coerce_kwcoco(data='watch-msi', dates=True, geodata=True, heatmap=True)
+        >>> sub_dset = coco_dset.subset(coco_dset.videos().images[0])
+        >>> key = 'salient'
+        >>> agg_fn = 'probs'
+        >>> thresh = 0.01
+        >>> morph_kernel = 3
+        >>> thresh_hysteresis = 0
+        >>> norm_ord = 1
+        >>> resolution = None
+        >>> moving_window_size = None
+        >>> bounds = None
+        >>> inner_window_size = '1year'
+        >>> results = list(_gids_polys(
+        >>>     sub_dset,
+        >>>     key,
+        >>>     agg_fn,
+        >>>     thresh,
+        >>>     morph_kernel,
+        >>>     thresh_hysteresis,
+        >>>     norm_ord,
+        >>>     resolution=resolution,
+        >>>     moving_window_size=moving_window_size,
+        >>>     bounds=bounds,
+        >>> ))
+
+    """
     if bounds:  # for SC
         raw_boundary_tracks = pop_tracks(sub_dset, [SITE_SUMMARY_CNAME])
         assert len(raw_boundary_tracks) > 0, 'need valid site boundaries!'
@@ -739,10 +889,18 @@ def _gids_polys(
         vidid = list(sub_dset.index.vidid_to_gids.keys())[0]
         gids = sub_dset.images(vidid=vidid).gids
 
+    from watch.utils import util_time
+    images = sub_dset.images(gids)
+    image_dates = [util_time.coerce_datetime(d)
+                   for d in images.lookup('date_captured')]
+    # image_years = [d.year for d in image_dates]
+
     _heatmaps = build_heatmaps(sub_dset,
                                gids, {'fg': key},
                                skipped='interpolate',
                                resolution=resolution)['fg']
+    _heatmaps = np.array(_heatmaps)
+    assert len(_heatmaps) == len(images)
 
     def _process(track):
 
@@ -753,19 +911,26 @@ def _gids_polys(
         if track is None:
             track_bounds = None
             _heatmaps_in_track = _heatmaps
+            heatmap_dates = image_dates
         else:
             track_bounds = track['poly'].unary_union
             track_gids = track['gid']
             flags = np.in1d(gids, track_gids)
             _heatmaps_in_track = np.compress(flags, _heatmaps, axis=0)
+            heatmap_dates = list(ub.compress(image_dates, flags))
 
         # this is another hot spot, heatmaps_to_polys -> mask_to_polygons ->
         # rasterize. Figure out how to vectorize over bounds.
         track_polys = heatmaps_to_polys(_heatmaps_in_track, track_bounds,
                                         agg_fn, thresh, morph_kernel,
                                         thresh_hysteresis, norm_ord,
-                                        moving_window_size)
+                                        moving_window_size,
+                                        inner_window_size=inner_window_size,
+                                        inner_agg_fn=inner_agg_fn,
+                                        heatmap_dates=heatmap_dates)
         if track is None:
+            # BUG: The polygons retunred from heatmap-to-polys might not be
+            # corresponding to the gids in this case.
             yield from zip(itertools.repeat(gids), track_polys)
             # for poly in polys:  # convert to shapely to check this
             # if poly.is_valid and not poly.is_empty:
@@ -922,6 +1087,9 @@ class TimeAggregatedBAS(NewTrackFunction):
     polygon_simplify_tolerance: Union[None, float] = None
     resolution: Optional[str] = None
 
+    inner_window_size : Optional[str] = None
+    inner_agg_fn : Optional[str] = None
+
     def __post_init__(self):
         _resolve_deprecated_args(self)
 
@@ -966,6 +1134,9 @@ class TimeAggregatedSC(NewTrackFunction):
     max_area_behavior: str = 'drop'
     polygon_simplify_tolerance: Union[None, float] = None
     resolution: Optional[str] = None
+
+    inner_window_size : Optional[str] = None
+    inner_agg_fn : Optional[str] = None
 
     def __post_init__(self):
         _resolve_deprecated_args(self)
