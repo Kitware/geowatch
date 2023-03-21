@@ -1021,7 +1021,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             ub.oset(['landcover_hidden.0', 'landcover_hidden.1', 'landcover_hidden.2']),
         ] + heuristics.HUERISTIC_COMBINABLE_CHANNELS
 
-        if self.config.prenormalize_inputs is True:
+        if self.config['prenormalize_inputs'] is True:
             raise NotImplementedError('need to compute prenormaliztions')
 
     def reseed(self):
@@ -1441,8 +1441,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         frame_items = self._build_frame_items(final_gids, gid_to_sample,
                                               truth_info, resolution_info)
 
-
-        if self.prenormalize_inputs is not None:
+        if self.config['prenormalize_inputs'] is not None:
             ...
 
         if self.normalize_perframe:

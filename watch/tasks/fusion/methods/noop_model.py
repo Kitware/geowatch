@@ -78,6 +78,8 @@ class NoopModel(pl.LightningModule, WatchModuleMixins):
         else:
             sensor_modes = set(self.unique_sensor_modes)
 
+        # important to sort so layers are always created in the same order
+        sensor_modes = sorted(sensor_modes)
         for k in sensor_modes:
             if isinstance(k, str):
                 if k == '*':
