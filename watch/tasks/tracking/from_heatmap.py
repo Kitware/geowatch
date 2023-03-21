@@ -1062,6 +1062,11 @@ def _resolve_deprecated_args(self):
         self.max_area_sqkm = None
 
 
+def _resolve_arg_values(self):
+    if isinstance(self.norm_ord, str) and self.norm_ord.lower() == 'inf':
+        self.norm_ord = float('inf')
+
+
 @dataclass
 class TimeAggregatedBAS(NewTrackFunction):
     '''
@@ -1072,7 +1077,7 @@ class TimeAggregatedBAS(NewTrackFunction):
     time_thresh: Optional[float] = 1
     response_thresh: Optional[float] = None
     key: str = 'salient'
-    norm_ord: Optional[Union[int, str]] = 1
+    norm_ord: Optional[Union[int, str, float]] = 1
     agg_fn: str = 'probs'
     thresh_hysteresis: Optional[float] = None
     moving_window_size: Optional[int] = None
@@ -1092,6 +1097,7 @@ class TimeAggregatedBAS(NewTrackFunction):
 
     def __post_init__(self):
         _resolve_deprecated_args(self)
+        _resolve_arg_values(self)
 
     def create_tracks(self, sub_dset):
         aggkw = ub.compatible(self.__dict__, time_aggregated_polys)
@@ -1120,7 +1126,7 @@ class TimeAggregatedSC(NewTrackFunction):
     key: Tuple[str] = tuple(CNAMES_DCT['positive']['scored'])
     bg_key: Tuple[str] = tuple(CNAMES_DCT['negative']['scored'])
     boundaries_as: Literal['bounds', 'polys', 'none'] = 'bounds'
-    norm_ord: Optional[Union[int, str]] = 1
+    norm_ord: Optional[Union[int, str, float]] = 1
     agg_fn: str = 'probs'
     thresh_hysteresis: Optional[float] = None
     moving_window_size: Optional[int] = None
@@ -1140,6 +1146,7 @@ class TimeAggregatedSC(NewTrackFunction):
 
     def __post_init__(self):
         _resolve_deprecated_args(self)
+        _resolve_arg_values(self)
 
     def create_tracks(self, sub_dset):
         '''
