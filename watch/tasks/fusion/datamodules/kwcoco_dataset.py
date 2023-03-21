@@ -1442,7 +1442,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                                               truth_info, resolution_info)
 
         if self.config['prenormalize_inputs'] is not None:
-            ...
+            raise NotImplementedError
 
         if self.normalize_perframe:
             for frame_item in frame_items:
@@ -2545,8 +2545,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             (s.sensor.spec, s.chans.spec)
             for s in self.input_sensorchan.streams())
 
-        is_native = self.config['input_space_scale'] == 'native'
-
         print('unique_sensor_modes = {}'.format(ub.repr2(unique_sensor_modes, nl=1)))
         intensity_dtype = np.float64
 
@@ -2572,32 +2570,24 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             Summarizes current stats estimates either for display or for the
             final output.
             """
-            input_stats = {}
+            domain_input_stats = {}
             for domain, running in norm_stats.items():
-                if is_native:
-                    # ensure we have the expected shape
-                    try:
-                        perchan_stats = running.summarize(axis=ub.NoParam, keepdims=True)
-                    except RuntimeError:
-                        perchan_stats = {'mean': np.array([np.nan]), 'std': np.array([np.nan])}
-                    chan_mean = perchan_stats['mean'][:, None, None]
-                    chan_std = perchan_stats['std'][:, None, None]
-                    chan_min = perchan_stats['min'][:, None, None]
-                    chan_max = perchan_stats['max'][:, None, None]
-                else:
-                    try:
-                        perchan_stats = running.summarize(axis=(1, 2))
-                    except RuntimeError:
-                        perchan_stats = {
-                            'mean': np.array([[[np.nan]]]),
-                            'std': np.array([[[np.nan]]]),
-                            'min': np.array([[[np.nan]]]),
-                            'max': np.array([[[np.nan]]]),
-                        }
-                    chan_mean = perchan_stats['mean']
-                    chan_std = perchan_stats['std']
-                    chan_min = perchan_stats['min']
-                    chan_max = perchan_stats['max']
+                # ensure we have the expected shape
+                try:
+                    perchan_stats = running.summarize(axis=ub.NoParam, keepdims=True)
+                except RuntimeError:
+                    perchan_stats = {
+                        'mean': np.array([np.nan]),
+                        'std': np.array([np.nan]),
+                        'min': np.array([np.nan]),
+                        'max': np.array([np.nan]),
+                        'n': np.array([np.nan]),
+                    }
+                chan_mean = perchan_stats['mean'][:, None, None]
+                chan_std = perchan_stats['std'][:, None, None]
+                chan_min = perchan_stats['min'][:, None, None]
+                chan_max = perchan_stats['max'][:, None, None]
+                chan_num = perchan_stats['n'][:, None, None]
 
                 # For nans, set the mean to zero and set the std to a huge
                 # number if we dont have any data on it. That will prevent
@@ -2609,24 +2599,50 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 chan_mean = chan_mean.round(6)
                 chan_std = chan_std.round(6)
                 # print('perchan_stats = {}'.format(ub.repr2(perchan_stats, nl=1)))
-                input_stats[domain] = {
+                domain_input_stats[domain] = {
                     'mean': chan_mean,
                     'std': chan_std,
                     'min': chan_min,
                     'max': chan_max,
+                    'n': chan_num,
                 }
-            return input_stats
+
+            # We are now computing input stats across a finer set of domain
+            # variables. For backwards compatability also return the old-style
+            # input stats that are only over sensor/channel
+            grouped_stats = ub.group_items(domain_input_stats.values(), [
+                (u.sensor, u.channels) for u in domain_input_stats.keys()])
+            old_input_stats = {}
+            for (sensor, chan), group in grouped_stats.items():
+                means = np.stack([m['mean'] for m in group], axis=0)
+                stds = np.stack([m['std'] for m in group], axis=0)
+                nums = np.stack([m['n'] for m in group], axis=0)
+                maxs = np.stack([m['max'] for m in group], axis=0)
+                mins = np.stack([m['min'] for m in group], axis=0)
+
+                combo_mins = np.nanmin(mins, axis=0)
+                combo_maxs = np.nanmax(maxs, axis=0)
+                combo_mean, combo_std, combo_nums = _combine_mean_stds(
+                    means, stds, nums, axis=0)
+                combo = {
+                    'mean': combo_mean,
+                    'std': combo_std,
+                    'min': combo_mins,
+                    'max': combo_maxs,
+                    'n': combo_nums,
+                }
+                old_input_stats[(sensor, chan)] = combo
+            return domain_input_stats, old_input_stats
 
         def update_displayed_estimates(pman):
             """
-            Build an intermediate summary to display to the user while this is
-            running.
+            Build an intermediate summary to display in the progress bar
             """
             stat_lines = ['Current Estimated Dataset Statistics: ']
             if with_intensity:
-                input_stats = current_input_stats()
+                domain_input_stats, old_input_stats = current_input_stats()
                 input_stats2 = {sc: {k: v.ravel() for k, v in stats.items()}
-                                for sc, stats in input_stats.items()}
+                                for sc, stats in old_input_stats.items()}
                 intensity_info_text = 'Spectra Stats: ' + ub.urepr(input_stats2, with_dtype=False, precision=4)
                 stat_lines.append(intensity_info_text)
             if with_class:
@@ -2639,25 +2655,42 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             if info_text:
                 pman.update_info(info_text)
 
-        def update_intensity_estimates(frame_item):
+        def update_intensity_estimates(item):
             # Update pixel-level intensity histogram
-            sensor_code = frame_item['sensor']
-            modes = frame_item['modes']
+            video_name = item['video_name']
+            for frame_item in item['frames']:
+                sensor_code = frame_item['sensor']
+                modes = frame_item['modes']
 
-            for mode_code, mode_val in modes.items():
-                domain = Domain(sensor_code, mode_code, None)
-                sensor_mode_hist[(sensor_code, mode_code)] += 1
-                running = norm_stats[domain]
-                val = mode_val.numpy().astype(intensity_dtype)
-                weights = np.isfinite(val).astype(intensity_dtype)
-                # kwarray can handle nans now
-                if is_native:
+                for mode_code, mode_val in modes.items():
+                    domain = Domain(sensor_code, mode_code, video_name)
+
+                    sensor_mode_hist[(sensor_code, mode_code)] += 1
+                    running = norm_stats[domain]
+                    val = mode_val.numpy().astype(intensity_dtype)
+                    weights = np.isfinite(val).astype(intensity_dtype)
+
                     # Put channels last so we can update multiple at once
                     flat_vals = val.transpose(1, 2, 0).reshape(-1, val.shape[0])
                     flat_weights = weights.transpose(1, 2, 0).reshape(-1, weights.shape[0])
                     running.update_many(flat_vals, weights=flat_weights)
-                else:
-                    running.update(val, weights=weights)
+
+        def update_stats(item, total_freq):
+            if with_vidid:
+                vidid = item['video_id']
+                video_id_histogram[vidid] += 1
+
+            for frame_item in item['frames']:
+                image_id_histogram[frame_item['gid']] += 1
+                if with_class:
+                    # Update pixel-level class histogram
+                    class_idxs = frame_item['class_idxs']
+                    if class_idxs is not None:
+                        item_freq = np.histogram(class_idxs.ravel(), bins=bins)[0]
+                        total_freq += item_freq
+
+            if with_intensity:
+                update_intensity_estimates(item)
 
         from watch.utils import util_progress
         from watch.utils import util_environ
@@ -2679,21 +2712,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 for item in batch_items:
                     if item is None:
                         continue
-
-                    if with_vidid:
-                        vidid = item['video_id']
-                        video_id_histogram[vidid] += 1
-
-                    for frame_item in item['frames']:
-                        image_id_histogram[frame_item['gid']] += 1
-                        if with_class:
-                            # Update pixel-level class histogram
-                            class_idxs = frame_item['class_idxs']
-                            if class_idxs is not None:
-                                item_freq = np.histogram(class_idxs.ravel(), bins=bins)[0]
-                                total_freq += item_freq
-                        if with_intensity:
-                            update_intensity_estimates(frame_item)
+                    update_stats(item, total_freq)
 
                 if timer._first or timer.toc() > timer.postfix_update_threshold:
                     update_displayed_estimates(pman)
@@ -2702,49 +2721,51 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
             update_displayed_estimates(pman)
 
-        # TODO: we should ensure we include at least one sample from each type
-        # of modality.  Note: the requested order of the channels could be
-        # different that what is registered in the dataset. Need to find a good
-        # way to account for this.
-        MISSING_SENSOR_FALLBACK = util_environ.envflag('MISSING_SENSOR_FALLBACK', 1)
-        if MISSING_SENSOR_FALLBACK and with_intensity:
-            missing_sensor_modes = set(unique_sensor_modes) - set(sensor_mode_hist)
-            # Try to find a few examples with these missing modes
-            if missing_sensor_modes:
-                print(f'Warning: we are missing stats for {missing_sensor_modes}. '
-                      'We will try to force something for them')
-                coco_images = self.sampler.dset.images().coco_images
-                sensor_to_images = ub.group_items(coco_images, key=lambda x: x.img.get('sensor_coarse', None))
-                extra_sample_groups = []
-                for sensor, mode in missing_sensor_modes:
-                    candidate_images = sensor_to_images.get(sensor, [])
-                    if len(candidate_images) == 0:
-                        print(f'sensor warning: unable to sample data for {sensor}:{mode}')
-                    else:
-                        filtered = []
-                        for img in candidate_images:
-                            if (img.channels & mode).numel():
-                                filtered.append(img)
-                        if not filtered:
-                            print(f'mode warning: unable to sample data for {sensor}:{mode}')
-                        extra_sample_groups.append(filtered)
+            # TODO: we should ensure we include at least one sample from each type
+            # of modality.  Note: the requested order of the channels could be
+            # different that what is registered in the dataset. Need to find a good
+            # way to account for this.
+            MISSING_SENSOR_FALLBACK = util_environ.envflag('MISSING_SENSOR_FALLBACK', 1)
+            if MISSING_SENSOR_FALLBACK and with_intensity:
+                missing_sensor_modes = set(unique_sensor_modes) - set(sensor_mode_hist)
+                # Try to find a few examples with these missing modes
+                if missing_sensor_modes:
+                    print(f'Warning: we are missing stats for {missing_sensor_modes}. '
+                          'We will try to force something for them')
+                    coco_images = self.sampler.dset.images().coco_images
+                    sensor_to_images = ub.group_items(coco_images, key=lambda x: x.img.get('sensor_coarse', None))
+                    extra_sample_groups = []
+                    for sensor, mode in missing_sensor_modes:
+                        candidate_images = sensor_to_images.get(sensor, [])
+                        if len(candidate_images) == 0:
+                            print(f'sensor warning: unable to sample data for {sensor}:{mode}')
+                        else:
+                            filtered = []
+                            for img in candidate_images:
+                                if (img.channels & mode).numel():
+                                    filtered.append(img)
+                            if not filtered:
+                                print(f'mode warning: unable to sample data for {sensor}:{mode}')
+                            extra_sample_groups.append(filtered)
 
-                # Build extra fallback samples
-                for group in ub.ProgIter(extra_sample_groups, desc='process fallbacks'):
-                    image_ids = [g.img['id'] for g in group]
-                    images = self.sampler.dset.images(image_ids)
-                    vidid_to_gids = ub.group_items(image_ids, images.lookup('video_id'))
-                    for vidid, gids in vidid_to_gids.items():
-                        video = self.sampler.dset.index.videos[vidid]
-                        # Hack: just use the entire video, if that fails we should
-                        # implement windowing here.
-                        space_slice = (
-                            slice(0, video['height']),
-                            slice(0, video['width']),
-                        )
-                        sample = {'video_id': vidid, 'gids': gids[0:1],
-                                  'space_slice': space_slice}
-                        item = self[sample]
+                    # Build extra fallback samples
+                    for group in ub.ProgIter(extra_sample_groups, desc='process fallbacks'):
+                        image_ids = [g.img['id'] for g in group]
+                        images = self.sampler.dset.images(image_ids)
+                        vidid_to_gids = ub.group_items(image_ids, images.lookup('video_id'))
+                        for vidid, gids in vidid_to_gids.items():
+                            video = self.sampler.dset.index.videos[vidid]
+                            # Hack: just use the entire video, if that fails we should
+                            # implement windowing here.
+                            space_slice = (
+                                slice(0, video['height']),
+                                slice(0, video['width']),
+                            )
+                            sample = {'video_id': vidid, 'gids': gids[0:1],
+                                      'space_slice': space_slice}
+                            item = self[sample]
+                            if item is not None:
+                                update_stats(item, total_freq)
 
         self.disable_augmenter = False
 
@@ -2755,17 +2776,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             class_freq = None
 
         if with_intensity:
-            input_stats = current_input_stats()
-            grouped_stats = ub.group_items(input_stats.values(), [
-                (u.sensor, u.channels) for u in input_stats.keys()])
-            old_input_stats = {}
-            for (sensor, chan), group in grouped_stats.items():
-                old_input_stats.setdefault(sensor, {})
-                combo = {}
-                combo['mean'] = np.stack([m['mean'] for m in group], axis=0).mean(axis=0)
-                combo['std'] = np.stack([m['std'] for m in group], axis=0).mean(axis=0)
-                old_input_stats[sensor][chan] = combo
+            domain_input_stats, old_input_stats = current_input_stats()
         else:
+            domain_input_stats = None
             old_input_stats = None
 
         dataset_stats = {
@@ -2773,6 +2786,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             'sensor_mode_hist': dict(sensor_mode_hist),
             'input_stats': old_input_stats,
             'class_freq': class_freq,  # pixelwise
+
+            'domain_input_stats': domain_input_stats,  # new
 
             'annot_class_freq': annot_class_freq,
             'track_class_freq': track_class_freq,
@@ -3099,3 +3114,147 @@ class Domain(NamedTuple):
     sensor: str
     channels: str
     video_name: str
+
+
+def _combine_mean_stds(means, stds, nums=None, axis=None, keepdims=False,
+                       bessel=True):
+    r"""
+    Args:
+        means (array): means[i] is the mean of the ith entry to combine
+
+        stds (array): stds[i] is the std of the ith entry to combine
+
+        nums (array | None):
+            nums[i] is the number of samples in the ith entry to combine.
+            if None, assumes sample sizes are infinite.
+
+        axis (int | Tuple[int] | None):
+            axis to combine the statistics over
+
+        keepdims (bool):
+            if True return arrays with the same number of dimensions they were
+            given in.
+
+        bessel (int):
+            Set to 1 to enables bessel correction to unbias the combined std
+            estimate.  Only disable if you have the true population means, or
+            you think you know what you are doing.
+
+    References:
+        https://stats.stackexchange.com/questions/55999/is-it-possible-to-find-the-combined-standard-deviation
+
+    SeeAlso:
+        development kwarray has a similar hidden function in util_averages.
+        Might expose later.
+
+    Example:
+        >>> means = np.stack([np.array([1.2, 3.2, 4.1])] * 100, axis=0)
+        >>> stds = np.stack([np.array([4.2, 0.2, 2.1])] * 100, axis=0)
+        >>> nums = np.stack([np.array([10, 100, 10])] * 100, axis=0)
+        >>> cm1, cs1, _ = _combine_mean_stds(means, stds, nums, axis=None)
+        >>> print('combo_mean = {}'.format(ub.urepr(cm1, nl=1)))
+        >>> print('combo_std  = {}'.format(ub.urepr(cs1, nl=1)))
+        >>> means = np.stack([np.array([1.2, 3.2, 4.1])] * 1, axis=0)
+        >>> stds = np.stack([np.array([4.2, 0.2, 2.1])] * 1, axis=0)
+        >>> nums = np.stack([np.array([10, 100, 10])] * 1, axis=0)
+        >>> cm2, cs2, _ = _combine_mean_stds(means, stds, nums, axis=None)
+        >>> print('combo_mean = {}'.format(ub.urepr(cm2, nl=1)))
+        >>> print('combo_std  = {}'.format(ub.urepr(cs2, nl=1)))
+        >>> means = np.stack([np.array([1.2, 3.2, 4.1])] * 5, axis=0)
+        >>> stds = np.stack([np.array([4.2, 0.2, 2.1])] * 5, axis=0)
+        >>> nums = np.stack([np.array([10, 100, 10])] * 5, axis=0)
+        >>> cm3, cs3, combo_num = _combine_mean_stds(means, stds, nums, axis=1)
+        >>> print('combo_mean = {}'.format(ub.urepr(cm3, nl=1)))
+        >>> print('combo_std  = {}'.format(ub.urepr(cs3, nl=1)))
+        >>> assert np.allclose(cm1, cm2) and np.allclose(cm2,  cm3)
+        >>> assert not np.allclose(cs1, cs2)
+        >>> assert np.allclose(cs2, cs3)
+
+    Example:
+        >>> means = np.random.rand(2, 3, 5, 7)
+        >>> stds = np.random.rand(2, 3, 5, 7)
+        >>> nums = (np.random.rand(2, 3, 5, 7) * 10) + 1
+        >>> cm, cs, cn = _combine_mean_stds(means, stds, nums, axis=1, keepdims=1)
+        >>> assert cm.shape == cs.shape == cn.shape
+        >>> print(f'cm.shape={cm.shape}')
+        >>> cm, cs, cn = _combine_mean_stds(means, stds, nums, axis=(0, 2), keepdims=1)
+        >>> assert cm.shape == cs.shape == cn.shape
+        >>> print(f'cm.shape={cm.shape}')
+        >>> cm, cs, cn = _combine_mean_stds(means, stds, nums, axis=(1, 3), keepdims=1)
+        >>> assert cm.shape == cs.shape == cn.shape
+        >>> print(f'cm.shape={cm.shape}')
+        >>> cm, cs, cn = _combine_mean_stds(means, stds, nums, axis=None)
+        >>> assert cm.shape == cs.shape == cn.shape
+        >>> print(f'cm.shape={cm.shape}')
+        cm.shape=(2, 1, 5, 7)
+        cm.shape=(1, 3, 1, 7)
+        cm.shape=(2, 1, 5, 1)
+        cm.shape=()
+    """
+    if nums is None:
+        # Assume the limit as nums -> infinite
+        combo_num = None
+        combo_mean = np.average(means, weights=None, axis=axis)
+        combo_mean = _postprocess_keepdims(means, combo_mean, axis)
+        numer_p1 = stds.sum(axis=axis, keepdims=1)
+        numer_p2 = (((means - combo_mean) ** 2)).sum(axis=axis, keepdims=1)
+        numer = numer_p1 + numer_p2
+        denom = len(stds)
+        combo_std = np.sqrt(numer / denom)
+    else:
+        combo_num = nums.sum(axis=axis, keepdims=1)
+        weights = nums / combo_num
+        combo_mean = np.average(means, weights=weights, axis=axis)
+        combo_mean = _postprocess_keepdims(means, combo_mean, axis)
+        numer_p1 = ((nums - bessel) * stds).sum(axis=axis, keepdims=1)
+        numer_p2 = (nums * ((means - combo_mean) ** 2)).sum(axis=axis, keepdims=1)
+        numer = numer_p1 + numer_p2
+        denom = combo_num - bessel
+        combo_std = np.sqrt(numer / denom)
+
+    if not keepdims:
+        indexer = _no_keepdim_indexer(combo_mean, axis)
+        combo_mean = combo_mean[indexer]
+        combo_std = combo_std[indexer]
+        if combo_num is not None:
+            combo_num = combo_num[indexer]
+
+    return combo_mean, combo_std, combo_num
+
+
+def _no_keepdim_indexer(result, axis):
+    """
+    Computes an indexer to postprocess a result with keepdims=True
+    that will modify the result as if keepdims=False
+    """
+    if axis is None:
+        indexer = [0] * len(result.shape)
+    else:
+        indexer = [slice(None)] * len(result.shape)
+        if isinstance(axis, (list, tuple)):
+            for a in axis:
+                indexer[a] = 0
+        else:
+            indexer[axis] = 0
+    indexer = tuple(indexer)
+    return indexer
+
+
+def _postprocess_keepdims(original, result, axis):
+    """
+    Can update the result of a function that does not support keepdims to look
+    as if keepdims was supported.
+    """
+    # Newer versions of numpy have keepdims on more functions
+    if axis is not None:
+        expander = [slice(None)] * len(original.shape)
+        if isinstance(axis, (list, tuple)):
+            for a in axis:
+                expander[a] = None
+        else:
+            expander[axis] = None
+        result = result[tuple(expander)]
+    else:
+        expander = [None] * len(original.shape)
+        result = np.array(result)[tuple(expander)]
+    return result

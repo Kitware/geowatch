@@ -109,28 +109,28 @@ def _format_offset(off):
 
 
 @profile
-def coerce_datetime(data, default_timezone='utc', nan_behavior='return-None',
-                    none_behavior='return-None'):
+def coerce_datetime(data, default_timezone='utc', nan_policy='return-None',
+                    none_policy='return-None'):
     """
     Parses a timestamp and always returns a timestamp with a timezone.
     If only a date is specified, the time is defaulted to 00:00:00
     If one is not discoverable a specified default is used.
-    A nan or None input depends on nan_behavior and none_behavior.
+    A nan or None input depends on nan_policy and none_policy.
 
     Args:
         data (None | str | datetime.datetime | datetime.date)
 
         default_timezone (str): defaults to utc.
 
-        none_behavior (str):
+        none_policy (str):
             How None inputs are handled. Can be:
                 'cast-to-none': returns None
-                'error': raises an error
+                'raise': raises an error
 
-        nan_behavior (str):
+        nan_policy (str):
             How nan inputs are handled. Can be:
                 'cast-to-none': returns None
-                'error': raises an error
+                'raise': raises an error
 
     Returns:
         datetime.datetime | None
@@ -144,12 +144,12 @@ def coerce_datetime(data, default_timezone='utc', nan_behavior='return-None',
         >>> assert coerce_datetime(datetime_cls(2020, 1, 1, 0, 0).date()) == datetime_cls(2020, 1, 1, 0, 0, tzinfo=datetime_mod.timezone.utc)
     """
     if data is None:
-        if none_behavior == 'return-None':
+        if none_policy == 'return-None':
             return None
-        elif none_behavior == 'error':
+        elif none_policy == 'raise':
             raise TimeTypeError('cannot cast None to a datetime')
         else:
-            raise KeyError(none_behavior)
+            raise KeyError(none_policy)
     elif isinstance(data, str):
         # Canse use ubelt.timeparse(data, default_timezone=default_timezone) here.
         if data == 'now':
@@ -162,12 +162,12 @@ def coerce_datetime(data, default_timezone='utc', nan_behavior='return-None',
         dt = dateutil.parser.parse(data.isoformat())
     elif isinstance(data, numbers.Number):
         if math.isnan(data):
-            if nan_behavior == 'return-None':
+            if nan_policy == 'return-None':
                 return None
-            elif nan_behavior == 'error':
+            elif nan_policy == 'raise':
                 raise TimeTypeError('cannot cast nan to a datetime')
             else:
-                raise KeyError(nan_behavior)
+                raise KeyError(nan_policy)
         dt = datetime_cls.fromtimestamp(data)
     else:
         raise TimeTypeError('unhandled {}'.format(data))
