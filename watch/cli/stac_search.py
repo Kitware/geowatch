@@ -150,7 +150,7 @@ class StacSearchConfig(scfg.Config):
     """
     Execute a STAC query
     """
-    default = {
+    __default__ = {
         'outfile': scfg.Value(
             None,
             help='output file name for STAC items',

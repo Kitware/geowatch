@@ -71,7 +71,7 @@ import warnings
 
 
 class PrepareTA2Config(scfg.Config):
-    default = {
+    __default__ = {
         'dataset_suffix': scfg.Value(None, help=''),
 
         'stac_query_mode': scfg.Value(None, help='if set to auto we try to make the .input files. Mutex with s3_fpath'),

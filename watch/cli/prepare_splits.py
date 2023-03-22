@@ -39,7 +39,7 @@ class PrepareSplitsConfig(scfg.Config):
         base_fpath = 'imganns*.kwcoco.*'
 
     """
-    default = {
+    __default__ = {
         'base_fpath': scfg.Value(None, nargs='+', help='base coco file to split or a globstring in constructive mode', position=1),
         'virtualenv_cmd': scfg.Value(None, type=str, help=ub.paragraph(
             '''

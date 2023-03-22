@@ -1,4 +1,6 @@
 """
+DEPRECATED
+
 Loads and summarizes pre-computed metrics over multiple experiments
 
 TODO:
@@ -64,7 +66,7 @@ class AggregateResultsConfig(scfg.Config):
 
         Tries to figure out which configs did best.
     """
-    default = {
+    __default__ = {
         'measure_globstr': scfg.Value('measures2.json', help='a group of measures2.json files from kwcoco metrics, specified by list or glob pattern'),
         'out_dpath': scfg.Value('./agg_results', help='A location where aggregate results can be written and compared'),
         'show': scfg.Value(False, help='if true, does a plt.show'),

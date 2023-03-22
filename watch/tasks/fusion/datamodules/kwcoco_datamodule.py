@@ -81,11 +81,11 @@ class KWCocoVideoDataModuleConfig(scfg.Config):
             faster responce times and lower memory footprint.
             ''')),
         # Mixin the dataset config
-    }) | KWCocoVideoDatasetConfig.default
+    }) | KWCocoVideoDatasetConfig.__default__
 
-    def normalize(self):
+    def __post_init__(self):
         # hack because we dont have proper inheritence
-        KWCocoVideoDatasetConfig.normalize(self)
+        KWCocoVideoDatasetConfig.__post_init__(self)
 
 
 class KWCocoVideoDataModule(pl.LightningDataModule):

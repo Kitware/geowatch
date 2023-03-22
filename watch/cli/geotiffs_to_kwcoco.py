@@ -18,7 +18,7 @@ class KWCocoFromGeotiffConfig(scfg.Config):
     """
     Create a kwcoco manifest of a set of on-disk geotiffs
     """
-    default = {
+    __default__ = {
         'geotiff_dpath': scfg.Value(None, help='path containing geotiffs'),
         'relative': scfg.Value(False, help='if true make paths relative'),
         'dst': scfg.Value(None, help='path to write new kwcoco file'),

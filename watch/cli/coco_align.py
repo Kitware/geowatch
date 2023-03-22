@@ -244,7 +244,7 @@ class CocoAlignGeotiffConfig(scfg.DataConfig):
             construct the aligned kwcoco dataset as normal.
             '''))
 
-    def normalize(config):
+    def __post_init__(config):
         if isinstance(config['target_gsd'], str):
             if config['target_gsd'].lower().endswith('gsd'):
                 config['target_gsd'] = int(config['target_gsd'][:-3].strip())

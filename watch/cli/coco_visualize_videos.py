@@ -71,7 +71,7 @@ class CocoVisualizeConfig(scfg.Config):
         smartwatch visualize "$KWCOCO_FPATH" --workers=avail --animate=True --channels="salient,red|green|blue"
     '''
 
-    default = {
+    __default__ = {
         'src': scfg.Value('data.kwcoco.json', help='input dataset', position=1),
 
         'viz_dpath': scfg.Value(None, help=ub.paragraph(

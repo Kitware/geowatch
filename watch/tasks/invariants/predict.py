@@ -95,7 +95,7 @@ class InvariantPredictConfig(scfg.DataConfig):
 
     track_emissions = scfg.Value(True, help='Set to false to disable codecarbon')
 
-    def normalize(self):
+    def __post_init__(self):
         if 'all' in self.tasks:
             self['tasks'] = ['segmentation', 'before_after', 'pretext']
 

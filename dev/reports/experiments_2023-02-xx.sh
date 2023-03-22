@@ -746,6 +746,40 @@ python -m watch.mlops.schedule_evaluation --params="
     --run=1
 
 
+# SPLIT 1 - filter1 analysis
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+python -m watch.mlops.schedule_evaluation --params="
+    matrix:
+        bas_pxl.package_fpath:
+            !include $HOME/code/watch/dev/reports/split1_models_filter1.yaml
+        bas_pxl.test_dataset:
+            - $DVC_DATA_DPATH/Drop6/combo_imganns-BH_R001_L.kwcoco.json
+            - $DVC_DATA_DPATH/Drop6/combo_imganns-NZ_R001_L.kwcoco.json
+            - $DVC_DATA_DPATH/Drop6/combo_imganns-KR_R001_L.kwcoco.json
+            - $DVC_DATA_DPATH/Drop6/combo_imganns-KR_R002_L.kwcoco.json
+        bas_pxl.chip_overlap: 0.3
+        bas_pxl.chip_dims:
+            - auto
+        bas_pxl.time_span:
+            - auto
+        bas_pxl.time_sampling:
+            - auto
+        bas_poly_eval.true_site_dpath: $DVC_DATA_DPATH/annotations/drop6/site_models
+        bas_poly_eval.true_region_dpath: $DVC_DATA_DPATH/annotations/drop6/region_models
+        bas_pxl.enabled: 1
+        bas_pxl_eval.enabled: 1
+        bas_poly.enabled: 0
+        bas_poly_eval.enabled: 0
+        bas_poly_viz.enabled: 0
+    " \
+    --root_dpath="$DVC_EXPT_DPATH/_namek_split1_eval_filter1" \
+    --devices="0,1" --queue_size=4 \
+    --backend=tmux --queue_name "_namek_split1_eval_filter1" \
+    --pipeline=bas --skip_existing=1 \
+    --run=1
+
+
 # ###################
 # SPLIT 2 - SMALL TEST
 # ###################

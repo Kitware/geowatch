@@ -39,7 +39,7 @@ class CocoSpectraConfig(scfg.Config):
     Updates image transforms in a kwcoco json file to align all videos to a
     target GSD.
     """
-    default = {
+    __default__ = {
         'src': scfg.Value('data.kwcoco.json', help='input coco dataset', position=1),
 
         'dst': scfg.Value(None, help='if specified dump the figure to disk at this file path (e.g. with a jpg or png suffix)'),

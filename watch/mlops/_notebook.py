@@ -47,12 +47,16 @@ def _gather_namek_shortlist_results():
     chosen_indexes = table.loc[chosen_indexes, 'rank'].sort_values().index
 
     all_models_fpath = ub.Path('$HOME/code/watch/dev/reports/split1_all_models.yaml').expand()
+    from watch.utils.util_yaml import Yaml
+    known_models = Yaml.coerce(all_models_fpath)
 
-    top_k = 6
+    top_k = 1
     chosen_indexes = chosen_indexes[:top_k]
+    top_models = table.loc[chosen_indexes, 'params.bas_pxl.package_fpath'].tolist()
+    set(known_models).issuperset(set(top_models))
+    new_models_fpath = ub.Path('$HOME/code/watch/dev/reports/split1_models_filter1.yaml').expand()
+    new_models_fpath.write_text(Yaml.dumps(top_models))
 
-    top_models = table.loc[chosen_indexes, ['params.bas_pxl.package_fpath']]
-    top_models = table.loc[chosen_indexes, ['resolved_params.bas_pxl_fit.name']]
 
     subagg = agg.filterto(index=chosen_indexes)
     subagg.table['resolved_params.bas_pxl_fit.name']

@@ -12,7 +12,7 @@ class UpdateGeotiffMetadataConfig(scfg.Config):
 
     Modifies the underlying images on disk.  Does not modify the kwcoco file.
     """
-    default = {
+    __default__ = {
         'src': scfg.Value('in.geojson.json', help='input dataset to chip'),
 
         'include_sensors': scfg.Value(None, help='if specified can be comma separated valid sensors'),

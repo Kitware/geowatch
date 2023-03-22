@@ -10,7 +10,7 @@ class MergeRegionModelConfig(scfg.Config):
     """
     Combine the specific features from multiple region files into a single one.
     """
-    default = {
+    __default__ = {
         'src':
         scfg.Value([],
                    help='paths to input geojson region files',

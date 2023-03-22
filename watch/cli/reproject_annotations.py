@@ -65,9 +65,9 @@ class ReprojectAnnotationsConfig(scfg.Config):
     References:
         https://smartgitlab.com/TE/annotations/-/wikis/Alternate-Site-Type
     """
-    default = {
-        'src':
-        scfg.Value(help=ub.paragraph('''
+    __default__ = {
+        'src': scfg.Value(help=ub.paragraph(
+            '''
             path to the kwcoco file to propagate labels in
             '''),
                    position=1),

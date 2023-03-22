@@ -72,7 +72,7 @@ class FindDVCConfig(scfg.Config):
         # Remove the test entry
         smartwatch_dvc remove testdir
     """
-    default = {
+    __default__ = {
         'command': scfg.Value('find', help='can be find, set, add, list, or remove', position=1),
 
         'name': scfg.Value(None, help='specify a name to query or store or remove', position=2),

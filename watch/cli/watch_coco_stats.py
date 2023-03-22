@@ -27,7 +27,7 @@ class WatchCocoStats(scfg.Config):
     SeeAlso:
         kwcoco stats
     """
-    default = {
+    __default__ = {
         'src': scfg.Value(
             ['special:shapes8'], nargs='+', help=ub.paragraph(
                 '''
