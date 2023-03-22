@@ -43,14 +43,14 @@ def _gather_namek_shortlist_results():
     for expt, group in table.groupby('resolved_params.bas_pxl_fit.name'):
         group['params.bas_pxl.package_fpath'].tolist()
         group = group.sort_values('rank')
-        chosen_indexes.append(group.index[0])
+        chosen_indexes.extend(group.index[0:2])
     chosen_indexes = table.loc[chosen_indexes, 'rank'].sort_values().index
 
     all_models_fpath = ub.Path('$HOME/code/watch/dev/reports/split1_all_models.yaml').expand()
     from watch.utils.util_yaml import Yaml
     known_models = Yaml.coerce(all_models_fpath)
 
-    top_k = 1
+    top_k = 40
     chosen_indexes = chosen_indexes[:top_k]
     top_models = table.loc[chosen_indexes, 'params.bas_pxl.package_fpath'].tolist()
     set(known_models).issuperset(set(top_models))

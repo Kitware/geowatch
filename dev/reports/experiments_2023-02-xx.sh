@@ -757,6 +757,10 @@ python -m watch.mlops.schedule_evaluation --params="
             - $DVC_DATA_DPATH/Drop6_MeanYear/imganns-KR_R002.kwcoco.zip
             - $DVC_DATA_DPATH/Drop6_MeanYear/imganns-KR_R001.kwcoco.zip
             - $DVC_DATA_DPATH/Drop6_MeanYear/imganns-NZ_R001.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6_MeanYear/imganns-CH_R001.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6_MeanYear/imganns-BH_R001.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6_MeanYear/imganns-BR_R001.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6_MeanYear/imganns-BR_R002.kwcoco.zip
         bas_pxl.chip_overlap: 0.3
         bas_pxl.chip_dims:
             - auto
@@ -765,12 +769,13 @@ python -m watch.mlops.schedule_evaluation --params="
         bas_pxl.time_sampling:
             - auto
         bas_poly.thresh:
-            - 0.1
-            - 0.17
+            #- 0.1
+            #- 0.17
             - 0.2
-            - 0.3
-            - 0.4
+            #- 0.3
+            #- 0.4
             - 0.5
+            - 0.8
         bas_poly.polygon_simplify_tolerance:
             - 1
         bas_poly.agg_fn:
@@ -795,7 +800,7 @@ python -m watch.mlops.schedule_evaluation --params="
     --devices="0,1" --queue_size=4 \
     --backend=tmux --queue_name "_namek_split1_eval_filter1" \
     --pipeline=bas --skip_existing=1 \
-    --run=0
+    --run=1
 
 
 DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)

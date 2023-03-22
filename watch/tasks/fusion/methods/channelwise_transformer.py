@@ -1685,63 +1685,6 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> for key in recon_state.keys():
             >>>     assert (model_state[key] == recon_state[key]).all()
             >>>     assert model_state[key] is not recon_state[key]
-
-        Example:
-            >>> # Test with datamodule
-            >>> import ubelt as ub
-            >>> from os.path import join
-            >>> from watch.tasks.fusion import datamodules
-            >>> from watch.tasks.fusion import methods
-            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
-            >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
-            >>> disable_lightning_hardware_warnings()
-            >>> dpath = ub.Path.appdir('watch/tests/package').ensuredir()
-            >>> package_path = dpath / 'my_package.pt'
-
-            >>> datamodule = datamodules.kwcoco_video_data.KWCocoVideoDataModule(
-            >>>     train_dataset='special:vidshapes8-multispectral-multisensor', chip_size=32,
-            >>>     batch_size=1, time_steps=2, num_workers=2, normalize_inputs=10, channels='auto')
-            >>> datamodule.setup('fit')
-            >>> dataset_stats = datamodule.torch_datasets['train'].cached_dataset_stats(num=3)
-            >>> classes = datamodule.torch_datasets['train'].classes
-
-            >>> # Use one of our fusion.architectures in a test
-            >>> self = methods.MultimodalTransformer(
-            >>>     arch_name="smt_it_joint_p2", classes=classes,
-            >>>     dataset_stats=dataset_stats, input_sensorchan=datamodule.input_sensorchan,
-            >>>     learning_rate=1e-8, optimizer='sgd',
-            >>>     change_head_hidden=0, saliency_head_hidden=0,
-            >>>     class_head_hidden=0)
-
-            >>> # We have to run an input through the module because it is lazy
-            >>> batch = ub.peek(iter(datamodule.train_dataloader()))
-            >>> outputs = self.training_step(batch)
-
-            >>> trainer = pl.Trainer(max_steps=0)
-            >>> trainer.fit(model=self, datamodule=datamodule)
-
-            >>> # Save the self
-            >>> self.save_package(package_path)
-
-            >>> # Test that the package can be reloaded
-            >>> recon = methods.MultimodalTransformer.load_package(package_path)
-
-            >>> # Check consistency and data is actually different
-            >>> recon_state = recon.state_dict()
-            >>> model_state = self.state_dict()
-            >>> assert recon is not self
-            >>> assert set(recon_state) == set(recon_state)
-            >>> for key in recon_state.keys():
-            >>>     v1 = model_state[key]
-            >>>     v2 = recon_state[key]
-            >>>     if not (v1 == v2).all():
-            >>>         print('v1 = {}'.format(ub.repr2(v1, nl=1)))
-            >>>         print('v2 = {}'.format(ub.repr2(v2, nl=1)))
-            >>>         raise AssertionError(f'Difference in key={key}')
-            >>>     assert v1 is not v2, 'should be distinct copies'
-
-        Ignore:
-            7z l $HOME/.cache/watch/tests/package/my_package.pt
         """
         self._save_package(package_path, verbose=verbose)
 

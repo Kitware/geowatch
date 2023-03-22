@@ -31,6 +31,10 @@ def main():
         'KR_R001',
         'KR_R002',
         'NZ_R001',
+        'CH_R001',
+        'BR_R001',
+        'BR_R002',
+        'BH_R001',
     ]
     import cmd_queue
     queue = cmd_queue.Queue.create(backend='tmux', size=4,
@@ -40,10 +44,10 @@ def main():
         fmtdict = dict(
             DVC_DATA_DPATH=dvc_data_dpath,
             REGION=region,
-            # TIME_DURATION='1year',
-            # SUFFIX='MeanYear',
-            TIME_DURATION='3months',
-            SUFFIX='Mean3Month10GSD',
+            TIME_DURATION='1year',
+            SUFFIX='MeanYear',
+            # TIME_DURATION='3months',
+            # SUFFIX='Mean3Month10GSD',
             RESOLUTION='10GSD',
         )
 
