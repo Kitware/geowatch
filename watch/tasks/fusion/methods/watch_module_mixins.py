@@ -696,7 +696,7 @@ class WatchModuleMixins:
             exp = torch.package.PackageExporter(package_path, debug=True)
             """
             # with torch.package.PackageExporter(package_path) as exp:
-            with torch.package.PackageExporter(package_path, debug=True) as exp:
+            with torch.package.PackageExporter(package_path) as exp:
                 # if True:
                 # TODO: this is not a problem yet, but some package types (mainly
                 # binaries) will need to be excluded and added as mocks

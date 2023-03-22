@@ -752,7 +752,7 @@ DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch.mlops.schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
-            !include $HOME/code/watch/dev/reports/split1_models_filter1.yaml
+            - $HOME/code/watch/dev/reports/split1_models_filter1.yaml
         bas_pxl.test_dataset:
             - $DVC_DATA_DPATH/Drop6/combo_imganns-BH_R001_L.kwcoco.json
             - $DVC_DATA_DPATH/Drop6/combo_imganns-NZ_R001_L.kwcoco.json
@@ -777,7 +777,7 @@ python -m watch.mlops.schedule_evaluation --params="
     --devices="0,1" --queue_size=4 \
     --backend=tmux --queue_name "_namek_split1_eval_filter1" \
     --pipeline=bas --skip_existing=1 \
-    --run=1
+    --run=0
 
 
 # ###################

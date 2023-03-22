@@ -72,6 +72,7 @@ def yaml_dumps(data, backend='ruamel'):
 
     Args:
         data (Any): yaml representable data
+        backend (str): either ruamel or pyyaml
 
     Returns:
         str: yaml text
@@ -110,6 +111,7 @@ def yaml_load(file, backend='ruamel'):
 
     Args:
         file (io.TextIO | PathLike | str): yaml file path or file object
+        backend (str): either ruamel or pyyaml
 
     Returns:
         object
@@ -138,6 +140,7 @@ def yaml_loads(text, backend='ruamel'):
 
     Args:
         text (str): yaml text
+        backend (str): either ruamel or pyyaml
 
     Returns:
         object
@@ -174,6 +177,7 @@ def coerce_yaml(data, backend='ruamel'):
 
     Args:
         data (str | PathLike | dict | list):
+        backend (str): either ruamel or pyyaml
 
     Returns:
         object: parsed yaml data
@@ -192,17 +196,17 @@ def coerce_yaml(data, backend='ruamel'):
 
     Example:
         >>> from watch.utils.util_yaml import *  # NOQA
-        >>> coerce_yaml('"[1, 2, 3]"')
+        >>> Yaml.coerce('"[1, 2, 3]"')
         [1, 2, 3]
         >>> fpath = ub.Path.appdir('watch/tests/util_yaml').ensuredir() / 'file.yaml'
         >>> fpath.write_text(yaml_dumps([4, 5, 6]))
-        >>> coerce_yaml(fpath)
+        >>> Yaml.coerce(fpath)
         [4, 5, 6]
-        >>> coerce_yaml(str(fpath))
+        >>> Yaml.coerce(str(fpath))
         [4, 5, 6]
-        >>> dict(coerce_yaml('{a: b, c: d}'))
+        >>> dict(Yaml.coerce('{a: b, c: d}'))
         {'a': 'b', 'c': 'd'}
-        >>> coerce_yaml(None)
+        >>> Yaml.coerce(None)
         None
 
     Example:

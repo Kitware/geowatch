@@ -301,8 +301,9 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
     # Expand paramater search grid
     if config['params'] is not None:
-        from watch.utils import util_yaml
-        param_arg = util_yaml.coerce_yaml(config['params'])
+        from watch.utils.util_yaml import Yaml
+        param_arg = Yaml.coerce(config['params'])
+        # print('param_arg = {}'.format(ub.urepr(param_arg, nl=1)))
         all_param_grid = list(expand_param_grid(
             param_arg,
             max_configs=config['max_configs'],

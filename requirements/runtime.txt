@@ -151,7 +151,7 @@ ndsampler>=0.7.3
 tifffile>=2021.4.8
 
 # Includes SimpleITK. Used in depth predictor.
-medpy>=0.4.0  ; python_version < '3.11'
+medpy>=0.4.0 
 
 # Plotting
 kwplot>=0.4.13

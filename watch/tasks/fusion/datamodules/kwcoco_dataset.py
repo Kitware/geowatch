@@ -1811,7 +1811,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         vidid = target_['video_id']
         video = coco_dset.index.videos[vidid]
 
-        with_annots = [] if self.inference_only else ['boxes', 'segmentation']
+        with_annots = False if self.inference_only else ['boxes', 'segmentation']
 
         # New true-multimodal data items
         gid_to_sample: Dict[int, Dict] = {}
