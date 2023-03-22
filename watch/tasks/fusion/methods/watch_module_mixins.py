@@ -632,3 +632,124 @@ class WatchModuleMixins:
         # TODO: start a server process that listens for new images
         # as it gets new images, it starts playing through the animation
         # looping as needed
+
+    def _save_package(self, package_path, verbose=1):
+        """
+        We define this as a protected method to allow modules to reuse the core
+        code, but force each module to define the ``save_package`` method
+        themselves with a doctest. In the future if this logic is general we
+        may remove that restriction and refactor tests to be part of unit
+        tests.
+        """
+        # import copy
+        import json
+        import torch.package
+
+        # Fix an issue on 3.10 with torch 1.12
+        from watch.monkey import monkey_torch
+        monkey_torch.fix_package_modules()
+
+        # shallow copy of self, to apply attribute hacks to
+        # model = copy.copy(self)
+        model = self
+
+        backup_attributes = {}
+        # Remove attributes we don't want to pickle before we serialize
+        # then restore them
+        unsaved_attributes = [
+            'trainer',
+            'train_dataloader',
+            'val_dataloader',
+            'test_dataloader',
+            '_load_state_dict_pre_hooks',  # lightning 1.5
+            '_trainer',  # lightning 1.7
+        ]
+        for key in unsaved_attributes:
+            try:
+                val = getattr(model, key, None)
+            except Exception:
+                val = None
+            if val is not None:
+                backup_attributes[key] = val
+
+        train_dpath_hint = getattr(model, 'train_dpath_hint', None)
+        if model.has_trainer:
+            if train_dpath_hint is None:
+                train_dpath_hint = model.trainer.log_dir
+            datamodule = model.trainer.datamodule
+            if datamodule is not None:
+                model.datamodule_hparams = datamodule.hparams
+
+        metadata_fpaths = []
+        if train_dpath_hint is not None:
+            train_dpath_hint = ub.Path(train_dpath_hint)
+            metadata_fpaths += list(train_dpath_hint.glob('hparams.yaml'))
+            metadata_fpaths += list(train_dpath_hint.glob('fit_config.yaml'))
+            metadata_fpaths += list(train_dpath_hint.glob('config.yaml'))
+
+        try:
+            for key in backup_attributes.keys():
+                setattr(model, key, None)
+            arch_name = 'model.pkl'
+            module_name = 'watch_tasks_fusion'
+            """
+            exp = torch.package.PackageExporter(package_path, debug=True)
+            """
+            # with torch.package.PackageExporter(package_path) as exp:
+            with torch.package.PackageExporter(package_path, debug=True) as exp:
+                # if True:
+                # TODO: this is not a problem yet, but some package types (mainly
+                # binaries) will need to be excluded and added as mocks
+                exp.extern('**', exclude=[
+                    'watch.tasks.fusion.**',
+                    'watch.tasks.fusion.methods.*'
+                ])
+                # exp.intern('watch.tasks.fusion.methods.*', allow_empty=False)
+                exp.intern('watch.tasks.fusion.**', allow_empty=False)
+
+                # Attempt to standardize some form of package metadata that can
+                # allow for model importing with fewer hard-coding requirements
+
+                # TODO:
+                # Add information about how this was trained, and what epoch it
+                # was saved at.
+                package_header = {
+                    'version': '0.2.0',
+                    'arch_name': arch_name,
+                    'module_name': module_name,
+                }
+
+                exp.save_text(
+                    'package_header', 'package_header.json',
+                    json.dumps(package_header)
+                )
+                exp.save_pickle(module_name, arch_name, model)
+
+                # Save metadata
+                for meta_fpath in metadata_fpaths:
+                    with open(meta_fpath, 'r') as file:
+                        text = file.read()
+                    exp.save_text('package_header', meta_fpath.name, text)
+        finally:
+            # restore attributes
+            for key, val in backup_attributes.items():
+                setattr(model, key, val)
+
+    def configure_optimizers(self):
+        """
+        Note: this is only a fallback for testing purposes. This should be
+        overwrriten in your module or done via lightning CLI.
+        """
+        import netharn as nh
+        from torch.optim import lr_scheduler
+
+        # Netharn api will convert a string code into a type/class and
+        # keyword-arguments to create an instance.
+        optim_cls, optim_kw = nh.api.Optimizer.coerce(
+            optimizer='adamw', lr=3e-4, weight_decay=3e-6)
+        optim_kw['params'] = self.parameters()
+        optimizer = optim_cls(**optim_kw)
+        max_epochs = 160
+        scheduler = lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=max_epochs)
+        return [optimizer], [scheduler]

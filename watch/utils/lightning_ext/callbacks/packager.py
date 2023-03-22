@@ -220,6 +220,9 @@ class Packager(pl.callbacks.Callback):
 
 def _torch_package_monkeypatch():
     # Monkey Patch torch.package
+    raise AssertionError(
+        'Dont call this anymore, '
+        'use watch.monkey.monkey_torch.fix_package_modules')
     from watch.monkey import monkey_torch
     monkey_torch.fix_package_modules()
 

@@ -55,7 +55,11 @@ def load_model_from_package(package_path):
 
     try:
         imp = package.PackageImporter(package_path)
-    except RuntimeError:
+    except (RuntimeError, ImportError):
+        import warnings
+        warnings.warn(
+            f'Failed to import package {package_path} with normal machanism. '
+            'Falling back to hacked mechanim')
         imp = _try_fixed_package_import(package_path)
     # Assume this standardized header information exists that tells us the
     # name of the resource corresponding to the model

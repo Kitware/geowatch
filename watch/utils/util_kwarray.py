@@ -641,3 +641,36 @@ def balanced_number_partitioning(items, num_parts):
 
     bin_assignments = [np.array(p, dtype=int) for p in bin_assignments]
     return bin_assignments
+
+
+def torch_array_equal(data1, data2, equal_nan=False) -> bool:
+    """
+    Example:
+        >>> # xdoctest: +REQUIRES(module:torch)
+        >>> import torch
+        >>> data1 = torch.rand(5, 5)
+        >>> data2 = data1 + 1
+        >>> result1 = torch_array_equal(data1, data2)
+        >>> result3 = torch_array_equal(data1, data1)
+        >>> assert result1 is False
+        >>> assert result3 is True
+
+    Example:
+        >>> # xdoctest: +REQUIRES(module:torch)
+        >>> import torch
+        >>> data1 = torch.rand(5, 5)
+        >>> data1[0] = np.nan
+        >>> data2 = data1
+        >>> result1 = torch_array_equal(data1, data2)
+        >>> result3 = torch_array_equal(data1, data2, equal_nan=True)
+        >>> assert result1 is False
+        >>> assert result3 is True
+    """
+    import torch
+    if equal_nan:
+        val_flags = torch.eq(data1, data2)
+        nan_flags = (data1.isnan() & data2.isnan())
+        flags = val_flags | nan_flags
+        return bool(flags.all())
+    else:
+        return torch.equal(data1, data2)
