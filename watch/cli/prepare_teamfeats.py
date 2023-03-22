@@ -79,7 +79,8 @@ Ignore:
         --expt_dpath="$DVC_EXPT_DPATH" \
         --with_landcover=0 \
         --with_materials=0 \
-        --with_invariants=1 \
+        --with_invariants=0 \
+        --with_invariants2=1 \
         --with_depth=0 \
         --do_splits=0 \
         --skip_existing=0 \
@@ -104,7 +105,8 @@ Ignore:
     python -m watch.cli.prepare_teamfeats \
         --base_fpath "$BUNDLE_DPATH"/imganns-*.kwcoco.zip \
         --expt_dpath="$DVC_EXPT_DPATH" \
-        --with_landcover=1 \
+        --with_landcover2=1 \
+        --with_landcover=0 \
         --with_materials=0 \
         --with_invariants=0 \
         --with_depth=0 \
@@ -112,8 +114,6 @@ Ignore:
         --do_splits=0 \
         --skip_existing=1 \
         --gres=0,1 --workers=4 --backend=tmux --run=1
-
-
 """
 
 

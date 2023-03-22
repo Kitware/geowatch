@@ -889,7 +889,7 @@ class AggregatorAnalysisMixin:
         analysis.results
         analysis.analysis()
 
-    def report_best(agg, top_k=3, shorten=True):
+    def report_best(agg, top_k=3, shorten=True, verbose=1):
         """
         Report the top k pointwise results for each region / macro-region.
 
@@ -947,34 +947,35 @@ class AggregatorAnalysisMixin:
         param_hashid_order = param_hashid_order[::-1]
         top_param_lut = ub.udict(big_param_lut).subdict(param_hashid_order)
 
-        rich.print('Parameter LUT: {}'.format(ub.urepr(top_param_lut, nl=2)))
+        if verbose:
+            rich.print('Parameter LUT: {}'.format(ub.urepr(top_param_lut, nl=2)))
 
-        # Check for a common special case that we can make more concise output for
-        only_one_top_item = all(len(t) == 1 for t in region_id_to_summary.values())
-        only_one_source_item = all(n == 1 for n in region_id_to_ntotal.values())
+            # Check for a common special case that we can make more concise output for
+            only_one_top_item = all(len(t) == 1 for t in region_id_to_summary.values())
+            only_one_source_item = all(n == 1 for n in region_id_to_ntotal.values())
 
-        if only_one_source_item and only_one_top_item:
-            justone = pd.concat(list(region_id_to_summary.values()), axis=0)
-            submacro = ub.udict(agg.macro_key_to_regions) & justone['region_id'].values
-            if submacro:
-                print('Macro Regions LUT: ' +  ub.urepr(submacro, nl=1))
-            rich.print(justone)
-        elif only_one_top_item:
-            justone = pd.concat(list(region_id_to_summary.values()), axis=0)
-            # submacro = ub.udict(agg.macro_key_to_regions) & justone['region_id'].values
-            # if submacro:
-            #     print('Macro Regions LUT: ' +  ub.urepr(submacro, nl=1))
-            rich.print(justone)
-            rich.print('agg.macro_key_to_regions = {}'.format(ub.repr2(agg.macro_key_to_regions, nl=1)))
-        else:
-            for region_id, summary_table in region_id_to_summary.items():
-                ntotal = region_id_to_ntotal[region_id]
-                if region_id in agg.macro_key_to_regions:
-                    macro_regions = agg.macro_key_to_regions[region_id]
-                    rich.print(f'Top {len(summary_table)} / {ntotal} for {region_id} = {macro_regions}')
-                else:
-                    rich.print(f'Top {len(summary_table)} / {ntotal} for {region_id}')
-                rich.print(summary_table.iloc[::-1].to_string())
+            if only_one_source_item and only_one_top_item:
+                justone = pd.concat(list(region_id_to_summary.values()), axis=0)
+                submacro = ub.udict(agg.macro_key_to_regions) & justone['region_id'].values
+                if submacro:
+                    print('Macro Regions LUT: ' +  ub.urepr(submacro, nl=1))
+                rich.print(justone)
+            elif only_one_top_item:
+                justone = pd.concat(list(region_id_to_summary.values()), axis=0)
+                # submacro = ub.udict(agg.macro_key_to_regions) & justone['region_id'].values
+                # if submacro:
+                #     print('Macro Regions LUT: ' +  ub.urepr(submacro, nl=1))
+                rich.print(justone)
+                rich.print('agg.macro_key_to_regions = {}'.format(ub.repr2(agg.macro_key_to_regions, nl=1)))
+            else:
+                for region_id, summary_table in region_id_to_summary.items():
+                    ntotal = region_id_to_ntotal[region_id]
+                    if region_id in agg.macro_key_to_regions:
+                        macro_regions = agg.macro_key_to_regions[region_id]
+                        rich.print(f'Top {len(summary_table)} / {ntotal} for {region_id} = {macro_regions}')
+                    else:
+                        rich.print(f'Top {len(summary_table)} / {ntotal} for {region_id}')
+                    rich.print(summary_table.iloc[::-1].to_string())
 
         return region_id_to_summary, top_param_lut
 

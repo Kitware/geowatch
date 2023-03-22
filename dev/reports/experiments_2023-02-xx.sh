@@ -677,14 +677,14 @@ python -m watch.mlops.manager "list" --dataset_codes Drop6 Drop4-BAS
 DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
 python -m watch.cli.cluster_sites \
         --src "$DVC_DATA_DPATH/annotations/drop6/region_models/KR_R002.geojson" \
-        --dst_dpath $DVC_DATA_DPATH/ValiRegionSmall/geojson \
+        --dst_dpath "$DVC_DATA_DPATH"/ValiRegionSmall/geojson \
         --draw_clusters True
 
 DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
 python -m watch.cli.coco_align \
-    --src $DVC_DATA_DPATH/Drop6/combo_imganns-KR_R002_L.kwcoco.json \
-    --dst $DVC_DATA_DPATH/ValiRegionSmall/small_KR_R002_odarcigm.kwcoco.zip \
-    --regions $DVC_DATA_DPATH/ValiRegionSmall/geojson/SUB_KR_R002_n007_odarcigm.geojson \
+    --src "$DVC_DATA_DPATH"/Drop6/combo_imganns-KR_R002_L.kwcoco.json \
+    --dst "$DVC_DATA_DPATH"/ValiRegionSmall/small_KR_R002_odarcigm.kwcoco.zip \
+    --regions "$DVC_DATA_DPATH"/ValiRegionSmall/geojson/SUB_KR_R002_n007_odarcigm.geojson \
     --minimum_size="128x128@10GSD" \
     --context_factor=1 \
     --geo_preprop=auto \
@@ -753,14 +753,14 @@ python -m watch.mlops.schedule_evaluation --params="
 DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
 python -m watch.cli.cluster_sites \
         --src "$DVC_DATA_DPATH/annotations/drop6/region_models/NZ_R001.geojson" \
-        --dst_dpath $DVC_DATA_DPATH/ValiRegionSmall/geojson/NZ_R001 \
+        --dst_dpath "$DVC_DATA_DPATH"/ValiRegionSmall/geojson/NZ_R001 \
         --draw_clusters True
 
 DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
 python -m watch.cli.coco_align \
-    --src $DVC_DATA_DPATH/Drop6/combo_imganns-NZ_R001_L.kwcoco.json \
-    --dst $DVC_DATA_DPATH/ValiRegionSmall/small_NZ_R001_swnykmah.kwcoco.zip \
-    --regions $DVC_DATA_DPATH/ValiRegionSmall/geojson/NZ_R001/SUB_NZ_R001_n031_swnykmah.geojson \
+    --src "$DVC_DATA_DPATH"/Drop6/combo_imganns-NZ_R001_L.kwcoco.json \
+    --dst "$DVC_DATA_DPATH"/ValiRegionSmall/small_NZ_R001_swnykmah.kwcoco.zip \
+    --regions "$DVC_DATA_DPATH"/ValiRegionSmall/geojson/NZ_R001/SUB_NZ_R001_n031_swnykmah.geojson \
     --minimum_size="128x128@10GSD" \
     --context_factor=1 \
     --geo_preprop=auto \
@@ -825,12 +825,12 @@ python -m watch.mlops.schedule_evaluation --params="
 
 
 
-fusion/Drop6/packages/Drop6_BAS_scratch_landcover_10GSD_split2_V24/Drop6_BAS_scratch_landcover_10GSD_split2_V24_epoch126_step25400.pt.dvc
-fusion/Drop6/packages/Drop6_BAS_scratch_landcover_10GSD_split2_V24/Drop6_BAS_scratch_landcover_10GSD_split2_V24_epoch16_step3400.pt.dvc
-fusion/Drop6/packages/Drop6_BAS_scratch_landcover_10GSD_split2_V24/Drop6_BAS_scratch_landcover_10GSD_split2_V24_epoch183_step36800.pt.dvc
-fusion/Drop6/packages/Drop6_BAS_scratch_landcover_10GSD_split2_V24/Drop6_BAS_scratch_landcover_10GSD_split2_V24_epoch18_step3800.pt.dvc
-fusion/Drop6/packages/Drop6_BAS_scratch_landcover_10GSD_split2_V24/Drop6_BAS_scratch_landcover_10GSD_split2_V24_epoch211_step42400.pt.dvc
-fusion/Drop6/packages/Drop6_BAS_scratch_landcover_10GSD_split2_V24/Drop6_BAS_scratch_landcover_10GSD_split2_V24_epoch218_step43800.pt.dvc
-fusion/Drop6/packages/Drop6_BAS_scratch_landcover_10GSD_split2_V33/Drop6_BAS_scratch_landcover_10GSD_split2_V33_epoch1133_step71442.pt.dvc
-fusion/Drop6/packages/Drop6_BAS_scratch_validation_10GSD_split2_V34/.gitignore
-fusion/Drop6/packages/Drop6_BAS_scratch_validation_10GSD_split2_V34/Drop6_BAS_scratch_validation_10GSD_split2_V34_epoch36_step2331.pt.dvc
+#fusion/Drop6/packages/Drop6_BAS_scratch_landcover_10GSD_split2_V24/Drop6_BAS_scratch_landcover_10GSD_split2_V24_epoch126_step25400.pt.dvc
+#fusion/Drop6/packages/Drop6_BAS_scratch_landcover_10GSD_split2_V24/Drop6_BAS_scratch_landcover_10GSD_split2_V24_epoch16_step3400.pt.dvc
+#fusion/Drop6/packages/Drop6_BAS_scratch_landcover_10GSD_split2_V24/Drop6_BAS_scratch_landcover_10GSD_split2_V24_epoch183_step36800.pt.dvc
+#fusion/Drop6/packages/Drop6_BAS_scratch_landcover_10GSD_split2_V24/Drop6_BAS_scratch_landcover_10GSD_split2_V24_epoch18_step3800.pt.dvc
+#fusion/Drop6/packages/Drop6_BAS_scratch_landcover_10GSD_split2_V24/Drop6_BAS_scratch_landcover_10GSD_split2_V24_epoch211_step42400.pt.dvc
+#fusion/Drop6/packages/Drop6_BAS_scratch_landcover_10GSD_split2_V24/Drop6_BAS_scratch_landcover_10GSD_split2_V24_epoch218_step43800.pt.dvc
+#fusion/Drop6/packages/Drop6_BAS_scratch_landcover_10GSD_split2_V33/Drop6_BAS_scratch_landcover_10GSD_split2_V33_epoch1133_step71442.pt.dvc
+#fusion/Drop6/packages/Drop6_BAS_scratch_validation_10GSD_split2_V34/.gitignore
+#fusion/Drop6/packages/Drop6_BAS_scratch_validation_10GSD_split2_V34/Drop6_BAS_scratch_validation_10GSD_split2_V34_epoch36_step2331.pt.dvc

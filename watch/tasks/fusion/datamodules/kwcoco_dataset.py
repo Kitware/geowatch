@@ -187,9 +187,8 @@ class KWCocoVideoDatasetConfig(scfg.Config):
 
     Also:
         * set_cover_algo
-
     """
-    default = {
+    __default__ = {
         ###############
         # SPACE OPTIONS
         ###############
@@ -565,7 +564,7 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             ''')),
     }
 
-    def normalize(self):
+    def __post_init__(self):
         if isinstance(self['exclude_sensors'], str):
             self['exclude_sensors'] = [s.strip() for s in self['exclude_sensors'].split(',')]
         self['time_steps'] = int(self['time_steps'])
@@ -1024,16 +1023,50 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         self.prenormalizers = None
 
-        if self.config['prenormalize_inputs'] is True:
-            # We generally want to compute these on the full dataset
-            stats = self.cached_dataset_stats(num_workers=4)
-            self.prenormalizers = stats['domain_input_stats']
-            # prenormalizers = []
-            # for key, value in stats['prenormalizers'].items():
-            #     item = ub.udict(key._asdict()) | {k: v.ravel() for k, v in value.items()}
-            #     prenormalizers.append(item)
-            # ...
-            # raise NotImplementedError('need to compute prenormaliztions')
+        if self.config['prenormalize_inputs'] is not None:
+            prenormalizers = None
+            if self.config['prenormalize_inputs'] is True:
+                # default_prenorm = {
+                #     'domain_stats': 'auto',
+                # }
+                #
+                """
+                e.g. we expect domain stats to look like:
+
+                domain_stats:
+                    - sensor: S2
+                      channels: red|green|blue
+                      video_name: KR_R001
+                      month: 3
+                      mean: [120, 231, 233]
+                      std: [30, 20, 24]
+                      min: [0, 0, 0]
+                      max: [10000, 10000, 10000]
+                    - ...
+                """
+
+                # We generally want to compute these on the full dataset
+                stats = self.cached_dataset_stats(num_workers=4)
+                self.prenormalizers = stats['domain_input_stats']
+                # prenormalizers = []
+                # for key, value in stats['prenormalizers'].items():
+                #     item = ub.udict(key._asdict()) | {k: v.ravel() for k, v in value.items()}
+                #     prenormalizers.append(item)
+                # ...
+                # raise NotImplementedError('need to compute prenormaliztions')
+
+            elif isinstance(self.config['prenormalize_inputs'], dict):
+                ...
+            elif isinstance(self.config['prenormalize_inputs'], list):
+                ...
+            else:
+                raise NotImplementedError
+
+            if prenormalizers is None:
+                stats = self.cached_dataset_stats(num_workers=4)
+                prenormalizers = stats['domain_input_stats']
+
+            self.prenormalizers = prenormalizers
 
     def reseed(self):
         """

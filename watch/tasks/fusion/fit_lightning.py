@@ -329,6 +329,7 @@ def main(config=None):
         # export stats
         from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
         from watch.tasks.fusion.fit_lightning import *  # NOQA
+        from watch.utils.util_yaml import Yaml
         disable_lightning_hardware_warnings()
 
         def export_dataset_stats(cli):
@@ -340,8 +341,8 @@ def main(config=None):
                 row = {
                     'sensor': sensorchan[0],
                     'channels': sensorchan[1],
-                    'mean': YamlInlineList(mean),
-                    'std': YamlInlineList(std),
+                    'mean': Yaml.InlineList(mean),
+                    'std': Yaml.InlineList(std),
                 }
                 rows.append(row)
             from watch.utils import util_yaml
