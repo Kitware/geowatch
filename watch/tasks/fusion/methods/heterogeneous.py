@@ -371,22 +371,78 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         assert tokenizer in {"simple_conv", "resnet18"}, "Tokenizer not implemented yet."
         assert decoder in {"upsample", "simple_conv", "trans_conv"}, "Decoder not implemented yet."
 
-        if isinstance(position_encoder, str) and position_encoder == 'auto':
-            position_encoder = ScaleAgnostictPositionalEncoder(3, 8)
+        if isinstance(position_encoder, str):
+            if position_encoder == 'auto':
+                position_encoder = ScaleAgnostictPositionalEncoder(3, 8)
+            else:
+                raise KeyError(position_encoder)
+
+        pre_backbone = None
+        post_backbone = None
 
         if isinstance(backbone, str):
             if backbone == 'auto':
+                # TODO: set this to a "reasonable" default.
                 backbone = TransformerEncoderDecoder(
-                    encoder_depth=1,
-                    decoder_depth=1,
-                    dim=position_encoder.output_dim + 16,
+                    encoder_depth=3,
+                    decoder_depth=3,
+                    dim=position_encoder.output_dim + token_dim,
                     queries_dim=position_encoder.output_dim,
-                    logits_dim=16,
+                    logits_dim=token_dim,
                     cross_heads=1,
                     latent_heads=1,
                     cross_dim_head=1,
                     latent_dim_head=1,
                 )
+            elif backbone == 'small':
+                # This should be a reasonable small network for testing
+                backbone = TransformerEncoderDecoder(
+                    encoder_depth=1,
+                    decoder_depth=1,
+                    dim=position_encoder.output_dim + token_dim,
+                    queries_dim=position_encoder.output_dim,
+                    logits_dim=token_dim,
+                    cross_heads=1,
+                    latent_heads=1,
+                    cross_dim_head=1,
+                    latent_dim_head=1,
+                )
+            elif backbone == 'wu-vit':
+                """
+                    import watch
+                    from watch.utils.simple_dvc import SimpleDVC
+                    expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
+                    expt_dvc = SimpleDVC(expt_dvc_dpath)
+                    ckpt_fpath = expt_dvc_dpath / 'models/wu/MAE-2023-02-09/goldenMae-epoch=07-val_loss=0.23.ckpt'
+
+                    from watch.tasks.fusion.methods.heterogeneous import HeterogeneousModel, ScaleAgnostictPositionalEncoder
+                    from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+                    position_encoder = ScaleAgnostictPositionalEncoder(3, 8)
+                    channels, classes, dataset_stats = HeterogeneousModel.demo_dataset_stats()
+                    model = HeterogeneousModel(
+                      # token_dim=768,
+                      # token_dim=768,
+                      input_sensorchan=channels,
+                      classes=classes,
+                      dataset_stats=dataset_stats,
+                      position_encoder=position_encoder,
+                      backbone='wu-vit',
+                    )
+
+                    from watch.tasks.fusion.fit import coerce_initializer
+                    from watch.utils import util_pattern
+                    initializer = coerce_initializer(str(ckpt_fpath))
+                    initializer.forward(model)
+
+                    batch = model.demo_batch(width=64, height=65)
+                    batch += model.demo_batch(width=55, height=75)
+                    outputs = model.forward(batch)
+                """
+                from watch.tasks.fusion.architectures import wu_mae
+                pre_backbone = nn.Linear(token_dim + position_encoder.output_dim, 16)
+                # post_backbone = nn.Linear(16, token_dim + position_encoder.output_dim)
+                post_backbone = nn.Linear(16, token_dim)
+                backbone = wu_mae.wu_backbone().transformer
             elif backbone == 'sits-former':
                 """
                 Ignore:
@@ -552,7 +608,9 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         # self.position_encoder = RandomFourierPositionalEncoder(3, 16)
         # position_dim = self.position_encoder.output_dim
 
+        self.pre_backbone = pre_backbone
         self.backbone = backbone
+        self.post_backbone = post_backbone
         # self.backbone = TransformerEncoderDecoder(
         #     encoder_depth=backbone_encoder_depth,
         #     decoder_depth=backbone_decoder_depth,
@@ -613,6 +671,8 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             'change': global_change_weight,
             'saliency': global_saliency_weight,
         }
+
+        self.magic_padding_value = -99999999.0  # Magic placeholder value
 
         for prop in head_properties:
             head_name = prop['name']
@@ -681,6 +741,8 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             })
             for stage in ["train", "val", "test"]
         })
+
+        self._prev_batch_size = None
 
     def process_input_tokens(self, example):
         """
@@ -1125,16 +1187,18 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             print('Skipping batch')
             return None
 
+        self._prev_batch_size = len(orig_input_seqs)
+
         # Each example may have a different number of tokens, so we perform
         # some padding and compute a mask of where those padded tokens are
-        padding_value = -1000.0  # Magic placeholder value
+
         input_seqs = nn.utils.rnn.pad_sequence(
             orig_input_seqs,
             batch_first=True,
-            padding_value=padding_value,
+            padding_value=self.magic_padding_value,
         )
         # Remove the placeholder
-        input_masks = input_seqs[..., 0] > padding_value
+        input_masks = input_seqs[..., 0] > self.magic_padding_value
         input_seqs[~input_masks] = 0.
 
         # ==================
@@ -1142,6 +1206,12 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         # (Should be similar/identical to the input proceedure)
         # BUT only if we need to
         # ==================
+
+        B, S, D = input_seqs.shape
+
+        if self.pre_backbone is not None:
+            # Fixup dims for the backbone
+            input_seqs = self.pre_backbone(input_seqs.view(-1, D)).view(B, S, -1)
 
         has_decoder = getattr(self.backbone, 'has_decoder', False)
         self.backbone.has_decoder = has_decoder
@@ -1172,14 +1242,13 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
 
             # Each example may have a different number of queries, so we perform
             # some padding and compute a mask of where those padded tokens are
-            padding_value = -1000.0  # Magic placeholder value
             query_seqs = nn.utils.rnn.pad_sequence(
                 orig_query_seqs,
                 batch_first=True,
-                padding_value=padding_value,
+                padding_value=self.magic_padding_value,
             )
             # Remove the placeholder
-            query_masks = query_seqs[..., 0] > padding_value
+            query_masks = query_seqs[..., 0] > self.magic_padding_value
             query_seqs[~query_masks] = 0.
 
         # ==================
@@ -1218,11 +1287,17 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                 output_shapes = orig_input_shapes
                 output_masks = input_masks
 
-            HACK_TOKEN_DIMS = 1
+            # Uncomment if old sits models need repackaing
+            HACK_TOKEN_DIMS = self.post_backbone is None
             if HACK_TOKEN_DIMS:
                 # hack for VIT. Drops feature dims to allow for running
                 if output_seqs.shape[2] != self.hparams.token_dim:
                     output_seqs = output_seqs[:, :, 0:self.hparams.token_dim]
+
+        if self.post_backbone is not None:
+            # Fixup dims for the backbone
+            output_seqs = self.post_backbone(output_seqs.view(-1, output_seqs.shape[-1]))
+            output_seqs = output_seqs.view(B, S, -1)
 
         # ==================
         # Decompose outputs into the appropriate output shape
@@ -1469,7 +1544,8 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                     task_labels_key = self.task_to_keynames[task_name]["labels"]
                     labels = frame[task_labels_key]
 
-                    self.log(f"{stage}_{task_name}_logit_mean", pred.mean(), batch_size=batch_size)
+                    self.log(f"{stage}_{task_name}_logit_mean", pred.mean(),
+                             batch_size=batch_size, rank_zero_only=True)
 
                     if labels is None:
                         continue
@@ -1508,21 +1584,27 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                         loss_labels_[None],
                     )
 
-                    # if loss.isnan().any():
-                    #     print(loss)
-                    #     print(pred)
-                    #     print(frame)
+                    if loss.isnan().any():
+                        print('!!!!!!!!!!!!!!!!!!!')
+                        print('!!!!!!!!!!!!!!!!!!!')
+                        print('Discovered NaN loss')
+                        print('loss = {}'.format(ub.urepr(loss, nl=1)))
+                        print('pred = {}'.format(ub.urepr(pred, nl=1)))
+                        print('frame = {}'.format(ub.urepr(frame, nl=1)))
+                        print('!!!!!!!!!!!!!!!!!!!')
+                        print('!!!!!!!!!!!!!!!!!!!')
 
                     loss *= task_weights_
                     frame_losses.append(
                         self.global_head_weights[task_name] * loss.mean()
                     )
+                    metric_values = self.head_metrics[f"{stage}_stage"][task_name](
+                        pred.argmax(dim=0).flatten(),
+                        # pred[None],
+                        labels.flatten().long(),
+                    )
                     self.log_dict(
-                        self.head_metrics[f"{stage}_stage"][task_name](
-                            pred.argmax(dim=0).flatten(),
-                            # pred[None],
-                            labels.flatten().long(),
-                        ),
+                        metric_values,
                         prog_bar=True,
                         batch_size=batch_size,
                     )
@@ -1585,6 +1667,15 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
 
     # this is a special thing for the predict step
     forward_step = shared_step
+
+    def log_grad_norm(self, grad_norm_dict) -> None:
+        """Override this method to change the default behaviour of ``log_grad_norm``.
+
+        Overloads log_grad_norm so we can supress the batch_size warning
+        """
+        self.log_dict(grad_norm_dict, on_step=True, on_epoch=True,
+                      prog_bar=False, logger=True,
+                      batch_size=self._prev_batch_size)
 
     def save_package(self, package_path, verbose=1):
         """

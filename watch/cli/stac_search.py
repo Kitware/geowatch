@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 r"""
 Performs the stac search to create the .input file needed for
 prepare_ta2_dataset
@@ -213,6 +213,7 @@ class StacSearcher:
     r"""
     Example:
         >>> # xdoctest: +REQUIRES(env:WATCH_ENABLE_NETWORK_TESTS)
+        >>> # xdoctest: +REQUIRES(env:SLOW_DOCTEST)
         >>> from watch.cli.stac_search import *  # NOQA
         >>> import tempfile
         >>> provider = "https://earth-search.aws.element84.com/v0"
@@ -333,6 +334,8 @@ def main(cmdline=True, **kwargs):
     Execute the stac search and write the input file
 
     Example:
+        >>> # xdoctest: +REQUIRES(env:SLOW_DOCTEST)
+        >>> # xdoctest: +REQUIRES(--network)
         >>> from watch.cli.stac_search import *  # NOQA
         >>> from watch.demo import demo_region
         >>> from watch.stac import stac_search_builder

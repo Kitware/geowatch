@@ -334,7 +334,7 @@ class HeatmapEvaluation(ProcessNode):
         fmtkw = self.final_config.copy()
         extra_opts = {
             'draw_curves': True,
-            'draw_heatmaps': True,
+            'draw_heatmaps': False,
             'viz_thresh': 0.2,
             'workers': 2,
             'score_space': 'video',

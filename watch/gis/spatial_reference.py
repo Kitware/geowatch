@@ -40,6 +40,7 @@ class RPCTransform(object):
         https://gdal.org/doxygen/gdal__alg_8h.html#af4c3c0d4c79218995b3a1f0bac3700a0
 
     Example:
+        >>> # xdoctest: +REQUIRES(env:SLOW_DOCTEST)
         >>> from watch.gis.spatial_reference import *  # NOQA
         >>> self = RPCTransform.demo()
         >>> pxl_pts = np.array([
@@ -278,6 +279,7 @@ class RPCTransform(object):
 
         Example:
             >>> # xdoctest: +SKIP
+            >>> # xdoctest: +REQUIRES(env:SLOW_DOCTEST)
             >>> from watch.gis.spatial_reference import *  # NOQA
             >>> self = RPCTransform.demo(elevation='gtop30')
             >>> pts_in = pxl_pts = np.array([

@@ -454,6 +454,7 @@ def demo_smart_annots():
     mgrs_code = mgrs.MGRS().toMGRS(lat, lon, MGRSPrecision=0)
 
     # Enlarge the region
+    # TODO: see RegionModel in ~/code/watch/watch/cli/cluster_sites.py
     region_feature = geojson.Feature(
         properties={
             "type": "region",

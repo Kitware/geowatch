@@ -18,15 +18,20 @@ Augogen:
     # lib.expand(['lightning_lite.utilities.device_parser'])
     # print(lib.current_sourcecode())
 """
-from lightning_lite.utilities.exceptions import MisconfigurationException
-from lightning_lite.plugins.environments.torchelastic import TorchElasticEnvironment
+from pytorch_lightning.utilities.exceptions import MisconfigurationException
 from typing import Optional
 from typing import List
 from typing import Union
 from typing import Any
 from typing import MutableSequence
 from typing import Tuple
-import lightning_lite.accelerators as accelerators
+
+try:
+    from lightning_fabric.plugins.environments import TorchElasticEnvironment
+    import lightning_fabric.accelerators as accelerators  # avoid circular dependency
+except Exception:
+    import lightning_lite.accelerators as accelerators
+    from lightning_lite.plugins.environments.torchelastic import TorchElasticEnvironment
 
 
 def parse_gpu_ids(*args: Any, **kwargs: Any) -> Any:
@@ -89,8 +94,14 @@ def _get_all_available_gpus(include_cuda: bool = False, include_mps: bool = Fals
     Returns:
         A list of all available GPUs
     """
-    cuda_gpus = accelerators.cuda._get_all_available_cuda_gpus() if include_cuda else []
-    mps_gpus = accelerators.mps._get_all_available_mps_gpus() if include_mps else []
+    try:
+        # latest version
+        cuda_gpus = accelerators.cuda._get_all_visible_cuda_devices() if include_cuda else []
+        mps_gpus = accelerators.mps._get_all_available_mps_gpus() if include_mps else []
+    except AttributeError:
+        # lite version
+        cuda_gpus = accelerators.cuda._get_all_available_cuda_gpus() if include_cuda else []
+        mps_gpus = accelerators.mps._get_all_available_mps_gpus() if include_mps else []
     return cuda_gpus + mps_gpus
 
 
@@ -173,6 +184,7 @@ def _parse_gpu_ids(
     if not gpus:
         raise MisconfigurationException("GPUs requested but none are available.")
 
+    # TODO: how to get rid of lighting_lite?
     if (
         TorchElasticEnvironment.detect()
         and len(gpus) != 1

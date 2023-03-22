@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import scriptconfig as scfg
 import ubelt as ub
 import numpy as np

@@ -221,13 +221,13 @@ class SmartGlobalHelper:
         elif agg.type == 'bas_pxl_eval':
             _primary_metrics_suffixes = [
                 'salient_AP',
-                'salient_APUC',
+                # 'salient_APUC',
                 'salient_AUC',
             ]
         elif agg.type == 'sc_pxl_eval':
             _primary_metrics_suffixes = [
                 'coi_mAP',
-                'coi_mAPUC',
+                # 'coi_mAPUC',
                 'coi_mAUC',
             ]
         else:

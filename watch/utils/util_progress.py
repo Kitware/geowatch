@@ -202,6 +202,7 @@ class RichProgIter:
                 self.task_id, description=description, refresh=refresh)
 
     set_postfix = set_postfix_str
+    set_extra = set_postfix_str
 
 
 class BaseProgIterManager:

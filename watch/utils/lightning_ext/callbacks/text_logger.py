@@ -56,10 +56,14 @@ class TextLogger(pl.callbacks.Callback):
     # def on_init_end(self, trainer: 'pl.Trainer') -> None:
 
     def on_fit_start(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
+        if trainer.global_rank != 0:
+            return
         self._log.info('on_fit_start')
         self._log.info(f'trainer.log_dir = {ub.Path(trainer.log_dir).shrinkuser()}')
 
     def on_fit_end(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
+        if trainer.global_rank != 0:
+            return
         self._log.info('on_fit_end')
         self._log.info(f'trainer.log_dir = {ub.Path(trainer.log_dir).shrinkuser()}')
 
@@ -79,18 +83,28 @@ class TextLogger(pl.callbacks.Callback):
             return super().load_state_dict(checkpoint)
 
     def on_train_start(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
+        if trainer.global_rank != 0:
+            return
         self._log.debug('on_train_start')
 
     def on_train_end(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
+        if trainer.global_rank != 0:
+            return
         self._log.debug('on_train_end')
 
     def on_sanity_check_start(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
+        if trainer.global_rank != 0:
+            return
         self._log.debug('on_sanity_check_start')
 
     def on_sanity_check_end(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
+        if trainer.global_rank != 0:
+            return
         self._log.debug('on_sanity_check_end')
 
     def on_exception(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', *args, **kw) -> None:
+        if trainer.global_rank != 0:
+            return
         self._log.error('on_exception')
         # self._log.error('KEYBOARD INTERUPT')
         self._log.error('trainer.default_root_dir = {!r}'.format(trainer.default_root_dir))
@@ -103,15 +117,23 @@ class TextLogger(pl.callbacks.Callback):
     #     self._log.debug('on_epoch_end')
 
     def on_train_epoch_start(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
+        if trainer.global_rank != 0:
+            return
         self._log.debug('on_train_epoch_start')
 
     def on_train_epoch_end(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
+        if trainer.global_rank != 0:
+            return
         self._log.debug('on_train_epoch_end')
 
     def on_validation_epoch_end(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
+        if trainer.global_rank != 0:
+            return
         self._log.debug('on_validation_epoch_end')
 
     def on_validation_epoch_start(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
+        if trainer.global_rank != 0:
+            return
         self._log.debug('on_validation_epoch_start')
 
 

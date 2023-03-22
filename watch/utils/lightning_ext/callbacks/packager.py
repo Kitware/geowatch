@@ -105,21 +105,27 @@ class Packager(pl.callbacks.Callback):
     def _after_initialization(self, trainer):
         # Rectify paths if we need to
         # print('on_init_start')
-        print('setup/(previously on_init_end)')
+        if trainer.global_rank == 0:
+            print('setup/(previously on_init_end)')
+
         if self.package_fpath == 'auto':
             root_dir = ub.Path(trainer.default_root_dir)
             self.package_fpath =  root_dir / 'final_package.pt'
-            print('setting auto self.package_fpath = {!r}'.format(self.package_fpath))
+            if trainer.global_rank == 0:
+                print('setting auto self.package_fpath = {!r}'.format(self.package_fpath))
 
         # Hack this in. TODO: what is the best way to expose this?
         trainer.package_fpath = self.package_fpath
-        print('will save trainer.package_fpath = {!r}'.format(trainer.package_fpath))
+        if trainer.global_rank == 0:
+            print('will save trainer.package_fpath = {!r}'.format(trainer.package_fpath))
 
     def on_fit_start(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
         """
         TODO:
             - [ ] Write out the uninitialized topology
         """
+        if trainer.global_rank != 0:
+            return
         if False:
             print('Training is starting, checking that the model can be packaged')
             package_dpath = (ub.Path(trainer.log_dir) / 'packages').ensuredir()
@@ -139,6 +145,8 @@ class Packager(pl.callbacks.Callback):
             - [ ] Symlink to "BEST" package at the end.
             - [ ] write some script such that any checkpoint can be packaged.
         """
+        if trainer.global_rank != 0:
+            return
         if trainer.log_dir is None:
             print('Trainer run without a log_dir, cannot save package')
             return
@@ -175,6 +183,8 @@ class Packager(pl.callbacks.Callback):
             - [X] Package current model state
             - [ ] Package "best" model state
         """
+        if trainer.global_rank != 0:
+            return
         if self.package_on_interrupt:
             print('Attempting to package model before exiting')
             # First save a checkpoint...

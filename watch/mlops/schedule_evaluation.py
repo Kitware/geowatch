@@ -182,28 +182,21 @@ Example:
 """
 import ubelt as ub
 import rich
-import shlex
-import json
-import scriptconfig as scfg
-# import watch
-import shlex  # NOQA
-import json  # NOQA
-from watch.utils.lightning_ext import util_globals  # NOQA
-import kwarray  # NOQA
 import cmd_queue
+import scriptconfig as scfg
 from watch.utils.util_param_grid import expand_param_grid
-# from watch.mlops.old_pipeline_nodes import resolve_pipeline_row
-from watch.mlops.old_pipeline_nodes import resolve_package_paths  # NOQA
-from watch.mlops.old_pipeline_nodes import Pipeline  # NOQA
-from watch.mlops.old_pipeline_nodes import Step  # NOQA
-from watch.mlops.old_pipeline_nodes import submit_old_pipeline_jobs  # NOQA
 
-from xdev import profile  # NOQA
+try:
+    from xdev import profile  # NOQA
+except ImportError:
+    from ubelt import identity as profile
 
 
 class ScheduleEvaluationConfig(scfg.DataConfig):
     """
-    Builds commands and optionally schedules them.
+    Driver for WATCH mlops evaluation
+
+    Builds commands and optionally executes them.
     """
     params = scfg.Value(None, type=str, help='a yaml/json grid/matrix of prediction params')
 

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 r"""
 Prediction script for Rutgers Material Semenatic Segmentation Models
 

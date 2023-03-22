@@ -6,6 +6,29 @@ from watch.mlops.aggregate import hash_param
 from watch.mlops.aggregate import fix_duplicate_param_hashids
 from watch.utils import util_pandas
 
+def _gather_namek_shortlist_results():
+    """
+
+    smartwatch model_stats models/fusion/Drop4-BAS/packages/Drop4_BAS_2022_12_15GSD_BGRNSH_BGR_V4/Drop4_BAS_2022_12_15GSD_BGRNSH_BGR_V4_v0_epoch44_step46014.pt
+
+    """
+    from watch.mlops.aggregate import AggregateEvluationConfig
+    from watch.mlops.aggregate import coerce_aggregators
+    import watch
+    expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+    cmdline = 0
+    kwargs = {
+        # 'target': expt_dvc_dpath / '_namek_split1_eval_small',
+        'target': expt_dvc_dpath / '_namek_split2_eval_small',
+        'pipeline': 'bas',
+        'io_workers': 20,
+    }
+    config = AggregateEvluationConfig.cli(cmdline=cmdline, data=kwargs)
+    eval_type_to_aggregator = coerce_aggregators(config)
+    agg = eval_type_to_aggregator['bas_pxl_eval']
+
+    _ = agg.report_best(100)
+
 
 def _namek_check_pipeline_status():
     from watch.mlops import aggregate_loader
@@ -395,7 +418,7 @@ def _namek_eval():
     kwargs = {
         'target': expt_dvc_dpath / '_namek_eval',
         'pipeline': 'bas',
-        'io_workers': 10,
+        'io_workers': 0,
     }
     config = AggregateEvluationConfig.cli(cmdline=cmdline, data=kwargs)
     eval_type_to_aggregator = coerce_aggregators(config)
@@ -403,9 +426,62 @@ def _namek_eval():
     poly_agg = eval_type_to_aggregator.get('bas_poly_eval', None)
     pxl_agg = eval_type_to_aggregator.get('bas_pxl_eval', None)
 
+    if 1:
+        # from watch.utils import util_dotdict  # NOQA
+        # Join the pixel and polygon results
+        from watch.utils import util_pandas
+        a = util_pandas.DotDictDataFrame(poly_agg.params).subframe('params.bas_pxl')
+        b = util_pandas.DotDictDataFrame(pxl_agg.params).subframe('params.bas_pxl')
+
+        a_hashids = [ub.hash_data(row) for row in a.to_dict('records')]
+        b_hashids = [ub.hash_data(row) for row in b.to_dict('records')]
+        a['hashid.bas_pxl'] = a_hashids
+        b['hashid.bas_pxl'] = b_hashids
+
+        hashid_to_idxs1 =ub.find_duplicates(a_hashids, k=0)
+        hashid_to_idxs2 =ub.find_duplicates(b_hashids, k=0)
+
+        missing1 = set(hashid_to_idxs1) - set(hashid_to_idxs2)
+        missing2 = set(hashid_to_idxs2) - set(hashid_to_idxs1)
+        common = set(hashid_to_idxs2) & set(hashid_to_idxs1)
+
+        pxl_eval_cols = [c for c in pxl_agg.table.columns if 'bas_pxl_eval' in c.split('.')]
+        sub_table = pxl_agg.table[pxl_eval_cols].copy()
+        sub_table.loc[:, 'hashid.bas_pxl'] = b_hashids
+
+        main_table = poly_agg.table.copy()
+        main_table.loc[:, 'hashid.bas_pxl'] = a_hashids
+        joined_table = pd.merge(main_table, sub_table, on='hashid.bas_pxl')
+
+        joined_table[['metrics.bas_poly_eval.bas_f1', 'metrics.bas_pxl_eval.salient_AP']]
+
+        joined_table[['resolved_params.bas_poly.agg_fn']]
+
+        import kwplot
+        if 0:
+            sns = kwplot.autosns()
+            plt = kwplot.autoplt()
+            # sns.scatterplot(
+            #     data=joined_table,
+            #     x='metrics.bas_poly_eval.bas_f1',
+            #     y='metrics.bas_pxl_eval.salient_AP',
+            #     hue='params.bas_pxl.package_fpath',
+            #     legend=False,
+            # )
+            sns.scatterplot(
+                data=joined_table,
+                x='metrics.bas_poly_eval.bas_f1',
+                y='metrics.bas_pxl_eval.salient_AP',
+                hue='resolved_params.bas_poly.agg_fn',
+                legend=False,
+            )
+
+        # ['params']).find_column('saliency_loss')
+        # row = util_dotdict.DotDict(row)
+        ...
+
     poly_agg.resources['resources.bas_poly_eval.duration']
     poly_agg.resources['resources.bas_poly.duration']
-    poly_agg.resources['resources.bas_poly.co2_kg']
 
     from watch.utils import util_time
     unique_resources = {}

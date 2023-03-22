@@ -10,9 +10,21 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Lightning Packager callback now saves checkpoints on errors in addition to packages.
 * Updated tutorials to LightningCLI
 * Renamed `coco_align_geotiff` to `coco_align`
+* CocoStitcher now writes quantization metadata to the geotiff itself
+* The kwcoco dataset now does extra work to randomize itself in training to bypass seed-everything issues. This can be disabled via the `reseed_fit_random_generators` parameter.
+* Prettier progress bars
 
 ### Added
 * Add SITS-former 
+* WU MAE Backbone in Heterogeneous Model
+* The `watch.cli.cluster_sites` script now works.
+* The `watch.cli.coco_temporally_combine_channels` script
+
+
+### Fixed
+* Fixed issue in fusion models where we could not resume from checkpoints with lightning.
+* Fixed basic DDP issues; there still seems to be some lingering issues if certain callbacks are enabled.
+* Issues in watch.tasks.cold preventing it from running on larger regions
 
 ## Version 0.3.10 - Target 2023-02-28
 

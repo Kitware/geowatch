@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 __notes__ = r"""
 .. :code: bash
 
@@ -97,7 +97,12 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
     # In general I don't like this, but this is not a system-critical part
     # so we can leave refactoring as a todo.
 
-    prog = ub.ProgIter(desc='submit video jobs', verbose=3)
+    from watch.utils import util_progress
+    pman = util_progress.ProgressManager()
+    pman.__enter__()
+
+    # prog = ub.ProgIter(desc='submit video jobs', verbose=3)
+    prog = pman.progiter(desc='submit video jobs')
     prog.begin()
 
     for type_ in types:
@@ -157,9 +162,11 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
                         pool.submit(
                             gifify.ffmpeg_animate_frames, frame_fpaths, ani_fpath,
                             in_framerate=frames_per_second, verbose=verbose_worker)
+    prog.end()
 
     failed = []
-    for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='collect animate jobs'):
+    # for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='collect animate jobs'):
+    for job in pman.progiter(pool.as_completed(), total=len(pool), desc='collect animate jobs'):
         try:
             job.result()
         except Exception as ex:
@@ -168,6 +175,8 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
 
     if failed:
         raise Exception(f'{len(failed)} / {len(pool)} animations failed')
+
+    pman.__exit__(None, None, None)
 
     print('Wrote animations to viz_dpath = {!r}'.format(viz_dpath))
     # The animation jobs can do something weird to the tty, so we should try

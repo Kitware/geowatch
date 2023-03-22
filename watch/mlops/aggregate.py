@@ -856,10 +856,36 @@ class AggregatorAnalysisMixin:
         return analysis, table
 
     def analyze(agg):
+        """
+        Does a stats analysis on each varied parameter. Note this makes
+        independence assumptions that may not hold in general.
+        """
         from watch.utils import result_analysis
         metrics_of_interest = agg.primary_metric_cols
-        analysis = result_analysis.ResultAnalysis(
-            agg.table, metrics=metrics_of_interest)
+        # metrics_of_interest = ['metrics.bas_pxl_eval.salient_AP']
+
+        params = agg.resolved_params
+        metrics = agg.metrics[metrics_of_interest]
+        params = params.applymap(lambda x: str(x) if isinstance(x, list) else x)
+
+        from watch.utils.result_analysis import varied_value_counts
+        varied_counts = varied_value_counts(params, dropna=True)
+
+        if 1:
+            # Only look at reasonable groupings
+            chosen_params = []
+            for param, counts in varied_counts.items():
+                if len(counts) > 1 and len(counts) < 10:
+                    chosen_params.append(param)
+                    ...
+        else:
+            chosen_params = None
+
+        results = {
+            'params': params,
+            'metrics': metrics,
+        }
+        analysis = result_analysis.ResultAnalysis(results, params=chosen_params)
         analysis.results
         analysis.analysis()
 
@@ -874,6 +900,9 @@ class AggregatorAnalysisMixin:
 
         Args:
             k (int): number of top results for each region
+
+            shorten (bool): if True, shorten the columns by removing
+                non-ambiguous prefixes wrt to a known node type.
 
         Returns:
             Tuple[T1, T2]:

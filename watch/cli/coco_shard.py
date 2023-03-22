@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import ubelt as ub
 import scriptconfig as scfg
 

@@ -1,8 +1,22 @@
 """
-The core pipeline data structure for MLOps
+The core pipeline data structure for MLOps.
 
-TODO:
-    rename "final" to something else, the term is overloaded
+This module outlines the structure for a generic DAG of bash process nodes.  It
+contains examples of generic test pipelines. For the SMART instantiation of
+project-specific dags see: smart_pipeline.py
+
+The basic idea is that each bash process knows about:
+
+    * its filepath inputs
+    * its filepath outputs
+    * algorithm parameters
+    * performance parameters
+    * the command that invokes the job
+
+Given a set of processes, a DAG is built by connecting process ouputs to
+process inputs. This DAG can then be configured with customized input paths and
+parameters. The resulting jobs can then be submitted to a cmd_queue.Queue for
+actual execution.
 """
 import ubelt as ub
 import networkx as nx
@@ -23,179 +37,13 @@ except ImportError:
     profile = ub.identity
 
 
-def demo_pipeline():
-    """
-    A simple test pipeline.
-
-    Example:
-        >>> # Self test
-        >>> from watch.mlops.pipeline_nodes import *  # NOQA
-        >>> demo_pipeline()
-    """
-    dpath = ub.Path.appdir('watch/tests/mlops/pipeline').ensuredir()
-    dpath.delete().ensuredir()
-    script_dpath = (dpath / 'src').ensuredir()
-    inputs_dpath = (dpath / 'inputs').ensuredir()
-    runs_dpath = (dpath / 'runs').ensuredir()
-
-    # Make simple scripts to stand in for the more complex processes that we
-    # will orchestrate. The important thing is they have CLI input and output
-    # paths / arguments.
-    fpath1 = script_dpath / 'demo_script1.py'
-    fpath2 = script_dpath / 'demo_script2.py'
-    fpath3 = script_dpath / 'demo_script3.py'
-    fpath1.write_text(ub.codeblock(
-        '''
-        import ubelt as ub
-        src = ub.Path(ub.argval('--src'))
-        dst = ub.Path(ub.argval('--dst'))
-        dst.parent.ensuredir()
-        algo_param1 = ub.argval('--algo_param1', default='')
-        perf_param1 = ub.argval('--perf_param1', default='')
-        dst.write_text(src.read_text() + algo_param1)
-        '''))
-    fpath2.write_text(ub.codeblock(
-        '''
-        import ubelt as ub
-        src1 = ub.Path(ub.argval('--src1'))
-        src2 = ub.Path(ub.argval('--src2'))
-        dst1 = ub.Path(ub.argval('--dst1'))
-        dst2 = ub.Path(ub.argval('--dst2'))
-        dst1.parent.ensuredir()
-        dst2.parent.ensuredir()
-        algo_param2 = ub.argval('--algo_param2', default='')
-        perf_param2 = ub.argval('--perf_param2', default='')
-        dst1.write_text(src1.read_text() + algo_param2)
-        dst2.write_text(src2.read_text() + algo_param2)
-        '''))
-    fpath3.write_text(ub.codeblock(
-        '''
-        import ubelt as ub
-        src1 = ub.Path(ub.argval('--src1'))
-        src2 = ub.Path(ub.argval('--src2'))
-        dst = ub.Path(ub.argval('--dst'))
-        dst.parent.ensuredir()
-        algo_param3 = ub.argval('--algo_param3', default='')
-        perf_param3 = ub.argval('--perf_param3', default='')
-        dst.write_text(src1.read_text() + algo_param3 + src2.read_text())
-        '''))
-    executable1 = f'python {fpath1}'
-    executable2 = f'python {fpath2}'
-    executable3 = f'python {fpath3}'
-
-    # Now that we have executables we need to create a ProcessNode that
-    # describes how each process might be run. This can be done via inheritence
-    # or specifying constructor variables.
-    node_A1 = ProcessNode(
-        name='node_A1',
-        in_paths={
-            'src',
-        },
-        algo_params={
-            'algo_param1': '',
-        },
-        perf_params={
-            'perf_param1': '',
-        },
-        out_paths={
-            'dst': 'out.txt'
-        },
-        executable=executable1
-    )
-    node_A2 = ProcessNode(
-        name='node_A2',
-        in_paths={
-            'src',
-        },
-        algo_params={
-            'algo_param1': '',
-        },
-        perf_params={
-            'perf_param1': '',
-        },
-        out_paths={
-            'dst': 'out.txt'
-        },
-        executable=executable1
-    )
-    node_B1 = ProcessNode(
-        name='node_B1',
-        in_paths={
-            'src1',
-            'src2'
-        },
-        algo_params={
-            'algo_param2': '',
-        },
-        perf_params={
-            'perf_param2': '',
-        },
-        out_paths={
-            'dst1': 'out1.txt',
-            'dst2': 'out2.txt'
-        },
-        executable=executable2
-    )
-    node_C1 = ProcessNode(
-        name='node_C1',
-        in_paths={
-            'src1',
-            'src2'
-        },
-        algo_params={
-            'algo_param3': '',
-        },
-        perf_params={
-            'perf_param3': '',
-        },
-        out_paths={
-            'dst': 'out.txt'
-        },
-        executable=executable3
-    )
-
-    # Given the process nodes we need to connect their inputs / outputs for
-    # form a pipeline.
-    node_A1.outputs['dst'].connect(node_B1.inputs['src1'])
-    node_A2.outputs['dst'].connect(node_B1.inputs['src2'])
-    node_A2.inputs['src'].connect(node_C1.inputs['src1'])
-    node_B1.outputs['dst1'].connect(node_C1.inputs['src2'])
-
-    # The pipeline is just a container for the nodes
-    nodes = [node_A1, node_A2, node_B1, node_C1]
-    dag = PipelineDAG(nodes=nodes)
-
-    # Given a dag, there will often be top level input parameters that must be
-    # configured along with any other algorithm or performance parameters
-
-    # Create the inputs and configure the graph
-    input1_fpath = inputs_dpath / 'input1.txt'
-    input2_fpath = inputs_dpath / 'input2.txt'
-    input1_fpath.write_text('spam')
-    input2_fpath.write_text('eggs')
-
-    dag.configure({
-        'node_A1.src': str(input1_fpath),
-        'node_A2.src': str(input2_fpath),
-    }, root_dpath=runs_dpath, cache=False)
-
-    dag.print_graphs()
-    dag.inspect_configurables()
-
-    # The jobs can now be submitted to a command queue which can be
-    # executed or inspected at your leasure.
-    status = dag.submit_jobs(queue=ub.udict({
-        'backend': 'serial',
-    }))
-    queue = status['queue']
-    queue.print_commands(exclude_tags='boilerplate', with_locks=False)
-    queue.run()
-
-
 class PipelineDAG:
     """
-    A container for a group of nodes that have been connected, but need to be
-    configured.
+    A container for a group of nodes that have been connected.
+
+    Allows these connected nodes to be jointly configured and submitted to a
+    cmd-queue for execution. Adds extra bookkeeping jobs that write invoke.sh
+    job_config.sh metadata as well as symlinks between node output directories.
 
     Example:
         >>> from watch.mlops.pipeline_nodes import *  # NOQA
@@ -482,7 +330,7 @@ class PipelineDAG:
 
             node.will_exist = ((node.enabled and ancestors_will_exist) or
                                node.does_exist)
-            if 1:
+            if 0:
                 print(f'node.final_out_paths={node.final_out_paths}')
                 print(f'Checking {node_name}, will_exist={node.will_exist}')
 
@@ -1492,3 +1340,172 @@ def _load_json(fpath):
 
 def _add_prefix(prefix, dict_):
     return {prefix + k: v for k, v in dict_.items()}
+
+
+def demo_pipeline():
+    """
+    A simple test pipeline.
+
+    Example:
+        >>> # Self test
+        >>> from watch.mlops.pipeline_nodes import *  # NOQA
+        >>> demo_pipeline()
+    """
+    dpath = ub.Path.appdir('watch/tests/mlops/pipeline').ensuredir()
+    dpath.delete().ensuredir()
+    script_dpath = (dpath / 'src').ensuredir()
+    inputs_dpath = (dpath / 'inputs').ensuredir()
+    runs_dpath = (dpath / 'runs').ensuredir()
+
+    # Make simple scripts to stand in for the more complex processes that we
+    # will orchestrate. The important thing is they have CLI input and output
+    # paths / arguments.
+    fpath1 = script_dpath / 'demo_script1.py'
+    fpath2 = script_dpath / 'demo_script2.py'
+    fpath3 = script_dpath / 'demo_script3.py'
+    fpath1.write_text(ub.codeblock(
+        '''
+        import ubelt as ub
+        src = ub.Path(ub.argval('--src'))
+        dst = ub.Path(ub.argval('--dst'))
+        dst.parent.ensuredir()
+        algo_param1 = ub.argval('--algo_param1', default='')
+        perf_param1 = ub.argval('--perf_param1', default='')
+        dst.write_text(src.read_text() + algo_param1)
+        '''))
+    fpath2.write_text(ub.codeblock(
+        '''
+        import ubelt as ub
+        src1 = ub.Path(ub.argval('--src1'))
+        src2 = ub.Path(ub.argval('--src2'))
+        dst1 = ub.Path(ub.argval('--dst1'))
+        dst2 = ub.Path(ub.argval('--dst2'))
+        dst1.parent.ensuredir()
+        dst2.parent.ensuredir()
+        algo_param2 = ub.argval('--algo_param2', default='')
+        perf_param2 = ub.argval('--perf_param2', default='')
+        dst1.write_text(src1.read_text() + algo_param2)
+        dst2.write_text(src2.read_text() + algo_param2)
+        '''))
+    fpath3.write_text(ub.codeblock(
+        '''
+        import ubelt as ub
+        src1 = ub.Path(ub.argval('--src1'))
+        src2 = ub.Path(ub.argval('--src2'))
+        dst = ub.Path(ub.argval('--dst'))
+        dst.parent.ensuredir()
+        algo_param3 = ub.argval('--algo_param3', default='')
+        perf_param3 = ub.argval('--perf_param3', default='')
+        dst.write_text(src1.read_text() + algo_param3 + src2.read_text())
+        '''))
+    executable1 = f'python {fpath1}'
+    executable2 = f'python {fpath2}'
+    executable3 = f'python {fpath3}'
+
+    # Now that we have executables we need to create a ProcessNode that
+    # describes how each process might be run. This can be done via inheritence
+    # or specifying constructor variables.
+    node_A1 = ProcessNode(
+        name='node_A1',
+        in_paths={
+            'src',
+        },
+        algo_params={
+            'algo_param1': '',
+        },
+        perf_params={
+            'perf_param1': '',
+        },
+        out_paths={
+            'dst': 'out.txt'
+        },
+        executable=executable1
+    )
+    node_A2 = ProcessNode(
+        name='node_A2',
+        in_paths={
+            'src',
+        },
+        algo_params={
+            'algo_param1': '',
+        },
+        perf_params={
+            'perf_param1': '',
+        },
+        out_paths={
+            'dst': 'out.txt'
+        },
+        executable=executable1
+    )
+    node_B1 = ProcessNode(
+        name='node_B1',
+        in_paths={
+            'src1',
+            'src2'
+        },
+        algo_params={
+            'algo_param2': '',
+        },
+        perf_params={
+            'perf_param2': '',
+        },
+        out_paths={
+            'dst1': 'out1.txt',
+            'dst2': 'out2.txt'
+        },
+        executable=executable2
+    )
+    node_C1 = ProcessNode(
+        name='node_C1',
+        in_paths={
+            'src1',
+            'src2'
+        },
+        algo_params={
+            'algo_param3': '',
+        },
+        perf_params={
+            'perf_param3': '',
+        },
+        out_paths={
+            'dst': 'out.txt'
+        },
+        executable=executable3
+    )
+
+    # Given the process nodes we need to connect their inputs / outputs for
+    # form a pipeline.
+    node_A1.outputs['dst'].connect(node_B1.inputs['src1'])
+    node_A2.outputs['dst'].connect(node_B1.inputs['src2'])
+    node_A2.inputs['src'].connect(node_C1.inputs['src1'])
+    node_B1.outputs['dst1'].connect(node_C1.inputs['src2'])
+
+    # The pipeline is just a container for the nodes
+    nodes = [node_A1, node_A2, node_B1, node_C1]
+    dag = PipelineDAG(nodes=nodes)
+
+    # Given a dag, there will often be top level input parameters that must be
+    # configured along with any other algorithm or performance parameters
+
+    # Create the inputs and configure the graph
+    input1_fpath = inputs_dpath / 'input1.txt'
+    input2_fpath = inputs_dpath / 'input2.txt'
+    input1_fpath.write_text('spam')
+    input2_fpath.write_text('eggs')
+
+    dag.configure({
+        'node_A1.src': str(input1_fpath),
+        'node_A2.src': str(input2_fpath),
+    }, root_dpath=runs_dpath, cache=False)
+
+    dag.print_graphs()
+    dag.inspect_configurables()
+
+    # The jobs can now be submitted to a command queue which can be
+    # executed or inspected at your leasure.
+    status = dag.submit_jobs(queue=ub.udict({
+        'backend': 'serial',
+    }))
+    queue = status['queue']
+    queue.print_commands(exclude_tags='boilerplate', with_locks=False)
+    queue.run()

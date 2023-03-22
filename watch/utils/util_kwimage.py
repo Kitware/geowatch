@@ -1635,6 +1635,8 @@ def exactly_1channel(image, ndim=2):
     a 2D or 3D array, depending on if ndim is 2 or 3. For a 3D array the last
     dimension is always 1.  An error is thrown if assumptions are not met.
 
+    PORTED TO kwimage in version 0.9.14
+
     Args:
         image (ndarray):
         ndim (int): either 2 or 3

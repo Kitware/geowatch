@@ -445,13 +445,13 @@ class UNetBaseline(pl.LightningModule, WatchModuleMixins):
             >>> import torch
             >>> channels, classes, dataset_stats = fusion.methods.UNetBaseline.demo_dataset_stats()
             >>> model = fusion.methods.UNetBaseline(
-            >>>     classes=classes,
+            >>>     classes=classes, token_dim=2,
             >>>     dataset_stats=dataset_stats,
             >>>     input_sensorchan=channels,
             >>> )
-            >>> batch = model.demo_batch(batch_size=1, width=64, height=65, num_timesteps=3, nans=0.1)
-            >>> batch += model.demo_batch(batch_size=1, width=64, height=65, num_timesteps=3, nans=0.5)
-            >>> batch += model.demo_batch(batch_size=1, width=64, height=65, num_timesteps=3, nans=1.0)
+            >>> batch = model.demo_batch(batch_size=1, width=32, height=35, num_timesteps=3, nans=0.1)
+            >>> batch += model.demo_batch(batch_size=1, width=32, height=35, num_timesteps=3, nans=0.5)
+            >>> batch += model.demo_batch(batch_size=1, width=32, height=35, num_timesteps=3, nans=1.0)
             >>> outputs = model.shared_step(batch)
             >>> optimizer = torch.optim.Adam(model.parameters())
             >>> optimizer.zero_grad()

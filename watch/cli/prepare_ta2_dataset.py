@@ -279,8 +279,8 @@ def main(cmdline=False, **kwargs):
     # inputs / outputs for us. At the time of writing we are still doing that
     # explicitly, but we could remove that code and just rely on implicit
     # dependencies based in in / out paths.
-    from watch.mlops import pipeline
-    pipeline = pipeline.Pipeline()
+    from watch.mlops.old import pipeline_v1
+    pipeline = pipeline_v1.Pipeline()
 
     stac_jobs = []
     # base_mkdir_job = pipeline.submit(f'mkdir -p "{uncropped_query_dpath}"', name='mkdir-base')

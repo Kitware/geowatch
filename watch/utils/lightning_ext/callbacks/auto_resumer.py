@@ -92,6 +92,8 @@ class AutoResumer(pl.callbacks.Callback):
 
     # def setup(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', stage: Optional[str] = None) -> None:
     def on_init_start(self, trainer: 'pl.Trainer') -> None:
+        if trainer.global_rank != 0:
+            return
         train_dpath = trainer.default_root_dir
         prev_states = self.recent_checkpoints(train_dpath)
         print('There are {} existing checkpoints'.format(len(prev_states)))
