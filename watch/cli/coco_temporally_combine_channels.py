@@ -13,7 +13,7 @@ from watch.tasks.fusion.coco_stitcher import CocoStitchingManager
 
 
 class TimeAverageConfig(scfg.DataConfig):
-    """_summary_
+    """Input arguments to time averaging function
     """
     kwcoco_fpath = scfg.Value(None, help='The path to the kwcoco file containing the image data to be combined.')
     output_kwcoco_fpath = scfg.Value(None,
@@ -373,24 +373,23 @@ def combine_kwcoco_channels_temporally(config):
                 window_coco_images = window_image.coco_images
                 # Detach for process parallelization
                 window_coco_images = [g.detach() for g in window_coco_images]
-                # video_id = window_coco_images[0]['video_id']
-
-                # (window_coco_images, merge_method, requested_chans, space, resolution, save_assest_dir,
-                #  filter_with_cloudmasks, s2_weight_factor, og_kwcoco_fpath) = (
-                #      window_coco_images, config.merge_method, requested_chans,
-                #      space, config.resolution, save_assest_dir,
-                #      config.filter_with_cloudmasks, config.s2_weight_factor,
-                #      config.kwcoco_fpath)
 
                 jobs.submit(merge_images, window_coco_images, config.merge_method, requested_chans, space,
                             config.resolution, new_bundle_dpath, config.filter_with_cloudmasks, config.s2_weight_factor,
                             config.kwcoco_fpath)
 
+            n_combined_images = 0
             for job in pman.progiter(jobs.as_completed(),
                                      total=len(jobs),
                                      desc='Collect combine within temporal windows jobs'):
                 new_img = job.result()
+                if new_img is None:
+                    continue
                 output_coco_dset.add_image(**new_img)
+                n_combined_images += 1
+
+    if n_combined_images == 0:
+        raise ValueError('No images were combined with non-NaN values')
 
     # Save kwcoco file.
     print(f"Saving ouput kwcoco file to: {output_kwcoco_fpath}")
@@ -429,8 +428,7 @@ def merge_images(window_coco_images, merge_method, requested_chans, space, resol
 
     first_coco_img = window_coco_images[0]
     # Scales to the resolution from the requested (i.e. video space)
-    scale_asset_from_vid = first_coco_img._scalefactor_for_resolution(
-        resolution=resolution, space='video')
+    scale_asset_from_vid = first_coco_img._scalefactor_for_resolution(resolution=resolution, space='video')
     # warp_asset_from_vid = kwimage.Affine.scale(scale_asset_from_vid)
 
     canvas_dsize = kwimage.Box.from_dsize(
@@ -535,6 +533,10 @@ def merge_images(window_coco_images, merge_method, requested_chans, space, resol
     else:
         raise NotImplementedError
 
+    # Check if the image contains data after cloud masking.
+    if np.all(np.isnan(combined_image_data)):
+        return None
+
     # 4. Save the combined image result to a new kwcoco dataset.
     ## Use the first image as the standin for the new image.
 
@@ -568,23 +570,19 @@ def merge_images(window_coco_images, merge_method, requested_chans, space, resol
     chanstr = merge_chans.path_sanitize()
     new_name = f'ave_{timestr}_{len(window_coco_images):03d}_{chanstr}_{hashid}'
     new_coco_img.img['name'] = new_name
-    new_coco_img.img['sensor_coarse'] = '_'.join(sorted(set([coco_img['sensor_coarse'] for coco_img in window_coco_images])))
+
+    # TODO: Figure out how to better handle this case.
+    # Issue is that the unique sensor combination does not get processed in the predict script.
+    new_coco_img.img['sensor_coarse'] = first_coco_img['sensor_coarse']
+    # new_coco_img.img['sensor_coarse'] = '_'.join(
+    #     sorted(set([coco_img['sensor_coarse'] for coco_img in window_coco_images])))
+
     # new_coco_img.bundle_dapth = new_bundle_dpath
     dname = f'ave_{merge_chans.path_sanitize()}'
-    # average_rel_fpath = ub.Path('_assets') / dname / new_name + '.tif'
-    # average_fpath = new_bundle_dpath / average_rel_fpath
-    # average_fpath.parent.ensuredir()
 
     # TODO: this should be set to the union of any valid_region_utms in the
     # input images.
     new_coco_img.img.pop('valid_region_utm', None)
-    # new_coco_img.add_asset(
-    #     file_name=os.fspath(average_rel_fpath),
-    #     channels=merge_chans,
-    #     warp_aux_to_img=new_warp_img_from_asset,
-    #     width=combined_image_data.shape[1],
-    #     height=combined_image_data.shape[0],
-    # )
 
     # TODO: Figure out how to add geo-metadata to the new image from previous images.
     tmp_dset = kwcoco.CocoDataset()
@@ -596,12 +594,12 @@ def merge_images(window_coco_images, merge_method, requested_chans, space, resol
         short_code=dname,
         chan_code=merge_chans.spec,
         stiching_space='video',
-        # quantize=
-        # expected_minmax=
     )
 
     gid = new_coco_img.img['id']
-    stitch_manager.accumulate_image(gid, None, combined_image_data,
+    stitch_manager.accumulate_image(gid,
+                                    None,
+                                    combined_image_data,
                                     asset_dsize=canvas_dsize,
                                     scale_asset_from_stitchspace=scale_asset_from_vid)
     stitch_manager.finalize_image(gid)
