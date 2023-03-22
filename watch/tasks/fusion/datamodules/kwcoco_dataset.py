@@ -51,6 +51,7 @@ Example:
     >>>     input_space_scale='3.3GSD',
     >>>     window_space_scale='3.3GSD',
     >>>     output_space_scale='1GSD',
+    >>>     prenormalize_inputs=True,
     >>>     #normalize_peritem='nir',
     >>>     dist_weights=0,
     >>>     quality_threshold=0,
@@ -1021,8 +1022,18 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             ub.oset(['landcover_hidden.0', 'landcover_hidden.1', 'landcover_hidden.2']),
         ] + heuristics.HUERISTIC_COMBINABLE_CHANNELS
 
+        self.prenormalizers = None
+
         if self.config['prenormalize_inputs'] is True:
-            raise NotImplementedError('need to compute prenormaliztions')
+            # We generally want to compute these on the full dataset
+            stats = self.cached_dataset_stats(num_workers=4)
+            self.prenormalizers = stats['domain_input_stats']
+            # prenormalizers = []
+            # for key, value in stats['prenormalizers'].items():
+            #     item = ub.udict(key._asdict()) | {k: v.ravel() for k, v in value.items()}
+            #     prenormalizers.append(item)
+            # ...
+            # raise NotImplementedError('need to compute prenormaliztions')
 
     def reseed(self):
         """
@@ -1188,8 +1199,34 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 # dont ask for annotations multiple times
                 first_with_annot = False
 
+        if coco_img.video is None:
+            video_name = None
+        else:
+            video_name = coco_img.video.get('name', None)
+
         # After all channels are sampled, apply final invalid mask.
         for stream, sample in sample_streams.items():
+
+            if self.prenormalizers is not None:
+                domain = Domain(channels=stream, sensor=sensor_coarse,
+                                video_name=video_name)
+                stats = self.prenormalizers[domain]
+                out = sample['im']
+                # norm = kwarray.normalize(
+                #     sample['im'],
+                #     mode='sigmoid',
+                #     alpha=stats['std'][None, None, None, :],
+                #     beta=stats['mean'][None, None, None, :],
+                #     min_val=stats['min'][None, None, None, :],
+                #     max_val=stats['max'][None, None, None, :],
+                # )
+                from scipy.special import expit as sigmoid
+                np.minimum(out, stats['max'][None, None, None, :], out=out)
+                np.maximum(out, stats['min'][None, None, None, :], out=out)
+                presig = (out - stats['mean'][None, None, None, :]) / stats['std'][None, None, None, :]
+                norm = sigmoid(presig)
+                out[:] = norm
+
             unobservable_mask.apply(sample['im'][0], np.nan)
             invalid_mask = np.isnan(sample['im'])
             any_invalid = np.any(invalid_mask)
@@ -1441,8 +1478,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         frame_items = self._build_frame_items(final_gids, gid_to_sample,
                                               truth_info, resolution_info)
 
-        if self.config['prenormalize_inputs'] is not None:
-            raise NotImplementedError
+        # if self.config['prenormalize_inputs'] is not None:
+        #     raise NotImplementedError
 
         if self.normalize_perframe:
             for frame_item in frame_items:
@@ -2438,7 +2475,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             ('normalize_perframe', self.config['normalize_perframe']),
             ('with_intensity', with_intensity),
             ('with_class', with_class),
-            ('depends_version', 16),  # bump if `compute_dataset_stats` changes
+            ('prenormalizers', self.prenormalizers),
+            ('depends_version', 18),  # bump if `compute_dataset_stats` changes
         ])
         if self.config['normalize_peritem']:
             depends['normalize_peritem'] = self.config['normalize_peritem']
@@ -2583,11 +2621,11 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                         'max': np.array([np.nan]),
                         'n': np.array([np.nan]),
                     }
-                chan_mean = perchan_stats['mean'][:, None, None]
-                chan_std = perchan_stats['std'][:, None, None]
-                chan_min = perchan_stats['min'][:, None, None]
-                chan_max = perchan_stats['max'][:, None, None]
-                chan_num = perchan_stats['n'][:, None, None]
+                chan_mean = perchan_stats['mean']
+                chan_std = perchan_stats['std']
+                chan_min = perchan_stats['min']
+                chan_max = perchan_stats['max']
+                chan_num = perchan_stats['n']
 
                 # For nans, set the mean to zero and set the std to a huge
                 # number if we dont have any data on it. That will prevent
@@ -2625,11 +2663,11 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 combo_mean, combo_std, combo_nums = _combine_mean_stds(
                     means, stds, nums, axis=0)
                 combo = {
-                    'mean': combo_mean,
-                    'std': combo_std,
-                    'min': combo_mins,
-                    'max': combo_maxs,
-                    'n': combo_nums,
+                    'mean': combo_mean[:, None, None],
+                    'std': combo_std[:, None, None],
+                    'min': combo_mins[:, None, None],
+                    'max': combo_maxs[:, None, None],
+                    'n': combo_nums[:, None, None],
                 }
                 old_input_stats[(sensor, chan)] = combo
             return domain_input_stats, old_input_stats
