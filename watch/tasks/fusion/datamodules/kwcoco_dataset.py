@@ -129,35 +129,36 @@ Ignore:
     >>> kwplot.imshow(canvas2, fnum=3, pnum=(2, 1, 2), title='per-item normalization (across time)')
 """
 import einops
-import os
-import warnings
 import kwarray
 import kwcoco
 import kwimage
 import ndsampler
 import numpy as np
+import os
 import pandas as pd
+import scriptconfig as scfg
 import torch
 import ubelt as ub
+import warnings
+import functools
+from os import getenv
 from shapely.ops import unary_union
 from torch.utils import data
 from typing import Dict
-import functools
-import scriptconfig as scfg
 from typing import NamedTuple
-from os import getenv
 
 from watch import heuristics
 from watch.utils import kwcoco_extensions
 from watch.utils import util_bands
 from watch.utils import util_iter
+from watch.utils import util_kwarray
 from watch.utils import util_kwimage
 from watch.utils import util_time
 from watch.tasks.fusion import utils
 from watch.tasks.fusion.datamodules import data_utils
+from watch.tasks.fusion.datamodules import spacetime_grid_builder
 from watch.tasks.fusion.datamodules.data_augment import SpacetimeAugmentMixin
 from watch.tasks.fusion.datamodules.smart_mixins import SMARTDataMixin
-from watch.tasks.fusion.datamodules import spacetime_grid_builder
 
 try:
     import xdev
@@ -165,8 +166,8 @@ try:
 except Exception:
     profile = ub.identity
 
-# See ~/code/watch/docs/coding_oddities.rst
 # For notes on Spaces
+# See ~/code/watch/docs/coding_conventions.rst
 
 
 class KWCocoVideoDatasetConfig(scfg.Config):
@@ -184,9 +185,6 @@ class KWCocoVideoDatasetConfig(scfg.Config):
         * time_steps
         * time_sampling
         * chip_dims / window_space_dims
-
-    Also:
-        * set_cover_algo
     """
     __default__ = {
         ###############
@@ -1577,7 +1575,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 for chan_data, valid_mask, parent_data, chan_sl in norm_items:
                     valid_data = chan_data[valid_mask]
                     # Apply normalizer (todo: use kwimage variant)
-                    imdata_normalized = apply_robust_normalizer(
+                    imdata_normalized = util_kwarray.apply_robust_normalizer(
                         normalizer, chan_data, valid_data, valid_mask,
                         dtype=np.float32, copy=True)
                     # Overwrite original data with new normalized variants
@@ -2041,7 +2039,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 upweight_time = self.upweight_time
 
             # Learn more from the center of the space-time patch
-            time_weights = biased_1d_weights(upweight_time, num_frames)
+            time_weights = util_kwarray.biased_1d_weights(upweight_time, num_frames)
 
             time_weights = time_weights / time_weights.max()
             time_weights = time_weights.clip(0, 1)
@@ -2693,7 +2691,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
                 combo_mins = np.nanmin(mins, axis=0)
                 combo_maxs = np.nanmax(maxs, axis=0)
-                combo_mean, combo_std, combo_nums = _combine_mean_stds(
+                combo_mean, combo_std, combo_nums = util_kwarray.combine_mean_stds(
                     means, stds, nums, axis=0)
                 combo = {
                     'mean': combo_mean[:, None, None],
@@ -3089,7 +3087,7 @@ def worker_init_fn(worker_id):
             self.sampler.dset.connect(readonly=True)
 
 
-@ub.memoize
+@functools.cache
 def _space_weights(space_shape):
     sigma = (
         (4.8 * ((space_shape[1] - 1) * 0.5 - 1) + 0.8),
@@ -3097,42 +3095,6 @@ def _space_weights(space_shape):
     )
     space_weights = kwarray.normalize(kwimage.gaussian_patch(space_shape, sigma=sigma))
     return space_weights
-
-
-@functools.cache
-def biased_1d_weights(upweight_time, num_frames):
-    """
-    import kwplot
-    plt = kwplot.autoplt()
-
-    kwplot.figure()
-    import sys, ubelt
-    sys.path.append(ubelt.expandpath('~/code/watch'))
-    from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
-
-    kwplot.figure(fnum=1, doclf=1)
-    num_frames = 5
-    values = biased_1d_weights(0.5, num_frames)
-    plt.plot(values)
-    values = biased_1d_weights(0.1, num_frames)
-    plt.plot(values)
-    values = biased_1d_weights(0.0, num_frames)
-    plt.plot(values)
-    values = biased_1d_weights(0.9, num_frames)
-    plt.plot(values)
-    values = biased_1d_weights(1.0, num_frames)
-    plt.plot(values)
-    """
-    # from kwarray.distributions import TruncNormal
-    from scipy.stats import norm
-    # from kwarray.distributions import TruncNormal
-    sigma = kwimage.im_cv2._auto_kernel_sigma(kernel=((num_frames, 1)))[1][0]
-    mean = upweight_time * (num_frames - 1) + 0.5
-    # rv = TruncNormal(mean=mean, std=sigma, low=0.0, high=num_frames).rv
-    rv = norm(mean, sigma)
-    locs = np.arange(num_frames) + 0.5
-    values = rv.pdf(locs)
-    return values
 
 
 # Backwards compat
@@ -3143,41 +3105,6 @@ class FailedSample(Exception):
     ...
 
 
-def apply_robust_normalizer(normalizer, imdata, imdata_valid, mask, dtype, copy=True):
-    """
-        data = [self.dataset[idx] for idx in possibly_batched_index]
-      File "/home/joncrall/code/watch/watch/tasks/fusion/datamodules/kwcoco_dataset.py", line 1004, in __getitem__
-        return self.getitem(index)
-      File "/home/joncrall/code/watch/watch/tasks/fusion/datamodules/kwcoco_dataset.py", line 1375, in getitem
-        imdata_normalized = apply_robust_normalizer(
-      File "/home/joncrall/code/watch/watch/tasks/fusion/datamodules/kwcoco_dataset.py", line 2513, in apply_robust_normalizer
-        imdata_valid_normalized = kwarray.normalize(
-      File "/home/joncrall/code/kwarray/kwarray/util_numpy.py", line 760, in normalize
-        old_min = np.nanmin(float_out)
-      File "<__array_function__ internals>", line 5, in nanmin
-      File "/home/joncrall/.pyenv/versions/3.10.5/envs/pyenv3.10.5/lib/python3.10/site-packages/numpy/lib/nanfunctions.py", line 319, in nanmin
-        res = np.fmin.reduce(a, axis=axis, out=out, **kwargs)
-    """
-    import kwarray
-    if normalizer['type'] is None:
-        imdata_normalized = imdata.astype(dtype, copy=copy)
-    elif normalizer['type'] == 'normalize':
-        # Note: we are using kwarray normalize, the one in kwimage is deprecated
-        arr = imdata_valid.astype(dtype, copy=copy)
-        imdata_valid_normalized = kwarray.normalize(
-            arr, mode=normalizer['mode'],
-            beta=normalizer['beta'], alpha=normalizer['alpha'],
-        )
-        if mask is None:
-            imdata_normalized = imdata_valid_normalized
-        else:
-            imdata_normalized = imdata.copy() if copy else imdata
-            imdata_normalized[mask] = imdata_valid_normalized
-    else:
-        raise KeyError(normalizer['type'])
-    return imdata_normalized
-
-
 class Domain(NamedTuple):
     """
     A normalization domain
@@ -3185,147 +3112,3 @@ class Domain(NamedTuple):
     sensor: str
     channels: str
     video_name: str
-
-
-def _combine_mean_stds(means, stds, nums=None, axis=None, keepdims=False,
-                       bessel=True):
-    r"""
-    Args:
-        means (array): means[i] is the mean of the ith entry to combine
-
-        stds (array): stds[i] is the std of the ith entry to combine
-
-        nums (array | None):
-            nums[i] is the number of samples in the ith entry to combine.
-            if None, assumes sample sizes are infinite.
-
-        axis (int | Tuple[int] | None):
-            axis to combine the statistics over
-
-        keepdims (bool):
-            if True return arrays with the same number of dimensions they were
-            given in.
-
-        bessel (int):
-            Set to 1 to enables bessel correction to unbias the combined std
-            estimate.  Only disable if you have the true population means, or
-            you think you know what you are doing.
-
-    References:
-        https://stats.stackexchange.com/questions/55999/is-it-possible-to-find-the-combined-standard-deviation
-
-    SeeAlso:
-        development kwarray has a similar hidden function in util_averages.
-        Might expose later.
-
-    Example:
-        >>> means = np.stack([np.array([1.2, 3.2, 4.1])] * 100, axis=0)
-        >>> stds = np.stack([np.array([4.2, 0.2, 2.1])] * 100, axis=0)
-        >>> nums = np.stack([np.array([10, 100, 10])] * 100, axis=0)
-        >>> cm1, cs1, _ = _combine_mean_stds(means, stds, nums, axis=None)
-        >>> print('combo_mean = {}'.format(ub.urepr(cm1, nl=1)))
-        >>> print('combo_std  = {}'.format(ub.urepr(cs1, nl=1)))
-        >>> means = np.stack([np.array([1.2, 3.2, 4.1])] * 1, axis=0)
-        >>> stds = np.stack([np.array([4.2, 0.2, 2.1])] * 1, axis=0)
-        >>> nums = np.stack([np.array([10, 100, 10])] * 1, axis=0)
-        >>> cm2, cs2, _ = _combine_mean_stds(means, stds, nums, axis=None)
-        >>> print('combo_mean = {}'.format(ub.urepr(cm2, nl=1)))
-        >>> print('combo_std  = {}'.format(ub.urepr(cs2, nl=1)))
-        >>> means = np.stack([np.array([1.2, 3.2, 4.1])] * 5, axis=0)
-        >>> stds = np.stack([np.array([4.2, 0.2, 2.1])] * 5, axis=0)
-        >>> nums = np.stack([np.array([10, 100, 10])] * 5, axis=0)
-        >>> cm3, cs3, combo_num = _combine_mean_stds(means, stds, nums, axis=1)
-        >>> print('combo_mean = {}'.format(ub.urepr(cm3, nl=1)))
-        >>> print('combo_std  = {}'.format(ub.urepr(cs3, nl=1)))
-        >>> assert np.allclose(cm1, cm2) and np.allclose(cm2,  cm3)
-        >>> assert not np.allclose(cs1, cs2)
-        >>> assert np.allclose(cs2, cs3)
-
-    Example:
-        >>> means = np.random.rand(2, 3, 5, 7)
-        >>> stds = np.random.rand(2, 3, 5, 7)
-        >>> nums = (np.random.rand(2, 3, 5, 7) * 10) + 1
-        >>> cm, cs, cn = _combine_mean_stds(means, stds, nums, axis=1, keepdims=1)
-        >>> assert cm.shape == cs.shape == cn.shape
-        >>> print(f'cm.shape={cm.shape}')
-        >>> cm, cs, cn = _combine_mean_stds(means, stds, nums, axis=(0, 2), keepdims=1)
-        >>> assert cm.shape == cs.shape == cn.shape
-        >>> print(f'cm.shape={cm.shape}')
-        >>> cm, cs, cn = _combine_mean_stds(means, stds, nums, axis=(1, 3), keepdims=1)
-        >>> assert cm.shape == cs.shape == cn.shape
-        >>> print(f'cm.shape={cm.shape}')
-        >>> cm, cs, cn = _combine_mean_stds(means, stds, nums, axis=None)
-        >>> assert cm.shape == cs.shape == cn.shape
-        >>> print(f'cm.shape={cm.shape}')
-        cm.shape=(2, 1, 5, 7)
-        cm.shape=(1, 3, 1, 7)
-        cm.shape=(2, 1, 5, 1)
-        cm.shape=()
-    """
-    if nums is None:
-        # Assume the limit as nums -> infinite
-        combo_num = None
-        combo_mean = np.average(means, weights=None, axis=axis)
-        combo_mean = _postprocess_keepdims(means, combo_mean, axis)
-        numer_p1 = stds.sum(axis=axis, keepdims=1)
-        numer_p2 = (((means - combo_mean) ** 2)).sum(axis=axis, keepdims=1)
-        numer = numer_p1 + numer_p2
-        denom = len(stds)
-        combo_std = np.sqrt(numer / denom)
-    else:
-        combo_num = nums.sum(axis=axis, keepdims=1)
-        weights = nums / combo_num
-        combo_mean = np.average(means, weights=weights, axis=axis)
-        combo_mean = _postprocess_keepdims(means, combo_mean, axis)
-        numer_p1 = ((nums - bessel) * stds).sum(axis=axis, keepdims=1)
-        numer_p2 = (nums * ((means - combo_mean) ** 2)).sum(axis=axis, keepdims=1)
-        numer = numer_p1 + numer_p2
-        denom = combo_num - bessel
-        combo_std = np.sqrt(numer / denom)
-
-    if not keepdims:
-        indexer = _no_keepdim_indexer(combo_mean, axis)
-        combo_mean = combo_mean[indexer]
-        combo_std = combo_std[indexer]
-        if combo_num is not None:
-            combo_num = combo_num[indexer]
-
-    return combo_mean, combo_std, combo_num
-
-
-def _no_keepdim_indexer(result, axis):
-    """
-    Computes an indexer to postprocess a result with keepdims=True
-    that will modify the result as if keepdims=False
-    """
-    if axis is None:
-        indexer = [0] * len(result.shape)
-    else:
-        indexer = [slice(None)] * len(result.shape)
-        if isinstance(axis, (list, tuple)):
-            for a in axis:
-                indexer[a] = 0
-        else:
-            indexer[axis] = 0
-    indexer = tuple(indexer)
-    return indexer
-
-
-def _postprocess_keepdims(original, result, axis):
-    """
-    Can update the result of a function that does not support keepdims to look
-    as if keepdims was supported.
-    """
-    # Newer versions of numpy have keepdims on more functions
-    if axis is not None:
-        expander = [slice(None)] * len(original.shape)
-        if isinstance(axis, (list, tuple)):
-            for a in axis:
-                expander[a] = None
-        else:
-            expander[axis] = None
-        result = result[tuple(expander)]
-    else:
-        expander = [None] * len(original.shape)
-        result = np.array(result)[tuple(expander)]
-    return result
