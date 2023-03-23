@@ -563,7 +563,6 @@ def merge_images(window_coco_images, merge_method, requested_chans, space, resol
                 # image_data = M.filled(np.nan)
                 # masked_image_data = M.filled(np.nan)
 
-
             median_stack.append(image_data)
 
         combined_image_data = np.nanmedian(median_stack, axis=0)

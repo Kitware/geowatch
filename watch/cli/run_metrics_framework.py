@@ -102,7 +102,7 @@ class MetricsConfig(scfg.DataConfig):
         '''))
     parallel = scfg.Value(False,
                           help=ub.paragraph('''
-        Innvocate running IARPA T&E metrics in parallel. Note: 
+        Innvocate running IARPA T&E metrics in parallel. Note:
         Only works with IARPA T&E metrics version 1.0.0 or greater.
         '''))
 
