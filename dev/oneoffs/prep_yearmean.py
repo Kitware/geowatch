@@ -1,4 +1,19 @@
-# DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+#!/usr/bin/env python3
+import scriptconfig as scfg
+import ubelt as ub
+
+
+class CMDQueueBoilerplateConfig(scfg.DataConfig):
+    backend = scfg.Value('tmux', help=('The cmd_queue backend. Can be tmux, slurm, or serial'))
+    print_commands = scfg.Value('auto', isflag=True, help='enable / disable rprint before exec', alias=['rprint'])
+    print_queue = scfg.Value('auto', isflag=True, help='print the cmd queue DAG')
+    run = scfg.Value(False, help='if False, only prints the commands, otherwise executes them')
+
+
+class PrepareTimeAverages(scfg.DataConfig):
+    # DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+    # src = scfg.Value(None, help='input')
+    __default__ = ub.udict({}) | CMDQueueBoilerplateConfig.__default__
 
 
 def codetemplate(text, format=False):
@@ -18,7 +33,17 @@ def codetemplate(text, format=False):
     return template.safe_substitute(**fmtdict)
 
 
-def main():
+def main(cmdline=1, **kwargs):
+    """
+    Example:
+        >>> # xdoctest: +SKIP
+        >>> cmdline = 0
+        >>> kwargs = dict(
+        >>> )
+        >>> main(cmdline=cmdline, **kwargs)
+    """
+    config = PrepareTimeAverages.cli(cmdline=cmdline, data=kwargs, strict=True)
+    print('config = ' + ub.urepr(dict(config), nl=1))
     import watch
 
     dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
@@ -29,12 +54,12 @@ def main():
 
     all_regions = [
         'KR_R001',
-        'KR_R002',
-        'NZ_R001',
-        'CH_R001',
-        'BR_R001',
-        'BR_R002',
-        'BH_R001',
+        # 'KR_R002',
+        # 'NZ_R001',
+        # 'CH_R001',
+        # 'BR_R001',
+        # 'BR_R002',
+        # 'BH_R001',
     ]
     import cmd_queue
     queue = cmd_queue.Queue.create(backend='tmux', size=4,
@@ -74,6 +99,42 @@ def main():
             ''', fmtdict)
         queue.submit(code, depends=[combine_job], name=f'reproject-ann-{region}')
 
-    queue.print_commands()
-    queue.print_graph()
-    queue.run()
+    print_thresh = 30
+    if config['print_commands'] == 'auto':
+        if len(queue) < print_thresh:
+            config['print_commands'] = 1
+        else:
+            print(f'More than {print_thresh} jobs, skip queue.print_commands. '
+                  'If you want to see them explicitly specify print_commands=1')
+            config['print_commands'] = 0
+
+    if config['print_queue'] == 'auto':
+        if len(queue) < print_thresh:
+            config['print_queue'] = 1
+        else:
+            print(f'More than {print_thresh} jobs, skip queue.print_graph. '
+                  'If you want to see them explicitly specify print_queue=1')
+            config['print_queue'] = 0
+
+    if config.print_commands:
+        queue.print_commands()
+
+    if config.print_queue:
+        queue.print_graph()
+
+    if config.run:
+        queue.run()
+
+if __name__ == '__main__':
+    """
+
+    CommandLine:
+        python ~/code/watch/dev/oneoffs/prep_yearmean.py
+        python -m prep_yearmean
+    """
+    main()
+
+
+__notes__ = """
+
+"""

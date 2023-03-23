@@ -126,6 +126,7 @@ class FindDVCConfig(scfg.Config):
 
 
 __config__ = FindDVCConfig
+_CLI = __config__
 
 
 if __name__ == '__main__':

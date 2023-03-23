@@ -241,6 +241,7 @@ if __name__ == '__main__':
                 'watch-cli = watch.cli.__main__:main',
                 'smartwatch= watch.cli.__main__:main',
                 'smartwatch_dvc= watch.cli.find_dvc:_CLI.main',
+                # 'smartwatch_dvc= watch.cli.find_dvc:__config__.main',
             ],
         },
         install_requires=REQUIREMENTS,

@@ -244,8 +244,8 @@ class ScheduleEvaluationConfig(scfg.DataConfig):
 
     max_configs = scfg.Value(None, help='if specified only run at most this many of the grid search configs')
 
-    print_commands = scfg.Value('auto', isflag=True, help='enable / disable rprint before exec', alias=['rprint'])
     print_varied = scfg.Value('auto', isflag=True, help='print the varied parameters')
+    print_commands = scfg.Value('auto', isflag=True, help='enable / disable rprint before exec', alias=['rprint'])
     print_queue = scfg.Value('auto', isflag=True, help='print the cmd queue DAG')
 
 
