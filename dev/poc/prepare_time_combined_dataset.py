@@ -94,6 +94,7 @@ class PrepareTimeAverages(scfg.DataConfig):
     output_bundle_dpath = scfg.Value(None)
 
     true_site_dpath = scfg.Value(None)
+    true_region_dpath = scfg.Value(None)
 
 
 def codetemplate(text, format=False):
@@ -124,12 +125,12 @@ def main(cmdline=1, **kwargs):
     """
     config = PrepareTimeAverages.cli(cmdline=cmdline, data=kwargs, strict=True)
     print('config = ' + ub.urepr(dict(config), nl=1))
-    import watch
-
     assert config.output_bundle_dpath is not None
+    assert config.input_bundle_dpath is not None
+    # import watch
+    # dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
 
-    dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-    all_regions = [p.name.split('.')[0] for p in (dvc_data_dpath / 'annotations/drop6/region_models').ls()]
+    all_regions = [p.name.split('.')[0] for p in (ub.Path(config.true_region_dpath)).ls()]
 
     # time_duration = '1year'
     # time_duration = '3months'
@@ -198,8 +199,9 @@ if __name__ == '__main__':
             --input_bundle_dpath=$DVC_DATA_DPATH/Drop6 \
             --output_bundle_dpath=$DVC_DATA_DPATH/Drop6-MeanYear10GSD \
             --true_site_dpath=$DVC_DATA_DPATH/annotations/drop6/site_models \
+            --true_region_dpath=$DVC_DATA_DPATH/annotations/drop6/region_models \
             --resolution=10GSD \
-            --run=0 --print-commands
+            --run=1
     """
     main()
 

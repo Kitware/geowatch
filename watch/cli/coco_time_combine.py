@@ -375,6 +375,9 @@ def combine_kwcoco_channels_temporally(config):
     s2_weight_factor = config.s2_weight_factor
     og_kwcoco_fpath = config.kwcoco_fpath
 
+    n_combined_images = 0
+    n_failed_merges = 0
+
     with pman:
 
         for video_id in pman.progiter(video_ids, desc='Combining channel info within temporal windows'):
@@ -464,8 +467,6 @@ def combine_kwcoco_channels_temporally(config):
                                   og_kwcoco_fpath)
                 job.merge_images = merge_images
 
-            n_combined_images = 0
-            n_failed_merges = 0
             for job in pman.progiter(jobs.as_completed(),
                                      total=len(jobs),
                                      desc='Collect combine within temporal windows jobs'):
