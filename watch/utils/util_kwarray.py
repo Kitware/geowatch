@@ -882,6 +882,7 @@ def biased_1d_weights(upweight_time, num_frames):
     """
     # from kwarray.distributions import TruncNormal
     from scipy.stats import norm
+    import kwimage
     # from kwarray.distributions import TruncNormal
     sigma = kwimage.im_cv2._auto_kernel_sigma(kernel=((num_frames, 1)))[1][0]
     mean = upweight_time * (num_frames - 1) + 0.5
