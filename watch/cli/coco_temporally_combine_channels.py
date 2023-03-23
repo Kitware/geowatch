@@ -1,4 +1,24 @@
 #!/usr/bin/env python3
+"""
+
+CommandLine:
+    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+
+    python -m watch.cli.coco_temporally_combine_channels \
+        --kwcoco_fpath="$DVC_DATA_DPATH/Drop6/imgonly-KR_R002.kwcoco.json" \
+        --output_kwcoco_fpath="$DVC_DATA_DPATH/Drop6_MeanYear/imgonly-KR_R002.kwcoco.json" \
+        --channels="red|green|blue|nir|swir16|swir22" \
+        --resolution=10GSD \
+        --temporal_window_duration=1year \
+        --merge_method=mean \
+        --workers=4
+
+    python -m watch reproject_annotations \
+        --src $DVC_DATA_DPATH/Drop6_MeanYear/imgonly-KR_R002.kwcoco.json \
+        --dst $DVC_DATA_DPATH/Drop6_MeanYear/imganns-KR_R002.kwcoco.zip \
+        --site_models="$DVC_DATA_DPATH/annotations/drop6/site_models/*.geojson"
+
+"""
 import os
 
 import kwcoco
