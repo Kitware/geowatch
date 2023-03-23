@@ -17,6 +17,7 @@ import kwcoco
 from os.path import join
 from watch.utils import util_raster
 from watch import exceptions
+import watch.gis
 
 try:
     from xdev import profile

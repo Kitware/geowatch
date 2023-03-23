@@ -928,10 +928,10 @@ def main(args=None, **kwargs):
         >>>        'polygon_simplify_tolerance': 1}),
         >>> ]
         >>> main(args)
-        >>> # Run SC on the same dset
+        >>> # Run SC on the same dset, but with BAS pred sites removed 
         >>> sites_dir = dpath / 'sites'
         >>> args = sc_args = [
-        >>>     '--in_file', str(bas_coco_fpath),
+        >>>     '--in_file', coco_dset.fpath,
         >>>     '--out_sites_dir', str(sites_dir),
         >>>     '--out_sites_fpath', str(sc_fpath),
         >>>     '--out_kwcoco', str(sc_coco_fpath),
@@ -959,7 +959,6 @@ def main(args=None, **kwargs):
         >>> obs_rows = sc_df[sc_df['type'] == 'observation']
         >>> assert len(site_rows) > 0
         >>> assert len(ssum_rows) > 0
-        >>> assert len(ssum_rows) == len(site_rows)
         >>> assert len(ssum_rows) == len(site_rows)
         >>> assert len(obs_rows) > len(site_rows)
         >>> # Cleanup

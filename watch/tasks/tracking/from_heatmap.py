@@ -540,7 +540,7 @@ def time_aggregated_polys(
         >>> #                num_frames=5, image_size=(480, 640))
         >>> sub_dset = watch.coerce_kwcoco(
         >>>     'watch-msi', num_videos=1, num_frames=5, image_size=(480, 640),
-        >>>     geodata=True, heatmap=True)
+        >>>     geodata=True, heatmap=True, dates=True)
         >>> thresh = 0.01
         >>> min_area_square_meters = None
         >>> orig_track = time_aggregated_polys(

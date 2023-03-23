@@ -21,7 +21,6 @@ def test_tracker():
     import scriptconfig as scfg
 
     from watch.tasks.tracking import from_heatmap, from_polygon
-    from watch.utils.kwcoco_extensions import sorted_annots
 
     from watch.cli.kwcoco_to_geojson import main
     from watch.demo import smart_kwcoco_demodata

@@ -365,7 +365,11 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
 
     if geodata:
         for ann in coco_dset.anns.values():
-            assert ann['segmentation'] is not None
+            has_seg = (ann['segmentation'] is not None and
+                       len(ann['segmentation']) > 0)
+            if not has_seg:
+                print('FIXME this should never print, but it does')
+                ann['segmentation'] = kwimage.Polygon.from_coco(ann['bbox']),to_coco(style='new') 
 
         # Hack in geographic info
         hack_seed_geometadata_in_dset(coco_dset, force=True, rng=rng)

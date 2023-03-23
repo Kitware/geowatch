@@ -246,7 +246,7 @@ def dedupe_tracks(coco_dset):
     new_trackids = TrackidGenerator(coco_dset)
 
     for trackid in coco_dset.index.trackid_to_aids.keys():
-        annots = coco_dset.annots(coco_dset, trackid)
+        annots = coco_dset.annots(trackid=trackid)
 
         # split each video into a separate track
         for idx, (vidid, aids) in enumerate(
