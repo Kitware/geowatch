@@ -338,11 +338,16 @@ def interpolate(coco_dset,
     cnames_to_replace = set(cnames) - set(cnames_to_keep)
 
     cids = np.array(annots.cids)
-    good_ixs = np.in1d(cnames, list(cnames_to_replace), invert=True)
-    ix_to_cid = dict(zip(range(len(good_ixs)), map(int, cids[good_ixs])))
-    interp = np.interp(range(len(cnames)), good_ixs, range(len(good_ixs)))
+    is_good = np.in1d(cnames, list(cnames_to_replace), invert=True)
+    ix_to_cid = dict(zip(range(len(is_good)), map(int, cids[is_good])))
+    ixs = np.arange(len(cnames))
+    good_ixs = ixs[is_good]
+    good_cids = cids[is_good]
+    interp = np.interp(ixs, good_ixs, good_cids)
+    # can get KeyError here from error about which cnames to keep/replace
     annots.set('category_id', [ix_to_cid[int(ix)] for ix in np.round(interp)])
-    return annots
+
+    return coco_dset
 
 
 def baseline(coco_dset,

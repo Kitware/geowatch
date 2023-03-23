@@ -383,7 +383,7 @@ def normalize_phases(coco_dset,
             if has_missing_labels and has_good_labels:
                 # if we have partial coverage, interpolate from good labels
                 log.update(['partial class labels'])
-                coco_dset = phase.interpolate(coco_dset, trackid)
+                coco_dset = phase.interpolate(coco_dset, trackid, cnames_to_keep=cnames_to_score)
             else:
                 if has_missing_labels:
                     # else, predict site prep for the first half of the track
@@ -735,7 +735,12 @@ def normalize(
         e_probs=e_probs
     )
     if 'key' in track_kwargs:  # assume this is a baseline (saliency) key
-        phase_kw['baseline_keys'] = set(track_kwargs['key'])
+        k = track_kwargs['key']
+        if ub.iterable(k):
+            k = set(k)
+        else:
+            k = {k}
+        phase_kw['baseline_keys'] = k
     out_dset = normalize_phases(out_dset, **phase_kw)
 
     if DEBUG_JSON_SERIALIZABLE:
