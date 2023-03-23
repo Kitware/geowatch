@@ -365,11 +365,38 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
 
     if geodata:
         for ann in coco_dset.anns.values():
+
+            # both of these errors occur in the call:
+            # watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, num_frames=16,
+            #                     image_size=(8, 8))
+
             has_seg = (ann['segmentation'] is not None and
                        len(ann['segmentation']) > 0)
             if not has_seg:
-                print('FIXME this should never print, but it does')
-                ann['segmentation'] = kwimage.Polygon.from_coco(ann['bbox']),to_coco(style='new') 
+                print('FIXME this should never print - empty segmentation generated')
+                ann['segmentation'] = (kwimage.Boxes([ann['bbox']], 'xywh')
+                                       .to_polygons()[0]
+                                       .to_coco(style='new'))
+
+            # why does coerce work here when 
+            # seg = kwimage.MultiPolygon.from_coco(ann['segmentation'])
+            seg = kwimage.MultiPolygon.coerce(ann['segmentation'])
+            try:
+                seg.to_shapely()
+            except ValueError:
+                print('FIXME this should never print - invalid segmentation generated')
+                import shapely
+                import shapely.geometry
+                from shapely.geometry import shape
+                try:
+                    shp = shape(seg.to_geojson())
+                    seg = kwimage.MultiPolygon.from_shapely(shp.make_valid())
+                    ann['segmentation'] = seg.to_coco(style='new')
+                except ValueError:
+                    ann['segmentation'] = (kwimage.Boxes([ann['bbox']], 'xywh')
+                                           .to_polygons()[0]
+                                           .to_coco(style='new'))
+
 
         # Hack in geographic info
         hack_seed_geometadata_in_dset(coco_dset, force=True, rng=rng)
