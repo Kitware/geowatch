@@ -83,7 +83,7 @@ def main(cmdline=False, **kwargs):
             geojson.dump(combo, file, indent='    ')
 
 
-_SubConfig = MergeRegionModelConfig
+__config__ = MergeRegionModelConfig
 
 
 def combine_region_models(json_paths, match_type=None, match_subtype=None):

@@ -800,7 +800,7 @@ def _fill_missing_colors(label_to_color):
     return final
 
 
-_SubConfig = CocoSpectraConfig
+__config__ = CocoSpectraConfig
 
 if __name__ == '__main__':
     main()

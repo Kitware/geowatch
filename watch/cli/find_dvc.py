@@ -125,7 +125,7 @@ class FindDVCConfig(scfg.Config):
         return 0
 
 
-_CLI = FindDVCConfig
+__config__ = FindDVCConfig
 
 
 if __name__ == '__main__':
@@ -138,4 +138,4 @@ if __name__ == '__main__':
 
 
     """
-    _CLI.main()
+    __config__.main()

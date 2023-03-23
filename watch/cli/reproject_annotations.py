@@ -1520,7 +1520,7 @@ def draw_geospace(dvc_dpath, sites):
         gdf.plot(ax=ax, facecolor='none', edgecolor='red', alpha=0.5)
 
 
-_SubConfig = ReprojectAnnotationsConfig
+__config__ = ReprojectAnnotationsConfig
 
 
 def reorder_columns(df, columns):

@@ -286,7 +286,7 @@ def find_empty_images(dset, main_channels, overview=-1, mode='process',
     return bad_gids
 
 
-_CLI = RemoveEmptyImagesConfig
+__config__ = RemoveEmptyImagesConfig
 
 
 if __name__ == '__main__':

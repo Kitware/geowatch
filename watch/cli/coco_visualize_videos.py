@@ -622,7 +622,7 @@ def video_track_info(coco_dset, vidid):
     return tid_to_info
 
 
-_CLI = CocoVisualizeConfig
+__config__ = CocoVisualizeConfig
 
 
 def select_fixed_normalization(fixed_normalization_scheme, sensor_coarse):

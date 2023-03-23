@@ -70,20 +70,10 @@ TODO:
         ```
     - [ ] Rename file to coco_geoalign.py
 """
-import kwcoco
-import kwimage
 import os
 import scriptconfig as scfg
-import socket
 import ubelt as ub
-import dateutil.parser
 import warnings
-from os.path import join, exists
-from watch.cli.coco_visualize_videos import _write_ann_visualizations2
-from watch.utils import util_gis
-from watch.utils import util_time
-from watch.utils import util_gdal
-from watch.utils import kwcoco_extensions
 
 DEBUG = 0
 
@@ -300,7 +290,9 @@ def main(cmdline=True, **kw):
         >>> from watch.demo.landsat_demodata import grab_landsat_product
         >>> from watch.gis.geotiff import geotiff_metadata
         >>> # Create a dead simple coco dataset with one image
+        >>> import dateutil.parser
         >>> import kwcoco
+        >>> import kwimage
         >>> coco_dset = kwcoco.CocoDataset()
         >>> ls_prod = grab_landsat_product()
         >>> fpath = ls_prod['bands'][0]
@@ -347,6 +339,8 @@ def main(cmdline=True, **kw):
         >>> from watch.gis.geotiff import geotiff_metadata, geotiff_crs_info
         >>> # Create a dead simple coco dataset with one image
         >>> import kwcoco
+        >>> import kwimage
+        >>> import dateutil.parser
         >>> coco_dset = kwcoco.CocoDataset()
         >>> ls_prod = grab_landsat_product()
         >>> fpath = ls_prod['bands'][0]
@@ -388,7 +382,7 @@ def main(cmdline=True, **kw):
         >>> # Check our output is in the CRS we think it is
         >>> asset = coco_img.primary_asset()
         >>> parent_fpath = asset['parent_file_name']
-        >>> crop_fpath = join(new_dset.bundle_dpath, asset['file_name'])
+        >>> crop_fpath = ub.Path(new_dset.bundle_dpath) / asset['file_name']
         >>> info = geotiff_crs_info(crop_fpath)
         >>> assert(all(info['meter_per_pxl'] == 60.0))
 
@@ -396,6 +390,7 @@ def main(cmdline=True, **kw):
         >>> # xdoctest: +REQUIRES(--slow)
         >>> from watch.cli.coco_align import *  # NOQA
         >>> from watch.demo.smart_kwcoco_demodata import demo_kwcoco_with_heatmaps
+        >>> import kwimage
         >>> coco_dset = demo_kwcoco_with_heatmaps(num_videos=2, num_frames=2)
         >>> dpath = ub.Path.appdir('watch/test/coco_align2').ensuredir()
         >>> dst = (dpath / 'align_bundle2').delete().ensuredir()
@@ -438,7 +433,7 @@ def main(cmdline=True, **kw):
         >>> # Check our output is in the CRS we think it is
         >>> asset = coco_img.primary_asset()
         >>> parent_fpath = asset['parent_file_name']
-        >>> crop_fpath = join(new_dset.bundle_dpath, asset['file_name'])
+        >>> crop_fpath = str(ub.Path(new_dset.bundle_dpath) / asset['file_name'])
         >>> print(ub.cmd(['gdalinfo', parent_fpath])['out'])
         >>> print(ub.cmd(['gdalinfo', crop_fpath])['out'])
 
@@ -461,9 +456,13 @@ def main(cmdline=True, **kw):
     from watch.utils import util_gis
     from watch.utils import util_parallel
     from watch.utils import util_resolution
+    from watch.utils import kwcoco_extensions
     import os
+    import kwcoco
+    import socket
     import pandas as pd
     import warnings
+    import kwimage
 
     config = CocoAlignGeotiffConfig.cli(data=kw, cmdline=cmdline)
 
@@ -482,6 +481,7 @@ def main(cmdline=True, **kw):
         warnings.warn('environ GDAL_DISABLE_READDIR_ON_OPEN should probably be set to EMPTY_DIR')
         os.environ['GDAL_DISABLE_READDIR_ON_OPEN'] = 'EMPTY_DIR'
 
+    # TODO: use ProcessContext instead
     process_info = {
         'type': 'process',
         'properties': {
@@ -649,7 +649,7 @@ def main(cmdline=True, **kw):
         video_name = image_overlaps['video_name']
         print('video_name = {!r}'.format(video_name))
 
-        sub_bundle_dpath = join(extract_dpath, video_name)
+        sub_bundle_dpath = ub.Path(extract_dpath) / video_name
         print('sub_bundle_dpath = {!r}'.format(sub_bundle_dpath))
 
         new_dset = cube.extract_overlaps(
@@ -732,6 +732,7 @@ class SimpleDataCube(object):
     def __init__(cube, coco_dset, gids=None):
         import geopandas as gpd
         import shapely
+        from watch.utils import util_gis
         from kwcoco.util import ensure_json_serializable
         expxected_geos_crs_info = {
             'axis_mapping': 'OAMS_TRADITIONAL_GIS_ORDER',
@@ -788,6 +789,10 @@ class SimpleDataCube(object):
         # Create a dead simple coco dataset with one image
         import geopandas as gpd
         import kwcoco
+        import kwimage
+        import dateutil.parser
+        from watch.utils import util_gis
+        from watch.utils import kwcoco_extensions
         coco_dset = kwcoco.CocoDataset()
 
         landsat_products = []
@@ -900,6 +905,8 @@ class SimpleDataCube(object):
         """
         from kwcoco.util.util_json import ensure_json_serializable
         import geopandas as gpd
+        from watch.utils import util_gis
+        import kwimage
 
         # Quickly find overlaps using a spatial index
         ridx_to_gidsx = util_gis.geopandas_pairwise_overlaps(region_df, cube.img_geos_df)
@@ -1153,6 +1160,11 @@ class SimpleDataCube(object):
         import geopandas as gpd
         import pandas as pd  # NOQA
         from shapely import geometry
+        from watch.utils import util_time
+        from watch.utils import util_gis
+        from watch.utils import kwcoco_extensions
+        import kwcoco
+        import kwimage
         # import watch
         coco_dset = cube.coco_dset
 
@@ -1174,13 +1186,12 @@ class SimpleDataCube(object):
         if new_dset is None:
             new_dset = kwcoco.CocoDataset()
 
-        sub_bundle_dpath = ub.ensuredir((extract_dpath, video_name))
+        sub_bundle_dpath = (ub.Path(extract_dpath) / video_name).ensuredir()
 
-        if exists(join(sub_bundle_dpath,
-                       'subdata.kwcoco.json')) and keep in {'roi-img', 'roi'}:
+        subdata_fpath = ub.Path(sub_bundle_dpath) / 'subdata.kwcoco.json'
+        if subdata_fpath.exists() and keep in {'roi-img', 'roi'}:
             print('ROI cache hit')
-            sub_dset = kwcoco.CocoDataset(
-                join(sub_bundle_dpath, 'subdata.kwcoco.json'))
+            sub_dset = kwcoco.CocoDataset(subdata_fpath)
             return new_dset.union(sub_dset)
 
         latmin, lonmin, latmax, lonmax = space_box.data[0]
@@ -1271,7 +1282,7 @@ class SimpleDataCube(object):
 
                         # Should more than just the primary asset be used here?
                         primary_asset = coco_img.primary_asset()
-                        fpath = join(coco_dset.bundle_dpath, primary_asset['file_name'])
+                        fpath = ub.Path(coco_dset.bundle_dpath) / primary_asset['file_name']
 
                         # Note: valid region data is not necessary as input but
                         # we use it if it exists.
@@ -1309,7 +1320,7 @@ class SimpleDataCube(object):
                             'score': score,
                             'gid': gid,
                             'valid_iooa': valid_iooa,
-                            'fname': ub.Path(fpath).name,
+                            'fname': fpath.name,
                             'geometry': sh_valid_region_local,
                         })
 
@@ -1495,6 +1506,7 @@ class SimpleDataCube(object):
         #     raise AssertionError('unserializable = {}'.format(ub.repr2(unserializable, nl=1)))
 
         if visualize:
+            from watch.cli.coco_visualize_videos import _write_ann_visualizations2
             new_video = new_dset.index.videos[new_vidid]
             local_max_frame = len(sub_new_gids)
             valid_vidspace_region = new_video.get('valid_region', None)
@@ -1529,8 +1541,8 @@ class SimpleDataCube(object):
                 new_dset._check_json_serializable()
 
             sub_dset = new_dset.subset(sub_new_gids, copy=True)
-            sub_dset.fpath = join(sub_bundle_dpath, 'subdata.kwcoco.json')
-            sub_dset.reroot(new_root=sub_bundle_dpath, absolute=False)
+            sub_dset.fpath = os.fspath(ub.Path(sub_bundle_dpath) / 'subdata.kwcoco.json')
+            sub_dset.reroot(new_root=os.fspath(sub_bundle_dpath), absolute=False)
 
             kwcoco_extensions.reorder_video_frames(sub_dset)
 
@@ -1574,7 +1586,10 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
     #     ERROR 1: PROJ: proj_create_from_database: Cannot find proj.db
     #     ```
     # When the cache is not computed and workers > 0
+    from watch.utils import kwcoco_extensions
+    from watch.utils import util_time
     from osgeo import osr
+    import kwimage
     osr.GetPROJSearchPaths()
     from kwcoco.coco_image import CocoImage
 
@@ -1846,6 +1861,7 @@ def _fix_geojson_poly(geo):
     the spec allows for. Fix this.
 
     Example:
+        >>> import kwimage
         >>> geo1 = kwimage.Polygon.random().to_geojson()
         >>> fixed1 = _fix_geojson_poly(geo1)
         >>> #
@@ -1889,6 +1905,8 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
                asset_timeout=None, force_nodata=None, verbose=0,
                force_min_gsd=None, hack_lazy=False):
     import watch
+    import kwcoco
+    from watch.utils import util_gdal
 
     # NOTE: https://github.com/dwtkns/gdal-cheat-sheet
     first_obj = obj_group[0]
@@ -1916,30 +1934,29 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
 
     if is_multi_image:
         multi_dpath = ub.ensuredir((dst_dpath, name))
-        dst_gpath = join(multi_dpath, name + '_' + chan_pname + '.tif')
+        dst_gpath = ub.Path(multi_dpath) / (name + '_' + chan_pname + '.tif')
     else:
-        dst_gpath = join(dst_dpath, name + '.tif')
+        dst_gpath = ub.Path(dst_dpath) / (name + '.tif')
 
     input_gnames = [obj.get('file_name', None) for obj in obj_group]
     assert all(n is not None for n in input_gnames)
-    input_gpaths = [join(bundle_dpath, n) for n in input_gnames]
+    input_gpaths = [str(ub.Path(bundle_dpath) / n) for n in input_gnames]
 
     dst = {
-        'file_name': dst_gpath,
+        'file_name': os.fspath(dst_gpath),
     }
     if first_obj.get('channels', None):
         dst['channels'] = first_obj['channels']
     if first_obj.get('num_bands', None):
         dst['num_bands'] = first_obj['num_bands']
 
-    already_exists = exists(dst_gpath)
+    already_exists = dst_gpath.exists()
     needs_recompute = not (already_exists and keep in {'img', 'roi-img'})
 
     if not needs_recompute:
         DOUBLE_CHECK = 1
         if DOUBLE_CHECK:
             # Sometimes the data will exist, but it's bad data. Check for this.
-            dst_gpath = ub.Path(dst_gpath)
             try:
                 ref = util_gdal.GdalOpen(dst_gpath, mode='r')
                 ref
@@ -2167,7 +2184,7 @@ class SkipImage(Exception):
     ...
 
 
-_CLI = CocoAlignGeotiffConfig
+__config__ = CocoAlignGeotiffConfig
 __config__ = CocoAlignGeotiffConfig
 
 

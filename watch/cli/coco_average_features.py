@@ -576,7 +576,6 @@ class CocoAverageFeaturesConfig(scfg.DataConfig):
             '''))
 
 
-_CLI = CocoAverageFeaturesConfig
 __config__ = CocoAverageFeaturesConfig
 
 
