@@ -52,10 +52,18 @@ def _gather_namek_shortlist_results():
 
     top_k = 40
     chosen_indexes = chosen_indexes[:top_k]
-    top_models = table.loc[chosen_indexes, 'params.bas_pxl.package_fpath'].tolist()
-    set(known_models).issuperset(set(top_models))
+
+    chosen_table = table.loc[chosen_indexes]
+
+    # Need to remove invariants for now
+    flags = ~np.array(['invariants' in chan for chan in chosen_table['resolved_params.bas_pxl_fit.channels']])
+    chosen_table = chosen_table[flags]
+
+    chosen_models = chosen_table['params.bas_pxl.package_fpath'].tolist()
+    set(known_models).issuperset(set(chosen_models))
+
     new_models_fpath = ub.Path('$HOME/code/watch/dev/reports/split1_models_filter1.yaml').expand()
-    new_models_fpath.write_text(Yaml.dumps(top_models))
+    new_models_fpath.write_text(Yaml.dumps(chosen_models))
 
 
     subagg = agg.filterto(index=chosen_indexes)
