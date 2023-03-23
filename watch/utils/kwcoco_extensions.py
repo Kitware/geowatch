@@ -222,19 +222,19 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
             SwigPyObject) returned from ``watch.gis.geotiff.geotiff_metadata``
             to be able do this.
             '''))
-    executor = ub.JobPool(mode, max_workers=workers)
-    # executor = ub.JobPool('process', max_workers=workers)
+
+    jobs = ub.JobPool(mode, max_workers=workers, transient=True)
     for gid in ub.ProgIter(gids, desc='submit populate imgs'):
         coco_img = coco_dset.coco_image(gid)
         if mode == 'process':
             coco_img = coco_img.detach()
-        job = executor.submit(
+        job = jobs.submit(
             coco_populate_geo_img_heuristics2, coco_img,
             overwrite=overwrite, default_gsd=default_gsd, **kw)
         job.gid = gid
 
     broken_image_ids = []
-    for job in ub.ProgIter(executor.as_completed(), total=len(executor), desc='collect populate imgs'):
+    for job in ub.ProgIter(jobs.as_completed(), total=len(jobs), desc='collect populate imgs'):
         gid = job.gid
         try:
             img = job.result()
@@ -840,12 +840,12 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
 
         # If the base dictionary has "warp_to_wld" and "approx_meter_gsd"
         # information we use that.
-        wld_from_img = img.get('warp_to_wld', None)
-        approx_meter_gsd = img.get('approx_meter_gsd', None)
+        warp_wld_from_img = img.get('warp_to_wld', None)
+        img_approx_meter_gsd = img.get('approx_meter_gsd', None)
         wld_crs_info = img.get('wld_crs_info', None)
 
         # Otherwise we try to obtain it from the auxiliary images
-        if approx_meter_gsd is None or wld_from_img is None:
+        if img_approx_meter_gsd is None or warp_wld_from_img is None:
             # Choose any one of the auxiliary images that has the required
             # attribute
             aux_chosen = coco_img.primary_asset(requires=[
@@ -858,14 +858,20 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
                     metadata.
                     '''))
 
-            wld_from_aux = kwimage.Affine.coerce(aux_chosen.get('warp_to_wld', None))
-            img_from_aux = kwimage.Affine.coerce(aux_chosen['warp_aux_to_img'])
-            aux_from_img = img_from_aux.inv()
-            wld_from_img = wld_from_aux @ aux_from_img
-            approx_meter_gsd = aux_chosen['approx_meter_gsd']
+            warp_wld_from_asset = kwimage.Affine.coerce(aux_chosen.get('warp_to_wld', None))
+            warp_img_from_asset = kwimage.Affine.coerce(aux_chosen['warp_aux_to_img'])
+
+            warp_asset_from_img = warp_img_from_asset.inv()
+            warp_wld_from_img = warp_wld_from_asset @ warp_asset_from_img
+
+            scale_img_from_asset = np.mean(warp_img_from_asset.decompose()['scale'])
+
+            asset_approx_meter_gsd = aux_chosen['approx_meter_gsd']
+            img_approx_meter_gsd = asset_approx_meter_gsd / scale_img_from_asset
+
             wld_crs_info = aux_chosen.get('wld_crs_info', None)
 
-        if approx_meter_gsd is None or wld_from_img is None:
+        if img_approx_meter_gsd is None or warp_wld_from_img is None:
             raise Exception(ub.paragraph(
                 '''
                 Both the base image and its auxiliary images do not seem to
@@ -873,7 +879,7 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
                 The image may not have associated geo metadata.
                 '''))
 
-        wld_from_img = kwimage.Affine.coerce(wld_from_img)
+        warp_wld_from_img = kwimage.Affine.coerce(warp_wld_from_img)
 
         asset_channels = []
         asset_gsds = []
@@ -885,12 +891,12 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
             asset_channels.append(obj.get('channels', None))
 
         frame_infos[gid] = {
-            'img_to_wld': wld_from_img,
+            'warp_wld_from_img': warp_wld_from_img,
             'wld_crs_info': wld_crs_info,
             # Note: division because gsd is inverted. This got me confused, but
             # I'm pretty sure this works.
             'target_gsd': target_gsd,
-            'approx_meter_gsd': approx_meter_gsd,
+            'approx_meter_gsd': img_approx_meter_gsd,
             'width': img['width'],
             'height': img['height'],
             'asset_channels': asset_channels,
@@ -933,6 +939,8 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
                 if _gsd is not None:
                     available_gsds.add(round(_gsd, 1))
 
+        print('')
+        print('frame_infos = {}'.format(ub.urepr(frame_infos, nl=1)))
         # Align to frame closest to the target GSD, which is the frame that has the
         # "to_target_scale_factor" that is closest to 1.0
         base_gid, base_info = min(
@@ -944,8 +952,9 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
 
         # Can add an extra transform here if the video is not exactly in
         # any specific image space
-        baseimg_from_wld = base_info['img_to_wld'].inv()
-        vid_from_wld = kwimage.Affine.scale(scale) @ baseimg_from_wld
+        warp_baseimg_from_wld = base_info['warp_wld_from_img'].inv()
+        warp_vid_from_wld = kwimage.Affine.scale(scale) @ warp_baseimg_from_wld
+
         video['width'] = int(np.ceil(base_info['width'] * scale))
         video['height'] = int(np.ceil(base_info['height'] * scale))
         video['wld_crs_info'] = base_wld_crs_info
@@ -958,11 +967,11 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
             wld_crs = base_wld_crs_info['auth']
             crs84 = util_gis._get_crs84()
             wld_region_poly = gpd.GeoDataFrame({'geometry': [valid_region_crs84.to_shapely()]}, crs=crs84).to_crs(wld_crs)['geometry'].iloc[0]
-            valid_region = kwimage.MultiPolygon.from_shapely(wld_region_poly).warp(vid_from_wld).to_geojson()
+            valid_region = kwimage.MultiPolygon.from_shapely(wld_region_poly).warp(warp_vid_from_wld).to_geojson()
             video['valid_region'] = valid_region
 
         # Store metadata in the video
-        video['warp_wld_to_vid'] = vid_from_wld.__json__()
+        video['warp_wld_to_vid'] = warp_vid_from_wld.__json__()
         video['target_gsd'] = target_gsd_
         video['resolution'] = f'{target_gsd_}GSD'
         video['min_gsd'] = min_gsd
@@ -975,10 +984,11 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
 
     for gid in gids:
         img = coco_dset.index.imgs[gid]
-        wld_from_img = frame_infos[gid]['img_to_wld']
-        wld_crs_info = frame_infos[gid]['wld_crs_info']
-        vid_from_img = vid_from_wld @ wld_from_img
-        img['warp_img_to_vid'] = vid_from_img.concise()
+        frame_info = frame_infos[gid]
+        wld_crs_info = frame_info['wld_crs_info']
+        warp_wld_from_img = frame_info['warp_wld_from_img']
+        warp_vid_from_img = warp_vid_from_wld @ warp_wld_from_img
+        img['warp_img_to_vid'] = warp_vid_from_img.concise()
 
         if base_wld_crs_info != wld_crs_info:
             import warnings

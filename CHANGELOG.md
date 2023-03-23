@@ -20,6 +20,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * The `watch.cli.cluster_sites` script now works.
 * The `watch.cli.coco_temporally_combine_channels` script
 
+### Fixed
+* Bug in `coco_add_watch_fields` where video properties were incorrectly
+  updated if auxiliary and image space was not aligned.
+
 
 ### Fixed
 * Fixed issue in fusion models where we could not resume from checkpoints with lightning.

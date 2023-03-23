@@ -20,86 +20,80 @@ CommandLine:
 
 """
 import os
-
-import kwcoco
-import kwarray
-import kwimage
-import numpy as np
 import ubelt as ub
 import scriptconfig as scfg
-
-from watch.utils import util_progress
-from watch.utils import util_time, kwcoco_extensions
-from watch.tasks.fusion.coco_stitcher import CocoStitchingManager
 
 
 class TimeAverageConfig(scfg.DataConfig):
     """
     Averages kwcoco images over a sliding temporal window in a video.
     """
-    kwcoco_fpath = scfg.Value(None,
-                              help=ub.paragraph('''
+    kwcoco_fpath = scfg.Value(None, help=ub.paragraph(
+            '''
             The path to the kwcoco file containing the image data to be
             combined.
             '''))
 
-    output_kwcoco_fpath = scfg.Value(None,
-                                     help=ub.paragraph('''
+    output_kwcoco_fpath = scfg.Value(None, help=ub.paragraph(
+            '''
             The path where the combined image data will be saved to in a
             kwcoco file.
             '''))
 
-    channels = scfg.Value('red|green|blue',
-                          help=ub.paragraph('''
+    channels = scfg.Value('*', help=ub.paragraph(
+            '''
             The channels to get and combine the spatial data from. E.g.
-            "red|green|blue". Note: Separate channels with "|".
+            "red|green|blue". Note: Separate channels with "|". A ``*``
+            means combine everything.
             '''))
 
-    temporal_window_duration = scfg.Value('1month',
-                                          help=ub.paragraph('''
-            The amount of time the temporal window should cover in days.
-            E.g. 365 for a year.
+    temporal_window_duration = scfg.Value('1month', help=ub.paragraph(
+            '''
+            The amount of time the temporal window should cover. E.g.
+            365 for a year.
             '''))
 
-    merge_method = scfg.Value('mean',
-                              help=ub.paragraph('''
+    merge_method = scfg.Value('mean', help=ub.paragraph(
+            '''
             The combine method to use. Choices: "mean", "median".
             '''))
 
-    resolution = scfg.Value('10GSD',
-                            help=ub.paragraph('''
+    resolution = scfg.Value('10GSD', help=ub.paragraph(
+            '''
             The resolution the imagery will be loaded during the
             combination operation and saved to the output kwcoco file.
             '''))
 
-    filter_with_cloudmasks = scfg.Value(True,
-                                        isflag=True,
-                                        help=ub.paragraph('''
+    filter_with_cloudmasks = scfg.Value(True, isflag=True, help=ub.paragraph(
+            '''
             If active the cloudmasks will be used to filter out pixels
             with too much cloud coverage or missing data.
             '''))
 
-    s2_weight_factor = scfg.Value(1.0,
-                                  help=ub.paragraph('''
+    s2_weight_factor = scfg.Value(1.0, help=ub.paragraph(
+            '''
             A weighting factor to scale the impact of Sentinel-2 pixels
             during the combination operation. Note: Only effects the
-            merge method "mean".
+            merge method "mean" when sensors are not separated.
+            TODO: make this a general mapping from sensor code to weight.
+            Can probably use Yaml.coerce
             '''))
+
     separate_sensors = scfg.Value(True, isflag=True, help='Combine images by sensor separately.')
 
-    workers = scfg.Value(0,
-                         help=ub.paragraph('''
+    workers = scfg.Value(0, help=ub.paragraph(
+            '''
             The number of CPU cores to compute the combination operation
             with.
             '''))
 
-    include_sensors = scfg.Value(None,
-                                 help=ub.paragraph('''
+    include_sensors = scfg.Value(None, help=ub.paragraph(
+            '''
             A list of sensors to include in the combination operation.
             '''))
 
-    exclude_sensors = scfg.Value(None,
-                                 help=ub.paragraph('''
+    exclude_sensors = scfg.Value(None, help=ub.paragraph(
+            '''
             A list of sensors to exclude from the combination operation.
             '''))
 
@@ -318,6 +312,12 @@ def combine_kwcoco_channels_temporally(config):
     3. For each temporal window, combine the spatial data from each channel.
     4. Save the combined image result to a new kwcoco dataset.
     """
+    import kwarray
+    import kwcoco
+    import numpy as np
+    from watch.utils import util_progress
+    from watch.utils import util_time
+    from watch.utils import kwcoco_extensions
     # Check inputs.
     space = 'video'
 
@@ -354,22 +354,30 @@ def combine_kwcoco_channels_temporally(config):
     new_bundle_dpath = output_kwcoco_fpath.parent
     new_bundle_dpath.ensuredir()
 
+    output_coco_dset.fpath = output_kwcoco_fpath
+
     # 2. Divide the dataset into temporal windows (per video).
 
     ## Convert temporal_window_duration from days to seconds.
     time_delta = util_time.coerce_timedelta(config.temporal_window_duration)
     time_delta_seconds = time_delta.total_seconds()
 
-    video_ids = [vid for vid in coco_dset.videos()]
+    video_ids = list(coco_dset.videos())
 
-    # pman = util_progress.ProgressManager(backend='rich')
-    pman = util_progress.ProgressManager(backend='progiter')  # uncomment if you need to embed
+    pman = util_progress.ProgressManager()
+    # pman = util_progress.ProgressManager(backend='progiter')  # uncomment if you need to use breakpoints
+
+    resolution = config.resolution
+    merge_method = config.merge_method
+    filter_with_cloudmasks = config.filter_with_cloudmasks
+    s2_weight_factor = config.s2_weight_factor
+    og_kwcoco_fpath = config.kwcoco_fpath
 
     with pman:
 
-        for vid in pman.progiter(video_ids, desc='Combining channel info within temporal windows'):
+        for video_id in pman.progiter(video_ids, desc='Combining channel info within temporal windows'):
             # Get all image ids for the video.
-            images = coco_dset.images(video_id=vid)
+            images = coco_dset.images(video_id=video_id)
 
             # Determine what channels in each image we want to merge
             image_merge_channels = []
@@ -380,6 +388,11 @@ def combine_kwcoco_channels_temporally(config):
                 else:
                     mergable = requested_chans.to_set() & coco_img.channels.fuse().to_set()
                 image_merge_channels.append(frozenset(mergable))
+
+            video = coco_dset.index.videos[video_id]
+            video_name = video['name']
+            video_dsize = (video['width'], video['height'])
+            print(f'video_dsize={video_dsize}')
 
             # Filter to only images that have a channel to merge
             flags = [len(c) > 0 for c in image_merge_channels]
@@ -414,13 +427,15 @@ def combine_kwcoco_channels_temporally(config):
             # groupid_to_idxs = dict(zip(unique_groupids, grouped_idxs))
             groupid_to_idxs = ub.group_items(range(len(image_groupids)), image_groupids)
 
+            print(f'{len(images)} / {len(flags)} images in {video_name} have {len(groupid_to_idxs)} mergable groups')
+
+            SHOW_INFO = 0
             # DEBUG: Print the distribution of images per window.
-            if 0:
-                region_name = coco_dset.index.videos[vid]['name']
+            if SHOW_INFO:
                 # Get the histogram for the number of images per window.
                 bucket_to_num_images = ub.udict(groupid_to_idxs).map_values(len)
                 bucket_stats = kwarray.stats_dict(list(bucket_to_num_images.values()))
-                print(f'[{region_name}] Distribution of images per window:')
+                print(f'[{video_name}] Distribution of images per window:')
                 print('Histogram: = {}'.format(ub.urepr(bucket_to_num_images, nl=1)))
                 print('N images per window: = {}'.format(ub.urepr(bucket_stats, nl=1)))
 
@@ -430,31 +445,61 @@ def combine_kwcoco_channels_temporally(config):
             chunk_image_idxs = list(groupid_to_idxs.values())
             prog = pman.progiter(chunk_image_idxs, transient=True, desc='Submit combine within temporal windows jobs')
             for chunk_image_idxs in prog:
-                window_image = images.take(chunk_image_idxs)
-                window_coco_images = window_image.coco_images
+                # if len(chunk_image_idxs) == 1:
+                #     import xdev
+                #     xdev.embed()
+                # else:
+                #     continue
+                window_images = images.take(chunk_image_idxs)
+                window_coco_images = window_images.coco_images
                 # Detach for process parallelization
                 window_coco_images = [g.detach() for g in window_coco_images]
 
-                jobs.submit(merge_images, window_coco_images, config.merge_method, requested_chans, space,
-                            config.resolution, new_bundle_dpath, config.filter_with_cloudmasks, config.s2_weight_factor,
-                            config.kwcoco_fpath)
+                job = jobs.submit(merge_images, window_coco_images,
+                                  merge_method, requested_chans, space,
+                                  resolution, new_bundle_dpath,
+                                  filter_with_cloudmasks, s2_weight_factor,
+                                  og_kwcoco_fpath)
+                job.merge_images = merge_images
 
             n_combined_images = 0
+            n_failed_merges = 0
             for job in pman.progiter(jobs.as_completed(),
                                      total=len(jobs),
                                      desc='Collect combine within temporal windows jobs'):
                 new_img = job.result()
                 if new_img is None:
+                    n_failed_merges += 1
                     continue
                 output_coco_dset.add_image(**new_img)
                 n_combined_images += 1
+                pman.update_info(ub.codeblock(
+                    f'''
+                    {n_combined_images=}
+                    {n_failed_merges=}
+                    '''))
 
     if n_combined_images == 0:
         raise ValueError('No images were combined with non-NaN values')
 
+    # from watch.utils import util_resolution
+    from kwcoco.coco_image import coerce_resolution
+    target_gsd = float(np.mean(coerce_resolution(config.resolution)['mag']))
+    print(f'Reset watch fields target_gsd={target_gsd}')
+    kwcoco_extensions.populate_watch_fields(
+        output_coco_dset, target_gsd=target_gsd, overwrite=True)
+
+    video = output_coco_dset.index.videos[video_id]
+    after_video_dsize = (video['width'], video['height'])
+    print(f'after_video_dsize={after_video_dsize}')
+
+    # for vidid in ub.ProgIter(vidids, total=len(vidids), desc='populate videos'):
+    #     coco_populate_geo_video_stats(coco_dset, vidid, target_gsd=target_gsd)
+
+    check_kwcoco_spatial_transforms(output_coco_dset)
+
     # Save kwcoco file.
     print(f"Saving ouput kwcoco file to: {output_kwcoco_fpath}")
-    output_coco_dset.fpath = output_kwcoco_fpath
     output_coco_dset.validate()
     output_coco_dset.dump()
     print(f"Saved ouput kwcoco file to: {output_kwcoco_fpath}")
@@ -497,8 +542,9 @@ def get_quality_mask(coco_image, space, resolution, avoid_quality_values=['cloud
     return quality_mask
 
 
-def merge_images(window_coco_images, merge_method, requested_chans, space, resolution, new_bundle_dpath,
-                 filter_with_cloudmasks, s2_weight_factor, og_kwcoco_fpath):
+def merge_images(window_coco_images, merge_method, requested_chans, space,
+                 resolution, new_bundle_dpath, filter_with_cloudmasks,
+                 s2_weight_factor, og_kwcoco_fpath):
     """
     Args:
         window_coco_images (List[kwcoco.CocoImage]): images with channels to merge
@@ -506,11 +552,22 @@ def merge_images(window_coco_images, merge_method, requested_chans, space, resol
     Returns:
         Dict: a new coco image that points at the merged image on disk.
     """
-    if requested_chans.spec == '*':
-        merge_chans_set = set(ub.flatten([g.channels.fuse().to_set() for g in window_coco_images]))
-    else:
-        merge_chans_set = requested_chans
+    import kwimage
+    import kwarray
+    import kwcoco
+    import numpy as np
+    from watch.tasks.fusion.coco_stitcher import CocoStitchingManager
+    from watch.utils import util_time
 
+    # Determine what channels are available in this image set
+    available_chans_set = set(ub.flatten([g.channels.fuse().to_set() for g in window_coco_images]))
+
+    if requested_chans.spec == '*':
+        requested_chans_set = available_chans_set
+    else:
+        requested_chans_set = requested_chans
+
+    merge_chans_set = requested_chans_set & available_chans_set
     merge_chans = kwcoco.FusedChannelSpec.coerce(sorted(merge_chans_set))
 
     # TODO: we should merge each asset at the highest resolution for that
@@ -524,14 +581,20 @@ def merge_images(window_coco_images, merge_method, requested_chans, space, resol
     assert space == 'video'
 
     first_coco_img = window_coco_images[0]
+
     # Scales to the resolution from the requested (i.e. video space)
     scale_asset_from_vid = first_coco_img._scalefactor_for_resolution(resolution=resolution, space='video')
     # warp_asset_from_vid = kwimage.Affine.scale(scale_asset_from_vid)
 
-    canvas_dsize = kwimage.Box.from_dsize(
-        (first_coco_img.video['width'], first_coco_img.video['height'])).scale(scale_asset_from_vid).quantize().dsize
+    video_dsize = kwimage.Box.from_dsize(
+        (first_coco_img.video['width'], first_coco_img.video['height']))
+
+    canvas_dsize = video_dsize.scale(scale_asset_from_vid).quantize().dsize
     canvas_dims = canvas_dsize[::-1]
     canvas_shape = canvas_dims + (merge_chans.numel(), )
+
+    avoid_quality_values = ['cloud', 'cloud_shadow', 'cloud_adjacent']
+    # avoid_quality_values += ['ice']
 
     # Load and combine the images within this range.
     if merge_method == 'mean':
@@ -542,11 +605,11 @@ def merge_images(window_coco_images, merge_method, requested_chans, space, resol
             delayed = coco_img.imdelay(merge_chans, space=space, resolution=resolution)
             image_data = delayed.finalize(nodata_method='float')
 
-            pxl_weight = (1 - np.isnan(image_data)).astype(np.float32)
+            pxl_weight = (~np.isnan(image_data)).astype(np.float32)
 
             if filter_with_cloudmasks:
                 # Load quality mask.
-                quality_mask = get_quality_mask(coco_img, space, resolution, avoid_quality_values=['cloud', 'cloud_shadow', 'cloud_adjacent'])
+                quality_mask = get_quality_mask(coco_img, space, resolution, avoid_quality_values=avoid_quality_values)
 
                 # Update pixel weights based on quality pixel values.
                 pxl_weight *= quality_mask
@@ -571,7 +634,7 @@ def merge_images(window_coco_images, merge_method, requested_chans, space, resol
 
             if filter_with_cloudmasks:
                 # Load quality mask.
-                quality_mask = get_quality_mask(coco_img, space, resolution, avoid_quality_values=['cloud', 'cloud_shadow', 'cloud_adjacent'])
+                quality_mask = get_quality_mask(coco_img, space, resolution, avoid_quality_values=avoid_quality_values)
 
                 # Update pixel weights based on quality pixel values.
                 x, y = np.where(quality_mask[..., 0] == 0)
@@ -603,6 +666,12 @@ def merge_images(window_coco_images, merge_method, requested_chans, space, resol
     new_img = first_coco_img.img.copy()
     new_img.pop('auxiliary', None)
     new_img.pop('assets', None)
+    new_img.pop('name', None)
+    new_img.pop('align_method', None)
+    new_img.pop('valid_region', None)
+    new_img.pop('valid_region_utm', None)
+    new_img.pop('parent_name', None)
+    new_img.pop('parent_canonical_name', None)
     new_coco_img = kwcoco.CocoImage(new_img)
 
     # We are currently writing all merged assets in video space, so
@@ -625,20 +694,27 @@ def merge_images(window_coco_images, merge_method, requested_chans, space, resol
 
     timestr = util_time.isoformat(util_time.coerce_datetime(new_coco_img.img['timestamp']))
     chanstr = merge_chans.path_sanitize()
-    new_name = f'ave_{timestr}_{len(window_coco_images):03d}_{chanstr}_{hashid}'
+    sensors = '_'.join(sorted(set([coco_img['sensor_coarse'] for coco_img in window_coco_images])))
+    new_name = f'ave_{timestr}_{len(window_coco_images):03d}_{chanstr}_{sensors}_{hashid}'
     new_coco_img.img['name'] = new_name
 
     # TODO: Figure out how to better handle this case.
     # Issue is that the unique sensor combination does not get processed in the predict script.
     new_coco_img.img['sensor_coarse'] = first_coco_img['sensor_coarse']
+    new_coco_img.img['_parent_sensors'] = sensors
+    new_coco_img.img['_num_parents'] = len(window_coco_images)
+    new_coco_img.img['_first_timestamp'] = window_coco_images[0].img['timestamp']
+    new_coco_img.img['_last_timestamp'] = window_coco_images[-1].img['timestamp']
+
     # new_coco_img.img['sensor_coarse'] = '_'.join(
     #     sorted(set([coco_img['sensor_coarse'] for coco_img in window_coco_images])))
 
     # new_coco_img.bundle_dapth = new_bundle_dpath
     dname = f'ave_{merge_chans.path_sanitize()}'
 
-    # TODO: this should be set to the union of any valid_region_utms in the
-    # input images.
+    # TODO:
+    # We could recompute the valid_region and valid_region_utm here
+    # as the union of the input items' properties
     new_coco_img.img.pop('valid_region_utm', None)
 
     # TODO: Figure out how to add geo-metadata to the new image from previous images.
@@ -651,6 +727,7 @@ def merge_images(window_coco_images, merge_method, requested_chans, space, resol
         short_code=dname,
         chan_code=merge_chans.spec,
         stiching_space='video',
+        write_prediction_attrs=False,
     )
 
     gid = new_coco_img.img['id']
@@ -665,12 +742,92 @@ def merge_images(window_coco_images, merge_method, requested_chans, space, resol
     return final_img
 
 
+def check_kwcoco_spatial_transforms(dset):
+    """
+    import kwplot
+    kwplot.plt.ion()
+    import kwcoco
+    dset = kwcoco.CocoDataset('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6_MeanYear/imgonly-KR_R001.kwcoco.zip')
+    """
+
+    import kwimage
+    from watch.utils import util_gdal
+    import numpy as np
+
+    for video in dset.videos().objs:
+
+        video_box = kwimage.Box.from_dsize((video['width'], video['height']))
+        print('video_box = {}'.format(ub.urepr(video_box, nl=1)))
+
+        video_target_gsd = video['target_gsd']
+
+        images = dset.images(video_id=video['id'])
+
+        for coco_img in images.coco_images:
+
+            image_box = kwimage.Box.from_dsize((coco_img['width'], coco_img['height']))
+            sensor = coco_img['sensor_coarse']
+
+            image_summary = {
+                'sensor': sensor,
+                'video_box': video_box,
+                'image_box': image_box,
+            }
+            warp_vid_from_img = coco_img.warp_vid_from_img
+            scale_vid_from_img = warp_vid_from_img.decompose()['scale']
+            recon_video_box = image_box.scale(scale_vid_from_img).quantize()
+            image_summary['scale_vid_from_img'] = scale_vid_from_img
+            image_summary['reconstructed_video_box'] = recon_video_box
+            image_summary['img_gsd'] = video_target_gsd / (1 / np.mean(scale_vid_from_img))
+
+            img = ub.udict(coco_img.img)
+            img = img - {'has_predictions'}
+            # print('coco_img.img = {}'.format(ub.urepr(img, nl=-1)))
+            asset_summaries = []
+
+            for asset in coco_img.assets:
+                warp_img_from_asset = kwimage.Affine.coerce(asset['warp_aux_to_img'])
+                scale_img_from_asset = warp_img_from_asset.decompose()['scale']
+
+                warp_vid_from_asset = warp_vid_from_img @ warp_img_from_asset
+
+                scale_vid_from_asset = warp_vid_from_asset.decompose()['scale']
+                scale_asset_from_vid = np.mean(warp_vid_from_asset.inv().decompose()['scale'])
+
+                asset_box = kwimage.Box.from_dsize((asset['width'], asset['height']))
+                recon_img_box = asset_box.scale(scale_img_from_asset)
+                recon_vid_box = asset_box.scale(scale_vid_from_asset)
+                fpath = ub.Path(coco_img.bundle_dpath) / asset['file_name']
+                gdal_dset = util_gdal.GdalOpen(fpath)
+                asset_shape = (gdal_dset.RasterYSize, gdal_dset.RasterXSize, gdal_dset.RasterCount)
+                info = gdal_dset.info()
+                disk_gsd = np.mean(np.abs(kwimage.Affine.from_gdal(info['geoTransform']).decompose()['scale']))
+                asset_summaries.append({
+                    'video_box': video_box,
+                    'image_box': image_box,
+                    'asset_box': asset_box,
+                    'asset_disk_shape': asset_shape,
+                    'asset_disk_gsd': disk_gsd,
+
+                    'asset_gsd': video_target_gsd / scale_asset_from_vid,
+
+                    'scale_img_from_asset': scale_img_from_asset,
+                    'scale_vid_from_asset': scale_vid_from_asset,
+                    'reconstructed_img_box': recon_img_box.quantize(),
+                    'reconstructed_vid_box': recon_vid_box.quantize(),
+                })
+                assert len(info['bands']) == coco_img.channels.numel()
+
+            image_summary['assets'] = asset_summaries
+            print('image_summary = {}'.format(ub.urepr(image_summary, nl=3, sv=1)))
+
+
+__config__ = TimeAverageConfig
+
 if __name__ == '__main__':
     """
 
     CommandLine:
         python -m watch.cli.coco_temporally_combine_channels
-
-
     """
     main()

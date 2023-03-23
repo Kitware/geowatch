@@ -1191,6 +1191,10 @@ class GdalDataset(ub.NiceRepr):
     def mode(self):
         return self._mode
 
+    @property
+    def shape(self):
+        return (self.RasterYSize, self.RasterXSize, self.RasterCount)
+
     def close(self):
         """
         Closes this dataset.
