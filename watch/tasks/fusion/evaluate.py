@@ -899,7 +899,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         >>> from kwcoco.demo.perterb import perterb_coco
         >>> import kwcoco
         >>> true_coco1 = kwcoco.CocoDataset.demo('vidshapes2', image_size=(64, 64))
-        >>> true_coco2 = kwcoco.CocoDataset.demo('shapes8', image_size=(64, 64))
+        >>> true_coco2 = kwcoco.CocoDataset.demo('shapes2', image_size=(64, 64))
         >>> #true_coco1 = kwcoco.CocoDataset.demo('vidshapes9')
         >>> #true_coco2 = kwcoco.CocoDataset.demo('shapes128')
         >>> true_coco = kwcoco.CocoDataset.union(true_coco1, true_coco2)
@@ -928,6 +928,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         >>> evaluate_segmentations(true_coco, pred_coco, eval_dpath, config=config)
 
     Example:
+        >>> # xdoctest: +REQUIRES(env:SLOW_DOCTEST)
         >>> from watch.tasks.fusion.evaluate import *  # NOQA
         >>> from kwcoco.coco_evaluator import CocoEvaluator
         >>> from kwcoco.demo.perterb import perterb_coco
