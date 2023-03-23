@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 This file contains logic to convert a kwcoco file into an IARPA Site Model.
 
@@ -25,42 +26,31 @@ DESIGN TODO:
         1) given a kwcoco file, does tracking and produces another kwcoco file with predicted "tracked" annotations.
         2) given a kwcoco file with predicted "tracked" annotations, convert that back to geojson
 """
-import datetime
-import itertools
-import json
 import os
-import sys
-from collections import defaultdict
-from typing import Dict, List, Tuple, Union
-
-import dateutil.parser
-import geojson
-import jsonschema
-import kwcoco
-import numpy as np
-import shapely
-import shapely.ops
-import ubelt as ub
 import scriptconfig as scfg
+import ubelt as ub
+from typing import Dict, List, Tuple
 
-from watch.tasks.tracking import from_heatmap, from_polygon
+if not os.environ.get('_ARGCOMPLETE', ''):
+    from watch.tasks.tracking import from_heatmap, from_polygon
 
-_KNOWN_TRACK_FUNCS = {
-    'saliency_heatmaps': from_heatmap.TimeAggregatedBAS,
-    'saliency_polys': from_polygon.OverlapTrack,
-    'class_heatmaps': from_heatmap.TimeAggregatedSC,
-    'site_validation': from_heatmap.TimeAggregatedSV,
-    'class_polys': from_polygon.OverlapTrack,
-    'mono_track': from_polygon.MonoTrack,
-}
+    _KNOWN_TRACK_FUNCS = {
+        'saliency_heatmaps': from_heatmap.TimeAggregatedBAS,
+        'saliency_polys': from_polygon.OverlapTrack,
+        'class_heatmaps': from_heatmap.TimeAggregatedSC,
+        'site_validation': from_heatmap.TimeAggregatedSV,
+        'class_polys': from_polygon.OverlapTrack,
+        'mono_track': from_polygon.MonoTrack,
+    }
 
-
-_trackfn_details_docs = ' --- '.join([
-    k + ': ' + ', '.join([field.name for field in v.__dataclass_fields__.values()])
-    if hasattr(v, '__dataclass_fields__') else
-    k + ':?'
-    for k, v in _KNOWN_TRACK_FUNCS.items()
-])
+    _trackfn_details_docs = ' --- '.join([
+        k + ': ' + ', '.join([field.name for field in v.__dataclass_fields__.values()])
+        if hasattr(v, '__dataclass_fields__') else
+        k + ':?'
+        for k, v in _KNOWN_TRACK_FUNCS.items()
+    ])
+else:
+    _trackfn_details_docs = 'na'
 
 
 try:
@@ -179,12 +169,22 @@ __config__ = KWCocoToGeoJSONConfig
 
 
 def _single_geometry(geom):
+    import shapely
     return shapely.geometry.shape(geom).buffer(0)
 
 
-def _ensure_multi(
-    poly: Union[shapely.geometry.Polygon, shapely.geometry.MultiPolygon]
-) -> shapely.geometry.MultiPolygon:
+def _ensure_multi(poly):
+    """
+    Args:
+        poly (Union[shapely.geometry.Polygon, shapely.geometry.MultiPolygon])
+
+    Returns:
+        shapely.geometry.MultiPolygon
+    """
+    # ) -> shapely.geometry.MultiPolygon:
+    #     poly: Union[shapely.geometry.Polygon, shapely.geometry.MultiPolygon]
+    # ) -> shapely.geometry.MultiPolygon:
+    import shapely
     if isinstance(poly, shapely.geometry.MultiPolygon):
         return poly
     elif isinstance(poly, shapely.geometry.Polygon):
@@ -194,10 +194,12 @@ def _ensure_multi(
 
 
 def _combined_geometries(geometry_list):
+    import shapely.ops
     return shapely.ops.unary_union(geometry_list).buffer(0)
 
 
 def _normalize_date(date_str):
+    import dateutil.parser
     return dateutil.parser.parse(date_str).date().isoformat()
 
 
@@ -211,6 +213,11 @@ def geojson_feature(anns, coco_dset, with_properties=True):
     Group kwcoco annotations in the same track (site) and image
     into one Feature in an IARPA site model
     '''
+    import geojson
+    import kwcoco
+    import shapely
+    import numpy as np
+    from collections import defaultdict
 
     def single_geometry(ann):
         seg_geo = ann['segmentation_geos']
@@ -373,6 +380,7 @@ def track_to_site(coco_dset,
     '''
     Turn a kwcoco track into an IARPA site model or site summary
     '''
+    import geojson
 
     # get annotations in this track sorted by frame_index
     annots = coco_dset.annots(trackid=trackid)
@@ -411,20 +419,23 @@ def predict_phase_changes(site_id, features):
 
     https://smartgitlab.com/TE/standards/-/wikis/Site-Model-Specification
     '''
+    import datetime as datetime_mod
+    import dateutil.parser
+    import itertools
     all_phases = [
         feat['properties']['current_phase'].split(sep) for feat in features
     ]
 
     tomorrow = (dateutil.parser.parse(
         features[-1]['properties']['observation_date']) +
-                datetime.timedelta(days=1)).isoformat()
+                datetime_mod.timedelta(days=1)).isoformat()
 
     def transition_date_from(phase):
         for feat, phases in zip(reversed(features), reversed(all_phases)):
             if phase in phases:
                 return (dateutil.parser.parse(
                     feat['properties']['observation_date']) +
-                        datetime.timedelta(
+                        datetime_mod.timedelta(
                             int(feat['properties']['misc_info']
                                 ['phase_transition_days'][phases.index(
                                     phase)]))).isoformat()
@@ -460,6 +471,8 @@ def site_feature(coco_dset, region_id, site_id, trackid, gids, features, as_summ
     Feature containing metadata about the site
     '''
     from mgrs import MGRS
+    import numpy as np
+    import geojson
 
     geom_list = [_single_geometry(feat['geometry']) for feat in features]
     geometry = _combined_geometries(geom_list)
@@ -583,6 +596,7 @@ def convert_kwcoco_to_iarpa(coco_dset,
 
 def _validate():
     # jsonschema.validate(site, schema=SITE_SCHEMA)
+    import json
     import jsonschema
     import watch
     SITE_SCHEMA = watch.rc.load_site_model_schema()
@@ -628,6 +642,7 @@ def _coerce_site_summaries(site_summary_or_region_model,
         List[Tuple[region_id: str, site_summary: Dict]]
     """
     from watch.utils import util_gis
+    import jsonschema
 
     geojson_infos = list(util_gis.coerce_geojson_datas(
         site_summary_or_region_model, format='json', allow_raw=True))
@@ -700,6 +715,7 @@ def add_site_summary_to_kwcoco(possible_summaries,
     independently) that need SC processing. We need to associate these and
     place them in the correct videos so we can process those areas.
     """
+    import dateutil.parser
 
     # input validation
     print(f'possible_summaries={possible_summaries}')
@@ -871,6 +887,7 @@ def add_site_summary_to_kwcoco(possible_summaries,
 
 @profile
 def create_region_feature(region_id, site_summaries):
+    import geojson
     geometry = _combined_geometries([
         _single_geometry(summary['geometry'])
         for summary in site_summaries
@@ -902,6 +919,7 @@ def main(args=None, **kwargs):
         >>> from watch.cli.kwcoco_to_geojson import main
         >>> from watch.demo import smart_kwcoco_demodata
         >>> from watch.utils import util_gis
+        >>> import json
         >>> import kwcoco
         >>> import ubelt as ub
         >>> # run BAS on demodata in a new place
@@ -931,7 +949,7 @@ def main(args=None, **kwargs):
         >>>        'polygon_simplify_tolerance': 1}),
         >>> ]
         >>> main(args)
-        >>> # Run SC on the same dset, but with BAS pred sites removed 
+        >>> # Run SC on the same dset, but with BAS pred sites removed
         >>> sites_dir = dpath / 'sites'
         >>> args = sc_args = [
         >>>     '--in_file', coco_dset.fpath,
@@ -1052,8 +1070,11 @@ def main(args=None, **kwargs):
         >>> demo(coco_dset, regions_dir, coco_dset_sc, sites_dir, cleanup=True)
 
     """
+    import json
     from watch.utils import process_context
     from kwcoco.util import util_json
+    import geojson
+    import kwcoco
     args = KWCocoToGeoJSONConfig.cli(cmdline=args, data=kwargs)
     print('args = {}'.format(ub.repr2(dict(args), nl=1)))
 
@@ -1337,6 +1358,7 @@ def demo(coco_dset,
 
 def _fix_pred_info():
     # Hack to fix data provinence
+    import json
     from watch.utils import util_path
     track_fpaths = util_path.coerce_patterned_paths('models/fusion/eval3_candidates/pred/**/tracks.json')
     for fpath in track_fpaths:
@@ -1355,4 +1377,4 @@ def _fix_pred_info():
 
 
 if __name__ == '__main__':
-    main(sys.argv[1:])
+    main()

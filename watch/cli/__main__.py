@@ -73,10 +73,10 @@ def main(cmdline=True, **kw):
             '''
             The SMART WATCH CLI
             '''))
-        def get_version():
+        def get_version(self):
             import watch
             return watch.__version__
-        modal.version = property(get_version)
+        modal.__class__.version = property(get_version)
 
         for cli_module in cli_modules:
 

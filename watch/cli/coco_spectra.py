@@ -23,14 +23,9 @@ CommandLine:
     KWCOCO_FPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L_nowv_vali.kwcoco.json
     smartwatch spectra --src $KWCOCO_FPATH --show=True --show=True --include_channels="forest|water|bare_ground"
 """
-import kwcoco
 import pickle
-import kwarray
 import ubelt as ub
 import scriptconfig as scfg
-import kwimage
-import pandas as pd
-import numpy as np
 import math
 
 
@@ -149,6 +144,8 @@ class HistAccum:
             final_accum[k] += v
 
     def finalize(self):
+        import pandas as pd
+        import numpy as np
         # Stack all accuulated histograms into a longform dataframe
         to_stack = {}
         for sensor, sub in self.accum.items():
@@ -213,6 +210,8 @@ def main(cmdline=True, **kwargs):
     from watch.utils import kwcoco_extensions
     from watch.utils import util_parallel
     import watch
+    import kwcoco
+    import numpy as np
     import kwplot
     kwplot.autosns()
 
@@ -335,7 +334,10 @@ def main(cmdline=True, **kwargs):
 def sensor_stats_tables(full_df):
     import itertools as it
     import scipy
+    import kwarray
     import scipy.stats
+    import pandas as pd
+    import numpy as np
     sensor_channel_to_vwf = {}
     for _sensor, sensor_df in full_df.groupby('sensor'):
         for channel, chan_df in sensor_df.groupby('channel'):
@@ -481,6 +483,8 @@ def ensure_intensity_sidecar(fpath, recompute=False):
         >>> pickle.loads(stats_fpath2.read_bytes())
     """
     import os
+    import kwarray
+    import kwimage
     stats_fpath = ub.Path(os.fspath(fpath) + '.stats_v1.pkl')
     if recompute or not stats_fpath.exists():
         imdata = kwimage.imread(fpath, backend='gdal', nodata_method='ma')
@@ -513,6 +517,9 @@ def ensure_intensity_stats(coco_img, recompute=False, include_channels=None, exc
     Ensures a sidecar file exists for the kwcoco image
     """
     from os.path import join
+    import numpy as np
+    import kwcoco
+    import kwimage
     intensity_stats = {'bands': []}
     for obj in coco_img.iter_asset_objs():
         fpath = join(coco_img.bundle_dpath, obj['file_name'])
@@ -706,6 +713,9 @@ def _weighted_auto_bins(data, xvar, weightvar):
     References:
         https://github.com/mwaskom/seaborn/issues/2710
 
+    TODO:
+        add to util_kwarray
+
     Example:
         >>> import pandas as pd
         >>> import numpy as np
@@ -727,6 +737,7 @@ def _weighted_auto_bins(data, xvar, weightvar):
         >>> import seaborn as sns
         >>> sns.histplot(data=data, bins=n_equal_bins, x='x', weights='weights', hue='hue')
     """
+    import numpy as np
     sort_df = data.sort_values(xvar)
     values = sort_df[xvar]
     weights = sort_df[weightvar]
@@ -776,6 +787,7 @@ def _fill_missing_colors(label_to_color):
     from distinctipy import distinctipy
     import kwarray
     import numpy as np
+    import kwimage
     given = {k: kwimage.Color(v).as01() for k, v in label_to_color.items() if v is not None}
     needs_color = sorted(set(label_to_color) - set(given))
 

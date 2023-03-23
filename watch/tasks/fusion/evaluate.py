@@ -898,8 +898,8 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         >>> from kwcoco.coco_evaluator import CocoEvaluator
         >>> from kwcoco.demo.perterb import perterb_coco
         >>> import kwcoco
-        >>> true_coco1 = kwcoco.CocoDataset.demo('vidshapes2')
-        >>> true_coco2 = kwcoco.CocoDataset.demo('shapes8')
+        >>> true_coco1 = kwcoco.CocoDataset.demo('vidshapes2', image_size=(64, 64))
+        >>> true_coco2 = kwcoco.CocoDataset.demo('shapes8', image_size=(64, 64))
         >>> #true_coco1 = kwcoco.CocoDataset.demo('vidshapes9')
         >>> #true_coco2 = kwcoco.CocoDataset.demo('shapes128')
         >>> true_coco = kwcoco.CocoDataset.union(true_coco1, true_coco2)
@@ -932,7 +932,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         >>> from kwcoco.coco_evaluator import CocoEvaluator
         >>> from kwcoco.demo.perterb import perterb_coco
         >>> import kwcoco
-        >>> true_coco = kwcoco.CocoDataset.demo('vidshapes2')
+        >>> true_coco = kwcoco.CocoDataset.demo('vidshapes2', image_size=(64, 64))
         >>> kwargs = {
         >>>     'box_noise': 0.5,
         >>>     'n_fp': (0, 10),

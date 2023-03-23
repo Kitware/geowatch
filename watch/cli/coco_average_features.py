@@ -1,17 +1,7 @@
 import os
 import re
-
-import kwcoco
-import kwarray
-import kwimage
-import numpy as np
 import ubelt as ub
-from tqdm import tqdm
 import scriptconfig as scfg
-
-from watch import exceptions
-from watch.tasks.fusion.coco_stitcher import quantize_image
-from watch.utils.kwcoco_extensions import transfer_geo_metadata
 
 
 def split_channel_names_by_grammar(channel_names):
@@ -40,6 +30,7 @@ def check_kwcoco_file(kwcoco_file, channel_name, sensor_names=None, flexible_mer
     Returns:
         missing_image_names (list): A list of names corresponding to images without the channel name.
     """
+    import kwcoco
 
     # Get all images in kwcoco file.
     images: kwcoco.coco_dataset.Videos = kwcoco_file.images()
@@ -140,7 +131,10 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         >>> # TEST 1: Merge two kwcoco files with the same number of images and plot results.
         >>> from watch.cli.coco_average_features import *  # NOQA
         >>> import watch
+        >>> import kwimage
+        >>> import numpy as np
         >>> from kwcoco.demo.perterb import perterb_coco
+        >>> import kwcoco
         >>> dpath = ub.Path.appdir('watch/test/coco_average_features')
         >>> base_dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, image_size=(64, 64), num_videos=2, num_frames=2)
         >>> # Construct two copies of the same data with slightly different heatmaps
@@ -211,7 +205,10 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         >>> # TEST 2: Merge two kwcoco files with geo information.
         >>> from watch.cli.coco_average_features import *  # NOQA
         >>> import watch
+        >>> import kwimage
         >>> from kwcoco.demo.perterb import perterb_coco
+        >>> import kwcoco
+        >>> import numpy as np
         >>> dpath = ub.Path.appdir('watch/test/coco_average_features')
         >>> base_dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, image_size=(64, 64), num_videos=2, num_frames=2)
         >>> # Construct two copies of the same data with slightly different heatmaps
@@ -279,6 +276,14 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         import xdev
         globals().update(xdev.get_func_kwargs(merge_kwcoco_channels))
     """
+    from watch.utils.kwcoco_extensions import transfer_geo_metadata
+    from watch.tasks.fusion.coco_stitcher import quantize_image
+    from watch import exceptions
+    from tqdm import tqdm
+    import kwimage
+    import kwarray
+    import kwcoco
+    import numpy as np
 
     # Check args.
     if len(kwcoco_file_paths) <= 1:

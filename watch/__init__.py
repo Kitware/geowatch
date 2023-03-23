@@ -6,6 +6,7 @@ Useful environs:
     DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
 """
 import os
+import sys
 import ubelt as ub
 import warnings
 
@@ -89,8 +90,11 @@ def _is_running_a_fast_cli_tool():
     References:
         .. [SO42076706] https://stackoverflow.com/questions/42076706/sys-argv-behavior-with-python-m
     """
-    import sys
+    if os.environ.get('_ARGCOMPLETE', ''):
+        return True
     if sys.argv and 'smartwatch_dvc' in sys.argv[0]:
+        return True
+    if sys.argv and '--help' in sys.argv[0]:
         return True
     return False
 
@@ -134,8 +138,11 @@ def _execute_ordered_preimports():
 _handle_hidden_commands()
 _execute_ordered_preimports()
 
-from watch.monkey import monkey_numpy  # NOQA
-monkey_numpy.patch_numpy_dtypes()
+
+if 0:
+    # Disable
+    from watch.monkey import monkey_numpy  # NOQA
+    monkey_numpy.patch_numpy_dtypes()
 
 
 if 'hard-to-inspect-key' in vars():

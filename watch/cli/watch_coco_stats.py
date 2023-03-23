@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 import scriptconfig as scfg
 import ubelt as ub
-import rich
-from watch.utils import kwcoco_extensions  # NOQA
 
 
 class WatchCocoStats(scfg.Config):
@@ -54,6 +52,7 @@ class WatchCocoStats(scfg.Config):
             >>> watch_coco_stats.__config__.main(cmdline=cmdline, **kw)
         """
         import pandas as pd
+        import rich
         config = WatchCocoStats(kw, cmdline=cmdline)
 
         fpaths = config['src']
@@ -159,6 +158,8 @@ def coco_watch_stats(dset, with_video_info=False):
     """
     from kwcoco.util import util_truncate
     from watch.utils import util_time
+    from watch.utils import kwcoco_extensions
+    import rich
     num_videos = len(dset.index.videos)
     rich.print('num_videos = {!r}'.format(num_videos))
     print('Per-video stats summary')
