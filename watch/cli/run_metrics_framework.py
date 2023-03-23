@@ -19,81 +19,91 @@ class MetricsConfig(scfg.DataConfig):
     """
     Score IARPA site model GeoJSON files using IARPA's metrics-and-test-framework
     """
-    pred_sites = scfg.Value(None, required=True, nargs='*', help=ub.paragraph(
-        '''
+    pred_sites = scfg.Value(None,
+                            required=True,
+                            nargs='*',
+                            help=ub.paragraph('''
         List of paths to predicted v2 site models. Or a path to a single text
         file containing the a list of paths to predicted site models.
         All region_ids from these sites will be scored, and it will be assumed
         that there are no other sites in these regions.
         '''))
-    gt_dpath = scfg.Value(None, help=ub.paragraph(
-        '''
+    gt_dpath = scfg.Value(None,
+                          help=ub.paragraph('''
         Path to a local copy of the ground truth annotations,
         https://smartgitlab.com/TE/annotations.  If None, use smartwatch_dvc to
         find $DVC_DATA_DPATH/annotations.
         '''))
 
-    true_site_dpath = scfg.Value(None, help=ub.paragraph(
-        '''
+    true_site_dpath = scfg.Value(None,
+                                 help=ub.paragraph('''
         Directory containing true site models. Defaults to
         gt_dpath / site_models
         '''))
 
-    true_region_dpath = scfg.Value(None, help=ub.paragraph(
-        '''
+    true_region_dpath = scfg.Value(None,
+                                   help=ub.paragraph('''
         Directory containing true region models. Defaults to
         gt_dpath / region_models
         '''))
 
-    out_dir = scfg.Value(None, help=ub.paragraph(
-        '''
+    out_dir = scfg.Value(None,
+                         help=ub.paragraph('''
         Output directory where scores will be written. Each
         region will have. Defaults to ./iarpa-metrics-output/
         '''))
-    merge = scfg.Value('overwrite', help=ub.paragraph(
-        '''
+    merge = scfg.Value('overwrite',
+                       help=ub.paragraph('''
         Merge BAS and SC metrics from all regions and output to
         {out_dir}/merged/.
         'overwrite' = rerun IARPA metrics,
         'read' = assume they exist on disk,
         (TODO 'write' = rerun IARPA metrics if needed.)
         '''))
-    merge_fpath = scfg.Value(None, help=ub.paragraph(
-        '''
+    merge_fpath = scfg.Value(None,
+                             help=ub.paragraph('''
         Forces the merge summary to be written to a specific
         location.
         '''))
-    merge_fbetas = scfg.Value([], help=ub.paragraph(
-        '''
+    merge_fbetas = scfg.Value([],
+                              help=ub.paragraph('''
         A list of BAS F-scores to compute besides F1.
         '''))
-    tmp_dir = scfg.Value(None, help=ub.paragraph(
-        '''
+    tmp_dir = scfg.Value(None,
+                         help=ub.paragraph('''
         If specified, will write temporary data here instead of
         using a     non-persistent directory
         '''))
-    enable_viz = scfg.Value(False, isflag=1, help=ub.paragraph(
-        '''
+    enable_viz = scfg.Value(False,
+                            isflag=1,
+                            help=ub.paragraph('''
         If true, enables iarpa visualizations
         '''))
-    name = scfg.Value('unknown', help=ub.paragraph(
-        '''
+    name = scfg.Value('unknown',
+                      help=ub.paragraph('''
         Short name for the algorithm used to generate the model
         '''))
-    use_cache = scfg.Value(False, isflag=1, help=ub.paragraph(
-        '''
+    use_cache = scfg.Value(False,
+                           isflag=1,
+                           help=ub.paragraph('''
         IARPA metrics code currently contains a cache bug, do not
         enable the cache until this is fixed.
         '''))
 
-    enable_sc_viz = scfg.Value(False, isflag=1, help=ub.paragraph(
-        '''
+    enable_sc_viz = scfg.Value(False,
+                               isflag=1,
+                               help=ub.paragraph('''
         If true, enables our SC visualization
         '''))
 
-    load_workers = scfg.Value(0, help=ub.paragraph(
-        '''
+    load_workers = scfg.Value(0,
+                              help=ub.paragraph('''
         The number of workers used to load site models.
+        '''))
+    parallel = scfg.Value(False,
+                          help=ub.paragraph('''
+        Innvocate running IARPA T&E metrics in parallel. Note: 
+        Only works with IARPA T&E metrics version 1.0.0 or greater.
         '''))
 
 
@@ -156,10 +166,8 @@ def ensure_thumbnails(image_root, region_id, sites):
     # build region viz
     region_root = image_root.joinpath(*region_id.split('_')) / 'images' / 'a' / 'b'
     region_root.mkdir(parents=True, exist_ok=True)
-    for img_path, img_date in ub.dict_union(
-            *site_img_date_dct.values()).items():
-        link_path = (region_root / '_'.join(
-            (img_date.replace('-', ''), img_path.with_suffix('.jp2').name)))
+    for img_path, img_date in ub.dict_union(*site_img_date_dct.values()).items():
+        link_path = (region_root / '_'.join((img_date.replace('-', ''), img_path.with_suffix('.jp2').name)))
         ub.symlink(img_path, link_path, verbose=0)
 
     # build site viz
@@ -168,8 +176,7 @@ def ensure_thumbnails(image_root, region_id, sites):
         site_root.mkdir(parents=True, exist_ok=True)
         for img_path, img_date in img_date_dct.items():
             # TODO crop
-            link_path = (site_root / '_'.join(
-                (img_date.replace('-', ''), img_path.with_suffix('.tif').name)))
+            link_path = (site_root / '_'.join((img_date.replace('-', ''), img_path.with_suffix('.tif').name)))
             ub.symlink(img_path, link_path, verbose=0)
 
 
@@ -230,9 +237,7 @@ def main(cmdline=True, **kwargs):
         import iarpa_smart_metrics
         METRICS_VERSION = version.Version(iarpa_smart_metrics.__version__)
     except Exception:
-        raise AssertionError(
-            'The iarpa_smart_metrics package should be pip installed '
-            'in your virtualenv')
+        raise AssertionError('The iarpa_smart_metrics package should be pip installed ' 'in your virtualenv')
     assert METRICS_VERSION >= version.Version('0.2.0')
 
     # Record information about this process
@@ -255,8 +260,7 @@ def main(cmdline=True, **kwargs):
 
     # load pred_sites
     load_workers = config['load_workers']
-    pred_site_infos = util_gis.coerce_geojson_paths(config['pred_sites'],
-                                                    return_manifests=True)
+    pred_site_infos = util_gis.coerce_geojson_paths(config['pred_sites'], return_manifests=True)
 
     if len(pred_site_infos['manifest_fpaths']) > 1:
         raise Exception('Only expected at most one manifest')
@@ -268,17 +272,14 @@ def main(cmdline=True, **kwargs):
         print('Load parent info from manifest')
         with open(manifest_fpath, 'r') as file:
             manifest = json.load(file)
-        assert (isinstance(manifest, dict) and
-                manifest.get('type', None) == 'tracking_result')
+        assert (isinstance(manifest, dict) and manifest.get('type', None) == 'tracking_result')
         # The input was a track result json which contains pointers to
         # the actual sites
         parent_info.extend(manifest.get('info', []))
 
     pred_sites = [
         info['data'] for info in util_gis.coerce_geojson_datas(
-            pred_site_infos['geojson_fpaths'], format='json',
-            workers=load_workers
-        )
+            pred_site_infos['geojson_fpaths'], format='json', workers=load_workers)
     ]
     if len(pred_sites) == 0:
         # FIXME: when the tracker produces no results, we fail to score here.
@@ -304,7 +305,7 @@ def main(cmdline=True, **kwargs):
             true_region_dpath = gt_dpath / 'region_models'
         if true_site_dpath is None:
             assert gt_dpath.is_dir(), gt_dpath
-            true_site_dpath =  gt_dpath / 'site_models'
+            true_site_dpath = gt_dpath / 'site_models'
 
     true_region_dpath = ub.Path(true_region_dpath)
     true_site_dpath = ub.Path(true_site_dpath)
@@ -317,16 +318,14 @@ def main(cmdline=True, **kwargs):
 
     # split sites by region
     out_dirs = []
-    grouped_sites = ub.group_items(
-        pred_sites, lambda site: site['features'][0]['properties']['region_id'])
+    grouped_sites = ub.group_items(pred_sites, lambda site: site['features'][0]['properties']['region_id'])
 
     main_out_dir = ub.Path(args.out_dir or './iarpa-metrics-output')
     main_out_dir.ensuredir()
 
     if 0:
         # This is not necessary anymore with mlops v3
-        full_invocation_text = ub.codeblock(
-            '''
+        full_invocation_text = ub.codeblock('''
             #!/bin/bash
             __doc__="
             This is an auto-generated file that records the command used to
@@ -338,8 +337,7 @@ def main(cmdline=True, **kwargs):
     # First build up all of the commands and prepare necessary data for them.
     commands = []
 
-    for region_id, region_sites in ub.ProgIter(sorted(grouped_sites.items()),
-                                               desc='prepare regions for eval'):
+    for region_id, region_sites in ub.ProgIter(sorted(grouped_sites.items()), desc='prepare regions for eval'):
 
         roi = region_id
         gt_dir = os.fspath(true_site_dpath)
@@ -372,9 +370,7 @@ def main(cmdline=True, **kwargs):
 
         # copy site models to site_dpath
         for site in region_sites:
-            geojson_fpath = pred_site_sub_dpath / (
-                site['features'][0]['properties']['site_id'] + '.geojson'
-            )
+            geojson_fpath = pred_site_sub_dpath / (site['features'][0]['properties']['site_id'] + '.geojson')
             with safer.open(geojson_fpath, 'w', temp_file=True) as f:
                 json.dump(site, f)
 
@@ -393,21 +389,30 @@ def main(cmdline=True, **kwargs):
             ]
 
         run_eval_command = [
-            'python', '-m', 'iarpa_smart_metrics.run_evaluation',
-            '--roi', roi,
-            '--gt_dir', os.fspath(gt_dir),
-            '--rm_dir', os.fspath(true_region_dpath),
-            '--sm_dir', os.fspath(pred_site_sub_dpath),
-            '--image_dir', os.fspath(image_dpath),
-            '--output_dir', os.fspath(out_dir),
+            'python',
+            '-m',
+            'iarpa_smart_metrics.run_evaluation',
+            '--roi',
+            roi,
+            '--gt_dir',
+            os.fspath(gt_dir),
+            '--rm_dir',
+            os.fspath(true_region_dpath),
+            '--sm_dir',
+            os.fspath(pred_site_sub_dpath),
+            '--image_dir',
+            os.fspath(image_dpath),
+            '--output_dir',
+            os.fspath(out_dir),
             ## Restrict to make this faster
             #'--tau', '0.2',
             #'--rho', '0.5',
-            '--activity', 'overall',
+            '--activity',
+            'overall',
             #'--loglevel', 'error',
         ]
 
-        # print(f'METRICS_VERSION={METRICS_VERSION}')
+        print(f'METRICS_VERSION={METRICS_VERSION}')
         if METRICS_VERSION >= version.Version('1.0.0'):
             run_eval_command += [
                 '--performer=kit',  # parameterize
@@ -415,12 +420,18 @@ def main(cmdline=True, **kwargs):
                 '--eval_run_num=0',
                 '--serial',
                 # '--no-db',
-                '--sequestered_id', 'seq',  # default None broken on autogen branch
+                '--sequestered_id',
+                'seq',  # default None broken on autogen branch
             ]
+            # Add parallel flag if requested
+            if args.parallel:
+                run_eval_command += ['--parallel']
         else:
             run_eval_command += [
-                '--cache_dir', os.fspath(cache_dpath),
-                '--name', name,
+                '--cache_dir',
+                os.fspath(cache_dpath),
+                '--name',
+                name,
                 '--serial',
                 # '--no-db',
                 # '--sequestered_id', 'seq',  # default None broken on autogen branch
@@ -429,8 +440,7 @@ def main(cmdline=True, **kwargs):
         run_eval_command += viz_flags
         # run metrics framework
         cmd = shlex.join(run_eval_command)
-        region_invocation_text = ub.codeblock(
-            '''
+        region_invocation_text = ub.codeblock('''
             #!/bin/bash
             __doc__="
             This is an auto-generated file that records the command used to
@@ -477,9 +487,8 @@ def main(cmdline=True, **kwargs):
 
         info.append(proc_context.stop())
 
-        json_data, bas_df, sc_df, best_bas_rows = merge_metrics_results(
-            region_dpaths, true_site_dpath, true_region_dpath,
-            args.merge_fbetas)
+        json_data, bas_df, sc_df, best_bas_rows = merge_metrics_results(region_dpaths, true_site_dpath,
+                                                                        true_region_dpath, args.merge_fbetas)
 
         # TODO: parent info should probably belong to info itself
         json_data['info'] = info
