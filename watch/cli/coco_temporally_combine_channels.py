@@ -441,6 +441,42 @@ def combine_kwcoco_channels_temporally(config):
     return output_coco_dset
 
 
+def get_quality_mask(coco_image, space, resolution, avoid_quality_values=['cloud', 'cloud_shadow', 'cloud_adjacent']):
+    """Get a binary mask of the quality data.
+
+    Args:
+        coco_image (kwcoco.coco_image.CocoImage): Object that contains references to the image and assets including the quality mask.
+        space (str): The space that the quality mask will be loaded in. Choices: 'image', 'video', 'asset'
+        resolution (str, int): The resolution that the quality mask will be loaded in. E.g. '10GSD'.
+        avoid_quality_values (list, optional): The values to include as bad quality according to the bitmask. Defaults to ['cloud', 'cloud_shadow', 'cloud_adjacent'].
+
+    Returns:
+        np.ndarray: A binary numpy array of shape [H, W, 1] where the 1 values corresponds to a quality pixel vice versa for 0 values.
+    """
+    qa_data = coco_image.imdelay('quality',
+                                 space=space,
+                                 interpolation='nearest',
+                                 antialias=False,
+                                 resolution=resolution).finalize()
+
+    from watch.tasks.fusion.datamodules.qa_bands import QA_SPECS
+    # We don't have the exact right information here, so we can
+    # punt for now and assume "Drop4"
+    spec_name = 'ACC-1'
+    sensor = coco_image.img.get('sensor_coarse', '*')
+    try:
+        table = QA_SPECS.find_table(spec_name, sensor)
+    except AssertionError as ex:
+        print(f'warning ex={ex}')
+        is_iffy = None
+    else:
+        is_iffy = table.mask_any(qa_data, avoid_quality_values)
+
+    quality_mask = (1 - is_iffy)
+
+    return quality_mask
+
+
 def merge_images(window_coco_images, merge_method, requested_chans, space, resolution, new_bundle_dpath,
                  filter_with_cloudmasks, s2_weight_factor, og_kwcoco_fpath):
     """
@@ -489,31 +525,8 @@ def merge_images(window_coco_images, merge_method, requested_chans, space, resol
             pxl_weight = (1 - np.isnan(image_data)).astype(np.float32)
 
             if filter_with_cloudmasks:
-                qa_data = coco_img.imdelay('quality',
-                                           space=space,
-                                           interpolation='nearest',
-                                           antialias=False,
-                                           resolution=resolution).finalize()
-
-                from watch.tasks.fusion.datamodules.qa_bands import QA_SPECS
-                # We don't have the exact right information here, so we can
-                # punt for now and assume "Drop4"
-                iffy_qa_names = [
-                    'cloud',
-                    'cloud_adjacent',
-                    'cloud_shadow',
-                ]
-                spec_name = 'ACC-1'
-                sensor = coco_img.img.get('sensor_coarse', '*')
-                try:
-                    table = QA_SPECS.find_table(spec_name, sensor)
-                except AssertionError as ex:
-                    print(f'warning ex={ex}')
-                    is_iffy = None
-                else:
-                    is_iffy = table.mask_any(qa_data, iffy_qa_names)
-
-                quality_mask = (1 - is_iffy)
+                # Load quality mask.
+                quality_mask = get_quality_mask(coco_img, space, resolution, avoid_quality_values=['cloud', 'cloud_shadow', 'cloud_adjacent'])
 
                 # Update pixel weights based on quality pixel values.
                 pxl_weight *= quality_mask
@@ -537,35 +550,18 @@ def merge_images(window_coco_images, merge_method, requested_chans, space, resol
             image_data = delayed.finalize(nodata_method='float')
 
             if filter_with_cloudmasks:
-                qa_data = coco_img.imdelay('quality',
-                                           space=space,
-                                           interpolation='nearest',
-                                           antialias=False,
-                                           resolution=resolution).finalize()
-
-                from watch.tasks.fusion.datamodules.qa_bands import QA_SPECS
-                # We don't have the exact right information here, so we can
-                # punt for now and assume "Drop4"
-                iffy_qa_names = [
-                    'cloud',
-                    'cloud_adjacent',
-                    'cloud_shadow',
-                ]
-                spec_name = 'ACC-1'
-                sensor = coco_img.img.get('sensor_coarse', '*')
-                try:
-                    table = QA_SPECS.find_table(spec_name, sensor)
-                except AssertionError as ex:
-                    print(f'warning ex={ex}')
-                    is_iffy = None
-                else:
-                    is_iffy = table.mask_any(qa_data, iffy_qa_names)
-
-                quality_mask = (1 - is_iffy)
+                # Load quality mask.
+                quality_mask = get_quality_mask(coco_img, space, resolution, avoid_quality_values=['cloud', 'cloud_shadow', 'cloud_adjacent'])
 
                 # Update pixel weights based on quality pixel values.
-                M = np.ma.masked_array(data=image_data, mask=~np.repeat(quality_mask, repeats=3, axis=2))
-                image_data = M.filled(np.nan)
+                x, y = np.where(quality_mask[..., 0] == 0)
+                image_data[x, y, :] = np.nan
+
+                # TODO: Fix the logic below to match above because it should be faster.
+                # matched_quality_mask = np.repeat(quality_mask, repeats=3, axis=2)
+                # masked_image_data = np.ma.masked_array(data=image_data2, mask=~matched_quality_mask, fill_value=np.nan)
+                # image_data = M.filled(np.nan)
+                # masked_image_data = M.filled(np.nan)
 
             median_stack.append(image_data)
 
