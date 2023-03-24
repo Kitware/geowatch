@@ -38,7 +38,6 @@ VIZ_DPATH = None
 
 
 def _norm(heatmaps, norm_ord):
-<<<<<<< HEAD
     """
     Computes the generalized mean over axis=0.
 
@@ -59,7 +58,6 @@ def _norm(heatmaps, norm_ord):
     Example:
         >>> from watch.tasks.tracking.from_heatmap import *  # NOQA
         >>> from watch.tasks.tracking.from_heatmap import _norm
-<<<<<<< HEAD
         >>> num_frames = 16
         >>> num_sequences = 6
         >>> # Setup 5 sequences to norm
