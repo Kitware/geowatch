@@ -1090,7 +1090,8 @@ def visualize_sample_grid(dset, sample_grid, max_vids=2, max_frames=6):
         >>> # dset = coco_dset = demo_kwcoco_multisensor(dates=True, geodata=True, heatmap=True)
         >>> dvc_dpath = watch.find_dvc_dpath(hardware='ssd', tags='phase2_data')
         >>> #coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/combo_DILM_train.kwcoco.json'
-        >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data_vali.kwcoco.json'
+        # >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data_vali.kwcoco.json'
+        >>> coco_fpath = dvc_dpath / 'Drop6/data_vali_split1.kwcoco.zip'
         >>> big_dset = kwcoco.CocoDataset(coco_fpath)
         >>> vid_gids = big_dset.videos(names=['KR_R002']).images.lookup('id')[0]
         >>> idxs = np.linspace(0, len(vid_gids) - 1, 12).round().astype(int)

@@ -60,7 +60,7 @@ def test_tracker():
     # Run SC on the same dset
     sites_dir = dpath / 'sites'
     args = sc_args = [
-        '--in_file', str(bas_coco_fpath),
+        '--in_file', coco_dset.fpath,
         '--out_sites_dir', str(sites_dir),
         '--out_sites_fpath', str(sc_fpath),
         '--out_kwcoco', str(sc_coco_fpath),
