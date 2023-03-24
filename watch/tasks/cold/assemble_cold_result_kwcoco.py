@@ -73,11 +73,11 @@ def assemble_main(cmdline=1, **kwargs):
     >>> from watch.tasks.cold.assemble_cold_result_kwcoco import *
     >>> kwargs= dict(
     >>>    stack_path = "/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/KR_R001",
-    >>>    reccg_path = "/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/reccg/KR_R001",
-    >>>    coco_fpath = ub.Path('/home/jws18003/data/dvc-repos/smart_data_dvc/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/imgonly-KR_R001.kwcoco.json'),
-    >>>    mod_coco_fpath = ub.Path('/home/jws18003/data/dvc-repos/smart_data_dvc/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/KR_R001/imgonly-KR_R001.kwcoco.modified.json'),
+    >>>    reccg_path = "/gpfs/sharedfs1/zhulab/Jiwon/kwcoco/reccg/KR_R001/",
+    >>>    coco_fpath = ub.Path('/home/jws18003/data/dvc-repos/smart_data_dvc/Drop6/imgonly-KR_R001.kwcoco.json'),
+    >>>    mod_coco_fpath = ub.Path('/home/jws18003/data/dvc-repos/smart_data_dvc/Drop6/imgonly-KR_R001.kwcoco.modified_delete.json'),
     >>>    meta_fpath = '/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/KR_R001/block_x10_y1/crop_20140115T020000Z_N37.643680E128.649453_N37.683356E128.734073_L8_0.json',
-    >>>    coefs = 'cv',
+    >>>    coefs = 'rmse',
     >>>    year_lowbound = None,
     >>>    year_highbound = None,
     >>>    coefs_bands = '0,1,2,3,4,5',
@@ -266,9 +266,11 @@ def assemble_main(cmdline=1, **kwargs):
 
             results = np.hstack(tmp_map_blocks)
             results = np.vstack(np.hsplit(results, n_block_x))
-            # ninput = 0
+            ninput = 0
             for band_idx, band_name in enumerate(coefs_bands):
                 for coef_index, coef in enumerate(coefs):
+                    if coef == 'cv':
+                        results[results == -9999] = 0
                     kwcoco_img_name = img_names[day]
                     band = BAND_INFO[band_name]
                     name_parts = list(map(str, (kwcoco_img_name[:-4], band, method, coef)))
@@ -286,22 +288,24 @@ def assemble_main(cmdline=1, **kwargs):
                     if '_L8_' in outname:
                         outdriver_L8 = gdal.GetDriverByName('GTiff')
                         outdata_L8 = outdriver_L8.Create(os.fspath(outfile), vid_w, vid_h, 1, gdal.GDT_Float32)
-                        outdata_L8.GetRasterBand(1).WriteArray(results[:vid_h, :vid_w, coef_index])
+                        outdata_L8.GetRasterBand(1).WriteArray(results[:vid_h, :vid_w, ninput])
                         outdata_L8.FlushCache()
                         outdata_L8.SetGeoTransform(L8_new_gdal_transform)
                         outdata_L8.FlushCache()
                         outdata_L8.SetProjection(L8_proj)
                         outdata_L8.FlushCache()
+                        ninput = ninput + 1
 
                     if '_S2_' in outname:
                         outdriver_S2 = gdal.GetDriverByName('GTiff')
                         outdata_S2 = outdriver_S2.Create(os.fspath(outfile), vid_w, vid_h, 1, gdal.GDT_Float32)
-                        outdata_S2.GetRasterBand(1).WriteArray(results[:vid_h, :vid_w, coef_index])
+                        outdata_S2.GetRasterBand(1).WriteArray(results[:vid_h, :vid_w, ninput])
                         outdata_S2.FlushCache()
                         outdata_S2.SetGeoTransform(S2_new_gdal_transform)
                         outdata_S2.FlushCache()
                         outdata_S2.SetProjection(S2_proj)
                         outdata_S2.FlushCache()
+                        ninput = ninput + 1
 
             # for x in range(n_blocks):
                 # TODO: would be nice to have a structure that controls these
@@ -391,9 +395,12 @@ def get_gdal_transform(coco_dset, sensor_name, resolution=None):
     # Get the transform for the original asset
     target_primary_asset = target_coco_img.primary_asset()
     target_primary_fpath = os.path.join(ub.Path(target_coco_img.bundle_dpath), target_primary_asset['file_name'])
-    ref_image = gdal.Open(target_primary_fpath, gdal.GA_ReadOnly)
-    proj = ref_image.GetProjection()     # This transforms from world space to CRS84
-    trans = ref_image.GetGeoTransform()  # This transforms from the underlying asset to world space.
+    try:
+        ref_image = gdal.Open(target_primary_fpath, gdal.GA_ReadOnly)    
+        proj = ref_image.GetProjection()     # This transforms from world space to CRS84
+        trans = ref_image.GetGeoTransform()  # This transforms from the underlying asset to world space.
+    except AttributeError:
+        return None, None
     warp_wld_from_primary = kwimage.Affine.from_gdal(trans)
     warp_img_from_primary = kwimage.Affine.coerce(target_primary_asset['warp_aux_to_img'])
 

@@ -253,13 +253,18 @@ def tile_process_main(cmdline=1, **kwargs):
                             date_collect.append(CM_date)
 
                 # save the dataset
+                if len(result_collect) == 0:
+                    with open(reccg_path / f'record_change_x{block_x}_y{block_y}_cold.status.json', 'w') as f:
+                        json.dump({'status': 'failed', 'output': 'invalid'}, f)
                 if len(result_collect) > 0:
                     if method == 'HybridCOLD':
                         np.save(reccg_path / f'record_change_x{block_x}_y{block_y}_hybridcold.npy',
                                 np.hstack(result_collect))
-                    else:
+                    elif method == 'COLD':
                         np.save(reccg_path / f'record_change_x{block_x}_y{block_y}_cold.npy',
                                 np.hstack(result_collect))
+                    with open(reccg_path / f'record_change_x{block_x}_y{block_y}_cold.status.json', 'w') as f:
+                        json.dump({'status': 'completed', 'output': 'valid'}, f)
                 if method == 'OBCOLD':
                     np.save(reccg_path / 'CM_date_x{block_x}_y{block_y}.npy', np.hstack(date_collect))
                     np.save(reccg_path / 'CM_x{block_x}_y{block_y}.npy', np.hstack(CM_collect))

@@ -95,7 +95,7 @@ CommandLine:
     python -m watch.tasks.cold.predict \
         --coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly-KR_R001.kwcoco.json" \
         --out_dpath="$DATA_DVC_DPATH/Drop6/_pycold" \
-        --sensors='L8, S2' \
+        --sensors='L8' \
         --mod_coco_fpath="$DATA_DVC_DPATH/Drop6/_pycold/imgonly-KR_R001-cold.kwcoco.json" \
         --adj_cloud=False \
         --method='COLD' \
@@ -104,7 +104,7 @@ CommandLine:
         --cm_interval=60 \
         --year_lowbound=None \
         --year_highbound=None \
-        --coefs=cv \
+        --coefs=cv,rmse,a0,a1,b1,c1 \
         --coefs_bands=0,1,2,3,4,5 \
         --timestamp=False \
         --workermode='process' \
@@ -137,6 +137,8 @@ CommandLine:
         --base_fpath \
             "$BUNDLE_DPATH"/imganns-*BR_R*.kwcoco.zip \
             "$BUNDLE_DPATH"/imganns-*KR_R*.kwcoco.zip \
+            "$BUNDLE_DPATH"/imganns-*NZ_R*.kwcoco.zip \
+            "$BUNDLE_DPATH"/imganns-*US_R*.kwcoco.zip \
         --expt_dpath="$DVC_EXPT_DPATH" \
         --with_cold=1 \
         --with_landcover=0 \
@@ -146,7 +148,8 @@ CommandLine:
         --do_splits=0 \
         --skip_existing=1 \
         --cold_workers=8 \
-        --workers=4 \
+        --cold_workermode=thread \
+        --workers=2 \
         --backend=tmux --run=1
 """
 import scriptconfig as scfg
