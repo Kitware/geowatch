@@ -298,7 +298,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         input_norms = None
         if input_stats is not None:
             input_norms = RobustModuleDict()
-            for s, c in self.unique_sensor_modes:
+            for s, c in sorted(self.unique_sensor_modes):
                 if s not in input_norms:
                     input_norms[s] = RobustModuleDict()
                 stats = input_stats.get((s, c), None)
@@ -310,7 +310,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
             # Not sure what causes the format to change. Just hitting test
             # cases.
-            for k, v in input_stats.items():
+            for k, v in sorted(input_stats.items()):
                 if isinstance(k, str):
                     for c, stats in v.items():
                         if s not in input_norms:
@@ -399,6 +399,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             sensor_modes = set(self.unique_sensor_modes) | set(input_stats.keys())
         else:
             sensor_modes = set(self.unique_sensor_modes)
+<<<<<<< HEAD
 
         # import xdev
         # with xdev.embed_on_exception_context:
@@ -410,6 +411,9 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                     raise AssertionError
             else:
                 s, c = k
+=======
+        for s, c in sorted(sensor_modes):
+>>>>>>> 7237f8f4 (expt and fix multimodal layer order)
             mode_code = kwcoco.FusedChannelSpec.coerce(c)
             # For each mode make a network that should learn to tokenize
             in_chan = mode_code.numel()

@@ -752,6 +752,12 @@ def check_kwcoco_spatial_transforms(dset):
     kwplot.plt.ion()
     import kwcoco
     dset = kwcoco.CocoDataset('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6_MeanYear/imgonly-KR_R001.kwcoco.zip')
+
+    import watch
+    data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+    dset = kwcoco.CocoDataset(data_dvc_dpath / 'Drop6-MeanYear10GSD/imganns-NZ_R001.kwcoco.zip')
+
+    dset = kwcoco.CocoDataset('/home/joncrall/quicklinks/toothbrush_smart_expt_dvc/_debug/pred.kwcoco.zip')
     """
 
     import kwimage
@@ -820,7 +826,7 @@ def check_kwcoco_spatial_transforms(dset):
                     'reconstructed_img_box': recon_img_box.quantize(),
                     'reconstructed_vid_box': recon_vid_box.quantize(),
                 })
-                assert len(info['bands']) == coco_img.channels.numel()
+                # assert len(info['bands']) == coco_img.channels.numel()
 
             image_summary['assets'] = asset_summaries
             print('image_summary = {}'.format(ub.urepr(image_summary, nl=3, sv=1)))

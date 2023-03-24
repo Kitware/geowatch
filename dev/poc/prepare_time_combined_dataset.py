@@ -134,15 +134,15 @@ def main(cmdline=1, **kwargs):
 
     # time_duration = '1year'
     # time_duration = '3months'
-    # all_regions = [
-    #     'KR_R001',
-    #     # 'KR_R002',
-    #     # 'NZ_R001',
-    #     # 'CH_R001',
-    #     # 'BR_R001',
-    #     # 'BR_R002',
-    #     # 'BH_R001',
-    # ]
+    all_regions = [
+        'KR_R001',
+        'KR_R002',
+        'NZ_R001',
+        'CH_R001',
+        # 'BR_R001',
+        # 'BR_R002',
+        # 'BH_R001',
+    ]
 
     queue = _CMDQueueBoilerplateConfig._create_queue(config)
 
@@ -200,7 +200,7 @@ if __name__ == '__main__':
             --output_bundle_dpath=$DVC_DATA_DPATH/Drop6-MeanYear10GSD \
             --true_site_dpath=$DVC_DATA_DPATH/annotations/drop6/site_models \
             --true_region_dpath=$DVC_DATA_DPATH/annotations/drop6/region_models \
-            --backend=tmux --tmux_workers=6 \
+            --backend=tmux --tmux_workers=2 \
             --resolution=10GSD \
             --run=1
 
@@ -227,6 +227,16 @@ python -m watch.cli.coco_time_combine \
     --workers=4
 
 
+python -m watch.cli.coco_time_combine \
+    --kwcoco_fpath="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6/imgonly-NZ_R001.kwcoco.json" \
+    --output_kwcoco_fpath="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6_MeanYear/imgonly-NZ_R001.kwcoco.zip" \
+    --channels="red|green|blue" \
+    --resolution="10GSD" \
+    --temporal_window_duration=1year \
+    --merge_method=mean \
+    --workers=4
+
+
 python -m watch.tasks.fusion.predict \
     --package_fpath=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt \
     --test_dataset=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6_MeanYear/imgonly-KR_R001.kwcoco.zip \
@@ -241,9 +251,7 @@ python -m watch.tasks.fusion.predict \
     --batch_size="1" \
     --with_saliency="True" \
     --with_class="False" \
-    --with_change="False" \
-    --tta_fliprot=4 \
-    --tta_time=4
+    --with_change="False"
 
 
 smartwatch stats /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6_MeanYear/imgonly-KR_R001.kwcoco.zip

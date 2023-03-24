@@ -15,6 +15,7 @@ Example:
 
     python -m watch.mlops.manager "status" --dataset_codes "Drop6"
     python -m watch.mlops.manager "push packages" --dataset_codes "Drop6"
+    python -m watch.mlops.manager "push packages" --dataset_codes "Drop6-MeanYear10GSD"
 
     python -m watch.mlops.manager "pull packages" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
 

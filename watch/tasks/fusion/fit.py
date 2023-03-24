@@ -326,7 +326,7 @@ def coerce_initializer(init):
             tfile = tempfile.NamedTemporaryFile(prefix='pretrained_state', suffix='.pt')
             # state_dict = other_model.state_dict()
             try:
-                tfile = other_model.state_dict()
+                state_dict = other_model.state_dict()
             except Exception:
                 if hasattr(other_model, 'head_metrics'):
                     other_model.head_metrics.clear()
