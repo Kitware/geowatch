@@ -939,8 +939,6 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
                 if _gsd is not None:
                     available_gsds.add(round(_gsd, 1))
 
-        print('')
-        print('frame_infos = {}'.format(ub.urepr(frame_infos, nl=1)))
         # Align to frame closest to the target GSD, which is the frame that has the
         # "to_target_scale_factor" that is closest to 1.0
         base_gid, base_info = min(
