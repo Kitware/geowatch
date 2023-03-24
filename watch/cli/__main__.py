@@ -34,6 +34,7 @@ def main(cmdline=True, **kw):
         # 'mlops_cli',
         'gifify',
         'coco_average_features',
+        'coco_time_combine',
     ]
 
     # TODO: delegate this to the CLI config __alias__ attributes
@@ -51,7 +52,8 @@ def main(cmdline=True, **kw):
         'watch.cli.kwcoco_to_geojson': [],
         'watch.cli.find_dvc': ['dvcdir'],
         'watch.cli.gifify': ['animate'],
-        'watch.cli.coco_average_features': ['average', 'average_features'],
+        'watch.cli.coco_average_features': ['average_features'],
+        'watch.cli.coco_time_combine': ['time_combine'],
     }
 
     module_lut = {}

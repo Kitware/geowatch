@@ -18,7 +18,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Add SITS-former 
 * WU MAE Backbone in Heterogeneous Model
 * The `watch.cli.cluster_sites` script now works.
-* The `watch.cli.coco_temporally_combine_channels` script
+* The `watch.cli.coco_time_combine` script
 
 ### Fixed
 * Bug in `coco_add_watch_fields` where video properties were incorrectly

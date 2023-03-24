@@ -4,7 +4,7 @@
 CommandLine:
     DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
 
-    python -m watch.cli.coco_temporally_combine_channels \
+    python -m watch.cli.coco_time_combine \
         --kwcoco_fpath="$DVC_DATA_DPATH/Drop6/imgonly-KR_R002.kwcoco.json" \
         --output_kwcoco_fpath="$DVC_DATA_DPATH/Drop6_MeanYear/imgonly-KR_R002.kwcoco.json" \
         --channels="red|green|blue|nir|swir16|swir22" \
@@ -24,10 +24,12 @@ import ubelt as ub
 import scriptconfig as scfg
 
 
-class TimeAverageConfig(scfg.DataConfig):
+class TimeCombineConfig(scfg.DataConfig):
     """
     Averages kwcoco images over a sliding temporal window in a video.
     """
+    __command__ = 'time_combine'
+
     kwcoco_fpath = scfg.Value(None, help=ub.paragraph(
             '''
             The path to the kwcoco file containing the image data to be
@@ -105,9 +107,9 @@ class TimeAverageConfig(scfg.DataConfig):
 def main(cmdline=1, **kwargs):
     """
     CommandLine:
-        DEVEL_TEST=1 xdoctest -m watch.cli.coco_temporally_combine_channels main
+        DEVEL_TEST=1 xdoctest -m watch.cli.coco_time_combine main
 
-        from watch.cli.coco_temporally_combine_channels import *  # NOQA
+        from watch.cli.coco_time_combine import *  # NOQA
         import watch
         data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         cmdline = 0
@@ -126,7 +128,7 @@ def main(cmdline=1, **kwargs):
     Example:
         >>> # 0: Baseline run.
         >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
-        >>> from watch.cli.coco_temporally_combine_channels import *  # NOQA
+        >>> from watch.cli.coco_time_combine import *  # NOQA
         >>> import watch
         >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> cmdline = 0
@@ -149,7 +151,7 @@ def main(cmdline=1, **kwargs):
     Example:
         >>> # 1: Check cloudmasking.
         >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
-        >>> from watch.cli.coco_temporally_combine_channels import *  # NOQA
+        >>> from watch.cli.coco_time_combine import *  # NOQA
         >>> import watch
         >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> cmdline = 0
@@ -172,7 +174,7 @@ def main(cmdline=1, **kwargs):
     Example:
         >>> # 2: Check that resolution can be updated.
         >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
-        >>> from watch.cli.coco_temporally_combine_channels import *  # NOQA
+        >>> from watch.cli.coco_time_combine import *  # NOQA
         >>> import watch
         >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> cmdline = 0
@@ -196,7 +198,7 @@ def main(cmdline=1, **kwargs):
     Example:
         >>> # 3: Median combining.
         >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
-        >>> from watch.cli.coco_temporally_combine_channels import *  # NOQA
+        >>> from watch.cli.coco_time_combine import *  # NOQA
         >>> import watch
         >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> cmdline = 0
@@ -221,7 +223,7 @@ def main(cmdline=1, **kwargs):
     Example:
         >>> # 4: Median combining with cloudmask.
         >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
-        >>> from watch.cli.coco_temporally_combine_channels import *  # NOQA
+        >>> from watch.cli.coco_time_combine import *  # NOQA
         >>> import watch
         >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> cmdline = 0
@@ -246,7 +248,7 @@ def main(cmdline=1, **kwargs):
     Example:
         >>> # 5: Dont separate sensors.
         >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
-        >>> from watch.cli.coco_temporally_combine_channels import *  # NOQA
+        >>> from watch.cli.coco_time_combine import *  # NOQA
         >>> import watch
         >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> cmdline = 0
@@ -272,7 +274,7 @@ def main(cmdline=1, **kwargs):
     Example:
         >>> # 6: Adjust the effect of S2 imagery.
         >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
-        >>> from watch.cli.coco_temporally_combine_channels import *  # NOQA
+        >>> from watch.cli.coco_time_combine import *  # NOQA
         >>> import watch
         >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> cmdline = 0
@@ -296,7 +298,7 @@ def main(cmdline=1, **kwargs):
         DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
         smartwatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001-cloudmask-s2w_10.kwcoco.json
     """
-    config = TimeAverageConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
+    config = TimeCombineConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
     print('config = ' + ub.urepr(dict(config), nl=1))
 
     output_coco_dset = combine_kwcoco_channels_temporally(config)
@@ -489,14 +491,15 @@ def combine_kwcoco_channels_temporally(config):
     kwcoco_extensions.populate_watch_fields(
         output_coco_dset, target_gsd=target_gsd, overwrite=True)
 
-    video = output_coco_dset.index.videos[video_id]
-    after_video_dsize = (video['width'], video['height'])
-    print(f'after_video_dsize={after_video_dsize}')
+    # video = output_coco_dset.index.videos[video_id]
+    # after_video_dsize = (video['width'], video['height'])
+    # print(f'after_video_dsize={after_video_dsize}')
 
     # for vidid in ub.ProgIter(vidids, total=len(vidids), desc='populate videos'):
     #     coco_populate_geo_video_stats(coco_dset, vidid, target_gsd=target_gsd)
 
-    check_kwcoco_spatial_transforms(output_coco_dset)
+    # Debugging:
+    # check_kwcoco_spatial_transforms(output_coco_dset)
 
     # Save kwcoco file.
     print(f"Saving ouput kwcoco file to: {output_kwcoco_fpath}")
@@ -822,12 +825,12 @@ def check_kwcoco_spatial_transforms(dset):
             print('image_summary = {}'.format(ub.urepr(image_summary, nl=3, sv=1)))
 
 
-__config__ = TimeAverageConfig
+__config__ = TimeCombineConfig
 
 if __name__ == '__main__':
     """
 
     CommandLine:
-        python -m watch.cli.coco_temporally_combine_channels
+        python -m watch.cli.coco_time_combine
     """
     main()

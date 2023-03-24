@@ -163,7 +163,7 @@ def main(cmdline=1, **kwargs):
 
         code = codetemplate(
             r'''
-            python -m watch.cli.coco_temporally_combine_channels \
+            python -m watch.cli.coco_time_combine \
                 --kwcoco_fpath="$INPUT_BUNDLE_DPATH/imgonly-${REGION}.kwcoco.json" \
                 --output_kwcoco_fpath="$OUTPUT_BUNDLE_DPATH/imgonly-${REGION}.kwcoco.zip" \
                 --channels="red|green|blue|nir|swir16|swir22|pan" \
@@ -206,7 +206,7 @@ if __name__ == '__main__':
 
 __notes__ = r"""
 
-python -m watch.cli.coco_temporally_combine_channels \
+python -m watch.cli.coco_time_combine \
     --kwcoco_fpath="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6/imgonly-KR_R001.kwcoco.json" \
     --output_kwcoco_fpath="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6_MeanYear/imgonly-KR_R001.kwcoco.zip" \
     --channels="red|green|blue" \
