@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """
 
+SeeAlso:
+    ~/code/watch/dev/poc/prepare_time_combined_dataset.py
+
+
 CommandLine:
     DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
 
@@ -490,7 +494,7 @@ def combine_kwcoco_channels_temporally(config):
     target_gsd = float(np.mean(coerce_resolution(config.resolution)['mag']))
     print(f'Reset watch fields target_gsd={target_gsd}')
     kwcoco_extensions.populate_watch_fields(
-        output_coco_dset, target_gsd=target_gsd, overwrite=True)
+        output_coco_dset, target_gsd=target_gsd, overwrite=False)
 
     # video = output_coco_dset.index.videos[video_id]
     # after_video_dsize = (video['width'], video['height'])
@@ -586,12 +590,14 @@ def merge_images(window_coco_images, merge_method, requested_chans, space,
 
     first_coco_img = window_coco_images[0]
 
+    video = first_coco_img.video
+    video_name = video['name']
+
     # Scales to the resolution from the requested (i.e. video space)
     scale_asset_from_vid = first_coco_img._scalefactor_for_resolution(resolution=resolution, space='video')
     # warp_asset_from_vid = kwimage.Affine.scale(scale_asset_from_vid)
 
-    video_dsize = kwimage.Box.from_dsize(
-        (first_coco_img.video['width'], first_coco_img.video['height']))
+    video_dsize = kwimage.Box.from_dsize((video['width'], video['height']))
 
     canvas_dsize = video_dsize.scale(scale_asset_from_vid).quantize().dsize
     canvas_dims = canvas_dsize[::-1]
@@ -714,7 +720,7 @@ def merge_images(window_coco_images, merge_method, requested_chans, space,
     #     sorted(set([coco_img['sensor_coarse'] for coco_img in window_coco_images])))
 
     # new_coco_img.bundle_dapth = new_bundle_dpath
-    dname = f'ave_{merge_chans.path_sanitize()}'
+    dname = f'{video_name}/ave_{merge_chans.path_sanitize()}'
 
     # TODO:
     # We could recompute the valid_region and valid_region_utm here

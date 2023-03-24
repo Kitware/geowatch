@@ -21,6 +21,8 @@ class CocoStitchingManager(object):
 
         short_code (str):
             short identifier used for directory names.
+            TODO: rename to prefix? OR or something more indicative that this
+            is a directory name?
 
         chan_code (str):
             If saving the stitched features, this is the channel code to use.

@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+"""
+SeeAlso:
+    ~/code/watch/watch/cli/coco_time_combine.py
+"""
 import scriptconfig as scfg
 import ubelt as ub
 
@@ -135,10 +139,10 @@ def main(cmdline=1, **kwargs):
     # time_duration = '1year'
     # time_duration = '3months'
     all_regions = [
-        'KR_R001',
-        'KR_R002',
+        # 'KR_R001',
+        # 'KR_R002',
         'NZ_R001',
-        'CH_R001',
+        # 'CH_R001',
         # 'BR_R001',
         # 'BR_R002',
         # 'BH_R001',
@@ -202,7 +206,7 @@ if __name__ == '__main__':
             --true_region_dpath=$DVC_DATA_DPATH/annotations/drop6/region_models \
             --backend=tmux --tmux_workers=2 \
             --resolution=10GSD \
-            --run=1
+            --run=0
 
         DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
         python -m watch.cli.prepare_splits \

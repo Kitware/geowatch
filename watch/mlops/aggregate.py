@@ -132,21 +132,24 @@ def main(cmdline=True, **kwargs):
     timestamp = ub.timestamp()
     if config.export_tables:
         for type, agg in eval_type_to_aggregator.items():
-            agg.output_dpath.ensuredir()
-            fname = f'{agg.type}_{timestamp}.csv.zip'
-            csv_fpath = agg.output_dpath / fname
-            print(f'csv_fpath={csv_fpath}')
-            agg.table.to_csv(csv_fpath, index_label=False)
+            if len(agg):
+                agg.output_dpath.ensuredir()
+                fname = f'{agg.type}_{timestamp}.csv.zip'
+                csv_fpath = agg.output_dpath / fname
+                print(f'csv_fpath={csv_fpath}')
+                agg.table.to_csv(csv_fpath, index_label=False)
 
     if config.stdout_report:
         for type, agg in eval_type_to_aggregator.items():
-            if rois is not None:
-                agg.build_macro_tables(rois)
-            agg.report_best()
+            if len(agg):
+                if rois is not None:
+                    agg.build_macro_tables(rois)
+                agg.report_best()
 
     if config.plot_params:
         for type, agg in eval_type_to_aggregator.items():
-            build_all_param_plots(agg, rois, config)
+            if len(agg):
+                build_all_param_plots(agg, rois, config)
     # automated_analysis(eval_type_to_aggregator, config)
 
 

@@ -1070,7 +1070,6 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     if eval_dpath is None:
         heatmap_dpath = None
     else:
-        heatmap_dpath = (ub.Path(eval_dpath) / 'heatmaps').ensuredir()
         curve_dpath = (ub.Path(eval_dpath) / 'curves').ensuredir()
         pcontext.write_invocation(curve_dpath / 'invocation.sh')
 
@@ -1219,6 +1218,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
                 class_measure_combiner.combine()
 
             if draw_heatmaps:
+                heatmap_dpath = (ub.Path(eval_dpath) / 'heatmaps').ensuredir()
                 # Let the draw executor release any memory it can
                 remaining_draw_jobs = []
                 for draw_job in draw_jobs:
