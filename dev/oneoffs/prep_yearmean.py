@@ -78,7 +78,7 @@ class PrepareTimeAverages(scfg.DataConfig):
     """
     Prepare a temporally averaged dataset on multiple regions
     """
-    # DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+    __fuzzy_hyphens__ = 1
     # src = scfg.Value(None, help='input')
     __default__ = ub.udict({}) | _CMDQueueBoilerplateConfig.__default__
 
@@ -87,6 +87,13 @@ class PrepareTimeAverages(scfg.DataConfig):
     resolution = '10GSD'
 
     integration_window = '1year'
+
+    combine_workers = scfg.Value(4, help='number of workers per combine job')
+
+    input_bundle_dpath = scfg.Value(None)
+    output_bundle_dpath = scfg.Value(None)
+
+    true_site_dpath = scfg.Value(None)
 
 
 def codetemplate(text, format=False):
@@ -119,43 +126,47 @@ def main(cmdline=1, **kwargs):
     print('config = ' + ub.urepr(dict(config), nl=1))
     import watch
 
+    assert config.output_bundle_dpath is not None
+
     dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
     all_regions = [p.name.split('.')[0] for p in (dvc_data_dpath / 'annotations/drop6/region_models').ls()]
 
     # time_duration = '1year'
     # time_duration = '3months'
-
-    all_regions = [
-        'KR_R001',
-        # 'KR_R002',
-        # 'NZ_R001',
-        # 'CH_R001',
-        # 'BR_R001',
-        # 'BR_R002',
-        # 'BH_R001',
-    ]
+    # all_regions = [
+    #     'KR_R001',
+    #     # 'KR_R002',
+    #     # 'NZ_R001',
+    #     # 'CH_R001',
+    #     # 'BR_R001',
+    #     # 'BR_R002',
+    #     # 'BH_R001',
+    # ]
 
     queue = _CMDQueueBoilerplateConfig._create_queue(config)
 
     for region in all_regions:
 
         fmtdict = dict(
-            DVC_DATA_DPATH=dvc_data_dpath,
+            # DVC_DATA_DPATH=dvc_data_dpath,
+            OUTPUT_BUNDLE_DPATH=config.output_bundle_dpath,
+            INPUT_BUNDLE_DPATH=config.input_bundle_dpath,
             REGION=region,
             TIME_DURATION=config.integration_window,
-            SUFFIX='MeanYear',
+            # SUFFIX='MeanYear',
             # TIME_DURATION='3months',
             # SUFFIX='Mean3Month10GSD',
             RESOLUTION=config.resolution,
-            WORKERS=4,
+            WORKERS=config.combine_workers,
+            TRUE_SITE_DPATH=config.true_site_dpath,
         )
 
         code = codetemplate(
             r'''
             python -m watch.cli.coco_temporally_combine_channels \
-                --kwcoco_fpath="$DVC_DATA_DPATH/Drop6/imgonly-${REGION}.kwcoco.json" \
-                --output_kwcoco_fpath="$DVC_DATA_DPATH/Drop6_${SUFFIX}/imgonly-${REGION}.kwcoco.zip" \
-                --channels="red|green|blue|nir|swir16|swir22" \
+                --kwcoco_fpath="$INPUT_BUNDLE_DPATH/imgonly-${REGION}.kwcoco.json" \
+                --output_kwcoco_fpath="$OUTPUT_BUNDLE_DPATH/imgonly-${REGION}.kwcoco.zip" \
+                --channels="red|green|blue|nir|swir16|swir22|pan" \
                 --resolution="$RESOLUTION" \
                 --temporal_window_duration=$TIME_DURATION \
                 --merge_method=mean \
@@ -168,9 +179,9 @@ def main(cmdline=1, **kwargs):
             code = codetemplate(
                 r'''
                 python -m watch reproject_annotations \
-                    --src $DVC_DATA_DPATH/Drop6_${SUFFIX}/imgonly-${REGION}.kwcoco.zip \
-                    --dst $DVC_DATA_DPATH/Drop6_${SUFFIX}/imganns-${REGION}.kwcoco.zip \
-                    --site_models="$DVC_DATA_DPATH/annotations/drop6/site_models/*.geojson"
+                    --src $OUTPUT_BUNDLE_DPATH/imgonly-${REGION}.kwcoco.zip \
+                    --dst $OUTPUT_BUNDLE_DPATH/imganns-${REGION}.kwcoco.zip \
+                    --site_models="$TRUE_SITE_DPATH/*.geojson"
                 ''', fmtdict)
             queue.submit(code, depends=[combine_job], name=f'reproject-ann-{region}')
 
@@ -181,10 +192,14 @@ if __name__ == '__main__':
     r"""
 
     CommandLine:
-        python ~/code/watch/dev/oneoffs/prep_yearmean.py --help
+
+        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
         python ~/code/watch/dev/oneoffs/prep_yearmean.py \
-            --resolution=15GSD \
-            --no-reproject --run=0
+            --input_bundle_dpath=$DVC_DATA_DPATH/Drop6 \
+            --output_bundle_dpath=$DVC_DATA_DPATH/Drop6-MeanYear10GSD \
+            --true_site_dpath=$DVC_DATA_DPATH/annotations/drop6/site_models \
+            --resolution=10GSD \
+            --run=0 --print-commands
 
         python -m prep_yearmean
     """
@@ -197,7 +212,7 @@ python -m watch.cli.coco_temporally_combine_channels \
     --kwcoco_fpath="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6/imgonly-KR_R001.kwcoco.json" \
     --output_kwcoco_fpath="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6_MeanYear/imgonly-KR_R001.kwcoco.zip" \
     --channels="red|green|blue" \
-    --resolution="15GSD" \
+    --resolution="10GSD" \
     --temporal_window_duration=1year \
     --merge_method=mean \
     --workers=4
@@ -217,7 +232,9 @@ python -m watch.tasks.fusion.predict \
     --batch_size="1" \
     --with_saliency="True" \
     --with_class="False" \
-    --with_change="False"
+    --with_change="False" \
+    --tta_fliprot=4 \
+    --tta_time=4
 
 
 smartwatch stats /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6_MeanYear/imgonly-KR_R001.kwcoco.zip

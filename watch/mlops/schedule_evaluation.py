@@ -222,7 +222,7 @@ class ScheduleEvaluationConfig(scfg.DataConfig):
     pred_workers = scfg.Value(4, help='number of prediction workers in each process')
 
     # shuffle_jobs = scfg.Value(True, help='if True, shuffles the jobs so they are submitted in a random order')
-    annotations_dpath = scfg.Value(None, help='path to IARPA annotations dpath for IARPA eval')
+    # annotations_dpath = scfg.Value(None, help='path to IARPA annotations dpath for IARPA eval')
 
     root_dpath = scfg.Value('auto', help=(
         'Where do dump all results. If "auto", uses <expt_dvc_dpath>/dag_runs'))

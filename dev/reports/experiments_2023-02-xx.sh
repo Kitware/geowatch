@@ -752,15 +752,19 @@ DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch.mlops.schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
-            - $HOME/code/watch/dev/reports/split1_models_filter1.yaml
+            - $HOME/code/watch/dev/reports/split1_models_filter1.pt
         bas_pxl.test_dataset:
-            - $DVC_DATA_DPATH/Drop6_MeanYear/imganns-KR_R002.kwcoco.zip
             - $DVC_DATA_DPATH/Drop6_MeanYear/imganns-KR_R001.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop6_MeanYear/imganns-NZ_R001.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop6_MeanYear/imganns-CH_R001.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop6_MeanYear/imganns-BH_R001.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop6_MeanYear/imganns-BR_R001.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop6_MeanYear/imganns-BR_R002.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6_MeanYear/imganns-KR_R002.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6_MeanYear/imganns-NZ_R001.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6_MeanYear/imganns-CH_R001.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6_MeanYear/imganns-BH_R001.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6_MeanYear/imganns-BR_R001.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6_MeanYear/imganns-BR_R002.kwcoco.zip
+        bas_pxl.include_sensors:
+            - 'S2,L8'
+        bas_pxl.test_dataset:
+            ...
         bas_pxl.chip_overlap: 0.3
         bas_pxl.chip_dims:
             - auto
@@ -800,7 +804,7 @@ python -m watch.mlops.schedule_evaluation --params="
     --devices="0,1" --queue_size=4 \
     --backend=tmux --queue_name "_namek_split1_eval_filter1" \
     --pipeline=bas --skip_existing=1 \
-    --run=1
+    --run=0
 
 
 DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
