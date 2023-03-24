@@ -153,7 +153,10 @@ class KWCocoToGeoJSONConfig(scfg.DataConfig):
 
             Valid params for each track_fn are: {_trackfn_details_docs}
             '''), group='track')
-    viz_out_dir = scfg.Value(None)
+    viz_out_dir = scfg.Value(None, help=ub.paragraph(
+            '''
+            Directory to save tracking vizualizations to; if None, don't viz
+            '''), group='track')
     site_summary = scfg.Value(None, help=ub.paragraph(
             '''
             A filepath glob or json blob containing either a

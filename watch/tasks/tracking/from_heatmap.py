@@ -1204,7 +1204,6 @@ class TimeAggregatedBAS(NewTrackFunction):
     max_area_behavior: str = 'drop'
     polygon_simplify_tolerance: Union[None, float] = None
     resolution: Optional[str] = None
-    viz_out_dir: Optional[ub.Path] = None
 
     inner_window_size : Optional[str] = None
     inner_agg_fn : Optional[str] = None
@@ -1219,10 +1218,6 @@ class TimeAggregatedBAS(NewTrackFunction):
         _resolve_arg_values(self)
 
     def create_tracks(self, sub_dset):
-
-        global VIZ_DPATH
-        VIZ_DPATH = self.viz_out_dir
-        # HACK
 
         aggkw = ub.compatible(self.__dict__, time_aggregated_polys)
         tracks = time_aggregated_polys(sub_dset, **aggkw)
@@ -1270,10 +1265,9 @@ class TimeAggregatedSC(NewTrackFunction):
     max_area_behavior: str = 'drop'
     polygon_simplify_tolerance: Union[None, float] = None
     resolution: Optional[str] = None
-    viz_out_dir: Optional[ub.Path] = None
 
-    inner_window_size : Optional[str] = None
-    inner_agg_fn : Optional[str] = None
+    inner_window_size: Optional[str] = None
+    inner_agg_fn: Optional[str] = None
 
     site_validation: bool = False
     site_validation_span_steps: int = 120
@@ -1290,9 +1284,6 @@ class TimeAggregatedSC(NewTrackFunction):
             'polys': generated polys will be the boundaries
             'none': generated polys will ignore the boundaries
         '''
-        global VIZ_DPATH
-        VIZ_DPATH = self.viz_out_dir
-        # HACK
 
         if self.boundaries_as == 'polys':
             tracks = pop_tracks(

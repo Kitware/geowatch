@@ -101,7 +101,7 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
         >>>     style='new'))
         >>> # test that scaling worked
         >>> assert np.all(annots.boxes.area < old_annots.boxes.area)
-        >>> assert np.all(annots.boxes.warp(aff.inv()).area ==
+        >>> assert np.allclose(annots.boxes.warp(aff.inv()).area,
         >>>     old_annots.boxes.area)
         >>> # test that remove_small_annots no-ops with no threshold
         >>> # (ie there are no invalid annots here)

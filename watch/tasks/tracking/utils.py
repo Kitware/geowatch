@@ -11,8 +11,9 @@ import warnings
 from abc import abstractmethod
 from scipy.ndimage import label as ndm_label
 from functools import lru_cache
-from typing import Union, Iterable, Optional, List, Dict
+from typing import Union, Iterable, Optional, Dict
 
+from dataclasses import dataclass
 
 try:
     from xdev import profile
@@ -248,11 +249,18 @@ class NoOpTrackFunction(TrackFunction):
         return sub_dset
 
 
+@dataclass
 class NewTrackFunction(TrackFunction):
     '''
     Specialization of TrackFunction to create polygons that do not yet exist
     in coco_dset, and add them as new annotations
     '''
+    viz_out_dir: Optional[ub.Path] = None
+
+    def __post_init__(self):
+        global VIZ_DPATH
+        VIZ_DPATH = self.viz_out_dir
+        # HACK
 
     def __call__(self, sub_dset):
         print('Create tracks')
