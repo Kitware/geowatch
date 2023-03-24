@@ -200,7 +200,16 @@ if __name__ == '__main__':
             --output_bundle_dpath=$DVC_DATA_DPATH/Drop6-MeanYear10GSD \
             --true_site_dpath=$DVC_DATA_DPATH/annotations/drop6/site_models \
             --true_region_dpath=$DVC_DATA_DPATH/annotations/drop6/region_models \
+            --backend=tmux --tmux_workers=6 \
             --resolution=10GSD \
+            --run=1
+
+        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+        python -m watch.cli.prepare_splits \
+            --base_fpath=$DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-*.kwcoco.zip \
+            --constructive_mode=True \
+            --suffix=rawbands \
+            --backend=tmux --tmux_workers=6 \
             --run=1
     """
     main()

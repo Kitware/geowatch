@@ -100,8 +100,17 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
     print(ub.repr2(utils.model_json(module, max_depth=3), nl=-1, sort=0))
     # print(ub.repr2(utils.model_json(module, max_depth=2), nl=-1, sort=0))
 
-    state = module.state_dict()
-    state_keys = list(state.keys())
+    # import xdev
+    # with xdev.embed_on_exception_context:
+    try:
+        state = module.state_dict()
+    except Exception:
+        if hasattr(module, 'head_metrics'):
+            module.head_metrics.clear()
+            state = module.state_dict()
+            state_keys = list(state.keys())
+        else:
+            raise
     # print('state_keys = {}'.format(ub.repr2(state_keys, nl=1)))
 
     unique_sensors = set()

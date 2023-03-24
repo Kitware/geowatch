@@ -754,17 +754,13 @@ python -m watch.mlops.schedule_evaluation --params="
         bas_pxl.package_fpath:
             - $HOME/code/watch/dev/reports/split1_models_filter1.pt
         bas_pxl.test_dataset:
-            - $DVC_DATA_DPATH/Drop6_MeanYear/imganns-KR_R001.kwcoco.zip
-            #- $DVC_DATA_DPATH/Drop6_MeanYear/imganns-KR_R002.kwcoco.zip
-            #- $DVC_DATA_DPATH/Drop6_MeanYear/imganns-NZ_R001.kwcoco.zip
-            #- $DVC_DATA_DPATH/Drop6_MeanYear/imganns-CH_R001.kwcoco.zip
-            #- $DVC_DATA_DPATH/Drop6_MeanYear/imganns-BH_R001.kwcoco.zip
-            #- $DVC_DATA_DPATH/Drop6_MeanYear/imganns-BR_R001.kwcoco.zip
-            #- $DVC_DATA_DPATH/Drop6_MeanYear/imganns-BR_R002.kwcoco.zip
-        bas_pxl.include_sensors:
-            - 'S2,L8'
-        bas_pxl.test_dataset:
-            ...
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-KR_R001.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-KR_R002.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-NZ_R001.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-CH_R001.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BH_R001.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BR_R001.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BR_R002.kwcoco.zip
         bas_pxl.chip_overlap: 0.3
         bas_pxl.chip_dims:
             - auto
@@ -774,10 +770,9 @@ python -m watch.mlops.schedule_evaluation --params="
             - auto
         bas_poly.thresh:
             #- 0.1
-            #- 0.17
+            - 0.17
             - 0.2
-            #- 0.3
-            #- 0.4
+            - 0.4
             - 0.5
             - 0.8
         bas_poly.polygon_simplify_tolerance:
@@ -789,7 +784,7 @@ python -m watch.mlops.schedule_evaluation --params="
         bas_poly.moving_window_size:
             - null
         bas_poly.min_area_square_meters:
-            - 72000
+            - 7200
         bas_poly.max_area_square_meters:
             - 8000000
         bas_poly_eval.true_site_dpath: $DVC_DATA_DPATH/annotations/drop6/site_models
@@ -800,11 +795,11 @@ python -m watch.mlops.schedule_evaluation --params="
         bas_poly_eval.enabled: 1
         bas_poly_viz.enabled: 0
     " \
-    --root_dpath="$DVC_EXPT_DPATH/_namek_split1_eval_filter1" \
+    --root_dpath="$DVC_EXPT_DPATH/_namek_split1_eval_filter1_MeanYear10GSD" \
     --devices="0,1" --queue_size=4 \
-    --backend=tmux --queue_name "_namek_split1_eval_filter1" \
+    --backend=tmux --queue_name "_namek_split1_eval_filter1_MeanYear10GSD" \
     --pipeline=bas --skip_existing=1 \
-    --run=0
+    --run=1
 
 
 DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
