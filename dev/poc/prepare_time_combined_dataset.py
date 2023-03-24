@@ -194,14 +194,12 @@ if __name__ == '__main__':
     CommandLine:
 
         DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-        python ~/code/watch/dev/oneoffs/prep_yearmean.py \
+        python ~/code/watch/dev/poc/prepare_time_combined_dataset.py \
             --input_bundle_dpath=$DVC_DATA_DPATH/Drop6 \
             --output_bundle_dpath=$DVC_DATA_DPATH/Drop6-MeanYear10GSD \
             --true_site_dpath=$DVC_DATA_DPATH/annotations/drop6/site_models \
             --resolution=10GSD \
             --run=0 --print-commands
-
-        python -m prep_yearmean
     """
     main()
 
