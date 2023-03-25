@@ -308,11 +308,23 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                     input_norms[s][c] = nh.layers.InputNorm(
                         **ub.udict(stats) & {'mean', 'std'})
 
-            for (s, c), stats in input_stats.items():
-                if s not in input_norms:
-                    input_norms[s] = RobustModuleDict()
-                input_norms[s][c] = nh.layers.InputNorm(
-                    **ub.udict(stats) & {'mean', 'std'})
+            # Not sure what causes the format to change. Just hitting test
+            # cases.
+            for k, v in input_stats.items():
+                if isinstance(k, str):
+                    for c, stats in v.items():
+                        if s not in input_norms:
+                            input_norms[s] = RobustModuleDict()
+                        input_norms[s][c] = nh.layers.InputNorm(
+                            **ub.udict(stats) & {'mean', 'std'})
+                else:
+                    # for (s, c), stats in input_stats.items():
+                    s, c = k
+                    stats = v
+                    if s not in input_norms:
+                        input_norms[s] = RobustModuleDict()
+                    input_norms[s][c] = nh.layers.InputNorm(
+                        **ub.udict(stats) & {'mean', 'std'})
 
         self.input_norms = input_norms
 
@@ -387,7 +399,17 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             sensor_modes = set(self.unique_sensor_modes) | set(input_stats.keys())
         else:
             sensor_modes = set(self.unique_sensor_modes)
-        for s, c in sensor_modes:
+
+        # import xdev
+        # with xdev.embed_on_exception_context:
+        for k in sensor_modes:
+            if isinstance(k, str):
+                if k == '*':
+                    s = c = '*'
+                else:
+                    raise AssertionError
+            else:
+                s, c = k
             mode_code = kwcoco.FusedChannelSpec.coerce(c)
             # For each mode make a network that should learn to tokenize
             in_chan = mode_code.numel()
