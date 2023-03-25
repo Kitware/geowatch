@@ -1018,6 +1018,7 @@ def check_geo_transform_consistency(coco_dset):
         import kwcoco
         coco_dset = kwcoco.CocoDataset('/home/joncrall/quicklinks/toothbrush_smart_data_dvc-ssd/Drop6/imgonly-KR_R001.kwcoco.json')
         coco_dset = kwcoco.CocoDataset('/home/joncrall/quicklinks/toothbrush_smart_data_dvc-ssd/Drop6/imgonly-NZ_R001.kwcoco.json')
+        coco_dset = kwcoco.CocoDataset('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6-MeanYear10GSD/imgonly-NZ_R001_v2.kwcoco.json')
         coco_dset = kwcoco.CocoDataset('/home/joncrall/quicklinks/toothbrush_smart_data_dvc-ssd/Drop6-MeanYear10GSD/imganns-KR_R001.kwcoco.zip')
     """
 
