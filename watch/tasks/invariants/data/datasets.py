@@ -8,6 +8,9 @@ import ndsampler
 import ubelt as ub
 import warnings
 from watch.utils import util_kwimage
+from watch.monkey import monkey_albumentations
+
+monkey_albumentations.patch_albumentations_for_311()
 
 
 class GriddedDataset(torch.utils.data.Dataset):
