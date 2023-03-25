@@ -78,8 +78,14 @@ class NoopModel(pl.LightningModule, WatchModuleMixins):
         else:
             sensor_modes = set(self.unique_sensor_modes)
 
-        for s, c in sensor_modes:
-
+        for k in sensor_modes:
+            if isinstance(k, str):
+                if k == '*':
+                    s = c = '*'
+                else:
+                    raise AssertionError
+            else:
+                s, c = k
             if input_stats is None:
                 input_norm = nh.layers.InputNorm()
             else:

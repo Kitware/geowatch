@@ -71,52 +71,246 @@
     },
     "_site_properties": {
       "properties": {
-        "type": {"const": "site", "type": "string"},
-        "version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
-        "mgrs": {"type": "string", "pattern": "[0-9]{2}[A-Z]{3}"},
-        "status": {"type": "string"},
-        "model_content": {"enum": ["annotation", "proposed"]},
-        "start_date": {"oneOf": [{"type": "null"}, {"type": "string", "format": "date"}]},
-        "end_date": {"oneOf": [{"type": "null"}, {"type": "string", "format": "date"}]},
-        "originator": {"enum": ["te", "pmo", "acc", "ara", "ast", "bla", "iai", "kit", "str", "iMERIT"]},
-        "score": {"type": "number", "minimum": 0, "maximum": 1},
-        "validated": {"enum": ["True", "False"]},
-        "predicted_phase_transition": {"enum": ["Active Construction", "Post Construction"]},
-        "predicted_phase_transition_date": {"type": "string", "format": "date"},
-        "misc_info": {"type": "object"}
+        "type": {
+          "const": "site",
+          "type": "string"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        "mgrs": {
+          "type": "string",
+          "pattern": "[0-9]{2}[A-Z]{3}"
+        },
+        "status": {
+          "enum": [
+            "system_proposed",
+            "system_confirmed",
+            "system_rejected",
+            "positive_annotated",
+            "positive_partial",
+            "positive_annotated_static",
+            "positive_partial_static",
+            "positive_pending",
+            "positive_excluded",
+            "negative",
+            "ignore"
+          ]
+        },
+        "model_content": {
+          "enum": [
+            "annotation",
+            "proposed"
+          ]
+        },
+        "start_date": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "format": "date"
+            }
+          ]
+        },
+        "end_date": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "format": "date"
+            }
+          ]
+        },
+        "originator": {
+          "enum": [
+            "te",
+            "pmo",
+            "acc",
+            "ara",
+            "ast",
+            "bla",
+            "iai",
+            "kit",
+            "str",
+            "iMERIT"
+          ]
+        },
+        "score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "validated": {
+          "enum": [
+            "True",
+            "False"
+          ]
+        },
+        "predicted_phase_transition": {
+          "enum": [
+            "Active Construction",
+            "Post Construction"
+          ]
+        },
+        "predicted_phase_transition_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "misc_info": {
+          "type": "object"
+        }
       },
       "required": [
-        "type", "region_id", "site_id", "version", "mgrs", "model_content", "start_date", "end_date", "status", "originator"
+        "type",
+        "region_id",
+        "site_id",
+        "version",
+        "mgrs",
+        "model_content",
+        "start_date",
+        "end_date",
+        "status",
+        "originator"
       ]
     },
     "unassociated_site_properties": {
-      "allOf": [{"$ref": "#/definitions/_site_properties"}],
+      "allOf": [
+        {
+          "$ref": "#/definitions/_site_properties"
+        }
+      ],
       "properties": {
-        "region_id": {"type": "null"}, 
-        "site_id": {"type": "string", "pattern": "^[A-Z]{2}_[RC]x{3}_[0-9]{4}$"}
+        "region_id": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^[A-Z]{2}_[RC]x{3}$"
+            }
+          ]
+        },
+        "site_id": {
+          "type": "string",
+          "pattern": "^[A-Z]{2}_[RC]x{3}_[0-9]{4}$"
+        }
       }
     },
     "associated_site_properties": {
-      "allOf": [{"$ref": "#/definitions/_site_properties"}],
+      "allOf": [
+        {
+          "$ref": "#/definitions/_site_properties"
+        }
+      ],
       "properties": {
-        "region_id": {"type": "string", "pattern": "^[A-Z]{2}_[RCS][0-9]{3}$"},
-        "site_id": {"type": "string", "pattern": "^[A-Z]{2}_[RC][0-9]{3}_[0-9]{4}$"}
+        "region_id": {
+          "type": "string",
+          "pattern": "^[A-Z]{2}_[RCS][0-9]{3}$"
+        },
+        "site_id": {
+          "type": "string",
+          "pattern": "^[A-Z]{2}_[RC][0-9]{3}_[0-9]{4}$"
+        }
       }
     },
     "observation_properties": {
       "properties": {
-        "type": {"const": "observation", "type": "string"},
-        "observation_date": {"oneOf": [{"type": "null"}, {"type": "string", "format": "date"}]},
-        "source": {"oneOf": [{"type": "null"}, {"type": "string"}]},
-        "sensor_name": {"oneOf": [{"type": "null"}, {"enum": ["Landsat 8", "Sentinel-2", "WorldView", "Planet"]}]},
-        "current_phase": {"oneOf": [{"type": "null"}, {"type": "string", "pattern": "^((No Activity|Site Preparation|Active Construction|Post Construction|Unknown),* *)+$"}]},
-        "is_occluded": {"oneOf": [{"type": "null"}, {"type": "string", "pattern": "^((True|False),* *)+$"}]},
-        "is_site_boundary": {"oneOf": [{"type": "null"}, {"type": "string", "pattern": "^((True|False),* *)+$"}]},
-        "score": {"type": "number", "minimum": 0, "maximum": 1},
-        "misc_info": {"type": "object"}
+        "type": {
+          "const": "observation",
+          "type": "string"
+        },
+        "observation_date": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "format": "date"
+            }
+          ]
+        },
+        "source": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "sensor_name": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "enum": [
+                "Landsat 8",
+                "Sentinel-2",
+                "WorldView",
+                "Planet"
+              ]
+            }
+          ]
+        },
+        "current_phase": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^((No Activity|Site Preparation|Active Construction|Post Construction|Unknown),* *)+$"
+            }
+          ]
+        },
+        "is_occluded": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^((True|False),* *)+$"
+            }
+          ]
+        },
+        "is_site_boundary": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^((True|False),* *)+$"
+            }
+          ]
+        },
+        "score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "misc_info": {
+          "type": "object"
+        }
       },
       "required": [
-        "type", "observation_date", "source", "sensor_name", "current_phase", "is_occluded", "is_site_boundary"
+        "type",
+        "observation_date",
+        "source",
+        "sensor_name",
+        "current_phase",
+        "is_occluded",
+        "is_site_boundary"
       ]
     }
   },
@@ -126,24 +320,33 @@
         "anyOf": [
           {
             "properties": {
-              "type":{
+              "type": {
                 "const": "Feature",
                 "type": "string"
               },
               "properties": {
                 "oneOf": [
-                  {"$ref": "#/definitions/unassociated_site_properties"},
-                  {"$ref": "#/definitions/associated_site_properties"}
-                ]},
-              "geometry": {"$ref": "#/definitions/polygon"}
+                  {
+                    "$ref": "#/definitions/unassociated_site_properties"
+                  },
+                  {
+                    "$ref": "#/definitions/associated_site_properties"
+                  }
+                ]
+              },
+              "geometry": {
+                "$ref": "#/definitions/polygon"
+              }
             },
             "required": [
-              "type", "geometry", "properties"
+              "type",
+              "geometry",
+              "properties"
             ]
           },
           {
             "properties": {
-              "type":{
+              "type": {
                 "const": "Feature",
                 "type": "string"
               },
@@ -152,13 +355,19 @@
               },
               "geometry": {
                 "oneOf": [
-                  {"$ref": "#/definitions/polygon"},
-                  {"$ref": "#/definitions/multipolygon"}
+                  {
+                    "$ref": "#/definitions/polygon"
+                  },
+                  {
+                    "$ref": "#/definitions/multipolygon"
+                  }
                 ]
               }
             },
             "required": [
-              "type", "geometry", "properties"
+              "type",
+              "geometry",
+              "properties"
             ]
           }
         ]

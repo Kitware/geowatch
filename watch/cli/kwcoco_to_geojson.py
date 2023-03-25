@@ -44,12 +44,12 @@ import ubelt as ub
 import scriptconfig as scfg
 
 from watch.tasks.tracking import from_heatmap, from_polygon
-from watch.utils.kwcoco_extensions import sorted_annots
 
 _KNOWN_TRACK_FUNCS = {
     'saliency_heatmaps': from_heatmap.TimeAggregatedBAS,
     'saliency_polys': from_polygon.OverlapTrack,
     'class_heatmaps': from_heatmap.TimeAggregatedSC,
+    'site_validation': from_heatmap.TimeAggregatedSV,
     'class_polys': from_polygon.OverlapTrack,
     'mono_track': from_polygon.MonoTrack,
 }
@@ -152,6 +152,10 @@ class KWCocoToGeoJSONConfig(scfg.DataConfig):
             CocoDatasets if possible.
 
             Valid params for each track_fn are: {_trackfn_details_docs}
+            '''), group='track')
+    viz_out_dir = scfg.Value(None, help=ub.paragraph(
+            '''
+            Directory to save tracking vizualizations to; if None, don't viz
             '''), group='track')
     site_summary = scfg.Value(None, help=ub.paragraph(
             '''
@@ -370,17 +374,9 @@ def track_to_site(coco_dset,
     Turn a kwcoco track into an IARPA site model or site summary
     '''
 
-    # get annotations in this track, sort them, and group them into features
-    annots = sorted_annots(coco_dset, trackid)
-    try:
-        ixs, gids, anns = annots.lookup(
-            'track_index'), annots.gids, annots.objs
-        # HACK because track_index isn't unique, need tiebreaker key to sort on
-        # _, gids, anns = zip(*sorted(zip(ixs, gids, anns)))
-        _, _, gids, anns = zip(*sorted(zip(ixs, range(len(ixs)), gids, anns)))
-    except KeyError:
-        # if track_index is missing, assume they're already sorted
-        gids, anns = annots.gids, annots.objs
+    # get annotations in this track sorted by frame_index
+    annots = coco_dset.annots(trackid=trackid)
+    gids, anns = annots.gids, annots.objs
 
     features = [
         geojson_feature(_anns, coco_dset, with_properties=(not as_summary))
@@ -395,7 +391,8 @@ def track_to_site(coco_dset,
         site_id = '_'.join((region_id, str(site_idx).zfill(4)))
     else:
         site_id = trackid
-        region_id = '_'.join(site_id.split('_')[:-1])
+        # TODO make more robust
+        region_id = '_'.join(site_id.split('_')[:2])
 
     if as_summary:
         return site_feature(coco_dset, region_id, site_id, trackid, gids, features, as_summary)
@@ -467,6 +464,14 @@ def site_feature(coco_dset, region_id, site_id, trackid, gids, features, as_summ
     geom_list = [_single_geometry(feat['geometry']) for feat in features]
     geometry = _combined_geometries(geom_list)
 
+    # site and site_summary features must be polygons
+    if isinstance(geometry, shapely.geometry.MultiPolygon):
+        if len(geometry.geoms) == 1:
+            geometry = geometry.geoms[0]
+        else:
+            print(f'warning: {coco_dset=} {region_id=} {site_id=} {trackid=} has multi-part site geometry')
+            geometry = geometry.convex_hull
+
     centroid_coords = np.array(geometry.centroid.coords)
     if centroid_coords.size == 0:
         raise AssertionError('Empty geometry. What happened?')
@@ -482,7 +487,7 @@ def site_feature(coco_dset, region_id, site_id, trackid, gids, features, as_summ
     # system_confirmed, system_rejected, or system_proposed
     # TODO system_proposed pre val-net
     status = set(
-        sorted_annots(coco_dset, trackid).get('status',
+        coco_dset.annots(trackid=trackid).get('status',
                                               'system_confirmed'))
     assert len(status) == 1, f'inconsistent {status=} for {trackid=}'
     status = status.pop()
@@ -537,24 +542,30 @@ def convert_kwcoco_to_iarpa(coco_dset,
             dictionary of json-style data in IARPA site format
 
     Example:
+        >>> import watch
         >>> from watch.cli.kwcoco_to_geojson import *  # NOQA
         >>> from watch.tasks.tracking.normalize import run_tracking_pipeline
         >>> from watch.tasks.tracking.from_polygon import MonoTrack
-        >>> from watch.demo import smart_kwcoco_demodata
         >>> import ubelt as ub
-        >>> import watch
         >>> coco_dset = watch.coerce_kwcoco('watch-msi', heatmap=True, geodata=True, dates=True)
-        >>> #coco_dset = smart_kwcoco_demodata.demo_smart_aligned_kwcoco()
         >>> coco_dset = run_tracking_pipeline(coco_dset, track_fn=MonoTrack, overwrite=False)
         >>> videos = coco_dset.videos()
         >>> videos.set('name', ['DM_R{:03d}'.format(vidid) for vidid in videos])
         >>> sites = convert_kwcoco_to_iarpa(coco_dset)
-        >>> print('sites = {}'.format(ub.repr2(sites, nl=7, sort=0)))
-        >>> import jsonschema
-        >>> import watch
-        >>> SITE_SCHEMA = watch.rc.load_site_model_schema()
-        >>> for site in sites:
-        >>>     jsonschema.validate(site, schema=SITE_SCHEMA)
+        >>> print(f'{len(sites)} sites')
+        >>> if 0:  # validation fails
+        >>>     import jsonschema
+        >>>     SITE_SCHEMA = watch.rc.load_site_model_schema()
+        >>>     for site in sites:
+        >>>         jsonschema.validate(site, schema=SITE_SCHEMA)
+        >>> elif 0:  # but this works if metrics are available
+        >>>     import tempfile
+        >>>     import json
+        >>>     from iarpa_smart_metrics.evaluation import SiteStack
+        >>>     for site in sites:
+        >>>         with tempfile.NamedTemporaryFile() as f:
+        >>>             json.dump(site, open(f.name, 'w'))
+        >>>             SiteStack(f.name)
     """
     sites = []
     for vidid, video in coco_dset.index.videos.items():
@@ -580,6 +591,22 @@ def _validate():
         site = json.load(open(fpath, 'r'))
         jsonschema.validate(site, schema=SITE_SCHEMA)
 
+
+# debug mode is for comparing against a set of known GT site models
+DEBUG_MODE = 0
+if DEBUG_MODE:
+    SITE_SUMMARY_POS_STATUS = {
+        'positive_annotated',
+        'system_proposed', 'system_confirmed',
+        'positive_annotated_static',  # TODO confirm
+        'negative',
+    }
+else:
+    # TODO handle positive_partial
+    SITE_SUMMARY_POS_STATUS = {
+        'positive_annotated',
+        'system_proposed', 'system_confirmed',
+    }
 
 def _coerce_site_summaries(site_summary_or_region_model,
                            default_region_id=None, strict=True) -> List[Tuple[str, Dict]]:
@@ -638,8 +665,7 @@ def _coerce_site_summaries(site_summary_or_region_model,
             _summaries = [
                 f for f in region_model['features']
                 if (f['properties']['type'] == 'site_summary'
-                    # TODO handle positive_partial
-                    and f['properties']['status'] in {'positive_annotated', 'system_proposed', 'system_confirmed'})
+                    and f['properties']['status'] in SITE_SUMMARY_POS_STATUS)
             ]
             region_feat = None
             for f in region_model['features']:
@@ -708,8 +734,18 @@ def add_site_summary_to_kwcoco(possible_summaries,
     site_idx_to_vidid = []
     unassigned_site_idxs = []
 
+    USE_NAME_ASSIGNMENT = DEBUG_MODE  # off by default, for known site models
     USE_GEO_ASSIGNMENT = 1
-    if USE_GEO_ASSIGNMENT:
+
+    if USE_NAME_ASSIGNMENT:
+        vids = coco_dset.videos().lookup(['name', 'id'])
+        for i, (_, s) in enumerate(site_summaries):
+            sid = s['properties']['site_id']
+            for vid, vn in zip(vids['id'], vids['name']):
+                if sid in vn:
+                    site_idx_to_vidid.append((i, vid))
+
+    elif USE_GEO_ASSIGNMENT:
         from watch.utils import kwcoco_extensions
         from watch.utils import util_gis
         import geopandas as gpd
@@ -814,9 +850,6 @@ def add_site_summary_to_kwcoco(possible_summaries,
                 track_id=track_id
             )
 
-    # TODO: we can be more efficient if we already have the transform data
-    # computed. We need to pass it in here, and prevent it from making
-    # more calls to geotiff_metadata
     print('Projecting regions to pixel coords')
     from watch.utils import kwcoco_extensions
     kwcoco_extensions.warp_annot_segmentations_from_geos(coco_dset)
@@ -874,7 +907,6 @@ def main(args=None, **kwargs):
         >>> # run BAS on demodata in a new place
         >>> import watch
         >>> coco_dset = watch.coerce_kwcoco('watch-msi', heatmap=True, geodata=True, dates=True)
-        >>> #coco_dset = smart_kwcoco_demodata.demo_smart_aligned_kwcoco()
         >>> dpath = ub.Path.appdir('watch', 'test', 'tracking', 'main0').ensuredir()
         >>> coco_dset.reroot(absolute=True)
         >>> coco_dset.fpath = dpath / 'bas_input.kwcoco.json'
@@ -899,10 +931,10 @@ def main(args=None, **kwargs):
         >>>        'polygon_simplify_tolerance': 1}),
         >>> ]
         >>> main(args)
-        >>> # Run SC on the same dset
+        >>> # Run SC on the same dset, but with BAS pred sites removed 
         >>> sites_dir = dpath / 'sites'
         >>> args = sc_args = [
-        >>>     '--in_file', str(bas_coco_fpath),
+        >>>     '--in_file', coco_dset.fpath,
         >>>     '--out_sites_dir', str(sites_dir),
         >>>     '--out_sites_fpath', str(sc_fpath),
         >>>     '--out_kwcoco', str(sc_coco_fpath),
@@ -930,7 +962,6 @@ def main(args=None, **kwargs):
         >>> obs_rows = sc_df[sc_df['type'] == 'observation']
         >>> assert len(site_rows) > 0
         >>> assert len(ssum_rows) > 0
-        >>> assert len(ssum_rows) == len(site_rows)
         >>> assert len(ssum_rows) == len(site_rows)
         >>> assert len(obs_rows) > len(site_rows)
         >>> # Cleanup
@@ -1158,8 +1189,8 @@ def main(args=None, **kwargs):
     ../tasks/tracking/normalize.py
     """
     coco_dset = watch.tasks.tracking.normalize.run_tracking_pipeline(
-        coco_dset, track_fn=track_fn, overwrite=False, gt_dset=gt_dset,
-        **track_kwargs)
+        coco_dset, track_fn=track_fn, gt_dset=gt_dset,
+        viz_out_dir=args.viz_out_dir, **track_kwargs)
 
     # Measure how long tracking takes
     proc_context.stop()

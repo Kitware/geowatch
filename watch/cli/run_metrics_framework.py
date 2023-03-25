@@ -166,9 +166,14 @@ def ensure_thumbnails(image_root, region_id, sites):
     # build region viz
     region_root = image_root.joinpath(*region_id.split('_')) / 'images' / 'a' / 'b'
     region_root.mkdir(parents=True, exist_ok=True)
-    for img_path, img_date in ub.dict_union(*site_img_date_dct.values()).items():
-        link_path = (region_root / '_'.join((img_date.replace('-', ''), img_path.with_suffix('.jp2').name)))
-        ub.symlink(img_path, link_path, verbose=0)
+    for img_path, img_date in ub.dict_union(
+            *site_img_date_dct.values()).items():
+        link_path = (region_root / '_'.join(
+            (img_date.replace('-', ''), img_path.with_suffix('.jp2').name)))
+        if img_path.exists():
+            ub.symlink(img_path, link_path, verbose=0)
+        else:
+            print(f'warning: {img_path=} not found')
 
     # build site viz
     for site_id, img_date_dct in site_img_date_dct.items():
@@ -176,8 +181,12 @@ def ensure_thumbnails(image_root, region_id, sites):
         site_root.mkdir(parents=True, exist_ok=True)
         for img_path, img_date in img_date_dct.items():
             # TODO crop
-            link_path = (site_root / '_'.join((img_date.replace('-', ''), img_path.with_suffix('.tif').name)))
-            ub.symlink(img_path, link_path, verbose=0)
+            link_path = (site_root / '_'.join(
+                (img_date.replace('-', ''), img_path.with_suffix('.tif').name)))
+            if img_path.exists():
+                ub.symlink(img_path, link_path, verbose=0)
+            else:
+                print(f'warning: {img_path=} not found')
 
 
 def main(cmdline=True, **kwargs):

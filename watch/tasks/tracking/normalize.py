@@ -1,16 +1,13 @@
 import kwcoco
 import kwimage
 import warnings
-from os.path import join
 import numpy as np
 import ubelt as ub
 from typing import Dict, List, Any
 from watch.utils.kwcoco_extensions import TrackidGenerator
-from watch.gis.geotiff import geotiff_crs_info
+from watch.utils.kwcoco_extensions import warp_annot_segmentations_to_geos
 from watch.tasks.tracking.utils import TrackFunction
-from watch.heuristics import SITE_SUMMARY_CNAME
 from watch.tasks.tracking.utils import check_only_bg
-from watch.utils.kwcoco_extensions import sorted_annots
 try:
     from xdev import profile
 except Exception:
@@ -37,88 +34,6 @@ def dedupe_annots(coco_dset):
             '''))
         aids_to_remove = list(annots.take(dup_idxs))
         coco_dset.remove_annotations(aids_to_remove, verbose=1)
-
-    return coco_dset
-
-
-@profile
-def add_geos(coco_dset, overwrite, max_workers=16):
-    '''
-    Add 'segmentation_geos' to every annotation in coco_dset with a
-    'segmentation'.
-
-    TODO serializable osr.CoordinateTransform+srcCRS+dstCRS obj
-
-    TODO how to handle cropped annotations from propagation?
-    Currently this will not correctly round-trip a ground truth site model
-    (IARPA -> kwcoco -> IARPA) due to these edge effects.
-    Could use 'orig' attr to fix this, but of course generated annotations
-    won't have this.
-    '''
-
-    if not overwrite:
-        if None not in coco_dset.annots().get('segmentation_geos', None):
-            return coco_dset
-
-    def needs_geos(ann):
-        return 'segmentation' in ann and (overwrite or
-                                          ('segmentation_geos' not in ann))
-
-    # find images containing at least 1 annotation that needs geo coords
-    annots = coco_dset.annots()
-    annots_to_fix = annots.compress(map(needs_geos, annots.objs))
-    gid_to_aids = ub.group_items(annots_to_fix,
-                                 annots_to_fix.lookup('image_id'))
-    images_to_fix = coco_dset.images(list(gid_to_aids.keys()))
-
-    # parallelize grabbing img CRS info
-    executor = ub.JobPool('thread', max_workers)
-
-    for gid in ub.ProgIter(images_to_fix, desc='submit crs jobs'):
-        coco_img: kwcoco.CocoImage = coco_dset.coco_image(gid)
-        # Hack: find an asset likely to have geoinfo
-        aux = coco_img.find_asset_obj('red|green|blue|panchromatic|pan')
-        if aux is None:
-            aux = coco_img.primary_asset()
-        fpath = join(coco_img.bundle_dpath, aux['file_name'])
-        job = executor.submit(geotiff_crs_info, fpath)
-        job.gid = gid
-        job.aux = aux
-
-    for job in executor.as_completed(desc='precomputing geo-segmentations'):
-        # job = executor.jobs[2]
-        info = job.result()
-        gid = job.gid
-        aux = job.aux
-        aids = gid_to_aids[gid]
-
-        anns = coco_dset.annots(aids=aids).objs
-        assert len(anns) > 0, f'image {gid} should have annotations!'
-        '''
-        # if this was encoded into the image dict ok, we can just use it there
-        # unfortunately info is still needed because wld_to_wgs84 may
-        # not be serializable
-        assert np.allclose(info['pxl_to_wld'], np.array(kwimage.Affine.coerce(
-            annotated_band(img)['wld_to_pxl']).inv()))
-        '''
-        img_anns = kwimage.SegmentationList(
-            [kwimage.Segmentation.coerce(ann['segmentation']) for ann in anns])
-
-        warp_img_from_aux = kwimage.Affine.coerce(
-            aux.get('warp_aux_to_img', None)).inv()
-        aux_anns = img_anns.warp(warp_img_from_aux)
-        wld_anns = aux_anns.warp(info['pxl_to_wld'])
-        wgs_anns = wld_anns.warp(info['wld_to_wgs84'])
-        # Flip into traditional CRS84 coordinates if we need to
-        if info['wgs84_crs_info'][
-                'axis_mapping'] == 'OAMS_AUTHORITY_COMPLIANT':
-            crs84_anns = [poly.swap_axes() for poly in wgs_anns]
-        else:
-            crs84_anns = wgs_anns
-        geojson_anns = [poly.to_geojson() for poly in crs84_anns]
-
-        for ann, geojson_ann in zip(anns, geojson_anns):
-            ann['segmentation_geos'] = geojson_ann
 
     return coco_dset
 
@@ -173,8 +88,8 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
         >>> img['height'] *= scale_factor
         >>> img['warp_img_to_vid']['scale'] = 1/scale_factor
         >>> for aux in img['auxiliary']:
-        >>>     aux['warp_aux_to_img']['scale'] = aux['warp_aux_to_img'].get(
-        >>>         'scale', 1) * scale_factor
+        >>>     aux['warp_aux_to_img']['scale'] = np.array(
+        >>>         aux['warp_aux_to_img'].get('scale', 1)) * scale_factor
         >>> annots = coco_dset.annots(gid=img['id'])
         >>> old_annots = deepcopy(annots)
         >>> dets = annots.detections.warp(aff)
@@ -186,7 +101,7 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
         >>>     style='new'))
         >>> # test that scaling worked
         >>> assert np.all(annots.boxes.area < old_annots.boxes.area)
-        >>> assert np.all(annots.boxes.warp(aff.inv()).area ==
+        >>> assert np.allclose(annots.boxes.warp(aff.inv()).area,
         >>>     old_annots.boxes.area)
         >>> # test that remove_small_annots no-ops with no threshold
         >>> # (ie there are no invalid annots here)
@@ -331,7 +246,7 @@ def dedupe_tracks(coco_dset):
     new_trackids = TrackidGenerator(coco_dset)
 
     for trackid in coco_dset.index.trackid_to_aids.keys():
-        annots = sorted_annots(coco_dset, trackid)
+        annots = coco_dset.annots(trackid=trackid)
 
         # split each video into a separate track
         for idx, (vidid, aids) in enumerate(
@@ -341,23 +256,6 @@ def dedupe_tracks(coco_dset):
                                                       None)).items()):
             if idx > 0:
                 coco_dset.annots(aids=aids).set('track_id', next(new_trackids))
-
-    return coco_dset
-
-
-def add_track_index(coco_dset):
-    '''
-    Ensure each track's track_index is fully populated with strictly
-    increasing but not-necessarily-unique values (can have multiple track
-    entries per image)
-    '''
-    for trackid in coco_dset.index.trackid_to_aids.keys():
-        annots = sorted_annots(coco_dset, trackid)
-
-        # order the track by track_index
-        sorted_gids = coco_dset.index._set_sorted_by_frame_index(annots.gids)
-        track_index_dict = dict(zip(sorted_gids, range(len(sorted_gids))))
-        annots.set('track_index', map(track_index_dict.get, annots.gids))
 
     return coco_dset
 
@@ -397,17 +295,32 @@ def normalize_phases(coco_dset,
     Example:
         >>> # test baseline guess
         >>> from watch.tasks.tracking.normalize import normalize_phases
+        >>> from watch.tasks.tracking.normalize import normalize_phases
         >>> from watch.demo import smart_kwcoco_demodata
-        >>> from watch.utils.kwcoco_extensions import sorted_annots
         >>> dset = smart_kwcoco_demodata.demo_kwcoco_with_heatmaps()
-        >>> dset.cats[3]['name'] = 'salient'
-        >>> dset.remove_categories([1,2])
-        >>> assert dset.cats == {3: {'id': 3, 'name': 'salient'}}
+        >>> dset.remove_categories([1,3,4,5])
+        >>> dset.cats[2]['name'] = 'salient'
+        >>> assert dset.cats == {2: {'id': 2, 'name': 'salient'}}
         >>> # HACK, this shouldn't be needed?
         >>> # TODO file bug report
         >>> dset._build_index()
         >>> dset = normalize_phases(dset)
-        >>> assert (sorted_annots(dset, trackid=1).cnames ==
+        >>> assert (dset.annots(trackid=1).cnames ==
+        >>>     ((['Site Preparation'] * 10) +
+        >>>      (['Active Construction'] * 9) +
+        >>>      (['Post Construction'])))
+        >>> # try again with smoothing
+        >>> dset = normalize_phases(dset, use_viterbi=True)
+        >>> from watch.demo import smart_kwcoco_demodata
+        >>> dset = smart_kwcoco_demodata.demo_kwcoco_with_heatmaps()
+        >>> dset.remove_categories([1,3,4,5])
+        >>> dset.cats[2]['name'] = 'salient'
+        >>> assert dset.cats == {2: {'id': 2, 'name': 'salient'}}
+        >>> # HACK, this shouldn't be needed?
+        >>> # TODO file bug report
+        >>> dset._build_index()
+        >>> dset = normalize_phases(dset)
+        >>> assert (dset.annots(trackid=1).cnames ==
         >>>     ((['Site Preparation'] * 10) +
         >>>      (['Active Construction'] * 9) +
         >>>      (['Post Construction'])))
@@ -464,13 +377,13 @@ def normalize_phases(coco_dset,
     for trackid, annot_ids in coco_dset.index.trackid_to_aids.items():
         n_anns = len(annot_ids)
         if n_anns > 1:
-            annots = sorted_annots(coco_dset, trackid)
+            annots = coco_dset.annots(trackid=trackid)
             has_missing_labels = bool(set(annots.cnames) - cnames_to_score)
             has_good_labels = bool(set(annots.cnames) - cnames_to_replace)
             if has_missing_labels and has_good_labels:
                 # if we have partial coverage, interpolate from good labels
                 log.update(['partial class labels'])
-                coco_dset = phase.interpolate(coco_dset, trackid)
+                coco_dset = phase.interpolate(coco_dset, trackid, cnames_to_keep=cnames_to_score)
             else:
                 if has_missing_labels:
                     # else, predict site prep for the first half of the track
@@ -491,7 +404,7 @@ def normalize_phases(coco_dset,
 
     for trackid, annot_ids in coco_dset.index.trackid_to_aids.items():
         n_anns = len(annot_ids)
-        annots = sorted_annots(coco_dset, trackid)
+        annots = coco_dset.annots(trackid=trackid)
 
         if n_anns > 1:
 
@@ -514,7 +427,7 @@ def normalize_phases(coco_dset,
             # coco_dset = phase.dedupe_background_anns(coco_dset, trackid)
             coco_dset = phase.ensure_post(coco_dset, trackid)
 
-        annots = sorted_annots(coco_dset, trackid)
+        annots = coco_dset.annots(trackid=trackid)
         is_empty = check_only_bg(annots.cnames)
         EMPTY_TRACK_BEHAVIOR = 'ignore'
 
@@ -556,7 +469,7 @@ def normalize_phases(coco_dset,
             annots.set(ann_field, phase_transition_days)
         else:
             for trackid in coco_dset.index.trackid_to_aids.keys():
-                _annots = sorted_annots(coco_dset, trackid)
+                _annots = coco_dset.annots(trackid=trackid)
                 phase_transition_days = phase.phase_prediction_baseline(_annots)
                 _annots.set(ann_field, phase_transition_days)
 
@@ -649,18 +562,16 @@ def dedupe_dates(coco_dset):
         'Landsat 7': 1
     }
     for trackid in coco_dset.index.trackid_to_aids.keys():
-        annots = sorted_annots(coco_dset, trackid)
+        annots = coco_dset.annots(trackid=trackid)
         dates = [util_time.coerce_datetime(d).date() for d in annots.images.lookup('date_captured')]
-        tixs = annots.lookup('track_index', None)  # Can we remove track-index here?
         fixs = annots.images.lookup('frame_index')
 
         is_sorted = lambda arr: np.all(arr[:-1] <= arr[1:])  # noqa
-        if not all(date_track_frame_sorted := (
+        if not all(date_frame_sorted := (
                     is_sorted(dates),
-                    is_sorted(tixs),
                     is_sorted(fixs))):
             # this should never print
-            print(f'WARNING: {trackid=} {date_track_frame_sorted=}')
+            print(f'WARNING: {trackid=} {date_frame_sorted=}')
 
     # remove full images instead of iterating over tracks for efficiency
     # not possible for some other removal methods, but it is for this one
@@ -690,10 +601,8 @@ def dedupe_dates(coco_dset):
 def normalize(
         coco_dset,
         track_fn,
-        overwrite,
         gt_dset=None,
-        viz_sc_bounds=False,
-        viz_videos=False,
+        viz_out_dir=None,
         use_viterbi=False,
         # t_probs=None,  # for viterbi
         # e_probs=None,  # for viterbi
@@ -725,26 +634,22 @@ def normalize(
         >>> d.cats[1]['name'] = 'change'
         >>> d.images().set('channels', 'rgb')
         >>> # test everything except geo-info
-        >>> overwrite = False
-        >>> def _normalize_annots(coco_dset, overwrite):
+        >>> def _normalize_annots(coco_dset):
         >>>     coco_dset = dedupe_annots(coco_dset)
-        >>>     # coco_dset = add_geos(coco_dset, overwrite)
         >>>     coco_dset = remove_small_annots(coco_dset,
         >>>         min_geo_precision=None)
         >>>     return coco_dset
         >>> coco_dset = d.copy()
-        >>> coco_dset = _normalize_annots(coco_dset, overwrite)
+        >>> coco_dset = _normalize_annots(coco_dset)
         >>> assert coco_dset.anns == d.anns
         >>> coco_dset = ensure_videos(coco_dset)
         >>> assert coco_dset.index.vidid_to_gids[1] == coco_dset.imgs.keys()
         >>> n_existing_annots = coco_dset.n_annots
-        >>> coco_dset = OverlapTrack().apply_per_video(coco_dset, overwrite)
+        >>> coco_dset = OverlapTrack().apply_per_video(coco_dset)
         >>> assert set(coco_dset.annots().get('track_id')) == {1}
         >>> assert coco_dset.n_annots == n_existing_annots
         >>> coco_dset = dedupe_tracks(coco_dset)
         >>> assert set(coco_dset.annots().get('track_id')) == {1}
-        >>> coco_dset = add_track_index(coco_dset)
-        >>> assert coco_dset.annots().get('track_index') == [0,1,2]
         >>> coco_dset = normalize_phases(coco_dset, baseline_keys={'change'})
         >>> assert (coco_dset.annots().cnames ==
         >>> ['Site Preparation', 'Site Preparation', 'Post Construction'])
@@ -757,12 +662,18 @@ def normalize(
     if DEBUG_JSON_SERIALIZABLE:
         from watch.utils.util_json import debug_json_unserializable
 
-    viz_out_dir = ub.Path('_assets/tracking_visualization')
+    if viz_out_dir is not None:
+        try:
+            viz_out_dir = ub.Path(viz_out_dir)
+        except TypeError:
+            viz_out_dir = ub.Path('_assets/tracking_visualization')
+            print(f'setting default {viz_out_dir=}')
+        viz_out_dir.mkdir(parents=True, exist_ok=True)
 
-    def _normalize_annots(coco_dset, overwrite):
+    def _normalize_annots(coco_dset):
         print(f'coco_dset.n_anns={coco_dset.n_annots}')
         coco_dset = dedupe_annots(coco_dset)
-        coco_dset = add_geos(coco_dset, overwrite)
+        warp_annot_segmentations_to_geos(coco_dset)
         coco_dset = remove_small_annots(coco_dset,
                                         min_area_px=0,
                                         min_geo_precision=None)
@@ -772,7 +683,7 @@ def normalize(
         return coco_dset
 
     if len(coco_dset.anns) > 0:
-        coco_dset = _normalize_annots(coco_dset, overwrite)
+        coco_dset = _normalize_annots(coco_dset)
     coco_dset = ensure_videos(coco_dset)
 
     if DEBUG_JSON_SERIALIZABLE:
@@ -789,7 +700,7 @@ def normalize(
     if DEBUG_JSON_SERIALIZABLE:
         debug_json_unserializable(coco_dset.dataset, 'Before apply_per_video: ')
 
-    tracker: TrackFunction = track_fn(**track_kwargs)
+    tracker: TrackFunction = track_fn(**track_kwargs, viz_out_dir=viz_out_dir)
     print('track_kwargs = {}'.format(ub.repr2(track_kwargs, nl=1)))
     print('{} {}'.format(tracker.__class__.__name__, ub.repr2(tracker.__dict__, nl=1)))
     out_dset = tracker.apply_per_video(coco_dset)
@@ -798,20 +709,17 @@ def normalize(
         debug_json_unserializable(out_dset.dataset, 'After apply_per_video: ')
 
     # normalize and add geo segmentations
-    out_dset = _normalize_annots(out_dset, overwrite=False)
+    out_dset = _normalize_annots(out_dset)
     out_dset._build_index()
     print('After normalizing: track ids',
           set(out_dset.annots().get('track_id', None)))
 
     out_dset = dedupe_tracks(out_dset)
-    out_dset = add_track_index(out_dset)
 
-    if viz_sc_bounds:
-        from watch.tasks.tracking.visualize import keys_to_score_sc, viz_track_scores
-        track_cats = [SITE_SUMMARY_CNAME] + sorted(set(out_dset.annots().cnames))
-        keys_to_score = keys_to_score_sc
+    if viz_out_dir is not None:
+        from watch.tasks.tracking.visualize import viz_track_scores
         out_pth = viz_out_dir / 'track_scores.jpg'
-        viz_track_scores(out_dset, track_cats, keys_to_score, out_pth)
+        viz_track_scores(out_dset, out_pth, gt_dset)
 
     if isinstance(use_viterbi, str):
         parts = use_viterbi.split(',')
@@ -827,7 +735,12 @@ def normalize(
         e_probs=e_probs
     )
     if 'key' in track_kwargs:  # assume this is a baseline (saliency) key
-        phase_kw['baseline_keys'] = set(track_kwargs['key'])
+        k = track_kwargs['key']
+        if ub.iterable(k):
+            k = set(k)
+        else:
+            k = {k}
+        phase_kw['baseline_keys'] = k
     out_dset = normalize_phases(out_dset, **phase_kw)
 
     if DEBUG_JSON_SERIALIZABLE:
@@ -843,19 +756,19 @@ def normalize(
     if DEBUG_JSON_SERIALIZABLE:
         debug_json_unserializable(out_dset.dataset, 'Output of normalize: ')
 
-    if viz_videos:
-        # TODO: Remove this option, have the user call visualize videos on the
-        # output if they want that. However, what we DO want is a way to dump
-        # and visualize the data the tracker is using to make decisions.
-        # It would be even nicer if there was some way to aggregate that with
-        # smartwatch visualize video
-
+    if viz_out_dir is not None:
         # visualize predicted sites with true sites
-        from .visualize import visualize_videos
-        visualize_videos(out_dset,
-                         gt_dset,
-                         viz_out_dir,
-                         coco_dset_sc=track_kwargs.get('coco_dset_sc'))
+
+        # TODO think more about key handling
+        from watch.tasks.tracking.visualize import visualize_videos
+        from watch.tasks.tracking.utils import _validate_keys
+        from dataclasses import asdict
+        fg, bg = _validate_keys(
+            asdict(tracker).get('key', None),
+            asdict(tracker).get('bg_key', None))
+        keys = '|'.join([*fg, *bg])
+        visualize_videos(out_dset, viz_out_dir / 'gif', keys, gt_dset)
+
     return out_dset
 
 

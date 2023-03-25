@@ -10,6 +10,7 @@ import kwimage
 import kwarray
 import kwcoco
 import numpy as np
+import pandas as pd
 import ubelt as ub
 import geopandas as gpd
 import itertools
@@ -17,9 +18,10 @@ import math
 from typing import Iterable, Tuple, Union, Optional, Literal
 from dataclasses import dataclass
 from shapely.ops import unary_union
-from watch.tasks.tracking.utils import (NewTrackFunction, mask_to_polygons,
+from watch.tasks.tracking.utils import (NewTrackFunction, NoOpTrackFunction,
+                                        mask_to_polygons,
                                         Poly, _validate_keys, pop_tracks,
-                                        build_heatmaps, trackid_is_default,
+                                        trackid_is_default,
                                         gpd_sort_by_gid, gpd_len,
                                         gpd_compute_scores)
 
@@ -27,6 +29,8 @@ try:
     from xdev import profile
 except Exception:
     profile = ub.identity
+
+VIZ_DPATH = None
 
 #
 # --- aggregation functions for heatmaps ---
@@ -157,6 +161,16 @@ def probs(heatmaps, norm_ord, morph_kernel, thresh):
     hard_probs = kwimage.morphology(probs > thresh, 'dilate', morph_kernel)
     modulated_probs = probs * hard_probs
 
+    if VIZ_DPATH is not None:
+        kwimage.imwrite(VIZ_DPATH / '0.png', (probs * 255).astype(np.uint8))
+        kwimage.imwrite(VIZ_DPATH / '0.tiff', probs)
+
+        # here, the png is the truth
+        kwimage.imwrite(VIZ_DPATH / '1.png', (hard_probs * 255).astype(np.uint8))
+
+        kwimage.imwrite(VIZ_DPATH / '2.png', (modulated_probs * 255).astype(np.uint8))
+        kwimage.imwrite(VIZ_DPATH / '2.tiff', modulated_probs)
+
     return modulated_probs
 
 
@@ -267,7 +281,7 @@ class ResponsePolygonFilter:
         self.threshold = threshold
 
         gids = gdf['gid'].unique()
-        mean_response = gdf[('fg', None)].mean()
+        mean_response = gdf[('fg', -1)].mean()
 
         self.gids = gids
         self.mean_response = mean_response
@@ -281,12 +295,12 @@ class ResponsePolygonFilter:
 
             def _filter(grp):
                 this_response = grp[grp['gid'].isin(self.gids)][('fg',
-                                                                 None)].mean()
+                                                                 -1)].mean()
                 return this_response / self.mean_response > threshold
 
             return gdf.groupby('track_idx', group_keys=False).filter(_filter)
         else:
-            cond = (gdf[('fg', None)] / self.mean_response > threshold)
+            cond = (gdf[('fg', -1)] / self.mean_response > threshold)
             return gdf[cond]
 
 
@@ -298,6 +312,10 @@ class ResponsePolygonFilter:
 @profile
 def _add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
     key, bg_key = _validate_keys(key, bg_key)
+
+    if tracks.empty:
+        print('no tracks to add!')
+        return sub_dset
 
     @ub.memoize
     def _warp_img_from_vid(gid):
@@ -336,6 +354,7 @@ def _add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
                        bbox=bbox,
                        segmentation=segmentation,
                        score=this_score,
+                       scores=scores_dct,
                        track_id=track_id)
         return new_ann
 
@@ -360,10 +379,10 @@ def _add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
         import warnings
         warnings.warn('warning: no tracks to add the the kwcoco dataset')
     else:
-        for tid, grp in groups:
+        for tid, grp in tracks.groupby('track_idx', axis=0):
             score_chan = kwcoco.ChannelSpec('|'.join(key))
-            this_score = grp[(score_chan.spec, None)]
-            scores_dct = {k: grp[(k, None)] for k in score_chan.unique()}
+            this_score = grp[(score_chan.spec, -1)]
+            scores_dct = {k: grp[(k, -1)] for k in score_chan.unique()}
             scores_dct = [dict(zip(scores_dct, t))
                           for t in zip(*scores_dct.values())]
             _add(zip(grp['gid'], grp['poly'], this_score, scores_dct), tid)
@@ -377,6 +396,75 @@ def _add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
     if DEBUG_JSON_SERIALIZABLE:
         from watch.utils.util_json import debug_json_unserializable
         debug_json_unserializable(sub_dset.dataset)
+
+    return sub_dset
+
+
+@profile
+def site_validation(
+    sub_dset,
+    thresh=0.25,
+    span_steps=15,
+    ):
+    """
+    Example:
+        >>> import watch
+        >>> from watch.tasks.tracking.from_heatmap import *  # NOQA
+        >>> coco_dset = watch.coerce_kwcoco(
+        >>>     'watch-msi', heatmap=True, geodata=True, dates=True)
+        >>> vid_id = coco_dset.videos()[0]
+        >>> sub_dset = coco_dset.subset(list(coco_dset.images(video_id=vid_id)))
+        >>> import numpy as np
+        >>> for ann in sub_dset.anns.values():
+        >>>     ann['score'] = float(np.random.rand())
+        >>> sub_dset.remove_annotations(sub_dset.index.trackid_to_aids[None])
+        >>> sub_dset = site_validation(sub_dset)
+    """
+
+    # Turn annotations into table we can query
+    # annots = pd.DataFrame([
+    #     (ub.udict(ann) & {'score', 'track_id', 'track_idx'})
+    #     # {
+    #     #     'score': ann['score'],
+    #     #     'track_id': ann.get('track_id', None),
+    #     #     'track_idx': ann.get('track_idx', None),
+    #     # }
+    #     for ann in sub_dset.dataset["annotations"]
+    # ])
+    imgs = pd.DataFrame(sub_dset.dataset["images"])
+    if "timestamp" not in imgs.columns:
+        imgs["timestamp"] = imgs["id"]
+
+    annots = pd.DataFrame(sub_dset.dataset["annotations"])
+
+    if annots.shape[0] == 0:
+        print("Nothing to filter")
+        return sub_dset
+
+    annots = annots[[
+        "id", "image_id", "track_id", "score"
+    ]].join(
+        imgs[["timestamp"]],
+        on="image_id",
+    )
+
+    track_ids_to_drop = []
+    ann_ids_to_drop = []
+
+    for track_id, track_group in annots.groupby('track_id', axis=0):
+
+        # Scores are inherently noisy. We smooth them out with a
+        # `span_steps`-wide weighted moving average. The maximum
+        # value of this decides whether to keep the track.
+        # TODO: do something more elegant here?
+        score = track_group["score"].ewm(span=span_steps).mean().max()
+        if score < thresh:
+            track_ids_to_drop.append(track_id)
+            ann_ids_to_drop.extend(track_group["id"].tolist())
+
+    print(f"Dropping {len(ann_ids_to_drop)} annotations from {len(track_ids_to_drop)} tracks.")
+    if len(ann_ids_to_drop) > 0:
+        sub_dset.remove_annotations(ann_ids_to_drop)
 
     return sub_dset
 
@@ -450,7 +538,7 @@ def time_aggregated_polys(
         >>> #                num_frames=5, image_size=(480, 640))
         >>> sub_dset = watch.coerce_kwcoco(
         >>>     'watch-msi', num_videos=1, num_frames=5, image_size=(480, 640),
-        >>>     geodata=True, heatmap=True)
+        >>>     geodata=True, heatmap=True, dates=True)
         >>> thresh = 0.01
         >>> min_area_square_meters = None
         >>> orig_track = time_aggregated_polys(
@@ -461,8 +549,8 @@ def time_aggregated_polys(
         >>>      sub_dset.imgs[gid]['auxiliary'].pop()
         >>> inter_track = time_aggregated_polys(
         >>>                 sub_dset, thresh, min_area_square_meters=min_area_square_meters, time_thresh=None)
-        >>> assert inter_track.iloc[0][('fg', None)] == 0
-        >>> assert inter_track.iloc[1][('fg', None)] > 0
+        >>> assert inter_track.iloc[0][('fg', -1)] == 0
+        >>> assert inter_track.iloc[1][('fg', -1)] > 0
     '''
     #
     # --- input validation ---
@@ -607,22 +695,25 @@ def time_aggregated_polys(
     _TRACKS = gpd_sort_by_gid(_TRACKS, sorted_gids)
 
     # awk, find better way of bookkeeping and indexing into scores needed
-    thrs = {None}
+    thrs = {-1}
     if response_thresh:
-        thrs.add(None)
+        thrs.add(-1)
     if time_thresh:
         thrs.add(time_thresh * thresh)
     thrs = list(thrs)
 
     ks = {'fg': key, 'bg': bg_key}
 
-    # 95% of runtime
-    _TRACKS = gpd_compute_scores(_TRACKS, sub_dset, thrs, ks, USE_DASK=False,
-                                 resolution=resolution)
-    # 63% of runtime
-    # _TRACKS = gpd_compute_scores(_TRACKS, sub_dset, thrs, ks, USE_DASK=True)
+    # TODO dask gives different results on polys that overlap nodata area, need
+    # to debug this. (6% of polygons in KR_R001, so not a huge difference)
+    # _TRACKS = gpd_compute_scores(_TRACKS, sub_dset, thrs, ks, USE_DASK=True, resolution=resolution)
+    _TRACKS = gpd_compute_scores(_TRACKS, sub_dset, thrs, ks, USE_DASK=False, resolution=resolution)
+
+    if _TRACKS.empty:
+        return _TRACKS
+
     # dask could unsort
-    # _TRACKS = gpd_sort_by_gid(_TRACKS.reset_index(), sorted_gids)
+    _TRACKS = gpd_sort_by_gid(_TRACKS.reset_index(), sorted_gids)
 
     # response_thresh = 0.9
     if response_thresh:
@@ -646,7 +737,6 @@ def time_aggregated_polys(
         # If a tracking resolution was specified undo the extra scale factor
         _TRACKS['poly'] = _TRACKS['poly'].scale(*scale_vid_from_trk, origin=(0, 0))
 
-    # try to ignore this error
     # TODO: do we need to convert to MultiPolygon here? Or can that be handled
     # by consumers of this method?
     _TRACKS['poly'] = _TRACKS['poly'].map(kwimage.MultiPolygon.from_shapely)
@@ -760,11 +850,22 @@ def heatmaps_to_polys(heatmaps, bounds, agg_fn, thresh, morph_kernel,
 
     _agg_fn = AGG_FN_REGISTRY[agg_fn]
 
+    viz_n_window = 0
+
     def _process_1_step(heatmaps):
+        nonlocal viz_n_window
+        global VIZ_DPATH
+        if VIZ_DPATH is not None:
+            VIZ_DPATH = (VIZ_DPATH / f'heatmaps_{viz_n_window}').mkdir(exist_ok=True)
+
         aggregated = _agg_fn(heatmaps,
                              thresh=thresh,
                              morph_kernel=morph_kernel,
                              norm_ord=norm_ord)
+
+        if VIZ_DPATH is not None:
+            VIZ_DPATH = VIZ_DPATH.parent
+            viz_n_window += 1
 
         polygons = list(
             mask_to_polygons(aggregated,
@@ -895,12 +996,22 @@ def _gids_polys(
                    for d in images.lookup('date_captured')]
     # image_years = [d.year for d in image_dates]
 
-    _heatmaps = build_heatmaps(sub_dset,
-                               gids, {'fg': key},
-                               skipped='interpolate',
-                               resolution=resolution)['fg']
-    _heatmaps = np.array(_heatmaps)
-    assert len(_heatmaps) == len(images)
+    key = '|'.join(key)
+    imgs = sub_dset.images(gids).coco_images
+    _heatmaps = np.stack([i.delay(channels=key, space='video', resolution=resolution).finalize() for i in imgs], axis=0)
+    _heatmaps = _heatmaps.sum(axis=-1)  # sum over channels
+    missing_ix = np.invert([key in i.channels for i in imgs])
+    # TODO this was actually broken in orig, so turning it off here for now
+    interpolate=0
+    if interpolate:
+        diffed = np.concatenate((np.diff(missing_ix), [False]))
+        src = ~missing_ix & diffed
+        _heatmaps[missing_ix] =_heatmaps[src]
+        if missing_ix[0]:
+            _heatmaps[:np.searchsorted(diffed, True)] = 0
+        assert np.isnan(_heatmaps).all(axis=(1, 2)).sum() == 0
+    else:
+        _heatmaps[missing_ix] = 0
 
     def _process(track):
 
@@ -1095,17 +1206,29 @@ class TimeAggregatedBAS(NewTrackFunction):
     inner_window_size : Optional[str] = None
     inner_agg_fn : Optional[str] = None
 
+    use_boundaries: bool = False
+    site_validation: bool = False
+    site_validation_span_steps: int = 120
+    site_validation_thresh: float = 0.1
+
     def __post_init__(self):
         _resolve_deprecated_args(self)
         _resolve_arg_values(self)
 
     def create_tracks(self, sub_dset):
+
         aggkw = ub.compatible(self.__dict__, time_aggregated_polys)
         tracks = time_aggregated_polys(sub_dset, **aggkw)
         return tracks
 
     def add_tracks_to_dset(self, sub_dset, tracks):
         sub_dset = _add_tracks_to_dset(sub_dset, tracks, self.thresh, self.key)
+        if self.site_validation:
+            sub_dset = site_validation(
+                sub_dset,
+                thresh=self.site_validation_thresh,
+                span_steps=self.site_validation_span_steps,
+            )
         return sub_dset
 
 
@@ -1141,8 +1264,12 @@ class TimeAggregatedSC(NewTrackFunction):
     polygon_simplify_tolerance: Union[None, float] = None
     resolution: Optional[str] = None
 
-    inner_window_size : Optional[str] = None
-    inner_agg_fn : Optional[str] = None
+    inner_window_size: Optional[str] = None
+    inner_agg_fn: Optional[str] = None
+
+    site_validation: bool = False
+    site_validation_span_steps: int = 120
+    site_validation_thresh: float = 0.1
 
     def __post_init__(self):
         _resolve_deprecated_args(self)
@@ -1155,6 +1282,7 @@ class TimeAggregatedSC(NewTrackFunction):
             'polys': generated polys will be the boundaries
             'none': generated polys will ignore the boundaries
         '''
+
         if self.boundaries_as == 'polys':
             tracks = pop_tracks(
                 sub_dset,
@@ -1165,7 +1293,7 @@ class TimeAggregatedSC(NewTrackFunction):
                 resolution=self.resolution,
             )
             # hack in always-foreground instead
-            # tracks[(score_chan, None)] = 1
+            # tracks[(score_chan, -1)] = 1
 
             # try to ignore this error
             tracks['poly'] = tracks['poly'].map(
@@ -1193,5 +1321,106 @@ class TimeAggregatedSC(NewTrackFunction):
             tracks.rename(columns=col_map, inplace=True)
         sub_dset = _add_tracks_to_dset(sub_dset, tracks, self.thresh, self.key,
                                        self.bg_key, **kwargs)
+        if self.site_validation:
+            sub_dset = site_validation(
+                sub_dset,
+                thresh=self.site_validation_thresh,
+                span_steps=self.site_validation_span_steps,
+            )
+
+        return sub_dset
+
+
+@dataclass
+class TimeAggregatedSV(NewTrackFunction):
+    '''
+    Wrapper for Site Validation that looks for phase heatmaps.
+
+    Alias: class_heatmaps
+
+    Note:
+        This is a valid choice of `track_fn` in ../../cli/kwcoco_to_geojson.py
+    '''
+    thresh: float = 0.01
+    morph_kernel: int = 3
+    time_thresh: Optional[float] = None
+    response_thresh: Optional[float] = None
+    key: str = 'salient'
+    # key: Tuple[str] = tuple(CNAMES_DCT['positive']['scored'])
+    # bg_key: Tuple[str] = tuple(CNAMES_DCT['negative']['scored'])
+    boundaries_as: Literal['bounds', 'polys', 'none'] = 'polys'
+    norm_ord: Optional[Union[int, str]] = 1
+    agg_fn: str = 'probs'
+    thresh_hysteresis: Optional[float] = None
+    moving_window_size: Optional[int] = None
+
+    min_area_sqkm: Optional[float] = None  # deprecate
+    max_area_sqkm: Optional[float] = None  # deprecate
+
+    min_area_square_meters: Optional[float] = None
+    max_area_square_meters: Optional[float] = None
+
+    max_area_behavior: str = 'drop'
+    polygon_simplify_tolerance: Union[None, float] = None
+    resolution: Optional[str] = None
+
+    span_steps: int = 120
+    thresh: float = 0.1
+
+    def __post_init__(self):
+        _resolve_deprecated_args(self)
+
+    def create_tracks(self, sub_dset):
+        '''
+        boundaries_as: use for Site Boundary annots in coco_dset
+            'bounds': generated polys will lie inside the boundaries
+            'polys': generated polys will be the boundaries
+            'none': generated polys will ignore the boundaries
+        '''
+        if self.boundaries_as == 'polys':
+            tracks = pop_tracks(
+                sub_dset,
+                cnames=[SITE_SUMMARY_CNAME],
+                # these are SC scores, not BAS, so this is not a
+                # true reproduction of hybrid.
+                score_chan=kwcoco.ChannelSpec('|'.join((self.key,))),
+                resolution=self.resolution,
+            )
+            # hack in always-foreground instead
+            # tracks[(score_chan, None)] = 1
+
+            # try to ignore this error
+            tracks['poly'] = tracks['poly'].map(
+                kwimage.MultiPolygon.from_shapely)
+
+        else:
+            raise NotImplementedError
+            # aggkw = ub.compatible(self.__dict__, time_aggregated_polys)
+            # aggkw['use_boundaries'] = aggkw.get('boundaries_as', 'none') != 'none'
+            # tracks = time_aggregated_polys(sub_dset, **aggkw)
+        return tracks
+
+    def add_tracks_to_dset(self, sub_dset, tracks, **kwargs):
+        # if self.boundaries_as != 'polys':
+        #     col_map = {}
+        #     for c in tracks.columns:
+        #         if c[0] == 'fg':
+        #             k = kwcoco.ChannelSpec('|'.join(self.key)).spec
+        #             col_map[c] = (k, *c[1:])
+        #         elif c[0] == 'bg':
+        #             k = kwcoco.ChannelSpec('|'.join(self.bg_key)).spec
+        #             col_map[c] = (k, *c[1:])
+        #     # weird effect here - reassignment casts from GeoDataFrame to
+        #     # DataFrame. Related to invalid geometry column?
+        #     # tracks = tracks.rename(columns=col_map)
+        #     tracks.rename(columns=col_map, inplace=True)
+
+        sub_dset = _add_tracks_to_dset(sub_dset, tracks, self.thresh, self.key,
+                                       **kwargs)
+        sub_dset = site_validation(
+            sub_dset,
+            thresh=self.thresh,
+            span_steps=self.span_steps,
+        )
 
         return sub_dset

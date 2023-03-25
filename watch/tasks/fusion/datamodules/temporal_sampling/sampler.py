@@ -436,7 +436,7 @@ class TimeWindowSampler(CommonSamplerMixin):
         >>> import kwcoco
         >>> import watch
         >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-        >>> coco_fpath = data_dvc_dpath / 'Drop4-SC/data_vali.kwcoco.json'
+        >>> coco_fpath = data_dvc_dpath / 'Drop6/data_vali_split1.kwcoco.zip'
         >>> dset = kwcoco.CocoDataset(coco_fpath)
         >>> vidid = dset.dataset['videos'][0]['id']
         >>> self = TimeWindowSampler.from_coco_video(
@@ -491,7 +491,7 @@ class TimeWindowSampler(CommonSamplerMixin):
             >>> from watch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
             >>> import watch
             >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-            >>> coco_fpath = dvc_dpath / 'Drop4-SC/data_vali.kwcoco.json'
+            >>> coco_fpath = dvc_dpath / 'Drop6/data_vali_split1.kwcoco.zip'
             >>> dset = kwcoco.CocoDataset(coco_fpath)
             >>> vidid = dset.dataset['videos'][0]['id']
             >>> self = TimeWindowSampler.from_coco_video(
@@ -746,7 +746,7 @@ class TimeWindowSampler(CommonSamplerMixin):
             >>> import kwcoco
             >>> # xdoctest: +REQUIRES(--show)
             >>> dvc_dpath = find_smart_dvc_dpath()
-            >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-07-28-c20-TA1-S2-L8-ACC/data_vali.kwcoco.json'
+            >>> coco_fpath = dvc_dpath / 'Drop6/data_vali_split1.kwcoco.zip'
             >>> dset = kwcoco.CocoDataset(coco_fpath)
             >>> video_ids = list(ub.sorted_vals(dset.index.vidid_to_gids, key=len).keys())
             >>> vidid = video_ids[2]

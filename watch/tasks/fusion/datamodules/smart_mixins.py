@@ -146,7 +146,7 @@ class SMARTDataMixin:
             >>> import watch
             >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
             >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
-            >>> coco_fpath = dvc_dpath / 'Drop4-BAS/KR_R001.kwcoco.json'
+            >>> coco_fpath = dvc_dpath / 'Drop6/data_vali_split1.kwcoco.zip'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> self = KWCocoVideoDataset(

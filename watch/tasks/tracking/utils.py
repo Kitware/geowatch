@@ -10,8 +10,10 @@ import ubelt as ub
 import warnings
 from abc import abstractmethod
 from scipy.ndimage import label as ndm_label
-from typing import Union, Iterable, Optional, List, Dict
+from functools import lru_cache
+from typing import Union, Iterable, Optional, Dict
 
+from dataclasses import dataclass
 
 try:
     from xdev import profile
@@ -247,11 +249,18 @@ class NoOpTrackFunction(TrackFunction):
         return sub_dset
 
 
+@dataclass
 class NewTrackFunction(TrackFunction):
     '''
     Specialization of TrackFunction to create polygons that do not yet exist
     in coco_dset, and add them as new annotations
     '''
+    viz_out_dir: Optional[ub.Path] = None
+
+    def __post_init__(self):
+        global VIZ_DPATH
+        VIZ_DPATH = self.viz_out_dir
+        # HACK
 
     def __call__(self, sub_dset):
         print('Create tracks')
@@ -291,50 +300,60 @@ def gpd_sort_by_gid(gdf, sorted_gids):
     # assert gdf['gid'].map(dct).groupby(
     # lambda x: x).is_monotonic_increasing.all()
 
-    return gdf.groupby('track_idx', group_keys=False).apply(
-        lambda x: x.sort_values('gid_order')).reset_index(drop=True).drop(
-            columns=['gid_order'])
+    if gdf.empty:
+        return gdf
+    else:
+        return gdf.groupby('track_idx', group_keys=False).apply(
+            lambda x: x.sort_values('gid_order')).reset_index(drop=True).drop(
+                columns=['gid_order'])
 
 
 def gpd_len(gdf):
     return gdf['track_idx'].nunique()
 
 
-def gpd_compute_scores(gdf,
-                       sub_dset,
-                       thrs: Iterable,
-                       ks: Dict,
-                       USE_DASK=False,
-                       resolution=None):
+@profile
+def gpd_compute_scores(
+        gdf,
+        sub_dset,
+        thrs: Iterable,
+        ks: Dict,
+        USE_DASK=False,
+        resolution=None):
 
-    def compute_scores(grp, thrs=[], ks={}):
-        # TODO handle keys as channelcodes
-        # port over better handling from utils.build_heatmaps
-        # gid = grp['gid'].iloc[0]
+    def compute_scores(grp, thrs=[], keys=[]):
         gid = getattr(grp, 'name', None)
-        for k in set().union(itertools.chain.from_iterable(ks.values())):
-            # TODO there is a regression here from not using
-            # build_heatmaps(skipped='interpolate'). It will be changed with
-            # nodata handling anyway, and that's easier to implement here.
-
-            if gid is None:
-                scores = pd.Series(np.array([0] * len(thrs)))
-            else:
-                heatmap = build_heatmap(sub_dset, gid, k, missing='fill',
-                                        resolution=resolution)
-                scores = grp['poly'].map(
-                    lambda p: score_poly(p, heatmap, threshold=thrs))
-
-            cols = [(k, thr) for thr in thrs]
-            grp[cols] = scores.to_list()
+        if gid is None:
+            for thr in thrs:
+                grp[[(k, thr) for k in keys]] = 0
+        else:
+            heatmaps = []
+            img = sub_dset.coco_image(gid)
+            for k in keys:
+                # TODO handle keys as channelcodes
+                if k in img.channels:
+                    heatmap = img.delay(k, space='video', resolution=resolution).finalize()
+                    heatmap = np.squeeze(heatmap, -1)
+                else:
+                    w, h = img.delay(space='video', resolution=resolution).dsize
+                    heatmap = np.zeros((h, w))
+                heatmaps.append(heatmap)
+            heatmaps = np.stack(heatmaps, axis=0)
+            score_cols = list(itertools.product(keys, thrs))
+            scores = grp['poly'].apply(
+                lambda p: pd.Series(dict(zip(
+                    score_cols,
+                    # awk, making this serializable for kwcoco dataset
+                    list(ub.flatten(score_poly(p, heatmaps, threshold=thrs)))))
+                ))
+            grp[score_cols] = scores
         return grp
 
     ks = {k: v for k, v in ks.items() if v}
-    _valid_keys = set().union(itertools.chain.from_iterable(
-        ks.values()))  # | ks.keys()
+    _valid_keys = list(set().union(itertools.chain.from_iterable(
+        ks.values())))  # | ks.keys()
     score_cols = list(itertools.product(_valid_keys, thrs))
 
-    USE_DASK = 0
     if USE_DASK:  # 63% runtime
         import dask_geopandas
         # https://github.com/geopandas/dask-geopandas
@@ -342,11 +361,10 @@ def gpd_compute_scores(gdf,
         gdf = gdf.set_index('gid')
         # npartitions and chunksize are mutually exclusive
         gdf = dask_geopandas.from_geopandas(gdf, npartitions=8)
-        meta = gdf._meta.join(
-            pd.DataFrame(columns=score_cols, dtype=float))
+        meta = gdf._meta.join(pd.DataFrame(columns=score_cols, dtype=float))
         gdf = gdf.groupby('gid', group_keys=False).apply(compute_scores,
                                                          thrs=thrs,
-                                                         ks=ks,
+                                                         keys=_valid_keys,
                                                          meta=meta)
         # raises this, which is probably fine:
         # /home/local/KHQ/matthew.bernstein/.local/conda/envs/watch/lib/python3.9/site-packages/rasterio/features.py:362:
@@ -354,14 +372,16 @@ def gpd_compute_scores(gdf,
         # The identity matrix will be returned.
         # _rasterize(valid_shapes, out, transform, all_touched, merge_alg)
 
-        gdf = gdf.compute()  # _tracks is now a gdf again
+        gdf = gdf.compute()  # gdf is now a GeoDataFrame again
+        gdf = gdf.reset_index()
         # gdf = gdf.reindex(columns=_col_order)
 
     else:  # 95% runtime
         grouped = gdf.groupby('gid', group_keys=False)
-        gdf = grouped.apply(compute_scores, thrs=thrs, ks=ks)
+        gdf = grouped.apply(compute_scores, thrs=thrs, keys=_valid_keys)
 
     # fill nan scores from nodata pxls
+    # groupby track instead of gid
     def _fillna(grp):
         if len(grp) == 0:
             grp = grp.reindex(list(ub.oset(grp.columns) | score_cols), axis=1)
@@ -387,6 +407,7 @@ def gpd_compute_scores(gdf,
 # -----------------------
 
 
+@profile
 def pop_tracks(coco_dset: kwcoco.CocoDataset,
                cnames: Iterable[str],
                remove: bool = True,
@@ -424,12 +445,14 @@ def pop_tracks(coco_dset: kwcoco.CocoDataset,
     assert len(polys) == len(annots), ('TODO handle multipolygon boundaries')
 
     polys = [p.to_shapely() for p in polys]
-    gdf = gpd.GeoDataFrame(dict(gid=annots.gids, poly=polys,
+    gdf = gpd.GeoDataFrame(dict(gid=annots.gids,
+                                poly=polys,
                                 track_idx=annots.get('track_id')),
                            geometry='poly')
     if score_chan is not None:
         keys = {score_chan.spec: list(score_chan.unique())}
-        gdf = gpd_compute_scores(gdf, coco_dset, [None], keys, USE_DASK=False,
+        # gdf = gpd_compute_scores(gdf, coco_dset, [-1], keys, USE_DASK=True,
+        gdf = gpd_compute_scores(gdf, coco_dset, [-1], keys, USE_DASK=False,
                                  resolution=resolution)
     # TODO standard way to access sorted_gids
     sorted_gids = coco_dset.index._set_sorted_by_frame_index(
@@ -442,68 +465,74 @@ def pop_tracks(coco_dset: kwcoco.CocoDataset,
     return gdf
 
 
+@lru_cache(maxsize=512)
+def _rasterized_poly(shp_poly, h, w, pixels_are):
+    poly = kwimage.MultiPolygon.from_shapely(shp_poly)
+    mask = poly.to_mask((h, w), pixels_are=pixels_are).data
+    return mask
+
+
 @profile
-def score_poly(poly, probs, threshold=None, use_rasterio=True):
+def score_poly(poly, probs, threshold=-1, use_rasterio=True):
     '''
     Args:
         poly: kwimage.Polygon or MultiPolygon in pixel coords
 
-        probs: heatmap to compare poly against
+        probs: heatmap to compare poly against. Any leading batch dimensions
+        will be preserved in output, e.g. (gid chan w h) -> (gid chan)
 
         use_rasterio: use rasterio.features module instead of kwimage
 
-        threshold: if not None, return fraction of poly with probs > threshold.
-        Else, return average value of probs in poly. Can be a list of values,
+        threshold: Return fraction of poly with probs > threshold.
+        If -1, return average value of probs in poly. Can be a list of values,
         in which case returns all of them.
 
     '''
-    # try converting from shapely
-    # TODO standard coerce fns between kwimage, shapely, and __geo_interface__
     if not isinstance(poly, (kwimage.Polygon, kwimage.MultiPolygon)):
         poly = kwimage.MultiPolygon.from_shapely(poly)  # 2.4% of runtime
+
+    _return_list = isinstance(threshold, Iterable)
+    if not _return_list:
+        threshold = [threshold]
 
     # First compute the valid bounds of the polygon
     # And create a mask for only the valid region of the polygon
     box = poly.bounding_box().quantize().to_xywh()
     # Ensure box is inside probs
-    ymax, xmax = probs.shape[:2]
+    ymax, xmax = probs.shape[-2:]
     box = box.clip(0, 0, xmax, ymax).to_xywh()
     if box.area[0][0] == 0:
         warnings.warn(
             'warning: scoring a polygon against an img with no overlap!')
-        return 0
+        zeros = np.zeros(probs.shape[:-2])
+        return [zeros] * len(threshold) if _return_list else zeros
     x, y, w, h = box.data[0]
     pixels_are = 'areas' if use_rasterio else 'points'
     # kwimage inverse
     # 95% of runtime... would batch be faster?
     rel_poly = poly.translate((-x, -y))
-    rel_mask = rel_poly.to_mask((h, w), pixels_are=pixels_are).data
+    # rel_mask = rel_poly.to_mask((h, w), pixels_are=pixels_are).data
+    # shapely polys hash correctly (based on shape, not memory location)
+    # kwimage polys don't
+    rel_mask = _rasterized_poly(rel_poly.to_shapely(), h, w, pixels_are)
     # Slice out the corresponding region of probabilities
-    rel_probs = probs[y:y + h, x:x + w]
-    # hacking to solve a bug: sometimes shape of rel_probs is x,y,1
-    if len(rel_probs.shape) == 3:
-        rel_probs = rel_probs[:, :, 0]
+    rel_probs = probs[..., y:y + h, x:x + w]
+
+    result = []
 
     # handle nans
-    # TODO figure out np.ma to reduce redundancy
-    # msk_rel_probs = np.ma.masked_where(~np.isfinite(rel_probs) | rel_mask,
-    #                                      rel_probs, copy=False)
-
-    total = (rel_mask * np.isfinite(rel_probs)).sum()
-    _return_list = isinstance(threshold, Iterable)
-    if not _return_list:
-        threshold = [threshold]
-    result = []
+    msk = (np.isfinite(rel_probs) * rel_mask).astype(bool)
     for t in threshold:
-        if total == 0:
-            result.append(np.nan)
-        elif t is None:
-            score = np.nansum(rel_mask * rel_probs) / total
-            result.append(score)
+        if not msk.any():
+            result.append(np.nan * np.ones(rel_probs.shape[:-2]))
+        elif t == -1:
+            mskd = np.ma.array(rel_probs, mask=~msk)
+            result.append(mskd.mean(axis=(-2, -1)).filled(0))
         else:
             hard_prob = rel_probs > t
-            overlap = np.nansum(hard_prob * rel_mask)
-            result.append(overlap / total)
+            mskd = np.ma.array(hard_prob, mask=~msk)
+            result.append(mskd.mean(axis=(-2, -1)).filled(0))
+
     return result if _return_list else result[0]
 
 
@@ -511,7 +540,6 @@ def score_poly(poly, probs, threshold=None, use_rasterio=True):
 def mask_to_polygons(probs,
                      thresh,
                      bounds=None,
-                     scored=False,
                      use_rasterio=True,
                      thresh_hysteresis=None):
     """
@@ -519,7 +547,6 @@ def mask_to_polygons(probs,
         probs: aka heatmap, image of probability values
         thresh: to turn probs into a hard mask
         bounds: a kwimage or shapely polygon to crop the results to
-        scored: return Iterable[Tuple[score, poly]] instead of Iterable[Poly]
         use_rasterio: use rasterio.features module instead of kwimage
         thresh_hysteresis: if not None, only keep polygons with at least one
             pixel of score >= thresh_hysteresis
@@ -533,8 +560,8 @@ def mask_to_polygons(probs,
         >>> probs = kwimage.Heatmap.random(dims=(64, 64),
         >>>                                rng=0).data['class_probs'][0]
         >>> thresh = 0.5
-        >>> polys = mask_to_polygons(probs, thresh, scored=True)
-        >>> score1, poly1 = list(polys)[0]
+        >>> polys = mask_to_polygons(probs, thresh)
+        >>> poly1 = list(polys)[0]
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
         >>> kwplot.autompl()
@@ -549,32 +576,20 @@ def mask_to_polygons(probs,
         >>>                                 ).data['class_probs'][0]
         >>> thresh = 0.5
         >>> polys1 = list(mask_to_polygons(
-        >>>             probs, thresh, scored=0, use_rasterio=0))
+        >>>             probs, thresh, use_rasterio=0))
         >>> polys2 = list(mask_to_polygons(
-        >>>             probs, thresh, scored=0, use_rasterio=1))
-        >>> polys3 = list(mask_to_polygons(
-        >>>             probs, thresh, scored=1, use_rasterio=0))
-        >>> polys4 = list(mask_to_polygons(
-        >>>             probs, thresh, scored=1, use_rasterio=1))
+        >>>             probs, thresh, use_rasterio=1))
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
         >>> kwplot.autompl()
         >>> plt = kwplot.autoplt()
         >>> pnum_ = kwplot.PlotNums(nSubplots=4)
-        >>> kwplot.imshow(probs, pnum=pnum_(), title='pixels_are=points, scored=0')
+        >>> kwplot.imshow(probs, pnum=pnum_(), title='pixels_are=points')
         >>> for poly in polys1:
         >>>     poly.draw(facecolor='none', edgecolor='kitware_blue', alpha=0.5, linewidth=8)
-        >>> kwplot.imshow(probs, pnum=pnum_(), title='pixels_are=areas, scored=0')
+        >>> kwplot.imshow(probs, pnum=pnum_(), title='pixels_are=areas')
         >>> for poly in polys2:
         >>>     poly.draw(facecolor='none', edgecolor='kitware_green', alpha=0.5, linewidth=8)
-        >>> kwplot.imshow(probs, pnum=pnum_(), title='pixels_are=points, scored=1')
-        >>> for score, poly in polys3:
-        >>>     poly.draw(facecolor='none', edgecolor='kitware_blue', alpha=0.5, linewidth=8)
-        >>>     plt.text(*poly.centroid, f'{score:0.2f}', color='orange', fontdict={'size': 'large', 'weight': 'bold'})
-        >>> kwplot.imshow(probs, pnum=pnum_(), title='pixels_are=areas, scored=1')
-        >>> for score, poly in polys4:
-        >>>     poly.draw(facecolor='none', edgecolor='kitware_green', alpha=0.5, linewidth=8)
-        >>>     plt.text(*poly.centroid, f'{score:0.2f}', color='orange', fontdict={'size': 'large', 'weight': 'bold'})
     """
     # Threshold scores
     if thresh_hysteresis is None:
@@ -601,12 +616,7 @@ def mask_to_polygons(probs,
     polygons = kwimage.Mask(
         binary_mask, 'c_mask').to_multi_polygon(pixels_are=pixels_are)
 
-    if scored:
-        for poly in polygons:
-            score = score_poly(poly, probs, use_rasterio=use_rasterio)
-            yield score, poly
-    else:
-        yield from polygons
+    yield from polygons
 
 
 def _validate_keys(key, bg_key):
@@ -624,272 +634,3 @@ def _validate_keys(key, bg_key):
     if not set(key).isdisjoint(set(bg_key)):
         raise ValueError('cannot have a key in foreground and background')
     return key, bg_key
-
-
-@profile
-def build_heatmaps(sub_dset: kwcoco.CocoDataset,
-                   gids: List[int],
-                   keys: Union[List[str], Dict[str, List[str]]],
-                   missing='fill',
-                   skipped='interpolate',
-                   space='video',
-                   resolution=None,
-                   video_id=None) -> Dict[str, List[np.array]]:
-    '''
-    Vectorized version of watch.tasks.tracking.utils.build_heatmap across gids.
-
-    Can also sum keys using group names.
-
-    Restrictions wrt heatmap():
-        - uses video space
-        - returns chan probs
-
-    Args:
-        sub_dset (kwcoco.CocoDataset): must have exactly 1 video
-
-        gids: List[image id]
-
-        key: List[str] list of channel names
-
-        space (str):
-            The "space" the heatmaps are loaded in.
-            Can be 'video' or 'image'. Should generally be "video".
-
-        missing: behavior for missing keys.
-            'fill': return probs and chan_probs of zeros
-            'skip': return probs of zeros, skip chan_probs
-            'raise': raise exception
-
-        skipped: behavior for missing keys across gids.
-            'interpolate': use heatmap from last gid
-            'zeros': insert zeros
-            # 'remove': do not return this gid  # TODO w/ different signature
-
-        video_id (int | None): if specified, get heatmaps for this video
-            otherwise assert that there is exactly one video
-
-        resolution (str | None):
-            desired resolution (e.g. 10GSD) that will define a scale factor
-            on top of the "space" (i.e. video space) used to build the heatmaps.
-
-    SeeAlso:
-        :func:`build_heatmap`
-        :func:`build_heatmaps`
-
-    Returns:
-        Dict : {key: [heatmap for each gid]}
-
-    Example:
-        >>> from watch.tasks.tracking.utils import *  # NOQA
-        >>> import watch
-        >>> dset = watch.coerce_kwcoco('watch-msi', heatmap=True, geodata=True, dates=True)
-        >>> keys = 'salient|notsalient|distri'
-        >>> videos = dset.videos()
-        >>> video_id = videos._ids[0]
-        >>> gids = videos.images[0][0:2]
-        >>> heatmaps = build_heatmaps(dset, gids=gids, keys=keys, video_id=video_id)
-        >>> assert all(len(v) == len(gids) for v in heatmaps.values())
-        >>> heatmaps = build_heatmaps(dset, gids=gids, keys={'group1': ['salient', 'notsalient']}, video_id=video_id)
-        >>> assert all(len(v) == len(gids) for v in heatmaps.values())
-    '''
-    assert space == 'video'
-
-    if isinstance(keys, list):
-        key_groups = {'__dummy__': keys}
-        _dummy_groups = ['__dummy__']
-    elif isinstance(keys, dict):
-        key_groups = keys
-        _dummy_groups = []
-    elif isinstance(keys, str):
-        import kwcoco
-        key_groups = {'__dummy__': kwcoco.FusedChannelSpec.coerce(keys).to_list()}
-        _dummy_groups = ['__dummy__']
-    else:
-        raise TypeError(type(keys))
-
-    # Would use RunningStats, but it can't support indexed/subsetted access
-    # for multiple site boundaries over different times.
-    # This solution is more efficient when len(tracks) > len(gids).
-    #
-    # running_dct = defaultdict(kwarray.RunningStats)
-    heatmaps_dct = collections.defaultdict(list)
-
-    # record previous heatmaps in video space to propagate thru missing
-    # frames
-    if video_id is None:
-        assert len(sub_dset.index.videos) == 1
-        video_id = ub.peek(sub_dset.index.videos.values())['id']
-
-    vid = sub_dset.index.videos[video_id]
-    vid_shape = (vid['height'], vid['width'])
-    first_coco_img = sub_dset.coco_image(
-        sub_dset.images(video_id=video_id).peek()['id'])
-    # should this be special-cased in _scalefactor_for_resolution?
-    if resolution is not None:
-        scale_trk_from_vid = first_coco_img._scalefactor_for_resolution(
-            space='video', resolution=resolution)
-        trk_shape = (np.array(vid_shape) * scale_trk_from_vid).astype(int)
-    else:
-        trk_shape = vid_shape
-
-    prev_heatmap_dct = collections.defaultdict(lambda: np.zeros(trk_shape))
-
-    for gid in gids:
-        for group, key in key_groups.items():
-
-            # we are working only in vid space, so forget about warping
-            img_probs, chan_probs = build_heatmap(sub_dset,
-                                                  gid,
-                                                  key,
-                                                  space=space,
-                                                  resolution=resolution,
-                                                  return_chan_probs=True)
-            # TODO make this more efficient using missing='skip'
-            if np.any(img_probs):
-                heatmaps_dct[group].append(img_probs)
-            elif skipped == 'interpolate':
-                heatmaps_dct[group].append(prev_heatmap_dct[group])
-            elif skipped == 'zeros':
-                heatmaps_dct[group].append(np.zeros(trk_shape))
-            else:
-                raise ValueError(skipped)
-
-            for k in key:
-                if k in chan_probs:
-                    heatmaps_dct[k].append(chan_probs[k])
-                    prev_heatmap_dct[k] = chan_probs[k]
-                elif skipped == 'interpolate':
-                    heatmaps_dct[k].append(prev_heatmap_dct[k])
-                elif skipped == 'zeros':
-                    heatmaps_dct[k].append(np.zeros(trk_shape))
-                else:
-                    raise ValueError(skipped)
-
-    for dummy in _dummy_groups:
-        heatmaps_dct.pop(dummy)
-    return heatmaps_dct
-
-
-@profile
-def build_heatmap(dset,
-                  gid,
-                  key,
-                  return_chan_probs=False,
-                  space='video',
-                  missing='fill',
-                  resolution=None):
-    """
-    Find the total heatmap of key within gid
-
-    Args:
-        dset: kwcoco.CocoDataset
-        gid: image id
-        key: List[str] list of channel names
-        return_chan_probs:
-            if True, also return a dict {k: build_heatmap(k) for k in keys}
-        space: 'video' or 'image'
-        missing: behavior for missing keys.
-            'fill': return probs and chan_probs of zeros
-            'skip': return probs of zeros, skip chan_probs
-            'raise': raise exception
-
-    SeeAlso:
-        :func:`build_heatmap`
-        :func:`build_heatmaps`
-
-    Example:
-        >>> from watch.tasks.tracking.utils import *  # NOQA
-        >>> import watch
-        >>> dset = watch.coerce_kwcoco(
-        >>>     data='watch-msi', heatmap=True, geodata=True, dates=True)
-        >>> gid = dset.images()[0]
-        >>> key = 'salient'
-        >>> space = 'video'
-        >>> missing = 'fill'
-        >>> # With probs
-        >>> return_chan_probs = True
-        >>> fg_img_probs1, chan_probs = build_heatmap(dset, gid, key, return_chan_probs, space, missing)
-        >>> # FG only
-        >>> return_chan_probs = False
-        >>> fg_img_probs2 = build_heatmap(dset, gid, key, return_chan_probs, space, missing)
-        >>> #
-        >>> # Test with a non-existing key
-        >>> return_chan_probs = True
-        >>> key = 'eludium'
-        >>> fg_img_probs1, chan_probs = build_heatmap(dset, gid, key, return_chan_probs, space, missing)
-
-    Example:
-        >>> from watch.tasks.tracking.utils import *  # NOQA
-        >>> import watch
-        >>> dset = watch.coerce_kwcoco(data='watch-msi', heatmap=True, geodata=True, dates=True)
-        >>> gid = dset.images()[0]
-        >>> key = 'salient'
-        >>> # Test dynamic resolution
-        >>> fg_img_probs1 = build_heatmap(dset, gid, key, resolution='3GSD')
-        >>> fg_img_probs2 = build_heatmap(dset, gid, key, resolution='7GSD')
-        >>> a = np.array(fg_img_probs1.shape)
-        >>> b = np.array(fg_img_probs2.shape)
-        >>> assert np.isclose((a / b).mean(), 7 / 3, atol=.1)
-    """
-    key, _ = _validate_keys(key, None)
-    coco_img = dset.coco_image(gid)
-
-    channels_request = kwcoco.FusedChannelSpec.coerce(key)
-    channels_have = coco_img.channels.fuse().intersection(channels_request)
-
-    if missing == 'raise':
-        if channels_have.numel() != channels_request.numel():
-            raise ValueError(
-                ub.paragraph(f'''
-                Requested {channels_request=} in the image {gid=} of {dset=}
-                but only {channels_have=} existed.
-                '''))
-
-    w, h = coco_img.delay(space=space).dsize
-    if resolution is not None:
-        scale_trk_from_vid = coco_img._scalefactor_for_resolution(
-            space='video', resolution=resolution)
-        w, h = (np.array((w, h)) * scale_trk_from_vid).astype(int)
-
-    common = channels_have
-
-    if len(common) == 0:  # for bg_key
-        fg_img_probs = np.zeros((h, w))
-        if return_chan_probs:
-            if missing == 'skip':
-                return fg_img_probs, {}
-            else:
-                return fg_img_probs, {k: fg_img_probs for k in key}
-        else:
-            return fg_img_probs
-
-    if 0 and __debug__:
-        if common.numel() > 1:
-            print('WARNING: Im not sure about that sum axis=-1, '
-                  'I hope there is only ever one channel here')
-
-    delayed = coco_img.delay(
-        channels=common, resolution=resolution, space=space,
-        nodata_method='float')
-    key_img_probs = delayed.finalize()
-
-    # Not sure about that sum axis=-1 here
-    fg_img_probs = key_img_probs.sum(axis=-1)
-    if return_chan_probs:
-        # some awkwardness here from non-invertible mapping from
-        # ChannelSpec to FusedChannelSpec
-        chan_probs = {}
-        idxs = common.component_indices()
-        for k in key:
-            codes = common.intersection([k]).as_list()
-            probs = [key_img_probs[idxs[code]] for code in codes]
-            if len(probs) == 0:
-                if missing == 'skip':
-                    continue
-                else:
-                    probs.append(np.zeros((h, w)))
-            # Again, I'm not sure about this sum here.
-            chan_probs[k] = np.sum(probs, axis=0)
-        return fg_img_probs, chan_probs
-    else:
-        return fg_img_probs

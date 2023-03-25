@@ -6,9 +6,7 @@ import numpy as np
 import kwcoco
 import kwimage
 
-from watch.tasks.tracking.utils import build_heatmaps, score_poly
 from watch.heuristics import CNAMES_DCT
-from watch.utils.kwcoco_extensions import sorted_annots
 
 
 def viterbi(input_sequence, transition_probs, emission_probs):
@@ -335,16 +333,21 @@ def interpolate(coco_dset,
     Replace any annot's cat not in cnames_to_keep with the most recent of
     cnames_to_keep
     '''
-    annots = sorted_annots(coco_dset, track_id)
+    annots = coco_dset.annots(trackid=track_id)
     cnames = annots.cnames
     cnames_to_replace = set(cnames) - set(cnames_to_keep)
 
     cids = np.array(annots.cids)
-    good_ixs = np.in1d(cnames, list(cnames_to_replace), invert=True)
-    ix_to_cid = dict(zip(range(len(good_ixs)), map(int, cids[good_ixs])))
-    interp = np.interp(range(len(cnames)), good_ixs, range(len(good_ixs)))
+    is_good = np.in1d(cnames, list(cnames_to_replace), invert=True)
+    ix_to_cid = dict(zip(range(len(is_good)), map(int, cids[is_good])))
+    ixs = np.arange(len(cnames))
+    good_ixs = ixs[is_good]
+    good_cids = cids[is_good]
+    interp = np.interp(ixs, good_ixs, good_cids)
+    # can get KeyError here from error about which cnames to keep/replace
     annots.set('category_id', [ix_to_cid[int(ix)] for ix in np.round(interp)])
-    return annots
+
+    return coco_dset
 
 
 def baseline(coco_dset,
@@ -354,7 +357,7 @@ def baseline(coco_dset,
     Predict site prep for the first half of the track and then active
     construction for the second half with post construction on the last frame
     '''
-    annots = sorted_annots(coco_dset, track_id)
+    annots = coco_dset.annots(trackid=track_id)
 
     assert len(cnames_to_insert) == 3, 'TODO generalize this with by_gid(anns)'
     siteprep_cid, active_cid, post_cid = map(coco_dset.ensure_category,
@@ -385,7 +388,7 @@ def sort_by_gid(coco_dset, track_id, prune=True):
     Returns:
         (Images, AnnotGroups)
     '''
-    annots = sorted_annots(coco_dset, track_id)
+    annots = coco_dset.annots(trackid=track_id)
     images = coco_dset.images(
         coco_dset.index._set_sorted_by_frame_index(annots.gids))
     if len(images) == 0:
@@ -447,8 +450,6 @@ def ensure_post(coco_dset,
 
                 post_ann = ann.copy()
                 post_ann.pop('id')
-                if 'track_index' in post_ann:
-                    post_ann['track_index'] += 1
                 post_ann.update(
                     dict(image_id=next_gid,
                          category_id=post_cid,
@@ -548,21 +549,3 @@ def phase_prediction_baseline(annots) -> List[float]:
         next_offset = np.array(list(phase_avg_days.values())).astype('timedelta64[D]').astype(float).mean()
 
     return next_offset
-
-
-def phase_prediction_heatmap(annots, coco_dset, key) -> List[float]:
-    '''
-    Get phase prediction heatmaps from model output and score them against
-    annotation polygons to get predicted dates
-    '''
-    gids = list(set(annots.gids))
-    heatmaps_dct = dict(
-        zip(gids,
-            build_heatmaps(coco_dset, gids, [key], skipped='interpolate')[key]))
-    # TODO generalize this as annots.detections.responses()?
-    return [
-        score_poly(poly, heatmaps_dct[gid])
-        for poly, gid in zip(
-            annots.detections.data['segmentations'].to_polygon_list(),
-            annots.gids)
-    ]

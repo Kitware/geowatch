@@ -53,7 +53,11 @@ class TorchGlobals(pl.callbacks.Callback):
     Callback to setup torch globals
 
     Args:
-        float32_matmul_precision (str): can be medium or high (default)
+        float32_matmul_precision (str):
+            can be 'medium', 'high', 'default', or 'auto'.
+            The 'default' value does not change any setting.
+            The 'auto' value defaults to 'medium' if the training devices have
+                ampere cores.
     """
 
     def __init__(self, float32_matmul_precision='default'):
@@ -61,13 +65,21 @@ class TorchGlobals(pl.callbacks.Callback):
 
     def setup(self, trainer, pl_module, stage):
         import torch
-        if self.float32_matmul_precision != 'default':
-            # TODO: can we set auto and detect Ampere tensor cores?
-            # Need to know which device is being used.
-            # major, _ = torch.cuda.get_device_capability(device)
-            # ampere_or_later = major >= 8  # Ampere and later leverage tensor cores, where this setting becomes useful
-
-            torch.set_float32_matmul_precision(self.float32_matmul_precision)
+        float32_matmul_precision = self.float32_matmul_precision
+        if float32_matmul_precision == 'default':
+            float32_matmul_precision = None
+        elif float32_matmul_precision == 'auto':
+            # Detect if we have Ampere tensor cores
+            # Ampere (V8) and later leverage tensor cores, where medium
+            # float32_matmul_precision becomes useful
+            device_versions = [torch.cuda.get_device_capability(device_id)[0]
+                               for device_id in trainer.device_ids]
+            if all(v >= 8 for v in device_versions):
+                float32_matmul_precision = 'medium'
+            else:
+                float32_matmul_precision = None
+        if float32_matmul_precision is not None:
+            torch.set_float32_matmul_precision(float32_matmul_precision)
 
 
 class WeightInitializer(pl.callbacks.Callback):

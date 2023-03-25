@@ -60,7 +60,8 @@
         "start_date": {"oneOf": [{"type": "null"}, {"type": "string", "format": "date"}]},
         "end_date": {"oneOf": [{"type": "null"}, {"type": "string", "format": "date"}]},
         "originator": {"enum": ["te", "pmo", "acc", "ara", "ast", "bla", "iai", "kit", "str", "iMERIT"]},
-        "comments": {"type": ["string", "null"]}
+        "comments": {"type": ["string", "null"]},
+        "performer_cache": {"type": "object"}
       },
       "required": [
         "type", "region_id", "version", "mgrs", "model_content", "start_date", "end_date", "originator"
@@ -72,13 +73,14 @@
         "site_id": {"type": "string", "pattern": "^[A-Z]{2}_[RCS]\\d{3}_\\d{4}$"},
         "version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
         "mgrs": {"type": "string", "pattern": "\\d{2}[A-Z]{3}"},
-        "status": {"enum": ["system_proposed", "system_confirmed", "system_rejected"]},
+        "status": {"enum": ["system_proposed", "system_confirmed", "system_rejected", "positive_annotated", "positive_partial", "positive_annotated_static", "positive_partial_static", "positive_pending", "positive_excluded", "negative", "ignore"]},
         "model_content": {"enum": ["annotation", "proposed"]},
         "start_date": {"oneOf": [{"type": "null"}, {"type": "string", "format": "date"}]},
         "end_date": {"oneOf": [{"type": "null"}, {"type": "string", "format": "date"}]},
         "originator": {"enum": ["te", "pmo", "acc", "ast", "ast", "bla", "iai", "kit", "str", "iMERIT"]},
         "score": {"type": "number", "minimum": 0, "maximum": 1},
-        "validated": {"enum": ["True", "False"]}
+        "validated": {"enum": ["True", "False"]},
+        "annotation_cache": {"type": "object"}
       },
       "required": [
         "type", "site_id", "version", "mgrs", "model_content", "start_date", "end_date", "status", "originator"

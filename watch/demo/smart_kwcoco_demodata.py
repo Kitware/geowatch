@@ -1,13 +1,7 @@
 """
 Extends kwcoco demodata to be more smart-like
 """
-from dateutil.parser import isoparse
-from os.path import dirname
-from os.path import join
-from watch.demo import landsat_demodata
-from watch.demo import sentinel2_demodata
-import datetime
-import geopandas as gpd
+import datetime as datetime_mod
 import kwarray
 import kwcoco
 import kwimage
@@ -16,150 +10,12 @@ import ubelt as ub
 import watch
 
 
-def demo_smart_raw_kwcoco():
-    """
-    Creates a kwcoco dataset that attempts to exhibit common corner cases with
-    special watch geospatial attributes. This is a raws dataset of
-    tiles with annotations that are not organized into videos.
-
-    Example:
-        >>> # xdoctest: +SKIP("Something is wrong with grabbing L8 images")
-        >>> from watch.demo.smart_kwcoco_demodata import *  # NOQA
-        >>> raw_coco_dset = demo_smart_raw_kwcoco()
-        >>> print('raw_coco_dset = {!r}'.format(raw_coco_dset))
-    """
-    from watch.cli import geotiffs_to_kwcoco
-    cache_dpath = ub.Path.appdir('watch', 'demo', 'kwcoco').ensuredir()
-    raw_coco_fpath = join(cache_dpath, 'demo_smart_raw.kwcoco.json')
-    stamp = ub.CacheStamp('raw_stamp', dpath=cache_dpath, depends=['v4'],
-                          product=raw_coco_fpath)
-    if stamp.expired():
-        s2_demo_paths1 = sentinel2_demodata.grab_sentinel2_product(index=0)
-        s2_demo_paths2 = sentinel2_demodata.grab_sentinel2_product(index=1)
-        l8_demo_paths = landsat_demodata.grab_landsat_product()
-
-        s2_demo_paths1.images
-        s2_demo_paths2.images
-
-        raw_coco_dset = kwcoco.CocoDataset()
-
-        categories = [
-            'Active Construction',
-            'Site Preparation',
-            'Post Construction',
-            'Unknown'
-        ]
-        for catname in categories:
-            raw_coco_dset.add_category(catname)
-
-        rng = kwarray.ensure_rng(542370, api='python')
-
-        # Add only the B01 for the first S2 image
-        cands = [fname for fname in s2_demo_paths1.images
-                 if fname.name.endswith('B01.jp2')]
-        if len(cands) != 1:
-            raise AssertionError(ub.paragraph(
-                f'''
-                Should only have 1 candidate. Got {len(cands)}.
-                cands={cands}.
-                '''))
-
-        assert len(cands) == 1
-        fname = cands[0]
-        fpath = str(s2_demo_paths1.path / fname)
-        img = geotiffs_to_kwcoco.make_coco_img_from_geotiff(fpath)
-        baseinfo = watch.gis.geotiff.geotiff_filepath_info(fpath)
-        capture_time = isoparse(baseinfo['filename_meta']['sense_start_time'])
-        img['date_captured'] = datetime.datetime.isoformat(capture_time)
-        img['sensor_coarse'] = 'S2'
-        raw_coco_dset.add_image(**img)
-        # Fix issue
-        try:
-            raw_coco_dset.imgs[1]['warp_pxl_to_wld'] = raw_coco_dset.imgs[1]['warp_pxl_to_wld'].concise()
-        except Exception:
-            pass
-
-        # Add all bands for the seconds S2 image
-        img = geotiffs_to_kwcoco.ingest_sentinel2_directory(str(s2_demo_paths2.path))
-        raw_coco_dset.add_image(**img)
-
-        # Add all bands of the L8 image
-        lc_dpath = dirname(l8_demo_paths['bands'][0])
-        img = geotiffs_to_kwcoco.ingest_landsat_directory(lc_dpath)
-        raw_coco_dset.add_image(**img)
-
-        # Add random annotations on each image
-        expected_geos_crs_info = {
-            'axis_mapping': 'OAMS_TRADITIONAL_GIS_ORDER',
-            'auth': ('EPSG', '4326')
-        }
-        for img in raw_coco_dset.imgs.values():
-            geos_crs_info = img['geos_corners']['properties']['crs_info']
-            assert geos_crs_info == expected_geos_crs_info
-            goes_corners = kwimage.Polygon.coerce(img['geos_corners']).to_shapely()
-            utm_gdf = gpd.GeoDataFrame(
-                {'geometry': [goes_corners]},
-                geometry='geometry', crs=geos_crs_info['auth'])
-            crs_corners = utm_gdf.to_crs('crs84').geometry.iloc[0]
-            corner_poly = kwimage.Polygon.from_shapely(crs_corners)
-
-            # Create a dummy annotation which is a scaled down version of the corner points
-            dummy_sseg_geos = corner_poly.scale(0.02, about='center')
-            random_cat = rng.choice(raw_coco_dset.dataset['categories'])
-            raw_coco_dset.add_annotation(
-                image_id=img['id'],
-                category_id=random_cat['id'],
-                segmentation_geos=dummy_sseg_geos.to_geojson())
-
-        raw_coco_dset.fpath = raw_coco_fpath
-        raw_coco_dset.validate()
-        raw_coco_dset.dump(raw_coco_dset.fpath, newlines=True)
-        stamp.renew()
-
-    raw_coco_dset = kwcoco.CocoDataset(raw_coco_fpath)
-    return raw_coco_dset
-
-
-def demo_smart_aligned_kwcoco():
-    """
-    This is an aligned dataset of videos
-
-    Example:
-        >>> # xdoctest: +SKIP("Something is wrong with grabbing L8 images")
-        >>> from watch.demo.smart_kwcoco_demodata import *  # NOQA
-        >>> aligned_coco_dset = demo_smart_aligned_kwcoco()
-        >>> print('aligned_coco_dset = {!r}'.format(aligned_coco_dset))
-    """
-    cache_dpath = ub.Path.appdir('watch/demo/kwcoco').ensuredir()
-    aligned_kwcoco_dpath = join(cache_dpath, 'demo_aligned')
-    aligned_coco_fpath = join(aligned_kwcoco_dpath, 'data.kwcoco.json')
-    stamp = ub.CacheStamp('aligned_stamp', dpath=cache_dpath, depends=['v2'],
-                          product=[aligned_coco_fpath])
-    if stamp.expired():
-        raw_coco_dset = demo_smart_raw_kwcoco()
-        from watch.cli import coco_align
-        coco_align.main(
-            src=raw_coco_dset,
-            regions='annots',
-            max_workers=0,
-            context_factor=3.0,
-            dst=aligned_kwcoco_dpath,
-        )
-        stamp.renew()
-
-    aligned_coco_dset = kwcoco.CocoDataset(aligned_coco_fpath)
-    return aligned_coco_dset
-
-
 def demo_kwcoco_with_heatmaps(num_videos=1, num_frames=20, image_size=(512, 512)):
     """
     Return a dummy kwcoco file with special metdata
 
     DEPRECATED:
         Instead use watch.coerce_kwcoco('watch-msi-geodata-dates-heatmap-videos1-frames20-gsize512') or something similar
-
-    TODO:
-        rename
 
     Example:
         >>> from watch.demo.smart_kwcoco_demodata import *  # NOQA
@@ -177,41 +33,9 @@ def demo_kwcoco_with_heatmaps(num_videos=1, num_frames=20, image_size=(512, 512)
             import kwplot
             kwplot.imshow(vid_stack)
     """
-    import kwarray
-    import kwcoco
-    from kwarray.distributions import DiscreteUniform  # NOQA
-
-    rng = 101893676  # random seed
-    rng = kwarray.ensure_rng(rng)
-
-    # img_w = DiscreteUniform(256, 512, rng=rng)
-    # img_h = DiscreteUniform(256, 512, rng=rng)
-    # image_size = (img_w, img_h)
-
-    coco_dset = kwcoco.CocoDataset.demo(
-        'vidshapes', num_videos=num_videos, num_frames=num_frames,
-        multispectral=True, image_size=image_size)
-
-    # from kwcoco.demo import perterb
-    # perterb_config = {
-    #     'box_noise': 0.5,
-    #     'n_fp': 3,
-    #     # 'with_probs': 1,
-    # }
-    # perterb.perterb_coco(coco_dset, **perterb_config)
-
-    hack_in_heatmaps(coco_dset, rng=rng)
-    hack_in_timedata(coco_dset)
-
-    # Hack in geographic info
-    hack_seed_geometadata_in_dset(coco_dset, force=True, rng=rng)
-
-    from watch.utils import kwcoco_extensions
-    # Do a consistent transfer of the hacked seeded geodat to the other images
-    kwcoco_extensions.ensure_transfered_geo_data(coco_dset)
-
-    kwcoco_extensions.warp_annot_segmentations_to_geos(coco_dset)
-    return coco_dset
+    assert image_size[0] == image_size[1]
+    return coerce_kwcoco(
+        f'watch-msi-geodata-dates-heatmap-videos{num_videos}-frames{num_frames}-gsize{image_size[0]}')
 
 
 def hack_in_heatmaps(coco_dset, heatmap_dname='dummy_heatmaps', with_nan=False, rng=None):
@@ -282,8 +106,8 @@ def hack_in_heatmaps(coco_dset, heatmap_dname='dummy_heatmaps', with_nan=False, 
 
 def hack_in_timedata(coco_dset):
     from kwarray.distributions import Uniform
-    min_time = datetime.datetime(year=1970, month=1, day=1)
-    max_time = datetime.datetime(year=2101, month=1, day=1)
+    min_time = datetime_mod.datetime(year=1970, month=1, day=1)
+    max_time = datetime_mod.datetime(year=2101, month=1, day=1)
     time_distri = Uniform(min_time.timestamp(), max_time.timestamp())
 
     # Hack in other metadata
@@ -291,7 +115,7 @@ def hack_in_timedata(coco_dset):
         vid_gids = list(coco_dset.images(vidid=vidid))
         time_pool = sorted(time_distri.sample(len(vid_gids)))
         for gid, timestamp in zip(vid_gids, time_pool):
-            ts = datetime.datetime.fromtimestamp(timestamp)
+            ts = datetime_mod.datetime.fromtimestamp(timestamp)
             img = coco_dset.index.imgs[gid]
             img['date_captured'] = ts.isoformat()
 
@@ -315,8 +139,7 @@ def hack_seed_geometadata_in_dset(coco_dset, force=False, rng=None):
         img = coco_dset.images(vidid=vidid).peek()
         coco_img = coco_dset._coco_image(img['id'])
         obj = coco_img.primary_asset()
-        fpath = join(coco_dset.bundle_dpath, obj['file_name'])
-        # print('fpath = {!r}'.format(fpath))
+        fpath = str(ub.Path(coco_dset.bundle_dpath) / obj['file_name'])
 
         format_info = kwcoco_extensions.geotiff_format_info(fpath)
         if force or not format_info['has_geotransform']:
@@ -351,7 +174,6 @@ def _random_utm_box(rng=None):
     import kwarray
     from watch.utils import util_gis
     from osgeo import osr
-    import watch
     # stay away from edges and poles
     rng = kwarray.ensure_rng(rng)
     max_lat = 90 - 40
@@ -543,13 +365,45 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
 
     if geodata:
         for ann in coco_dset.anns.values():
-            assert ann['segmentation'] is not None
+
+            # both of these errors occur in the call:
+            # watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, num_frames=16,
+            #                     image_size=(8, 8))
+
+            has_seg = (ann['segmentation'] is not None and
+                       len(ann['segmentation']) > 0)
+            if not has_seg:
+                print('FIXME this should never print - empty segmentation generated')
+                ann['segmentation'] = (kwimage.Boxes([ann['bbox']], 'xywh')
+                                       .to_polygons()[0]
+                                       .to_coco(style='new'))
+
+            # why does coerce work here when 
+            # seg = kwimage.MultiPolygon.from_coco(ann['segmentation'])
+            seg = kwimage.MultiPolygon.coerce(ann['segmentation'])
+            try:
+                seg.to_shapely()
+            except ValueError:
+                print('FIXME this should never print - invalid segmentation generated')
+                import shapely
+                import shapely.geometry
+                from shapely.geometry import shape
+                try:
+                    shp = shape(seg.to_geojson())
+                    seg = kwimage.MultiPolygon.from_shapely(shp.make_valid())
+                    ann['segmentation'] = seg.to_coco(style='new')
+                except ValueError:
+                    ann['segmentation'] = (kwimage.Boxes([ann['bbox']], 'xywh')
+                                           .to_polygons()[0]
+                                           .to_coco(style='new'))
+
 
         # Hack in geographic info
         hack_seed_geometadata_in_dset(coco_dset, force=True, rng=rng)
         from watch.utils import kwcoco_extensions
         # Do a consistent transfer of the hacked seeded geodata to the other images
         kwcoco_extensions.ensure_transfered_geo_data(coco_dset)
+        kwcoco_extensions.coco_populate_geo_heuristics(coco_dset)
         kwcoco_extensions.warp_annot_segmentations_to_geos(coco_dset)
 
         # Also hack in an invalid region in the top left of some videos
