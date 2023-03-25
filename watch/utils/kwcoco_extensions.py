@@ -2086,9 +2086,15 @@ def _recompute_auxiliary_transforms(img):
             img['height'] = base['height']
 
     for asset in coco_img.assets:
-        warp_wld_from_asset = kwimage.Affine.coerce(asset['warp_to_wld'])
-        warp_img_from_asset = warp_img_from_wld @ warp_wld_from_asset
-        asset['warp_aux_to_img'] = warp_img_from_asset.concise()
+        if 'warp_to_wld' in asset:
+            warp_wld_from_asset = kwimage.Affine.coerce(asset['warp_to_wld'])
+            warp_img_from_asset = warp_img_from_wld @ warp_wld_from_asset
+            asset['warp_aux_to_img'] = warp_img_from_asset.concise()
+        else:
+            import warnings
+            warnings.warn(
+                'An asset could not have its warp_aux_to_img transform updated '
+                'because it does not have a warp_to_wld attribute')
 
 
 def coco_channel_stats(coco_dset):
