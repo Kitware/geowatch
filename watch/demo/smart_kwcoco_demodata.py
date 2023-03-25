@@ -302,7 +302,7 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
         'geodata': geodata,
         'heatmap': heatmap,
         'bad_nodata': bad_nodata,
-        'version': 1,
+        'version': 2,
     }
 
     bundle_name = 'watch_vidshapes_' + ub.hash_data(depends)[0:8]
