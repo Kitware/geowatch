@@ -802,38 +802,6 @@ python -m watch.mlops.schedule_evaluation --params="
     --run=1
 
 
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.schedule_evaluation --params="
-    matrix:
-        bas_pxl.package_fpath:
-            - $HOME/code/watch/dev/reports/split1_models_filter1.yaml
-        bas_pxl.test_dataset:
-            - $DVC_DATA_DPATH/Drop6_Mean3Month10GSD/imganns-KR_R002.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop6_Mean3Month10GSD/imganns-KR_R001.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop6_Mean3Month10GSD/imganns-NZ_R001.kwcoco.zip
-        bas_pxl.chip_overlap: 0.3
-        bas_pxl.chip_dims:
-            - auto
-        bas_pxl.time_span:
-            - auto
-        bas_pxl.time_sampling:
-            - auto
-        bas_poly_eval.true_site_dpath: $DVC_DATA_DPATH/annotations/drop6/site_models
-        bas_poly_eval.true_region_dpath: $DVC_DATA_DPATH/annotations/drop6/region_models
-        bas_pxl.enabled: 1
-        bas_pxl_eval.enabled: 1
-        bas_poly.enabled: 0
-        bas_poly_eval.enabled: 0
-        bas_poly_viz.enabled: 0
-    " \
-    --root_dpath="$DVC_EXPT_DPATH/_namek_split1_eval_filter1" \
-    --devices="0,1" --queue_size=4 \
-    --backend=tmux --queue_name "_namek_split1_eval_filter1" \
-    --pipeline=bas --skip_existing=1 \
-    --run=1
-
-
 # ###################
 # SPLIT 2 - SMALL TEST
 # ###################
@@ -991,3 +959,68 @@ python -m watch.mlops.aggregate \
     --stdout_report=True \
     --target \
         "$DVC_EXPT_DPATH/_toothbrush_eval_split6_MeanYear10GSD"
+
+##########
+#
+
+# New Stuff - 03-25
+
+python -m watch.mlops.manager "list" --dataset_codes Drop6-MeanYear10GSD
+
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+python -m watch.mlops.schedule_evaluation --params="
+    matrix:
+        bas_pxl.package_fpath:
+            - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont3/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont3_epoch0_step128.pt
+            - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont3/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont3_epoch9_step2560.pt
+            - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42/Drop6_TCombo1Year_BAS_10GSD_split6_V42_epoch102_step26346.pt
+            - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42/Drop6_TCombo1Year_BAS_10GSD_split6_V42_epoch101_step26112.pt
+            - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42/Drop6_TCombo1Year_BAS_10GSD_split6_V42_epoch0_step0.pt
+            - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42/Drop6_TCombo1Year_BAS_10GSD_split6_V42_epoch27_step7168.pt
+            - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42/Drop6_TCombo1Year_BAS_10GSD_split6_V42_epoch35_step9216.pt
+            - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42/Drop6_TCombo1Year_BAS_10GSD_split6_V42_epoch43_step11264.pt
+            - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2_epoch41_step10496.pt
+            - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2_epoch2_step524.pt
+            - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2_epoch1_step512.pt
+            - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2_epoch111_step28455.pt
+            - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2_epoch31_step8192.pt
+            - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2_epoch70_step18175.pt
+            - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2_epoch2_step512.pt
+            - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2_epoch0_step195.pt
+            - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2_epoch98_step25215.pt
+            - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2_epoch0_step0.pt
+            - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2_epoch110_step28416.pt
+            - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2_epoch41_step10532.pt
+            - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2_epoch2_step768.pt
+            - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2_epoch3_step941.pt
+        bas_pxl.test_dataset:
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-KR_R002.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-KR_R001.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-NZ_R001.kwcoco.zip
+        bas_pxl.chip_overlap: 0.3
+        bas_pxl.chip_dims:
+            - auto
+        bas_pxl.time_span:
+            - auto
+        bas_pxl.time_sampling:
+            - auto
+        bas_poly_eval.true_site_dpath: $DVC_DATA_DPATH/annotations/drop6/site_models
+        bas_poly_eval.true_region_dpath: $DVC_DATA_DPATH/annotations/drop6/region_models
+        bas_pxl.enabled: 1
+        bas_pxl_eval.enabled: 1
+        bas_poly.enabled: 0
+        bas_poly_eval.enabled: 0
+        bas_poly_viz.enabled: 0
+    " \
+    --root_dpath="$DVC_EXPT_DPATH/_split6_toothbrush_meanyear" \
+    --devices="0," --queue_size=2 \
+    --backend=tmux --queue_name "_split6_toothbrush_meanyear" \
+    --pipeline=bas --skip_existing=1 \
+    --run=1
+
+python -m watch.mlops.aggregate \
+    --pipeline=bas \
+    --stdout_report=True \
+    --target \
+        "$DVC_EXPT_DPATH/_split6_toothbrush_meanyear"
