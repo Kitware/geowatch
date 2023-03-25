@@ -42,8 +42,130 @@ def main(cmdline=1, **kwargs):
         else:
             versions[pkgname] = version
 
+    versions = ub.udict(versions)
+    remain = versions.copy()
+
+    library_categories = {
+        'kitware': {
+            'scriptconfig',
+            'kwarray',
+            'kwimage',
+            'kwimage_ext',
+            'kwcoco',
+            'kwplot',
+            'delayed_image',
+            'ndsampler',
+            'cmd_queue',
+            'torch_liberator',
+            'netharn',
+            'ubelt',
+        },
+
+        'numeric': {
+            'scipy',
+            'numpy',
+            'dask',
+            'pandas',
+            'scikit_learn',
+            'filterpy',
+            'einops',
+            'xarray',
+            'numexpr',
+        },
+
+        'imaging': {
+            'Pillow',
+            'scikit_image',
+            'tifffile',
+            'opencv-python-headless',
+        },
+
+        'plotting': {
+            'seaborn',
+            'matplotlib',
+            'dataframe_image',
+            'PyQt5',
+            'distinctipy',
+        },
+
+        'utils': {
+            'jq',
+            'rich',
+            'textual',
+            'parse',
+            'pint',
+        },
+
+        'algorithms': {
+            'networkx',
+            'pygtrie',
+            'xxhash',
+            'blakce3',
+        },
+
+        'gis': {
+            'rasterio',
+            'geojson',
+            'geopandas',
+            'shapely',
+            'mgrs',
+            'pyproj',
+            'fiona',
+            'rtree',
+            'affine',
+            'rgd_client',
+            'rgd_imagery_client',
+            'utm',
+        },
+
+        'env': {
+            'psutil',
+            'py-cpuinfo',
+            'codecarbon',
+        },
+
+        'testing': {
+            'coverage',
+            'xdoctest',
+            'pytest',
+            'pytest_cov',
+        },
+
+        'learning': {
+            'torch',
+            'torchvision',
+            'torchmetrics',
+            'pytorch_lightning',
+            'torch_optimizer',
+            'perceiver-pytorch',
+            'reformer_pytorch',
+            'performer_pytorch',
+        },
+
+        'development': {
+            'xdev',
+            'autopep8',
+            'flake8',
+            'timerit',
+        }
+
+    }
+    grouped_libraries = ub.udict()
+    for key, val in library_categories.items():
+        remain = remain - val
+        grouped_libraries[key] = versions & val
+
+    grouped_libraries['other'] = remain
+
+    group_hashes = grouped_libraries.map_values(lambda x: ub.hash_data(x)[0:8])
+    full_hash = ub.hash_data(group_hashes)
     import rich
-    rich.print('versions = {}'.format(ub.urepr(versions, nl=1, align=':')))
+    rich.print('grouped_libraries = {}'.format(ub.urepr(grouped_libraries, nl=2, align=':')))
+    rich.print('group_hashes = {}'.format(ub.urepr(group_hashes, nl=2, align=':')))
+    rich.print(f'full_hash={full_hash}')
+
+    from torch.utils import collect_env
+    collect_env.main()
 
 if __name__ == '__main__':
     """
