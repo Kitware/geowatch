@@ -9,9 +9,9 @@
 # though. May be integrated into xdev in the future.
 # https://github.com/Erotemic/local/blob/main/tools/supported_python_versions_pip.py
 
-numpy>=1.23.0    ;                             python_version >= '3.11'    # Python 3.11+
-numpy>=1.21.6    ; python_version < '3.11' and python_version >= '3.10'    # Python 3.10
-numpy>=1.20.0    ; python_version <  '3.10'    # Python 3.8-3.9
+numpy>=1.24.1    ;                             python_version >= '3.11'    # Python 3.11+
+numpy>=1.24.1    ; python_version < '3.11' and python_version >= '3.10'    # Python 3.10
+numpy>=1.24.1    ; python_version <  '3.10'    # Python 3.8-3.9
 
 scipy>=1.9.2     ;                             python_version >= '3.11'    # Python 3.11+
 scipy>=1.8.1     ; python_version < '3.11' and python_version >= '3.10'    # Python 3.10
@@ -46,8 +46,8 @@ pyproj>=3.3.1     ; python_version < '3.11' and python_version >= '3.10'    # Py
 pyproj>=3.2.1     ;  python_version <  '3.10'    # Python 3.8-3.9
 
 fiona>=1.8.22,<1.9.0  ;                             python_version >= '3.11'    # Python 3.11+
-fiona>=1.8.21,<1.9.0  ; python_version < '3.11' and python_version >= '3.10'    # Python 3.10
-fiona>=1.8.20,<1.9.0  ;  python_version <  '3.10'    # Python 3.8-3.9
+fiona>=1.8.22,<1.9.0  ; python_version < '3.11' and python_version >= '3.10'    # Python 3.10
+fiona>=1.8.22,<1.9.0  ;  python_version <  '3.10'    # Python 3.8-3.9
 
 matplotlib>=3.5.2  ;                             python_version >= '3.11'    # Python 3.11+
 matplotlib>=3.5.2  ; python_version < '3.11' and python_version >= '3.10'    # Python 3.10
