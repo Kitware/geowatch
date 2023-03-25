@@ -1,5 +1,8 @@
 
 def patch_albumentations_for_311():
+    """
+    Backport https://github.com/albumentations-team/albumentations/pull/1426
+    """
     import sys
     from packaging.version import parse as Version
     if sys.version_info[0:2] >= (3, 11):
