@@ -17,7 +17,7 @@ import kwcoco
 from os.path import join
 from watch.utils import util_raster
 from watch import exceptions
-import watch.gis
+# import watch.gis
 
 try:
     from xdev import profile
@@ -1121,6 +1121,9 @@ def check_kwcoco_spatial_transforms(coco_dset):
 
 def check_geo_transform_consistency(coco_dset):
     """
+    Checks the consistency of transforms between world, video, image, and asset
+    space in a coco dataset.
+
     Ignore:
         >>> from watch.utils.kwcoco_extensions import *  # NOQA
         >>> import kwcoco
@@ -1147,7 +1150,6 @@ def check_geo_transform_consistency(coco_dset):
             if wld_crs_info is not None:
                 space_crs_infos[space] = wld_crs_info
 
-
         space_crs_infos_hash = space_crs_infos.map_values(ub.hash_data)
         if not ub.allsame(space_crs_infos_hash.values()):
             errors.append({
@@ -1157,7 +1159,6 @@ def check_geo_transform_consistency(coco_dset):
                     'space_crs_infos_hash': space_crs_infos_hash,
                 }
             })
-
 
         import itertools as it
         ious = {}
@@ -1216,7 +1217,6 @@ def check_geo_transform_consistency(coco_dset):
                             'warp_direct': warp_direct.concise(),
                         },
                     })
-
 
         if 0:
             from cmd_queue.util.util_networkx import write_network_text

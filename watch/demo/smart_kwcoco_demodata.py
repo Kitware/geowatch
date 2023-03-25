@@ -378,7 +378,7 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
                                        .to_polygons()[0]
                                        .to_coco(style='new'))
 
-            # why does coerce work here when 
+            # why does coerce work here when
             # seg = kwimage.MultiPolygon.from_coco(ann['segmentation'])
             seg = kwimage.MultiPolygon.coerce(ann['segmentation'])
             try:
@@ -386,7 +386,7 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
             except ValueError:
                 print('FIXME this should never print - invalid segmentation generated')
                 import shapely
-                import shapely.geometry
+                import shapely.geometry  # NOQA
                 from shapely.geometry import shape
                 try:
                     shp = shape(seg.to_geojson())
@@ -396,7 +396,6 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
                     ann['segmentation'] = (kwimage.Boxes([ann['bbox']], 'xywh')
                                            .to_polygons()[0]
                                            .to_coco(style='new'))
-
 
         # Hack in geographic info
         hack_seed_geometadata_in_dset(coco_dset, force=True, rng=rng)

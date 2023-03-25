@@ -267,15 +267,15 @@ def export_cold_main(cmdline=1, **kwargs):
 
         now = datetime_cls.now(tz).strftime('%Y-%m-%d %H:%M:%S')
         print(f'processing the rec_cg file {reccg_fpath} ({now})')
-        
+
         # if not reccg_fpath.exists():
-        #     print(f'the rec_cg file {reccg_fpath} is missing')        
-            
+        #     print(f'the rec_cg file {reccg_fpath} is missing')
+
         if coefs is not None:
             results_block_coefs = np.full(
                 (block_height, block_width, len(coefs) * len(coefs_bands),
-                    len(ordinal_day_list)), -9999, dtype=np.float32)            
-            
+                    len(ordinal_day_list)), -9999, dtype=np.float32)
+
             status_fpath = reccg_fpath.with_suffix('.status.json')
             if status_fpath.exists():
                 with open(status_fpath, 'r') as f:
@@ -284,31 +284,31 @@ def export_cold_main(cmdline=1, **kwargs):
                     print(f'the rec_cg file {reccg_fpath} has failed status')
                     results_block_coefs
                 else:
-                    cold_block = np.array(np.load(reccg_fpath), dtype=dt)                
+                    cold_block = np.array(np.load(reccg_fpath), dtype=dt)
                     cold_block_split = np.split(cold_block, np.argwhere(np.diff(cold_block['pos']) != 0)[:, 0] + 1)
-                    
+
                     nan_val = -9999
                     feature_outputs = coefs
                     feature_set = set(feature_outputs)
-                    
+
                     if not feature_set.issubset({'a0', 'c1', 'a1', 'b1', 'a2', 'b2', 'a3', 'b3', 'cv', 'rmse'}):
                         raise Exception('the outputted feature must be in [a0, c1, a1, b1, a2, b2, a3, b3, cv, rmse]')
-                    
+
                     for element in cold_block_split:
                         # the relative column number in the block
                         i_col = int((element[0]["pos"] - 1) % n_cols) - \
                                 (current_block_x - 1) * block_width
                         i_row = int((element[0]["pos"] - 1) / n_cols) - \
                                 (current_block_y - 1) * block_height
-                        
+
                         for band_idx, band in enumerate(coefs_bands):
                             feature_row = extract_features(element, band, ordinal_day_list, nan_val, timestamp,
-                                                            feature_outputs, feature_set)                    
+                                                            feature_outputs, feature_set)
                             # Degugging mode
                             # if current_block_x == 10 and current_block_y == 11:
                             #     print((current_block_x, current_block_y), (i_col, i_row), (band_idx, band))
                             #     print(feature_row)
-                            
+
                             for index, coef in enumerate(coefs):
                                 results_block_coefs[i_row][i_col][index + band_idx * len(coefs)][:] = \
                                     feature_row[index]
@@ -342,14 +342,6 @@ def extract_features(cold_plot, band, ordinal_day_list,
         dtype=np.double)
     SLOPE_SCALE = 10000
 
-<<<<<<< HEAD
-    last_year = pd.Timestamp.fromordinal(cold_plot[-1]['t_end']).year
-    max_days_list = [
-        datetime_mod.date(
-            last_year,
-            12,
-            31).toordinal()] * len(cold_plot)
-=======
     max_days_list = []
     for i in range(len(cold_plot)):
         last_year = pd.Timestamp.fromordinal(cold_plot[i]['t_end']).year
@@ -357,8 +349,7 @@ def extract_features(cold_plot, band, ordinal_day_list,
 
     # last_year = pd.Timestamp.fromordinal(cold_plot[i]['t_end']).year
     # max_days_list = [datetime_mod.date(last_year, 12, 31).toordinal()] * len(cold_plot)
-  
->>>>>>> 2d2ea402 (fixed a bug in max_days_list)
+
     break_year_list = [-9999 if not (curve['t_break'] > 0 and curve['change_prob'] == 100) else
                        pd.Timestamp.fromordinal(curve['t_break']).year for curve in cold_plot]
 
@@ -397,13 +388,7 @@ def extract_features(cold_plot, band, ordinal_day_list,
                         cold_curve['coefs'][band][1] *
                         ordinal_day / SLOPE_SCALE)
                 if c1_idx is not None:
-<<<<<<< HEAD
-                    features[c1_idx,
-                             day_idx] = cold_curve['coefs'][band,
-                                                            1] / SLOPE_SCALE
-=======
                     features[c1_idx, day_idx] = cold_curve['coefs'][band][1] / SLOPE_SCALE
->>>>>>> 2d2ea402 (fixed a bug in max_days_list)
                 if a1_idx is not None:
                     features[a1_idx, day_idx] = cold_curve['coefs'][band][2]
                 if b1_idx is not None:
