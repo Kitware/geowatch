@@ -2067,12 +2067,12 @@ def _recompute_auxiliary_transforms(img):
     coco_img = CocoImage(img)
     base = coco_img.primary_asset()
     try:
-        warp_img_to_wld = kwimage.Affine.coerce(base['warp_to_wld'])
+        warp_wld_from_img = kwimage.Affine.coerce(base['warp_to_wld'])
     except Exception:
         print('img = {}'.format(ub.repr2(img, nl=2)))
         raise
 
-    warp_wld_to_img = warp_img_to_wld.inv()
+    warp_img_from_wld = warp_wld_from_img.inv()
     img.update(ub.dict_isect(base, {
         'geos_corners',
         'wld_crs_info',
@@ -2084,10 +2084,11 @@ def _recompute_auxiliary_transforms(img):
         if 'width' in base and 'height' in base:
             img['width'] = base['width']
             img['height'] = base['height']
+
     for asset in coco_img.assets:
-        warp_aux_to_wld = kwimage.Affine.coerce(asset['warp_to_wld'])
-        warp_aux_to_img = warp_wld_to_img @ warp_aux_to_wld
-        asset['warp_aux_to_img'] = warp_aux_to_img.concise()
+        warp_wld_from_asset = kwimage.Affine.coerce(asset['warp_to_wld'])
+        warp_img_from_asset = warp_img_from_wld @ warp_wld_from_asset
+        asset['warp_aux_to_img'] = warp_img_from_asset.concise()
 
 
 def coco_channel_stats(coco_dset):

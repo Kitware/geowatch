@@ -28,7 +28,10 @@ def test_cli_help_message():
     info = ub.cmd('python -m watch.cli reproject --help', verbose=verbose)
     assert info['ret'] == 0
 
-    info = ub.cmd('python -m watch.cli average --help', verbose=verbose)
+    info = ub.cmd('python -m watch.cli average_features --help', verbose=verbose)
+    assert info['ret'] == 0
+
+    info = ub.cmd('python -m watch.cli time_combine --help', verbose=verbose)
     assert info['ret'] == 0
 
     info = ub.cmd('python -m watch.cli iarpa_eval --help', verbose=verbose)
