@@ -1084,7 +1084,7 @@ KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_rawbands_split6.kwcoco.zip
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_rawbands_split6.kwcoco.zip
 CHANNELS="(L8,S2,PD):(blue|green|red|nir),(WV):(blue|green|red),(WV,WV1):pan"
-EXPERIMENT_NAME=Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2
+EXPERIMENT_NAME=Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont3
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
@@ -1118,7 +1118,7 @@ data:
     weight_dilate          : 10
     use_centered_positives : True
     normalize_inputs       : 16384
-    balance_areas          : True
+    balance_areas          : False
 model:
     class_path: MultimodalTransformer
     init_args:
@@ -1131,7 +1131,7 @@ model:
         negative_change_weight : 0.01 
         stream_channels        : 16 
         class_loss             : 'dicefocal' 
-        saliency_loss          : 'focal' 
+        saliency_loss          : 'dicefocal' 
         saliency_head_hidden   : 6
         change_head_hidden     : 6
         class_head_hidden      : 6
@@ -1166,7 +1166,8 @@ torch_globals:
     float32_matmul_precision: auto
 
 initializer:
-    init: /home/local/KHQ/jon.crall/remote/yardrat/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop6-MeanYear10GSD/runs/Drop6_TCombo1Year_BAS_10GSD_split6_V42/lightning_logs/version_3/package-interupt/package_epoch102_step26346.pt
+    init: /home/local/KHQ/jon.crall/remote/yardrat/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop6-MeanYear10GSD/runs/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2/lightning_logs/version_0/package-interupt/package_epoch3_step941.pt
+    #init: /home/local/KHQ/jon.crall/remote/yardrat/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop6-MeanYear10GSD/runs/Drop6_TCombo1Year_BAS_10GSD_split6_V42/lightning_logs/version_3/package-interupt/package_epoch102_step26346.pt
     #init: $DVC_EXPT_DPATH/models/fusion/Drop6/packages/Drop6_BAS_2022_12_10GSD_BGRN_V11_CONT4/Drop6_BAS_2022_12_10GSD_BGRN_V11_CONT4_epoch6_step22939.pt
 " 
 

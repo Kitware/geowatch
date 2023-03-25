@@ -183,7 +183,9 @@ monai>=0.6.0
 torch_optimizer>=0.1.0
 netharn>=0.6.1
 
-# timm>=0.4.12
+timm>=0.6.13 ; python_version < '4.0'  and python_version >= '3.11'  # Python 3.11+
+timm>=0.4.12 ; python_version < '3.11'                               # Python 3.10-
+
 # Do we need to pin this?
 kornia<=0.5
 segmentation-models-pytorch>=0.2.0  ; python_version < '3.11'
