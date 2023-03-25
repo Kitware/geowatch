@@ -473,6 +473,7 @@ def site_feature(coco_dset, region_id, site_id, trackid, gids, features, as_summ
     from mgrs import MGRS
     import numpy as np
     import geojson
+    import shapely
 
     geom_list = [_single_geometry(feat['geometry']) for feat in features]
     geometry = _combined_geometries(geom_list)
@@ -621,6 +622,7 @@ else:
         'positive_annotated',
         'system_proposed', 'system_confirmed',
     }
+
 
 def _coerce_site_summaries(site_summary_or_region_model,
                            default_region_id=None, strict=True) -> List[Tuple[str, Dict]]:

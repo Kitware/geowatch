@@ -494,7 +494,7 @@ def combine_kwcoco_channels_temporally(config):
     target_gsd = float(np.mean(coerce_resolution(config.resolution)['mag']))
     print(f'Reset watch fields target_gsd={target_gsd}')
     kwcoco_extensions.populate_watch_fields(
-        output_coco_dset, target_gsd=target_gsd, overwrite=False)
+        output_coco_dset, target_gsd=target_gsd, overwrite=True)
 
     # video = output_coco_dset.index.videos[video_id]
     # after_video_dsize = (video['width'], video['height'])
@@ -504,7 +504,7 @@ def combine_kwcoco_channels_temporally(config):
     #     coco_populate_geo_video_stats(coco_dset, vidid, target_gsd=target_gsd)
 
     # Debugging:
-    # check_kwcoco_spatial_transforms(output_coco_dset)
+    kwcoco_extensions.check_kwcoco_spatial_transforms(output_coco_dset)
 
     # Save kwcoco file.
     print(f"Saving ouput kwcoco file to: {output_kwcoco_fpath}")
@@ -750,92 +750,6 @@ def merge_images(window_coco_images, merge_method, requested_chans, space,
     final_img = tmp_dset.imgs[gid]
 
     return final_img
-
-
-def check_kwcoco_spatial_transforms(dset):
-    """
-    import kwplot
-    kwplot.plt.ion()
-    import kwcoco
-    dset = kwcoco.CocoDataset('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6_MeanYear/imgonly-KR_R001.kwcoco.zip')
-
-    import watch
-    data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-    dset = kwcoco.CocoDataset(data_dvc_dpath / 'Drop6-MeanYear10GSD/imganns-NZ_R001.kwcoco.zip')
-
-    dset = kwcoco.CocoDataset('/home/joncrall/quicklinks/toothbrush_smart_expt_dvc/_debug/pred.kwcoco.zip')
-    """
-
-    import kwimage
-    from watch.utils import util_gdal
-    import numpy as np
-
-    for video in dset.videos().objs:
-
-        video_box = kwimage.Box.from_dsize((video['width'], video['height']))
-        print('video_box = {}'.format(ub.urepr(video_box, nl=1)))
-
-        video_target_gsd = video['target_gsd']
-
-        images = dset.images(video_id=video['id'])
-
-        for coco_img in images.coco_images:
-
-            image_box = kwimage.Box.from_dsize((coco_img['width'], coco_img['height']))
-            sensor = coco_img['sensor_coarse']
-
-            image_summary = {
-                'sensor': sensor,
-                'video_box': video_box,
-                'image_box': image_box,
-            }
-            warp_vid_from_img = coco_img.warp_vid_from_img
-            scale_vid_from_img = warp_vid_from_img.decompose()['scale']
-            recon_video_box = image_box.scale(scale_vid_from_img).quantize()
-            image_summary['scale_vid_from_img'] = scale_vid_from_img
-            image_summary['reconstructed_video_box'] = recon_video_box
-            image_summary['img_gsd'] = video_target_gsd / (1 / np.mean(scale_vid_from_img))
-
-            img = ub.udict(coco_img.img)
-            img = img - {'has_predictions'}
-            # print('coco_img.img = {}'.format(ub.urepr(img, nl=-1)))
-            asset_summaries = []
-
-            for asset in coco_img.assets:
-                warp_img_from_asset = kwimage.Affine.coerce(asset['warp_aux_to_img'])
-                scale_img_from_asset = warp_img_from_asset.decompose()['scale']
-
-                warp_vid_from_asset = warp_vid_from_img @ warp_img_from_asset
-
-                scale_vid_from_asset = warp_vid_from_asset.decompose()['scale']
-                scale_asset_from_vid = np.mean(warp_vid_from_asset.inv().decompose()['scale'])
-
-                asset_box = kwimage.Box.from_dsize((asset['width'], asset['height']))
-                recon_img_box = asset_box.scale(scale_img_from_asset)
-                recon_vid_box = asset_box.scale(scale_vid_from_asset)
-                fpath = ub.Path(coco_img.bundle_dpath) / asset['file_name']
-                gdal_dset = util_gdal.GdalOpen(fpath)
-                asset_shape = (gdal_dset.RasterYSize, gdal_dset.RasterXSize, gdal_dset.RasterCount)
-                info = gdal_dset.info()
-                disk_gsd = np.mean(np.abs(kwimage.Affine.from_gdal(info['geoTransform']).decompose()['scale']))
-                asset_summaries.append({
-                    'video_box': video_box,
-                    'image_box': image_box,
-                    'asset_box': asset_box,
-                    'asset_disk_shape': asset_shape,
-                    'asset_disk_gsd': disk_gsd,
-
-                    'asset_gsd': video_target_gsd / scale_asset_from_vid,
-
-                    'scale_img_from_asset': scale_img_from_asset,
-                    'scale_vid_from_asset': scale_vid_from_asset,
-                    'reconstructed_img_box': recon_img_box.quantize(),
-                    'reconstructed_vid_box': recon_vid_box.quantize(),
-                })
-                # assert len(info['bands']) == coco_img.channels.numel()
-
-            image_summary['assets'] = asset_summaries
-            print('image_summary = {}'.format(ub.urepr(image_summary, nl=3, sv=1)))
 
 
 __config__ = TimeCombineConfig

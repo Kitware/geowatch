@@ -960,7 +960,11 @@ torch_globals:
 
 initializer:
     init: /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6-MeanYear10GSD/runs/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2/lightning_logs/version_2/package-interupt/package_epoch0_step195.pt
-" --ckpt_path=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6-MeanYear10GSD/runs/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2/lightning_logs/version_3/checkpoints/epoch=40-step=10496.ckpt
+" \
+    --ckpt_path=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6-MeanYear10GSD/runs/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2/lightning_logs/version_8/checkpoints/epoch=97-step=25088.ckpt
+
+#--ckpt_path=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6-MeanYear10GSD/runs/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2/lightning_logs/version_7/checkpoints/epoch=69-step=17920.ckpt
+ #--ckpt_path=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6-MeanYear10GSD/runs/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2/lightning_logs/version_3/checkpoints/epoch=40-step=10496.ckpt
 
 #/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6-MeanYear10GSD/runs/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2/lightning_logs/version_0/checkpoints/epoch=1-step=512.ckpt
 ls "$WORKDIR"/$DATASET_CODE/runs/$EXPERIMENT_NAME/lightning_logs/version_*/checkpoints/*.ckpt

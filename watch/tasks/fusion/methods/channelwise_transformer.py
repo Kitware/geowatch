@@ -399,11 +399,10 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             sensor_modes = set(self.unique_sensor_modes) | set(input_stats.keys())
         else:
             sensor_modes = set(self.unique_sensor_modes)
-<<<<<<< HEAD
 
         # import xdev
         # with xdev.embed_on_exception_context:
-        for k in sensor_modes:
+        for k in sorted(sensor_modes):
             if isinstance(k, str):
                 if k == '*':
                     s = c = '*'
@@ -411,9 +410,6 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                     raise AssertionError
             else:
                 s, c = k
-=======
-        for s, c in sorted(sensor_modes):
->>>>>>> 7237f8f4 (expt and fix multimodal layer order)
             mode_code = kwcoco.FusedChannelSpec.coerce(c)
             # For each mode make a network that should learn to tokenize
             in_chan = mode_code.numel()
