@@ -208,6 +208,24 @@ if __name__ == '__main__':
             --resolution=10GSD \
             --run=1
 
+        # Drop 6
+        export CUDA_VISIBLE_DEVICES="0,1"
+        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+        DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+        BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6-MeanYear10GSD
+        python -m watch.cli.prepare_teamfeats \
+            --base_fpath "$BUNDLE_DPATH"/imganns-*.kwcoco.zip \
+            --expt_dpath="$DVC_EXPT_DPATH" \
+            --with_landcover2=1 \
+            --with_landcover=0 \
+            --with_materials=0 \
+            --with_invariants=1 \
+            --with_depth=0 \
+            --with_cold=0 \
+            --do_splits=0 \
+            --skip_existing=1 \
+            --gres=0,1 --workers=4 --backend=tmux --run=1
+
         DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
         python -m watch.cli.prepare_splits \
             --base_fpath=$DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-*.kwcoco.zip \

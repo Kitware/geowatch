@@ -33,13 +33,13 @@ Example:
     >>> }
     >>> config['backend'] = 'slurm'
     >>> queue = prep_feats(cmdline=False, **config)
-    >>> queue.rprint(0, 0)
+    >>> queue.print_commands(0, 0)
     >>> config['backend'] = 'tmux'
     >>> queue = prep_feats(cmdline=False, **config)
-    >>> queue.rprint(0, 0)
+    >>> queue.print_commands(0, 0)
     >>> config['backend'] = 'serial'
     >>> queue = prep_feats(cmdline=False, **config)
-    >>> queue.rprint(0, 0)
+    >>> queue.print_commands(0, 0)
 
 Ignore:
 
@@ -182,7 +182,8 @@ class TeamFeaturePipelineConfig(scfg.DataConfig):
     backend = scfg.Value('tmux', help=None, nargs=None)
     check = scfg.Value(True, help='if True check files exist where we can', nargs=None)
     verbose = scfg.Value(1, help='', nargs=None)
-    kwcoco_ext = scfg.Value('.kwcoco.json', help=ub.paragraph(
+
+    kwcoco_ext = scfg.Value('.kwcoco.zip', help=ub.paragraph(
             '''
             use .kwcoco.json or .kwcoco.zip for outputs
             '''), nargs=None)
@@ -264,7 +265,7 @@ def prep_feats(cmdline=True, **kwargs):
 
     if config['verbose']:
         queue.print_graph()
-        queue.rprint(with_locks=0)
+        queue.print_commands(with_locks=0)
 
     if config['run']:
         queue.run(

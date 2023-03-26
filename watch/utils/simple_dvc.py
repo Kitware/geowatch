@@ -254,19 +254,32 @@ class SimpleDVC(ub.NiceRepr):
         """
         paths = list(map(ub.Path, _ensure_iterable(path)))
         missing_data = [path for path in paths if not path.exists()]
-        to_pull = [
-            path.augment(stem=path.name, ext='.dvc')
-            for path in missing_data
-        ]
-        missing_sidecar = [
-            dvc_fpath for dvc_fpath in to_pull if not dvc_fpath.exists()
-        ]
 
-        if missing_sidecar:
-            raise Exception(f'There were {len(missing_sidecar)} / {len(paths)} missing sidecar files')
+        if missing_data:
+            dvc_root = self._ensure_root(paths)
+            def _find_sidecar(path):
+                first_cand = path.augment(stem=path.name, ext='.dvc')
+                if first_cand.exists():
+                    return first_cand
+                rel_path = path.relative_to(dvc_root)
+                rel_parts = rel_path.parts
+                for i in reversed(range(len(rel_parts))):
+                    parts = rel_parts[0:i]
+                    cand_dat = dvc_root.joinpath(*parts)
+                    cand_dvc = cand_dat.augment(stem=cand_dat.name, ext='.dvc')
+                    if cand_dvc.exists():
+                        return cand_dvc
 
-        if to_pull:
-            self.pull(to_pull, remote=remote)
+            to_pull = [_find_sidecar(path) for path in missing_data]
+            missing_sidecar = [dvc_fpath for dvc_fpath in to_pull if not dvc_fpath.exists()]
+
+            if missing_sidecar:
+                if len(missing_sidecar) < 10:
+                    print(f'missing_sidecar={missing_sidecar}')
+                raise Exception(f'There were {len(missing_sidecar)} / {len(paths)} missing sidecar files')
+
+            if to_pull:
+                self.pull(to_pull, remote=remote)
 
     def unprotect(self, path):
         from dvc import main as dvc_main
