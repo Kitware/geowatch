@@ -16,18 +16,16 @@ CommandLine:
     smartwatch spectra --src special:photos --show=True --fill=False
     smartwatch spectra --src special:shapes8 --show=True --stat=count --cumulative=True --multiple=stack
 
+    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
+    smartwatch spectra --src $DVC_DATA_DPATH/Drop6/data.kwcoco.zip --channels='red|green|blue|nir' --workers=11
+
     DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
     KWCOCO_FPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L_nowv_vali.kwcoco.json
     smartwatch spectra --src $KWCOCO_FPATH --show=True --show=True --include_channels="forest|water|bare_ground"
 """
-import kwcoco
 import pickle
-import kwarray
 import ubelt as ub
 import scriptconfig as scfg
-import kwimage
-import pandas as pd
-import numpy as np
 import math
 
 
@@ -36,7 +34,7 @@ class CocoSpectraConfig(scfg.Config):
     Updates image transforms in a kwcoco json file to align all videos to a
     target GSD.
     """
-    default = {
+    __default__ = {
         'src': scfg.Value('data.kwcoco.json', help='input coco dataset', position=1),
 
         'dst': scfg.Value(None, help='if specified dump the figure to disk at this file path (e.g. with a jpg or png suffix)'),
@@ -137,6 +135,7 @@ class HistAccum:
         self.n += 1
         if sensor not in self.accum:
             self.accum[sensor] = {}
+        # TODO: video / month
         sensor_accum = self.accum[sensor]
         if channel not in sensor_accum:
             sensor_accum[channel] = ub.ddict(lambda: 0)
@@ -145,6 +144,8 @@ class HistAccum:
             final_accum[k] += v
 
     def finalize(self):
+        import pandas as pd
+        import numpy as np
         # Stack all accuulated histograms into a longform dataframe
         to_stack = {}
         for sensor, sub in self.accum.items():
@@ -209,6 +210,8 @@ def main(cmdline=True, **kwargs):
     from watch.utils import kwcoco_extensions
     from watch.utils import util_parallel
     import watch
+    import kwcoco
+    import numpy as np
     import kwplot
     kwplot.autosns()
 
@@ -240,44 +243,54 @@ def main(cmdline=True, **kwargs):
     include_channels = None if include_channels is None else kwcoco.FusedChannelSpec.coerce(include_channels)
     exclude_channels = None if exclude_channels is None else kwcoco.FusedChannelSpec.coerce(exclude_channels)
 
-    jobs = ub.JobPool(mode=config['mode'], max_workers=workers)
-    for coco_img in ub.ProgIter(images.coco_images, desc='submit stats jobs'):
-        coco_img.detach()
-        job = jobs.submit(ensure_intensity_stats, coco_img,
-                          include_channels=include_channels,
-                          exclude_channels=exclude_channels)
-        job.coco_img = coco_img
+    jobs = ub.JobPool(mode=config['mode'], max_workers=workers, transient=True)
+    from watch.utils import util_progress
+    pman = util_progress.ProgressManager()
+    with pman:
+        for coco_img in pman.progiter(images.coco_images, desc='submit stats jobs'):
+            coco_img.detach()
+            job = jobs.submit(ensure_intensity_stats, coco_img,
+                              include_channels=include_channels,
+                              exclude_channels=exclude_channels)
+            job.coco_img = coco_img
 
-    if config['valid_range'] is not None:
-        valid_min, valid_max = map(float, config['valid_range'].split(':'))
-    else:
-        valid_min = -math.inf
-        valid_max = math.inf
+        if config['valid_range'] is not None:
+            valid_min, valid_max = map(float, config['valid_range'].split(':'))
+        else:
+            valid_min = -math.inf
+            valid_max = math.inf
 
-    accum = HistAccum()
-    for job in jobs.as_completed(desc='accumulate stats'):
-        intensity_stats = job.result()
-        sensor = job.coco_img.get('sensor_coarse', job.coco_img.get('sensor', 'unknown_sensor'))
-        for band_stats in intensity_stats['bands']:
-            band_name = band_stats['band_name']
-            intensity_hist = band_stats['intensity_hist']
-            intensity_hist = {k: v for k, v in intensity_hist.items()
-                              if k >= valid_min and k <= valid_max}
-            accum.update(intensity_hist, sensor, band_name)
+        accum = HistAccum()
+        seen_props = ub.ddict(set)
+        for job in pman.progiter(jobs.as_completed(), total=len(jobs), desc='accumulate stats'):
+            intensity_stats = job.result()
+            sensor = job.coco_img.get('sensor_coarse', job.coco_img.get('sensor', 'unknown_sensor'))
+            for band_stats in intensity_stats['bands']:
+                intensity_hist = band_stats['intensity_hist']
+                band_props = band_stats['properties']
+                for k, v in band_props.items():
+                    seen_props[k].add(v)
+                band_name = band_props['band_name']
+                intensity_hist = {k: v for k, v in intensity_hist.items()
+                                  if k >= valid_min and k <= valid_max}
+                accum.update(intensity_hist, sensor, band_name)
+            pman.update_info(
+                ('seen_props = {}'.format(ub.urepr(seen_props, nl=1)))
+            )
 
-    full_df = accum.finalize()
+        full_df = accum.finalize()
 
-    sensor_chan_stats, distance_metrics = sensor_stats_tables(full_df)
+        sensor_chan_stats, distance_metrics = sensor_stats_tables(full_df)
 
-    COMPARSE_SENSORS = True
-    if COMPARSE_SENSORS:
-        request_columns = ['emd', 'energy_dist', 'mean_diff', 'std_diff']
-        have_columns = list(ub.oset(request_columns) & ub.oset(distance_metrics.columns))
-        harmony_scores = distance_metrics[have_columns].mean()
-        extra_text = ub.repr2(harmony_scores.to_dict(), precision=4, compact=1)
-        print('extra_text = {!r}'.format(extra_text))
-    else:
-        extra_text = None
+        COMPARSE_SENSORS = True
+        if COMPARSE_SENSORS:
+            request_columns = ['emd', 'energy_dist', 'mean_diff', 'std_diff']
+            have_columns = list(ub.oset(request_columns) & ub.oset(distance_metrics.columns))
+            harmony_scores = distance_metrics[have_columns].mean()
+            extra_text = ub.repr2(harmony_scores.to_dict(), precision=4, compact=1)
+            print('extra_text = {!r}'.format(extra_text))
+        else:
+            extra_text = None
 
     if config['draw']:
         fig = plot_intensity_histograms(full_df, config)
@@ -287,6 +300,7 @@ def main(cmdline=True, **kwargs):
         if title is not None:
             title_lines.append(title)
 
+        title_lines.append(ub.Path(coco_dset.fpath).name)
         if extra_text is not None:
             title_lines.append(extra_text)
 
@@ -320,7 +334,10 @@ def main(cmdline=True, **kwargs):
 def sensor_stats_tables(full_df):
     import itertools as it
     import scipy
+    import kwarray
     import scipy.stats
+    import pandas as pd
+    import numpy as np
     sensor_channel_to_vwf = {}
     for _sensor, sensor_df in full_df.groupby('sensor'):
         for channel, chan_df in sensor_df.groupby('channel'):
@@ -466,14 +483,19 @@ def ensure_intensity_sidecar(fpath, recompute=False):
         >>> pickle.loads(stats_fpath2.read_bytes())
     """
     import os
+    import kwarray
+    import kwimage
     stats_fpath = ub.Path(os.fspath(fpath) + '.stats_v1.pkl')
     if recompute or not stats_fpath.exists():
         imdata = kwimage.imread(fpath, backend='gdal', nodata_method='ma')
         imdata = kwarray.atleast_nd(imdata, 3)
         # TODO: even better float handling
         if imdata.dtype.kind == 'f':
-            # Round floats to 3 decimals to keep things semi-managable
-            imdata = imdata.round(3)
+            precision = 2
+            # Round floats to p decimals to keep things semi-managable
+            # binning floats is necessary due to fundamental limitations
+            # We may need to decrease our resolution even further.
+            imdata = imdata.round(precision)
         stats_info = {'bands': []}
         for imband in imdata.transpose(2, 0, 1):
             masked_data = imband.ravel()
@@ -484,7 +506,8 @@ def ensure_intensity_sidecar(fpath, recompute=False):
             stats_info['bands'].append({
                 'intensity_hist': intensity_hist,
             })
-        with open(stats_fpath, 'wb') as file:
+        import safer
+        with safer.open(stats_fpath, 'wb') as file:
             pickle.dump(stats_info, file)
     return stats_fpath
 
@@ -494,6 +517,9 @@ def ensure_intensity_stats(coco_img, recompute=False, include_channels=None, exc
     Ensures a sidecar file exists for the kwcoco image
     """
     from os.path import join
+    import numpy as np
+    import kwcoco
+    import kwimage
     intensity_stats = {'bands': []}
     for obj in coco_img.iter_asset_objs():
         fpath = join(coco_img.bundle_dpath, obj['file_name'])
@@ -556,6 +582,20 @@ def ensure_intensity_stats(coco_img, recompute=False, include_channels=None, exc
                     dequant_values = dequantize(quant_values, quantization)
                     band_stat['intensity_hist'] = ub.odict(zip(dequant_values, counts))
                 if alwaysappend or band_name in requested_channels:
+                    band_stat['properties'] = props = {
+                        'video_name': None,
+                        'band_name': band_name,
+                        'month': None,
+                    }
+                    try:
+                        props['video_name'] = coco_img.video['name']
+                    except Exception:
+                        ...
+                    try:
+                        from watch.utils import util_time
+                        props['month'] = util_time.coerce_datetime(coco_img.img['date_captured']).month
+                    except Exception:
+                        ...
                     band_stat['band_name'] = band_name
                     intensity_stats['bands'].append(band_stat)
     return intensity_stats
@@ -649,6 +689,10 @@ def plot_intensity_histograms(full_df, config):
             print(sensor_df)
             raise
             pass
+        if config['valid_range'] is not None:
+            valid_min, valid_max = map(float, config['valid_range'].split(':'))
+            ax.set_xlim(valid_min, valid_max)
+
         ax.set_title(sensor_name)
         # maxx = sensor_df.intensity_bin.max()
         # maxx = sensor_maxes[sensor_name]
@@ -668,6 +712,9 @@ def _weighted_auto_bins(data, xvar, weightvar):
 
     References:
         https://github.com/mwaskom/seaborn/issues/2710
+
+    TODO:
+        add to util_kwarray
 
     Example:
         >>> import pandas as pd
@@ -690,6 +737,7 @@ def _weighted_auto_bins(data, xvar, weightvar):
         >>> import seaborn as sns
         >>> sns.histplot(data=data, bins=n_equal_bins, x='x', weights='weights', hue='hue')
     """
+    import numpy as np
     sort_df = data.sort_values(xvar)
     values = sort_df[xvar]
     weights = sort_df[weightvar]
@@ -739,6 +787,7 @@ def _fill_missing_colors(label_to_color):
     from distinctipy import distinctipy
     import kwarray
     import numpy as np
+    import kwimage
     given = {k: kwimage.Color(v).as01() for k, v in label_to_color.items() if v is not None}
     needs_color = sorted(set(label_to_color) - set(given))
 
@@ -763,7 +812,7 @@ def _fill_missing_colors(label_to_color):
     return final
 
 
-_SubConfig = CocoSpectraConfig
+__config__ = CocoSpectraConfig
 
 if __name__ == '__main__':
     main()

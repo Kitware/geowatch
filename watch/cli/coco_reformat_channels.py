@@ -13,7 +13,7 @@ class CocoReformatChannels(scfg.Config):
     Helper to remove channels from a coco file and reformat predictions from
     float32 to int16.
     """
-    default = {
+    __default__ = {
         'src': scfg.Value(None, help='path to coco dataset to read and rewrite'),
 
         'quantize': scfg.Value(None, type=str, help='channels to quantize'),

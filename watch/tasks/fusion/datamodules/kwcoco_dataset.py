@@ -51,6 +51,7 @@ Example:
     >>>     input_space_scale='3.3GSD',
     >>>     window_space_scale='3.3GSD',
     >>>     output_space_scale='1GSD',
+    >>>     prenormalize_inputs=True,
     >>>     #normalize_peritem='nir',
     >>>     dist_weights=0,
     >>>     quality_threshold=0,
@@ -74,6 +75,44 @@ Example:
     >>> kwplot.imshow(canvas, fnum=1)
     >>> kwplot.show_if_requested()
 
+Example:
+    >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+    >>> # This shows how you can use the dataloader to sample an arbitrary
+    >>> # spacetime volume.
+    >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+    >>> import watch
+    >>> import kwcoco
+    >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+    >>> #coco_fpath = dvc_dpath / 'Drop4-BAS/data_vali.kwcoco.json'
+    >>> coco_fpath = dvc_dpath / 'Drop6/data_vali_split1.kwcoco.zip'
+    >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+    >>> ##'red|green|blue',
+    >>> self = KWCocoVideoDataset(
+    >>>     coco_dset,
+    >>>     time_dims=7, window_dims=(196, 196),
+    >>>     window_overlap=0,
+    >>>     channels="(S2,L8):blue|green|red|nir",
+    >>>     input_space_scale='3.3GSD',
+    >>>     window_space_scale='3.3GSD',
+    >>>     output_space_scale='1GSD',
+    >>>     #normalize_peritem='nir',
+    >>>     dist_weights=0,
+    >>>     quality_threshold=0,
+    >>>     neg_to_pos_ratio=0, time_sampling='soft2',
+    >>> )
+    >>> self.requested_tasks['change'] = 1
+    >>> self.requested_tasks['saliency'] = 1
+    >>> self.requested_tasks['class'] = 0
+    >>> self.requested_tasks['boxes'] = 1
+    >>> target = {
+    >>>     'video_id': 3,
+    >>>     'gids': [529, 555, 607, 697, 719, 730, 768],
+    >>>     'main_idx': 3,
+    >>>     'space_slice': (slice(0, 65, None), slice(130, 195, None)),
+    >>> }
+    >>> item = self[target]
+
+
 Ignore:
     >>> self.disable_augmenter = True
     >>> self.normalize_peritem = None
@@ -90,34 +129,36 @@ Ignore:
     >>> kwplot.imshow(canvas2, fnum=3, pnum=(2, 1, 2), title='per-item normalization (across time)')
 """
 import einops
-import os
-import warnings
 import kwarray
 import kwcoco
 import kwimage
 import ndsampler
 import numpy as np
+import os
 import pandas as pd
+import scriptconfig as scfg
 import torch
 import ubelt as ub
+import warnings
+import functools
+from os import getenv
 from shapely.ops import unary_union
 from torch.utils import data
 from typing import Dict
-import functools
-import scriptconfig as scfg
-from os import getenv
+from typing import NamedTuple
 
 from watch import heuristics
 from watch.utils import kwcoco_extensions
 from watch.utils import util_bands
 from watch.utils import util_iter
+from watch.utils import util_kwarray
 from watch.utils import util_kwimage
 from watch.utils import util_time
 from watch.tasks.fusion import utils
 from watch.tasks.fusion.datamodules import data_utils
+from watch.tasks.fusion.datamodules import spacetime_grid_builder
 from watch.tasks.fusion.datamodules.data_augment import SpacetimeAugmentMixin
 from watch.tasks.fusion.datamodules.smart_mixins import SMARTDataMixin
-from watch.tasks.fusion.datamodules import spacetime_grid_builder
 
 try:
     import xdev
@@ -125,8 +166,8 @@ try:
 except Exception:
     profile = ub.identity
 
-# See ~/code/watch/docs/coding_oddities.rst
 # For notes on Spaces
+# See ~/code/watch/docs/coding_conventions.rst
 
 
 class KWCocoVideoDatasetConfig(scfg.Config):
@@ -144,12 +185,8 @@ class KWCocoVideoDatasetConfig(scfg.Config):
         * time_steps
         * time_sampling
         * chip_dims / window_space_dims
-
-    Also:
-        * set_cover_algo
-
     """
-    default = {
+    __default__ = {
         ###############
         # SPACE OPTIONS
         ###############
@@ -356,20 +393,59 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             runs quicker.
             ''')),
 
+        ############################
+        # DATA NORMALIZATION OPTIONS
+        ############################
+
+        'prenormalize_inputs': scfg.Value(None, help=ub.paragraph(
+            '''
+            New in 0.4.3: Can specified as list of dictionaries that
+            effectively contains the dataset statistics to use. Details of that
+            will be documented as the feature matures.
+
+            See the watch.cli.coco_spectra script to help determine reasonable
+            values for this.
+
+            These normalizations are applied at the dataloader getitem level.
+
+            This should be specified as a list of dictionaries each containing:
+                * mean:
+                * std:
+                * min:
+                * max:
+
+            As well as the domain to which the normalization applies, e.g.:
+                * video_name
+                * channels
+                * sensor
+
+            If set to True, then we try to automatically compute these values.
+            ''')),
+
+        'normalize_perframe': scfg.Value(False, help=ub.paragraph(
+            '''
+            Applies a pre-normalizaiton that normalizes each frame by itself.
+            This is not recommended unless you have a larger chip size
+            because there needs to be enough data within a frame for
+            the normalization to be effective.
+            ''')),
+
+        'normalize_peritem': scfg.Value(None, type=str, help=ub.paragraph(
+            '''
+            Applies a pre-normalization across all frames in an item.  This
+            preserves relative temporal variations.
+
+            Can be specified as a ChannelSpec, and in this case will only be
+            applied to these channels. If True all channels are normalized this
+            way.
+            ''')),
+
         ###################
         # WEIGHTING OPTIONS
         ###################
 
         'ignore_dilate': scfg.Value(0, help='Dilation applied to ignore masks.'),
         'weight_dilate': scfg.Value(0, help='Dilation applied to weight masks.'),
-
-        'normalize_perframe': scfg.Value(False, help='undocumented - ignored'),
-
-        'normalize_peritem': scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            if specified normalize these bands/channels on a per-batch-item
-            level across time. if True normalize all bands.
-            ''')),
 
         'min_spacetime_weight': scfg.Value(0.9, help=ub.paragraph(
             '''
@@ -486,7 +562,7 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             ''')),
     }
 
-    def normalize(self):
+    def __post_init__(self):
         if isinstance(self['exclude_sensors'], str):
             self['exclude_sensors'] = [s.strip() for s in self['exclude_sensors'].split(',')]
         self['time_steps'] = int(self['time_steps'])
@@ -605,6 +681,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         window_overlap = config['chip_overlap']
 
         self.config = config
+        print('self.config = {}'.format(ub.urepr(dict(self.config), nl=1)))
         # TODO: maintain instance variables xor items in the config, not both.
         self.__dict__.update(self.config.to_dict())
         self.sampler = sampler
@@ -942,6 +1019,53 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             ub.oset(['landcover_hidden.0', 'landcover_hidden.1', 'landcover_hidden.2']),
         ] + heuristics.HUERISTIC_COMBINABLE_CHANNELS
 
+        self.prenormalizers = None
+
+        if self.config['prenormalize_inputs'] is not None:
+            prenormalizers = None
+            if self.config['prenormalize_inputs'] is True:
+                # default_prenorm = {
+                #     'domain_stats': 'auto',
+                # }
+                #
+                """
+                e.g. we expect domain stats to look like:
+
+                domain_stats:
+                    - sensor: S2
+                      channels: red|green|blue
+                      video_name: KR_R001
+                      month: 3
+                      mean: [120, 231, 233]
+                      std: [30, 20, 24]
+                      min: [0, 0, 0]
+                      max: [10000, 10000, 10000]
+                    - ...
+                """
+
+                # We generally want to compute these on the full dataset
+                stats = self.cached_dataset_stats(num_workers=4)
+                self.prenormalizers = stats['domain_input_stats']
+                # prenormalizers = []
+                # for key, value in stats['prenormalizers'].items():
+                #     item = ub.udict(key._asdict()) | {k: v.ravel() for k, v in value.items()}
+                #     prenormalizers.append(item)
+                # ...
+                # raise NotImplementedError('need to compute prenormaliztions')
+
+            elif isinstance(self.config['prenormalize_inputs'], dict):
+                ...
+            elif isinstance(self.config['prenormalize_inputs'], list):
+                ...
+            else:
+                raise NotImplementedError
+
+            if prenormalizers is None:
+                stats = self.cached_dataset_stats(num_workers=4)
+                prenormalizers = stats['domain_input_stats']
+
+            self.prenormalizers = prenormalizers
+
     def reseed(self):
         """
         Reinitialize the random number generator
@@ -1106,8 +1230,34 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 # dont ask for annotations multiple times
                 first_with_annot = False
 
+        if coco_img.video is None:
+            video_name = None
+        else:
+            video_name = coco_img.video.get('name', None)
+
         # After all channels are sampled, apply final invalid mask.
         for stream, sample in sample_streams.items():
+
+            if self.prenormalizers is not None:
+                domain = Domain(channels=stream, sensor=sensor_coarse,
+                                video_name=video_name)
+                stats = self.prenormalizers[domain]
+                out = sample['im']
+                # norm = kwarray.normalize(
+                #     sample['im'],
+                #     mode='sigmoid',
+                #     alpha=stats['std'][None, None, None, :],
+                #     beta=stats['mean'][None, None, None, :],
+                #     min_val=stats['min'][None, None, None, :],
+                #     max_val=stats['max'][None, None, None, :],
+                # )
+                from scipy.special import expit as sigmoid
+                np.minimum(out, stats['max'][None, None, None, :], out=out)
+                np.maximum(out, stats['min'][None, None, None, :], out=out)
+                presig = (out - stats['mean'][None, None, None, :]) / stats['std'][None, None, None, :]
+                norm = sigmoid(presig)
+                out[:] = norm
+
             unobservable_mask.apply(sample['im'][0], np.nan)
             invalid_mask = np.isnan(sample['im'])
             any_invalid = np.any(invalid_mask)
@@ -1359,6 +1509,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         frame_items = self._build_frame_items(final_gids, gid_to_sample,
                                               truth_info, resolution_info)
 
+        # if self.config['prenormalize_inputs'] is not None:
+        #     raise NotImplementedError
+
         if self.normalize_perframe:
             for frame_item in frame_items:
                 frame_modes = frame_item['modes']
@@ -1422,7 +1575,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 for chan_data, valid_mask, parent_data, chan_sl in norm_items:
                     valid_data = chan_data[valid_mask]
                     # Apply normalizer (todo: use kwimage variant)
-                    imdata_normalized = apply_robust_normalizer(
+                    imdata_normalized = util_kwarray.apply_robust_normalizer(
                         normalizer, chan_data, valid_data, valid_mask,
                         dtype=np.float32, copy=True)
                     # Overwrite original data with new normalized variants
@@ -1656,7 +1809,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         vidid = target_['video_id']
         video = coco_dset.index.videos[vidid]
 
-        with_annots = [] if self.inference_only else ['boxes', 'segmentation']
+        with_annots = False if self.inference_only else ['boxes', 'segmentation']
 
         # New true-multimodal data items
         gid_to_sample: Dict[int, Dict] = {}
@@ -1886,7 +2039,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 upweight_time = self.upweight_time
 
             # Learn more from the center of the space-time patch
-            time_weights = biased_1d_weights(upweight_time, num_frames)
+            time_weights = util_kwarray.biased_1d_weights(upweight_time, num_frames)
 
             time_weights = time_weights / time_weights.max()
             time_weights = time_weights.clip(0, 1)
@@ -2353,7 +2506,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             ('normalize_perframe', self.config['normalize_perframe']),
             ('with_intensity', with_intensity),
             ('with_class', with_class),
-            ('depends_version', 16),  # bump if `compute_dataset_stats` changes
+            ('prenormalizers', self.prenormalizers),
+            ('depends_version', 18),  # bump if `compute_dataset_stats` changes
         ])
         if self.config['normalize_peritem']:
             depends['normalize_peritem'] = self.config['normalize_peritem']
@@ -2424,8 +2578,12 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> self.input_sensorchan
             >>> stats = self.compute_dataset_stats(batch_size=1)
 
+        Ignore:
+            import sys, ubelt
+            sys.path.append(ubelt.expandpath('~/code/watch'))
+            globals().update(xdev.get_func_kwargs(KWCocoVideoDataset.compute_dataset_stats))
+
         """
-        from watch.utils.slugify_ext import smart_truncate
         num = num if isinstance(num, int) and num is not True else 1000
         if not with_class and not with_intensity:
             num = 1  # efficiency hack
@@ -2439,7 +2597,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                                   shuffle=True, batch_size=batch_size)
 
         # Track moving average of each fused channel stream
-        channel_stats = ub.ddict(lambda: ub.ddict(kwarray.RunningStats))
+        norm_stats = ub.ddict(kwarray.RunningStats)
 
         classes = self.classes
         num_classes = len(classes)
@@ -2455,8 +2613,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         unique_sensor_modes = set(
             (s.sensor.spec, s.chans.spec)
             for s in self.input_sensorchan.streams())
-
-        is_native = self.config['input_space_scale'] == 'native'
 
         print('unique_sensor_modes = {}'.format(ub.repr2(unique_sensor_modes, nl=1)))
         intensity_dtype = np.float64
@@ -2478,137 +2634,142 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             track_class_freq = None
             annot_class_freq = None
 
-        WITH_PROG_POSTFIX_TEXT = 1
-        if WITH_PROG_POSTFIX_TEXT:
-            # Create timer to periodically summarize intermediate results while
-            # full dataset stats are accumulating
-            timer = ub.Timer().tic()
-            timer._first = True
-            postfix_update_threshold = 5  # seconds
-
         def current_input_stats():
             """
             Summarizes current stats estimates either for display or for the
             final output.
             """
-            input_stats = {}
-            for sensor, submodes in channel_stats.items():
-                for chan_key, running in submodes.items():
-                    if is_native:
-                        # ensure we have the expected shape
-                        try:
-                            perchan_stats = running.summarize(axis=ub.NoParam, keepdims=True)
-                        except RuntimeError:
-                            perchan_stats = {'mean': np.array([np.nan]), 'std': np.array([np.nan])}
-                        chan_mean = perchan_stats['mean'][:, None, None]
-                        chan_std = perchan_stats['std'][:, None, None]
-                        chan_min = perchan_stats['min'][:, None, None]
-                        chan_max = perchan_stats['max'][:, None, None]
-                    else:
-                        try:
-                            perchan_stats = running.summarize(axis=(1, 2))
-                        except RuntimeError:
-                            perchan_stats = {
-                                'mean': np.array([[[np.nan]]]),
-                                'std': np.array([[[np.nan]]]),
-                                'min': np.array([[[np.nan]]]),
-                                'max': np.array([[[np.nan]]]),
-                            }
-                        chan_mean = perchan_stats['mean']
-                        chan_std = perchan_stats['std']
-                        chan_min = perchan_stats['min']
-                        chan_max = perchan_stats['max']
-
-                    # For nans, set the mean to zero and set the std to a huge
-                    # number if we dont have any data on it. That will prevent
-                    # the network from doing much with it which is really the
-                    # best we can do here.
-                    chan_mean[np.isnan(chan_mean)] = 0
-                    chan_std[np.isnan(chan_std)] = 1e8
-
-                    chan_mean = chan_mean.round(6)
-                    chan_std = chan_std.round(6)
-                    # print('perchan_stats = {}'.format(ub.repr2(perchan_stats, nl=1)))
-                    input_stats[(sensor, chan_key)] = {
-                        'mean': chan_mean,
-                        'std': chan_std,
-                        'min': chan_min,
-                        'max': chan_max,
+            domain_input_stats = {}
+            for domain, running in norm_stats.items():
+                # ensure we have the expected shape
+                try:
+                    perchan_stats = running.summarize(axis=ub.NoParam, keepdims=True)
+                except RuntimeError:
+                    perchan_stats = {
+                        'mean': np.array([np.nan]),
+                        'std': np.array([np.nan]),
+                        'min': np.array([np.nan]),
+                        'max': np.array([np.nan]),
+                        'n': np.array([np.nan]),
                     }
-            return input_stats
+                chan_mean = perchan_stats['mean']
+                chan_std = perchan_stats['std']
+                chan_min = perchan_stats['min']
+                chan_max = perchan_stats['max']
+                chan_num = perchan_stats['n']
 
-        from watch.utils import util_progress
-        from watch.utils import util_environ
-        USE_RICH_UPDATES = util_environ.envflag('USE_RICH_UPDATES', 1)
-        pman = util_progress.ProgressManager(
-            backend='rich' if USE_RICH_UPDATES else 'progiter')
+                # For nans, set the mean to zero and set the std to a huge
+                # number if we dont have any data on it. That will prevent
+                # the network from doing much with it which is really the
+                # best we can do here.
+                chan_mean[np.isnan(chan_mean)] = 0
+                chan_std[np.isnan(chan_std)] = 1e8
 
-        def update_displayed_estimates():
+                chan_mean = chan_mean.round(6)
+                chan_std = chan_std.round(6)
+                # print('perchan_stats = {}'.format(ub.repr2(perchan_stats, nl=1)))
+                domain_input_stats[domain] = {
+                    'mean': chan_mean,
+                    'std': chan_std,
+                    'min': chan_min,
+                    'max': chan_max,
+                    'n': chan_num,
+                }
+
+            # We are now computing input stats across a finer set of domain
+            # variables. For backwards compatability also return the old-style
+            # input stats that are only over sensor/channel
+            grouped_stats = ub.group_items(domain_input_stats.values(), [
+                (u.sensor, u.channels) for u in domain_input_stats.keys()])
+            old_input_stats = {}
+            for (sensor, chan), group in grouped_stats.items():
+                means = np.stack([m['mean'] for m in group], axis=0)
+                stds = np.stack([m['std'] for m in group], axis=0)
+                nums = np.stack([m['n'] for m in group], axis=0)
+                maxs = np.stack([m['max'] for m in group], axis=0)
+                mins = np.stack([m['min'] for m in group], axis=0)
+
+                combo_mins = np.nanmin(mins, axis=0)
+                combo_maxs = np.nanmax(maxs, axis=0)
+                combo_mean, combo_std, combo_nums = util_kwarray.combine_mean_stds(
+                    means, stds, nums, axis=0)
+                combo = {
+                    'mean': combo_mean[:, None, None],
+                    'std': combo_std[:, None, None],
+                    'min': combo_mins[:, None, None],
+                    'max': combo_maxs[:, None, None],
+                    'n': combo_nums[:, None, None],
+                }
+                old_input_stats[(sensor, chan)] = combo
+            return domain_input_stats, old_input_stats
+
+        def update_displayed_estimates(pman):
             """
-            Build an intermediate summary to display to the user while this is
-            running.
+            Build an intermediate summary to display in the progress bar
             """
-            if USE_RICH_UPDATES:
-                stat_lines = ['Current Estimated Dataset Statistics: ']
-                if with_intensity:
-                    input_stats = current_input_stats()
-                    input_stats2 = {sc: {k: v.ravel() for k, v in stats.items()} for sc, stats in input_stats.items()}
-                    intensity_info_text = 'Spectra Stats: ' + ub.urepr(input_stats2, with_dtype=False, precision=4)
-                    stat_lines.append(intensity_info_text)
-                if with_class:
-                    class_stats = ub.sorted_vals(ub.dzip(classes, total_freq), reverse=True)
-                    class_info_text = 'Class Stats: ' + ub.urepr(class_stats)
-                    stat_lines.append(class_info_text)
-                stat_lines.append('Unique Image Samples: {}'.format(len(image_id_histogram)))
-                stat_lines.append('Unique Video Samples: {}'.format(len(video_id_histogram)))
-                info_text = '\n'.join(stat_lines).strip()
-                if info_text:
-                    pman.update_info(info_text)
-            else:
-                if with_class:
-                    intermediate = ub.sorted_vals(ub.dzip(classes, total_freq), reverse=True)
-                    intermediate_text = ub.repr2(intermediate, compact=1)
-                    intermediate_text_trunc = smart_truncate(intermediate_text, max_length=40, trunc_loc=0.8)
-                else:
-                    intermediate_text = ''
-                    intermediate_text_trunc = ''
+            stat_lines = ['Current Estimated Dataset Statistics: ']
+            if with_intensity:
+                domain_input_stats, old_input_stats = current_input_stats()
+                input_stats2 = {sc: {k: v.ravel() for k, v in stats.items()}
+                                for sc, stats in old_input_stats.items()}
+                intensity_info_text = 'Spectra Stats: ' + ub.urepr(input_stats2, with_dtype=False, precision=4)
+                stat_lines.append(intensity_info_text)
+            if with_class:
+                class_stats = ub.sorted_vals(ub.dzip(classes, total_freq), reverse=True)
+                class_info_text = 'Class Stats: ' + ub.urepr(class_stats)
+                stat_lines.append(class_info_text)
+            stat_lines.append('Unique Image Samples: {}'.format(len(image_id_histogram)))
+            stat_lines.append('Unique Video Samples: {}'.format(len(video_id_histogram)))
+            info_text = '\n'.join(stat_lines).strip()
+            if info_text:
+                pman.update_info(info_text)
 
-                if with_intensity:
-                    try:
-                        # Broken in general, only looks at one sensorchan, but
-                        # not sure how to do better. This is off by default
-                        # anyway.
-                        input_stats = current_input_stats()
-                        input_stats2 = {sc: {k: v.ravel() for k, v in stats.items()} for sc, stats in input_stats.items()}
-                        curr = ub.peek(input_stats2.values())
-                    except RuntimeError:
-                        curr = {}
-                    else:
-                        curr = curr & {'mean', 'std', 'max', 'min'}
-                        curr = curr.map_values(float)
-                    text = ub.repr2(curr, compact=1, precision=1, nl=0) + ' ' + intermediate_text_trunc
-                else:
-                    text = intermediate_text_trunc
-                prog.set_postfix_str(text)
-
-        def update_intensity_estimates(frame_item):
+        def update_intensity_estimates(item):
             # Update pixel-level intensity histogram
-            sensor_code = frame_item['sensor']
-            modes = frame_item['modes']
+            video_name = item['video_name']
+            for frame_item in item['frames']:
+                sensor_code = frame_item['sensor']
+                modes = frame_item['modes']
 
-            for mode_code, mode_val in modes.items():
-                sensor_mode_hist[(sensor_code, mode_code)] += 1
-                running = channel_stats[sensor_code][mode_code]
-                val = mode_val.numpy().astype(intensity_dtype)
-                weights = np.isfinite(val).astype(intensity_dtype)
-                # kwarray can handle nans now
-                if is_native:
+                for mode_code, mode_val in modes.items():
+                    domain = Domain(sensor_code, mode_code, video_name)
+
+                    sensor_mode_hist[(sensor_code, mode_code)] += 1
+                    running = norm_stats[domain]
+                    val = mode_val.numpy().astype(intensity_dtype)
+                    weights = np.isfinite(val).astype(intensity_dtype)
+
                     # Put channels last so we can update multiple at once
                     flat_vals = val.transpose(1, 2, 0).reshape(-1, val.shape[0])
                     flat_weights = weights.transpose(1, 2, 0).reshape(-1, weights.shape[0])
                     running.update_many(flat_vals, weights=flat_weights)
-                else:
-                    running.update(val, weights=weights)
+
+        def update_stats(item, total_freq):
+            if with_vidid:
+                vidid = item['video_id']
+                video_id_histogram[vidid] += 1
+
+            for frame_item in item['frames']:
+                image_id_histogram[frame_item['gid']] += 1
+                if with_class:
+                    # Update pixel-level class histogram
+                    class_idxs = frame_item['class_idxs']
+                    if class_idxs is not None:
+                        item_freq = np.histogram(class_idxs.ravel(), bins=bins)[0]
+                        total_freq += item_freq
+
+            if with_intensity:
+                update_intensity_estimates(item)
+
+        from watch.utils import util_progress
+        from watch.utils import util_environ
+        pman = util_progress.ProgressManager()
+
+        # Create timer to periodically summarize intermediate results while
+        # full dataset stats are accumulating
+        timer = ub.Timer().tic()
+        timer._first = True
+        timer.postfix_update_threshold = 5  # seconds
 
         # TODO: we can compute the intensity histogram more efficiently by
         # only doing it for unique channels (which might be duplicated)
@@ -2620,73 +2781,60 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 for item in batch_items:
                     if item is None:
                         continue
+                    update_stats(item, total_freq)
 
-                    if with_vidid:
-                        vidid = item['video_id']
-                        video_id_histogram[vidid] += 1
-
-                    for frame_item in item['frames']:
-                        image_id_histogram[frame_item['gid']] += 1
-                        if with_class:
-                            # Update pixel-level class histogram
-                            class_idxs = frame_item['class_idxs']
-                            if class_idxs is not None:
-                                item_freq = np.histogram(class_idxs.ravel(), bins=bins)[0]
-                                total_freq += item_freq
-                        if with_intensity:
-                            update_intensity_estimates(frame_item)
-
-                if WITH_PROG_POSTFIX_TEXT and timer._first or timer.toc() > postfix_update_threshold:
-                    update_displayed_estimates()
+                if timer._first or timer.toc() > timer.postfix_update_threshold:
+                    update_displayed_estimates(pman)
                     timer._first = 0
                     timer.tic()
 
-            if WITH_PROG_POSTFIX_TEXT:
-                update_displayed_estimates()
+            update_displayed_estimates(pman)
 
-        # TODO: we should ensure we include at least one sample from each type
-        # of modality.  Note: the requested order of the channels could be
-        # different that what is registered in the dataset. Need to find a good
-        # way to account for this.
-        MISSING_SENSOR_FALLBACK = util_environ.envflag('MISSING_SENSOR_FALLBACK', 1)
-        if MISSING_SENSOR_FALLBACK and with_intensity:
-            missing_sensor_modes = set(unique_sensor_modes) - set(sensor_mode_hist)
-            # Try to find a few examples with these missing modes
-            if missing_sensor_modes:
-                print(f'Warning: we are missing stats for {missing_sensor_modes}. '
-                      'We will try to force something for them')
-                coco_images = self.sampler.dset.images().coco_images
-                sensor_to_images = ub.group_items(coco_images, key=lambda x: x.img.get('sensor_coarse', None))
-                extra_sample_groups = []
-                for sensor, mode in missing_sensor_modes:
-                    candidate_images = sensor_to_images.get(sensor, [])
-                    if len(candidate_images) == 0:
-                        print(f'sensor warning: unable to sample data for {sensor}:{mode}')
-                    else:
-                        filtered = []
-                        for img in candidate_images:
-                            if (img.channels & mode).numel():
-                                filtered.append(img)
-                        if not filtered:
-                            print(f'mode warning: unable to sample data for {sensor}:{mode}')
-                        extra_sample_groups.append(filtered)
+            # TODO: we should ensure we include at least one sample from each type
+            # of modality.  Note: the requested order of the channels could be
+            # different that what is registered in the dataset. Need to find a good
+            # way to account for this.
+            MISSING_SENSOR_FALLBACK = util_environ.envflag('MISSING_SENSOR_FALLBACK', 1)
+            if MISSING_SENSOR_FALLBACK and with_intensity:
+                missing_sensor_modes = set(unique_sensor_modes) - set(sensor_mode_hist)
+                # Try to find a few examples with these missing modes
+                if missing_sensor_modes:
+                    print(f'Warning: we are missing stats for {missing_sensor_modes}. '
+                          'We will try to force something for them')
+                    coco_images = self.sampler.dset.images().coco_images
+                    sensor_to_images = ub.group_items(coco_images, key=lambda x: x.img.get('sensor_coarse', None))
+                    extra_sample_groups = []
+                    for sensor, mode in missing_sensor_modes:
+                        candidate_images = sensor_to_images.get(sensor, [])
+                        if len(candidate_images) == 0:
+                            print(f'sensor warning: unable to sample data for {sensor}:{mode}')
+                        else:
+                            filtered = []
+                            for img in candidate_images:
+                                if (img.channels & mode).numel():
+                                    filtered.append(img)
+                            if not filtered:
+                                print(f'mode warning: unable to sample data for {sensor}:{mode}')
+                            extra_sample_groups.append(filtered)
 
-                # Build extra fallback samples
-                for group in ub.ProgIter(extra_sample_groups, desc='process fallbacks'):
-                    image_ids = [g.img['id'] for g in group]
-                    images = self.sampler.dset.images(image_ids)
-                    vidid_to_gids = ub.group_items(image_ids, images.lookup('video_id'))
-                    for vidid, gids in vidid_to_gids.items():
-                        video = self.sampler.dset.index.videos[vidid]
-                        # Hack: just use the entire video, if that fails we should
-                        # implement windowing here.
-                        space_slice = (
-                            slice(0, video['height']),
-                            slice(0, video['width']),
-                        )
-                        sample = {'video_id': vidid, 'gids': gids[0:1],
-                                  'space_slice': space_slice}
-                        item = self[sample]
+                    # Build extra fallback samples
+                    for group in ub.ProgIter(extra_sample_groups, desc='process fallbacks'):
+                        image_ids = [g.img['id'] for g in group]
+                        images = self.sampler.dset.images(image_ids)
+                        vidid_to_gids = ub.group_items(image_ids, images.lookup('video_id'))
+                        for vidid, gids in vidid_to_gids.items():
+                            video = self.sampler.dset.index.videos[vidid]
+                            # Hack: just use the entire video, if that fails we should
+                            # implement windowing here.
+                            space_slice = (
+                                slice(0, video['height']),
+                                slice(0, video['width']),
+                            )
+                            sample = {'video_id': vidid, 'gids': gids[0:1],
+                                      'space_slice': space_slice}
+                            item = self[sample]
+                            if item is not None:
+                                update_stats(item, total_freq)
 
         self.disable_augmenter = False
 
@@ -2697,15 +2845,18 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             class_freq = None
 
         if with_intensity:
-            input_stats = current_input_stats()
+            domain_input_stats, old_input_stats = current_input_stats()
         else:
-            input_stats = None
+            domain_input_stats = None
+            old_input_stats = None
 
         dataset_stats = {
             'unique_sensor_modes': unique_sensor_modes,
             'sensor_mode_hist': dict(sensor_mode_hist),
-            'input_stats': input_stats,
+            'input_stats': old_input_stats,
             'class_freq': class_freq,  # pixelwise
+
+            'domain_input_stats': domain_input_stats,  # new
 
             'annot_class_freq': annot_class_freq,
             'track_class_freq': track_class_freq,
@@ -2936,7 +3087,7 @@ def worker_init_fn(worker_id):
             self.sampler.dset.connect(readonly=True)
 
 
-@ub.memoize
+@functools.cache
 def _space_weights(space_shape):
     sigma = (
         (4.8 * ((space_shape[1] - 1) * 0.5 - 1) + 0.8),
@@ -2944,42 +3095,6 @@ def _space_weights(space_shape):
     )
     space_weights = kwarray.normalize(kwimage.gaussian_patch(space_shape, sigma=sigma))
     return space_weights
-
-
-@functools.cache
-def biased_1d_weights(upweight_time, num_frames):
-    """
-    import kwplot
-    plt = kwplot.autoplt()
-
-    kwplot.figure()
-    import sys, ubelt
-    sys.path.append(ubelt.expandpath('~/code/watch'))
-    from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
-
-    kwplot.figure(fnum=1, doclf=1)
-    num_frames = 5
-    values = biased_1d_weights(0.5, num_frames)
-    plt.plot(values)
-    values = biased_1d_weights(0.1, num_frames)
-    plt.plot(values)
-    values = biased_1d_weights(0.0, num_frames)
-    plt.plot(values)
-    values = biased_1d_weights(0.9, num_frames)
-    plt.plot(values)
-    values = biased_1d_weights(1.0, num_frames)
-    plt.plot(values)
-    """
-    # from kwarray.distributions import TruncNormal
-    from scipy.stats import norm
-    # from kwarray.distributions import TruncNormal
-    sigma = kwimage.im_cv2._auto_kernel_sigma(kernel=((num_frames, 1)))[1][0]
-    mean = upweight_time * (num_frames - 1) + 0.5
-    # rv = TruncNormal(mean=mean, std=sigma, low=0.0, high=num_frames).rv
-    rv = norm(mean, sigma)
-    locs = np.arange(num_frames) + 0.5
-    values = rv.pdf(locs)
-    return values
 
 
 # Backwards compat
@@ -2990,36 +3105,10 @@ class FailedSample(Exception):
     ...
 
 
-def apply_robust_normalizer(normalizer, imdata, imdata_valid, mask, dtype, copy=True):
+class Domain(NamedTuple):
     """
-        data = [self.dataset[idx] for idx in possibly_batched_index]
-      File "/home/joncrall/code/watch/watch/tasks/fusion/datamodules/kwcoco_dataset.py", line 1004, in __getitem__
-        return self.getitem(index)
-      File "/home/joncrall/code/watch/watch/tasks/fusion/datamodules/kwcoco_dataset.py", line 1375, in getitem
-        imdata_normalized = apply_robust_normalizer(
-      File "/home/joncrall/code/watch/watch/tasks/fusion/datamodules/kwcoco_dataset.py", line 2513, in apply_robust_normalizer
-        imdata_valid_normalized = kwarray.normalize(
-      File "/home/joncrall/code/kwarray/kwarray/util_numpy.py", line 760, in normalize
-        old_min = np.nanmin(float_out)
-      File "<__array_function__ internals>", line 5, in nanmin
-      File "/home/joncrall/.pyenv/versions/3.10.5/envs/pyenv3.10.5/lib/python3.10/site-packages/numpy/lib/nanfunctions.py", line 319, in nanmin
-        res = np.fmin.reduce(a, axis=axis, out=out, **kwargs)
+    A normalization domain
     """
-    import kwarray
-    if normalizer['type'] is None:
-        imdata_normalized = imdata.astype(dtype, copy=copy)
-    elif normalizer['type'] == 'normalize':
-        # Note: we are using kwarray normalize, the one in kwimage is deprecated
-        arr = imdata_valid.astype(dtype, copy=copy)
-        imdata_valid_normalized = kwarray.normalize(
-            arr, mode=normalizer['mode'],
-            beta=normalizer['beta'], alpha=normalizer['alpha'],
-        )
-        if mask is None:
-            imdata_normalized = imdata_valid_normalized
-        else:
-            imdata_normalized = imdata.copy() if copy else imdata
-            imdata_normalized[mask] = imdata_valid_normalized
-    else:
-        raise KeyError(normalizer['type'])
-    return imdata_normalized
+    sensor: str
+    channels: str
+    video_name: str

@@ -10,7 +10,7 @@ class MergeRegionModelConfig(scfg.Config):
     """
     Combine the specific features from multiple region files into a single one.
     """
-    default = {
+    __default__ = {
         'src':
         scfg.Value([],
                    help='paths to input geojson region files',
@@ -83,7 +83,7 @@ def main(cmdline=False, **kwargs):
             geojson.dump(combo, file, indent='    ')
 
 
-_SubConfig = MergeRegionModelConfig
+__config__ = MergeRegionModelConfig
 
 
 def combine_region_models(json_paths, match_type=None, match_subtype=None):

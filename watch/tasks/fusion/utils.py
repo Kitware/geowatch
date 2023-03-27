@@ -52,7 +52,15 @@ def load_model_from_package(package_path):
         raise TypeError(type(package_path))
 
     package_path = os.fspath(package_path)
-    imp = package.PackageImporter(package_path)
+
+    try:
+        imp = package.PackageImporter(package_path)
+    except (RuntimeError, ImportError):
+        import warnings
+        warnings.warn(
+            f'Failed to import package {package_path} with normal machanism. '
+            'Falling back to hacked mechanim')
+        imp = _try_fixed_package_import(package_path)
     # Assume this standardized header information exists that tells us the
     # name of the resource corresponding to the model
     try:
@@ -98,6 +106,121 @@ def load_model_from_package(package_path):
 
     model.package_path = package_path
     return model
+
+
+def _try_fixed_package_import(package_path):
+    from torch import package
+    import torch
+    from typing import Any
+    from torch.package.package_importer import (
+        DirectoryReader, _PackageNode, PackageMangler, PackageUnpickler,
+        _ModuleNode, _ExternNode)
+    import builtins
+    import os
+    from pathlib import Path
+
+    class CustomPackageImporter(package.PackageImporter):
+        def __init__(self, file_or_buffer, module_allowed=lambda module_name: True):
+            torch._C._log_api_usage_once("torch.package.PackageImporter")
+
+            self.zip_reader: Any
+            if isinstance(file_or_buffer, torch._C.PyTorchFileReader):
+                self.filename = "<pytorch_file_reader>"
+                self.zip_reader = file_or_buffer
+            elif isinstance(file_or_buffer, (Path, str)):
+                self.filename = str(file_or_buffer)
+                if not os.path.isdir(self.filename):
+                    self.zip_reader = torch._C.PyTorchFileReader(self.filename)
+                else:
+                    self.zip_reader = DirectoryReader(self.filename)
+            else:
+                self.filename = "<binary>"
+                self.zip_reader = torch._C.PyTorchFileReader(file_or_buffer)
+
+            self.root = _PackageNode(None)
+            self.modules = {}
+            self.extern_modules = self._read_extern()
+
+            self.errors = []
+
+            for extern_module in self.extern_modules:
+                if not module_allowed(extern_module):
+                    self.errors.append((
+                        f"package '{file_or_buffer}' needs the external module '{extern_module}' "
+                        f"but that module has been disallowed"
+                    ))
+                self._add_extern(extern_module)
+
+            if len(self.errors):
+                import ubelt as ub
+                print('self.errors = {}'.format(ub.urepr(self.errors, nl=1)))
+
+            for fname in self.zip_reader.get_all_records():
+                self._add_file(fname)
+
+            self.patched_builtins = builtins.__dict__.copy()
+            self.patched_builtins["__import__"] = self.__import__
+            # Allow packaged modules to reference their PackageImporter
+            self.modules["torch_package_importer"] = self  # type: ignore[assignment]
+
+            self._mangler = PackageMangler()
+
+            # used for reduce deserializaiton
+            self.storage_context: Any = None
+            self.last_map_location = None
+
+            # used for torch.serialization._load
+            self.Unpickler = lambda *args, **kwargs: PackageUnpickler(self, *args, **kwargs)
+
+        def _add_file(self, filename: str):
+            """Assembles a Python module out of the given file. Will ignore files in the .data directory.
+
+            Args:
+                filename (str): the name of the file inside of the package archive to be added
+            """
+            *prefix, last = filename.split("/")
+            if len(prefix) > 1 and prefix[0] == ".data":
+                return
+            package = self._get_or_create_package(prefix)
+            errored = False
+            if isinstance(package, _ExternNode):
+                self.errors.append((
+                    f"inconsistent module structure. package contains a module file {filename}"
+                    f" that is a subpackage of a module marked external."
+                ))
+                errored = True
+            if not errored:
+                if last == "__init__.py":
+                    package.source_file = filename
+                elif last.endswith(".py"):
+                    package_name = last[: -len(".py")]
+                    package.children[package_name] = _ModuleNode(filename)
+
+    from torch import package
+    imp = CustomPackageImporter(package_path)
+    # import json
+    # header_infos = ['package_header']
+    # header = json.loads(imp.zip_reader.read(header_infos['package_header.json']).decode('utf8').strip())
+
+    # package_header = json.loads(imp.load_text(
+    #     'package_header', 'package_header.json'))
+    # arch_name = package_header['arch_name']
+    # module_name = package_header['module_name']
+
+    # # We can load the model through errors if our external state is actually ok
+    # model = imp.load_pickle(module_name, arch_name)
+    # state = model.state_dict()
+
+    # # Can recreate an unmangled version of the model by constructing a new
+    # # instance.
+    # cls = type(model)
+    # new_model = cls(**model.hparams)
+    # new_model.load_state_dict(state)
+
+    # new_model.save_package('foo.pt')
+    # from watch.tasks.fusion.utils import load_model_from_package
+    # recon_model = load_model_from_package('foo.pt')
+    return imp
 
 
 class Lambda(nn.Module):

@@ -95,7 +95,7 @@ class InvariantPredictConfig(scfg.DataConfig):
 
     track_emissions = scfg.Value(True, help='Set to false to disable codecarbon')
 
-    def normalize(self):
+    def __post_init__(self):
         if 'all' in self.tasks:
             self['tasks'] = ['segmentation', 'before_after', 'pretext']
 
@@ -226,7 +226,9 @@ class Predictor(object):
 
         ###
         print('build grid dataset')
-        self.dataset = GriddedDataset(self.coco_dset, args.bands,
+        self.dataset = GriddedDataset(self.coco_dset,
+                                      sensor=args.sensor,
+                                      bands=args.bands,
                                       patch_size=args.patch_size,
                                       patch_overlap=args.patch_overlap,
                                       window_space_scale=args.window_space_scale,

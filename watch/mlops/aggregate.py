@@ -132,21 +132,33 @@ def main(cmdline=True, **kwargs):
     timestamp = ub.timestamp()
     if config.export_tables:
         for type, agg in eval_type_to_aggregator.items():
-            agg.output_dpath.ensuredir()
-            fname = f'{agg.type}_{timestamp}.csv.zip'
-            csv_fpath = agg.output_dpath / fname
-            print(f'csv_fpath={csv_fpath}')
-            agg.table.to_csv(csv_fpath, index_label=False)
+            if len(agg):
+                agg.output_dpath.ensuredir()
+                fname = f'{agg.type}_{timestamp}.csv.zip'
+                csv_fpath = agg.output_dpath / fname
+                print(f'csv_fpath={csv_fpath}')
+                agg.table.to_csv(csv_fpath, index_label=False)
 
     if config.stdout_report:
+        from watch.utils.util_yaml import Yaml
+        if config.stdout_report is not True:
+            report_config = Yaml.coerce(config.stdout_report)
+        else:
+            report_config = {}
         for type, agg in eval_type_to_aggregator.items():
-            if rois is not None:
-                agg.build_macro_tables(rois)
-            agg.report_best()
+            if len(agg):
+                if rois is not None:
+                    agg.build_macro_tables(rois)
+                agg.report_best(**ub.compatible(report_config, agg.report_best))
+                if report_config.get('analyze', False):
+                    agg.analyze()
+                if report_config.get('macro_analysis', False):
+                    agg.macro_analysis()
 
     if config.plot_params:
         for type, agg in eval_type_to_aggregator.items():
-            build_all_param_plots(agg, rois, config)
+            if len(agg):
+                build_all_param_plots(agg, rois, config)
     # automated_analysis(eval_type_to_aggregator, config)
 
 
@@ -812,10 +824,12 @@ class AggregatorAnalysisMixin:
             raise Exception('Build a macro result first')
 
         regions_of_interest = agg.macro_key_to_regions[agg.primary_macro_region]
-        tables = agg.region_to_tables[agg.primary_macro_region]
+        tables = util_pandas.DotDictDataFrame(agg.region_to_tables[agg.primary_macro_region])
+
         resolved_params = tables['resolved_params']
         metrics = tables['metrics']
-        index = tables['index']
+        # index = tables['index']
+        index = tables[['node', 'region_id']]
         table = pd.concat([index, resolved_params, metrics], axis=1)
         table = table.fillna('None')
 
@@ -886,10 +900,10 @@ class AggregatorAnalysisMixin:
             'metrics': metrics,
         }
         analysis = result_analysis.ResultAnalysis(results, params=chosen_params)
-        analysis.results
+        # analysis.results
         analysis.analysis()
 
-    def report_best(agg, top_k=3, shorten=True):
+    def report_best(agg, top_k=3, shorten=True, per_group=2, verbose=1):
         """
         Report the top k pointwise results for each region / macro-region.
 
@@ -899,7 +913,7 @@ class AggregatorAnalysisMixin:
             report the top results for that filtering.
 
         Args:
-            k (int): number of top results for each region
+            top_k (int): number of top results for each region
 
             shorten (bool): if True, shorten the columns by removing
                 non-ambiguous prefixes wrt to a known node type.
@@ -947,34 +961,88 @@ class AggregatorAnalysisMixin:
         param_hashid_order = param_hashid_order[::-1]
         top_param_lut = ub.udict(big_param_lut).subdict(param_hashid_order)
 
-        rich.print('Parameter LUT: {}'.format(ub.urepr(top_param_lut, nl=2)))
+        if verbose:
+            rich.print('Parameter LUT: {}'.format(ub.urepr(top_param_lut, nl=2)))
 
-        # Check for a common special case that we can make more concise output for
-        only_one_top_item = all(len(t) == 1 for t in region_id_to_summary.values())
-        only_one_source_item = all(n == 1 for n in region_id_to_ntotal.values())
+            # Check for a common special case that we can make more concise output for
+            only_one_top_item = all(len(t) == 1 for t in region_id_to_summary.values())
+            only_one_source_item = all(n == 1 for n in region_id_to_ntotal.values())
 
-        if only_one_source_item and only_one_top_item:
-            justone = pd.concat(list(region_id_to_summary.values()), axis=0)
-            submacro = ub.udict(agg.macro_key_to_regions) & justone['region_id'].values
-            if submacro:
-                print('Macro Regions LUT: ' +  ub.urepr(submacro, nl=1))
-            rich.print(justone)
-        elif only_one_top_item:
-            justone = pd.concat(list(region_id_to_summary.values()), axis=0)
-            # submacro = ub.udict(agg.macro_key_to_regions) & justone['region_id'].values
-            # if submacro:
-            #     print('Macro Regions LUT: ' +  ub.urepr(submacro, nl=1))
-            rich.print(justone)
-            rich.print('agg.macro_key_to_regions = {}'.format(ub.repr2(agg.macro_key_to_regions, nl=1)))
-        else:
-            for region_id, summary_table in region_id_to_summary.items():
-                ntotal = region_id_to_ntotal[region_id]
-                if region_id in agg.macro_key_to_regions:
-                    macro_regions = agg.macro_key_to_regions[region_id]
-                    rich.print(f'Top {len(summary_table)} / {ntotal} for {region_id} = {macro_regions}')
-                else:
-                    rich.print(f'Top {len(summary_table)} / {ntotal} for {region_id}')
-                rich.print(summary_table.iloc[::-1].to_string())
+            if only_one_source_item and only_one_top_item:
+                justone = pd.concat(list(region_id_to_summary.values()), axis=0)
+                submacro = ub.udict(agg.macro_key_to_regions) & justone['region_id'].values
+                if submacro:
+                    print('Macro Regions LUT: ' +  ub.urepr(submacro, nl=1))
+                rich.print(justone)
+            elif only_one_top_item:
+                justone = pd.concat(list(region_id_to_summary.values()), axis=0)
+                # submacro = ub.udict(agg.macro_key_to_regions) & justone['region_id'].values
+                # if submacro:
+                #     print('Macro Regions LUT: ' +  ub.urepr(submacro, nl=1))
+                rich.print(justone)
+                rich.print('agg.macro_key_to_regions = {}'.format(ub.repr2(agg.macro_key_to_regions, nl=1)))
+            else:
+                for region_id, summary_table in region_id_to_summary.items():
+                    ntotal = region_id_to_ntotal[region_id]
+                    if region_id in agg.macro_key_to_regions:
+                        macro_regions = agg.macro_key_to_regions[region_id]
+                        rich.print(f'Top {len(summary_table)} / {ntotal} for {region_id} = {macro_regions}')
+                    else:
+                        rich.print(f'Top {len(summary_table)} / {ntotal} for {region_id}')
+                    rich.print(summary_table.iloc[::-1].to_string())
+
+        PRINT_MODELS = verbose
+        if PRINT_MODELS:
+            tocombine_indexes = []
+            for region, summary in region_id_to_summary.items():
+                tocombine_indexes.append(list(summary.index))
+            import itertools as it
+            top_indexes = list(ub.oset([x for x in ub.flatten(
+                it.zip_longest(*tocombine_indexes)) if x is not None]))
+
+            table = agg.table.copy()
+            table.loc[top_indexes, 'rank'] = list(range(len(top_indexes)))
+            table = table.sort_values('rank')
+
+            chosen_indexes = []
+            if 0:
+                for expt, group in table.groupby('resolved_params.bas_pxl_fit.name'):
+                    group['params.bas_pxl.package_fpath'].tolist()
+                    group = group.sort_values('rank')
+                    chosen_indexes.extend(group.index[0:2])
+                chosen_indexes = table.loc[chosen_indexes, 'rank'].sort_values().index
+            else:
+                table['_hackname'] = [ub.Path(p).parent.name for p in table['params.bas_pxl.package_fpath'].tolist()]
+                for expt, group in table.groupby('_hackname'):
+                    # group['params.bas_pxl.package_fpath'].tolist()
+                    flags = (group[agg.primary_metric_cols] > 0).any(axis=1)
+                    group = group[flags]
+                    group = group.sort_values('rank')
+                    chosen_indexes.extend(group.index[0:per_group])
+                chosen_indexes = table.loc[chosen_indexes, 'rank'].sort_values().index
+
+            all_models_fpath = ub.Path('$HOME/code/watch/dev/reports/split1_all_models.yaml').expand()
+            from watch.utils.util_yaml import Yaml
+            known_models = Yaml.coerce(all_models_fpath)
+
+            top_k = 40
+            chosen_indexes = chosen_indexes[:top_k]
+
+            chosen_table = table.loc[chosen_indexes]
+
+            # Need to remove invariants for now
+            flags = ~np.array(['invariants' in chan for chan in chosen_table['resolved_params.bas_pxl_fit.channels']])
+            chosen_table = chosen_table[flags]
+
+            chosen_models = chosen_table['params.bas_pxl.package_fpath'].tolist()
+            set(known_models).issuperset(set(chosen_models))
+
+            shortlist_text = Yaml.dumps(chosen_models)
+            print(shortlist_text)
+
+            if 0:
+                new_models_fpath = ub.Path('$HOME/code/watch/dev/reports/unnamed_shortlist.yaml').expand()
+                new_models_fpath.write_text(shortlist_text)
 
         return region_id_to_summary, top_param_lut
 

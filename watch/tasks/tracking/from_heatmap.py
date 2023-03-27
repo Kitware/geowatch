@@ -18,7 +18,8 @@ import math
 from typing import Iterable, Tuple, Union, Optional, Literal
 from dataclasses import dataclass
 from shapely.ops import unary_union
-from watch.tasks.tracking.utils import (NewTrackFunction, NoOpTrackFunction,
+from watch.tasks.tracking.utils import NoOpTrackFunction  # NOQA
+from watch.tasks.tracking.utils import (NewTrackFunction,
                                         mask_to_polygons,
                                         Poly, _validate_keys, pop_tracks,
                                         trackid_is_default,
@@ -374,7 +375,7 @@ def _add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
             all_new_anns.append(new_ann)
 
     try:
-        groups = tracks.groupby('track_idx', axis=0)
+        tracks.groupby('track_idx', axis=0)
     except ValueError:
         import warnings
         warnings.warn('warning: no tracks to add the the kwcoco dataset')
@@ -401,11 +402,7 @@ def _add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
 
 
 @profile
-def site_validation(
-    sub_dset,
-    thresh=0.25,
-    span_steps=15,
-    ):
+def site_validation(sub_dset, thresh=0.25, span_steps=15):
     """
     Example:
         >>> import watch
@@ -1002,11 +999,11 @@ def _gids_polys(
     _heatmaps = _heatmaps.sum(axis=-1)  # sum over channels
     missing_ix = np.invert([key in i.channels for i in imgs])
     # TODO this was actually broken in orig, so turning it off here for now
-    interpolate=0
+    interpolate = 0
     if interpolate:
         diffed = np.concatenate((np.diff(missing_ix), [False]))
         src = ~missing_ix & diffed
-        _heatmaps[missing_ix] =_heatmaps[src]
+        _heatmaps[missing_ix] = _heatmaps[src]
         if missing_ix[0]:
             _heatmaps[:np.searchsorted(diffed, True)] = 0
         assert np.isnan(_heatmaps).all(axis=(1, 2)).sum() == 0

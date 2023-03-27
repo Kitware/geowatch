@@ -16,7 +16,7 @@ class CropSitesToRegionsConfig(scfg.Config):
             --region_models "$DVC_DPATH/annotations/region_models/KR_R002.geojson" \
             --new_site_dpath ./cropped_sites
     """
-    default = {
+    __default__ = {
         'site_models': scfg.Value(None, help=ub.paragraph(
             '''
             Geospatial geojson "site" annotation files. Either a path to a

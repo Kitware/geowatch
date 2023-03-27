@@ -28,6 +28,7 @@ class CachePurgeCLI(scfg.Config):
     __default__ = dict(
         dpath=scfg.Value('.', position=1, help='input path'),
         workers=scfg.Value(0, help='number of parallel jobs'),
+        invert=scfg.Value(False, isflag=True, help='if True, pure all the unreferenced files in the cache instead')
     )
 
     @classmethod
@@ -39,21 +40,33 @@ class CachePurgeCLI(scfg.Config):
         workers = config['workers']
         dvc = SimpleDVC.coerce(dpath)
 
-        cache_fpath_iter = find_cached_fpaths(dvc, dpath)
+        if config['invert']:
+            for r, ds, fs in dpath.walk('.'):
+                print(f'r={r}')
+                for f in fs:
+                    fpath = r / f
+                    if fpath.is_symlink():
+                        raise Exception
+                ...
+            raise NotImplementedError
+            import xdev
+            xdev.embed()
+        else:
+            cache_fpath_iter = find_cached_fpaths(dvc, dpath)
 
-        jobs = ub.JobPool(mode='thread', max_workers=workers)
-        with jobs:
-            pman = util_progress.ProgressManager()
-            with pman:
-                fpath_iter = pman(cache_fpath_iter, desc='submit delete jobs')
-                for fpath in fpath_iter:
-                    if fpath.exists():
-                        jobs.submit(fpath.delete)
-                for job in pman(jobs.as_completed(), desc='collect deletes jobs'):
-                    try:
-                        job.result()
-                    except Exception as ex:
-                        print(f'ex={ex}')
+            jobs = ub.JobPool(mode='thread', max_workers=workers)
+            with jobs:
+                pman = util_progress.ProgressManager()
+                with pman:
+                    fpath_iter = pman(cache_fpath_iter, desc='submit delete jobs')
+                    for fpath in fpath_iter:
+                        if fpath.exists():
+                            jobs.submit(fpath.delete)
+                    for job in pman(jobs.as_completed(), desc='collect deletes jobs'):
+                        try:
+                            job.result()
+                        except Exception as ex:
+                            print(f'ex={ex}')
 
 
 @modal.register

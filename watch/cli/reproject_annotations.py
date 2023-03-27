@@ -42,19 +42,11 @@ Notes:
         https://gitlab.kitware.com/smart/watch/-/blob/master/watch/cli/kwcoco_to_geojson.py#L476
     in `add_site_summary_to_kwcoco`.
 """
-import dateutil
-import kwcoco
-import kwimage
 import ubelt as ub
-import numpy as np
 import scriptconfig as scfg
 import io
 import warnings
 import math
-from watch.utils import kwcoco_extensions
-from watch.utils import util_kwplot
-from watch.utils import util_time
-from watch.utils.util_environ import envflag
 
 
 class ReprojectAnnotationsConfig(scfg.Config):
@@ -65,9 +57,9 @@ class ReprojectAnnotationsConfig(scfg.Config):
     References:
         https://smartgitlab.com/TE/annotations/-/wikis/Alternate-Site-Type
     """
-    default = {
-        'src':
-        scfg.Value(help=ub.paragraph('''
+    __default__ = {
+        'src': scfg.Value(help=ub.paragraph(
+            '''
             path to the kwcoco file to propagate labels in
             '''),
                    position=1),
@@ -160,6 +152,9 @@ def main(cmdline=False, **kwargs):
     from watch.utils import util_parallel
     from watch.utils import util_yaml
     from watch import heuristics
+    from watch.utils import kwcoco_extensions
+    import kwcoco
+    import numpy as np
     config = ReprojectAnnotationsConfig(data=kwargs, cmdline=cmdline)
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
 
@@ -190,6 +185,7 @@ def main(cmdline=False, **kwargs):
 
     # Read the external CRS84 annotations from the site models
 
+    from watch.utils.util_environ import envflag
     HACK_HANDLE_DUPLICATE_SITE_ROWS = envflag('HACK_HANDLE_DUPLICATE_SITE_ROWS', default=True)
 
     site_model_infos = list(
@@ -305,6 +301,7 @@ def separate_region_model_types(regions):
     """
     Split up each region model into its region info and site summary info
     """
+    from watch.utils import util_time
     region_id_to_site_summaries = {}
     region_id_region_row = {}
     for region_df in ub.ProgIter(regions, desc='checking region assumptions', verbose=3):
@@ -363,6 +360,7 @@ def expand_site_models_with_site_summaries(sites, regions):
             real and/or pseudo.
     """
     import pandas as pd
+    import numpy as np
 
     if __debug__:
         check_sitemodel_assumptions(sites)
@@ -566,8 +564,9 @@ def make_pseudo_sitemodels(region_row, sitesummaries):
     """
     import geojson
     import json
+    import kwimage
     from watch.utils import util_gis
-
+    from watch.utils import util_time
     # observation_properties = [
     #     'type', 'observation_date', 'source', 'sensor_name',
     #     'current_phase', 'is_occluded', 'is_site_boundary', 'score',
@@ -742,6 +741,11 @@ def assign_sites_to_images(coco_dset,
     from shapely.ops import unary_union
     import pandas as pd
     from watch.utils import util_gis
+    from watch.utils import kwcoco_extensions
+    import kwimage
+    import dateutil
+    import numpy as np
+    from watch import heuristics
     # Create a geopandas data frame that contains the CRS84 extent of all images
     img_gdf = kwcoco_extensions.covered_image_geo_regions(coco_dset)
 
@@ -764,7 +768,6 @@ def assign_sites_to_images(coco_dset,
         videos_gdf = None
 
     # Ensure colors and categories
-    from watch import heuristics
     status_to_color = {d['name']: kwimage.Color(d['color']).as01() for d in heuristics.HUERISTIC_STATUS_DATA}
     # print('coco_dset categories = {}'.format(ub.repr2(coco_dset.dataset['categories'], nl=2)))
     for cat in heuristics.CATEGORIES:
@@ -905,7 +908,10 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
     potential images in the assigned region.
     """
     from watch.utils import util_gis
+    from watch.utils import util_time
     from watch import heuristics
+    import kwimage
+    import numpy as np
 
     if __debug__ and 0:
         # Sanity check, the sites should have spatial overlap with each image in the video
@@ -1178,6 +1184,7 @@ def keyframe_interpolate(image_times, key_infos):
 
     Example:
         >>> from watch.cli.reproject_annotations import *  # NOQA
+        >>> import numpy as np
         >>> image_times = np.array([1, 2, 3, 4, 5, 6, 7])
         >>> # TODO: likely also needs a range for a maximum amount of time you will
         >>> # apply the observation for.
@@ -1197,6 +1204,7 @@ def keyframe_interpolate(image_times, key_infos):
         >>> key_times = np.array(key_times)
         >>> plot_poc_keyframe_interpolate(image_times, key_times, key_assignment)
     """
+    import numpy as np
     key_times = [d['time'] for d in key_infos]
     key_times = np.array(key_times)
 
@@ -1389,6 +1397,7 @@ def plot_poc_keyframe_interpolate(image_times, key_times, key_assignment):
 
 def coerce_datetime2(data):
     """ Is this a monad 🦋 ? """
+    from watch.utils import util_time
     return None if data is None or (isinstance(data, float) and math.isnan(data)) else util_time.coerce_datetime(data)
 
 
@@ -1406,6 +1415,9 @@ def plot_image_and_site_times(coco_dset, region_image_dates, drawable_region_sit
 
     from watch import heuristics
     import matplotlib as mpl
+    import kwimage
+    import numpy as np
+    from watch.utils import util_kwplot
     hueristic_status_data = heuristics.HUERISTIC_STATUS_DATA
 
     status_to_color = {d['name']: kwimage.Color(d['color']).as01() for d in hueristic_status_data}
@@ -1520,7 +1532,7 @@ def draw_geospace(dvc_dpath, sites):
         gdf.plot(ax=ax, facecolor='none', edgecolor='red', alpha=0.5)
 
 
-_SubConfig = ReprojectAnnotationsConfig
+__config__ = ReprojectAnnotationsConfig
 
 
 def reorder_columns(df, columns):

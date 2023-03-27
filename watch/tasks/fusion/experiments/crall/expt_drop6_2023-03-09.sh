@@ -769,3 +769,617 @@ torch_globals:
 initializer:
     init: $DVC_EXPT_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
 "
+
+
+### Toothbrush long training with normalize_perframe
+export CUDA_VISIBLE_DEVICES=1
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop6
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_fixquant_split6.kwcoco.zip
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_fixquant_split6.kwcoco.zip
+CHANNELS="(L8,S2,PD):(blue|green|red|nir),(WV):(blue|green|red),(WV,WV1):pan"
+EXPERIMENT_NAME=Drop6_BAS_10GSD_split6_V41_cont
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+TARGET_LR=3e-4
+WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
+echo "WEIGHT_DECAY = $WEIGHT_DECAY"
+MAX_STEPS=80000
+WATCH_GRID_WORKERS=2 python -m watch.tasks.fusion fit --config "
+data:
+    select_videos          : $SELECT_VIDEOS
+    num_workers            : 4
+    train_dataset          : $TRAIN_FPATH
+    vali_dataset           : $VALI_FPATH
+    chip_dims              : 256,256
+    time_steps             : 9
+    time_sampling          : uniform-soft5-soft4-contiguous
+    time_kernel            : '(-1y,-6m,-2m,-1w,0,1w,2m,6m,1y)'
+    window_space_scale     : 10.0GSD
+    input_space_scale      : 10.0GSD
+    output_space_scale     : 10.0GSD
+    neg_to_pos_ratio       : 1.0
+    batch_size             : 4
+    normalize_perframe     : true
+    normalize_peritem      : false
+    max_epoch_length       : 1000000 
+    channels               : '$CHANNELS'
+    min_spacetime_weight   : 0.6
+    temporal_dropout       : 0.5
+    mask_low_quality       : True
+    mask_samecolor_method  : None
+    observable_threshold   : 0.0
+    quality_threshold      : 0.0
+    weight_dilate          : 10
+    use_centered_positives : True
+    normalize_inputs       : 16384
+    balance_areas          : False
+model:
+    class_path: MultimodalTransformer
+    init_args:
+        saliency_weights       : auto 
+        class_weights          : auto 
+        tokenizer              : linconv 
+        arch_name              : smt_it_stm_p8 
+        decoder                : mlp 
+        positive_change_weight : 1 
+        negative_change_weight : 0.01 
+        stream_channels        : 16 
+        class_loss            : 'dicefocal' 
+        saliency_loss          : 'focal' 
+        saliency_head_hidden   : 3
+        change_head_hidden     : 3
+        global_change_weight   : 0.00 
+        global_class_weight    : 0.00 
+        global_saliency_weight : 1.00 
+optimizer: 
+    class_path: torch.optim.AdamW
+    init_args:
+        lr           : $TARGET_LR
+        weight_decay : $WEIGHT_DECAY
+lr_scheduler:
+  class_path: torch.optim.lr_scheduler.OneCycleLR
+  init_args:
+    max_lr: $TARGET_LR
+    total_steps: $MAX_STEPS
+    anneal_strategy: cos
+    pct_start: 0.05
+trainer:
+    accumulate_grad_batches: 8
+    default_root_dir     : $DEFAULT_ROOT_DIR
+    accelerator          : gpu 
+    devices              : 0,
+    #devices              : 0,1
+    #strategy             : ddp 
+    limit_val_batches    : 256
+    limit_train_batches  : 2048
+    num_sanity_val_steps : 0 
+    max_epochs           : 360
+
+torch_globals:
+    float32_matmul_precision: auto
+
+initializer:
+    init: /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6/runs/Drop6_BAS_10GSD_split6_V41/lightning_logs/version_1/package-interupt/package_epoch94_step24084.pt
+"
+
+
+### Toothbrush long training with normalize_peritem and 1year averaged data.
+export CUDA_VISIBLE_DEVICES=1
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop6-MeanYear10GSD
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_rawbands_split6.kwcoco.zip
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_rawbands_split6.kwcoco.zip
+CHANNELS="(L8,S2,PD):(blue|green|red|nir),(WV):(blue|green|red),(WV,WV1):pan"
+EXPERIMENT_NAME=Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2
+ls "$WORKDIR"/$DATASET_CODE/runs/$EXPERIMENT_NAME/lightning_logs/version_*/checkpoints/*.ckpt
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+TARGET_LR=3e-4
+WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
+echo "WEIGHT_DECAY = $WEIGHT_DECAY"
+MAX_STEPS=80000
+WATCH_GRID_WORKERS=2 python -m watch.tasks.fusion fit --config "
+data:
+    select_videos          : $SELECT_VIDEOS
+    num_workers            : 6
+    train_dataset          : $TRAIN_FPATH
+    vali_dataset           : $VALI_FPATH
+    chip_dims              : 256,256
+    time_steps             : 9
+    time_sampling          : uniform-soft5-soft4-contiguous
+    time_kernel            : '(-2.5y,-2y,-1.5y,-1y,0,1y,1.5y,2y,2.5y)'
+    window_space_scale     : 10.0GSD
+    input_space_scale      : 10.0GSD
+    output_space_scale     : 10.0GSD
+    neg_to_pos_ratio       : 1.0
+    batch_size             : 6
+    normalize_perframe     : false
+    normalize_peritem      : true
+    max_epoch_length       : 1000000 
+    channels               : '$CHANNELS'
+    min_spacetime_weight   : 0.6
+    temporal_dropout       : 0.5
+    mask_low_quality       : False
+    mask_samecolor_method  : None
+    observable_threshold   : 0.0
+    quality_threshold      : 0.0
+    weight_dilate          : 10
+    use_centered_positives : True
+    normalize_inputs       : 16384
+    balance_areas          : False
+model:
+    class_path: MultimodalTransformer
+    init_args:
+        saliency_weights       : auto 
+        class_weights          : auto 
+        tokenizer              : linconv 
+        arch_name              : smt_it_stm_p8 
+        decoder                : mlp 
+        positive_change_weight : 1 
+        negative_change_weight : 0.01 
+        stream_channels        : 16 
+        class_loss            : 'dicefocal' 
+        saliency_loss          : 'focal' 
+        saliency_head_hidden   : 3
+        change_head_hidden     : 3
+        global_change_weight   : 0.00 
+        global_class_weight    : 0.00 
+        global_saliency_weight : 1.00 
+optimizer: 
+    class_path: torch.optim.AdamW
+    init_args:
+        lr           : $TARGET_LR
+        weight_decay : $WEIGHT_DECAY
+lr_scheduler:
+  class_path: torch.optim.lr_scheduler.OneCycleLR
+  init_args:
+    max_lr: $TARGET_LR
+    total_steps: $MAX_STEPS
+    anneal_strategy: cos
+    pct_start: 0.05
+trainer:
+    accumulate_grad_batches: 8
+    default_root_dir     : $DEFAULT_ROOT_DIR
+    accelerator          : gpu 
+    devices              : 0,
+    #devices              : 0,1
+    #strategy             : ddp 
+    limit_val_batches    : 256
+    limit_train_batches  : 2048
+    num_sanity_val_steps : 0 
+    max_epochs           : 360
+
+torch_globals:
+    float32_matmul_precision: auto
+
+initializer:
+    init: /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6-MeanYear10GSD/runs/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2/lightning_logs/version_2/package-interupt/package_epoch0_step195.pt
+" \
+    --ckpt_path=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6-MeanYear10GSD/runs/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2/lightning_logs/version_8/checkpoints/epoch=97-step=25088.ckpt
+
+#--ckpt_path=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6-MeanYear10GSD/runs/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2/lightning_logs/version_7/checkpoints/epoch=69-step=17920.ckpt
+ #--ckpt_path=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6-MeanYear10GSD/runs/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2/lightning_logs/version_3/checkpoints/epoch=40-step=10496.ckpt
+
+#/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6-MeanYear10GSD/runs/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2/lightning_logs/version_0/checkpoints/epoch=1-step=512.ckpt
+ls "$WORKDIR"/$DATASET_CODE/runs/$EXPERIMENT_NAME/lightning_logs/version_*/checkpoints/*.ckpt
+
+
+#
+
+
+## Yardrat long train run
+export CUDA_VISIBLE_DEVICES=0
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop6-MeanYear10GSD
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_rawbands_split6.kwcoco.zip
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_rawbands_split6.kwcoco.zip
+CHANNELS="(L8,S2,PD):(blue|green|red|nir),(WV):(blue|green|red),(WV,WV1):pan"
+EXPERIMENT_NAME=Drop6_TCombo1Year_BAS_10GSD_split6_V42
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+TARGET_LR=1e-4
+WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
+echo "WEIGHT_DECAY = $WEIGHT_DECAY"
+MAX_STEPS=80000
+WATCH_GRID_WORKERS=2 python -m watch.tasks.fusion fit --config "
+data:
+    select_videos          : $SELECT_VIDEOS
+    num_workers            : 5
+    train_dataset          : $TRAIN_FPATH
+    vali_dataset           : $VALI_FPATH
+    chip_dims              : 196,196
+    time_steps             : 11
+    time_sampling          : uniform-soft5-soft4-contiguous
+    time_kernel            : '(-3y,-2.5y,-2y,-1.5y,-1y,0,1y,1.5y,2y,2.5y,3y)'
+    window_space_scale     : 10.0GSD
+    input_space_scale      : 10.0GSD
+    output_space_scale     : 10.0GSD
+    neg_to_pos_ratio       : 1.0
+    batch_size             : 4
+    normalize_perframe     : false
+    normalize_peritem      : true
+    max_epoch_length       : 1000000 
+    channels               : '$CHANNELS'
+    min_spacetime_weight   : 0.6
+    temporal_dropout       : 0.5
+    mask_low_quality       : False
+    mask_samecolor_method  : None
+    observable_threshold   : 0.0
+    quality_threshold      : 0.0
+    weight_dilate          : 10
+    use_centered_positives : True
+    normalize_inputs       : 16384
+    balance_areas          : True
+model:
+    class_path: MultimodalTransformer
+    init_args:
+        #saliency_weights       : '1:1' 
+        #class_weights          : auto 
+        tokenizer              : linconv 
+        arch_name              : smt_it_stm_p8 
+        decoder                : mlp 
+        positive_change_weight : 1 
+        negative_change_weight : 0.01 
+        stream_channels        : 16 
+        class_loss             : 'dicefocal' 
+        saliency_loss          : 'focal' 
+        saliency_head_hidden   : 6
+        change_head_hidden     : 6
+        class_head_hidden      : 6
+        global_change_weight   : 0.05 
+        global_class_weight    : 0.50 
+        global_saliency_weight : 1.00 
+optimizer: 
+    class_path: torch.optim.AdamW
+    init_args:
+        lr           : $TARGET_LR
+        weight_decay : $WEIGHT_DECAY
+lr_scheduler:
+  class_path: torch.optim.lr_scheduler.OneCycleLR
+  init_args:
+    max_lr: $TARGET_LR
+    total_steps: $MAX_STEPS
+    anneal_strategy: cos
+    pct_start: 0.05
+trainer:
+    accumulate_grad_batches: 8
+    default_root_dir     : $DEFAULT_ROOT_DIR
+    accelerator          : gpu 
+    devices              : 0,
+    #devices              : 0,1
+    #strategy             : ddp 
+    limit_val_batches    : 256
+    limit_train_batches  : 2048
+    num_sanity_val_steps : 0 
+    max_epochs           : 360
+
+torch_globals:
+    float32_matmul_precision: auto
+
+initializer:
+    init: $DVC_EXPT_DPATH/models/fusion/Drop6/packages/Drop6_BAS_2022_12_10GSD_BGRN_V11_CONT4/Drop6_BAS_2022_12_10GSD_BGRN_V11_CONT4_epoch6_step22939.pt
+" 
+
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+rsync -avprPR yardrat:data/dvc-repos/smart_expt_dvc/./training/yardrat/jon.crall/Drop6-MeanYear10GSD/runs/Drop6_TCombo1Year_BAS_10GSD_split6_V42 "$DVC_EXPT_DPATH"
+
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+smartwatch model_stats "$DVC_EXPT_DPATH"/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2_epoch3_step941.pt
+
+
+## Yardrat long train run
+export CUDA_VISIBLE_DEVICES=0
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop6-MeanYear10GSD
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_rawbands_split6.kwcoco.zip
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_rawbands_split6.kwcoco.zip
+CHANNELS="(L8,S2,PD):(blue|green|red|nir),(WV):(blue|green|red),(WV,WV1):pan"
+EXPERIMENT_NAME=Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont3
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+TARGET_LR=1e-4
+WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
+echo "WEIGHT_DECAY = $WEIGHT_DECAY"
+MAX_STEPS=80000
+WATCH_GRID_WORKERS=2 python -m watch.tasks.fusion fit --config "
+data:
+    select_videos          : $SELECT_VIDEOS
+    num_workers            : 5
+    train_dataset          : $TRAIN_FPATH
+    vali_dataset           : $VALI_FPATH
+    chip_dims              : 196,196
+    time_steps             : 11
+    time_sampling          : uniform-soft5-soft4-contiguous
+    time_kernel            : '(-3y,-2.5y,-2y,-1.5y,-1y,0,1y,1.5y,2y,2.5y,3y)'
+    window_space_scale     : 10.0GSD
+    input_space_scale      : 10.0GSD
+    output_space_scale     : 10.0GSD
+    neg_to_pos_ratio       : 1.0
+    batch_size             : 4
+    normalize_perframe     : false
+    normalize_peritem      : true
+    max_epoch_length       : 1000000 
+    channels               : '$CHANNELS'
+    min_spacetime_weight   : 0.6
+    temporal_dropout       : 0.5
+    mask_low_quality       : False
+    mask_samecolor_method  : None
+    observable_threshold   : 0.0
+    quality_threshold      : 0.0
+    weight_dilate          : 10
+    use_centered_positives : True
+    normalize_inputs       : 16384
+    balance_areas          : False
+model:
+    class_path: MultimodalTransformer
+    init_args:
+        #saliency_weights       : '1:1' 
+        #class_weights          : auto 
+        tokenizer              : linconv 
+        arch_name              : smt_it_stm_p8 
+        decoder                : mlp 
+        positive_change_weight : 1 
+        negative_change_weight : 0.01 
+        stream_channels        : 16 
+        class_loss             : 'dicefocal' 
+        saliency_loss          : 'dicefocal' 
+        saliency_head_hidden   : 6
+        change_head_hidden     : 6
+        class_head_hidden      : 6
+        global_change_weight   : 0.00 
+        global_class_weight    : 0.00 
+        global_saliency_weight : 1.00 
+optimizer: 
+    class_path: torch.optim.AdamW
+    init_args:
+        lr           : $TARGET_LR
+        weight_decay : $WEIGHT_DECAY
+lr_scheduler:
+  class_path: torch.optim.lr_scheduler.OneCycleLR
+  init_args:
+    max_lr: $TARGET_LR
+    total_steps: $MAX_STEPS
+    anneal_strategy: cos
+    pct_start: 0.05
+trainer:
+    accumulate_grad_batches: 8
+    default_root_dir     : $DEFAULT_ROOT_DIR
+    accelerator          : gpu 
+    devices              : 0,
+    #devices              : 0,1
+    #strategy             : ddp 
+    limit_val_batches    : 256
+    limit_train_batches  : 2048
+    num_sanity_val_steps : 0 
+    max_epochs           : 360
+
+torch_globals:
+    float32_matmul_precision: auto
+
+initializer:
+    init: /home/local/KHQ/jon.crall/remote/yardrat/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop6-MeanYear10GSD/runs/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2/lightning_logs/version_0/package-interupt/package_epoch3_step941.pt
+    #init: /home/local/KHQ/jon.crall/remote/yardrat/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop6-MeanYear10GSD/runs/Drop6_TCombo1Year_BAS_10GSD_split6_V42/lightning_logs/version_3/package-interupt/package_epoch102_step26346.pt
+    #init: $DVC_EXPT_DPATH/models/fusion/Drop6/packages/Drop6_BAS_2022_12_10GSD_BGRN_V11_CONT4/Drop6_BAS_2022_12_10GSD_BGRN_V11_CONT4_epoch6_step22939.pt
+" 
+
+
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+rsync -avprPR yardrat:data/dvc-repos/smart_expt_dvc/./training/yardrat/jon.crall/Drop6-MeanYear10GSD/runs/Drop6_TCombo1Year_BAS_10GSD_split6_V42 "$DVC_EXPT_DPATH"
+
+
+### Toothbrush long training with normalize_peritem and 1year averaged data.
+export CUDA_VISIBLE_DEVICES=1
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop6-MeanYear10GSD
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_rawbands_split6.kwcoco.zip
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_rawbands_split6.kwcoco.zip
+CHANNELS="(L8,S2,PD):(blue|green|red|nir),(WV):(blue|green|red),(WV,WV1):pan"
+EXPERIMENT_NAME=Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont3
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+TARGET_LR=1e-4
+WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
+echo "WEIGHT_DECAY = $WEIGHT_DECAY"
+MAX_STEPS=80000
+WATCH_GRID_WORKERS=2 python -m watch.tasks.fusion fit --config "
+data:
+    select_videos          : $SELECT_VIDEOS
+    num_workers            : 6
+    train_dataset          : $TRAIN_FPATH
+    vali_dataset           : $VALI_FPATH
+    chip_dims              : 256,256
+    time_steps             : 9
+    time_sampling          : uniform-soft5-soft4-contiguous
+    time_kernel            : '(-2.5y,-2y,-1.5y,-1y,0,1y,1.5y,2y,2.5y)'
+    window_space_scale     : 10.0GSD
+    input_space_scale      : 10.0GSD
+    output_space_scale     : 10.0GSD
+    neg_to_pos_ratio       : 1.0
+    batch_size             : 6
+    normalize_perframe     : false
+    normalize_peritem      : true
+    max_epoch_length       : 1000000 
+    channels               : '$CHANNELS'
+    min_spacetime_weight   : 0.6
+    temporal_dropout       : 0.5
+    mask_low_quality       : False
+    mask_samecolor_method  : None
+    observable_threshold   : 0.0
+    quality_threshold      : 0.0
+    weight_dilate          : 10
+    use_centered_positives : True
+    normalize_inputs       : 16384
+    balance_areas          : False
+model:
+    class_path: MultimodalTransformer
+    init_args:
+        saliency_weights       : auto 
+        class_weights          : auto 
+        tokenizer              : linconv 
+        arch_name              : smt_it_stm_p8 
+        decoder                : mlp 
+        positive_change_weight : 1 
+        negative_change_weight : 0.01 
+        stream_channels        : 16 
+        class_loss             : 'dicefocal' 
+        saliency_loss          : 'focal' 
+        saliency_head_hidden   : 3
+        change_head_hidden     : 3
+        global_change_weight   : 0.00 
+        global_class_weight    : 0.50 
+        global_saliency_weight : 1.00 
+optimizer: 
+    class_path: torch.optim.AdamW
+    init_args:
+        lr           : $TARGET_LR
+        weight_decay : $WEIGHT_DECAY
+lr_scheduler:
+  class_path: torch.optim.lr_scheduler.OneCycleLR
+  init_args:
+    max_lr: $TARGET_LR
+    total_steps: $MAX_STEPS
+    anneal_strategy: cos
+    pct_start: 0.05
+trainer:
+    accumulate_grad_batches: 16
+    default_root_dir     : $DEFAULT_ROOT_DIR
+    accelerator          : gpu 
+    devices              : 0,
+    #devices              : 0,1
+    #strategy             : ddp 
+    limit_val_batches    : 256
+    limit_train_batches  : 2048
+    num_sanity_val_steps : 0 
+    max_epochs           : 360
+
+torch_globals:
+    float32_matmul_precision: auto
+
+initializer:
+    init: /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6-MeanYear10GSD/runs/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2/lightning_logs/version_9/checkpoints/epoch=110-step=28416.ckpt
+" 
+
+#--ckpt_path=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6-MeanYear10GSD/runs/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2/lightning_logs/version_7/checkpoints/epoch=69-step=17920.ckpt
+ #--ckpt_path=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6-MeanYear10GSD/runs/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2/lightning_logs/version_3/checkpoints/epoch=40-step=10496.ckpt
+
+#/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6-MeanYear10GSD/runs/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2/lightning_logs/version_0/checkpoints/epoch=1-step=512.ckpt
+ls "$WORKDIR"/$DATASET_CODE/runs/$EXPERIMENT_NAME/lightning_logs/version_*/checkpoints/*.ckpt
+
+
+
+## Yardrat continue good model
+export CUDA_VISIBLE_DEVICES=0
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop6-MeanYear10GSD
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_rawbands_split6.kwcoco.zip
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_rawbands_split6.kwcoco.zip
+CHANNELS="(L8,S2,PD):(blue|green|red|nir),(WV):(blue|green|red),(WV,WV1):pan"
+EXPERIMENT_NAME=Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont4
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+TARGET_LR=1e-4
+WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
+echo "WEIGHT_DECAY = $WEIGHT_DECAY"
+MAX_STEPS=80000
+WATCH_GRID_WORKERS=2 python -m watch.tasks.fusion fit --config "
+data:
+    select_videos          : $SELECT_VIDEOS
+    num_workers            : 5
+    train_dataset          : $TRAIN_FPATH
+    vali_dataset           : $VALI_FPATH
+    chip_dims              : 196,196
+    time_steps             : 11
+    time_sampling          : uniform-soft5-soft4-contiguous
+    time_kernel            : '(-3y,-2.5y,-2y,-1.5y,-1y,0,1y,1.5y,2y,2.5y,3y)'
+    window_space_scale     : 10.0GSD
+    input_space_scale      : 10.0GSD
+    output_space_scale     : 10.0GSD
+    neg_to_pos_ratio       : 1.0
+    batch_size             : 4
+    normalize_perframe     : false
+    normalize_peritem      : true
+    max_epoch_length       : 1000000 
+    channels               : '$CHANNELS'
+    min_spacetime_weight   : 0.6
+    temporal_dropout       : 0.5
+    mask_low_quality       : False
+    mask_samecolor_method  : None
+    observable_threshold   : 0.0
+    quality_threshold      : 0.0
+    weight_dilate          : 10
+    use_centered_positives : True
+    normalize_inputs       : 16384
+    balance_areas          : True
+model:
+    class_path: MultimodalTransformer
+    init_args:
+        #saliency_weights       : '1:1' 
+        #class_weights          : auto 
+        tokenizer              : linconv 
+        arch_name              : smt_it_stm_p8 
+        decoder                : mlp 
+        positive_change_weight : 1 
+        negative_change_weight : 0.01 
+        stream_channels        : 16 
+        class_loss             : 'dicefocal' 
+        saliency_loss          : 'focal' 
+        saliency_head_hidden   : 6
+        change_head_hidden     : 6
+        class_head_hidden      : 6
+        global_change_weight   : 0.05 
+        global_class_weight    : 0.50 
+        global_saliency_weight : 1.00 
+optimizer: 
+    class_path: torch.optim.AdamW
+    init_args:
+        lr           : $TARGET_LR
+        weight_decay : $WEIGHT_DECAY
+lr_scheduler:
+  class_path: torch.optim.lr_scheduler.OneCycleLR
+  init_args:
+    max_lr: $TARGET_LR
+    total_steps: $MAX_STEPS
+    anneal_strategy: cos
+    pct_start: 0.05
+trainer:
+    accumulate_grad_batches: 16
+    default_root_dir     : $DEFAULT_ROOT_DIR
+    accelerator          : gpu 
+    devices              : 0,
+    #devices              : 0,1
+    #strategy             : ddp 
+    limit_val_batches    : 256
+    limit_train_batches  : 2048
+    num_sanity_val_steps : 0 
+    max_epochs           : 360
+
+torch_globals:
+    float32_matmul_precision: auto
+
+initializer:
+    init: $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2_epoch3_step941.pt
+"
+
+
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+smartwatch model_stats "$DVC_EXPT_DPATH"/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2_epoch3_step941.pt
+rsync -avprPR yardrat:data/dvc-repos/smart_expt_dvc/./training/yardrat/jon.crall/Drop6-MeanYear10GSD/runs/Drop6_TCombo1Year_BAS_10GSD_split6_V42 "$DVC_EXPT_DPATH"

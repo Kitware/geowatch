@@ -11,7 +11,7 @@ class RemoveEmptyImagesConfig(scfg.Config):
     Updates image transforms in a kwcoco json file to align all videos to a
     target GSD.
     """
-    default = {
+    __default__ = {
         'src': scfg.Value('data.kwcoco.json', help='input kwcoco filepath'),
 
         'dst': scfg.Value(None, help='output kwcoco filepath'),
@@ -286,7 +286,7 @@ def find_empty_images(dset, main_channels, overview=-1, mode='process',
     return bad_gids
 
 
-_CLI = RemoveEmptyImagesConfig
+__config__ = RemoveEmptyImagesConfig
 
 
 if __name__ == '__main__':

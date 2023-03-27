@@ -7,7 +7,7 @@ class CocoShardConfig(scfg.Config):
     """
     Shards a kwcoco dataset into multiple subparts
     """
-    default = {
+    __default__ = {
         'src': scfg.Value(None, help='input dataset to split', position=1),
 
         'dst_pattern': scfg.Value('{dpath}/shard_{stem}_{index:03d}.kwcoco.json', help='pattern for writing a shard'),
@@ -83,7 +83,7 @@ def main(cmdline=True, **kw):
     print('Wrote shards: {}'.format(ub.repr2(dest_fpaths, nl=1)))
 
 
-_CLI = CocoShardConfig
+__config__ = CocoShardConfig
 
 if __name__ == '__main__':
-    _CLI.main()
+    main()

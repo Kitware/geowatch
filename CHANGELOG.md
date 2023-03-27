@@ -4,7 +4,7 @@ This changelog follows the specifications detailed in: [Keep a Changelog](https:
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
 
-## Version 0.4.0 - Target 2023-03-x
+## Version 0.4.3 - Target 2023-03-x
 
 ### Changed
 * Lightning Packager callback now saves checkpoints on errors in addition to packages.
@@ -13,18 +13,38 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * CocoStitcher now writes quantization metadata to the geotiff itself
 * The kwcoco dataset now does extra work to randomize itself in training to bypass seed-everything issues. This can be disabled via the `reseed_fit_random_generators` parameter.
 * Prettier progress bars
+* `watch.cli.coco_add_watch_fields` how modifies image space to agree with the highest resolution asset.
+* Reworked the `smartwatch` CLI. Response time is much faster. Added autocomplete
+* Refactored `save_package` to use common code between all models
+* Improve yaml utils, allow !include tag.
+* `watch.mlops.aggregate` CLI tool now has basic functionality.
+* `watch.cli.coco_spectra` can now pool results per video / month.
+* Improve tracker speed / efficiency
 
 ### Added
 * Add SITS-former 
 * WU MAE Backbone in Heterogeneous Model
 * The `watch.cli.cluster_sites` script now works.
-* The `watch.cli.coco_temporally_combine_channels` script
-
+* The `watch.cli.coco_time_combine` script
+* Space / transform consistency checks in `kwcoco_extensions`
+* Initial prenormalizer support in data loader.
+* Site verification logic in the tracker
+* Inner window averaging in the tracker
 
 ### Fixed
+* Bug in `coco_add_watch_fields` where video properties were incorrectly updated if auxiliary and image space was not aligned.
+* Workaround issue loading old models due to newer torch.package checks
+* Bug in coco dataset grid builder, `use_centered_positives=True` now properly centers annotations.
+* Models now define their layers in a consistent order to workaround lightning#17025
 * Fixed issue in fusion models where we could not resume from checkpoints with lightning.
 * Fixed basic DDP issues; there still seems to be some lingering issues if certain callbacks are enabled.
 * Issues in watch.tasks.cold preventing it from running on larger regions
+* Fix inconsistency in UTM space estimation.
+* Fixes in `cold` task
+
+
+### Removed
+* Old `demo_smart_raw/aligned kwcoco` in favor of `demo_kwcoco_multisensor`.
 
 ## Version 0.3.10 - Target 2023-02-28
 

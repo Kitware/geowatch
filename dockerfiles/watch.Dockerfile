@@ -1,8 +1,12 @@
-# syntax=docker/dockerfile:1.3.0-labs
+# syntax=docker/dockerfile:1.5.0
 
 # This dockerfile uses new-ish buildkit syntax. 
 # Details on how to run are on the bottom of the file.
-FROM pyenv:310
+
+
+ARG BASE_IMAGE=pyenv:311
+
+FROM $BASE_IMAGE
 
 ENV HOME=/root
 
@@ -26,32 +30,53 @@ EOF
 #EOF
 
 
+WORKDIR /root
+RUN mkdir -p /root/code
+
 # Stage the watch source
-COPY setup.py /watch/
-COPY pyproject.toml /watch/
-COPY requirements /watch/requirements
-COPY watch /watch/watch
+COPY setup.py       /root/code/watch/
+COPY pyproject.toml /root/code/watch/
+COPY requirements   /root/code/watch/requirements
+COPY watch          /root/code/watch/watch
 
-SHELL ["/bin/bash", "--login", "-c"]
-
-RUN echo $(pwd)
+#RUN echo $(pwd)
 
 ARG BUILD_STRICT=0
 
+#SHELL ["/bin/bash", "--login", "-c"]
+
 # Setup primary dependencies
-RUN <<EOF
+# Note: special syntax for caching deps
+# https://pythonspeed.com/articles/docker-cache-pip-downloads/
+RUN --mount=type=cache,target=/root/.cache <<EOF
 #!/bin/bash
-source $HOME/activate
+#source $HOME/activate
 
-# Always use the latest Python build tools
-python -m pip install pip setuptools wheel build -U
+echo "
+Preparing to pip install watch
+"
 
+which python
+which pip
+python --version
+pip --version
+pwd
+ls -altr
+
+echo "
+Pip install latest Python build tools:
+"
+python -m pip install --prefer-binary pip setuptools wheel build -U
+
+echo "
+Pip install watch itself
+"
 if [ "$BUILD_STRICT" -eq 1 ]; then
     echo "BUILDING STRICT VARIANT"
-    pip install -e /watch[runtime-strict,development-strict,optional-strict,headless-strict]
+    pip install --prefer-binary -e /root/code/watch[runtime-strict,development-strict,optional-strict,headless-strict]
 else
     echo "BUILDING LOOSE VARIANT"
-    pip install -e /watch[development,optional,headless]
+    pip install --prefer-binary -e /root/code/watch[development,optional,headless]
     # python -m pip install dvc[all]>=2.13.0
     # pip install awscli
 fi
@@ -60,11 +85,11 @@ EOF
 
 
 # Finalize more fickle dependencies
-RUN <<EOF
+RUN --mount=type=cache,target=/root/.cache <<EOF
 #!/bin/bash
-source $HOME/activate
+#source $HOME/activate
 
-cd /watch
+cd /root/code/watch
 if [ "$BUILD_STRICT" -eq 1 ]; then
     echo "FINALIZE STRICT VARIANT DEPS"
     sed 's/>=/==/g' requirements/gdal.txt > requirements/gdal-strict.txt
@@ -77,10 +102,14 @@ fi
 EOF
 
 
+#### Copy over the rest of the repo structure
+COPY .git          /root/code/watch/.git
+
+
 # Install other useful tools
-RUN <<EOF
+RUN --mount=type=cache,target=/root/.cache <<EOF
 #!/bin/bash
-source $HOME/activate
+#source $HOME/activate
 
 # python -m pip install dvc[all]>=2.13.0
 # pip install scikit-image>=0.18.1
@@ -92,7 +121,7 @@ EOF
 # Run simple tests
 RUN <<EOF
 #!/bin/bash
-source $HOME/activate
+#source $HOME/activate
 
 echo "Start simple tests"
 EAGER_IMPORT=1 python -c "import watch; print(watch.__version__)"
@@ -100,7 +129,9 @@ EAGER_IMPORT=1 python -m watch --help
 EOF
 
 # Copy over the rest of the repo
-COPY . /watch
+COPY . /root/code/watch
+
+WORKDIR /root/code/watch
 
 RUN <<EOF
 # https://www.docker.com/blog/introduction-to-heredocs-in-dockerfiles/
@@ -111,16 +142,45 @@ echo "
 
 cd $HOME/code/watch
 
-# Either build the pyenv image or
-docker pull gitlab.kitware.com:4567/smart/watch/pyenv:310
-docker tag gitlab.kitware.com:4567/smart/watch/pyenv:310 pyenv:310 
+mkdir -p $HOME/tmp/watch-img-staging
+git clone --origin=host-$HOSTNAME $HOME/code/watch/.git $HOME/tmp/watch-img-staging/watch
+cd $HOME/tmp/watch-img-staging/watch
+git remote add origin git@gitlab.kitware.com:smart/watch.git
 
+# Either build the pyenv image or
+#docker pull gitlab.kitware.com:4567/smart/watch/pyenv:311
+#docker tag gitlab.kitware.com:4567/smart/watch/pyenv:311 pyenv:311 
+
+
+#### 3.10
+
+cd $HOME/tmp/watch-img-staging/watch
 DOCKER_BUILDKIT=1 docker build --progress=plain \
-    -t "watch:310" \
-    --build-arg PYTHON_VERSION=3.10.5 \
+    -t "watch:310-strict" \
+    --build-arg BASE_IMAGE=pyenv:310 \
+    --build-arg BUILD_STRICT=1 \
     -f ./dockerfiles/watch.Dockerfile .
 
-docker run --runtime=nvidia -it watch:310 bash
+docker run \
+    --volume "$HOME/code/watch":/host-watch:ro \
+    --runtime=nvidia -it watch:310-strict bash
+
+#### 3.11
+
+cd $HOME/tmp/watch-img-staging/watch
+DOCKER_BUILDKIT=1 docker build --progress=plain \
+    -t "watch:311-loose" \
+    --build-arg BUILD_STRICT=0 \
+    --build-arg BASE_IMAGE=pyenv:311 \
+    --build-arg PYTHON_VERSION=3.11.2 \
+    -f ./dockerfiles/watch.Dockerfile .
+
+docker run \
+    --volume "$HOME/code/watch":/host-watch:ro \
+    --runtime=nvidia -it watch:311-loose bash
+
+
+git remote add dockerhost /host-watch/.git
 
 "
 EOF

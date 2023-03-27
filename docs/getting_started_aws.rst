@@ -11,7 +11,7 @@ Installing AWS CLI
 
 This section provides instructions to install the AWS CLI tool.
 
-For more details or troubleshooting, please refer to the the 
+For more details or troubleshooting, please refer to the the
 `official instructions for installing the AWS CLI <https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html>`_.
 
 We attempt to summarize the above with a series of commands that should "just
@@ -91,16 +91,17 @@ be skipped, but it is usually a good idea to do this.
     # Download the signature and verify the CLI tool is signed by amazon
     curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip.sig" -o "awscli-exe-linux-x86_64.zip.sig"
 
-    gpg --verify awscli-exe-linux-x86_64.zip.sig awscli-exe-linux-x86_64.zip 
+    gpg --verify awscli-exe-linux-x86_64.zip.sig awscli-exe-linux-x86_64.zip
 
 
 Now that we have verified the integrity, install the aws CLI tool to your local
 PATH.
 
+
 .. code:: bash
 
     # Unzip the downloaded installer
-    unzip -o awscli-exe-linux-x86_64.zip 
+    unzip -o awscli-exe-linux-x86_64.zip
 
     # If you want to install somewhere else, change the PREFIX variable
     PREFIX="$HOME/.local"
@@ -113,7 +114,7 @@ should be in your PATH. If you do not have that location in your path we
 recommend adding it like this:
 
 .. code:: bash
-    
+
     # Add to the path in the current shell
     export PATH=$HOME/.local/bin/:$PATH
 
@@ -127,7 +128,7 @@ Test that your new AWS CLI is working by running:
 .. code:: bash
 
    aws --version
-    
+
 
 Now that you have the AWS CLI, the next step is to ensure you have the correct
 credentials.
@@ -151,7 +152,7 @@ Obtaining Credentials
 
 To obtain credentials, the current point of contact is
 yonatan.gefen@kitware.com (as of 2022-10-06). Please send Yoni an email and CC
-matt.leotta@kitware.com and jon.crall@kitware.com to request credentials. 
+matt.leotta@kitware.com and jon.crall@kitware.com to request credentials.
 
 We will then start the process of securely sending you your credentials. If you
 have a public GPG key, please send that with your request. We will encrypt your
@@ -177,7 +178,7 @@ To summarize, here is an example. Alice wants to send Bob the secret message:
 "hello world".
 
 * Alice navigates to https://cryptotools.net/dhe, generates a public key: `bSoNKmm2qF2HLo2tG39gVN4c5xuMnBqX6ES4C0nLdOI=`, and sends it to Bob.
- 
+
 * Bob navigates to https://cryptotools.net/dhe, generates a public key: `UYXjuE9QpXASQM8QQmjImECyvIg4MsOwkS3YrTXXLB0=`, and sends it to Alice.
 
 * Alice enters Bob's secret key into her "Public key" on the right.
@@ -187,7 +188,7 @@ To summarize, here is an example. Alice wants to send Bob the secret message:
 * Both Alice and Bob now see a shared secret: `arnE9PLCOHrvKRLAXsrx+Nc4pyCBZtjCoESjo16Fvi8=` appear, which they can now use for encryption and decryption.
 
 * Alice navigates to https://cryptotools.net/aes, enters the plain text "hello world" and uses the shared secret `arnE9PLCOHrvKRLAXsrx+Nc4pyCBZtjCoESjo16Fvi8=` as the encryption key. This generates the encrypted cyphertext `U2FsdGVkX19sofdkwHQvnur20N8KwDULOxqVPkboYxI=`, which Alice can send to Bob.
- 
+
 * Bob receives the cyphertext from Alice, navigates to https://cryptotools.net/aes, and hits the "Decrypt" button. He enters the cyphertext `U2FsdGVkX19sofdkwHQvnur20N8KwDULOxqVPkboYxI=` into the bottom pane, and also enters the shared secret `arnE9PLCOHrvKRLAXsrx+Nc4pyCBZtjCoESjo16Fvi8=` into the key feild. The decryption happens automatically and the secret message appears in the top plaintext box.
 
 
@@ -238,7 +239,7 @@ AWS Security
 
 It is important to periodically rotate your AWS credentials.
 
-See detailed **internal** instructions for rotating keys: 
+See detailed **internal** instructions for rotating keys:
 `here <https://docs.google.com/document/d/1bW8UM1jR3opJ2qf-OU28Yr3Gyg7chZQ2MH5YQYGBIhs/edit#heading=h.z29n19ypsfef>`_.
 
 
@@ -258,3 +259,12 @@ See detailed **internal** instructions for rotating keys:
 
     # Synchronize those keys to all other machine that need them.
     # Doing this will depend on how the user synchronizes keys.
+
+
+
+Next Steps
+----------
+
+* `getting started with kubectl <getting_started_kubectl.rst>`
+
+* `getting started with dvc <getting_started_dvc.rst>`

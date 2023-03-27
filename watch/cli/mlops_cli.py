@@ -6,7 +6,7 @@ BROKEN DO NOT USE
 from watch.mlops import expt_manager
 
 
-_CLI = expt_manager.ExptManagerConfig
+__config__ = expt_manager.ExptManagerConfig
 main = expt_manager.main
 
 

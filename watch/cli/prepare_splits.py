@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+# PYTHON_ARGCOMPLETE_OK
 """
 CommandLine:
     xdoctest -m watch.cli.prepare_splits __doc__
@@ -37,10 +39,12 @@ class PrepareSplitsConfig(scfg.Config):
 
     Ignore:
         base_fpath = 'imganns*.kwcoco.*'
-
     """
-    default = {
+    __fuzzy_hyphens__ = 1
+
+    __default__ = {
         'base_fpath': scfg.Value(None, nargs='+', help='base coco file to split or a globstring in constructive mode', position=1),
+
         'virtualenv_cmd': scfg.Value(None, type=str, help=ub.paragraph(
             '''
             Command to start the appropriate virtual environment if your bashrc
@@ -102,8 +106,8 @@ def _submit_constructive_split_jobs(base_fpath, suffix, queue, depends=[]):
     from watch.utils import util_path
     import shlex
     partitioned_fpaths = util_path.coerce_patterned_paths(base_fpath)
-    dpath = ub.Path(partitioned_fpaths[0]).parent  # Hack
     print('partitioned_fpaths = {}'.format(ub.urepr(partitioned_fpaths, nl=1)))
+    dpath = ub.Path(partitioned_fpaths[0]).parent  # Hack
 
     full_fpath = dpath / 'data.kwcoco.zip'
 

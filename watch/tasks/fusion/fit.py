@@ -324,7 +324,16 @@ def coerce_initializer(init):
             import torch
             import tempfile
             tfile = tempfile.NamedTemporaryFile(prefix='pretrained_state', suffix='.pt')
-            state_dict = other_model.state_dict()
+            # state_dict = other_model.state_dict()
+            try:
+                state_dict = other_model.state_dict()
+            except Exception:
+                if hasattr(other_model, 'head_metrics'):
+                    other_model.head_metrics.clear()
+                    state_dict = other_model.state_dict()
+                else:
+                    raise
+
             # HACK:
             # Remove the normalization keys, we don't want to transfer them
             # in this step. They will be set correctly depending on if

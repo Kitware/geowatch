@@ -7,11 +7,9 @@ import os
 import sys
 import json
 import shlex
-from tempfile import TemporaryDirectory
 import ubelt as ub
 import scriptconfig as scfg
 from packaging import version
-import safer
 import warnings
 
 
@@ -234,6 +232,8 @@ def main(cmdline=True, **kwargs):
     from watch.utils import util_gis
     from kwcoco.util import util_json
     from watch.utils import process_context
+    from tempfile import TemporaryDirectory
+    import safer
     config = MetricsConfig.cli(cmdline=cmdline, data=kwargs)
     args = config
 
@@ -534,6 +534,8 @@ def main(cmdline=True, **kwargs):
             from watch.tasks.metrics.viz_sc_results import viz_sc
             viz_sc(region_dpaths, true_site_dpath, true_region_dpath, combined_viz_dpath)
 
+
+__config__ = MetricsConfig
 
 if __name__ == '__main__':
     main()

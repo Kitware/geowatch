@@ -898,8 +898,8 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         >>> from kwcoco.coco_evaluator import CocoEvaluator
         >>> from kwcoco.demo.perterb import perterb_coco
         >>> import kwcoco
-        >>> true_coco1 = kwcoco.CocoDataset.demo('vidshapes2')
-        >>> true_coco2 = kwcoco.CocoDataset.demo('shapes8')
+        >>> true_coco1 = kwcoco.CocoDataset.demo('vidshapes2', image_size=(64, 64))
+        >>> true_coco2 = kwcoco.CocoDataset.demo('shapes2', image_size=(64, 64))
         >>> #true_coco1 = kwcoco.CocoDataset.demo('vidshapes9')
         >>> #true_coco2 = kwcoco.CocoDataset.demo('shapes128')
         >>> true_coco = kwcoco.CocoDataset.union(true_coco1, true_coco2)
@@ -928,11 +928,12 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         >>> evaluate_segmentations(true_coco, pred_coco, eval_dpath, config=config)
 
     Example:
+        >>> # xdoctest: +REQUIRES(env:SLOW_DOCTEST)
         >>> from watch.tasks.fusion.evaluate import *  # NOQA
         >>> from kwcoco.coco_evaluator import CocoEvaluator
         >>> from kwcoco.demo.perterb import perterb_coco
         >>> import kwcoco
-        >>> true_coco = kwcoco.CocoDataset.demo('vidshapes2')
+        >>> true_coco = kwcoco.CocoDataset.demo('vidshapes2', image_size=(64, 64))
         >>> kwargs = {
         >>>     'box_noise': 0.5,
         >>>     'n_fp': (0, 10),
@@ -1069,7 +1070,6 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     if eval_dpath is None:
         heatmap_dpath = None
     else:
-        heatmap_dpath = (ub.Path(eval_dpath) / 'heatmaps').ensuredir()
         curve_dpath = (ub.Path(eval_dpath) / 'curves').ensuredir()
         pcontext.write_invocation(curve_dpath / 'invocation.sh')
 
@@ -1218,6 +1218,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
                 class_measure_combiner.combine()
 
             if draw_heatmaps:
+                heatmap_dpath = (ub.Path(eval_dpath) / 'heatmaps').ensuredir()
                 # Let the draw executor release any memory it can
                 remaining_draw_jobs = []
                 for draw_job in draw_jobs:

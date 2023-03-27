@@ -7,7 +7,7 @@
 FROM nvidia/cuda:11.4.3-cudnn8-devel-ubuntu20.04
 
 ARG PYTHON_VERSION=3.10.5
-ARG PYENV_VERSION=v2.3.3
+ARG PYENV_VERSION=v2.3.13
 
 ENV HOME=/root
 ENV PYENV_ROOT=/root/.pyenv
@@ -64,53 +64,89 @@ EOF
 
 #SHELL ["/bin/bash", "--login", "-c"]
 
-### Create a default Python virtualenv
-#RUN <<EOF
-##!/bin/bash
-#export PATH="$PYENV_ROOT/bin:$PATH"
-#eval "$($PYENV_ROOT/bin/pyenv init -)"
-#pyenv global $PYTHON_VERSION
+ENV PATH="$PYENV_ROOT/shims:$PYENV_ROOT/bin:$PATH"
 
+
+# pyenv prefix is not working. We should be able to hack it?
+env PYENV_PREFIX=/root/.pyenv/versions/$PYTHON_VERSION
+env PYTHON_VERSION=$PYTHON_VERSION
+
+
+## Setup a default Python virtualenv
+## (this does not seem to be reliable)
+RUN <<EOF
+#!/bin/bash
+echo "Init pyenv"
+echo "HOME=$HOME"
+echo "PYENV_ROOT=$PYENV_ROOT"
+echo "PYTHON_VERSION=$PYTHON_VERSION"
+echo "PYENV_VERSION=$PYENV_VERSION"
+echo "PYENV_PREFIX=$PYENV_PREFIX"
+echo "PATH=$PATH"
+
+## Setup global pyenv version
+eval "$($PYENV_ROOT/bin/pyenv init -)"
+pyenv global $PYTHON_VERSION
+pyenv global
+
+# pyenv prefix is not working. We should be able to hack it?
 #PYENV_PREFIX=$(pyenv prefix)
-#python -m venv $PYENV_PREFIX/envs/pyenv$PYTHON_VERSION
+#PYENV_PREFIX=/root/.pyenv/versions/$PYENV_VERSION
 
-#BASHRC_CONTENTS='
-## Add the pyenv command to our environment if it exists
-#export HOME="/root"
-#export PYENV_ROOT="$HOME/.pyenv"
-#if [ -d "$PYENV_ROOT" ]; then
-#    export PATH="$PYENV_ROOT/bin:$PATH"
-#    eval "$($PYENV_ROOT/bin/pyenv init -)"
-#    source $PYENV_ROOT/completions/pyenv.bash
-#    export PYENV_PREFIX=$(pyenv prefix)
-#fi
+echo "Make envs dir"
 
-## Optionally auto-activate the chosen pyenv pyenv environment
+mkdir -p $PYENV_PREFIX/envs
+echo "Make virutalenv"
+
+# Not sure why I need the unset here
+unset PYENV_VERSION
+
+# Not sure why venv isn't working correctly, but we should be fine just using
+# the global pyenv python
+#
+##### Uncomment if we want to try default venvs again
+# $PYENV_ROOT/shims/python3 -m venv $PYENV_PREFIX/envs/pyenv$PYTHON_VERSION
+#echo "Checking venv directory"
+#ls -al $PYENV_PREFIX/envs
+#ls -al $PYENV_PREFIX/envs/pyenv$PYTHON_VERSION
+
+echo "Write bashrc and profile"
+BASHRC_CONTENTS='
+# Add the pyenv command to our environment if it exists
+export HOME="/root"
+export PYENV_ROOT="$HOME/.pyenv"
+if [ -d "$PYENV_ROOT" ]; then
+    export PATH="$PYENV_ROOT/bin:$PATH"
+    eval "$($PYENV_ROOT/bin/pyenv init -)"
+    source $PYENV_ROOT/completions/pyenv.bash
+    #export PYENV_PREFIX=$(pyenv prefix)
+    #export PYENV_PREFIX=$PYENV_PREFIX
+fi
+
+
+__note__="
+# Enable global python argcomplete
+
+pip install argcomplete
+mkdir -p ~/.bash_completion.d
+activate-global-python-argcomplete --dest ~/.bash_completion.d
+source ~/.bash_completion.d/python-argcomplete
+"
+# activate-global-python-argcomplete --dest ~/.bash_completion.d
+if [ -f "$HOME/.bash_completion.d/python-argcomplete" ]; then
+    source ~/.bash_completion.d/python-argcomplete
+fi
+
+# Optionally auto-activate the chosen pyenv pyenv environment
 #if [ -d "$PYENV_PREFIX/envs/pyenv$PYTHON_VERSION" ]; then
 #    source $PYENV_PREFIX/envs/pyenv$PYTHON_VERSION/bin/activate
 #fi
-#'
-#echo "$BASHRC_CONTENTS" >> $HOME/.bashrc
-## Write a secondary script for non-interactive usage
+'
+echo "$BASHRC_CONTENTS" >> $HOME/.bashrc
+echo "$BASHRC_CONTENTS" >> $HOME/.profile
+# Write a secondary script for non-interactive usage
 #echo "$BASHRC_CONTENTS" >> $HOME/activate
-#EOF
-
-
-RUN <<EOF
-#!/bin/bash
-echo "Hello" >> /hello
-echo "World!" >> /hello
-EOF
-
-
-## Install Prerequisites 
-RUN <<EOF
-mkdir -p foobar
-EOF
-
-## Install pyenv
-RUN <<EOF
-rm -rf foobar
+#source $HOME/activate
 EOF
 
 
@@ -124,6 +160,8 @@ echo "
 # docker login
 # docker pull docker/dockerfile:1.3.0-labs
 
+#### 3.10
+
 cd $HOME/code/watch
 DOCKER_BUILDKIT=1 docker build --progress=plain \
     -t pyenv:310 \
@@ -131,6 +169,16 @@ DOCKER_BUILDKIT=1 docker build --progress=plain \
     -f ./dockerfiles/pyenv.Dockerfile .
 
 docker run --runtime=nvidia -it pyenv:310 bash  
+
+#### 3.11
+
+cd $HOME/code/watch
+DOCKER_BUILDKIT=1 docker build --progress=plain \
+    -t pyenv:311 \
+    --build-arg PYTHON_VERSION=3.11.2 \
+    -f ./dockerfiles/pyenv.Dockerfile .
+
+docker run --runtime=nvidia -it pyenv:311 bash
 
 docker login gitlab.kitware.com:4567
 

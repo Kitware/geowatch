@@ -17,7 +17,7 @@ class CocoCombineFeatures(scfg.Config):
     TODO:
         - [ ] This might go in kwcoco proper? This could be folded into "union"
     """
-    default = {
+    __default__ = {
         'src': scfg.Value([], nargs='+', help='path to datasets. The first one will be the "base"', position=1),
 
         'dst': scfg.Value(None, help='dataset to write to'),

@@ -60,6 +60,7 @@ keys_to_score_bas = kwcoco.FusedChannelSpec.coerce('salient')
 keys_to_score_sc = kwcoco.FusedChannelSpec.coerce(
     '|'.join(CNAMES_DCT['positive']['scored']))
 
+
 # def chans_intersect(c1: kwcoco.ChannelSpec, c2: kwcoco.ChannelSpec) -> kwcoco.FusedChannelSpec:
 
 def are_bas_dct(dset):
@@ -93,9 +94,7 @@ def viz_track_scores(dset, out_fpath, gt_dset=None):
     # import json
     import watch
     import kwplot
-    import datetime
     from matplotlib.collections import LineCollection
-    from matplotlib.dates import date2num
     from matplotlib.colors import to_rgba
     plt = kwplot.autoplt()
     sns = kwplot.autosns()
@@ -109,7 +108,6 @@ def viz_track_scores(dset, out_fpath, gt_dset=None):
         are_sc_imgs.append(f.intersection(keys_to_score_sc).numel() == keys_to_score_sc.numel())
     assert (sum(are_bas_imgs) > 0 or sum(are_sc_imgs) > 0), 'no valid channels to score!'
     keys = (keys_to_score_bas if sum(are_bas_imgs) > sum(are_sc_imgs) else keys_to_score_sc)
-
 
     if gt_dset is not None:
         # have parallel keys to 'orig' for gt and post-vit
@@ -148,16 +146,10 @@ def viz_track_scores(dset, out_fpath, gt_dset=None):
     # ax1.plot(df['date'], df['orig'], label='orig')
 
     def add_scores(x, *ordered_phases_cols, **kwargs):
-        # if isinstance(x.iloc[0], datetime.date):
-            # x = date2num(x)
-
         ax = plt.gca()
         ax.stackplot(x, pd.DataFrame(ordered_phases_cols).values, labels=ordered_phases, colors=[palette[p] for p in ordered_phases])
 
     def add_colored_linesegments(x, y, phase, **kwargs):
-        # if isinstance(x.iloc[0], datetime.date):
-            # x = date2num(x)
-
         _df = pd.DataFrame(dict(
             xy=zip(x, y),
             hue=pd.Series(phase).map(palette).astype('string').map(to_rgba),
@@ -184,8 +176,6 @@ def viz_track_scores(dset, out_fpath, gt_dset=None):
         ax.add_collection(lc)
 
     def add_ticks(xs, sensor_coarses, **kwargs):
-        # if isinstance(xs.iloc[0], datetime.date):
-            # xs = date2num(xs)
         colors = dict(zip(['Sentinel-2', 'Landsat 8', 'WorldView'], kwimage.Color.distinct(3)))
         colors['S2'] = colors['Sentinel-2']
         colors['L8'] = colors['Landsat 8']

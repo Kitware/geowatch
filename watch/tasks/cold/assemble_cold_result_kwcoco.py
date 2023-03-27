@@ -396,7 +396,7 @@ def get_gdal_transform(coco_dset, sensor_name, resolution=None):
     target_primary_asset = target_coco_img.primary_asset()
     target_primary_fpath = os.path.join(ub.Path(target_coco_img.bundle_dpath), target_primary_asset['file_name'])
     try:
-        ref_image = gdal.Open(target_primary_fpath, gdal.GA_ReadOnly)    
+        ref_image = gdal.Open(target_primary_fpath, gdal.GA_ReadOnly)
         proj = ref_image.GetProjection()     # This transforms from world space to CRS84
         trans = ref_image.GetGeoTransform()  # This transforms from the underlying asset to world space.
     except AttributeError:

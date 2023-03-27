@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import scriptconfig as scfg
 import ubelt as ub
-import numpy as np
 
 
 class CleanGeotiffConfig(scfg.DataConfig):
@@ -141,6 +140,7 @@ def main(cmdline=1, **kwargs):
         >>> import kwimage
         >>> import watch
         >>> import kwarray
+        >>> import numpy as np
         >>> # Create a copy of the test dataset to clean inplace
         >>> orig_dset = watch.coerce_kwcoco('watch-msi', geodata=True, bad_nodata=True)
         >>> orig_dpath = ub.Path(orig_dset.bundle_dpath)
@@ -378,6 +378,7 @@ def probe_image_issues(coco_img, channels=None, prefilter_channels=None, scale=N
     Example:
         >>> import watch
         >>> from watch.cli.coco_clean_geotiffs import *  # NOQA
+        >>> import numpy as np
         >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, bad_nodata=True)
         >>> coco_img = dset.images().coco_images[4]
         >>> channels = 'B11|B10|X.1'
@@ -580,6 +581,7 @@ def probe_asset_imdata(imdata, band_idxs, min_region_size_=256,
 def probe_band_imdata(band_imdata, min_region_size_=256,
                       possible_nodata_values=None):
     from watch.utils import util_kwimage
+    import numpy as np
 
     band_imdata = np.ascontiguousarray(band_imdata)
     is_samecolor = util_kwimage.find_samecolor_regions(
@@ -657,6 +659,7 @@ def fix_geotiff_ondisk(asset_summary, correct_nodata_value=-9999):
         >>> from watch.cli.coco_clean_geotiffs import *  # NOQA
         >>> from watch.demo.metrics_demo.demo_rendering import write_demo_geotiff
         >>> import kwimage
+        >>> import numpy as np
         >>> dpath = ub.Path.appdir('watch/tests/clean_geotiff').ensuredir()
         >>> fpath1 = dpath / 'test_geotiff.tif'
         >>> fpath2 = fpath1.augment(stemsuffix='_fixed')
@@ -696,6 +699,7 @@ def fix_geotiff_ondisk(asset_summary, correct_nodata_value=-9999):
         >>> from watch.cli.coco_clean_geotiffs import *  # NOQA
         >>> from watch.demo.metrics_demo.demo_rendering import write_demo_geotiff
         >>> import kwimage
+        >>> import numpy as np
         >>> dpath = ub.Path.appdir('watch/tests/clean_geotiff').ensuredir()
         >>> fpath1 = dpath / 'test_geotiff.tif'
         >>> fpath2 = fpath1.augment(stemsuffix='_fixed')
@@ -732,6 +736,7 @@ def fix_geotiff_ondisk(asset_summary, correct_nodata_value=-9999):
     import os
     from watch.utils import util_gdal
     from osgeo import gdal
+    import numpy as np
     import tempfile
     fpath = ub.Path(asset_summary['fpath'])
     band_idxs = asset_summary['band_idxs']
@@ -835,6 +840,7 @@ def fix_geotiff_ondisk(asset_summary, correct_nodata_value=-9999):
 def draw_asset_summary(coco_img, asset_summary):
     from watch.utils import util_kwimage
     import kwimage
+    import numpy as np
     is_samecolor = asset_summary['is_samecolor']
     data = coco_img.delay(channels=asset_summary['channels'], space='asset',
                           nodata_method='float').finalize()

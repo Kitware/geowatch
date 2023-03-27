@@ -298,7 +298,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         input_norms = None
         if input_stats is not None:
             input_norms = RobustModuleDict()
-            for s, c in self.unique_sensor_modes:
+            for s, c in sorted(self.unique_sensor_modes):
                 if s not in input_norms:
                     input_norms[s] = RobustModuleDict()
                 stats = input_stats.get((s, c), None)
@@ -310,7 +310,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
             # Not sure what causes the format to change. Just hitting test
             # cases.
-            for k, v in input_stats.items():
+            for k, v in sorted(input_stats.items()):
                 if isinstance(k, str):
                     for c, stats in v.items():
                         if s not in input_norms:
@@ -402,7 +402,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
         # import xdev
         # with xdev.embed_on_exception_context:
-        for k in sensor_modes:
+        for k in sorted(sensor_modes):
             if isinstance(k, str):
                 if k == '*':
                     s = c = '*'
@@ -735,8 +735,8 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             {'weight_decay': self.hparams.weight_decay}, optim_cls))
 
         optim_kw['params'] = self.parameters()
-        print('optim_cls = {}'.format(ub.repr2(optim_cls, nl=1)))
-        print('optim_kw = {}'.format(ub.repr2(optim_kw, nl=1)))
+        # print('optim_cls = {}'.format(ub.repr2(optim_cls, nl=1)))
+        # print('optim_kw = {}'.format(ub.repr2(optim_kw, nl=1)))
         optimizer = optim_cls(**optim_kw)
 
         # TODO:
@@ -1685,150 +1685,8 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> for key in recon_state.keys():
             >>>     assert (model_state[key] == recon_state[key]).all()
             >>>     assert model_state[key] is not recon_state[key]
-
-        Example:
-            >>> # Test with datamodule
-            >>> import ubelt as ub
-            >>> from os.path import join
-            >>> from watch.tasks.fusion import datamodules
-            >>> from watch.tasks.fusion import methods
-            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
-            >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
-            >>> disable_lightning_hardware_warnings()
-            >>> dpath = ub.Path.appdir('watch/tests/package').ensuredir()
-            >>> package_path = dpath / 'my_package.pt'
-
-            >>> datamodule = datamodules.kwcoco_video_data.KWCocoVideoDataModule(
-            >>>     train_dataset='special:vidshapes8-multispectral-multisensor', chip_size=32,
-            >>>     batch_size=1, time_steps=2, num_workers=2, normalize_inputs=10, channels='auto')
-            >>> datamodule.setup('fit')
-            >>> dataset_stats = datamodule.torch_datasets['train'].cached_dataset_stats(num=3)
-            >>> classes = datamodule.torch_datasets['train'].classes
-
-            >>> # Use one of our fusion.architectures in a test
-            >>> self = methods.MultimodalTransformer(
-            >>>     arch_name="smt_it_joint_p2", classes=classes,
-            >>>     dataset_stats=dataset_stats, input_sensorchan=datamodule.input_sensorchan,
-            >>>     learning_rate=1e-8, optimizer='sgd',
-            >>>     change_head_hidden=0, saliency_head_hidden=0,
-            >>>     class_head_hidden=0)
-
-            >>> # We have to run an input through the module because it is lazy
-            >>> batch = ub.peek(iter(datamodule.train_dataloader()))
-            >>> outputs = self.training_step(batch)
-
-            >>> trainer = pl.Trainer(max_steps=1)
-            >>> trainer.fit(model=self, datamodule=datamodule)
-
-            >>> # Save the self
-            >>> self.save_package(package_path)
-
-            >>> # Test that the package can be reloaded
-            >>> recon = methods.MultimodalTransformer.load_package(package_path)
-
-            >>> # Check consistency and data is actually different
-            >>> recon_state = recon.state_dict()
-            >>> model_state = self.state_dict()
-            >>> assert recon is not self
-            >>> assert set(recon_state) == set(recon_state)
-            >>> for key in recon_state.keys():
-            >>>     v1 = model_state[key]
-            >>>     v2 = recon_state[key]
-            >>>     if not (v1 == v2).all():
-            >>>         print('v1 = {}'.format(ub.repr2(v1, nl=1)))
-            >>>         print('v2 = {}'.format(ub.repr2(v2, nl=1)))
-            >>>         raise AssertionError(f'Difference in key={key}')
-            >>>     assert v1 is not v2, 'should be distinct copies'
-
-        Ignore:
-            7z l $HOME/.cache/watch/tests/package/my_package.pt
         """
-        # import copy
-        import json
-        import torch.package
-
-        # Fix an issue on 3.10 with torch 1.12
-        from watch.monkey import monkey_torch
-        monkey_torch.fix_package_modules()
-
-        # shallow copy of self, to apply attribute hacks to
-        # model = copy.copy(self)
-        model = self
-
-        backup_attributes = {}
-        # Remove attributes we don't want to pickle before we serialize
-        # then restore them
-        unsaved_attributes = [
-            'trainer',
-            'train_dataloader',
-            'val_dataloader',
-            'test_dataloader',
-            '_load_state_dict_pre_hooks',  # lightning 1.5
-            '_trainer',  # lightning 1.7
-        ]
-        for key in unsaved_attributes:
-            try:
-                val = getattr(model, key, None)
-            except Exception:
-                val = None
-            if val is not None:
-                backup_attributes[key] = val
-
-        train_dpath_hint = getattr(model, 'train_dpath_hint', None)
-        if model.has_trainer:
-            if train_dpath_hint is None:
-                train_dpath_hint = model.trainer.log_dir
-            datamodule = model.trainer.datamodule
-            if datamodule is not None:
-                model.datamodule_hparams = datamodule.hparams
-
-        metadata_fpaths = []
-        if train_dpath_hint is not None:
-            train_dpath_hint = ub.Path(train_dpath_hint)
-            metadata_fpaths += list(train_dpath_hint.glob('hparams.yaml'))
-            metadata_fpaths += list(train_dpath_hint.glob('fit_config.yaml'))
-
-        try:
-            for key in backup_attributes.keys():
-                setattr(model, key, None)
-            arch_name = 'model.pkl'
-            module_name = 'watch_tasks_fusion'
-            """
-            exp = torch.package.PackageExporter(package_path, verbose=True)
-            """
-            with torch.package.PackageExporter(package_path) as exp:
-                # TODO: this is not a problem yet, but some package types (mainly
-                # binaries) will need to be excluded and added as mocks
-                exp.extern('**', exclude=['watch.tasks.fusion.**', 'watch.tasks.fusion.methods.channelwise_transformer'])
-                exp.intern('watch.tasks.fusion.**', allow_empty=False)
-
-                # Attempt to standardize some form of package metadata that can
-                # allow for model importing with fewer hard-coding requirements
-
-                # TODO:
-                # Add information about how this was trained, and what epoch it
-                # was saved at.
-                package_header = {
-                    'version': '0.1.0',
-                    'arch_name': arch_name,
-                    'module_name': module_name,
-                }
-
-                exp.save_text(
-                    'package_header', 'package_header.json',
-                    json.dumps(package_header)
-                )
-                exp.save_pickle(module_name, arch_name, model)
-
-                # Save metadata
-                for meta_fpath in metadata_fpaths:
-                    with open(meta_fpath, 'r') as file:
-                        text = file.read()
-                    exp.save_text('package_header', meta_fpath.name, text)
-        finally:
-            # restore attributes
-            for key, val in backup_attributes.items():
-                setattr(model, key, val)
+        self._save_package(package_path, verbose=verbose)
 
     @profile
     def forward(self, images):

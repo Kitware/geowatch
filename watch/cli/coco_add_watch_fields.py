@@ -6,11 +6,8 @@ We assume input is orthorectified.  We assume some GSD "target" gsd for video
 and image processing. Note a video GSD will typically be much higher (i.e.
 lower resolution) than an image GSD.
 """
-import kwcoco
 import ubelt as ub
 import scriptconfig as scfg
-import numpy as np
-import kwimage
 
 
 class AddWatchFieldsConfig(scfg.Config):
@@ -18,7 +15,7 @@ class AddWatchFieldsConfig(scfg.Config):
     Updates image transforms in a kwcoco json file to align all videos to a
     target GSD.
     """
-    default = {
+    __default__ = {
         'src': scfg.Value('data.kwcoco.json', help='input kwcoco filepath', position=1),
 
         'dst': scfg.Value(None, help='output kwcoco filepath', position=2),
@@ -96,6 +93,9 @@ def main(cmdline=True, **kwargs):
         main(**kwargs)
     """
     from watch import heuristics
+    import numpy as np
+    import kwcoco
+    import kwimage
     from watch.utils import util_parallel
     from watch.utils import kwcoco_extensions
     config = AddWatchFieldsConfig(kwargs, cmdline=cmdline)
@@ -143,7 +143,7 @@ def main(cmdline=True, **kwargs):
         print('not writing')
 
 
-_SubConfig = AddWatchFieldsConfig
+__config__ = AddWatchFieldsConfig
 
 if __name__ == '__main__':
     """

@@ -64,6 +64,7 @@ def make_predict_config(cmdline=False, **kwargs):
 
     parser.add_argument('--compress', type=str, default='DEFLATE', help='type of compression for prob images')
     parser.add_argument('--track_emissions', type=smartcast, default=True, help='set to false to disable emission tracking')
+    parser.add_argument('--record_context', default=True, type=smartcast, help='If enabled records process context stats')
 
     parser.add_argument('--quantize', type=smartcast, default=True, help='quantize outputs')
 
@@ -737,7 +738,7 @@ def predict(cmdline=False, **kwargs):
     from watch.utils import util_progress
     pman = util_progress.ProgressManager(backend='rich')
 
-    # prog = ub.ProgIter(batch_iter, desc='predicting', verbose=1, freq=1)
+    # prog = ub.ProgIter(batch_iter, desc='fusion predict', verbose=1, freq=1)
 
     # Make threads after starting background proces.
     if args.write_workers == 'datamodule':
@@ -843,20 +844,19 @@ def predict(cmdline=False, **kwargs):
     assert not list(util_json.find_json_unserializable(config_resolved))
     assert not list(util_json.find_json_unserializable(traintime_params))
 
-    from watch.utils import process_context
-    proc_context = process_context.ProcessContext(
-        name='watch.tasks.fusion.predict',
-        type='process',
-        config=config_resolved,
-        track_emissions=config['track_emissions'],
-        extra={'fit_config': traintime_params}
-    )
-
-    assert not list(util_json.find_json_unserializable(proc_context.obj))
-
-    info.append(proc_context.obj)
-    proc_context.start()
-    proc_context.add_disk_info(test_coco_dataset.fpath)
+    if config['record_context']:
+        from watch.utils import process_context
+        proc_context = process_context.ProcessContext(
+            name='watch.tasks.fusion.predict',
+            type='process',
+            config=config_resolved,
+            track_emissions=config['track_emissions'],
+            extra={'fit_config': traintime_params}
+        )
+        # assert not list(util_json.find_json_unserializable(proc_context.obj))
+        info.append(proc_context.obj)
+        proc_context.start()
+        proc_context.add_disk_info(test_coco_dataset.fpath)
 
     with torch.set_grad_enabled(False), pman:
         # FIXME: that data loader should not be producing incorrect sensor/mode
@@ -864,7 +864,7 @@ def predict(cmdline=False, **kwargs):
         EMERGENCY_INPUT_AGREEMENT_HACK = 1 and hasattr(method, 'input_norms')
         # prog.set_extra(' <will populate stats after first video>')
         # pman.start()
-        prog = pman.progiter(batch_iter, desc='predicting')
+        prog = pman.progiter(batch_iter, desc='fusion predict')
         _batch_iter = iter(prog)
         if 0:
             item = test_dataloader.dataset[0]
@@ -1086,8 +1086,9 @@ def predict(cmdline=False, **kwargs):
         print('outspace_iou_stats = {}'.format(ub.repr2(outspace_iou_stats, nl=1)))
         print('outspace_iooa_stats = {}'.format(ub.repr2(outspace_iooa_stats, nl=1)))
 
-    proc_context.add_device_info(device)
-    proc_context.stop()
+    if config['record_context']:
+        proc_context.add_device_info(device)
+        proc_context.stop()
 
     # Print logs about what we predicted on
     all_video_ids = list(result_dataset.videos())

@@ -1,6 +1,9 @@
-An fully FOSS alternative to a conda environment is pyenv. 
+Installing Pyenv
+----------------
+
+An fully FOSS alternative to a conda environment is pyenv.
 The only real drawback to pyenv is that you must be able to compile Python
-itself. 
+itself.
 
 On ubuntu this can be setup as follows:
 
@@ -17,14 +20,14 @@ On ubuntu this can be setup as follows:
         HIT_PKGS=()
         # Only use the sudo command if we need it (i.e. we are not root)
         _SUDO=""
-        if [ "$(whoami)" != "root" ]; then 
+        if [ "$(whoami)" != "root" ]; then
             _SUDO="sudo "
         fi
         # shellcheck disable=SC2068
         for PKG_NAME in ${ARGS[@]}
         do
             # Check if the package is already installed or not
-            if dpkg -l "$PKG_NAME" | grep "^ii *$PKG_NAME" > /dev/null; then 
+            if dpkg -l "$PKG_NAME" | grep "^ii *$PKG_NAME" > /dev/null; then
                 echo "Already have PKG_NAME='$PKG_NAME'"
                 # shellcheck disable=SC2268,SC2206
                 HIT_PKGS=(${HIT_PKGS[@]} "$PKG_NAME")
@@ -49,7 +52,7 @@ On ubuntu this can be setup as follows:
     apt_ensure \
         make build-essential libssl-dev zlib1g-dev \
         libbz2-dev libreadline-dev libsqlite3-dev wget curl llvm libncurses5-dev \
-        libncursesw5-dev xz-utils tk-dev libffi-dev liblzma-dev 
+        libncursesw5-dev xz-utils tk-dev libffi-dev liblzma-dev
 
     # Download pyenv
     export PYENV_ROOT="$HOME/.pyenv"
@@ -76,7 +79,7 @@ On ubuntu this can be setup as follows:
 
     PYTHON_CONFIGURE_OPTS="--enable-shared --enable-optimizations --with-computed-gotos --with-lto"
 
-    PYTHON_CFLAGS="-march=native -O2 -pipe" 
+    PYTHON_CFLAGS="-march=native -O2 -pipe"
 
     PROFILE_TASK=$PROFILE_TASK \
     PYTHON_CFLAGS="$PYTHON_CFLAGS" \
@@ -124,8 +127,7 @@ Create WATCH environment with Pyenv
 First create and activate a new virtual environment (note this could be done
 with conda as well).
 
-If using `pyenv installation instructions <docs/pyenv_alternative.rst>`_, then
-a virtual environment can be created with the standard ``venv`` module.
+A virtual environment can be created with the standard ``venv`` module.
 Assuming you have installed Python with pyenv the following will create a
 virtual environment.
 

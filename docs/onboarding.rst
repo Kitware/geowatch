@@ -21,7 +21,7 @@ recommend the following directory structure:
    # Create a directory for DATA
    # Either:
    mkdir -p $HOME/data/
-   
+
    # XOR: create a symlink to a drive that has space on it.
    ln -s /data $HOME/data
 
@@ -29,7 +29,7 @@ recommend the following directory structure:
    git clone https://gitlab.kitware.com/smart/watch/  $HOME/code/watch
 
    # Clone the data repos
-   mkdir -p $HOME/data/dvc-repos 
+   mkdir -p $HOME/data/dvc-repos
    git clone https://gitlab.kitware.com/smart/smart_data_dvc/ $HOME/data/dvc-repos/smart_data_dvc
    git clone https://gitlab.kitware.com/smart/smart_expt_dvc/ $HOME/data/dvc-repos/smart_expt_dvc
 
@@ -38,11 +38,11 @@ recommend the following directory structure:
    git clone git@gitlab.kitware.com:smart/smart_expt_dvc.git $HOME/data/dvc-repos/smart_expt_dvc
 
 
-For details on installing the watch system in development mode see 
-`installing watch for development guide <../docs/installing_watch.rst>`_.
+For details on installing the watch system in development mode see
+`installing watch for development guide <installing_watch.rst>`_.
 
-For more detailed instructions on setting up the DVC repos see: 
-`accessing dvc repos <../docs/access_dvc_repos.rst>`_.
+For more detailed instructions on setting up the DVC repos see:
+`accessing dvc repos <access_dvc_repos.rst>`_.
 
 
 This onboarding document is a work in progress. While things are are still
@@ -54,22 +54,18 @@ For quick reference, review the list of current documentation files in the `READ
 
 Please ensure you review :
 
-  + `Contribution Instructions <docs/contribution_instructions.rst>`_
+  + `Contribution Instructions <contribution_instructions.rst>`_
 
-  + `Rebasing Procedure <docs/rebasing_procedure.md>`_
+  + `Rebasing Procedure <rebasing_procedure.rst>`_
 
-  + `Testing Practices <docs/testing_practices.md>`_
+  + `Testing Practices <testing_practices.rst>`_
 
-  + `Coding Oddities <docs/coding_oddities.rst>`_
+  + `Coding Conventions <coding_conventions.rst>`_
 
-  + `Supporting Projects <docs/supporting_projects.rst>`_
+  + `Supporting Projects <supporting_projects.rst>`_
 
 
 TODO: Point to the FAQ examples in kwcoco and other projects with them
-
-
-.. ..To contribute, please read the `contribution instructions <docs/contribution_instructions.rst>`_.
-.. ..For information on testing please see `running and writing watch tests <docs/testing_practices.rst>`_.
 
 
 Tutorials
@@ -78,13 +74,13 @@ Tutorials
 The following tutorials detail how to train simple fusion models
 
 
-* Tutorial 1: `Toy RGB Experiment <../tutorial/toy_experiments_rgb.sh>`_ 
+* Tutorial 1: `Toy RGB Experiment <../tutorial/toy_experiments_rgb.sh>`_
 
-* Tutorial 2: `Toy MSI Experiment <../tutorial/toy_experiments_msi.sh>`_ 
+* Tutorial 2: `Toy MSI Experiment <../tutorial/toy_experiments_msi.sh>`_
 
 * Tutorial 3: TODO: tutorial about kwcoco (See docs for `kwcoco <https://gitlab.kitware.com/computer-vision/kwcoco>`_)
 
-* Tutorial 4: `Feature Fusion Tutorial <../tutorial/feature_fusion_tutorial.sh>`_ 
+* Tutorial 4: `Feature Fusion Tutorial <../tutorial/feature_fusion_tutorial.sh>`_
 
 
 Module Structure

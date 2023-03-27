@@ -222,7 +222,7 @@ class ScheduleEvaluationConfig(scfg.DataConfig):
     pred_workers = scfg.Value(4, help='number of prediction workers in each process')
 
     # shuffle_jobs = scfg.Value(True, help='if True, shuffles the jobs so they are submitted in a random order')
-    annotations_dpath = scfg.Value(None, help='path to IARPA annotations dpath for IARPA eval')
+    # annotations_dpath = scfg.Value(None, help='path to IARPA annotations dpath for IARPA eval')
 
     root_dpath = scfg.Value('auto', help=(
         'Where do dump all results. If "auto", uses <expt_dvc_dpath>/dag_runs'))
@@ -244,8 +244,8 @@ class ScheduleEvaluationConfig(scfg.DataConfig):
 
     max_configs = scfg.Value(None, help='if specified only run at most this many of the grid search configs')
 
-    print_commands = scfg.Value('auto', isflag=True, help='enable / disable rprint before exec', alias=['rprint'])
     print_varied = scfg.Value('auto', isflag=True, help='print the varied parameters')
+    print_commands = scfg.Value('auto', isflag=True, help='enable / disable rprint before exec', alias=['rprint'])
     print_queue = scfg.Value('auto', isflag=True, help='print the cmd queue DAG')
 
 
@@ -301,8 +301,9 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
     # Expand paramater search grid
     if config['params'] is not None:
-        from watch.utils import util_yaml
-        param_arg = util_yaml.coerce_yaml(config['params'])
+        from watch.utils.util_yaml import Yaml
+        param_arg = Yaml.coerce(config['params'])
+        # print('param_arg = {}'.format(ub.urepr(param_arg, nl=1)))
         all_param_grid = list(expand_param_grid(
             param_arg,
             max_configs=config['max_configs'],

@@ -485,8 +485,8 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method, resolution):
     # padding_value_col = im_data[:, :padded_w - w]
     # im_data[:, w:] = padding_value_col
     # padding_value_row = im_data[:padded_h - h, :]
-    # im_data[h:] = padding_value_row   
-    
+    # im_data[h:] = padding_value_row
+
     if method == 'ASI':
         Scale = 10000
         fill_value = 0

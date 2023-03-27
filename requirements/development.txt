@@ -1,12 +1,12 @@
 # Libraries that are needed in development, but maybe not in production
 
 # Testing
-pytest >= 6.2.1
-xdoctest >= 0.15.8
-pytest_cov >= 2.8.1
-coverage >= 5.4
+pytest >= 6.2.5
+xdoctest >= 1.1.1
+pytest-cov>=3.0.0
+coverage>=6.1.1
 jsonschema >= 3.2.0
-xdev >= 0.3.1
+xdev >= 1.1.1
 
 
 # Machine learning

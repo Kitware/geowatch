@@ -323,6 +323,56 @@ def main(config=None):
     CommandLine:
         xdoctest -m watch.tasks.fusion.fit_lightning main:0
 
+    Ignore:
+        ...
+
+        # export stats
+        from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
+        from watch.tasks.fusion.fit_lightning import *  # NOQA
+        from watch.utils.util_yaml import Yaml
+        disable_lightning_hardware_warnings()
+
+        def export_dataset_stats(cli):
+            input_stats = cli.trainer.datamodule.dataset_stats['input_stats']
+            rows = []
+            for sensorchan, stats in input_stats.items():
+                mean = list(map(float, stats['mean'].ravel().tolist()))
+                std = list(map(float, stats['std'].ravel().tolist()))
+                row = {
+                    'sensor': sensorchan[0],
+                    'channels': sensorchan[1],
+                    'mean': Yaml.InlineList(mean),
+                    'std': Yaml.InlineList(std),
+                }
+                rows.append(row)
+            from watch.utils import util_yaml
+            import ruamel.yaml
+            import io
+            file = io.StringIO()
+            ruamel.yaml.round_trip_dump(rows, file, Dumper=ruamel.yaml.RoundTripDumper)
+            print(file.getvalue())
+        dataset_stats = ub.codeblock(
+            '''
+            - sensor: '*'
+              channels: r|g|b
+              mean: [87.572401, 87.572401, 87.572401]
+              std: [99.449996, 99.449996, 99.449996]
+            ''')
+        dpath = ub.Path.appdir('watch/tests/test_fusion_fit/demo_main_noop').delete().ensuredir()
+        config = {
+            'subcommand': 'fit',
+            'fit.model': 'watch.tasks.fusion.methods.noop_model.NoopModel',
+            'fit.trainer.default_root_dir': dpath,
+            'fit.data.train_dataset': 'special:vidshapes4-frames9-gsize32',
+            'fit.data.vali_dataset': 'special:vidshapes1-frames9-gsize32',
+            'fit.data.window_dims': 32,
+            'fit.data.dataset_stats': dataset_stats,
+            'fit.trainer.max_steps': 2,
+            'fit.trainer.num_sanity_val_steps': 0,
+        }
+        cli = main(config=config)
+
+
     Example:
         >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
         >>> from watch.tasks.fusion.fit_lightning import *  # NOQA
@@ -332,13 +382,13 @@ def main(config=None):
         >>>     'subcommand': 'fit',
         >>>     'fit.model': 'watch.tasks.fusion.methods.noop_model.NoopModel',
         >>>     'fit.trainer.default_root_dir': dpath,
-        >>>     'fit.data.train_dataset': 'special:vidshapes8-frames9-gsize64-speed0.5-multispectral',
-        >>>     'fit.data.vali_dataset': 'special:vidshapes4-frames9-gsize64-speed0.5-multispectral',
-        >>>     'fit.data.chip_dims': 64,
+        >>>     'fit.data.train_dataset': 'special:vidshapes4-frames9-gsize32',
+        >>>     'fit.data.vali_dataset': 'special:vidshapes1-frames9-gsize32',
+        >>>     'fit.data.chip_dims': 32,
         >>>     'fit.trainer.max_steps': 2,
         >>>     'fit.trainer.num_sanity_val_steps': 0,
         >>> }
-        >>> main(config=config)
+        >>> cli = main(config=config)
 
     Example:
         >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
@@ -378,6 +428,8 @@ if __name__ == "__main__":
 
         python -m watch.tasks.fusion.fit_lightning fit \
             --data.train_dataset=special:vidshapes8-frames9-speed0.5 \
+            --data.window_dims=64 \
+            --data.workers=4 \
             --trainer.accelerator=gpu \
             --trainer.strategy=ddp \
             --trainer.devices=0,1 \
@@ -386,8 +438,30 @@ if __name__ == "__main__":
             --optimizer.class_path=torch.optim.Adam \
             --trainer.default_root_dir ./demo_train
 
-            --trainer.precision=16  \
-            --trainer.fast_dev_run=5 \
+        python -m watch.tasks.fusion.fit_lightning fit --config="
+            data:
+                train_dataset: special:vidshapes8-frames9-speed0.5
+                window_dims: 64
+                workers: 4
+                batch_size: 4
+                normalize_inputs:
+                    input_stats:
+                        - sensor: '*'
+                          channels: r|g|b
+                          video: video1
+                          mean: [87.572401, 87.572401, 87.572401]
+                          std: [99.449996, 99.449996, 99.449996]
+            trainer:
+                accelerator: gpu
+                strategy: ddp
+                devices: 0,1
+            model:
+                class_path: HeterogeneousModel
+            optimizer:
+                class_path: torch.optim.Adam
+            trainer:
+                default_root_dir: ./demo_train
+        "
 
         # Note: setting fast_dev_run seems to disable directory output.
 

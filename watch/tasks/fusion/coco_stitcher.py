@@ -21,6 +21,8 @@ class CocoStitchingManager(object):
 
         short_code (str):
             short identifier used for directory names.
+            TODO: rename to prefix? OR or something more indicative that this
+            is a directory name?
 
         chan_code (str):
             If saving the stitched features, this is the channel code to use.
@@ -55,6 +57,10 @@ class CocoStitchingManager(object):
         writer_queue (None | BlockingJobQueue):
             if specified, uses this shared writer queue, otherwise creates
             its own.
+
+        write_prediction_attrs (bool):
+            set to True if you are adding predictions to the kwcoco file,
+            otherwise set to False to remove unnecessary attributes.
 
     TODO:
         - [ ] Handle the case where the input space is related to the output
@@ -136,7 +142,8 @@ class CocoStitchingManager(object):
                  stiching_space='video', device='numpy', thresh=0.5,
                  write_probs=True, write_preds=False, num_bands='auto',
                  prob_compress='DEFLATE', polygon_categories=None,
-                 expected_minmax=None, quantize=True, writer_queue=None):
+                 expected_minmax=None, quantize=True, writer_queue=None,
+                 write_prediction_attrs=True):
         from watch.utils import util_parallel
         self.short_code = short_code
         self.result_dataset = result_dataset
@@ -148,6 +155,7 @@ class CocoStitchingManager(object):
         self.polygon_categories = polygon_categories
         self.quantize = quantize
         self.expected_minmax = expected_minmax
+        self.write_prediction_attrs = write_prediction_attrs
 
         if writer_queue is None:
             # basic queue if nothing fancy is given
@@ -470,11 +478,6 @@ class CocoStitchingManager(object):
             warnings.filterwarnings('ignore', 'invalid value encountered in true_divide')
             final_probs = stitcher.finalize()
         final_probs = kwarray.atleast_nd(final_probs, 3)
-        # is_nodata = np.isnan(final_probs)
-        # final_probs = np.nan_to_num(final_probs)
-
-        final_weights = kwarray.atleast_nd(stitcher.weights, 3)
-        is_predicted_pixel = final_weights.any(axis=2).astype('uint8')
 
         # NOTE: could find and record the valid prediction regions.
         # Given a (rectilinear) non-convex multipolygon where we are guarenteed
@@ -483,12 +486,15 @@ class CocoStitchingManager(object):
         # rectangles?
         # https://stackoverflow.com/questions/5919298/algorithm-for-finding-the-fewest-rectangles-to-cover-a-set-of-rectangles-without/6634668#6634668
         # Or... just write out a polygon... KISS
-        _mask = kwimage.Mask(is_predicted_pixel, 'c_mask')
-        _poly = _mask.to_multi_polygon()
-        predicted_region = _poly.to_geojson()
         # Mark that we made a prediction on this image.
-        img['prediction_region'] = predicted_region
-        img['has_predictions'] = ub.dict_union(img.get('has_predictions', {}), {self.chan_code: True})
+        if self.write_prediction_attrs:
+            final_weights = kwarray.atleast_nd(stitcher.weights, 3)
+            is_predicted_pixel = final_weights.any(axis=2).astype('uint8')
+            _mask = kwimage.Mask(is_predicted_pixel, 'c_mask')
+            _poly = _mask.to_multi_polygon()
+            predicted_region = _poly.to_geojson()
+            img['prediction_region'] = predicted_region
+            img['has_predictions'] = ub.dict_union(img.get('has_predictions', {}), {self.chan_code: True})
 
         # Get spatial relationship between the stitch space and image space
         if self.stiching_space == 'video':
@@ -515,8 +521,6 @@ class CocoStitchingManager(object):
             new_fname = img.get('name', str(img['id'])) + f'_{self.suffix_code}.tif'  # FIXME
             new_fpath = self.prob_dpath / new_fname
 
-            # assert final_probs.shape[2] == (self.chan_code.count('|') + 1)
-
             aux = {
                 'file_name': relpath(new_fpath, bundle_dpath),
                 'channels': self.chan_code,
@@ -528,9 +532,9 @@ class CocoStitchingManager(object):
             auxiliary = img.setdefault('auxiliary', [])
             auxiliary.append(aux)
 
-            # Save the prediction to disk
             total_prob += np.nansum(final_probs)
 
+            # Save the prediction to disk
             write_kwargs = {}
             write_kwargs['blocksize'] = 128
             write_kwargs['compress'] = self.prob_compress

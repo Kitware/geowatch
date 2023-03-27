@@ -8,6 +8,9 @@ import ndsampler
 import ubelt as ub
 import warnings
 from watch.utils import util_kwimage
+from watch.monkey import monkey_albumentations
+
+monkey_albumentations.patch_albumentations_for_311()
 
 
 class GriddedDataset(torch.utils.data.Dataset):
@@ -19,7 +22,7 @@ class GriddedDataset(torch.utils.data.Dataset):
         >>> coco_dset = watch.coerce_kwcoco('watch-msi', dates=True, geodata=True)
         >>> keep_ids = [img.img['id'] for img in coco_dset.images().coco_images if 'B11' in img.channels]
         >>> coco_dset = coco_dset.subset(keep_ids)
-        >>> self = GriddedDataset(coco_dset, include_debug_info=True, bands=['B11'], patch_size=32, input_space_scale='3GSD')
+        >>> self = GriddedDataset(coco_dset, include_debug_info=True, sensor=None, bands=['B11'], patch_size=32, input_space_scale='3GSD')
         >>> item = self[0]
         >>> item_summary = self.summarize_item(item)
         >>> import rich
@@ -139,12 +142,18 @@ class GriddedDataset(torch.utils.data.Dataset):
         print('filter dataset')
         # Filter out worldview images (better to use subset than remove)
         images: kwcoco.coco_objects1d.Images = self.coco_dset.images()
-        flags = [s != 'WV' for s in images.lookup('sensor_coarse')]
-        valid_image_ids : list[int] = list(images.compress(flags))
-        self.coco_dset = self.coco_dset.subset(valid_image_ids)
+
+        if sensor is not None:
+            requested_sensors = set(sensor)
+            flags = [s in requested_sensors for s in images.lookup('sensor_coarse')]
+            valid_image_ids : list[int] = list(images.compress(flags))
+            self.coco_dset = self.coco_dset.subset(valid_image_ids)
 
         self.images : kwcoco.coco_objects1d.Images = self.coco_dset.images()
         self.sampler = ndsampler.CocoSampler(self.coco_dset)
+
+        if len(self.images) == 0:
+            raise ValueError('No images were provided')
 
         print('make grid')
         from watch.tasks.fusion.datamodules import spacetime_grid_builder
@@ -156,7 +165,7 @@ class GriddedDataset(torch.utils.data.Dataset):
             time_sampling='hardish3', time_span='1y',
             use_annot_info=False,
             keepbound=True,
-            exclude_sensors=['WV'],
+            # exclude_sensors=['WV'],
             use_centered_positives=False,
             # set_cover_algo='approx',
             set_cover_algo=None,
@@ -460,7 +469,7 @@ class GriddedDataset(torch.utils.data.Dataset):
             >>> coco_dset = coerce_kwcoco('watch-msi', dates=True, geodata=True)
             >>> keep_ids = [img.img['id'] for img in coco_dset.images().coco_images if 'B11' in img.channels]
             >>> coco_dset = coco_dset.subset(keep_ids)
-            >>> self = GriddedDataset(coco_dset, include_debug_info=True, bands=['B11'])
+            >>> self = GriddedDataset(coco_dset, include_debug_info=True, sensor=None, bands=['B11'])
             >>> item = self[0]
             >>> item_summary = self.summarize_item(item)
             >>> print('item_summary = {}'.format(ub.repr2(item_summary, nl=1)))

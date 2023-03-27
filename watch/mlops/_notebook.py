@@ -18,8 +18,8 @@ def _gather_namek_shortlist_results():
     expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
     cmdline = 0
     kwargs = {
-        # 'target': expt_dvc_dpath / '_namek_split1_eval_small',
-        'target': expt_dvc_dpath / '_namek_split2_eval_small',
+        'target': expt_dvc_dpath / '_namek_split1_eval_small',
+        # 'target': expt_dvc_dpath / '_namek_split2_eval_small',
         'pipeline': 'bas',
         'io_workers': 20,
     }
@@ -27,7 +27,66 @@ def _gather_namek_shortlist_results():
     eval_type_to_aggregator = coerce_aggregators(config)
     agg = eval_type_to_aggregator['bas_pxl_eval']
 
-    _ = agg.report_best(100)
+    region_id_to_summary, top_param_lut = agg.report_best(1000, verbose=0)
+
+    tocombine_indexes = []
+    for region, summary in region_id_to_summary.items():
+        tocombine_indexes.append(list(summary.index))
+    import itertools as it
+    top_indexes = list(ub.oset([x for x in ub.flatten(
+        it.zip_longest(*tocombine_indexes)) if x is not None]))
+
+    table = agg.table.copy()
+    table.loc[top_indexes, 'rank'] = list(range(len(top_indexes)))
+    table = table.sort_values('rank')
+
+    chosen_indexes = []
+    for expt, group in table.groupby('resolved_params.bas_pxl_fit.name'):
+        group['params.bas_pxl.package_fpath'].tolist()
+        group = group.sort_values('rank')
+        chosen_indexes.extend(group.index[0:2])
+    chosen_indexes = table.loc[chosen_indexes, 'rank'].sort_values().index
+
+    all_models_fpath = ub.Path('$HOME/code/watch/dev/reports/split1_all_models.yaml').expand()
+    from watch.utils.util_yaml import Yaml
+    known_models = Yaml.coerce(all_models_fpath)
+
+    top_k = 40
+    chosen_indexes = chosen_indexes[:top_k]
+
+    chosen_table = table.loc[chosen_indexes]
+
+    # Need to remove invariants for now
+    flags = ~np.array(['invariants' in chan for chan in chosen_table['resolved_params.bas_pxl_fit.channels']])
+    chosen_table = chosen_table[flags]
+
+    chosen_models = chosen_table['params.bas_pxl.package_fpath'].tolist()
+    set(known_models).issuperset(set(chosen_models))
+
+    new_models_fpath = ub.Path('$HOME/code/watch/dev/reports/split1_models_filter1.yaml').expand()
+    new_models_fpath.write_text(Yaml.dumps(chosen_models))
+
+
+    subagg = agg.filterto(index=chosen_indexes)
+    subagg.table['resolved_params.bas_pxl_fit.name']
+
+    # top_table = agg.table.loc[top_indexes]
+
+    # top_models = top_table['resolved_params.bas_pxl_fit.name'].unique()
+
+    # from watch.utils.util_pandas import DotDictDataFrame
+    # resolved = DotDictDataFrame(agg.resolved_params)
+    # fit_params = resolved.subframe('resolved_params.bas_pxl_fit')
+    # top_fit_params = fit_params.loc[top_indexes]
+
+    num_top_models = len(top_models)
+    num_total_models = len(agg.params['params.bas_pxl.package_fpath'].unique())
+    print(f'num_top_models={num_top_models} / {num_total_models}')
+
+    is_highres = [float(a.split('G')[0]) < 8 for a in agg.table['resolved_params.bas_pxl_fit.window_space_scale']]
+    has_wv = ['WV' in a for a in agg.table['resolved_params.bas_pxl_fit.channels']]
+    flags = (np.array(has_wv) & np.array(is_highres))
+    subagg = agg.compress(flags)
 
 
 def _namek_check_pipeline_status():
@@ -359,7 +418,7 @@ def resource_usage_report(agg):
         co2_key = f'resources.{k}.co2_kg'
         if co2_key in v:
             ...
-        v[].max().sum()
+        # v[].max().sum()
 
     pxl_time = poly_agg.table.groupby('context.bas_pxl.uuid')['resources.bas_pxl.duration'].max().apply(util_time.coerce_timedelta).sum()
     poly_time = poly_agg.table.groupby('context.bas_poly.uuid')['resources.bas_poly.duration'].max().apply(util_time.coerce_timedelta).sum()
@@ -494,7 +553,7 @@ def _namek_eval():
         co2_key = f'resources.{k}.co2_kg'
         if co2_key in v:
             ...
-        v[].max().sum()
+        # v[].max().sum()
 
     pxl_time = poly_agg.table.groupby('context.bas_pxl.uuid')['resources.bas_pxl.duration'].max().apply(util_time.coerce_timedelta).sum()
     poly_time = poly_agg.table.groupby('context.bas_poly.uuid')['resources.bas_poly.duration'].max().apply(util_time.coerce_timedelta).sum()

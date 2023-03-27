@@ -41,7 +41,7 @@ class CocoCropTrackConfig(scfg.Config):
         * Orthorectify (or warp) the selected spatial region and its
           annotations to a cannonical space.
     """
-    default = {
+    __default__ = {
         'src': scfg.Value('in.geojson.json', help='input dataset to chip'),
 
         'dst': scfg.Value(None, help='bundle directory or kwcoco json file for the output'),

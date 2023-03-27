@@ -11,7 +11,7 @@ import scriptconfig as scfg
 
 
 class FilterBySensorConfig(scfg.Config):
-    default = {
+    __default__ = {
         'src': scfg.Value('in.geojson.json', help='input dataset to chip'),
 
         'dst': scfg.Value(None, help='bundle directory for the output'),

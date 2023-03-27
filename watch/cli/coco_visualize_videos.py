@@ -27,11 +27,7 @@ CommandLine:
 
     python -m watch.cli.coco_visualize_videos --src=$KWCOCO_FPATH --viz_dpath=$VIZ_DPATH --zoom_to_tracks=True --start_frame=1 --num_frames=5 --animate=True
 """
-import kwcoco
-import kwarray
-import kwimage
 import scriptconfig as scfg
-import numpy as np
 import ubelt as ub
 
 try:
@@ -71,7 +67,7 @@ class CocoVisualizeConfig(scfg.Config):
         smartwatch visualize "$KWCOCO_FPATH" --workers=avail --animate=True --channels="salient,red|green|blue"
     '''
 
-    default = {
+    __default__ = {
         'src': scfg.Value('data.kwcoco.json', help='input dataset', position=1),
 
         'viz_dpath': scfg.Value(None, help=ub.paragraph(
@@ -234,6 +230,9 @@ def main(cmdline=True, **kwargs):
     from watch.utils import util_parallel
     from watch.utils import util_resources
     from watch.utils import kwcoco_extensions
+    import kwcoco
+    import kwarray
+    import numpy as np
     config = CocoVisualizeConfig(data=kwargs, cmdline=cmdline and {'strict': True})
     space = config['space']
     channels = config['channels']
@@ -279,6 +278,7 @@ def main(cmdline=True, **kwargs):
             FusedChannelSpec.coerce('red|green|blue'),
             FusedChannelSpec.coerce('No Activity|Site Preparation|Active Construction|Post Construction'),
             FusedChannelSpec.coerce('salient'),
+            FusedChannelSpec.coerce('pan'),
         ]
         from collections import defaultdict, Counter
         channel_stats = kwcoco_extensions.coco_channel_stats(coco_dset)
@@ -594,6 +594,7 @@ class SkipChanGroup(Exception):
 
 
 def video_track_info(coco_dset, vidid):
+    import kwimage
     vid_annots = coco_dset.images(vidid=vidid).annots
     track_ids = set(ub.flatten(vid_annots.lookup('track_id')))
     tid_to_info = {}
@@ -622,7 +623,7 @@ def video_track_info(coco_dset, vidid):
     return tid_to_info
 
 
-_CLI = CocoVisualizeConfig
+__config__ = CocoVisualizeConfig
 
 
 def select_fixed_normalization(fixed_normalization_scheme, sensor_coarse):
@@ -687,6 +688,7 @@ def _resolve_channel_groups(coco_img, channels, verbose, request_grouped_bands,
     Resolve which channel groups should be requested.
     """
     from kwcoco import channel_spec
+    import kwcoco
     if channels is not None:
         if isinstance(channels, list):
             channels = ','.join(channels)  # hack
@@ -853,7 +855,7 @@ def __default_kwcoco_build_image_header_text(**kwargs):
     return header_lines
 
 
-def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
+def _write_ann_visualizations2(coco_dset,
                                img : dict,
                                anns : list,
                                sub_dpath : str,
@@ -897,6 +899,8 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
     # Ensure names are differentiated between frames.
     import math
+    import kwimage
+    import numpy as np
     if local_max_frame is None:
         num_digits = 8
     else:
@@ -1167,6 +1171,10 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
                     draw_labels, role_to_dets, valid_video_poly, stack,
                     draw_header, stack_idx, request_roles):
     from watch.utils import util_kwimage
+    import kwimage
+    import kwarray
+    import kwcoco
+    import numpy as np
     chan_pname = chan_row['pname']
     chan_group_obj = chan_row['chan']
     chan_list = chan_group_obj.parsed

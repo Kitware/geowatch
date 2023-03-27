@@ -42,6 +42,7 @@ class KWCocoVideoDataModuleConfig(scfg.Config):
         'test_dataset': scfg.Value(None, help='path to the test kwcoco file'),
 
         'batch_size': scfg.Value(4, type=int),
+
         'normalize_inputs': scfg.Value(True, help=ub.paragraph(
             '''
             if True, computes the mean/std for this dataset on each mode
@@ -50,9 +51,8 @@ class KWCocoVideoDataModuleConfig(scfg.Config):
 
         'num_workers': scfg.Value(4, type=str, help=ub.paragraph(
             '''
-            number of background workers. Can be auto or an avail
-            expression. TODO: rename to data_workers?
-            ''')),
+            number of background workers. Can be auto or an avail expression.
+            '''), alias=['workers']),
 
         'torch_sharing_strategy': scfg.Value('default', help=ub.paragraph(
             '''
@@ -81,11 +81,11 @@ class KWCocoVideoDataModuleConfig(scfg.Config):
             faster responce times and lower memory footprint.
             ''')),
         # Mixin the dataset config
-    }) | KWCocoVideoDatasetConfig.default
+    }) | KWCocoVideoDatasetConfig.__default__
 
-    def normalize(self):
+    def __post_init__(self):
         # hack because we dont have proper inheritence
-        KWCocoVideoDatasetConfig.normalize(self)
+        KWCocoVideoDatasetConfig.__post_init__(self)
 
 
 class KWCocoVideoDataModule(pl.LightningDataModule):
@@ -357,6 +357,10 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 'num_workers': self.num_workers,
                 'batch_size': self.batch_size,
             }
+            if isinstance(self.prenormalize_inputs, list):
+                # The user specified normalization info
+                ...
+
             if self.normalize_inputs:
                 if isinstance(self.normalize_inputs, str):
                     if self.normalize_inputs == 'transfer':
