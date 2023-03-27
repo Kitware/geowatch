@@ -1,7 +1,7 @@
 WATCH - Wide Area Terrestrial Change Hypercube
 ==============================================
 
-.. The large version wont work because github strips rst image rescaling. 
+.. The large version wont work because github strips rst image rescaling.
 .. image:: https://ipfs.io/ipfs/QmYftzG6enTebF2f143KeHiPiJGs66LJf3jT1fNYAiqQvq
    :height: 100px
    :align: left
@@ -9,7 +9,7 @@ WATCH - Wide Area Terrestrial Change Hypercube
 |main-pipeline| |main-coverage|
 
 
-This repository addresses the algorithmic challenges of the 
+This repository addresses the algorithmic challenges of the
 `IARPA SMART <https://www.iarpa.gov/research-programs/smart>`_ (Space-based
 Machine Automated Recognition Technique) program.  The goal of this software is
 analyze space-based imagery to perform broad-area search for natural and
@@ -49,7 +49,7 @@ Then run:
 
    cd $HOME/code/watch
    bash ./run_developer_setup.sh
- 
+
 
 Test everything is working by running
 
@@ -63,18 +63,18 @@ For more details see the `installing watch for development guide <docs/installin
 Development
 -----------
 
-For new collaberators, please refer to the `onboarding docs <docs/onboarding.rst>`_ 
+For new collaberators, please refer to the `onboarding docs <docs/onboarding.rst>`_
 
-For internal collaberators, please refer to the `internal docs <docs/internal_resources.rst>`_ 
+For internal collaberators, please refer to the `internal docs <docs/internal_resources.rst>`_
 
 
 The Watch CLI
 -------------
 
-The watch module comes with a set of command line tools. 
+The watch module comes with a set of command line tools.
 Using ``python -m watch --help`` or ``smartwatch --help`` shows the top level modal CLI:
 
-.. code:: 
+.. code::
     usage: smartwatch [-h] [--version]
                       {add_fields,coco_add_watch_fields,align,coco_align_geotiffs,stats,watch_coco_stats,reproject,project,reproject_annotations,visualize,coco_visualize_videos,spectra,intensity_histograms,coco_spectra,dvcdir,find_dvc,kwcoco_to_geojson,iarpa_eval,model_stats,model_info,torch_model_stats,clean_geotiffs,coco_clean_geotiffs,animate,gifify}
                       ...
@@ -129,11 +129,11 @@ As a researcher / developer / user the most important commands for you to know a
 
 * ``smartwatch geotiffs_to_kwcoco`` - Create a kwcoco file from a set of on-disk geotiffs.
 
-* ``smartwatch_dvc`` - Helper to register / retreive your DVC paths so scripts can be written agnostic to filesystem layouts. See `docs <~/code/watch/docs/using_smartwatch_dvc.rst>`_ for more details.
+* ``smartwatch_dvc`` - Helper to register / retreive your DVC paths so scripts can be written agnostic to filesystem layouts. See `docs <docs/using_smartwatch_dvc.rst>`_ for more details.
 
 
 For more details about the WATCH CLI and other CLI tools included in this package see:
-`the WATCH CLI docs <docs/watch_cli.rst>`_ 
+`the WATCH CLI docs <docs/watch_cli.rst>`_
 
 
 Documentation
@@ -151,15 +151,15 @@ For quick reference, a list of current documentation files is:
 
   + `Contribution Instructions <docs/contribution_instructions.rst>`_
 
-  + `Rebasing Procedure <docs/rebasing_procedure.md>`_
+  + `Rebasing Procedure <docs/rebasing_procedure.rst>`_
 
-  + `Testing Practices <docs/testing_practices.md>`_
+  + `Testing Practices <docs/testing_practices.rst>`_
 
   + `Supporting Projects <docs/supporting_projects.rst>`_
 
   + `Coding Conventions <docs/coding_conventions.rst>`_
 
-* Installing: 
+* Installing:
 
   + `Installing WATCH <docs/installing_watch.rst>`_
 
@@ -181,9 +181,13 @@ For quick reference, a list of current documentation files is:
 
 * Tutorials:
 
-  + Tutorial 1: `Toy RGB Fusion Model Example <../watch/tasks/fusion/experiments/crall/toy_experiments_rgb.sh>`_ 
+  + Tutorial 1: `Toy RGB Fusion Model Example <tutorial/toy_experiments_rgb.sh>`_
 
-  + Tutorial 2: `Toy MSI Fusion Model Example <../watch/tasks/fusion/experiments/crall/toy_experiments_msi.sh>`_ 
+  + Tutorial 2: `Toy MSI Fusion Model Example <tutorial/toy_experiments_msi.sh>`_
+
+  + Tutorial 3: `Feature Fusion Tutorial <tutorial/feature_fusion_tutorial.sh>`_
+
+  + Tutorial 4: `Misc Training Tutorial <tutorial/toy_experiments_msi_v2.sh>`_
 
 
 Acknowledgement

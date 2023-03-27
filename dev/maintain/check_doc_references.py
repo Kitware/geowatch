@@ -14,9 +14,13 @@ def main(cmdline=1, **kwargs):
     """
     Example:
         >>> # xdoctest: +SKIP
+        >>> import sys, ubelt
+        >>> sys.path.append(ubelt.expandpath('~/code/watch/dev/maintain'))
+        >>> from check_doc_references import *  # NOQA
+        >>> import watch
+        >>> repo_dpath = ub.Path(watch.__file__).parent.parent
         >>> cmdline = 0
-        >>> kwargs = dict(
-        >>> )
+        >>> kwargs = dict(repo_dpath=repo_dpath)
         >>> main(cmdline=cmdline, **kwargs)
     """
     config = MyNewConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
@@ -37,8 +41,7 @@ def main(cmdline=1, **kwargs):
     pattern = '(?<!`)`(?P<text>[^<>`]*?)<(?P<link>[^<>`]*?)>`(?!`)'
     pat = re.compile(pattern)
 
-    all_links = []
-    rel_doc_fpaths = []
+    doc_paths = []
     repo_dpath = repo_dpath.absolute()
     doc_dpath = repo_dpath / 'docs'
     for r, ds, fs in doc_dpath.walk():
@@ -47,12 +50,16 @@ def main(cmdline=1, **kwargs):
             fpath = r / f
             if fpath.suffix == '.rst':
                 rel_fpath = rel_root / f
-                rel_doc_fpaths.append(rel_fpath)
-                text = fpath.read_text()
-                for match in pat.finditer(text):
-                    group = dict(match.groupdict())
-                    group['fpath'] = fpath
-                    all_links.append(group)
+                doc_paths.append((fpath, rel_fpath))
+    doc_paths.append((repo_dpath / 'README.rst', 'README.rst'))
+
+    all_links = []
+    for fpath, rel_fpath in doc_paths:
+        text = fpath.read_text()
+        for match in pat.finditer(text):
+            group = dict(match.groupdict())
+            group['fpath'] = fpath
+            all_links.append(group)
 
     for group in all_links:
         if group['link'].startswith('https'):
