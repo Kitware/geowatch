@@ -39,10 +39,10 @@ recommend the following directory structure:
 
 
 For details on installing the watch system in development mode see
-`installing watch for development guide <../docs/installing_watch.rst>`_.
+`installing watch for development guide <installing_watch.rst>`_.
 
 For more detailed instructions on setting up the DVC repos see:
-`accessing dvc repos <../docs/access_dvc_repos.rst>`_.
+`accessing dvc repos <access_dvc_repos.rst>`_.
 
 
 This onboarding document is a work in progress. While things are are still
