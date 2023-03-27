@@ -355,7 +355,7 @@ def hack_track_categories(track_catnames, task):
     # Might want to make a real parser for this mini-language, or find an
     # existing mini-language that works
 
-    main_classes = {'No Activity', 'Site Preparation', 'Post Construction', 'Post Construction'}
+    main_classes = {'No Activity', 'Site Preparation', 'Active Construction', 'Post Construction'}
 
     # This is some of the uggliest code I've ever written
     new_catnames = []
