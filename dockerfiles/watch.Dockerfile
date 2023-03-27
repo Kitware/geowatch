@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.3.0-labs
+# syntax=docker/dockerfile:1.5.0
 
 # This dockerfile uses new-ish buildkit syntax. 
 # Details on how to run are on the bottom of the file.
@@ -46,7 +46,9 @@ ARG BUILD_STRICT=0
 #SHELL ["/bin/bash", "--login", "-c"]
 
 # Setup primary dependencies
-RUN <<EOF
+# Note: special syntax for caching deps
+# https://pythonspeed.com/articles/docker-cache-pip-downloads/
+RUN --mount=type=cache,target=/root/.cache <<EOF
 #!/bin/bash
 #source $HOME/activate
 
@@ -83,7 +85,7 @@ EOF
 
 
 # Finalize more fickle dependencies
-RUN <<EOF
+RUN --mount=type=cache,target=/root/.cache <<EOF
 #!/bin/bash
 #source $HOME/activate
 
@@ -91,7 +93,8 @@ cd /root/code/watch
 if [ "$BUILD_STRICT" -eq 1 ]; then
     echo "FINALIZE STRICT VARIANT DEPS"
     sed 's/>=/==/g' requirements/gdal.txt > requirements/gdal-strict.txt
-    pip install -r requiremGe
+    pip install -r requirements/gdal-strict.txt
+else
     echo "FINALIZE LOOSE VARIANT DEPS"
     pip install -r requirements/gdal.txt
 fi
@@ -104,7 +107,7 @@ COPY .git          /root/code/watch/.git
 
 
 # Install other useful tools
-RUN <<EOF
+RUN --mount=type=cache,target=/root/.cache <<EOF
 #!/bin/bash
 #source $HOME/activate
 
