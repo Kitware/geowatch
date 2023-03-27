@@ -608,10 +608,10 @@ python -m watch.mlops.schedule_evaluation \
               bax_pxl.package_fpath:
                 - $DVC_EXPT_DPATH/models/fusion/Drop6/packages/Drop6_BAS_2022_12_10GSD_BGRN_V12/Drop6_BAS_2022_12_10GSD_BGRN_V12_v0_epoch159_step163840.pt
                 - $DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_BAS_2022_12_15GSD_BGRN_V10/Drop4_BAS_2022_12_15GSD_BGRN_V10_v0_epoch1_step8247.pt
-              bas_pxl.time_kernel: 
+              bas_pxl.time_kernel:
                   - '-1y,-3m,-1w,0,1w,3m,1y'
                   - '-6m,-3m,-1w,0,1w,3m,6m'
-              bas_pxl.time_sampling: 
+              bas_pxl.time_sampling:
                   - auto
                   - soft4
                   - soft5
@@ -620,9 +620,9 @@ python -m watch.mlops.schedule_evaluation \
               bax_pxl.package_fpath:
                 - $DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
                 - $DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_BAS_15GSD_BGRNSH_invar_V8/Drop4_BAS_15GSD_BGRNSH_invar_V8_epoch=16-step=8704.pt
-              bas_pxl.time_kernel: 
+              bas_pxl.time_kernel:
                   - '-1y,-3m,0,3m,1y'
-              bas_pxl.time_sampling: 
+              bas_pxl.time_sampling:
                   - auto
                   - soft4
                   - soft5
@@ -632,7 +632,7 @@ python -m watch.mlops.schedule_evaluation \
             - bas_pxl.window_space_scale: 10GSD
               bas_pxl.input_space_scale: 10GSD
               bas_pxl.output_space_scale: 10GSD
-        
+
     " \
     --root_dpath="$DVC_EXPT_DPATH/_timekernel_test_drop4" \
     --devices="0,1" --queue_size=4 \
@@ -1050,6 +1050,6 @@ python -m watch.mlops.aggregate \
         per_group: 1
         macro_analysis: 0
         analyze: 0
-    " \
-    --plot_params=True \
-    --output_dpath="$DVC_EXPT_DPATH"/_split6_toothbrush_meanyear/_aggregate
+    "
+    #--plot_params=True \
+    #--output_dpath="$DVC_EXPT_DPATH"/_split6_toothbrush_meanyear/_aggregate

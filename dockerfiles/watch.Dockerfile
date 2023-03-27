@@ -2,7 +2,11 @@
 
 # This dockerfile uses new-ish buildkit syntax. 
 # Details on how to run are on the bottom of the file.
-FROM pyenv:310
+
+
+ARG BASE_IMAGE=pyenv:311
+
+FROM $BASE_IMAGE
 
 ENV HOME=/root
 
@@ -27,21 +31,20 @@ EOF
 
 
 # Stage the watch source
-COPY setup.py /watch/
+COPY setup.py       /watch/
 COPY pyproject.toml /watch/
-COPY requirements /watch/requirements
-COPY watch /watch/watch
+COPY requirements   /watch/requirements
+COPY watch          /watch/watch
 
-SHELL ["/bin/bash", "--login", "-c"]
-
-RUN echo $(pwd)
+#SHELL ["/bin/bash", "--login", "-c"]
+#RUN echo $(pwd)
 
 ARG BUILD_STRICT=0
 
 # Setup primary dependencies
 RUN <<EOF
 #!/bin/bash
-source $HOME/activate
+#source $HOME/activate
 
 # Always use the latest Python build tools
 python -m pip install pip setuptools wheel build -U
@@ -62,7 +65,7 @@ EOF
 # Finalize more fickle dependencies
 RUN <<EOF
 #!/bin/bash
-source $HOME/activate
+#source $HOME/activate
 
 cd /watch
 if [ "$BUILD_STRICT" -eq 1 ]; then
@@ -77,10 +80,14 @@ fi
 EOF
 
 
+#### Copy over the rest of the repo structure
+COPY .git          /watch/.git
+
+
 # Install other useful tools
 RUN <<EOF
 #!/bin/bash
-source $HOME/activate
+#source $HOME/activate
 
 # python -m pip install dvc[all]>=2.13.0
 # pip install scikit-image>=0.18.1
@@ -92,7 +99,7 @@ EOF
 # Run simple tests
 RUN <<EOF
 #!/bin/bash
-source $HOME/activate
+#source $HOME/activate
 
 echo "Start simple tests"
 EAGER_IMPORT=1 python -c "import watch; print(watch.__version__)"
@@ -111,13 +118,33 @@ echo "
 
 cd $HOME/code/watch
 
-# Either build the pyenv image or
-docker pull gitlab.kitware.com:4567/smart/watch/pyenv:310
-docker tag gitlab.kitware.com:4567/smart/watch/pyenv:310 pyenv:310 
+mkdir -p $HOME/tmp/watch-img-staging
+git clone --origin=host-$HOSTNAME $HOME/code/watch/.git $HOME/tmp/watch-img-staging/watch
+cd $HOME/tmp/watch-img-staging/watch
+git remote add origin git@gitlab.kitware.com:smart/watch.git
 
+# Either build the pyenv image or
+#docker pull gitlab.kitware.com:4567/smart/watch/pyenv:311
+#docker tag gitlab.kitware.com:4567/smart/watch/pyenv:311 pyenv:311 
+
+
+#### 3.10
+
+cd $HOME/tmp/watch-img-staging/watch
 DOCKER_BUILDKIT=1 docker build --progress=plain \
-    -t "watch:310" \
-    --build-arg PYTHON_VERSION=3.10.5 \
+    -t "watch:310-strict" \
+    --build-arg BASE_IMAGE=pyenv:310 \
+    --build-arg BUILD_STRICT=1 \
+    -f ./dockerfiles/watch.Dockerfile .
+
+#### 3.11
+
+cd $HOME/tmp/watch-img-staging/watch
+DOCKER_BUILDKIT=1 docker build --progress=plain \
+    -t "watch:311-strict" \
+    --build-arg BUILD_STRICT=1 \
+    --build-arg BASE_IMAGE=pyenv:311 \
+    --build-arg PYTHON_VERSION=3.11.2 \
     -f ./dockerfiles/watch.Dockerfile .
 
 docker run --runtime=nvidia -it watch:310 bash
