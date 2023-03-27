@@ -161,7 +161,9 @@ DOCKER_BUILDKIT=1 docker build --progress=plain \
     --build-arg BUILD_STRICT=1 \
     -f ./dockerfiles/watch.Dockerfile .
 
-docker run --runtime=nvidia -it watch:310-strict bash
+docker run \
+    --volume "$HOME/code/watch":/host-watch:ro \
+    --runtime=nvidia -it watch:310-strict bash
 
 #### 3.11
 
@@ -173,7 +175,12 @@ DOCKER_BUILDKIT=1 docker build --progress=plain \
     --build-arg PYTHON_VERSION=3.11.2 \
     -f ./dockerfiles/watch.Dockerfile .
 
-docker run --runtime=nvidia -it watch:311-loose bash
+docker run \
+    --volume "$HOME/code/watch":/host-watch:ro \
+    --runtime=nvidia -it watch:311-loose bash
+
+
+git remote add dockerhost /host-watch/.git
 
 "
 EOF

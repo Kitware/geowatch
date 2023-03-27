@@ -52,6 +52,6 @@ def main():
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/dev/repo_structure_for_readme.py
+        python ~/code/watch/dev/maintain/repo_structure_for_readme.py
     """
     main()

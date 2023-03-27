@@ -5,7 +5,6 @@ The SMART WATCH module comes with a command line interface (CLI). This can be in
 via ``python -m watch --help`` (note: if the module has been pip installed
 ``python -m watch`` can be replaced with ``smartwatch`` for primary CLI commands).
 
-More information can be found in the `watch cli docs <docs/watch_cli.rst>`_.
 
 In these examples we use the ``smartwatch`` invocation to be concise, but you
 can simply replace them with ``python -m smartwatch`` if your shell does not
@@ -18,7 +17,7 @@ The following is a list of the primary CLI commands:
 
 * ``smartwatch stats --help`` - Print statistics about a kwcoco file with a focus on sensor / channel frequency and region information.
 
-* ``smartwatch coco_intensity_histograms --help`` - Show per-band / per-sensor histograms of pixel intensities. This is useful for acessing the harmonization between sensors. 
+* ``smartwatch coco_intensity_histograms --help`` - Show per-band / per-sensor histograms of pixel intensities. This is useful for acessing the harmonization between sensors.
 
 * ``smartwatch coco_visualize_videos --help`` - Visualize a video sequence with and without annotations. This can also create an animation of arbitrary feature channels.
 
@@ -32,7 +31,7 @@ The following is a list of the primary CLI commands:
 Using ``--help`` shows the top level modal CLI:
 
 
-.. code:: 
+.. code::
 
         usage: smartwatch [-h] [--version] {command}
                           ...
@@ -70,13 +69,13 @@ Using ``--help`` shows the top level modal CLI:
         optional arguments:
           -h, --help            show this help message and exit
           --version             show version number and exit (default: False)
-   
+
 
 
 Other important commands that are not exposed via the main CLI are:
 
 * ``python -m watch.tasks.fusion.fit --help`` - Train a TA2 fusion model.
-  
+
 * ``python -m watch.tasks.fusion.predict --help`` - Predict using a pretrained TA2 fusion model on a target dataset.
 
 * ``python -m watch.tasks.fusion.evaluate --help`` - Measure pixel-level quality metrics between a prediction and truth kwcoco file.
@@ -94,8 +93,8 @@ Scripts that don’t quite belong in the WATCH Python module itself
 (e.g. due to a lack of general purpose use, or lack of polish) can be
 added to the ``scripts`` or ``dev`` directory. Generally, the ``scripts``
 directory is for data processing and ``dev`` is for scripts related to
-repository maintenence. 
-  
+repository maintenence.
+
 
 
 Summary of WATCH Scripts
@@ -112,7 +111,7 @@ watch_coco_stats - Very useful. Stats about bands / videos in a kwcoco file.
 
 coco_visualize_videos - Very useful. Renders bands and annotations to images or animated gifs. Lots of options. Should be ported to kwcoco proper eventaully.
 
-torch_model_stats - Very useful. Human readable metadata report for a trained torch package. (i.e. what bands / sensors / datasets was it trained on). 
+torch_model_stats - Very useful. Human readable metadata report for a trained torch package. (i.e. what bands / sensors / datasets was it trained on).
 
 coco_intensity_histograms - Reasonably useful. Makes histograms to visualize and compare channel intensity across sensors / videos.
 
@@ -218,7 +217,7 @@ To see full help use `smartwatch_dvc --help`
 
 .. code:: bash
 
-    usage: FindDVCConfig 
+    usage: FindDVCConfig
 
     Command line helper to find the path to the watch DVC repo
 
