@@ -1294,7 +1294,7 @@ KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_rawbands_split6.kwcoco.zip
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_rawbands_split6.kwcoco.zip
 CHANNELS="(L8,S2,PD):(blue|green|red|nir),(WV):(blue|green|red),(WV,WV1):pan"
-EXPERIMENT_NAME=Drop6_TCombo1Year_BAS_10GSD_split6_V42
+EXPERIMENT_NAME=Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont4
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
@@ -1361,7 +1361,7 @@ lr_scheduler:
     anneal_strategy: cos
     pct_start: 0.05
 trainer:
-    accumulate_grad_batches: 8
+    accumulate_grad_batches: 16
     default_root_dir     : $DEFAULT_ROOT_DIR
     accelerator          : gpu 
     devices              : 0,
@@ -1378,6 +1378,8 @@ torch_globals:
 initializer:
     init: $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2_epoch3_step941.pt
 "
+
+
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
 smartwatch model_stats "$DVC_EXPT_DPATH"/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2_epoch3_step941.pt
 rsync -avprPR yardrat:data/dvc-repos/smart_expt_dvc/./training/yardrat/jon.crall/Drop6-MeanYear10GSD/runs/Drop6_TCombo1Year_BAS_10GSD_split6_V42 "$DVC_EXPT_DPATH"

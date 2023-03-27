@@ -224,7 +224,7 @@ if __name__ == '__main__':
             --with_cold=0 \
             --do_splits=0 \
             --skip_existing=1 \
-            --gres=0,1 --workers=4 --backend=tmux --run=1
+            --gres=0,1 --workers=4 --backend=serial --run=1
 
         DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
         python -m watch.cli.prepare_splits \

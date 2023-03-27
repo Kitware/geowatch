@@ -1221,7 +1221,7 @@ def main(args=None, **kwargs):
     out_kwcoco = args.out_kwcoco
 
     if out_kwcoco is not None:
-        coco_dset = coco_dset.reroot(absolute=True)
+        coco_dset = coco_dset.reroot(absolute=True, check=False)
         # Add tracking audit data to the kwcoco file
         coco_info = coco_dset.dataset.get('info', [])
         coco_info.append(proc_context.obj)

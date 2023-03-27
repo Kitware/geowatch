@@ -8,10 +8,13 @@ Prerequisites
 
 This assumes you have aws setup.
 
+* `get started with aws <getting_started_aws.rst>`
+
 Install Kubernetes CLI
 ----------------------
 
-This script will install the latest version of kubectl.
+We summarize the `official kubectl install instructions <https://kubernetes.io/docs/tasks/tools/#kubectl>`_ here.
+The following is a script that will install the latest version of kubectl.
 
 .. code:: bash
 
@@ -28,7 +31,17 @@ This script will install the latest version of kubectl.
     cp ./kubectl "$PREFIX"/bin/kubectl
     # ensure $PREFIX/bin is in the PATH
 
+
+Test that the install worked:
+
+.. code:: bash
+
     # Ensure that this works.
     kubectl version --client --output=yaml
 
-Or follow the `official kubectl install instructions <https://kubernetes.io/docs/tasks/tools/#kubectl>`_.
+
+
+Next Steps
+----------
+
+* `get started with smartflow <getting_started_smartflow.rst>`

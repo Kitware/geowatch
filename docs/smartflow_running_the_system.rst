@@ -1,9 +1,11 @@
 Prerequisites
 -------------
 
-* `AWS and KubeCTL <getting_started_aws.rst>`
+* `AWS <getting_started_aws.rst>`
 
-* `Smartflow Setup <smartflow_setup.rst>`
+* `Kubectl <getting_started_kubectl.rst>`
+
+* `Smartflow Setup <getting_started_smartflow.rst>`
 
 
 NOTE: this file is currently a working notes document.
@@ -26,6 +28,7 @@ High level:
     * push container into T&E gitlab
 
     * tweak dags to point to new container
+
 
 
 How to Bake a Model into a Dockerfile
@@ -62,9 +65,9 @@ Choose a DAG file in ~/code/watch-smartflow-dags/ then edit it to give it a uniq
 .e.g. ~/code/watch-smartflow-dags/KIT_TA2_20221121_BATCH.py
 
 
-* change name of file and then change ``EVALUATION`` to be a unique string to name it what you want. 
+* change name of file and then change ``EVALUATION`` to be a unique string to name it what you want.
 
-* change the image names / tags e.g. 
+* change the image names / tags e.g.
     image="registry.smartgitlab.com/kitware/watch/ta2:Ph2Nov21EvalBatch", these are all "pod tasks" create_pod_task
 
 * ``purpose`` is something about the node that it runs on.
@@ -72,7 +75,7 @@ Choose a DAG file in ~/code/watch-smartflow-dags/ then edit it to give it a uniq
 
 * make cpu limit a bit less than what is availble on the pod.
 
-* Copy the DAG to smartflow S3: 
+* Copy the DAG to smartflow S3:
     aws s3 --profile iarpa cp Kit_DatasetGeneration.py s3://smartflow-023300502152-us-west-2/smartflow/env/kitware-prod-v2/dags/Kit_DatasetGeneration.py
 
 
@@ -85,4 +88,4 @@ Need to run service to access airflow gui:
 navigate to localhost:2746/home
 
 
-Now dags show up in the GUI. 
+Now dags show up in the GUI.
