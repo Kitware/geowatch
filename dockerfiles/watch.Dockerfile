@@ -30,31 +30,49 @@ EOF
 #EOF
 
 
-# Stage the watch source
-COPY setup.py       /watch/
-COPY pyproject.toml /watch/
-COPY requirements   /watch/requirements
-COPY watch          /watch/watch
+WORKDIR /root
+RUN mkdir -p /root/code
 
-#SHELL ["/bin/bash", "--login", "-c"]
+# Stage the watch source
+COPY setup.py       /root/code/watch/
+COPY pyproject.toml /root/code/watch/
+COPY requirements   /root/code/watch/requirements
+COPY watch          /root/code/watch/watch
+
 #RUN echo $(pwd)
 
 ARG BUILD_STRICT=0
+
+#SHELL ["/bin/bash", "--login", "-c"]
 
 # Setup primary dependencies
 RUN <<EOF
 #!/bin/bash
 #source $HOME/activate
 
-# Always use the latest Python build tools
-python -m pip install pip setuptools wheel build -U
+echo "
+Preparing to pip install watch
+"
 
+which python
+which pip
+pwd
+ls -altr
+
+echo "
+Pip install latest Python build tools:
+"
+python -m pip install --prefer-binary pip setuptools wheel build -U
+
+echo "
+Pip install watch itself
+"
 if [ "$BUILD_STRICT" -eq 1 ]; then
     echo "BUILDING STRICT VARIANT"
-    pip install -e /watch[runtime-strict,development-strict,optional-strict,headless-strict]
+    pip install --prefer-binary -e /root/code/watch[runtime-strict,development-strict,optional-strict,headless-strict]
 else
     echo "BUILDING LOOSE VARIANT"
-    pip install -e /watch[development,optional,headless]
+    pip install --prefer-binary -e /root/code/watch[development,optional,headless]
     # python -m pip install dvc[all]>=2.13.0
     # pip install awscli
 fi
@@ -67,7 +85,7 @@ RUN <<EOF
 #!/bin/bash
 #source $HOME/activate
 
-cd /watch
+cd /root/code/watch
 if [ "$BUILD_STRICT" -eq 1 ]; then
     echo "FINALIZE STRICT VARIANT DEPS"
     sed 's/>=/==/g' requirements/gdal.txt > requirements/gdal-strict.txt
@@ -81,7 +99,7 @@ EOF
 
 
 #### Copy over the rest of the repo structure
-COPY .git          /watch/.git
+COPY .git          /root/code/watch/.git
 
 
 # Install other useful tools
@@ -107,7 +125,7 @@ EAGER_IMPORT=1 python -m watch --help
 EOF
 
 # Copy over the rest of the repo
-COPY . /watch
+COPY . /root/code/watch
 
 RUN <<EOF
 # https://www.docker.com/blog/introduction-to-heredocs-in-dockerfiles/

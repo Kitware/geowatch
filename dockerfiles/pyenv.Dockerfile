@@ -101,12 +101,14 @@ echo "Make virutalenv"
 # Not sure why I need the unset here
 unset PYENV_VERSION
 
-$PYENV_ROOT/shims/python3 -m venv $PYENV_PREFIX/envs/pyenv$PYTHON_VERSION
-echo $?
-
-echo "Checking venv directory"
-ls -al $PYENV_PREFIX/envs
-ls -al $PYENV_PREFIX/envs/pyenv$PYTHON_VERSION
+# Not sure why venv isn't working correctly, but we should be fine just using
+# the global pyenv python
+#
+##### Uncomment if we want to try default venvs again
+# $PYENV_ROOT/shims/python3 -m venv $PYENV_PREFIX/envs/pyenv$PYTHON_VERSION
+#echo "Checking venv directory"
+#ls -al $PYENV_PREFIX/envs
+#ls -al $PYENV_PREFIX/envs/pyenv$PYTHON_VERSION
 
 echo "Write bashrc and profile"
 BASHRC_CONTENTS='
@@ -121,10 +123,24 @@ if [ -d "$PYENV_ROOT" ]; then
     #export PYENV_PREFIX=$PYENV_PREFIX
 fi
 
-# Optionally auto-activate the chosen pyenv pyenv environment
-if [ -d "$PYENV_PREFIX/envs/pyenv$PYTHON_VERSION" ]; then
-    source $PYENV_PREFIX/envs/pyenv$PYTHON_VERSION/bin/activate
+
+__note__="
+# Enable global python argcomplete
+
+pip install argcomplete
+mkdir -p ~/.bash_completion.d
+activate-global-python-argcomplete --dest ~/.bash_completion.d
+source ~/.bash_completion.d/python-argcomplete
+"
+# activate-global-python-argcomplete --dest ~/.bash_completion.d
+if [ -f "$HOME/.bash_completion.d/python-argcomplete" ]; then
+    source ~/.bash_completion.d/python-argcomplete
 fi
+
+# Optionally auto-activate the chosen pyenv pyenv environment
+#if [ -d "$PYENV_PREFIX/envs/pyenv$PYTHON_VERSION" ]; then
+#    source $PYENV_PREFIX/envs/pyenv$PYTHON_VERSION/bin/activate
+#fi
 '
 echo "$BASHRC_CONTENTS" >> $HOME/.bashrc
 echo "$BASHRC_CONTENTS" >> $HOME/.profile
@@ -162,7 +178,7 @@ DOCKER_BUILDKIT=1 docker build --progress=plain \
     --build-arg PYTHON_VERSION=3.11.2 \
     -f ./dockerfiles/pyenv.Dockerfile .
 
-docker run --runtime=nvidia -it pyenv:311 bash --login
+docker run --runtime=nvidia -it pyenv:311 bash
 
 docker login gitlab.kitware.com:4567
 

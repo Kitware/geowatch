@@ -13,3 +13,5 @@ timerit >= 0.3.0
 codecarbon >= 2.0.0
 
 humanize >= 4.4.0
+
+argcomplete >= 2.0.0
