@@ -28,6 +28,7 @@ def _gather_namek_shortlist_results():
     agg = eval_type_to_aggregator['bas_pxl_eval']
 
     region_id_to_summary, top_param_lut = agg.report_best(1000, verbose=0)
+
     tocombine_indexes = []
     for region, summary in region_id_to_summary.items():
         tocombine_indexes.append(list(summary.index))

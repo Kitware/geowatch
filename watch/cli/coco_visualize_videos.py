@@ -278,6 +278,7 @@ def main(cmdline=True, **kwargs):
             FusedChannelSpec.coerce('red|green|blue'),
             FusedChannelSpec.coerce('No Activity|Site Preparation|Active Construction|Post Construction'),
             FusedChannelSpec.coerce('salient'),
+            FusedChannelSpec.coerce('pan'),
         ]
         from collections import defaultdict, Counter
         channel_stats = kwcoco_extensions.coco_channel_stats(coco_dset)

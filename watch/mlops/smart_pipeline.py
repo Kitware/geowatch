@@ -335,7 +335,7 @@ class HeatmapEvaluation(ProcessNode):
         extra_opts = {
             'draw_curves': True,
             'draw_heatmaps': False,
-            'viz_thresh': 0.2,
+            'viz_thresh': 'auto',
             'workers': 2,
             'score_space': 'video',
         }

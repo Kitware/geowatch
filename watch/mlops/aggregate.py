@@ -140,11 +140,20 @@ def main(cmdline=True, **kwargs):
                 agg.table.to_csv(csv_fpath, index_label=False)
 
     if config.stdout_report:
+        from watch.utils.util_yaml import Yaml
+        if config.stdout_report is not True:
+            report_config = Yaml.coerce(config.stdout_report)
+        else:
+            report_config = {}
         for type, agg in eval_type_to_aggregator.items():
             if len(agg):
                 if rois is not None:
                     agg.build_macro_tables(rois)
-                agg.report_best()
+                agg.report_best(**ub.compatible(report_config, agg.report_best))
+                if report_config.get('analyze', False):
+                    agg.analyze()
+                if report_config.get('macro_analysis', False):
+                    agg.macro_analysis()
 
     if config.plot_params:
         for type, agg in eval_type_to_aggregator.items():
@@ -815,10 +824,12 @@ class AggregatorAnalysisMixin:
             raise Exception('Build a macro result first')
 
         regions_of_interest = agg.macro_key_to_regions[agg.primary_macro_region]
-        tables = agg.region_to_tables[agg.primary_macro_region]
+        tables = util_pandas.DotDictDataFrame(agg.region_to_tables[agg.primary_macro_region])
+
         resolved_params = tables['resolved_params']
         metrics = tables['metrics']
-        index = tables['index']
+        # index = tables['index']
+        index = tables[['node', 'region_id']]
         table = pd.concat([index, resolved_params, metrics], axis=1)
         table = table.fillna('None')
 
@@ -889,10 +900,10 @@ class AggregatorAnalysisMixin:
             'metrics': metrics,
         }
         analysis = result_analysis.ResultAnalysis(results, params=chosen_params)
-        analysis.results
+        # analysis.results
         analysis.analysis()
 
-    def report_best(agg, top_k=3, shorten=True, verbose=1):
+    def report_best(agg, top_k=3, shorten=True, per_group=2, verbose=1):
         """
         Report the top k pointwise results for each region / macro-region.
 
@@ -902,7 +913,7 @@ class AggregatorAnalysisMixin:
             report the top results for that filtering.
 
         Args:
-            k (int): number of top results for each region
+            top_k (int): number of top results for each region
 
             shorten (bool): if True, shorten the columns by removing
                 non-ambiguous prefixes wrt to a known node type.
@@ -979,6 +990,59 @@ class AggregatorAnalysisMixin:
                     else:
                         rich.print(f'Top {len(summary_table)} / {ntotal} for {region_id}')
                     rich.print(summary_table.iloc[::-1].to_string())
+
+        PRINT_MODELS = verbose
+        if PRINT_MODELS:
+            tocombine_indexes = []
+            for region, summary in region_id_to_summary.items():
+                tocombine_indexes.append(list(summary.index))
+            import itertools as it
+            top_indexes = list(ub.oset([x for x in ub.flatten(
+                it.zip_longest(*tocombine_indexes)) if x is not None]))
+
+            table = agg.table.copy()
+            table.loc[top_indexes, 'rank'] = list(range(len(top_indexes)))
+            table = table.sort_values('rank')
+
+            chosen_indexes = []
+            if 0:
+                for expt, group in table.groupby('resolved_params.bas_pxl_fit.name'):
+                    group['params.bas_pxl.package_fpath'].tolist()
+                    group = group.sort_values('rank')
+                    chosen_indexes.extend(group.index[0:2])
+                chosen_indexes = table.loc[chosen_indexes, 'rank'].sort_values().index
+            else:
+                table['_hackname'] = [ub.Path(p).parent.name for p in table['params.bas_pxl.package_fpath'].tolist()]
+                for expt, group in table.groupby('_hackname'):
+                    # group['params.bas_pxl.package_fpath'].tolist()
+                    flags = (group[agg.primary_metric_cols] > 0).any(axis=1)
+                    group = group[flags]
+                    group = group.sort_values('rank')
+                    chosen_indexes.extend(group.index[0:per_group])
+                chosen_indexes = table.loc[chosen_indexes, 'rank'].sort_values().index
+
+            all_models_fpath = ub.Path('$HOME/code/watch/dev/reports/split1_all_models.yaml').expand()
+            from watch.utils.util_yaml import Yaml
+            known_models = Yaml.coerce(all_models_fpath)
+
+            top_k = 40
+            chosen_indexes = chosen_indexes[:top_k]
+
+            chosen_table = table.loc[chosen_indexes]
+
+            # Need to remove invariants for now
+            flags = ~np.array(['invariants' in chan for chan in chosen_table['resolved_params.bas_pxl_fit.channels']])
+            chosen_table = chosen_table[flags]
+
+            chosen_models = chosen_table['params.bas_pxl.package_fpath'].tolist()
+            set(known_models).issuperset(set(chosen_models))
+
+            shortlist_text = Yaml.dumps(chosen_models)
+            print(shortlist_text)
+
+            if 0:
+                new_models_fpath = ub.Path('$HOME/code/watch/dev/reports/unnamed_shortlist.yaml').expand()
+                new_models_fpath.write_text(shortlist_text)
 
         return region_id_to_summary, top_param_lut
 

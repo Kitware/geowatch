@@ -1190,7 +1190,7 @@ VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_rawbands_split6.kwcoco.zip
 CHANNELS="(L8,S2,PD):(blue|green|red|nir),(WV):(blue|green|red),(WV,WV1):pan"
 EXPERIMENT_NAME=Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont3
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-TARGET_LR=3e-4
+TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
@@ -1234,12 +1234,12 @@ model:
         positive_change_weight : 1 
         negative_change_weight : 0.01 
         stream_channels        : 16 
-        class_loss             : 'focal' 
-        saliency_loss          : 'dicefocal' 
+        class_loss             : 'dicefocal' 
+        saliency_loss          : 'focal' 
         saliency_head_hidden   : 3
         change_head_hidden     : 3
         global_change_weight   : 0.00 
-        global_class_weight    : 1.00 
+        global_class_weight    : 0.50 
         global_saliency_weight : 1.00 
 optimizer: 
     class_path: torch.optim.AdamW

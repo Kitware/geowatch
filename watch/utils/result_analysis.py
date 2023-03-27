@@ -981,8 +981,10 @@ class ResultAnalysis(ub.NiceRepr):
         stat_groups_item = grid_item["stat_group_item"]
 
         param_name, stat_group = stat_groups_item
+        param_name_show = ub.color_text(param_name, color='yellow')
+        metric_key_show =  ub.color_text(metric_key, color='blue')
         stats_row = ub.group_items(stat_group, key=lambda x: x["metric"])[metric_key][0]
-        title = f"PARAMETER: {param_name} - METRIC: {metric_key}"
+        title = f"PARAMETER: {param_name_show} - METRIC: {metric_key_show}"
         print("\n\n")
         print(title)
         print("=" * len(title))
@@ -991,7 +993,7 @@ class ResultAnalysis(ub.NiceRepr):
         anova_mean_p = stats_row["anova_mean_p"]
         # Rougly speaking
         print("")
-        print(f"ANOVA: If p is low, the param {param_name!r} might have an effect")
+        print(f"ANOVA: If p is low, the param {param_name_show} might have an effect")
         print(
             ub.color_text(
                 f"  Rank-ANOVA: p={anova_rank_p:0.8f}",
@@ -1014,7 +1016,7 @@ class ResultAnalysis(ub.NiceRepr):
             if value2 == winner:
                 value1, value2 = value2, value1
             print(
-                f"  If p is low, {value1} may outperform {value2} for {param_name}."
+                f"  If p is low, {value1} may outperform {value2} for {param_name_show}."
             )
             if "ttest_ind" in pairstat:
                 ttest_ind_result = pairstat["ttest_ind"]
