@@ -66,17 +66,49 @@ EOF
 
 ENV PATH="$PYENV_ROOT/shims:$PYENV_ROOT/bin:$PATH"
 
-## Create a default Python virtualenv
+
+# pyenv prefix is not working. We should be able to hack it?
+env PYENV_PREFIX=/root/.pyenv/versions/$PYTHON_VERSION
+env PYTHON_VERSION=$PYTHON_VERSION
+
+
+## Setup a default Python virtualenv
+## (this does not seem to be reliable)
 RUN <<EOF
 #!/bin/bash
+echo "Init pyenv"
+echo "HOME=$HOME"
+echo "PYENV_ROOT=$PYENV_ROOT"
+echo "PYTHON_VERSION=$PYTHON_VERSION"
+echo "PYENV_VERSION=$PYENV_VERSION"
+echo "PYENV_PREFIX=$PYENV_PREFIX"
+echo "PATH=$PATH"
+
+## Setup global pyenv version
 eval "$($PYENV_ROOT/bin/pyenv init -)"
 pyenv global $PYTHON_VERSION
+pyenv global
 
-PYENV_PREFIX=$(pyenv prefix)
+# pyenv prefix is not working. We should be able to hack it?
+#PYENV_PREFIX=$(pyenv prefix)
+#PYENV_PREFIX=/root/.pyenv/versions/$PYENV_VERSION
+
+echo "Make envs dir"
+
 mkdir -p $PYENV_PREFIX/envs
+echo "Make virutalenv"
 
-python -m venv $PYENV_PREFIX/envs/pyenv$PYTHON_VERSION
+# Not sure why I need the unset here
+unset PYENV_VERSION
 
+$PYENV_ROOT/shims/python3 -m venv $PYENV_PREFIX/envs/pyenv$PYTHON_VERSION
+echo $?
+
+echo "Checking venv directory"
+ls -al $PYENV_PREFIX/envs
+ls -al $PYENV_PREFIX/envs/pyenv$PYTHON_VERSION
+
+echo "Write bashrc and profile"
 BASHRC_CONTENTS='
 # Add the pyenv command to our environment if it exists
 export HOME="/root"
@@ -85,7 +117,8 @@ if [ -d "$PYENV_ROOT" ]; then
     export PATH="$PYENV_ROOT/bin:$PATH"
     eval "$($PYENV_ROOT/bin/pyenv init -)"
     source $PYENV_ROOT/completions/pyenv.bash
-    export PYENV_PREFIX=$(pyenv prefix)
+    #export PYENV_PREFIX=$(pyenv prefix)
+    #export PYENV_PREFIX=$PYENV_PREFIX
 fi
 
 # Optionally auto-activate the chosen pyenv pyenv environment
@@ -97,7 +130,7 @@ echo "$BASHRC_CONTENTS" >> $HOME/.bashrc
 echo "$BASHRC_CONTENTS" >> $HOME/.profile
 # Write a secondary script for non-interactive usage
 echo "$BASHRC_CONTENTS" >> $HOME/activate
-chmod +x $HOME/activate
+#source $HOME/activate
 EOF
 
 

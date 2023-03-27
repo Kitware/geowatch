@@ -137,6 +137,8 @@ DOCKER_BUILDKIT=1 docker build --progress=plain \
     --build-arg BUILD_STRICT=1 \
     -f ./dockerfiles/watch.Dockerfile .
 
+docker run --runtime=nvidia -it watch:310 bash
+
 #### 3.11
 
 cd $HOME/tmp/watch-img-staging/watch
