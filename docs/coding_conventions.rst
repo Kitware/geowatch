@@ -31,7 +31,7 @@ Variable abbreviations:
 
 * A suffix of ``x`` or ``idx`` - an index (e.g. ``cx`` for category index)
 
-* ``tr`` often means "target", but that pattern has been deprecated and its usually just spelled out as ``target`` now. 
+* ``tr`` often means "target", but that pattern has been deprecated and its usually just spelled out as ``target`` now.
 
 * The "xywh", "ltrb", and "cxywh" are codes indicating the format of bounding boxes for `kwimage.Boxes <https://kwimage.readthedocs.io/en/release/kwimage.structs.boxes.html#module-kwimage.structs.boxes>_`. They stand for "left-x, top-y, width, height", "left-x, top-y, right-x, bottom-y", and "center-x, center-y, width, height" respectively.
 
@@ -60,7 +60,7 @@ style of indexing is being used so we do not confuse them.
   column when you see these patterns.
 
 
-Misc termonology: 
+Misc termonology:
 
 * Functions / methods called "coerce" are designed to auto-detect the type of
   data that is given to them and then convert it into a stanardized expected
@@ -100,9 +100,9 @@ Best Practices:
 
 * When you are working with a list of classes, try to make sure you have it wrapped in a ``kwcoco.CategoryTree`` and use that to shuffle around relevant metadata.
 
-* When working with a set of channels wrt to a single sensor use: ``kwcoco.ChannelSpec`` or  ``kwcoco.FusedChannelSpec`` 
+* When working with a set of channels wrt to a single sensor use: ``kwcoco.ChannelSpec`` or  ``kwcoco.FusedChannelSpec``
 
-* When working with a set of channels wrt to known or unknown sensors use: ``kwcoco.SensorChanSpec`` or  ``kwcoco.FusedSensorChanSpec`` 
+* When working with a set of channels wrt to known or unknown sensors use: ``kwcoco.SensorChanSpec`` or  ``kwcoco.FusedSensorChanSpec``
 
 * DONT IMPORT PYPLOT AT THE MODULE LEVEL!!! Always do it in a function. If fact, do most everything inside a function. Reduce the amount of globally scoped code.
 
@@ -110,12 +110,14 @@ Best Practices:
 Spaces
 ------
 
-See the section about SPACES in kwcoco docs
+See `KWCOCO Spaces <https://kwcoco.readthedocs.io/en/release/concepts/warping_and_spaces.html>`_ section in the in kwcoco docs.
 
 
 There are several 'spaces' here and that can get confusing.
 
-**Native Space** - The space of the data on disk
+**Native Space** / **Asset Space** - The space of the data on disk
+
+**Image Space** - The space all bands in an image are aligned to.
 
 **Video Space** - The space a sequence is geo-aligned in.  This is the space we generally want to be thinking in.
     It is hard coded wrt to the kwcoco dataset.
@@ -135,3 +137,8 @@ There are several 'spaces' here and that can get confusing.
 **Output Space** - GSD of the output of the network
    Scale factor is wrt to video space.
    Alias: Prediction Space
+
+
+The following visualizes the key asset, image, and video spaces:
+
+.. image:: https://i.imgur.com/QuiSJwR.png
