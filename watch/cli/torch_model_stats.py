@@ -108,9 +108,9 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
         if hasattr(module, 'head_metrics'):
             module.head_metrics.clear()
             state = module.state_dict()
-            state_keys = list(state.keys())
         else:
             raise
+    state_keys = list(state.keys())
     # print('state_keys = {}'.format(ub.repr2(state_keys, nl=1)))
 
     unique_sensors = set()
