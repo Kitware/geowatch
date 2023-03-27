@@ -81,18 +81,28 @@ Misc termonology:
 Short semi-ambiguous identifiers:
 
     * ``ub.udict`` - The extended ubelt dictionary with set operations and other nice methods
+
     * ``ub.ddict`` - A defaultdict alias
 
 
 Module aliases
+
 * ``import ubelt as ub``
+
 * ``import numpy as np``
+
 * ``import networkx as nx``
+
 * ``import geopandas as gpd``
+
 * ``import pytorch_lightning as pl``
+
 * ``import geopandas as gpd``
+
 * ``import pandas as pd``
+
 * ``import seaborn as sns``
+
 * ``import scriptconfig as scfg``
 
 
