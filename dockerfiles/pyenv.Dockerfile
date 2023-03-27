@@ -145,7 +145,7 @@ fi
 echo "$BASHRC_CONTENTS" >> $HOME/.bashrc
 echo "$BASHRC_CONTENTS" >> $HOME/.profile
 # Write a secondary script for non-interactive usage
-echo "$BASHRC_CONTENTS" >> $HOME/activate
+#echo "$BASHRC_CONTENTS" >> $HOME/activate
 #source $HOME/activate
 EOF
 

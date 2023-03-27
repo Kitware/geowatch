@@ -56,6 +56,8 @@ Preparing to pip install watch
 
 which python
 which pip
+python --version
+pip --version
 pwd
 ls -altr
 
@@ -89,8 +91,7 @@ cd /root/code/watch
 if [ "$BUILD_STRICT" -eq 1 ]; then
     echo "FINALIZE STRICT VARIANT DEPS"
     sed 's/>=/==/g' requirements/gdal.txt > requirements/gdal-strict.txt
-    pip install -r requirements/gdal-strict.txt
-else
+    pip install -r requiremGe
     echo "FINALIZE LOOSE VARIANT DEPS"
     pip install -r requirements/gdal.txt
 fi
@@ -127,6 +128,8 @@ EOF
 # Copy over the rest of the repo
 COPY . /root/code/watch
 
+WORKDIR /root/code/watch
+
 RUN <<EOF
 # https://www.docker.com/blog/introduction-to-heredocs-in-dockerfiles/
 echo "
@@ -155,19 +158,19 @@ DOCKER_BUILDKIT=1 docker build --progress=plain \
     --build-arg BUILD_STRICT=1 \
     -f ./dockerfiles/watch.Dockerfile .
 
-docker run --runtime=nvidia -it watch:310 bash
+docker run --runtime=nvidia -it watch:310-strict bash
 
 #### 3.11
 
 cd $HOME/tmp/watch-img-staging/watch
 DOCKER_BUILDKIT=1 docker build --progress=plain \
-    -t "watch:311-strict" \
-    --build-arg BUILD_STRICT=1 \
+    -t "watch:311-loose" \
+    --build-arg BUILD_STRICT=0 \
     --build-arg BASE_IMAGE=pyenv:311 \
     --build-arg PYTHON_VERSION=3.11.2 \
     -f ./dockerfiles/watch.Dockerfile .
 
-docker run --runtime=nvidia -it watch:310 bash
+docker run --runtime=nvidia -it watch:311-loose bash
 
 "
 EOF

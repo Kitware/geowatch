@@ -418,7 +418,7 @@ def resource_usage_report(agg):
         co2_key = f'resources.{k}.co2_kg'
         if co2_key in v:
             ...
-        v[].max().sum()
+        # v[].max().sum()
 
     pxl_time = poly_agg.table.groupby('context.bas_pxl.uuid')['resources.bas_pxl.duration'].max().apply(util_time.coerce_timedelta).sum()
     poly_time = poly_agg.table.groupby('context.bas_poly.uuid')['resources.bas_poly.duration'].max().apply(util_time.coerce_timedelta).sum()
@@ -553,7 +553,7 @@ def _namek_eval():
         co2_key = f'resources.{k}.co2_kg'
         if co2_key in v:
             ...
-        v[].max().sum()
+        # v[].max().sum()
 
     pxl_time = poly_agg.table.groupby('context.bas_pxl.uuid')['resources.bas_pxl.duration'].max().apply(util_time.coerce_timedelta).sum()
     poly_time = poly_agg.table.groupby('context.bas_poly.uuid')['resources.bas_poly.duration'].max().apply(util_time.coerce_timedelta).sum()

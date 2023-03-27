@@ -2065,7 +2065,7 @@ def _recompute_auxiliary_transforms(img):
     import kwimage
     from kwcoco.coco_image import CocoImage
     coco_img = CocoImage(img)
-    base = coco_img.primary_asset()
+    base = coco_img.primary_asset(requires=['warp_to_wld'])
     try:
         warp_wld_from_img = kwimage.Affine.coerce(base['warp_to_wld'])
     except Exception:
