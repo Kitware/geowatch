@@ -95,8 +95,7 @@ class TimeCombineConfig(scfg.DataConfig):
 
     workers = scfg.Value(0, help=ub.paragraph(
             '''
-            The number of CPU cores to compute the combination operation
-            with.
+            The number of CPU cores to compute the combination operation with.
             '''))
 
     include_sensors = scfg.Value(None, help=ub.paragraph(
@@ -109,9 +108,9 @@ class TimeCombineConfig(scfg.DataConfig):
             A list of sensors to exclude from the combination operation.
             '''))
 
-    select_images = scfg.Value(None, help='TODO:')
+    select_images = scfg.Value(None, help='see kwcoco_extensions.filter_image_ids docs')
 
-    select_videos = scfg.Value(None, help='TODO:')
+    select_videos = scfg.Value(None, help='see kwcoco_extensions.filter_image_ids docs')
 
 
 def main(cmdline=1, **kwargs):
@@ -330,8 +329,12 @@ def combine_kwcoco_channels_temporally(config):
     from watch.utils import util_progress
     from watch.utils import util_time
     from watch.utils import kwcoco_extensions
+    from watch.utils import util_parallel
     # Check inputs.
+
     space = 'video'
+
+    workers = util_parallel.coerce_num_workers(config.workers)
 
     ## Check input kwcoco file path exists.
     if os.path.exists(config.input_kwcoco_fpath) is False:
@@ -454,7 +457,7 @@ def combine_kwcoco_channels_temporally(config):
                 print('Histogram: = {}'.format(ub.urepr(bucket_to_num_images, nl=1)))
                 print('N images per window: = {}'.format(ub.urepr(bucket_stats, nl=1)))
 
-            jobs = ub.JobPool(mode='process', max_workers=config.workers)
+            jobs = ub.JobPool(mode='process', max_workers=workers)
 
             # 3. For each temporal window, combine the spatial data from each channel.
             chunk_image_idxs = list(groupid_to_idxs.values())

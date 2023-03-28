@@ -304,6 +304,28 @@ to it.
    echo $NEW_IMAGE_NAME
 
 
+Update the code / models in an existing image (NEW)
+---------------------------------------------------
+
+Say you need to make a small change to the code, but don't want to rebuild the
+entire model. We can handle that case.
+
+.. code:: bash
+
+
+   export WATCH_REPO_DPATH=$HOME/code/watch
+   export DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+
+   IMAGE_NAME=watch:0.4.5-strict-pyenv3.11.2-models-2023-03-28
+   NEW_IMAGE_NAME=watch:0.4.5-strict-pyenv3.11.2-models-2023-03-28-v2
+
+   # Mount the image with
+   docker run \
+       --volume $DVC_EXPT_DPATH:/host-smart_expt_dvc:ro \
+       --volume $WATCH_REPO_DPATH:/host-watch_repo:ro \
+       -td --name temp_container $IMAGE_NAME
+
+
 How to Submit a DAG (NEW)
 -------------------------
 

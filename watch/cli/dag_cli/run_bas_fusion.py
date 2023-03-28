@@ -75,6 +75,11 @@ class BasFusionConfig(scfg.DataConfig):
             S3 Output directory for previous interval BAS fusion output
             '''))
 
+    hack_time_combine = scfg.Value(False, isflag=True, help=ub.paragraph(
+            '''
+            Quick and dirty hack to run time combine before fusion
+            '''))
+
 
 def main():
     config = BasFusionConfig.cli()
@@ -198,7 +203,8 @@ def run_bas_fusion_for_baseline(
         jobs=1,
         force_zero_num_workers=False,
         bas_thresh=0.1,
-        previous_bas_outbucket=None):
+        previous_bas_outbucket=None,
+        hack_time_combine=False):
     if aws_profile is not None:
         aws_base_command =\
             ['aws', 's3', '--profile', aws_profile, 'cp']
@@ -226,6 +232,22 @@ def run_bas_fusion_for_baseline(
                                                     strip_nonregions=True,
                                                     replace_originator=True)
 
+    if hack_time_combine:
+        from watch.cli import coco_time_combine
+        preproc_kwcoco_fpath = ub.Path(ingress_kwcoco_path).augment(
+            stemsuffix='_timecombined', ext='.kwcoco.zip', multidot=True)
+        coco_time_combine.main(
+            cmdline=0,
+            input_kwcoco_fpath=ingress_kwcoco_path,
+            output_kwcoco_fpath=preproc_kwcoco_fpath,
+            time_window='1y',
+            resolution='10GSD',
+            workers='avail',
+        )
+        predict_input_fpath = os.fspath(preproc_kwcoco_fpath)
+    else:
+        predict_input_fpath = ingress_kwcoco_path
+
     # 3. Run fusion
     print("* Running BAS fusion *")
     bas_fusion_kwcoco_path = os.path.join(
@@ -247,9 +269,9 @@ def run_bas_fusion_for_baseline(
             with_change=False,
             with_saliency=True,
             with_class=False,
-            test_dataset=ingress_kwcoco_path,
-            package_fpath=bas_fusion_model_path,
+            test_dataset=predict_input_fpath,
             pred_dataset=bas_fusion_kwcoco_path,
+            package_fpath=bas_fusion_model_path,
             num_workers=('0' if force_zero_num_workers else str(jobs)),  # noqa: 501
             batch_size=1,
             **predict_config)
