@@ -189,9 +189,9 @@ git remote add dockerhost /host-watch/.git
 
 
    # Push the container to smartgitlab
-   IMAGE_NAME=watch:311-loose
-   docker tag $NEW_IMAGE_NAME registry.smartgitlab.com/kitware/$NEW_IMAGE_NAME
-   docker push registry.smartgitlab.com/kitware/$NEW_IMAGE_NAME
+IMAGE_NAME=watch:311-strict
+docker tag $IMAGE_NAME registry.smartgitlab.com/kitware/$IMAGE_NAME
+docker push registry.smartgitlab.com/kitware/$IMAGE_NAME
 
    # Will need to bake in a model
 
