@@ -172,6 +172,7 @@ docker run \
 #### 3.11
 
 cd $HOME/tmp/watch-img-staging/watch
+
 DOCKER_BUILDKIT=1 docker build --progress=plain \
     -t "watch:311-strict" \
     --build-arg BUILD_STRICT=1 \
@@ -185,6 +186,14 @@ docker run \
 
 
 git remote add dockerhost /host-watch/.git
+
+
+   # Push the container to smartgitlab
+   IMAGE_NAME=watch:311-loose
+   docker tag $NEW_IMAGE_NAME registry.smartgitlab.com/kitware/$NEW_IMAGE_NAME
+   docker push registry.smartgitlab.com/kitware/$NEW_IMAGE_NAME
+
+   # Will need to bake in a model
 
 "
 EOF
