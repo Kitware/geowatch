@@ -191,7 +191,9 @@ torch_liberator>=0.2.1
 
 pytorch_lightning[extra]>=1.8.6,<2.0.0
 
-monai>=0.6.0
+monai>=0.8.0     ; python_version < '4.0'  and python_version >= '3.11'    # Python 3.11+
+monai>=0.6.0     ; python_version < '3.11' 
+
 torch_optimizer>=0.1.0
 netharn>=0.6.1
 
