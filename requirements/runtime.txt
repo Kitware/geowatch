@@ -204,8 +204,6 @@ timm>=0.4.12 ; python_version < '3.11'                               # Python 3.
 kornia<=0.5
 segmentation-models-pytorch>=0.2.0  ; python_version < '3.11'
 
-ujson>=5.2.0 
-
 ujson>=5.6.0 ; python_version < '4.0'  and python_version >= '3.11'  # Python 3.11+
 ujson>=5.2.0 ; python_version < '3.11'                               # Python 3.10-
 
