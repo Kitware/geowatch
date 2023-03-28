@@ -18,6 +18,7 @@ from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco
 from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress
 from watch.tasks.fusion.predict import predict
 from watch.cli.concat_kwcoco_videos import concat_kwcoco_datasets
+from watch.utils.util_yaml import Yaml
 
 import scriptconfig as scfg
 import ubelt as ub
@@ -53,18 +54,6 @@ class BasFusionConfig(scfg.DataConfig):
             S3 Output directory for STAC item / asset egress
             '''))
 
-    newline = scfg.Value(False, isflag=True, short_alias=['n'], help=ub.paragraph(
-            '''
-            Output as simple newline separated STAC items
-            '''))
-
-    jobs = scfg.Value(1, type=int, short_alias=['j'], help='Number of jobs to run in parallel')
-
-    force_zero_num_workers = scfg.Value(False, isflag=True, help=ub.paragraph(
-            '''
-            Force predict scripts to use --num_workers=0
-            '''))
-
     bas_thresh = scfg.Value(0.1, type=float, help=ub.paragraph(
             '''
             Threshold for BAS tracking (kwarg 'thresh')
@@ -75,15 +64,27 @@ class BasFusionConfig(scfg.DataConfig):
             S3 Output directory for previous interval BAS fusion output
             '''))
 
-    hack_time_combine = scfg.Value(False, isflag=True, help=ub.paragraph(
+    time_combine = scfg.Value(False, isflag=True, help=ub.paragraph(
             '''
             Quick and dirty hack to run time combine before fusion
+            '''))
+
+    bas_pxl_config = scfg.Value(None, type=str, help=ub.paragraph(
+            '''
+            Raw json/yaml or a path to a json/yaml file that specifies the
+            config for fusion.predict.
+            '''))
+
+    bas_poly_config = scfg.Value(None, type=str, help=ub.paragraph(
+            '''
+            Raw json/yaml or a path to a json/yaml file that specifies the
+            config for bas tracking.
             '''))
 
 
 def main():
     config = BasFusionConfig.cli()
-    run_bas_fusion_for_baseline(**config)
+    run_bas_fusion_for_baseline(config)
 
 
 def _download_region(aws_base_command,
@@ -191,20 +192,18 @@ def _ta2_collate_output(aws_base_command,
                         site_s3_outpath], check=True)
 
 
-def run_bas_fusion_for_baseline(
-        input_path,
-        input_region_path,
-        output_path,
-        bas_fusion_model_path,
-        outbucket,
-        aws_profile=None,
-        dryrun=False,
-        newline=False,
-        jobs=1,
-        force_zero_num_workers=False,
-        bas_thresh=0.1,
-        previous_bas_outbucket=None,
-        hack_time_combine=False):
+def run_bas_fusion_for_baseline(config):
+
+    input_path = config.input_path
+    input_region_path = config.input_region_path
+    output_path = config.output_path
+    bas_fusion_model_path = config.bas_fusion_model_path
+    outbucket = config.outbucket
+    aws_profile = config.aws_profile
+    dryrun = config.dryrun
+    bas_thresh = config.bas_thresh
+    previous_bas_outbucket = config.previous_bas_outbucket
+
     if aws_profile is not None:
         aws_base_command =\
             ['aws', 's3', '--profile', aws_profile, 'cp']
@@ -232,7 +231,7 @@ def run_bas_fusion_for_baseline(
                                                     strip_nonregions=True,
                                                     replace_originator=True)
 
-    if hack_time_combine:
+    if config.time_combine:
         from watch.cli import coco_time_combine
         preproc_kwcoco_fpath = ub.Path(ingress_kwcoco_path).augment(
             stemsuffix='_timecombined', ext='.kwcoco.zip', multidot=True)
@@ -253,15 +252,16 @@ def run_bas_fusion_for_baseline(
     bas_fusion_kwcoco_path = os.path.join(
         ingress_dir, 'bas_fusion_kwcoco.json')
 
-    predict_config = json.loads("""
-{
-      "chip_overlap": 0.3,
-      "chip_dims": "auto",
-      "time_span": "auto",
-      "time_sampling": "auto",
-      "drop_unused_frames": true
-}
-    """)
+    default_predict_config = ub.udict({
+          "chip_overlap": 0.3,
+          "chip_dims": "auto",
+          "time_span": "auto",
+          "time_sampling": "auto",
+          "drop_unused_frames": True,
+          "batch_size": 1,
+          "num_workers": 2,
+    })
+    bas_pxl_config = default_predict_config | Yaml.coerce(config.bas_pxl_config or {})
 
     predict(devices='0,',
             write_preds=False,
@@ -272,9 +272,7 @@ def run_bas_fusion_for_baseline(
             test_dataset=predict_input_fpath,
             pred_dataset=bas_fusion_kwcoco_path,
             package_fpath=bas_fusion_model_path,
-            num_workers=('0' if force_zero_num_workers else str(jobs)),  # noqa: 501
-            batch_size=1,
-            **predict_config)
+            **bas_pxl_config)
 
     # 3.1. If a previous interval was run; concatenate BAS fusion
     # output KWCOCO files for tracking
@@ -329,11 +327,13 @@ def run_bas_fusion_for_baseline(
     shutil.copy(local_region_path, os.path.join(
         region_models_outdir, '{}.geojson'.format(region_id)))
 
-    bas_tracking_config = {
+    default_bas_tracking_config = ub.udict({
         "thresh": bas_thresh,
         "moving_window_size": None,
         "polygon_simplify_tolerance": 1,
-        "max_area_behavior": 'ignore'}
+        "max_area_behavior": 'ignore'
+    })
+    bas_tracking_config = default_bas_tracking_config | Yaml.coerce(config.bas_poly_config or {})
 
     tracked_bas_kwcoco_path = '_tracked'.join(
         os.path.splitext(bas_fusion_kwcoco_path))

@@ -308,7 +308,9 @@ Update the code / models in an existing image (NEW)
 ---------------------------------------------------
 
 Say you need to make a small change to the code, but don't want to rebuild the
-entire model. We can handle that case.
+entire model. We can handle that case by mounting the latest repos onto the
+container, setting the remotes of the repo to point to those, pulling the
+latest code, and commiting the change as a new image.
 
 .. code:: bash
 
@@ -324,6 +326,20 @@ entire model. We can handle that case.
        --volume $DVC_EXPT_DPATH:/host-smart_expt_dvc:ro \
        --volume $WATCH_REPO_DPATH:/host-watch_repo:ro \
        -td --name temp_container $IMAGE_NAME
+
+   docker exec -w /root/code/watch  -t temp_container \
+       git remote add host /host-watch_repo/.git
+
+   docker exec -w /root/code/watch  -t temp_container \
+       git pull host dev/0.4.5
+
+   # Save the modified container as a new image
+   docker commit temp_container $NEW_IMAGE_NAME
+
+   # Push the container to smartgitlab
+   echo $NEW_IMAGE_NAME
+   docker tag $NEW_IMAGE_NAME registry.smartgitlab.com/kitware/$NEW_IMAGE_NAME
+   docker push registry.smartgitlab.com/kitware/$NEW_IMAGE_NAME
 
 
 How to Submit a DAG (NEW)
