@@ -972,17 +972,17 @@ DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch.mlops.schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
-            - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42/Drop6_TCombo1Year_BAS_10GSD_split6_V42_epoch27_step7168.pt
+            #- /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42/Drop6_TCombo1Year_BAS_10GSD_split6_V42_epoch27_step7168.pt
             - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2_epoch3_step941.pt
-            - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2_epoch41_step10532.pt
+            #- /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2_epoch41_step10532.pt
         bas_pxl.test_dataset:
-            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-KR_R001.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-KR_R001.kwcoco.zip
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-KR_R002.kwcoco.zip
-            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-NZ_R001.kwcoco.zip
-            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-CH_R001.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-NZ_R001.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-CH_R001.kwcoco.zip
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BH_R001.kwcoco.zip
-            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BR_R001.kwcoco.zip
-            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BR_R002.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BR_R001.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BR_R002.kwcoco.zip
         bas_pxl.chip_overlap: 0.3
         bas_pxl.chip_dims:
             - auto
@@ -998,18 +998,18 @@ python -m watch.mlops.schedule_evaluation --params="
             #- 0.27
             #- 0.3
             - 0.33
-            - 0.4
-            - 0.5
-            - 0.7
+            #- 0.4
+            #- 0.5
+            #- 0.7
         bas_poly.inner_window_size:
-            - 1y
+            #- 1y
             - null
         bas_poly.inner_agg_fn:
             - mean
         bas_poly.norm_ord:
             - 1
-            - 2
-            - inf
+            #- 2
+            #- inf
         bas_poly.polygon_simplify_tolerance:
             - 1
         bas_poly.agg_fn:
@@ -1018,8 +1018,8 @@ python -m watch.mlops.schedule_evaluation --params="
             - 10GSD
         bas_poly.moving_window_size:
             - null
-            - 1
-            - 3
+            #- 1
+            #- 3
         bas_poly.min_area_square_meters:
             - 7200
         bas_poly.max_area_square_meters:
@@ -1033,7 +1033,7 @@ python -m watch.mlops.schedule_evaluation --params="
         bas_poly_viz.enabled: 0
     " \
     --root_dpath="$DVC_EXPT_DPATH/_split6_toothbrush_meanyear" \
-    --devices="0," --queue_size=6 \
+    --devices="0,1" --queue_size=6 \
     --backend=tmux --queue_name "_split6_toothbrush_meanyear" \
     --pipeline=bas --skip_existing=1 \
     --run=1

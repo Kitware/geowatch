@@ -984,12 +984,14 @@ class AggregatorAnalysisMixin:
             else:
                 for region_id, summary_table in region_id_to_summary.items():
                     ntotal = region_id_to_ntotal[region_id]
+                    rich.print('---')
                     if region_id in agg.macro_key_to_regions:
                         macro_regions = agg.macro_key_to_regions[region_id]
                         rich.print(f'Top {len(summary_table)} / {ntotal} for {region_id} = {macro_regions}')
                     else:
                         rich.print(f'Top {len(summary_table)} / {ntotal} for {region_id}')
                     rich.print(summary_table.iloc[::-1].to_string())
+                    rich.print('')
 
         PRINT_MODELS = verbose
         if PRINT_MODELS:
