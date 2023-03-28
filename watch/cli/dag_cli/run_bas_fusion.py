@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# PYTHON_ARGCOMPLETE_OK
 """
 See Old Version:
     ../../../scripts/run_bas_fusion_eval3_for_baseline.py
@@ -6,28 +7,26 @@ See Old Version:
 SeeAlso:
     ~/code/watch-smartflow-dags/KIT_TA2_PYENV_TEST.py
 """
-from urllib.parse import urlparse
+import json
 import os
+import scriptconfig as scfg
+import shutil
 import subprocess
 import tempfile
-import json
-from glob import glob
-import shutil
-
-from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress
-from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress
-from watch.tasks.fusion.predict import predict
-from watch.cli.concat_kwcoco_videos import concat_kwcoco_datasets
-from watch.utils.util_yaml import Yaml
-
-import scriptconfig as scfg
 import ubelt as ub
+
+from glob import glob
+from urllib.parse import urlparse
 
 
 class BasFusionConfig(scfg.DataConfig):
     """
     Run TA-2 BAS fusion as baseline framework component
+
+    python ~/code/watch/watch/cli/dag_cli/run_bas_fusion.py
     """
+    __fuzzy_hyphens__ = True
+
     input_path = scfg.Value(None, type=str, position=1, required=True, help=ub.paragraph(
             '''
             Path to input T&E Baseline Framework JSON
@@ -83,7 +82,10 @@ class BasFusionConfig(scfg.DataConfig):
 
 
 def main():
-    config = BasFusionConfig.cli()
+    config = BasFusionConfig.cli(strict=True)
+    import sys
+    print(f'sys.argv={sys.argv}')
+    print('config = {}'.format(ub.urepr(dict(config), nl=1, align=':')))
     run_bas_fusion_for_baseline(config)
 
 
@@ -193,6 +195,11 @@ def _ta2_collate_output(aws_base_command,
 
 
 def run_bas_fusion_for_baseline(config):
+    from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress
+    from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress
+    from watch.cli.concat_kwcoco_videos import concat_kwcoco_datasets
+    from watch.tasks.fusion.predict import predict
+    from watch.utils.util_yaml import Yaml
 
     input_path = config.input_path
     input_region_path = config.input_region_path
@@ -205,8 +212,7 @@ def run_bas_fusion_for_baseline(config):
     previous_bas_outbucket = config.previous_bas_outbucket
 
     if aws_profile is not None:
-        aws_base_command =\
-            ['aws', 's3', '--profile', aws_profile, 'cp']
+        aws_base_command = ['aws', 's3', '--profile', aws_profile, 'cp']
     else:
         aws_base_command = ['aws', 's3', 'cp']
 
