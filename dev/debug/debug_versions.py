@@ -30,6 +30,7 @@ def main(cmdline=1, **kwargs):
         setup = ub.import_module_from_path(repo_dpath / 'setup.py', index=0)
 
     reqs = setup.parse_requirements(repo_dpath / 'requirements.txt', versions=False)
+    reqs.append('opencv-python-headless')
     reqs = list(ub.oset([req.split(';')[0].split('[')[0].split('<')[0] for req in reqs]))
 
     versions = {}
@@ -73,7 +74,7 @@ def main(cmdline=1, **kwargs):
             'numexpr',
         },
 
-        'imaging': {
+        'images': {
             'Pillow',
             'scikit_image',
             'tifffile',
@@ -154,6 +155,8 @@ def main(cmdline=1, **kwargs):
     for key, val in library_categories.items():
         remain = remain - val
         grouped_libraries[key] = versions & val
+
+    # grouped_libraries['images'].add('opencv-python-headless')
 
     grouped_libraries['other'] = remain
 
