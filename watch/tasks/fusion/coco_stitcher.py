@@ -475,7 +475,7 @@ class CocoStitchingManager(object):
 
         # Get the final stitched feature for this image
         with warnings.catch_warnings():
-            warnings.filterwarnings('ignore', 'invalid value encountered in true_divide')
+            warnings.filterwarnings('ignore', 'invalid value encountered')
             final_probs = stitcher.finalize()
         final_probs = kwarray.atleast_nd(final_probs, 3)
 

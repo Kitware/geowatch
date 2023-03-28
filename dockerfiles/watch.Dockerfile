@@ -194,6 +194,8 @@ docker tag $IMAGE_NAME registry.smartgitlab.com/kitware/$IMAGE_NAME
 docker push registry.smartgitlab.com/kitware/$IMAGE_NAME
 
    # Will need to bake in a model
+   # For futher instructions see: 
+   # ../docs/smartflow_running_the_system.rst
 
 "
 EOF
