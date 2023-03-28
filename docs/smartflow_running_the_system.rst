@@ -60,26 +60,40 @@ Assuming that you have already build a pyenv docker image (see last heredoc in
 
 .. code:: bash
 
-   # This is the model you are interested in baking in.
-   DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
-
-   MODEL_REL_FNAME=models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2_epoch3_step941.pt
-   HOST_MODEL_FPATH=$DVC_EXPT_DPATH/$MODEL_REL_FNAME
-   CONTAINER_MODEL_FPATH=/smart_expt_dvc/$MODEL_REL_FNAME
-   CONTAINER_MODEL_DNAME=$(python -c "import pathlib; print(str(pathlib.Path('$CONTAINER_MODEL_FPATH').parent))")
-   echo $HOST_MODEL_FPATH
-   echo $CONTAINER_MODEL_DNAME
-   echo $CONTAINER_MODEL_FPATH
-
    # This is the name of the pyenv watch image that you built
    IMAGE_NAME=watch:311-loose
 
-   NEW_IMAGE_NAME=${IMAGE_NAME}-baked
+   NEW_IMAGE_NAME=${IMAGE_NAME}-baked-v2
 
    # Run the base image as a container so we can put stuff into it
-   docker run -td --name temp_container $IMAGE_NAME
-   docker exec -t temp_container mkdir -p "$CONTAINER_MODEL_DNAME"
-   docker cp $HOST_MODEL_FPATH "temp_container:/$CONTAINER_MODEL_FPATH"
+   # We will use DVC to facilitate the transfer to keep things consistent
+   # We mount our local experiment directory, and pull relevant files
+   DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+   docker run \
+       --volume $DVC_EXPT_DPATH:/host-smart_expt_dvc:ro \
+       -td --name temp_container $IMAGE_NAME
+
+   docker exec -t temp_container pip install dvc
+   docker exec -t temp_container mkdir -p /root/data
+   docker exec -t temp_container git clone /host-smart_expt_dvc/.git /root/data/smart_expt_dvc
+
+   docker exec -w /root/data/smart_expt_dvc -t temp_container \
+       dvc remote add host /host-smart_expt_dvc/.dvc/cache
+
+   # Workaround DVC Issue by removing aws remote
+   # References: https://github.com/iterative/dvc/issues/9264
+   docker exec -w /root/data/smart_expt_dvc -t temp_container \
+       dvc remote remove aws
+
+   # Pull in relevant models you want to bake into the container
+   # These will be specified relative to the experiment DVC repo
+   docker exec -w /root/data/smart_expt_dvc -t temp_container \
+       dvc pull --remote host \
+       models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2_epoch3_step941.pt \
+       models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt \
+       models/uky/uky_invariants_2022_03_21/pretext_model/pretext_pca_104.pt \
+       models/uky/uky_invariants_2022_12_17/TA1_pretext_model/pretext_package.pt \
+       models/landcover/sentinel2.pt
 
    # Save the modified container as a new image
    docker commit temp_container $NEW_IMAGE_NAME

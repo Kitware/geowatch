@@ -905,11 +905,12 @@ python -m watch.mlops.schedule_evaluation --params="
         bas_pxl.test_dataset:
             #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-KR_R001.kwcoco.zip
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-KR_R002.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-NZ_R001.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-NZ_R001.kwcoco.zip
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-CH_R001.kwcoco.zip
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BH_R001.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BR_R001.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BR_R002.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BR_R001.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BR_R002.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-AE_R002.kwcoco.zip
         bas_pxl.chip_overlap: 0.3
         bas_pxl.chip_dims:
             - auto
@@ -978,11 +979,12 @@ python -m watch.mlops.schedule_evaluation --params="
         bas_pxl.test_dataset:
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-KR_R001.kwcoco.zip
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-KR_R002.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-NZ_R001.kwcoco.zip
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-CH_R001.kwcoco.zip
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BH_R001.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BR_R001.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BR_R002.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-NZ_R001.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BR_R001.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BR_R002.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-AE_R002.kwcoco.zip
         bas_pxl.chip_overlap: 0.3
         bas_pxl.chip_dims:
             - auto
@@ -996,13 +998,13 @@ python -m watch.mlops.schedule_evaluation --params="
             #- 0.2
             #- 0.25
             #- 0.27
-            #- 0.3
+            - 0.3
             - 0.33
-            #- 0.4
+            - 0.4
             #- 0.5
             #- 0.7
         bas_poly.inner_window_size:
-            #- 1y
+            - 1y
             - null
         bas_poly.inner_agg_fn:
             - mean
@@ -1018,8 +1020,10 @@ python -m watch.mlops.schedule_evaluation --params="
             - 10GSD
         bas_poly.moving_window_size:
             - null
-            #- 1
-            #- 3
+            - 1
+            - 2
+            - 3
+            - 4
         bas_poly.min_area_square_meters:
             - 7200
         bas_poly.max_area_square_meters:

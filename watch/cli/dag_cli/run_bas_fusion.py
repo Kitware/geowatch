@@ -1,9 +1,8 @@
+#!/usr/bin/env python3
 """
-See New Version:
-    ../watch/cli/dag_cli/run_bas_fusion.py
+See Old Version:
+    ../../../scripts/run_bas_fusion_eval3_for_baseline.py
 """
-import argparse
-import sys
 from urllib.parse import urlparse
 import os
 import subprocess
@@ -11,72 +10,72 @@ import tempfile
 import json
 from glob import glob
 import shutil
-from distutils import dir_util
 
-from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress  # noqa: 501
-from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress  # noqa: 501
+from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress
+from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress
 from watch.tasks.fusion.predict import predict
 from watch.cli.concat_kwcoco_videos import concat_kwcoco_datasets
 
+import scriptconfig as scfg
+import ubelt as ub
+
+
+class BasFusionConfig(scfg.DataConfig):
+    """
+    Run TA-2 BAS fusion as baseline framework component
+    """
+    input_path = scfg.Value(None, type=str, position=1, required=True, help=ub.paragraph(
+            '''
+            Path to input T&E Baseline Framework JSON
+            '''))
+
+    input_region_path = scfg.Value(None, type=str, position=2, required=True, help=ub.paragraph(
+            '''
+            Path to input T&E Baseline Framework Region definition JSON
+            '''))
+
+    output_path = scfg.Value(None, type=str, position=3, required=True, help='S3 path for output JSON')
+
+    bas_fusion_model_path = scfg.Value(None, type=str, required=True, help='File path to BAS fusion model')
+
+    aws_profile = scfg.Value(None, type=str, help=ub.paragraph(
+            '''
+            AWS Profile to use for AWS S3 CLI commands
+            '''))
+
+    dryrun = scfg.Value(False, isflag=True, short_alias=['d'], help='Run AWS CLI commands with --dryrun flag')
+
+    outbucket = scfg.Value(None, type=str, required=True, short_alias=['o'], help=ub.paragraph(
+            '''
+            S3 Output directory for STAC item / asset egress
+            '''))
+
+    newline = scfg.Value(False, isflag=True, short_alias=['n'], help=ub.paragraph(
+            '''
+            Output as simple newline separated STAC items
+            '''))
+
+    jobs = scfg.Value(1, type=int, short_alias=['j'], help='Number of jobs to run in parallel')
+
+    force_zero_num_workers = scfg.Value(False, isflag=True, help=ub.paragraph(
+            '''
+            Force predict scripts to use --num_workers=0
+            '''))
+
+    bas_thresh = scfg.Value(0.1, type=float, help=ub.paragraph(
+            '''
+            Threshold for BAS tracking (kwarg 'thresh')
+            '''))
+
+    previous_bas_outbucket = scfg.Value(None, type=str, help=ub.paragraph(
+            '''
+            S3 Output directory for previous interval BAS fusion output
+            '''))
+
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Run TA-2 BAS fusion as "
-                    "baseline framework component")
-
-    parser.add_argument('input_path',
-                        type=str,
-                        help="Path to input T&E Baseline Framework JSON")
-    parser.add_argument('input_region_path',
-                        type=str,
-                        help="Path to input T&E Baseline Framework Region "
-                             "definition JSON")
-    parser.add_argument('output_path',
-                        type=str,
-                        help="S3 path for output JSON")
-    parser.add_argument("--bas_fusion_model_path",
-                        required=True,
-                        type=str,
-                        help="File path to BAS fusion model")
-    parser.add_argument("--aws_profile",
-                        required=False,
-                        type=str,
-                        help="AWS Profile to use for AWS S3 CLI commands")
-    parser.add_argument("-d", "--dryrun",
-                        action='store_true',
-                        default=False,
-                        help="Run AWS CLI commands with --dryrun flag")
-    parser.add_argument("-o", "--outbucket",
-                        type=str,
-                        required=True,
-                        help="S3 Output directory for STAC item / asset "
-                             "egress")
-    parser.add_argument("-n", "--newline",
-                        action='store_true',
-                        default=False,
-                        help="Output as simple newline separated STAC items")
-    parser.add_argument("-j", "--jobs",
-                        type=int,
-                        default=1,
-                        required=False,
-                        help="Number of jobs to run in parallel")
-    parser.add_argument("--force_zero_num_workers",
-                        action='store_true',
-                        default=False,
-                        help="Force predict scripts to use --num_workers=0")
-    parser.add_argument("--bas_thresh",
-                        default=0.1,
-                        type=float,
-                        required=False,
-                        help="Threshold for BAS tracking (kwarg 'thresh')")
-    parser.add_argument("--previous_bas_outbucket",
-                        type=str,
-                        required=False,
-                        help="S3 Output directory for previous interval BAS "
-                             "fusion output")
-
-    run_bas_fusion_for_baseline(**vars(parser.parse_args()))
-    return 0
+    config = BasFusionConfig.cli()
+    run_bas_fusion_for_baseline(**config)
 
 
 def _download_region(aws_base_command,
@@ -273,12 +272,12 @@ def run_bas_fusion_for_baseline(
                 (previous_bas_fusion_kwcoco_path, bas_fusion_kwcoco_path),
                 combined_bas_fusion_kwcoco_path)
             # Copy saliency assets from previous bas fusion
-            dir_util.copy_tree(
+            shutil.copy_tree(
                 os.path.join(previous_ingress_dir, '_assets', 'pred_saliency'),
                 os.path.join(ingress_dir, '_assets', 'pred_saliency'))
 
             # Copy original assets from previous bas rusion
-            dir_util.copy_tree(
+            shutil.copy_tree(
                 os.path.join(previous_ingress_dir, region_id),
                 os.path.join(ingress_dir, region_id))
         else:
@@ -347,4 +346,4 @@ def run_bas_fusion_for_baseline(
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()
