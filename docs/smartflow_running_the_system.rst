@@ -31,8 +31,8 @@ High level:
 
 
 
-How to Bake a Model into a Dockerfile
--------------------------------------
+How to Bake a Model into a Dockerfile (OLD)
+-------------------------------------------
 
 * Must be run in repo root
 * Ensure whatever variant of the repo you want to be run is checked out.
@@ -51,12 +51,49 @@ Need to push container to smartgitlab
 
 
 
+Building the Pyenv Docker Image (NEW)
+-------------------------------------
+
+If you have not built a docker image, we will need to do so.
+
+There are two images that need to be build, first the
+`pyenv dockerfile <../dockerfiles/pyenv.Dockerfile>`_.
+And then the watch dockerfile that builds on top of it
+`watch dockerfile <../dockerfiles/watch.Dockerfile>`_. The heredocs in these
+files provide futher instructions.
+
+Here we will go over the basic use case for a specific version of Python /
+dependencies. We will use Python 3.11 and strict dependencies. We will assume
+that your watch repo is in ``~/code/watch``, but if it is not then change the
+environment variable:
+
+.. code:: bash
+
+   WATCH_REPO_DPATH=$HOME/code/watch
+
+   # Create a directory on the host for context
+   mkdir -p $HOME/temp/container-staging
+
+   # For pyenv we will use an empty directory
+   mkdir -p $HOME/temp/container-staging/empty
+
+   DOCKER_BUILDKIT=1 docker build --progress=plain \
+        -t pyenv:311 \
+        --build-arg PYTHON_VERSION=3.11.2 \
+        -f $WATCH_REPO_DPATH/dockerfiles/pyenv.Dockerfile \
+        $HOME/temp/container-staging/empty
+
+First, to build the pyenv image
+
+.. code:: bash
+
+
 
 How to Bake a Model into a Pyenv Dockerfile (NEW)
 -------------------------------------------------
 
-Assuming that you have already build a pyenv docker image (see last heredoc in
-../dockerfiles/watch.Dockerfile ) we will add a model to it.
+Assuming that you have already build a pyenv docker image we will add a model to it.
+
 
 .. code:: bash
 

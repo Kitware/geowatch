@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.3.0-labs
+# syntax=docker/dockerfile:1.5.0
 
 # This dockerfile uses new-ish buildkit syntax. 
 # Details on how to run are on the bottom of the file.
