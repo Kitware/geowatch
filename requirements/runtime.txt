@@ -207,7 +207,7 @@ segmentation-models-pytorch>=0.2.0  ; python_version < '3.11'
 ujson>=5.6.0 ; python_version < '4.0'  and python_version >= '3.11'  # Python 3.11+
 ujson>=5.2.0 ; python_version < '3.11'                               # Python 3.10-
 
-kwimage_ext >= 0.2.0
+kwimage_ext >= 0.2.1
 
 py-cpuinfo>=8.0.0
 
