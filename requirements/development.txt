@@ -37,4 +37,4 @@ cmd_queue >= 0.1.7
 dataframe_image>=0.1.1
 
 # For monkey patches
-wrapt>=1.13.3
+wrapt>=1.14.1
