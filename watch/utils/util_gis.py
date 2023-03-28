@@ -290,6 +290,9 @@ def get_crs84():
 
     Returns:
         pyproj.crs.crs.CRS
+
+    Example:
+        >>> get_crs84()
     """
     from pyproj import CRS
     crs84 = CRS.from_user_input('crs84')
