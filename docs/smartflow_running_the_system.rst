@@ -62,10 +62,11 @@ Assuming that you have already build a pyenv docker image (see last heredoc in
 
    # This is the model you are interested in baking in.
    DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
-   HOST_MODEL_FPATH=$DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2_epoch3_step941.pt
-   MODEL_FNAME=$(python -c "import pathlib; print(str(pathlib.Path('$HOST_MODEL_FPATH').relative_to('$DVC_EXPT_DPATH')))")
-   CONTAINER_MODEL_DNAME=$(python -c "from pathlib import Path as P; print(str(P('/smart_expt_dvc') / P('$HOST_MODEL_FPATH').parent.relative_to('$DVC_EXPT_DPATH')))")
-   CONTAINER_MODEL_FPATH=$CONTAINER_MODEL_DNAME/$MODEL_FNAME
+
+   MODEL_REL_FNAME=models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2_epoch3_step941.pt
+   HOST_MODEL_FPATH=$DVC_EXPT_DPATH/$MODEL_REL_FNAME
+   CONTAINER_MODEL_FPATH=/smart_expt_dvc/$MODEL_REL_FNAME
+   CONTAINER_MODEL_DNAME=$(python -c "import pathlib; print(str(pathlib.Path('$CONTAINER_MODEL_FPATH').parent))")
    echo $HOST_MODEL_FPATH
    echo $CONTAINER_MODEL_DNAME
    echo $CONTAINER_MODEL_FPATH
@@ -92,6 +93,20 @@ Assuming that you have already build a pyenv docker image (see last heredoc in
    docker push registry.smartgitlab.com/kitware/$NEW_IMAGE_NAME
 
 
+Jon Notes (will turn these into docs soon):
+
+.. code:: bash
+
+    # SeeAlso: ~/code/watch-smartflow-dags/KIT_TA2_PYENV_TEST.py
+
+    # git@gitlab.kitware.com:smart/watch-smartflow-dags.git
+    # This is the repo containing the smartflow dags
+
+    LOCAL_DAG_DPATH=$HOME/code/watch-smartflow-dags
+    DAG_FNAME=KIT_TA2_PYENV_TEST.py
+
+    aws s3 --profile iarpa cp $LOCAL_DAG_DPATH/$DAG_FNAME \
+        s3://smartflow-023300502152-us-west-2/smartflow/env/kitware-prod-v4/dags/$DAG_FNAME
 
 
 Running Dags After Containers are Using

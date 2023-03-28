@@ -140,6 +140,10 @@ echo "
 # docker login
 # docker pull docker/dockerfile:1.3.0-labs
 
+
+#### You need to build the pyenv image first:
+# ./pyenv.Dockerfile
+
 cd $HOME/code/watch
 
 mkdir -p $HOME/tmp/watch-img-staging
@@ -169,15 +173,15 @@ docker run \
 
 cd $HOME/tmp/watch-img-staging/watch
 DOCKER_BUILDKIT=1 docker build --progress=plain \
-    -t "watch:311-loose" \
-    --build-arg BUILD_STRICT=0 \
+    -t "watch:311-strict" \
+    --build-arg BUILD_STRICT=1 \
     --build-arg BASE_IMAGE=pyenv:311 \
     --build-arg PYTHON_VERSION=3.11.2 \
     -f ./dockerfiles/watch.Dockerfile .
 
 docker run \
     --volume "$HOME/code/watch":/host-watch:ro \
-    --runtime=nvidia -it watch:311-loose bash
+    --runtime=nvidia -it watch:311-strict bash
 
 
 git remote add dockerhost /host-watch/.git
