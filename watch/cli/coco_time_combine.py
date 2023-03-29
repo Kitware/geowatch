@@ -64,7 +64,7 @@ class TimeCombineConfig(scfg.DataConfig):
     merge_method = scfg.Value('mean', help=ub.paragraph(
             '''
             How to combine multiple observations over each time_window.
-            '''), choices=['mean', 'median'])
+            '''), choices=['mean', 'median', 'max'])
 
     resolution = scfg.Value('10GSD', help=ub.paragraph(
             '''
@@ -671,6 +671,20 @@ def merge_images(window_coco_images, merge_method, requested_chans, space,
 
         combined_image_data = np.nanmedian(median_stack, axis=0)
 
+    elif merge_method == 'max':
+        # TODO: Combine with other methods.
+        median_stack = []
+        for coco_img in window_coco_images:
+            delayed = coco_img.imdelay(merge_chans, space=space, resolution=resolution)
+            image_data = delayed.finalize(nodata_method='float')
+            if mask_low_quality:
+                # Load quality mask.
+                quality_mask = get_quality_mask(coco_img, space, resolution, avoid_quality_values=avoid_quality_values)
+                # Update pixel weights based on quality pixel values.
+                x, y = np.where(quality_mask[..., 0] == 0)
+                image_data[x, y, :] = np.nan
+            median_stack.append(image_data)
+        combined_image_data = np.nanmax(median_stack, axis=0)
     else:
         raise NotImplementedError
 

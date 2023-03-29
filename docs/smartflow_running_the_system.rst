@@ -31,28 +31,8 @@ High level:
 
 
 
-How to Bake a Model into a Dockerfile (OLD)
--------------------------------------------
-
-* Must be run in repo root
-* Ensure whatever variant of the repo you want to be run is checked out.
-* Need a base directory with a model in ``./models``.
-
-.. code:: bash
-
-    DOCKER_BUILDKIT=1 \
-        docker build --build-arg BUILD_STRICT=1 -f dockerfiles/ta2_features.Dockerfile . \
-        --tag registry.smartgitlab.com/kitware/watch/ta2:post-jan31-invariant-rescaled-debug4
-
-
-In the DAG need to change path to point to the new baked in model.
-
-Need to push container to smartgitlab
-
-
-
-Building the Pyenv-WATCH Docker Image (NEW)
--------------------------------------------
+Building the Pyenv-WATCH Docker Image
+-------------------------------------
 
 If you have not built a docker image, we will need to do so.
 
@@ -182,8 +162,8 @@ machine.
     docker push registry.smartgitlab.com/kitware/$WATCH_IMAGE
 
 
-How to Bake a Model into a Pyenv Dockerfile (NEW)
--------------------------------------------------
+How to Bake a Model into a Pyenv Dockerfile
+-------------------------------------------
 
 Assuming that you have already build a pyenv docker image we will add a model
 to it.
@@ -304,8 +284,8 @@ to it.
    echo $NEW_IMAGE_NAME
 
 
-Update the code / models in an existing image (NEW)
----------------------------------------------------
+Update the code / models in an existing image
+---------------------------------------------
 
 Say you need to make a small change to the code, but don't want to rebuild the
 entire model. We can handle that case by mounting the latest repos onto the
@@ -345,8 +325,8 @@ latest code, and commiting the change as a new image.
    docker push registry.smartgitlab.com/kitware/$NEW_IMAGE_NAME
 
 
-How to Submit a DAG (NEW)
--------------------------
+How to Submit a DAG
+-------------------
 
 .. .. SeeAlso: ~/code/watch-smartflow-dags/KIT_TA2_PYENV_TEST.py
 .. .. SeeAlso: ~/code/watch-smartflow-dags/KIT_TA2_PREEVAL10_PYENV.py
@@ -394,8 +374,28 @@ which can be done via the command:
    python -c "import webbrowser; webbrowser.open('https://localhost:2746/home', new=1)"
 
 
-Running Dags After Containers are Using
----------------------------------------
+
+How to Bake a Model into a Dockerfile (OLD)
+-------------------------------------------
+
+* Must be run in repo root
+* Ensure whatever variant of the repo you want to be run is checked out.
+* Need a base directory with a model in ``./models``.
+
+.. code:: bash
+
+    DOCKER_BUILDKIT=1 \
+        docker build --build-arg BUILD_STRICT=1 -f dockerfiles/ta2_features.Dockerfile . \
+        --tag registry.smartgitlab.com/kitware/watch/ta2:post-jan31-invariant-rescaled-debug4
+
+
+In the DAG need to change path to point to the new baked in model.
+
+Need to push container to smartgitlab
+
+
+Running Dags After Containers are Using (OLD)
+---------------------------------------------
 
 Now we edit a DAG file for airflow
 

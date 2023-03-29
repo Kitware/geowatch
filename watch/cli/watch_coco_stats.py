@@ -306,6 +306,7 @@ def build_year_summary(image_df):
     import numpy as np
     _, year_bins = np.histogram(image_df['year'])
     year_bins = sorted(np.unique(np.ceil(year_bins)))
+    year_bins = year_bins + [year_bins[-1] + 1]
     # max_bins = max(18 // len(image_df['sensor'].unique()), 2)
     max_bins = 15
     if len(year_bins) > max_bins:
