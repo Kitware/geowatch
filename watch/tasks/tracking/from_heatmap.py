@@ -757,8 +757,9 @@ def _merge_polys(p1, p2, poly_merge_method=None):
         from watch.tasks.tracking.from_heatmap import * # NOQA
         from watch.tasks.tracking.from_heatmap import _merge_polys  # NOQA
 
-        p1 = [kwimage.Polygon.random().to_shapely() for _ in range(10)]
-        p2 = [kwimage.Polygon.random().to_shapely() for _ in range(10)]
+        p1 = [kwimage.Polygon.random().scale(0.2).to_shapely() for _ in range(1)]
+        p2 = [kwimage.Polygon.random().to_shapely() for _ in range(1)]
+        unary_union(p1 + p2)
         _merge_polys(p1, p2)
 
         p1_kw = kwimage.Polygon(exterior=np.array([(0, 0), (1, 0), (0.5, 1)]))
@@ -797,6 +798,7 @@ def _merge_polys(p1, p2, poly_merge_method=None):
         level_sets = {frozenset(v.tolist()) for v in isect_idxs.values()}
         level_sets = list(map(sorted, level_sets))
 
+        merged_polys = []
         for idxs in level_sets:
             if len(idxs) == 1:
                 combo = geom_df['geometry'].iloc[idxs[0]]
@@ -812,7 +814,8 @@ def _merge_polys(p1, p2, poly_merge_method=None):
                     # warnings.warn('Found two intersecting polygons where the
                     # union was a multipolygon')
                     # combo = combo.buffer(0)
-                    merged_polys.extend(list(combo.geoms))
+                    merged_polys.append(combo.convex_hull)
+                    # merged_polys.extend(list(combo.geoms))
                 else:
                     raise AssertionError(f'Unexpected type {combo.geom_type}')
     elif poly_merge_method == 'v1':
