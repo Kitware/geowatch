@@ -998,9 +998,9 @@ python -m watch.mlops.schedule_evaluation --params="
             #- 0.2
             #- 0.25
             #- 0.27
-            - 0.3
+            #- 0.3
             - 0.33
-            - 0.4
+            #- 0.4
             #- 0.5
             #- 0.7
         bas_poly.inner_window_size:
@@ -1021,9 +1021,11 @@ python -m watch.mlops.schedule_evaluation --params="
         bas_poly.moving_window_size:
             - null
             - 1
-            - 2
-            - 3
-            - 4
+            #- 2
+            #- 3
+            #- 4
+        bas_poly.poly_merge_method:
+            - 'v2'
         bas_poly.min_area_square_meters:
             - 7200
         bas_poly.max_area_square_meters:
