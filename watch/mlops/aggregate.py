@@ -85,6 +85,8 @@ class AggregateEvluationConfig(DataConfig):
 
     stdout_report = Value(False, help='if True, print a report to stdout')
 
+    resource_report = Value(False, help='if True report resource utilization')
+
     io_workers = Value('avail', help='number of processes to load results')
 
     rois = Value('auto', help='Comma separated regions of interest')
@@ -154,6 +156,11 @@ def main(cmdline=True, **kwargs):
                     agg.analyze()
                 if report_config.get('macro_analysis', False):
                     agg.macro_analysis()
+
+    if config.resource_report:
+        for type, agg in eval_type_to_aggregator.items():
+            if len(agg):
+                agg.report_resources()
 
     if config.plot_params:
         for type, agg in eval_type_to_aggregator.items():
@@ -1047,6 +1054,66 @@ class AggregatorAnalysisMixin:
                 new_models_fpath.write_text(shortlist_text)
 
         return region_id_to_summary, top_param_lut
+
+    def report_resources(agg):
+        import pandas as pd
+        from watch.utils import util_time
+        table = agg.table.copy()
+        resources = agg.resources
+
+        duration_cols = [
+            k for k in resources.keys()
+            if k.endswith('.duration')
+        ]
+        for k in duration_cols:
+            table.loc[:, k] = table.loc[:, k].apply(lambda x: util_time.coerce_timedelta(x) if not pd.isnull(x) else x)
+
+        resource_summary = []
+        for k in duration_cols:
+            a, b, c = k.split('.')
+            uuid_key = f'context.{b}.uuid'
+
+            chosen = []
+            for _, group in table.groupby(uuid_key):
+                idx = group[k].idxmax()
+                chosen.append(idx)
+
+            unique_rows = table.loc[chosen]
+            row = {
+                'node': b,
+                'resource': c,
+                'total': unique_rows[k].sum(),
+                'mean': unique_rows[k].mean(),
+                'num': len(chosen),
+            }
+            resource_summary.append(row)
+
+            co2_key = f'{a}.{b}.co2_kg'
+            if co2_key in table:
+                unique_rows[co2_key]
+                row = {
+                    'node': b,
+                    'resource': 'co2_kg',
+                    'total': unique_rows[co2_key].sum(),
+                    'mean': unique_rows[co2_key].mean(),
+                    'num': len(chosen),
+                }
+                resource_summary.append(row)
+
+            co2_key = f'{a}.{b}.kwh'
+            if co2_key in table:
+                unique_rows[co2_key]
+                row = {
+                    'node': b,
+                    'resource': 'kwh',
+                    'total': unique_rows[co2_key].sum(),
+                    'mean': unique_rows[co2_key].mean(),
+                    'num': len(chosen),
+                }
+                resource_summary.append(row)
+        resource_summary_df = pd.DataFrame(resource_summary)
+        import rich
+        rich.print(resource_summary_df.to_string())
 
 
 class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):

@@ -1049,6 +1049,7 @@ python -m watch.mlops.aggregate \
     --target "
         - $DVC_EXPT_DPATH/_split6_toothbrush_meanyear
     " \
+    --resource_report=True \
     --stdout_report="
         top_k: 10
         per_group: 1

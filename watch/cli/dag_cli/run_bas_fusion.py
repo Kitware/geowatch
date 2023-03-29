@@ -5,7 +5,7 @@ See Old Version:
     ../../../scripts/run_bas_fusion_eval3_for_baseline.py
 
 SeeAlso:
-    ~/code/watch-smartflow-dags/KIT_TA2_PYENV_TEST.py
+    ~/code/watch-smartflow-dags/KIT_TA2_PREEVAL10_PYENV.py
 """
 import json
 import os
@@ -82,6 +82,23 @@ class BasFusionConfig(scfg.DataConfig):
 
 
 def main():
+    """
+    Ignore:
+        import sys, ubelt
+        sys.path.append(ubelt.expandpath('~/code/watch'))
+        from watch.cli.dag_cli.run_bas_fusion import *  # NOQA
+        argv = [
+            'script',
+            '--bas_fusion_model_path', '/root/data/smart_expt_dvc/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2_epoch3_step941.pt',
+            '--outbucket', 's3://smartflow-023300502152-us-west-2/smartflow/env/kitware-prod-v4/work/ta2_preeval10_pyenv_v01/batch/kit/KR_R001/2021-08-31/split/mono/products/bas-fusion',
+            '--input_path', 's3://smartflow-023300502152-us-west-2/smartflow/env/kitware-prod-v4/work/ta2_preeval10_pyenv_v01/batch/kit/KR_R001/2021-08-31/split/mono/products/kwcoco-dataset/items.jsonl', '--input_region_path',
+            's3://smartflow-023300502152-us-west-2/smartflow/env/kitware-prod-v4/work/ta2_preeval10_pyenv_v01/batch/kit/KR_R001/2021-08-31/input/mono/region_models/KR_R001.geojson', '--output_path', 's3://smartflow-023300502152-us-west-2/smartflow/env/kitware-prod-v4/work/ta2_preeval10_pyenv_v01/batch/kit/KR_R001/2021-08-31/split/mono/products/bas-fusion/items.jsonl',
+            '--time_combine', 'True', '--bas_pxl_config',
+            'num_workers: 24\nchip_overlap: 0.3\nchip_dims: auto\ndrop_unused_frames: true\ntime_sampling: auto\ntime_span: auto,\ntime_kernel: auto\nbatch_size: 1', '--bas_poly_config', 'inner_window_size: null\ninner_agg_fn: mean\nnorm_ord: 1\nagg_fn: probs\nresolution: 10GSD\nmoving_window_size: null\nmin_area_square_meters: 7200\nmax_area_square_meters: 9000000', '--bas_thresh', '0.33'
+            ]
+        config = BasFusionConfig.cli(argv=argv, strict=True)
+        print('config = {}'.format(ub.urepr(dict(config), nl=1, align=':')))
+    """
     config = BasFusionConfig.cli(strict=True)
     import sys
     print(f'sys.argv={sys.argv}')

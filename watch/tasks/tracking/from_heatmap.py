@@ -487,6 +487,7 @@ def time_aggregated_polys(
         resolution=None,
         inner_window_size=None,
         inner_agg_fn=None,
+        poly_merge_method=None,
         ):
     '''
     Track function.
@@ -641,7 +642,8 @@ def time_aggregated_polys(
                              inner_window_size=inner_window_size,
                              inner_agg_fn=inner_agg_fn,
                              resolution=resolution,
-                             bounds=use_boundaries)
+                             bounds=use_boundaries,
+                             poly_merge_method=poly_merge_method)
     orig_gid_polys = list(gids_polys)  # 26% of runtime
     gids_polys = orig_gid_polys
 
@@ -745,7 +747,7 @@ def time_aggregated_polys(
 #
 
 
-def _merge_polys(p1, p2):
+def _merge_polys(p1, p2, poly_merge_method=None):
     '''
     Given two lists of polygons, p1 and p2, merge these according to:
       - add all unique polygons in the merged list
@@ -784,46 +786,76 @@ def _merge_polys(p1, p2):
                     raise Exception('!')
     '''
     merged_polys = []
+    if poly_merge_method is None:
+        poly_merge_method = 'v1'
 
-    p1_seen = set()
-    p2_seen = set()
+    if poly_merge_method == 'v2':
+        # Just combine anything that touches in both frames together
+        from watch.utils import util_gis
+        geom_df = gpd.GeoDataFrame(geometry=p1 + p2)
+        isect_idxs = util_gis.geopandas_pairwise_overlaps(geom_df, geom_df)
+        level_sets = {frozenset(v.tolist()) for v in isect_idxs.values()}
+        level_sets = list(map(sorted, level_sets))
 
-    # add all polygons that overlap
-    for j, _p1 in enumerate(p1):
-        if j in p1_seen:
-            continue
-        for i, _p2 in enumerate(p2):
-            if (i in p2_seen) or (i > len(p2) - 1):
-                continue
-            if _p1.intersects(_p2):
-                combo = unary_union([_p1, _p2])
+        for idxs in level_sets:
+            if len(idxs) == 1:
+                combo = geom_df['geometry'].iloc[idxs[0]]
+                merged_polys.append(combo)
+            else:
+                combo = geom_df['geometry'].iloc[idxs].unary_union
                 if combo.geom_type == 'Polygon':
-                    merged_polys.append(combo)
+                    ...
                 elif combo.geom_type == 'MultiPolygon':
                     # Can this ever happen? It seems to have occurred in a test
                     # run. Bowties can cause this.
                     # import warnings
                     # warnings.warn('Found two intersecting polygons where the
                     # union was a multipolygon')
-                    merged_polys.extend(list(combo.geoms))
+                    combo = combo.buffer(0)
                 else:
-                    raise AssertionError(
-                        f'Unexpected type {combo.geom_type} from {_p1} and {_p2}')
+                    raise AssertionError(f'Unexpected type {combo.geom_type}')
+                merged_polys.append(combo)
+    elif poly_merge_method == 'v1':
+        p1_seen = set()
+        p2_seen = set()
+        # add all polygons that overlap
+        for j, _p1 in enumerate(p1):
+            if j in p1_seen:
+                continue
+            for i, _p2 in enumerate(p2):
+                if (i in p2_seen) or (i > len(p2) - 1):
+                    continue
+                if _p1.intersects(_p2):
+                    combo = unary_union([_p1, _p2])
+                    if combo.geom_type == 'Polygon':
+                        merged_polys.append(combo)
+                    elif combo.geom_type == 'MultiPolygon':
+                        # Can this ever happen? It seems to have occurred in a test
+                        # run. Bowties can cause this.
+                        # import warnings
+                        # warnings.warn('Found two intersecting polygons where the
+                        # union was a multipolygon')
+                        merged_polys.extend(list(combo.geoms))
+                    else:
+                        raise AssertionError(
+                            f'Unexpected type {combo.geom_type} from {_p1} and {_p2}')
 
-                p1_seen.add(j)
-                p2_seen.add(i)
+                    p1_seen.add(j)
+                    p2_seen.add(i)
 
-    # all polygons that did not overlap with any polygon
-    all_p1 = set(np.arange(len(p1)))
-    remaining_p1 = all_p1 - p1_seen
+        # all polygons that did not overlap with any polygon
+        all_p1 = set(np.arange(len(p1)))
+        remaining_p1 = all_p1 - p1_seen
 
-    for index in remaining_p1:
-        merged_polys.append(p1[index])
+        for index in remaining_p1:
+            merged_polys.append(p1[index])
 
-    all_p2 = set(np.arange(len(p2)))
-    remaining_p2 = all_p2 - p2_seen
-    for index in remaining_p2:
-        merged_polys.append(p2[index])
+        all_p2 = set(np.arange(len(p2)))
+        remaining_p2 = all_p2 - p2_seen
+        for index in remaining_p2:
+            merged_polys.append(p2[index])
+    else:
+        raise ValueError(poly_merge_method)
 
     return merged_polys
 
@@ -832,7 +864,7 @@ def _merge_polys(p1, p2):
 def heatmaps_to_polys(heatmaps, bounds, agg_fn, thresh, morph_kernel,
                       thresh_hysteresis, norm_ord, moving_window_size,
                       inner_window_size=None, inner_agg_fn=None,
-                      heatmap_dates=None):
+                      heatmap_dates=None, poly_merge_method=None):
     '''
     Use parameters: agg_fn, thresh, morph_kernel, thresh_hysteresis, norm_ord
     '''
@@ -920,7 +952,8 @@ def heatmaps_to_polys(heatmaps, bounds, agg_fn, thresh, morph_kernel,
             h1 = heatmaps[(i + 1) * final_size:(i + 2) * final_size]
             p1 = _process_1_step(h1)
             p1 = convert_to_shapely(p1)
-            polys_final = _merge_polys(polys_final, p1)
+            polys_final = _merge_polys(polys_final, p1,
+                                       poly_merge_method=poly_merge_method)
 
         polys_final = convert_to_kwimage_poly(polys_final)
 
@@ -939,7 +972,8 @@ def _gids_polys(
         moving_window_size=None,  # 150
         inner_window_size=None,
         inner_agg_fn='mean',
-        bounds=False) -> Iterable[Union[int, Poly]]:
+        bounds=False,
+        poly_merge_method=None) -> Iterable[Union[int, Poly]]:
     """
     Example:
         >>> from watch.tasks.tracking.from_heatmap import *  # NOQA
@@ -1035,7 +1069,9 @@ def _gids_polys(
                                         moving_window_size,
                                         inner_window_size=inner_window_size,
                                         inner_agg_fn=inner_agg_fn,
-                                        heatmap_dates=heatmap_dates)
+                                        heatmap_dates=heatmap_dates,
+                                        poly_merge_method=poly_merge_method,
+                                       )
         if track is None:
             # BUG: The polygons retunred from heatmap-to-polys might not be
             # corresponding to the gids in this case.
@@ -1207,6 +1243,8 @@ class TimeAggregatedBAS(NewTrackFunction):
     site_validation: bool = False
     site_validation_span_steps: int = 120
     site_validation_thresh: float = 0.1
+
+    poly_merge_method: str = 'v1'
 
     def __post_init__(self):
         _resolve_deprecated_args(self)

@@ -319,7 +319,7 @@ latest code, and commiting the change as a new image.
    export DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
 
    IMAGE_NAME=watch:0.4.5-strict-pyenv3.11.2-models-2023-03-28
-   NEW_IMAGE_NAME=watch:0.4.5-strict-pyenv3.11.2-models-2023-03-28-v03
+   NEW_IMAGE_NAME=watch:0.4.5-strict-pyenv3.11.2-models-2023-03-28-v04
 
    # Mount the image with
    docker run \
@@ -368,7 +368,7 @@ Once you have a DAG file ready upload it to AWS via:
     LOCAL_DAG_DPATH=$HOME/code/watch-smartflow-dags
 
     # The name of the DAG file we edited
-    DAG_FNAME=KIT_TA2_PYENV_TEST.py
+    DAG_FNAME=KIT_TA2_PREEVAL10_PYENV.py
 
     # Upload the DAG file to AWS
     aws s3 --profile iarpa cp $LOCAL_DAG_DPATH/$DAG_FNAME \
