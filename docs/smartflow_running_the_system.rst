@@ -356,7 +356,7 @@ Ensure that you have the DAG repo
 .. code:: bash
 
     # This is the repo containing the smartflow dags
-   git clone git@gitlab.kitware.com:smart/watch-smartflow-dags.git $HOME/code
+   git clone git@gitlab.kitware.com:smart/watch-smartflow-dags.git $HOME/code/watch-smartflow-dags
 
 
 Choose a DAG file and modify it as necessary (TODO, describe this in more
