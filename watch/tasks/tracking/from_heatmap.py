@@ -804,17 +804,17 @@ def _merge_polys(p1, p2, poly_merge_method=None):
             else:
                 combo = geom_df['geometry'].iloc[idxs].unary_union
                 if combo.geom_type == 'Polygon':
-                    ...
+                    merged_polys.append(combo)
                 elif combo.geom_type == 'MultiPolygon':
                     # Can this ever happen? It seems to have occurred in a test
                     # run. Bowties can cause this.
                     # import warnings
                     # warnings.warn('Found two intersecting polygons where the
                     # union was a multipolygon')
-                    combo = combo.buffer(0)
+                    # combo = combo.buffer(0)
+                    merged_polys.extend(list(combo.geoms))
                 else:
                     raise AssertionError(f'Unexpected type {combo.geom_type}')
-                merged_polys.append(combo)
     elif poly_merge_method == 'v1':
         p1_seen = set()
         p2_seen = set()

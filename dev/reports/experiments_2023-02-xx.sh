@@ -981,9 +981,9 @@ python -m watch.mlops.schedule_evaluation --params="
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-KR_R002.kwcoco.zip
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-CH_R001.kwcoco.zip
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BH_R001.kwcoco.zip
-            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-NZ_R001.kwcoco.zip
-            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BR_R001.kwcoco.zip
-            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BR_R002.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-NZ_R001.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BR_R001.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BR_R002.kwcoco.zip
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-AE_R002.kwcoco.zip
         bas_pxl.chip_overlap: 0.3
         bas_pxl.chip_dims:
