@@ -336,6 +336,9 @@ latest code, and commiting the change as a new image.
    # Save the modified container as a new image
    docker commit temp_container $NEW_IMAGE_NAME
 
+   docker stop temp_container
+   docker rm temp_container
+
    # Push the container to smartgitlab
    echo $NEW_IMAGE_NAME
    docker tag $NEW_IMAGE_NAME registry.smartgitlab.com/kitware/$NEW_IMAGE_NAME
