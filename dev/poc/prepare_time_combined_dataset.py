@@ -409,4 +409,15 @@ smartwatch visualize /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_
 
 
 
+smartwatch visualize /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6-MeanYear10GSD/imganns-CH_R001.kwcoco.zip --smart
+
+
+smartwatch reproject_annotations \
+    --src /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6-MeanYear10GSD/imgonly-CH_R001.kwcoco.zip \
+    --dst /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6-MeanYear10GSD/imganns-CH_R001.kwcoco.zip \
+    --site_models="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-hdd/annotations/drop6/site_models/*.geojson"
+
+smartwatch visualize /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6-MeanYear10GSD/imganns-CH_R001.kwcoco.zip --smart
+smartwatch visualize /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6-MeanYear10GSD/imganns-CH_R0012.kwcoco.zip --smart
+
 """

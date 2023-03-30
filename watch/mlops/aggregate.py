@@ -65,6 +65,8 @@ class AggregateEvluationConfig(DataConfig):
     """
     Aggregates results from multiple DAG evaluations.
     """
+    __fuzzy_hyphens__ = True
+
     target = Value(None, help=ub.paragraph(
         '''
         The input to the aggregator, which can take several forms:
@@ -79,13 +81,13 @@ class AggregateEvluationConfig(DataConfig):
 
     pipeline = Value('joint_bas_sc', help='the name of the pipeline to run')
 
-    export_tables = Value(False, help='if True, aggregated tables will be written to the output directory')
+    export_tables = Value(False, isflag=True, help='if True, aggregated tables will be written to the output directory')
 
-    plot_params = Value(False, help='if True, param plots will be drawn')
+    plot_params = Value(False, isflag=True, help='if True, param plots will be drawn')
 
-    stdout_report = Value(False, help='if True, print a report to stdout')
+    stdout_report = Value(False, isflag=True, help='if True, print a report to stdout')
 
-    resource_report = Value(False, help='if True report resource utilization')
+    resource_report = Value(False, isflag=True, help='if True report resource utilization')
 
     io_workers = Value('avail', help='number of processes to load results')
 
@@ -149,8 +151,10 @@ def main(cmdline=True, **kwargs):
             report_config = {}
         for type, agg in eval_type_to_aggregator.items():
             if len(agg):
+
                 if rois is not None:
                     agg.build_macro_tables(rois)
+
                 agg.report_best(**ub.compatible(report_config, agg.report_best))
                 if report_config.get('analyze', False):
                     agg.analyze()
@@ -910,7 +914,7 @@ class AggregatorAnalysisMixin:
         # analysis.results
         analysis.analysis()
 
-    def report_best(agg, top_k=3, shorten=True, per_group=2, verbose=1):
+    def report_best(agg, top_k=3, shorten=True, per_group=2, verbose=1, reference_region=None):
         """
         Report the top k pointwise results for each region / macro-region.
 
@@ -925,6 +929,13 @@ class AggregatorAnalysisMixin:
             shorten (bool): if True, shorten the columns by removing
                 non-ambiguous prefixes wrt to a known node type.
 
+            reference_region (str | None):
+                if specified filter the top results in all other regions to
+                only be with respect to the top results in this region (or
+                macro region). Can be set to the special key "final" to choose
+                the last region, which is typically a macro region.
+
+
         Returns:
             Tuple[T1, T2]:
                 region_id_to_summary (T1=Dict[str, DataFrame]):
@@ -936,18 +947,37 @@ class AggregatorAnalysisMixin:
         region_id_to_summary = {}
         big_param_lut = {}
         region_id_to_ntotal = {}
-
-        for region_id, group in agg.region_to_tables.items():
+        if reference_region:
+            # In every region group, restrict to only the top values for the
+            # reference region. The idea is to make things comparable to the
+            # macro scores.
+            if reference_region == 'final':
+                reference_region = region_id = list(agg.region_to_tables.keys())[-1]
+            else:
+                region_id = reference_region
+            group = agg.region_to_tables[region_id]
             metric_group = group[group.columns.intersection(agg.metrics.columns)]
             metric_group = metric_group.sort_values(agg.primary_metric_cols)
-
             top_idxs = util_pandas.pandas_argmaxima(metric_group, agg.primary_metric_cols, k=top_k)
+            param_hashids = group.iloc[top_idxs]['param_hashid']
+            _agg = agg.filterto(param_hashids=param_hashids)
+            if region_id in agg.macro_key_to_regions:
+                rois = agg.macro_key_to_regions[region_id]
+                _agg.build_macro_tables(rois)
+        else:
+            _agg = agg
 
-            final_display_cols = list(ub.oset(agg.primary_metric_cols + agg.display_metric_cols))
+        for region_id, group in _agg.region_to_tables.items():
+            metric_group = group[group.columns.intersection(_agg.metrics.columns)]
+            metric_group = metric_group.sort_values(_agg.primary_metric_cols)
+
+            top_idxs = util_pandas.pandas_argmaxima(metric_group, _agg.primary_metric_cols, k=top_k)
+
+            final_display_cols = list(ub.oset(_agg.primary_metric_cols + _agg.display_metric_cols))
             top_metrics = metric_group.loc[top_idxs][final_display_cols]
-            # top_metrics = top_metrics[agg.primary_metric_cols + agg.display_metric_cols]
-            top_indexes = group[group.columns.intersection(agg.index.columns)].loc[top_idxs]
-            param_lut = agg.hashid_to_params.subdict(top_indexes['param_hashid'])
+            # top_metrics = top_metrics[_agg.primary_metric_cols + _agg.display_metric_cols]
+            top_indexes = group[group.columns.intersection(_agg.index.columns)].loc[top_idxs]
+            param_lut = _agg.hashid_to_params.subdict(top_indexes['param_hashid'])
             big_param_lut.update(param_lut)
             summary_table = pd.concat([top_indexes, top_metrics], axis=1)
             if shorten:
@@ -977,39 +1007,45 @@ class AggregatorAnalysisMixin:
 
             if only_one_source_item and only_one_top_item:
                 justone = pd.concat(list(region_id_to_summary.values()), axis=0)
-                submacro = ub.udict(agg.macro_key_to_regions) & justone['region_id'].values
+                submacro = ub.udict(_agg.macro_key_to_regions) & justone['region_id'].values
                 if submacro:
                     print('Macro Regions LUT: ' +  ub.urepr(submacro, nl=1))
                 rich.print(justone)
             elif only_one_top_item:
                 justone = pd.concat(list(region_id_to_summary.values()), axis=0)
-                # submacro = ub.udict(agg.macro_key_to_regions) & justone['region_id'].values
+                # submacro = ub.udict(_agg.macro_key_to_regions) & justone['region_id'].values
                 # if submacro:
                 #     print('Macro Regions LUT: ' +  ub.urepr(submacro, nl=1))
                 rich.print(justone)
-                rich.print('agg.macro_key_to_regions = {}'.format(ub.repr2(agg.macro_key_to_regions, nl=1)))
+                rich.print('agg.macro_key_to_regions = {}'.format(ub.repr2(_agg.macro_key_to_regions, nl=1)))
             else:
                 for region_id, summary_table in region_id_to_summary.items():
                     ntotal = region_id_to_ntotal[region_id]
                     rich.print('---')
-                    if region_id in agg.macro_key_to_regions:
-                        macro_regions = agg.macro_key_to_regions[region_id]
-                        rich.print(f'Top {len(summary_table)} / {ntotal} for {region_id} = {macro_regions}')
+                    ref_text = ''
+                    if reference_region:
+                        ref_text = f' wrt to reference region {reference_region}'
+
+                    if region_id in _agg.macro_key_to_regions:
+                        macro_regions = _agg.macro_key_to_regions[region_id]
+                        rich.print(f'Top {len(summary_table)} / {ntotal} for {region_id} = {macro_regions}{ref_text}')
                     else:
-                        rich.print(f'Top {len(summary_table)} / {ntotal} for {region_id}')
+                        rich.print(f'Top {len(summary_table)} / {ntotal} for {region_id}{ref_text}')
                     rich.print(summary_table.iloc[::-1].to_string())
                     rich.print('')
 
         PRINT_MODELS = verbose
-        if PRINT_MODELS:
+        if PRINT_MODELS and 0:
+            # FIXME: handle macro regions
             tocombine_indexes = []
-            for region, summary in region_id_to_summary.items():
+            for region_id, summary in region_id_to_summary.items():
                 tocombine_indexes.append(list(summary.index))
+
             import itertools as it
             top_indexes = list(ub.oset([x for x in ub.flatten(
                 it.zip_longest(*tocombine_indexes)) if x is not None]))
 
-            table = agg.table.copy()
+            table = _agg.table.copy()
             table.loc[top_indexes, 'rank'] = list(range(len(top_indexes)))
             table = table.sort_values('rank')
 
@@ -1024,7 +1060,7 @@ class AggregatorAnalysisMixin:
                 table['_hackname'] = [ub.Path(p).parent.name for p in table['params.bas_pxl.package_fpath'].tolist()]
                 for expt, group in table.groupby('_hackname'):
                     # group['params.bas_pxl.package_fpath'].tolist()
-                    flags = (group[agg.primary_metric_cols] > 0).any(axis=1)
+                    flags = (group[_agg.primary_metric_cols] > 0).any(axis=1)
                     group = group[flags]
                     group = group.sort_values('rank')
                     chosen_indexes.extend(group.index[0:per_group])
@@ -1394,6 +1430,8 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         """
         Builds one or more macro tables
         """
+        if rois == 'auto':
+            rois = [key for key in agg.macro_compatible.keys() if len(key) > 1]
         if isinstance(rois, list) and len(rois) and ub.iterable(rois[0]):
             # Asked for multiple groups of ROIS.
             for single_rois in rois:

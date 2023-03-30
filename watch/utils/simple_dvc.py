@@ -36,7 +36,7 @@ class SimpleDVC(ub.NiceRepr):
         self.remote = remote
 
     def __nice__(self):
-        return str(self.dvc_root)
+        return f'dvc_root={self.dvc_root}'
 
     @ub.memoize_property
     def cache_dir(self):
@@ -73,10 +73,13 @@ class SimpleDVC(ub.NiceRepr):
 
     @classmethod
     def find_root(cls, path=None):
+        """
+        Given a path, search its ancestors to find the root of a dvc repo.
+        """
         if path is None:
             raise Exception('no way to find dvc root')
         # Need to find it from the path
-        path = ub.Path(path)
+        path = ub.Path(path).resolve()
         max_parts = len(path.parts)
         curr = path
         found = None

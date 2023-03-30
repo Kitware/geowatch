@@ -1367,9 +1367,10 @@ def remove_specific_runs_by_region():
     dag.configure(config=None, root_dpath=root_dpath)
 
     remove_regions = [
-        'NZ_R001',
-        'BR_R001',
-        'BR_R002',
+        # 'NZ_R001',
+        # 'BR_R001',
+        # 'BR_R002',
+        'CH_R001',
     ]
 
     stages_of_interest = ['bas_pxl', 'bas_pxl_eval', 'bas_poly_eval']
@@ -1405,6 +1406,9 @@ def remove_specific_runs_by_region():
 
     closed_bad_dpaths = sorted([p.resolve() for p in list(complement_bad_dpaths) + bad_dpaths])
     print('closed_bad_dpaths = {}'.format(ub.urepr(closed_bad_dpaths, nl=1)))
+
+    # Keep bas pxl jobs
+    closed_bad_dpaths = [p for p in closed_bad_dpaths if 'bas_pxl' not in str(p)]
 
     for dpath in closed_bad_dpaths:
         dpath.delete()
