@@ -1373,7 +1373,7 @@ def remove_specific_runs_by_region():
         'CH_R001',
     ]
 
-    stages_of_interest = ['bas_pxl', 'bas_pxl_eval', 'bas_poly_eval']
+    stages_of_interest = ['bas_pxl_eval', 'bas_poly_eval']
     existing = {}
 
     bad_dpaths = []
@@ -1398,11 +1398,10 @@ def remove_specific_runs_by_region():
             yield from expand_succ(succ_dpath)
 
     complement_bad_dpaths = set()
-
-    for dpath in list(bad_dpaths):
-        if dpath not in complement_bad_dpaths:
-            complement_bad_dpaths.update(list(expand_pred(dpath)))
-            complement_bad_dpaths.update(list(expand_succ(dpath)))
+    # for dpath in list(bad_dpaths):
+    #     if dpath not in complement_bad_dpaths:
+    #         complement_bad_dpaths.update(list(expand_pred(dpath)))
+    #         complement_bad_dpaths.update(list(expand_succ(dpath)))
 
     closed_bad_dpaths = sorted([p.resolve() for p in list(complement_bad_dpaths) + bad_dpaths])
     print('closed_bad_dpaths = {}'.format(ub.urepr(closed_bad_dpaths, nl=1)))
