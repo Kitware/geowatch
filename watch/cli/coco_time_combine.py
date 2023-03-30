@@ -535,11 +535,16 @@ def get_quality_mask(coco_image, space, resolution, avoid_quality_values=['cloud
     Returns:
         np.ndarray: A binary numpy array of shape [H, W, 1] where the 1 values corresponds to a quality pixel vice versa for 0 values.
     """
+    import numpy as np
     qa_data = coco_image.imdelay('quality',
                                  space=space,
                                  interpolation='nearest',
                                  antialias=False,
                                  resolution=resolution).finalize()
+
+    if qa_data.dtype.kind == 'f':
+        # If the qa band is a float, then it must be a nan channel
+        return np.ones_like(qa_data, dtype=np.uint8)
 
     from watch.tasks.fusion.datamodules.qa_bands import QA_SPECS
     # We don't have the exact right information here, so we can
@@ -550,8 +555,6 @@ def get_quality_mask(coco_image, space, resolution, avoid_quality_values=['cloud
         table = QA_SPECS.find_table(spec_name, sensor)
     except AssertionError as ex:
         print(f'warning ex={ex}')
-        import xdev
-        xdev.embed()
         is_iffy = None
     else:
         is_iffy = table.mask_any(qa_data, avoid_quality_values)

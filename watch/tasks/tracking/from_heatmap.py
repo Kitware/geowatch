@@ -1073,8 +1073,7 @@ def _gids_polys(
                                         inner_window_size=inner_window_size,
                                         inner_agg_fn=inner_agg_fn,
                                         heatmap_dates=heatmap_dates,
-                                        poly_merge_method=poly_merge_method,
-                                       )
+                                        poly_merge_method=poly_merge_method,)
         if track is None:
             # BUG: The polygons retunred from heatmap-to-polys might not be
             # corresponding to the gids in this case.
