@@ -49,7 +49,7 @@ import warnings
 import math
 
 
-class ReprojectAnnotationsConfig(scfg.Config):
+class ReprojectAnnotationsConfig(scfg.DataConfig):
     """
     Projects annotations from geospace onto a kwcoco dataset and optionally
     propogates them across time.
@@ -57,68 +57,82 @@ class ReprojectAnnotationsConfig(scfg.Config):
     References:
         https://smartgitlab.com/TE/annotations/-/wikis/Alternate-Site-Type
     """
-    __default__ = {
-        'src': scfg.Value(help=ub.paragraph(
+    __fuzzy_hyphens__ = 1
+
+    src = scfg.Value(None, position=1, help=ub.paragraph(
             '''
-            path to the kwcoco file to propagate labels in
-            '''),
-                   position=1),
-        'dst':
-        scfg.Value('propagated_data.kwcoco.json',
-                   help=ub.paragraph('''
-            Where the output kwcoco file with propagated labels is saved
-            '''),
-                   position=2),
-        'site_models':
-        scfg.Value(None,
-                   help=ub.paragraph('''
-            Geospatial geojson "site" annotation files. Either a path to a
-            file, or a directory.
-            ''')),
-        'region_models':
-        scfg.Value(None,
-                   help=ub.paragraph('''
-            Geospatial geojson "region" annotation files. Containing site
-            summaries.  Either a path to a file, or a directory.
-            ''')),
-        'viz_dpath':
-        scfg.Value(None,
-                   help=ub.paragraph('''
-            if specified, visualizations will be written to this directory
-            ''')),
-        'verbose':
-        scfg.Value(1, help=ub.paragraph('''
-            use this to print details
-            ''')),
-        'role':
-        scfg.Value(None,
-                   help=ub.paragraph('''
+            Input coco file to project annotations onto.
+            '''))
+
+    dst = scfg.Value(None, position=2, help=ub.paragraph(
+            '''
+            Output coco file that will contain projected annotations.
+            '''))
+
+    inplace = scfg.Value(False, isflag=True, help=ub.paragraph(
+        '''
+        if True and dst is unspecified then the output will overwrite the input
+        '''))
+
+    site_models = scfg.Value(None, help=ub.paragraph(
+            '''
+            Geospatial geojson "site" annotation files. Either a path to
+            a file, or a directory.
+            '''))
+
+    region_models = scfg.Value(None, help=ub.paragraph(
+            '''
+            Geospatial geojson "region" annotation files. Containing
+            site summaries. Either a path to a file, or a directory.
+            '''))
+
+    viz_dpath = scfg.Value(None, help=ub.paragraph(
+            '''
+            if specified, visualizations will be written to this
+            directory
+            '''))
+
+    role = scfg.Value(None, help=ub.paragraph(
+            '''
             if specified, the value is assigned as the role of each new
             annotation.
-            ''')),
-        'clear_existing':
-        scfg.Value(True,
-                   help=ub.paragraph('''
-            if True, clears existing annotations before reprojecting the new ones.
-            ''')),
-        'propogate_strategy':
-        scfg.Value('SMART', help='strategy for how to interpolate annotations over time'),
-        'geo_preprop':
-        scfg.Value('auto', help='force if we check geo properties or not'),
-        'geospace_lookup':
-        scfg.Value('auto', help='if False assumes region-ids can be used to lookup association'),
-        'workers':
-        scfg.Value(0, help='number of workers for geo-preprop / geojson io'),
-        'status_to_catname':
-        scfg.Value(None,
-                   help=ub.paragraph('''
-            Can be yaml or a path to a yaml file containing a mapping from
-            status to kwcoco category names. This partially overwrites behavior
-            in heuristics.PHASE_STATUS_TO_KWCOCO_CATNAME, so only the
-            difference mapping needs to be specified.
-            E.g. "{positive_excluded: positive}".
             '''))
-    }
+
+    clear_existing = scfg.Value(True, help=ub.paragraph(
+            '''
+            if True, clears existing annotations before reprojecting the
+            new ones.
+            '''))
+
+    propogate_strategy = scfg.Value('SMART', help=ub.paragraph(
+            '''
+            strategy for how to interpolate annotations over time
+            '''))
+
+    geo_preprop = scfg.Value('auto', help='force if we check geo properties or not')
+
+    geospace_lookup = scfg.Value('auto', help=ub.paragraph(
+            '''
+            if False assumes region-ids can be used to lookup
+            association
+            '''))
+
+    status_to_catname = scfg.Value(None, help=ub.paragraph(
+            '''
+            Can be yaml or a path to a yaml file containing a mapping
+            from status to kwcoco category names. This partially
+            overwrites behavior in
+            heuristics.PHASE_STATUS_TO_KWCOCO_CATNAME, so only the
+            difference mapping needs to be specified. E.g.
+            "{positive_excluded: positive}".
+            '''))
+
+    workers = scfg.Value(0, help=ub.paragraph(
+            '''
+            number of workers for geo-preprop / geojson io
+            '''))
+
+    verbose = scfg.Value(1, help='use this to print details')
 
 
 DUMMY_START_DATE = '1970-01-01'
@@ -155,12 +169,15 @@ def main(cmdline=False, **kwargs):
     from watch.utils import kwcoco_extensions
     import kwcoco
     import numpy as np
-    config = ReprojectAnnotationsConfig(data=kwargs, cmdline=cmdline)
+    config = ReprojectAnnotationsConfig.cli(data=kwargs, cmdline=cmdline)
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
 
     output_fpath = config['dst']
     if output_fpath is None:
-        raise AssertionError
+        if config['inplace']:
+            config['dst'] = config['src']
+        else:
+            raise ValueError('must specify dst: {}'.format(config['dst']))
 
     # Load the coco dataset with all of the images
     coco_dset = kwcoco.CocoDataset.coerce(config['src'])

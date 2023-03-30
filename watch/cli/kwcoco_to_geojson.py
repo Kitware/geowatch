@@ -25,6 +25,32 @@ DESIGN TODO:
     - [ ] Separate out into two processes:
         1) given a kwcoco file, does tracking and produces another kwcoco file with predicted "tracked" annotations.
         2) given a kwcoco file with predicted "tracked" annotations, convert that back to geojson
+
+Ignore:
+    python -m watch.cli.run_tracker \
+        --in_file /data/joncrall/dvc-repos/smart_expt_dvc/_debug/metrics/bas-fusion/bas_fusion_kwcoco.json \
+        --out_site_summaries_fpath /data/joncrall/dvc-repos/smart_expt_dvc/_debug/metrics/bas-fusion/tracking_manifests_bas2/region_models_manifest.json \
+        --out_site_summaries_dir /data/joncrall/dvc-repos/smart_expt_dvc/_debug/metrics/bas-fusion/region_models2 \
+        --out_kwcoco /data/joncrall/dvc-repos/smart_expt_dvc/_debug/metrics/bas-fusion/bas_fusion_kwcoco_tracked3.json \
+        --default_track_fn saliency_heatmaps \
+        --append_mode=False \
+        --track_kwargs "
+            thresh: 0.33
+            inner_window_size: 1y
+            inner_agg_fn: mean
+            norm_ord: 1
+            agg_fn: probs
+            resolution: 10GSD
+            moving_window_size: 1
+            min_area_square_meters: 7200
+            max_area_square_meters: 9000000
+            poly_merge_method: v1
+        "
+
+        smartwatch visualize /data/joncrall/dvc-repos/smart_expt_dvc/_debug/metrics/bas-fusion/bas_fusion_kwcoco_tracked3.json --smart
+
+
+
 """
 import os
 import scriptconfig as scfg
@@ -1106,10 +1132,12 @@ def main(args=None, **kwargs):
             raise ValueError('out_site_summaries_fpath should have a .json extension')
 
     # load the track kwargs
-    if os.path.isfile(args.track_kwargs):
-        track_kwargs = json.load(args.track_kwargs)
-    else:
-        track_kwargs = json.loads(args.track_kwargs)
+    from watch.utils.util_yaml import Yaml
+    track_kwargs = Yaml.coerce(args.track_kwargs)
+    # if os.path.isfile(args.track_kwargs):
+    #     track_kwargs = json.load(args.track_kwargs)
+    # else:
+    #     track_kwargs = json.loads(args.track_kwargs)
     assert isinstance(track_kwargs, dict)
 
     # Read the kwcoco file
@@ -1297,6 +1325,7 @@ def main(args=None, **kwargs):
         site_summary_tracking_output = tracking_output.copy()
         site_summary_tracking_output['files'] = site_summary_fpaths
         out_site_summaries_fpath = ub.Path(args.out_site_summaries_fpath)
+        out_site_summaries_fpath.parent.ensuredir()
         print(f'Write tracked site summary result to {out_site_summaries_fpath}')
         with safer.open(out_site_summaries_fpath, 'w', temp_file=True) as file:
             json.dump(site_summary_tracking_output, file, indent='    ')

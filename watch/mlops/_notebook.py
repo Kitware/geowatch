@@ -332,7 +332,8 @@ def _gather_all_results():
     expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
     cmdline = 0
     kwargs = {
-        'target': expt_dvc_dpath / 'all_agg_2022-02-24/*.csv.zip',
+        # 'target': expt_dvc_dpath / 'all_agg_2022-02-24/*.csv.zip',
+        'target': expt_dvc_dpath / '_split6_toothbrush_meanyear',
         'pipeline': 'bas',
         'io_workers': 20,
     }
@@ -1346,3 +1347,68 @@ def quick_heatmap_viz():
     kwplot.imshow(stats['max'], cmap='plasma', data_colorbar=True, title='max response', fnum=2)
     kwplot.imshow(stats['mean'], cmap='plasma', data_colorbar=True, title='mean response', fnum=3)
     kwplot.imshow(stats['std'], cmap='plasma', data_colorbar=True, title='std response', fnum=4)
+
+
+def remove_specific_runs_by_region():
+    """
+    Find specific regions and remove runs for them
+    """
+    from watch.mlops import aggregate_loader
+    import watch
+    expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+    root_dpath = expt_dvc_dpath / '_split6_toothbrush_meanyear'
+    pipeline = 'bas'
+    io_workers = 16
+    # eval_type_to_results = aggregate_loader.build_tables(root_dpath, pipeline, io_workers)
+    # eval_type_to_results['bas_pxl_eval']
+
+    from watch.mlops import smart_pipeline
+    dag = smart_pipeline.make_smart_pipeline(pipeline)
+    dag.configure(config=None, root_dpath=root_dpath)
+
+    remove_regions = [
+        # 'NZ_R001',
+        # 'BR_R001',
+        # 'BR_R002',
+        'CH_R001',
+    ]
+
+    stages_of_interest = ['bas_pxl', 'bas_pxl_eval', 'bas_poly_eval']
+    existing = {}
+
+    bad_dpaths = []
+    for stage in stages_of_interest:
+        rows = dag.nodes[stage].find_template_outputs(workers=8)
+        for row in rows:
+            test_dset_fpath = ub.Path(row['request.bas_pxl.test_dataset'])
+            if any([r in test_dset_fpath.name for r in remove_regions]):
+                bad_dpath = row['dpath']
+                bad_dpaths.append(bad_dpath)
+
+    def expand_pred(dpath):
+        pred_link_dpath = dpath / '.pred'
+        for pred_dpath in list(pred_link_dpath.glob('*/*')):
+            yield pred_dpath
+            yield from expand_pred(pred_dpath)
+
+    def expand_succ(dpath):
+        succ_link_dpath = dpath / '.succ'
+        for succ_dpath in list(succ_link_dpath.glob('*/*')):
+            yield succ_dpath
+            yield from expand_succ(succ_dpath)
+
+    complement_bad_dpaths = set()
+
+    for dpath in list(bad_dpaths):
+        if dpath not in complement_bad_dpaths:
+            complement_bad_dpaths.update(list(expand_pred(dpath)))
+            complement_bad_dpaths.update(list(expand_succ(dpath)))
+
+    closed_bad_dpaths = sorted([p.resolve() for p in list(complement_bad_dpaths) + bad_dpaths])
+    print('closed_bad_dpaths = {}'.format(ub.urepr(closed_bad_dpaths, nl=1)))
+
+    # Keep bas pxl jobs
+    closed_bad_dpaths = [p for p in closed_bad_dpaths if 'bas_pxl' not in str(p)]
+
+    for dpath in closed_bad_dpaths:
+        dpath.delete()

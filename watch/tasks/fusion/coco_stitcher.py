@@ -475,7 +475,7 @@ class CocoStitchingManager(object):
 
         # Get the final stitched feature for this image
         with warnings.catch_warnings():
-            warnings.filterwarnings('ignore', 'invalid value encountered in true_divide')
+            warnings.filterwarnings('ignore', 'invalid value encountered')
             final_probs = stitcher.finalize()
         final_probs = kwarray.atleast_nd(final_probs, 3)
 
@@ -741,7 +741,9 @@ def quantize_image(imdata, old_min=None, old_max=None, quantize_dtype=np.int16):
     if imdata is not None:
         invalid_mask = np.isnan(imdata)
         new_imdata = (imdata.clip(old_min, old_max) - old_min) * quant_factor + quantize_min
-        new_imdata = new_imdata.astype(quantize_dtype)
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', 'invalid value encountered')
+            new_imdata = new_imdata.astype(quantize_dtype)
         new_imdata[invalid_mask] = quantize_nan
     else:
         new_imdata = None

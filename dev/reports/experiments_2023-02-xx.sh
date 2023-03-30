@@ -905,11 +905,12 @@ python -m watch.mlops.schedule_evaluation --params="
         bas_pxl.test_dataset:
             #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-KR_R001.kwcoco.zip
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-KR_R002.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-NZ_R001.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-NZ_R001.kwcoco.zip
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-CH_R001.kwcoco.zip
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BH_R001.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BR_R001.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BR_R002.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BR_R001.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BR_R002.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-AE_R002.kwcoco.zip
         bas_pxl.chip_overlap: 0.3
         bas_pxl.chip_dims:
             - auto
@@ -964,6 +965,9 @@ python -m watch.mlops.aggregate \
 #
 
 # New Stuff - 03-25
+#
+# SeeAlso:
+# ~/code/watch/dev/poc/prepare_time_combined_dataset.py
 
 python -m watch.mlops.manager "list" --dataset_codes Drop6-MeanYear10GSD
 
@@ -976,13 +980,14 @@ python -m watch.mlops.schedule_evaluation --params="
             - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2_epoch3_step941.pt
             #- /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2_epoch41_step10532.pt
         bas_pxl.test_dataset:
-            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-KR_R001.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-KR_R002.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-NZ_R001.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-KR_R001.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-KR_R002.kwcoco.zip
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-CH_R001.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BH_R001.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BR_R001.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BR_R002.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BH_R001.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-NZ_R001.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BR_R001.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BR_R002.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-AE_R001.kwcoco.zip
         bas_pxl.chip_overlap: 0.3
         bas_pxl.chip_dims:
             - auto
@@ -996,20 +1001,24 @@ python -m watch.mlops.schedule_evaluation --params="
             #- 0.2
             #- 0.25
             #- 0.27
+            #- 0.27
             #- 0.3
             - 0.33
-            #- 0.4
+            - 0.35
+            - 0.38
+            - 0.4
+            - 0.42
             #- 0.5
             #- 0.7
         bas_poly.inner_window_size:
-            #- 1y
+            - 1y
             - null
         bas_poly.inner_agg_fn:
             - mean
         bas_poly.norm_ord:
             - 1
             #- 2
-            #- inf
+            - inf
         bas_poly.polygon_simplify_tolerance:
             - 1
         bas_poly.agg_fn:
@@ -1018,8 +1027,12 @@ python -m watch.mlops.schedule_evaluation --params="
             - 10GSD
         bas_poly.moving_window_size:
             - null
-            #- 1
+            - 1
+            #- 2
             #- 3
+            #- 4
+        bas_poly.poly_merge_method:
+            - 'v2'
         bas_poly.min_area_square_meters:
             - 7200
         bas_poly.max_area_square_meters:
@@ -1033,7 +1046,7 @@ python -m watch.mlops.schedule_evaluation --params="
         bas_poly_viz.enabled: 0
     " \
     --root_dpath="$DVC_EXPT_DPATH/_split6_toothbrush_meanyear" \
-    --devices="0,1" --queue_size=6 \
+    --devices="0,1" --queue_size=8 \
     --backend=tmux --queue_name "_split6_toothbrush_meanyear" \
     --pipeline=bas --skip_existing=1 \
     --run=1
@@ -1045,11 +1058,14 @@ python -m watch.mlops.aggregate \
     --target "
         - $DVC_EXPT_DPATH/_split6_toothbrush_meanyear
     " \
+    --resource_report=True \
+    --rois=KR_R001,KR_R002,CH_R001,NZ_R001,AE_R001,BH_R001,BR_R002,BR_R001 \
     --stdout_report="
-        top_k: 10
+        top_k: 3
         per_group: 1
         macro_analysis: 0
         analyze: 0
+        reference_region: final
     "
     #--plot_params=True \
     #--output_dpath="$DVC_EXPT_DPATH"/_split6_toothbrush_meanyear/_aggregate

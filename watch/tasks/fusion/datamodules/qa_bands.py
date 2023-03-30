@@ -180,6 +180,8 @@ class QA_BitSpecTable(QA_SpecMixin):
         })
 
     def mask_any(table, quality_im, qa_names):
+        if quality_im.dtype.kind == 'f':
+            raise ValueError('The quality mask should be an bitwise integer type, not a float')
         bit_values = list((table.name_to_value & qa_names).values())
         iffy_bits = functools.reduce(operator.or_, bit_values)
         is_iffy = (quality_im & iffy_bits) > 0
@@ -294,6 +296,8 @@ class QA_ValueSpecTable(QA_SpecMixin):
         }
 
     def mask_any(table, quality_im, qa_names):
+        if quality_im.dtype.kind == 'f':
+            raise ValueError('The quality mask should be an integer type, not a float')
         iffy_values = list((table.name_to_value & qa_names).values())
         is_iffy = np.logical_or.reduce([quality_im == value for value in iffy_values])
         return is_iffy
@@ -365,6 +369,7 @@ QA_SPECS += QA_BitSpecTable({
     'qa_spec_name': 'ACC-1',
     'qa_spec_date': '2022-11-28',
     'sensor': 'S2',
+    'sensor_alias': ['Sentinel-2'],
     'dtype': {'kind': 'u', 'itemsize': 2},
     'bits': [
         {'bit_number': 0, 'qa_name': 'combined', 'qa_description': 'combined qa mask', 'bit_value': [{'value': 1, 'description': 'use-pixel'}]},
@@ -391,6 +396,7 @@ QA_SPECS += QA_BitSpecTable({
     'qa_spec_name': 'ACC-1',
     'qa_spec_date': '2022-11-28',
     'sensor': 'L8',
+    'sensor_alias': ['Landsat 8'],
     'dtype': {'kind': 'u', 'itemsize': 2},
     'bits': [
         {'bit_number': 0, 'qa_name': 'combined', 'qa_description': 'combined qa mask', 'bit_value': [{'value': 1, 'description': 'use-pixel'}]},

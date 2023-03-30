@@ -41,15 +41,11 @@ jq>=1.3.0     ;                             python_version >= '3.11'    # Python
 jq>=1.2.2     ; python_version < '3.11' and python_version >= '3.10'    # Python 3.10
 jq>=1.2.1     ;  python_version <  '3.10'    # Python 3.8-3.9
 
-# TODO: unpin pyproj ASAP
-pyproj>=3.4.0     ;                             python_version >= '3.11'    # Python 3.11+
-pyproj>=3.3.1     ; python_version < '3.11' and python_version >= '3.10'    # Python 3.10
-pyproj>=3.2.1     ;  python_version <  '3.10'    # Python 3.8-3.9
-
 # Pinned due to CRS issue. Unsure if this is necessary. Need to check dashboards.
-#pyproj>=3.3.1,<=3.3.1 ;                             python_version >= '3.11'    # Python 3.11+
-#pyproj>=3.3.1,<=3.3.1 ; python_version < '3.11' and python_version >= '3.10'    # Python 3.10
-#pyproj>=3.3.3,<=3.3.1 ;  python_version <  '3.10'    # Python 3.8-3.9
+# TODO: try and fix and unpin pyproj 
+pyproj>=3.4.1<3.5.0 ;                             python_version >= '3.11'    # Python 3.11+
+pyproj>=3.3.1       ; python_version < '3.11' and python_version >= '3.10'    # Python 3.10
+pyproj>=3.2.1       ;  python_version <  '3.10'    # Python 3.8-3.9
 
 fiona>=1.8.22,<1.9.0  ;                             python_version >= '3.11'    # Python 3.11+
 fiona>=1.8.22,<1.9.0  ; python_version < '3.11' and python_version >= '3.10'    # Python 3.10

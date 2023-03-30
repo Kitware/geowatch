@@ -1,82 +1,109 @@
+#!/usr/bin/env python3
+# PYTHON_ARGCOMPLETE_OK
 """
-See New Version:
-    ../watch/cli/dag_cli/run_bas_fusion.py
+See Old Version:
+    ../../../scripts/run_bas_fusion_eval3_for_baseline.py
+
+SeeAlso:
+    ~/code/watch-smartflow-dags/KIT_TA2_PREEVAL10_PYENV.py
 """
-import argparse
-import sys
-from urllib.parse import urlparse
+import json
 import os
+import scriptconfig as scfg
+import shutil
 import subprocess
 import tempfile
-import json
-from glob import glob
-import shutil
-from distutils import dir_util
+import ubelt as ub
 
-from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress  # noqa: 501
-from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress  # noqa: 501
-from watch.tasks.fusion.predict import predict
-from watch.cli.concat_kwcoco_videos import concat_kwcoco_datasets
+from glob import glob
+from urllib.parse import urlparse
+
+
+class BasFusionConfig(scfg.DataConfig):
+    """
+    Run TA-2 BAS fusion as baseline framework component
+
+    python ~/code/watch/watch/cli/dag_cli/run_bas_fusion.py
+    """
+    __fuzzy_hyphens__ = True
+
+    input_path = scfg.Value(None, type=str, position=1, required=True, help=ub.paragraph(
+            '''
+            Path to input T&E Baseline Framework JSON
+            '''))
+
+    input_region_path = scfg.Value(None, type=str, position=2, required=True, help=ub.paragraph(
+            '''
+            Path to input T&E Baseline Framework Region definition JSON
+            '''))
+
+    output_path = scfg.Value(None, type=str, position=3, required=True, help='S3 path for output JSON')
+
+    bas_fusion_model_path = scfg.Value(None, type=str, required=True, help='File path to BAS fusion model')
+
+    aws_profile = scfg.Value(None, type=str, help=ub.paragraph(
+            '''
+            AWS Profile to use for AWS S3 CLI commands
+            '''))
+
+    dryrun = scfg.Value(False, isflag=True, short_alias=['d'], help='Run AWS CLI commands with --dryrun flag')
+
+    outbucket = scfg.Value(None, type=str, required=True, short_alias=['o'], help=ub.paragraph(
+            '''
+            S3 Output directory for STAC item / asset egress
+            '''))
+
+    bas_thresh = scfg.Value(0.1, type=float, help=ub.paragraph(
+            '''
+            Threshold for BAS tracking (kwarg 'thresh')
+            '''))
+
+    previous_bas_outbucket = scfg.Value(None, type=str, help=ub.paragraph(
+            '''
+            S3 Output directory for previous interval BAS fusion output
+            '''))
+
+    time_combine = scfg.Value(False, isflag=True, help=ub.paragraph(
+            '''
+            Quick and dirty hack to run time combine before fusion
+            '''))
+
+    bas_pxl_config = scfg.Value(None, type=str, help=ub.paragraph(
+            '''
+            Raw json/yaml or a path to a json/yaml file that specifies the
+            config for fusion.predict.
+            '''))
+
+    bas_poly_config = scfg.Value(None, type=str, help=ub.paragraph(
+            '''
+            Raw json/yaml or a path to a json/yaml file that specifies the
+            config for bas tracking.
+            '''))
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Run TA-2 BAS fusion as "
-                    "baseline framework component")
-
-    parser.add_argument('input_path',
-                        type=str,
-                        help="Path to input T&E Baseline Framework JSON")
-    parser.add_argument('input_region_path',
-                        type=str,
-                        help="Path to input T&E Baseline Framework Region "
-                             "definition JSON")
-    parser.add_argument('output_path',
-                        type=str,
-                        help="S3 path for output JSON")
-    parser.add_argument("--bas_fusion_model_path",
-                        required=True,
-                        type=str,
-                        help="File path to BAS fusion model")
-    parser.add_argument("--aws_profile",
-                        required=False,
-                        type=str,
-                        help="AWS Profile to use for AWS S3 CLI commands")
-    parser.add_argument("-d", "--dryrun",
-                        action='store_true',
-                        default=False,
-                        help="Run AWS CLI commands with --dryrun flag")
-    parser.add_argument("-o", "--outbucket",
-                        type=str,
-                        required=True,
-                        help="S3 Output directory for STAC item / asset "
-                             "egress")
-    parser.add_argument("-n", "--newline",
-                        action='store_true',
-                        default=False,
-                        help="Output as simple newline separated STAC items")
-    parser.add_argument("-j", "--jobs",
-                        type=int,
-                        default=1,
-                        required=False,
-                        help="Number of jobs to run in parallel")
-    parser.add_argument("--force_zero_num_workers",
-                        action='store_true',
-                        default=False,
-                        help="Force predict scripts to use --num_workers=0")
-    parser.add_argument("--bas_thresh",
-                        default=0.1,
-                        type=float,
-                        required=False,
-                        help="Threshold for BAS tracking (kwarg 'thresh')")
-    parser.add_argument("--previous_bas_outbucket",
-                        type=str,
-                        required=False,
-                        help="S3 Output directory for previous interval BAS "
-                             "fusion output")
-
-    run_bas_fusion_for_baseline(**vars(parser.parse_args()))
-    return 0
+    """
+    Ignore:
+        import sys, ubelt
+        sys.path.append(ubelt.expandpath('~/code/watch'))
+        from watch.cli.dag_cli.run_bas_fusion import *  # NOQA
+        argv = [
+            'script',
+            '--bas_fusion_model_path', '/root/data/smart_expt_dvc/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2_epoch3_step941.pt',
+            '--outbucket', 's3://smartflow-023300502152-us-west-2/smartflow/env/kitware-prod-v4/work/ta2_preeval10_pyenv_v01/batch/kit/KR_R001/2021-08-31/split/mono/products/bas-fusion',
+            '--input_path', 's3://smartflow-023300502152-us-west-2/smartflow/env/kitware-prod-v4/work/ta2_preeval10_pyenv_v01/batch/kit/KR_R001/2021-08-31/split/mono/products/kwcoco-dataset/items.jsonl', '--input_region_path',
+            's3://smartflow-023300502152-us-west-2/smartflow/env/kitware-prod-v4/work/ta2_preeval10_pyenv_v01/batch/kit/KR_R001/2021-08-31/input/mono/region_models/KR_R001.geojson', '--output_path', 's3://smartflow-023300502152-us-west-2/smartflow/env/kitware-prod-v4/work/ta2_preeval10_pyenv_v01/batch/kit/KR_R001/2021-08-31/split/mono/products/bas-fusion/items.jsonl',
+            '--time_combine', 'True', '--bas_pxl_config',
+            'num_workers: 24\nchip_overlap: 0.3\nchip_dims: auto\ndrop_unused_frames: true\ntime_sampling: auto\ntime_span: auto,\ntime_kernel: auto\nbatch_size: 1', '--bas_poly_config', 'inner_window_size: null\ninner_agg_fn: mean\nnorm_ord: 1\nagg_fn: probs\nresolution: 10GSD\nmoving_window_size: null\nmin_area_square_meters: 7200\nmax_area_square_meters: 9000000', '--bas_thresh', '0.33'
+            ]
+        config = BasFusionConfig.cli(argv=argv, strict=True)
+        print('config = {}'.format(ub.urepr(dict(config), nl=1, align=':')))
+    """
+    config = BasFusionConfig.cli(strict=True)
+    import sys
+    print(f'sys.argv={sys.argv}')
+    print('config = {}'.format(ub.urepr(dict(config), nl=1, align=':')))
+    run_bas_fusion_for_baseline(config)
 
 
 def _download_region(aws_base_command,
@@ -184,22 +211,25 @@ def _ta2_collate_output(aws_base_command,
                         site_s3_outpath], check=True)
 
 
-def run_bas_fusion_for_baseline(
-        input_path,
-        input_region_path,
-        output_path,
-        bas_fusion_model_path,
-        outbucket,
-        aws_profile=None,
-        dryrun=False,
-        newline=False,
-        jobs=1,
-        force_zero_num_workers=False,
-        bas_thresh=0.1,
-        previous_bas_outbucket=None):
+def run_bas_fusion_for_baseline(config):
+    from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress
+    from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress
+    from watch.cli.concat_kwcoco_videos import concat_kwcoco_datasets
+    from watch.tasks.fusion.predict import predict
+    from watch.utils.util_yaml import Yaml
+
+    input_path = config.input_path
+    input_region_path = config.input_region_path
+    output_path = config.output_path
+    bas_fusion_model_path = config.bas_fusion_model_path
+    outbucket = config.outbucket
+    aws_profile = config.aws_profile
+    dryrun = config.dryrun
+    bas_thresh = config.bas_thresh
+    previous_bas_outbucket = config.previous_bas_outbucket
+
     if aws_profile is not None:
-        aws_base_command =\
-            ['aws', 's3', '--profile', aws_profile, 'cp']
+        aws_base_command = ['aws', 's3', '--profile', aws_profile, 'cp']
     else:
         aws_base_command = ['aws', 's3', 'cp']
 
@@ -224,20 +254,37 @@ def run_bas_fusion_for_baseline(
                                                     strip_nonregions=True,
                                                     replace_originator=True)
 
+    if config.time_combine:
+        from watch.cli import coco_time_combine
+        preproc_kwcoco_fpath = ub.Path(ingress_kwcoco_path).augment(
+            stemsuffix='_timecombined', ext='.kwcoco.zip', multidot=True)
+        coco_time_combine.main(
+            cmdline=0,
+            input_kwcoco_fpath=ingress_kwcoco_path,
+            output_kwcoco_fpath=preproc_kwcoco_fpath,
+            time_window='1y',
+            resolution='10GSD',
+            workers='avail',
+        )
+        predict_input_fpath = os.fspath(preproc_kwcoco_fpath)
+    else:
+        predict_input_fpath = ingress_kwcoco_path
+
     # 3. Run fusion
     print("* Running BAS fusion *")
     bas_fusion_kwcoco_path = os.path.join(
         ingress_dir, 'bas_fusion_kwcoco.json')
 
-    predict_config = json.loads("""
-{
-      "chip_overlap": 0.3,
-      "chip_dims": "auto",
-      "time_span": "auto",
-      "time_sampling": "auto",
-      "drop_unused_frames": true
-}
-    """)
+    default_predict_config = ub.udict({
+          "chip_overlap": 0.3,
+          "chip_dims": "auto",
+          "time_span": "auto",
+          "time_sampling": "auto",
+          "drop_unused_frames": True,
+          "batch_size": 1,
+          "num_workers": 2,
+    })
+    bas_pxl_config = default_predict_config | Yaml.coerce(config.bas_pxl_config or {})
 
     predict(devices='0,',
             write_preds=False,
@@ -245,12 +292,10 @@ def run_bas_fusion_for_baseline(
             with_change=False,
             with_saliency=True,
             with_class=False,
-            test_dataset=ingress_kwcoco_path,
-            package_fpath=bas_fusion_model_path,
+            test_dataset=predict_input_fpath,
             pred_dataset=bas_fusion_kwcoco_path,
-            num_workers=('0' if force_zero_num_workers else str(jobs)),  # noqa: 501
-            batch_size=1,
-            **predict_config)
+            package_fpath=bas_fusion_model_path,
+            **bas_pxl_config)
 
     # 3.1. If a previous interval was run; concatenate BAS fusion
     # output KWCOCO files for tracking
@@ -273,12 +318,12 @@ def run_bas_fusion_for_baseline(
                 (previous_bas_fusion_kwcoco_path, bas_fusion_kwcoco_path),
                 combined_bas_fusion_kwcoco_path)
             # Copy saliency assets from previous bas fusion
-            dir_util.copy_tree(
+            shutil.copy_tree(
                 os.path.join(previous_ingress_dir, '_assets', 'pred_saliency'),
                 os.path.join(ingress_dir, '_assets', 'pred_saliency'))
 
             # Copy original assets from previous bas rusion
-            dir_util.copy_tree(
+            shutil.copy_tree(
                 os.path.join(previous_ingress_dir, region_id),
                 os.path.join(ingress_dir, region_id))
         else:
@@ -305,11 +350,13 @@ def run_bas_fusion_for_baseline(
     shutil.copy(local_region_path, os.path.join(
         region_models_outdir, '{}.geojson'.format(region_id)))
 
-    bas_tracking_config = {
+    default_bas_tracking_config = ub.udict({
         "thresh": bas_thresh,
         "moving_window_size": None,
         "polygon_simplify_tolerance": 1,
-        "max_area_behavior": 'ignore'}
+        "max_area_behavior": 'ignore'
+    })
+    bas_tracking_config = default_bas_tracking_config | Yaml.coerce(config.bas_poly_config or {})
 
     tracked_bas_kwcoco_path = '_tracked'.join(
         os.path.splitext(bas_fusion_kwcoco_path))
@@ -347,4 +394,4 @@ def run_bas_fusion_for_baseline(
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

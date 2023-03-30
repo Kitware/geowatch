@@ -238,7 +238,10 @@ def coerce_yaml(data, backend='ruamel'):
         if '\n' not in data:
             # Ambiguous case: might this be path-like?
             maybe_path = ub.Path(data)
-            if not maybe_path.exists():
+            try:
+                if not maybe_path.exists():
+                    maybe_path = None
+            except OSError:
                 maybe_path = None
         if maybe_path is not None:
             result = coerce_yaml(maybe_path, backend=backend)

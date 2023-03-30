@@ -985,6 +985,7 @@ def _write_ann_visualizations2(coco_dset,
                 # color = 'kitware_red'
                 # color = 'kitware_lightgray'
                 color = 'white'
+            color = kwimage.Color.coerce(color).as01()
             colors.append(color)
 
         role_dets = kwimage.Detections.from_coco_annots(role_anns, dset=coco_dset)
@@ -1095,6 +1096,8 @@ def _write_ann_visualizations2(coco_dset,
                 ann_stack.append(stack_ann_item)
         except SkipChanGroup:
             ...
+        else:
+            break
 
     if stack:
         img_stacked_dpath = (img_view_dpath / 'stack')

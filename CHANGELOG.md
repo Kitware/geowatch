@@ -20,6 +20,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * `watch.mlops.aggregate` CLI tool now has basic functionality.
 * `watch.cli.coco_spectra` can now pool results per video / month.
 * Improve tracker speed / efficiency
+* The tracker `track_kwargs` can now take yaml as well as json.
 
 ### Added
 * Add SITS-former 
@@ -30,6 +31,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Initial prenormalizer support in data loader.
 * Site verification logic in the tracker
 * Inner window averaging in the tracker
+* Poly merge method to BAS tracking
 
 ### Fixed
 * Bug in `coco_add_watch_fields` where video properties were incorrectly updated if auxiliary and image space was not aligned.
