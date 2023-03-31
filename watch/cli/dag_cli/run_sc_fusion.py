@@ -2,86 +2,83 @@
 # PYTHON_ARGCOMPLETE_OK
 """
 See Old Version:
-    ../../../scripts/run_bas_fusion_eval3_for_baseline.py
+    ../../../scripts/run_sc_fusion_eval3_for_baseline.py
 
 SeeAlso:
     ~/code/watch-smartflow-dags/KIT_TA2_PREEVAL10_PYENV.py
 """
-import json
+import sys
+from urllib.parse import urlparse
 import os
-import scriptconfig as scfg
-import shutil
 import subprocess
 import tempfile
+import json
+from glob import glob
+import shutil
+import traceback
+
+# from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress  # noqa: 501
+# from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress  # noqa: 501
+# from watch.tasks.fusion.predict import predict
+import scriptconfig as scfg
 import ubelt as ub
 
-from glob import glob
-from urllib.parse import urlparse
 
-
-class BasFusionConfig(scfg.DataConfig):
+class SCFusionConfig(scfg.DataConfig):
     """
-    Run TA-2 BAS fusion as baseline framework component
-
-    python ~/code/watch/watch/cli/dag_cli/run_bas_fusion.py
+    Run TA-2 SC fusion as baseline framework component
     """
-    __fuzzy_hyphens__ = True
-
     input_path = scfg.Value(None, type=str, position=1, required=True, help=ub.paragraph(
             '''
             Path to input T&E Baseline Framework JSON
             '''))
-
     input_region_path = scfg.Value(None, type=str, position=2, required=True, help=ub.paragraph(
             '''
             Path to input T&E Baseline Framework Region definition JSON
             '''))
-
     output_path = scfg.Value(None, type=str, position=3, required=True, help='S3 path for output JSON')
 
-    bas_fusion_model_path = scfg.Value(None, type=str, required=True, help='File path to BAS fusion model')
-
+    sc_track_fn = scfg.Value('class_heatmaps', type=str, help=ub.paragraph(
+            '''
+            Tracking function to use for generating sites
+            '''))
     aws_profile = scfg.Value(None, type=str, help=ub.paragraph(
             '''
             AWS Profile to use for AWS S3 CLI commands
             '''))
-
     dryrun = scfg.Value(False, isflag=True, short_alias=['d'], help='Run AWS CLI commands with --dryrun flag')
-
     outbucket = scfg.Value(None, type=str, required=True, short_alias=['o'], help=ub.paragraph(
             '''
             S3 Output directory for STAC item / asset egress
             '''))
 
-    previous_bas_outbucket = scfg.Value(None, type=str, help=ub.paragraph(
+    ta2_s3_collation_bucket = scfg.Value(None, type=str, help=ub.paragraph(
             '''
-            S3 Output directory for previous interval BAS fusion output
+            S3 Location for collated TA-2 output (bucket name should
+            include up to eval name)
             '''))
 
-    time_combine = scfg.Value(False, isflag=True, help=ub.paragraph(
-            '''
-            Quick and dirty hack to run time combine before fusion
-            '''))
-
-    bas_pxl_config = scfg.Value(None, type=str, help=ub.paragraph(
+    sc_pxl_config = scfg.Value(None, type=str, help=ub.paragraph(
             '''
             Raw json/yaml or a path to a json/yaml file that specifies the
             config for fusion.predict.
             '''))
 
-    bas_poly_config = scfg.Value(None, type=str, help=ub.paragraph(
+    sc_poly_config = scfg.Value(None, type=str, help=ub.paragraph(
             '''
             Raw json/yaml or a path to a json/yaml file that specifies the
-            config for bas tracking.
+            config for SC tracking.
             '''))
 
 
 def main():
-    config = BasFusionConfig.cli(strict=True)
+    config = SCFusionConfig.cli(strict=True)
     import sys
     print(f'sys.argv={sys.argv}')
     print('config = {}'.format(ub.urepr(dict(config), nl=1, align=':')))
-    run_bas_fusion_for_baseline(config)
+    run_sc_fusion_for_baseline(config)
+
+    return 0
 
 
 def _download_region(aws_base_command,
@@ -125,8 +122,6 @@ def _download_region(aws_base_command,
     for feature in out_region_data.get('features', ()):
         props = feature['properties']
         if props['type'] == 'region':
-            # Ensure the region feature has a "comments" field
-            props['comments'] = props.get('comments', '')
             region_id = props.get('region_model_id', props.get('region_id'))
             break
 
@@ -189,23 +184,26 @@ def _ta2_collate_output(aws_base_command,
                         site_s3_outpath], check=True)
 
 
-def run_bas_fusion_for_baseline(config):
+def run_sc_fusion_for_baseline(config):
     from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress
     from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress
-    from watch.cli.concat_kwcoco_videos import concat_kwcoco_datasets
     from watch.tasks.fusion.predict import predict
+    from watch.tasks.fusion.datamodules.temporal_sampling import TimeSampleError
     from watch.utils.util_yaml import Yaml
 
     input_path = config.input_path
     input_region_path = config.input_region_path
     output_path = config.output_path
+
     outbucket = config.outbucket
+    sc_track_fn = config.sc_track_fn
     aws_profile = config.aws_profile
     dryrun = config.dryrun
-    previous_bas_outbucket = config.previous_bas_outbucket
+    ta2_s3_collation_bucket = config.ta2_s3_collation_bucket
 
     if aws_profile is not None:
-        aws_base_command = ['aws', 's3', '--profile', aws_profile, 'cp']
+        aws_base_command =\
+            ['aws', 's3', '--profile', aws_profile, 'cp']
     else:
         aws_base_command = ['aws', 's3', 'cp']
 
@@ -230,146 +228,134 @@ def run_bas_fusion_for_baseline(config):
                                                     strip_nonregions=True,
                                                     replace_originator=True)
 
-    if config.time_combine:
-        from watch.cli import coco_time_combine
-        preproc_kwcoco_fpath = ub.Path(ingress_kwcoco_path).augment(
-            stemsuffix='_timecombined', ext='.kwcoco.zip', multidot=True)
-        coco_time_combine.main(
-            cmdline=0,
-            input_kwcoco_fpath=ingress_kwcoco_path,
-            output_kwcoco_fpath=preproc_kwcoco_fpath,
-            time_window='1y',
-            resolution='10GSD',
-            workers='avail',
-        )
-        predict_input_fpath = os.fspath(preproc_kwcoco_fpath)
-    else:
-        predict_input_fpath = ingress_kwcoco_path
+    sc_fusion_kwcoco_path = os.path.join(
+        ingress_dir, 'sc_fusion_kwcoco.json')
 
-    # 3. Run fusion
-    print("* Running BAS fusion *")
-    bas_fusion_kwcoco_path = os.path.join(
-        ingress_dir, 'bas_fusion_kwcoco.json')
+    cropped_region_models_bas = os.path.join(ingress_dir,
+                                             'cropped_region_models_bas')
 
-    # TODO: remove these defaults or replace them with whatever is the
-    # default in predict. The params should be fully given in the DAG, not
-    # here.
-    default_predict_config = ub.udict({
-          "chip_overlap": 0.3,
-          "chip_dims": "auto",
-          "time_span": "auto",
-          "time_sampling": "auto",
-          "drop_unused_frames": True,
-          "batch_size": 1,
-          "num_workers": 2,
-          'package_fpath': None,
-    })
-    bas_pxl_config = default_predict_config | Yaml.coerce(config.bas_pxl_config or {})
-
-    if bas_pxl_config.get('package_fpath', None) is None:
-        raise ValueError('Requires package_fpath')
-
-    predict(devices='0,',
-            write_preds=False,
-            write_probs=True,
-            with_change=False,
-            with_saliency=True,
-            with_class=False,
-            test_dataset=predict_input_fpath,
-            pred_dataset=bas_fusion_kwcoco_path,
-            **bas_pxl_config)
-
-    # 3.1. If a previous interval was run; concatenate BAS fusion
-    # output KWCOCO files for tracking
-    if previous_bas_outbucket is not None:
-        combined_bas_fusion_kwcoco_path = os.path.join(
-                ingress_dir, 'combined_bas_fusion_kwcoco.json')
-
-        previous_ingress_dir = '/tmp/ingress_previous'
-        subprocess.run([*aws_base_command, '--recursive',
-                        previous_bas_outbucket, previous_ingress_dir],
-                       check=True)
-
-        previous_bas_fusion_kwcoco_path = os.path.join(
-            previous_ingress_dir, 'combined_bas_fusion_kwcoco.json')
-
-        # On first interval nothing will be copied down so need to
-        # check that we have the input explicitly
-        if os.path.isfile(previous_bas_fusion_kwcoco_path):
-            concat_kwcoco_datasets(
-                (previous_bas_fusion_kwcoco_path, bas_fusion_kwcoco_path),
-                combined_bas_fusion_kwcoco_path)
-            # Copy saliency assets from previous bas fusion
-            shutil.copy_tree(
-                os.path.join(previous_ingress_dir, '_assets', 'pred_saliency'),
-                os.path.join(ingress_dir, '_assets', 'pred_saliency'))
-
-            # Copy original assets from previous bas rusion
-            shutil.copy_tree(
-                os.path.join(previous_ingress_dir, region_id),
-                os.path.join(ingress_dir, region_id))
-        else:
-            # Copy current bas_fusion_kwcoco_path to combined path as
-            # this is the first interval
-            shutil.copy(bas_fusion_kwcoco_path,
-                        combined_bas_fusion_kwcoco_path)
-    else:
-        combined_bas_fusion_kwcoco_path = bas_fusion_kwcoco_path
-
-    # 4. Compute tracks (BAS)
-    print("* Computing tracks (BAS) *")
-    region_models_outdir = os.path.join(ingress_dir, 'region_models')
+    site_models_outdir = os.path.join(ingress_dir, 'sc_out_site_models')
+    os.makedirs(site_models_outdir, exist_ok=True)
+    region_models_outdir = os.path.join(ingress_dir, 'sc_out_region_models')
     os.makedirs(region_models_outdir, exist_ok=True)
 
-    region_models_manifest_outdir = os.path.join(
-        ingress_dir, 'tracking_manifests_bas')
-    os.makedirs(region_models_manifest_outdir, exist_ok=True)
-    region_models_manifest_outpath = os.path.join(
-        region_models_manifest_outdir, 'region_models_manifest.json')
+    site_models_manifest_outdir = os.path.join(
+        ingress_dir, 'tracking_manifests_sc')
+    os.makedirs(site_models_manifest_outdir, exist_ok=True)
+    site_models_manifest_outpath = os.path.join(
+        site_models_manifest_outdir, 'site_models_manifest.json')
     # Copy input region model into region_models outdir to be updated
     # (rather than generated from tracking, which may not have the
     # same bounds as the original)
     shutil.copy(local_region_path, os.path.join(
         region_models_outdir, '{}.geojson'.format(region_id)))
 
-    # TODO: remove these defaults or replace them with whatever is the
-    # default in tracker. The params should be fully given in the DAG,
-    # not here.
-    default_bas_tracking_config = ub.udict({
-        "thresh": 0.1,
-        "moving_window_size": None,
-        "polygon_simplify_tolerance": 1,
-        "max_area_behavior": 'ignore'
-    })
-    bas_tracking_config = default_bas_tracking_config | Yaml.coerce(config.bas_poly_config or {})
+    # 3.1. Check that we have at least one "video" (BAS identified
+    # site) to run over; if not skip SC fusion and KWCOCO to GeoJSON
+    with open(ingress_kwcoco_path) as f:
+        ingress_kwcoco_data = json.load(f)
 
-    tracked_bas_kwcoco_path = '_tracked'.join(
-        os.path.splitext(bas_fusion_kwcoco_path))
-    subprocess.run(['python', '-m', 'watch.cli.run_tracker',
-                    combined_bas_fusion_kwcoco_path,
-                    '--out_site_summaries_dir', region_models_outdir,
-                    '--out_site_summaries_fpath',
-                    region_models_manifest_outpath,
-                    '--out_kwcoco', tracked_bas_kwcoco_path,
-                    '--default_track_fn', 'saliency_heatmaps',
-                    '--append_mode', 'True',
-                    '--track_kwargs', json.dumps(bas_tracking_config)],
-                   check=True)
+    if len(ingress_kwcoco_data.get('videos', ())) > 0:
+        # 3. Run fusion
+        print("* Running SC fusion *")
 
+        # TODO: remove these defaults or replace them with whatever is the
+        # default in predict. The params should be fully given in the DAG, not
+        # here.
+        default_sc_pxl_config = ub.udict({
+            'tta_fliprot': 0.0,
+            'tta_time': 0.0,
+            'chip_overlap': 0.3,
+            'input_space_scale': '8GSD',
+            'window_space_scale': '8GSD',
+            'output_space_scale': '8GSD',
+            'time_span': '6m',
+            'time_sampling': 'auto',
+            'time_steps': '12',
+            'chip_dims': 'auto',
+            'set_cover_algo': None,
+            'resample_invalid_frames': 3,
+            'observable_threshold': 0.0,
+            'mask_low_quality': True,
+            'drop_unused_frames': True,
+            'num_workers': 2,
+            'batch_size': 1,
+            'write_workers': 0,
+            'package_fpath': None,
+        })
+
+        sc_pxl_config = default_sc_pxl_config | Yaml.coerce(config.sc_pxl_config or {})
+
+        if sc_pxl_config.get('package_fpath', None) is None:
+            raise ValueError('Requires package_fpath')
+
+        try:
+            predict(devices='0,',
+                    write_preds=False,
+                    write_probs=True,
+                    with_change=False,
+                    with_saliency=False,
+                    with_class=True,
+                    test_dataset=ingress_kwcoco_path,
+                    pred_dataset=sc_fusion_kwcoco_path,
+                    **sc_pxl_config)
+        except TimeSampleError:
+            print("* Error with time sampling during SC Predict "
+                  "(shown below) -- attempting to continue anyway")
+            traceback.print_exception(*sys.exc_info())
+        else:
+            # 4. Compute tracks (SC)
+            print("* Computing tracks (SC) *")
+
+            # TODO: remove these defaults or replace them with whatever is the
+            # default in tracker. The params should be fully given in the DAG,
+            # not here.
+            default_sc_track_kwargs = ub.udict({
+                "boundaries_as": "polys",
+                "resolution": 8,
+                "min_area_square_meters": 7200,
+                "thresh": 0.07,
+            })
+            sc_track_kwargs = default_sc_track_kwargs | Yaml.coerce(config.sc_poly_config or {})
+
+            tracked_sc_kwcoco_path = '_tracked'.join(
+                os.path.splitext(sc_fusion_kwcoco_path))
+            subprocess.run(['python', '-m', 'watch.cli.run_tracker',
+                            sc_fusion_kwcoco_path,
+                            '--out_site_summaries_dir', region_models_outdir,
+                            '--out_sites_dir', site_models_outdir,
+                            '--out_sites_fpath', site_models_manifest_outpath,
+                            '--out_kwcoco', tracked_sc_kwcoco_path,
+                            '--default_track_fn', sc_track_fn,
+                            '--site_summary',
+                            os.path.join(cropped_region_models_bas,
+                                         '*.geojson'),
+                            '--append_mode', 'True',
+                            '--track_kwargs', json.dumps(sc_track_kwargs)],
+                           check=True)
+
+    cropped_site_models_outdir = os.path.join(ingress_dir,
+                                              'cropped_site_models')
+    os.makedirs(cropped_site_models_outdir, exist_ok=True)
     cropped_region_models_outdir = os.path.join(ingress_dir,
-                                                'cropped_region_models_bas')
+                                                'cropped_region_models')
+    os.makedirs(cropped_region_models_outdir, exist_ok=True)
+
     subprocess.run(['python', '-m', 'watch.cli.crop_sites_to_regions',
+                    '--site_models',
+                    os.path.join(site_models_outdir, '*.geojson'),
                     '--region_models',
-                    os.path.join(region_models_outdir, '*.geojson'),
-                    '--new_site_dpath', cropped_region_models_outdir,
+                    os.path.join(region_models_outdir,
+                                 '{}.geojson'.format(region_id)),
+                    '--new_site_dpath', cropped_site_models_outdir,
                     '--new_region_dpath', cropped_region_models_outdir],
                    check=True)
 
-    # 6. Egress (envelop KWCOCO dataset in a STAC item and egress;
+    # 5. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)
     print("* Egressing KWCOCO dataset and associated STAC item *")
-    baseline_framework_kwcoco_egress(bas_fusion_kwcoco_path,
+    baseline_framework_kwcoco_egress(sc_fusion_kwcoco_path,
                                      local_region_path,
                                      output_path,
                                      outbucket,
@@ -377,6 +363,14 @@ def run_bas_fusion_for_baseline(config):
                                      dryrun=False,
                                      newline=False)
 
+    # 6. (Optional) collate TA-2 output
+    if ta2_s3_collation_bucket is not None:
+        print("* Collating TA-2 output")
+        _ta2_collate_output(aws_base_command,
+                            cropped_region_models_outdir,
+                            cropped_site_models_outdir,
+                            ta2_s3_collation_bucket)
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

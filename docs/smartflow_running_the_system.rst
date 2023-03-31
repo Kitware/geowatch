@@ -374,6 +374,17 @@ which can be done via the command:
    python -c "import webbrowser; webbrowser.open('https://localhost:2746/home', new=1)"
 
 
+To debug interactively you can log into an existing run:
+
+
+.. code:: bash
+
+    kubectl -n airflow get pods
+
+    # Find your POD_ADDR
+    kubectl -n airflow exec -it pods/$POD_ADDR -- bash
+
+
 
 How to Bake a Model into a Dockerfile (OLD)
 -------------------------------------------
