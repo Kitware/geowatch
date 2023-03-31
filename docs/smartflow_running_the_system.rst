@@ -328,8 +328,8 @@ latest code, and commiting the change as a new image.
 How to Submit a DAG
 -------------------
 
-.. .. SeeAlso: ~/code/watch-smartflow-dags/KIT_TA2_PYENV_TEST.py
-.. .. SeeAlso: ~/code/watch-smartflow-dags/KIT_TA2_PREEVAL10_PYENV.py
+.. .. SeeAlso: ~/code/watch-smartflow-dags/KIT_TA2_PREEVAL10_PYENV_V13.py
+   ~/code/watch-smartflow-dags/KIT_TA2_PREEVAL10_V13.py
 
 Ensure that you have the DAG repo
 
@@ -351,7 +351,7 @@ Once you have a DAG file ready upload it to AWS via:
     LOCAL_DAG_DPATH=$HOME/code/watch-smartflow-dags
 
     # The name of the DAG file we edited
-    DAG_FNAME=KIT_TA2_PREEVAL10_PYENV.py
+    DAG_FNAME=KIT_TA2_PREEVAL10_PYENV_V13.py
 
     # Upload the DAG file to AWS
     aws s3 --profile iarpa cp $LOCAL_DAG_DPATH/$DAG_FNAME \
@@ -380,10 +380,35 @@ To debug interactively you can log into an existing run:
 .. code:: bash
 
     kubectl -n airflow get pods
-
     # Find your POD_ADDR
-    kubectl -n airflow exec -it pods/$POD_ADDR -- bash
+    # POD_ADDR=site-cropped-kwcoco-6254ac27fab04f0b8eb302ac19b09745
+    # kubectl -n airflow exec -it pods/$POD_ADDR -- bash
 
+    # Script to list and exec into a running pod
+    python -c "if True:
+    import json
+    import pandas as pd
+    import rich
+    import ubelt as ub
+    info = ub.cmd('kubectl -n airflow get pods -o json')
+    data = json.loads(info['out'])
+
+    rows = []
+    for item in data['items']:
+        row = {
+            'name': item['metadata']['name'],
+            'status': data['items'][0]['status']['phase'],
+            'startTime': data['items'][0]['status']['startTime'],
+        }
+        rows.append(row)
+    df = pd.DataFrame(rows)
+    rich.print(df.to_string())
+    import rich.prompt
+    ans = rich.prompt.Prompt.ask('which one?', choices=list(map(str, df.index.to_list())))
+    idx = int(ans)
+    pod_addr = df.iloc[idx]['name']
+    ub.cmd(f'kubectl -n airflow exec -it pods/{pod_addr} -- bash', system=True)
+    "
 
 
 How to Bake a Model into a Dockerfile (OLD)

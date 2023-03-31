@@ -39,8 +39,6 @@ class BasFusionConfig(scfg.DataConfig):
 
     output_path = scfg.Value(None, type=str, position=3, required=True, help='S3 path for output JSON')
 
-    bas_fusion_model_path = scfg.Value(None, type=str, required=True, help='File path to BAS fusion model')
-
     aws_profile = scfg.Value(None, type=str, help=ub.paragraph(
             '''
             AWS Profile to use for AWS S3 CLI commands
@@ -78,8 +76,6 @@ class BasFusionConfig(scfg.DataConfig):
 
 def main():
     config = BasFusionConfig.cli(strict=True)
-    import sys
-    print(f'sys.argv={sys.argv}')
     print('config = {}'.format(ub.urepr(dict(config), nl=1, align=':')))
     run_bas_fusion_for_baseline(config)
 
