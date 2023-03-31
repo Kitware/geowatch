@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# PYTHON_ARGCOMPLETE_OK
 """
 See Old Version:
     ../../../scripts/run_sc_fusion_eval3_for_baseline.py
@@ -16,10 +15,6 @@ import json
 from glob import glob
 import shutil
 import traceback
-
-# from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress  # noqa: 501
-# from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress  # noqa: 501
-# from watch.tasks.fusion.predict import predict
 import scriptconfig as scfg
 import ubelt as ub
 
@@ -73,12 +68,8 @@ class SCFusionConfig(scfg.DataConfig):
 
 def main():
     config = SCFusionConfig.cli(strict=True)
-    import sys
-    print(f'sys.argv={sys.argv}')
     print('config = {}'.format(ub.urepr(dict(config), nl=1, align=':')))
     run_sc_fusion_for_baseline(config)
-
-    return 0
 
 
 def _download_region(aws_base_command,
@@ -373,4 +364,4 @@ def run_sc_fusion_for_baseline(config):
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# PYTHON_ARGCOMPLETE_OK
 """
 See Old Version:
     ../../../scripts/run_bas_fusion_eval3_for_baseline.py
