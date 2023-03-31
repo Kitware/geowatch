@@ -104,10 +104,10 @@ trainer:
   #      save_top_k: 5
   #      auto_insert_metric_name: true
   default_root_dir     : $DEFAULT_ROOT_DIR
-  accelerator          : gpu 
+  accelerator          : gpu
   devices              : 0,
   #devices              : 0,1
-  #strategy             : ddp 
+  #strategy             : ddp
   check_val_every_n_epoch: 1
   enable_checkpointing: true
   enable_model_summary: true
@@ -229,10 +229,10 @@ trainer:
   #      save_top_k: 5
   #      auto_insert_metric_name: true
   default_root_dir     : $DEFAULT_ROOT_DIR
-  accelerator          : gpu 
+  accelerator          : gpu
   devices              : 0,
   #devices              : 0,1
-  #strategy             : ddp 
+  #strategy             : ddp
   check_val_every_n_epoch: 1
   enable_checkpointing: true
   enable_model_summary: true
@@ -337,7 +337,7 @@ optimizer:
 trainer:
   accumulate_grad_batches: 6
   default_root_dir     : $DEFAULT_ROOT_DIR
-  accelerator          : gpu 
+  accelerator          : gpu
   devices              : 0,
   check_val_every_n_epoch: 1
   enable_checkpointing: true
@@ -440,7 +440,7 @@ optimizer:
 trainer:
   accumulate_grad_batches: 8
   default_root_dir     : $DEFAULT_ROOT_DIR
-  accelerator          : gpu 
+  accelerator          : gpu
   devices              : 0,
   check_val_every_n_epoch: 1
   enable_checkpointing: true
@@ -542,7 +542,7 @@ optimizer:
 trainer:
   accumulate_grad_batches: 6
   default_root_dir     : $DEFAULT_ROOT_DIR
-  accelerator          : gpu 
+  accelerator          : gpu
   devices              : 0,
   check_val_every_n_epoch: 1
   enable_checkpointing: true
@@ -612,7 +612,7 @@ data:
     batch_size             : 4
     normalize_perframe     : true
     normalize_peritem      : false
-    max_epoch_length       : 1000000 
+    max_epoch_length       : 1000000
     channels               : '$CHANNELS'
     min_spacetime_weight   : 0.6
     temporal_dropout       : 0.5
@@ -627,22 +627,22 @@ data:
 model:
     class_path: MultimodalTransformer
     init_args:
-        saliency_weights       : auto 
-        class_weights          : auto 
-        tokenizer              : linconv 
-        arch_name              : smt_it_stm_p8 
-        decoder                : mlp 
-        positive_change_weight : 1 
-        negative_change_weight : 0.01 
-        stream_channels        : 16 
-        class_loss            : 'dicefocal' 
-        saliency_loss          : 'focal' 
+        saliency_weights       : auto
+        class_weights          : auto
+        tokenizer              : linconv
+        arch_name              : smt_it_stm_p8
+        decoder                : mlp
+        positive_change_weight : 1
+        negative_change_weight : 0.01
+        stream_channels        : 16
+        class_loss            : 'dicefocal'
+        saliency_loss          : 'focal'
         saliency_head_hidden   : 5
         change_head_hidden     : 5
-        global_change_weight   : 0.00 
-        global_class_weight    : 0.00 
-        global_saliency_weight : 1.00 
-optimizer: 
+        global_change_weight   : 0.00
+        global_class_weight    : 0.00
+        global_saliency_weight : 1.00
+optimizer:
     class_path: torch.optim.AdamW
     init_args:
         lr           : $TARGET_LR
@@ -659,13 +659,13 @@ lr_scheduler:
 trainer:
     accumulate_grad_batches: 8
     default_root_dir     : $DEFAULT_ROOT_DIR
-    accelerator          : gpu 
+    accelerator          : gpu
     devices              : 0,
     #devices              : 0,1
-    #strategy             : ddp 
+    #strategy             : ddp
     limit_val_batches    : 256
     limit_train_batches  : 2048
-    num_sanity_val_steps : 0 
+    num_sanity_val_steps : 0
     max_epochs           : 360
 
 torch_globals:
@@ -709,7 +709,7 @@ data:
     batch_size             : 4
     normalize_perframe     : true
     normalize_peritem      : false
-    max_epoch_length       : 1000000 
+    max_epoch_length       : 1000000
     channels               : '$CHANNELS'
     min_spacetime_weight   : 0.6
     temporal_dropout       : 0.5
@@ -724,22 +724,22 @@ data:
 model:
     class_path: MultimodalTransformer
     init_args:
-        saliency_weights       : auto 
-        class_weights          : auto 
-        tokenizer              : linconv 
-        arch_name              : smt_it_stm_p8 
-        decoder                : mlp 
-        positive_change_weight : 1 
-        negative_change_weight : 0.01 
-        stream_channels        : 16 
-        class_loss            : 'dicefocal' 
-        saliency_loss          : 'focal' 
+        saliency_weights       : auto
+        class_weights          : auto
+        tokenizer              : linconv
+        arch_name              : smt_it_stm_p8
+        decoder                : mlp
+        positive_change_weight : 1
+        negative_change_weight : 0.01
+        stream_channels        : 16
+        class_loss            : 'dicefocal'
+        saliency_loss          : 'focal'
         saliency_head_hidden   : 5
         change_head_hidden     : 5
-        global_change_weight   : 0.00 
-        global_class_weight    : 0.00 
-        global_saliency_weight : 1.00 
-optimizer: 
+        global_change_weight   : 0.00
+        global_class_weight    : 0.00
+        global_saliency_weight : 1.00
+optimizer:
     class_path: torch.optim.AdamW
     init_args:
         lr           : $TARGET_LR
@@ -754,13 +754,13 @@ lr_scheduler:
 trainer:
     accumulate_grad_batches: 8
     default_root_dir     : $DEFAULT_ROOT_DIR
-    accelerator          : gpu 
+    accelerator          : gpu
     devices              : 0,
     #devices              : 0,1
-    #strategy             : ddp 
+    #strategy             : ddp
     limit_val_batches    : 256
     limit_train_batches  : 2048
-    num_sanity_val_steps : 0 
+    num_sanity_val_steps : 0
     max_epochs           : 360
 
 torch_globals:
@@ -805,7 +805,7 @@ data:
     batch_size             : 4
     normalize_perframe     : true
     normalize_peritem      : false
-    max_epoch_length       : 1000000 
+    max_epoch_length       : 1000000
     channels               : '$CHANNELS'
     min_spacetime_weight   : 0.6
     temporal_dropout       : 0.5
@@ -820,22 +820,22 @@ data:
 model:
     class_path: MultimodalTransformer
     init_args:
-        saliency_weights       : auto 
-        class_weights          : auto 
-        tokenizer              : linconv 
-        arch_name              : smt_it_stm_p8 
-        decoder                : mlp 
-        positive_change_weight : 1 
-        negative_change_weight : 0.01 
-        stream_channels        : 16 
-        class_loss            : 'dicefocal' 
-        saliency_loss          : 'focal' 
+        saliency_weights       : auto
+        class_weights          : auto
+        tokenizer              : linconv
+        arch_name              : smt_it_stm_p8
+        decoder                : mlp
+        positive_change_weight : 1
+        negative_change_weight : 0.01
+        stream_channels        : 16
+        class_loss            : 'dicefocal'
+        saliency_loss          : 'focal'
         saliency_head_hidden   : 3
         change_head_hidden     : 3
-        global_change_weight   : 0.00 
-        global_class_weight    : 0.00 
-        global_saliency_weight : 1.00 
-optimizer: 
+        global_change_weight   : 0.00
+        global_class_weight    : 0.00
+        global_saliency_weight : 1.00
+optimizer:
     class_path: torch.optim.AdamW
     init_args:
         lr           : $TARGET_LR
@@ -850,13 +850,13 @@ lr_scheduler:
 trainer:
     accumulate_grad_batches: 8
     default_root_dir     : $DEFAULT_ROOT_DIR
-    accelerator          : gpu 
+    accelerator          : gpu
     devices              : 0,
     #devices              : 0,1
-    #strategy             : ddp 
+    #strategy             : ddp
     limit_val_batches    : 256
     limit_train_batches  : 2048
-    num_sanity_val_steps : 0 
+    num_sanity_val_steps : 0
     max_epochs           : 360
 
 torch_globals:
@@ -902,7 +902,7 @@ data:
     batch_size             : 6
     normalize_perframe     : false
     normalize_peritem      : true
-    max_epoch_length       : 1000000 
+    max_epoch_length       : 1000000
     channels               : '$CHANNELS'
     min_spacetime_weight   : 0.6
     temporal_dropout       : 0.5
@@ -917,22 +917,22 @@ data:
 model:
     class_path: MultimodalTransformer
     init_args:
-        saliency_weights       : auto 
-        class_weights          : auto 
-        tokenizer              : linconv 
-        arch_name              : smt_it_stm_p8 
-        decoder                : mlp 
-        positive_change_weight : 1 
-        negative_change_weight : 0.01 
-        stream_channels        : 16 
-        class_loss            : 'dicefocal' 
-        saliency_loss          : 'focal' 
+        saliency_weights       : auto
+        class_weights          : auto
+        tokenizer              : linconv
+        arch_name              : smt_it_stm_p8
+        decoder                : mlp
+        positive_change_weight : 1
+        negative_change_weight : 0.01
+        stream_channels        : 16
+        class_loss            : 'dicefocal'
+        saliency_loss          : 'focal'
         saliency_head_hidden   : 3
         change_head_hidden     : 3
-        global_change_weight   : 0.00 
-        global_class_weight    : 0.00 
-        global_saliency_weight : 1.00 
-optimizer: 
+        global_change_weight   : 0.00
+        global_class_weight    : 0.00
+        global_saliency_weight : 1.00
+optimizer:
     class_path: torch.optim.AdamW
     init_args:
         lr           : $TARGET_LR
@@ -947,13 +947,13 @@ lr_scheduler:
 trainer:
     accumulate_grad_batches: 8
     default_root_dir     : $DEFAULT_ROOT_DIR
-    accelerator          : gpu 
+    accelerator          : gpu
     devices              : 0,
     #devices              : 0,1
-    #strategy             : ddp 
+    #strategy             : ddp
     limit_val_batches    : 256
     limit_train_batches  : 2048
-    num_sanity_val_steps : 0 
+    num_sanity_val_steps : 0
     max_epochs           : 360
 
 torch_globals:
@@ -1008,7 +1008,7 @@ data:
     batch_size             : 4
     normalize_perframe     : false
     normalize_peritem      : true
-    max_epoch_length       : 1000000 
+    max_epoch_length       : 1000000
     channels               : '$CHANNELS'
     min_spacetime_weight   : 0.6
     temporal_dropout       : 0.5
@@ -1023,23 +1023,23 @@ data:
 model:
     class_path: MultimodalTransformer
     init_args:
-        #saliency_weights       : '1:1' 
-        #class_weights          : auto 
-        tokenizer              : linconv 
-        arch_name              : smt_it_stm_p8 
-        decoder                : mlp 
-        positive_change_weight : 1 
-        negative_change_weight : 0.01 
-        stream_channels        : 16 
-        class_loss             : 'dicefocal' 
-        saliency_loss          : 'focal' 
+        #saliency_weights       : '1:1'
+        #class_weights          : auto
+        tokenizer              : linconv
+        arch_name              : smt_it_stm_p8
+        decoder                : mlp
+        positive_change_weight : 1
+        negative_change_weight : 0.01
+        stream_channels        : 16
+        class_loss             : 'dicefocal'
+        saliency_loss          : 'focal'
         saliency_head_hidden   : 6
         change_head_hidden     : 6
         class_head_hidden      : 6
-        global_change_weight   : 0.05 
-        global_class_weight    : 0.50 
-        global_saliency_weight : 1.00 
-optimizer: 
+        global_change_weight   : 0.05
+        global_class_weight    : 0.50
+        global_saliency_weight : 1.00
+optimizer:
     class_path: torch.optim.AdamW
     init_args:
         lr           : $TARGET_LR
@@ -1054,13 +1054,13 @@ lr_scheduler:
 trainer:
     accumulate_grad_batches: 8
     default_root_dir     : $DEFAULT_ROOT_DIR
-    accelerator          : gpu 
+    accelerator          : gpu
     devices              : 0,
     #devices              : 0,1
-    #strategy             : ddp 
+    #strategy             : ddp
     limit_val_batches    : 256
     limit_train_batches  : 2048
-    num_sanity_val_steps : 0 
+    num_sanity_val_steps : 0
     max_epochs           : 360
 
 torch_globals:
@@ -1068,7 +1068,7 @@ torch_globals:
 
 initializer:
     init: $DVC_EXPT_DPATH/models/fusion/Drop6/packages/Drop6_BAS_2022_12_10GSD_BGRN_V11_CONT4/Drop6_BAS_2022_12_10GSD_BGRN_V11_CONT4_epoch6_step22939.pt
-" 
+"
 
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
 rsync -avprPR yardrat:data/dvc-repos/smart_expt_dvc/./training/yardrat/jon.crall/Drop6-MeanYear10GSD/runs/Drop6_TCombo1Year_BAS_10GSD_split6_V42 "$DVC_EXPT_DPATH"
@@ -1111,7 +1111,7 @@ data:
     batch_size             : 4
     normalize_perframe     : false
     normalize_peritem      : true
-    max_epoch_length       : 1000000 
+    max_epoch_length       : 1000000
     channels               : '$CHANNELS'
     min_spacetime_weight   : 0.6
     temporal_dropout       : 0.5
@@ -1126,23 +1126,23 @@ data:
 model:
     class_path: MultimodalTransformer
     init_args:
-        #saliency_weights       : '1:1' 
-        #class_weights          : auto 
-        tokenizer              : linconv 
-        arch_name              : smt_it_stm_p8 
-        decoder                : mlp 
-        positive_change_weight : 1 
-        negative_change_weight : 0.01 
-        stream_channels        : 16 
-        class_loss             : 'dicefocal' 
-        saliency_loss          : 'dicefocal' 
+        #saliency_weights       : '1:1'
+        #class_weights          : auto
+        tokenizer              : linconv
+        arch_name              : smt_it_stm_p8
+        decoder                : mlp
+        positive_change_weight : 1
+        negative_change_weight : 0.01
+        stream_channels        : 16
+        class_loss             : 'dicefocal'
+        saliency_loss          : 'dicefocal'
         saliency_head_hidden   : 6
         change_head_hidden     : 6
         class_head_hidden      : 6
-        global_change_weight   : 0.00 
-        global_class_weight    : 0.00 
-        global_saliency_weight : 1.00 
-optimizer: 
+        global_change_weight   : 0.00
+        global_class_weight    : 0.00
+        global_saliency_weight : 1.00
+optimizer:
     class_path: torch.optim.AdamW
     init_args:
         lr           : $TARGET_LR
@@ -1157,13 +1157,13 @@ lr_scheduler:
 trainer:
     accumulate_grad_batches: 8
     default_root_dir     : $DEFAULT_ROOT_DIR
-    accelerator          : gpu 
+    accelerator          : gpu
     devices              : 0,
     #devices              : 0,1
-    #strategy             : ddp 
+    #strategy             : ddp
     limit_val_batches    : 256
     limit_train_batches  : 2048
-    num_sanity_val_steps : 0 
+    num_sanity_val_steps : 0
     max_epochs           : 360
 
 torch_globals:
@@ -1173,7 +1173,7 @@ initializer:
     init: /home/local/KHQ/jon.crall/remote/yardrat/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop6-MeanYear10GSD/runs/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2/lightning_logs/version_0/package-interupt/package_epoch3_step941.pt
     #init: /home/local/KHQ/jon.crall/remote/yardrat/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop6-MeanYear10GSD/runs/Drop6_TCombo1Year_BAS_10GSD_split6_V42/lightning_logs/version_3/package-interupt/package_epoch102_step26346.pt
     #init: $DVC_EXPT_DPATH/models/fusion/Drop6/packages/Drop6_BAS_2022_12_10GSD_BGRN_V11_CONT4/Drop6_BAS_2022_12_10GSD_BGRN_V11_CONT4_epoch6_step22939.pt
-" 
+"
 
 
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
@@ -1214,7 +1214,7 @@ data:
     batch_size             : 6
     normalize_perframe     : false
     normalize_peritem      : true
-    max_epoch_length       : 1000000 
+    max_epoch_length       : 1000000
     channels               : '$CHANNELS'
     min_spacetime_weight   : 0.6
     temporal_dropout       : 0.5
@@ -1229,22 +1229,22 @@ data:
 model:
     class_path: MultimodalTransformer
     init_args:
-        saliency_weights       : auto 
-        class_weights          : auto 
-        tokenizer              : linconv 
-        arch_name              : smt_it_stm_p8 
-        decoder                : mlp 
-        positive_change_weight : 1 
-        negative_change_weight : 0.01 
-        stream_channels        : 16 
-        class_loss             : 'dicefocal' 
-        saliency_loss          : 'focal' 
+        saliency_weights       : auto
+        class_weights          : auto
+        tokenizer              : linconv
+        arch_name              : smt_it_stm_p8
+        decoder                : mlp
+        positive_change_weight : 1
+        negative_change_weight : 0.01
+        stream_channels        : 16
+        class_loss             : 'dicefocal'
+        saliency_loss          : 'focal'
         saliency_head_hidden   : 3
         change_head_hidden     : 3
-        global_change_weight   : 0.00 
-        global_class_weight    : 0.50 
-        global_saliency_weight : 1.00 
-optimizer: 
+        global_change_weight   : 0.00
+        global_class_weight    : 0.50
+        global_saliency_weight : 1.00
+optimizer:
     class_path: torch.optim.AdamW
     init_args:
         lr           : $TARGET_LR
@@ -1259,13 +1259,13 @@ lr_scheduler:
 trainer:
     accumulate_grad_batches: 16
     default_root_dir     : $DEFAULT_ROOT_DIR
-    accelerator          : gpu 
+    accelerator          : gpu
     devices              : 0,
     #devices              : 0,1
-    #strategy             : ddp 
+    #strategy             : ddp
     limit_val_batches    : 256
     limit_train_batches  : 2048
-    num_sanity_val_steps : 0 
+    num_sanity_val_steps : 0
     max_epochs           : 360
 
 torch_globals:
@@ -1273,7 +1273,7 @@ torch_globals:
 
 initializer:
     init: /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6-MeanYear10GSD/runs/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2/lightning_logs/version_9/checkpoints/epoch=110-step=28416.ckpt
-" 
+"
 
 #--ckpt_path=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6-MeanYear10GSD/runs/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2/lightning_logs/version_7/checkpoints/epoch=69-step=17920.ckpt
  #--ckpt_path=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6-MeanYear10GSD/runs/Drop6_TCombo1Year_BAS_10GSD_split6_V41_cont2/lightning_logs/version_3/checkpoints/epoch=40-step=10496.ckpt
@@ -1317,7 +1317,7 @@ data:
     batch_size             : 4
     normalize_perframe     : false
     normalize_peritem      : true
-    max_epoch_length       : 1000000 
+    max_epoch_length       : 1000000
     channels               : '$CHANNELS'
     min_spacetime_weight   : 0.6
     temporal_dropout       : 0.5
@@ -1332,23 +1332,23 @@ data:
 model:
     class_path: MultimodalTransformer
     init_args:
-        #saliency_weights       : '1:1' 
-        #class_weights          : auto 
-        tokenizer              : linconv 
-        arch_name              : smt_it_stm_p8 
-        decoder                : mlp 
-        positive_change_weight : 1 
-        negative_change_weight : 0.01 
-        stream_channels        : 16 
-        class_loss             : 'dicefocal' 
-        saliency_loss          : 'focal' 
+        #saliency_weights       : '1:1'
+        #class_weights          : auto
+        tokenizer              : linconv
+        arch_name              : smt_it_stm_p8
+        decoder                : mlp
+        positive_change_weight : 1
+        negative_change_weight : 0.01
+        stream_channels        : 16
+        class_loss             : 'dicefocal'
+        saliency_loss          : 'focal'
         saliency_head_hidden   : 6
         change_head_hidden     : 6
         class_head_hidden      : 6
-        global_change_weight   : 0.05 
-        global_class_weight    : 0.50 
-        global_saliency_weight : 1.00 
-optimizer: 
+        global_change_weight   : 0.05
+        global_class_weight    : 0.50
+        global_saliency_weight : 1.00
+optimizer:
     class_path: torch.optim.AdamW
     init_args:
         lr           : $TARGET_LR
@@ -1363,13 +1363,13 @@ lr_scheduler:
 trainer:
     accumulate_grad_batches: 16
     default_root_dir     : $DEFAULT_ROOT_DIR
-    accelerator          : gpu 
+    accelerator          : gpu
     devices              : 0,
     #devices              : 0,1
-    #strategy             : ddp 
+    #strategy             : ddp
     limit_val_batches    : 256
     limit_train_batches  : 2048
-    num_sanity_val_steps : 0 
+    num_sanity_val_steps : 0
     max_epochs           : 360
 
 torch_globals:
@@ -1378,6 +1378,8 @@ torch_globals:
 initializer:
     init: $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2_epoch3_step941.pt
 "
+
+models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2_epoch3_step941.pt
 
 
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')

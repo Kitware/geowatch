@@ -968,6 +968,8 @@ class AggregatorAnalysisMixin:
             _agg = agg
 
         for region_id, group in _agg.region_to_tables.items():
+            if len(group) == 0:
+                continue
             metric_group = group[group.columns.intersection(_agg.metrics.columns)]
             metric_group = metric_group.sort_values(_agg.primary_metric_cols)
 
@@ -1476,8 +1478,9 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             # Macro aggregaet comparable groups
             macro_rows = []
             for group in comparable_groups:
-                macro_row = macro_aggregate(agg, group, aggregator)
-                macro_rows.append(macro_row)
+                if len(group) > 0:
+                    macro_row = macro_aggregate(agg, group, aggregator)
+                    macro_rows.append(macro_row)
 
             macro_table = pd.DataFrame(macro_rows).reset_index(drop=True)
             agg.region_to_tables.pop(macro_key, None)
@@ -1495,7 +1498,7 @@ def aggregate_param_cols(df, aggregator=None, hash_cols=None, allow_nonuniform=F
     be effectively the same, otherwise we will warn.
 
     TODO:
-        - [ ] optimizatize this
+        - [ ] optimize this
     """
     agg_row = df.iloc[0]
     if len(df) == 1:

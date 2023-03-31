@@ -1065,7 +1065,7 @@ python -m watch.mlops.aggregate \
         per_group: 1
         macro_analysis: 0
         analyze: 0
-        #reference_region: final
+        reference_region: final
     "
     #--plot_params=True \
     #--output_dpath="$DVC_EXPT_DPATH"/_split6_toothbrush_meanyear/_aggregate
