@@ -100,7 +100,7 @@ class pretext(pl.LightningModule):
         self.criteria = [ self.criteria[i] for i in self.task_indices ]
 
         # task specific metrics
-        self.sort_accuracy = Accuracy()
+        self.sort_accuracy = Accuracy(task='binary')
 
     def forward(self, image_stack, positional_encoding=None):
         # pass through shared model body
