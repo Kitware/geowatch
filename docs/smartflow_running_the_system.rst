@@ -397,8 +397,8 @@ To debug interactively you can log into an existing run:
     for item in data['items']:
         row = {
             'name': item['metadata']['name'],
-            'status': data['items'][0]['status']['phase'],
-            'startTime': data['items'][0]['status']['startTime'],
+            'status': item['status']['phase'],
+            'startTime': item['status']['startTime'],
         }
         rows.append(row)
     df = pd.DataFrame(rows)
@@ -409,6 +409,89 @@ To debug interactively you can log into an existing run:
     pod_addr = df.iloc[idx]['name']
     ub.cmd(f'kubectl -n airflow exec -it pods/{pod_addr} -- bash', system=True)
     "
+
+
+To interact with airflow on the command line, you need to exec into the airflow
+scheduler pod.
+
+
+.. code:: bash
+
+    JQ_QUERY='.items[] | select(.metadata.name | startswith("airflow-scheduler-")) | .metadata.name'
+    AIRFLOW_SCHEDULER_POD_NAME=$(kubectl -n airflow get pods -o json | jq -r "$JQ_QUERY")
+    echo $AIRFLOW_SCHEDULER_POD_NAME
+
+    # Get a shell into the scheduler to run airflow commands
+    kubectl -n airflow exec -it pods/$AIRFLOW_SCHEDULER_POD_NAME -- /bin/bash
+
+    # Inside the airflow shell
+    echo '
+
+    airflow dags list
+
+    airflow dags list -o json > dags.json
+
+    airflow dags list-jobs
+
+    # To run a dag you need to trigger and unpause it.
+    airflow dags trigger kit_ta2_preeval10_pyenv_t29_batch_AE_R001
+    airflow dags unpause kit_ta2_preeval10_pyenv_t29_batch_AE_R001
+
+    airflow dags trigger kit_ta2_preeval10_pyenv_t29_batch_KW_R001
+    airflow dags unpause kit_ta2_preeval10_pyenv_t29_batch_KW_R001
+
+    REGION_IDS=("KR_R002" "KR_R001" "NZ_R001")
+    for REGION_ID in "${REGION_IDS[@]}"; do
+        echo "trigger $REGION_ID"
+        airflow dags trigger kit_ta2_preeval10_pyenv_t29_batch_$REGION_ID
+        airflow dags unpause kit_ta2_preeval10_pyenv_t29_batch_$REGION_ID
+    done
+
+    REGION_IDS=("KR_R002" "KR_R001" "NZ_R001" "KW_R001" "AE_R001")
+    for REGION_ID in "${REGION_IDS[@]}"; do
+        echo "trigger $REGION_ID"
+        airflow dags trigger kit_ta2_preeval10_pyenv_t31_batch_$REGION_ID
+        airflow dags unpause kit_ta2_preeval10_pyenv_t31_batch_$REGION_ID
+    done
+    '
+
+
+    ### Alternative - execute commands from local shell
+    kubectl -n airflow exec -it pods/$AIRFLOW_SCHEDULER_POD_NAME -- airflow dags list
+
+    # This doesn't work well because it puts color in the output
+    kubectl -n airflow exec -it pods/$AIRFLOW_SCHEDULER_POD_NAME -- airflow dags list -o json > dags.json
+    # But we can strip ansi colors out
+    cat dags.json | sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2};?)?)?[mGK]//g" | cat > dags_nocolor.json
+
+    python -c "if True:
+    import json
+    import pathlib
+    import xdev
+    import cmd_queue
+
+    # Build pattern to identify the jobs you want to run
+    pattern = xdev.MultiPattern.coerce([
+        f'kit_ta2_preeval10_pyenv_t{t}*'
+        for t in [31, 35]
+    ])
+    data = json.loads(pathlib.Path('dags_nocolor.json').read_text())
+
+    # Build cmd-queue with the commands to execute
+    queue = cmd_queue.Queue.create(backend='serial')
+    prefix = 'kubectl -n airflow exec -it pods/$AIRFLOW_SCHEDULER_POD_NAME -- '
+    for item in data:
+        if pattern.match(item['dag_id']):
+            print(item['dag_id'])
+            queue.submit(prefix + 'airflow dags trigger ' + item['dag_id'])
+            queue.submit(prefix + 'airflow dags unpause ' + item['dag_id'])
+
+    # It is a good idea to comment out the run to check that you
+    # are doing what you want to do before you actually execute.
+    queue.print_commands()
+    queue.run()
+    "
+
 
 
 How to Bake a Model into a Dockerfile (OLD)
