@@ -17,7 +17,9 @@ import os
 import numpy as np
 import pandas as pd
 from osgeo import gdal
-import datetime as datetime
+import pytz
+import datetime as datetime_mod
+from datetime import datetime as datetime_cls
 import json
 import kwcoco
 import kwimage
@@ -32,7 +34,7 @@ except ImportError:
     from ubelt import identity as profile
 
 logger = logging.getLogger(__name__)
-
+tz = pytz.timezone('US/Eastern')
 
 class AssembleColdKwcocoConfig(scfg.DataConfig):
     """
@@ -41,19 +43,25 @@ class AssembleColdKwcocoConfig(scfg.DataConfig):
     stack_path = scfg.Value(None, help='folder directory of stacked data')
     reccg_path = scfg.Value(None, help='folder directory of cold processing result')
     coco_fpath = scfg.Value(None, help='file path of coco json')
+    combined_coco_fpath = scfg.Value(None, help=ub.paragraph(
+        '''
+        a path to a file to combined kwcoco file
+        '''))
     mod_coco_fpath = scfg.Value(None, help='file path for modified coco json')
     meta_fpath = scfg.Value(None, help='file path of metadata json created by prepare_kwcoco script')
     year_lowbound = scfg.Value(None, help='min year for saving geotiff, e.g., 2017')
     year_highbound = scfg.Value(None, help='max year for saving geotiff, e.g., 2022')
     coefs = scfg.Value(None, type=str, help="list of COLD coefficients for saving geotiff, e.g., a0,c1,a1,b1,a2,b2,a3,b3,cv,rmse")
     coefs_bands = scfg.Value(None, type=str, help='indicate the bands for output coefs_bands, e.g., 0,1,2,3,4,5')
-    timestamp = scfg.Value(True, help='True: exporting cold result by timestamp, False: exporting cold result by year, Default is False')
+    timestamp = scfg.Value(False, help='True: exporting cold result by timestamp, False: exporting cold result by year, Default is False')
+    combine = scfg.Value(True, help='for temporal combined mode, Default is True')
     resolution = scfg.Value('30GSD', help=ub.paragraph(
         '''
         the resolution used when preparing the kwcoco data. Note: results will
         be wrong if this does not agree with what was used in
         PrepareKwcocoConfig
         '''))
+    sensors = scfg.Value('L8', type=str, help='sensor type, default is "L8"')
 
 
 @profile
@@ -72,16 +80,19 @@ def assemble_main(cmdline=1, **kwargs):
     >>> from watch.tasks.cold.assemble_cold_result_kwcoco import assemble_main
     >>> from watch.tasks.cold.assemble_cold_result_kwcoco import *
     >>> kwargs= dict(
-    >>>    stack_path = "/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/KR_R001",
-    >>>    reccg_path = "/gpfs/sharedfs1/zhulab/Jiwon/kwcoco/reccg/KR_R001/",
-    >>>    coco_fpath = ub.Path('/home/jws18003/data/dvc-repos/smart_data_dvc/Drop6/imgonly-KR_R001.kwcoco.json'),
-    >>>    mod_coco_fpath = ub.Path('/home/jws18003/data/dvc-repos/smart_data_dvc/Drop6/imgonly-KR_R001.kwcoco.modified_delete.json'),
-    >>>    meta_fpath = '/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/KR_R001/block_x10_y1/crop_20140115T020000Z_N37.643680E128.649453_N37.683356E128.734073_L8_0.json',
-    >>>    coefs = 'rmse',
+    >>>    stack_path = "/home/jws18003/data/dvc-repos/smart_data_dvc/Drop6/_pycold_combine/stacked/KR_R001/",
+    >>>    reccg_path = "/home/jws18003/data/dvc-repos/smart_data_dvc/Drop6/_pycold_combine/reccg/KR_R001/",
+    >>>    coco_fpath = ub.Path('/home/jws18003/data/dvc-repos/smart_data_dvc/Drop6/data_vali_split1_KR_R001.kwcoco.json'),
+    >>>    mod_coco_fpath = ub.Path('/home/jws18003/data/dvc-repos/smart_data_dvc/Drop6/_pycold_combine/test.json'),
+    >>>    meta_fpath = '/home/jws18003/data/dvc-repos/smart_data_dvc/Drop6/_pycold_combine/stacked/KR_R001/block_x9_y9/crop_20210807T010000Z_N37.643680E128.649453_N37.683356E128.734073_L8_0.json',
+    >>>    combined_coco_fpath = ub.Path('/home/jws18003/data/dvc-repos/smart_data_dvc/Drop6_MeanYear/data_vali_split1_KR_R001_MeanYear.kwcoco.json'),
+    >>>    coefs = 'cv,rmse',
     >>>    year_lowbound = None,
     >>>    year_highbound = None,
-    >>>    coefs_bands = '0,1,2,3,4,5',
+    >>>    coefs_bands = '2',
     >>>    timestamp = False,
+    >>>    combine = True,
+    >>>    sensors = 'L8',
     >>>    )
     >>> cmdline=0
     >>> assemble_main(cmdline, **kwargs)
@@ -95,6 +106,7 @@ def assemble_main(cmdline=1, **kwargs):
     stack_path = ub.Path(config_in['stack_path'])
     reccg_path = ub.Path(config_in['reccg_path'])
     coco_fpath = ub.Path(config_in['coco_fpath'])
+    combined_coco_fpath = ub.Path(config_in['combined_coco_fpath'])
     mod_coco_fpath = ub.Path(config_in['mod_coco_fpath'])
     out_path = reccg_path / 'cold_feature'
     tmp_path = out_path / 'tmp'
@@ -104,7 +116,9 @@ def assemble_main(cmdline=1, **kwargs):
     coefs = config_in['coefs']
     coefs_bands = config_in['coefs_bands']
     timestamp = config_in['timestamp']
+    combine = config_in['combine']
     resolution = config_in['resolution']
+    sensors = config_in['sensors']
 
     # define variables
     config = json.loads(meta_fpath.read_text())
@@ -139,21 +153,6 @@ def assemble_main(cmdline=1, **kwargs):
         except Exception:
             print("Illegal coefs_bands inputs: example, --coefs_bands='0, 1, 2, 3, 4, 5, 6'")
 
-    # dt = np.dtype([('t_start', np.int32),
-    #                ('t_end', np.int32),
-    #                ('t_break', np.int32),
-    #                ('pos', np.int32),
-    #                ('num_obs', np.int32),
-    #                ('category', np.short),
-    #                ('change_prob', np.short),
-    #                ('coefs', np.float32, (7, 8)),   # note that the slope coefficient was scaled up by 10000
-    #                ('rmse', np.float32, 7),
-    #                ('magnitude', np.float32, 7)])
-
-    # if coefs is not None:
-    #     assert all(elem in coef_names for elem in coefs)
-    #     assert all(elem in band_names for elem in coefs_bands)
-
     # Get original transform from projection to image space
     coco_dset = kwcoco.CocoDataset(coco_fpath)
     L8_new_gdal_transform, L8_proj = get_gdal_transform(coco_dset, 'L8', resolution=resolution)
@@ -162,42 +161,6 @@ def assemble_main(cmdline=1, **kwargs):
     available_transforms = [L8_new_gdal_transform, S2_new_gdal_transform]
     if all(t is None for t in available_transforms):
         raise RuntimeError('There are no images of known sensors')
-
-    # video_ids = list(coco_dset.videos())
-    # if len(video_ids) != 1:
-    #     raise AssertionError('currently expecting one video per coco file; todo: be robust to this')
-    # video_id = video_ids[0]
-
-    # # Get all the images in the first video.
-    # images = coco_dset.images(video_id=video_id)
-    # sensors = images.lookup('sensor_coarse', None)
-    # is_landsat = [s == 'L8' for s in sensors]
-
-    # # Filter to only the landsat images
-    # landsat_images = images.compress(is_landsat)
-    # if len(landsat_images) == 0:
-    #     raise RuntimeError(f'Video {video_id} in {coco_dset} contains no landsat images')
-
-    # # Take the first landsat image
-    # coco_img = landsat_images.coco_images[0]
-    # primary_asset = coco_img.primary_asset()
-    # primary_fpath = ub.Path(coco_img.bundle_dpath) / primary_asset['file_name']
-    # ref_image = gdal.Open(os.fspath(primary_fpath), gdal.GA_ReadOnly)
-    # trans = ref_image.GetGeoTransform()
-    # proj = ref_image.GetProjection()
-
-    # original = kwimage.Affine.from_gdal(trans)
-    # # c, a, b, f, d, e = trans
-    # # original = kwimage.Affine(np.array([
-    # #     [a, b, c],
-    # #     [d, e, f],
-    # #     [0, 0, 1],
-    # # ]))
-
-    # warp_vid_from_img = kwimage.Affine.coerce(coco_img.img['warp_img_to_vid']).inv()
-    # new_geotrans =  original @ warp_vid_from_img
-    # a, b, c, d, e, f, g, h, i = np.array(new_geotrans).ravel().tolist()
-    # new_gdal_transform = (c, a, b, f, d, e)
 
     # Get ordinal day list
     block_folder = stack_path / 'block_x1_y1'
@@ -221,7 +184,7 @@ def assemble_main(cmdline=1, **kwargs):
         year_low_ordinal = min(img_dates)
         year_lowbound = pd.Timestamp.fromordinal(year_low_ordinal).year
     else:
-        year_low_ordinal = pd.Timestamp.toordinal(datetime.datetime(int(year_lowbound), 1, 1))
+        year_low_ordinal = pd.Timestamp.toordinal(datetime_mod.datetime(int(year_lowbound), 1, 1))
 
     img_dates, img_names = zip(*filter(lambda x: x[0] >= year_low_ordinal,
                                         zip(img_dates, img_names)))
@@ -229,7 +192,7 @@ def assemble_main(cmdline=1, **kwargs):
         year_high_ordinal = max(img_dates)
         year_highbound = pd.Timestamp.fromordinal(year_high_ordinal).year
     else:
-        year_high_ordinal = pd.Timestamp.toordinal(datetime.datetime(int(year_highbound + 1), 1, 1))
+        year_high_ordinal = pd.Timestamp.toordinal(datetime_mod.datetime(int(year_highbound + 1), 1, 1))
 
     img_dates, img_names = zip(*filter(lambda x: x[0] < year_high_ordinal,
                                             zip(img_dates, img_names)))
@@ -237,20 +200,44 @@ def assemble_main(cmdline=1, **kwargs):
     img_names = sorted(img_names)
     if timestamp:
         ordinal_day_list = img_dates
-    else:
-        # Get only the first ordinal date of each year
-        first_ordinal_dates = []
-        first_img_names = []
-        last_year = None
-        for ordinal_day, img_name in zip(img_dates, img_names):
-            year = pd.Timestamp.fromordinal(ordinal_day).year
-            if year != last_year:
-                first_ordinal_dates.append(ordinal_day)
-                first_img_names.append(img_name)
-                last_year = year
+    if combine:        
+        combined_coco_dset = kwcoco.CocoDataset(combined_coco_fpath)
+        
+        # filter by sensors
+        all_images = combined_coco_dset.images(list(ub.flatten(combined_coco_dset.videos().images)))
+        flags = [s in sensors for s in all_images.lookup('sensor_coarse')]
+        all_images = all_images.compress(flags)
+        image_id_iter = iter(all_images)
+        
+        # Get ordinal date of combined coco image
+        ordinal_dates = []
+        img_names = []
+        for image_id in image_id_iter:
+            combined_coco_image: kwcoco.CocoImage = combined_coco_dset.coco_image(image_id)
+            coco_image: kwcoco.CocoImage = coco_dset.coco_image(image_id)
+            ts = combined_coco_image.img['timestamp']
+            coco_img_name = coco_image.img['name']
+            timestamp_local = datetime_cls.fromtimestamp(ts, tz=tz)
+            timestamp_utc = timestamp_local.astimezone(pytz.utc)
+            ordinal = timestamp_utc.toordinal()
+            ordinal_dates.append(ordinal)
+            img_names.append(coco_img_name)
+        ordinal_day_list = ordinal_dates
+        
+    # else:
+    #     # Get only the first ordinal date of each year
+    #     first_ordinal_dates = []
+    #     first_img_names = []
+    #     last_year = None
+    #     for ordinal_day, img_name in zip(img_dates, img_names):
+    #         year = pd.Timestamp.fromordinal(ordinal_day).year
+    #         if year != last_year:
+    #             first_ordinal_dates.append(ordinal_day)
+    #             first_img_names.append(img_name)
+    #             last_year = year
 
-        ordinal_day_list = first_ordinal_dates
-        img_names = first_img_names
+    #     ordinal_day_list = first_ordinal_dates
+    #     img_names = first_img_names
 
     # assemble
     logger.info('Generating COLD output geotiff')
@@ -269,22 +256,11 @@ def assemble_main(cmdline=1, **kwargs):
             ninput = 0
             for band_idx, band_name in enumerate(coefs_bands):
                 for coef_index, coef in enumerate(coefs):
-                    if coef == 'cv':
-                        results[results == -9999] = 0
                     kwcoco_img_name = img_names[day]
                     band = BAND_INFO[band_name]
-                    name_parts = list(map(str, (kwcoco_img_name[:-4], band, method, coef)))
+                    name_parts = list(map(str, (kwcoco_img_name, band, method, coef)))
                     outname = '_'.join(name_parts) + '.tif'
                     outfile = out_path / outname
-                    # outdriver1 = gdal.GetDriverByName("GTiff")
-                    # outdata = outdriver1.Create(os.fspath(outfile), vid_w, vid_h, 1, gdal.GDT_Float32)
-                    # outdata.GetRasterBand(1).WriteArray(results[:vid_h, :vid_w, ninput])
-                    # outdata.FlushCache()
-                    # outdata.SetGeoTransform(new_gdal_transform)
-                    # outdata.FlushCache()
-                    # outdata.SetProjection(proj)
-                    # outdata.FlushCache()
-                    # ninput = ninput + 1
                     if '_L8_' in outname:
                         outdriver_L8 = gdal.GetDriverByName('GTiff')
                         outdata_L8 = outdriver_L8.Create(os.fspath(outfile), vid_w, vid_h, 1, gdal.GDT_Float32)
@@ -313,59 +289,102 @@ def assemble_main(cmdline=1, **kwargs):
                 # sorting, or nest files to keep folder sizes small
 
     # Remove tmp files
-    # for file in os.listdir(out_path):
-    #     if fnmatch.fnmatch(file, 'tmp_coefmap*'):
-    #         os.remove(out_path / file)
     shutil.rmtree(tmp_path)
 
     logger.info('Starting adding new asset to kwcoco json')
+    if combine:
+        combined_coco_dset = kwcoco.CocoDataset(combined_coco_fpath)
+        for image_id in combined_coco_dset.images():
+            combined_coco_image: kwcoco.CocoImage = combined_coco_dset.coco_image(image_id)
+            coco_image: kwcoco.CocoImage = coco_dset.coco_image(image_id)
+            image_name = coco_image.img['name']
 
-    # add new asset to each image
-    for image_id in coco_dset.images():
-        # Create a CocoImage object for each image.
-        coco_image: kwcoco.CocoImage = coco_dset.coco_image(image_id)
-        image_name = coco_image.img['name']
+            asset_w = vid_w
+            asset_h = vid_h
+            
+            for band_name in band_names:
+                for coef in coef_names:
+                    band = BAND_INFO[band_name]
+                    new_fpath = out_path / f'{image_name}_{band}_{method}_{coef}.tif'
+                    if new_fpath.exists():
+                        channels = kwcoco.ChannelSpec.coerce(f'{band}_{method}_{coef}')
 
-        asset_w = vid_w
-        asset_h = vid_h
+                        # COLD output was wrote based on transform information of
+                        # coco_dset, so it aligned to a scaled video space.
+                        warp_img_from_vid = coco_image.warp_img_from_vid
 
-        for band_name in band_names:
-            for coef in coef_names:
-                band = BAND_INFO[band_name]
-                new_fpath = out_path / f'{image_name}_{band}_{method}_{coef}.tif'
-                if new_fpath.exists():
-                    channels = kwcoco.ChannelSpec.coerce(f'{band}_{method}_{coef}')
+                        if resolution is None:
+                            scale_asset_from_vid = (1., 1.)
+                        else:
+                            scale_asset_from_vid = coco_image._scalefactor_for_resolution(
+                                space='video', resolution=resolution)
+                        warp_asset_from_vid = kwimage.Affine.scale(scale_asset_from_vid)
+                        warp_vid_from_asset = warp_asset_from_vid.inv()
+                        warp_img_from_asset = warp_img_from_vid @ warp_vid_from_asset
+                        
+                        # Use the CocoImage helper which will augment the coco dictionary with
+                        # your information.                        
+                        combined_coco_image.add_asset(os.fspath(new_fpath),
+                                            channels=channels, width=asset_w,
+                                            height=asset_h,
+                                            warp_aux_to_img=warp_img_from_asset)                        
+                        logger.info(f'Added to the asset {new_fpath}')
+    else:                    
+        # add new asset to each image
+        for image_id in coco_dset.images():
+            # Create a CocoImage object for each image.
+            coco_image: kwcoco.CocoImage = coco_dset.coco_image(image_id)
+            image_name = coco_image.img['name']
+            
+            asset_w = vid_w
+            asset_h = vid_h
 
-                    # COLD output was wrote based on transform information of
-                    # coco_dset, so it aligned to a scaled video space.
-                    warp_img_from_vid = coco_image.warp_img_from_vid
+            for band_name in band_names:
+                for coef in coef_names:
+                    band = BAND_INFO[band_name]
+                    new_fpath = out_path / f'{image_name}_{band}_{method}_{coef}.tif'
+                    if new_fpath.exists():
+                        channels = kwcoco.ChannelSpec.coerce(f'{band}_{method}_{coef}')
 
-                    if resolution is None:
-                        scale_asset_from_vid = (1., 1.)
-                    else:
-                        scale_asset_from_vid = coco_image._scalefactor_for_resolution(
-                            space='video', resolution=resolution)
-                    warp_asset_from_vid = kwimage.Affine.scale(scale_asset_from_vid)
-                    warp_vid_from_asset = warp_asset_from_vid.inv()
-                    warp_img_from_asset = warp_img_from_vid @ warp_vid_from_asset
+                        # COLD output was wrote based on transform information of
+                        # coco_dset, so it aligned to a scaled video space.
+                        warp_img_from_vid = coco_image.warp_img_from_vid
 
-                    # Use the CocoImage helper which will augment the coco dictionary with
-                    # your information.
-                    coco_image.add_asset(os.fspath(new_fpath),
-                                         channels=channels, width=asset_w,
-                                         height=asset_h,
-                                         warp_aux_to_img=warp_img_from_asset)
-                    logger.info(f'Added to the asset {new_fpath}')
+                        if resolution is None:
+                            scale_asset_from_vid = (1., 1.)
+                        else:
+                            scale_asset_from_vid = coco_image._scalefactor_for_resolution(
+                                space='video', resolution=resolution)
+                        warp_asset_from_vid = kwimage.Affine.scale(scale_asset_from_vid)
+                        warp_vid_from_asset = warp_asset_from_vid.inv()
+                        warp_img_from_asset = warp_img_from_vid @ warp_vid_from_asset
+                        
+                        # Use the CocoImage helper which will augment the coco dictionary with
+                        # your information.                        
+                        coco_image.add_asset(os.fspath(new_fpath),
+                                                channels=channels, width=asset_w,
+                                                height=asset_h,
+                                                warp_aux_to_img=warp_img_from_asset)
+                        
+                        logger.info(f'Added to the asset {new_fpath}')
 
     if proc_context is not None:
         context_info = proc_context.stop()
-        coco_dset.dataset['info'].append(context_info)
+        if combine:
+            combined_coco_dset.dataset['info'].append(context_info)
+        else:
+            coco_dset.dataset['info'].append(context_info)
 
     # Write a modified kwcoco.json file
     logger.info(f'Writing kwcoco file to: {mod_coco_fpath}')
-    coco_dset.fpath = mod_coco_fpath
-    coco_dset._ensure_json_serializable()
-    coco_dset.dump()
+    if combine:
+        combined_coco_dset.fpath = mod_coco_fpath
+        combined_coco_dset._ensure_json_serializable()
+        combined_coco_dset.dump()
+    else:
+        coco_dset.fpath = mod_coco_fpath
+        coco_dset._ensure_json_serializable()
+        coco_dset.dump()
     logger.info(f'Finished writing kwcoco file to: {mod_coco_fpath}')
 
     gc.collect()

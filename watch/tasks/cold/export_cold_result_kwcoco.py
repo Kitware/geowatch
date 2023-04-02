@@ -28,9 +28,10 @@ import scriptconfig as scfg
 import logging
 import itertools
 import ubelt as ub
-from pytz import timezone
+import pytz
 from datetime import datetime as datetime_cls
 import gc
+import kwcoco
 logger = logging.getLogger(__name__)
 
 
@@ -51,6 +52,10 @@ class ExportColdKwcocoConfig(scfg.DataConfig):
         None, help='folder directory of cold processing result')
     meta_fpath = scfg.Value(
         None, help='file path of metadata json created by prepare_kwcoco script')
+    combined_coco_fpath = scfg.Value(None, help=ub.paragraph(
+        '''
+        a path to a file to combined kwcoco file
+        '''))
     year_lowbound = scfg.Value(
         None, help='min year for saving geotiff, e.g., 2017')
     year_highbound = scfg.Value(
@@ -64,8 +69,10 @@ class ExportColdKwcocoConfig(scfg.DataConfig):
         type=str,
         help='indicate the ba_nds for output coefs_bands, e.g., 0,1,2,3,4,5')
     timestamp = scfg.Value(
-        True,
+        False,
         help='True: exporting cold result by timestamp, False: exporting cold result by year, Default is False')
+    combine = scfg.Value(True, help='for temporal combined mode, Default is True')
+    sensors = scfg.Value('L8', type=str, help='sensor type, default is "L8"')
 
 
 @profile
@@ -86,14 +93,16 @@ def export_cold_main(cmdline=1, **kwargs):
     >>> kwargs= dict(
     >>>    rank = 0,
     >>>    n_cores = 1,
-    >>>    stack_path = "/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/KR_R001",
-    >>>    reccg_path = "/gpfs/sharedfs1/zhulab/Jiwon/kwcoco/reccg/KR_R001/",
-    >>>    meta_fpath = '/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/KR_R001/block_x9_y9/crop_20210807T010000Z_N37.643680E128.649453_N37.683356E128.734073_L8_0.json',
+    >>>    stack_path = "/home/jws18003/data/dvc-repos/smart_data_dvc/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/_pycold_combine/stacked/KR_R001/",
+    >>>    reccg_path = "/home/jws18003/data/dvc-repos/smart_data_dvc/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/_pycold_combine/reccg/KR_R001/",
+    >>>    meta_fpath = '/home/jws18003/data/dvc-repos/smart_data_dvc/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/_pycold_combine/stacked/KR_R001/block_x9_y9/crop_20210807T010000Z_N37.643680E128.649453_N37.683356E128.734073_L8_0.json',
+    >>>    combined_coco_fpath = "/home/jws18003/data/dvc-repos/smart_data_dvc/Drop6_MeanYear/data_vali_split1_KR_R001_MeanYear.kwcoco.json",
     >>>    coefs = 'rmse',
     >>>    year_lowbound = None,
     >>>    year_highbound = None,
-    >>>    coefs_bands = '0,1,2,3,4,5',
+    >>>    coefs_bands = '2',
     >>>    timestamp = False,
+    >>>    combine = True,
     >>>    )
     >>> cmdline=0
     >>> export_cold_main(cmdline, **kwargs)
@@ -105,12 +114,16 @@ def export_cold_main(cmdline=1, **kwargs):
     stack_path = ub.Path(config_in['stack_path'])
     reccg_path = ub.Path(config_in['reccg_path'])
     meta_fpath = ub.Path(config_in['meta_fpath'])
+    combined_coco_fpath = ub.Path(config_in['combined_coco_fpath'])
     year_lowbound = config_in['year_lowbound']
     year_highbound = config_in['year_highbound']
     coefs = config_in['coefs']
     coefs_bands = config_in['coefs_bands']
+    combine = config_in['combine']
     timestamp = config_in['timestamp']
-
+    sensors = config_in['sensors']
+    
+    assert (combine and not timestamp) or (not combine and timestamp), "combine and timestamp must be either True and False, or False and True."
     # TODO: MPI mode
     # if config_in['rank'] == 'MPI':
     #     ## MPI mode
@@ -176,7 +189,7 @@ def export_cold_main(cmdline=1, **kwargs):
     out_path = reccg_path / 'cold_feature'
     tmp_path = reccg_path / 'cold_feature' / 'tmp'
 
-    tz = timezone('US/Eastern')
+    tz = pytz.timezone('US/Eastern')
 
     if rank == 0:
         out_path.ensuredir()
@@ -228,19 +241,41 @@ def export_cold_main(cmdline=1, **kwargs):
     img_names = sorted(img_names)
     if timestamp:
         ordinal_day_list = img_dates
-    else:
-        # Get only the first ordinal date of each year
-        first_ordinal_dates = []
-        first_img_names = []
-        last_year = None
-        for ordinal_day, img_name in zip(img_dates, img_names):
-            year = pd.Timestamp.fromordinal(ordinal_day).year
-            if year != last_year:
-                first_ordinal_dates.append(ordinal_day)
-                first_img_names.append(img_name)
-                last_year = year
+    if combine:        
+        combined_coco_dset = kwcoco.CocoDataset(combined_coco_fpath)
+        
+        # filter by sensors
+        all_images = combined_coco_dset.images(list(ub.flatten(combined_coco_dset.videos().images)))
+        flags = [s in sensors for s in all_images.lookup('sensor_coarse')]
+        all_images = all_images.compress(flags)
+        image_id_iter = iter(all_images)
+        
+        # Get ordinal date of combined coco image
+        ordinal_dates = []
+        ordinal_dates_july_first = []
+        for image_id in image_id_iter:
+            combined_coco_image: kwcoco.CocoImage = combined_coco_dset.coco_image(image_id)
+            ts = combined_coco_image.img['timestamp']
+            timestamp_local = datetime_cls.fromtimestamp(ts, tz=tz)
+            timestamp_utc = timestamp_local.astimezone(pytz.utc)
+            july_first = datetime_mod.date(timestamp_utc.year, 7, 1).toordinal()
+            ordinal = timestamp_utc.toordinal()
+            ordinal_dates.append(ordinal)
+            ordinal_dates_july_first.append(july_first)
 
-        ordinal_day_list = first_ordinal_dates
+        ordinal_day_list = ordinal_dates
+        
+        # Back up
+        # first_ordinal_dates = []
+        # first_img_names = []
+        # last_year = None
+        # for ordinal_day, img_name in zip(img_dates, img_names):
+        #     year = pd.Timestamp.fromordinal(ordinal_day).year
+        #     if year != last_year:
+        #         first_ordinal_dates.append(ordinal_day)
+        #         first_img_names.append(img_name)
+        #         last_year = year
+        # ordinal_day_list = first_ordinal_dates
 
     ranks_percore = int(np.ceil(n_blocks / n_cores))
     i_iter = range(ranks_percore)
@@ -284,37 +319,45 @@ def export_cold_main(cmdline=1, **kwargs):
                     print(f'the rec_cg file {reccg_fpath} has failed status')
                     results_block_coefs
                 else:
-                    cold_block = np.array(np.load(reccg_fpath), dtype=dt)
+                    cold_block = np.array(np.load(reccg_fpath), dtype=dt)                
                     cold_block_split = np.split(cold_block, np.argwhere(np.diff(cold_block['pos']) != 0)[:, 0] + 1)
-
+                    
                     nan_val = -9999
                     feature_outputs = coefs
                     feature_set = set(feature_outputs)
-
+                    
                     if not feature_set.issubset({'a0', 'c1', 'a1', 'b1', 'a2', 'b2', 'a3', 'b3', 'cv', 'rmse'}):
                         raise Exception('the outputted feature must be in [a0, c1, a1, b1, a2, b2, a3, b3, cv, rmse]')
-
+                    
                     for element in cold_block_split:
+                        # Degugging mode 
+                        # if element[0]["pos"] == 4:
+                        #     print(element)
                         # the relative column number in the block
                         i_col = int((element[0]["pos"] - 1) % n_cols) - \
                                 (current_block_x - 1) * block_width
                         i_row = int((element[0]["pos"] - 1) / n_cols) - \
                                 (current_block_y - 1) * block_height
-
+                        
                         for band_idx, band in enumerate(coefs_bands):
-                            feature_row = extract_features(element, band, ordinal_day_list, nan_val, timestamp,
-                                                            feature_outputs, feature_set)
+                            feature_row = extract_features(element, band, ordinal_dates_july_first, nan_val, timestamp,
+                                                            feature_outputs, feature_set)                    
                             # Degugging mode
-                            # if current_block_x == 10 and current_block_y == 11:
-                            #     print((current_block_x, current_block_y), (i_col, i_row), (band_idx, band))
-                            #     print(feature_row)
-
+                            # if current_block_x == 1 and current_block_y == 1:
+                            #     if i_col == 3 and i_row == 0:
+                            #         print(element[0]["pos"])
+                            #         print((current_block_x, current_block_y), (i_col, i_row), (band_idx, band))
+                            #         print('feature_row', feature_row)
+                            
                             for index, coef in enumerate(coefs):
+                                # Degugging mode
+                                # if i_col == 3 and i_row == 0 and element[0]["pos"] == 4:
+                                #     print(feature_row[index])
                                 results_block_coefs[i_row][i_col][index + band_idx * len(coefs)][:] = \
                                     feature_row[index]
+                                    
 
         # save the temp dataset out
-        # if timestamp:
         for day in range(len(ordinal_day_list)):
             if coefs is not None:
                 outfile = tmp_path / \
@@ -351,7 +394,7 @@ def extract_features(cold_plot, band, ordinal_day_list,
     # max_days_list = [datetime_mod.date(last_year, 12, 31).toordinal()] * len(cold_plot)
 
     break_year_list = [-9999 if not (curve['t_break'] > 0 and curve['change_prob'] == 100) else
-                       pd.Timestamp.fromordinal(curve['t_break']).year for curve in cold_plot]
+                    pd.Timestamp.fromordinal(curve['t_break']).year for curve in cold_plot]
 
     possible_features = ['a0', 'c1', 'a1', 'b1', 'rmse', 'cv']
     fk_to_idx = {
@@ -380,7 +423,12 @@ def extract_features(cold_plot, band, ordinal_day_list,
     try:
         idxs_iter = itertools.product(idx_day_year_list, mday_byear_curve_list)
         for (day_idx, ordinal_day, ord_year), (max_day,
-                                               break_year, cold_curve) in idxs_iter:
+                                            break_year, cold_curve) in idxs_iter:
+            if cv_idx is not None:
+                if cold_curve['t_break'] != 0 and cold_curve['change_prob'] == 100:
+                    if (timestamp and ordinal_day == cold_curve['t_break']) or (
+                            not timestamp and break_year == ord_year):
+                        features[cv_idx, day_idx] = cold_curve['magnitude'][band]
             if cold_curve['t_start'] <= ordinal_day < max_day:
                 if a0_idx is not None:
                     features[a0_idx, day_idx] = (
@@ -395,18 +443,11 @@ def extract_features(cold_plot, band, ordinal_day_list,
                     features[b1_idx, day_idx] = cold_curve['coefs'][band][3]
                 if rmse_idx is not None:
                     features[rmse_idx, day_idx] = cold_curve['rmse'][band]
-
-                if cv_idx is not None:
-                    if cold_curve['t_break'] != 0 and cold_curve['change_prob'] == 100:
-                        break_year = break_year
-                        if (timestamp and ordinal_day == cold_curve['t_break']) or (
-                                not timestamp and break_year == ord_year):
-                            features[cv_idx,
-                                     day_idx] = cold_curve['magnitude'][band]
-                            # In this case, we didn't find a matching cold
-                            # curve for the current ordinal day, stop
-                            # processing.
-                            raise NoMatchingColdCurve
+        # print(features)
+                    # In this case, we didn't find a matching cold
+                    # curve for the current ordinal day, stop
+                    # processing.
+                    # raise NoMatchingColdCurve
     except NoMatchingColdCurve:
         ...
 
