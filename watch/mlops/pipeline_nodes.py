@@ -37,7 +37,7 @@ except ImportError:
     profile = ub.identity
 
 
-class PipelineDAG:
+class Pipeline:
     """
     A container for a group of nodes that have been connected.
 
@@ -81,11 +81,26 @@ class PipelineDAG:
         self.nodes = nodes
         self.config = None
 
+        self._dirty = True
+
         if self.nodes:
             self.build_nx_graphs()
 
         if config:
             self.configure(config, root_dpath=root_dpath)
+
+    def _ensure_clean(self):
+        if self._dirty:
+            self.build_nx_graphs()
+
+    def submit(self, command, **kwargs):
+        """
+        Dynamically create a new unique process node and add it to the dag
+        """
+        task = ProcessNode(command=command, **kwargs)
+        self.nodes.append(task)
+        self._dirty = True
+        return task
 
     @property
     def node_dict(self):
@@ -137,6 +152,8 @@ class PipelineDAG:
 
                 for oi_node in onode.succ:
                     self.io_graph.add_edge(onode.key, oi_node.key)
+
+        self._dirty = False
 
     @profile
     def inspect_configurables(self):
@@ -218,6 +235,7 @@ class PipelineDAG:
         """
         Update the DAG configuration
         """
+        self._ensure_clean()
 
         if root_dpath is not None:
             root_dpath = ub.Path(root_dpath)
@@ -241,6 +259,7 @@ class PipelineDAG:
         """
         Prints the Process and IO graph for the DAG.
         """
+        self._ensure_clean()
 
         def labelize_graph(graph):
             # # self.io_graph.add_node(name + '.proc', node=node)
@@ -446,6 +465,11 @@ class PipelineDAG:
 
         # print(f'queue={queue}')
         return summary
+
+    make_queue = submit_jobs
+
+
+PipelineDAG = Pipeline
 
 
 def glob_templated_path(template):
@@ -796,6 +820,7 @@ class ProcessNode(Node):
     out_paths : Collection = None
 
     def __init__(self,
+                 *,  # TODO: allow positional arguments after we find a good order
                  name=None,
                  executable=None,
                  algo_params=None,
@@ -806,7 +831,16 @@ class ProcessNode(Node):
                  group_dname=None,
                  node_dname=None,
                  root_dpath=None,
-                 config=None):
+                 config=None,
+                 _no_outarg=False,
+                 **aliases):
+        if aliases:
+            if 'command' in aliases:
+                executable = aliases['command']
+        del aliases
+
+        if name is None and executable is not None:
+            name = 'unnamed_' + ub.hash_data(executable)[0:8]
         args = locals()
         fallbacks = {
             'resources': {
@@ -844,6 +878,7 @@ class ProcessNode(Node):
         self.final_opaths = None
         self.enabled = True
         self.cache = True
+        self._no_outarg = _no_outarg
 
         self.configure(self.config)
 
@@ -924,7 +959,11 @@ class ProcessNode(Node):
         """
         final_config = self.config.copy()
         final_config.update(self.final_in_paths)
-        final_config.update(self.final_out_paths)
+        if not self._no_outarg:
+            # Hacky option, improve the API to make this not necessary
+            # when the full command is given and we dont need to
+            # add the extra args
+            final_config.update(self.final_out_paths)
         final_config.update(self.final_perf_config)
         return final_config
 
@@ -1222,6 +1261,8 @@ class ProcessNode(Node):
 
     @profile
     def test_is_computed_command(step):
+        if not step.final_out_paths:
+            return None
         test_expr = ' -a '.join(
             [f'-e "{p}"' for p in step.final_out_paths.values()])
         test_cmd = 'test ' +  test_expr
@@ -1230,6 +1271,9 @@ class ProcessNode(Node):
     @memoize_configured_property
     @profile
     def does_exist(self):
+        if len(self.final_out_paths) == 0:
+            # Can only cache if we know what output paths are
+            return False
         # return all(self.out_paths.map_values(lambda p: p.exists()).values())
         return all(ub.Path(p).expand().exists() for p in self.final_out_paths.values())
 
@@ -1250,7 +1294,11 @@ class ProcessNode(Node):
         base_command = '\n'.join([line for line in lines if line.strip() != '\\'])
 
         if self.cache or (not self.enabled and self.enabled != 'redo'):
-            return self.test_is_computed_command() + ' || ' + base_command
+            test_cmd = self.test_is_computed_command()
+            if test_cmd is None:
+                return base_command
+            else:
+                return test_cmd + ' || ' + base_command
         else:
             return base_command
 
