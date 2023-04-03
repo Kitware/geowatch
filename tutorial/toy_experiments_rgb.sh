@@ -9,7 +9,7 @@ This demonstrates an end-to-end pipeline on RGB toydata
 The tutorial generates its own training data so it can be run with minimal
 effort to test that all core components of the system are working.
 
-This walks through the entire process of fit -> predict -> evaluate to 
+This walks through the entire process of fit -> predict -> evaluate to
 train a fusion model on RGB data.
 """
 
@@ -43,7 +43,7 @@ accomplish this.
 # Define the names of the kwcoco files to generate
 TRAIN_FPATH=$DVC_DATA_DPATH/vidshapes_rgb_train/data.kwcoco.json
 VALI_FPATH=$DVC_DATA_DPATH/vidshapes_rgb_vali/data.kwcoco.json
-TEST_FPATH=$DVC_DATA_DPATH/vidshapes_rgb_test/data.kwcoco.json 
+TEST_FPATH=$DVC_DATA_DPATH/vidshapes_rgb_test/data.kwcoco.json
 
 # Generate toy datasets using the "kwcoco toydata" tool
 kwcoco toydata vidshapes1-frames5 --bundle_dpath "$DVC_DATA_DPATH"/vidshapes_rgb_train
@@ -80,7 +80,7 @@ Running visualize by default will write images for all channels in the exiting
 'kwcoco bundle' (i.e. the directory that contains the kwcoco json file) with a
 hash corresponding to the state of the kwcoco file. It will also output all the
 channels by default. Use 'smartwatch visualize --help' for a list of additional
-options. 
+options.
 
 Some useful options are:
 
@@ -118,7 +118,7 @@ Other arguments:
 * optimizers
 * training strategies
 
-In this tutorial we will use 'gpu' as our lightning accelerator. 
+In this tutorial we will use 'gpu' as our lightning accelerator.
 Please read the lightning docs for other available trainer settings:
 https://pytorch-lightning.readthedocs.io/en/stable/common/trainer.html#devices
 
@@ -131,57 +131,72 @@ WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 EXPERIMENT_NAME=ToyRGB_Demo_V001
 DATASET_CODE=ToyRGB
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-MAX_STEPS=100
+MAX_STEPS=512
 TARGET_LR=3e-4
 python -m watch.tasks.fusion fit --config "
-    data:
-        num_workers          : 4
-        train_dataset        : $TRAIN_FPATH
-        vali_dataset         : $VALI_FPATH
-        channels             : 'r|g|b'
-        time_steps           : 5
-        chip_dims            : 128
-        batch_size           : 2
-    model:
-        class_path: MultimodalTransformer
-        init_args:
-            name        : $EXPERIMENT_NAME
-            arch_name   : smt_it_stm_p8 
-            window_size : 8
-            dropout     : 0.1
-    lr_scheduler:
-      class_path: torch.optim.lr_scheduler.OneCycleLR
+data:
+    num_workers          : 4
+    train_dataset        : $TRAIN_FPATH
+    vali_dataset         : $VALI_FPATH
+    channels             : 'r|g|b'
+    time_steps           : 5
+    chip_dims            : 128
+    batch_size           : 2
+model:
+    class_path: MultimodalTransformer
+    init_args:
+        name        : $EXPERIMENT_NAME
+        arch_name   : smt_it_stm_p8
+        window_size : 8
+        dropout     : 0.1
+lr_scheduler:
+  class_path: torch.optim.lr_scheduler.OneCycleLR
+  init_args:
+    max_lr: $TARGET_LR
+    total_steps: $MAX_STEPS
+    anneal_strategy: cos
+    pct_start: 0.05
+optimizer:
+  class_path: torch.optim.Adam
+  init_args:
+    lr: $TARGET_LR
+    weight_decay: 1e-5
+    betas:
+      - 0.9
+      - 0.99
+trainer:
+  accumulate_grad_batches: 1
+  default_root_dir     : $DEFAULT_ROOT_DIR
+  accelerator          : gpu
+  devices              : 0,
+  #devices             : 0,1
+  #strategy            : ddp
+  check_val_every_n_epoch: 1
+  enable_checkpointing: true
+  enable_model_summary: true
+  log_every_n_steps: 5
+  logger: true
+  max_steps: $MAX_STEPS
+  num_sanity_val_steps: 0
+  replace_sampler_ddp: true
+  track_grad_norm: 2
+  limit_val_batches    : 64
+  limit_train_batches  : 16
+  callbacks:
+    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
       init_args:
-        max_lr: $TARGET_LR
-        total_steps: $MAX_STEPS
-        anneal_strategy: linear
-        pct_start: 0.05
-    optimizer:
-      class_path: torch.optim.Adam
+        monitor: val_loss
+        mode: min
+        save_top_k: 3
+    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
       init_args:
-        lr: $TARGET_LR
-        weight_decay: 1e-5
-        betas:
-          - 0.9
-          - 0.99
-    trainer:
-      accumulate_grad_batches: 1
-      default_root_dir     : $DEFAULT_ROOT_DIR
-      accelerator          : gpu 
-      devices              : 0,
-      #devices             : 0,1
-      #strategy            : ddp 
-      check_val_every_n_epoch: 1
-      enable_checkpointing: true
-      enable_model_summary: true
-      log_every_n_steps: 5
-      logger: true
-      max_steps: $MAX_STEPS
-      num_sanity_val_steps: 0
-      replace_sampler_ddp: true
-      track_grad_norm: 2
-    initializer:
-        init: noop
+        monitor: train_loss
+        mode: min
+        save_top_k: 3
+torch_globals:
+    float32_matmul_precision: auto
+initializer:
+    init: noop
 "
 
 # For more options with this particular model see:
@@ -194,7 +209,7 @@ The training code will output useful information in the "DEFAULT_ROOT_DIR".
 This will include
 
    * A set of checkpoints that score the best on validation metrics in $DEFAULT_ROOT_DIR/lightning_logs/*/checkpoints
-   * A monitor directory containing visualizations of train and validation batches in 
+   * A monitor directory containing visualizations of train and validation batches in
        $DEFAULT_ROOT_DIR/lightning_logs/*/monitor/train/batches and
        $DEFAULT_ROOT_DIR/lightning_logs/*/monitor/validate/batches
    * Image files containing visualized tensorboard curves in $DEFAULT_ROOT_DIR/lightning_logs/*/monitor/tensorboard
@@ -202,13 +217,13 @@ This will include
 
 In this examples we also specify a "package_fpath" for convenience.
 Typically you will want to repackage multiple checkpoints as torch models (see
-tutorial TODO), but for this first example, "package_fpath" provides an easy way to 
+tutorial TODO), but for this first example, "package_fpath" provides an easy way to
 tell the training to always package up the final checkpoint in a serialized model.
 
 Torch models are great because they combine the weights with the code needed to
 execute the forward pass of the network.  They can also store metadata about
 how the model was trained, which is critical for performing robust analysis on
-large numbers of models. 
+large numbers of models.
 
 We provide a CLI tool to summarize the info contained in a torch model via
 "smartwatch torch_model_stats". Lets try that on the model we just built.
@@ -245,7 +260,7 @@ To use a model to predict on an unseed kwcoco dataset (in this case the toy
 test set) we simply call the "watch.tasks.fusion.predict" script and pass it:
 
    * the kwcoco file of the dataset to predict on
-   * the path to the model we want to predict with 
+   * the path to the model we want to predict with
    * the name of the output kwcoco file that will contain the predictions
 
 All necessary metadata you would normally have to (redundantly) specify in
@@ -258,7 +273,7 @@ are stripped and ignored during prediction.
 '
 
 
-# Predict 
+# Predict
 python -m watch.tasks.fusion.predict \
     --test_dataset="$TEST_FPATH" \
     --package_fpath="$DEFAULT_ROOT_DIR"/final_package.pt  \
@@ -289,18 +304,18 @@ smartwatch visualize "$DVC_EXPT_DPATH"/predictions/pred.kwcoco.json --stack=True
 
 
 echo '
-The last step in this basic tutorial is to measure how good our model is. 
+The last step in this basic tutorial is to measure how good our model is.
 We can do this with pixelwise metrics.
 
 This is done by using "watch.tasks.fusion.evaluate" as the main module, and
 its arguments are:
 
     * The true kwcoco data with groundtruth annotations (i.e. the test dataset)
-    * The pred kwcoco data that we predicted earlier 
+    * The pred kwcoco data that we predicted earlier
     * An output path for results
 '
 
-# Evaluate 
+# Evaluate
 python -m watch.tasks.fusion.evaluate \
     --true_dataset="$TEST_FPATH" \
     --pred_dataset="$DVC_EXPT_DPATH"/predictions/pred.kwcoco.json \

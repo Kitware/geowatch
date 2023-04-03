@@ -103,23 +103,6 @@ class PrepareTimeAverages(scfg.DataConfig):
     true_region_dpath = scfg.Value(None)
 
 
-def codetemplate(text, format=False):
-    import string
-    import ubelt as ub
-    import operator as op
-    from functools import reduce
-    code_text = ub.codeblock(text)
-    template = string.Template(code_text)
-    existing_vars = {reduce(op.add, t, '') for t in template.pattern.findall(text)}
-    if format is False:
-        return code_text
-    elif format is True:
-        import xdev
-        format = xdev.get_stack_frame(1).f_locals
-    fmtdict = ub.udict(format) & existing_vars
-    return template.safe_substitute(**fmtdict)
-
-
 def main(cmdline=1, **kwargs):
     """
     Example:
@@ -129,6 +112,7 @@ def main(cmdline=1, **kwargs):
         >>> )
         >>> main(cmdline=cmdline, **kwargs)
     """
+    from watch.utils.partial_format import subtemplate
     config = PrepareTimeAverages.cli(cmdline=cmdline, data=kwargs, strict=True)
     print('config = ' + ub.urepr(dict(config), nl=1))
     assert config.output_bundle_dpath is not None
@@ -174,7 +158,7 @@ def main(cmdline=1, **kwargs):
             CHANNELS='red|green|blue|nir|swir16|swir22|pan',
         )
 
-        code = codetemplate(
+        code = subtemplate(ub.codeblock(
             r'''
             python -m watch.cli.coco_time_combine \
                 --kwcoco_fpath="$INPUT_BUNDLE_DPATH/imgonly-${REGION}.kwcoco.json" \
@@ -184,11 +168,11 @@ def main(cmdline=1, **kwargs):
                 --temporal_window_duration=$TIME_DURATION \
                 --merge_method=mean \
                 --workers=$WORKERS
-            ''', fmtdict)
+            '''), fmtdict)
         combine_job = queue.submit(code, name=f'combine-time-{region}')
 
         if config.reproject:
-            code = codetemplate(
+            code = subtemplate(
                 r'''
                 python -m watch reproject_annotations \
                     --src $OUTPUT_BUNDLE_DPATH/imgonly-${REGION}.kwcoco.zip \

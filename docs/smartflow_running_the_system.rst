@@ -328,8 +328,8 @@ latest code, and commiting the change as a new image.
 How to Submit a DAG
 -------------------
 
-.. .. SeeAlso: ~/code/watch-smartflow-dags/KIT_TA2_PYENV_TEST.py
-.. .. SeeAlso: ~/code/watch-smartflow-dags/KIT_TA2_PREEVAL10_PYENV.py
+.. .. SeeAlso: ~/code/watch-smartflow-dags/KIT_TA2_PREEVAL10_PYENV_V13.py
+   ~/code/watch-smartflow-dags/KIT_TA2_PREEVAL10_V13.py
 
 Ensure that you have the DAG repo
 
@@ -351,7 +351,7 @@ Once you have a DAG file ready upload it to AWS via:
     LOCAL_DAG_DPATH=$HOME/code/watch-smartflow-dags
 
     # The name of the DAG file we edited
-    DAG_FNAME=KIT_TA2_PREEVAL10_PYENV.py
+    DAG_FNAME=KIT_TA2_PREEVAL10_PYENV_V13.py
 
     # Upload the DAG file to AWS
     aws s3 --profile iarpa cp $LOCAL_DAG_DPATH/$DAG_FNAME \
@@ -372,6 +372,125 @@ which can be done via the command:
 
    # Not working?
    python -c "import webbrowser; webbrowser.open('https://localhost:2746/home', new=1)"
+
+
+To debug interactively you can log into an existing run:
+
+
+.. code:: bash
+
+    kubectl -n airflow get pods
+    # Find your POD_ADDR
+    # POD_ADDR=site-cropped-kwcoco-6254ac27fab04f0b8eb302ac19b09745
+    # kubectl -n airflow exec -it pods/$POD_ADDR -- bash
+
+    # Script to list and exec into a running pod
+    python -c "if True:
+    import json
+    import pandas as pd
+    import rich
+    import ubelt as ub
+    info = ub.cmd('kubectl -n airflow get pods -o json')
+    data = json.loads(info['out'])
+
+    rows = []
+    for item in data['items']:
+        row = {
+            'name': item['metadata']['name'],
+            'status': item['status']['phase'],
+            'startTime': item['status']['startTime'],
+        }
+        rows.append(row)
+    df = pd.DataFrame(rows)
+    rich.print(df.to_string())
+    import rich.prompt
+    ans = rich.prompt.Prompt.ask('which one?', choices=list(map(str, df.index.to_list())))
+    idx = int(ans)
+    pod_addr = df.iloc[idx]['name']
+    ub.cmd(f'kubectl -n airflow exec -it pods/{pod_addr} -- bash', system=True)
+    "
+
+
+To interact with airflow on the command line, you need to exec into the airflow
+scheduler pod.
+
+
+.. code:: bash
+
+    JQ_QUERY='.items[] | select(.metadata.name | startswith("airflow-scheduler-")) | .metadata.name'
+    AIRFLOW_SCHEDULER_POD_NAME=$(kubectl -n airflow get pods -o json | jq -r "$JQ_QUERY")
+    echo $AIRFLOW_SCHEDULER_POD_NAME
+
+    # Get a shell into the scheduler to run airflow commands
+    kubectl -n airflow exec -it pods/$AIRFLOW_SCHEDULER_POD_NAME -- /bin/bash
+
+    # Inside the airflow shell
+    echo '
+
+    airflow dags list
+
+    airflow dags list -o json > dags.json
+
+    airflow dags list-jobs
+
+    # To run a dag you need to trigger and unpause it.
+    airflow dags trigger kit_ta2_preeval10_pyenv_t29_batch_AE_R001
+    airflow dags unpause kit_ta2_preeval10_pyenv_t29_batch_AE_R001
+
+    airflow dags trigger kit_ta2_preeval10_pyenv_t29_batch_KW_R001
+    airflow dags unpause kit_ta2_preeval10_pyenv_t29_batch_KW_R001
+
+    REGION_IDS=("KR_R002" "KR_R001" "NZ_R001")
+    for REGION_ID in "${REGION_IDS[@]}"; do
+        echo "trigger $REGION_ID"
+        airflow dags trigger kit_ta2_preeval10_pyenv_t29_batch_$REGION_ID
+        airflow dags unpause kit_ta2_preeval10_pyenv_t29_batch_$REGION_ID
+    done
+
+    REGION_IDS=("KR_R002" "KR_R001" "NZ_R001" "KW_R001" "AE_R001")
+    for REGION_ID in "${REGION_IDS[@]}"; do
+        echo "trigger $REGION_ID"
+        airflow dags trigger kit_ta2_preeval10_pyenv_t31_batch_$REGION_ID
+        airflow dags unpause kit_ta2_preeval10_pyenv_t31_batch_$REGION_ID
+    done
+    '
+
+
+    ### Alternative - execute commands from local shell
+    kubectl -n airflow exec -it pods/$AIRFLOW_SCHEDULER_POD_NAME -- airflow dags list
+
+    # This doesn't work well because it puts color in the output
+    kubectl -n airflow exec -it pods/$AIRFLOW_SCHEDULER_POD_NAME -- airflow dags list -o json > dags.json
+    # But we can strip ansi colors out
+    cat dags.json | sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2};?)?)?[mGK]//g" | cat > dags_nocolor.json
+
+    python -c "if True:
+    import json
+    import pathlib
+    import xdev
+    import cmd_queue
+
+    # Build pattern to identify the jobs you want to run
+    pattern = xdev.MultiPattern.coerce([
+        f'kit_ta2_preeval10_pyenv_t{t}*'
+        for t in [31, 35]
+    ])
+    data = json.loads(pathlib.Path('dags_nocolor.json').read_text())
+
+    # Build cmd-queue with the commands to execute
+    queue = cmd_queue.Queue.create(backend='serial')
+    prefix = 'kubectl -n airflow exec -it pods/$AIRFLOW_SCHEDULER_POD_NAME -- '
+    for item in data:
+        if pattern.match(item['dag_id']):
+            print(item['dag_id'])
+            queue.submit(prefix + 'airflow dags trigger ' + item['dag_id'])
+            queue.submit(prefix + 'airflow dags unpause ' + item['dag_id'])
+
+    # It is a good idea to comment out the run to check that you
+    # are doing what you want to do before you actually execute.
+    queue.print_commands()
+    queue.run()
+    "
 
 
 

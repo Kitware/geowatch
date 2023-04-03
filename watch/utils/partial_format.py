@@ -117,7 +117,11 @@ class _PartialFormatter(string.Formatter):
         return ''.join(result), auto_arg_index
 
 
-def test_partial_format():
+def _test_partial_format():
+    """
+    Example:
+        _test_partial_format
+    """
     import pytest
 
     def test_auto_indexing():
@@ -188,3 +192,110 @@ def test_partial_format():
         )
         result = partial_format(s, **data)
         assert expected == result
+
+
+def subtemplate(text, subs=None, /, **kwargs):
+    """
+    Substitutes variables into a templated string.
+
+    Similar to format, replaces variables with bash-like dollar sign patterns
+    (e.g. $VARNAME or ${VARNAME}).
+
+    Args:
+        text (str): the templated text
+        subs (dict | None): a dictionary of substitutions
+        **kwargs: other substitutions
+
+    Returns:
+        str: formatted text. Unspecified variables are left unchanged.
+
+    Notes:
+        Order of precidence from lowest to highest goes: subs, kwargs
+
+    Example:
+        >>> from watch.utils.partial_format import *  # NOQA
+        >>> text = ub.codeblock(
+        >>>     '''
+        >>>     The $SUBJECT $VERB the $OBJECT
+        >>>     ''')
+        >>> print(subtemplate(text, SUBJECT='dog', OBJECT='food'))
+        The dog $VERB the food
+        >>> print(subtemplate(text, SUBJECT='dog', VERB='eats', OBJECT='food'))
+        The dog eats the food
+        >>> print(subtemplate(text, {'SUBJECT': 'dude'}, SUBJECT='dog'))
+        The dog $VERB the $OBJECT
+    """
+    import string
+    import ubelt as ub
+    import operator as op
+    from functools import reduce
+    fmtdict = ub.udict({})
+    if subs:
+        fmtdict.update(subs)
+    fmtdict.update(kwargs)
+    if not fmtdict:
+        return text
+    template = string.Template(text)
+    existing_vars = {reduce(op.add, t, '') for t in template.pattern.findall(text)}
+    fmtdict = fmtdict & existing_vars
+    return template.safe_substitute(**fmtdict)
+
+
+def fsubtemplate(text, subs=None, /, **kwargs):
+    """
+    Like subtemplate, but uses the current local variable context
+
+    Args:
+        text (str): the templated text
+        subs (dict | None): a dictionary of substitutions
+        **kwargs: other substitutions
+
+    Returns:
+        str: formatted text. Unspecified variables are left unchanged.
+
+    Notes:
+        Order of precidence from lowest to highest goes: locals, subs, kwargs
+
+    Example:
+        >>> from watch.utils.partial_format import *  # NOQA
+        >>> text = ub.codeblock(
+        >>>     '''
+        >>>     The $SUBJECT $VERB the $OBJECT
+        >>>     ''')
+        >>> SUBJECT = 'dude'
+        >>> print(fsubtemplate(text, OBJECT='food'))
+        The dude $VERB the food
+        >>> print(fsubtemplate(text, SUBJECT='dog', OBJECT='food'))
+        The dog $VERB the food
+        >>> print(fsubtemplate(text, SUBJECT='dog', VERB='eats', OBJECT='food'))
+        The dog eats the food
+    """
+    import ubelt as ub
+    locals_ = _get_stack_frame(1).f_locals
+    subs = ub.udict()
+    subs.update(locals_)
+    if subs is not None:
+        subs.update(subs)
+    subs.update(kwargs)
+    return subtemplate(text, subs)
+
+
+def _get_stack_frame(N=0, strict=True):
+    """
+    Args:
+        N (int): N=0 means the frame you called this function in.
+                 N=1 is the parent frame.
+        strict (bool): (default = True)
+    """
+    import inspect
+    frame_cur = inspect.currentframe()
+    for idx in range(N + 1):
+        # always skip the frame of this function
+        frame_next = frame_cur.f_back
+        if frame_next is None:
+            if strict:
+                raise AssertionError('Frame level {:!r} is root'.format(idx))
+            else:
+                break
+        frame_cur = frame_next
+    return frame_cur

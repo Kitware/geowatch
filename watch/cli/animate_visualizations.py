@@ -174,6 +174,8 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
             pass
 
     if failed:
+        print('Animation jobs failed with the following errors:')
+        print('failed = {}'.format(ub.urepr(failed, nl=1)))
         raise Exception(f'{len(failed)} / {len(pool)} animations failed')
 
     pman.__exit__(None, None, None)

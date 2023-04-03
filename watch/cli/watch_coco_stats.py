@@ -270,7 +270,7 @@ def coco_watch_stats(dset, with_video_info=False):
     image_df = pd.DataFrame(image_rows)
     try:
         year_pivot = build_year_summary(image_df)
-    except TypeError:
+    except (TypeError, KeyError):
         print('unable to build year analysis')
         year_pivot = None
     else:
