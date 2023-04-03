@@ -14,7 +14,7 @@ Unpinned lightning for 2.x
 
 * The old fit script will now raise an error. Use the `fit_lightning` script instead.
 
-## Version 0.4.5 - Target 2023-03-31
+## Version 0.4.7 - Target 2023-03-31
 
 ### Changed
 * Lightning Packager callback now saves checkpoints on errors in addition to packages.
