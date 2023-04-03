@@ -147,7 +147,8 @@ class IngressProcessEgressWrapper:
 def download_region(input_region_path,
                     output_region_path,
                     aws_profile=None,
-                    strip_nonregions=False):
+                    strip_nonregions=False,
+                    ensure_comments=False):
     if aws_profile is not None:
         aws_base_command =\
             ['aws', 's3', '--profile', aws_profile, 'cp']
@@ -181,7 +182,34 @@ def download_region(input_region_path,
              if ('properties' in feature
                  and feature['properties'].get('type') == 'region')]
 
+    if ensure_comments:
+        # Ensure the region feature has a "comments" field
+        for feature in out_region_data.get('features', ()):
+            props = feature['properties']
+            if props['type'] == 'region':
+                props['comments'] = props.get('comments', '')
+
     with open(output_region_path, 'w') as f:
         print(json.dumps(out_region_data, indent=2), file=f)
 
     return output_region_path
+
+
+def determine_region_id(region_fpath):
+    """
+    Args:
+        region_fpath (str | PathLike):
+            the path to a region model geojson file
+
+    Returns:
+        str | None : the region id if we can find one
+    """
+    region_id = None
+    with open(region_fpath, 'r') as file:
+        region_data = json.load(file)
+        for feature in region_data.get('features', []):
+            props = feature['properties']
+            if props['type'] == 'region':
+                region_id = props.get('region_id', props.get('region_model_id'))
+                break
+    return region_id

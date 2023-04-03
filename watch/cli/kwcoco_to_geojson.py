@@ -920,6 +920,8 @@ def create_region_feature(region_id, site_summaries):
         _single_geometry(summary['geometry'])
         for summary in site_summaries
     ]).envelope
+    import xdev
+    xdev.embed()
     start_date = min(summary['properties']['start_date']
                      for summary in site_summaries)
     end_date = max(summary['properties']['end_date']
@@ -1011,7 +1013,7 @@ def main(args=None, **kwargs):
         >>> assert len(ssum_rows) == len(site_rows)
         >>> assert len(obs_rows) > len(site_rows)
         >>> # Cleanup
-        >>> dpath.delete()
+        >>> #dpath.delete()
 
     Example:
         >>> # test resolution

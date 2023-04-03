@@ -68,6 +68,16 @@ environment variable:
         -f $WATCH_REPO_DPATH/dockerfiles/pyenv.Dockerfile \
         $STAGING_DPATH/empty
 
+    # Optional: push this image to kitware and smartgitlab registries
+
+    # optional: Push to smartgitlab
+    docker tag $PYENV_IMAGE registry.smartgitlab.com/kitware/$PYENV_IMAGE
+    docker push registry.smartgitlab.com/kitware/$PYENV_IMAGE
+
+    # optional: Push to gitlab.kitware.com
+    docker tag $PYENV_IMAGE gitlab.kitware.com:4567/smart/watch/$PYENV_IMAGE
+    docker push gitlab.kitware.com:4567/smart/watch/$PYENV_IMAGE
+
 
 Now that the pyenv image ``pyenv:3.11.2`` has been created we can quickly test it:
 
@@ -127,6 +137,16 @@ dont accidently bake in any secrets or other large files.
         --build-arg "BUILD_STRICT=$BUILD_STRICT" \
         --build-arg "BASE_IMAGE=$PYENV_IMAGE" \
         -f $STAGING_DPATH/watch/dockerfiles/watch.Dockerfile .
+
+    # Optional: push this image to kitware and smartgitlab registries
+
+    # optional: Push to smartgitlab
+    docker tag $WATCH_IMAGE registry.smartgitlab.com/kitware/$WATCH_IMAGE
+    docker push registry.smartgitlab.com/kitware/$WATCH_IMAGE
+
+    # optional: Push to gitlab.kitware.com
+    docker tag $WATCH_IMAGE gitlab.kitware.com:4567/smart/watch/$WATCH_IMAGE
+    docker push gitlab.kitware.com:4567/smart/watch/$WATCH_IMAGE
 
 
 It is a good idea to run some tests to ensure the image built properly
@@ -282,6 +302,10 @@ to it.
    docker tag $NEW_IMAGE_NAME registry.smartgitlab.com/kitware/$NEW_IMAGE_NAME
    docker push registry.smartgitlab.com/kitware/$NEW_IMAGE_NAME
    echo $NEW_IMAGE_NAME
+
+   # optional: Push to gitlab.kitware.com
+   docker tag $WATCH_IMAGE gitlab.kitware.com:4567/smart/watch/$WATCH_IMAGE
+   docker push gitlab.kitware.com:4567/smart/watch/$WATCH_IMAGE
 
 
 Update the code / models in an existing image
