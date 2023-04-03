@@ -115,6 +115,6 @@ def demo_trainer():
     # kwargs['callbacks'] = callbacks
 
     trainer = pl.Trainer(default_root_dir=default_root_dir, max_epochs=100,
-                         callbacks=callbacks)
+                         callbacks=callbacks, accelerator='cpu', devices=1)
     trainer.model = model
     return trainer

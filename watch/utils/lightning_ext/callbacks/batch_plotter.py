@@ -53,7 +53,7 @@ class BatchPlotter(pl.callbacks.Callback):
         >>> #
         >>> trainer = pl.Trainer(callbacks=[BatchPlotter()],
         >>>                      default_root_dir=default_root_dir,
-        >>>                      max_epochs=3)
+        >>>                      max_epochs=3, accelerator='cpu', devices=1)
         >>> trainer.fit(model)
         >>> import pathlib
         >>> train_dpath = pathlib.Path(trainer.log_dir)

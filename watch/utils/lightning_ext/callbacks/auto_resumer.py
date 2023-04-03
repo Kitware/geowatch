@@ -14,6 +14,8 @@ class AutoResumer(pl.callbacks.Callback):
     """
     Auto-resumes from the most recent checkpoint
 
+    THIS SEEMS TO BE BROKEN WITH NEW LIGHTNING VERSIONS
+
     Example:
         >>> from watch.utils.lightning_ext.callbacks.auto_resumer import AutoResumer
         >>> from watch.utils import util_path
@@ -33,7 +35,7 @@ class AutoResumer(pl.callbacks.Callback):
         >>>     AutoResumer()
         >>> except NotImplementedError:
         >>>     pytest.skip()
-        >>> trainer_orig = pl.Trainer(default_root_dir=default_root_dir, callbacks=[AutoResumer(), StateLogger()], max_epochs=2)
+        >>> trainer_orig = pl.Trainer(default_root_dir=default_root_dir, callbacks=[AutoResumer(), StateLogger()], max_epochs=2, accelerator='cpu', devices=1)
         >>> model = LightningToyNet2d()
         >>> trainer_orig.fit(model)
         >>> assert len(list((util_path.coercepath(trainer_orig.logger.log_dir) / 'checkpoints').glob('*'))) > 0
@@ -43,7 +45,7 @@ class AutoResumer(pl.callbacks.Callback):
         >>> # CHECK 1:
         >>> # Make a new trainer that should auto-resume
         >>> self = AutoResumer()
-        >>> trainer = trainer_resume1 = pl.Trainer(default_root_dir=default_root_dir, callbacks=[self, StateLogger()], max_epochs=2)
+        >>> trainer = trainer_resume1 = pl.Trainer(default_root_dir=default_root_dir, callbacks=[self, StateLogger()], max_epochs=2, accelerator='cpu', devices=1)
         >>> model = LightningToyNet2d()
         >>> trainer_resume1.fit(model)
         >>> print(ub.repr2(list(util_path.tree(default_root_dir)), sort=0))
@@ -52,7 +54,7 @@ class AutoResumer(pl.callbacks.Callback):
         >>> #
         >>> # CHECK 2:
         >>> # Increasing max epochs will let it train for longer
-        >>> trainer_resume2 = pl.Trainer(default_root_dir=default_root_dir, callbacks=[AutoResumer(), StateLogger()], max_epochs=3)
+        >>> trainer_resume2 = pl.Trainer(default_root_dir=default_root_dir, callbacks=[AutoResumer(), StateLogger()], max_epochs=3, accelerator='cpu', devices=1)
         >>> model = LightningToyNet2d()
         >>> trainer_resume2.fit(model)
         >>> print(ub.repr2(list(util_path.tree(util_path.coercepath(default_root_dir))), sort=0))

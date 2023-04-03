@@ -23,9 +23,9 @@ class TextLogger(pl.callbacks.Callback):
         >>> #
         >>> trainer = pl.Trainer(callbacks=[TextLogger()],
         >>>                      default_root_dir=default_root_dir,
-        >>>                      max_epochs=3)
+        >>>                      max_epochs=3, accelerator='cpu', devices=1)
         >>> trainer.fit(self)
-        >>> text_logs = ub.readfrom(trainer.text_logger.log_fpath)
+        >>> text_logs = ub.Path(trainer.text_logger.log_fpath).read_text()
         >>> print(text_logs)
     """
 
