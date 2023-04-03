@@ -178,8 +178,6 @@ trainer:
   logger: true
   max_steps: $MAX_STEPS
   num_sanity_val_steps: 0
-  replace_sampler_ddp: true
-  track_grad_norm: 2
   limit_val_batches    : 64
   limit_train_batches  : 16
   callbacks:

@@ -407,8 +407,9 @@ def predict(cmdline=False, **kwargs):
     """
     Example:
         >>> # Train a demo model (in the future grab a pretrained demo model)
-        >>> from watch.tasks.fusion.fit import fit_model  # NOQA
+        >>> # from watch.tasks.fusion.fit import fit_model  # NOQA
         >>> from watch.tasks.fusion.predict import *  # NOQA
+        >>> import os
         >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
         >>> disable_lightning_hardware_warnings()
         >>> args = None
@@ -418,30 +419,36 @@ def predict(cmdline=False, **kwargs):
         >>> results_path = (test_dpath / 'predict').ensuredir()
         >>> results_path.delete()
         >>> results_path.ensuredir()
-        >>> package_fpath = test_dpath / 'my_test_package.pt'
         >>> import kwcoco
         >>> train_dset = kwcoco.CocoDataset.demo('special:vidshapes4-multispectral', num_frames=5, image_size=(64, 64))
         >>> test_dset = kwcoco.CocoDataset.demo('special:vidshapes2-multispectral', num_frames=5, image_size=(64, 64))
-        >>> fit_kwargs = kwargs = {
-        ...     'train_dataset': train_dset.fpath,
-        ...     'datamodule': 'KWCocoVideoDataModule',
-        ...     'workdir': ub.ensuredir((test_dpath, 'train')),
-        ...     'package_fpath': package_fpath,
-        ...     #'channels': 'auto',
-        ...     'max_epochs': 1,
-        ...     'time_steps': 2,
-        ...     'time_span': "2m",
-        ...     'chip_size': 64,
-        ...     'time_sampling': 'hardish3',
-        ...     'global_change_weight': 1.0,
-        ...     'global_class_weight': 1.0,
-        ...     'global_saliency_weight': 1.0,
-        ...     'max_steps': 1,
-        ...     'learning_rate': 1e-5,
-        ...     'num_workers': 0,
-        ...     'devices': devices,
+        >>> root_dpath = ub.Path(test_dpath, 'train').ensuredir()
+        >>> fit_config = kwargs = {
+        ...     'subcommand': 'fit',
+        ...     'fit.data.train_dataset': train_dset.fpath,
+        ...     'fit.data.time_steps': 2,
+        ...     'fit.data.time_span': "2m",
+        ...     'fit.data.chip_dims': 64,
+        ...     'fit.data.time_sampling': 'hardish3',
+        ...     'fit.data.num_workers': 0,
+        ...     #'package_fpath': package_fpath,
+        ...     'fit.model.class_path': 'watch.tasks.fusion.methods.MultimodalTransformer',
+        ...     'fit.model.init_args.global_change_weight': 1.0,
+        ...     'fit.model.init_args.global_class_weight': 1.0,
+        ...     'fit.model.init_args.global_saliency_weight': 1.0,
+        ...     'fit.optimizer.class_path': 'torch.optim.SGD',
+        ...     'fit.optimizer.init_args.lr': 1e-5,
+        ...     'fit.trainer.max_steps': 1,
+        ...     'fit.trainer.accelerator': 'cpu',
+        ...     'fit.trainer.max_epochs': 1,
+        ...     'fit.trainer.default_root_dir': os.fspath(root_dpath),
         ... }
-        >>> package_fpath = fit_model(**fit_kwargs)
+        >>> from watch.tasks.fusion import fit_lightning
+        >>> package_fpath = root_dpath / 'final_package.pt'
+        >>> fit_lightning.main(fit_config)
+        >>> # Unfortunately, its not as easy to get the package path of
+        >>> # this call..
+        >>> #package_fpath = fit_model(**fit_kwargs)
         >>> assert ub.Path(package_fpath).exists()
         >>> # Predict via that model
         >>> predict_kwargs = kwargs = {
@@ -487,7 +494,6 @@ def predict(cmdline=False, **kwargs):
         >>> # xdoctest: +REQUIRES(env:SLOW_DOCTEST)
         >>> # FIXME: why does this test hang on the strict dashboard?
         >>> # Train a demo model (in the future grab a pretrained demo model)
-        >>> from watch.tasks.fusion.fit import fit_model  # NOQA
         >>> from watch.tasks.fusion.predict import *  # NOQA
         >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
         >>> disable_lightning_hardware_warnings()
@@ -540,7 +546,7 @@ def predict(cmdline=False, **kwargs):
         >>> print("model.heads.keys = ", model.heads.keys())
 
         >>> # Save the self
-        >>> package_fpath = test_dpath / 'my_test_package.pt'
+        >>> package_fpath = root_dpath / 'final_package.pt'
         >>> model.save_package(package_fpath)
         >>> # package_fpath = fit_model(**fit_kwargs)
         >>> assert ub.Path(package_fpath).exists()

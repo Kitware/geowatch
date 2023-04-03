@@ -118,6 +118,7 @@ def make_fit_config(cmdline=False, **kwargs):
         **kwargs: dictionary that overrides defaults
 
     Example:
+        >>> # xdoctest: +SKIP
         >>> from watch.tasks.fusion.fit import *  # NOQA
         >>> cmdline = False
         >>> kwargs = {}
@@ -369,6 +370,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
         xdoctest -m watch.tasks.fusion.fit make_lightning_modules
 
     Example:
+        >>> # xdoctest: +SKIP
         >>> from watch.tasks.fusion.fit import *  # NOQA
         >>> args = None
         >>> cmdline = False
@@ -572,6 +574,7 @@ def fit_model(args=None, cmdline=False, **kwargs):
         CUDA_VISIBLE_DEVICES=0 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc xdoctest -m watch.tasks.fusion.fit fit_model:0 -- --gpu
 
     Example:
+        >>> # xdoctest: +SKIP
         >>> # xdoctest: +REQUIRES(--gpu)
         >>> from watch.tasks.fusion.fit import *  # NOQA
         >>> args = None
@@ -752,7 +755,7 @@ def main(**kwargs):
     #     # initialize the process group
     #     dist.init_process_group("gloo", rank=rank, world_size=world_size)
     # setup(0, 1)
-
+    raise Exception('Use the new lightning CLI instead')
     import logging
     # configure logging at the root level of lightning
     # logging.getLogger('pytorch_lightning').setLevel(logging.DEBUG)

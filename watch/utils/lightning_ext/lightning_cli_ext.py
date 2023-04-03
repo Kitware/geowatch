@@ -574,10 +574,11 @@ class LightningCLI_Extension(LightningCLI):
         import sys
         if args is not None and len(sys.argv) > 1:
             # Please let us shoot ourselves in the foot.
-            import warnings
-            warnings.warn(
+            from pytorch_lightning.utilities.rank_zero import rank_zero_warn
+            # import warnings
+            rank_zero_warn(
                 "LightningCLI's args parameter is intended to run from within Python like if it were from the command "
-                "line. To prevent mistakes it is not allowed to provide both args and command line arguments, got: "
+                "line. To prevent mistakes it is not recommended to provide both args and command line arguments, got: "
                 f"sys.argv[1:]={sys.argv[1:]}, args={args}."
             )
         if isinstance(args, (dict, Namespace)):

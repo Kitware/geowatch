@@ -4,7 +4,17 @@ This changelog follows the specifications detailed in: [Keep a Changelog](https:
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
 
-## Version 0.4.3 - Target 2023-03-x
+## Version 0.4.3 - Target 2023-04-x
+
+### Changed
+
+Unpinned lightning for 2.x
+
+### Removed
+
+* The old fit script will now raise an error. Use the `fit_lightning` script instead.
+
+## Version 0.4.5 - Target 2023-03-31
 
 ### Changed
 * Lightning Packager callback now saves checkpoints on errors in addition to packages.
