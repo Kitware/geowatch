@@ -440,6 +440,7 @@ def predict(cmdline=False, **kwargs):
         ...     'fit.optimizer.init_args.lr': 1e-5,
         ...     'fit.trainer.max_steps': 1,
         ...     'fit.trainer.accelerator': 'cpu',
+        ...     'fit.trainer.devices': 1,
         ...     'fit.trainer.max_epochs': 1,
         ...     'fit.trainer.default_root_dir': os.fspath(root_dpath),
         ... }

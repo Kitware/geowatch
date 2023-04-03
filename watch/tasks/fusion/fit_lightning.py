@@ -386,6 +386,7 @@ def main(config=None):
         >>>     'fit.data.vali_dataset': 'special:vidshapes1-frames9-gsize32',
         >>>     'fit.data.chip_dims': 32,
         >>>     'fit.trainer.accelerator': 'cpu',
+        >>>     'fit.trainer.devices': 1,
         >>>     'fit.trainer.max_steps': 2,
         >>>     'fit.trainer.num_sanity_val_steps': 0,
         >>> }
@@ -408,6 +409,7 @@ def main(config=None):
         >>>     'fit.data.vali_dataset': 'special:vidshapes4-gsize64-frames9-speed0.5-multispectral',
         >>>     'fit.data.chip_dims': 64,
         >>>     'fit.trainer.accelerator': 'cpu',
+        >>>     'fit.trainer.devices': 1,
         >>>     'fit.trainer.max_steps': 2,
         >>>     'fit.trainer.num_sanity_val_steps': 0,
         >>> }
