@@ -68,6 +68,16 @@ environment variable:
         -f $WATCH_REPO_DPATH/dockerfiles/pyenv.Dockerfile \
         $STAGING_DPATH/empty
 
+    # Optional: push this image to kitware and smartgitlab registries
+
+    # optional: Push to smartgitlab
+    docker tag $PYENV_IMAGE registry.smartgitlab.com/kitware/$PYENV_IMAGE
+    docker push registry.smartgitlab.com/kitware/$PYENV_IMAGE
+
+    # optional: Push to gitlab.kitware.com
+    docker tag $PYENV_IMAGE gitlab.kitware.com:4567/smart/watch/$PYENV_IMAGE
+    docker push gitlab.kitware.com:4567/smart/watch/$PYENV_IMAGE
+
 
 Now that the pyenv image ``pyenv:3.11.2`` has been created we can quickly test it:
 
@@ -127,6 +137,16 @@ dont accidently bake in any secrets or other large files.
         --build-arg "BUILD_STRICT=$BUILD_STRICT" \
         --build-arg "BASE_IMAGE=$PYENV_IMAGE" \
         -f $STAGING_DPATH/watch/dockerfiles/watch.Dockerfile .
+
+    # Optional: push this image to kitware and smartgitlab registries
+
+    # optional: Push to smartgitlab
+    docker tag $WATCH_IMAGE registry.smartgitlab.com/kitware/$WATCH_IMAGE
+    docker push registry.smartgitlab.com/kitware/$WATCH_IMAGE
+
+    # optional: Push to gitlab.kitware.com
+    docker tag $WATCH_IMAGE gitlab.kitware.com:4567/smart/watch/$WATCH_IMAGE
+    docker push gitlab.kitware.com:4567/smart/watch/$WATCH_IMAGE
 
 
 It is a good idea to run some tests to ensure the image built properly
@@ -283,6 +303,10 @@ to it.
    docker push registry.smartgitlab.com/kitware/$NEW_IMAGE_NAME
    echo $NEW_IMAGE_NAME
 
+   # optional: Push to gitlab.kitware.com
+   docker tag $WATCH_IMAGE gitlab.kitware.com:4567/smart/watch/$WATCH_IMAGE
+   docker push gitlab.kitware.com:4567/smart/watch/$WATCH_IMAGE
+
 
 Update the code / models in an existing image
 ---------------------------------------------
@@ -419,7 +443,7 @@ scheduler pod.
 
     JQ_QUERY='.items[] | select(.metadata.name | startswith("airflow-scheduler-")) | .metadata.name'
     AIRFLOW_SCHEDULER_POD_NAME=$(kubectl -n airflow get pods -o json | jq -r "$JQ_QUERY")
-    echo $AIRFLOW_SCHEDULER_POD_NAME
+    echo "AIRFLOW_SCHEDULER_POD_NAME=$AIRFLOW_SCHEDULER_POD_NAME"
 
     # Get a shell into the scheduler to run airflow commands
     kubectl -n airflow exec -it pods/$AIRFLOW_SCHEDULER_POD_NAME -- /bin/bash
@@ -453,43 +477,45 @@ scheduler pod.
         airflow dags trigger kit_ta2_preeval10_pyenv_t31_batch_$REGION_ID
         airflow dags unpause kit_ta2_preeval10_pyenv_t31_batch_$REGION_ID
     done
+
+
+    # Status queries
+    airflow dags list-jobs -d kit_ta2_preeval10_pyenv_t33_post1_batch_KR_R001 -o yaml
+    airflow dags list-runs -d kit_ta2_preeval10_pyenv_t33_post1_batch_KR_R001 -o yaml
     '
 
 
     ### Alternative - execute commands from local shell
-    kubectl -n airflow exec -it pods/$AIRFLOW_SCHEDULER_POD_NAME -- airflow dags list
-
-    # This doesn't work well because it puts color in the output
+    # Oddly this tends to send outputs with color that we need to strip out.
     kubectl -n airflow exec -it pods/$AIRFLOW_SCHEDULER_POD_NAME -- airflow dags list -o json > dags.json
-    # But we can strip ansi colors out
     cat dags.json | sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2};?)?)?[mGK]//g" | cat > dags_nocolor.json
 
     python -c "if True:
-    import json
-    import pathlib
-    import xdev
-    import cmd_queue
+        import json
+        import pathlib
+        import cmd_queue
 
-    # Build pattern to identify the jobs you want to run
-    pattern = xdev.MultiPattern.coerce([
-        f'kit_ta2_preeval10_pyenv_t{t}*'
-        for t in [31, 35]
-    ])
-    data = json.loads(pathlib.Path('dags_nocolor.json').read_text())
+        # Build pattern to identify the jobs you want to run
+        import xdev
+        pattern = xdev.MultiPattern.coerce([
+            f'kit_ta2_preeval10_pyenv_t{t}*'
+            for t in [31, 35]
+        ])
+        data = json.loads(pathlib.Path('dags_nocolor.json').read_text())
 
-    # Build cmd-queue with the commands to execute
-    queue = cmd_queue.Queue.create(backend='serial')
-    prefix = 'kubectl -n airflow exec -it pods/$AIRFLOW_SCHEDULER_POD_NAME -- '
-    for item in data:
-        if pattern.match(item['dag_id']):
-            print(item['dag_id'])
-            queue.submit(prefix + 'airflow dags trigger ' + item['dag_id'])
-            queue.submit(prefix + 'airflow dags unpause ' + item['dag_id'])
+        # Build cmd-queue with the commands to execute
+        queue = cmd_queue.Queue.create(backend='serial')
+        prefix = 'kubectl -n airflow exec -it pods/$AIRFLOW_SCHEDULER_POD_NAME -- '
+        for item in data:
+            if pattern.match(item['dag_id']):
+                print(item['dag_id'])
+                queue.submit(prefix + 'airflow dags trigger ' + item['dag_id'])
+                queue.submit(prefix + 'airflow dags unpause ' + item['dag_id'])
 
-    # It is a good idea to comment out the run to check that you
-    # are doing what you want to do before you actually execute.
-    queue.print_commands()
-    queue.run()
+        # It is a good idea to comment out the run to check that you
+        # are doing what you want to do before you actually execute.
+        queue.print_commands()
+        queue.run()
     "
 
 

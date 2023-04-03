@@ -158,7 +158,7 @@ def run_uky_invariants_for_baseline(input_path,
                                                     input_region_path,
                                                     local_region_path,
                                                     strip_nonregions=True,
-                                                    replace_originator=True)
+                                                    replace_originator=False)
 
     # 2. Generate Invariants
     print("* Generating UKY invariant features for L8 *")
