@@ -222,7 +222,7 @@ def run_bas_fusion_for_baseline(
                                                     input_region_path,
                                                     local_region_path,
                                                     strip_nonregions=True,
-                                                    replace_originator=True)
+                                                    replace_originator=False)
 
     # 3. Run fusion
     print("* Running BAS fusion *")

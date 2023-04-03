@@ -11,11 +11,8 @@ import os
 import scriptconfig as scfg
 import shutil
 import subprocess
-import tempfile
 import ubelt as ub
-
 from glob import glob
-from urllib.parse import urlparse
 
 
 class BasFusionConfig(scfg.DataConfig):

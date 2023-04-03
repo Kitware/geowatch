@@ -224,7 +224,7 @@ def run_sc_fusion_for_baseline(
                                                     input_region_path,
                                                     local_region_path,
                                                     strip_nonregions=True,
-                                                    replace_originator=True)
+                                                    replace_originator=False)
 
     sc_fusion_kwcoco_path = os.path.join(
         ingress_dir, 'sc_fusion_kwcoco.json')

@@ -5,11 +5,8 @@ See Old Version:
 SeeAlso:
     ~/code/watch-smartflow-dags/KIT_TA2_PREEVAL10_PYENV.py
 """
-from urllib.parse import urlparse
 import os
 import subprocess
-import tempfile
-import json
 import ubelt as ub
 import scriptconfig as scfg
 
@@ -62,56 +59,6 @@ def main():
     run_uky_invariants_for_baseline(**config)
 
 
-def _download_region(aws_base_command,
-                     input_region_path,
-                     output_region_path,
-                     strip_nonregions=False,
-                     replace_originator=True):
-    scheme, *_ = urlparse(input_region_path)
-    if scheme == 's3':
-        with tempfile.NamedTemporaryFile() as temporary_file:
-            command = [*aws_base_command,
-                       input_region_path,
-                       temporary_file.name]
-
-            print("Running: {}".format(' '.join(command)))
-            # TODO: Manually check return code / output
-            subprocess.run(command, check=True)
-
-            with open(temporary_file.name) as f:
-                out_region_data = json.load(f)
-    elif scheme == '':
-        with open(input_region_path) as f:
-            out_region_data = json.load(f)
-    else:
-        raise NotImplementedError("Don't know how to pull down region file "
-                                  "with URI scheme: '{}'".format(scheme))
-
-    if strip_nonregions:
-        out_region_data['features'] =\
-            [feature
-             for feature in out_region_data.get('features', ())
-             if ('properties' in feature
-                 and feature['properties'].get('type') == 'region')]
-
-    if replace_originator:
-        for feature in out_region_data.get('features', ()):
-            if feature['properties']['type'] == 'region':
-                feature['properties']['originator'] = 'kit'
-
-    region_id = None
-    for feature in out_region_data.get('features', ()):
-        props = feature['properties']
-        if props['type'] == 'region':
-            region_id = props.get('region_model_id', props.get('region_id'))
-            break
-
-    with open(output_region_path, 'w') as f:
-        print(json.dumps(out_region_data, indent=2), file=f)
-
-    return output_region_path, region_id
-
-
 def run_uky_invariants_for_baseline(input_path,
                                     input_region_path,
                                     output_path,
@@ -124,6 +71,7 @@ def run_uky_invariants_for_baseline(input_path,
                                     requester_pays=False,
                                     newline=False,
                                     jobs=1):
+    from watch.utils.util_framework import download_region
     if aws_profile is not None:
         aws_base_command =\
             ['aws', 's3', '--profile', aws_profile, 'cp']
@@ -145,11 +93,12 @@ def run_uky_invariants_for_baseline(input_path,
     # 2. Download and prune region file
     print("* Downloading and pruning region file *")
     local_region_path = '/tmp/region.json'
-    local_region_path, region_id = _download_region(aws_base_command,
-                                                    input_region_path,
-                                                    local_region_path,
-                                                    strip_nonregions=True,
-                                                    replace_originator=True)
+    download_region(
+        input_region_path=input_region_path,
+        output_region_path=local_region_path,
+        aws_profile=aws_profile,
+        strip_nonregions=True,
+    )
 
     # 2. Generate Invariants
     print("* Generating UKY invariant features for L8 *")
