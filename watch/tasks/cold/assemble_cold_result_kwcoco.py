@@ -86,13 +86,14 @@ def assemble_main(cmdline=1, **kwargs):
     >>>    mod_coco_fpath = ub.Path('/home/jws18003/data/dvc-repos/smart_data_dvc/Drop6/_pycold_combine/test.json'),
     >>>    meta_fpath = '/home/jws18003/data/dvc-repos/smart_data_dvc/Drop6/_pycold_combine/stacked/KR_R001/block_x9_y9/crop_20210807T010000Z_N37.643680E128.649453_N37.683356E128.734073_L8_0.json',
     >>>    combined_coco_fpath = ub.Path('/home/jws18003/data/dvc-repos/smart_data_dvc/Drop6_MeanYear/data_vali_split1_KR_R001_MeanYear.kwcoco.json'),
-    >>>    coefs = 'cv,rmse',
+    >>>    coefs = 'cv,rmse,a0,a1,b1,c1',
     >>>    year_lowbound = None,
     >>>    year_highbound = None,
-    >>>    coefs_bands = '2',
+    >>>    coefs_bands = '0,1,2,3,4,5',
     >>>    timestamp = False,
     >>>    combine = True,
     >>>    sensors = 'L8',
+    >>>    resolution = '10GSD',
     >>>    )
     >>> cmdline=0
     >>> assemble_main(cmdline, **kwargs)
@@ -311,12 +312,12 @@ def assemble_main(cmdline=1, **kwargs):
 
                         # COLD output was wrote based on transform information of
                         # coco_dset, so it aligned to a scaled video space.
-                        warp_img_from_vid = coco_image.warp_img_from_vid
+                        warp_img_from_vid = combined_coco_image.warp_img_from_vid
 
                         if resolution is None:
                             scale_asset_from_vid = (1., 1.)
                         else:
-                            scale_asset_from_vid = coco_image._scalefactor_for_resolution(
+                            scale_asset_from_vid = combined_coco_image._scalefactor_for_resolution(
                                 space='video', resolution=resolution)
                         warp_asset_from_vid = kwimage.Affine.scale(scale_asset_from_vid)
                         warp_vid_from_asset = warp_asset_from_vid.inv()
