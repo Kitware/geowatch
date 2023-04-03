@@ -214,6 +214,7 @@ def subtemplate(text, subs=None, /, **kwargs):
 
     Example:
         >>> from watch.utils.partial_format import *  # NOQA
+        >>> import ubelt as ub
         >>> text = ub.codeblock(
         >>>     '''
         >>>     The $SUBJECT $VERB the $OBJECT
@@ -258,6 +259,7 @@ def fsubtemplate(text, subs=None, /, **kwargs):
 
     Example:
         >>> from watch.utils.partial_format import *  # NOQA
+        >>> import ubelt as ub
         >>> text = ub.codeblock(
         >>>     '''
         >>>     The $SUBJECT $VERB the $OBJECT
