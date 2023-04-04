@@ -1119,51 +1119,99 @@ The following are the common and differing settings between BAS / SC
 
 I include some candidate scfg logic that I may implement
 
+
+AUTOGEN:
+
+    # This will port the dataconf to scriptconfig
+
+    import sys, ubelt
+    from watch.tasks.tracking.from_heatmap import *  # NOQA
+    from watch.tasks.tracking.from_heatmap import _norm, _add_tracks_to_dset, _merge_polys, _gids_polys, _resolve_deprecated_args, _resolve_arg_values
+
+    items = [TimeAggregatedBAS, TimeAggregatedSC, TimeAggregatedSV]
+
+    common_keys = ub.udict.intersection(*[d.__dataclass_fields__ for d in items])
+    common_kv = {}
+    differ_vals = []
+    for k, v in common_keys.items():
+        common_vals = all(v.default == d.__dataclass_fields__[k].default for d in items)
+        if common_vals:
+            common_kv[k] = v
+        else:
+            differ_vals.append(k)
+
+    import scriptconfig as scfg
+    sc_common = {}
+    for k, v in common_kv.items():
+        sc_common[k] = scfg.Value(v.default)
+
+    class CommonTrackerConfig(scfg.DataConfig):
+        __default__ = sc_common
+
+    print(z.port_to_dataconf())
+
+    for d in items:
+        new_name = d.__name__ + 'Config'
+        new_default = {}
+        for k, v in d.__dataclass_fields__.items():
+            if k not in sc_common:
+                new_default[k] = scfg.Value(v.default)
+        class NewConfig(scfg.DataConfig):
+            __default__ = new_default
+        print(NewConfig().port_to_dataconf().replace('NewConfig', new_name).replace('scfg.DataConfig', 'CommonTrackerConfig'))
+
+
 COMMON:
 
-from scriptconfig import DataConfig
-from scriptconfig import Value as V
+import scriptconfig as scfg
 
-# Note that the V wrapping can/will be optional
-# Do something like __defaults__ = Common.__defaults__  # Can do this with a metaclass
+class CommonTrackerConfig(scfg.DataConfig):
+    viz_out_dir                = scfg.Value(None, help=None)
+    morph_kernel               = scfg.Value(3, help=None)
+    response_thresh            = scfg.Value(None, help=None)
+    norm_ord                   = scfg.Value(1, help=None)
+    agg_fn                     = scfg.Value('probs', help=None)
+    thresh_hysteresis          = scfg.Value(None, help=None)
+    moving_window_size         = scfg.Value(None, help=None)
+    min_area_sqkm              = scfg.Value(None, help=None)
+    max_area_sqkm              = scfg.Value(None, help=None)
+    min_area_square_meters     = scfg.Value(None, help=None)
+    max_area_square_meters     = scfg.Value(None, help=None)
+    max_area_behavior          = scfg.Value('drop', help=None)
+    polygon_simplify_tolerance = scfg.Value(None, help=None)
+    resolution                 = scfg.Value(None, help=None)
 
-class CommonTrackerConfig(DataConfig):
-    agg_fn                     : V[str]           = V('probs', help='agg method')
-    max_area_behavior          : str              = 'drop'
-    morph_kernel               : V[int]           = V(3, help='...')
-    moving_window_size         : V[int | None]    = V(None, help='...')
-    norm_ord                   : V[int | str]     = V(1, help='...')
-    polygon_simplify_tolerance : V[float | None]  = V(None, help='...')
-    resolution                 : V[str | None]    = V(None, help='...')
-    response_thresh            : Optional[float]  = None
-    thresh_hysteresis          : Optional[float]  = None
+class TimeAggregatedBASConfig(CommonTrackerConfig):
+    thresh                     = scfg.Value(0.2, help=None)
+    time_thresh                = scfg.Value(1, help=None)
+    key                        = scfg.Value('salient', help=None)
+    inner_window_size          = scfg.Value(None, help=None)
+    inner_agg_fn               = scfg.Value(None, help=None)
+    use_boundaries             = scfg.Value(False, help=None)
+    site_validation            = scfg.Value(False, help=None)
+    site_validation_span_steps = scfg.Value(120, help=None)
+    site_validation_thresh     = scfg.Value(0.1, help=None)
+    poly_merge_method          = scfg.Value('v1', help=None)
 
+class TimeAggregatedSCConfig(CommonTrackerConfig):
+    thresh                     = scfg.Value(0.01, help=None)
+    time_thresh                = scfg.Value(None, help=None)
+    key                        = scfg.Value(('Site Preparation', 'Active Construction', 'Post Construction'), help=None)
+    bg_key                     = scfg.Value(('No Activity',), help=None)
+    boundaries_as              = scfg.Value('bounds', help=None)
+    inner_window_size          = scfg.Value(None, help=None)
+    inner_agg_fn               = scfg.Value(None, help=None)
+    site_validation            = scfg.Value(False, help=None)
+    site_validation_span_steps = scfg.Value(120, help=None)
+    site_validation_thresh     = scfg.Value(0.1, help=None)
 
-class BAS_TrackerConfig(CommonTrackerConfig):
+class TimeAggregatedSVConfig(CommonTrackerConfig):
+    thresh        = scfg.Value(0.1, help=None)
+    time_thresh   = scfg.Value(None, help=None)
+    key           = scfg.Value('salient', help=None)
+    boundaries_as = scfg.Value('polys', help=None)
+    span_steps    = scfg.Value(120, help=None)
 
-    # Common but different defaults
-    key: str = 'salient'
-    min_area_square_meters: Optional[float] = None
-    max_area_square_meters: Optional[float] = None
-    time_thresh: Optional[float] = 1
-    thresh: float = 0.2
-
-
-VALID_BOUNDRY_ALGOS = Literal['bounds', 'polys', 'none']
-BACKGROUND_NAMES = CNAMES_DCT['negative']['scored']
-
-class SC_TrackerConfig(CommonTrackerConfig):
-
-    # Common but different defaults
-    key           : Tuple[str]      = tuple(CNAMES_DCT['positive']['scored'])
-    max_area_square_meters : Optional[float] = None
-    min_area_square_meters : Optional[float] = None
-    thresh        : float           = 0.01
-    time_thresh   : Optional[float] = None
-
-    # Unique to SC
-    boundaries_as : VALID_BOUNDRY_ALGOS = 'bounds'
-    bg_key        : Tuple[str]          = tuple(BACKGROUND_NAMES)
 """
 
 
