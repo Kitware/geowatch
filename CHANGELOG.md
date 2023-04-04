@@ -14,7 +14,7 @@ Unpinned lightning for 2.x
 
 * The old fit script will now raise an error. Use the `fit_lightning` script instead.
 
-## Version 0.4.7 - Target 2023-03-31
+## Version 0.4.8 - Delivered 2023-03-31
 
 ### Changed
 * Lightning Packager callback now saves checkpoints on errors in addition to packages.
@@ -54,11 +54,10 @@ Unpinned lightning for 2.x
 * Fix inconsistency in UTM space estimation.
 * Fixes in `cold` task
 
-
 ### Removed
 * Old `demo_smart_raw/aligned kwcoco` in favor of `demo_kwcoco_multisensor`.
 
-## Version 0.3.10 - Target 2023-02-28
+## Version 0.3.10 - Delivered 2023-02-28
 
 ### Added
 * `smartwatch align` new argument `--minimum_size`: to ensure all regions have enough pixels
@@ -109,7 +108,7 @@ Unpinned lightning for 2.x
 * Reworked `utils` to use `lazy_loader`.
 * New `util_kwplot` constructs
 
-## Version 0.3.9 - Target 2023-01-31
+## Version 0.3.9 - Delivered 2023-01-31
 
 ### Added
 * Add new CLI tool: `smartwatch coco_clean_geotiffs` to fix NODATA values directly in geotiffs
@@ -138,7 +137,7 @@ Unpinned lightning for 2.x
   `utm_corners`, and `utm_crs_info`, which are redundant with `geos_corners`.
 
 
-## Version 0.3.8 - Target 2022-12-31
+## Version 0.3.8 - Delivered 2022-12-31
 
 ### Added
 * Initial scripts for new teamfeatures
@@ -195,7 +194,7 @@ Unpinned lightning for 2.x
 
 
 
-## Version 0.3.7 - Target 2022-11-21
+## Version 0.3.7 - Delivered 2022-11-21
 
 ### Added
 * min / max world area threshold in tracker
