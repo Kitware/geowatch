@@ -276,8 +276,16 @@ class PolygonEvaluation(ProcessNode):
         # self.tmp_dpath = self.paths['eval_dpath'] / 'tmp'
         # self.tmp_dpath = self.paths['eval_dpath'] / 'tmp'
         fmtkw = self.final_config.copy()
-        fmtkw['params_argstr'] = self._make_argstr(self.final_algo_config)
-        fmtkw['perf_argstr'] = self._make_argstr(self.final_perf_config)
+
+        handled = {
+            'name', 'true_site_dpath', 'merge', 'true_region_dpath',
+            'true_region_dpath', 'pred_sites', 'tmp_dir', 'out_dir',
+            'merge_fpath',
+        }
+
+        fmtkw['params_argstr'] = self._make_argstr(self.final_algo_config - handled)
+        fmtkw['perf_argstr'] = self._make_argstr(self.final_perf_config - handled)
+
         fmtkw['tmp_dpath'] = self.final_node_dpath / 'tmp'
 
         # Hack:
@@ -302,8 +310,11 @@ class PolygonEvaluation(ProcessNode):
                 --pred_sites "{sites_fpath}" \
                 --tmp_dir "{tmp_dpath}" \
                 --out_dir "{eval_dpath}" \
-                --merge_fpath "{eval_fpath}"
+                --merge_fpath "{eval_fpath}" \
+                {params_argstr} \
+                {perf_argstr}
             ''').format(**fmtkw)
+        command = command.rstrip().rstrip('\\').rstrip()
         return command
 
 

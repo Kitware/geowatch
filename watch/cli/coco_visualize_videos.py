@@ -1096,8 +1096,8 @@ def _write_ann_visualizations2(coco_dset,
                 ann_stack.append(stack_ann_item)
         except SkipChanGroup:
             ...
-        else:
-            break
+        # else:
+        #     break
 
     if stack:
         img_stacked_dpath = (img_view_dpath / 'stack')

@@ -98,7 +98,7 @@ class MetricsConfig(scfg.DataConfig):
                               help=ub.paragraph('''
         The number of workers used to load site models.
         '''))
-    parallel = scfg.Value(False,
+    parallel = scfg.Value(False, isflag=True,
                           help=ub.paragraph('''
         Innvocate running IARPA T&E metrics in parallel. Note:
         Only works with IARPA T&E metrics version 1.0.0 or greater.

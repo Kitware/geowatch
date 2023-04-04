@@ -1181,6 +1181,10 @@ class CommonTrackerConfig(scfg.DataConfig):
     polygon_simplify_tolerance = scfg.Value(None, help=None)
     resolution                 = scfg.Value(None, help=None)
 
+    def __post_init__(self):
+        _resolve_deprecated_args(self)
+        _resolve_arg_values(self)
+
 class TimeAggregatedBASConfig(CommonTrackerConfig):
     thresh                     = scfg.Value(0.2, help=None)
     time_thresh                = scfg.Value(1, help=None)
