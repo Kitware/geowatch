@@ -40,6 +40,7 @@ def viterbi(input_sequence, transition_probs, emission_probs):
     References:
         - https://en.wikipedia.org/wiki/Viterbi_algorithm#Pseudocode
         - https://stackoverflow.com/q/9729968
+
     Example:
         >>> # Demo based loosely on a star's simplified life sequence
         >>> import numpy as np
@@ -80,7 +81,7 @@ def viterbi(input_sequence, transition_probs, emission_probs):
         >>>     {'obs': 'black_hole',   'real': 'black_hole',   'prob': 0.5},
         >>> ]
         >>> emission_table = pd.DataFrame.from_dict(emissions)
-        >>> emission_df = emission_table.pivot(['obs'], ['real'], ['prob'])
+        >>> emission_df = emission_table.pivot(index=['obs'], columns=['real'], values=['prob'])
         >>> # Fill unspecified values in pairwise probability tables
         >>> import kwarray
         >>> rng = kwarray.ensure_rng(42110)
@@ -89,7 +90,7 @@ def viterbi(input_sequence, transition_probs, emission_probs):
         >>> emission_df = emission_df.fillna(0) + randfill * flags
         >>> transition_table = pd.DataFrame.from_dict(transitions)
         >>> transition_df = transition_table.pivot(
-        >>>     ['src'], ['dst'], ['prob']).fillna(0)
+        >>>     index=['src'], columns=['dst'], values=['prob']).fillna(0)
         >>> # Normalize probs
         >>> emission_df = emission_df.div(emission_df.groupby(
         >>>     axis=1, level=0).sum(), level=0)

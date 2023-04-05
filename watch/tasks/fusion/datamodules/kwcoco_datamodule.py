@@ -36,7 +36,7 @@ class KWCocoVideoDataModuleConfig(scfg.Config):
 
     In the future this might be convertable to, or handled by omegaconfig
     """
-    default = ub.udict({
+    __default__ = ub.udict({
         'train_dataset': scfg.Value(None, help='path to the train kwcoco file'),
         'vali_dataset': scfg.Value(None, help='path to the validation kwcoco file'),
         'test_dataset': scfg.Value(None, help='path to the test kwcoco file'),
