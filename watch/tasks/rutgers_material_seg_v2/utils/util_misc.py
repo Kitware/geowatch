@@ -257,7 +257,7 @@ def filter_image_ids_by_season(coco_dset, image_ids, filtered_seasons):
         print('WARNING: No images to filter.')
         return []
 
-    if isinstance(filtered_seasons, list) is False:
+    if not isinstance(filtered_seasons, list):
         filtered_seasons = [filtered_seasons]
 
     for filtered_season in filtered_seasons:
