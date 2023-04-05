@@ -283,7 +283,8 @@ def filter_image_ids_by_season(coco_dset, image_ids, filtered_seasons):
         coco_img = coco_dset.coco_image(image_id)
 
         # Get month.
-        month = int(coco_img['date_captured'].split('-')[1])
+        from watch.utils import util_time
+        month = util_time.coerce_datetime(coco_img['date_captured']).month
 
         # Get season of month.
         img_season = month_to_season_map[month]
