@@ -32,8 +32,6 @@ class TimeCombineConfig(scfg.DataConfig):
     """
     Averages kwcoco images over a sliding temporal window in a video.
     """
-    from watch.utils.util_yaml import Yaml
-
     __command__ = 'time_combine'
     __fuzzy_hyphens__ = True
 
@@ -80,12 +78,11 @@ class TimeCombineConfig(scfg.DataConfig):
             being used in the average.
             '''), alias=['filter_with_cloudmasks'])
 
-    sensor_weights = Yaml.coerce(
+    sensor_weights = scfg.Value(0, help=ub.paragraph(
             '''
-                S2: 2.5
-                L8: 1.0
-                WV: 5.0
-            ''')
+            Weight the contribution of each sensor in the average operation
+            by a scalar value.
+            '''))
 
     separate_sensors = scfg.Value(True, isflag=True, help=ub.paragraph(
         '''
@@ -296,14 +293,14 @@ def main(cmdline=1, **kwargs):
 
     Example:
         >>> # 6: Adjust the effect of S2 imagery.
-        >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
         >>> from watch.cli.coco_time_combine import *  # NOQA
+        >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
         >>> import watch
         >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> cmdline = 0
         >>> kwargs = dict(
-        >>>     input_kwcoco_fpath=data_dvc_dpath / 'Drop6/imgonly-KR_R001.kwcoco.zip',
-        >>>     output_kwcoco_fpath=data_dvc_dpath / 'Drop6/test-timeave-KR_R001-cloudmask-s2w_10.kwcoco.zip',
+        >>>     input_kwcoco_fpath=data_dvc_dpath / 'Drop6/imganns-KR_R001.kwcoco.zip',
+        >>>     output_kwcoco_fpath=data_dvc_dpath / 'Drop6/test-timeave-test_6-KR_R001.kwcoco.zip',
         >>>     workers=11,
         >>>     merge_method='mean',
         >>>     time_window='1 year',
@@ -311,6 +308,7 @@ def main(cmdline=1, **kwargs):
         >>>     mask_low_quality=True,
         >>>     resolution='10GSD',
         >>>     separate_sensors=False,
+        >>>     sensor_weights=dict(S2=2.5, L8=1.0, WV=5.0)
         >>> )
         >>> output_coco_dset = main(cmdline=cmdline, **kwargs)
         >>> from watch.cli import coco_visualize_videos
@@ -323,13 +321,14 @@ def main(cmdline=1, **kwargs):
     Example:
         >>> # 7: Tile images instead of computing average all at once.
         >>> from watch.cli.coco_time_combine import *  # NOQA
+        >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
         >>> import watch
         >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> cmdline = 0
         >>> kwargs = dict(
         >>>     input_kwcoco_fpath=data_dvc_dpath / 'Drop6/imganns-KR_R001.kwcoco.zip',
         >>>     output_kwcoco_fpath=data_dvc_dpath / 'Drop6/test-timeave-test_7-KR_R001.kwcoco.zip',
-        >>>     workers=0,
+        >>>     workers=11,
         >>>     merge_method='median',
         >>>     time_window='1 year',
         >>>     channels='red|green|blue',
@@ -377,13 +376,14 @@ def main(cmdline=1, **kwargs):
     Example:
         >>> # 9: Exclude winter seasons for time average.
         >>> from watch.cli.coco_time_combine import *  # NOQA
+        >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
         >>> import watch
         >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> cmdline = 0
         >>> kwargs = dict(
         >>>     input_kwcoco_fpath=data_dvc_dpath / 'Drop6/imganns-KR_R001.kwcoco.zip',
         >>>     output_kwcoco_fpath=data_dvc_dpath / 'Drop6/test-timeave-test_9-KR_R001.kwcoco.zip',
-        >>>     workers=0,
+        >>>     workers=11,
         >>>     merge_method='mean',
         >>>     time_window='1 year',
         >>>     channels='red|green|blue',
@@ -424,6 +424,7 @@ def combine_kwcoco_channels_temporally(config):
     from watch.utils import util_time
     from watch.utils import kwcoco_extensions
     from watch.utils import util_parallel
+    from watch.utils.util_yaml import Yaml
     from watch.tasks.rutgers_material_seg_v2.utils.util_misc import filter_image_ids_by_season
     # Check inputs.
 
@@ -435,8 +436,13 @@ def combine_kwcoco_channels_temporally(config):
     if os.path.exists(config.input_kwcoco_fpath) is False:
         raise FileNotFoundError(f'Input kwcoco file path does not exist: {config.input_kwcoco_fpath}')
 
+    sensor_weights = Yaml.coerce(config.sensor_weights)
+
     ## Check the S2 weight factor and merge method combination.
-    for sensor_code, sensor_weight in config.sensor_weights.items():
+    if isinstance(sensor_weights, dict) is False:
+        sensor_weights = {}
+
+    for sensor_code, sensor_weight in sensor_weights.items():
         if sensor_weight != 1.0 and config.merge_method != 'mean':
             print(f'WARNING: {sensor_code} weight factor only effects the merge method "mean".')
 
@@ -484,7 +490,6 @@ def combine_kwcoco_channels_temporally(config):
 
     resolution = config.resolution
     merge_method = config.merge_method
-    sensor_weights = config.sensor_weights
     mask_low_quality = config.mask_low_quality
     og_kwcoco_fpath = config.input_kwcoco_fpath
     if isinstance(config.spatial_tile_size, tuple) is False:
