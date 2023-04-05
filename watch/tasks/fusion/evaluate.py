@@ -81,9 +81,10 @@ def main(cmdline=True, **kwargs):
     """
     full_config = SegmentationEvalConfig.cli(
         cmdline=cmdline, data=kwargs, strict=True)
-    full_config = ub.udict(full_config)
-    print('full_config = {}'.format(ub.urepr(full_config, nl=1)))
+    import rich
+    rich.print('full_config = {}'.format(ub.urepr(full_config, nl=1)))
 
+    full_config = ub.udict(full_config)
     true_coco = kwcoco.CocoDataset.coerce(full_config['true_dataset'])
     pred_coco = kwcoco.CocoDataset.coerce(full_config['pred_dataset'])
     eval_fpath = full_config['eval_fpath']
@@ -959,6 +960,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         >>> #workers = 0
         >>> evaluate_segmentations(true_coco, pred_coco, eval_dpath, config=config)
     """
+    import rich
 
     if config is None:
         config = {}
@@ -1252,8 +1254,8 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
 
     df = pd.DataFrame(rows)
     print('Per Image Pixel Measures')
-    print(df)
-    print(df.describe().T)
+    rich.print(df)
+    rich.print(df.describe().T)
 
     # Finalize all of the aggregated measures
     print('Finalize salient measures')
@@ -1306,7 +1308,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     # (TODO: better API)
     result = CocoSingleResult(
         salient_combo_measures, ovr_combo_measures, None, meta)
-    print('result = {}'.format(result))
+    rich.print('result = {}'.format(result))
 
     meta['info'].append(pcontext.stop())
 
@@ -1346,9 +1348,10 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         summary['salient_auc'] = salient_combo_measures['auc']
         summary['salient_max_f1'] = salient_combo_measures['max_f1']
 
-    print('summary = {}'.format(ub.urepr(
+    rich.print('summary = {}'.format(ub.urepr(
         summary, nl=1, precision=4, align=':', sort=0)))
-    print('eval_dpath = {!r}'.format(eval_dpath))
+
+    rich.print(f'Eval Dpath: [link={eval_dpath}]{eval_dpath}[/link]')
     print(f'eval_fpath={eval_fpath}')
     return df
 

@@ -30,13 +30,6 @@ CommandLine:
 import scriptconfig as scfg
 import ubelt as ub
 
-try:
-    import rich
-    from rich import print
-except ImportError:
-    rich = None
-    pass
-
 
 class CocoVisualizeConfig(scfg.Config):
     """
@@ -234,11 +227,12 @@ def main(cmdline=True, **kwargs):
     from watch.utils import kwcoco_extensions
     import kwcoco
     import kwarray
+    import rich
     import numpy as np
     config = CocoVisualizeConfig(data=kwargs, cmdline=cmdline and {'strict': True})
     space = config['space']
     channels = config['channels']
-    print('config = {}'.format(ub.urepr(dict(config), nl=2)))
+    rich.print('config = {}'.format(ub.urepr(dict(config), nl=2)))
 
     if config['smart']:
         if config['workers'] == 'auto':
@@ -265,11 +259,11 @@ def main(cmdline=True, **kwargs):
         max_workers = util_parallel.coerce_num_workers(config['max_workers'])
     else:
         max_workers = util_parallel.coerce_num_workers(config['workers'])
-    print('max_workers = {!r}'.format(max_workers))
+    rich.print('max_workers = {!r}'.format(max_workers))
 
     coco_dset = kwcoco.CocoDataset.coerce(config['src'])
-    print('coco_dset.fpath = {!r}'.format(coco_dset.fpath))
-    print('coco_dset = {!r}'.format(coco_dset))
+    rich.print('coco_dset.fpath = {!r}'.format(coco_dset.fpath))
+    rich.print('coco_dset = {!r}'.format(coco_dset))
 
     from watch import heuristics
     heuristics.ensure_heuristic_coco_colors(coco_dset)
@@ -299,7 +293,7 @@ def main(cmdline=True, **kwargs):
             # force RGB first
             chosen = ub.oset(['red|green|blue']) | (chosen - {'red|green|blue'})
         channels = ','.join(chosen)
-        print(f'AUTO channels={channels}')
+        rich.print(f'AUTO channels={channels}')
     elif channels is None:
         channel_stats = kwcoco_extensions.coco_channel_stats(coco_dset)
         all_sensorchan = channel_stats['all_sensorchan']
@@ -331,7 +325,7 @@ def main(cmdline=True, **kwargs):
         viz_dpath = ub.Path(config['viz_dpath'])
     else:
         viz_dpath = bundle_dpath / '_viz_{}'.format(dset_idstr)
-    print('viz_dpath = {!r}'.format(viz_dpath))
+    rich.print('viz_dpath = {!r}'.format(viz_dpath))
 
     from watch.utils import util_progress
     pman = util_progress.ProgressManager()
@@ -376,7 +370,7 @@ def main(cmdline=True, **kwargs):
             else:
                 if requested_channels & code:
                     keep.append(coco_img.img['id'])
-        print(f'Filtered {len(coco_images) - len(keep)} images without requested channels. Keeping {len(keep)}')
+        rich.print(f'Filtered {len(coco_images) - len(keep)} images without requested channels. Keeping {len(keep)}')
         selected_gids = keep
 
     video_names = []
@@ -389,16 +383,16 @@ def main(cmdline=True, **kwargs):
             gids = list(ub.oset(gids) & set(selected_gids))
 
         if len(gids) == 0:
-            print(f'Skip {video["name"]=!r} with no selected images')
+            rich.print(f'Skip {video["name"]=!r} with no selected images')
             continue
 
         sub_dpath.ensuredir()
         video_names.append(video['name'])
 
         if config['animate'] == 'oops':
-            print('Got animate=oops. '
-                  'Assuming images already exists and you forgot to animate'
-                  'Skipping video draw')
+            rich.print('Got animate=oops. '
+                       'Assuming images already exists and you forgot to animate'
+                       'Skipping video draw')
             continue
 
         norm_over_time = config['norm_over_time']
@@ -448,7 +442,7 @@ def main(cmdline=True, **kwargs):
                     # 'mode': 'sigmoid',
                 })
                 chan_to_normalizer[chan] = normalizer
-            print('chan_to_normalizer = {}'.format(ub.urepr(chan_to_normalizer, nl=1)))
+            rich.print('chan_to_normalizer = {}'.format(ub.urepr(chan_to_normalizer, nl=1)))
 
         if config['draw_valid_region']:
             valid_vidspace_region = video.get('valid_region', None)
@@ -536,10 +530,7 @@ def main(cmdline=True, **kwargs):
         pool.jobs.clear()
 
     pman.__exit__(None, None, None)
-    if rich is not None and print is rich.print:
-        rich.print(f'Wrote images to: [link={viz_dpath}]{viz_dpath}[/link]')
-    else:
-        print('Wrote images to viz_dpath = {!r}'.format(viz_dpath))
+    rich.print(f'Wrote images to: [link={viz_dpath}]{viz_dpath}[/link]')
 
     if config['animate']:
         # TODO: develop this idea more
@@ -564,7 +555,7 @@ def main(cmdline=True, **kwargs):
                 print('Tried to pass animate as a yaml config but loading failed')
                 raise
 
-        print('animate_config = {}'.format(ub.urepr(animate_config, nl=1)))
+        rich.print('animate_config = {}'.format(ub.urepr(animate_config, nl=1)))
         from watch.cli import animate_visualizations
 
         # Hack: pretend that stack is a channel even though it is not.
@@ -694,6 +685,7 @@ def _resolve_channel_groups(coco_img, channels, verbose, request_grouped_bands,
     """
     from kwcoco import channel_spec
     import kwcoco
+    import rich
     if channels is not None:
         if isinstance(channels, list):
             channels = ','.join(channels)  # hack
@@ -703,8 +695,8 @@ def _resolve_channel_groups(coco_img, channels, verbose, request_grouped_bands,
         ]
     else:
         if verbose > 0:
-            print('Choosing channels')
-            print(f'request_grouped_bands={request_grouped_bands}')
+            rich.print('Choosing channels')
+            rich.print(f'request_grouped_bands={request_grouped_bands}')
         channels = coco_img.channels
         if request_grouped_bands == 'default':
             # Use false color for special groups
@@ -904,6 +896,7 @@ def _write_ann_visualizations2(coco_dset,
 
     # Ensure names are differentiated between frames.
     import math
+    import rich
     import kwimage
     import numpy as np
     if local_max_frame is None:
@@ -953,9 +946,9 @@ def _write_ann_visualizations2(coco_dset,
                                        'min_val': 0, 'max_val': 255}
 
     if verbose > 0:
-        print(f'fixed_normalization_scheme={fixed_normalization_scheme}')
-        print(f'chan_to_normalizer={chan_to_normalizer}')
-        print(f'channels={channels}')
+        rich.print(f'fixed_normalization_scheme={fixed_normalization_scheme}')
+        rich.print(f'chan_to_normalizer={chan_to_normalizer}')
+        rich.print(f'channels={channels}')
 
     chan_groups = _resolve_channel_groups(coco_img, channels, verbose,
                                           request_grouped_bands, any3)
@@ -1183,6 +1176,7 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
     import kwarray
     import kwcoco
     import numpy as np
+    import rich
     chan_pname = chan_row['pname']
     chan_group_obj = chan_row['chan']
     chan_list = chan_group_obj.parsed
@@ -1208,14 +1202,14 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
     # foo = kwimage.fill_nans_with_checkers(raw_canvas)
 
     if verbose > 1:
-        print('raw_canvas.shape = {!r}'.format(raw_canvas.shape))
-        print('chan_list = {!r}'.format(chan_list))
+        rich.print('raw_canvas.shape = {!r}'.format(raw_canvas.shape))
+        rich.print('chan_list = {!r}'.format(chan_list))
         try:
             # chan_stats = kwarray.stats_dict(raw_canvas, axis=2, nan=True)
             chan_stats = kwarray.stats_dict(raw_canvas, axis=(0, 1), nan=True)
-            print('chan_stats = {}'.format(ub.urepr(chan_stats, nl=1)))
+            rich.print('chan_stats = {}'.format(ub.urepr(chan_stats, nl=1)))
         except Exception as ex:
-            print(f'ex={ex}')
+            rich.print(f'ex={ex}')
             import warnings
             warnings.warn('Error printing chan stats, probably need kwarray >= 0.6.1')
 
