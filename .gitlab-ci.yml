@@ -95,7 +95,7 @@ stages:
         - python -m pip install pip -U
         - python -m pip install setuptools>=0.8 wheel build
         - pip install --prefer-binary -r requirements/gdal.txt  # gdal is special
-        - pip install --prefer-binary -e .[runtime,headless,development]
+        - pip install --prefer-binary -e .[headless,development]
 
     script:
         - EAGER_IMPORT=1 python -c "import watch; print(watch.__version__)"
