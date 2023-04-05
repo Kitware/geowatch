@@ -1,7 +1,7 @@
 """
 Basic
 """
-__version__ = '{mod_dpath}/__init__.py::__version__'
+__version__ = '0.0.1'
 __author__ = 'Jon Crall'
 __author_email__ = 'erotemic@gmail.com'
 __url__ = 'None'
