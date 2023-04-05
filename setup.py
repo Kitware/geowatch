@@ -229,19 +229,20 @@ if __name__ == '__main__':
         python_requires='>=3.9',
         # https://pypi.org/classifiers/
         classifiers=[
-            'Development Status :: 3 - Alpha',
+            'Development Status :: 4 - Beta',
             'Intended Audience :: Developers',
             'Natural Language :: English',
             'Programming Language :: Python :: 3',
-            'Programming Language :: Python :: 3.8',
             'Programming Language :: Python :: 3.9',
             'Programming Language :: Python :: 3.10',
+            'Programming Language :: Python :: 3.11',
         ],
         description="",
         entry_points={
             'console_scripts': [
                 'watch-cli = watch.cli.__main__:main',
                 'smartwatch= watch.cli.__main__:main',
+                'geowatch= watch.cli.__main__:main',
                 'smartwatch_dvc= watch.cli.find_dvc:_CLI.main',
                 # 'smartwatch_dvc= watch.cli.find_dvc:__config__.main',
             ],
