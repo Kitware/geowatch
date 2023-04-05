@@ -235,7 +235,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.vali_kwcoco = self.config['vali_dataset']
         self.test_kwcoco = self.config['test_dataset']
 
-        common_keys = set(KWCocoVideoDatasetConfig.default.keys())
+        common_keys = set(KWCocoVideoDatasetConfig.__default__.keys())
         # Pass the relevant parts of the config to the underlying datasets
         self.train_dataset_config = ub.dict_subset(cfgdict, common_keys)
         # with small changes made for validation and test datasets.

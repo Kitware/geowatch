@@ -34,6 +34,7 @@ def trackid_is_default(trackid):
     except ValueError:
         return False
 
+
 Poly = Union[kwimage.Polygon, kwimage.MultiPolygon]
 
 

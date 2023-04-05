@@ -31,8 +31,10 @@ import scriptconfig as scfg
 import ubelt as ub
 
 try:
+    import rich
     from rich import print
 except ImportError:
+    rich = None
     pass
 
 
@@ -534,7 +536,10 @@ def main(cmdline=True, **kwargs):
         pool.jobs.clear()
 
     pman.__exit__(None, None, None)
-    print('Wrote images to viz_dpath = {!r}'.format(viz_dpath))
+    if rich is not None and print is rich.print:
+        rich.print(f'Wrote images to: [link={viz_dpath}]{viz_dpath}[/link]')
+    else:
+        print('Wrote images to viz_dpath = {!r}'.format(viz_dpath))
 
     if config['animate']:
         # TODO: develop this idea more

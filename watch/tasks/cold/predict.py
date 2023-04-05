@@ -368,5 +368,6 @@ def cold_predict_main(cmdline=1, **kwargs):
         shutil.rmtree(tile_kwargs['stack_path'])
         main_prog.step()
 
+
 if __name__ == '__main__':
     cold_predict_main()

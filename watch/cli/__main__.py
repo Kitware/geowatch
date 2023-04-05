@@ -75,6 +75,7 @@ def main(cmdline=True, **kw):
             '''
             The SMART WATCH CLI
             '''))
+
         def get_version(self):
             import watch
             return watch.__version__
