@@ -63,10 +63,10 @@ stages:
     variables:
         PIP_CACHE_DIR:
             "$CI_PROJECT_DIR/.cache/pip"
-        CONDA_PKGS_DIRS:
-            "$CI_PROJECT_DIR/.cache/conda/pkgs"
-        CONDA_ENVS_PATH:
-            "$CI_PROJECT_DIR/.cache/conda/envs"
+        #CONDA_PKGS_DIRS:
+        #    "$CI_PROJECT_DIR/.cache/conda/pkgs"
+        #CONDA_ENVS_PATH:
+        #    "$CI_PROJECT_DIR/.cache/conda/envs"
         XDG_CACHE_HOME:
             "$CI_PROJECT_DIR/.cache/xdg_cache"
     tags:
@@ -77,21 +77,6 @@ stages:
         #- linux
         #- linux-3.17
         - build
-
-.common_template_docker:
-  &common_template_docker
-  tags:
-    #- aws
-    - smart
-    - docker
-    - linux-x86_64
-    #- linux
-    #- linux-3.17
-    - build
-  before_script:
-    - docker info
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-
 
 .test_pyenv_loose_template:
     &test_pyenv_loose_template
@@ -110,7 +95,7 @@ stages:
               source $PYENV_ROOT/completions/pyenv.bash
               export PYENV_PREFIX=$(pyenv prefix)
           fi
-          pyenv global 3.10
+          pyenv global 3.11
         - pip install wheel build
         - pip install --prefer-binary -r requirements/gdal.txt  # gdal is special
         - pip install --prefer-binary -e .[runtime,headless,development]
@@ -136,36 +121,38 @@ stages:
             #- .cache/conda/envs/loose-watch-env  # better with or without this?
             - .cache/pip
             #- .cache/xdg_cache
+            
 
-
-.test_strict_template:
-    &test_strict_template
+.test_pyenv_strict_template:
+    &test_pyenv_strict_template
     <<:
         *common_template
     stage:
         test
 
     before_script:
-        - conda init bash
-        - source ~/.bashrc
-        - ls -al
+        - |
+          export HOME="/root"
+          export PYENV_ROOT="$HOME/.pyenv"
+          if [ -d "$PYENV_ROOT" ]; then
+              export PATH="$PYENV_ROOT/bin:$PATH"
+              eval "$($PYENV_ROOT/bin/pyenv init -)"
+              source $PYENV_ROOT/completions/pyenv.bash
+              export PYENV_PREFIX=$(pyenv prefix)
+          fi
+          pyenv global 3.11
+        - pip install wheel build
         - ./dev/make_strict_req.sh
-        - conda env create -f conda_env_strict.yml --prefix ".cache/conda/envs/strict-watch-env"
-        - conda activate ".cache/conda/envs/strict-watch-env"
-        - pip install -e .
-        # Test with IARPA metrics
-        # - pip install git+ssh://git@gitlab.kitware.com/smart/metrics-and-test-framework.git -U
+        - pip install --prefer-binary -r requirements-strict/gdal.txt  # gdal is special
+        - pip install --prefer-binary -e .[runtime-strict,headless-strict,development-strict]
+
     script:
-        # Run a few quick checks first
-        # 
-        #- python -c "from pyproj import CRS ; print(CRS.from_user_input('crs84'))"
-        #- python -c "from pyproj import CRS ; print(CRS.from_user_input('epsg:4326'))"
+        - EAGER_IMPORT=1 python -c "import watch; print(watch.__version__)"
         - ./run_tests.py --network watch tests --verbose
 
     after_script:
         - du -sh .cache/*
         - du -sh .cache/xdg_cache/*
-        - du -sh .cache/conda/*
         - du -sh .cache/pip/*
 
     # Coverage is a regex that will parse the coverage from the test stdout
@@ -176,11 +163,52 @@ stages:
         key:
             strict-cache-v1
         paths:
-            
-            #- .cache/conda/envs/strict-watch-env  # better with or without this?
-            - .cache/conda/pkgs
             - .cache/pip
-            #- .cache/xdg_cache
+
+
+#.test_strict_template:
+#    &test_strict_template
+#    <<:
+#        *common_template
+#    stage:
+#        test
+
+#    before_script:
+#        - conda init bash
+#        - source ~/.bashrc
+#        - ls -al
+#        - ./dev/make_strict_req.sh
+#        - conda env create -f conda_env_strict.yml --prefix ".cache/conda/envs/strict-watch-env"
+#        - conda activate ".cache/conda/envs/strict-watch-env"
+#        - pip install -e .
+#        # Test with IARPA metrics
+#        # - pip install git+ssh://git@gitlab.kitware.com/smart/metrics-and-test-framework.git -U
+#    script:
+#        # Run a few quick checks first
+#        # 
+#        #- python -c "from pyproj import CRS ; print(CRS.from_user_input('crs84'))"
+#        #- python -c "from pyproj import CRS ; print(CRS.from_user_input('epsg:4326'))"
+#        - ./run_tests.py --network watch tests --verbose
+
+#    after_script:
+#        - du -sh .cache/*
+#        - du -sh .cache/xdg_cache/*
+#        - du -sh .cache/conda/*
+#        - du -sh .cache/pip/*
+
+#    # Coverage is a regex that will parse the coverage from the test stdout
+#    coverage:
+#        '/TOTAL.+ ([0-9]{1,3}%)/'
+
+#    cache:
+#        key:
+#            strict-cache-v1
+#        paths:
+            
+#            #- .cache/conda/envs/strict-watch-env  # better with or without this?
+#            - .cache/conda/pkgs
+#            - .cache/pip
+#            #- .cache/xdg_cache
 
 
 #### JOBS ###
@@ -207,10 +235,7 @@ run_linter:
               source $PYENV_ROOT/completions/pyenv.bash
               export PYENV_PREFIX=$(pyenv prefix)
           fi
-          pyenv global 3.10
-        # NOTE: The default env runs Python 3.7, need to run 3.8 for 3.8 syntax
-        # - conda create -y -n lint_env python=3.8 --override-channels --channel conda-forge
-        # - conda activate lint_env
+          pyenv global 3.11
         - python -m pip install pip -U
         - ls -al
         - python -m pip install -r requirements/linting.txt 
@@ -225,12 +250,10 @@ run_linter:
         key:
             linter-cache-v1
         paths:
-            #- .cache/conda/pkgs
             - .cache/pip
 
     image:
-        #gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3
-        gitlab.kitware.com:4567/computer-vision/ci-docker/pyenv:3.10
+        gitlab.kitware.com:4567/computer-vision/ci-docker/pyenv:3.11
     needs: []
 
 
@@ -241,21 +264,45 @@ test_full_loose/pyenv-linux:
         - <<: *if-merge-request
         - <<: *if-merged-into-default
     image:
-        gitlab.kitware.com:4567/computer-vision/ci-docker/pyenv:3.10
+        gitlab.kitware.com:4567/computer-vision/ci-docker/pyenv:3.11
     needs: []
 
-
-test_full_strict/conda-linux:
+test_full_strict/pyenv-linux:
     <<:
-        *test_strict_template
+        *test_pyenv_strict_template
     rules:
         - <<: *if-merge-request
         - <<: *if-merged-into-default
     image:
-        gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3
-        # TODO: gitlab.kitware.com:4567/computer-vision/ci-docker/pyenv:3.10
+        gitlab.kitware.com:4567/computer-vision/ci-docker/pyenv:3.11
     needs: []
 
+
+#test_full_strict/conda-linux:
+#    <<:
+#        *test_strict_template
+#    rules:
+#        - <<: *if-merge-request
+#        - <<: *if-merged-into-default
+#    image:
+#        gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3
+#        # TODO: gitlab.kitware.com:4567/computer-vision/ci-docker/pyenv:3.11
+#    needs: []
+
+
+#.common_template_docker:
+#  &common_template_docker
+#  tags:
+#    #- aws
+#    - smart
+#    - docker
+#    - linux-x86_64
+#    #- linux
+#    #- linux-3.17
+#    - build
+#  before_script:
+#    - docker info
+#    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
 
 # Failing on main, and hasn't been used in awhile (as of 2022-01-13), just
 # disable it.
@@ -287,7 +334,7 @@ test_full_strict/conda-linux:
             IMAGE=gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3
             docker pull $IMAGE
 
-            IMAGE=gitlab.kitware.com:4567/computer-vision/ci-docker/pyenv:3.10
+            IMAGE=gitlab.kitware.com:4567/computer-vision/ci-docker/pyenv:3.11
             docker pull $IMAGE
             
             # Commands to help developers debug pipelines on their local
