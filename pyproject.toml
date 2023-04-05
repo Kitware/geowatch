@@ -42,6 +42,9 @@ filterwarnings = [
     "ignore:.*pkg_resources.declare_namespace('zc').*",
     "ignore:.*pkg_resources.declare_namespace('lightning_fabric').*",
     "ignore:.*pkg_resources.declare_namespace('pytorch_lightning').*",
+    "ignore:.*pkg_resources.*",
+    "ignore:.*Please install grpcio-status.*",
+    "ignore:.*monai/utils/module.py*",
 ]
 
 [tool.coverage.run]

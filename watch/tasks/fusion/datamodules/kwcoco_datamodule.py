@@ -505,7 +505,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
 
     def draw_batch(self, batch, stage='train', outputs=None, max_items=2,
                    overlay_on_image=False, **kwargs):
-        """
+        r"""
         Visualize a batch produced by this DataSet.
 
         Args:

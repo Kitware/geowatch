@@ -401,16 +401,17 @@ def build_search_json(start_date, end_date, sensors, api_key, cloud_cover):
             'stac_search': [
                 {
                     'collections': ['sentinel-s2-l2a-cogs'],
-                    'end_date': '2020-01-01',
                     'endpoint': 'https://earth-search.aws.element84.com/v0',
-                    'headers': {},
                     'query': {
                         'eo:cloud_cover': {'lt': 20}
                     },
-                    'start_date': '2017-01-01'
+                    'headers': {},
+                    'start_date': '2017-01-01',
+                    'end_date': '2020-01-01'
                 }
             ]
         }
+
     """
     from watch.utils import util_time
 

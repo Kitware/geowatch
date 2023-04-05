@@ -260,7 +260,6 @@ def github_action_matrix(arg):
             {'fruit': 'banana', 'animal': 'cat'},
         ]
 
-
     Example:
         >>> from watch.utils.util_param_grid import *  # NOQA
         >>> arg = ub.codeblock(
@@ -279,15 +278,15 @@ def github_action_matrix(arg):
         >>> grid_items = list(github_action_matrix(arg))
         >>> print('grid_items = {}'.format(ub.urepr(grid_items, nl=1)))
         grid_items = [
-            {'environment': 'staging', 'os': 'macos-latest', 'version': 12},
-            {'environment': 'staging', 'os': 'macos-latest', 'version': 14},
-            {'environment': 'production', 'os': 'macos-latest', 'version': 14},
-            {'environment': 'staging', 'os': 'macos-latest', 'version': 16},
-            {'environment': 'production', 'os': 'macos-latest', 'version': 16},
-            {'environment': 'staging', 'os': 'windows-latest', 'version': 12},
-            {'environment': 'production', 'os': 'windows-latest', 'version': 12},
-            {'environment': 'staging', 'os': 'windows-latest', 'version': 14},
-            {'environment': 'production', 'os': 'windows-latest', 'version': 14},
+            {'os': 'macos-latest', 'version': 12, 'environment': 'staging'},
+            {'os': 'macos-latest', 'version': 14, 'environment': 'staging'},
+            {'os': 'macos-latest', 'version': 14, 'environment': 'production'},
+            {'os': 'macos-latest', 'version': 16, 'environment': 'staging'},
+            {'os': 'macos-latest', 'version': 16, 'environment': 'production'},
+            {'os': 'windows-latest', 'version': 12, 'environment': 'staging'},
+            {'os': 'windows-latest', 'version': 12, 'environment': 'production'},
+            {'os': 'windows-latest', 'version': 14, 'environment': 'staging'},
+            {'os': 'windows-latest', 'version': 14, 'environment': 'production'},
         ]
 
     Example:

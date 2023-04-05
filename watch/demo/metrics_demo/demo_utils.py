@@ -86,6 +86,7 @@ def random_geo_polygon(max_rt_area=10_000, rng=None):
         >>> geo_poly = region_poly.round(6).to_geojson()
         >>> print('geo_poly = {}'.format(ub.urepr(geo_poly, nl=-1)))
         geo_poly = {
+            'type': 'Polygon',
             'coordinates': [
                 [
                     [-151.983974, 50.530122],
@@ -96,8 +97,7 @@ def random_geo_polygon(max_rt_area=10_000, rng=None):
                     [-151.941043, 50.541291],
                     [-151.983974, 50.530122]
                 ]
-            ],
-            'type': 'Polygon'
+            ]
         }
 
     Example:
