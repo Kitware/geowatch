@@ -33,6 +33,8 @@ class TimeCombineConfig(scfg.DataConfig):
     """
     Averages kwcoco images over a sliding temporal window in a video.
     """
+    from watch.utils.util_yaml import Yaml
+
     __command__ = 'time_combine'
     __fuzzy_hyphens__ = True
 
@@ -79,14 +81,12 @@ class TimeCombineConfig(scfg.DataConfig):
             being used in the average.
             '''), alias=['filter_with_cloudmasks'])
 
-    s2_weight_factor = scfg.Value(1.0, help=ub.paragraph(
+    sensor_weights = Yaml.coerce(
             '''
-            A weighting factor to scale the impact of Sentinel-2 pixels
-            during the combination operation. Note: Only effects the
-            merge method "mean" when sensors are not separated.
-            TODO: make this a general mapping from sensor code to weight.
-            Can probably use Yaml.coerce
-            '''))
+                S2: 1.0
+                L8: 0.0
+                WV: 1.0
+            ''')
 
     separate_sensors = scfg.Value(True, isflag=True, help=ub.paragraph(
         '''
@@ -311,7 +311,6 @@ def main(cmdline=1, **kwargs):
         >>>     channels='red|green|blue',
         >>>     mask_low_quality=True,
         >>>     resolution='10GSD',
-        >>>     s2_weight_factor=10.0,
         >>>     separate_sensors=False,
         >>> )
         >>> output_coco_dset = main(cmdline=cmdline, **kwargs)
@@ -379,7 +378,6 @@ def main(cmdline=1, **kwargs):
 
     Example:
         >>> # 9: Exclude winter seasons for time average.
-        >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
         >>> from watch.cli.coco_time_combine import *  # NOQA
         >>> import watch
         >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
@@ -388,7 +386,7 @@ def main(cmdline=1, **kwargs):
         >>>     input_kwcoco_fpath=data_dvc_dpath / 'Drop6/imganns-KR_R001.kwcoco.zip',
         >>>     output_kwcoco_fpath=data_dvc_dpath / 'Drop6/test-timeave-test_9-KR_R001.kwcoco.zip',
         >>>     workers=11,
-        >>>     merge_method='median',
+        >>>     merge_method='mean',
         >>>     time_window='1 year',
         >>>     channels='red|green|blue',
         >>>     mask_low_quality=True,
@@ -440,8 +438,9 @@ def combine_kwcoco_channels_temporally(config):
         raise FileNotFoundError(f'Input kwcoco file path does not exist: {config.input_kwcoco_fpath}')
 
     ## Check the S2 weight factor and merge method combination.
-    if config.s2_weight_factor != 1.0 and config.merge_method != 'mean':
-        print('WARNING: S2 weight factor only effects the merge method "mean".')
+    for sensor_code, sensor_weight in config.sensor_weights.items():
+        if sensor_weight != 1.0 and config.merge_method != 'mean':
+            print(f'WARNING: {sensor_code} weight factor only effects the merge method "mean".')
 
     # 1. Load kwcoco dataset.
     coco_dset = kwcoco.CocoDataset.coerce(config.input_kwcoco_fpath)
@@ -487,8 +486,8 @@ def combine_kwcoco_channels_temporally(config):
 
     resolution = config.resolution
     merge_method = config.merge_method
+    sensor_weights = config.sensor_weights
     mask_low_quality = config.mask_low_quality
-    s2_weight_factor = config.s2_weight_factor
     og_kwcoco_fpath = config.input_kwcoco_fpath
     spatial_tile_size = config.spatial_tile_size
 
@@ -608,14 +607,14 @@ def combine_kwcoco_channels_temporally(config):
                     job = jobs.submit(merge_images_tiled, window_coco_images,
                                       merge_method, requested_chans, space,
                                       resolution, new_bundle_dpath,
-                                      mask_low_quality, s2_weight_factor,
+                                      mask_low_quality, sensor_weights,
                                       og_kwcoco_fpath, crop_slices)
                     job.merge_images = merge_images_tiled
                 else:
                     job = jobs.submit(merge_images, window_coco_images,
                                       merge_method, requested_chans, space,
                                       resolution, new_bundle_dpath,
-                                      mask_low_quality, s2_weight_factor,
+                                      mask_low_quality, sensor_weights,
                                       og_kwcoco_fpath)
                     job.merge_images = merge_images
 
@@ -708,7 +707,7 @@ def get_quality_mask(coco_image, space, resolution, avoid_quality_values=['cloud
 
 def merge_images(window_coco_images, merge_method, requested_chans, space,
                  resolution, new_bundle_dpath, mask_low_quality,
-                 s2_weight_factor, og_kwcoco_fpath):
+                 sensor_weights, og_kwcoco_fpath):
     """
     Args:
         window_coco_images (List[kwcoco.CocoImage]): images with channels to merge
@@ -780,8 +779,11 @@ def merge_images(window_coco_images, merge_method, requested_chans, space,
                 # Update pixel weights based on quality pixel values.
                 pxl_weight *= quality_mask
 
-            if coco_img['sensor_coarse'] == 'S2':
-                pxl_weight *= s2_weight_factor
+            try:
+                sensor_weight = sensor_weights[coco_img['sensor_coarse']]
+            except KeyError:
+                sensor_weight = 1.0
+            pxl_weight *= sensor_weight
 
             image_data = np.nan_to_num(image_data)
             accum.add((slice(None), slice(None)), image_data, pxl_weight)
