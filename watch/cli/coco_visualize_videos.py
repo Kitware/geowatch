@@ -554,7 +554,7 @@ def main(cmdline=True, **kwargs):
         animate_config = dict(AnimateConfig())
         if isinstance(config['animate'], str) and config['animate'] not in {'oops'}:
             try:
-                user_config = util_yaml.yaml_loads(config['animate'])
+                user_config = util_yaml.Yaml.loads(config['animate'])
                 assert isinstance(user_config, dict), 'animate subconfig should be coercable into a dict'
                 # hack
                 if 'fps' in user_config:

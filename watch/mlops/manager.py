@@ -765,7 +765,7 @@ class ExperimentState(ub.NiceRepr):
 
         if ready_packages is not None:
             from watch.utils import util_yaml
-            print(util_yaml.yaml_dumps({
+            print(util_yaml.Yaml.dumps({
                 'ready_packages': ready_packages,
             }))
             # print('ready_packages = {}'.format(ub.urepr(ready_packages, nl=1)))

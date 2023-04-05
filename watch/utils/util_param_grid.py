@@ -494,6 +494,8 @@ def extended_github_action_matrix(arg):
         >>> print('grid_items = {}'.format(ub.urepr(grid_items, nl=1)))
     """
     import ruamel.yaml
+    from watch.utils.util_yaml import Yaml
+    import os
     if isinstance(arg, str):
         data = ruamel.yaml.safe_load(arg)
     else:
@@ -508,16 +510,14 @@ def extended_github_action_matrix(arg):
     exclude = list(map(ub.udict, exclude))
     submatrices = list(map(ub.udict, submatrices))
 
-    from watch.utils import util_yaml
-    import os
-
     def coerce_matrix_value(v):
         if not ub.iterable(v):
             v = [v]
         final = []
         for item in v:
             if isinstance(item, (str, os.PathLike)) and str(item).endswith(('.yaml', '.yml')):
-                final.extend(util_yaml.yaml_load(item))
+                # use Yaml.coerce instead?
+                final.extend(Yaml.load(item))
             else:
                 final.append(item)
         return final

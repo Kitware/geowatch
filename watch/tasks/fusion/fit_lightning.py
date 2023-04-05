@@ -239,7 +239,7 @@ def make_cli(config=None):
         from watch.utils import util_yaml
         print('Passing string-based config:')
         print(ub.highlight_code(config, 'yaml'))
-        nested = util_yaml.yaml_loads(config, backend='pyyaml')
+        nested = util_yaml.Yaml.loads(config, backend='pyyaml')
         # print('nested = {}'.format(ub.urepr(nested, nl=1)))
         config = nested_to_jsonnest(nested)
         # print('config = {}'.format(ub.urepr(config, nl=1)))
