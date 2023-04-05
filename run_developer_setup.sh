@@ -10,7 +10,7 @@ CommandLine:
 
 if [[ "$VIRTUAL_ENV" == "" ]]; then
     echo "NOT INSIDE OF A VIRTUALENV. This script may not run correctly"
-fi 
+fi
 
 apt_ensure(){
     __doc__="
@@ -20,13 +20,13 @@ apt_ensure(){
     if we already have all requested packages.
 
     Args:
-        *ARGS : one or more requested packages 
+        *ARGS : one or more requested packages
 
     Example:
-        apt_ensure git curl htop 
+        apt_ensure git curl htop
 
     Ignore:
-        REQUESTED_PKGS=(git curl htop) 
+        REQUESTED_PKGS=(git curl htop)
     "
     # Note the $@ is not actually an array, but we can convert it to one
     # https://linuxize.com/post/bash-functions/#passing-arguments-to-bash-functions
@@ -37,7 +37,7 @@ apt_ensure(){
     do
         #apt_ensure_single $EXE_NAME
         RESULT=$(dpkg -l "$PKG_NAME" | grep "^ii *$PKG_NAME")
-        if [ "$RESULT" == "" ]; then 
+        if [ "$RESULT" == "" ]; then
             echo "Do not have PKG_NAME='$PKG_NAME'"
             # shellcheck disable=SC2268,SC2206
             MISS_PKGS=(${MISS_PKGS[@]} "$PKG_NAME")
@@ -57,7 +57,7 @@ apt_ensure(){
 
 ###  ENSURE DEPENDENCIES ###
 
-# If on debian/ubuntu ensure the dependencies are installed 
+# If on debian/ubuntu ensure the dependencies are installed
 if [[ "$(command -v apt)" != "" ]]; then
     apt_ensure ffmpeg tmux jq tree p7zip-full rsync
 else
@@ -88,6 +88,8 @@ if [[ "$WATCH_STRICT" == "1" ]]; then
 
     python -m pip install -r requirements-strict/linting.txt
 
+    python -m pip install -r requirements-strict/tests.txt
+
     python -m pip install "dvc[all]>=2.9.3"
 
     python -m pip install lru-dict || echo "unable to install lru-dict"
@@ -104,6 +106,8 @@ else
     python -m pip install -r requirements/headless.txt
 
     python -m pip install -r requirements/linting.txt
+
+    python -m pip install -r requirements/tests.txt
 
     python -m pip install "dvc[all]>=2.9.3"
 
@@ -163,11 +167,11 @@ check_metrics_framework(){
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
         WARNING: IARPA metrics not installed!
-        
+
         To enable evaluating your results, run this command:
 
         pip install git+ssh://git@gitlab.kitware.com/smart/metrics-and-test-framework.git -U
-        
+
         For more information, see:
         https://gitlab.kitware.com/smart/metrics-and-test-framework#installation
 
@@ -180,7 +184,7 @@ check_metrics_framework
 
 check_gpu_ops_work(){
     # quick check to ensure that GPU operations are generally functional
-    
+
     xdoctest -m torch --style=google --global-exec "from torch import nn\nimport torch.nn.functional as F\nimport torch" --options="+IGNORE_WHITESPACE"
 
     python -c "import torch; print(torch.nn.modules.Linear(10, 5).to(0)(torch.rand(10, 10).to(0)).sum().backward())"
