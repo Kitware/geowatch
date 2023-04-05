@@ -323,14 +323,13 @@ def main(cmdline=1, **kwargs):
     Example:
         >>> # 7: Tile images instead of computing average all at once.
         >>> from watch.cli.coco_time_combine import *  # NOQA
-        >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
         >>> import watch
         >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> cmdline = 0
         >>> kwargs = dict(
         >>>     input_kwcoco_fpath=data_dvc_dpath / 'Drop6/imganns-KR_R001.kwcoco.zip',
         >>>     output_kwcoco_fpath=data_dvc_dpath / 'Drop6/test-timeave-test_7-KR_R001.kwcoco.zip',
-        >>>     workers=11,
+        >>>     workers=0,
         >>>     merge_method='median',
         >>>     time_window='1 year',
         >>>     channels='red|green|blue',
@@ -378,14 +377,13 @@ def main(cmdline=1, **kwargs):
     Example:
         >>> # 9: Exclude winter seasons for time average.
         >>> from watch.cli.coco_time_combine import *  # NOQA
-        >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
         >>> import watch
         >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> cmdline = 0
         >>> kwargs = dict(
         >>>     input_kwcoco_fpath=data_dvc_dpath / 'Drop6/imganns-KR_R001.kwcoco.zip',
         >>>     output_kwcoco_fpath=data_dvc_dpath / 'Drop6/test-timeave-test_9-KR_R001.kwcoco.zip',
-        >>>     workers=11,
+        >>>     workers=0,
         >>>     merge_method='mean',
         >>>     time_window='1 year',
         >>>     channels='red|green|blue',
@@ -729,7 +727,7 @@ def merge_images(window_coco_images, merge_method, requested_chans, space,
 
     if all(spatial_tile_size) is False:
         # Set tiles as the same size as the video.
-        slider = [(slice(0, video_height, 0), slice(0, video_width, 0))]
+        slider = [(slice(0, video_height, None), slice(0, video_width, None))]
     else:
         # Create tiling slices for given video shape and tile size.
 
