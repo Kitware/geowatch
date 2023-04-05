@@ -287,9 +287,9 @@ def coco_populate_geo_img_heuristics2(coco_img, overwrite=False,
 
     Example:
         >>> from watch.utils.kwcoco_extensions import *  # NOQA
-        >>> from watch.demo.smart_kwcoco_demodata import demo_kwcoco_with_heatmaps
+        >>> import watch
         >>> import json
-        >>> coco_dset = demo_kwcoco_with_heatmaps()
+        >>> coco_dset = watch.coerce_kwcoco('watch-msi-geodata-dates-heatmap-videos1-frames2-gsize64')
         >>> gid = 1
         >>> overwrite = {'warp', 'band'}
         >>> default_gsd = None
@@ -2066,6 +2066,12 @@ def _recompute_auxiliary_transforms(img):
     from kwcoco.coco_image import CocoImage
     coco_img = CocoImage(img)
     base = coco_img.primary_asset(requires=['warp_to_wld'])
+    if base is None:
+        import warnings
+        warnings.warn(
+            'Cannot recompute auxiliary/asset transforms if no asset has a '
+            ' warp_to_wld attribute')
+        return
     try:
         warp_wld_from_img = kwimage.Affine.coerce(base['warp_to_wld'])
     except Exception:
