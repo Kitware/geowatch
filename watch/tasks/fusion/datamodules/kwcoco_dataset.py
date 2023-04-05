@@ -2774,7 +2774,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         # TODO: we can compute the intensity histogram more efficiently by
         # only doing it for unique channels (which might be duplicated)
-        with pman:
+        with pman, warnings.catch_warnings():
+            warnings.filterwarnings('ignore', 'invalid value encountered in true_divide', category=RuntimeWarning)
             prog = pman.progiter(loader, desc='estimate dataset stats', verbose=1)
             iter_ = iter(prog)
 
@@ -2846,7 +2847,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             class_freq = None
 
         if with_intensity:
-            domain_input_stats, old_input_stats = current_input_stats()
+            with warnings.catch_warnings():
+                warnings.filterwarnings('ignore', 'invalid value encountered in true_divide', category=RuntimeWarning)
+                domain_input_stats, old_input_stats = current_input_stats()
         else:
             domain_input_stats = None
             old_input_stats = None
