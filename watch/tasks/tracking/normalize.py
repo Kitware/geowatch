@@ -246,7 +246,7 @@ def dedupe_tracks(coco_dset):
     new_trackids = TrackidGenerator(coco_dset)
 
     for trackid in coco_dset.index.trackid_to_aids.keys():
-        annots = coco_dset.annots(trackid=trackid)
+        annots = coco_dset.annots(track_id=trackid)
 
         # split each video into a separate track
         for idx, (vidid, aids) in enumerate(
@@ -305,7 +305,7 @@ def normalize_phases(coco_dset,
         >>> # TODO file bug report
         >>> dset._build_index()
         >>> dset = normalize_phases(dset)
-        >>> assert (dset.annots(trackid=1).cnames ==
+        >>> assert (dset.annots(track_id=1).cnames ==
         >>>     ((['Site Preparation'] * 10) +
         >>>      (['Active Construction'] * 9) +
         >>>      (['Post Construction'])))
@@ -320,7 +320,7 @@ def normalize_phases(coco_dset,
         >>> # TODO file bug report
         >>> dset._build_index()
         >>> dset = normalize_phases(dset)
-        >>> assert (dset.annots(trackid=1).cnames ==
+        >>> assert (dset.annots(track_id=1).cnames ==
         >>>     ((['Site Preparation'] * 10) +
         >>>      (['Active Construction'] * 9) +
         >>>      (['Post Construction'])))
@@ -377,7 +377,7 @@ def normalize_phases(coco_dset,
     for trackid, annot_ids in coco_dset.index.trackid_to_aids.items():
         n_anns = len(annot_ids)
         if n_anns > 1:
-            annots = coco_dset.annots(trackid=trackid)
+            annots = coco_dset.annots(track_id=trackid)
             has_missing_labels = bool(set(annots.cnames) - cnames_to_score)
             has_good_labels = bool(set(annots.cnames) - cnames_to_replace)
             if has_missing_labels and has_good_labels:
@@ -404,7 +404,7 @@ def normalize_phases(coco_dset,
 
     for trackid, annot_ids in coco_dset.index.trackid_to_aids.items():
         n_anns = len(annot_ids)
-        annots = coco_dset.annots(trackid=trackid)
+        annots = coco_dset.annots(track_id=trackid)
 
         if n_anns > 1:
 
@@ -427,7 +427,7 @@ def normalize_phases(coco_dset,
             # coco_dset = phase.dedupe_background_anns(coco_dset, trackid)
             coco_dset = phase.ensure_post(coco_dset, trackid)
 
-        annots = coco_dset.annots(trackid=trackid)
+        annots = coco_dset.annots(track_id=trackid)
         is_empty = check_only_bg(annots.cnames)
         EMPTY_TRACK_BEHAVIOR = 'ignore'
 
@@ -469,7 +469,7 @@ def normalize_phases(coco_dset,
             annots.set(ann_field, phase_transition_days)
         else:
             for trackid in coco_dset.index.trackid_to_aids.keys():
-                _annots = coco_dset.annots(trackid=trackid)
+                _annots = coco_dset.annots(track_id=trackid)
                 phase_transition_days = phase.phase_prediction_baseline(_annots)
                 _annots.set(ann_field, phase_transition_days)
 
@@ -562,7 +562,7 @@ def dedupe_dates(coco_dset):
         'Landsat 7': 1
     }
     for trackid in coco_dset.index.trackid_to_aids.keys():
-        annots = coco_dset.annots(trackid=trackid)
+        annots = coco_dset.annots(track_id=trackid)
         dates = [util_time.coerce_datetime(d).date() for d in annots.images.lookup('date_captured')]
         fixs = annots.images.lookup('frame_index')
 

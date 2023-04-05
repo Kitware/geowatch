@@ -334,7 +334,7 @@ def interpolate(coco_dset,
     Replace any annot's cat not in cnames_to_keep with the most recent of
     cnames_to_keep
     '''
-    annots = coco_dset.annots(trackid=track_id)
+    annots = coco_dset.annots(track_id=track_id)
     cnames = annots.cnames
     cnames_to_replace = set(cnames) - set(cnames_to_keep)
 
@@ -358,7 +358,7 @@ def baseline(coco_dset,
     Predict site prep for the first half of the track and then active
     construction for the second half with post construction on the last frame
     '''
-    annots = coco_dset.annots(trackid=track_id)
+    annots = coco_dset.annots(track_id=track_id)
 
     assert len(cnames_to_insert) == 3, 'TODO generalize this with by_gid(anns)'
     siteprep_cid, active_cid, post_cid = map(coco_dset.ensure_category,
@@ -389,7 +389,7 @@ def sort_by_gid(coco_dset, track_id, prune=True):
     Returns:
         (Images, AnnotGroups)
     '''
-    annots = coco_dset.annots(trackid=track_id)
+    annots = coco_dset.annots(track_id=track_id)
     images = coco_dset.images(
         coco_dset.index._set_sorted_by_frame_index(annots.gids))
     if len(images) == 0:

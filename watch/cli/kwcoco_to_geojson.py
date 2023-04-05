@@ -409,7 +409,7 @@ def track_to_site(coco_dset,
     import geojson
 
     # get annotations in this track sorted by frame_index
-    annots = coco_dset.annots(trackid=trackid)
+    annots = coco_dset.annots(track_id=trackid)
     gids, anns = annots.gids, annots.objs
 
     features = [
@@ -526,9 +526,7 @@ def site_feature(coco_dset, region_id, site_id, trackid, gids, features, as_summ
     # https://smartgitlab.com/TE/annotations/-/wikis/Annotation-Status-Types#for-site-models-generated-by-performersalgorithms
     # system_confirmed, system_rejected, or system_proposed
     # TODO system_proposed pre val-net
-    status = set(
-        coco_dset.annots(trackid=trackid).get('status',
-                                              'system_confirmed'))
+    status = set(coco_dset.annots(track_id=trackid).get('status', 'system_confirmed'))
     assert len(status) == 1, f'inconsistent {status=} for {trackid=}'
     status = status.pop()
 
