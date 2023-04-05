@@ -170,7 +170,7 @@ except Exception:
 # See ~/code/watch/docs/coding_conventions.rst
 
 
-class KWCocoVideoDatasetConfig(scfg.Config):
+class KWCocoVideoDatasetConfig(scfg.DataConfig):
     """
     This is the configuration for a single dataset that could be used for
     train, test, or validation.
@@ -668,7 +668,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         """
         # note: sampler can be a ndsampler.CocoSampler or a kwcoco.CocoDataset
         sampler = ndsampler.CocoSampler.coerce(sampler)
-        config = KWCocoVideoDatasetConfig(cmdline=0, data=kwargs)
+        config = KWCocoVideoDatasetConfig(**kwargs)
         chip_dims = config['chip_dims']
         if isinstance(chip_dims, str):
             window_dims = chip_dims
@@ -681,7 +681,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         window_overlap = config['chip_overlap']
 
         self.config = config
-        print('self.config = {}'.format(ub.urepr(dict(self.config), nl=1)))
+        import rich
+        rich.print('self.config = {}'.format(ub.urepr(self.config, nl=1)))
         # TODO: maintain instance variables xor items in the config, not both.
         self.__dict__.update(self.config.to_dict())
         self.sampler = sampler
@@ -2865,8 +2866,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         return dataset_stats
 
     def draw_item(self, item, item_output=None, combinable_extra=None,
-                  max_channels=5, max_dim=224, norm_over_time=0,
-                  overlay_on_image=False, draw_weights=True, rescale='auto', **kw):
+                  max_channels=5, max_dim=224, norm_over_time='auto',
+                  overlay_on_image=False, draw_weights=True, rescale='auto',
+                  **kw):
         """
         Visualize an item produced by this DataSet.
 
@@ -2975,6 +2977,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             return bad_canvas
 
         default_combinable_channels = self.default_combinable_channels
+
+        if norm_over_time == 'auto':
+            norm_over_time = self.normalize_peritem is not None
 
         from watch.tasks.fusion.datamodules.batch_visualization import BatchVisualizationBuilder
         builder = BatchVisualizationBuilder(

@@ -17,7 +17,7 @@ Example:
     >>> vidid = dset.dataset['videos'][0]['id']
     >>> self = TimeWindowSampler.from_coco_video(
     >>>     dset, vidid,
-    >>>     time_window=11,
+    >>>     time_window=5,
     >>>     affinity_type='soft2', time_span='8m', update_rule='distribute',
     >>> )
     >>> # xdoctest: +REQUIRES(--show)

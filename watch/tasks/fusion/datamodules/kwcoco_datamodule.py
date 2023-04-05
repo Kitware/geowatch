@@ -25,7 +25,7 @@ except Exception:
     profile = ub.identity
 
 
-class KWCocoVideoDataModuleConfig(scfg.Config):
+class KWCocoVideoDataModuleConfig(KWCocoVideoDatasetConfig):
     """
     These are the argument accepted by the KWCocoDataModule.
 
@@ -36,56 +36,50 @@ class KWCocoVideoDataModuleConfig(scfg.Config):
 
     In the future this might be convertable to, or handled by omegaconfig
     """
-    __default__ = ub.udict({
-        'train_dataset': scfg.Value(None, help='path to the train kwcoco file'),
-        'vali_dataset': scfg.Value(None, help='path to the validation kwcoco file'),
-        'test_dataset': scfg.Value(None, help='path to the test kwcoco file'),
+    train_dataset = scfg.Value(None, help='path to the train kwcoco file')
+    vali_dataset = scfg.Value(None, help='path to the validation kwcoco file')
+    test_dataset = scfg.Value(None, help='path to the test kwcoco file')
 
-        'batch_size': scfg.Value(4, type=int),
+    batch_size = scfg.Value(4, type=int, help=None)
 
-        'normalize_inputs': scfg.Value(True, help=ub.paragraph(
+    normalize_inputs = scfg.Value(True, help=ub.paragraph(
             '''
             if True, computes the mean/std for this dataset on each mode
             so this can be passed to the model.
-            ''')),
+            '''))
 
-        'num_workers': scfg.Value(4, type=str, help=ub.paragraph(
+    num_workers = scfg.Value(4, type=str, alias=['workers'], help=ub.paragraph(
             '''
-            number of background workers. Can be auto or an avail expression.
-            '''), alias=['workers']),
+            number of background workers. Can be auto or an avail
+            expression.
+            '''))
 
-        'torch_sharing_strategy': scfg.Value('default', help=ub.paragraph(
+    torch_sharing_strategy = scfg.Value('default', help=ub.paragraph(
             '''
             Torch multiprocessing sharing strategy. Can be 'default',
             "file_descriptor", "file_system". On linux, the default is
-            "file_descriptor".
+            "file_descriptor". See https://pytorch.org/docs/stable/multi
+            processing.html#sharing-strategies for descriptions of
+            options. When using sqlview=True, using "file_system" can
+            help prevent the "received 0 items of ancdata" Error. It is
+            unclear why using "file_descriptor" fails in this case for
+            some datasets.
+            '''))
 
-            See https://pytorch.org/docs/stable/multiprocessing.html#sharing-strategies
-            for descriptions of options.
-
-            When using sqlview=True, using "file_system" can help prevent the
-            "received 0 items of ancdata" Error. It is unclear why using
-            "file_descriptor" fails in this case for some datasets.
-            ''')),
-
-        'torch_start_method': scfg.Value('default', help=ub.paragraph(
+    torch_start_method = scfg.Value('default', help=ub.paragraph(
             '''
-            Torch multiprocessing sharing strategy. Can be "default", "fork",
-            "spawn", "forkserver". The default method on Linux is "spawn".
-            ''')),
+            Torch multiprocessing sharing strategy. Can be "default",
+            "fork", "spawn", "forkserver". The default method on Linux
+            is "spawn".
+            '''))
 
-        'sqlview': scfg.Value(False, help=ub.paragraph(
+    sqlview = scfg.Value(False, help=ub.paragraph(
             '''
-            If False, reads the COCO dataset as a json file. Otherwise it can
-            be sqlite or postgresql to cache json file in an SQL database for
-            faster responce times and lower memory footprint.
-            ''')),
-        # Mixin the dataset config
-    }) | KWCocoVideoDatasetConfig.__default__
-
-    def __post_init__(self):
-        # hack because we dont have proper inheritence
-        KWCocoVideoDatasetConfig.__post_init__(self)
+            If False, reads the COCO dataset as a json file. Otherwise
+            it can be sqlite or postgresql to cache json file in an SQL
+            database for faster responce times and lower memory
+            footprint.
+            '''))
 
 
 class KWCocoVideoDataModule(pl.LightningDataModule):
@@ -225,7 +219,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         """
         super().__init__()
         self.verbose = verbose
-        self.config = KWCocoVideoDataModuleConfig(cmdline=0, data=kwargs)
+        self.config = KWCocoVideoDataModuleConfig(**kwargs)
         cfgdict = self.config.to_dict()
         self.save_hyperparameters(cfgdict)
         # Backwards compatibility. Previous iterations had the
@@ -479,7 +473,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         """
         # from functools import partial
         parser = parent_parser.add_argument_group('kwcoco_datamodule')
-        config = KWCocoVideoDataModuleConfig(cmdline=0)
+        config = KWCocoVideoDataModuleConfig()
         config.argparse(parser)
         return parent_parser
 
@@ -499,7 +493,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             argname for argname, argtype in cls_sig.parameters.items()
             if argtype.kind in nameable_kinds
         ]
-        valid_argnames = explicit_argnames + list(KWCocoVideoDataModuleConfig.default.keys())
+        valid_argnames = explicit_argnames + list(KWCocoVideoDataModuleConfig.__default__.keys())
         datamodule_vars = ub.dict_isect(cfgdict, valid_argnames)
         return datamodule_vars
 

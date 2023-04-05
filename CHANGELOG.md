@@ -8,7 +8,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
-Unpinned lightning for 2.x
+* Unpinned lightning for 2.x
+* kwcoco draw item `norm_over_time` now defaults to `auto`, which is true if
+  `normalize_peritem` or `normalize_perdomain` is on.
+* Started transition to a new package name: `geowatch`.
+* CI updated to `pyenv:3.11`
+* Cleanup `util_yaml`.
+
+### Fixed
+
+* Fixed gdal warnings
 
 ### Removed
 
