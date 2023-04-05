@@ -90,7 +90,8 @@ stages:
               export PYENV_PREFIX=$(pyenv prefix)
           fi
           pyenv global 3.11
-        - pip install wheel build
+        - python -m pip install pip -U
+        - python -m pip install setuptools>=0.8 wheel build
         - pip install --prefer-binary -r requirements/gdal.txt  # gdal is special
         - pip install --prefer-binary -e .[runtime,headless,development]
 
@@ -99,9 +100,9 @@ stages:
         - ./run_tests.py --network watch tests --verbose
 
     after_script:
-        - du -sh .cache/*
-        - du -sh .cache/xdg_cache/*
-        - du -sh .cache/pip/*
+        - du -sh .cache/* || true
+        - du -sh .cache/xdg_cache/* || true
+        - du -sh .cache/pip/* || true
 
     # Coverage is a regex that will parse the coverage from the test stdout
     coverage:
@@ -134,7 +135,8 @@ stages:
               export PYENV_PREFIX=$(pyenv prefix)
           fi
           pyenv global 3.11
-        - pip install wheel build
+        - python -m pip install pip -U
+        - python -m pip install setuptools>=0.8 wheel build
         - ./dev/make_strict_req.sh
         - pip install --prefer-binary -r requirements-strict/gdal.txt  # gdal is special
         - pip install --prefer-binary -e .[runtime-strict,headless-strict,development-strict]
@@ -146,9 +148,9 @@ stages:
         - ./run_tests.py --network watch tests --verbose
 
     after_script:
-        - du -sh .cache/*
-        - du -sh .cache/xdg_cache/*
-        - du -sh .cache/pip/*
+        - du -sh .cache/* || true
+        - du -sh .cache/xdg_cache/* || true
+        - du -sh .cache/pip/* || true
 
     # Coverage is a regex that will parse the coverage from the test stdout
     coverage:
@@ -189,6 +191,7 @@ run_linter:
         - pyenv global 3.11
         - echo "PATH=$PATH" || true
         - python -m pip install pip -U
+        - python -m pip install setuptools>=0.8 wheel build
         - ls -al
         - python -m pip install -r requirements/linting.txt 
 
