@@ -89,7 +89,9 @@ stages:
               source $PYENV_ROOT/completions/pyenv.bash
               export PYENV_PREFIX=$(pyenv prefix)
           fi
-          pyenv global 3.11
+        - pyenv global 3.11
+        - which python || true
+        - python --version || true
         - python -m pip install pip -U
         - python -m pip install setuptools>=0.8 wheel build
         - pip install --prefer-binary -r requirements/gdal.txt  # gdal is special
@@ -134,7 +136,9 @@ stages:
               source $PYENV_ROOT/completions/pyenv.bash
               export PYENV_PREFIX=$(pyenv prefix)
           fi
-          pyenv global 3.11
+        - pyenv global 3.11
+        - which python || true
+        - python --version || true
         - python -m pip install pip -U
         - python -m pip install setuptools>=0.8 wheel build
         - ./dev/make_strict_req.sh
@@ -187,9 +191,9 @@ run_linter:
               source $PYENV_ROOT/completions/pyenv.bash
               export PYENV_PREFIX=$(pyenv prefix)
           fi
-        - echo "PATH=$PATH" || true
         - pyenv global 3.11
-        - echo "PATH=$PATH" || true
+        - which python || true
+        - python --version || true
         - python -m pip install pip -U
         - python -m pip install setuptools>=0.8 wheel build
         - ls -al
