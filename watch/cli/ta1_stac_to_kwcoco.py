@@ -567,8 +567,8 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
             # TODO: stac_item['geometry'] - we can prepopulate geo information
             # stac_dict['properties']
 
-        print('sensorchan_hist = {}'.format(ub.repr2(sensorchan_hist, nl=1)))
-        print('sensorasset_hist = {}'.format(ub.repr2(sensorasset_hist, nl=1)))
+        print('sensorchan_hist = {}'.format(ub.urepr(sensorchan_hist, nl=1)))
+        print('sensorasset_hist = {}'.format(ub.urepr(sensorasset_hist, nl=1)))
 
     for stac_item in all_items:
         executor.submit(_stac_item_to_kwcoco_image, stac_item,
@@ -586,7 +586,7 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
         if kwcoco_img is not None:
             # Ignore iamges with 0 auxiliary items
             if len(kwcoco_img.get('auxiliary', [])) == 0:
-                print('Failed kwcoco_img = {}'.format(ub.repr2(kwcoco_img, nl=1)))
+                print('Failed kwcoco_img = {}'.format(ub.urepr(kwcoco_img, nl=1)))
                 continue
             try:
                 output_dset.add_image(**kwcoco_img)

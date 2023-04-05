@@ -18,7 +18,7 @@ Example:
     >>>     with pman:
     >>>         pbar1 = pman.progiter(range(5), desc='outer loop', verbose=3)
     >>>         for i in pbar1:
-    >>>             pbar1.set_postfix(f'\[step {i}]', refresh=False)
+    >>>             pbar1.set_postfix(f'\\[step {i}]', refresh=False)
     >>>             for j1 in pman.progiter(range(100), desc=f'prepare inner loop {i}', transient=True):
     >>>                 time.sleep(delay / 3)
     >>>             for j2 in pman.progiter(range(100), desc=f'execute inner loop {i}'):

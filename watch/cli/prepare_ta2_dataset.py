@@ -189,7 +189,7 @@ def main(cmdline=False, **kwargs):
 
     # import shlex
     config = PrepareTA2Config(cmdline=cmdline, data=kwargs)
-    print('config = {}'.format(ub.repr2(dict(config), nl=1)))
+    print('config = {}'.format(ub.urepr(dict(config), nl=1)))
 
     if config['serial']:
         config['backend'] = 'serial'

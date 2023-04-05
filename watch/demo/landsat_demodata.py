@@ -23,7 +23,7 @@ def grab_landsat_product(product_id=None, demo_index=0):
         >>> from watch.demo.landsat_demodata import *  # NOQA
         >>> product = grab_landsat_product()
         >>> # xdoctest: +IGNORE_WANT
-        >>> print('product = {}'.format(ub.repr2(product, nl=2)))
+        >>> print('product = {}'.format(ub.urepr(product, nl=2)))
         product = {
             'bands': [
                 '.../LC08/01/037/029/LC08_L1TP_037029_20130602_20170310_01_T1/LC08_L1TP_037029_20130602_20170310_01_T1_B1.TIF',

@@ -102,6 +102,7 @@ class Transformer(nn.Module):
         >>> out = self.forward(x, mask)
         >>> print(f'out.shape={out.shape}')
     """
+
     def __init__(self, dim, depth, heads, dim_head, mlp_dim, dropout=0.):
         super().__init__()
         self.layers = nn.ModuleList([])

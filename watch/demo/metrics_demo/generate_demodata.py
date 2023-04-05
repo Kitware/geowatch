@@ -27,7 +27,7 @@ def generate_demo_metrics_framework_data(
         >>> demo_info = generate_demo_metrics_framework_data(
         >>>     num_sites=5, num_observations=10, noise=2, p_observe=0.5,
         >>>     p_transition=0.3, drop_noise=0.5, drop_limit=0.5)
-        >>> print('demo_info = {}'.format(ub.repr2(demo_info, nl=1)))
+        >>> print('demo_info = {}'.format(ub.urepr(demo_info, nl=1)))
         >>> # TODO: visualize
     """
 

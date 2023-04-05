@@ -130,7 +130,7 @@ def test_save_noop_with_dataloader():
         input_sensorchan=5,)
     datamodule = datamodules.kwcoco_video_data.KWCocoVideoDataModule(
         train_dataset='special:vidshapes8-multispectral-multisensor', chip_size=32,
-        batch_size=1, time_steps=2, num_workers=2, normalize_inputs=10, channels='auto')
+        batch_size=1, time_steps=2, num_workers=0, normalize_inputs=10, channels='auto')
     datamodule.setup('fit')
     _save_package_with_trainer(model, datamodule)
 
@@ -144,7 +144,7 @@ def _save_package_with_trainer(model, datamodule):
     batch = ub.peek(iter(datamodule.train_dataloader()))
     model.training_step(batch)
 
-    trainer = pl.Trainer(max_steps=0)
+    trainer = pl.Trainer(max_steps=0, accelerator='cpu', devices=1)
     trainer.fit(model=model, datamodule=datamodule)
     _save_package(model)
 

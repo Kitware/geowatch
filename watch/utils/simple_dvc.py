@@ -260,6 +260,7 @@ class SimpleDVC(ub.NiceRepr):
 
         if missing_data:
             dvc_root = self._ensure_root(paths)
+
             def _find_sidecar(path):
                 first_cand = path.augment(stem=path.name, ext='.dvc')
                 if first_cand.exists():

@@ -121,7 +121,7 @@ class WeightInitializer(pl.callbacks.Callback):
                 mapping = info.get('mapping', None)
                 unset = info.get('self_unset', None)
                 unused = info.get('self_unused', None)
-                print('mapping = {}'.format(ub.repr2(mapping, nl=1)))
+                print('mapping = {}'.format(ub.urepr(mapping, nl=1)))
                 print(f'unused={unused}')
                 print(f'unset={unset}')
 
@@ -385,6 +385,8 @@ def main(config=None):
         >>>     'fit.data.train_dataset': 'special:vidshapes4-frames9-gsize32',
         >>>     'fit.data.vali_dataset': 'special:vidshapes1-frames9-gsize32',
         >>>     'fit.data.chip_dims': 32,
+        >>>     'fit.trainer.accelerator': 'cpu',
+        >>>     'fit.trainer.devices': 1,
         >>>     'fit.trainer.max_steps': 2,
         >>>     'fit.trainer.num_sanity_val_steps': 0,
         >>> }
@@ -406,6 +408,8 @@ def main(config=None):
         >>>     'fit.data.train_dataset': 'special:vidshapes8-gsize64-frames9-speed0.5-multispectral',
         >>>     'fit.data.vali_dataset': 'special:vidshapes4-gsize64-frames9-speed0.5-multispectral',
         >>>     'fit.data.chip_dims': 64,
+        >>>     'fit.trainer.accelerator': 'cpu',
+        >>>     'fit.trainer.devices': 1,
         >>>     'fit.trainer.max_steps': 2,
         >>>     'fit.trainer.num_sanity_val_steps': 0,
         >>> }

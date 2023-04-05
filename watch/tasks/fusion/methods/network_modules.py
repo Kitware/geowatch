@@ -395,8 +395,8 @@ class ConvTokenizer(nn.Module):
                 stride=5, padding=3,
             ),
         ])
-        print(ub.repr2(downsampler1.output_shape_for(input_shape).hidden.shallow(30), nl=1))
-        print(ub.repr2(downsampler2.output_shape_for(input_shape).hidden.shallow(30), nl=1))
+        print(ub.urepr(downsampler1.output_shape_for(input_shape).hidden.shallow(30), nl=1))
+        print(ub.urepr(downsampler2.output_shape_for(input_shape).hidden.shallow(30), nl=1))
 
 
     """

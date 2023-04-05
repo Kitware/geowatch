@@ -62,7 +62,7 @@ def main(cmdline=False, **kwargs):
     import safer
 
     config = CropSitesToRegionsConfig(data=kwargs, cmdline=cmdline)
-    print('config = {}'.format(ub.repr2(dict(config), nl=1)))
+    print('config = {}'.format(ub.urepr(dict(config), nl=1)))
 
     new_site_dpath = config['new_site_dpath']
     assert new_site_dpath is not None, 'must specify new_site_dpath'

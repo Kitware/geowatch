@@ -427,5 +427,6 @@ def get_gdal_transform(coco_dset, sensor_name, resolution=None):
     new_geotrans = tuple(warp_wld_from_asset.to_gdal())
     return new_geotrans, proj
 
+
 if __name__ == '__main__':
     assemble_main()

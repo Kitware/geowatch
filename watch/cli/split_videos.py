@@ -58,7 +58,7 @@ def main(cmdline=1, **kwargs):
     from watch.utils import util_pattern
     from watch.utils import util_parallel
     config = SplitVideoConfig.cli(cmdline=cmdline, data=kwargs)
-    print('config = {}'.format(ub.repr2(config, nl=1)))
+    print('config = {}'.format(ub.urepr(config, nl=1)))
 
     coco_fpaths = list(util_pattern.MultiPattern.coerce(config.src).paths())
     print(f'coco_fpaths={coco_fpaths}')

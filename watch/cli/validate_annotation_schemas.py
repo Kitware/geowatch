@@ -192,8 +192,8 @@ def validate_schemas(site_model_fpaths, region_model_fpaths, site_model_schema,
             site_errors.append(error_info)
             prog.set_description(f'check site models, errors: {len(site_errors)}')
 
-    print('site_errors = {}'.format(ub.repr2(site_errors, nl=1)))
-    print('region_errors = {}'.format(ub.repr2(region_errors, nl=1)))
+    print('site_errors = {}'.format(ub.urepr(site_errors, nl=1)))
+    print('region_errors = {}'.format(ub.urepr(region_errors, nl=1)))
 
     print(f'{len(site_errors)} / {len(site_model_fpaths)} site model errors')
     print(f'{len(region_errors)} / {len(region_model_fpaths)} region model errors')
@@ -391,7 +391,7 @@ def validate_data_contents(region_model_fpaths, site_model_fpaths):
         region_models.append(region_df)
         region_reports.append(region_report)
     region_reports = sorted(region_reports, key=lambda x: (x['num_errors'], x['region_id']))
-    print('region_reports = {}'.format(ub.repr2(region_reports, sort=0, nl=-1)).replace('\'', '"').replace('None', 'null'))
+    print('region_reports = {}'.format(ub.urepr(region_reports, sort=0, nl=-1)).replace('\'', '"').replace('None', 'null'))
 
     # Finish reading site models, build reports while this is happening.
     site_reports = []
@@ -418,7 +418,7 @@ def validate_data_contents(region_model_fpaths, site_model_fpaths):
         }
 
     grouped_site_reports = sorted(region_id_to_report_group.values(), key=lambda x: (x['num_errors'], x['region_id']))
-    print('site_reports = {}'.format(ub.repr2(grouped_site_reports, sort=0, nl=-1)).replace('\'', '"').replace('None', 'null'))
+    print('site_reports = {}'.format(ub.urepr(grouped_site_reports, sort=0, nl=-1)).replace('\'', '"').replace('None', 'null'))
 
 
 if __name__ == '__main__':

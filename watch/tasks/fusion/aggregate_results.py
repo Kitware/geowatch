@@ -1278,11 +1278,11 @@ def best_candidates(class_rows, mean_rows):
     sc_pred_candidates = list(ub.unique(ub.flatten(pred_candidates['sc'])))
     bas_pred_candidates = list(ub.unique(ub.flatten(pred_candidates['bas'])))
 
-    print('sc_model_candidates = {}'.format(ub.repr2(sc_model_candidates, nl=1)))
-    print('bas_model_candidates = {}'.format(ub.repr2(bas_model_candidates, nl=1)))
+    print('sc_model_candidates = {}'.format(ub.urepr(sc_model_candidates, nl=1)))
+    print('bas_model_candidates = {}'.format(ub.urepr(bas_model_candidates, nl=1)))
 
-    print('sc_pred_candidates = {}'.format(ub.repr2(sc_pred_candidates, nl=1)))
-    print('bas_pred_candidates = {}'.format(ub.repr2(bas_pred_candidates, nl=1)))
+    print('sc_pred_candidates = {}'.format(ub.urepr(sc_pred_candidates, nl=1)))
+    print('bas_pred_candidates = {}'.format(ub.urepr(bas_pred_candidates, nl=1)))
 
     all_model_candidates = sorted(all_model_candidates)
 
@@ -1291,7 +1291,7 @@ def best_candidates(class_rows, mean_rows):
     #     print(resolve_cross_machine_path(p, dvc_dpath))
     #     # print(util_path.resolve_directory_symlinks(resolve_cross_machine_path(p)))
 
-    print('all_model_candidates = {}'.format(ub.repr2(all_model_candidates, nl=1)))
+    print('all_model_candidates = {}'.format(ub.urepr(all_model_candidates, nl=1)))
 
     if 0:
         # HACK
@@ -1729,7 +1729,7 @@ def main(cmdline=False, **kwargs):
     from watch.utils import util_pattern
 
     config = AggregateResultsConfig(cmdline=cmdline, data=kwargs)
-    print('config = {}'.format(ub.repr2(config.asdict(), nl=1)))
+    print('config = {}'.format(ub.urepr(config.asdict(), nl=1)))
 
     measure_globstr = config['measure_globstr']
     out_dpath = ub.Path(config['out_dpath']).ensuredir()
@@ -1770,12 +1770,12 @@ def main(cmdline=False, **kwargs):
     # dset_glob = ''
     # measure_fpaths
 
-    print('dset_groups = {}'.format(ub.repr2(dset_groups, nl=2)))
+    print('dset_groups = {}'.format(ub.urepr(dset_groups, nl=2)))
 
     predict_group_freq = ub.map_vals(len, dset_groups)
     print('These are the different datasets prediction was run on.')
     print('TODO: need to choose exactly 1 or a compatible set of them')
-    print('predict_group_freq = {}'.format(ub.repr2(predict_group_freq, nl=1)))
+    print('predict_group_freq = {}'.format(ub.urepr(predict_group_freq, nl=1)))
 
     dset_group_key = util_pattern.MultiPattern.coerce(
         config['dset_group_key'], hint='glob')
@@ -1884,7 +1884,7 @@ def main(cmdline=False, **kwargs):
         print('AnalysisError: ex = {!r}'.format(ex))
         print('Warning: Statistical analysis failed. Probably needs more data.')
     else:
-        print('analysis.varied = {}'.format(ub.repr2(analysis.varied, nl=2)))
+        print('analysis.varied = {}'.format(ub.urepr(analysis.varied, nl=2)))
         if len(analysis.stats_table):
             analysis.stats_table = analysis.stats_table.sort_values('anova_rank_p')
             print(analysis.stats_table)
@@ -2122,7 +2122,7 @@ def main(cmdline=False, **kwargs):
                     xcoord = data[x][line]
                     ycoord = data[y][line]
                     subcol = data[text_column].iloc[line]
-                    text = ub.repr2(subcol.to_dict(), compact=1).replace('pred_', '')
+                    text = ub.urepr(subcol.to_dict(), compact=1).replace('pred_', '')
                     ax.text(xcoord, ycoord,
                             text, horizontalalignment='left',
                             size='medium', color='black', weight='semibold')

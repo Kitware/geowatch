@@ -37,7 +37,7 @@ def geotiff_metadata(gpath, elevation='gtop30', strict=False,
         ...        'LC08_L1GT_044034_20130330_20170310_01_T2_B11.TIF')
         >>> gpath = ub.grabdata(url, appname='watch')
         >>> info = geotiff_metadata(gpath)
-        >>> print('info = {}'.format(ub.repr2(info, nl=1)))
+        >>> print('info = {}'.format(ub.urepr(info, nl=1)))
 
         >>> import ubelt as ub
         >>> url = ('http://storage.googleapis.com/gcp-public-data-landsat/'
@@ -46,7 +46,7 @@ def geotiff_metadata(gpath, elevation='gtop30', strict=False,
         >>> gpath = ub.grabdata(url, appname='watch')
 
         >>> info = geotiff_metadata(gpath)
-        >>> print('info = {}'.format(ub.repr2(info, nl=1)))
+        >>> print('info = {}'.format(ub.urepr(info, nl=1)))
 
 
     Ignore:
@@ -103,10 +103,10 @@ def geotiff_header_info(gpath_or_ref):
         >>> from watch.demo.landsat_demodata import grab_landsat_product
         >>> gpath_or_ref = gpath = dummy_rpc_geotiff_fpath()
         >>> info = geotiff_header_info(gpath)
-        >>> print('info = {}'.format(ub.repr2(info, nl=1)))
+        >>> print('info = {}'.format(ub.urepr(info, nl=1)))
         >>> gpath_or_ref = gpath = grab_landsat_product()['bands'][0]
         >>> info = geotiff_header_info(gpath)
-        >>> print('info = {}'.format(ub.repr2(info, nl=1)))
+        >>> print('info = {}'.format(ub.urepr(info, nl=1)))
     """
     from watch.utils import util_gdal
     ref = util_gdal.GdalDataset.coerce(gpath_or_ref)
@@ -128,7 +128,7 @@ def geotiff_header_info(gpath_or_ref):
             continue
         meta = ref.GetMetadata(ns)
         if 0:
-            print('meta = {}'.format(ub.repr2(meta, nl=1)))
+            print('meta = {}'.format(ub.urepr(meta, nl=1)))
         for key, value in ub.dict_isect(meta, keys_of_interest).items():
             all_domain_img_meta['{}.{}'.format(ns, key)] = value
     img_info = {}
@@ -182,7 +182,7 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         >>> from watch.demo.dummy_demodata import dummy_rpc_geotiff_fpath
         >>> gpath_or_ref = gpath = dummy_rpc_geotiff_fpath()
         >>> info = geotiff_crs_info(gpath)
-        >>> print('info = {}'.format(ub.repr2(info, nl=1, sort=False)))
+        >>> print('info = {}'.format(ub.urepr(info, nl=1, sort=False)))
         >>> assert info['is_rpc']
         >>> assert info['img_shape'] == (2000, 2000)
 
@@ -191,7 +191,7 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         >>>     'https://download.osgeo.org/geotiff/samples/gdal_eg/cea.tif',
         >>>     appname='watch/demodata', hash_prefix='10a2ebcdcd95582')
         >>> info = geotiff_crs_info(gpath)
-        >>> print('info = {}'.format(ub.repr2(info, nl=1, sort=False)))
+        >>> print('info = {}'.format(ub.urepr(info, nl=1, sort=False)))
         >>> assert not info['is_rpc']
         >>> assert info['img_shape'] == (515, 514)
 
@@ -200,7 +200,7 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         >>> from watch.demo.nitf_demodata import grab_nitf_fpath
         >>> gpath_or_ref = gpath = grab_nitf_fpath('i_3004g.ntf')
         >>> info = geotiff_crs_info(gpath)
-        >>> print('info = {}'.format(ub.repr2(info, nl=1, sort=False)))
+        >>> print('info = {}'.format(ub.urepr(info, nl=1, sort=False)))
         >>> assert not info['is_rpc']
         >>> assert info['img_shape'] == (512, 512)
 
@@ -533,15 +533,15 @@ def make_crs_info_object(osr_crs):
         >>> osr_crs = osr.SpatialReference()
         >>> osr_crs.ImportFromEPSG(4326)
         >>> crs_info = make_crs_info_object(osr_crs)
-        >>> print('crs_info = {}'.format(ub.repr2(crs_info, nl=1)))
+        >>> print('crs_info = {}'.format(ub.urepr(crs_info, nl=1)))
         >>> osr_crs = osr.SpatialReference()
         >>> osr_crs.ImportFromEPSG(4326)
         >>> osr_crs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
         >>> crs_info = make_crs_info_object(osr_crs)
-        >>> print('crs_info = {}'.format(ub.repr2(crs_info, nl=1)))
+        >>> print('crs_info = {}'.format(ub.urepr(crs_info, nl=1)))
         >>> osr_crs.ImportFromEPSG(32744)
         >>> crs_info = make_crs_info_object(osr_crs)
-        >>> print('crs_info = {}'.format(ub.repr2(crs_info, nl=1)))
+        >>> print('crs_info = {}'.format(ub.urepr(crs_info, nl=1)))
     """
     wkt = osr_crs.ExportToWkt()
     auth = memo_auth_from_wkt(wkt)
@@ -671,8 +671,8 @@ def geotiff_filepath_info(gpath, fast=True):
         >>> for gpath in inputs:
         >>>     print('----')
         >>>     info = geotiff_filepath_info(gpath)
-        >>>     print('gpath = {}'.format(ub.repr2(gpath, nl=1)))
-        >>>     print('info = {}'.format(ub.repr2(info, nl=2)))
+        >>>     print('gpath = {}'.format(ub.urepr(gpath, nl=1)))
+        >>>     print('info = {}'.format(ub.urepr(info, nl=2)))
         >>>     if len(info['sensor_candidates']) == 0:
         >>>         print(ub.color_text('NO HUERISTIC', 'red'))
         >>>     else:
@@ -683,7 +683,7 @@ def geotiff_filepath_info(gpath, fast=True):
         >>> from watch.gis.geotiff import *  # NOQA
         >>> gpath = 'LC08_L1TP_037029_20130602_20170310_01_T1_B1.TIF'
         >>> info = geotiff_filepath_info(gpath)
-        >>> print('info = {}'.format(ub.repr2(info, nl=1)))
+        >>> print('info = {}'.format(ub.urepr(info, nl=1)))
         >>> assert info['filename_meta']['sensor_code'] == 'C'
         >>> assert info['filename_meta']['sat_code'] == '08'
         >>> assert info['filename_meta']['sat_code'] == '08'
@@ -707,7 +707,7 @@ def geotiff_filepath_info(gpath, fast=True):
         >>> import ubelt as ub
         >>> gpath = ub.expandpath('$HOME/remote/namek/data/dvc-repos/smart_watch_dvc/drop0/KR-Pyeongchang-WV/_assets/20170907_a_KRP_011777481_10_0/011777481010_01_003/011777481010_01/011777481010_01_P001_MUL/17SEP07021826-M1BS-011777481010_01_P001.TIF')
         >>> info = geotiff_filepath_info(gpath)
-        >>> print('info = {}'.format(ub.repr2(info, nl=1)))
+        >>> print('info = {}'.format(ub.urepr(info, nl=1)))
 
     Ignore:
         >>> from watch.gis.geotiff import *  # NOQA
@@ -717,7 +717,7 @@ def geotiff_filepath_info(gpath, fast=True):
         >>> for path in paths:
         >>>     info = geotiff_filepath_info(path)
         >>>     info['basename'] = basename(path)
-        >>>     print('info = {}'.format(ub.repr2(info, nl=1)))
+        >>>     print('info = {}'.format(ub.urepr(info, nl=1)))
         >>>     infos.append(info)
 
         >>> paths = sorted(walk_geotiff_products(base_dpath, with_product_dirs=0, with_loose_images=1))
@@ -725,10 +725,10 @@ def geotiff_filepath_info(gpath, fast=True):
         >>> for path in paths:
         >>>     info = geotiff_filepath_info(path)
         >>>     info['basename'] = basename(path)
-        >>>     print('info = {}'.format(ub.repr2(info, nl=1)))
+        >>>     print('info = {}'.format(ub.urepr(info, nl=1)))
         >>>     infos.append(info)
-        >>> print('infos = {}'.format(ub.repr2(infos[0:10], nl=1)))
-        >>> print('infos = {}'.format(ub.repr2(infos[-10:], nl=1)))
+        >>> print('infos = {}'.format(ub.urepr(infos[0:10], nl=1)))
+        >>> print('infos = {}'.format(ub.urepr(infos[-10:], nl=1)))
 
         >>> infos = []
         >>> for path in paths:
@@ -1061,7 +1061,7 @@ def parse_landsat_product_id(product_id):
         >>> from watch.gis.geotiff import *  # NOQA
         >>> gpath = 'LC08_L1TP_037029_20130602_20170310_01_T1_B1'
         >>> info = parse_landsat_product_id(gpath)
-        >>> print('info = {}'.format(ub.repr2(info, nl=1)))
+        >>> print('info = {}'.format(ub.urepr(info, nl=1)))
         >>> assert info['sensor_code'] == 'C'
         >>> assert info['sat_code'] == '08'
         >>> assert info['sat_code'] == '08'
@@ -1073,7 +1073,7 @@ def parse_landsat_product_id(product_id):
         >>> from watch.gis.geotiff import *  # NOQA
         >>> gpath = 'LC08_CU_029005_20181208_20210503_02_QA_LINEAGE.TIF'
         >>> info = parse_landsat_product_id(gpath)
-        >>> print('info = {}'.format(ub.repr2(info, nl=1)))
+        >>> print('info = {}'.format(ub.urepr(info, nl=1)))
 
     Example:
         >>> # xdoctest: +REQUIRES(--network)

@@ -56,7 +56,7 @@ class WatchCocoStats(scfg.Config):
         config = WatchCocoStats(kw, cmdline=cmdline)
 
         fpaths = config['src']
-        rich.print('config = {}'.format(ub.repr2(dict(config), nl=1, sort=0)))
+        rich.print('config = {}'.format(ub.urepr(dict(config), nl=1, sort=0)))
 
         if isinstance(fpaths, str):
             if ',' in fpaths:
@@ -111,7 +111,7 @@ class WatchCocoStats(scfg.Config):
         else:
             print('No per-video stats')
 
-        print('collatables = {}'.format(ub.repr2(collatables, nl=2, sort=0)))
+        print('collatables = {}'.format(ub.urepr(collatables, nl=2, sort=0)))
         summary = pd.DataFrame(collatables)
 
         from watch.utils import slugify_ext
@@ -124,7 +124,7 @@ class WatchCocoStats(scfg.Config):
 
         if col_name_map:
             print('Remap names for readability:')
-            print('col_name_map = {}'.format(ub.repr2(
+            print('col_name_map = {}'.format(ub.urepr(
                 ub.invert_dict(col_name_map), nl=1, sort=0)))
 
         summary = summary.rename(col_name_map, axis=1)
@@ -175,7 +175,7 @@ def coco_watch_stats(dset, with_video_info=False):
         all_image_ids_with_video.update(gids)
         video = dset.index.videos[vidid]
         video = ub.dict_diff(video, ['regions', 'properties'])
-        # video_str = ub.repr2(video, nl=-1, sort=False)
+        # video_str = ub.urepr(video, nl=-1, sort=False)
         # video_str = util_truncate.smart_truncate(
         #     video_str, max_length=512, trunc_loc=0.7)
         # print('video = {}'.format(video_str))
@@ -222,7 +222,7 @@ def coco_watch_stats(dset, with_video_info=False):
         }) | video
         video_info.pop('regions', None)
         video_info.pop('properties', None)
-        vid_info_str = ub.repr2(video_info, nl=-1, sort=False)
+        vid_info_str = ub.urepr(video_info, nl=-1, sort=False)
         vid_info_str = util_truncate.smart_truncate(
             vid_info_str, max_length=512, trunc_loc=0.6)
 
@@ -236,15 +236,15 @@ def coco_watch_stats(dset, with_video_info=False):
 
     basic_stats = dset.basic_stats()
     ext_stats = dset.extended_stats()
-    rich.print('basic_stats = {}'.format(ub.repr2(basic_stats, nl=1, sort=0)))
-    rich.print('ext_stats = {}'.format(ub.repr2(ext_stats, nl=1, align=':', precision=3)))
+    rich.print('basic_stats = {}'.format(ub.urepr(basic_stats, nl=1, sort=0)))
+    rich.print('ext_stats = {}'.format(ub.urepr(ext_stats, nl=1, align=':', precision=3)))
 
     attrs = dset.videos().attribute_frequency()
-    rich.print('video_attrs = {}'.format(ub.repr2(attrs, nl=1, sort=0)))
+    rich.print('video_attrs = {}'.format(ub.urepr(attrs, nl=1, sort=0)))
     attrs = dset.images().attribute_frequency()
-    rich.print('image_attrs = {}'.format(ub.repr2(attrs, nl=1, sort=0)))
+    rich.print('image_attrs = {}'.format(ub.urepr(attrs, nl=1, sort=0)))
     attrs = dset.annots().attribute_frequency()
-    rich.print('annot_attrs = {}'.format(ub.repr2(attrs, nl=1, sort=0)))
+    rich.print('annot_attrs = {}'.format(ub.urepr(attrs, nl=1, sort=0)))
 
     loose_image_ids = sorted(all_image_ids - all_image_ids_with_video)
     rich.print('len(loose_image_ids) = {!r}'.format(len(loose_image_ids)))
@@ -281,11 +281,11 @@ def coco_watch_stats(dset, with_video_info=False):
     rich.print(sensorchan_gsd_stats.to_string(max_rows=500))
 
     sensor_hist = ub.dict_hist(all_sensor_entries)
-    rich.print('Sensor Histogram = {}'.format(ub.repr2(sensor_hist, nl=1, sort=0)))
+    rich.print('Sensor Histogram = {}'.format(ub.urepr(sensor_hist, nl=1, sort=0)))
 
     print('MSI channel stats')
     info = kwcoco_extensions.coco_channel_stats(dset)
-    rich.print(ub.repr2(info, nl=4, sort=0))
+    rich.print(ub.urepr(info, nl=4, sort=0))
 
     dset_bundle_suffix = '/'.join(ub.Path(dset.fpath).parts[-2:])
 

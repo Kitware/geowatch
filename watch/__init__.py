@@ -11,7 +11,7 @@ import ubelt as ub
 import warnings
 
 
-__version__ = '0.4.8'
+__version__ = '0.5.0'
 
 
 # ~/code/watch/dev/maintain/generate_authors.py
@@ -48,6 +48,7 @@ def _import_troublesome_module(modname):
     """
     if modname == 'gdal':
         from osgeo import gdal as module
+        module.UseExceptions()
     elif modname == 'pyproj':
         import pyproj as module
         from pyproj import CRS  # NOQA

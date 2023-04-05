@@ -71,7 +71,7 @@ print(len(model_paths))
 model_paths = sorted(set(model_paths))
 print(len(model_paths))
 
-print(ub.repr2(list(map(str, model_paths))))
+print(ub.urepr(list(map(str, model_paths))))
 
 contenders_dpath = dvc_dpath / 'models/fusion/eval3_candidates/packages'
 

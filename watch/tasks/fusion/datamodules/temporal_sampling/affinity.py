@@ -149,7 +149,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         >>> import kwplot
         >>> kwplot.autompl()
         >>> chosen, info = self.show_procedure(idx=0, fnum=10, exclude=[1, 2, 4])
-        >>> print('info = {}'.format(ub.repr2(info, nl=4)))
+        >>> print('info = {}'.format(ub.urepr(info, nl=4)))
 
     Ignore:
         >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA

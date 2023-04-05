@@ -330,7 +330,7 @@ def main():
 
     from watch.utils.util_pandas import DotDictDataFrame
     df = DotDictDataFrame(df)
-    print('df.nested_columns = {}'.format(ub.repr2(df.nested_columns, nl=True)))
+    print('df.nested_columns = {}'.format(ub.urepr(df.nested_columns, nl=True)))
 
     space = DotDictDataFrame(df['input_space_scale'])
     (space['act.fit.input_space_scale'] != space['act.pxl.input_space_scale']).sum()

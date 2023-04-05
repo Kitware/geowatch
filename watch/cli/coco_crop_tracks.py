@@ -110,12 +110,12 @@ def main(cmdline=0, **kwargs):
         kwargs['workers'] = 8
     """
     config = CocoCropTrackConfig(cmdline=cmdline, data=kwargs)
-    print('config = {}'.format(ub.repr2(dict(config), nl=1)))
+    print('config = {}'.format(ub.urepr(dict(config), nl=1)))
     src = config['src']
     dst = ub.Path(config['dst'])
     dst_bundle_dpath = dst.parent
 
-    print('load = {}'.format(ub.repr2(src, nl=1)))
+    print('load = {}'.format(ub.urepr(src, nl=1)))
     if config['sqlmode']:
         coco_dset = kwcoco.CocoSqlDatabase.coerce(src)
     else:
@@ -177,7 +177,7 @@ def main(cmdline=0, **kwargs):
             # stack_lines = traceback.format_list(stack)
             # tbtext = ''.join(stack_lines)
             # print(ub.highlight_code(tbtext, 'pytb'))
-            print('ex = {}'.format(ub.repr2(ex, nl=1)))
+            print('ex = {}'.format(ub.urepr(ex, nl=1)))
             print('Failed crop asset task ex = {!r}'.format(ex))
             raise
             failed.append(job)
@@ -198,7 +198,7 @@ def main(cmdline=0, **kwargs):
         quant_keys = ['q_{:0.2f}'.format(q) for q in quantile]
         for k, v in zip(quant_keys, quant_values):
             stats[k] = v
-    print(f'track length stats {ub.repr2(stats, nl=1)!s}')
+    print(f'track length stats {ub.urepr(stats, nl=1)!s}')
 
     # Rebuild the manifest
     target_gsd = config['target_gsd']

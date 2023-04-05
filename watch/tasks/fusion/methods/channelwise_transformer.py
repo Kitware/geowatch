@@ -224,7 +224,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         >>> dataset = datamodule.torch_datasets['train']
         >>> print('(STEP 1): ESTIMATE DATASET STATS')
         >>> dataset_stats = dataset.cached_dataset_stats(num=3)
-        >>> print('dataset_stats = {}'.format(ub.repr2(dataset_stats, nl=3)))
+        >>> print('dataset_stats = {}'.format(ub.urepr(dataset_stats, nl=3)))
         >>> loader = datamodule.train_dataloader()
         >>> print('(STEP 2): SAMPLE BATCH')
         >>> batch = next(iter(loader))
@@ -280,7 +280,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> assert "tokenizer" in model.hparams
         """
         assert kwargs.pop('config', None) is None  # not sure why this is in the kwargs
-        print('kwargs = {}'.format(ub.repr2(kwargs, nl=1)))
+        print('kwargs = {}'.format(ub.urepr(kwargs, nl=1)))
         _config = MultimodalTransformerConfig(**kwargs)
         _cfgdict = _config.to_dict()
         assert _config.tokenizer in ['dwcnn', 'rearrange', 'conv7', 'linconv']
@@ -735,8 +735,8 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             {'weight_decay': self.hparams.weight_decay}, optim_cls))
 
         optim_kw['params'] = self.parameters()
-        # print('optim_cls = {}'.format(ub.repr2(optim_cls, nl=1)))
-        # print('optim_kw = {}'.format(ub.repr2(optim_kw, nl=1)))
+        # print('optim_cls = {}'.format(ub.urepr(optim_cls, nl=1)))
+        # print('optim_kw = {}'.format(ub.urepr(optim_kw, nl=1)))
         optimizer = optim_cls(**optim_kw)
 
         # TODO:
@@ -818,7 +818,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> dataset_stats = datamodule.dataset_stats
             >>> input_sensorchan = datamodule.input_sensorchan
             >>> classes = datamodule.classes
-            >>> print('dataset_stats = {}'.format(ub.repr2(dataset_stats, nl=3)))
+            >>> print('dataset_stats = {}'.format(ub.urepr(dataset_stats, nl=3)))
             >>> print('input_sensorchan = {}'.format(input_sensorchan))
             >>> print('classes = {}'.format(classes))
             >>> # Choose subclass to test this with (does not cover all cases)
@@ -1265,8 +1265,8 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
         if len(tokenized) == 0:
             print('Error concat of:')
-            print('tokenized = {}'.format(ub.repr2(tokenized, nl=1)))
-            print('item = {}'.format(ub.repr2(item, nl=1)))
+            print('tokenized = {}'.format(ub.urepr(tokenized, nl=1)))
+            print('item = {}'.format(ub.urepr(item, nl=1)))
             for frame_idx, frame in enumerate(item['frames']):
                 if len(frame['modes']) == 0:
                     print('Frame {} had no modal data'.format(frame_idx))

@@ -162,7 +162,7 @@ def main():
             else:
                 raise KeyError
 
-            suffix = 'task-' + ub.repr2(track_kwargs, compact=1)
+            suffix = 'task-' + ub.urepr(track_kwargs, compact=1)
             IARPA_EVAL_DPATH = pred_bundle_dpath / f'eval/tracked/iarpa-{suffix}'
             summary_fpath = IARPA_EVAL_DPATH / 'scores/merged/summary2.json'
             expected_outputs.append(summary_fpath)

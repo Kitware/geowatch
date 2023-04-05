@@ -628,11 +628,17 @@ class UNetBaseline(pl.LightningModule, WatchModuleMixins):
             >>> # Check consistency and data is actually different
             >>> recon_state = recon.state_dict()
             >>> model_state = model.state_dict()
-            >>> assert recon is not model
+            >>> assert recon is not self
             >>> assert set(recon_state) == set(recon_state)
+            >>> from watch.utils.util_kwarray import torch_array_equal
             >>> for key in recon_state.keys():
-            >>>     assert (model_state[key] == recon_state[key]).all()
-            >>>     assert model_state[key] is not recon_state[key]
+            >>>     v1 = model_state[key]
+            >>>     v2 = recon_state[key]
+            >>>     if not torch.allclose(v1, v2, equal_nan=True):
+            >>>         print('v1 = {}'.format(ub.urepr(v1, nl=1)))
+            >>>         print('v2 = {}'.format(ub.urepr(v2, nl=1)))
+            >>>         raise AssertionError(f'Difference in key={key}')
+            >>>     assert v1 is not v2, 'should be distinct copies'
 
         Example:
             >>> # Test without datamodule
@@ -658,12 +664,18 @@ class UNetBaseline(pl.LightningModule, WatchModuleMixins):
             >>> recon = load_model_from_package(package_path)
             >>> # Check consistency and data is actually different
             >>> recon_state = recon.state_dict()
-            >>> model_state = model.state_dict()
-            >>> assert recon is not model
+            >>> model_state = self.state_dict()
+            >>> assert recon is not self
             >>> assert set(recon_state) == set(recon_state)
+            >>> from watch.utils.util_kwarray import torch_array_equal
             >>> for key in recon_state.keys():
-            >>>     assert (model_state[key] == recon_state[key]).all()
-            >>>     assert model_state[key] is not recon_state[key]
+            >>>     v1 = model_state[key]
+            >>>     v2 = recon_state[key]
+            >>>     if not torch.allclose(v1, v2, equal_nan=True):
+            >>>         print('v1 = {}'.format(ub.urepr(v1, nl=1)))
+            >>>         print('v2 = {}'.format(ub.urepr(v2, nl=1)))
+            >>>         raise AssertionError(f'Difference in key={key}')
+            >>>     assert v1 is not v2, 'should be distinct copies'
 
         Example:
             >>> # Test without datamodule
@@ -689,11 +701,17 @@ class UNetBaseline(pl.LightningModule, WatchModuleMixins):
             >>> recon = load_model_from_package(package_path)
             >>> # Check consistency and data is actually different
             >>> recon_state = recon.state_dict()
-            >>> model_state = model.state_dict()
-            >>> assert recon is not model
+            >>> model_state = self.state_dict()
+            >>> assert recon is not self
             >>> assert set(recon_state) == set(recon_state)
+            >>> from watch.utils.util_kwarray import torch_array_equal
             >>> for key in recon_state.keys():
-            >>>     assert (model_state[key] == recon_state[key]).all()
-            >>>     assert model_state[key] is not recon_state[key]
+            >>>     v1 = model_state[key]
+            >>>     v2 = recon_state[key]
+            >>>     if not torch.allclose(v1, v2, equal_nan=True):
+            >>>         print('v1 = {}'.format(ub.urepr(v1, nl=1)))
+            >>>         print('v2 = {}'.format(ub.urepr(v2, nl=1)))
+            >>>         raise AssertionError(f'Difference in key={key}')
+            >>>     assert v1 is not v2, 'should be distinct copies'
         """
         self._save_package(package_path, verbose=verbose)

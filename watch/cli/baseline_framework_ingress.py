@@ -231,7 +231,7 @@ def ingress_item(feature,
         item_href = os.path.relpath(item_href, outdir)
 
     item.set_self_href(item_href)
-    # print('item = {}'.format(ub.repr2(item.to_dict(), nl=2)))
+    # print('item = {}'.format(ub.urepr(item.to_dict(), nl=2)))
     return item
 
 

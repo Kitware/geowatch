@@ -6,6 +6,7 @@ from watch.mlops.aggregate import hash_param
 from watch.mlops.aggregate import fix_duplicate_param_hashids
 from watch.utils import util_pandas
 
+
 def _gather_namek_shortlist_results():
     """
 
@@ -65,7 +66,6 @@ def _gather_namek_shortlist_results():
 
     new_models_fpath = ub.Path('$HOME/code/watch/dev/reports/split1_models_filter1.yaml').expand()
     new_models_fpath.write_text(Yaml.dumps(chosen_models))
-
 
     subagg = agg.filterto(index=chosen_indexes)
     subagg.table['resolved_params.bas_pxl_fit.name']
@@ -164,7 +164,6 @@ def _namek_check_pipeline_status():
         node2 = dag.nodes[stage2]
         ...
 
-
     df1 = dfs['bas_pxl'].subframe('request')
     df2 = dfs['bas_pxl_eval'].subframe('request')
 
@@ -211,7 +210,6 @@ def _namek_check_pipeline_status():
     missing2 = hashids1 - hashids2
     # These have not had a computation done for them.
     missing_df = df1.loc[missing2]
-
 
     # WANTED: Algorithm that takes a list of grid points and determines if any
     # of the rows can be expressed conciesly as a matrix.
@@ -280,8 +278,6 @@ def _namek_check_pipeline_status():
             --run=0
         ''')
     print(invocation)
-
-
 
     # For two levels in the node figure out:
     # What paths on the parent are are in common.
@@ -498,8 +494,8 @@ def _namek_eval():
         a['hashid.bas_pxl'] = a_hashids
         b['hashid.bas_pxl'] = b_hashids
 
-        hashid_to_idxs1 =ub.find_duplicates(a_hashids, k=0)
-        hashid_to_idxs2 =ub.find_duplicates(b_hashids, k=0)
+        hashid_to_idxs1 = ub.find_duplicates(a_hashids, k=0)
+        hashid_to_idxs2 = ub.find_duplicates(b_hashids, k=0)
 
         missing1 = set(hashid_to_idxs1) - set(hashid_to_idxs2)
         missing2 = set(hashid_to_idxs2) - set(hashid_to_idxs1)
@@ -563,7 +559,6 @@ def _namek_eval():
 
     poly_agg.table['context.bas_poly.uuid']
     poly_agg.table['context.bas_poly_eval.uuid']
-
 
     agg = ub.peek(eval_type_to_aggregator.values())
     agg.build_macro_tables()
@@ -1199,7 +1194,7 @@ def custom_analysis(eval_type_to_aggregator, config):
         subagg1.build_macro_tables(macro_groups)
         _ = subagg1.report_best()
 
-        print(ub.repr2(subagg1.results['fpaths']['fpath'].to_list()))
+        print(ub.urepr(subagg1.results['fpaths']['fpath'].to_list()))
 
         agg_group_dpath = agg_dpath / (f'agg_params_{param_of_interest}')
         agg_group_dpath = agg_group_dpath.ensuredir()

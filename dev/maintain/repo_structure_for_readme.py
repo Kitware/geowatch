@@ -44,7 +44,7 @@ def main():
     for p in list(g.nodes):
         node_data = g.nodes[p]
         root_info = path_to_info[p]
-        node_data['label'] = ub.color_text(node_data['label'], 'green') + ' ' + ub.repr2(root_info['ext_hist'], nl=0)
+        node_data['label'] = ub.color_text(node_data['label'], 'green') + ' ' + ub.urepr(root_info['ext_hist'], nl=0)
 
     print(util.util_networkx.write_network_text(g, sources=[base]))
 

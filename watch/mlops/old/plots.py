@@ -740,16 +740,16 @@ def describe_varied(merged_df, dpath, human_mapping=None):
         dataset_code, type = code_type
 
         print('Varied fit params')
-        print('type = {}'.format(ub.repr2(type, nl=1)))
-        print('dataset_code = {}'.format(ub.repr2(dataset_code, nl=1)))
+        print('type = {}'.format(ub.urepr(type, nl=1)))
+        print('dataset_code = {}'.format(ub.urepr(dataset_code, nl=1)))
         param_keys = heuristics.fit_param_keys
         varied_param_table(fnum, param_keys, dataset_code, param_type='Fit')
         # print(ub.highlight_code(pprint.pformat(dict(varied), width=80)))
-        # print('varied = {}'.format(ub.repr2(varied, nl=2)))
+        # print('varied = {}'.format(ub.urepr(varied, nl=2)))
 
         print('Varied pred params')
-        print('type = {}'.format(ub.repr2(type, nl=1)))
-        print('dataset_code = {}'.format(ub.repr2(dataset_code, nl=1)))
+        print('type = {}'.format(ub.urepr(type, nl=1)))
+        print('dataset_code = {}'.format(ub.urepr(dataset_code, nl=1)))
         param_keys = pred_param_keys
         fnum += 1
         varied_param_table(fnum, param_keys, dataset_code, param_type='Predict')
@@ -759,8 +759,8 @@ def describe_varied(merged_df, dpath, human_mapping=None):
         # print(ub.highlight_code(pprint.pformat(dict(varied), width=80)))
 
         print('Varied track params')
-        print('type = {}'.format(ub.repr2(type, nl=1)))
-        print('dataset_code = {}'.format(ub.repr2(dataset_code, nl=1)))
+        print('type = {}'.format(ub.urepr(type, nl=1)))
+        print('dataset_code = {}'.format(ub.urepr(dataset_code, nl=1)))
         param_keys = trk_param_keys
         fnum += 1
         varied_param_table(fnum, param_keys, dataset_code, param_type='BAS Tracking')
@@ -770,8 +770,8 @@ def describe_varied(merged_df, dpath, human_mapping=None):
         # print(ub.highlight_code(pprint.pformat(dict(varied), width=80)))
 
         print('Varied activity params')
-        print('type = {}'.format(ub.repr2(type, nl=1)))
-        print('dataset_code = {}'.format(ub.repr2(dataset_code, nl=1)))
+        print('type = {}'.format(ub.urepr(type, nl=1)))
+        print('dataset_code = {}'.format(ub.urepr(dataset_code, nl=1)))
         param_keys = act_param_keys
         fnum += 1
         varied_param_table(fnum, param_keys, dataset_code, param_type='SC Classification')

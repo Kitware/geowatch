@@ -37,7 +37,7 @@ class DataRegistry:
         self.add('repo_ffs2', path=repo_ffs2, hardware='ffs', tags='expt_phase1', priority=10)
         self.add('repo_ssd2', path=repo_ssd2, hardware='ssd', tags='expt_phase1')
         print(self.pandas())
-        print(ub.repr2(self.read()))
+        print(ub.urepr(self.read()))
 
         self.query(tags='expt_phase1')
         self.query(tags='expt_phase1', max_results=1)
@@ -179,8 +179,8 @@ class DataRegistry:
         if unexepcted:
             raise ValueError(
                 'Unexpected query keywords: {}. Valid keywords are {}'.format(
-                    ub.repr2(list(unexepcted.keys()), nl=0),
-                    ub.repr2(list(self._expected_attrs.keys()), nl=0),
+                    ub.urepr(list(unexepcted.keys()), nl=0),
+                    ub.urepr(list(self._expected_attrs.keys()), nl=0),
                 ))
         query = ub.udict({k: v for k, v in kwargs.items() if v is not None})
 
@@ -217,7 +217,7 @@ class DataRegistry:
 
                 for row in hardware_to_results.get('ssd', []):
                     row['priority'] = (row.get('priority', 0) or 0) - min_ssd_priority + non_ssd_priority * 2
-                # print('hardware_to_results = {}'.format(ub.repr2(hardware_to_results, nl=2)))
+                # print('hardware_to_results = {}'.format(ub.urepr(hardware_to_results, nl=2)))
 
         HACK_JONS_REMOTE_PATTERN = 1
         if HACK_JONS_REMOTE_PATTERN:
@@ -259,7 +259,7 @@ class DataRegistry:
             print(self.list())
             print('Error in DataRegistry.find. Listing query results...')
             print(self.list(**kwargs))
-            print('... for query kwargs = {}'.format(ub.repr2(kwargs, nl=1)))
+            print('... for query kwargs = {}'.format(ub.urepr(kwargs, nl=1)))
             raise Exception('No suitable data directory found')
 
         if kwargs.get('must_exist', True):
@@ -271,7 +271,7 @@ class DataRegistry:
                 print(self.list())
                 print('Error in DataRegistry.find. Listing query results...')
                 print(self.list(**kwargs))
-                print('... for query kwargs = {}'.format(ub.repr2(kwargs, nl=1)))
+                print('... for query kwargs = {}'.format(ub.urepr(kwargs, nl=1)))
                 raise Exception('No existing data directory found')
             else:
                 return None

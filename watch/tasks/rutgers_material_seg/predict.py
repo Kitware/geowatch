@@ -686,14 +686,14 @@ def build_evaler(cmdline=False, **kwargs):
     """
     """
     args = make_predict_config(cmdline=cmdline, **kwargs)
-    print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1)))
+    print('args.__dict__ = {}'.format(ub.urepr(args.__dict__, nl=1)))
     config = hardcoded_default_configs(args.default_config_key)
 
     config['start_time'] = datetime.datetime.today().strftime('%Y-%m-%d-%H:%M:%S')
 
     # Hacks to modify the config
     config['training']['pretrained'] = False
-    print('config = {}'.format(ub.repr2(config, nl=2)))
+    print('config = {}'.format(ub.urepr(config, nl=2)))
     if 0:
         torch.manual_seed(config['seed'])
         torch.cuda.manual_seed(config['seed'])

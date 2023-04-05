@@ -239,7 +239,7 @@ def find_empty_images(dset, main_channels, overview=-1, mode='process',
         iffy_bins = [-1, 0, 0.25, 0.5, 0.75, 0.85, .90, .95, 0.98, 1.0]
         iffy_freq, iffy_bins = np.histogram(iffy_fracs, bins=iffy_bins)
         iffy_hist = ub.dzip(ub.iter_window(iffy_bins, 2), iffy_freq)
-        print('iffy_hist = {}'.format(ub.repr2(iffy_hist, nl=1)))
+        print('iffy_hist = {}'.format(ub.urepr(iffy_hist, nl=1)))
 
     # TODO: different iffy thresh per sensor
     iffy_thresh = 0.95
@@ -267,8 +267,8 @@ def find_empty_images(dset, main_channels, overview=-1, mode='process',
     vidname_bad_df = vidname_bad_df.sort_index()
     print('Video Versus num bad')
     print(vidname_bad_df.to_string())
-    # print('sensor_to_num_bad = {}'.format(ub.repr2(sensor_to_num_bad, nl=1)))
-    # print('region_to_num_bad = {}'.format(ub.repr2(region_to_num_bad, nl=1)))
+    # print('sensor_to_num_bad = {}'.format(ub.urepr(sensor_to_num_bad, nl=1)))
+    # print('region_to_num_bad = {}'.format(ub.urepr(region_to_num_bad, nl=1)))
 
     bad_stats = ub.ddict(lambda: 0)
     for bad in bad_img_infos:
@@ -281,7 +281,7 @@ def find_empty_images(dset, main_channels, overview=-1, mode='process',
             elif chan_info["max_val"] == 0:
                 bad_stats[f'{sensor}:{chan}.max_zero'] += 1
                 chan_info["num_masked"]
-    print('bad_stats = {}'.format(ub.repr2(bad_stats, nl=1)))
+    print('bad_stats = {}'.format(ub.urepr(bad_stats, nl=1)))
 
     return bad_gids
 

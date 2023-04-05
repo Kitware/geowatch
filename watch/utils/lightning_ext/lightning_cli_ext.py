@@ -260,7 +260,7 @@ class LightningArgumentParser_Extension(LightningArgumentParser):
                 as_positional=as_positional,
             )
         # import ubelt as ub
-        # print('added_args = {}'.format(ub.repr2(added_args, nl=1)))
+        # print('added_args = {}'.format(ub.urepr(added_args, nl=1)))
         return added_args
 
     def _add_signature_parameter(
@@ -574,10 +574,11 @@ class LightningCLI_Extension(LightningCLI):
         import sys
         if args is not None and len(sys.argv) > 1:
             # Please let us shoot ourselves in the foot.
-            import warnings
-            warnings.warn(
+            from pytorch_lightning.utilities.rank_zero import rank_zero_warn
+            # import warnings
+            rank_zero_warn(
                 "LightningCLI's args parameter is intended to run from within Python like if it were from the command "
-                "line. To prevent mistakes it is not allowed to provide both args and command line arguments, got: "
+                "line. To prevent mistakes it is not recommended to provide both args and command line arguments, got: "
                 f"sys.argv[1:]={sys.argv[1:]}, args={args}."
             )
         if isinstance(args, (dict, Namespace)):

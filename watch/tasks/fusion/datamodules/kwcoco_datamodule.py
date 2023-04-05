@@ -36,7 +36,7 @@ class KWCocoVideoDataModuleConfig(scfg.Config):
 
     In the future this might be convertable to, or handled by omegaconfig
     """
-    default = ub.udict({
+    __default__ = ub.udict({
         'train_dataset': scfg.Value(None, help='path to the train kwcoco file'),
         'vali_dataset': scfg.Value(None, help='path to the validation kwcoco file'),
         'test_dataset': scfg.Value(None, help='path to the test kwcoco file'),
@@ -235,7 +235,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.vali_kwcoco = self.config['vali_dataset']
         self.test_kwcoco = self.config['test_dataset']
 
-        common_keys = set(KWCocoVideoDatasetConfig.default.keys())
+        common_keys = set(KWCocoVideoDatasetConfig.__default__.keys())
         # Pass the relevant parts of the config to the underlying datasets
         self.train_dataset_config = ub.dict_subset(cfgdict, common_keys)
         # with small changes made for validation and test datasets.
@@ -406,7 +406,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             )
             ub.inject_method(self, lambda self: self._make_dataloader('test', shuffle=False), 'test_dataloader')
 
-        print('self.torch_datasets = {}'.format(ub.repr2(self.torch_datasets, nl=1)))
+        print('self.torch_datasets = {}'.format(ub.urepr(self.torch_datasets, nl=1)))
         self._notify_about_tasks(self.requested_tasks)
         self.did_setup = True
 
@@ -505,7 +505,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
 
     def draw_batch(self, batch, stage='train', outputs=None, max_items=2,
                    overlay_on_image=False, **kwargs):
-        """
+        r"""
         Visualize a batch produced by this DataSet.
 
         Args:
@@ -574,7 +574,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             >>>             outputs['class_probs'][-1].append(torch.rand(H, W, 10))
             >>>             outputs['saliency_probs'][-1].append(torch.rand(H, W, 2))
             >>> from watch.utils import util_nesting
-            >>> print(ub.repr2(util_nesting.shape_summary(outputs), nl=1, sort=0))
+            >>> print(ub.urepr(util_nesting.shape_summary(outputs), nl=1, sort=0))
             >>> stage = 'train'
             >>> canvas = self.draw_batch(batch, stage=stage, outputs=outputs, max_items=4)
             >>> # xdoctest: +REQUIRES(--show)

@@ -132,7 +132,7 @@ def make_coco_img_from_geotiff(tiff_fpath, name=None, force_affine=True,
         >>> tiff_fpath = product['bands'][0]
         >>> name = None
         >>> img = make_coco_img_from_geotiff(tiff_fpath)
-        >>> print('img = {}'.format(ub.repr2(img, nl=1)))
+        >>> print('img = {}'.format(ub.urepr(img, nl=1)))
     """
     img = {}
     if name is not None:
@@ -201,7 +201,7 @@ def make_coco_img_from_auxiliary_geotiffs(tiffs, name):
         >>> tiffs = product['bands'] + [product['meta']['bqa']]
         >>> name = product['scene_name']
         >>> img = make_coco_img_from_auxiliary_geotiffs(tiffs, name)
-        >>> print('img = {}'.format(ub.repr2(img, nl=-1, sort=0)))
+        >>> print('img = {}'.format(ub.urepr(img, nl=-1, sort=0)))
     """
     auxiliary = []
     for fpath in tiffs:

@@ -105,7 +105,7 @@ Ignore:
     python -m watch.cli.prepare_teamfeats \
         --base_fpath "$BUNDLE_DPATH"/imganns-*.kwcoco.zip \
         --expt_dpath="$DVC_EXPT_DPATH" \
-        --with_landcover2=1 \
+        --with_invariants2=1 \
         --with_landcover=0 \
         --with_materials=0 \
         --with_invariants=0 \
@@ -113,7 +113,24 @@ Ignore:
         --with_cold=0 \
         --do_splits=0 \
         --skip_existing=1 \
-        --gres=0,1 --workers=4 --backend=tmux --run=1
+        --gres=0,1 --workers=4 --backend=tmux --run=0
+
+    # Drop 6
+    export CUDA_VISIBLE_DEVICES="0,1"
+    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+    BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6
+    python -m watch.cli.prepare_teamfeats \
+        --base_fpath "$BUNDLE_DPATH"/imganns-KR_R00*.kwcoco.zip \
+        --expt_dpath="$DVC_EXPT_DPATH" \
+        --with_invariants2=1 \
+        --with_landcover=0 \
+        --with_materials=0 \
+        --with_invariants=0 \
+        --with_depth=0 \
+        --with_cold=0 \
+        --do_splits=0 \
+        --skip_existing=1 \
+        --gres=0,1 --workers=4 --backend=tmux --run=0
 """
 
 
@@ -203,7 +220,7 @@ def prep_feats(cmdline=True, **kwargs):
     from watch.utils import util_path
 
     config = TeamFeaturePipelineConfig.cli(cmdline=cmdline, data=kwargs)
-    print('config = {}'.format(ub.repr2(dict(config), nl=1)))
+    print('config = {}'.format(ub.urepr(dict(config), nl=1)))
 
     gres = config['gres']
     gres = smartcast(gres)
@@ -328,8 +345,8 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
     }
 
     print('Exist check: ')
-    print('model_packages: ' + ub.repr2(ub.map_vals(lambda x: x.exists(), model_fpaths)))
-    print('feature outputs: ' + ub.repr2(ub.map_vals(lambda x: x.exists(), outputs)))
+    print('model_packages: ' + ub.urepr(ub.map_vals(lambda x: x.exists(), model_fpaths)))
+    print('feature outputs: ' + ub.urepr(ub.map_vals(lambda x: x.exists(), outputs)))
 
     # TODO: different versions of features need different codes.
     codes = {

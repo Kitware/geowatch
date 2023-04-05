@@ -141,7 +141,7 @@ class DigitalGlobeBundle(ub.NiceRepr):
             type_to_prods['aoi']
             type_to_prods['other']
             # prod_type_hist = ub.map_vals(len, type_to_prods)
-            # print('prod_type_hist = {}'.format(ub.repr2(prod_type_hist, nl=1)))
+            # print('prod_type_hist = {}'.format(ub.urepr(prod_type_hist, nl=1)))
 
             aoi_files = {key: open(val, 'rb') for key, val in aoi_fpaths.items()}
             try:

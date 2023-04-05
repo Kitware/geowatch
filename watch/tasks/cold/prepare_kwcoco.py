@@ -428,7 +428,7 @@ def process_one_coco_image(coco_image, out_dir, adj_cloud, method, resolution):
     # as well as align it with other images in the sequence.
     # NOTE: Issue occurs when setting resolution argument in imdelay
     delayed_im = coco_image.imdelay(channels=intensity_channels, **delay_kwargs)
-    delayed_qa = coco_image.imdelay(channels=quality_channels,  **delay_kwargs)
+    delayed_qa = coco_image.imdelay(channels=quality_channels, **delay_kwargs)
 
     # Check what shape the data would be loaded with if we finalized right now.
     h, w = delayed_im.shape[0:2]

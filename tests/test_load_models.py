@@ -25,7 +25,7 @@ def test_load_uky_models():
 
     for state in states:
         info = ub.dict_isect(state, {'epoch', 'hyper_parameters', 'global_step'})
-        print('info = {}'.format(ub.repr2(info, nl=2)))
+        print('info = {}'.format(ub.urepr(info, nl=2)))
         print(state['epoch'])
         print(state['hyper_parameters'])
         print(state['hparams_name'])

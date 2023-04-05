@@ -127,8 +127,8 @@ def populate_watch_fields(coco_dset, target_gsd=10.0, vidids=None,
         >>> coco_dset = kwcoco.CocoDataset(fpath)
         >>> target_gsd = 5.0
         >>> populate_watch_fields(coco_dset, target_gsd)
-        >>> print('coco_dset.index.videos = {}'.format(ub.repr2(coco_dset.index.videos, nl=-1)))
-        >>> print('coco_dset.index.imgs[1] = ' + ub.repr2(coco_dset.index.imgs[1], nl=1))
+        >>> print('coco_dset.index.videos = {}'.format(ub.urepr(coco_dset.index.videos, nl=-1)))
+        >>> print('coco_dset.index.imgs[1] = ' + ub.urepr(coco_dset.index.imgs[1], nl=1))
 
     Example:
         >>> from watch.utils.kwcoco_extensions import *  # NOQA
@@ -138,16 +138,16 @@ def populate_watch_fields(coco_dset, target_gsd=10.0, vidids=None,
         >>> print('coco_dset = {!r}'.format(coco_dset))
         >>> target_gsd = 13.0
         >>> populate_watch_fields(coco_dset, target_gsd, default_gsd=1)
-        >>> print('coco_dset.index.imgs[1] = ' + ub.repr2(coco_dset.index.imgs[1], nl=2))
-        >>> print('coco_dset.index.videos = {}'.format(ub.repr2(coco_dset.index.videos, nl=1)))
+        >>> print('coco_dset.index.imgs[1] = ' + ub.urepr(coco_dset.index.imgs[1], nl=2))
+        >>> print('coco_dset.index.videos = {}'.format(ub.urepr(coco_dset.index.videos, nl=1)))
 
         >>> # TODO: make a demo dataset with some sort of gsd metadata
         >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes8')
         >>> print('coco_dset = {!r}'.format(coco_dset))
         >>> target_gsd = 13.0
         >>> populate_watch_fields(coco_dset, target_gsd, default_gsd=1)
-        >>> print('coco_dset.index.imgs[1] = ' + ub.repr2(coco_dset.index.imgs[1], nl=2))
-        >>> print('coco_dset.index.videos = {}'.format(ub.repr2(coco_dset.index.videos, nl=1)))
+        >>> print('coco_dset.index.imgs[1] = ' + ub.urepr(coco_dset.index.imgs[1], nl=2))
+        >>> print('coco_dset.index.videos = {}'.format(ub.urepr(coco_dset.index.videos, nl=1)))
     """
     # Load your KW-COCO dataset (conform populates information like image size)
     if conform:
@@ -298,7 +298,7 @@ def coco_populate_geo_img_heuristics2(coco_img, overwrite=False,
         >>> before_img_attrs = list(coco_img.img.keys())
         >>> before_aux_attr_hist = ub.dict_hist(ub.flatten([list(aux) for aux in coco_img.img['auxiliary']]))
         >>> print('before_img_attrs = {!r}'.format(before_img_attrs))
-        >>> print('before_aux_attr_hist = {}'.format(ub.repr2(before_aux_attr_hist, nl=1)))
+        >>> print('before_aux_attr_hist = {}'.format(ub.urepr(before_aux_attr_hist, nl=1)))
         >>> coco_populate_geo_img_heuristics2(coco_img)
         >>> img = coco_dset.index.imgs[gid]
         >>> after_img_attrs = list(coco_img.img.keys())
@@ -306,10 +306,10 @@ def coco_populate_geo_img_heuristics2(coco_img, overwrite=False,
         >>> new_img_attrs = set(after_img_attrs) - set(before_img_attrs)
         >>> new_aux_attrs = {k: after_aux_attr_hist[k] - before_aux_attr_hist.get(k, 0) for k in after_aux_attr_hist}
         >>> new_aux_attrs = {k: v for k, v in new_aux_attrs.items() if v > 0}
-        >>> print('new_img_attrs = {}'.format(ub.repr2(new_img_attrs, nl=1)))
-        >>> print('new_aux_attrs = {}'.format(ub.repr2(new_aux_attrs, nl=1)))
-        >>> #print('after_img_attrs = {}'.format(ub.repr2(after_img_attrs, nl=1)))
-        >>> #print('after_aux_attr_hist = {}'.format(ub.repr2(after_aux_attr_hist, nl=1)))
+        >>> print('new_img_attrs = {}'.format(ub.urepr(new_img_attrs, nl=1)))
+        >>> print('new_aux_attrs = {}'.format(ub.urepr(new_aux_attrs, nl=1)))
+        >>> #print('after_img_attrs = {}'.format(ub.urepr(after_img_attrs, nl=1)))
+        >>> #print('after_aux_attr_hist = {}'.format(ub.urepr(after_aux_attr_hist, nl=1)))
         >>> assert 'geos_corners' in img
         >>> #assert 'default_nodata' in img
         >>> #assert 'default_nodata' in new_aux_attrs
@@ -562,7 +562,7 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
                 try:
                     height, width = info['img_shape'][0:2]
                 except Exception:
-                    print('info = {}'.format(ub.repr2(info, nl=1)))
+                    print('info = {}'.format(ub.urepr(info, nl=1)))
                     raise
 
                 obj['height'] = height
@@ -790,7 +790,7 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
         >>> # Check these transforms to make sure they look right
         >>> popualted_video = coco_dset.index.videos[vidid]
         >>> popualted_video = ub.dict_isect(popualted_video, ['width', 'height', 'warp_wld_to_vid', 'target_gsd'])
-        >>> print('popualted_video = {}'.format(ub.repr2(popualted_video, nl=-1)))
+        >>> print('popualted_video = {}'.format(ub.urepr(popualted_video, nl=-1)))
         >>> coco_dset.images(vidid=vidid).lookup('warp_img_to_vid')
 
         # TODO: make a demo dataset with some sort of gsd metadata
@@ -1390,12 +1390,12 @@ def check_unique_channel_names(coco_dset, gids=None, verbose=0):
             _check_unique_channel_names_in_image(coco_img)
         except AssertionError as ex:
             if verbose:
-                print('ERROR: ex = {}'.format(ub.repr2(ex, nl=1)))
+                print('ERROR: ex = {}'.format(ub.urepr(ex, nl=1)))
             errors.append(ex)
 
     if errors:
         error_summary = ub.dict_hist(map(str, errors))
-        raise AssertionError(ub.repr2(error_summary))
+        raise AssertionError(ub.urepr(error_summary))
 
 
 def _check_unique_channel_names_in_image(coco_img):
@@ -1495,7 +1495,7 @@ def rewrite_geotiffs(coco_dset):
             command = 'gdalwarp ' + ' '.join(options)
             cmdinfo = ub.cmd(command)
             if cmdinfo['ret'] != 0:
-                print('cmdinfo = {}'.format(ub.repr2(cmdinfo, nl=1)))
+                print('cmdinfo = {}'.format(ub.urepr(cmdinfo, nl=1)))
                 raise Exception('Command Errored')
 
             # Backup the original file
@@ -1880,7 +1880,7 @@ def _make_coco_img_from_geotiff(tiff_fpath, name=None):
         >>> tiff_fpath = product['bands'][0]
         >>> name = None
         >>> img = _make_coco_img_from_geotiff(tiff_fpath)
-        >>> print('img = {}'.format(ub.repr2(img, nl=1)))
+        >>> print('img = {}'.format(ub.urepr(img, nl=1)))
     """
     obj = {}
     if name is not None:
@@ -2069,7 +2069,7 @@ def _recompute_auxiliary_transforms(img):
     try:
         warp_wld_from_img = kwimage.Affine.coerce(base['warp_to_wld'])
     except Exception:
-        print('img = {}'.format(ub.repr2(img, nl=2)))
+        print('img = {}'.format(ub.urepr(img, nl=2)))
         raise
 
     warp_img_from_wld = warp_wld_from_img.inv()
@@ -2108,7 +2108,7 @@ def coco_channel_stats(coco_dset):
         >>> coco_dset = watch.coerce_kwcoco('vidshapes-watch')
         >>> from watch.utils import kwcoco_extensions
         >>> info = kwcoco_extensions.coco_channel_stats(coco_dset)
-        >>> print(ub.repr2(info, nl=3))
+        >>> print(ub.urepr(info, nl=3))
     """
     import kwcoco
     from kwcoco.coco_image import CocoImage
@@ -2897,5 +2897,5 @@ def reorder_video_frames(dset):
         info.append(video_report)
 
     dset._build_index()
-    print('reorder check info = {}'.format(ub.repr2(info, nl=1)))
+    print('reorder check info = {}'.format(ub.urepr(info, nl=1)))
     return info

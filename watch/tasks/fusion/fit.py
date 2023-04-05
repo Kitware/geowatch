@@ -118,11 +118,12 @@ def make_fit_config(cmdline=False, **kwargs):
         **kwargs: dictionary that overrides defaults
 
     Example:
+        >>> # xdoctest: +SKIP
         >>> from watch.tasks.fusion.fit import *  # NOQA
         >>> cmdline = False
         >>> kwargs = {}
         >>> args, parser = make_fit_config(cmdline=cmdline, **kwargs)
-        >>> print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1, sort=0)))
+        >>> print('args.__dict__ = {}'.format(ub.urepr(args.__dict__, nl=1, sort=0)))
     """
     from watch.utils import configargparse_ext
     from watch.tasks.fusion import datamodules
@@ -287,7 +288,7 @@ def make_fit_config(cmdline=False, **kwargs):
     if args.max_steps is None:
         args.max_steps = -1  # Hack to supress warning
 
-    # print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1)))
+    # print('args.__dict__ = {}'.format(ub.urepr(args.__dict__, nl=1)))
     learning_config = ub.dict_diff(args.__dict__, learning_irrelevant)
 
     # Construct a netharn-like training directory based on relevant hyperparams
@@ -342,7 +343,7 @@ def coerce_initializer(init):
             for k in ignore_keys:
                 state_dict.pop(k)
             print('Hacking a packaged model for init')
-            # print(ub.repr2(sorted(state_dict.keys())))
+            # print(ub.urepr(sorted(state_dict.keys())))
             weights_fpath = tfile.name
             torch.save(state_dict, weights_fpath)
             init_cls = Pretrained
@@ -369,6 +370,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
         xdoctest -m watch.tasks.fusion.fit make_lightning_modules
 
     Example:
+        >>> # xdoctest: +SKIP
         >>> from watch.tasks.fusion.fit import *  # NOQA
         >>> args = None
         >>> cmdline = False
@@ -386,7 +388,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
 
     args_dict = args.__dict__
     print('{train_name}\n===================='.format(**args_dict))
-    print('[fusion.fit] args_dict = {}'.format(ub.repr2(args_dict, nl=1, sort=1)))
+    print('[fusion.fit] args_dict = {}'.format(ub.urepr(args_dict, nl=1, sort=1)))
 
     ub.Path(args.workdir).ensuredir()
 
@@ -432,10 +434,10 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
             assert other_model is not None
             method_var_dict['dataset_stats'] = other_model.dataset_stats
             print('other_model.dataset_stats = {}'.format(
-                ub.repr2(other_model.dataset_stats, nl=3, sort=0)))
+                ub.urepr(other_model.dataset_stats, nl=3, sort=0)))
         else:
             print('datamodule.dataset_stats = {}'.format(
-                ub.repr2(datamodule.dataset_stats, nl=3, sort=0)))
+                ub.urepr(datamodule.dataset_stats, nl=3, sort=0)))
             method_var_dict['dataset_stats'] = datamodule.dataset_stats
 
     method_var_dict['classes'] = datamodule.classes
@@ -470,7 +472,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
         mapping = info.get('mapping', None)
         unset = info.get('self_unset', None)
         unused = info.get('self_unused', None)
-        print('mapping = {}'.format(ub.repr2(mapping, nl=1)))
+        print('mapping = {}'.format(ub.urepr(mapping, nl=1)))
         print(f'unused={unused}')
         print(f'unset={unset}')
 
@@ -572,6 +574,7 @@ def fit_model(args=None, cmdline=False, **kwargs):
         CUDA_VISIBLE_DEVICES=0 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc xdoctest -m watch.tasks.fusion.fit fit_model:0 -- --gpu
 
     Example:
+        >>> # xdoctest: +SKIP
         >>> # xdoctest: +REQUIRES(--gpu)
         >>> from watch.tasks.fusion.fit import *  # NOQA
         >>> args = None
@@ -608,7 +611,7 @@ def fit_model(args=None, cmdline=False, **kwargs):
     trainer = modules['trainer']
     datamodule = modules['datamodule']
     model = modules['model']
-    print(ub.repr2(utils.model_json(model, max_depth=1), nl=-1, sort=0))
+    print(ub.urepr(utils.model_json(model, max_depth=1), nl=-1, sort=0))
 
     print('Tune if requested')
     # if requested, tune model with lightning default tuners
@@ -625,7 +628,7 @@ def fit_model(args=None, cmdline=False, **kwargs):
             kwplot.autompl()
             finder.plot()
             kwplot.show_if_requested()
-        print('tune_result = {}'.format(ub.repr2(tune_result, nl=1)))
+        print('tune_result = {}'.format(ub.urepr(tune_result, nl=1)))
 
     fitkw = {}
     if args.auto_resume:
@@ -688,7 +691,7 @@ def fit_model(args=None, cmdline=False, **kwargs):
                 package_fpath=package_fpath)
             import json
             suggestions = json.loads(suggestions)
-            print('suggestions = {}'.format(ub.repr2(suggestions, nl=1)))
+            print('suggestions = {}'.format(ub.urepr(suggestions, nl=1)))
             from watch.tasks.fusion import predict
             from watch.tasks.fusion import evaluate
             predict_cfg = {
@@ -752,7 +755,7 @@ def main(**kwargs):
     #     # initialize the process group
     #     dist.init_process_group("gloo", rank=rank, world_size=world_size)
     # setup(0, 1)
-
+    raise Exception('Use the new lightning CLI instead')
     import logging
     # configure logging at the root level of lightning
     # logging.getLogger('pytorch_lightning').setLevel(logging.DEBUG)

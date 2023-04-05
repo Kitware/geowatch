@@ -102,7 +102,7 @@ class CocoStitchingManager(object):
         >>> self.finalize_image(gid)
         >>> # The new auxiliary image is now in our result dataset
         >>> result_img = result_dataset.coco_image(gid)
-        >>> print(ub.repr2(result_img.img, nl=-1))
+        >>> print(ub.urepr(result_img.img, nl=-1))
         >>> assert 'df1' in result_img.channels
         >>> im1 = result_img.imdelay('df1', space='video')
         >>> im2 = result_img.imdelay(channels='df1', space='asset')
@@ -130,7 +130,7 @@ class CocoStitchingManager(object):
         >>> self.finalize_image(gid)
         >>> # The new auxiliary image is now in our result dataset
         >>> result_img = result_dataset.coco_image(gid)
-        >>> print(ub.repr2(result_img.img, nl=-1))
+        >>> print(ub.urepr(result_img.img, nl=-1))
         >>> assert 'df1' in result_img.channels
         >>> im1 = result_img.imdelay('df1', space='image')
         >>> im2 = result_img.imdelay(channels='df1', space='asset')

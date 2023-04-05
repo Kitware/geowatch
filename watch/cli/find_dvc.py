@@ -106,7 +106,7 @@ class FindDVCConfig(scfg.Config):
             must_exist = command == 'find'
 
         if verbose > 1:
-            print('config = {}'.format(ub.repr2(cli_config, nl=1)))
+            print('config = {}'.format(ub.urepr(cli_config, nl=1)))
 
         registry = util_data.DataRegistry()
         if command == 'list':

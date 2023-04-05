@@ -441,7 +441,7 @@ def sample_video_spacetime_targets(dset,
         cacher.save(sample_grid)
     vidid_to_meta = sample_grid['vidid_to_meta']
     from watch.utils.slugify_ext import smart_truncate
-    print('vidid_to_meta = {}'.format(smart_truncate(ub.repr2(vidid_to_meta, nl=-1), max_length=1600, head='\n~...', tail='\n...~')))
+    print('vidid_to_meta = {}'.format(smart_truncate(ub.urepr(vidid_to_meta, nl=-1), max_length=1600, head='\n~...', tail='\n...~')))
     return sample_grid
 
 
@@ -985,7 +985,7 @@ def make_track_based_spatial_samples(coco_dset):
         positives_samples = positives.to_cxywh()
         positives_samples.data[:, 2] = winspace_space_dims[0]
         positives_samples.data[:, 3] = winspace_space_dims[1]
-        print('positive_boxes = {}'.format(ub.repr2(positive_boxes, nl=1)))
+        print('positive_boxes = {}'.format(ub.urepr(positive_boxes, nl=1)))
 
         video = coco_dset.index.videos[vidid]
         full_dims = [video['height'], video['width']]

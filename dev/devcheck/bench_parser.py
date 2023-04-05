@@ -19,7 +19,7 @@ def benchmark_parse():
         with timer:
             parse.parse(pattern, 'foo')
 
-    print('ti.rankings = {}'.format(ub.repr2(
+    print('ti.rankings = {}'.format(ub.urepr(
         ti.rankings, nl=1, precision=8, align=':')))
 
 if __name__ == '__main__':

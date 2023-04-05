@@ -46,9 +46,9 @@ VALI_FPATH=$DVC_DATA_DPATH/vidshapes_rgb_vali/data.kwcoco.json
 TEST_FPATH=$DVC_DATA_DPATH/vidshapes_rgb_test/data.kwcoco.json
 
 # Generate toy datasets using the "kwcoco toydata" tool
-kwcoco toydata vidshapes1-frames5 --bundle_dpath "$DVC_DATA_DPATH"/vidshapes_rgb_train
-kwcoco toydata vidshapes4-frames5 --bundle_dpath "$DVC_DATA_DPATH"/vidshapes_rgb_vali
-kwcoco toydata vidshapes2-frames6 --bundle_dpath "$DVC_DATA_DPATH"/vidshapes_rgb_test
+kwcoco toydata vidshapes1-frames5-amazon --bundle_dpath "$DVC_DATA_DPATH"/vidshapes_rgb_train
+kwcoco toydata vidshapes4-frames5-amazon --bundle_dpath "$DVC_DATA_DPATH"/vidshapes_rgb_vali
+kwcoco toydata vidshapes2-frames6-amazon --bundle_dpath "$DVC_DATA_DPATH"/vidshapes_rgb_test
 
 
 echo "
@@ -133,6 +133,7 @@ DATASET_CODE=ToyRGB
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 MAX_STEPS=512
 TARGET_LR=3e-4
+WEIGHT_DECAY=$(python -c "print($TARGET_LR * 1e-2)")
 python -m watch.tasks.fusion fit --config "
 data:
     num_workers          : 4
@@ -157,18 +158,18 @@ lr_scheduler:
     anneal_strategy: cos
     pct_start: 0.05
 optimizer:
-  class_path: torch.optim.Adam
+  class_path: torch.optim.AdamW
   init_args:
     lr: $TARGET_LR
-    weight_decay: 1e-5
+    weight_decay: $WEIGHT_DECAY
     betas:
       - 0.9
       - 0.99
 trainer:
   accumulate_grad_batches: 1
   default_root_dir     : $DEFAULT_ROOT_DIR
-  accelerator          : gpu
-  devices              : 0,
+  accelerator          : cpu
+  devices              : 1
   #devices             : 0,1
   #strategy            : ddp
   check_val_every_n_epoch: 1
@@ -178,8 +179,6 @@ trainer:
   logger: true
   max_steps: $MAX_STEPS
   num_sanity_val_steps: 0
-  replace_sampler_ddp: true
-  track_grad_norm: 2
   limit_val_batches    : 64
   limit_train_batches  : 16
   callbacks:

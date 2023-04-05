@@ -336,7 +336,7 @@ def hack_track_categories(track_catnames, task):
         >>> for kw in ub.named_product(basis):
         >>>     task = kw['task']
         >>>     track_catnames = kw['track_catnames']
-        >>>     print('kw = {}'.format(ub.repr2(kw, nl=1)))
+        >>>     print('kw = {}'.format(ub.urepr(kw, nl=1)))
         >>>     print(hack_track_categories(track_catnames, task))
 
     Example:
@@ -626,7 +626,7 @@ def build_image_header_text(**kwargs):
         >>>     '_header_extra': None,
         >>> }
         >>> header_lines = build_image_header_text(**kwargs)
-        >>> print('header_lines = {}'.format(ub.repr2(header_lines, nl=1)))
+        >>> print('header_lines = {}'.format(ub.urepr(header_lines, nl=1)))
     """
     img = kwargs.get('img', {})
     _header_extra = kwargs.get('_header_extra', None)

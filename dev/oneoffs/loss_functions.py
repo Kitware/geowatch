@@ -209,7 +209,7 @@ def single_example_loss_functions():
             'type': loss_info['cls'].__name__,
             **kwargs
         }
-        title = ub.repr2(loss_json, compact=True, sort=0, nl=1)
+        title = ub.urepr(loss_json, compact=True, sort=0, nl=1)
         print('title = {}'.format(title))
         loss_info['title'] = title
 
@@ -285,7 +285,7 @@ def single_example_loss_functions():
 
         for loss_info in loss_infos:
             input = inputs[loss_info['input_style']]
-            # print('loss_info = {}'.format(ub.repr2(loss_info, nl=1)))
+            # print('loss_info = {}'.format(ub.urepr(loss_info, nl=1)))
             target = targets[loss_info['target_style']]
             loss_instance = loss_info['instance']
 

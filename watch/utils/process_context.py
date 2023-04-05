@@ -43,7 +43,7 @@ class ProcessContext:
         >>> if torch.cuda.is_available():
         >>>     device = torch.device(0)
         >>>     self.add_device_info(device)
-        >>> print('obj = {}'.format(ub.repr2(obj, nl=3)))
+        >>> print('obj = {}'.format(ub.urepr(obj, nl=3)))
     """
 
     def __init__(self, name=None, type='process', args=None, config=None,
@@ -205,7 +205,7 @@ class ProcessContext:
                 emissions_tracker = EmissionsTracker(log_level='error')
                 emissions_tracker.start()
             except Exception as ex:
-                print('ex = {}'.format(ub.repr2(ex, nl=1)))
+                print('ex = {}'.format(ub.urepr(ex, nl=1)))
                 print('Online emissions tracker is not available. Trying offline')
                 if self._emission_backend == 'auto':
                     backend = 'offline'

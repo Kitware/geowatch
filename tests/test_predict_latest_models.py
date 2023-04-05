@@ -207,7 +207,7 @@ def make_small_kwcoco_subset(dset, output_dpath):
     subset.fpath = str(output_dpath / 'test_input.kwcoco.json')
 
     stats = kwcoco_extensions.coco_channel_stats(subset)
-    print('stats = {}'.format(ub.repr2(stats, nl=2)))
+    print('stats = {}'.format(ub.urepr(stats, nl=2)))
 
     subset.dump(subset.fpath, newlines=True)
     return subset

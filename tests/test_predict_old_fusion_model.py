@@ -111,7 +111,7 @@ def make_small_kwcoco_subset(dset, output_dpath):
         transform_dict.clear()
         transform_dict.update(fixed)
     stats = kwcoco_extensions.coco_channel_stats(subset)
-    print('stats = {}'.format(ub.repr2(stats, nl=2)))
+    print('stats = {}'.format(ub.urepr(stats, nl=2)))
     subset.dump(subset.fpath, newlines=True)
     return subset
 
