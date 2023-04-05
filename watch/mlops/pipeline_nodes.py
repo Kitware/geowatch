@@ -228,7 +228,7 @@ class Pipeline:
         for _, row in df[df['maybe_required']].iterrows():
             default[row['node'] + '.' + row['key']] = None
         from watch.utils import util_yaml
-        rich.print(util_yaml.yaml_dumps(default))
+        rich.print(util_yaml.Yaml.dumps(default))
 
     @profile
     def configure(self, config=None, root_dpath=None, cache=True):

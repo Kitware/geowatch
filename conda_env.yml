@@ -9,6 +9,7 @@ dependencies:
   - pip:
     - -r requirements/runtime.txt
     - -r requirements/development.txt
+    - -r requirements/tests.txt
 
     # Brings in opencv-python, which conflicts with opencv-python-headless
     #- imgaug >= 0.4.0

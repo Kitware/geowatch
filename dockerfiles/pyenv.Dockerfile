@@ -1,8 +1,14 @@
 # syntax=docker/dockerfile:1.5.0
 
+# **************************************************
+# The pyenv dockerfile builds a cuda compatible pyenv
+# environment with a specific version precompiled and builtin.
+#
 # This dockerfile uses new-ish buildkit syntax. 
 # Details on how to run are on the bottom of the file.
 # (docker devs: todo unconsequential heredocs)
+#
+# **************************************************
 
 FROM nvidia/cuda:11.4.3-cudnn8-devel-ubuntu20.04
 
@@ -65,7 +71,6 @@ EOF
 #SHELL ["/bin/bash", "--login", "-c"]
 
 ENV PATH="$PYENV_ROOT/shims:$PYENV_ROOT/bin:$PATH"
-
 
 # pyenv prefix is not working. We should be able to hack it?
 env PYENV_PREFIX=/root/.pyenv/versions/$PYTHON_VERSION
@@ -154,8 +159,8 @@ EOF
 ### __DOCS__ ###
 ################
 RUN <<EOF
+echo '
 # https://www.docker.com/blog/introduction-to-heredocs-in-dockerfiles/
-echo "
 
 # docker login
 # docker pull docker/dockerfile:1.3.0-labs
@@ -184,5 +189,8 @@ docker run --runtime=nvidia -it pyenv:311 bash
 #docker tag pyenv:310 gitlab.kitware.com:4567/smart/watch/pyenv:310
 #docker push gitlab.kitware.com:4567/smart/watch/pyenv:310
 # docker buildx build -t "pyenv3.10" -f ./pyenv.Dockerfile --build-arg BUILD_STRICT=1 .
-"
+
+# SeeAlso:
+# ~/code/ci-docker/pyenv.dockerfile
+'
 EOF

@@ -260,7 +260,7 @@ def main():
                 'metrics': row & metric_cols,
             }
             summary_fpath = row_dpath / 'summary.yaml'
-            yaml_text = util_yaml.yaml_dumps(summary)
+            yaml_text = util_yaml.Yaml.dumps(summary)
             summary_fpath.write_text(yaml_text)
             # summary_fpath.write_text(json.dumps(summary, indent='   '))
             rich_mod.print('summary = {}'.format(ub.urepr(summary, nl=2)))

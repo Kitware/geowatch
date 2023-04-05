@@ -138,7 +138,7 @@ def coerce_patterned_paths(data, expected_extension=None):
     resolved_globs = []
     for data in datas:
         if isinstance(data, str):
-            loaded = util_yaml.yaml_loads(data)
+            loaded = util_yaml.Yaml.loads(data)
             if isinstance(loaded, str):
                 loaded = [loaded]
             resolved_globs.extend(loaded)

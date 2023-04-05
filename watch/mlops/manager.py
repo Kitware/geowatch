@@ -27,6 +27,7 @@ Example:
     python -m watch.mlops.manager "list" --dataset_codes Drop4-BAS
     python -m watch.mlops.manager "list" --dataset_codes Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC
     python -m watch.mlops.manager "list" --dataset_codes Drop6 Drop4-BAS
+    python -m watch.mlops.manager "list" --dataset_codes Drop6 Drop6-MeanYear10GSD
 
     # On training machine
     python -m watch.mlops.manager "push packages" --dataset_codes Drop6
@@ -765,7 +766,7 @@ class ExperimentState(ub.NiceRepr):
 
         if ready_packages is not None:
             from watch.utils import util_yaml
-            print(util_yaml.yaml_dumps({
+            print(util_yaml.Yaml.dumps({
                 'ready_packages': ready_packages,
             }))
             # print('ready_packages = {}'.format(ub.urepr(ready_packages, nl=1)))

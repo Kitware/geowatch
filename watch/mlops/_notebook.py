@@ -261,7 +261,7 @@ def _namek_check_pipeline_status():
             submatrices.append(row)
 
     from watch.utils import util_yaml
-    submat_text = util_yaml.yaml_dumps({'submatrices': submatrices})
+    submat_text = util_yaml.Yaml.dumps({'submatrices': submatrices})
     fpath = ub.Path('foo.yaml').absolute()
     fpath.write_text(submat_text)
 
