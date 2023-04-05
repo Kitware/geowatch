@@ -185,7 +185,9 @@ run_linter:
               source $PYENV_ROOT/completions/pyenv.bash
               export PYENV_PREFIX=$(pyenv prefix)
           fi
-          pyenv global 3.11
+        - echo "PATH=$PATH" || true
+        - pyenv global 3.11
+        - echo "PATH=$PATH" || true
         - python -m pip install pip -U
         - ls -al
         - python -m pip install -r requirements/linting.txt 
