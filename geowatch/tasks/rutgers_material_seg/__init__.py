@@ -1,0 +1,1 @@
+from watch.tasks.rutgers_material_seg import *  # NOQA

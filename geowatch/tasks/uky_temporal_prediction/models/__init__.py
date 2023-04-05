@@ -1,0 +1,1 @@
+from watch.tasks.uky_temporal_prediction.models import *  # NOQA

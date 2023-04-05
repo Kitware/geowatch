@@ -427,14 +427,15 @@ def main(cmdline=True, **kwargs):
                 '--performer=kit',  # parameterize
                 '--eval_num=0',
                 '--eval_run_num=0',
-                '--serial',
                 # '--no-db',
-                '--sequestered_id',
-                'seq',  # default None broken on autogen branch
+                '--sequestered_id', '',
+                # 'seq',  # default None broken on autogen branch
             ]
             # Add parallel flag if requested
             if args.parallel:
                 run_eval_command += ['--parallel']
+            else:
+                run_eval_command += ['--serial']
         else:
             run_eval_command += [
                 '--cache_dir',

@@ -1,0 +1,1 @@
+from watch.tasks.fusion import *  # NOQA

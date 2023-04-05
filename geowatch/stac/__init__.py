@@ -1,0 +1,1 @@
+from watch.stac import *  # NOQA

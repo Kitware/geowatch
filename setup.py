@@ -262,7 +262,11 @@ if __name__ == '__main__':
             ],
         },
         name='watch',
-        packages=find_packages(include=['watch', 'watch.*']),
+        packages=find_packages(include=[
+            'watch', 'watch.*',
+            # Alias the module while we transition to a new name.
+            'geowatch', 'geowatch.*',
+        ]),
         url='https://gitlab.kitware.com/watch/watch.git',
         version=VERSION,
         zip_safe=False,
