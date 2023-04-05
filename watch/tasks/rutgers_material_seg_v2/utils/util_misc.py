@@ -127,9 +127,9 @@ def get_crop_slices(height, width, crop_height, crop_width, step=None, mode='exa
     Args:
         height (int): The height of the image to be cropped (y-axis).
         width (int): The width of the image to be cropped (x-axis).
-        crop_height (int): The size of the crop height. Note: For certain modes, 
+        crop_height (int): The size of the crop height. Note: For certain modes,
             e.g. mode = 'under', crop height must be less than original image height.
-        crop_width (int): The size of the crop width. Note: For certain modes, 
+        crop_width (int): The size of the crop width. Note: For certain modes,
             e.g. mode = 'under', crop width must be less than original image width.
         step (int): Distance in pixels to move crop window, defauls to size of the crop along that direction, i.e. no overlap.
         mode (str, optional): Method for how to handle edge cases. Defaults to 'exact'.
@@ -235,6 +235,7 @@ def get_crop_slices(height, width, crop_height, crop_width, step=None, mode='exa
         raise NotImplementedError(f'Invalid mode: {mode}')
 
     return crop_slices
+
 
 def filter_image_ids_by_season(coco_dset, image_ids, filtered_seasons):
     hemipshere_to_season_map = {

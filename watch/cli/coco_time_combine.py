@@ -115,11 +115,11 @@ class TimeCombineConfig(scfg.DataConfig):
 
     spatial_tile_size = scfg.Value(None, help=ub.paragraph(
         '''
-            The size of the tiling over space to use when computing the average. 
+            The size of the tiling over space to use when computing the average.
             If None, the average is computed on the entire stack of images at
             once.
         '''))
-    
+
     filter_season = scfg.Value(None, help=ub.paragraph(
         '''
             Images within this season(s) will be excluded from the average operation.
@@ -582,7 +582,7 @@ def combine_kwcoco_channels_temporally(config):
                     # Check assumption that we are using video space for merging.
                     if space != 'video':
                         raise ValueError(f'Spatial tiling assumes merging in video space, not "{space}" space.')
-                    
+
                     # Get video height and width for given resolution.
                     scale_asset_from_vid = window_coco_images[0]._scalefactor_for_resolution(resolution=resolution, space='video')
                     video_dsize = kwimage.Box.from_dsize((video['width'], video['height']))
@@ -594,10 +594,10 @@ def combine_kwcoco_channels_temporally(config):
 
                     ## Check that crop size is not bigger than the video size.
                     if video_height < spatial_tile_size:
-                         spatial_height_size = video_height
+                        spatial_height_size = video_height
                     else:
                         spatial_height_size = spatial_tile_size
-                    
+
                     if video_width < spatial_tile_size:
                         spatial_width_size = video_height
                     else:
@@ -606,17 +606,17 @@ def combine_kwcoco_channels_temporally(config):
                     crop_slices = get_crop_slices(video_height, video_width, spatial_height_size, spatial_width_size, step=min(spatial_height_size, spatial_width_size), mode='exact')
 
                     job = jobs.submit(merge_images_tiled, window_coco_images,
-                                    merge_method, requested_chans, space,
-                                    resolution, new_bundle_dpath,
-                                    mask_low_quality, s2_weight_factor,
-                                    og_kwcoco_fpath, crop_slices)
+                                      merge_method, requested_chans, space,
+                                      resolution, new_bundle_dpath,
+                                      mask_low_quality, s2_weight_factor,
+                                      og_kwcoco_fpath, crop_slices)
                     job.merge_images = merge_images_tiled
                 else:
                     job = jobs.submit(merge_images, window_coco_images,
-                                    merge_method, requested_chans, space,
-                                    resolution, new_bundle_dpath,
-                                    mask_low_quality, s2_weight_factor,
-                                    og_kwcoco_fpath)
+                                      merge_method, requested_chans, space,
+                                      resolution, new_bundle_dpath,
+                                      mask_low_quality, s2_weight_factor,
+                                      og_kwcoco_fpath)
                     job.merge_images = merge_images
 
             for job in pman.progiter(jobs.as_completed(),
@@ -921,9 +921,10 @@ def merge_images(window_coco_images, merge_method, requested_chans, space,
 
     return final_img
 
+
 def merge_images_tiled(window_coco_images, merge_method, requested_chans, space,
-                 resolution, new_bundle_dpath, mask_low_quality,
-                 s2_weight_factor, og_kwcoco_fpath, crop_slices):
+                       resolution, new_bundle_dpath, mask_low_quality,
+                       s2_weight_factor, og_kwcoco_fpath, crop_slices):
     """
     Args:
         window_coco_images (List[kwcoco.CocoImage]): images with channels to merge
@@ -939,7 +940,7 @@ def merge_images_tiled(window_coco_images, merge_method, requested_chans, space,
     from watch.utils import util_time
 
     if crop_slices is None:
-        raise ValueError(f'If crop slices are not provided, use merge_images instead. Not merge_images_tiled function.')
+        raise ValueError('If crop slices are not provided, use merge_images instead. Not merge_images_tiled function.')
 
     # Determine what channels are available in this image set
     available_chans_set = set(ub.flatten([g.channels.fuse().to_set() for g in window_coco_images]))
@@ -984,7 +985,7 @@ def merge_images_tiled(window_coco_images, merge_method, requested_chans, space,
 
     for crop_slice in crop_slices:
         h0, w0, dh, dw = crop_slice
-        height_slice, width_slice = slice(h0, h0+dh), slice(w0, w0+dw)
+        height_slice, width_slice = slice(h0, h0 + dh), slice(w0, w0 + dw)
 
         # Load and combine the images within this range.
         if merge_method == 'mean':
@@ -1153,7 +1154,6 @@ def merge_images_tiled(window_coco_images, merge_method, requested_chans, space,
     final_img = tmp_dset.imgs[gid]
 
     return final_img
-
 
 
 __config__ = TimeCombineConfig
