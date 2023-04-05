@@ -50,7 +50,7 @@ class RPCTransform(object):
         >>>     [20000, 20000],
         >>> ])
         >>> wld_pts = self.warp_world_from_pixel(pxl_pts)
-        >>> print('wld_pts =\n{}'.format(ub.repr2(wld_pts, nl=1, precision=2)))
+        >>> print('wld_pts =\n{}'.format(ub.urepr(wld_pts, nl=1, precision=2)))
         wld_pts =
         np.array([[128.87,  37.8 ],
                   [128.87,  37.7 ],
@@ -59,7 +59,7 @@ class RPCTransform(object):
 
         >>> wld_pts = np.array([[self.rpcs.long_off, self.rpcs.lat_off]])
         >>> pxl_pts = self.warp_pixel_from_world(wld_pts)
-        >>> print('pxl_pts = {}'.format(ub.repr2(pxl_pts, nl=1, precision=2)))
+        >>> print('pxl_pts = {}'.format(ub.urepr(pxl_pts, nl=1, precision=2)))
         pxl_pts = np.array([[17576.2 , 10690.73]]...)
     """
 
@@ -289,7 +289,7 @@ class RPCTransform(object):
             >>>     [20000, 20000],
             >>> ])
             >>> wld_pts = self.warp_world_from_pixel(pxl_pts)
-            >>> print('wld_pts =\n{}'.format(ub.repr2(wld_pts, nl=1, precision=2)))
+            >>> print('wld_pts =\n{}'.format(ub.urepr(wld_pts, nl=1, precision=2)))
             >>> #
             >>> import osgeo
             >>> from watch.gis.spatial_reference import *  # NOQA

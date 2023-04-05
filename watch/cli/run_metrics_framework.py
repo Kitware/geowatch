@@ -212,9 +212,9 @@ def main(cmdline=True, **kwargs):
         >>>     roi='DR_R003',
         >>>     num_sites=11, num_observations=10, noise=3, p_observe=0.5,
         >>>     p_transition=0.2, drop_noise=0.3, drop_limit=0.5)
-        >>> print('demo_info1 = {}'.format(ub.repr2(demo_info1, nl=1)))
-        >>> print('demo_info2 = {}'.format(ub.repr2(demo_info2, nl=1)))
-        >>> print('demo_info3 = {}'.format(ub.repr2(demo_info3, nl=1)))
+        >>> print('demo_info1 = {}'.format(ub.urepr(demo_info1, nl=1)))
+        >>> print('demo_info2 = {}'.format(ub.urepr(demo_info2, nl=1)))
+        >>> print('demo_info3 = {}'.format(ub.urepr(demo_info3, nl=1)))
         >>> out_dpath = dpath / 'region_metrics'
         >>> merge_fpath = dpath / 'merged.json'
         >>> out_dpath.delete()
@@ -239,7 +239,7 @@ def main(cmdline=True, **kwargs):
 
     # args, _ = parser.parse_known_args(args)
     config_dict = config.asdict()
-    print('config = {}'.format(ub.repr2(config_dict, nl=2, sort=0)))
+    print('config = {}'.format(ub.urepr(config_dict, nl=2, sort=0)))
 
     try:
         # Do we have the latest and greatest?
@@ -479,7 +479,7 @@ def main(cmdline=True, **kwargs):
                     print('error in metrics framework, probably due to zero '
                           'TP site matches or a region without site truth.')
 
-    print('out_dirs = {}'.format(ub.repr2(out_dirs, nl=1)))
+    print('out_dirs = {}'.format(ub.urepr(out_dirs, nl=1)))
     if args.merge and out_dirs:
         from watch.tasks.metrics.merge_iarpa_metrics import merge_metrics_results
         from watch.tasks.metrics.merge_iarpa_metrics import iarpa_bas_color_legend

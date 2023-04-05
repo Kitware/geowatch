@@ -52,8 +52,8 @@ def parallel_map_items(catalog,
         >>> catalog = pystac.Catalog.from_file(catalog_fpath)
         >>> def demo_mapper_func(item):
         >>>     import copy
-        >>>     print('Process: item = {}'.format(ub.repr2(item, nl=1)))
-        >>>     print('item.assets = {}'.format(ub.repr2(item.assets, nl=1)))
+        >>>     print('Process: item = {}'.format(ub.urepr(item, nl=1)))
+        >>>     print('item.assets = {}'.format(ub.urepr(item.assets, nl=1)))
         >>>     if 'data' not in item.assets:
         >>>         print('Drop asset without data')
         >>>         return None  # drop assets without data

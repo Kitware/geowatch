@@ -83,7 +83,7 @@ class BatchVisualizationBuilder:
         >>> rescale = 0
         >>> draw_weights = 1
         >>> rescaled_item = self[rescaled_target]
-        >>> print(ub.repr2(self.summarize_item(native_item), nl=-1, sort=0))
+        >>> print(ub.urepr(self.summarize_item(native_item), nl=-1, sort=0))
         >>> native_item_output = BatchVisualizationBuilder.populate_demo_output(native_item, self.sampler.classes, rng=0)
         >>> rescaled_item_output = BatchVisualizationBuilder.populate_demo_output(rescaled_item, self.sampler.classes, rng=0)
         >>> #rescaled_item_output = None
@@ -107,7 +107,7 @@ class BatchVisualizationBuilder:
         >>> plt.gcf().tight_layout()
         >>> ######
         >>> # Resample the same item, but without native sampling for comparison
-        >>> print(ub.repr2(self.summarize_item(rescaled_item), nl=-1, sort=0))
+        >>> print(ub.urepr(self.summarize_item(rescaled_item), nl=-1, sort=0))
         >>> builder = BatchVisualizationBuilder(
         >>>     rescaled_item, rescaled_item_output, classes=self.classes,
         >>>     requested_tasks=requested_tasks,
@@ -221,7 +221,7 @@ class BatchVisualizationBuilder:
                 print('---')
                 print('idx = {!r}'.format(idx))
                 frame_weight_shape = ub.map_vals(lambda x: x.shape, frame_meta['frame_weight'])
-                print('frame_weight_shape = {}'.format(ub.repr2(frame_weight_shape, nl=1)))
+                print('frame_weight_shape = {}'.format(ub.urepr(frame_weight_shape, nl=1)))
                 frame_meta['frame_weight']
         canvas = builder._build_canvas(frame_metas)
         return canvas

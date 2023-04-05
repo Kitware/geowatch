@@ -30,12 +30,12 @@ def main(**kwargs):
 
     """
     config = FilterBySensorConfig(kwargs, cmdline=True)
-    # print('config = {}'.format(ub.repr2(dict(config), nl=1)))
+    # print('config = {}'.format(ub.urepr(dict(config), nl=1)))
 
     print('read dataset')
     dset = kwcoco.CocoDataset(config['src'])
 
-    print('dset.index.videos = {}'.format(ub.repr2(dset.index.videos, nl=2, precision=4)))
+    print('dset.index.videos = {}'.format(ub.urepr(dset.index.videos, nl=2, precision=4)))
     gids_to_remove = []
     aids_to_remove = []
     for gid, img in dset.index.imgs.items():

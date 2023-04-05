@@ -31,7 +31,7 @@ def random_geo_points(num, rng=None):
     Example:
         >>> from watch.demo.metrics_demo.demo_utils import *  # NOQA
         >>> latlon = random_geo_points(num=3, rng=0)
-        >>> print(ub.repr2(latlon, precision=4))
+        >>> print(ub.urepr(latlon, precision=4))
         np.array([[ 16.1579,   5.6025],
                   [-27.4843,  25.4916],
                   [ 52.5219,  11.8603]], dtype=np.float64)
@@ -84,7 +84,7 @@ def random_geo_polygon(max_rt_area=10_000, rng=None):
         >>> max_rt_area = 10000
         >>> region_poly = random_geo_polygon(max_rt_area, rng=321)
         >>> geo_poly = region_poly.round(6).to_geojson()
-        >>> print('geo_poly = {}'.format(ub.repr2(geo_poly, nl=-1)))
+        >>> print('geo_poly = {}'.format(ub.urepr(geo_poly, nl=-1)))
         geo_poly = {
             'coordinates': [
                 [
@@ -174,7 +174,7 @@ def random_time_sequence(min_date_iso, max_date_iso, num_observations, rng=None)
         >>> max_date_iso = '2017-10-27'
         >>> num_observations = 3
         >>> obs_sequence = random_time_sequence(min_date_iso, max_date_iso, num_observations, rng=9320)
-        >>> print('obs_sequence = {}'.format(ub.repr2(obs_sequence, nl=1)))
+        >>> print('obs_sequence = {}'.format(ub.urepr(obs_sequence, nl=1)))
         obs_sequence = [
             datetime.datetime(1997, 9, 17, 20, 49, 7, 888653),
             datetime.datetime(2001, 6, 29, 17, 43, 36, 108233),

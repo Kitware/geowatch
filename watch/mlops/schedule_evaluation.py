@@ -260,7 +260,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
     from watch.utils import util_progress
     import pandas as pd
     config = ScheduleEvaluationConfig.cli(cmdline=cmdline, data=kwargs)
-    print('ScheduleEvaluationConfig config = {}'.format(ub.repr2(dict(config), nl=1, sv=1)))
+    print('ScheduleEvaluationConfig config = {}'.format(ub.urepr(dict(config), nl=1, sv=1)))
 
     if config['root_dpath'] in {None, 'auto'}:
         expt_dvc_dpath = watch.find_smart_dvc_dpath(tags='phase2_expt', hardware='auto')

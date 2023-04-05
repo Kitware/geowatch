@@ -80,7 +80,7 @@ def trace_json_lineage(fpath):
             print(f'name={name}')
             print(proc['properties']['start_timestamp'])
             print(proc['properties']['emissions']['run_id'])
-            print('proc = {}'.format(ub.repr2(proc, nl=2)))
+            print('proc = {}'.format(ub.urepr(proc, nl=2)))
         # print(proc['properties']['name'])
 
 

@@ -777,7 +777,7 @@ class FusionEncoder(nn.Module):
         >>>     num_params = nh.util.number_of_parameters(self)
         >>>     row = {'arch': key, 'num_params': num_params}
         >>>     row.update(config)
-        >>>     print('row = {}'.format(ub.repr2(row, nl=0, sort=0)))
+        >>>     print('row = {}'.format(ub.urepr(row, nl=0, sort=0)))
         >>>     rows.append(row)
         >>> import pandas as pd
         >>> data = pd.DataFrame(rows).sort_values('num_params')
@@ -908,7 +908,7 @@ def _build_global_configs():
 
 encoder_configs = _build_global_configs()
 
-# print('encoder_configs = {}'.format(ub.repr2(list(encoder_configs.keys(), nl=1)))
+# print('encoder_configs = {}'.format(ub.urepr(list(encoder_configs.keys(), nl=1)))
 
 # ========================================
 # Below is an implementation of the transformer architecture that uses the

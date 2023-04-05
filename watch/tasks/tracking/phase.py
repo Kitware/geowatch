@@ -267,7 +267,7 @@ def class_label_smoothing(track_cats, transition_probs=None,
         >>> transition_probs = 'v1'
         >>> emission_probs = 'v6'
         >>> smoothed_cats = class_label_smoothing(track_cats, transition_probs, emission_probs)
-        >>> print('smoothed_cats = {}'.format(ub.repr2(smoothed_cats, nl=1)))
+        >>> print('smoothed_cats = {}'.format(ub.urepr(smoothed_cats, nl=1)))
         smoothed_cats = [
             'No Activity',
             'No Activity',

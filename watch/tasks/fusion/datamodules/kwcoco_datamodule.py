@@ -406,7 +406,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             )
             ub.inject_method(self, lambda self: self._make_dataloader('test', shuffle=False), 'test_dataloader')
 
-        print('self.torch_datasets = {}'.format(ub.repr2(self.torch_datasets, nl=1)))
+        print('self.torch_datasets = {}'.format(ub.urepr(self.torch_datasets, nl=1)))
         self._notify_about_tasks(self.requested_tasks)
         self.did_setup = True
 
@@ -574,7 +574,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             >>>             outputs['class_probs'][-1].append(torch.rand(H, W, 10))
             >>>             outputs['saliency_probs'][-1].append(torch.rand(H, W, 2))
             >>> from watch.utils import util_nesting
-            >>> print(ub.repr2(util_nesting.shape_summary(outputs), nl=1, sort=0))
+            >>> print(ub.urepr(util_nesting.shape_summary(outputs), nl=1, sort=0))
             >>> stage = 'train'
             >>> canvas = self.draw_batch(batch, stage=stage, outputs=outputs, max_items=4)
             >>> # xdoctest: +REQUIRES(--show)

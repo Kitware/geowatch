@@ -34,7 +34,7 @@ def evaluation_report():
     from watch.mlops.old.expt_report import *  # NOQA
 
     row = reporter.orig_merged_df.loc[121]
-    print(ub.repr2(row.to_dict(), nl=1))
+    print(ub.urepr(row.to_dict(), nl=1))
     path = reporter.orig_merged_df.loc[121]['raw']
 
     import platform
@@ -42,7 +42,7 @@ def evaluation_report():
     path.shrinkuser(home=f'$HOME/remote/{host}')
 
 
-    print(ub.repr2(row.to_dict(), nl=1))
+    print(ub.urepr(row.to_dict(), nl=1))
     """
     import kwplot
     kwplot.autosns()
@@ -151,13 +151,13 @@ class EvaluationReporter:
         primary_metrics = (ub.oset(['act.poly.metrics.sc_macro_f1', 'trk.poly.metrics.bas_faa_f1']) & metric_cols)
         metric_cols = list((metric_cols & primary_metrics) | (metric_cols - primary_metrics))
 
-        # print('orig_merged_df.columns = {}'.format(ub.repr2(list(orig_merged_df.columns), nl=1)))
+        # print('orig_merged_df.columns = {}'.format(ub.urepr(list(orig_merged_df.columns), nl=1)))
         id_cols = list(ub.oset(id_names) & orig_merged_df.columns)
 
         # test_datasets = orig_merged_df['test_dset'].dropna().unique().tolist()
         # if verbose:
         #     rich.print('[orange1]-- REPORTING BEST --')
-        #     print('test_datasets = {}'.format(ub.repr2(test_datasets, nl=1)))
+        #     print('test_datasets = {}'.format(ub.urepr(test_datasets, nl=1)))
 
         grouped_shortlists = {}
         group_keys = ub.oset(['test_trk_dset', 'test_act_dset', 'type'])
@@ -222,7 +222,7 @@ class EvaluationReporter:
                 resolved = reporter._build_cfg_rlut(keys)
                 resolved = ub.udict(resolved).subdict(keys)
                 if verbose and show_configs:
-                    rich.print('resolved = {}'.format(ub.repr2(resolved, sort=0, nl=2)))
+                    rich.print('resolved = {}'.format(ub.urepr(resolved, sort=0, nl=2)))
 
             # test_dset_to_best[test_dset] =
             if verbose:
@@ -354,7 +354,7 @@ class EvaluationReporter:
                 eval_types = tuple(sorted(group['type'].unique()))
                 eval_types_to_locs[eval_types].extend(group.index)
             print('Cross-Metric Comparable Locs')
-            print(ub.repr2(ub.map_vals(len, eval_types_to_locs)))
+            print(ub.urepr(ub.map_vals(len, eval_types_to_locs)))
             comparable_locs = list(ub.flatten(v for k, v in eval_types_to_locs.items() if len(k) > 0))
             reporter.comp_df = comp_df = filt_df.loc[comparable_locs]
 

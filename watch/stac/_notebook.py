@@ -44,9 +44,9 @@ def print_provider_debug_information():
     print(f'There are {len(unique_endpoints)} unique endpoints')
     print(f'There are {len(single_endpoint_collections)} collection that are unique to an endpoint')
     print(f'There are {num_multi_collections} collections that exist in multiple endpoints')
-    print('single_endpoint_collections = {}'.format(ub.repr2(single_endpoint_collections, nl=1)))
-    print('multiendpoint_collections = {}'.format(ub.repr2(multiendpoint_collections, nl=1)))
-    print('unique_endpoints = {}'.format(ub.repr2(unique_endpoints, nl=1)))
+    print('single_endpoint_collections = {}'.format(ub.urepr(single_endpoint_collections, nl=1)))
+    print('multiendpoint_collections = {}'.format(ub.urepr(multiendpoint_collections, nl=1)))
+    print('unique_endpoints = {}'.format(ub.urepr(unique_endpoints, nl=1)))
 
     smart_stac_header = {
         'x-api-key': os.environ['SMART_STAC_API_KEY']
@@ -82,11 +82,11 @@ def print_provider_debug_information():
         misregistered_names = known_collection_names - found_collection_names
         unregistered_names = found_collection_names - known_collection_names
         if registered_names:
-            print('Valid registered collections = {}'.format(ub.repr2(registered_names, nl=1)))
+            print('Valid registered collections = {}'.format(ub.urepr(registered_names, nl=1)))
         if misregistered_names:
             print(f'!!! Collections are registered that dont exist {misregistered_names=}')
         if unregistered_names:
-            print('There are unregistered collections = {}'.format(ub.repr2(unregistered_names, nl=1)))
+            print('There are unregistered collections = {}'.format(ub.urepr(unregistered_names, nl=1)))
             for name in unregistered_names:
                 unregistered_rows.append({
                     'stac_code': None,
@@ -377,7 +377,7 @@ def check_processed_regions():
     # print(f'region_id={region_id}')
     # print(f'results={results}')
     # print(f'collection={collection}')
-    # print('region_to_results = {}'.format(ub.repr2(region_to_results, nl=1)))
+    # print('region_to_results = {}'.format(ub.urepr(region_to_results, nl=1)))
 
 
 def _devcheck_providers_exist():
@@ -396,7 +396,7 @@ def _devcheck_providers_exist():
     }
     provider = "https://api.smart-stac.com"
     catalog = pystac_client.Client.open(provider, headers=headers)
-    print(ub.repr2(list(catalog.get_collections())))
+    print(ub.urepr(list(catalog.get_collections())))
 
     # item_search = catalog.search(collections=["ta1-mixedgsd-acc-1"])
     # print(f'item_search={item_search}')

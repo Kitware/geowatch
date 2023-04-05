@@ -263,7 +263,7 @@ def main():
             yaml_text = util_yaml.yaml_dumps(summary)
             summary_fpath.write_text(yaml_text)
             # summary_fpath.write_text(json.dumps(summary, indent='   '))
-            rich_mod.print('summary = {}'.format(ub.repr2(summary, nl=2)))
+            rich_mod.print('summary = {}'.format(ub.urepr(summary, nl=2)))
             print(f'summary_fpath={summary_fpath}')
 
     for viz_cmd in viz_cmds:
@@ -299,7 +299,7 @@ def main():
     analysis = plotter.analysis = reporter.build_analysis()
 
     params_of_interest = [s['param_name'] for s in analysis.statistics][::-1]
-    print('params_of_interest = {}'.format(ub.repr2(params_of_interest, nl=1)))
+    print('params_of_interest = {}'.format(ub.urepr(params_of_interest, nl=1)))
     plotter.params_of_interest = params_of_interest
 
     # Takes a long time to load these
@@ -388,7 +388,7 @@ def single_model_analysis(reporter, model):
 
     varied_pred_params = {k for k, v in type_to_varied_params['pred_pxl'].items() if len(v) > 1}
     varied_trk_params = {k for k, v in type_to_varied_params['pred_trk'].items() if len(v) > 1}
-    print('type_to_varied_params = {}'.format(ub.repr2(type_to_varied_params, nl=2)))
+    print('type_to_varied_params = {}'.format(ub.urepr(type_to_varied_params, nl=2)))
 
     for type, varied_params in type_to_varied_params.items():
         varied_params
@@ -429,7 +429,7 @@ def custom_investigate(reporter):
     import ubelt as ub
     for type, group in mfound.groupby('type'):
         print(f'type={type}')
-        print(ub.repr2(group.to_dict('records')[0]))
+        print(ub.urepr(group.to_dict('records')[0]))
 
     mfound[['model', 'BAS_F1', 'pred_cfg', 'trk_cfg']]
 

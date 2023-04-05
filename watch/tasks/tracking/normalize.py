@@ -190,10 +190,10 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
         keep_track_lengths = ub.dict_hist(keep_tids)
         print(f'Size filter: removing {len(empty_aids)} annotations')
         print('keep_track_lengths = {}'.format(
-            ub.repr2(keep_track_lengths, nl=1)))
+            ub.urepr(keep_track_lengths, nl=1)))
         print(f'{len(keep_annots)=}')
         removal_reasons = ub.dict_hist(remove_reason)
-        print('removal_reasons = {}'.format(ub.repr2(removal_reasons, nl=1)))
+        print('removal_reasons = {}'.format(ub.urepr(removal_reasons, nl=1)))
 
     return coco_dset
 
@@ -701,8 +701,8 @@ def normalize(
         debug_json_unserializable(coco_dset.dataset, 'Before apply_per_video: ')
 
     tracker: TrackFunction = track_fn(**track_kwargs, viz_out_dir=viz_out_dir)
-    print('track_kwargs = {}'.format(ub.repr2(track_kwargs, nl=1)))
-    print('{} {}'.format(tracker.__class__.__name__, ub.repr2(tracker.__dict__, nl=1)))
+    print('track_kwargs = {}'.format(ub.urepr(track_kwargs, nl=1)))
+    print('{} {}'.format(tracker.__class__.__name__, ub.urepr(tracker.__dict__, nl=1)))
     out_dset = tracker.apply_per_video(coco_dset)
 
     if DEBUG_JSON_SERIALIZABLE:

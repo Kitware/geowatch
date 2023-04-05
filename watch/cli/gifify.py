@@ -41,12 +41,12 @@ __config__ = AnimateConfig
 def main(cmdline=True, **kwargs):
     import glob
     config = AnimateConfig.legacy(cmdline=cmdline, data=kwargs)
-    print('config = {}'.format(ub.repr2(dict(config), nl=1)))
+    print('config = {}'.format(ub.urepr(dict(config), nl=1)))
 
     image_paths = config['image_list']
 
     print('Converting:')
-    print('image_paths = ' + ub.repr2(image_paths))
+    print('image_paths = ' + ub.urepr(image_paths))
 
     assert image_paths is not None
 

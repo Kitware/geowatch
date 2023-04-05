@@ -539,7 +539,7 @@ def specialized_index_bands(bands=None, coco_img=None, symbolic=False):
         >>> #indexes = ub.dict_isect(indexes, {"ASI", 'AF_Norm', 'SSF_Norm', 'VSF_Norm', 'MF_Norm'})
         >>> indexes = ub.dict_isect(indexes, {"ASI"})
         >>> import kwarray
-        >>> print(ub.repr2(ub.map_vals(kwarray.stats_dict, indexes), nl=1))
+        >>> print(ub.urepr(ub.map_vals(kwarray.stats_dict, indexes), nl=1))
         >>> import pandas as pd
         >>> print(pd.DataFrame(ub.map_vals(kwarray.stats_dict, indexes)))
         >>> # xdoctest: +REQUIRES(--show)
@@ -860,7 +860,7 @@ def specialized_index_bands2(delayed=None):
         >>> symbolic = False
         >>> indexes = specialized_index_bands2(delayed)
         >>> import kwarray
-        >>> #print(ub.repr2(ub.map_vals(kwarray.stats_dict, indexes), nl=1))
+        >>> #print(ub.urepr(ub.map_vals(kwarray.stats_dict, indexes), nl=1))
         >>> #import pandas as pd
         >>> #print(pd.DataFrame(ub.map_vals(kwarray.stats_dict, indexes)))
         >>> # xdoctest: +REQUIRES(--show)

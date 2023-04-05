@@ -26,7 +26,7 @@ class GriddedDataset(torch.utils.data.Dataset):
         >>> item = self[0]
         >>> item_summary = self.summarize_item(item)
         >>> import rich
-        >>> rich.print('item_summary = {}'.format(ub.repr2(item_summary, nl=1, sort=0, align=':')))
+        >>> rich.print('item_summary = {}'.format(ub.urepr(item_summary, nl=1, sort=0, align=':')))
 
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
@@ -86,7 +86,7 @@ class GriddedDataset(torch.utils.data.Dataset):
         >>>     rows.append(row_canvas)
         >>> item_summary = self.summarize_item(item)
         >>> import rich
-        >>> rich.print('item_summary = {}'.format(ub.repr2(item_summary, nl=1, sort=0, align=':')))
+        >>> rich.print('item_summary = {}'.format(ub.urepr(item_summary, nl=1, sort=0, align=':')))
         >>> canvas = kwimage.stack_images(rows, axis=0, pad=10)
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
@@ -472,7 +472,7 @@ class GriddedDataset(torch.utils.data.Dataset):
             >>> self = GriddedDataset(coco_dset, include_debug_info=True, sensor=None, bands=['B11'])
             >>> item = self[0]
             >>> item_summary = self.summarize_item(item)
-            >>> print('item_summary = {}'.format(ub.repr2(item_summary, nl=1)))
+            >>> print('item_summary = {}'.format(ub.urepr(item_summary, nl=1)))
             >>> canvas = self.draw_item(item)
             >>> # xdoctest: +REQUIRES(--show)
             >>> import kwplot
@@ -550,7 +550,7 @@ def find_complete_image_indexes(samples, fast=True):
         >>> assert sample_to_complete_gids == sample_to_complete_gids2
         >>> from cmd_queue.util.util_networkx import write_network_text
         >>> write_network_text(graphs['node_ordered'])
-        >>> print('sample_to_complete_gids = {}'.format(ub.repr2(sample_to_complete_gids, nl=1)))
+        >>> print('sample_to_complete_gids = {}'.format(ub.urepr(sample_to_complete_gids, nl=1)))
 
     Example:
         >>> from watch.tasks.invariants.data.datasets import *  # NOQA
@@ -567,7 +567,7 @@ def find_complete_image_indexes(samples, fast=True):
         >>> assert sample_to_complete_gids == sample_to_complete_gids2
         >>> from cmd_queue.util.util_networkx import write_network_text
         >>> write_network_text(graphs['node_ordered'])
-        >>> print('sample_to_complete_gids = {}'.format(ub.repr2(sample_to_complete_gids, nl=1)))
+        >>> print('sample_to_complete_gids = {}'.format(ub.urepr(sample_to_complete_gids, nl=1)))
 
     Ignore:
         import kwplot

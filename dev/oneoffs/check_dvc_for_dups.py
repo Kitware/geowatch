@@ -55,7 +55,7 @@ def main():
 
     for k in md5_dup2:
         items = md5_to_items2[k]
-        print('items = {}'.format(ub.repr2(items, nl=1)))
+        print('items = {}'.format(ub.urepr(items, nl=1)))
 
 
 def find_unregistered_files():

@@ -179,7 +179,7 @@ class SMARTDataMixin:
                 canvas = self.draw_item(item)
                 kwplot.imshow(canvas)
 
-            # >>> print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
+            # >>> print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
             # >>> # xdoctest: +REQUIRES(--show)
             # >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0, rescale=0)
             # >>> import kwplot
@@ -315,7 +315,7 @@ class SMARTDataMixin:
             sensor_coarse = dset.coco_image(gid).img.get('sensor_coarse', '*')
             freqs['sensor'][sensor_coarse] += 1
 
-        print(ub.repr2(ub.dict_diff(freqs, {'gid'})))
+        print(ub.urepr(ub.dict_diff(freqs, {'gid'})))
 
 
 def draw_cloudmask_viz(qa_data, rgb_data):

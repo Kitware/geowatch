@@ -273,10 +273,10 @@ class WatchModuleMixins:
                     print('cat_weights = {!r}'.format(cat_weights))
                     print('catnames = {!r}'.format(catnames))
                     heuristic_weights = ub.dzip(catnames, cat_weights)
-                print('heuristic_weights = {}'.format(ub.repr2(heuristic_weights, nl=1)))
+                print('heuristic_weights = {}'.format(ub.urepr(heuristic_weights, nl=1)))
 
                 heuristic_weights.update({k: 0 for k in hueristic_ignore_keys})
-                # print('heuristic_weights = {}'.format(ub.repr2(heuristic_weights, nl=1, align=':')))
+                # print('heuristic_weights = {}'.format(ub.urepr(heuristic_weights, nl=1, align=':')))
                 class_weights = []
                 for catname in self.classes:
                     w = heuristic_weights.get(catname, 1.0)
@@ -308,7 +308,7 @@ class WatchModuleMixins:
                         # Modulate
                         using_class_weights[catname] = weight
 
-                print('using_class_weights = {}'.format(ub.repr2(using_class_weights, nl=1, align=':')))
+                print('using_class_weights = {}'.format(ub.urepr(using_class_weights, nl=1, align=':')))
                 class_weights = [
                     using_class_weights.get(catname, 1.0)
                     for catname in self.classes
@@ -504,7 +504,7 @@ class WatchModuleMixins:
             >>> dataset_stats = datamodule.dataset_stats
             >>> input_sensorchan = datamodule.input_sensorchan
             >>> classes = datamodule.classes
-            >>> print('dataset_stats = {}'.format(ub.repr2(dataset_stats, nl=3)))
+            >>> print('dataset_stats = {}'.format(ub.urepr(dataset_stats, nl=3)))
             >>> print('input_sensorchan = {}'.format(input_sensorchan))
             >>> print('classes = {}'.format(classes))
             >>> # Choose subclass to test this with (does not cover all cases)

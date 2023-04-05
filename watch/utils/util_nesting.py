@@ -10,8 +10,8 @@ def debug_shapes(data):
 
     @extensions.register((torch.Tensor, np.ndarray))
     def format_shape(data, **kwargs):
-        return ub.repr2(dict(type=str(type(data).__name__), shape=data.shape), nl=0, sv=1)
-    print('data = ' + ub.repr2(data, extensions=extensions, nl=-1, sort=0))
+        return ub.urepr(dict(type=str(type(data).__name__), shape=data.shape), nl=0, sv=1)
+    print('data = ' + ub.urepr(data, extensions=extensions, nl=-1, sort=0))
 
 
 def shape_summary(data, flat=0):

@@ -216,7 +216,7 @@ def benchmark_models():
         arch_cfg = transformer.encoder_configs[k[0]]
         cfg = ub.dzip(grouper, k)
         cfg.update(ub.dict_isect(arch_cfg, {'n_layers', 'n_heats', 'embedding_size'}))
-        title = ub.repr2(cfg, compact=1, sort=0)
+        title = ub.urepr(cfg, compact=1, sort=0)
 
         sns.heatmap(d,
                     annot=piv,

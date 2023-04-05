@@ -44,7 +44,7 @@ class TextLogger(pl.callbacks.Callback):
         self._log.info('sys.argv = {!r}'.format(sys.argv))
         trainer.text_logger = self
         if self.args is not None:
-            self._log.info('args_dict = {}'.format(ub.repr2(self.args.__dict__, nl=1, sort=0)))
+            self._log.info('args_dict = {}'.format(ub.urepr(self.args.__dict__, nl=1, sort=0)))
 
     def teardown(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', stage: Optional[str] = None) -> None:
         self._log.debug('teardown state _log')
@@ -69,10 +69,10 @@ class TextLogger(pl.callbacks.Callback):
 
     if PL_VERSION < Version('1.6'):
         def on_load_checkpoint(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', callback_state: Dict[str, Any]) -> None:
-            self._log.debug('on_load_checkpoint - callback_state = {}'.format(ub.repr2(callback_state.keys(), nl=1)))
+            self._log.debug('on_load_checkpoint - callback_state = {}'.format(ub.urepr(callback_state.keys(), nl=1)))
 
         def on_save_checkpoint(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', checkpoint: Dict[str, Any]) -> dict:
-            self._log.debug('on_save_checkpoint - checkpoint = {}'.format(ub.repr2(checkpoint.keys(), nl=1)))
+            self._log.debug('on_save_checkpoint - checkpoint = {}'.format(ub.urepr(checkpoint.keys(), nl=1)))
     else:
         def state_dict(self):
             self._log.debug('call pl state_dict')

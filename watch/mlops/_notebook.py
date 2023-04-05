@@ -1194,7 +1194,7 @@ def custom_analysis(eval_type_to_aggregator, config):
         subagg1.build_macro_tables(macro_groups)
         _ = subagg1.report_best()
 
-        print(ub.repr2(subagg1.results['fpaths']['fpath'].to_list()))
+        print(ub.urepr(subagg1.results['fpaths']['fpath'].to_list()))
 
         agg_group_dpath = agg_dpath / (f'agg_params_{param_of_interest}')
         agg_group_dpath = agg_group_dpath.ensuredir()

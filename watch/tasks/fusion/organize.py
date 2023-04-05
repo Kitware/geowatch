@@ -38,14 +38,14 @@ def suggest_paths(test_dataset=None, package_fpath=None, workdir=None,
         >>> test_dataset = 'vali.kwcoco.json'
         >>> package_fpath = 'work/models/fusion/eval1_cand/packages/expt1/package_abc.pt'
         >>> suggestions = suggest_paths(test_dataset, package_fpath, sidecar2=1, as_json=False)
-        >>> print('suggestions = {}'.format(ub.repr2(suggestions, nl=1, align=':', sort=0)))
+        >>> print('suggestions = {}'.format(ub.urepr(suggestions, nl=1, align=':', sort=0)))
 
         >>> suggestions = suggest_paths(test_dataset, package_fpath, sidecar2=1, as_json=False, workdir='/my_tmp_eval')
-        >>> print('suggestions = {}'.format(ub.repr2(suggestions, nl=1, align=':', sort=0)))
+        >>> print('suggestions = {}'.format(ub.urepr(suggestions, nl=1, align=':', sort=0)))
 
         >>> package_fpath = 'foobar/eval1_cand/packages/expt1/package_abc.pt'
         >>> suggestions = suggest_paths(test_dataset, package_fpath, sidecar2=1, as_json=False)
-        >>> print('suggestions = {}'.format(ub.repr2(suggestions, nl=1, align=':', sort=0)))
+        >>> print('suggestions = {}'.format(ub.urepr(suggestions, nl=1, align=':', sort=0)))
     """
 
     suggestions = {}

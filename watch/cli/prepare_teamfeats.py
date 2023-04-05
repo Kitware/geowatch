@@ -220,7 +220,7 @@ def prep_feats(cmdline=True, **kwargs):
     from watch.utils import util_path
 
     config = TeamFeaturePipelineConfig.cli(cmdline=cmdline, data=kwargs)
-    print('config = {}'.format(ub.repr2(dict(config), nl=1)))
+    print('config = {}'.format(ub.urepr(dict(config), nl=1)))
 
     gres = config['gres']
     gres = smartcast(gres)
@@ -345,8 +345,8 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
     }
 
     print('Exist check: ')
-    print('model_packages: ' + ub.repr2(ub.map_vals(lambda x: x.exists(), model_fpaths)))
-    print('feature outputs: ' + ub.repr2(ub.map_vals(lambda x: x.exists(), outputs)))
+    print('model_packages: ' + ub.urepr(ub.map_vals(lambda x: x.exists(), model_fpaths)))
+    print('feature outputs: ' + ub.urepr(ub.map_vals(lambda x: x.exists(), outputs)))
 
     # TODO: different versions of features need different codes.
     codes = {

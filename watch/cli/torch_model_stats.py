@@ -40,7 +40,7 @@ def main(cmdline=False, **kwargs):
     import rich
 
     config = TorchModelStatsConfig.cli(cmdline=cmdline, data=kwargs)
-    print('config = {}'.format(ub.repr2(dict(config), nl=1)))
+    print('config = {}'.format(ub.urepr(dict(config), nl=1)))
     package_paths = config['src']
 
     if not ub.iterable(package_paths):
@@ -62,10 +62,10 @@ def main(cmdline=False, **kwargs):
         fit_config = row.pop('fit_config', None)
         if config.hparams:
             rich.print('fit_config = {}'.format(ub.urepr(fit_config, nl=1)))
-        rich.print('model_stats = {}'.format(ub.repr2(model_stats, nl=2, sort=0, precision=2)))
+        rich.print('model_stats = {}'.format(ub.urepr(model_stats, nl=2, sort=0, precision=2)))
         package_rows.append(row)
 
-    print('package_rows = {}'.format(ub.repr2(package_rows, nl=2, sort=0)))
+    print('package_rows = {}'.format(ub.urepr(package_rows, nl=2, sort=0)))
 
 
 def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
@@ -97,8 +97,8 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
     model_stats = {}
     num_params = util_netharn.number_of_parameters(module)
 
-    print(ub.repr2(utils.model_json(module, max_depth=3), nl=-1, sort=0))
-    # print(ub.repr2(utils.model_json(module, max_depth=2), nl=-1, sort=0))
+    print(ub.urepr(utils.model_json(module, max_depth=3), nl=-1, sort=0))
+    # print(ub.urepr(utils.model_json(module, max_depth=2), nl=-1, sort=0))
 
     # import xdev
     # with xdev.embed_on_exception_context:
@@ -111,7 +111,7 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
         else:
             raise
     state_keys = list(state.keys())
-    # print('state_keys = {}'.format(ub.repr2(state_keys, nl=1)))
+    # print('state_keys = {}'.format(ub.urepr(state_keys, nl=1)))
 
     unique_sensors = set()
     train_dataset = None
@@ -154,7 +154,7 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
                 )
 
         mb_size = file_stat.st_size / (2.0 ** 20)
-        size_str = ub.repr2(mb_size, precision=2) + ' MB'
+        size_str = ub.urepr(mb_size, precision=2) + ' MB'
 
         # Add in some params about how this model was trained
         if hasattr(raw_module, 'fit_config'):

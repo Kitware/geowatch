@@ -63,7 +63,7 @@ for s in sensors:
 sensor_to_bytes = ub.udict(sensor_to_sizes).map_values(lambda x: sum(int(b) * 1024 for b in x))
 import xdev as xd
 sensor_to_size = sensor_to_bytes.map_values(xd.byte_str)
-print('sensor_to_size = {}'.format(ub.repr2(sensor_to_size, nl=1)))
+print('sensor_to_size = {}'.format(ub.urepr(sensor_to_size, nl=1)))
 
 total_size = sum(sensor_to_bytes.values())
 print('total = {}'.format(xd.byte_str(total_size)))

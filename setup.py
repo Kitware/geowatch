@@ -217,7 +217,7 @@ EXTRAS_REQUIRES = {
     'graphics-strict': parse_requirements('requirements/graphics.txt', versions='strict'),
 }
 # import ubelt as ub
-# print('EXTRAS_REQUIRES = {}'.format(ub.repr2(EXTRAS_REQUIRES, nl=2)))
+# print('EXTRAS_REQUIRES = {}'.format(ub.urepr(EXTRAS_REQUIRES, nl=2)))
 
 
 if __name__ == '__main__':

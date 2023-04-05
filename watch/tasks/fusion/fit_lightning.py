@@ -121,7 +121,7 @@ class WeightInitializer(pl.callbacks.Callback):
                 mapping = info.get('mapping', None)
                 unset = info.get('self_unset', None)
                 unused = info.get('self_unused', None)
-                print('mapping = {}'.format(ub.repr2(mapping, nl=1)))
+                print('mapping = {}'.format(ub.urepr(mapping, nl=1)))
                 print(f'unused={unused}')
                 print(f'unset={unset}')
 

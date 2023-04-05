@@ -635,8 +635,8 @@ class UNetBaseline(pl.LightningModule, WatchModuleMixins):
             >>>     v1 = model_state[key]
             >>>     v2 = recon_state[key]
             >>>     if not torch.allclose(v1, v2, equal_nan=True):
-            >>>         print('v1 = {}'.format(ub.repr2(v1, nl=1)))
-            >>>         print('v2 = {}'.format(ub.repr2(v2, nl=1)))
+            >>>         print('v1 = {}'.format(ub.urepr(v1, nl=1)))
+            >>>         print('v2 = {}'.format(ub.urepr(v2, nl=1)))
             >>>         raise AssertionError(f'Difference in key={key}')
             >>>     assert v1 is not v2, 'should be distinct copies'
 
@@ -672,8 +672,8 @@ class UNetBaseline(pl.LightningModule, WatchModuleMixins):
             >>>     v1 = model_state[key]
             >>>     v2 = recon_state[key]
             >>>     if not torch.allclose(v1, v2, equal_nan=True):
-            >>>         print('v1 = {}'.format(ub.repr2(v1, nl=1)))
-            >>>         print('v2 = {}'.format(ub.repr2(v2, nl=1)))
+            >>>         print('v1 = {}'.format(ub.urepr(v1, nl=1)))
+            >>>         print('v2 = {}'.format(ub.urepr(v2, nl=1)))
             >>>         raise AssertionError(f'Difference in key={key}')
             >>>     assert v1 is not v2, 'should be distinct copies'
 
@@ -709,8 +709,8 @@ class UNetBaseline(pl.LightningModule, WatchModuleMixins):
             >>>     v1 = model_state[key]
             >>>     v2 = recon_state[key]
             >>>     if not torch.allclose(v1, v2, equal_nan=True):
-            >>>         print('v1 = {}'.format(ub.repr2(v1, nl=1)))
-            >>>         print('v2 = {}'.format(ub.repr2(v2, nl=1)))
+            >>>         print('v1 = {}'.format(ub.urepr(v1, nl=1)))
+            >>>         print('v2 = {}'.format(ub.urepr(v2, nl=1)))
             >>>         raise AssertionError(f'Difference in key={key}')
             >>>     assert v1 is not v2, 'should be distinct copies'
         """

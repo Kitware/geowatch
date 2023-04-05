@@ -431,7 +431,7 @@ def model_json(model, max_depth=float('inf'), depth=0):
     import torchvision
     model = torchvision.models.resnet50()
     info = model_json(model, max_depth=1)
-    print(ub.repr2(info, sort=0, nl=-1))
+    print(ub.urepr(info, sort=0, nl=-1))
     """
     info = {
         'type': model._get_name(),

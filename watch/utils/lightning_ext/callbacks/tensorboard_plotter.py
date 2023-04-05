@@ -79,9 +79,9 @@ class TensorboardPlotter(pl.callbacks.Callback):
             hparams = util_model.model_hparams(model)
             model_config = {
                 'type': str(model.__class__),
-                'hp': smart_truncate(ub.repr2(hparams, compact=1, nl=0), max_length=8),
+                'hp': smart_truncate(ub.urepr(hparams, compact=1, nl=0), max_length=8),
             }
-            model_cfgstr = smart_truncate(ub.repr2(
+            model_cfgstr = smart_truncate(ub.urepr(
                 model_config, compact=1, nl=0), max_length=64)
 
         args = (train_dpath, model_cfgstr)
@@ -412,9 +412,9 @@ def redraw_cli(train_dpath):
             from watch.utils.slugify_ext import smart_truncate
             model_config = {
                 # 'type': str(model.__class__),
-                'hp': smart_truncate(ub.repr2(hparams, compact=1, nl=0), max_length=8),
+                'hp': smart_truncate(ub.urepr(hparams, compact=1, nl=0), max_length=8),
             }
-            model_cfgstr = smart_truncate(ub.repr2(
+            model_cfgstr = smart_truncate(ub.urepr(
                 model_config, compact=1, nl=0), max_length=64)
             title = model_cfgstr
     else:

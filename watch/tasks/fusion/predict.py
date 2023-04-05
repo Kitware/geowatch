@@ -316,9 +316,9 @@ def resolve_datamodule(config, method, datamodule_defaults):
     overloads.update(datamodule_defaults & unable_to_infer)
     datamodule_vars.update(overloads)
     config.update(datamodule_vars)
-    print('able_to_infer = {}'.format(ub.repr2(able_to_infer, nl=1)))
-    print('unable_to_infer = {}'.format(ub.repr2(unable_to_infer, nl=1)))
-    print('overloads = {}'.format(ub.repr2(overloads, nl=1)))
+    print('able_to_infer = {}'.format(ub.urepr(able_to_infer, nl=1)))
+    print('unable_to_infer = {}'.format(ub.urepr(unable_to_infer, nl=1)))
+    print('overloads = {}'.format(ub.urepr(overloads, nl=1)))
 
     # Look at the difference between predict and train time settings
     print('deviation from fit->predict settings:')
@@ -599,8 +599,8 @@ def predict(cmdline=False, **kwargs):
     args = make_predict_config(cmdline=cmdline, **kwargs)
     config = args.__dict__.copy()
     datamodule_defaults = args.datamodule_defaults
-    print('kwargs = {}'.format(ub.repr2(kwargs, nl=1)))
-    print('config = {}'.format(ub.repr2(config, nl=2)))
+    print('kwargs = {}'.format(ub.urepr(kwargs, nl=1)))
+    print('config = {}'.format(ub.urepr(config, nl=2)))
 
     package_fpath = ub.Path(config['package_fpath']).expand()
 
@@ -792,15 +792,15 @@ def predict(cmdline=False, **kwargs):
         all_gids = list(test_dataloader.dataset.sampler.dset.images())
         from xdev import set_overlaps
         img_overlaps = set_overlaps(all_gids, seen_gids)
-        print('img_overlaps = {}'.format(ub.repr2(img_overlaps, nl=1)))
+        print('img_overlaps = {}'.format(ub.urepr(img_overlaps, nl=1)))
         # primary_img_overlaps = set_overlaps(all_gids, primary_gids)
-        # print('primary_img_overlaps = {}'.format(ub.repr2(primary_img_overlaps, nl=1)))
+        # print('primary_img_overlaps = {}'.format(ub.urepr(primary_img_overlaps, nl=1)))
 
         # Check to see how much of each image is covered in video space
         # import kwimage
         coco_dset = test_dataloader.dataset.sampler.dset
         gid_to_iou = {}
-        print('image_id_to_target_space_slices = {}'.format(ub.repr2(image_id_to_target_space_slices, nl=2)))
+        print('image_id_to_target_space_slices = {}'.format(ub.urepr(image_id_to_target_space_slices, nl=2)))
         for gid, slices in image_id_to_target_space_slices.items():
             vidid = coco_dset.index.imgs[gid]['video_id']
             video = coco_dset.index.videos[vidid]
@@ -812,7 +812,7 @@ def predict(cmdline=False, **kwargs):
             gid_to_iou[gid] = iou
         ious = list(gid_to_iou.values())
         iou_stats = kwarray.stats_dict(ious, n_extreme=True)
-        print('iou_stats = {}'.format(ub.repr2(iou_stats, nl=1)))
+        print('iou_stats = {}'.format(ub.urepr(iou_stats, nl=1)))
 
     DEBUG_PRED_SPATIAL_COVERAGE = 0
     if DEBUG_PRED_SPATIAL_COVERAGE:
@@ -944,7 +944,7 @@ def predict(cmdline=False, **kwargs):
             try:
                 outputs = method.forward_step(batch, with_loss=False)
             except RuntimeError as ex:
-                msg = ('A predict batch failed ex = {}'.format(ub.repr2(ex, nl=1)))
+                msg = ('A predict batch failed ex = {}'.format(ub.urepr(ex, nl=1)))
                 print(msg)
                 import warnings
                 warnings.warn(msg)
@@ -1088,10 +1088,10 @@ def predict(cmdline=False, **kwargs):
             list(gid_to_outspace_iou.values()), n_extreme=True)
         outspace_iooa_stats = kwarray.stats_dict(
             list(gid_to_outspace_iooa.values()), n_extreme=True)
-        print('vidspace_iou_stats = {}'.format(ub.repr2(vidspace_iou_stats, nl=1)))
-        print('vidspace_iooa_stats = {}'.format(ub.repr2(vidspace_iooa_stats, nl=1)))
-        print('outspace_iou_stats = {}'.format(ub.repr2(outspace_iou_stats, nl=1)))
-        print('outspace_iooa_stats = {}'.format(ub.repr2(outspace_iooa_stats, nl=1)))
+        print('vidspace_iou_stats = {}'.format(ub.urepr(vidspace_iou_stats, nl=1)))
+        print('vidspace_iooa_stats = {}'.format(ub.urepr(vidspace_iooa_stats, nl=1)))
+        print('outspace_iou_stats = {}'.format(ub.urepr(outspace_iou_stats, nl=1)))
+        print('outspace_iooa_stats = {}'.format(ub.urepr(outspace_iooa_stats, nl=1)))
 
     if config['record_context']:
         proc_context.add_device_info(device)

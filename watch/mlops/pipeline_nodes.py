@@ -246,7 +246,7 @@ class Pipeline:
 
         if config is not None:
             self.config = config
-            # print('CONFIGURE config = {}'.format(ub.repr2(config, nl=1)))
+            # print('CONFIGURE config = {}'.format(ub.urepr(config, nl=1)))
 
             # Set the configuration for each node in this pipeline.
             dotconfig = util_dotdict.DotDict(config)

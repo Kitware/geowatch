@@ -16,7 +16,7 @@ def debug_json_unserializable(data, msg=''):
     import ubelt as ub
     unserializable = list(util_json.find_json_unserializable(data))
     if unserializable:
-        raise Exception(msg + ub.repr2(unserializable))
+        raise Exception(msg + ub.urepr(unserializable))
 
 
 def ensure_json_serializable(dict_, normalize_containers=False, verbose=0):
@@ -39,10 +39,10 @@ def ensure_json_serializable(dict_, normalize_containers=False, verbose=0):
         >>> data['foo']['a'] = 1
         >>> data['foo']['b'] = (1, np.array([1, 2, 3]), {3: np.int32(3), 4: np.float16(1.0)})
         >>> dict_ = data
-        >>> print(ub.repr2(data, nl=-1))
+        >>> print(ub.urepr(data, nl=-1))
         >>> assert list(util_json.find_json_unserializable(data))
         >>> result = ensure_json_serializable(data, normalize_containers=True)
-        >>> print(ub.repr2(result, nl=-1))
+        >>> print(ub.urepr(result, nl=-1))
         >>> assert not list(util_json.find_json_unserializable(result))
         >>> assert type(result) is dict
     """

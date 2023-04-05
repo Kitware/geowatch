@@ -80,7 +80,7 @@ def random_region_model(region_id=None, num_sites=3, num_observations=5,
     Example:
         >>> from watch.demo.metrics_demo.demo_truth import *  # NOQA
         >>> region, sites, renderables = random_region_model(num_sites=2, num_observations=5, p_observe=0.5, rng=0)
-        >>> print('region = {}'.format(ub.repr2(region, nl=4, precision=6, sort=0)))
+        >>> print('region = {}'.format(ub.urepr(region, nl=4, precision=6, sort=0)))
         region = {
             'type': 'FeatureCollection',
             'features': [
@@ -263,7 +263,7 @@ def random_observables(num_observations, rng=None):
         >>> from watch.demo.metrics_demo.demo_truth import *  # NOQA
         >>> num_observations = 2
         >>> observables = random_observables(1, rng=32)
-        >>> print('observables = {}'.format(ub.repr2(observables, nl=2)))
+        >>> print('observables = {}'.format(ub.urepr(observables, nl=2)))
         observables = [
             {
                 'datetime': datetime.datetime(2018, 8, 3, 16, 55, 35, 398921),
@@ -341,7 +341,7 @@ def random_site_model(region_id, site_id, region_corners, observables,
         >>> p_observe = 1.0
         >>> site_summary, site = random_site_model(region_id, site_id, region_corners, observables,
         >>>                                        p_observe=p_observe, rng=rng)
-        >>> print('site = {}'.format(ub.repr2(site, nl=4, sort=0)))
+        >>> print('site = {}'.format(ub.urepr(site, nl=4, sort=0)))
         site = {
             'type': 'FeatureCollection',
             'features': [
@@ -398,7 +398,7 @@ def random_site_model(region_id, site_id, region_corners, observables,
         >>> p_observe = 1.0
         >>> site_summary, site = random_site_model(region_id, site_id, region_corners, observables,
         >>>                                        p_observe=p_observe, rng=rng)
-        >>> print('site_summary = {}'.format(ub.repr2(site_summary, nl=-1, sort=0)))
+        >>> print('site_summary = {}'.format(ub.urepr(site_summary, nl=-1, sort=0)))
         site_summary = {
             'type': 'Feature',
             'geometry': {

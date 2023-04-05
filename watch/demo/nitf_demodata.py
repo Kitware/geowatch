@@ -294,7 +294,7 @@ def _dev_build_description_table():
                 name = None
             elif td.text.strip() in names_noext:
                 name = td.text.strip()
-    print(ub.repr2(fname_to_desc, nl=1))
+    print(ub.urepr(fname_to_desc, nl=1))
 
 
 def _build_test_image_table():
@@ -329,7 +329,7 @@ def _build_test_image_table():
         test_image_table.append(new_row)
 
     test_image_table = sorted(test_image_table, key=lambda x: x['size_bytes'])
-    print('_TEST_IMAGES = {}'.format(ub.repr2(test_image_table, nl=1, sort=False)))
+    print('_TEST_IMAGES = {}'.format(ub.urepr(test_image_table, nl=1, sort=False)))
 
 
 def _check_properties():
@@ -393,7 +393,7 @@ def _check_properties():
             else:
                 row['has_crs'] = True
                 row['has_rpc'] = info['is_rpc']
-                print('info = {}'.format(ub.repr2(info, nl=1, sort=False)))
+                print('info = {}'.format(ub.urepr(info, nl=1, sort=False)))
                 _ = ub.cmd('gdalinfo {}'.format(fpath), verbose=3)
     [x['wld_crs_type'] for x in infos]
-    print('_TEST_IMAGES = {}'.format(ub.repr2(_TEST_IMAGES, nl=1, sort=False)))
+    print('_TEST_IMAGES = {}'.format(ub.urepr(_TEST_IMAGES, nl=1, sort=False)))

@@ -1104,7 +1104,7 @@ def main(args=None, **kwargs):
     import geojson
     import kwcoco
     args = KWCocoToGeoJSONConfig.cli(cmdline=args, data=kwargs)
-    print('args = {}'.format(ub.repr2(dict(args), nl=1)))
+    print('args = {}'.format(ub.urepr(dict(args), nl=1)))
 
     coco_fpath = ub.Path(args.in_file)
 

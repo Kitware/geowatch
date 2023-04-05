@@ -80,8 +80,8 @@ def main(cmdline=True, **kwargs):
         >>> print('dset = {!r}'.format(dset))
         >>> target_gsd = 13.0
         >>> main(cmdline=False, src=dset, target_gsd=target_gsd, default_gsd=1)
-        >>> print('dset.index.imgs[1] = ' + ub.repr2(dset.index.imgs[1], nl=2))
-        >>> print('dset.index.videos = {}'.format(ub.repr2(dset.index.videos, nl=1)))
+        >>> print('dset.index.imgs[1] = ' + ub.urepr(dset.index.imgs[1], nl=2))
+        >>> print('dset.index.videos = {}'.format(ub.urepr(dset.index.videos, nl=1)))
 
     Ignore:
         kwargs = {
@@ -99,7 +99,7 @@ def main(cmdline=True, **kwargs):
     from watch.utils import util_parallel
     from watch.utils import kwcoco_extensions
     config = AddWatchFieldsConfig(kwargs, cmdline=cmdline)
-    print('config = {}'.format(ub.repr2(dict(config), nl=1)))
+    print('config = {}'.format(ub.urepr(dict(config), nl=1)))
 
     print('read dataset')
     dset = kwcoco.CocoDataset.coerce(config['src'])
@@ -120,7 +120,7 @@ def main(cmdline=True, **kwargs):
     populate_kw['workers'] = util_parallel.coerce_num_workers(config['workers'])
 
     kwcoco_extensions.populate_watch_fields(dset, **populate_kw)
-    print('dset.index.videos = {}'.format(ub.repr2(dset.index.videos, nl=2, precision=4)))
+    print('dset.index.videos = {}'.format(ub.urepr(dset.index.videos, nl=2, precision=4)))
 
     if config['edit_geotiff_metadata']:
         kwcoco_extensions.ensure_transfered_geo_data(dset)
@@ -129,7 +129,7 @@ def main(cmdline=True, **kwargs):
         if img.get('video_id', None) is not None:
             offset =  np.asarray(kwimage.Affine.coerce(img['warp_img_to_vid']))[:, 2]
             if np.any(np.abs(offset) > 100):
-                print('img = {}'.format(ub.repr2(img, nl=-1)))
+                print('img = {}'.format(ub.urepr(img, nl=-1)))
                 print('warning there is a large offset (this is ok if we are not expecting this dataset to be aligned)')
                 print('offset = {!r}'.format(offset))
                 print('{}, {}'.format(gid, img['warp_img_to_vid']))

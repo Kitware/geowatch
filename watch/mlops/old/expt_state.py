@@ -33,7 +33,7 @@ class ExperimentState(ub.NiceRepr):
         >>> # Just show patterns:
         >>> from watch.mlops.old.expt_state import *  # NOQA
         >>> self = ExperimentState('<expt_dpath>', '<dset_code>')
-        >>> print('self.templates = {}'.format(ub.repr2(self.templates, nl=1, sort=0)))
+        >>> print('self.templates = {}'.format(ub.urepr(self.templates, nl=1, sort=0)))
 
     Ignore:
         table[table.type == 'pkg_fpath']['model'].unique()
@@ -284,7 +284,7 @@ class ExperimentState(ub.NiceRepr):
             })
             for patterns in self._pattern_matrix
         ]
-        # print('self.path_patterns_matrix = {}'.format(ub.repr2(self.path_patterns_matrix, nl=1)))
+        # print('self.path_patterns_matrix = {}'.format(ub.urepr(self.path_patterns_matrix, nl=1)))
 
     def __nice__(self):
         return self.dataset_code
@@ -739,7 +739,7 @@ class ExperimentState(ub.NiceRepr):
             to_repackage = needs_package['ckpt_path'].values.tolist()
         else:
             to_repackage = []
-        print('to_repackage = {}'.format(ub.repr2(to_repackage, nl=1)))
+        print('to_repackage = {}'.format(ub.urepr(to_repackage, nl=1)))
         if to_repackage:
             # NOTE: THIS RELIES ON KNOWING ABOUT THE SPECIFIC MODEL CODE.
             # IT WOULD BE NICE IF WE DIDN'T NEED THAT HERE.
@@ -886,7 +886,7 @@ class ExperimentState(ub.NiceRepr):
         human_opts = ub.dict_isect(bas_track_cfg, {})
         other_opts = ub.dict_diff(bas_track_cfg, human_opts)
         if len(human_opts):
-            human_part = ub.repr2(human_opts, compact=1) + '_'
+            human_part = ub.urepr(human_opts, compact=1) + '_'
         else:
             human_part = ''
         cfgstr = human_part + ub.hash_data(other_opts)[0:8]
@@ -910,7 +910,7 @@ class ExperimentState(ub.NiceRepr):
         human_opts = ub.dict_isect(act_cfg, {})
         other_opts = ub.dict_diff(act_cfg, human_opts)
         if len(human_opts):
-            human_part = ub.repr2(human_opts, compact=1) + '_'
+            human_part = ub.urepr(human_opts, compact=1) + '_'
         else:
             human_part = ''
         cfgstr = human_part + ub.hash_data(other_opts)[0:8]
@@ -936,7 +936,7 @@ def summarize_tables(tables):
     table_shapes = ub.udict(tables).map_values(lambda x: x.shape)
     title = '[blue] Table Summary'
     print(title)
-    print('table_shapes = {}'.format(ub.repr2(table_shapes, nl=1, align=':', sort=0)))
+    print('table_shapes = {}'.format(ub.urepr(table_shapes, nl=1, align=':', sort=0)))
 
     if staging_df is not None:
         title = '[yellow] Staging Summary (Training)'

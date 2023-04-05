@@ -54,7 +54,7 @@ class ArgumentParser(configargparse.ArgumentParser):
                 else:
                     raise KeyError('Unknown setting {} for {}'.format(val, key))
         # import ubelt as ub
-        # print('kwargs = {}'.format(ub.repr2(kwargs, nl=1)))
+        # print('kwargs = {}'.format(ub.urepr(kwargs, nl=1)))
         super().__init__(*args, **kwargs)
 
     # Annoying that I have to pull in all of this code

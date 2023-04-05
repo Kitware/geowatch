@@ -173,7 +173,7 @@ class Result(ub.NiceRepr):
 
     def __nice__(self):
         row = self.to_dict()
-        text = ub.repr2(row, compact=True, precision=2, sort=0)
+        text = ub.urepr(row, compact=True, precision=2, sort=0)
         return text
 
     @classmethod
@@ -459,7 +459,7 @@ class ResultAnalysis(ub.NiceRepr):
         self._description["num_results"] = len(self.result_table)
 
     def __nice__(self):
-        return ub.repr2(self._description, si=1, sv=1)
+        return ub.urepr(self._description, si=1, sv=1)
 
     @classmethod
     def demo(cls, num=10, mode="null", rng=None):
@@ -677,11 +677,11 @@ class ResultAnalysis(ub.NiceRepr):
         if skillboard is not None:
             print(
                 "skillboard.ratings = {}".format(
-                    ub.repr2(skillboard.ratings, nl=1, align=":")
+                    ub.urepr(skillboard.ratings, nl=1, align=":")
                 )
             )
             win_probs = skillboard.predict_win()
-            print(f"win_probs = {ub.repr2(win_probs, nl=1)}")
+            print(f"win_probs = {ub.urepr(win_probs, nl=1)}")
 
         for key, improves in score_improvements.items():
             k1, k2, metric_key = key
@@ -711,7 +711,7 @@ class ResultAnalysis(ub.NiceRepr):
             >>> param_group = ['param2', 'param1']
             >>> metric_key = 'f1'
             >>> stats_row = self.test_group(param_group, metric_key)
-            >>> print('stats_row = {}'.format(ub.repr2(stats_row, nl=2, sort=0, precision=2)))
+            >>> print('stats_row = {}'.format(ub.urepr(stats_row, nl=2, sort=0, precision=2)))
         """
         param_group_name = ",".join(param_group)
         stats_row = {
@@ -1073,7 +1073,7 @@ class ResultAnalysis(ub.NiceRepr):
             >>> self = ResultAnalysis.demo(num=1000, mode='alt')
             >>> self.analysis()
             >>> print('self = {}'.format(self))
-            >>> print('self.varied = {}'.format(ub.repr2(self.varied, nl=1)))
+            >>> print('self.varied = {}'.format(ub.urepr(self.varied, nl=1)))
             >>> # xdoctest: +REQUIRES(--show)
             >>> # xdoctest: +REQUIRES(module:kwplot)
             >>> import kwplot
@@ -1106,7 +1106,7 @@ class ResultAnalysis(ub.NiceRepr):
             if len(labels):
                 new_col = []
                 for row in data[labels].to_dict("records"):
-                    item = ub.repr2(row, compact=1, si=1)
+                    item = ub.urepr(row, compact=1, si=1)
                     new_col.append(item)
                 gkey = gname + "_key"
                 data[gkey] = new_col
@@ -1292,7 +1292,7 @@ class SkillTracker:
         >>> self.observe([1, 2, 5, 3])  # Player 3 didnt play this round.
         >>> self.observe([2, 3, 4, 5, 1])  # Everyone played, player 2 won.
         >>> win_probs = self.predict_win()
-        >>> print('win_probs = {}'.format(ub.repr2(win_probs, nl=1, precision=2)))
+        >>> print('win_probs = {}'.format(ub.urepr(win_probs, nl=1, precision=2)))
         win_probs = {
             1: 0.20,
             2: 0.21,

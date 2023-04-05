@@ -34,7 +34,7 @@ def exec_flake8(dpaths, select=None, ignore=None, max_line_length=79):
             print(f'{code!r}: {desc!r},')
 
     if info['ret'] not in {0, 1}:
-        raise Exception(ub.repr2(ub.dict_diff(info, ['out'])))
+        raise Exception(ub.urepr(ub.dict_diff(info, ['out'])))
     return info['ret']
 
 
@@ -71,7 +71,7 @@ def exec_autopep8(dpaths, autofix, mode='diff'):
     else:
         info = ub.cmd(['autopep8'] + args_list + dpaths, verbose=VERBOSE, check=False)
     if info['ret'] not in {0, 1}:
-        raise Exception(ub.repr2(ub.dict_diff(info, ['out'])))
+        raise Exception(ub.urepr(ub.dict_diff(info, ['out'])))
     return info['ret']
 
 

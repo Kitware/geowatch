@@ -238,7 +238,7 @@ def main(cmdline=True, **kwargs):
     config = CocoVisualizeConfig(data=kwargs, cmdline=cmdline and {'strict': True})
     space = config['space']
     channels = config['channels']
-    print('config = {}'.format(ub.repr2(dict(config), nl=2)))
+    print('config = {}'.format(ub.urepr(dict(config), nl=2)))
 
     if config['smart']:
         if config['workers'] == 'auto':
@@ -448,7 +448,7 @@ def main(cmdline=True, **kwargs):
                     # 'mode': 'sigmoid',
                 })
                 chan_to_normalizer[chan] = normalizer
-            print('chan_to_normalizer = {}'.format(ub.repr2(chan_to_normalizer, nl=1)))
+            print('chan_to_normalizer = {}'.format(ub.urepr(chan_to_normalizer, nl=1)))
 
         if config['draw_valid_region']:
             valid_vidspace_region = video.get('valid_region', None)
@@ -564,7 +564,7 @@ def main(cmdline=True, **kwargs):
                 print('Tried to pass animate as a yaml config but loading failed')
                 raise
 
-        print('animate_config = {}'.format(ub.repr2(animate_config, nl=1)))
+        print('animate_config = {}'.format(ub.urepr(animate_config, nl=1)))
         from watch.cli import animate_visualizations
 
         # Hack: pretend that stack is a channel even though it is not.
@@ -808,7 +808,7 @@ def __default_kwcoco_build_image_header_text(**kwargs):
         >>>     '_header_extra': None,
         >>> }
         >>> header_lines = build_image_header_text(**kwargs)
-        >>> print('header_lines = {}'.format(ub.repr2(header_lines, nl=1)))
+        >>> print('header_lines = {}'.format(ub.urepr(header_lines, nl=1)))
     """
     img = kwargs.get('img', {})
     _header_extra = kwargs.get('_header_extra', None)
@@ -1213,7 +1213,7 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
         try:
             # chan_stats = kwarray.stats_dict(raw_canvas, axis=2, nan=True)
             chan_stats = kwarray.stats_dict(raw_canvas, axis=(0, 1), nan=True)
-            print('chan_stats = {}'.format(ub.repr2(chan_stats, nl=1)))
+            print('chan_stats = {}'.format(ub.urepr(chan_stats, nl=1)))
         except Exception as ex:
             print(f'ex={ex}')
             import warnings

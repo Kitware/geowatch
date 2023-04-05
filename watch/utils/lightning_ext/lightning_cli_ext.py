@@ -260,7 +260,7 @@ class LightningArgumentParser_Extension(LightningArgumentParser):
                 as_positional=as_positional,
             )
         # import ubelt as ub
-        # print('added_args = {}'.format(ub.repr2(added_args, nl=1)))
+        # print('added_args = {}'.format(ub.urepr(added_args, nl=1)))
         return added_args
 
     def _add_signature_parameter(

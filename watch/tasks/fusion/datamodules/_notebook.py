@@ -27,7 +27,7 @@ def dzyne_mwe():
     # Execute sampling logic. Dive into the getitem function as necessary to
     # debug.
     item = self[target]
-    print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
+    print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
 
     # Display the sample
     canvas = self.draw_item(item, overlay_on_image=0, rescale=1,
@@ -92,7 +92,7 @@ def visualize_cloudmask_batch():
     # import xdev
     # xdev.profile.print_report()
 
-    #print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
+    #print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
     canvas1 = self.draw_item(item, overlay_on_image=0, rescale=1,
                              max_channels=5,
                              draw_truth=False,

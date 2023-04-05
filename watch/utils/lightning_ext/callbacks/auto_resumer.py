@@ -40,7 +40,7 @@ class AutoResumer(pl.callbacks.Callback):
         >>> trainer_orig.fit(model)
         >>> assert len(list((util_path.coercepath(trainer_orig.logger.log_dir) / 'checkpoints').glob('*'))) > 0
         >>> # See contents written
-        >>> print(ub.repr2(list(util_path.tree(default_root_dir)), sort=0))
+        >>> print(ub.urepr(list(util_path.tree(default_root_dir)), sort=0))
         >>> #
         >>> # CHECK 1:
         >>> # Make a new trainer that should auto-resume
@@ -48,7 +48,7 @@ class AutoResumer(pl.callbacks.Callback):
         >>> trainer = trainer_resume1 = pl.Trainer(default_root_dir=default_root_dir, callbacks=[self, StateLogger()], max_epochs=2, accelerator='cpu', devices=1)
         >>> model = LightningToyNet2d()
         >>> trainer_resume1.fit(model)
-        >>> print(ub.repr2(list(util_path.tree(default_root_dir)), sort=0))
+        >>> print(ub.urepr(list(util_path.tree(default_root_dir)), sort=0))
         >>> # max_epochs should prevent auto-resume from doing anything
         >>> assert len(list((util_path.coercepath(trainer_resume1.logger.log_dir) / 'checkpoints').glob('*'))) == 0
         >>> #
@@ -57,7 +57,7 @@ class AutoResumer(pl.callbacks.Callback):
         >>> trainer_resume2 = pl.Trainer(default_root_dir=default_root_dir, callbacks=[AutoResumer(), StateLogger()], max_epochs=3, accelerator='cpu', devices=1)
         >>> model = LightningToyNet2d()
         >>> trainer_resume2.fit(model)
-        >>> print(ub.repr2(list(util_path.tree(util_path.coercepath(default_root_dir))), sort=0))
+        >>> print(ub.urepr(list(util_path.tree(util_path.coercepath(default_root_dir))), sort=0))
         >>> # max_epochs should prevent auto-resume from doing anything
         >>> assert len(list((util_path.coercepath(trainer_resume2.logger.log_dir) / 'checkpoints').glob('*'))) > 0
     """

@@ -26,7 +26,7 @@ def viz_sc(region_dpaths, true_site_dpath, true_region_dpath, save_dpath):
         >>>     roi='DR_R003',
         >>>     num_sites=11, num_observations=10, noise=3, p_observe=0.5,
         >>>     p_transition=0.2, drop_noise=0.3, drop_limit=0.5)
-        >>> print('demo_info3 = {}'.format(ub.repr2(demo_info3, nl=1)))
+        >>> print('demo_info3 = {}'.format(ub.urepr(demo_info3, nl=1)))
         >>> out_dpath = dpath / 'region_metrics'
         >>> merge_fpath = dpath / 'merged.json'
         >>> out_dpath.delete()

@@ -78,7 +78,7 @@ def audit():
     dev_pxl_params = ub.udict(dev_audit_info['pred_pxl_parms']['pxl'])
     flag, check_info = ub.indexable_allclose(pro_pxl_params, dev_pxl_params, return_info=True)
     n_matching_params = len(check_info['passlist'])
-    print('matching_params: ' + ub.repr2(check_info['passlist']))
+    print('matching_params: ' + ub.urepr(check_info['passlist']))
     print(f'n_matching_params={n_matching_params}')
     for k, v1, v2 in check_info['faillist']:
         print(f'Diff {k}: production={v1} -vs- developer={v2}')
@@ -220,8 +220,8 @@ def check_dataset_differences(dev_input_dset, pro_input_dset, trk_pxl_params, au
     names2 = set(pro_input_dset.index.name_to_img.keys())
     missing1 = names1 - names2
     missing2 = names2 - names1
-    rich.print('missing1 = {}'.format(ub.repr2(missing1, nl=1)))
-    rich.print('missing2 = {}'.format(ub.repr2(missing2, nl=1)))
+    rich.print('missing1 = {}'.format(ub.urepr(missing1, nl=1)))
+    rich.print('missing2 = {}'.format(ub.urepr(missing2, nl=1)))
 
     ub.Path(pro_input_dset.fpath).parent.ls()
     ub.Path(dev_input_dset.fpath).parent.ls()
@@ -278,10 +278,10 @@ def check_dataset_differences(dev_input_dset, pro_input_dset, trk_pxl_params, au
 
                 if 'passlist' in cmp_info:
                     same_attrs = set([p[0] for p in cmp_info['passlist']])
-                    print('Similarities: ' + ub.repr2(same_attrs))
+                    print('Similarities: ' + ub.urepr(same_attrs))
 
                 print('Differences:')
-                print(ub.repr2(diff_attrs, nl=2))
+                print(ub.urepr(diff_attrs, nl=2))
 
             d1 = coco_img1.delay(channels='red|green|blue|nir|swir16|swir22|cloudmask')
             d2 = coco_img2.delay(channels='red|green|blue|nir|swir16|swir22|quality')
@@ -321,8 +321,8 @@ def check_dataset_differences(dev_input_dset, pro_input_dset, trk_pxl_params, au
     pro_input_stats = pro_input_dset.basic_stats()
     print(f'pro_input_dset.fpath={pro_input_dset.fpath}')
     print(f'dev_input_dset.fpath={dev_input_dset.fpath}')
-    print('dev_input_stats = {}'.format(ub.repr2(dev_input_stats, nl=1)))
-    print('pro_input_stats = {}'.format(ub.repr2(pro_input_stats, nl=1)))
+    print('dev_input_stats = {}'.format(ub.urepr(dev_input_stats, nl=1)))
+    print('pro_input_stats = {}'.format(ub.urepr(pro_input_stats, nl=1)))
 
     bad_gids1 = images1.take(bad_idxs)
     bad_gids2 = images2.take(bad_idxs)
@@ -483,7 +483,7 @@ def check_datamodule_consistency(dev_input_dset_, pro_input_dset_, trk_pxl_param
     print(f'diff_pairs={diff_pairs}')
     import kwarray
     affinity_diff_stats = kwarray.stats_dict(affinity_diff)
-    print('affinity_diff_stats = {}'.format(ub.repr2(affinity_diff_stats, nl=1)))
+    print('affinity_diff_stats = {}'.format(ub.urepr(affinity_diff_stats, nl=1)))
     total_affinity_diff = affinity_diff.sum()
     print(f'total_affinity_diff={total_affinity_diff}')
 
@@ -616,7 +616,7 @@ def test_sc_results(pro_tracked_dset):
 def audit_dataset(coco_dset):
     chan_stats = kwcoco_extensions.coco_channel_stats(coco_dset)
     sensorchan_hist = chan_stats['sensorchan_hist']
-    print('sensorchan_hist = {}'.format(ub.repr2(sensorchan_hist, nl=2)))
+    print('sensorchan_hist = {}'.format(ub.urepr(sensorchan_hist, nl=2)))
 
     audit_info = {
         'sensorchan_hist': sensorchan_hist,

@@ -176,7 +176,7 @@ def main(cmdline=True, **kwargs):
     from watch.mlops.old.expt_manager import *  # NOQA
     """
     config = ExptManagerConfig(cmdline=cmdline, data=kwargs)
-    print('ExptManagerConfig config = {}'.format(ub.repr2(dict(config), nl=1)))
+    print('ExptManagerConfig config = {}'.format(ub.urepr(dict(config), nl=1)))
     command = config['command']
 
     available_actions = [
@@ -200,7 +200,7 @@ def main(cmdline=True, **kwargs):
 
     # print(f'actions={actions}')
     # print(f'targets={targets}')
-    # print('config = {}'.format(ub.repr2(dict(config), nl=1)))
+    # print('config = {}'.format(ub.urepr(dict(config), nl=1)))
 
     dvc_remote = config['dvc_remote']
 

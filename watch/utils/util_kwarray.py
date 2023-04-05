@@ -68,7 +68,7 @@ def tukey_biweight_loss(r, c=4.685):
         >>>     'c': [4.685, 2, 6],
         >>> })
         >>> for kwargs in grid:
-        >>>     key = ub.repr2(kwargs, compact=1)
+        >>>     key = ub.urepr(kwargs, compact=1)
         >>>     loss = tukey_biweight_loss(r, **kwargs)
         >>>     data[key] = loss
         >>> import pandas as pd
@@ -116,7 +116,7 @@ def asymptotic(x, offset=1, gamma=1, degree=0, horizontal=1):
         >>>     'horizontal': [1],
         >>> })
         >>> for kwargs in grid:
-        >>>     key = ub.repr2(kwargs, compact=1)
+        >>>     key = ub.urepr(kwargs, compact=1)
         >>>     data[key] = asymptotic(x, **kwargs)
         >>> import pandas as pd
         >>> melted = pd.DataFrame(data).melt(['x'])
@@ -223,9 +223,9 @@ def find_robust_normalizers(data, params='auto'):
         >>> norm_params1 = find_robust_normalizers(data, params='auto')
         >>> norm_params2 = find_robust_normalizers(data, params={'low': 0, 'high': 1.0})
         >>> norm_params3 = find_robust_normalizers(np.empty(0), params='auto')
-        >>> print('norm_params1 = {}'.format(ub.repr2(norm_params1, nl=1)))
-        >>> print('norm_params2 = {}'.format(ub.repr2(norm_params2, nl=1)))
-        >>> print('norm_params3 = {}'.format(ub.repr2(norm_params3, nl=1)))
+        >>> print('norm_params1 = {}'.format(ub.urepr(norm_params1, nl=1)))
+        >>> print('norm_params2 = {}'.format(ub.urepr(norm_params2, nl=1)))
+        >>> print('norm_params3 = {}'.format(ub.urepr(norm_params3, nl=1)))
     """
     if data.size == 0:
         normalizer = {

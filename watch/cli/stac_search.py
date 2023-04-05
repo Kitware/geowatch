@@ -271,11 +271,11 @@ class StacSearcher:
             items = list(items_gen)
             # items = search.get_all_items()
         except pystac_client.exceptions.APIError as ex:
-            print('ERROR ex = {}'.format(ub.repr2(ex, nl=1)))
+            print('ERROR ex = {}'.format(ub.urepr(ex, nl=1)))
             if 'no such index' in str(ex):
                 print('You may have the wrong collection. Listing available')
                 available_collections = list(catalog.get_all_collections())
-                print('available_collections = {}'.format(ub.repr2(available_collections, nl=1)))
+                print('available_collections = {}'.format(ub.urepr(available_collections, nl=1)))
                 pass
             raise
 
@@ -374,7 +374,7 @@ def main(cmdline=True, **kwargs):
         >>>     print(item['properties']['datetime'])
     """
     config = StacSearchConfig(cmdline=cmdline, data=kwargs)
-    print('config = {}'.format(ub.repr2(dict(config), nl=1)))
+    print('config = {}'.format(ub.urepr(dict(config), nl=1)))
     args = config.namespace
 
     logger = util_logging.get_logger(verbose=args.verbose)
@@ -408,7 +408,7 @@ def main(cmdline=True, **kwargs):
         from watch.utils import slugify_ext
 
         print('region_file_fpaths = {}'.format(slugify_ext.smart_truncate(
-            ub.repr2(region_file_fpaths, nl=1), max_length=1000)))
+            ub.urepr(region_file_fpaths, nl=1), max_length=1000)))
 
         if not hasattr(args, 'search_json'):
             raise ValueError('Missing stac search parameters')

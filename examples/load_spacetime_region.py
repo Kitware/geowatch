@@ -393,7 +393,7 @@ def demo_change_pairs():
     positive_idxs = []
     negative_idxs = []
 
-    print('dset.cats = {}'.format(ub.repr2(dset.cats, nl=1)))
+    print('dset.cats = {}'.format(ub.urepr(dset.cats, nl=1)))
 
     # Given an video
     # video_id = ub.peek()
@@ -438,7 +438,7 @@ def demo_change_pairs():
                     'aid': aid,
                 })
 
-        # print('tid_to_info = {}'.format(ub.repr2(tid_to_info, nl=2, sort=0)))
+        # print('tid_to_info = {}'.format(ub.urepr(tid_to_info, nl=2, sort=0)))
         for space_region in list(slider):
             y_sl, x_sl = space_region
 

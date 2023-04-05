@@ -131,7 +131,7 @@ def demo_visualize_heterogeneous_inputs():
         for c in kwcoco.FusedChannelSpec.coerce(chans).as_list():
             single_channels_hist[c] += freq
 
-    print('single_channels_hist = {}'.format(ub.repr2(single_channels_hist, nl=1)))
+    print('single_channels_hist = {}'.format(ub.urepr(single_channels_hist, nl=1)))
 
     channel_groups = [
         'red|green|blue',
@@ -243,7 +243,7 @@ def find_varied_region(coco_dset, dataset):
             space_slices.append(tr['space_slice'])
 
     slice_options = list(ub.unique(space_slices, key=ub.hash_data))
-    print('slice_options = {}'.format(ub.repr2(slice_options, nl=1)))
+    print('slice_options = {}'.format(ub.urepr(slice_options, nl=1)))
     space_slice = slice_options[0]
 
     # gids = [843, 923, 921, 927]

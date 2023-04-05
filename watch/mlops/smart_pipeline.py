@@ -42,12 +42,12 @@ Example:
     >>>     print(f'{node.out_paths=}')
     >>>     print(f'{node.resources=}')
     >>>     print(f'{node.algo_params=}')
-    >>>     print('node.depends = {}'.format(ub.repr2(node.depends, nl=1, sort=0)))
+    >>>     print('node.depends = {}'.format(ub.urepr(node.depends, nl=1, sort=0)))
     >>>     final = node._finalize_templates()
-    >>>     print('final = {}'.format(ub.repr2(final, nl=2)))
+    >>>     print('final = {}'.format(ub.urepr(final, nl=2)))
     >>>     print('---')
     >>> dag.print_graphs()
-    >>> print('dag.config = {}'.format(ub.repr2(dag.config, nl=1)))
+    >>> print('dag.config = {}'.format(ub.urepr(dag.config, nl=1)))
     >>> dag_templates = {}
     >>> dag_paths = {}
     >>> for node in dag.nodes.values():
@@ -56,9 +56,9 @@ Example:
     >>>     print(node.command())
     >>> import rich
     >>> rich.print('dag_templates = {}'.format(
-    >>>     ub.repr2(dag_templates, nl=1, sv=1, align=':', sort=0)))
+    >>>     ub.urepr(dag_templates, nl=1, sv=1, align=':', sort=0)))
     >>> rich.print('dag_paths = {}'.format(
-    >>>     ub.repr2(dag_paths, nl=1, sv=1, align=':', sort=0)))
+    >>>     ub.urepr(dag_paths, nl=1, sv=1, align=':', sort=0)))
 
 
 Example:

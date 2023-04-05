@@ -82,7 +82,7 @@ def main(cmdline=True, **kwargs):
     full_config = SegmentationEvalConfig.cli(
         cmdline=cmdline, data=kwargs, strict=True)
     full_config = ub.udict(full_config)
-    print('full_config = {}'.format(ub.repr2(full_config, nl=1)))
+    print('full_config = {}'.format(ub.urepr(full_config, nl=1)))
 
     true_coco = kwcoco.CocoDataset.coerce(full_config['true_dataset'])
     pred_coco = kwcoco.CocoDataset.coerce(full_config['pred_dataset'])
@@ -1045,8 +1045,8 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     n_vid_matches = len(video_matches)
     n_img_per_vid_matches = [len(d['match_gids1']) for d in video_matches]
     n_img_matches = image_matches['match_gids1']
-    print('n_img_per_vid_matches = {}'.format(ub.repr2(n_img_per_vid_matches, nl=1)))
-    print('n_vid_matches = {}'.format(ub.repr2(n_vid_matches, nl=1)))
+    print('n_img_per_vid_matches = {}'.format(ub.urepr(n_img_per_vid_matches, nl=1)))
+    print('n_vid_matches = {}'.format(ub.urepr(n_vid_matches, nl=1)))
     print('n_img_matches = {!r}'.format(n_img_matches))
 
     rows = []
@@ -1270,7 +1270,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
 
         for p in tocombine:
             z = ub.dict_isect(p, {'fp_count', 'tp_count', 'fn_count', 'tn_count', 'thresholds', 'nsupport'})
-            print(ub.repr2(ub.map_vals(list, z), nl=0))
+            print(ub.urepr(ub.map_vals(list, z), nl=0))
 
         salient_measure_combiner = MeasureCombiner(thresh_bins=thresh_bins)
         print('salient_combo_measures.__dict__ = {!r}'.format(salient_combo_measures.__dict__))
@@ -1346,7 +1346,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         summary['salient_auc'] = salient_combo_measures['auc']
         summary['salient_max_f1'] = salient_combo_measures['max_f1']
 
-    print('summary = {}'.format(ub.repr2(
+    print('summary = {}'.format(ub.urepr(
         summary, nl=1, precision=4, align=':', sort=0)))
     print('eval_dpath = {!r}'.format(eval_dpath))
     print(f'eval_fpath={eval_fpath}')
