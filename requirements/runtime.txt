@@ -1,0 +1,48 @@
+# Add requirements here, use the script for help (erotemic needs to publish this script)
+# python ~/local/tools/supported_python_versions_pip.py pygments
+# python ~/local/tools/supported_python_versions_pip.py ubelt
+# python ~/local/tools/supported_python_versions_pip.py scriptconfig
+# python ~/local/tools/supported_python_versions_pip.py toml
+# python ~/local/tools/supported_python_versions_pip.py rich
+
+xdev>=0.3.1     ;                            python_version >= '3.6'    # Python 3.6+
+
+ubelt>=1.2.1     ;                            python_version >= '3.6'    # Python 3.6+
+ubelt>=0.8.1     ; python_version < '3.6' and python_version >= '2.7'    # Python 2.7
+
+toml>=0.9.6     ;                            python_version >= '2.7'    # Python 2.7+
+
+scriptconfig>=0.7.0     ;                            python_version >= '3.6'    # Python 3.6+
+
+rich>=12.4.4    ;                            python_version >= '3.8'    # Python 3.8+
+rich>=11.2.0    ; python_version < '3.8' and python_version >= '3.6'    # Python 3.6 
+
+git-python>=1.0.0     ;                            python_version >= '2.7'    # Python 2.7+
+
+black>=22.1.0    ;                            python_version >= '3.6.2'    # Python 3.6.2+
+
+packaging>=21.3
+
+PyYAML >= 0.6.0
+ruamel.yaml >= 0.17.21
+
+argcomplete>=1.0
+
+# xdev availpkg pandas --request_min=1.1.4
+pandas>=1.5.0  ; python_version < '4.0'  and python_version >= '3.11'  # Python 3.11+
+pandas>=1.3.5  ; python_version < '3.11' and python_version >= '3.10'  # Python 3.10
+pandas>=1.4.0  ; python_version < '3.10' and python_version >= '3.9'   # Python 3.9
+pandas>=1.4.0  ; python_version < '3.9'  and python_version >= '3.8'   # Python 3.8
+pandas>=1.2.0  ; python_version < '3.8'  and python_version >= '3.7'   # Python 3.7.1
+pandas>=1.1.4  ; python_version < '3.7'  and python_version >= '3.6'   # Python 3.6.1
+
+cmd_queue>=0.1.6
+
+sphinx>=5.0.1
+sphinx-autobuild>=2021.3.14
+sphinx_rtd_theme>=1.0.0
+sphinxcontrib-napoleon>=0.7
+sphinx-autoapi>=1.8.4
+Pygments>=2.9.0
+myst_parser>=0.18.0
+sphinx-reredirects>=0.0.1
