@@ -310,7 +310,7 @@ def _test():
     from watch.tasks.fusion.predict import quantize_float01
     quant_pred, quantization = quantize_float01(pred, old_min=0, old_max=1,
                                                 quantize_dtype=np.uint8)
-    print('quantization = {}'.format(ub.repr2(quantization, nl=1)))
+    print('quantization = {}'.format(ub.urepr(quantization, nl=1)))
 
     import kwplot
     kwplot.autompl()

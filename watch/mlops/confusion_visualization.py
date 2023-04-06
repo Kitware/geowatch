@@ -358,14 +358,14 @@ def bas_poly_eval_confusion_analysis(eval_fpath):
     repr1 = str(dst_dset.annots())
     print(f'repr1={repr1}')
     dst_dset = reproject_annotations.main(cmdline=cmdline, **true_kwargs)
-    repr2 = str(dst_dset.annots())
+    urepr = str(dst_dset.annots())
     print(f'repr1={repr1}')
-    print(f'repr2={repr2}')
+    print(f'urepr={urepr}')
     pred_kwargs['src'] = dst_dset
     dst_dset = reproject_annotations.main(cmdline=cmdline, **pred_kwargs)
     repr3 = str(dst_dset.annots())
     print(f'repr1={repr1}')
-    print(f'repr2={repr2}')
+    print(f'urepr={urepr}')
     print(f'repr3={repr3}')
 
     set(dst_dset.annots().lookup('role', None))

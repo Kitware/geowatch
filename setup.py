@@ -200,6 +200,7 @@ REQUIREMENTS = (
 EXTRAS_REQUIRES = {
     'all': parse_requirements('requirements.txt'),
     'development': parse_requirements('requirements/development.txt'),
+    'tests': parse_requirements('requirements/tests.txt'),
     'optional': parse_requirements('requirements/optional.txt'),
     # Really annoying that this is the best we can do
     # The user *must* choose either headless or graphics
@@ -209,6 +210,7 @@ EXTRAS_REQUIRES = {
     'all-strict': parse_requirements('requirements.txt', versions='strict'),
     'runtime-strict': parse_requirements('requirements/runtime.txt', versions='strict'),
     'development-strict': parse_requirements('requirements/development.txt', versions='strict'),
+    'tests-strict': parse_requirements('requirements/tests.txt', versions='strict'),
     'optional-strict': parse_requirements('requirements/optional.txt', versions='strict'),
     # Really annoying that this is the best we can do
     # The user *must* choose either headless or graphics
@@ -217,7 +219,7 @@ EXTRAS_REQUIRES = {
     'graphics-strict': parse_requirements('requirements/graphics.txt', versions='strict'),
 }
 # import ubelt as ub
-# print('EXTRAS_REQUIRES = {}'.format(ub.repr2(EXTRAS_REQUIRES, nl=2)))
+# print('EXTRAS_REQUIRES = {}'.format(ub.urepr(EXTRAS_REQUIRES, nl=2)))
 
 
 if __name__ == '__main__':

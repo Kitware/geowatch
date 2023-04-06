@@ -99,7 +99,7 @@ def associate_images(dset1, dset2):
             iou = ious[(idx1, idx2)]
             candidates.append((dist, iou, name1, name2))
         print(len(candidates))
-        print(ub.repr2(sorted(candidates)[0:1000], compact_brace=10, nl=3))
+        print(ub.urepr(sorted(candidates)[0:1000], compact_brace=10, nl=3))
 
     # identifier_to_gid = []
     # for img in dset1.index.imgs.values():

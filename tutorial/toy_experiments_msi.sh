@@ -19,7 +19,7 @@ NUM_TOY_TEST_VIDS="${NUM_TOY_TEST_VIDS:-2}"  # If variable not set or null, use 
 # Generate toy datasets
 TRAIN_FPATH=$DVC_DATA_DPATH/vidshapes_msi_train${NUM_TOY_TRAIN_VIDS}/data.kwcoco.json
 VALI_FPATH=$DVC_DATA_DPATH/vidshapes_msi_vali${NUM_TOY_VALI_VIDS}/data.kwcoco.json
-TEST_FPATH=$DVC_DATA_DPATH/vidshapes_msi_test${NUM_TOY_TEST_VIDS}/data.kwcoco.json 
+TEST_FPATH=$DVC_DATA_DPATH/vidshapes_msi_test${NUM_TOY_TEST_VIDS}/data.kwcoco.json
 
 generate_data(){
     mkdir -p "$DVC_DATA_DPATH"
@@ -47,7 +47,7 @@ if [[ ! -e "$TRAIN_FPATH" ]]; then
 fi
 
 __doc__="""
-Should look like 
+Should look like
                                    dset  n_anns  n_imgs  n_videos  n_cats  r|g|b|disparity|gauss|B8|B11  B1|B8|B8a|B10|B11  r|g|b|flowx|flowy|distri|B10|B11
 0  vidshapes_msi_train/data.kwcoco.json      80      40         8       3                            12                 12                                16
 1   vidshapes_msi_vali/data.kwcoco.json      50      25         5       3                             9                 10                                 6
@@ -72,8 +72,8 @@ demo_visualize_toydata(){
 
 
 # Define the channels we want to use
-# The sensors and channels are specified by the kwcoco SensorChanSpec 
-# in this example the data does not contain sensor metadata, so we 
+# The sensors and channels are specified by the kwcoco SensorChanSpec
+# in this example the data does not contain sensor metadata, so we
 # use a "*" to indicate a generic sensor.
 # A colon ":" separates channels from the sensors.
 # A pipe "|" indicates channels are early fused
@@ -84,7 +84,7 @@ CHANNELS="(*):(disparity|gauss,X.2|Y:2:6,B1|B8a,flowx|flowy|distri)"
 echo "CHANNELS = $CHANNELS"
 
 
-# Fit 
+# Fit
 DATASET_CODE=ToyDataMSI
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 EXPERIMENT_NAME=ToyDataMSI_Demo_V001
@@ -104,12 +104,12 @@ python -m watch.tasks.fusion fit --config "
         class_path: MultimodalTransformer
         init_args:
             name        : $EXPERIMENT_NAME
-            arch_name   : smt_it_stm_p8 
+            arch_name   : smt_it_stm_p8
             window_size : 8
             dropout     : 0.1
-            global_saliency_weight: 1.0 
-            global_class_weight:    1.0 
-            global_change_weight:   0.0 
+            global_saliency_weight: 1.0
+            global_class_weight:    1.0
+            global_change_weight:   0.0
     lr_scheduler:
       class_path: torch.optim.lr_scheduler.OneCycleLR
       init_args:
@@ -128,10 +128,11 @@ python -m watch.tasks.fusion fit --config "
     trainer:
       accumulate_grad_batches: 1
       default_root_dir     : $DEFAULT_ROOT_DIR
-      accelerator          : gpu 
+      #accelerator          : gpu
+      accelerator          : gpu
       devices              : 0,
       #devices             : 0,1
-      #strategy            : ddp 
+      #strategy            : ddp
       check_val_every_n_epoch: 1
       enable_checkpointing: true
       enable_model_summary: true
@@ -139,8 +140,6 @@ python -m watch.tasks.fusion fit --config "
       logger: true
       max_steps: $MAX_STEPS
       num_sanity_val_steps: 0
-      replace_sampler_ddp: true
-      track_grad_norm: 2
     initializer:
         init: noop
 "

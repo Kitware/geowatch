@@ -81,13 +81,13 @@ class Initializer(object):
             Tuple[Initializer, dict]: initializer_ = initializer_cls, kw
 
         Examples:
-            >>> print(ub.repr2(Initializer.coerce({'init': 'noop'})))
+            >>> print(ub.urepr(Initializer.coerce({'init': 'noop'})))
             >>> config = {
             ...     'init': 'pretrained',
             ...     'pretrained_fpath': '/fit/nice/untitled'
             ... }
-            >>> print(ub.repr2(Initializer.coerce(config)))
-            >>> print(ub.repr2(Initializer.coerce({'init': 'kaiming_normal'})))
+            >>> print(ub.urepr(Initializer.coerce(config)))
+            >>> print(ub.urepr(Initializer.coerce({'init': 'kaiming_normal'})))
         """
         if isinstance(config, str):
             config = {

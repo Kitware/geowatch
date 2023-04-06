@@ -67,7 +67,7 @@ def main(cmdline=False, **kwargs):
         >>> #assert new_pred2.dtype.kind == 'i'
     """
     config = CocoReformatChannels(data=kwargs, cmdline=cmdline)
-    print('config = {}'.format(ub.repr2(dict(config), nl=1)))
+    print('config = {}'.format(ub.urepr(dict(config), nl=1)))
     dset = kwcoco.CocoDataset.coerce(config['src'])
 
     to_quantize = kwcoco.ChannelSpec.coerce('' if config['quantize'] is None else config['quantize']).fuse()

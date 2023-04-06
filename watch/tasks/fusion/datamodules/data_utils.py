@@ -54,9 +54,9 @@ def resolve_scale_request(request=None, data_gsd=None):
         >>>     'data_gsd': [None, 10, 30],
         >>> }))
         >>> for kwargs in grid:
-        >>>     print('kwargs = {}'.format(ub.repr2(kwargs, nl=0)))
+        >>>     print('kwargs = {}'.format(ub.urepr(kwargs, nl=0)))
         >>>     resolved = resolve_scale_request(**kwargs)
-        >>>     print('resolved = {}'.format(ub.repr2(resolved, nl=0)))
+        >>>     print('resolved = {}'.format(ub.urepr(resolved, nl=0)))
         >>>     print('---')
 
     """
@@ -210,7 +210,7 @@ def fliprot_annot(annot, rot_k, flip_axis=None, axes=(0, 1), canvas_dsize=None):
         >>>     canvas2 = annot2.draw_on(image2.copy(), edgecolor='kitware_blue', fill=False)
         >>>     canvas3 = annot3.draw_on(image3.copy(), edgecolor='kitware_red', fill=False)
         >>>     canvas = kwimage.stack_images([canvas1, canvas2, canvas3], axis=1)
-        >>>     kwplot.imshow(canvas, pnum=pnum_(), title=ub.repr2(result['params'], nl=0, compact=1, nobr=1))
+        >>>     kwplot.imshow(canvas, pnum=pnum_(), title=ub.urepr(result['params'], nl=0, compact=1, nobr=1))
     """
     import kwimage
     if rot_k != 0:
@@ -230,9 +230,9 @@ def fliprot_annot(annot, rot_k, flip_axis=None, axes=(0, 1), canvas_dsize=None):
         y2 = new_canvas_box.height / 2
         # Translate to the center of the new canvas
         T2 = kwimage.Affine.translate((x2, y2))
-        # print(f'T1=\n{ub.repr2(T1)}')
-        # print(f'R=\n{ub.repr2(R)}')
-        # print(f'T2=\n{ub.repr2(T2)}')
+        # print(f'T1=\n{ub.urepr(T1)}')
+        # print(f'R=\n{ub.urepr(R)}')
+        # print(f'T2=\n{ub.urepr(T2)}')
         A = T2 @ R @ T1
         annot = annot.warp(A)
         # TODO: specialized faster way
@@ -337,7 +337,7 @@ class NestedPool(list):
         >>> print({nested2.sample() for i in range(100)})
         >>> nested3 = NestedPool([nested1, nested2, [4, 59, 9, [], []]])
         >>> print({nested3.sample() for i in range(100)})
-        >>> print(ub.repr2(ub.dict_hist(nested3.sample() for i in range(100))))
+        >>> print(ub.urepr(ub.dict_hist(nested3.sample() for i in range(100))))
     """
     def __init__(nested, pools, rng=None):
         super().__init__(pools)

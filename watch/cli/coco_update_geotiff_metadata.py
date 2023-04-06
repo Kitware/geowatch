@@ -116,4 +116,4 @@ def main(cmdline=True, **kwargs):
     tasks_per_img = list(map(len, transfer_tasks))
     import kwarray
     tasks_per_img_stats = kwarray.stats_dict(tasks_per_img, sum=True)
-    print('transfers_per_img_stats = {}'.format(ub.repr2(tasks_per_img_stats, nl=1)))
+    print('transfers_per_img_stats = {}'.format(ub.urepr(tasks_per_img_stats, nl=1)))

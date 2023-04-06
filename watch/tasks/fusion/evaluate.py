@@ -81,9 +81,10 @@ def main(cmdline=True, **kwargs):
     """
     full_config = SegmentationEvalConfig.cli(
         cmdline=cmdline, data=kwargs, strict=True)
-    full_config = ub.udict(full_config)
-    print('full_config = {}'.format(ub.repr2(full_config, nl=1)))
+    import rich
+    rich.print('full_config = {}'.format(ub.urepr(full_config, nl=1)))
 
+    full_config = ub.udict(full_config)
     true_coco = kwcoco.CocoDataset.coerce(full_config['true_dataset'])
     pred_coco = kwcoco.CocoDataset.coerce(full_config['pred_dataset'])
     eval_fpath = full_config['eval_fpath']
@@ -959,6 +960,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         >>> #workers = 0
         >>> evaluate_segmentations(true_coco, pred_coco, eval_dpath, config=config)
     """
+    import rich
 
     if config is None:
         config = {}
@@ -1045,8 +1047,8 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     n_vid_matches = len(video_matches)
     n_img_per_vid_matches = [len(d['match_gids1']) for d in video_matches]
     n_img_matches = image_matches['match_gids1']
-    print('n_img_per_vid_matches = {}'.format(ub.repr2(n_img_per_vid_matches, nl=1)))
-    print('n_vid_matches = {}'.format(ub.repr2(n_vid_matches, nl=1)))
+    print('n_img_per_vid_matches = {}'.format(ub.urepr(n_img_per_vid_matches, nl=1)))
+    print('n_vid_matches = {}'.format(ub.urepr(n_vid_matches, nl=1)))
     print('n_img_matches = {!r}'.format(n_img_matches))
 
     rows = []
@@ -1252,8 +1254,8 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
 
     df = pd.DataFrame(rows)
     print('Per Image Pixel Measures')
-    print(df)
-    print(df.describe().T)
+    rich.print(df)
+    rich.print(df.describe().T)
 
     # Finalize all of the aggregated measures
     print('Finalize salient measures')
@@ -1270,7 +1272,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
 
         for p in tocombine:
             z = ub.dict_isect(p, {'fp_count', 'tp_count', 'fn_count', 'tn_count', 'thresholds', 'nsupport'})
-            print(ub.repr2(ub.map_vals(list, z), nl=0))
+            print(ub.urepr(ub.map_vals(list, z), nl=0))
 
         salient_measure_combiner = MeasureCombiner(thresh_bins=thresh_bins)
         print('salient_combo_measures.__dict__ = {!r}'.format(salient_combo_measures.__dict__))
@@ -1306,7 +1308,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     # (TODO: better API)
     result = CocoSingleResult(
         salient_combo_measures, ovr_combo_measures, None, meta)
-    print('result = {}'.format(result))
+    rich.print('result = {}'.format(result))
 
     meta['info'].append(pcontext.stop())
 
@@ -1346,9 +1348,10 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         summary['salient_auc'] = salient_combo_measures['auc']
         summary['salient_max_f1'] = salient_combo_measures['max_f1']
 
-    print('summary = {}'.format(ub.repr2(
+    rich.print('summary = {}'.format(ub.urepr(
         summary, nl=1, precision=4, align=':', sort=0)))
-    print('eval_dpath = {!r}'.format(eval_dpath))
+
+    rich.print(f'Eval Dpath: [link={eval_dpath}]{eval_dpath}[/link]')
     print(f'eval_fpath={eval_fpath}')
     return df
 

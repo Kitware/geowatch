@@ -123,7 +123,7 @@ def main(cmdline=True, **kwargs):
     """
 
     config = AggregateEvluationConfig.cli(cmdline=cmdline, data=kwargs)
-    print('config = {}'.format(ub.repr2(dict(config), nl=1)))
+    print('config = {}'.format(ub.urepr(dict(config), nl=1)))
 
     eval_type_to_aggregator = coerce_aggregators(config)
 
@@ -796,7 +796,7 @@ def generic_analysis(agg0, macro_groups=None, selector=None):
     if selector is None:
         selector = chosen_macro_rois[-1]
 
-    print('chosen_macro_rois = {}'.format(ub.repr2(chosen_macro_rois, nl=1)))
+    print('chosen_macro_rois = {}'.format(ub.urepr(chosen_macro_rois, nl=1)))
     agg0_.build_macro_tables(chosen_macro_rois)
 
     agg_best, param_lut = agg0_.report_best(top_k=1)
@@ -1019,7 +1019,7 @@ class AggregatorAnalysisMixin:
                 # if submacro:
                 #     print('Macro Regions LUT: ' +  ub.urepr(submacro, nl=1))
                 rich.print(justone)
-                rich.print('agg.macro_key_to_regions = {}'.format(ub.repr2(_agg.macro_key_to_regions, nl=1)))
+                rich.print('agg.macro_key_to_regions = {}'.format(ub.urepr(_agg.macro_key_to_regions, nl=1)))
             else:
                 for region_id, summary_table in region_id_to_summary.items():
                     ntotal = region_id_to_ntotal[region_id]

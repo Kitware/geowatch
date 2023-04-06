@@ -395,7 +395,7 @@ def dvc_add_new_regions(new_regions):
                     needs_add.append(sensor_zip_fpath_dst)
                 else:
                     from watch.utils import util_yaml
-                    data = util_yaml.yaml_loads(sidecar_fpath.read_text())
+                    data = util_yaml.Yaml.loads(sidecar_fpath.read_text())
 
                     if SLOW_CHECK:
                         print('check hash')

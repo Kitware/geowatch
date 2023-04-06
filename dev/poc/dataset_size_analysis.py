@@ -89,7 +89,7 @@ def main():
         })
     per_image_df = pd.DataFrame(per_image_rows)
 
-    print(ub.repr2(ub.dict_hist(per_image_df['chan_spec'])))
+    print(ub.urepr(ub.dict_hist(per_image_df['chan_spec'])))
 
     band_df = band_df[~band_df['is_dangling']]
     # # band_df = band_df[band_df['sensor'] == 'WV']

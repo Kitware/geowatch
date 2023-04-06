@@ -53,7 +53,7 @@ class BatchPlotter(pl.callbacks.Callback):
         >>> #
         >>> trainer = pl.Trainer(callbacks=[BatchPlotter()],
         >>>                      default_root_dir=default_root_dir,
-        >>>                      max_epochs=3)
+        >>>                      max_epochs=3, accelerator='cpu', devices=1)
         >>> trainer.fit(model)
         >>> import pathlib
         >>> train_dpath = pathlib.Path(trainer.log_dir)
@@ -136,9 +136,9 @@ class BatchPlotter(pl.callbacks.Callback):
             hparams = util_model.model_hparams(model)
             model_config = {
                 'type': str(model.__class__),
-                'hp': smart_truncate(ub.repr2(hparams, compact=1, nl=0), max_length=8),
+                'hp': smart_truncate(ub.urepr(hparams, compact=1, nl=0), max_length=8),
             }
-            model_cfgstr = smart_truncate(ub.repr2(
+            model_cfgstr = smart_truncate(ub.urepr(
                 model_config, compact=1, nl=0), max_length=64)
 
         datamodule = trainer.datamodule

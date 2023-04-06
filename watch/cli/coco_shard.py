@@ -35,7 +35,7 @@ def main(cmdline=True, **kw):
     """
     import kwcoco
     config = CocoShardConfig(kw, cmdline=cmdline)
-    print('config = {}'.format(ub.repr2(dict(config), nl=1)))
+    print('config = {}'.format(ub.urepr(dict(config), nl=1)))
 
     if config['src'] is None:
         raise Exception('must specify source: {}'.format(config['src']))
@@ -80,7 +80,7 @@ def main(cmdline=True, **kw):
         dset_shard = dset.subset(gids)
         dset_shard.fpath = dst_fpath
         dset_shard.dump(dset_shard.fpath, newlines=True)
-    print('Wrote shards: {}'.format(ub.repr2(dest_fpaths, nl=1)))
+    print('Wrote shards: {}'.format(ub.urepr(dest_fpaths, nl=1)))
 
 
 __config__ = CocoShardConfig

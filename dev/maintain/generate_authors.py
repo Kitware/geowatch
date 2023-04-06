@@ -86,7 +86,7 @@ def main(cmdline=1, **kwargs):
     df = df.sort_values('num', ascending=False)
     print(df)
     print(', '.join(df['name']))
-    # print(ub.repr2(df.drop(['id', 'num'], axis=1).to_dict('records')))
+    # print(ub.urepr(df.drop(['id', 'num'], axis=1).to_dict('records')))
 
 if __name__ == '__main__':
     """

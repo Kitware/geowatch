@@ -880,7 +880,7 @@ def single_image_stacking_collection2(tmp_path, source_dir, out_dir, folder, cle
                                dstNodata=0, srcNodata=0, outputType=gdal.GDT_UInt16).ReadAsArray()
                 B7 = gdal.Warp(os.path.join(tmp_path, '_tmp_img'), gdal.Open(join(join(tmp_path, folder),
                                                                                   "{}_ST_B6.TIF".format(folder))),
-                               outputBounds=[bounds[0], bounds[1], bounds[2], bounds[3]],  xRes=res, yRes=res,
+                               outputBounds=[bounds[0], bounds[1], bounds[2], bounds[3]], xRes=res, yRes=res,
                                dstNodata=0, srcNodata=0, outputType=gdal.GDT_UInt16).ReadAsArray()
             except ValueError as e:
                 # logger.error('Cannot open spectral bands for {}: {}'.format(folder, e))
@@ -1120,7 +1120,7 @@ def bbox(f):
 @click.option('--hpc/--dhtc', default=True, help='if it is set for HPC or DHTC environment')
 @click.option('--low_date_bound', type=str, default=None, help='the lower bound of the year range of user interest')
 @click.option('--upp_date_bound', type=str, default=None, help='the upper bound of the year range of user interest')
-@click.option('--collection',  type=click.Choice(['ARD', 'C2', 'HLS', 'HLS14']), default='ARD',
+@click.option('--collection', type=click.Choice(['ARD', 'C2', 'HLS', 'HLS14']), default='ARD',
               help='image source')
 @click.option('--shapefile_path', type=str, default=None)
 @click.option('--id', type=int, default=0)

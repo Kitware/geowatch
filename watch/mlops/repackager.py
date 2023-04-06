@@ -45,7 +45,7 @@ class RepackageConfig(scfg.DataConfig):
 
 def main(**kwargs):
     config = RepackageConfig.cli(data=kwargs)
-    print('config = {}'.format(ub.repr2(config.to_dict(), nl=1)))
+    print('config = {}'.format(ub.urepr(config.to_dict(), nl=1)))
     checkpoint_fpath = config['checkpoint_fpath']
     repackage(checkpoint_fpath, force=config['force'])
 
@@ -66,7 +66,7 @@ def repackage(checkpoint_fpath, force=False, dry=False):
     from watch.utils import util_path
     checkpoint_fpaths = util_path.coerce_patterned_paths(checkpoint_fpath)
     print('Begin repackage')
-    print('checkpoint_fpaths = {}'.format(ub.repr2(checkpoint_fpaths, nl=1)))
+    print('checkpoint_fpaths = {}'.format(ub.urepr(checkpoint_fpaths, nl=1)))
     package_fpaths = []
     for checkpoint_fpath in checkpoint_fpaths:
         # If we have a checkpoint path we can load it if we make assumptions
@@ -85,10 +85,10 @@ def repackage(checkpoint_fpath, force=False, dry=False):
                 except Exception as ex:
                     print('ERROR: Failed to package: {}'.format(ex))
         package_fpaths.append(os.fspath(package_fpath))
-    print('package_fpaths = {}'.format(ub.repr2(package_fpaths, nl=1)))
+    print('package_fpaths = {}'.format(ub.urepr(package_fpaths, nl=1)))
     from watch.utils import util_yaml
     package_fpaths_ = [ub.shrinkuser(p, home='$HOME') for p in package_fpaths]
-    print(util_yaml.yaml_dumps(package_fpaths_))
+    print(util_yaml.Yaml.dumps(package_fpaths_))
     return package_fpaths
 
 

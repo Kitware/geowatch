@@ -164,13 +164,13 @@ def main(cmdline=False, **kwargs):
     import geopandas as gpd  # NOQA
     from watch.utils import util_gis
     from watch.utils import util_parallel
-    from watch.utils import util_yaml
+    from watch.utils.util_yaml import Yaml
     from watch import heuristics
     from watch.utils import kwcoco_extensions
     import kwcoco
     import numpy as np
     config = ReprojectAnnotationsConfig.cli(data=kwargs, cmdline=cmdline)
-    print('config = {}'.format(ub.repr2(dict(config), nl=1)))
+    print('config = {}'.format(ub.urepr(dict(config), nl=1)))
 
     output_fpath = config['dst']
     if output_fpath is None:
@@ -209,7 +209,7 @@ def main(cmdline=False, **kwargs):
         util_gis.coerce_geojson_datas(config['site_models'], desc='load site models', allow_raw=True, workers=workers))
 
     status_to_catname_default = ub.udict(heuristics.PHASE_STATUS_TO_KWCOCO_CATNAME)
-    status_to_catname = util_yaml.coerce_yaml(config['status_to_catname'])
+    status_to_catname = Yaml.coerce(config['status_to_catname'])
     if status_to_catname is not None:
         status_to_catname = status_to_catname_default | status_to_catname
     else:
@@ -390,9 +390,9 @@ def expand_site_models_with_site_summaries(sites, regions):
 
     region_id_to_num_sitesumms = ub.map_vals(len, region_id_to_site_summaries)
     region_id_to_num_sites = ub.map_vals(len, region_id_to_sites)
-    print('region_id_to_num_sitesumms = {}'.format(ub.repr2(region_id_to_num_sitesumms, nl=1, sort=0)))
+    print('region_id_to_num_sitesumms = {}'.format(ub.urepr(region_id_to_num_sitesumms, nl=1, sort=0)))
     if VERYVERBOSE:
-        print('region_id_to_num_sites = {}'.format(ub.repr2(region_id_to_num_sites, nl=1, sort=0)))
+        print('region_id_to_num_sites = {}'.format(ub.urepr(region_id_to_num_sites, nl=1, sort=0)))
 
     site_rows1 = []
     for region_id, region_sites in region_id_to_sites.items():
@@ -474,7 +474,7 @@ def expand_site_models_with_site_summaries(sites, regions):
 
     if VERYVERBOSE:
         region_id_to_num_only_sitesumms = ub.map_vals(len, region_id_to_only_site_summaries)
-        print('region_id_to_num_only_sitesumms = {}'.format(ub.repr2(region_id_to_num_only_sitesumms, nl=1, sort=0)))
+        print('region_id_to_num_only_sitesumms = {}'.format(ub.urepr(region_id_to_num_only_sitesumms, nl=1, sort=0)))
 
     # Transform site-summaries without corresponding sites into pseudo-site
     # observations
@@ -498,7 +498,7 @@ def expand_site_models_with_site_summaries(sites, regions):
     # site_model_schema[
 
     region_id_to_num_sites = ub.map_vals(len, region_id_to_sites)
-    # print('BEFORE region_id_to_num_sites = {}'.format(ub.repr2(region_id_to_num_sites, nl=1)))
+    # print('BEFORE region_id_to_num_sites = {}'.format(ub.urepr(region_id_to_num_sites, nl=1)))
 
     for region_id, sitesummaries in region_id_to_only_site_summaries.items():
         region_row = region_id_region_row[region_id]
@@ -507,7 +507,7 @@ def expand_site_models_with_site_summaries(sites, regions):
 
     region_id_to_num_sites = ub.map_vals(len, region_id_to_sites)
     if VERYVERBOSE:
-        print('AFTER (sitesummary) region_id_to_num_sites = {}'.format(ub.repr2(region_id_to_num_sites, nl=1)))
+        print('AFTER (sitesummary) region_id_to_num_sites = {}'.format(ub.urepr(region_id_to_num_sites, nl=1)))
 
     def is_nonish(x):
         return x is None or isinstance(x, float) and math.isnan(x)
@@ -557,7 +557,7 @@ def expand_site_models_with_site_summaries(sites, regions):
                     'end_date': site_summary_row['end_date'],
                     'unique_phases': site_rows['current_phase'].unique(),
                 }
-                # print('summary = {}'.format(ub.repr2(summary, nl=0)))
+                # print('summary = {}'.format(ub.urepr(summary, nl=0)))
                 site_high_level_summaries.append(summary)
 
         df = pd.DataFrame(site_high_level_summaries)
@@ -786,14 +786,14 @@ def assign_sites_to_images(coco_dset,
 
     # Ensure colors and categories
     status_to_color = {d['name']: kwimage.Color(d['color']).as01() for d in heuristics.HUERISTIC_STATUS_DATA}
-    # print('coco_dset categories = {}'.format(ub.repr2(coco_dset.dataset['categories'], nl=2)))
+    # print('coco_dset categories = {}'.format(ub.urepr(coco_dset.dataset['categories'], nl=2)))
     for cat in heuristics.CATEGORIES:
         coco_dset.ensure_category(**cat)
     # hack in heuristic colors
     heuristics.ensure_heuristic_coco_colors(coco_dset)
     # handle any other colors
     kwcoco_extensions.category_category_colors(coco_dset)
-    # print('coco_dset categories = {}'.format(ub.repr2(coco_dset.dataset['categories'], nl=2)))
+    # print('coco_dset categories = {}'.format(ub.urepr(coco_dset.dataset['categories'], nl=2)))
 
     all_drawable_infos = []  # helper if we are going to draw
 
@@ -858,7 +858,7 @@ def assign_sites_to_images(coco_dset,
             video_id = video['id']
             video_id_to_region_id[video_id] = region_id
 
-    print('Found Association: video_id_to_region_id = {}'.format(ub.repr2(video_id_to_region_id, nl=1)))
+    print('Found Association: video_id_to_region_id = {}'.format(ub.urepr(video_id_to_region_id, nl=1)))
     propogated_annotations = []
     for video_id, region_id in video_id_to_region_id.items():
         region_sites = region_id_to_sites[region_id]
@@ -970,13 +970,13 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
         print(site_gdf)
         print(f'start_date = {start_date}')
         print(f'end_date   = {end_date}')
-        print('observation_dates = {}'.format(ub.repr2(observation_dates.tolist(), nl=1)))
+        print('observation_dates = {}'.format(ub.urepr(observation_dates.tolist(), nl=1)))
     if end_date is not None and observation_dates[-1] != end_date:
         print('WARNING: inconsistent end date')
         print(site_gdf)
         print(f'start_date = {start_date}')
         print(f'end_date   = {end_date}')
-        print('observation_dates = {}'.format(ub.repr2(observation_dates.tolist(), nl=1)))
+        print('observation_dates = {}'.format(ub.urepr(observation_dates.tolist(), nl=1)))
 
     # Assuming observations are sorted by date
     assert all([d.total_seconds() >= 0 for d in np.diff(observation_dates)])

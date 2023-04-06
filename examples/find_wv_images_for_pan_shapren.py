@@ -29,9 +29,9 @@ def find_wv_images_for_pan_sharpen():
     import ubelt as ub
     for obj in coco_dset.images(valid_gids).objs:
         name = obj['name']
-        print(' * name = {}'.format(ub.repr2(name, nl=1)))
+        print(' * name = {}'.format(ub.urepr(name, nl=1)))
         for aux in obj['auxiliary']:
             aux_fname = aux['file_name']
-            print('    * aux_fname = {}'.format(ub.repr2(aux_fname, nl=1)))
+            print('    * aux_fname = {}'.format(ub.urepr(aux_fname, nl=1)))
             aux_chan = aux['channels']
-            print('    * aux_chan = {}'.format(ub.repr2(aux_chan, nl=1)))
+            print('    * aux_chan = {}'.format(ub.urepr(aux_chan, nl=1)))

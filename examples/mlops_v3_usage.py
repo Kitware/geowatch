@@ -29,7 +29,7 @@ if 0:
     util.util_graphviz.dump_nx_ondisk(pipeline.proc_graph, 'proc_graph.png')
     util.util_graphviz.dump_nx_ondisk(pipeline.io_graph, 'io_graph.png')
 
-config = util_yaml.yaml_loads(ub.codeblock(
+config = util_yaml.Yaml.loads(ub.codeblock(
     '''
     bas_pxl.package_fpath: BAS_MODEL.pt
     sc_pxl.package_fpath: BAS_MODEL.pt
@@ -52,7 +52,7 @@ config = util_yaml.yaml_loads(ub.codeblock(
     '''))
 
 # We can overwrite performance parameters based on our needs
-config.update(util_yaml.yaml_loads(ub.codeblock(
+config.update(util_yaml.Yaml.loads(ub.codeblock(
     '''
     bas_pxl.devices: "0,"
     bas_pxl.accelerator: "gpu"

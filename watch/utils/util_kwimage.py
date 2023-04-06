@@ -1355,7 +1355,7 @@ def find_low_overlap_covering_boxes(polygons, scale, min_box_dim, max_box_dim, m
         if num_old == num_new:
             residual = (old_candidate_bbs.data - candidate_bbs.data).max()
             if residual > 0:
-                print('improving residual = {}'.format(ub.repr2(residual, nl=1)))
+                print('improving residual = {}'.format(ub.urepr(residual, nl=1)))
             else:
                 print('converged')
                 break

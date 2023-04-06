@@ -216,7 +216,7 @@ class QA_BitSpecTable(QA_SpecMixin):
                 parts['value'] = val
                 parts['bits'] = '---'
                 parts['desc'] = 'nodata'
-            val_to_desc[val] = ub.repr2(parts, compact=1, nobr=1, nl=True, si=1, sort=0)
+            val_to_desc[val] = ub.urepr(parts, compact=1, nobr=1, nl=True, si=1, sort=0)
         return val_to_desc
 
 
@@ -320,7 +320,7 @@ class QA_ValueSpecTable(QA_SpecMixin):
                 val_to_desc[val] = '?'
             else:
                 parts['desc'] = spec['qa_description']
-            val_to_desc[val] = ub.repr2(parts, compact=1, nobr=1, nl=True, si=1, sort=0)
+            val_to_desc[val] = ub.urepr(parts, compact=1, nobr=1, nl=True, si=1, sort=0)
         return val_to_desc
 
 

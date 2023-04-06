@@ -57,7 +57,7 @@ class Packager(pl.callbacks.Callback):
         >>> trainer = pl.Trainer(default_root_dir=default_root_dir, callbacks=[
         >>>     Packager(default_root_dir / 'final_package.pt'),
         >>>     StateLogger()
-        >>> ], max_epochs=2)
+        >>> ], max_epochs=2, accelerator='cpu', devices=1)
         >>> model = LightningToyNet2d()
         >>> trainer.fit(model)
     """

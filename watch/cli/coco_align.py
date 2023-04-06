@@ -492,7 +492,7 @@ def main(cmdline=True, **kw):
             'timestamp': ub.timestamp(),
         }
     }
-    print('process_info = {}'.format(ub.repr2(process_info, nl=3, sort=0)))
+    print('process_info = {}'.format(ub.urepr(process_info, nl=3, sort=0)))
 
     src_fpath = config['src']
     dst = config['dst']
@@ -913,8 +913,8 @@ class SimpleDataCube(object):
 
         print('candidate query overlaps')
         ridx_to_num_matches = ub.map_vals(len, ridx_to_gidsx)
-        print('ridx_to_num_matches = {}'.format(ub.repr2(ridx_to_num_matches, nl=1)))
-        # print('ridx_to_gidsx = {}'.format(ub.repr2(ridx_to_gidsx, nl=1)))
+        print('ridx_to_num_matches = {}'.format(ub.urepr(ridx_to_num_matches, nl=1)))
+        # print('ridx_to_gidsx = {}'.format(ub.urepr(ridx_to_gidsx, nl=1)))
 
         to_extract = []
         for ridx, gidxs in ridx_to_gidsx.items():
@@ -1032,7 +1032,7 @@ class SimpleDataCube(object):
                     print('Warning: No temporal matches to {}'.format(video_name))
                 else:
                     datetime_to_gids = ub.group_items(cand_gids, cand_datetimes)
-                    # print('datetime_to_gids = {}'.format(ub.repr2(datetime_to_gids, nl=1)))
+                    # print('datetime_to_gids = {}'.format(ub.urepr(datetime_to_gids, nl=1)))
                     dates = sorted(datetime_to_gids)
                     print('Found {:>4} overlaps for {} from {} to {}'.format(
                         len(cand_gids),
@@ -1168,7 +1168,7 @@ class SimpleDataCube(object):
         # import watch
         coco_dset = cube.coco_dset
 
-        # print('image_overlaps = {}'.format(ub.repr2(image_overlaps, nl=1)))
+        # print('image_overlaps = {}'.format(ub.urepr(image_overlaps, nl=1)))
         datetime_to_gids = image_overlaps['datetime_to_gids']
         space_str = image_overlaps['space_str']
         space_box = image_overlaps['space_box']
@@ -1176,12 +1176,12 @@ class SimpleDataCube(object):
         video_name = image_overlaps['video_name']
         video_props = image_overlaps['properties']
         local_epsg = image_overlaps['local_epsg']
-        print('space_str = {}'.format(ub.repr2(space_str, nl=1)))
-        print('space_box = {}'.format(ub.repr2(space_box, nl=1)))
-        print('space_region = {}'.format(ub.repr2(space_region, nl=1)))
-        print('video_name = {}'.format(ub.repr2(video_name, nl=1)))
-        print('video_props = {}'.format(ub.repr2(video_props, nl=1)))
-        print('local_epsg = {}'.format(ub.repr2(local_epsg, nl=1)))
+        print('space_str = {}'.format(ub.urepr(space_str, nl=1)))
+        print('space_box = {}'.format(ub.urepr(space_box, nl=1)))
+        print('space_region = {}'.format(ub.urepr(space_region, nl=1)))
+        print('video_name = {}'.format(ub.urepr(video_name, nl=1)))
+        print('video_props = {}'.format(ub.urepr(video_props, nl=1)))
+        print('local_epsg = {}'.format(ub.urepr(local_epsg, nl=1)))
 
         if new_dset is None:
             new_dset = kwcoco.CocoDataset()
@@ -1468,7 +1468,7 @@ class SimpleDataCube(object):
                     obj.pop('wgs84_to_wld', None)
                 unserializable = list(util_json.find_json_unserializable(new_img))
                 if unserializable:
-                    raise AssertionError('unserializable(gid={}) = {}'.format(new_gid, ub.repr2(unserializable, nl=0)))
+                    raise AssertionError('unserializable(gid={}) = {}'.format(new_gid, ub.urepr(unserializable, nl=0)))
 
         kwcoco_extensions.coco_populate_geo_video_stats(
             new_dset, target_gsd=target_gsd, vidid=new_vidid)
@@ -1481,29 +1481,29 @@ class SimpleDataCube(object):
                 new_objs = [new_img] + new_img.get('auxiliary', [])
                 unserializable = list(util_json.find_json_unserializable(new_img))
                 if unserializable:
-                    print('new_img = {}'.format(ub.repr2(new_img, nl=1)))
+                    print('new_img = {}'.format(ub.urepr(new_img, nl=1)))
                     raise AssertionError('unserializable(gid={}) = {}'.format(
-                        new_gid, ub.repr2(unserializable, nl=0)))
+                        new_gid, ub.urepr(unserializable, nl=0)))
 
             for new_aid in sub_new_aids:
                 new_ann = new_dset.index.anns[new_aid]
                 unserializable = list(util_json.find_json_unserializable(new_ann))
                 if unserializable:
-                    print('new_ann = {}'.format(ub.repr2(new_ann, nl=1)))
+                    print('new_ann = {}'.format(ub.urepr(new_ann, nl=1)))
                     raise AssertionError('unserializable(aid={}) = {}'.format(
-                        new_aid, ub.repr2(unserializable, nl=1)))
+                        new_aid, ub.urepr(unserializable, nl=1)))
 
             for new_vidid in [new_vidid]:
                 new_video = new_dset.index.videos[new_vidid]
                 unserializable = list(util_json.find_json_unserializable(new_video))
                 if unserializable:
-                    print('new_video = {}'.format(ub.repr2(new_video, nl=1)))
+                    print('new_video = {}'.format(ub.urepr(new_video, nl=1)))
                     raise AssertionError('unserializable(vidid={}) = {}'.format(
-                        new_vidid, ub.repr2(unserializable, nl=1)))
+                        new_vidid, ub.urepr(unserializable, nl=1)))
 
         # unserializable = list(util_json.find_json_unserializable(new_dset.dataset))
         # if unserializable:
-        #     raise AssertionError('unserializable = {}'.format(ub.repr2(unserializable, nl=1)))
+        #     raise AssertionError('unserializable = {}'.format(ub.urepr(unserializable, nl=1)))
 
         if visualize:
             from watch.cli.coco_visualize_videos import _write_ann_visualizations2
@@ -1994,7 +1994,7 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
             Input to _aligncrop contained duplicate filepaths, the same image
             might be registered in the base kwcoco file multiple times.
             '''))
-        # print('!!WARNING!! duplicates = {}'.format(ub.repr2(duplicates, nl=1)))
+        # print('!!WARNING!! duplicates = {}'.format(ub.urepr(duplicates, nl=1)))
         input_gpaths = list(ub.oset(input_gpaths))
 
     nodata = force_nodata
@@ -2006,7 +2006,7 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
     out_fpath = dst_gpath
     if verbose > 2:
         print(
-            'start gdal warp in_fpaths = {}'.format(ub.repr2(input_gpaths, nl=1)) +
+            'start gdal warp in_fpaths = {}'.format(ub.urepr(input_gpaths, nl=1)) +
             'chan_code = {!r}\n'.format(chan_code) +
             '\n* dst_gpath = {!r}'.format(dst_gpath))
 
@@ -2152,7 +2152,7 @@ def _debug_valid_regions(cube, coco_dset, space_region_crs84,
         }
         fname = f'debug_{debug_name}_text.py'
         debug_fpath = debug_dpath / fname
-        datastr = ub.repr2(debug_info, nl=2)
+        datastr = ub.urepr(debug_info, nl=2)
         debug_text = ub.codeblock(
             '''
             """

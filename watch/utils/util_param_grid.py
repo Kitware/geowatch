@@ -35,7 +35,7 @@ def handle_yaml_grid(default, auto, arg):
     """
     stdform_keys = {'matrix', 'include'}
     import ruamel.yaml
-    print('arg = {}'.format(ub.repr2(arg, nl=1)))
+    print('arg = {}'.format(ub.urepr(arg, nl=1)))
     if arg:
         if arg is True:
             arg = 'auto'
@@ -60,7 +60,7 @@ def handle_yaml_grid(default, auto, arg):
     else:
         raise TypeError(type(arg))
     assert set(arg.keys()).issubset(stdform_keys)
-    print('arg = {}'.format(ub.repr2(arg, nl=1)))
+    print('arg = {}'.format(ub.urepr(arg, nl=1)))
     basis = arg.get('matrix', {})
     if basis:
         grid = list(ub.named_product(basis))
@@ -189,9 +189,9 @@ def expand_param_grid(arg, max_configs=None):
                     trk.pxl.data.input_space_scale: 10GSD
             ''')
         >>> grid_items = list(expand_param_grid(arg))
-        >>> print('grid_items = {}'.format(ub.repr2(grid_items, nl=1, sort=0)))
+        >>> print('grid_items = {}'.format(ub.urepr(grid_items, nl=1, sort=0)))
         >>> from watch.utils.util_dotdict import dotdict_to_nested
-        >>> print(ub.repr2([dotdict_to_nested(p) for p in grid_items], nl=-3, sort=0))
+        >>> print(ub.urepr([dotdict_to_nested(p) for p in grid_items], nl=-3, sort=0))
         >>> print(len(grid_items))
     """
     prevalidate_param_grid(arg)
@@ -260,7 +260,6 @@ def github_action_matrix(arg):
             {'fruit': 'banana', 'animal': 'cat'},
         ]
 
-
     Example:
         >>> from watch.utils.util_param_grid import *  # NOQA
         >>> arg = ub.codeblock(
@@ -277,17 +276,17 @@ def github_action_matrix(arg):
                         version: 16
             ''')
         >>> grid_items = list(github_action_matrix(arg))
-        >>> print('grid_items = {}'.format(ub.repr2(grid_items, nl=1)))
+        >>> print('grid_items = {}'.format(ub.urepr(grid_items, nl=1)))
         grid_items = [
-            {'environment': 'staging', 'os': 'macos-latest', 'version': 12},
-            {'environment': 'staging', 'os': 'macos-latest', 'version': 14},
-            {'environment': 'production', 'os': 'macos-latest', 'version': 14},
-            {'environment': 'staging', 'os': 'macos-latest', 'version': 16},
-            {'environment': 'production', 'os': 'macos-latest', 'version': 16},
-            {'environment': 'staging', 'os': 'windows-latest', 'version': 12},
-            {'environment': 'production', 'os': 'windows-latest', 'version': 12},
-            {'environment': 'staging', 'os': 'windows-latest', 'version': 14},
-            {'environment': 'production', 'os': 'windows-latest', 'version': 14},
+            {'os': 'macos-latest', 'version': 12, 'environment': 'staging'},
+            {'os': 'macos-latest', 'version': 14, 'environment': 'staging'},
+            {'os': 'macos-latest', 'version': 14, 'environment': 'production'},
+            {'os': 'macos-latest', 'version': 16, 'environment': 'staging'},
+            {'os': 'macos-latest', 'version': 16, 'environment': 'production'},
+            {'os': 'windows-latest', 'version': 12, 'environment': 'staging'},
+            {'os': 'windows-latest', 'version': 12, 'environment': 'production'},
+            {'os': 'windows-latest', 'version': 14, 'environment': 'staging'},
+            {'os': 'windows-latest', 'version': 14, 'environment': 'production'},
         ]
 
     Example:
@@ -434,7 +433,7 @@ def extended_github_action_matrix(arg):
                         version: 16
             ''')
         >>> grid_items = list(extended_github_action_matrix(arg))
-        >>> print('grid_items = {}'.format(ub.repr2(grid_items, nl=1)))
+        >>> print('grid_items = {}'.format(ub.urepr(grid_items, nl=1)))
 
     Example:
         >>> from watch.utils.util_param_grid import *  # NOQA
@@ -495,6 +494,8 @@ def extended_github_action_matrix(arg):
         >>> print('grid_items = {}'.format(ub.urepr(grid_items, nl=1)))
     """
     import ruamel.yaml
+    from watch.utils.util_yaml import Yaml
+    import os
     if isinstance(arg, str):
         data = ruamel.yaml.safe_load(arg)
     else:
@@ -509,16 +510,14 @@ def extended_github_action_matrix(arg):
     exclude = list(map(ub.udict, exclude))
     submatrices = list(map(ub.udict, submatrices))
 
-    from watch.utils import util_yaml
-    import os
-
     def coerce_matrix_value(v):
         if not ub.iterable(v):
             v = [v]
         final = []
         for item in v:
             if isinstance(item, (str, os.PathLike)) and str(item).endswith(('.yaml', '.yml')):
-                final.extend(util_yaml.yaml_load(item))
+                # use Yaml.coerce instead?
+                final.extend(Yaml.load(item))
             else:
                 final.append(item)
         return final

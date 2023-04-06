@@ -62,7 +62,7 @@ def sentinel2_grid():
         >>> # Print out statistics about the chosen S2-tile UTM areas
         >>> import kwarray
         >>> area_stats = kwarray.stats_dict(all_utm_areas)
-        >>> print('area_stats = {}'.format(ub.repr2(
+        >>> print('area_stats = {}'.format(ub.urepr(
         >>>     area_stats, nl=1, precision=0, align=':')))
 
         ...

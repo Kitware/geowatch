@@ -54,7 +54,7 @@ def main():
         args.n_workers = cfg.n_workers
 
     config = args.__dict__
-    print('config = {}'.format(ub.repr2(config, nl=1)))
+    print('config = {}'.format(ub.urepr(config, nl=1)))
 
     # Build dataset (manually).
     n_frames = get_n_frames(cfg.dataset.n_frames, cfg.task_mode)

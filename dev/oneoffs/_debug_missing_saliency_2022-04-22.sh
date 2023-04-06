@@ -102,7 +102,7 @@ canvas = kwimage.fill_nans_with_checkers(canvas)
 canvas = kwimage.overlay_alpha_images(cloud_overlay, canvas)
 kwplot.imshow(canvas)
 ax = plt.gca()
-ax.set_title(ub.repr2(row, precision=3, nl=0))
+ax.set_title(ub.urepr(row, precision=3, nl=0))
 
 
 ax = plt.gca()

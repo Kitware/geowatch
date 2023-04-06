@@ -396,21 +396,22 @@ def build_search_json(start_date, end_date, sensors, api_key, cloud_cover):
         >>> api_key = None
         >>> cloud_cover = 20
         >>> search_json = build_search_json(start_date, end_date, sensors, api_key, cloud_cover)
-        >>> print('search_json = {}'.format(ub.repr2(search_json, nl=-1)))
+        >>> print('search_json = {}'.format(ub.urepr(search_json, nl=-1)))
         search_json = {
             'stac_search': [
                 {
                     'collections': ['sentinel-s2-l2a-cogs'],
-                    'end_date': '2020-01-01',
                     'endpoint': 'https://earth-search.aws.element84.com/v0',
-                    'headers': {},
                     'query': {
                         'eo:cloud_cover': {'lt': 20}
                     },
-                    'start_date': '2017-01-01'
+                    'headers': {},
+                    'start_date': '2017-01-01',
+                    'end_date': '2020-01-01'
                 }
             ]
         }
+
     """
     from watch.utils import util_time
 

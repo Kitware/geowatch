@@ -106,8 +106,8 @@ def main(cmdline=True, **kwargs):
             frac_samecolor = chan_info['num_samecolor'] / chan_info['num_pixels']
             mask_stats.update(frac_mask)
             samecolor_stats.update(frac_samecolor)
-        lbl1 = 'stat(same)=' + ub.repr2(ub.dict_isect(samecolor_stats.current(), ['n', 'mean', 'max', 'min']), compact=1, precision=4)
-        lbl2 = 'stat(mask)=' + ub.repr2(ub.dict_isect(mask_stats.current(), ['n', 'mean', 'max', 'min']), compact=1, precision=4)
+        lbl1 = 'stat(same)=' + ub.urepr(ub.dict_isect(samecolor_stats.current(), ['n', 'mean', 'max', 'min']), compact=1, precision=4)
+        lbl2 = 'stat(mask)=' + ub.urepr(ub.dict_isect(mask_stats.current(), ['n', 'mean', 'max', 'min']), compact=1, precision=4)
         prog.set_postfix_str(f'{lbl1} - {lbl2}')
 
     bad_images = []
@@ -132,8 +132,8 @@ def main(cmdline=True, **kwargs):
     bad = dset.images([b['gid'] for b in bad_images])
     sensor_to_num_bad = ub.dict_hist(bad.lookup("sensor_coarse"))
     region_to_num_bad = ub.dict_hist(dset.videos(bad.lookup("video_id")).lookup("name"))
-    print('sensor_to_num_bad = {}'.format(ub.repr2(sensor_to_num_bad, nl=1)))
-    print('region_to_num_bad = {}'.format(ub.repr2(region_to_num_bad, nl=1)))
+    print('sensor_to_num_bad = {}'.format(ub.urepr(sensor_to_num_bad, nl=1)))
+    print('region_to_num_bad = {}'.format(ub.urepr(region_to_num_bad, nl=1)))
 
     bad_stats = ub.ddict(lambda: 0)
     for bad in bad_images:

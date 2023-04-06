@@ -21,7 +21,7 @@ Example:
     >>> self.disable_augmenter = True
     >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
     >>> item = self[index]
-    >>> print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
+    >>> print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
     >>> canvas = self.draw_item(item, overlay_on_image=0, rescale=0)
     >>> # xdoctest: +REQUIRES(--show)
     >>> import kwplot
@@ -67,7 +67,7 @@ Example:
     >>> target = item['target']
     >>> #for idx in range(100):
     ... #    self[idx]
-    >>> print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
+    >>> print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
     >>> # xdoctest: +REQUIRES(--show)
     >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0, rescale=1)
     >>> import kwplot
@@ -621,7 +621,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         >>> #target['space_slice'] = Box.from_slice(target['space_slice']).translate((30, 0)).quantize().to_slice()
         >>> target['verbose_ndsample'] = True
         >>> item = self[target]
-        >>> #print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
+        >>> #print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
         >>> canvas = self.draw_item(item, overlay_on_image=0, rescale=0, max_channels=3)
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
@@ -650,7 +650,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         >>> Box = util_kwimage.Box
         >>> index['space_slice'] = Box.from_slice(index['space_slice']).translate((30, 0)).quantize().to_slice()
         >>> item = self[index]
-        >>> #print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
+        >>> #print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
         >>> canvas = self.draw_item(item, overlay_on_image=1, rescale=0, max_channels=3)
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
@@ -955,7 +955,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     expanded_input_sensorchan_streams.append('{}:{}'.format(sensor, chans))
 
             if not expanded_input_sensorchan_streams:
-                print('sensorchan_hist = {}'.format(ub.repr2(sensorchan_hist, nl=1)))
+                print('sensorchan_hist = {}'.format(ub.urepr(sensorchan_hist, nl=1)))
                 raise ValueError('The generic sensor * was given, but no data in the kwcoco file matched')
 
             self.sensorchan = kwcoco.SensorChanSpec.coerce(','.join(
@@ -1185,11 +1185,11 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             tr_frame['channels'] = stream
             tr_frame['padkw' ] = {'constant_values': np.nan}
             tr_frame['nodata' ] = 'float'
+            tr_frame['dtype'] = np.float32
             # FIXME: each kwcoco asset should be able to control its own
             # interpolation as a function of its role.
             sample = sampler.load_sample(
                 tr_frame, with_annots=first_with_annot,
-                dtype=np.float32,
             )
 
             stream_oset = ub.oset(stream)
@@ -1328,7 +1328,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> target['allow_augment'] = False
             >>> index = target
             >>> item = self[index]
-            >>> print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
+            >>> print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
             >>> # xdoctest: +REQUIRES(--show)
             >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0, rescale=0)
             >>> import kwplot
@@ -1368,7 +1368,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> target['allow_augment'] = False
             >>> index = target
             >>> item = self[index]
-            >>> print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
+            >>> print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
             >>> # xdoctest: +REQUIRES(--show)
             >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0, rescale=0)
             >>> import kwplot
@@ -1401,7 +1401,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> index['allow_augment'] = False
             >>> item = self[index]
             >>> target = item['target']
-            >>> print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
+            >>> print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
             >>> # xdoctest: +REQUIRES(--show)
             >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0, rescale=0)
             >>> import kwplot
@@ -1476,7 +1476,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         target_['as_xarray'] = False
         target_['legacy_annots'] = False
-        target_['legacy_targets'] = False
+        target_['legacy_target'] = False
 
         if 'video_id' not in target_:
             _gid = ub.peek(target_['gids'])
@@ -1852,7 +1852,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         force_bad_frames = target_.get('force_bad_frames', 0)
         if force_bad_frames:
             final_gids = ub.oset(video_gids) & set(gid_to_isbad.keys())
-            print('gid_to_isbad = {}'.format(ub.repr2(gid_to_isbad, nl=1)))
+            print('gid_to_isbad = {}'.format(ub.urepr(gid_to_isbad, nl=1)))
 
         # coco_dset.images(final_gids).lookup('date_captured')
         target_['gids'] = final_gids
@@ -2563,7 +2563,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> num_workers = 0
             >>> batch_size = 6
             >>> s = (self.compute_dataset_stats(num=num))
-            >>> print('s = {}'.format(ub.repr2(s, nl=3)))
+            >>> print('s = {}'.format(ub.urepr(s, nl=3)))
             >>> stats1 = self.compute_dataset_stats(num=num, with_intensity=False)
             >>> stats2 = self.compute_dataset_stats(num=num, with_class=False)
             >>> stats3 = self.compute_dataset_stats(num=num, with_class=False, with_intensity=False)
@@ -2614,7 +2614,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             (s.sensor.spec, s.chans.spec)
             for s in self.input_sensorchan.streams())
 
-        print('unique_sensor_modes = {}'.format(ub.repr2(unique_sensor_modes, nl=1)))
+        print('unique_sensor_modes = {}'.format(ub.urepr(unique_sensor_modes, nl=1)))
         intensity_dtype = np.float64
 
         # Ensure instance level frequency data in addition to pixel level
@@ -2667,7 +2667,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
                 chan_mean = chan_mean.round(6)
                 chan_std = chan_std.round(6)
-                # print('perchan_stats = {}'.format(ub.repr2(perchan_stats, nl=1)))
+                # print('perchan_stats = {}'.format(ub.urepr(perchan_stats, nl=1)))
                 domain_input_stats[domain] = {
                     'mean': chan_mean,
                     'std': chan_std,
@@ -2916,7 +2916,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>>     # More controlled settings for debug
             >>>     self.disable_augmenter = True
             >>> item = self[index]
-            >>> print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
+            >>> print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
             >>> fliprot_params = item['target'].get('fliprot_params', None)
             >>> rng = kwarray.ensure_rng(None)
             >>> #
@@ -2951,7 +2951,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> item_output['class_probs'] = class_probs
             >>> item_output['pred_ltrb'] = frame_pred_ltrb_list
             >>> #binprobs[0][:] = 0  # first change prob should be all zeros
-            >>> print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
+            >>> print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
             >>> canvas = self.draw_item(item, item_output, combinable_extra=combinable_extra, overlay_on_image=1)
             >>> canvas2 = self.draw_item(item, item_output, combinable_extra=combinable_extra, max_channels=3, overlay_on_image=0)
             >>> # xdoctest: +REQUIRES(--show)

@@ -2,20 +2,126 @@
 Do a better job with default argparse
 
 TODO: work on this
+
+import liberator
+
+lib = liberator.Liberator()
+lib.add_dynamic(get_init_arguments_and_types)
+lib.add_dynamic(str_to_bool)
+lib.add_dynamic(str_to_bool_or_int)
+lib.add_dynamic(str_to_bool_or_str)
+lib.add_dynamic(_int_or_float_type)
+lib.add_dynamic(_gpus_allowed_type)
+lib.expand(['pytorch_lightning'])
+print(lib.current_sourcecode())
+
 """
+import inspect
+
+
+def get_init_arguments_and_types(cls):
+    """
+    Scans the class signature and returns argument names, types and default values.
+
+    Returns:
+        List with tuples of 3 values:
+        (argument name, set with argument types, argument default value).
+    """
+    cls_default_params = inspect.signature(cls).parameters
+    name_type_default = []
+    for arg in cls_default_params:
+        arg_type = cls_default_params[arg].annotation
+        arg_default = cls_default_params[arg].default
+        try:
+            if (type(arg_type).__name__ == '_LiteralGenericAlias'):
+                arg_types = tuple({type(a) for a in arg_type.__args__})
+            elif (('typing.Literal' in str(arg_type)) or ('typing_extensions.Literal' in str(arg_type))):
+                arg_types = tuple({type(a) for union_args in arg_type.__args__ for a in union_args.__args__})
+            else:
+                arg_types = tuple(arg_type.__args__)
+        except (AttributeError, TypeError):
+            arg_types = (arg_type,)
+        name_type_default.append((arg, arg_types, arg_default))
+    return name_type_default
+
+
+def str_to_bool_or_str(val: str):
+    """
+    Possibly convert a string representation of truth to bool. Returns the input otherwise. Based on the python
+        implementation distutils.utils.strtobool.
+
+        True values are 'y', 'yes', 't', 'true', 'on', and '1'; false values are 'n', 'no', 'f', 'false', 'off', and '0'.
+
+    """
+    lower = val.lower()
+    if (lower in ('y', 'yes', 't', 'true', 'on', '1')):
+        return True
+    if (lower in ('n', 'no', 'f', 'false', 'off', '0')):
+        return False
+    return val
+
+
+def str_to_bool_or_int(val: str):
+    """
+    Convert a string representation to truth of bool if possible, or otherwise try to convert it to an int.
+
+        >>> str_to_bool_or_int("FALSE")
+        False
+        >>> str_to_bool_or_int("1")
+        True
+        >>> str_to_bool_or_int("2")
+        2
+        >>> str_to_bool_or_int("abc")
+        'abc'
+
+    """
+    val_converted = str_to_bool_or_str(val)
+    if isinstance(val_converted, bool):
+        return val_converted
+    try:
+        return int(val_converted)
+    except ValueError:
+        return val_converted
+
+
+def str_to_bool(val: str) -> bool:
+    """
+    Convert a string representation of truth to bool.
+
+        True values are 'y', 'yes', 't', 'true', 'on', and '1'; false values
+        are 'n', 'no', 'f', 'false', 'off', and '0'.
+
+        Raises:
+            ValueError:
+                If ``val`` isn't in one of the aforementioned true or false values.
+
+        >>> str_to_bool('YES')
+        True
+        >>> str_to_bool('FALSE')
+        False
+
+    """
+    val_converted = str_to_bool_or_str(val)
+    if isinstance(val_converted, bool):
+        return val_converted
+    raise ValueError(f'invalid truth value {val_converted}')
+
+
+def _gpus_allowed_type(x: str):
+    if (',' in x):
+        return str(x)
+    return int(x)
+
+
+def _int_or_float_type(x):
+    if ('.' in str(x)):
+        return float(x)
+    return int(x)
 
 
 def parse_docstring_args(cls):
     import inspect
     from xdoctest.docstr import docscrape_google
-    from pytorch_lightning.utilities.argparse import (
-        get_init_arguments_and_types,
-        str_to_bool,
-        str_to_bool_or_int,
-        str_to_bool_or_str,
-        _gpus_allowed_type,
-        _int_or_float_type,
-    )
 
     symbol = cls.__init__
     if symbol.__doc__ is None:

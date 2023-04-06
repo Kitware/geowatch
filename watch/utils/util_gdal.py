@@ -726,7 +726,7 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, blocksize=256,
         >>> commands = gdal_multi_warp(
         >>>     in_fpaths, out_fpath=out_fpath, space_box=space_box,
         >>>     local_epsg=local_epsg, verbose=3, eager=False)
-        >>> print('commands = {}'.format(ub.repr2(commands, nl=1)))
+        >>> print('commands = {}'.format(ub.urepr(commands, nl=1)))
 
     Returns:
         None | List[str]:
@@ -905,7 +905,7 @@ def _execute_gdal_command_with_checks(command, out_fpath, tries=1, shell=False,
             print(
                 'Error: gdal seems to have returned with a valid exist code, '
                 'but the target file was not written')
-            print('got = {}'.format(ub.repr2(got, nl=1)))
+            print('got = {}'.format(ub.urepr(got, nl=1)))
             print(command)
         raise
     except RuntimeError:
@@ -913,7 +913,7 @@ def _execute_gdal_command_with_checks(command, out_fpath, tries=1, shell=False,
             print(
                 'Error: gdal has written a file, but its contents '
                 'appear to be invalid')
-            print('got = {}'.format(ub.repr2(got, nl=1)))
+            print('got = {}'.format(ub.urepr(got, nl=1)))
             print(command)
         raise
 
@@ -928,7 +928,7 @@ def list_gdal_drivers():
     Example:
         >>> from watch.utils.util_gdal import *
         >>> drivers = list_gdal_drivers()
-        >>> print('drivers = {}'.format(ub.repr2(drivers, nl=1)))
+        >>> print('drivers = {}'.format(ub.urepr(drivers, nl=1)))
         >>> assert ('GTiff', 'GeoTIFF', ['tif', 'tiff']) in drivers
     """
     from osgeo import gdal

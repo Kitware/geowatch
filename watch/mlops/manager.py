@@ -27,6 +27,7 @@ Example:
     python -m watch.mlops.manager "list" --dataset_codes Drop4-BAS
     python -m watch.mlops.manager "list" --dataset_codes Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC
     python -m watch.mlops.manager "list" --dataset_codes Drop6 Drop4-BAS
+    python -m watch.mlops.manager "list" --dataset_codes Drop6 Drop6-MeanYear10GSD
 
     # On training machine
     python -m watch.mlops.manager "push packages" --dataset_codes Drop6
@@ -122,7 +123,7 @@ def main(cmdline=True, **kwargs):
     from watch.mlops.manager import *  # NOQA
     """
     config = ManagerConfig.cli(cmdline=cmdline, data=kwargs)
-    print('ManagerConfig config = {}'.format(ub.repr2(dict(config), nl=1)))
+    print('ManagerConfig config = {}'.format(ub.urepr(dict(config), nl=1)))
     command = config['command']
 
     available_actions = [
@@ -147,7 +148,7 @@ def main(cmdline=True, **kwargs):
 
     print(f'actions={actions}')
     print(f'targets={targets}')
-    print('config = {}'.format(ub.repr2(dict(config), nl=1)))
+    print('config = {}'.format(ub.urepr(dict(config), nl=1)))
 
     dvc_remote = config['dvc_remote']
 
@@ -340,7 +341,7 @@ class ExperimentState(ub.NiceRepr):
         >>> # Just show patterns:
         >>> from watch.mlops.manager import *  # NOQA
         >>> self = ExperimentState('<expt_dpath>', '<dset_code>')
-        >>> print('self.templates = {}'.format(ub.repr2(self.templates, nl=1, sort=0)))
+        >>> print('self.templates = {}'.format(ub.urepr(self.templates, nl=1, sort=0)))
 
     Ignore:
         table[table.type == 'pkg_fpath']['model'].unique()
@@ -462,7 +463,7 @@ class ExperimentState(ub.NiceRepr):
             k: partial_format(v, **partialkw)
             for k, v in self.templates.items()
         }
-        # print('self.path_patterns_matrix = {}'.format(ub.repr2(self.path_patterns_matrix, nl=1)))
+        # print('self.path_patterns_matrix = {}'.format(ub.urepr(self.path_patterns_matrix, nl=1)))
 
     def __nice__(self):
         return self.dataset_code
@@ -765,7 +766,7 @@ class ExperimentState(ub.NiceRepr):
 
         if ready_packages is not None:
             from watch.utils import util_yaml
-            print(util_yaml.yaml_dumps({
+            print(util_yaml.Yaml.dumps({
                 'ready_packages': ready_packages,
             }))
             # print('ready_packages = {}'.format(ub.urepr(ready_packages, nl=1)))
@@ -803,7 +804,7 @@ class ExperimentState(ub.NiceRepr):
             to_repackage = needs_package['ckpt_path'].values.tolist()
         else:
             to_repackage = []
-        print('to_repackage = {}'.format(ub.repr2(to_repackage, nl=1)))
+        print('to_repackage = {}'.format(ub.urepr(to_repackage, nl=1)))
         if to_repackage:
             # NOTE: THIS RELIES ON KNOWING ABOUT THE SPECIFIC MODEL CODE.
             # IT WOULD BE NICE IF WE DIDN'T NEED THAT HERE.
@@ -977,7 +978,7 @@ def summarize_tables(tables):
     table_shapes = ub.udict(tables).map_values(lambda x: x.shape)
     title = '[blue] Table Summary'
     print(title)
-    print('table_shapes = {}'.format(ub.repr2(table_shapes, nl=1, align=':', sort=0)))
+    print('table_shapes = {}'.format(ub.urepr(table_shapes, nl=1, align=':', sort=0)))
 
     if staging_df is not None:
         title = '[yellow] Staging Summary (Training Checkpoints)'

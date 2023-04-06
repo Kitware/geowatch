@@ -27,8 +27,8 @@ def test_small_predict_region():
     from watch.utils import kwcoco_extensions  # NOQA
     test_chans = kwcoco_extensions.coco_channel_stats(test_dset)
     train_chans = kwcoco_extensions.coco_channel_stats(train_dset)
-    print('test_chans = {}'.format(ub.repr2(test_chans, nl=1)))
-    print('train_chans = {}'.format(ub.repr2(train_chans, nl=1)))
+    print('test_chans = {}'.format(ub.urepr(test_chans, nl=1)))
+    print('train_chans = {}'.format(ub.urepr(train_chans, nl=1)))
 
     fit_kwargs = {
         'train_dataset': train_dset.fpath,
@@ -72,7 +72,7 @@ def test_small_predict_region():
     }
     result_dataset = predict(**predict_kwargs)
     pred_chans = kwcoco_extensions.coco_channel_stats(result_dataset)
-    print('pred_chans = {}'.format(ub.repr2(pred_chans, nl=1)))
+    print('pred_chans = {}'.format(ub.urepr(pred_chans, nl=1)))
 
     from watch.cli import watch_coco_stats
     watch_coco_stats.WatchCocoStats.main(src=train_dset.fpath)

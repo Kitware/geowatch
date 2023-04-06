@@ -13,7 +13,7 @@ def debug_feature_loading():
     from watch.utils.util_data import find_smart_dvc_dpath
     dvc_dpath = find_smart_dvc_dpath()
 
-    print(ub.repr2(list((dvc_dpath / 'drop1-S2-L8-aligned').glob('combo*.json'))))
+    print(ub.urepr(list((dvc_dpath / 'drop1-S2-L8-aligned').glob('combo*.json'))))
 
     coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/combo_train_data.kwcoco.json'
     coco_dset = kwcoco.CocoDataset(coco_fpath)

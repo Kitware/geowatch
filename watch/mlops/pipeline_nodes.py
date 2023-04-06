@@ -228,7 +228,7 @@ class Pipeline:
         for _, row in df[df['maybe_required']].iterrows():
             default[row['node'] + '.' + row['key']] = None
         from watch.utils import util_yaml
-        rich.print(util_yaml.yaml_dumps(default))
+        rich.print(util_yaml.Yaml.dumps(default))
 
     @profile
     def configure(self, config=None, root_dpath=None, cache=True):
@@ -246,7 +246,7 @@ class Pipeline:
 
         if config is not None:
             self.config = config
-            # print('CONFIGURE config = {}'.format(ub.repr2(config, nl=1)))
+            # print('CONFIGURE config = {}'.format(ub.urepr(config, nl=1)))
 
             # Set the configuration for each node in this pipeline.
             dotconfig = util_dotdict.DotDict(config)
@@ -832,6 +832,8 @@ class ProcessNode(Node):
                  node_dname=None,
                  root_dpath=None,
                  config=None,
+                 _overwrite_node_dpath=None,  # overwrites the configured node dpath
+                 _overwrite_group_dpath=None,  # overwrites the configured group dpath
                  _no_outarg=False,
                  **aliases):
         if aliases:
@@ -879,6 +881,11 @@ class ProcessNode(Node):
         self.enabled = True
         self.cache = True
         self._no_outarg = _no_outarg
+
+        # TODO: make specifying these overloads more natural
+        # Basically: use templates unless the user gives these
+        self._overwrite_node_dpath = _overwrite_node_dpath
+        self._overwrite_group_dpath = _overwrite_group_dpath
 
         self.configure(self.config)
 
@@ -1065,6 +1072,9 @@ class ProcessNode(Node):
 
     @memoize_configured_property
     def final_node_dpath(self):
+        """
+        The configured directory where all outputs are relative to.
+        """
         return ub.Path(str(self.template_node_dpath).format(**self.condensed))
 
     @memoize_configured_property
@@ -1072,13 +1082,26 @@ class ProcessNode(Node):
         return ub.Path(str(self.template_root_dpath).format(**self.condensed))
 
     @property
-    def template_node_group_dpath(self):
-        return self.root_dpath / self.group_dname / 'flat' / self.name
+    def template_group_dpath(self):
+        """
+        The template for the directory where the configured node dpath will be placed.
+        """
+        if self._overwrite_group_dpath is not None:
+            return ub.Path(self._overwrite_group_dpath)
+        if self.group_dname is None:
+            return self.root_dpath / 'flat' / self.name
+        else:
+            return self.root_dpath / self.group_dname / 'flat' / self.name
 
     @memoize_configured_property
     def template_node_dpath(self):
+        """
+        The template for the configured directory where all outputs are relative to.
+        """
+        if self._overwrite_node_dpath is not None:
+            return ub.Path(self._overwrite_node_dpath)
         key = self.name + '_id'
-        return self.template_node_group_dpath / ('{' + key + '}')
+        return self.template_group_dpath / ('{' + key + '}')
 
     # @memoize_configured_property
     # @profile

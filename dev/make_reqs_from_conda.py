@@ -49,7 +49,7 @@ def parse_conda_reqs(fpath, blocklist=set()):
 #     resp = requests.get(url)
 #     assert resp.status_code == 200
 #     depinfo = resp.json()
-#     print('depinfo = {}'.format(ub.repr2(depinfo, nl=-1)))
+#     print('depinfo = {}'.format(ub.urepr(depinfo, nl=-1)))
 
 
 # def pip_explore_deps(package_name, version=None):

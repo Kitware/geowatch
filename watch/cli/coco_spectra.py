@@ -216,7 +216,7 @@ def main(cmdline=True, **kwargs):
     kwplot.autosns()
 
     config = CocoSpectraConfig(kwargs, cmdline=cmdline)
-    print('config = {}'.format(ub.repr2(config.to_dict(), nl=1)))
+    print('config = {}'.format(ub.urepr(config.to_dict(), nl=1)))
 
     # coco_dset = kwcoco.CocoDataset.coerce(config['src'])
     coco_dset = watch.coerce_kwcoco(config['src'])
@@ -287,7 +287,7 @@ def main(cmdline=True, **kwargs):
             request_columns = ['emd', 'energy_dist', 'mean_diff', 'std_diff']
             have_columns = list(ub.oset(request_columns) & ub.oset(distance_metrics.columns))
             harmony_scores = distance_metrics[have_columns].mean()
-            extra_text = ub.repr2(harmony_scores.to_dict(), precision=4, compact=1)
+            extra_text = ub.urepr(harmony_scores.to_dict(), precision=4, compact=1)
             print('extra_text = {!r}'.format(extra_text))
         else:
             extra_text = None
@@ -352,7 +352,7 @@ def sensor_stats_tables(full_df):
             }
 
     print('compute per-sensor stats')
-    print(ub.repr2(list(sensor_channel_to_vwf.keys()), nl=1))
+    print(ub.urepr(list(sensor_channel_to_vwf.keys()), nl=1))
     chan_to_group = ub.group_items(
         sensor_channel_to_vwf.keys(),
         [t[1] for t in sensor_channel_to_vwf.keys()]
@@ -391,7 +391,7 @@ def sensor_stats_tables(full_df):
             'auto_bins': auto_bins,
         }
         assert info['max'] >= info['min']
-        # print('info = {}'.format(ub.repr2(info, nl=1, sort=False)))
+        # print('info = {}'.format(ub.urepr(info, nl=1, sort=False)))
         single_rows.append(info)
 
     sensor_chan_stats = pd.DataFrame(single_rows)
@@ -565,7 +565,7 @@ def ensure_intensity_stats(coco_img, recompute=False, include_channels=None, exc
                 except IndexError:
                     print('bad channel declaration fpath = {!r}'.format(fpath))
                     if 0:
-                        print('obj = {}'.format(ub.repr2(obj, nl=1)))
+                        print('obj = {}'.format(ub.urepr(obj, nl=1)))
                         print('coco_img = {!r}'.format(coco_img))
                         print('fpath = {!r}'.format(fpath))
                         print('stats_fpath = {!r}'.format(stats_fpath))
@@ -658,7 +658,7 @@ def plot_intensity_histograms(full_df, config):
             'legend', 'thresh' 'y',
         }
         maybe_expose = (set(sig.parameters) - exposed_params) - probably_ignorable_params
-        print('maybe_expose = {}'.format(ub.repr2(maybe_expose, nl=1)))
+        print('maybe_expose = {}'.format(ub.urepr(maybe_expose, nl=1)))
 
     #  For S2 that is supposed to be divide by 10000.  For L8 it is multiply by 2.75e-5 and subtract 0.2.
     # 1 / 2.75e-5
@@ -683,8 +683,8 @@ def plot_intensity_histograms(full_df, config):
             # https://github.com/mwaskom/seaborn/issues/2709
             sns.histplot(ax=ax, data=sensor_df.reset_index(), **hist_data_kw_, **hist_style_kw)
         except Exception:
-            print('hist_data_kw_ = {}'.format(ub.repr2(hist_data_kw_, nl=1)))
-            print('hist_style_kw = {}'.format(ub.repr2(hist_style_kw, nl=1)))
+            print('hist_data_kw_ = {}'.format(ub.urepr(hist_data_kw_, nl=1)))
+            print('hist_style_kw = {}'.format(ub.urepr(hist_style_kw, nl=1)))
             print('ERROR')
             print(sensor_df)
             raise

@@ -243,8 +243,8 @@ def check_loadtime():
             from ndsampler.utils.validate_cog import validate as _validate_cog
             warn, err, details = _validate_cog(fpath)
             # print('err = {!r}'.format(err))
-            # print('details = {}'.format(ub.repr2(details, nl=1)))
-            # print('warn = {}'.format(ub.repr2(warn, nl=1)))
+            # print('details = {}'.format(ub.urepr(details, nl=1)))
+            # print('warn = {}'.format(ub.urepr(warn, nl=1)))
             assert not err
             num_bytes = os.stat(fpath).st_size
             file_bytes.append(num_bytes)
@@ -308,7 +308,7 @@ def check_loadtime():
 
     sample_time_rows = []
     for sample_kw in sample_grid:
-        sample_key = ub.repr2(sample_kw, compact=1)
+        sample_key = ub.urepr(sample_kw, compact=1)
 
         for coco_fpath in coco_fpaths:
             coco_fpath = pathlib.Path(coco_fpath)

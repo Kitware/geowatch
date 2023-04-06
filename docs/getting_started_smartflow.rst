@@ -14,6 +14,11 @@ Configure Kubernetes
 
 To configure kubernetes to talk to the Kitware smartflow server run:
 
+NOTE: If you have an old configuration you should remove it. You can list
+existing contexts with ``kubectl config get-contexts``, and
+``kubectl config delete-context <chosen-context>`` to remove a context, or simply delete
+``rm -rf $HOME/.kube/config`` if you want to start fresh.
+
 .. code:: bash
 
     export ENVIRONMENT_NAME=kitware-prod-v4
@@ -28,11 +33,6 @@ To configure kubernetes to talk to the Kitware smartflow server run:
     aws eks --profile iarpa --region $AWS_REGION update-kubeconfig \
         --name "smartflow-${ENVIRONMENT_NAME}-eks" \
         --role-arn "arn:aws:iam::${AWS_ACCOUNT_ID}:role/smartflow-${ENVIRONMENT_NAME}-${AWS_REGION}-eks-admin"
-
-NOTE: If you have an old configuration you should remove it. You can list
-existing contexts with ``kubectl config get-contexts``, and
-``kubectl config delete-context <chosen-context>`` to remove a context, or simply delete
-``rm -rf $HOME/.kube/config`` if you want to start fresh.
 
 Test that you can reach the service with:
 

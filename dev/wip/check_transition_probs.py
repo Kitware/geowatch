@@ -131,6 +131,6 @@ def build_emperical_transition_probs():
     hybrid_probs = 0.5 * count_probs + 0.5 * seconds_probs
     hybrid_probs = hybrid_probs / hybrid_probs.sum(axis=1)
 
-    print('\n\ncount_probs =\n{}'.format(ub.repr2(count_probs, nl=1)))
-    print('\n\nseconds_probs =\n{}'.format(ub.repr2(seconds_probs, nl=1)))
-    print('\n\nhybrid_probs =\n{}'.format(ub.repr2(hybrid_probs, nl=1)))
+    print('\n\ncount_probs =\n{}'.format(ub.urepr(count_probs, nl=1)))
+    print('\n\nseconds_probs =\n{}'.format(ub.urepr(seconds_probs, nl=1)))
+    print('\n\nhybrid_probs =\n{}'.format(ub.urepr(hybrid_probs, nl=1)))

@@ -32,7 +32,7 @@ def main():
     resolved_list = []
     for imglist in image_lists:
         resolved_list.append(resolve_imglist(imglist))
-    print('resolved_list = {}'.format(ub.repr2(resolved_list, nl=2)))
+    print('resolved_list = {}'.format(ub.urepr(resolved_list, nl=2)))
     import xdev
     xdev.embed()
 

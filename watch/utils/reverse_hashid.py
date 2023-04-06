@@ -27,7 +27,7 @@ class ReverseHashTable:
         >>> self.register('conflict-hash', 'conflict-data1')
         >>> self.register('conflict-hash', 'conflict-data2')
         >>> full_shelf = self.load()
-        >>> print('full_shelf = {}'.format(ub.repr2(full_shelf, nl=2)))
+        >>> print('full_shelf = {}'.format(ub.urepr(full_shelf, nl=2)))
     """
 
     def __init__(self, type='global'):
@@ -86,12 +86,12 @@ class ReverseHashTable:
             if info['status'] != 'exists':
                 # Convinience
                 if FULL_TEXT:
-                    full_text = ub.repr2(full_shelf, nl=3)
+                    full_text = ub.urepr(full_shelf, nl=3)
                     self.text_fpath.write_text(full_text)
 
                 if DPATH_TEXT:
                     fpath = self.file_dpath / key
-                    datas_text = ub.repr2(datas, nl=3)
+                    datas_text = ub.urepr(datas, nl=3)
                     fpath.write_text(datas_text)
         return info
 
@@ -108,7 +108,7 @@ class ReverseHashTable:
             type = dpath.name
             rlut_type = cls(type)
             full_shelf = rlut_type.load()
-            # print('full_shelf = {}'.format(ub.repr2(full_shelf, nl=1, sort=1)))
+            # print('full_shelf = {}'.format(ub.urepr(full_shelf, nl=1, sort=1)))
             if key is None:
                 for k, v in full_shelf.items():
                     candidates.append({'found': v, 'type': type, 'key': k})
@@ -117,7 +117,7 @@ class ReverseHashTable:
 
         if verbose:
             print(f'Found {len(candidates)} entries for key={key}')
-            print('candidates = {}'.format(ub.repr2(candidates, nl=5)))
+            print('candidates = {}'.format(ub.urepr(candidates, nl=5)))
         return candidates
 
 
@@ -136,7 +136,7 @@ def condense_config(params, type, human_opts=None, register=True):
     human_opts = params & human_opts
     other_opts = params - human_opts
     if len(human_opts):
-        human_part = ub.repr2(human_opts, compact=1) + '_'
+        human_part = ub.urepr(human_opts, compact=1) + '_'
     else:
         human_part = ''
     cfgstr_suffix = human_part + ub.hash_data(other_opts)[0:8]

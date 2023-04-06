@@ -24,7 +24,7 @@ def dotkeys_to_nested(keys):
     for k in keys:
         path = k.split('.')
         walker[path] = k
-    # print(ub.repr2(auto))
+    # print(ub.urepr(auto))
     return auto.to_dict()
 
 

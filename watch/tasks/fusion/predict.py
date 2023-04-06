@@ -316,9 +316,9 @@ def resolve_datamodule(config, method, datamodule_defaults):
     overloads.update(datamodule_defaults & unable_to_infer)
     datamodule_vars.update(overloads)
     config.update(datamodule_vars)
-    print('able_to_infer = {}'.format(ub.repr2(able_to_infer, nl=1)))
-    print('unable_to_infer = {}'.format(ub.repr2(unable_to_infer, nl=1)))
-    print('overloads = {}'.format(ub.repr2(overloads, nl=1)))
+    print('able_to_infer = {}'.format(ub.urepr(able_to_infer, nl=1)))
+    print('unable_to_infer = {}'.format(ub.urepr(unable_to_infer, nl=1)))
+    print('overloads = {}'.format(ub.urepr(overloads, nl=1)))
 
     # Look at the difference between predict and train time settings
     print('deviation from fit->predict settings:')
@@ -407,8 +407,9 @@ def predict(cmdline=False, **kwargs):
     """
     Example:
         >>> # Train a demo model (in the future grab a pretrained demo model)
-        >>> from watch.tasks.fusion.fit import fit_model  # NOQA
+        >>> # from watch.tasks.fusion.fit import fit_model  # NOQA
         >>> from watch.tasks.fusion.predict import *  # NOQA
+        >>> import os
         >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
         >>> disable_lightning_hardware_warnings()
         >>> args = None
@@ -418,30 +419,37 @@ def predict(cmdline=False, **kwargs):
         >>> results_path = (test_dpath / 'predict').ensuredir()
         >>> results_path.delete()
         >>> results_path.ensuredir()
-        >>> package_fpath = test_dpath / 'my_test_package.pt'
         >>> import kwcoco
         >>> train_dset = kwcoco.CocoDataset.demo('special:vidshapes4-multispectral', num_frames=5, image_size=(64, 64))
         >>> test_dset = kwcoco.CocoDataset.demo('special:vidshapes2-multispectral', num_frames=5, image_size=(64, 64))
-        >>> fit_kwargs = kwargs = {
-        ...     'train_dataset': train_dset.fpath,
-        ...     'datamodule': 'KWCocoVideoDataModule',
-        ...     'workdir': ub.ensuredir((test_dpath, 'train')),
-        ...     'package_fpath': package_fpath,
-        ...     #'channels': 'auto',
-        ...     'max_epochs': 1,
-        ...     'time_steps': 2,
-        ...     'time_span': "2m",
-        ...     'chip_size': 64,
-        ...     'time_sampling': 'hardish3',
-        ...     'global_change_weight': 1.0,
-        ...     'global_class_weight': 1.0,
-        ...     'global_saliency_weight': 1.0,
-        ...     'max_steps': 1,
-        ...     'learning_rate': 1e-5,
-        ...     'num_workers': 0,
-        ...     'devices': devices,
+        >>> root_dpath = ub.Path(test_dpath, 'train').ensuredir()
+        >>> fit_config = kwargs = {
+        ...     'subcommand': 'fit',
+        ...     'fit.data.train_dataset': train_dset.fpath,
+        ...     'fit.data.time_steps': 2,
+        ...     'fit.data.time_span': "2m",
+        ...     'fit.data.chip_dims': 64,
+        ...     'fit.data.time_sampling': 'hardish3',
+        ...     'fit.data.num_workers': 0,
+        ...     #'package_fpath': package_fpath,
+        ...     'fit.model.class_path': 'watch.tasks.fusion.methods.MultimodalTransformer',
+        ...     'fit.model.init_args.global_change_weight': 1.0,
+        ...     'fit.model.init_args.global_class_weight': 1.0,
+        ...     'fit.model.init_args.global_saliency_weight': 1.0,
+        ...     'fit.optimizer.class_path': 'torch.optim.SGD',
+        ...     'fit.optimizer.init_args.lr': 1e-5,
+        ...     'fit.trainer.max_steps': 1,
+        ...     'fit.trainer.accelerator': 'cpu',
+        ...     'fit.trainer.devices': 1,
+        ...     'fit.trainer.max_epochs': 1,
+        ...     'fit.trainer.default_root_dir': os.fspath(root_dpath),
         ... }
-        >>> package_fpath = fit_model(**fit_kwargs)
+        >>> from watch.tasks.fusion import fit_lightning
+        >>> package_fpath = root_dpath / 'final_package.pt'
+        >>> fit_lightning.main(fit_config)
+        >>> # Unfortunately, its not as easy to get the package path of
+        >>> # this call..
+        >>> #package_fpath = fit_model(**fit_kwargs)
         >>> assert ub.Path(package_fpath).exists()
         >>> # Predict via that model
         >>> predict_kwargs = kwargs = {
@@ -487,7 +495,6 @@ def predict(cmdline=False, **kwargs):
         >>> # xdoctest: +REQUIRES(env:SLOW_DOCTEST)
         >>> # FIXME: why does this test hang on the strict dashboard?
         >>> # Train a demo model (in the future grab a pretrained demo model)
-        >>> from watch.tasks.fusion.fit import fit_model  # NOQA
         >>> from watch.tasks.fusion.predict import *  # NOQA
         >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
         >>> disable_lightning_hardware_warnings()
@@ -540,7 +547,7 @@ def predict(cmdline=False, **kwargs):
         >>> print("model.heads.keys = ", model.heads.keys())
 
         >>> # Save the self
-        >>> package_fpath = test_dpath / 'my_test_package.pt'
+        >>> package_fpath = root_dpath / 'final_package.pt'
         >>> model.save_package(package_fpath)
         >>> # package_fpath = fit_model(**fit_kwargs)
         >>> assert ub.Path(package_fpath).exists()
@@ -592,8 +599,8 @@ def predict(cmdline=False, **kwargs):
     args = make_predict_config(cmdline=cmdline, **kwargs)
     config = args.__dict__.copy()
     datamodule_defaults = args.datamodule_defaults
-    print('kwargs = {}'.format(ub.repr2(kwargs, nl=1)))
-    print('config = {}'.format(ub.repr2(config, nl=2)))
+    print('kwargs = {}'.format(ub.urepr(kwargs, nl=1)))
+    print('config = {}'.format(ub.urepr(config, nl=2)))
 
     package_fpath = ub.Path(config['package_fpath']).expand()
 
@@ -785,15 +792,15 @@ def predict(cmdline=False, **kwargs):
         all_gids = list(test_dataloader.dataset.sampler.dset.images())
         from xdev import set_overlaps
         img_overlaps = set_overlaps(all_gids, seen_gids)
-        print('img_overlaps = {}'.format(ub.repr2(img_overlaps, nl=1)))
+        print('img_overlaps = {}'.format(ub.urepr(img_overlaps, nl=1)))
         # primary_img_overlaps = set_overlaps(all_gids, primary_gids)
-        # print('primary_img_overlaps = {}'.format(ub.repr2(primary_img_overlaps, nl=1)))
+        # print('primary_img_overlaps = {}'.format(ub.urepr(primary_img_overlaps, nl=1)))
 
         # Check to see how much of each image is covered in video space
         # import kwimage
         coco_dset = test_dataloader.dataset.sampler.dset
         gid_to_iou = {}
-        print('image_id_to_target_space_slices = {}'.format(ub.repr2(image_id_to_target_space_slices, nl=2)))
+        print('image_id_to_target_space_slices = {}'.format(ub.urepr(image_id_to_target_space_slices, nl=2)))
         for gid, slices in image_id_to_target_space_slices.items():
             vidid = coco_dset.index.imgs[gid]['video_id']
             video = coco_dset.index.videos[vidid]
@@ -805,7 +812,7 @@ def predict(cmdline=False, **kwargs):
             gid_to_iou[gid] = iou
         ious = list(gid_to_iou.values())
         iou_stats = kwarray.stats_dict(ious, n_extreme=True)
-        print('iou_stats = {}'.format(ub.repr2(iou_stats, nl=1)))
+        print('iou_stats = {}'.format(ub.urepr(iou_stats, nl=1)))
 
     DEBUG_PRED_SPATIAL_COVERAGE = 0
     if DEBUG_PRED_SPATIAL_COVERAGE:
@@ -937,7 +944,7 @@ def predict(cmdline=False, **kwargs):
             try:
                 outputs = method.forward_step(batch, with_loss=False)
             except RuntimeError as ex:
-                msg = ('A predict batch failed ex = {}'.format(ub.repr2(ex, nl=1)))
+                msg = ('A predict batch failed ex = {}'.format(ub.urepr(ex, nl=1)))
                 print(msg)
                 import warnings
                 warnings.warn(msg)
@@ -1081,10 +1088,10 @@ def predict(cmdline=False, **kwargs):
             list(gid_to_outspace_iou.values()), n_extreme=True)
         outspace_iooa_stats = kwarray.stats_dict(
             list(gid_to_outspace_iooa.values()), n_extreme=True)
-        print('vidspace_iou_stats = {}'.format(ub.repr2(vidspace_iou_stats, nl=1)))
-        print('vidspace_iooa_stats = {}'.format(ub.repr2(vidspace_iooa_stats, nl=1)))
-        print('outspace_iou_stats = {}'.format(ub.repr2(outspace_iou_stats, nl=1)))
-        print('outspace_iooa_stats = {}'.format(ub.repr2(outspace_iooa_stats, nl=1)))
+        print('vidspace_iou_stats = {}'.format(ub.urepr(vidspace_iou_stats, nl=1)))
+        print('vidspace_iooa_stats = {}'.format(ub.urepr(vidspace_iooa_stats, nl=1)))
+        print('outspace_iou_stats = {}'.format(ub.urepr(outspace_iou_stats, nl=1)))
+        print('outspace_iooa_stats = {}'.format(ub.urepr(outspace_iooa_stats, nl=1)))
 
     if config['record_context']:
         proc_context.add_device_info(device)

@@ -40,6 +40,7 @@ def viterbi(input_sequence, transition_probs, emission_probs):
     References:
         - https://en.wikipedia.org/wiki/Viterbi_algorithm#Pseudocode
         - https://stackoverflow.com/q/9729968
+
     Example:
         >>> # Demo based loosely on a star's simplified life sequence
         >>> import numpy as np
@@ -80,7 +81,7 @@ def viterbi(input_sequence, transition_probs, emission_probs):
         >>>     {'obs': 'black_hole',   'real': 'black_hole',   'prob': 0.5},
         >>> ]
         >>> emission_table = pd.DataFrame.from_dict(emissions)
-        >>> emission_df = emission_table.pivot(['obs'], ['real'], ['prob'])
+        >>> emission_df = emission_table.pivot(index=['obs'], columns=['real'], values=['prob'])
         >>> # Fill unspecified values in pairwise probability tables
         >>> import kwarray
         >>> rng = kwarray.ensure_rng(42110)
@@ -89,7 +90,7 @@ def viterbi(input_sequence, transition_probs, emission_probs):
         >>> emission_df = emission_df.fillna(0) + randfill * flags
         >>> transition_table = pd.DataFrame.from_dict(transitions)
         >>> transition_df = transition_table.pivot(
-        >>>     ['src'], ['dst'], ['prob']).fillna(0)
+        >>>     index=['src'], columns=['dst'], values=['prob']).fillna(0)
         >>> # Normalize probs
         >>> emission_df = emission_df.div(emission_df.groupby(
         >>>     axis=1, level=0).sum(), level=0)
@@ -266,7 +267,7 @@ def class_label_smoothing(track_cats, transition_probs=None,
         >>> transition_probs = 'v1'
         >>> emission_probs = 'v6'
         >>> smoothed_cats = class_label_smoothing(track_cats, transition_probs, emission_probs)
-        >>> print('smoothed_cats = {}'.format(ub.repr2(smoothed_cats, nl=1)))
+        >>> print('smoothed_cats = {}'.format(ub.urepr(smoothed_cats, nl=1)))
         smoothed_cats = [
             'No Activity',
             'No Activity',
@@ -333,7 +334,7 @@ def interpolate(coco_dset,
     Replace any annot's cat not in cnames_to_keep with the most recent of
     cnames_to_keep
     '''
-    annots = coco_dset.annots(trackid=track_id)
+    annots = coco_dset.annots(track_id=track_id)
     cnames = annots.cnames
     cnames_to_replace = set(cnames) - set(cnames_to_keep)
 
@@ -357,7 +358,7 @@ def baseline(coco_dset,
     Predict site prep for the first half of the track and then active
     construction for the second half with post construction on the last frame
     '''
-    annots = coco_dset.annots(trackid=track_id)
+    annots = coco_dset.annots(track_id=track_id)
 
     assert len(cnames_to_insert) == 3, 'TODO generalize this with by_gid(anns)'
     siteprep_cid, active_cid, post_cid = map(coco_dset.ensure_category,
@@ -388,7 +389,7 @@ def sort_by_gid(coco_dset, track_id, prune=True):
     Returns:
         (Images, AnnotGroups)
     '''
-    annots = coco_dset.annots(trackid=track_id)
+    annots = coco_dset.annots(track_id=track_id)
     images = coco_dset.images(
         coco_dset.index._set_sorted_by_frame_index(annots.gids))
     if len(images) == 0:

@@ -20,7 +20,7 @@ def resolve_pipeline_row(grid_item_defaults, state, region_model_dpath, expt_dvc
     from watch.mlops.expt_manager import ExperimentState
     state = ExperimentState(expt_dvc_dpath, '*')
     item = grid_item_defaults | item
-    # print('item = {}'.format(ub.repr2(item, nl=1)))
+    # print('item = {}'.format(ub.urepr(item, nl=1)))
     nested = util_dotdict.dotdict_to_nested(item)
 
     condensed = {}
@@ -224,7 +224,7 @@ def resolve_package_paths(model_globstr, expt_dvc_dpath):
             else:
                 missing.append(line)
         if missing:
-            rich.print('[yellow] WARNING: missing = {}'.format(ub.repr2(missing, nl=1)))
+            rich.print('[yellow] WARNING: missing = {}'.format(ub.urepr(missing, nl=1)))
             rich.print(f'[yellow] WARNING: specified a models-of-interest.txt and {len(missing)} / {len(lines)} models were missing')
         return expanded_fpaths
 

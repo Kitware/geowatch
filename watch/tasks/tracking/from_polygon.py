@@ -80,6 +80,6 @@ class OverlapTrack(TrackFunction):
                     unserializable = list(util_json.find_json_unserializable(next_ann))
                     if unserializable:
                         import ubelt as ub
-                        raise Exception('Inside OverlapTrack: ' + ub.repr2(unserializable))
+                        raise Exception('Inside OverlapTrack: ' + ub.urepr(unserializable))
 
         return coco_dset

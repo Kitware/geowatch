@@ -260,6 +260,7 @@ class SimpleDVC(ub.NiceRepr):
 
         if missing_data:
             dvc_root = self._ensure_root(paths)
+
             def _find_sidecar(path):
                 first_cand = path.augment(stem=path.name, ext='.dvc')
                 if first_cand.exists():
@@ -330,7 +331,7 @@ class SimpleDVC(ub.NiceRepr):
     def read_dvc_sidecar(self, sidecar_fpath):
         from watch.utils import util_yaml
         sidecar_fpath = ub.Path(sidecar_fpath)
-        data = util_yaml.yaml_loads(sidecar_fpath.read_text())
+        data = util_yaml.Yaml.loads(sidecar_fpath.read_text())
         return data
 
     def resolve_cache_paths(self, sidecar_fpath):
@@ -342,12 +343,12 @@ class SimpleDVC(ub.NiceRepr):
         """
         from watch.utils import util_yaml
         sidecar_fpath = ub.Path(sidecar_fpath)
-        data = util_yaml.yaml_loads(sidecar_fpath.read_text())
+        data = util_yaml.Yaml.loads(sidecar_fpath.read_text())
         for item in data['outs']:
             md5 = item['md5']
             cache_fpath = self.cache_dir / md5[0:2] / md5[2:]
             if md5.endswith('.dir') and cache_fpath.exists():
-                dir_data = util_yaml.yaml_loads(cache_fpath.read_text())
+                dir_data = util_yaml.Yaml.loads(cache_fpath.read_text())
                 for item in dir_data:
                     file_md5 = item['md5']
                     assert not file_md5.endswith('.dir'), 'unhandled'

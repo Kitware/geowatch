@@ -56,7 +56,7 @@ def tree(path):
         >>> path = ub.Path('.')
         >>> gen = tree(path)
         >>> results = list(it.islice(gen, 5))
-        >>> print('results = {}'.format(ub.repr2(results, nl=1)))
+        >>> print('results = {}'.format(ub.urepr(results, nl=1)))
     """
     import os
     from os.path import join
@@ -138,7 +138,7 @@ def coerce_patterned_paths(data, expected_extension=None):
     resolved_globs = []
     for data in datas:
         if isinstance(data, str):
-            loaded = util_yaml.yaml_loads(data)
+            loaded = util_yaml.Yaml.loads(data)
             if isinstance(loaded, str):
                 loaded = [loaded]
             resolved_globs.extend(loaded)
@@ -452,8 +452,8 @@ def sidecar_glob(main_pat, sidecar_ext, main_key='main', sidecar_key=None,
         >>> dvc_dpath = watch.find_smart_dvc_dpath()
         >>> bundle_dpath = dvc_dpath / 'Cropped-Drop3-TA1-2022-03-10'
         >>> sidecar_ext = '.dvc'
-        >>> print(ub.repr2(list(sidecar_glob(bundle_dpath / '*R*', sidecar_ext)), nl=2))
-        >>> print(ub.repr2(list(sidecar_glob(bundle_dpath / '*.dvc', sidecar_ext)), nl=2))
+        >>> print(ub.urepr(list(sidecar_glob(bundle_dpath / '*R*', sidecar_ext)), nl=2))
+        >>> print(ub.urepr(list(sidecar_glob(bundle_dpath / '*.dvc', sidecar_ext)), nl=2))
 
     Example:
         >>> from watch.utils.util_path import *  # NOQA
@@ -475,7 +475,7 @@ def sidecar_glob(main_pat, sidecar_ext, main_key='main', sidecar_key=None,
         ...         for k, v in row.items():
         ...             if v is not None:
         ...                 row[k] = v.relative_to(dpath)
-        ...     print(ub.repr2(results, sv=1))
+        ...     print(ub.urepr(results, sv=1))
         ...     return results
         >>> main_key = 'main',
         >>> sidecar_key = '.car'

@@ -46,12 +46,12 @@ class StateLogger(pl.callbacks.Callback):
 
     def on_save_checkpoint(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', checkpoint: Dict[str, Any]) -> dict:
         if 0:
-            print('on_save_checkpoint - checkpoint = {}'.format(ub.repr2(checkpoint.keys(), nl=1)))
+            print('on_save_checkpoint - checkpoint = {}'.format(ub.urepr(checkpoint.keys(), nl=1)))
 
     # def load_state_dict...
     # def on_load_checkpoint(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', callback_state: Dict[str, Any]) -> None:
     #     if 0:
-    #         print('on_load_checkpoint - callback_state = {}'.format(ub.repr2(callback_state.keys(), nl=1)))
+    #         print('on_load_checkpoint - callback_state = {}'.format(ub.urepr(callback_state.keys(), nl=1)))
 
     def on_sanity_check_start(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
         if 0:
