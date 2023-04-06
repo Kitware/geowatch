@@ -141,7 +141,7 @@ def get_crop_slices(height, width, crop_height, crop_width, step=None, mode='exa
         NotImplementedError: If invalid crop mode given.
 
     Returns:
-        list: A list of crop slices. Each crop slice has the following form [h0, w0, h, w].
+        list: A list of crop slices. Each crop slice has the following form [h0, w0, dh, dw].
     """
     if step is not None:
         if type(step) is tuple:
@@ -235,3 +235,60 @@ def get_crop_slices(height, width, crop_height, crop_width, step=None, mode='exa
         raise NotImplementedError(f'Invalid mode: {mode}')
 
     return crop_slices
+
+
+def filter_image_ids_by_season(coco_dset, image_ids, filtered_seasons):
+    hemipshere_to_season_map = {
+        'northern': {
+            'spring': [3, 4, 5],
+            'summer': [6, 7, 8],
+            'fall': [9, 10, 11],
+            'winter': [12, 1, 2]
+        },
+        'southern': {
+            'spring': [9, 10, 11],
+            'summer': [12, 1, 2],
+            'fall': [3, 4, 5],
+            'winter': [6, 7, 8]
+        }
+    }
+
+    if len(image_ids) == 0:
+        print('WARNING: No images to filter.')
+        return []
+
+    if not isinstance(filtered_seasons, list):
+        filtered_seasons = [filtered_seasons]
+
+    for filtered_season in filtered_seasons:
+        if filtered_season not in ['spring', 'summer', 'fall', 'winter']:
+            raise ValueError(f'Invalid season: {filtered_season}')
+
+    # Get hemisphere of region.
+    coco_img = coco_dset.coco_image(image_ids[0])
+    lon, _ = coco_img.img['geos_corners']['coordinates'][0][0]
+
+    if lon > 0:
+        hemisphere = 'northern'
+    else:
+        hemisphere = 'southern'
+
+    month_to_season_map = {}
+    for season, months in hemipshere_to_season_map[hemisphere].items():
+        for month in months:
+            month_to_season_map[month] = season
+
+    final_image_ids = []
+    for image_id in image_ids:
+        coco_img = coco_dset.coco_image(image_id)
+
+        # Get month.
+        from watch.utils import util_time
+        month = util_time.coerce_datetime(coco_img['date_captured']).month
+
+        # Get season of month.
+        img_season = month_to_season_map[month]
+        if img_season not in filtered_seasons:
+            final_image_ids.append(image_id)
+
+    return final_image_ids
