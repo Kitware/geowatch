@@ -293,7 +293,7 @@ def resolve_datamodule(config, method, datamodule_defaults):
                 acceptable_keys.update(val.alias)
 
         common = ub.udict(other) & acceptable_keys
-        resolved = dict(config_cls(cmdline=0, data=common))
+        resolved = dict(config_cls.cli(cmdline=0, data=common))
         return resolved
 
     config_cls = datamodules.kwcoco_dataset.KWCocoVideoDatasetConfig
