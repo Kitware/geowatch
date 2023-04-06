@@ -268,6 +268,9 @@ def main(cmdline=False, **kwargs):
 
     if output_fpath != 'return':
         # print('dump coco_dset.fpath = {!r}'.format(coco_dset.fpath))
+        needs_reroot = (ub.Path(output_fpath).parent.resolve() != ub.Path(coco_dset.fpath).parent.resolve())
+        if needs_reroot:
+            coco_dset.reroot(absolute=True)
         coco_dset.fpath = output_fpath
         coco_dset.dump(coco_dset.fpath)
 

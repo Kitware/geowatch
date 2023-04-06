@@ -18,6 +18,8 @@ Location of existing tools that should likely be moved:
     * ../cli/cluster_sites.py :: various
     * ../utils/util_framework.py :: determine_region_id
 
+    * ~/code/watch/dev/poc/make_region_from_sitemodel.py
+
 
 Related tool that should NOT be moved are related to general geojson:
 

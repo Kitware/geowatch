@@ -155,7 +155,7 @@ def random_region_model(region_id=None, num_sites=3, num_observations=5,
         raise ValueError('must have at least one observation')
 
     if region_id is None:
-        region_id = 'DR_{:04d}'.format(rng.randint(0, 1000))
+        region_id = 'DR_R{:03d}'.format(rng.randint(0, 1000))
 
     region_poly = demo_utils.random_geo_polygon(max_rt_area=10_000, rng=rng)
 
@@ -196,7 +196,7 @@ def random_region_model(region_id=None, num_sites=3, num_observations=5,
     sites = []
     site_summaries = []
     for site_num in range(num_sites):
-        site_id = f"{region_id}_{site_num:03d}"
+        site_id = f"{region_id}_{site_num:04d}"
         sitesum, site = random_site_model(
             region_id, site_id, region_corners, observables,
             p_observe=p_observe, p_transition=p_transition, rng=rng)
