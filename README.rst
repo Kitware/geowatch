@@ -1,4 +1,4 @@
-WATCH - Wide Area Terrestrial Change Hypercube
+GEOWATCH - Geographic Wide Area Terrestrial Change Hypercube
 ==============================================
 
 .. The large version wont work because github strips rst image rescaling.
@@ -20,7 +20,7 @@ space.
 The following table provides links to relevant resources for the SMART WATCH project:
 
 +----------------------------------------------------------+----------------------------------------------------------------+
-| The Public SMART WATCH Python Module                     | https://gitlab.kitware.com/watch/watch/                        |
+| The Public GEOWATCH Python Module                        | https://gitlab.kitware.com/computer-vision/geowatch/           |
 +----------------------------------------------------------+----------------------------------------------------------------+
 | The Internal SMART WATCH Python Module                   | https://gitlab.kitware.com/smart/watch/                        |
 +----------------------------------------------------------+----------------------------------------------------------------+
@@ -72,10 +72,10 @@ The Watch CLI
 -------------
 
 The watch module comes with a set of command line tools.
-Using ``python -m watch --help`` or ``smartwatch --help`` shows the top level modal CLI:
+Using ``python -m watch --help`` or ``geowatch --help`` shows the top level modal CLI:
 
 .. code::
-    usage: smartwatch [-h] [--version]
+    usage: geowatch [-h] [--version]
                       {add_fields,coco_add_watch_fields,align,coco_align_geotiffs,stats,watch_coco_stats,reproject,project,reproject_annotations,visualize,coco_visualize_videos,spectra,intensity_histograms,coco_spectra,dvcdir,find_dvc,kwcoco_to_geojson,iarpa_eval,model_stats,model_info,torch_model_stats,clean_geotiffs,coco_clean_geotiffs,animate,gifify}
                       ...
 
@@ -113,21 +113,21 @@ Using ``python -m watch --help`` or ``smartwatch --help`` shows the top level mo
 
 As a researcher / developer / user the most important commands for you to know are:
 
-* ``smartwatch stats <kwcoco_file>`` - Get watch-relevant statistics about data in a kwcoco file
+* ``geowatch stats <kwcoco_file>`` - Get watch-relevant statistics about data in a kwcoco file
 
-* ``smartwatch visualize <kwcoco_file>`` - Visualize the image / videos / annotations in a kwcoco file.
+* ``geowatch visualize <kwcoco_file>`` - Visualize the image / videos / annotations in a kwcoco file.
 
-* ``smartwatch spectra <kwcoco_file>`` - Look at the distribution of intensity values per band / per sensor in a kwcoco file.
+* ``geowatch spectra <kwcoco_file>`` - Look at the distribution of intensity values per band / per sensor in a kwcoco file.
 
-* ``smartwatch model_stats <fusion_model_file>`` - Get stats / info about a trained fusion model.
+* ``geowatch model_stats <fusion_model_file>`` - Get stats / info about a trained fusion model.
 
-* ``smartwatch reproject`` - Reproject CRS84 (geojson) annoations to image space and write to a kwcoco file.
+* ``geowatch reproject`` - Reproject CRS84 (geojson) annoations to image space and write to a kwcoco file.
 
-* ``smartwatch align`` - Crop a kwcoco dataset based on CRS84 (geojson) regions.
+* ``geowatch align`` - Crop a kwcoco dataset based on CRS84 (geojson) regions.
 
-* ``smartwatch clean_geotiff`` - Heuristic to detect large regions of black pixels and edit them to NODATA in the geotiff.
+* ``geowatch clean_geotiff`` - Heuristic to detect large regions of black pixels and edit them to NODATA in the geotiff.
 
-* ``smartwatch geotiffs_to_kwcoco`` - Create a kwcoco file from a set of on-disk geotiffs.
+* ``geowatch geotiffs_to_kwcoco`` - Create a kwcoco file from a set of on-disk geotiffs.
 
 * ``smartwatch_dvc`` - Helper to register / retreive your DVC paths so scripts can be written agnostic to filesystem layouts. See `docs <docs/using_smartwatch_dvc.rst>`_ for more details.
 

@@ -240,10 +240,10 @@ if __name__ == '__main__':
         description="",
         entry_points={
             'console_scripts': [
-                'watch-cli = watch.cli.__main__:main',
                 'smartwatch= watch.cli.__main__:main',
-                'geowatch= watch.cli.__main__:main',
                 'smartwatch_dvc= watch.cli.find_dvc:_CLI.main',
+                'geowatch= watch.cli.__main__:main',
+                'geowatch_dvc= watch.cli.find_dvc:_CLI.main',
                 # 'smartwatch_dvc= watch.cli.find_dvc:__config__.main',
             ],
         },
