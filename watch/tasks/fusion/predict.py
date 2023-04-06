@@ -596,6 +596,7 @@ def predict(cmdline=False, **kwargs):
         >>> # pred2 = coco_img.delay('salient').finalize(nodata_method='float', dequantize=False)
         >>> # assert pred2.max() > 1
     """
+    import rich
     args = make_predict_config(cmdline=cmdline, **kwargs)
     config = args.__dict__.copy()
     datamodule_defaults = args.datamodule_defaults
@@ -1132,6 +1133,9 @@ def predict(cmdline=False, **kwargs):
     # validate and save results
     if 0:
         print(result_dataset.validate())
+
+    pred_dpath = ub.Path(result_dataset.fpath).parent
+    rich.print(f'Pred Dpath: [link={pred_dpath}]{pred_dpath}[/link]')
     print('dump result_dataset.fpath = {!r}'.format(result_dataset.fpath))
     result_dataset.dump(result_dataset.fpath)
     print('return result_dataset.fpath = {!r}'.format(result_dataset.fpath))
