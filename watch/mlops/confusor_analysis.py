@@ -248,6 +248,7 @@ def main(cmdline=1, **kwargs):
         header_prop['status'] = 'negative'
         header_prop['model_content'] = 'annotation'
         header_prop['misc_info'].pop('confusion', None)
+        header_prop['misc_info']['weight'] = 1.5
         for obs in hard_neg.observations():
             props = obs['properties']
             props['current_phase'] = None

@@ -238,8 +238,16 @@ class _RichProgIterManager(BaseProgIterManager):
         self.rich_manager = None
         self.enabled = kwargs.get('enabled', True)
         self.setup_rich()
+        self._active = False
+
+    # Can we make this work?
+    # def __del__(self):
+    #     if self._active:
+    #         self.stop()
 
     def progiter(self, iterable=None, total=None, desc=None, transient=False, spinner=False, verbose='auto', **kw):
+        if not self._active:
+            self.start()
         # Fixme remove circular ref
         self.rich_manager.pman = self
         prog = RichProgIter(
@@ -305,16 +313,19 @@ class _RichProgIterManager(BaseProgIterManager):
             self.info_panel.renderable = text
 
     def start(self):
-        if self.enabled:
+        if self.enabled and not self._active:
+            self._active = True
             return self.live_context.__enter__()
 
     def stop(self, **kw):
-        if self.enabled:
+        if self.enabled and self._active:
             if not kw:
                 kw['exc_type'] = None
                 kw['exc_val'] = None
                 kw['exc_tb'] = None
-            return self.live_context.__exit__(**kw)
+            ret = self.live_context.__exit__(**kw)
+            self._active = False
+            return ret
 
 
 class _ProgIterManager(BaseProgIterManager):

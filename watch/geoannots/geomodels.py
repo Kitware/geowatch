@@ -2,10 +2,15 @@
 Geojson object oriented interface for region and site models
 """
 import ubelt as ub
+import geopandas as gpd
 import geojson
+import jsonschema
+import copy
+from watch.utils import util_time
+from watch.utils import util_progress
 
 
-class _FeatureCollectionMixin(ub.NiceRepr, geojson.FeatureCollection):
+class _Model(ub.NiceRepr, geojson.FeatureCollection):
     type = 'FeatureCollection'
 
     def __nice__(self):
@@ -16,16 +21,50 @@ class _FeatureCollectionMixin(ub.NiceRepr, geojson.FeatureCollection):
         Returns:
             geopandas.GeoDataFrame: the feature collection as data frame
         """
-        import geopandas as gpd
         gdf = gpd.GeoDataFrame.from_features(self['features'])
         return gdf
 
     def deepcopy(self):
-        import copy
         return copy.deepcopy(self)
 
+    @classmethod
+    def coerce(cls, data):
+        if isinstance(data, cls):
+            return data
+        elif isinstance(data, dict):
+            return cls.from_dict(data)
+        elif isinstance(data, gpd.GeoDataFrame):
+            return cls.from_dataframe(data)
+        else:
+            raise TypeError
 
-class RegionModel(_FeatureCollectionMixin):
+    @classmethod
+    def from_dataframe(cls, gdf):
+        """
+        Args:
+            gdf (GeoDataFrame):
+        """
+        jsondct = gdf.__geo_interface__
+        return cls(**jsondct)
+
+    @classmethod
+    def from_dict(cls, data):
+        """
+        Args:
+            gdf (GeoDataFrame):
+        """
+        return cls(**data)
+
+    @property
+    def start_date(self):
+        return util_time.coerce_datetime(self.header['properties']['start_date'])
+
+    @property
+    def end_date(self):
+        return util_time.coerce_datetime(self.header['properties']['end_date'])
+
+
+class RegionModel(_Model):
     """
     Wrapper around a geojson region model FeatureCollection
 
@@ -63,7 +102,6 @@ class RegionModel(_FeatureCollectionMixin):
         Returns:
             geopandas.GeoDataFrame: the site summaries as a data frame
         """
-        import geopandas as gpd
         gdf = gpd.GeoDataFrame.from_features(list(self.site_summaries()))
         return gdf
 
@@ -74,21 +112,11 @@ class RegionModel(_FeatureCollectionMixin):
         # print('region = {}'.format(ub.urepr(region, nl=-1)))
         return cls(**region)
 
-    @classmethod
-    def coerce(self, data):
-        if isinstance(data, RegionModel):
-            return data
-        elif isinstance(data, dict):
-            return RegionModel(**data)
-        else:
-            raise TypeError
-
     def validate(self):
+        import watch
         feature_types = ub.dict_hist([f['properties']['type'] for f in self.features])
         assert feature_types.pop('region', 0) == 1
         assert set(feature_types).issubset({'site_summary'})
-        import watch
-        import jsonschema
         schema = watch.rc.registry.load_region_model_schema()
         jsonschema.validate(self, schema)
 
@@ -96,18 +124,15 @@ class RegionModel(_FeatureCollectionMixin):
         if header is not self.features[0]:
             raise AssertionError('Header should be the first feature')
 
-        from dateutil.parser import parse
-        dummy_start_date = '1970-01-01'  # hack, could be more robust here
-        dummy_end_date = '2101-01-01'
-        start_date = header['properties']['start_date'] or dummy_start_date
-        end_date = header['properties']['end_date'] or dummy_end_date
-        start_datetime = parse(start_date)
-        end_datetime = parse(end_date)
-        if end_datetime < start_datetime:
-            raise AssertionError('bad date')
+        jsonschema.validate(self, schema)
+        start_date = self.start_date
+        end_date = self.end_date
+        if start_date is not None and end_date is not None:
+            if end_date < start_date:
+                raise AssertionError('bad date')
 
 
-class SiteModel(_FeatureCollectionMixin):
+class SiteModel(_Model):
     """
     Wrapper around a geojson site model FeatureCollection
 
@@ -139,14 +164,13 @@ class SiteModel(_FeatureCollectionMixin):
             if prop['type'] == 'observation':
                 yield feat
 
-    @classmethod
-    def coerce(cls, data):
-        if isinstance(data, SiteModel):
-            return data
-        elif isinstance(data, dict):
-            return SiteModel(**data)
-        else:
-            raise TypeError
+    def pandas_observations(self):
+        """
+        Returns:
+            geopandas.GeoDataFrame: the site summaries as a data frame
+        """
+        gdf = gpd.GeoDataFrame.from_features(list(self.observations()))
+        return gdf
 
     @classmethod
     def random(cls):
@@ -172,18 +196,11 @@ class SiteModel(_FeatureCollectionMixin):
         return self.header['properties']['site_id']
 
     @property
-    def start_date(self):
-        return self.header['properties']['start_date']
-
-    @property
-    def end_date(self):
-        return self.header['properties']['end_date']
-
-    @property
     def status(self):
         return self.header['properties']['status']
 
     def validate(self):
+        import watch
         header = self.header
         if header is not self.features[0]:
             raise AssertionError('Header should be the first feature')
@@ -191,23 +208,16 @@ class SiteModel(_FeatureCollectionMixin):
         feature_types = ub.dict_hist([f['properties']['type'] for f in self.features])
         assert feature_types.pop('site', 0) == 1
         assert set(feature_types).issubset({'observation'})
-        import watch
-        import jsonschema
         schema = watch.rc.registry.load_site_model_schema()
         jsonschema.validate(self, schema)
-
-        from dateutil.parser import parse
-        dummy_start_date = '1970-01-01'  # hack, could be more robust here
-        dummy_end_date = '2101-01-01'
-        start_date = header['properties']['start_date'] or dummy_start_date
-        end_date = header['properties']['end_date'] or dummy_end_date
-        start_datetime = parse(start_date)
-        end_datetime = parse(end_date)
-        if end_datetime < start_datetime:
-            raise AssertionError('bad date')
+        start_date = self.start_date
+        end_date = self.end_date
+        if start_date is not None and end_date is not None:
+            if end_date < start_date:
+                raise AssertionError('bad date')
 
 
-class _FeatureMixin(ub.NiceRepr, geojson.Feature):
+class _Feature(ub.NiceRepr, geojson.Feature):
     type = 'Feature'
 
     def __nice__(self):
@@ -220,19 +230,19 @@ class _FeatureMixin(ub.NiceRepr, geojson.Feature):
         return info
 
 
-class Observation(_FeatureMixin):
+class Observation(_Feature):
     ...
 
 
-class SiteSummary(_FeatureMixin):
+class SiteSummary(_Feature):
     ...
 
 
-class SiteHeader(_FeatureMixin):
+class SiteHeader(_Feature):
     ...
 
 
-class RegionHeader(_FeatureMixin):
+class RegionHeader(_Feature):
     """
     A helper wrapper for the region model header features
     """
@@ -295,7 +305,6 @@ class ModelCollection(list):
     """
 
     def validate(self, mode='process', workers=0):
-        from watch.utils import util_progress
         pman = util_progress.ProgressManager()
         with pman:
             jobs = ub.JobPool(mode='process', max_workers=8)
