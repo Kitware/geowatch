@@ -22,6 +22,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Fixed
 
 * Fixed gdal warnings
+* Visualization issue where annots would not always be rendered
 
 ### Removed
 
