@@ -35,11 +35,16 @@ class ConfusorAnalysisConfig(scfg.DataConfig):
 
 def main(cmdline=1, **kwargs):
     """
-    Ignore:
+    CommandLine:
+        xdoctest -m /home/joncrall/code/watch/watch/mlops/confusor_analysis.py main
+        HAS_DVC=1 xdoctest -m watch.mlops.confusor_analysis main:0
+
+    Example:
+        >>> # xdoctest: +REQUIRES(env:HAS_DVC)
         >>> from watch.mlops.confusor_analysis import *  # NOQA
         >>> import watch
         >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-        >>> region_id = 'KR_R001'
+        >>> region_id = 'NZ_R001'
         >>> true_site_dpath = data_dvc_dpath / 'annotations/drop6/site_models'
         >>> true_region_dpath = data_dvc_dpath / 'annotations/drop6/region_models'
         >>> src_kwcoco = data_dvc_dpath / f'Drop6-MeanYear10GSD/imgonly-{region_id}.kwcoco.zip'
@@ -60,6 +65,7 @@ def main(cmdline=1, **kwargs):
         >>>     src_kwcoco=src_kwcoco,
         >>>     region_id=region_id,
         >>> )
+        >>> main(cmdline=cmdline, **kwargs)
     """
     config = ConfusorAnalysisConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
 
@@ -216,6 +222,7 @@ def main(cmdline=1, **kwargs):
     VALIDATE = 1
     if VALIDATE:
         all_models = SiteModelCollection(pred_sites + true_sites)
+        all_models.fixup()
         all_models.validate(workers=8)
 
     pred_region_model = pred_sites.as_region_model(region=true_region_model.header)

@@ -159,7 +159,7 @@ def main(cmdline=False, **kwargs):
         >>> from watch.cli.reproject_annotations import *  # NOQA
         >>> import watch
         >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-        >>> coco_fpath = dvc_dpath / 'Drop6/imgonly-KR_R001.kwcoco.json'
+        >>> coco_fpath = dvc_dpath / 'Drop6/imgonly-NZ_R001.kwcoco.json'
         >>> dpath = ub.Path.appdir('watch/tests/project_annots').ensuredir()
         >>> cmdline = False
         >>> output_fpath = dpath / 'test_project_data.kwcoco.json'
@@ -281,6 +281,21 @@ def main(cmdline=False, **kwargs):
 
     for ann in propogated_annotations:
         coco_dset.add_annotation(**ann)
+
+    # TODO: move to add_watch_fields
+    # Modify videos to include cleared status
+    if 1:
+        from watch import heuristics
+        import watch
+        region_id_to_cleared = {d['region_id']: d['cleared'] for d in heuristics.REGION_STATUS}
+        pat = watch.utils.util_pattern.Pattern.coerce(r'\w+_R\d+(_\d+)?', 'regex')
+        for video in coco_dset.videos().objs:
+            video_name = video['name']
+            if pat.match(video_name):
+                region_id = '_'.join(video_name.split('_')[0:2])
+                cleared = region_id_to_cleared.get(region_id, False)
+                video['cleared'] = cleared
+                video['domain'] = region_id
 
     kwcoco_extensions.warp_annot_segmentations_from_geos(coco_dset)
 
@@ -447,7 +462,7 @@ def expand_site_models_with_site_summaries(sites, regions):
             site_df1['misc_info'] = None
 
         misc_info1 = site_df1['misc_info']
-        misc_info1 = [{} if d is None else ub.udict.difference(d, {'commit_hash'}) for d in misc_info1]
+        misc_info1 = [{} if is_nonish(d) else ub.udict.difference(d, {'commit_hash'}) for d in misc_info1]
         site_df1['misc_info'] = misc_info1
 
     else:
@@ -473,7 +488,7 @@ def expand_site_models_with_site_summaries(sites, regions):
         if 'misc_info' not in site_df2.columns:
             site_df2['misc_info'] = None
         misc_info2 = site_df2['misc_info']
-        misc_info2 = [{} if d is None else ub.udict.difference(d, {'commit_hash'}) for d in misc_info2]
+        misc_info2 = [{} if is_nonish(d) else ub.udict.difference(d, {'commit_hash'}) for d in misc_info2]
         site_df2['misc_info'] = misc_info2
     else:
         site_df2 = pd.DataFrame([], columns=expected_keys)
@@ -558,9 +573,6 @@ def expand_site_models_with_site_summaries(sites, regions):
     region_id_to_num_sites = ub.map_vals(len, region_id_to_sites)
     if VERYVERBOSE:
         print('AFTER (sitesummary) region_id_to_num_sites = {}'.format(ub.urepr(region_id_to_num_sites, nl=1)))
-
-    def is_nonish(x):
-        return x is None or isinstance(x, float) and math.isnan(x)
 
     # Fix out of order observations
     FIX_OBS_ORDER = True
@@ -1604,6 +1616,10 @@ def draw_geospace(dvc_dpath, sites):
         centroid = gdf.to_crs('+proj=cea').centroid.to_crs(gdf.crs)
         centroid.plot(ax=ax, marker='o', facecolor='red', alpha=0.5)
         gdf.plot(ax=ax, facecolor='none', edgecolor='red', alpha=0.5)
+
+
+def is_nonish(x):
+    return x is None or isinstance(x, float) and math.isnan(x)
 
 
 __config__ = ReprojectAnnotationsConfig

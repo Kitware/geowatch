@@ -12,6 +12,8 @@ from watch.utils import util_progress
 
 class _Model(ub.NiceRepr, geojson.FeatureCollection):
     type = 'FeatureCollection'
+    _header_type = NotImplemented
+    _body_type = NotImplemented
 
     def __nice__(self):
         return ub.urepr(self.info(), nl=2)
@@ -63,6 +65,47 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
     def end_date(self):
         return util_time.coerce_datetime(self.header['properties']['end_date'])
 
+    def body_features(self):
+        for feat in self['features']:
+            prop = feat['properties']
+            if prop['type'] == self._body_type:
+                yield feat
+
+    @property
+    def header(self):
+        for feat in self['features']:
+            prop = feat['properties']
+            if prop['type'] == self._header_type:
+                return feat
+
+    def validate(self):
+        import watch
+        import rich
+        header = self.header
+        if header is not self.features[0]:
+            raise AssertionError('Header should be the first feature')
+
+        feature_types = ub.dict_hist([f['properties']['type'] for f in self.features])
+        assert feature_types.pop('site', 0) == 1
+        assert set(feature_types).issubset({'observation'})
+        schema = watch.rc.registry.load_site_model_schema()
+        try:
+            jsonschema.validate(self, schema)
+        except jsonschema.ValidationError as e:
+            ex = e
+            ex.instance
+            rich.print('[red] ERROR')
+            print(f'self={self}')
+            print('ex.__dict__ = {}'.format(ub.urepr(ex.__dict__, nl=3)))
+            rich.print('[red] ERROR')
+            raise
+            ...
+        start_date = self.start_date
+        end_date = self.end_date
+        if start_date is not None and end_date is not None:
+            if end_date < start_date:
+                raise AssertionError('bad date')
+
 
 class RegionModel(_Model):
     """
@@ -74,6 +117,8 @@ class RegionModel(_Model):
         >>> print(self)
         >>> self.validate()
     """
+    _header_type = 'region'
+    _body_type = 'site_summary'
 
     def info(self):
         header = self.header
@@ -84,18 +129,13 @@ class RegionModel(_Model):
         }
         return info
 
-    @property
-    def header(self):
-        for feat in self['features']:
-            prop = feat['properties']
-            if prop['type'] == 'region':
-                return feat
+    def load_schema(self):
+        import watch
+        schema = watch.rc.registry.load_region_model_schema()
+        return schema
 
     def site_summaries(self):
-        for feat in self['features']:
-            prop = feat['properties']
-            if prop['type'] == 'site_summary':
-                yield feat
+        yield from self.body_features()
 
     def pandas_summaries(self):
         """
@@ -112,25 +152,6 @@ class RegionModel(_Model):
         # print('region = {}'.format(ub.urepr(region, nl=-1)))
         return cls(**region)
 
-    def validate(self):
-        import watch
-        feature_types = ub.dict_hist([f['properties']['type'] for f in self.features])
-        assert feature_types.pop('region', 0) == 1
-        assert set(feature_types).issubset({'site_summary'})
-        schema = watch.rc.registry.load_region_model_schema()
-        jsonschema.validate(self, schema)
-
-        header = self.header
-        if header is not self.features[0]:
-            raise AssertionError('Header should be the first feature')
-
-        jsonschema.validate(self, schema)
-        start_date = self.start_date
-        end_date = self.end_date
-        if start_date is not None and end_date is not None:
-            if end_date < start_date:
-                raise AssertionError('bad date')
-
 
 class SiteModel(_Model):
     """
@@ -142,6 +163,9 @@ class SiteModel(_Model):
         >>> print(self)
         >>> self.validate()
     """
+    _header_type = 'site'
+    _body_type = 'observation'
+
     def info(self):
         header = self.header
         prop = '<no site header>' if header is None else header['properties']
@@ -151,6 +175,11 @@ class SiteModel(_Model):
         }
         return info
 
+    def load_schema(self):
+        import watch
+        schema = watch.rc.registry.load_site_model_schema()
+        return schema
+
     @property
     def header(self):
         for feat in self['features']:
@@ -159,10 +188,7 @@ class SiteModel(_Model):
                 return feat
 
     def observations(self):
-        for feat in self['features']:
-            prop = feat['properties']
-            if prop['type'] == 'observation':
-                yield feat
+        yield from self.body_features()
 
     def pandas_observations(self):
         """
@@ -199,22 +225,27 @@ class SiteModel(_Model):
     def status(self):
         return self.header['properties']['status']
 
-    def validate(self):
-        import watch
-        header = self.header
-        if header is not self.features[0]:
-            raise AssertionError('Header should be the first feature')
+    def fix_geom(self):
+        from shapely.geometry import shape
+        from shapely.validation import make_valid
+        from shapely.geometry import MultiPolygon
+        for feat in self.features:
+            geom = shape(feat['geometry'])
+            if geom.geom_type in {'MultiPolygon', 'Polygon'}:
+                make_valid(geom)
+            else:
+                geom = geom.buffer(3).convex_hull
+                geom = MultiPolygon([geom])
+            feat['geometry'] = geom.__geo_interface__
 
-        feature_types = ub.dict_hist([f['properties']['type'] for f in self.features])
-        assert feature_types.pop('site', 0) == 1
-        assert set(feature_types).issubset({'observation'})
-        schema = watch.rc.registry.load_site_model_schema()
-        jsonschema.validate(self, schema)
-        start_date = self.start_date
-        end_date = self.end_date
-        if start_date is not None and end_date is not None:
-            if end_date < start_date:
-                raise AssertionError('bad date')
+    def fixup(self):
+        self.clamp_scores()
+        # self.fix_geom()
+
+    def clamp_scores(self):
+        for feat in self.features:
+            fprop = feat['properties']
+            fprop['score'] = float(max(min(1, fprop['score']), 0))
 
 
 class _Feature(ub.NiceRepr, geojson.Feature):
@@ -304,14 +335,33 @@ class ModelCollection(list):
     A storage container for multiple site / region models
     """
 
-    def validate(self, mode='process', workers=0):
+    def fixup(self):
         pman = util_progress.ProgressManager()
         with pman:
-            jobs = ub.JobPool(mode='process', max_workers=8)
-            for s in pman.progiter(self, desc='submit validate models'):
-                jobs.submit(s.validate)
-            for job in pman.progiter(jobs.as_completed(), total=len(jobs), desc='collect validate models'):
-                job.result()
+            for s in pman.progiter(self, desc='fixup'):
+                s.fixup()
+
+    def validate(self, mode='process', workers=0):
+        import rich
+        # pman = util_progress.ProgressManager(backend='progiter')
+        pman = util_progress.ProgressManager()
+        with pman:
+            tries = 0
+            while True:
+                jobs = ub.JobPool(mode='process', max_workers=8 if tries == 0 else 0)
+                for s in pman.progiter(self, desc='submit validate models'):
+                    job = jobs.submit(s.validate)
+                    job.s = s
+                try:
+                    for job in pman.progiter(jobs.as_completed(), total=len(jobs), desc='collect validate models'):
+                        job.result()
+                except Exception:
+                    if tries > 0 or workers == 0:
+                        raise Exception
+                    tries += 1
+                    rich.print('[red] ERROR: [yellow] Failed to validate: trying again with workers=0')
+                else:
+                    break
 
 
 class SiteModelCollection(ModelCollection):
