@@ -414,8 +414,8 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
                 * min:
                 * max:
 
-            As well as the domain to which the normalization applies, e.g.:
-                * video_name
+            As well as the Modality to which the normalization applies, e.g.:
+                * domain
                 * channels
                 * sensor
 
@@ -720,7 +720,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             self.undistinguished_classes)
 
         channels = config['channels']
-        neg_to_pos_ratio = config['neg_to_pos_ratio']
         max_epoch_length = config['max_epoch_length']
 
         import os
@@ -773,101 +772,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             )
             new_sample_grid = builder.build()
 
-            # Train time data balancing
-            n_pos = len(new_sample_grid['positives_indexes'])
-            n_neg = len(new_sample_grid['negatives_indexes'])
-
-            target_vidids = [v['video_id'] for v in new_sample_grid['targets']]
-
-            # Hack: determine if videos should be grouped together
-            target_posbit = kwarray.boolmask(
-                new_sample_grid['positives_indexes'],
-                len(new_sample_grid['targets']))
-
             if 1:
-                # TODO: each video should be able to have some sort of group
-                # attribute we can use to balance over similar videos.
-                print('Balancing over videos')
-
-                # Do this for unique video ids otherwise SQLviews will take forever
-                unique_vidids, _idx_to_unique_idx = np.unique(target_vidids, return_inverse=True)
-                unique_vidnames = self.sampler.dset.videos(unique_vidids).lookup('name')
-                vidnames = list(ub.take(unique_vidnames, _idx_to_unique_idx))
-
-                # if 0:
-                #     # DEBUG postgres
-                #     # all_vidids = self.sampler.dset.videos()
-                #     # all_vidids = set(all_vidids)
-                #     # len(set(target_vidids) & all_vidids)
-                #     # len(set(target_vidids) - all_vidids)
-                #     # len(all_vidids - set(target_vidids))
-                #     vid_table = self.sampler.dset.raw_table('videos')
-
-                df = pd.DataFrame({
-                    'vidid': target_vidids,
-                    'vidname': vidnames,
-                    'is_positive': target_posbit,
-                }).reset_index(drop=False)
-
-                # Hack, because we didn't encode the region in the cropped site
-                # (rookie move)
-                import watch
-                pat = watch.utils.util_pattern.Pattern.coerce(r'\w+_R\d+_\d+', 'regex')
-                vidname_to_region_name = {}
-                for vidname in set(vidnames):
-                    if pat.match(vidname):
-                        vidname_to_region_name[vidname] = vidname.rsplit('_', 1)[0]
-
-                self.vidname_to_region_name = vidname_to_region_name
-
-                if vidname_to_region_name:
-                    df['region'] = df['vidname'].apply(vidname_to_region_name.__getitem__)
-                else:
-                    df['region'] = df['vidname']
-
-                key_to_group = dict(list(df.groupby(['region', 'is_positive'])))
-                vidname_to_pool = {}
-                for key, group in key_to_group.items():
-                    vidname, flag = key
-                    if flag:
-                        pos_vid_idxs = group['index']
-                        other_key = (vidname, False)
-                        if other_key in key_to_group:
-                            other = key_to_group[other_key]
-                            neg_vid_idxs = other['index']
-                        else:
-                            neg_vid_idxs = []
-                            other = []
-                        n_pos = len(group)
-                        n_neg = len(other)
-                        max_neg = min(int(max(1, (neg_to_pos_ratio * n_pos))), n_neg)
-
-                        if 0:
-                            # TODO: dataloader logger
-                            print(f'restrict to {max_neg=} in {vidname=} with {n_pos=} and {n_neg=}')
-
-                        # neg_vid_idxs = posneg_groups[False]['index'].values
-                        neg_vid_pool_ = list(util_iter.chunks(neg_vid_idxs, nchunks=max_neg))
-                        pos_vid_pool_ = list(util_iter.chunks(pos_vid_idxs, nchunks=n_pos))
-                        vid_pool = pos_vid_pool_ + neg_vid_pool_
-                        vidname_to_pool[vidname] = [p for p in vid_pool if p]
-
-                freqs = list(map(len, vidname_to_pool.values()))
-                if len(freqs) == 0:
-                    max_per_vid = 100
-                    warnings.warn('Warning: no video pool')
-                else:
-                    max_per_vid = int(np.median(freqs))
-                all_chunks = []
-                for vidname, vid_pool in vidname_to_pool.items():
-                    # print(len(vid_pool[0]))
-                    # print(len(vid_pool[-1]))
-                    rechunked_video_pool = list(util_iter.chunks(vid_pool, nchunks=max_per_vid))
-                    all_chunks.extend(rechunked_video_pool)
-
-                self.nested_pool = data_utils.NestedPool(all_chunks)
-                if self.config['reseed_fit_random_generators']:
-                    self.reseed()
+                self._init_balance(new_sample_grid)
 
             self.length = len(self.nested_pool)
 
@@ -977,10 +883,10 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 raise NotImplementedError('This is broken ATM')
                 # TODO: introspect which extra bands are needed for to compute
                 # the sample, but hard code for now
-                _sample_stream -= special_bands
-                _sample_stream = _sample_stream | ub.oset('blue|green|red|nir|swir16|swir22'.split('|'))
-                self.special_inputs[key] = special_bands
-                _stream = [s + p for p in _stream for s in ['', 'D']]
+                # _sample_stream -= special_bands
+                # _sample_stream = _sample_stream | ub.oset('blue|green|red|nir|swir16|swir22'.split('|'))
+                # self.special_inputs[key] = special_bands
+                # _stream = [s + p for p in _stream for s in ['', 'D']]
             _input_sensorchans.append(sensor.spec + ':' + '|'.join(_stream))
             _sample_sensorchans.append(sensor.spec + ':' + '|'.join(_sample_stream))
             _input_channels.append('|'.join(_stream))
@@ -1026,16 +932,16 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             prenormalizers = None
             if self.config['prenormalize_inputs'] is True:
                 # default_prenorm = {
-                #     'domain_stats': 'auto',
+                #     'modality_stats': 'auto',
                 # }
                 #
                 """
-                e.g. we expect domain stats to look like:
+                e.g. we expect modality stats to look like:
 
-                domain_stats:
+                modality_stats:
                     - sensor: S2
                       channels: red|green|blue
-                      video_name: KR_R001
+                      domain: KR_R001
                       month: 3
                       mean: [120, 231, 233]
                       std: [30, 20, 24]
@@ -1046,7 +952,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
                 # We generally want to compute these on the full dataset
                 stats = self.cached_dataset_stats(num_workers=4)
-                self.prenormalizers = stats['domain_input_stats']
+                self.prenormalizers = stats['modality_input_stats']
                 # prenormalizers = []
                 # for key, value in stats['prenormalizers'].items():
                 #     item = ub.udict(key._asdict()) | {k: v.ravel() for k, v in value.items()}
@@ -1063,9 +969,111 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
             if prenormalizers is None:
                 stats = self.cached_dataset_stats(num_workers=4)
-                prenormalizers = stats['domain_input_stats']
+                prenormalizers = stats['modality_input_stats']
 
             self.prenormalizers = prenormalizers
+
+    def _init_balance(self, new_sample_grid):
+        """
+        Helper for __init__ which constructs a NestedPool to balance sampling
+        across input domains.
+        """
+        # TODO: each video should be able to have some sort of group
+        # attribute we can use to balance over similar videos.
+        print('Balancing over videos')
+
+        neg_to_pos_ratio = self.config['neg_to_pos_ratio']
+
+        # Train time data balancing
+        n_pos = len(new_sample_grid['positives_indexes'])
+        n_neg = len(new_sample_grid['negatives_indexes'])
+
+        target_vidids = [v['video_id'] for v in new_sample_grid['targets']]
+
+        # Hack: determine if videos should be grouped together
+        target_posbit = kwarray.boolmask(
+            new_sample_grid['positives_indexes'],
+            len(new_sample_grid['targets']))
+
+        # Do this for unique video ids otherwise SQLviews will take forever
+        unique_vidids, _idx_to_unique_idx = np.unique(target_vidids, return_inverse=True)
+        unique_vidnames = self.sampler.dset.videos(unique_vidids).lookup('name')
+        vidnames = list(ub.take(unique_vidnames, _idx_to_unique_idx))
+
+        # if 0:
+        #     # DEBUG postgres
+        #     # all_vidids = self.sampler.dset.videos()
+        #     # all_vidids = set(all_vidids)
+        #     # len(set(target_vidids) & all_vidids)
+        #     # len(set(target_vidids) - all_vidids)
+        #     # len(all_vidids - set(target_vidids))
+        #     vid_table = self.sampler.dset.raw_table('videos')
+
+        df = pd.DataFrame({
+            'vidid': target_vidids,
+            'vidname': vidnames,
+            'is_positive': target_posbit,
+        }).reset_index(drop=False)
+
+        # Hack, because we didn't encode the region in the cropped site
+        # (rookie move)
+        import watch
+        pat = watch.utils.util_pattern.Pattern.coerce(r'\w+_R\d+_\d+', 'regex')
+        vidname_to_region_name = {}
+        for vidname in set(vidnames):
+            if pat.match(vidname):
+                vidname_to_region_name[vidname] = vidname.rsplit('_', 1)[0]
+
+        self.vidname_to_region_name = vidname_to_region_name
+
+        if vidname_to_region_name:
+            df['region'] = df['vidname'].apply(vidname_to_region_name.__getitem__)
+        else:
+            df['region'] = df['vidname']
+
+        key_to_group = dict(list(df.groupby(['region', 'is_positive'])))
+        vidname_to_pool = {}
+        for key, group in key_to_group.items():
+            vidname, flag = key
+            if flag:
+                pos_vid_idxs = group['index']
+                other_key = (vidname, False)
+                if other_key in key_to_group:
+                    other = key_to_group[other_key]
+                    neg_vid_idxs = other['index']
+                else:
+                    neg_vid_idxs = []
+                    other = []
+                n_pos = len(group)
+                n_neg = len(other)
+                max_neg = min(int(max(1, (neg_to_pos_ratio * n_pos))), n_neg)
+
+                if 0:
+                    # TODO: dataloader logger
+                    print(f'restrict to {max_neg=} in {vidname=} with {n_pos=} and {n_neg=}')
+
+                # neg_vid_idxs = posneg_groups[False]['index'].values
+                neg_vid_pool_ = list(util_iter.chunks(neg_vid_idxs, nchunks=max_neg))
+                pos_vid_pool_ = list(util_iter.chunks(pos_vid_idxs, nchunks=n_pos))
+                vid_pool = pos_vid_pool_ + neg_vid_pool_
+                vidname_to_pool[vidname] = [p for p in vid_pool if p]
+
+        freqs = list(map(len, vidname_to_pool.values()))
+        if len(freqs) == 0:
+            max_per_vid = 100
+            warnings.warn('Warning: no video pool')
+        else:
+            max_per_vid = int(np.median(freqs))
+        all_chunks = []
+        for vidname, vid_pool in vidname_to_pool.items():
+            # print(len(vid_pool[0]))
+            # print(len(vid_pool[-1]))
+            rechunked_video_pool = list(util_iter.chunks(vid_pool, nchunks=max_per_vid))
+            all_chunks.extend(rechunked_video_pool)
+
+        self.nested_pool = data_utils.NestedPool(all_chunks)
+        if self.config['reseed_fit_random_generators']:
+            self.reseed()
 
     def reseed(self):
         """
@@ -1231,18 +1239,19 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 # dont ask for annotations multiple times
                 first_with_annot = False
 
-        if coco_img.video is None:
-            video_name = None
+        coco_video = coco_img.video
+        if coco_video is None:
+            domain = None
         else:
-            video_name = coco_img.video.get('name', None)
+            domain = coco_video.get('domain', coco_video.get('name', None))
 
         # After all channels are sampled, apply final invalid mask.
         for stream, sample in sample_streams.items():
 
             if self.prenormalizers is not None:
-                domain = Domain(channels=stream, sensor=sensor_coarse,
-                                video_name=video_name)
-                stats = self.prenormalizers[domain]
+                modality = Modality(channels=stream, sensor=sensor_coarse,
+                                    domain=domain)
+                stats = self.prenormalizers[modality]
                 out = sample['im']
                 # norm = kwarray.normalize(
                 #     sample['im'],
@@ -1749,6 +1758,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             'positional_tensors': positional_tensors,
             'video_id': vidid,
             'video_name': video['name'],
+            'domain': video.get('domain', video.get('name', None)),
             'input_gsd': resolved_input_scale.get('gsd', None),
             'output_gsd': resolved_output_scale.get('gsd', None),
             'target': tr_subset,
@@ -2508,7 +2518,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             ('with_intensity', with_intensity),
             ('with_class', with_class),
             ('prenormalizers', self.prenormalizers),
-            ('depends_version', 18),  # bump if `compute_dataset_stats` changes
+            ('depends_version', 19),  # bump if `compute_dataset_stats` changes
         ])
         if self.config['normalize_peritem']:
             depends['normalize_peritem'] = self.config['normalize_peritem']
@@ -2640,8 +2650,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             Summarizes current stats estimates either for display or for the
             final output.
             """
-            domain_input_stats = {}
-            for domain, running in norm_stats.items():
+            modality_input_stats = {}
+            for modality, running in norm_stats.items():
                 # ensure we have the expected shape
                 try:
                     perchan_stats = running.summarize(axis=ub.NoParam, keepdims=True)
@@ -2669,7 +2679,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 chan_mean = chan_mean.round(6)
                 chan_std = chan_std.round(6)
                 # print('perchan_stats = {}'.format(ub.urepr(perchan_stats, nl=1)))
-                domain_input_stats[domain] = {
+                modality_input_stats[modality] = {
                     'mean': chan_mean,
                     'std': chan_std,
                     'min': chan_min,
@@ -2677,11 +2687,11 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     'n': chan_num,
                 }
 
-            # We are now computing input stats across a finer set of domain
+            # We are now computing input stats across a finer set of modality
             # variables. For backwards compatability also return the old-style
             # input stats that are only over sensor/channel
-            grouped_stats = ub.group_items(domain_input_stats.values(), [
-                (u.sensor, u.channels) for u in domain_input_stats.keys()])
+            grouped_stats = ub.group_items(modality_input_stats.values(), [
+                (u.sensor, u.channels) for u in modality_input_stats.keys()])
             old_input_stats = {}
             for (sensor, chan), group in grouped_stats.items():
                 means = np.stack([m['mean'] for m in group], axis=0)
@@ -2702,7 +2712,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     'n': combo_nums[:, None, None],
                 }
                 old_input_stats[(sensor, chan)] = combo
-            return domain_input_stats, old_input_stats
+            return modality_input_stats, old_input_stats
 
         def update_displayed_estimates(pman):
             """
@@ -2710,7 +2720,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             """
             stat_lines = ['Current Estimated Dataset Statistics: ']
             if with_intensity:
-                domain_input_stats, old_input_stats = current_input_stats()
+                modality_input_stats, old_input_stats = current_input_stats()
                 input_stats2 = {sc: {k: v.ravel() for k, v in stats.items()}
                                 for sc, stats in old_input_stats.items()}
                 intensity_info_text = 'Spectra Stats: ' + ub.urepr(input_stats2, with_dtype=False, precision=4)
@@ -2727,16 +2737,16 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         def update_intensity_estimates(item):
             # Update pixel-level intensity histogram
-            video_name = item['video_name']
+            domain = item['domain']
             for frame_item in item['frames']:
                 sensor_code = frame_item['sensor']
                 modes = frame_item['modes']
 
                 for mode_code, mode_val in modes.items():
-                    domain = Domain(sensor_code, mode_code, video_name)
+                    modality = Modality(sensor_code, mode_code, domain)
 
                     sensor_mode_hist[(sensor_code, mode_code)] += 1
-                    running = norm_stats[domain]
+                    running = norm_stats[modality]
                     val = mode_val.numpy().astype(intensity_dtype)
                     weights = np.isfinite(val).astype(intensity_dtype)
 
@@ -2849,9 +2859,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         if with_intensity:
             with warnings.catch_warnings():
                 warnings.filterwarnings('ignore', 'invalid value encountered in true_divide', category=RuntimeWarning)
-                domain_input_stats, old_input_stats = current_input_stats()
+                modality_input_stats, old_input_stats = current_input_stats()
         else:
-            domain_input_stats = None
+            modality_input_stats = None
             old_input_stats = None
 
         dataset_stats = {
@@ -2860,7 +2870,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             'input_stats': old_input_stats,
             'class_freq': class_freq,  # pixelwise
 
-            'domain_input_stats': domain_input_stats,  # new
+            'modality_input_stats': modality_input_stats,  # new
 
             'annot_class_freq': annot_class_freq,
             'track_class_freq': track_class_freq,
@@ -3113,10 +3123,10 @@ class FailedSample(Exception):
     ...
 
 
-class Domain(NamedTuple):
+class Modality(NamedTuple):
     """
-    A normalization domain
+    A modality consists of a domain, a sensor, and a FusedChannelSpec
     """
     sensor: str
     channels: str
-    video_name: str
+    domain: str
