@@ -32,6 +32,19 @@ class ConfusorAnalysisConfig(scfg.DataConfig):
 
     out_dpath = scfg.Value(None, help='where to write results')
 
+    def __post_init__(self):
+        if self.bas_metric_dpath is not None:
+            self.bas_metric_dpath = ub.Path(self.bas_metric_dpath)
+
+        if self.true_region_dpath is not None:
+            self.true_region_dpath = ub.Path(self.true_region_dpath)
+
+        if self.true_site_dpath is not None:
+            self.true_site_dpath = ub.Path(self.true_site_dpath)
+
+        if self.out_dpath is not None:
+            self.out_dpath = ub.Path(self.out_dpath)
+
 
 def main(cmdline=1, **kwargs):
     """
@@ -255,11 +268,14 @@ def main(cmdline=1, **kwargs):
         header_prop['status'] = 'negative'
         header_prop['model_content'] = 'annotation'
         header_prop['misc_info'].pop('confusion', None)
-        header_prop['misc_info']['weight'] = 1.5
+        header_prop['misc_info']['kwcoco'] = {'weight': 1.5}
+        header_prop['comments'] = 'hard_negative'
         for obs in hard_neg.observations():
             props = obs['properties']
             props['current_phase'] = None
             props['is_site_boundary'] = None
+            props.pop('predicted_phase_transition', None)
+            props.pop('predicted_phase_transition_date', None)
 
     hard_neg_summaries = [s.as_summary() for s in hard_negative_sites]
     new_region = true_region_model.deepcopy()
@@ -267,11 +283,19 @@ def main(cmdline=1, **kwargs):
     new_true_sites = [s.deepcopy() for s in true_sites]
 
     # Upweight hard positive true sites
-    for site in new_true_sites:
-        header_prop = site.header['properties']
-        header_prop['misc_info'].pop('confusion', None)
-        if header_prop['site_id'] in hard_positive_site_ids:
-            header_prop['misc_info']['kwcoco'] = {'weight': 2.0}
+    print('hard_positive_site_ids = {}'.format(ub.urepr(hard_positive_site_ids, nl=1)))
+    new_true_props = [n.header['properties'] for n in new_true_sites] + [s['properties'] for s in new_region.site_summaries()]
+    for prop in new_true_props:
+        if 'misc_info' not in prop:
+            prop['misc_info'] = {}
+        prop['misc_info'].pop('confusion', None)
+        if prop['site_id'] in hard_positive_site_ids:
+            prop['misc_info']['kwcoco'] = {'weight': 2.0}
+            if 'comments' not in prop or not prop['comments']:
+                prop['comments'] = 'hard_positive'
+            else:
+                prop['comments'] += ';hard_positive'
+
     # Add in hard negatives
     new_sites = new_true_sites + hard_negative_sites
 

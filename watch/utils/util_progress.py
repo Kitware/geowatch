@@ -280,6 +280,7 @@ class _RichProgIterManager(BaseProgIterManager):
             self._is_main_manager = False
             self.live_context = None
             self.rich_progress = MAIN_RICH_PMAN.rich_progress
+            self.progress_group = MAIN_RICH_PMAN.progress_group
         else:
             self._is_main_manager = True
 
