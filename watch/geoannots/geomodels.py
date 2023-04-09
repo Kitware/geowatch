@@ -65,6 +65,9 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
     def end_date(self):
         return util_time.coerce_datetime(self.header['properties']['end_date'])
 
+    def load_schema(self):
+        raise NotImplementedError('abstract')
+
     def body_features(self):
         for feat in self['features']:
             prop = feat['properties']
@@ -79,16 +82,15 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
                 return feat
 
     def validate(self):
-        import watch
         import rich
         header = self.header
         if header is not self.features[0]:
             raise AssertionError('Header should be the first feature')
 
         feature_types = ub.dict_hist([f['properties']['type'] for f in self.features])
-        assert feature_types.pop('site', 0) == 1
-        assert set(feature_types).issubset({'observation'})
-        schema = watch.rc.registry.load_site_model_schema()
+        assert feature_types.pop(self._header_type, 0) == 1
+        assert set(feature_types).issubset({self._body_type})
+        schema = self.load_schema()
         try:
             jsonschema.validate(self, schema)
         except jsonschema.ValidationError as e:
@@ -99,7 +101,7 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
             print('ex.__dict__ = {}'.format(ub.urepr(ex.__dict__, nl=3)))
             rich.print('[red] ERROR')
             raise
-            ...
+
         start_date = self.start_date
         end_date = self.end_date
         if start_date is not None and end_date is not None:
