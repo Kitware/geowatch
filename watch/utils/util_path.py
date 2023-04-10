@@ -116,6 +116,10 @@ def coerce_patterned_paths(data, expected_extension=None):
         ...     ''', expected_extension='.txt')
         >>> paths = [p.shrinkuser() for p in paths]
         >>> print('paths = {}'.format(ub.urepr(paths, nl=1)))
+        >>> with ChDir(dpath / 'dir'):
+        >>>     paths = coerce_patterned_paths('*.txt*')
+        >>> print('paths = {}'.format(ub.urepr(paths, nl=1)))
+        >>> assert len(paths) == 2
 
         paths = [
             Path('~/.cache/watch/test/utils/path/file1.txt'),
@@ -123,7 +127,8 @@ def coerce_patterned_paths(data, expected_extension=None):
             Path('~/.cache/watch/test/utils/path/dir/subfile2.txt'),
         ]
     """
-    from watch.utils import util_yaml
+    from watch.utils.util_yaml import Yaml
+    from ruamel.yaml.composer import ComposerError
     from os.path import isdir, join
     import glob
 
@@ -138,7 +143,10 @@ def coerce_patterned_paths(data, expected_extension=None):
     resolved_globs = []
     for data in datas:
         if isinstance(data, str):
-            loaded = util_yaml.Yaml.loads(data)
+            try:
+                loaded = Yaml.loads(data)
+            except ComposerError:
+                loaded = data
             if isinstance(loaded, str):
                 loaded = [loaded]
             resolved_globs.extend(loaded)
