@@ -35,6 +35,24 @@ def main(cmdline=True, **kw):
         'coco_time_combine',
     ]
 
+    cmd_alias = {
+        'watch.cli.torch_model_stats': ['model_stats', 'model_info'],
+        'watch.cli.watch_coco_stats': ['stats'],
+        'watch.cli.coco_visualize_videos': ['visualize'],
+        'watch.cli.coco_align': ['align', 'coco_align_geotiffs'],
+        'watch.cli.reproject_annotations': ['reproject', 'project'],
+        'watch.cli.coco_add_watch_fields': ['add_fields'],
+        'watch.cli.coco_spectra': ['spectra', 'intensity_histograms'],
+        # 'watch.cli.mlops_cli': ['mlops'],
+        'watch.cli.run_metrics_framework': ['iarpa_eval'],
+        'watch.cli.coco_clean_geotiffs': ['clean_geotiffs'],
+        'watch.cli.kwcoco_to_geojson': [],
+        'watch.cli.find_dvc': ['dvcdir'],
+        'watch.cli.gifify': ['animate'],
+        'watch.cli.coco_average_features': ['average_features'],
+        'watch.cli.coco_time_combine': ['time_combine'],
+    }
+
     module_lut = {}
     for name in modnames:
         mod = ub.import_module_from_name('watch.cli.{}'.format(name))
@@ -85,7 +103,9 @@ def main(cmdline=True, **kw):
         if command is not None:
             cmdname_aliases.add(command)
         cmdname_aliases.update(alias)
+        cmdname_aliases.update(cmd_alias.get(cli_modname, []) )
         cmdname_aliases.add(cli_rel_modname)
+        # parserkw = {}
         primary_cmdname = cmdname_aliases[0]
         secondary_cmdnames = cmdname_aliases[1:]
         cli_subconfig.__command__ = primary_cmdname

@@ -659,15 +659,6 @@ def reprocess_all_kwcoco_files():
         ''')
     ub.cmd(command, system=True)
 
-    command = ub.codeblock(
-        fr'''
-        python -m watch.cli.prepare_splits \
-            --base_fpath="{HDD.hdd_bundle_dpath}/imganns*.kwcoco.zip" \
-            --workers=5 \
-            --constructive_mode=True --run=1
-        ''')
-    ub.cmd(command, system=True)
-
     # Repackage splits
     splits_fpath = HDD.hdd_bundle_dpath / 'splits.zip'
     splits_fpath.delete()

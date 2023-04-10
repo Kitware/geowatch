@@ -282,21 +282,6 @@ def main(cmdline=False, **kwargs):
     for ann in propogated_annotations:
         coco_dset.add_annotation(**ann)
 
-    # TODO: move to add_watch_fields
-    # Modify videos to include cleared status
-    if 1:
-        from watch import heuristics
-        import watch
-        region_id_to_cleared = {d['region_id']: d['cleared'] for d in heuristics.REGION_STATUS}
-        pat = watch.utils.util_pattern.Pattern.coerce(r'\w+_R\d+(_\d+)?', 'regex')
-        for video in coco_dset.videos().objs:
-            video_name = video['name']
-            if pat.match(video_name):
-                region_id = '_'.join(video_name.split('_')[0:2])
-                cleared = region_id_to_cleared.get(region_id, False)
-                video['cleared'] = cleared
-                video['domain'] = region_id
-
     kwcoco_extensions.warp_annot_segmentations_from_geos(coco_dset)
 
     if output_fpath != 'return':

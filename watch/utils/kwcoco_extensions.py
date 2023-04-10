@@ -168,6 +168,20 @@ def populate_watch_fields(coco_dset, target_gsd=10.0, vidids=None,
         enable_valid_region=enable_valid_region,
         remove_broken=remove_broken)
 
+    # Modify videos to include cleared status
+    if 1:
+        from watch import heuristics
+        import watch
+        region_id_to_cleared = {d['region_id']: d['cleared'] for d in heuristics.REGION_STATUS}
+        pat = watch.utils.util_pattern.Pattern.coerce(r'\w+_R\d+(_\d+)?', 'regex')
+        for video in coco_dset.videos().objs:
+            video_name = video['name']
+            if pat.match(video_name):
+                region_id = '_'.join(video_name.split('_')[0:2])
+                cleared = region_id_to_cleared.get(region_id, False)
+                video['cleared'] = cleared
+                video['domain'] = region_id
+
     if enable_video_stats:
         for vidid in ub.ProgIter(vidids, total=len(vidids), desc='populate videos'):
             coco_populate_geo_video_stats(coco_dset, vidid, target_gsd=target_gsd)
