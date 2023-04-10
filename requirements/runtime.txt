@@ -223,3 +223,7 @@ ijson>=3.1.4
 lazy_loader>=0.1
 
 colormath>=3.0.0
+
+imagesize>=1.4.1
+
+pytorch_msssim==0.1.5

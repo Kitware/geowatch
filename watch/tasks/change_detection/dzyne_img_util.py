@@ -1,7 +1,10 @@
+#original script: https://github.com/fangchangma/sparse-to-dense/blob/master/utils.lua
+
 import cv2
 import rasterio
-import numpy as np
+import torch
 
+import numpy as np
 import tifffile as tiff
 
 from PIL import Image
@@ -41,8 +44,42 @@ def pad(img, pad_size=32):
         x_min_pad = int(x_pad / 2)
         x_max_pad = x_pad - x_min_pad
 
-    img = cv2.copyMakeBorder(img, y_min_pad, y_max_pad,
-                             x_min_pad, x_max_pad, cv2.BORDER_REFLECT_101)
+    img = cv2.copyMakeBorder(img, y_min_pad, y_max_pad, x_min_pad, x_max_pad, cv2.BORDER_REFLECT_101)
+
+    return img, (x_min_pad, y_min_pad, x_max_pad, y_max_pad)
+
+
+def pad_enlarge(img, pad_size=1024):
+    """
+    Pad image on the sides, so that eash side is divisible by 32 (network requirement)
+    if pad = True:
+        returns image as numpy.array,
+        tuple with padding in pixels as(x_min_pad, y_min_pad, x_max_pad, y_max_pad)
+    else:
+        returns image as numpy.array
+    """
+    if pad_size == 0:
+        return img
+
+    height, width = img.shape[:2]
+
+    if height >= pad_size:
+        y_min_pad = 0
+        y_max_pad = 0
+    else:
+        y_pad = pad_size - height % pad_size
+        y_min_pad = int(y_pad / 2)
+        y_max_pad = y_pad - y_min_pad
+
+    if width >= pad_size:
+        x_min_pad = 0
+        x_max_pad = 0
+    else:
+        x_pad = pad_size - width % pad_size
+        x_min_pad = int(x_pad / 2)
+        x_max_pad = x_pad - x_min_pad
+
+    img = cv2.copyMakeBorder(img, y_min_pad, y_max_pad, x_min_pad, x_max_pad, cv2.BORDER_CONSTANT)
 
     return img, (x_min_pad, y_min_pad, x_max_pad, y_max_pad)
 
@@ -94,7 +131,7 @@ def equalizeRGB(img):
 
     img = minmax(img) * 255
 
-    img_y_cr_cb = cv2.cvtColor(img.astype(np.uint8), cv2.COLOR_BGR2YCrCb)
+    img_y_cr_cb = cv2.cvtColor(img.astype('uint8'), cv2.COLOR_BGR2YCrCb)
     y, cr, cb = cv2.split(img_y_cr_cb)
 
     # Applying equalize Hist operation on Y channel.
@@ -113,24 +150,39 @@ def normalizeRGB(img, percent_range=(2, 98)):
     min_val, max_val = percent_range
 
     img = img.astype(np.float32)
+
     img_dim = len(img.shape)
     if (img_dim < 3):
         img = np.expand_dims(img, axis=2)
 
     for b in range(img.shape[2]):
+
+        # min = np.percentile(img[:, :, b].flatten(), min_val)
+        # max = np.percentile(img[:, :, b].flatten(), max_val)
+        # pdb.set_trace()
+
         img_b = img[:, :, b]
-        valid_values = img_b[~np.isnan(img_b)]
+        valid_values = img_b[img_b != 0]
+
+        # perc_valid = float(valid_values.size) / float(img_b.shape[0] * img_b.shape[1])
+        # print('valid percetn is:', perc_valid)
+        # if perc_valid > 0.5:
+        #    valid_values = img[:, :, b].flatten()
+        # pdb.set_trace()
 
         if valid_values.size == 0:
             min = max = 0
         else:
             min, max = np.percentile(valid_values, (min_val, max_val))
 
-        img[:, :, b] -= min
-        if min != max:
-            img[:, :, b] /= (max - min)
+        if min == max:
+            img[:, :, b] = 255 * (img[:, :, b] - min)
+        else:
+            img[:, :, b] = 255 * (img[:, :, b] - min) / (max - min)
 
-    img.clip(min=0, max=1, out=img)
+    img /= 255.0
+    img[img < 0] = 0
+    img[img > 1] = 1
 
     if img_dim < 3:
         return img[:, :, 0]
@@ -147,14 +199,8 @@ def load_image(file_name_rgb, file_name_tif):
             rgb = np.asarray(Image.open(str(file_name_rgb)))
         elif file_name_rgb.lower().endswith(('.tif', '.tiff')):
             rgb = tiff.imread(str(file_name_rgb))
-            # Some of the spacenet data has channel as the 1st dim
-            #rgb = np.swapaxes(rgb, 0, 2)
-            #rgb = np.swapaxes(rgb, 0, 1)
-            #rgb = rgb[:,:,[0,2,1]]
-
         elif file_name_rgb.lower().endswith(('.ntf')):
             rgb = readRasterImage(file_name_rgb)[0]
-
         else:
             print("Not valid RGB image format")
 
@@ -162,18 +208,17 @@ def load_image(file_name_rgb, file_name_tif):
             rgb = (255 * minmax(rgb)).astype(np.uint8)
 
         if len(rgb.shape) < 3:
-            rgb = np.dstack((rgb, rgb, rgb))
-
-        if LOAD_ORIGINAL:
-            return rgb
+            rgb =  np.dstack((rgb, rgb, rgb))
 
         if rgb.shape[2] == 4 or RGB_ONLY or not BAND_SWAP:
             rgb = rgb[:, :, :3]
+            if BAND_SWAP:
+                rgb = rgb[:, :, [2, 1, 0]]
         else:
             rgb = rgb[:, :, [4, 2, 1]]
 
-        # if EQUALIZE_FLAG:
-        #    rgb = equalizeRGB(rgb)
+        if LOAD_ORIGINAL:
+            return rgb
 
         # normalize it to [0, 1]
         rgb = minmax(rgb)
@@ -181,19 +226,28 @@ def load_image(file_name_rgb, file_name_tif):
         tf = np.concatenate([rgb, rgb, rgb[:, :, 0:2]], axis=2)
 
     else:
-        rgb = tiff.imread(str(file_name_tif))
+
+        if file_name_rgb.lower().endswith(('.tif', '.tiff')):
+            rgb = tiff.imread(str(file_name_tif))
+        elif file_name_rgb.lower().endswith(('.ntf')):
+            rgb = readRasterImage(file_name_rgb)[0]
+
         rgb = minmax(rgb)
 
         if len(rgb.shape) < 3:
-            rgb = np.dstack((rgb, rgb, rgb))
+            rgb =  np.dstack((rgb, rgb, rgb))
 
         #tf = tiff.imread(str(file_name_tif)).astype(np.float32) / (2 ** 11 - 1)
 
-        tf = tiff.imread(str(file_name_tif)).astype(np.float32)
+        if file_name_tif.lower().endswith(('.tif', '.tiff')):
+            tf = tiff.imread(str(file_name_tif)).astype(np.float32)
+        elif file_name_tif.lower().endswith(('.ntf')):
+            tf = readRasterImage(file_name_tif)[0]
+
         tf = minmax(tf)
 
         if len(tf.shape) < 3:
-            tf = np.dstack((tf, tf, tf))
+            tf =  np.dstack((tf, tf, tf))
 
         if tf.shape[2] == 4:
             tf = np.concatenate([tf, tf], axis=2)
@@ -202,10 +256,14 @@ def load_image(file_name_rgb, file_name_tif):
         return np.concatenate([rgb[:, :, :3], tf], axis=2) * (2 ** 8 - 1)
     else:
         if tf.shape[2] <= 4:
-            return np.concatenate([rgb[:, :, :3], tf], axis=2) * (2 ** 8 - 1)
+            if not BAND_SWAP:
+                return np.concatenate([rgb[:, :, :3], tf], axis=2) * (2 ** 8 - 1)
+            else:
+                return np.concatenate([rgb[:, :, [2, 1, 0]], tf], axis=2) * (2 ** 8 - 1)
         else:
-            return np.concatenate(
-                [rgb[:, :, [4, 2, 1]], tf], axis=2) * (2 ** 8 - 1)
+            return np.concatenate([rgb[:, :, [4, 2, 1]], tf], axis=2) * (2 ** 8 - 1)
+
+#-----------------------------------------------------------------------------
 
 
 def readRasterImage(filename: str, geoProps={}, convert=False):
@@ -292,9 +350,65 @@ def readRasterImage(filename: str, geoProps={}, convert=False):
             if bands == 3:
                 normalizeRGB(img)
             else:
-                # FIXME: THIS IS A NAME ERROR
-                normalize(img, bands, datatype)  # NOQA
+                # normalize(img, bands, datatype)
+                raise RuntimeError("Unsupported band")
 
         # --- End: Copying imagery by ROIs ---
 
         return (img, transform, bands, datatype)
+
+
+#-----------------------------------------------------------------------------
+# Convert tensor to numpy array
+#-----------------------------------------------------------------------------
+
+def tensor2np(input_image, if_normalize=True, percent_range=(3, 97)):
+    """
+    :param input_image: C*H*W / H*W
+    :return: ndarray, H*W*C / H*W
+    """
+    if isinstance(input_image, torch.Tensor):  # get the data from a variable
+        image_tensor = input_image.data
+        image_numpy = image_tensor.cpu().float().numpy()  # convert it into a numpy array
+
+    else:
+        image_numpy = input_image
+    if image_numpy.ndim == 2:
+        return image_numpy
+    elif image_numpy.ndim == 3:
+        C, H, W = image_numpy.shape
+        image_numpy = np.transpose(image_numpy, (1, 2, 0))
+        #  如果输入为灰度图C==1，则输出array，ndim==2；
+        if C == 1:
+            image_numpy = image_numpy[:, :, 0]
+        if if_normalize and C == 3:
+            '''
+            image_numpy = (image_numpy + 1) / 2.0 * 255.0  # post-processing: tranpose and scaling
+            #  add to prevent extreme noises in visual images
+            image_numpy[image_numpy<0]=0
+            image_numpy[image_numpy>255]=255
+            image_numpy = image_numpy.astype(np.uint8)
+            '''
+            image_numpy = (255 * normalizeRGB(image_numpy, percent_range)).astype(np.uint8)
+
+    return image_numpy
+
+#-----------------------------------------------------------------------------
+# Convert numpy array to tensor
+#-----------------------------------------------------------------------------
+
+
+def np_to_tensor(image):
+    """
+    input: nd.array: H*W*C/H*W
+    """
+    if isinstance(image, torch.Tensor):
+        return image
+    elif isinstance(image, np.ndarray):
+        if image.ndim == 3:
+            if image.shape[2] == 3:
+                image = np.transpose(image, [2, 0, 1])
+        elif image.ndim == 2:
+            image = np.newaxis(image, 0)
+        image = torch.from_numpy(image)
+        return image.unsqueeze(0)
