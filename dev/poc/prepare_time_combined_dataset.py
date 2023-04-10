@@ -86,7 +86,7 @@ class PrepareTimeAverages(scfg.DataConfig):
     # src = scfg.Value(None, help='input')
     __default__ = ub.udict({}) | _CMDQueueBoilerplateConfig.__default__
 
-    regions = scfg.Value('all', help='The regions to time average (this is not a robust implementation)')
+    regions = scfg.Value('all', type=str, help='The regions to time average (this is not a robust implementation)')
 
     reproject = scfg.Value(True, isflag=True, help='Enable reprojection of annotations')
 
@@ -103,6 +103,19 @@ class PrepareTimeAverages(scfg.DataConfig):
     true_region_dpath = scfg.Value(None)
 
 
+def _find_valid_regions():
+    import watch
+    dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+    coco_fpaths = list((dvc_data_dpath / 'Drop6').glob('imgonly*.kwcoco*'))
+    import kwcoco
+    dsets = list(kwcoco.CocoDataset.coerce_multiple(coco_fpaths, workers='avail'))
+
+    for dset in dsets:
+        if dset.n_images > 0:
+            print('- ' + ub.Path(dset.fpath).name.split('-')[1].split('.')[0])
+        ...
+
+
 def main(cmdline=1, **kwargs):
     """
     Example:
@@ -114,7 +127,8 @@ def main(cmdline=1, **kwargs):
     """
     from watch.utils.partial_format import subtemplate
     config = PrepareTimeAverages.cli(cmdline=cmdline, data=kwargs, strict=True)
-    print('config = ' + ub.urepr(dict(config), nl=1))
+    import rich
+    rich.print('config = ' + ub.urepr(config, nl=1))
     assert config.output_bundle_dpath is not None
     assert config.input_bundle_dpath is not None
     # import watch
@@ -125,6 +139,8 @@ def main(cmdline=1, **kwargs):
     else:
         from watch.utils.util_yaml import Yaml
         all_regions = Yaml.coerce(config.regions)
+
+    rich.print('all_regions = {}'.format(ub.urepr(all_regions, nl=1)))
 
     # time_duration = '1year'
     # time_duration = '3months'
@@ -165,12 +181,12 @@ def main(cmdline=1, **kwargs):
                 --output_kwcoco_fpath="$OUTPUT_BUNDLE_DPATH/imgonly-${REGION}.kwcoco.zip" \
                 --channels="$CHANNELS" \
                 --resolution="$RESOLUTION" \
-                --temporal_window_duration=$TIME_DURATION \
+                --time_window=$TIME_DURATION \
+                --start_time=2010-01-01 \
                 --merge_method=mean \
                 --workers=$WORKERS
             '''), fmtdict)
         combine_job = queue.submit(code, name=f'combine-time-{region}')
-        combine_job = None
 
         if config.reproject:
             code = subtemplate(
@@ -199,7 +215,15 @@ if __name__ == '__main__':
 
         DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
         python ~/code/watch/dev/poc/prepare_time_combined_dataset.py \
-            --regions=all \
+            --regions="[
+                    # T&E Regions
+                    AE_R001, BH_R001, BR_R001, BR_R002, BR_R004, BR_R005, CH_R001,
+                    KR_R001, KR_R002, LT_R001, NZ_R001, US_R001, US_R004, US_R005,
+                    US_R006, US_R007,
+                    # iMerit Regions
+                    # AE_C001, AE_C002, AE_C003,
+                    # PE_C001, QA_C001, SA_C005, US_C000, US_C010, US_C011, US_C012,
+            ]" \
             --input_bundle_dpath=$DVC_DATA_DPATH/Drop6 \
             --output_bundle_dpath=$DVC_DATA_DPATH/Drop6-MeanYear10GSD \
             --true_site_dpath=$DVC_DATA_DPATH/annotations/drop6_hard_v1/site_models \
@@ -280,136 +304,6 @@ python -m watch.tasks.fusion.predict \
 
 
 smartwatch stats /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6_MeanYear/imgonly-KR_R001.kwcoco.zip
-
 smartwatch visualize /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6_MeanYear/imgonly-KR_R001.kwcoco.zip --smart
 smartwatch visualize /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6_MeanYear/pred-KR_R001.kwcoco.zip --smart
-
-
-
-Ignore:
-    import kwplot
-    kwplot.plt.ion()
-    import kwcoco
-    dset = kwcoco.CocoDataset('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6_MeanYear/imgonly-KR_R001.kwcoco.zip')
-
-    from watch.utils import util_gdal
-
-    import kwimage
-    video = dset.videos().objs[0]
-    video_box = kwimage.Box.from_dsize((video['width'], video['height']))
-
-    for coco_img in coco_images:
-        print(f'coco_img.shape={coco_img.dsize}')
-        img = ub.udict(coco_img.img)
-        img = img - {'has_predictions'}
-        print('coco_img.img = {}'.format(ub.urepr(img, nl=-1)))
-
-        for asset in coco_img.assets:
-            fpath = ub.Path(coco_img.bundle_dpath) / asset['file_name']
-            info = util_gdal.GdalOpen(fpath).info()
-            assert len(info['bands']) == coco_img.channels.numel()
-            ...
-
-
-
-
-python -m watch.cli.coco_time_combine \
-    --kwcoco_fpath="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6/imgonly-NZ_R001.kwcoco.json" \
-    --output_kwcoco_fpath="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6-MeanYear10GSD/imgonly-NZ_R001.kwcoco.json" \
-    --channels="red|green|blue|nir|swir16|swir22|pan" \
-    --resolution="10GSD" \
-    --temporal_window_duration=1year \
-    --merge_method=mean \
-    --workers=4
-
-
-python -m watch.cli.coco_add_watch_fields \
-    --src=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6-MeanYear10GSD/imgonly-NZ_R001.kwcoco.json \
-    --dst=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6-MeanYear10GSD/imgonly-NZ_R001_v2.kwcoco.json \
-    --overwrite=True \
-    --target_gsd=10
-
-#
-### Command 2 / 2 - reproject-ann-NZ_R001
-python -m watch reproject_annotations \
-    --src /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6-MeanYear10GSD/imgonly-NZ_R001_v2.kwcoco.json \
-    --dst /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6-MeanYear10GSD/imganns-NZ_R001_v2.kwcoco.json \
-    --site_models="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/annotations/drop6/site_models/*.geojson"
-
-
-smartwatch visualize /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6-MeanYear10GSD/imganns-NZ_R001_v2.kwcoco.json --smart
-
-
-
-
-python -m watch.cli.coco_add_watch_fields \
-    --src=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6-MeanYear10GSD/data_vali_rawbands_split6.kwcoco.zip \
-    --dst=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6-MeanYear10GSD/data_vali_rawbands_split6.kwcoco.zip \
-    --overwrite=True \
-    --target_gsd=10
-
-python -m watch.cli.coco_add_watch_fields \
-    --src=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6-MeanYear10GSD/data_train_rawbands_split6.kwcoco.zip \
-    --dst=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6-MeanYear10GSD/data_train_rawbands_split6.kwcoco.zip \
-    --overwrite=True \
-    --target_gsd=10
-
-### Command 2 / 2 - reproject-ann-NZ_R001
-python -m watch reproject_annotations \
-    --src /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6-MeanYear10GSD/data_train_rawbands_split6.kwcoco.zip \
-    --dst /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6-MeanYear10GSD/data_train_rawbands_split6.kwcoco.zip \
-    --site_models="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/annotations/drop6/site_models/*.geojson"
-
-### Command 2 / 2 - reproject-ann-NZ_R001
-python -m watch reproject_annotations \
-    --src /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6-MeanYear10GSD/data_vali_rawbands_split6.kwcoco.zip \
-    --dst /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6-MeanYear10GSD/data_vali_rawbands_split6.kwcoco.zip \
-    --site_models="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/annotations/drop6/site_models/*.geojson"
-
-
-
-
-### Command 2 / 2 - reproject-ann-BR_R002
-python -m watch reproject_annotations \
-    --src /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6/imgonly-BR_R002.kwcoco.json \
-    --dst /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6/TEST-BR_R002.kwcoco.json \
-    --site_models="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/annotations/drop6/site_models/BR_R002*.geojson"
-
-smartwatch visualize /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6/TEST-BR_R002.kwcoco.json --smart
-
-
-
-python -m watch.cli.coco_time_combine \
-    --kwcoco_fpath="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6/imgonly-BR_R002.kwcoco.json" \
-    --output_kwcoco_fpath="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6-MeanYear10GSD/imgonly-BR_R002.kwcoco.zip" \
-    --channels="red|green|blue|nir|swir16|swir22|pan" \
-    --resolution="10GSD" \
-    --temporal_window_duration=1year \
-    --merge_method=mean \
-    --workers=4
-
-
-#
-### Command 2 / 2 - reproject-ann-BR_R002
-python -m watch reproject_annotations \
-    --src /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6-MeanYear10GSD/imgonly-BR_R002.kwcoco.zip \
-    --dst /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6-MeanYear10GSD/imganns-BR_R002.kwcoco.zip \
-    --site_models="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/annotations/drop6/site_models/BR_R002*.geojson"
-
-
-smartwatch visualize /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6-MeanYear10GSD/imganns-BR_R002.kwcoco.zip --smart
-
-
-
-smartwatch visualize /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6-MeanYear10GSD/imganns-CH_R001.kwcoco.zip --smart
-
-
-smartwatch reproject_annotations \
-    --src /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6-MeanYear10GSD/imgonly-CH_R001.kwcoco.zip \
-    --dst /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6-MeanYear10GSD/imganns-CH_R001.kwcoco.zip \
-    --site_models="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-hdd/annotations/drop6/site_models/*.geojson"
-
-smartwatch visualize /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6-MeanYear10GSD/imganns-CH_R001.kwcoco.zip --smart
-smartwatch visualize /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6-MeanYear10GSD/imganns-CH_R0012.kwcoco.zip --smart
-
 """

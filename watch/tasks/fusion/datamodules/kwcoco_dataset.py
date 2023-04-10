@@ -368,9 +368,18 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
 
         'use_grid_positives': scfg.Value(True, help=ub.paragraph(
             '''
-            Use annotation overlaps with grid as positives.
-            Only applies to training dataset when used in the data module.
-            Validation/test dataset defaults to True.
+            Use sliding window cells that overlap with positive annotations as
+            positives.  Only applies to training dataset when used in the data
+            module.  Validation/test dataset defaults to True.
+            ''')),
+
+        'use_grid_negatives': scfg.Value(True, help=ub.paragraph(
+            '''
+            Use sliding window cells dont overlap with positive annotations as
+            negatives. If set to "cleared", then only videos with a True
+            "cleared" attribute contribute grid negatives. Only applies to
+            training dataset when used in the data module. Validation/test
+            dataset defaults to True.
             ''')),
 
         'use_grid_valid_regions': scfg.Value(True, help=ub.paragraph(
@@ -776,6 +785,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 use_annot_info=True,
                 use_centered_positives=config['use_centered_positives'],
                 use_grid_positives=config['use_grid_positives'],
+                use_grid_negatives=config['use_grid_negatives'],
                 **common_grid_kw
             )
             new_sample_grid = builder.build()

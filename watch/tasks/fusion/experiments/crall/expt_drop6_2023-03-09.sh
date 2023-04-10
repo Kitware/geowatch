@@ -1434,6 +1434,8 @@ data:
     quality_threshold      : 0.0
     weight_dilate          : 10
     use_centered_positives : True
+    use_grid_positives     : True
+    use_grid_negatives     : 'cleared'
     normalize_inputs       : 16384
     balance_areas          : True
 model:

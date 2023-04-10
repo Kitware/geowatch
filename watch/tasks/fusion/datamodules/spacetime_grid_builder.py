@@ -79,6 +79,7 @@ class SpacetimeGridBuilder:
         time_kernel=None,
         use_annot_info=True,
         use_grid_positives=True,
+        use_grid_negatives=True,
         use_centered_positives=True,
         window_space_scale=None,
         set_cover_algo=None,
@@ -111,6 +112,9 @@ class SpacetimeGridBuilder:
             use_grid_positives (bool):
                 if False, will remove any grid sample that contains a positive
                 example. In this case use_centered_positives should be True.
+
+            use_grid_negatives (bool | str):
+                Use non-annotation locations as negatives. Can be "cleared".
 
             use_centered_positives (bool):
                 extend the grid with extra off-axis samples where positive
@@ -167,6 +171,7 @@ def sample_video_spacetime_targets(dset,
                                    time_kernel=None,
                                    use_annot_info=True,
                                    use_grid_positives=True,
+                                   use_grid_negatives=True,
                                    use_centered_positives=True,
                                    window_space_scale=None,
                                    set_cover_algo=None,
@@ -352,10 +357,11 @@ def sample_video_spacetime_targets(dset,
         time_span, time_kernel, use_annot_info,
         set_cover_algo,
         use_grid_positives,
+        use_grid_negatives,
         use_centered_positives,
         refine_iosa_thresh,
         respect_valid_regions,
-        'cache_v12',
+        'cache_v13',
     ]
     # Higher level cacher (not sure if adding this secondary level of caching
     # is faster or not).
@@ -402,7 +408,7 @@ def sample_video_spacetime_targets(dset,
                 video_id, video_gids, winspace_time_dims, winspace_space_dims,
                 window_overlap, negative_classes, keepbound,
                 affinity_type, update_rule, time_span, time_kernel, use_annot_info,
-                use_grid_positives, use_centered_positives, window_space_scale,
+                use_grid_positives, use_grid_negatives, use_centered_positives, window_space_scale,
                 set_cover_algo, use_cache, respect_valid_regions,
                 refine_iosa_thresh, verbose)
             job.video_id = video_id
@@ -450,7 +456,7 @@ def _sample_single_video_spacetime_targets(
         dset, dset_hashid, video_id, video_gids, winspace_time_dims, winspace_space_dims,
         window_overlap, negative_classes,
         keepbound, affinity_type, update_rule, time_span, time_kernel,
-        use_annot_info, use_grid_positives, use_centered_positives,
+        use_annot_info, use_grid_positives, use_grid_negatives, use_centered_positives,
         window_space_scale, set_cover_algo, use_cache, respect_valid_regions,
         refine_iosa_thresh, verbose):
     """
@@ -536,6 +542,9 @@ def _sample_single_video_spacetime_targets(
         vidspace_window_width = vidspace_window_box.width.ravel()[0]
         vidspace_window_dims = (vidspace_window_height, vidspace_window_width)
 
+    if use_grid_negatives == 'cleared':
+        use_grid_negatives = video_info.get('cleared', False)
+
     depends = [
         dset_hashid,
         negative_classes,
@@ -548,6 +557,7 @@ def _sample_single_video_spacetime_targets(
         affinity_type,
         time_span, use_annot_info,
         use_grid_positives,
+        use_grid_negatives,
         use_centered_positives,
         refine_iosa_thresh,
         respect_valid_regions,
@@ -599,41 +609,48 @@ def _sample_single_video_spacetime_targets(
             qtree = None
             tid_to_infos = None
 
-        # Do a spatial sliding window (in video space) and handle all the
-        # temporal stuff for that window in the internal function.
-        slider = kwarray.SlidingWindow(vidspace_full_dims,
-                                       vidspace_window_dims,
-                                       overlap=window_overlap,
-                                       keepbound=keepbound,
-                                       allow_overshoot=True)
-        slices = list(slider)
+        needs_sliding_window = (
+            use_grid_negatives or
+            use_centered_positives or
+            (not use_annot_info)
+        )
+        if needs_sliding_window:
+            # Do a spatial sliding window (in video space) and handle all the
+            # temporal stuff for that window in the internal function.
+            slider = kwarray.SlidingWindow(vidspace_full_dims,
+                                           vidspace_window_dims,
+                                           overlap=window_overlap,
+                                           keepbound=keepbound,
+                                           allow_overshoot=True)
+            slices = list(slider)
+            num_cells = len(slices) * len(video_gids)
+            probably_slow = num_cells > (16 * 30)
 
-        num_cells = len(slices) * len(video_gids)
-        probably_slow = num_cells > (16 * 30)
+            for vidspace_region in ub.ProgIter(slices, desc='Sliding window',
+                                               enabled=probably_slow,
+                                               verbose=verbose * probably_slow):
 
-        for vidspace_region in ub.ProgIter(slices, desc='Sliding window',
-                                           enabled=probably_slow,
-                                           verbose=verbose * probably_slow):
+                new_targets = _build_targets_in_spatial_region(
+                    dset, video_id, vidspace_region, use_annot_info, qtree,
+                    main_idx_to_gids, refine_iosa_thresh, time_sampler,
+                    get_image_valid_region_in_vidspace, respect_valid_regions,
+                    set_cover_algo)
+                new_targets = list(new_targets)
 
-            new_targets = _build_targets_in_spatial_region(
-                dset, video_id, vidspace_region, use_annot_info, qtree,
-                main_idx_to_gids, refine_iosa_thresh, time_sampler,
-                get_image_valid_region_in_vidspace, respect_valid_regions,
-                set_cover_algo)
-            new_targets = list(new_targets)
-
-            if not use_annot_info:
-                video_targets.extend(new_targets)
-            else:
-                for target in new_targets:
-                    label = target['label']
-                    if label == 'positive_grid':
-                        if not use_grid_positives:
-                            continue
-                        video_positive_idxs.append(len(video_targets))
-                    elif label == 'negative_grid':
-                        video_negative_idxs.append(len(video_targets))
-                    video_targets.append(target)
+                if not use_annot_info:
+                    video_targets.extend(new_targets)
+                else:
+                    for target in new_targets:
+                        label = target['label']
+                        if label == 'positive_grid':
+                            if not use_grid_positives:
+                                continue
+                            video_positive_idxs.append(len(video_targets))
+                        elif label == 'negative_grid':
+                            if not use_grid_negatives:
+                                continue
+                            video_negative_idxs.append(len(video_targets))
+                        video_targets.append(target)
 
         if use_centered_positives and use_annot_info:
             # FIXME: This code is too slow
