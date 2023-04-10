@@ -22,6 +22,38 @@ CommandLine:
         --dst $DVC_DATA_DPATH/Drop6_MeanYear/imganns-KR_R002.kwcoco.zip \
         --site_models="$DVC_DATA_DPATH/annotations/drop6/site_models/*.geojson"
 
+Example:
+    >>> # Toydata example for CI
+    >>> import watch
+    >>> from watch.cli import coco_time_combine
+    >>> import ubelt as ub
+    >>> dpath = ub.Path.appdir('watch/tests/cli/time_combine/t0')
+    >>> dset = watch.coerce_kwcoco(
+    >>>     'watch-msi', geodata=True,
+    >>>     dates={'start_time': '2020-01-01', 'end_time': '2020-06-01'},
+    >>>     image_size=(32, 32)
+    >>> )
+    >>> dpath.delete().ensuredir()
+    >>> output_fpath = dpath / 'time_combined/data.kwcoco.json'
+    >>> gsd = dset.videos().objs[0]['target_gsd']
+    >>> kwargs = coco_time_combine.TimeCombineConfig(
+    >>>     input_kwcoco_fpath=dset.fpath,
+    >>>     output_kwcoco_fpath=output_fpath,
+    >>>     time_window='2month',
+    >>>     merge_method='mean',
+    >>>     resolution=f'{gsd}GSD',
+    >>>     start_time='2019-06-01',
+    >>> )
+    >>> cmdline = 0
+    >>> coco_time_combine.main(cmdline=cmdline, **kwargs)
+    >>> import kwcoco
+    >>> out_dset = kwcoco.CocoDataset(output_fpath)
+    >>> assert len(out_dset.videos()) == len(dset.videos())
+    >>> assert out_dset.n_images < dset.n_images
+
+    from watch.cli import coco_visualize_videos
+    coco_visualize_videos.main(cmdline=0, src=output_fpath, stack='only', workers='avail')
+
 """
 import os
 import ubelt as ub
@@ -408,7 +440,8 @@ def main(cmdline=1, **kwargs):
 
     """
     config = TimeCombineConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
-    print('config = ' + ub.urepr(dict(config), nl=1))
+    import rich
+    rich.print('config = ' + ub.urepr(config, nl=1))
 
     output_coco_dset = combine_kwcoco_channels_temporally(config)
     return output_coco_dset
@@ -487,12 +520,13 @@ def combine_kwcoco_channels_temporally(config):
 
     ## Convert time_window from days to seconds.
     time_delta = util_time.coerce_timedelta(config.time_window)
+    start_time = util_time.coerce_datetime(config.start_time)
     time_delta_seconds = time_delta.total_seconds()
 
     video_ids = list(coco_dset.videos())
 
-    # pman = util_progress.ProgressManager()
-    pman = util_progress.ProgressManager(backend='progiter')  # uncomment if you need to use breakpoints
+    pman = util_progress.ProgressManager()
+    # pman = util_progress.ProgressManager(backend='progiter')  # uncomment if you need to use breakpoints
 
     resolution = config.resolution
     merge_method = config.merge_method
@@ -536,8 +570,11 @@ def combine_kwcoco_channels_temporally(config):
 
             image_unixtimes = np.array([t.timestamp() for t in image_datetimes])
 
-            # Get number of seconds after the first image
-            image_rel_unixtimes = image_unixtimes - image_unixtimes[0]
+            # Get number of seconds after the start time (or first image)
+            if start_time is not None:
+                image_rel_unixtimes = image_unixtimes - start_time.timestamp()
+            else:
+                image_rel_unixtimes = image_unixtimes - image_unixtimes[0]
 
             # We might group via multiple criteria
             groupers = {}
@@ -628,7 +665,8 @@ def combine_kwcoco_channels_temporally(config):
     #     coco_populate_geo_video_stats(coco_dset, vidid, target_gsd=target_gsd)
 
     # Debugging:
-    kwcoco_extensions.check_kwcoco_spatial_transforms(output_coco_dset)
+    if 0:
+        kwcoco_extensions.check_kwcoco_spatial_transforms(output_coco_dset)
 
     # Save kwcoco file.
     print(f"Saving ouput kwcoco file to: {output_kwcoco_fpath}")
@@ -769,89 +807,91 @@ def merge_images(window_coco_images, merge_method, requested_chans, space,
     # Create canvas to combine averaged tiles into.
     average_canvas = kwarray.Stitcher(canvas_shape)
 
-    # Load and combine the images within this range.
-    for crop_slice in slider:
-        if merge_method == 'mean':
-            accum = kwarray.Stitcher(canvas_shape)
+    import warnings
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', 'All-NaN')
+        warnings.filterwarnings('ignore', 'invalid')
 
-            # TODO: we can also parallelize this in case the window is really big
-            for coco_img in window_coco_images:
-                delayed = coco_img.imdelay(merge_chans, space=space, resolution=resolution)
-                delayed = delayed.crop(crop_slice)
-                image_data = delayed.finalize(nodata_method='float')
+        # Load and combine the images within this range.
+        for crop_slice in slider:
+            if merge_method == 'mean':
+                accum = kwarray.Stitcher(canvas_shape)
 
-                pxl_weight = (~np.isnan(image_data)).astype(np.float32)
+                # TODO: we can also parallelize this in case the window is really big
+                for coco_img in window_coco_images:
+                    delayed = coco_img.imdelay(merge_chans, space=space, resolution=resolution)
+                    delayed = delayed.crop(crop_slice)
+                    image_data = delayed.finalize(nodata_method='float')
 
-                if mask_low_quality:
-                    # Load quality mask.
-                    quality_mask = get_quality_mask(coco_img, space, resolution, avoid_quality_values=avoid_quality_values, crop_slice=crop_slice)
+                    pxl_weight = (~np.isnan(image_data)).astype(np.float32)
 
-                    # Update pixel weights based on quality pixel values.
-                    pxl_weight *= quality_mask
+                    if mask_low_quality:
+                        # Load quality mask.
+                        quality_mask = get_quality_mask(coco_img, space, resolution, avoid_quality_values=avoid_quality_values, crop_slice=crop_slice)
 
-                try:
-                    sensor_weight = sensor_weights[coco_img['sensor_coarse']]
-                except KeyError:
-                    sensor_weight = 1.0
-                pxl_weight *= sensor_weight
+                        # Update pixel weights based on quality pixel values.
+                        pxl_weight *= quality_mask
 
-                image_data = np.nan_to_num(image_data)
-                accum.add((slice(None), slice(None)), image_data, pxl_weight)
+                    try:
+                        sensor_weight = sensor_weights[coco_img['sensor_coarse']]
+                    except KeyError:
+                        sensor_weight = 1.0
+                    pxl_weight *= sensor_weight
 
-            import warnings
-            with warnings.catch_warnings():
-                warnings.filterwarnings('ignore', 'invalid')
+                    image_data = np.nan_to_num(image_data)
+                    accum.add((slice(None), slice(None)), image_data, pxl_weight)
+
                 combined_image_data = accum.finalize()
 
-        elif merge_method == 'median':
-            # TODO: Make this less computationally expensive.
-            median_stack = []
-            for coco_img in window_coco_images:
-                delayed = coco_img.imdelay(merge_chans, space=space, resolution=resolution)
-                delayed = delayed.crop(crop_slice)
-                image_data = delayed.finalize(nodata_method='float')
+            elif merge_method == 'median':
+                # TODO: Make this less computationally expensive.
+                median_stack = []
+                for coco_img in window_coco_images:
+                    delayed = coco_img.imdelay(merge_chans, space=space, resolution=resolution)
+                    delayed = delayed.crop(crop_slice)
+                    image_data = delayed.finalize(nodata_method='float')
 
-                if mask_low_quality:
-                    # Load quality mask.
-                    quality_mask = get_quality_mask(coco_img, space, resolution, avoid_quality_values=avoid_quality_values, crop_slice=crop_slice)
+                    if mask_low_quality:
+                        # Load quality mask.
+                        quality_mask = get_quality_mask(coco_img, space, resolution, avoid_quality_values=avoid_quality_values, crop_slice=crop_slice)
 
-                    # Update pixel weights based on quality pixel values.
-                    x, y = np.where(quality_mask[..., 0] == 0)
-                    image_data[x, y, :] = np.nan
+                        # Update pixel weights based on quality pixel values.
+                        x, y = np.where(quality_mask[..., 0] == 0)
+                        image_data[x, y, :] = np.nan
 
-                    # TODO: Fix the logic below to match above because it should be faster.
-                    # matched_quality_mask = np.repeat(quality_mask, repeats=3, axis=2)
-                    # masked_image_data = np.ma.masked_array(data=image_data2, mask=~matched_quality_mask, fill_value=np.nan)
-                    # image_data = M.filled(np.nan)
-                    # masked_image_data = M.filled(np.nan)
+                        # TODO: Fix the logic below to match above because it should be faster.
+                        # matched_quality_mask = np.repeat(quality_mask, repeats=3, axis=2)
+                        # masked_image_data = np.ma.masked_array(data=image_data2, mask=~matched_quality_mask, fill_value=np.nan)
+                        # image_data = M.filled(np.nan)
+                        # masked_image_data = M.filled(np.nan)
 
-                median_stack.append(image_data)
+                    median_stack.append(image_data)
 
-            combined_image_data = np.nanmedian(median_stack, axis=0)
+                combined_image_data = np.nanmedian(median_stack, axis=0)
 
-        elif merge_method == 'max':
-            # TODO: Combine with other methods.
-            median_stack = []
-            for coco_img in window_coco_images:
-                delayed = coco_img.imdelay(merge_chans, space=space, resolution=resolution)
-                delayed = delayed.crop(crop_slice)
-                image_data = delayed.finalize(nodata_method='float')
-                if mask_low_quality:
-                    # Load quality mask.
-                    quality_mask = get_quality_mask(coco_img, space, resolution, avoid_quality_values=avoid_quality_values, crop_slice=crop_slice)
-                    # Update pixel weights based on quality pixel values.
-                    x, y = np.where(quality_mask[..., 0] == 0)
-                    image_data[x, y, :] = np.nan
-                median_stack.append(image_data)
-            combined_image_data = np.nanmax(median_stack, axis=0)
-        else:
-            raise NotImplementedError
+            elif merge_method == 'max':
+                # TODO: Combine with other methods.
+                median_stack = []
+                for coco_img in window_coco_images:
+                    delayed = coco_img.imdelay(merge_chans, space=space, resolution=resolution)
+                    delayed = delayed.crop(crop_slice)
+                    image_data = delayed.finalize(nodata_method='float')
+                    if mask_low_quality:
+                        # Load quality mask.
+                        quality_mask = get_quality_mask(coco_img, space, resolution, avoid_quality_values=avoid_quality_values, crop_slice=crop_slice)
+                        # Update pixel weights based on quality pixel values.
+                        x, y = np.where(quality_mask[..., 0] == 0)
+                        image_data[x, y, :] = np.nan
+                    median_stack.append(image_data)
+                combined_image_data = np.nanmax(median_stack, axis=0)
+            else:
+                raise NotImplementedError
 
-        # Add the combined image data to the average canvas.
-        average_canvas.add(crop_slice, combined_image_data)
+            # Add the combined image data to the average canvas.
+            average_canvas.add(crop_slice, combined_image_data)
 
-    # Rename the average canvas to the combined image data.
-    combined_image_data = average_canvas.finalize()
+        # Rename the average canvas to the combined image data.
+        combined_image_data = average_canvas.finalize()
 
     # Check if the image contains data after cloud masking.
     if np.all(np.isnan(combined_image_data)):
