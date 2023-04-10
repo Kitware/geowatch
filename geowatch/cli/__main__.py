@@ -1,0 +1,1 @@
+from watch.cli.__main__ import *  # NOQA
