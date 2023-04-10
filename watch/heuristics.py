@@ -812,3 +812,15 @@ REGION_STATUS = [
     {'region_id': 'US_R004', 'cleared': True},
     {'region_id': 'US_R005', 'cleared': True},
 ]
+
+
+# Mapping from our sensor names to the official T&E sensor names
+TE_SENSOR_NAMES = {
+    'WV': 'WorldView',
+    'S2': 'Sentinel-2',
+    'LE': 'Landsat 7',
+    'LC': 'Landsat 8',
+    'L8': 'Landsat 8',
+    'WV1': 'WorldView 1',
+    'PD': 'Planet',
+}

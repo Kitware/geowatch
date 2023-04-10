@@ -112,7 +112,7 @@ def hack_in_timedata(coco_dset, dates=True, rng=None):
     from watch.utils import util_time
     datekw = ub.udict({
         'start_time': '1970-01-01',
-        'end_time': '1970-01-01',
+        'end_time': '2101-01-01',
     })
     if isinstance(dates, dict):
         extra = dates - datekw
@@ -317,7 +317,7 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
         'geodata': geodata,
         'heatmap': heatmap,
         'bad_nodata': bad_nodata,
-        'version': 4,
+        'version': 5,
     }
 
     bundle_name = 'watch_vidshapes_' + ub.hash_data(depends)[0:8]

@@ -395,7 +395,9 @@ def _add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
     else:
         for tid, grp in tracks.groupby('track_idx', axis=0):
             score_chan = kwcoco.ChannelSpec('|'.join(key))
-            this_score = grp[(score_chan.spec, -1)]
+            import xdev
+            with xdev.embed_on_exception_context:
+                this_score = grp[(score_chan.spec, -1)]
             scores_dct = {k: grp[(k, -1)] for k in score_chan.unique()}
             scores_dct = [dict(zip(scores_dct, t))
                           for t in zip(*scores_dct.values())]
