@@ -1407,7 +1407,7 @@ TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
-WATCH_GRID_WORKERS=2 python -m watch.tasks.fusion fit --config "
+WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
     num_workers            : 5

@@ -8,6 +8,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 * `coco_time_combine` can now ignore seasons / handle median images with less memory
+* `use_grid_negatives` as dataset option, which can be set to "cleared" to only use negatives from cleared regions.
 
 ### Changed
 
