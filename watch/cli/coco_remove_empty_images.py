@@ -1,8 +1,5 @@
 #!/bin/env python
-import kwimage
 import ubelt as ub
-import kwcoco
-import numpy as np
 import scriptconfig as scfg
 
 
@@ -42,7 +39,8 @@ def main(cmdline=True, **kwargs):
         kwargs['channels'] = 'red'
         cmdline = False
     """
-    config = RemoveEmptyImagesConfig(cmdline=cmdline, data=kwargs)
+    config = RemoveEmptyImagesConfig.cli(cmdline=cmdline, data=kwargs)
+    import kwcoco
     mode = config['mode']
 
     from watch.utils import util_parallel
@@ -127,6 +125,9 @@ def is_image_empty(coco_img, main_channels=None, overview=-1):
     """
     Run heristics to determine if a coco image is empty.
     """
+    import kwimage
+    import numpy as np
+    import kwcoco
     bundle_dpath = ub.Path(coco_img.bundle_dpath)
 
     if main_channels is not None:
@@ -201,7 +202,7 @@ def is_image_empty(coco_img, main_channels=None, overview=-1):
 
 def find_empty_images(dset, main_channels, overview=-1, mode='process',
                       workers=0):
-
+    import numpy as np
     gid_to_infos = {}
     pool = ub.JobPool(mode=mode, max_workers=workers)
     all_gids = list(dset.index.imgs.keys())

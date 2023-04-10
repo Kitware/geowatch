@@ -41,7 +41,7 @@ def main(cmdline=0, **kwargs):
     from watch.utils import util_time
     import matplotlib.dates as mdates
 
-    config = GeojsonSiteStatConfig.legacy(cmdline=cmdline, data=kwargs)
+    config = GeojsonSiteStatConfig.cli(cmdline=cmdline, data=kwargs)
     site_infos = list(util_gis.coerce_geojson_datas(config['site_models']))
 
     viz_dpath = config['viz_dpath']

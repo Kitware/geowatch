@@ -1,11 +1,6 @@
-import kwcoco
 import ubelt as ub
 import scriptconfig as scfg
-import xarray as xr
-import kwimage
-import numpy as np
 import os
-from kwcoco.channel_spec import FusedChannelSpec
 
 
 class CocoReformatChannels(scfg.Config):
@@ -61,12 +56,14 @@ def main(cmdline=False, **kwargs):
         >>> reformatted_dset = kwcoco.CocoDataset(new_fpath)
         >>> assert 'quantization' in reformatted_dset.imgs[1]['auxiliary'][-1]
         >>> new_coco_img = reformatted_dset.coco_image(gid)
+        >>> import numpy as np
         >>> new_pred1 = np.nan_to_num(new_coco_img.delay('salient').finalize())
         >>> #assert np.allclose(new_pred1, new_pred2)
         >>> #new_pred2 = new_coco_img.delay('salient').finalize(dequantize=False)
         >>> #assert new_pred2.dtype.kind == 'i'
     """
-    config = CocoReformatChannels(data=kwargs, cmdline=cmdline)
+    config = CocoReformatChannels.cli(data=kwargs, cmdline=cmdline)
+    import kwcoco
     print('config = {}'.format(ub.urepr(dict(config), nl=1)))
     dset = kwcoco.CocoDataset.coerce(config['src'])
 
@@ -148,6 +145,10 @@ def main(cmdline=False, **kwargs):
 
 
 def reformat_obj(obj, bundle_dpath, has_remove, has_quantize):
+    import xarray as xr
+    from kwcoco.channel_spec import FusedChannelSpec
+    import kwimage
+    import numpy as np
     quantize_dtype = np.int16
     quantize_max = np.iinfo(quantize_dtype).max
     quantize_min = 0

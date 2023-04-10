@@ -36,11 +36,10 @@ def main(cmdline=False, **kwargs):
         main(cmdline=False, **kwargs)
 
     """
+    config = TorchModelStatsConfig.cli(cmdline=cmdline, data=kwargs)
     import watch
     import rich
-
-    config = TorchModelStatsConfig.cli(cmdline=cmdline, data=kwargs)
-    print('config = {}'.format(ub.urepr(dict(config), nl=1)))
+    rich.print('config = {}'.format(ub.urepr(config, nl=1)))
     package_paths = config['src']
 
     if not ub.iterable(package_paths):

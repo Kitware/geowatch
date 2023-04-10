@@ -52,7 +52,6 @@ Example:
 """
 import scriptconfig as scfg
 import ubelt as ub
-import kwimage
 
 
 class ClusterSiteConfig(scfg.DataConfig):
@@ -80,6 +79,7 @@ def main(cmdline=0, **kwargs):
         main(**kwargs)
     """
     from watch.utils import util_gis
+    import kwimage
     config = ClusterSiteConfig.cli(data=kwargs)
     print('config = {}'.format(ub.urepr(dict(config), nl=1)))
     dst_dpath = ub.Path(config.dst_dpath)
@@ -230,6 +230,7 @@ def main(cmdline=0, **kwargs):
 
 
 class RegionModel:
+    # TODO: use watch.geoannots instead
     def __init__(self, region_id, geometry, start_date, end_date, site_summaries=None):
         _version = '2.4.3'
         self.properties = {

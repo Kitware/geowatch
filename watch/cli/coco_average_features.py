@@ -1,5 +1,4 @@
 import os
-import re
 import ubelt as ub
 import scriptconfig as scfg
 
@@ -14,6 +13,7 @@ def split_channel_names_by_grammar(channel_names):
     Returns:
         list(str): A list of strings that were originally divided by certain characters.
     """
+    import re
     channel_names = re.split(r",|\|", channel_names)
     return channel_names
 
