@@ -18,8 +18,8 @@
 # print(f'{img_w=} {img_h=}')
 # print(f'{vid_w=} {vid_h=}')
 
-# delayed_imgspace = coco_img.delay('red|green|blue', space='image')
-# delayed_vidspace = coco_img.delay('red|green|blue', space='video')
+# delayed_imgspace = coco_img.imdelay('red|green|blue', space='image')
+# delayed_vidspace = coco_img.imdelay('red|green|blue', space='video')
 
 # print(f'{delayed_imgspace.shape=}')
 # print(f'{delayed_vidspace.shape=}')
@@ -178,8 +178,8 @@ def process_one_coco_image(coco_image, config, out_dir):
     # Specify how we are going to handle spatial resampling and nodata
     delay_kwargs = {'nodata_method': None, 'space': 'image'}
 
-    delayed_im = coco_image.delay(channels=intensity_channels, **delay_kwargs)
-    delayed_qa = coco_image.delay(channels=quality_channels, **delay_kwargs)
+    delayed_im = coco_img.imdelay(channels=intensity_channels, **delay_kwargs)
+    delayed_qa = coco_img.imdelay(channels=quality_channels, **delay_kwargs)
     print(delayed_im)
 
     h, w = delayed_im.shape[0:2]

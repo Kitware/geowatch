@@ -45,7 +45,7 @@ def main(cmdline=False, **kwargs):
         >>> coco_img.add_auxiliary_item('test_prediction.tif', channels='salient', imdata=imdata, imwrite=True)
         >>> new_dset.dump(new_dset.fpath)
         >>> # now reformat this new dataset
-        >>> orig_pred = coco_img.delay('salient').finalize()
+        >>> orig_pred = coco_img.imdelay('salient').finalize()
         >>> kwargs = {
         >>>     'src': new_dset.fpath,
         >>>     'quantize': 'salient',
@@ -57,9 +57,9 @@ def main(cmdline=False, **kwargs):
         >>> assert 'quantization' in reformatted_dset.imgs[1]['auxiliary'][-1]
         >>> new_coco_img = reformatted_dset.coco_image(gid)
         >>> import numpy as np
-        >>> new_pred1 = np.nan_to_num(new_coco_img.delay('salient').finalize())
+        >>> new_pred1 = np.nan_to_num(new_coco_img.imdelay('salient').finalize())
         >>> #assert np.allclose(new_pred1, new_pred2)
-        >>> #new_pred2 = new_coco_img.delay('salient').finalize(dequantize=False)
+        >>> #new_pred2 = new_coco_img.imdelay('salient').finalize(dequantize=False)
         >>> #assert new_pred2.dtype.kind == 'i'
     """
     config = CocoReformatChannels.cli(data=kwargs, cmdline=cmdline)

@@ -25,7 +25,7 @@ def demo_kwcoco_with_heatmaps(num_videos=1, num_frames=20, image_size=(512, 512)
         for vidid in coco_dset.videos():
             frames = []
             for gid in coco_dset.images(vidid=vidid):
-                delayed = coco_dset._coco_image(gid).delay(channels=key, space='video')
+                delayed = coco_dset._coco_image(gid).imdelay(channels=key, space='video')
                 final = delayed.finalize()
                 frames.append(final)
             vid_stack = kwimage.stack_images_grid(frames, axis=1, pad=5, bg_value=1)

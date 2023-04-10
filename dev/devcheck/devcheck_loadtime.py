@@ -220,7 +220,7 @@ def check_loadtime():
         sample_fpaths = []
         for gid in sample_gids:
             coco_img = coco_dset.coco_image(gid)
-            delayed = coco_img.delay(channels)
+            delayed = coco_img.imdelay(channels)
             for p, v in ub.IndexableWalker(delayed.__json__()):
                 if p[-1] == 'fpath':
                     fpath = v

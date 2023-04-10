@@ -166,8 +166,8 @@ def main(cmdline=1, **kwargs):
         >>> coco_img2 = dset.coco_image(coco_img1.img['id'])
         >>> print(ub.urepr(list(coco_img1.iter_image_filepaths())))
         >>> print(ub.urepr(list(coco_img2.iter_image_filepaths())))
-        >>> imdata1 = coco_img1.delay('B11', nodata_method='float').finalize()
-        >>> imdata2 = coco_img2.delay('B11', nodata_method='float').finalize()
+        >>> imdata1 = coco_img1.imdelay('B11', nodata_method='float').finalize()
+        >>> imdata2 = coco_img2.imdelay('B11', nodata_method='float').finalize()
         >>> print(np.isnan(imdata1).sum())
         >>> print(np.isnan(imdata2).sum())
         >>> canvas1 = kwarray.robust_normalize(imdata1)
@@ -514,7 +514,7 @@ def probe_asset(coco_img, obj, band_idxs=None, scale=None,
             # assume if the file exists we should skip the check.
 
     check_channels = asset_channels[band_idxs]
-    delayed = coco_img.delay(
+    delayed = coco_img.imdelay(
         channels=check_channels, space='asset', nodata_method='float')
     if scale is not None:
         delayed.prepare()
@@ -842,8 +842,8 @@ def draw_asset_summary(coco_img, asset_summary):
     import kwimage
     import numpy as np
     is_samecolor = asset_summary['is_samecolor']
-    data = coco_img.delay(channels=asset_summary['channels'], space='asset',
-                          nodata_method='float').finalize()
+    data = coco_img.imdelay(channels=asset_summary['channels'], space='asset',
+                            nodata_method='float').finalize()
 
     is_samecolor = np.ascontiguousarray(is_samecolor)
     unique_labels, first_index = np.unique(is_samecolor, return_index=True)

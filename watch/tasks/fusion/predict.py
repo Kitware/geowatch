@@ -484,11 +484,11 @@ def predict(cmdline=False, **kwargs):
         >>>         warnings.warn('should have some change predictions elsewhere')
         >>> coco_img = dset.images().coco_images[1]
         >>> # Test that new quantization does not existing APIs
-        >>> pred1 = coco_img.delay('salient', nodata_method='float').finalize()
+        >>> pred1 = coco_img.imdelay('salient', nodata_method='float').finalize()
         >>> assert pred1.max() <= 1
         >>> # new delayed image does not make it easy to remove dequantization
         >>> # add test back in if we add support for that.
-        >>> # pred2 = coco_img.delay('salient').finalize(nodata_method='float', dequantize=False)
+        >>> # pred2 = coco_img.imdelay('salient').finalize(nodata_method='float', dequantize=False)
         >>> # assert pred2.max() > 1
 
     Example:
@@ -589,11 +589,11 @@ def predict(cmdline=False, **kwargs):
         >>>         warnings.warn('should have some change predictions elsewhere')
         >>> coco_img = dset.images().coco_images[1]
         >>> # Test that new quantization does not existing APIs
-        >>> pred1 = coco_img.delay('salient', nodata_method='float').finalize()
+        >>> pred1 = coco_img.imdelay('salient', nodata_method='float').finalize()
         >>> assert pred1.max() <= 1
         >>> # new delayed image does not make it easy to remove dequantization
         >>> # add test back in if we add support for that.
-        >>> # pred2 = coco_img.delay('salient').finalize(nodata_method='float', dequantize=False)
+        >>> # pred2 = coco_img.imdelay('salient').finalize(nodata_method='float', dequantize=False)
         >>> # assert pred2.max() > 1
     """
     import rich

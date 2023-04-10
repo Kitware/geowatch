@@ -46,7 +46,7 @@ def main(cmdline=True, **kw):
         # 'watch.cli.mlops_cli': ['mlops'],
         'watch.cli.run_metrics_framework': ['iarpa_eval'],
         'watch.cli.coco_clean_geotiffs': ['clean_geotiffs'],
-        'watch.cli.kwcoco_to_geojson': [],
+        'watch.cli.kwcoco_to_geojson': ['run_tracker'],
         'watch.cli.find_dvc': ['dvcdir'],
         'watch.cli.gifify': ['animate'],
         'watch.cli.coco_average_features': ['average_features'],

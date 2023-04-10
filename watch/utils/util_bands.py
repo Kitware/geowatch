@@ -547,7 +547,7 @@ def specialized_index_bands(bands=None, coco_img=None, symbolic=False):
         >>> import kwimage
         >>> kwplot.autompl()
         >>> pnum_ = kwplot.PlotNums(nSubplots=len(indexes))
-        >>> #value = kwimage.normalize_intensity(coco_img.delay('red|green|blue').finalize())
+        >>> #value = kwimage.normalize_intensity(coco_img.imdelay('red|green|blue').finalize())
         >>> #kwplot.imshow(value, title='red|green|blue', pnum=pnum_())
         >>> for key, value in indexes.items():
         >>>     kwplot.imshow(kwimage.normalize(value), title=key, pnum=pnum_())
@@ -583,7 +583,7 @@ def specialized_index_bands(bands=None, coco_img=None, symbolic=False):
         Blue, Green, Red, SWIR1, SWIR2, NIR = sym.symbols(
             'Blue, Green, Red, SWIR1, SWIR2, NIR')
     else:
-        delayed = coco_img.delay()
+        delayed = coco_img.imdelay()
         rgbir123 = delayed.take_channels('blue|green|red|swir16|swir22|nir')
         chw = rgbir123.finalize().transpose(2, 0, 1)
 
@@ -856,7 +856,7 @@ def specialized_index_bands2(delayed=None):
         >>> #gid = ub.peek(dset.index.imgs.keys())
         >>> coco_img = dset.coco_image(gid)
         >>> #print('coco_img.channels = {!r}'.format(coco_img.channels))
-        >>> delayed = coco_img.delay(space='video', nodata_method='float')
+        >>> delayed = coco_img.imdelay(space='video', nodata_method='float')
         >>> symbolic = False
         >>> indexes = specialized_index_bands2(delayed)
         >>> import kwarray
@@ -885,7 +885,7 @@ def specialized_index_bands2(delayed=None):
         >>> import watch
         >>> dset = watch.demo.demo_smart_raw_kwcoco()
         >>> coco_img = [img for img in dset.images().coco_images if img.get('sensor_coarse', None) == 'L8'][0]
-        >>> delayed = coco_img.delay().crop((slice(4000, 5000), slice(4000, 5000)))
+        >>> delayed = coco_img.imdelay().crop((slice(4000, 5000), slice(4000, 5000)))
         >>> indexes = specialized_index_bands2(delayed)
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
@@ -901,7 +901,7 @@ def specialized_index_bands2(delayed=None):
 
 
     Ignore:
-        >>> delayed = coco_img.delay()
+        >>> delayed = coco_img.imdelay()
         >>> rgbir123 = delayed.take_channels('blue|green|red|swir16|swir22|nir')
         >>> chw = rgbir123.finalize().transpose(2, 0, 1).astype(np.float32)
         >>> Blue, Green, Red, SWIR1, SWIR2, NIR = chw

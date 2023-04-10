@@ -43,7 +43,7 @@ rows = []
 for coco_img in ub.ProgIter(coco_images, desc='iter images'):
 
 
-    delayed = coco_img.delay('cloudmask', space='auxiliary')
+    delayed = coco_img.imdelay('cloudmask', space='auxiliary')
     cloud_im = delayed.finalize(
         nodata='ma',
         interpolation='nearest',
@@ -52,7 +52,7 @@ for coco_img in ub.ProgIter(coco_images, desc='iter images'):
     is_cloud_iffy = np.logical_or.reduce([cloud_im == b for b in cloud_bits])
     is_iffy = is_cloud_iffy | cloud_im.mask
 
-    delayed = coco_img.delay('salient', space='auxiliary')
+    delayed = coco_img.imdelay('salient', space='auxiliary')
     salient_im = delayed.finalize(nodata='float')
     valid_saliency = 1 - np.isnan(salient_im)
 
@@ -90,9 +90,9 @@ gid = row['gid']
 has_salient = row['has_salient']
 space = 'image'
 coco_img = coco_dset.coco_image(gid)
-imdata = coco_img.delay('red|green|blue', space=space).finalize(nodata='float')
-cloud_im = coco_img.delay('cloudmask', space=space).finalize(nodata='ma', interpolation='nearest', antialias=False)
-salient_img = coco_img.delay('salient', space=space).finalize(nodata='float')
+imdata = coco_img.imdelay('red|green|blue', space=space).finalize(nodata='float')
+cloud_im = coco_img.imdelay('cloudmask', space=space).finalize(nodata='ma', interpolation='nearest', antialias=False)
+salient_img = coco_img.imdelay('salient', space=space).finalize(nodata='float')
 is_cloud_iffy = np.logical_or.reduce([cloud_im == b for b in cloud_bits])
 
 salient_overlay = kwimage.make_heatmask(salient_img[:, :, 0], with_alpha=0.5, cmap='Blues')
@@ -229,10 +229,10 @@ for gid in xdev.InteractiveIter(missed_gids):
     grids = gid_to_grids[gid]
     grid_cells = kwimage.Boxes.concatenate([kwimage.Boxes.from_slice(s) for s in grids]).to_polygons()
     coco_img = coco_dset.coco_image(gid)
-    imdata = coco_img.delay('red|green|blue', space=space).finalize(nodata='float')
+    imdata = coco_img.imdelay('red|green|blue', space=space).finalize(nodata='float')
     canvas = kwimage.normalize_intensity(imdata)
     canvas = kwimage.fill_nans_with_checkers(canvas)
-    cloud_im = coco_img.delay('cloudmask', space=space).finalize(nodata='ma', interpolation='nearest', antialias=False)
+    cloud_im = coco_img.imdelay('cloudmask', space=space).finalize(nodata='ma', interpolation='nearest', antialias=False)
     is_cloud_iffy = np.logical_or.reduce([cloud_im == b for b in cloud_bits])
     cloud_overlay = kwimage.make_heatmask(is_cloud_iffy[:, :, 0], with_alpha=0.4, cmap='Reds')
     canvas = grid_cells.draw_on(canvas, edgecolor='blue', facecolor='white', alpha=0.2, fastdraw=False)

@@ -250,7 +250,7 @@ def find_varied_region(coco_dset, dataset):
 
     # for gid in sensor_gids['WV']:
     #     coco_img = coco_dset.coco_image(gid)
-    #     data = coco_img.delay(channels='panchromatic').finalize(space='video')
+    #     data = coco_img.imdelay(channels='panchromatic').finalize(space='video')
 
     # for gid in sensor_gids['WV']:
     #     print(coco_dset.imgs[gid]['valid_region'])

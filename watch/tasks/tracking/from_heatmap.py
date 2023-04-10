@@ -1059,7 +1059,7 @@ def _gids_polys(
 
     key = '|'.join(key)
     imgs = sub_dset.images(gids).coco_images
-    _heatmaps = np.stack([i.delay(channels=key, space='video', resolution=resolution).finalize() for i in imgs], axis=0)
+    _heatmaps = np.stack([i.imdelay(channels=key, space='video', resolution=resolution).finalize() for i in imgs], axis=0)
     _heatmaps = _heatmaps.sum(axis=-1)  # sum over channels
     missing_ix = np.invert([key in i.channels for i in imgs])
     # TODO this was actually broken in orig, so turning it off here for now

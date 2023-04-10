@@ -448,7 +448,7 @@ def summary_visualization(dst_dset, viz_dpath):
             if 1:
                 for coco_img in pman(images.coco_images, desc='submit delay jobs'):
                     chanels = acceptable_channels(coco_img.channels, chan_priority)
-                    delayed = coco_img.delay(chanels, resolution=resolution, nodata_method='float')
+                    delayed = coco_img.imdelay(chanels, resolution=resolution, nodata_method='float')
                     job = jobs.submit(delayed.finalize)
 
                     from watch.utils import util_time

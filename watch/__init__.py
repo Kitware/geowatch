@@ -94,6 +94,8 @@ def _is_running_a_fast_cli_tool():
         return True
     if sys.argv and 'smartwatch_dvc' in sys.argv[0]:
         return True
+    if sys.argv and sys.argv == ['-m']:
+        return True
     if sys.argv and '--help' in sys.argv:
         return True
     return False

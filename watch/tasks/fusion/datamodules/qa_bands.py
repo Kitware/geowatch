@@ -31,8 +31,8 @@ def _dump_qa_debug_vid():
     for idx, gid in enumerate(images):
         coco_img = dset.coco_image(gid)
         # Load some quality and rgb data
-        qa_delayed = coco_img.delay('cloudmask', interpolation='nearest', antialias=False)
-        rgb_delayed = coco_img.delay('red|green|blue')
+        qa_delayed = coco_img.imdelay('cloudmask', interpolation='nearest', antialias=False)
+        rgb_delayed = coco_img.imdelay('red|green|blue')
         quality_im = qa_delayed.finalize()
         rgb_canvas = kwimage.normalize_intensity(rgb_delayed.finalize(nodata_method='float'))
         sensor = coco_img.img.get('sensor_coarse')
@@ -80,8 +80,8 @@ class QA_SpecMixin:
             >>> gid = dset.images()[18]
             >>> coco_img = dset.coco_image(gid)
             >>> # Load some quality and rgb data
-            >>> qa_delayed = coco_img.delay('cloudmask', interpolation='nearest', antialias=False)
-            >>> rgb_delayed = coco_img.delay('red|green|blue')
+            >>> qa_delayed = coco_img.imdelay('cloudmask', interpolation='nearest', antialias=False)
+            >>> rgb_delayed = coco_img.imdelay('red|green|blue')
             >>> quality_im = qa_delayed.finalize()
             >>> rgb_canvas = kwimage.normalize_intensity(rgb_delayed.finalize(nodata_method='float'))
             >>> sensor = coco_img.img.get('sensor_coarse')

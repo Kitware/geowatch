@@ -88,10 +88,10 @@ def kwcoco_resample_example():
 
             # Load the old delayed image in videospace and do a delayed warp
             # into the dst video / image space (which will be the same)
-            src_delayed_cat = src_coco_img.delay(space='video', channels=categorical_bands)
+            src_delayed_cat = src_coco_img.imdelay(space='video', channels=categorical_bands)
             dst_delayed_cat = src_delayed_cat.warp(warp_dst_from_src, dsize=tuple(dst_video_dsize.tolist()))
 
-            src_delayed_con = src_coco_img.delay(space='video', channels=continuous_bands)
+            src_delayed_con = src_coco_img.imdelay(space='video', channels=continuous_bands)
             dst_delayed_con = src_delayed_con.warp(warp_dst_from_src, dsize=tuple(dst_video_dsize.tolist()))
 
             # Use some hacked domain knowledge to handle the right nodata value

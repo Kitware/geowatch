@@ -283,7 +283,7 @@ def check_dataset_differences(dev_input_dset, pro_input_dset, trk_pxl_params, au
                 print('Differences:')
                 print(ub.urepr(diff_attrs, nl=2))
 
-            d1 = coco_img1.delay(channels='red|green|blue|nir|swir16|swir22|cloudmask')
+            d1 = coco_img.imdelay(channels='red|green|blue|nir|swir16|swir22|cloudmask')
             d2 = coco_img2.delay(channels='red|green|blue|nir|swir16|swir22|quality')
             a = d1.finalize()
             b = d2.finalize()

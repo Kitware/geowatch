@@ -923,7 +923,7 @@ def _debug_sample_in_context(self, target):
         three_chans = img_channels.fuse().to_list()[0:3]
         if len(three_chans) == 2:
             three_chans = three_chans[0:1]
-        delayed = coco_img.delay(channels=three_chans, space='video')
+        delayed = coco_img.imdelay(channels=three_chans, space='video')
         vidspace_img = delayed.finalize()
         if vidspace_img.dtype.kind == 'u' and vidspace_img.dtype.itemsize == 1:
             vispace_canvas = kwimage.ensure_float01(vidspace_img.copy())

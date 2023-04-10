@@ -167,8 +167,8 @@ def visualize_cloudmask_batch():
         space = 'video'
         # space = 'image'
         scale = 0.4
-        qa_data = coco_img.delay('cloudmask', space=space).scale(scale).finalize(interpolation='nearest', antialias=1)
-        rgb_img = coco_img.delay('red|green|blue', space=space).scale(scale).finalize(interpolation='linear', nodata_method='ma')
+        qa_data = coco_img.imdelay('cloudmask', space=space).scale(scale).finalize(interpolation='nearest', antialias=1)
+        rgb_img = coco_img.imdelay('red|green|blue', space=space).scale(scale).finalize(interpolation='linear', nodata_method='ma')
 
         quality_im = qa_data
         result = table.draw_labels(quality_im)
@@ -235,7 +235,7 @@ def _check_target(self):
 
     kwplot.imshow(self.draw_item(item))
 
-    data = coco_img.delay('invariants.0').finalize()
+    data = coco_img.imdelay('invariants.0').finalize()
     kwplot.imshow(data)
 
     target_ = item['target'].copy()

@@ -345,10 +345,10 @@ def gpd_compute_scores(
             for k in keys:
                 # TODO handle keys as channelcodes
                 if k in img.channels:
-                    heatmap = img.delay(k, space='video', resolution=resolution).finalize()
+                    heatmap = img.imdelay(k, space='video', resolution=resolution).finalize()
                     heatmap = np.squeeze(heatmap, -1)
                 else:
-                    w, h = img.delay(space='video', resolution=resolution).dsize
+                    w, h = img.imdelay(space='video', resolution=resolution).dsize
                     heatmap = np.zeros((h, w))
                 heatmaps.append(heatmap)
             heatmaps = np.stack(heatmaps, axis=0)

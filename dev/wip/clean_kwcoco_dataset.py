@@ -156,7 +156,7 @@ def get_imagedata_stats(coco_img, main_channels='red'):
     from watch.utils import util_kwimage
     main_channels = kwcoco.FusedChannelSpec.coerce(main_channels)
 
-    delayed = coco_img.delay(channels=main_channels, nodata_method='ma')
+    delayed = coco_img.imdelay(channels=main_channels, nodata_method='ma')
     chan_infos = {}
     for delayed_chan in delayed.parts:
         chan_infos[delayed_chan.channels.spec] = chan_info = {}
@@ -215,8 +215,8 @@ def debug_cases(dset):
     coco_img1.img['auxiliary'][0]['parent_file_name']
     coco_img2.img['auxiliary'][0]['parent_file_name']
 
-    delay1 = coco_img2.delay(channels='red|green|blue', nodata_method='float').warp({'scale': 0.25}).optimize()
-    delay2 = coco_img1.delay(channels='red|green|blue', nodata_method='float').warp({'scale': 0.25}).optimize()
+    delay1 = coco_img1.imdelay(channels='red|green|blue', nodata_method='float').warp({'scale': 0.25}).optimize()
+    delay2 = coco_img2.imdelay(channels='red|green|blue', nodata_method='float').warp({'scale': 0.25}).optimize()
 
     for _, node in delay1._traverse():
         if hasattr(node, 'fpath'):
