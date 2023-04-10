@@ -18,7 +18,7 @@ from tqdm import tqdm
 from scipy import ndimage
 
 from . import modules_monkeypatch  # NOQA
-from .datasets import WVRgbDataset
+from .datasets import WVRgbDataset, WVSuperRgbDataset
 # from .pl_highres_verify import MultiTaskModel, modify_bn, dfactor, local_utils
 from .pl_highres_verify import MultiTaskModel, modify_bn, dfactor
 from .utils import process_image_chunked
@@ -37,29 +37,21 @@ ENABLE_CHUNKS = 1  # set to zero to disable chunking (increases VRAM)
 
 
 @click.command()
-@click.option('--dataset', required=True,
-              type=click.Path(exists=True), help='input kwcoco dataset')
-@click.option('--deployed', required=True,
-              type=click.Path(exists=True), help='pytorch weights file')
-@click.option('--output', required=False, type=click.Path(),
-              help='output kwcoco dataset')
-@click.option('--window_size', required=False, type=int,
-              default=1024, help='sliding window size')
-@click.option('--dump_shards', required=False, default=False,
-              help='if True, output partial kwcoco files as they are completed')
-@click.option('--data_workers', required=False,
-              default=0, help='background data loaders')
-@click.option('--select_images', required=False, default=None,
-              help='if specified, a jq operation to filter images')
-@click.option('--select_videos', required=False, default=None,
-              help='if specified, a jq operation to filter videos')
-@click.option('--asset_suffix', required=False, default='_assets/dzyne_depth',
-              help='folder relative to output to save features in')
-@click.option('--cache', required=False, default=0,
-              help='if True, enable caching of results')
+@click.option('--dataset', required=True, type=click.Path(exists=True), help='input kwcoco dataset')
+@click.option('--deployed', required=True, type=click.Path(exists=True), help='pytorch weights file')
+@click.option('--output', required=False, type=click.Path(), help='output kwcoco dataset')
+@click.option('--window_size', required=False, type=int, default=1024, help='sliding window size')
+@click.option('--dump_shards', required=False, default=False, help='if True, output partial kwcoco files as they are completed')
+@click.option('--data_workers', required=False, default=0, help='background data loaders')
+@click.option('--select_images', required=False, default=None, help='if specified, a jq operation to filter images')
+@click.option('--select_videos', required=False, default=None, help='if specified, a jq operation to filter videos')
+@click.option('--asset_suffix', required=False, default='_assets/dzyne_depth', help='folder relative to output to save features in')
+@click.option('--cache', required=False, default=0, help='if True, enable caching of results')
+@click.option('--use_super_res_bands', required=False, default=False, help='if True, uses super-res (upsampled) bands to form source RGB image')
+@click.option('--scale', required=False, default=4, help='Specify scaling factor between image size and super-res bands, only applicable when use_super_res_bands is true')
 def predict(dataset, deployed, output, window_size=2048, dump_shards=False,
             data_workers=0, select_images=None, select_videos=None,
-            asset_suffix='_assets/dzyne_depth', cache=False):
+            asset_suffix='_assets/dzyne_depth', cache=False, use_super_res_bands=False, scale=4):
     """
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
@@ -80,7 +72,6 @@ def predict(dataset, deployed, output, window_size=2048, dump_shards=False,
         >>>         window_size=window_size, dump_shards=dump_shards,
         >>>         data_workers=data_workers, select_images=select_images,
         >>>         select_videos=select_videos, cache=cache)
-
     """
     weights_filename = ub.Path(deployed)
 
@@ -122,7 +113,11 @@ def predict(dataset, deployed, output, window_size=2048, dump_shards=False,
                            check=True)
 
     # input data
-    torch_dataset = WVRgbDataset(input_dset)
+    if use_super_res_bands is True:
+        torch_dataset = WVSuperRgbDataset(dset=input_dset, scale=scale)  # TODO - auto-detect scaling
+    else:
+        torch_dataset = WVRgbDataset(input_dset)
+
     if cache:
         log.debug('checking for cached files')
 
@@ -592,24 +587,16 @@ if __name__ == '__main__':
     # window_size=1024: 17.111 GB
     # window_size=1152: 21.007 GB
 
-    DVC_DPATH=$(smartwatch_dvc)
-    KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15
-    python -m watch.tasks.depth.predict \
-        --dataset="$KWCOCO_BUNDLE_DPATH/data.kwcoco.json" \
-        --output="$KWCOCO_BUNDLE_DPATH/dzyne_depth.kwcoco.json" \
-        --deployed="$DVC_DPATH/models/depth/weights_v1.pt" \
-        --data_workers=0 \
-        --window_size=512
-
-    DVC_DPATH=$(smartwatch_dvc --hdd)
-    echo "DVC_DPATH = $DVC_DPATH"
-    KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15
-    python -m watch.tasks.depth.predict \
-        --dataset="$KWCOCO_BUNDLE_DPATH/data.kwcoco.json" \
-        --output="$KWCOCO_BUNDLE_DPATH/dzyne_depth.kwcoco.json" \
-        --deployed="$DVC_DPATH/models/depth/weights_v1.pt" \
-        --data_workers=0 \
-        --window_size=512
+    ## Drop 4 ##
+    python3 -m watch.tasks.depth.predict \
+    --deployed=/smart/backup/models/depth/weights_v1.pt \
+    --dataset=/output/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/data_wv_superRes.kwcoco.json \
+    --output=/output/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/data_wv_superRes_depth.kwcoco.json \
+    --data_workers=8 \
+    --window_size=2048 \
+    --cache=1 \
+    --use_super_res_bands=True \
+    --scale=4
 
     python -m watch visualize $KWCOCO_BUNDLE_DPATH/dzyne_depth.kwcoco.json \
         --animate=True --channels="depth,red|green|blue" --skip_missing=True \
