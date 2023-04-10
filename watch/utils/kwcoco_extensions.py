@@ -414,6 +414,10 @@ def coco_populate_geo_img_heuristics2(coco_img, overwrite=False,
     if keep_geotiff_metadata:
         img['geotiff_metadata'] = primary_obj['geotiff_metadata']
 
+    if 'date_captured' in img:
+        from watch.utils import util_time
+        img['timestamp'] = util_time.coerce_datetime(img['date_captured']).timestamp()
+
     if 'geos_corners' in primary_obj:
         # FIXME: we are assuming this maps perfectly onto the image
         # which is should for the SMART data, but perhaps in the future
