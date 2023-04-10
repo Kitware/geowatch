@@ -32,7 +32,8 @@ class HDD_Paths:
         import watch
         self.hdd_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='hdd')
         self.hdd_bundle_dpath = self.hdd_data_dpath / 'Drop6'
-        self.geojson_annot_dpath = self.hdd_data_dpath / 'annotations/drop6'
+        # self.geojson_annot_dpath = self.hdd_data_dpath / 'annotations/drop6'
+        self.geojson_annot_dpath = self.hdd_data_dpath / 'annotations/drop6_hard_v1'
 
     def sensor_zip_fpath(self, region_id, sensor):
         return self.hdd_bundle_dpath / region_id / (sensor + '.zip')
@@ -303,15 +304,15 @@ def check_dmj_annotation_agree_with_disk(region_id):
 
 
 def check_hdd_annotations_agree_with_zipfiles(region_id):
-    imgonly_fpath = HDD.imganns_coco_fpath(region_id)
-    dset = kwcoco.CocoDataset(imgonly_fpath)
+    imganns_fpath = HDD.imganns_coco_fpath(region_id)
+    dset = kwcoco.CocoDataset(imganns_fpath)
 
-    jpc_assets = ub.ddict(list)
+    hdd_assets = ub.ddict(list)
     for coco_img in dset.images().coco_images:
         sensor = coco_img.img['sensor_coarse']
-        jpc_assets[sensor].extend([ub.Path(o['file_name']) for o in coco_img.iter_asset_objs()])
+        hdd_assets[sensor].extend([ub.Path(o['file_name']) for o in coco_img.iter_asset_objs()])
 
-    for sensor, assets in jpc_assets.items():
+    for sensor, assets in hdd_assets.items():
         sensor_zip_fpath = HDD.sensor_zip_fpath(region_id, sensor)
         if sensor_zip_fpath.exists():
             zfile = zipfile.ZipFile(sensor_zip_fpath)
@@ -360,6 +361,37 @@ def all_check_dmj_annotation_agree_with_self():
     set(dmj_regions) & set(issue_regions)
 
 
+def check_hdd_annotations_agree_with_splits_zipfile(region_id):
+    imganns_fpath = HDD.imganns_coco_fpath(region_id)
+    imgonly_fpath = HDD.imgonly_coco_fpath(region_id)
+
+    splits_fpath = HDD.hdd_bundle_dpath / 'splits.zip'
+    if splits_fpath.exists():
+        zfile = zipfile.ZipFile(splits_fpath)
+        names = zfile.namelist()
+        imgann_name = imganns_fpath.name
+        assert imganns_fpath.name in names
+        assert imgonly_fpath.name in names
+
+        zip_imganns_hash = ub.hash_data(zfile.read(imganns_fpath.name))
+        dsk_imganns_hash = ub.hash_file(imganns_fpath)
+        comparison = {
+            'imgann_name': imgann_name,
+            'region_id': region_id,
+            'is_same': dsk_imganns_hash == zip_imganns_hash
+        }
+        yield comparison
+
+        zip_imgonly_hash = ub.hash_data(zfile.read(imgonly_fpath.name))
+        dsk_imgonly_hash = ub.hash_file(imgonly_fpath)
+        comparison = {
+            'imgann_name': imgann_name,
+            'region_id': region_id,
+            'is_same': dsk_imgonly_hash == zip_imgonly_hash
+        }
+        yield comparison
+
+
 def all_check_hdd_annotations_agree_with_zipfiles():
     """
     Check that the annotations agree with zipped images in the HDD bundle.
@@ -370,7 +402,13 @@ def all_check_hdd_annotations_agree_with_zipfiles():
     for region_id in ub.ProgIter(region_ids):
         for comparison in check_hdd_annotations_agree_with_zipfiles(region_id):
             comparisons.append(comparison)
-            if not comparisons['is_same']:
+            if not comparison['is_same']:
+                issues.append(comparison)
+
+    for region_id in ub.ProgIter(region_ids):
+        for comparison in check_hdd_annotations_agree_with_splits_zipfile(region_id):
+            comparisons.append(comparison)
+            if not comparison['is_same']:
                 issues.append(comparison)
 
     print('issues = {}'.format(ub.urepr(issues, nl=1)))
@@ -540,7 +578,7 @@ def check_missing_image_against_dmj():
             copy_job = queue.submit(f'''cp {task['dmj_fpath']} {task['imgonly_fpath']}''')
             queue.submit(ub.codeblock(
                 fr'''
-                python -m watch reproject_annotations \
+                python -m watch reproject \
                     --src "{task['imgonly_fpath']}" \
                     --dst "{task['imganns_fpath']}" \
                     --propogate_strategy="SMART" \
@@ -602,6 +640,10 @@ def remove_bad_zip_paths():
 
 
 def reprocess_all_kwcoco_files():
+    """
+    python -c "import kwcoco; print(set(kwcoco.CocoDataset('imganns-CH_R001.kwcoco.zip').annots().lookup('weight', None)))"
+    python -c "import kwcoco; print(kwcoco.CocoDataset('data_vali_split3.kwcoco.zip').videos().lookup('cleared', None))"
+    """
     import cmd_queue
     geojson_annot_dpath = HDD.geojson_annot_dpath
     imgonly_fpaths = list(HDD.hdd_bundle_dpath.glob('imgonly*.kwcoco.*'))
@@ -638,7 +680,7 @@ def reprocess_all_kwcoco_files():
         assert imgonly_fpath.exists()
         command = ub.codeblock(
             fr'''
-            python -m watch reproject_annotations \
+            python -m watch reproject \
                 --src "{imgonly_fpath}" \
                 --dst "{imganns_fpath}" \
                 --propogate_strategy="SMART" \

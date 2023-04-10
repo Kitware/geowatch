@@ -61,6 +61,12 @@ class TimeCombineConfig(scfg.DataConfig):
             image defines where the buckets start.
             '''), alias=['temporal_window_duration'])
 
+    start_time = scfg.Value(None, help=ub.paragraph(
+        '''
+        The datetime to start time window partitioning. If unspecified the
+        first date in the dataset is used.
+        '''))
+
     merge_method = scfg.Value('mean', help=ub.paragraph(
             '''
             How to combine multiple observations over each time_window.
@@ -399,7 +405,7 @@ def main(cmdline=1, **kwargs):
     Ignore:
         DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
         smartwatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001-cloudmask-s2w_10.kwcoco.zip
-                
+
     """
     config = TimeCombineConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
     print('config = ' + ub.urepr(dict(config), nl=1))

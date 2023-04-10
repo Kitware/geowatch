@@ -128,16 +128,16 @@ def main(cmdline=1, **kwargs):
 
     # time_duration = '1year'
     # time_duration = '3months'
-    all_regions = [
-        'KR_R001',
-        'KR_R002',
-        'NZ_R001',
-        'CH_R001',
-        'BR_R001',
-        'BR_R002',
-        'BH_R001',
-        'AE_R001',
-    ]
+    # all_regions = [
+    #     'KR_R001',
+    #     'KR_R002',
+    #     'NZ_R001',
+    #     'CH_R001',
+    #     'BR_R001',
+    #     'BR_R002',
+    #     'BH_R001',
+    #     'AE_R001',
+    # ]
 
     queue = _CMDQueueBoilerplateConfig._create_queue(config)
 
@@ -170,16 +170,24 @@ def main(cmdline=1, **kwargs):
                 --workers=$WORKERS
             '''), fmtdict)
         combine_job = queue.submit(code, name=f'combine-time-{region}')
+        combine_job = None
 
         if config.reproject:
             code = subtemplate(
                 r'''
-                python -m watch reproject_annotations \
+                python -m watch add_fields \
+                    --src $OUTPUT_BUNDLE_DPATH/imgonly-${REGION}.kwcoco.zip \
+                    --dst $OUTPUT_BUNDLE_DPATH/imgonly-${REGION}.kwcoco.zip \
+                ''', fmtdict)
+            field_job = queue.submit(code, depends=[combine_job], name=f'add-fields-{region}')
+            code = subtemplate(
+                r'''
+                python -m watch reproject \
                     --src $OUTPUT_BUNDLE_DPATH/imgonly-${REGION}.kwcoco.zip \
                     --dst $OUTPUT_BUNDLE_DPATH/imganns-${REGION}.kwcoco.zip \
                     --site_models="$TRUE_SITE_DPATH/${REGION}_*.geojson"
                 ''', fmtdict)
-            queue.submit(code, depends=[combine_job], name=f'reproject-ann-{region}')
+            queue.submit(code, depends=[field_job], name=f'reproject-ann-{region}')
 
     _CMDQueueBoilerplateConfig._run_queue(config, queue)
 
@@ -194,8 +202,8 @@ if __name__ == '__main__':
             --regions=all \
             --input_bundle_dpath=$DVC_DATA_DPATH/Drop6 \
             --output_bundle_dpath=$DVC_DATA_DPATH/Drop6-MeanYear10GSD \
-            --true_site_dpath=$DVC_DATA_DPATH/annotations/drop6/site_models \
-            --true_region_dpath=$DVC_DATA_DPATH/annotations/drop6/region_models \
+            --true_site_dpath=$DVC_DATA_DPATH/annotations/drop6_hard_v1/site_models \
+            --true_region_dpath=$DVC_DATA_DPATH/annotations/drop6_hard_v1/region_models \
             --backend=tmux \
             --tmux_workers=4 \
             --resolution=10GSD \

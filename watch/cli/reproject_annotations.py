@@ -993,7 +993,6 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
     observation_dates = np.array([util_time.coerce_datetime(x) for x in valid_site_rows['observation_date']])
 
     site_model = SiteModel.from_dataframe(valid_site_gdf)
-    header_misc_info = ub.udict(site_model.header.get('misc_info', {}))
     track_id = site_model.site_id
     start_date = site_model.start_date
     end_date = site_model.end_date
@@ -1148,6 +1147,8 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
     # level in the annotation file. This is really the annotation state
     # interpolation problem.
 
+    header_misc_info = ub.udict(site_model.header['properties'].get('misc_info', None) or {})
+
     # Create annotations on each frame we are associated with
     site_anns = []
     drawable_summary = []
@@ -1200,7 +1201,21 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
         site_polygons = [
             p.to_geojson() for p in kwimage.MultiPolygon.from_geojson(obs_row['geometry']).to_multi_polygon().data
         ]
-        assert len(site_polygons) == len(site_catnames)
+
+        HACK_TO_FIX_HARDNEGS = 1
+        if HACK_TO_FIX_HARDNEGS:
+            if len(site_polygons) != len(site_catnames):
+                assert site_catnames == ['negative'], 'hack assumptions violated'
+                # Hack case, should fix this elsewhere
+                # should not produce multipolygon hard negatives, not sure why
+                # we are.
+                combo = kwimage.MultiPolygon.from_geojson(obs_row['geometry']).convex_hull
+                site_polygons = [
+                    p.to_geojson() for p in combo.to_multi_polygon().data
+                ]
+
+        if len(site_polygons) != len(site_catnames):
+            raise AssertionError('Should be equal')
 
         # Propogate each subsite
         for subsite_catname, poly in zip(site_catnames, site_polygons):

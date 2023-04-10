@@ -18,7 +18,7 @@ def restricted_eval(expr, max_chars=32, local_dict=None, builtins_passlist=None)
         expr (str): the expression to evaluate
         max_char (int): expression cannot be more than this many characters
         local_dict (Dict[str, Any]): a list of variables allowed to be used
-        builtins_passlist : if specified, only allow use of certain builtins
+        builtins_passlist (List[str] | None) : if specified, only allow use of certain builtins
 
     References:
         https://realpython.com/python-eval-function/#minimizing-the-security-issues-of-eval

@@ -6,7 +6,6 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Version 0.5.0 - Target 2023-04-x
 
-
 ### Added
 * `coco_time_combine` can now ignore seasons / handle median images with less memory
 

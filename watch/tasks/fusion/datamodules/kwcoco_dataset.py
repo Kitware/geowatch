@@ -567,10 +567,18 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
             self['exclude_sensors'] = [s.strip() for s in self['exclude_sensors'].split(',')]
         self['time_steps'] = int(self['time_steps'])
 
-        # if self['chip_dims'] is None:
-        #     d = int(self['chip_size'])
-        #     self['chip_dims'] = [d, d]  # has to be a list not a tuple for yaml
-        # self['chip_size'] = None
+        if self['chip_dims'] is not None:
+            arg = self['chip_dims']
+            if isinstance(arg, str):
+                if ',' in arg:
+                    p1, p2 = arg.split(',')
+                    arg = [int(p1), int(p2)]
+            if isinstance(arg, list):
+                assert len(arg) == 2
+                arg = [int(arg[0]), int(arg[1])]
+            if isinstance(arg, int):
+                arg = [arg, arg]
+            self['chip_dims'] = arg
 
         if self['fixed_resolution'] not in {None, 'None', 'none', 'null'}:
             self['window_space_scale'] = self['fixed_resolution']
@@ -3130,3 +3138,12 @@ class Modality(NamedTuple):
     sensor: str
     channels: str
     domain: str
+
+
+class Domain(NamedTuple):
+    """
+    DO NOT USE. BUT DO NOT REMOVE. NEEDED FOR BACKWARDS COMPAT
+    """
+    sensor: str
+    channels: str
+    video_name: str

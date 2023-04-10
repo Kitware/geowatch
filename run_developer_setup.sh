@@ -90,6 +90,8 @@ if [[ "$WATCH_STRICT" == "1" ]]; then
 
     python -m pip install -r requirements-strict/tests.txt
 
+    python -m pip install -r requirements-strict/optional.txt
+
     python -m pip install "dvc[all]>=2.9.3"
 
     python -m pip install lru-dict || echo "unable to install lru-dict"
@@ -108,6 +110,8 @@ else
     python -m pip install -r requirements/linting.txt
 
     python -m pip install -r requirements/tests.txt
+
+    python -m pip install -r requirements/optional.txt
 
     python -m pip install "dvc[all]>=2.9.3"
 
