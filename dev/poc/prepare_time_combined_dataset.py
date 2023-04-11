@@ -221,8 +221,8 @@ if __name__ == '__main__':
                     KR_R001, KR_R002, LT_R001, NZ_R001, US_R001, US_R004, US_R005,
                     US_R006, US_R007,
                     # iMerit Regions
-                    # AE_C001, AE_C002, AE_C003,
-                    # PE_C001, QA_C001, SA_C005, US_C000, US_C010, US_C011, US_C012,
+                    AE_C001, AE_C002, AE_C003,
+                    PE_C001, QA_C001, SA_C005, US_C000, US_C010, US_C011, US_C012,
             ]" \
             --input_bundle_dpath=$DVC_DATA_DPATH/Drop6 \
             --output_bundle_dpath=$DVC_DATA_DPATH/Drop6-MeanYear10GSD \
@@ -230,6 +230,7 @@ if __name__ == '__main__':
             --true_region_dpath=$DVC_DATA_DPATH/annotations/drop6_hard_v1/region_models \
             --backend=tmux \
             --tmux_workers=4 \
+            --combine_workers=0 \
             --resolution=10GSD \
             --run=1
 

@@ -112,6 +112,55 @@ Example:
     >>> }
     >>> item = self[target]
 
+Example:
+    >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+    >>> # Tests the hard negative sampling
+    >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+    >>> import watch
+    >>> import kwcoco
+    >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+    >>> coco_fpath = dvc_dpath / 'Drop6-MeanYear10GSD/data.kwcoco.zip'
+    >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+    >>> ##'red|green|blue',
+    >>> self = KWCocoVideoDataset(
+    >>>     coco_dset,
+    >>>     time_dims=5, window_dims=(196, 196),
+    >>>     window_overlap=0,
+    >>>     channels="(S2,L8):blue|green|red",
+    >>>     fixed_resolution='10GSD',
+    >>>     normalize_peritem=True,
+    >>>     use_grid_negatives='cleared',
+    >>>     use_grid_positives=False,
+    >>>     use_centered_positives= True,
+    >>>     time_kernel='(-2y,-1y,0,1y,2y)',
+    >>> )
+    >>> self.requested_tasks['change'] = 1
+    >>> self.requested_tasks['saliency'] = 1
+    >>> self.requested_tasks['class'] = 0
+    >>> self.requested_tasks['boxes'] = 1
+
+    >>> # Check that all of the negative regions are from cleared videos
+    >>> videos = self.sampler.dset.videos()
+    >>> vidid_to_cleared = ub.udict(ub.dzip(videos.lookup('id'), videos.lookup('cleared', False)))
+    >>> assert self.config['use_grid_negatives'] == 'cleared'
+    >>> positive_idxs = self.new_sample_grid['positives_indexes']
+    >>> negative_idxs = self.new_sample_grid['negatives_indexes']
+    >>> targets = self.new_sample_grid['targets']
+    >>> negative_video_ids = {targets[x]['video_id'] for x in negative_idxs}
+    >>> positive_video_ids = {targets[x]['video_id'] for x in positive_idxs}
+    >>> assert all(vidid_to_cleared.subdict(negative_video_ids).values())
+
+    >>> index = 0
+    >>> item = self[index]
+    >>> target = item['target']
+    >>> print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
+    >>> # xdoctest: +REQUIRES(--show)
+    >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0, rescale=1)
+    >>> import kwplot
+    >>> kwplot.autompl()
+    >>> kwplot.imshow(canvas, fnum=1)
+    >>> kwplot.show_if_requested()
+
 
 Ignore:
     >>> self.disable_augmenter = True
