@@ -10,6 +10,8 @@ SeeAlso:
     ../tasks/depth/predict.py
     ../tasks/cold/predict.py
 
+    ~/code/watch/dev/poc/prepare_time_combined_dataset.py
+
 Example:
     >>> from watch.cli.prepare_teamfeats import *  # NOQA
     >>> expt_dvc_dpath = ub.Path('./pretend_expt_dpath')
@@ -205,6 +207,11 @@ class TeamFeaturePipelineConfig(scfg.DataConfig):
             use .kwcoco.json or .kwcoco.zip for outputs
             '''), nargs=None)
 
+    assets_dname = scfg.Value('_teamfeats', help=ub.paragraph(
+        '''
+        The name of the top-level directory to write new assets.
+        '''))
+
 
 def prep_feats(cmdline=True, **kwargs):
     """
@@ -379,6 +386,7 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
                 --num_workers="{data_workers}" \
                 --with_hidden=32 \
                 --select_images='.sensor_coarse == "S2"' \
+                --assets_dname="{config.assets_dname}" \
                 --device=0
             ''')
         combo_code_parts.append(codes[key])
@@ -513,6 +521,7 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
     # Note: Does not run on a 1080, needs 18GB in this form
     key = 'with_invariants'
     if config[key]:
+        raise Exception('Use with_invariants2 instead')
         task = {}
         simple_dvc.SimpleDVC().request(model_fpaths['uky_pretext'])
 
@@ -542,8 +551,8 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
                 --patch_size=256 \
                 --do_pca {config['invariant_pca']} \
                 --patch_overlap=0.3 \
-                --num_workers="{data_workers}" \
-                --write_workers 2 \
+                --workers="{data_workers}" \
+                --io_workers 2 \
                 --tasks before_after pretext
             ''')
         combo_code_parts.append(codes[key])
@@ -581,8 +590,9 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
                 --patch_size=256 \
                 --do_pca {config['invariant_pca']} \
                 --patch_overlap=0.3 \
-                --num_workers="{data_workers}" \
-                --write_workers 0 \
+                --workers="{data_workers}" \
+                --io_workers 0 \
+                --assets_dname="{config.assets_dname}" \
                 --tasks before_after pretext
             ''')
         combo_code_parts.append(codes[key])

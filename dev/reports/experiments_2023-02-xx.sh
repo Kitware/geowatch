@@ -1,3 +1,10 @@
+__doc__="
+SeeAlso:
+    ~/code/watch/dev/poc/prepare_time_combined_dataset.py
+
+
+"
+
 #### Eval9 Models (Namek)
 
 DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=hdd)

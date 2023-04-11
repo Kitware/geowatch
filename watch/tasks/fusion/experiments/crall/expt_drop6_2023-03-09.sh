@@ -1391,7 +1391,7 @@ rsync -avprPR yardrat:data/dvc-repos/smart_expt_dvc/./training/yardrat/jon.crall
 
 
 ## Continue training on toothbrush with new annotations and hard negatives
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=0
 DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
@@ -1444,7 +1444,7 @@ model:
         #saliency_weights       : '1:1'
         #class_weights          : auto
         tokenizer              : linconv
-        arch_name              : smt_it_stm_p8
+        arch_name              : smt_it_stm_p16
         decoder                : mlp
         positive_change_weight : 1
         negative_change_weight : 0.01
@@ -1454,8 +1454,8 @@ model:
         saliency_head_hidden   : 6
         change_head_hidden     : 6
         class_head_hidden      : 6
-        #global_change_weight   : 0.05
-        global_class_weight    : 0.50
+        global_change_weight   : 0.00
+        global_class_weight    : 0.00
         global_saliency_weight : 1.00
 optimizer:
     class_path: torch.optim.AdamW
@@ -1486,7 +1486,10 @@ torch_globals:
 
 initializer:
     init: $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2_epoch3_step941.pt
-"
+" \
+    --ckpt_path=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6-MeanYear10GSD/runs/Drop6_TCombo1Year_BAS_10GSD_split6_V43/lightning_logs/version_0/checkpoints/epoch=73-step=18944.ckpt
+
+ls "$WORKDIR"/$DATASET_CODE/runs/$EXPERIMENT_NAME/lightning_logs/version_*/checkpoints/*.ckpt
 
 
 ## Continue training on toothbrush with new annotations and hard negatives

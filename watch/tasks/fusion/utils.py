@@ -93,7 +93,7 @@ def load_model_from_package(package_path):
         try:
             fit_config_text = imp.load_text('package_header', candidate_fpath)
         except Exception:
-            print(f"Did not find {candidate_dest} at {candidate_fpath}")
+            print(f"[load_model_from_package] Warning: did not find {candidate_dest} at {candidate_fpath}")
             pass
         else:
             import io

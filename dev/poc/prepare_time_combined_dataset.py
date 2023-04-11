@@ -244,15 +244,15 @@ if __name__ == '__main__':
         python -m watch.cli.prepare_teamfeats \
             --base_fpath "$BUNDLE_DPATH"/imganns-*.kwcoco.zip \
             --expt_dpath="$DVC_EXPT_DPATH" \
-            --with_landcover2=1 \
-            --with_landcover=0 \
+            --with_landcover=1 \
+            --with_invariants2=1 \
             --with_materials=0 \
-            --with_invariants=1 \
             --with_depth=0 \
             --with_cold=0 \
             --do_splits=0 \
             --skip_existing=1 \
-            --gres=0,1 --workers=4 --backend=serial --run=1
+            --assets_dname=teamfeats \
+            --gres=0,1 --workers=4 --backend=serial --run=0
 
         DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
         python -m watch.cli.prepare_splits \
