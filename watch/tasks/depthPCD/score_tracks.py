@@ -1,0 +1,331 @@
+import geojson
+import json
+import os
+
+from watch.tasks.depthPCD.model import getModel, normalize
+import numpy as np
+import cv2
+import kwimage
+import ndsampler
+
+import pandas as pd
+import scriptconfig as scfg
+import ubelt as ub
+from kwcoco.util import util_json
+from tqdm import tqdm
+
+import watch
+from watch.cli.kwcoco_to_geojson import convert_kwcoco_to_iarpa, create_region_feature, KWCocoToGeoJSONConfig
+from watch.utils import process_context
+
+# important imported last
+import kwcoco
+
+
+def score_tracks(coco_dset, imCoco_dset, thresh):
+    expt_dvc_dpath = watch.find_smart_dvc_dpath(tags='phase2_expt', hardware='auto')
+    print('loading site validation model')
+    model = getModel()
+    model.load_weights(expt_dvc_dpath + '/models/depthPCD/basicModel2.h5', by_name=True, skip_mismatch=True)
+    # model.load_weights('/media/hdd2/antonio/models/urbanTCDs-use.h5')
+
+    to_keep = []
+    for coco_img in imCoco_dset.images().coco_images:
+        if coco_img['sensor_coarse'] == 'WV' and 'red' in coco_img.channels:
+            to_keep.append(coco_img['id'])
+
+    dset = imCoco_dset.subset(to_keep)
+
+    sampler = ndsampler.CocoSampler(dset)
+
+    imgs = pd.DataFrame(coco_dset.dataset["images"])
+    if "timestamp" not in imgs.columns:
+        imgs["timestamp"] = imgs["id"]
+
+    annots = pd.DataFrame(coco_dset.dataset["annotations"])
+
+    if annots.shape[0] == 0:
+        print("Nothing to filter")
+        return coco_dset
+
+    annots = annots[[
+        "id", "image_id", "track_id", "score"
+    ]].join(
+        imgs[["timestamp"]],
+        on="image_id",
+    )
+
+    track_ids_to_drop = []
+    ann_ids_to_drop = []
+
+    regions = []
+    tannots = annots.groupby('track_id', axis=0)
+    for track_id, track_group in tqdm(tannots):
+
+        first_annot_id = track_group["id"].tolist()[0]
+        first_image_id = track_group["image_id"].tolist()[0]
+        first_coco_img = coco_dset.coco_image(first_image_id)
+        first_annot = coco_dset.anns[first_annot_id]
+        imgspace_annot_box = kwimage.Box.coerce(first_annot['bbox'], format='xywh')
+        vidspace_annot_box = imgspace_annot_box.warp(first_coco_img.warp_vid_from_img)
+        ref_coco_img = first_coco_img  # dset.coco_image(dset.dataset['images'][0]['id'])
+
+        if 1:
+            # Because we want a higher resolution, we need to scale the requested
+            # videospace region down. Looks like quantization errors may happen
+            # here not sure how I deal with in the dataloader, it probably needs to
+            # be fixed there too.
+
+            res = '2GSD'
+            scale_res_from_vidspace = ref_coco_img._scalefactor_for_resolution(space='video', resolution=res)
+
+            # cxy = vidspace_annot_box.to_cxywh().data[0:2]
+            # warp_res_from_vidspace = kwimage.Affine.coerce(scale=scale_res_from_vidspace, about=cxy)
+            warp_res_from_vidspace = kwimage.Affine.scale(scale_res_from_vidspace)
+
+            # Convert the video space annotation into requested resolution "window space"
+            winspace_annot_box = vidspace_annot_box.warp(warp_res_from_vidspace)
+
+            # Convert to center xy/with/height format
+            winspace_annot_box = winspace_annot_box.toformat('cxywh')
+
+            # Force the box to be a specific size at our window resolution
+            # THIS IS THE BUG
+            # winspace_target_box = winspace_annot_box.resize(*force_dsize)
+
+            # Workaround
+            winspace_target_box = winspace_annot_box.copy()
+            #            size = max(winspace_target_box.data[2], winspace_target_box.data[3])
+            winspace_target_box.data[2:4] = (224, 224)
+
+            # Convert the box back to videospace
+            vidspace_target_box = winspace_target_box.warp(warp_res_from_vidspace.inv())
+
+            # Get the slice for video space
+            vidspace_slice = vidspace_target_box.quantize().to_slice()
+        else:
+            vidspace_slice = vidspace_annot_box.to_slice()
+
+        # find in second video
+        videoName = first_coco_img.video['name']
+        vidid = -1
+        for v in sampler.dset.index.videos.values():
+            if v['name'] == videoName:
+                vidid = v['id']
+        if vidid == -1:
+            continue
+        target = {
+            'vidid': vidid,
+            'channels': 'blue|green|red',
+            'allow_augment': False,
+            'space_slice': vidspace_slice,
+            'use_native_scale': True,
+        }
+        data = sampler.load_sample(target, with_annots=False, visible_thres=1.0)
+
+        ims = data['im']
+
+        good_ims = []
+        for i in ims:
+            im = np.stack([ii[..., 0] for ii in i], axis=-1) / (4096 * 2)
+            im[im < 0] = 0
+            im[im > 1] = 1
+            im = (im * 255).astype(np.uint8)
+            if im.shape[-1] == 3:
+                im = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
+            if np.mean(im == 0) > .2:
+                continue
+            good_ims.append(normalize(im))
+
+        # a little average at start vs end
+        nAvg = 2
+        if len(good_ims) < nAvg + 1:
+            continue
+        ims = []
+        for i in range(nAvg):
+            for j in range(-1, -nAvg - 1, -1):
+                first = good_ims[i]
+                last = good_ims[j]
+                ims.append(np.stack([first, 0.5 * first + 0.5 * last, last], axis=-1).astype(np.float32))
+
+        score = np.mean(model.predict(np.array(ims), batch_size=1, verbose=False)[8])
+
+        if 0:
+            print(score)
+            cv2.namedWindow('main', cv2.WINDOW_GUI_NORMAL)
+            i = 1
+            first = good_ims[0]
+            last = good_ims[-1]
+            while 1:
+                if i == 1:
+                    i = 0
+                    im = first
+                else:
+                    i = 1
+                    im = last
+                cv2.imshow('main', im / 255)
+                q = cv2.waitKey(0)
+                if q == 113:
+                    break
+
+        #        ks = list(coco_dset.index.videos.keys())
+
+        if score < thresh:  # or coco_dset.index.videos[ks[0]]['name'] == 'AE_R001':
+            track_ids_to_drop.append(track_id)
+            ann_ids_to_drop.extend(track_group["id"].tolist())
+            regions.append(videoName)
+
+    print(f"Dropping {len(ann_ids_to_drop)} annotations from {len(track_ids_to_drop)} tracks.")
+    from collections import Counter
+    print(Counter(regions))
+    if len(ann_ids_to_drop) > 0:
+        coco_dset.remove_annotations(ann_ids_to_drop)
+
+    return coco_dset
+
+
+class scoreTracksConfig(KWCocoToGeoJSONConfig):
+    """
+    Score and Convert KWCOCO to IARPA GeoJSON
+    """
+    images = scfg.Value(None, required=True, help=ub.paragraph(
+        '''
+            kwcoco file with images where to score polygons.
+            '''), group='track scoring')
+    threshold = scfg.Value(0.4, help=ub.paragraph(
+        '''
+            threshold to filter polygons, very sensitive
+            '''), group='track scoring')
+
+
+def main(**kwargs):
+    args = scoreTracksConfig.cli(cmdline=True, data=kwargs)
+    print('args = {}'.format(ub.urepr(dict(args), nl=1)))
+
+    coco_dset = kwcoco.CocoDataset.coerce(args.in_file)
+
+    pred_info = coco_dset.dataset.get('info', [])
+
+    tracking_output = {
+        'type': 'tracking_result',
+        'info': [],
+        'files': [],
+    }
+    # Args will be serailized in kwcoco, so make sure it can be coerced to json
+    jsonified_config = util_json.ensure_json_serializable(args.asdict())
+    walker = ub.IndexableWalker(jsonified_config)
+    for problem in util_json.find_json_unserializable(jsonified_config):
+        bad_data = problem['data']
+        walker[problem['loc']] = str(bad_data)
+
+    info = tracking_output['info']
+
+    proc_context = process_context.ProcessContext(
+        name='watch.tasks.depthPCD.score_tracks', type='process',
+        config=jsonified_config,
+        extra={'pred_info': pred_info},
+        track_emissions=False,
+    )
+    proc_context.start()
+    info.append(proc_context.obj)
+
+    images = kwcoco.CocoDataset.coerce(args.images)
+    coco_dset = score_tracks(coco_dset, images, args.threshold)
+
+    proc_context.stop()
+    out_kwcoco = args.out_kwcoco
+    if out_kwcoco is not None and 0:
+        coco_dset = coco_dset.reroot(absolute=True, check=False)
+        # Add tracking audit data to the kwcoco file
+        coco_info = coco_dset.dataset.get('info', [])
+        coco_info.append(proc_context.obj)
+        coco_dset.fpath = out_kwcoco
+        ub.Path(out_kwcoco).parent.ensuredir()
+        print(f'write to coco_dset.fpath={coco_dset.fpath}')
+        coco_dset.dump(out_kwcoco, indent=2)
+
+        # Convert kwcoco to sites
+    import safer
+    verbose = 1
+
+    if args.out_sites_dir is not None:
+
+        sites_dir = ub.Path(args.out_sites_dir).ensuredir()
+        # Also do this in BAS mode
+        sites = convert_kwcoco_to_iarpa(coco_dset,
+                                        default_region_id=args.region_id,
+                                        as_summary=False)
+        print(f'{len(sites)=}')
+        # write sites to disk
+        site_fpaths = []
+        for site in ub.ProgIter(sites, desc='writing sites', verbose=verbose):
+            site_props = site['features'][0]['properties']
+            assert site_props['type'] == 'site'
+            site_fpath = sites_dir / (site_props['site_id'] + '.geojson')
+            site_fpaths.append(os.fspath(site_fpath))
+
+            with safer.open(site_fpath, 'w', temp_file=True) as f:
+                geojson.dump(site, f, indent=2)
+
+    if args.out_sites_fpath is not None:
+        site_tracking_output = tracking_output.copy()
+        site_tracking_output['files'] = site_fpaths
+        out_sites_fpath = ub.Path(args.out_sites_fpath)
+        print(f'Write tracked site result to {out_sites_fpath}')
+        with safer.open(out_sites_fpath, 'w', temp_file=True) as file:
+            json.dump(site_tracking_output, file, indent='    ')
+
+    # Convert kwcoco to sites summaries
+    if args.out_site_summaries_dir is not None:
+        sites = convert_kwcoco_to_iarpa(coco_dset,
+                                        default_region_id=args.region_id,
+                                        as_summary=True)
+        print(f'{len(sites)=}')
+        site_summary_dir = ub.Path(args.out_site_summaries_dir).ensuredir()
+        # write sites to region models on disk
+        groups = ub.group_items(sites, lambda site: site['properties'].pop('region_id'))
+
+        site_summary_fpaths = []
+        for region_id, site_summaries in groups.items():
+
+            region_fpath = site_summary_dir / (region_id + '.geojson')
+            if args.append_mode and region_fpath.is_file():
+                with open(region_fpath, 'r') as f:
+                    region = geojson.load(f)
+                if verbose:
+                    print(f'writing to existing region {region_fpath}')
+            else:
+                region = geojson.FeatureCollection(
+                    [create_region_feature(region_id, site_summaries)])
+                if verbose:
+                    print(f'writing to new region {region_fpath}')
+            for site_summary in site_summaries:
+                assert site_summary['properties']['type'] == 'site_summary'
+                region['features'].append(site_summary)
+
+            site_summary_fpaths.append(os.fspath(region_fpath))
+            with safer.open(region_fpath, 'w', temp_file=True) as f:
+                geojson.dump(region, f, indent=2)
+
+    if args.out_site_summaries_fpath is not None:
+        site_summary_tracking_output = tracking_output.copy()
+        site_summary_tracking_output['files'] = site_summary_fpaths
+        out_site_summaries_fpath = ub.Path(args.out_site_summaries_fpath)
+        out_site_summaries_fpath.parent.ensuredir()
+        print(f'Write tracked site summary result to {out_site_summaries_fpath}')
+        with safer.open(out_site_summaries_fpath, 'w', temp_file=True) as file:
+            json.dump(site_summary_tracking_output, file, indent='    ')
+
+
+'''
+python -m watch.tasks.depthPCD.score_tracks /media/barcelona/Drop6/bas_baseline/polyb.kwcoco.zip
+        --images /media/barcelona/Drop6/valT.kwcoco.zip
+        --out_site_summaries_fpath "/media/barcelona/Drop6/tronexperiments/debug/site_summaries_manifest.json"
+        --out_site_summaries_dir "/media/barcelona/Drop6/tronexperiments/debug/site_summaries"
+        --out_sites_fpath "/media/barcelona/Drop6/tronexperiments/debug/sites_manifest.json"
+        --out_sites_dir "/media/barcelona/Drop6/tronexperiments/debug/sites"
+        --out_kwcoco "some file with filtered poly if you need"
+        --threshold 0.3 (default)
+'''
+if __name__ == '__main__':
+    main()

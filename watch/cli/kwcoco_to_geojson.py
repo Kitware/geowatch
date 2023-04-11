@@ -419,6 +419,8 @@ def coco_track_to_site(coco_dset, trackid, region_id, site_idx=None,
         coco_create_observation(coco_dset, _anns, with_properties=(not as_summary))
         for gid, _anns in ub.group_items(anns, gids).items()
     ]
+    for i in range(len(features)):
+        features[i]['properties']['trackid'] = trackid
 
     # HACK to passthrough site_summary IDs
     import watch
