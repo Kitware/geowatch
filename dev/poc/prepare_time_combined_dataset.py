@@ -2,90 +2,17 @@
 """
 SeeAlso:
     ~/code/watch/watch/cli/coco_time_combine.py
+    ~/code/watch/watch/cli/prepare_teamfeats.py
 """
 import scriptconfig as scfg
 import ubelt as ub
+from cmd_queue.cli_boilerplate import CMDQueueConfig
 
 
-class _CMDQueueBoilerplateConfig(scfg.DataConfig):
-    """
-    A helper to carry around the common boilerplate for cmd-queue CLI's.
-    The __default__ attribute should be used to update another config's
-    __default__ attribute, and the static methods can be used to create /
-    execute the queue.
-
-    This or something like it may eventually be ported to cmdqueue itself.
-    """
-
-    backend = scfg.Value('tmux', help=('The cmd_queue backend. Can be tmux, slurm, or serial'), group='cmd-queue')
-
-    print_commands = scfg.Value('auto', isflag=True, help='enable / disable rprint before exec', group='cmd-queue')
-
-    print_queue = scfg.Value('auto', isflag=True, help='print the cmd queue DAG', group='cmd-queue')
-
-    run = scfg.Value(False, isflag=True, help='if False, only prints the commands, otherwise executes them', group='cmd-queue')
-
-    with_textual = scfg.Value('auto', isflag=True, help='setting for cmd-queue monitoring', group='cmd-queue')
-
-    other_session_handler = scfg.Value('ask', help='for tmux backend only. How to handle conflicting sessions. Can be ask, kill, or ignore, or auto', group='cmd-queue')
-
-    virtualenv_cmd = scfg.Value(None, type=str, help=ub.paragraph(
-        '''
-        Command to start the appropriate virtual environment if your bashrc
-        does not start it by default.'''), group='cmd-queue')
-
-    tmux_workers = scfg.Value(4, help='number of tmux workers in the queue for the tmux backend', group='cmd-queue')
-
-    queue_name = scfg.Value(None, help='overwrite the default queue name', group='cmd-queue')
-
-    @staticmethod
-    def _create_queue(config):
-        import cmd_queue
-        queue = cmd_queue.Queue.create(
-            backend=config.backend, size=config.tmux_workers,
-            name=config.queue_name or 'combine-time-queue')
-        if config.virtualenv_cmd:
-            queue.add_header_command(config.virtualenv_cmd)
-        return queue
-
-    @staticmethod
-    def _run_queue(config, queue):
-        print_thresh = 30
-        if config['print_commands'] == 'auto':
-            if len(queue) < print_thresh:
-                config['print_commands'] = 1
-            else:
-                print(f'More than {print_thresh} jobs, skip queue.print_commands. '
-                      'If you want to see them explicitly specify print_commands=1')
-                config['print_commands'] = 0
-
-        if config['print_queue'] == 'auto':
-            if len(queue) < print_thresh:
-                config['print_queue'] = 1
-            else:
-                print(f'More than {print_thresh} jobs, skip queue.print_graph. '
-                      'If you want to see them explicitly specify print_queue=1')
-                config['print_queue'] = 0
-
-        if config.print_commands:
-            queue.print_commands()
-
-        if config.print_queue:
-            queue.print_graph()
-
-        if config.run:
-            queue.run(with_textual=config.with_textual,
-                      other_session_handler=config.other_session_handler)
-
-
-class PrepareTimeAverages(scfg.DataConfig):
+class PrepareTimeAverages(CMDQueueConfig):
     """
     Prepare a temporally averaged dataset on multiple regions
     """
-    __fuzzy_hyphens__ = 1
-    # src = scfg.Value(None, help='input')
-    __default__ = ub.udict({}) | _CMDQueueBoilerplateConfig.__default__
-
     regions = scfg.Value('all', type=str, help='The regions to time average (this is not a robust implementation)')
 
     reproject = scfg.Value(True, isflag=True, help='Enable reprojection of annotations')
@@ -125,9 +52,9 @@ def main(cmdline=1, **kwargs):
         >>> )
         >>> main(cmdline=cmdline, **kwargs)
     """
-    from watch.utils.partial_format import subtemplate
     config = PrepareTimeAverages.cli(cmdline=cmdline, data=kwargs, strict=True)
     import rich
+    from watch.utils.partial_format import subtemplate
     rich.print('config = ' + ub.urepr(config, nl=1))
     assert config.output_bundle_dpath is not None
     assert config.input_bundle_dpath is not None
@@ -155,7 +82,7 @@ def main(cmdline=1, **kwargs):
     #     'AE_R001',
     # ]
 
-    queue = _CMDQueueBoilerplateConfig._create_queue(config)
+    queue = config.create_queue()
 
     for region in all_regions:
 
@@ -205,7 +132,7 @@ def main(cmdline=1, **kwargs):
                 ''', fmtdict)
             queue.submit(code, depends=[field_job], name=f'reproject-ann-{region}')
 
-    _CMDQueueBoilerplateConfig._run_queue(config, queue)
+    config.run_queue(queue)
 
 
 if __name__ == '__main__':

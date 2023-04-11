@@ -134,13 +134,12 @@ Ignore:
         --skip_existing=1 \
         --gres=0,1 --workers=4 --backend=tmux --run=0
 """
-
-
 import scriptconfig as scfg
 import ubelt as ub
+from cmd_queue.cli_boilerplate import CMDQueueConfig
 
 
-class TeamFeaturePipelineConfig(scfg.DataConfig):
+class TeamFeaturePipelineConfig(CMDQueueConfig):
     """
     This generates the bash commands necessary to run team feature computation,
     followed by aggregation and then splitting out train / val datasets.
@@ -154,63 +153,74 @@ class TeamFeaturePipelineConfig(scfg.DataConfig):
     base_fpath = scfg.Value(None, help=ub.paragraph(
             '''
             One or more base coco files to compute team-features on.
-            '''), nargs='+')
+            '''), nargs='+', group='inputs')
     expt_dvc_dpath = scfg.Value('auto', help=ub.paragraph(
             '''
             The DVC directory where team feature model weights can be
             found. If "auto" uses the
             ``watch.find_dvc_dpath(tags='phase2_expt')`` mechanism to
             infer the location.
-            '''), nargs=None)
-    gres = scfg.Value('auto', help='comma separated list of gpus or auto', nargs=None)
-    with_landcover = scfg.Value(True, help='Include DZYNE landcover features', nargs=None)
-    with_materials = scfg.Value(True, help='Include Rutgers material features', nargs=None)
-    with_invariants = scfg.Value(True, help='Include UKY invariant features', nargs=None)
-    with_invariants2 = scfg.Value(0, help='Include UKY invariant features', nargs=None)
-    with_depth = scfg.Value(True, help='Include DZYNE WorldView depth features', nargs=None)
-    with_cold = scfg.Value(True, help='Include COLD features', nargs=None)
+            '''), nargs=None, group='inputs')
+
+    # gres = scfg.Value('auto', help='comma separated list of gpus or auto', nargs=None)
+
+    with_landcover = scfg.Value(False, help='Include DZYNE landcover features', nargs=None, group='team feature enablers')
+    with_materials = scfg.Value(False, help='Include Rutgers material features', nargs=None, group='team feature enablers')
+    with_invariants = scfg.Value(False, help='Include UKY invariant features', nargs=None, group='team feature enablers')
+    with_invariants2 = scfg.Value(False, help='Include UKY invariant features', nargs=None, group='team feature enablers')
+    with_depth = scfg.Value(False, help='Include DZYNE WorldView depth features', nargs=None, group='team feature enablers')
+    with_cold = scfg.Value(False, help='Include COLD features', nargs=None)
+
     invariant_segmentation = scfg.Value(False, help=ub.paragraph(
             '''
             Enable/Disable segmentation part of invariants
-            '''), nargs=None)
-    invariant_pca = scfg.Value(0, help='Enable/Disable invariant PCA', nargs=None)
-    invariant_resolution = scfg.Value('10GSD', help='GSD for invariants', nargs=None)
+            '''), nargs=None, group='invariants options')
+    invariant_pca = scfg.Value(0, help='Enable/Disable invariant PCA', nargs=None, group='invariants options')
+    invariant_resolution = scfg.Value('10GSD', help='GSD for invariants', nargs=None, group='invariants options')
+
     virtualenv_cmd = scfg.Value(None, type=str, help=ub.paragraph(
             '''
             Command to start the appropriate virtual environment if your
             bashrc does not start it by default.
             '''), nargs=None)
+
     data_workers = scfg.Value(2, help='dataloader workers for each proc', nargs=None)
-    cold_workers = scfg.Value(4, help='workers for pycold', nargs=None)
-    cold_workermode = scfg.Value('process', help='workers mode for pycold', nargs=None)
+
+    cold_workers = scfg.Value(4, help='workers for pycold', nargs=None, group='cold options')
+    cold_workermode = scfg.Value('process', help='workers mode for pycold', nargs=None, group='cold options')
+
     depth_workers = scfg.Value(2, help=ub.paragraph(
             '''
             workers for depth only. On systems with < 32GB RAM might
             need to set to 0
-            '''), nargs=None)
-    keep_sessions = scfg.Value(False, help='if True does not close tmux sessions', nargs=None)
+            '''), nargs=None, group='depth options')
+
+    # keep_sessions = scfg.Value(False, help='if True does not close tmux sessions', nargs=None)
+
     workers = scfg.Value('auto', help=ub.paragraph(
             '''
             Maximum number of parallel jobs, 0 is no-nonsense serial
             mode.
             '''), nargs=None)
-    run = scfg.Value(0, help='if True execute the pipeline', nargs=None)
-    skip_existing = scfg.Value(True, help='if True skip completed results', nargs=None)
+    # run = scfg.Value(0, help='if True execute the pipeline', nargs=None)
+    # skip_existing = scfg.Value(True, help='if True skip completed results', nargs=None)
+
     do_splits = scfg.Value(False, help='if True also make splits. BROKEN', nargs=None)
-    serial = scfg.Value(False, help='if True use serial mode', nargs=None)
-    backend = scfg.Value('tmux', help=None, nargs=None)
+
+    # serial = scfg.Value(False, help='if True use serial mode', nargs=None)
+    # backend = scfg.Value('tmux', help=None, nargs=None)
     check = scfg.Value(True, help='if True check files exist where we can', nargs=None)
     verbose = scfg.Value(1, help='', nargs=None)
 
     kwcoco_ext = scfg.Value('.kwcoco.zip', help=ub.paragraph(
             '''
             use .kwcoco.json or .kwcoco.zip for outputs
-            '''), nargs=None)
+            '''), nargs=None, group='common options')
 
     assets_dname = scfg.Value('_teamfeats', help=ub.paragraph(
         '''
         The name of the top-level directory to write new assets.
-        '''))
+        '''), group='common options')
 
 
 def prep_feats(cmdline=True, **kwargs):
@@ -222,33 +232,35 @@ def prep_feats(cmdline=True, **kwargs):
     TODO:
         - [ ] Option to just dump the serial bash script that does everything.
     """
-    from scriptconfig.smartcast import smartcast
-    import cmd_queue
+    # from scriptconfig.smartcast import smartcast
+    # import cmd_queue
     from watch.utils import util_path
 
     config = TeamFeaturePipelineConfig.cli(cmdline=cmdline, data=kwargs)
     print('config = {}'.format(ub.urepr(dict(config), nl=1)))
 
-    gres = config['gres']
-    gres = smartcast(gres)
-    if gres is None:
-        gres = 'auto'
-    print('gres = {!r}'.format(gres))
-    if gres  == 'auto':
-        import netharn as nh
-        gres = []
-        for gpu_idx, gpu_info in nh.device.gpu_info().items():
-            if len(gpu_info['procs']) == 0:
-                gres.append(gpu_idx)
-    elif not ub.iterable(gres):
-        gres = [gres]
-
-    workers = config['workers']
-    if workers == 'auto':
-        if gres is None:
-            workers = 0
-        else:
-            workers = len(gres)
+    # gres = config['gres']
+    # gres = smartcast(gres)
+    # if gres is None:
+    #     gres = 'auto'
+    # print('gres = {!r}'.format(gres))
+    # if gres  == 'auto':
+    #     import netharn as nh
+    #     gres = []
+    #     for gpu_idx, gpu_info in nh.device.gpu_info().items():
+    #         if len(gpu_info['procs']) == 0:
+    #             gres.append(gpu_idx)
+    # elif not ub.iterable(gres):
+    #     gres = [gres]
+    # workers = config['workers']
+    # if workers == 'auto':
+    #     if gres is None:
+    #         workers = 0
+    #     else:
+    #         workers = len(gres)
+    # if workers == 0:
+    #     gres = None
+    # size = max(1, workers)
 
     if config['expt_dvc_dpath'] == 'auto':
         import watch
@@ -256,10 +268,6 @@ def prep_feats(cmdline=True, **kwargs):
     else:
         expt_dvc_dpath = ub.Path(config['expt_dvc_dpath'])
 
-    if workers == 0:
-        gres = None
-
-    size = max(1, workers)
     from watch.mlops.old import pipeline_v1
     pipeline = pipeline_v1.Pipeline()
 
@@ -274,29 +282,33 @@ def prep_feats(cmdline=True, **kwargs):
         _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath,
                                  aligned_bundle_dpath, config)
 
-    queue = cmd_queue.Queue.create(
-        name='watch-teamfeat',
-        backend=config['backend'],
-        # Tmux only
-        size=size, gres=gres,
-    )
+    # queue = cmd_queue.Queue.create(
+    #     name='watch-teamfeat',
+    #     backend=config['backend'],
+    #     # Tmux only
+    #     size=size, gres=gres,
+    # )
 
-    if config['virtualenv_cmd']:
-        queue.add_header_command(config['virtualenv_cmd'])
+    queue = config.create_queue()
+
+    # if config['virtualenv_cmd']:
+    #     queue.add_header_command(config['virtualenv_cmd'])
 
     pipeline._populate_explicit_dependency_queue(queue)
     # pipeline._populate_implicit_dependency_queue(queue, skip_existing=config['skip_existing'])
 
-    if config['verbose']:
-        queue.print_graph()
-        queue.print_commands(with_locks=0)
+    # if config['verbose']:
+    #     queue.print_graph()
+    #     queue.print_commands(with_locks=0)
 
-    if config['run']:
-        queue.run(
-            block=True,
-            # with_textual=False,
-            with_textual='auto',
-        )
+    config.run_queue(queue)
+
+    # if config['run']:
+    #     queue.run(
+    #         block=True,
+    #         # with_textual=False,
+    #         with_textual='auto',
+    #     )
 
     """
     Ignore:
