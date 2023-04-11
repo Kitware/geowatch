@@ -62,6 +62,12 @@ class CocoStitchingManager(object):
             set to True if you are adding predictions to the kwcoco file,
             otherwise set to False to remove unnecessary attributes.
 
+        dtype (str): the dtype to stitch over. Defaults to 'float32'
+
+        assets_dname (str):
+            The name of the top-level directory to write new assets. Defaults
+            to _assets
+
     TODO:
         - [ ] Handle the case where the input space is related to the output
               space by an affine transform.
@@ -143,7 +149,8 @@ class CocoStitchingManager(object):
                  write_probs=True, write_preds=False, num_bands='auto',
                  prob_compress='DEFLATE', polygon_categories=None,
                  expected_minmax=None, quantize=True, writer_queue=None,
-                 write_prediction_attrs=True):
+                 write_prediction_attrs=True, assets_dname='_assets',
+                 dtype='float32'):
         from watch.utils import util_parallel
         self.short_code = short_code
         self.result_dataset = result_dataset
@@ -156,6 +163,8 @@ class CocoStitchingManager(object):
         self.quantize = quantize
         self.expected_minmax = expected_minmax
         self.write_prediction_attrs = write_prediction_attrs
+        self.dtype = dtype
+        self.assets_dname = assets_dname
 
         if writer_queue is None:
             # basic queue if nothing fancy is given
@@ -204,7 +213,7 @@ class CocoStitchingManager(object):
 
         if self.write_probs:
             bundle_dpath = ub.Path(self.result_dataset.bundle_dpath)
-            prob_subdir = f'_assets/{self.short_code}'
+            prob_subdir = f'{self.assets_dname}/{self.short_code}'
             self.prob_dpath = (bundle_dpath / prob_subdir).ensuredir()
 
     def accumulate_image(self, gid, space_slice, data, asset_dsize=None,
@@ -271,7 +280,7 @@ class CocoStitchingManager(object):
                         raise NotImplementedError
                 asset_dims = (height, width, self.num_bands)
                 self.image_stitchers[gid] = kwarray.Stitcher(
-                    asset_dims, device=self.device)
+                    asset_dims, device=self.device, dtype=self.dtype)
                 self._image_scales[gid] = scale_asset_from_stitchspace
 
             if is_ready == 'auto':
