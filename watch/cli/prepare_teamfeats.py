@@ -25,13 +25,11 @@ Example:
     >>>     'with_landcover': 1,
     >>>     'with_materials': 1,
     >>>     'with_invariants': 1,
-    >>>     'do_splits': 1,
     >>> #
     >>>     'run': 0,
     >>>     #'check': False,
     >>>     'skip_existing': False,
     >>>     'backend': 'serial',
-    >>>     'verbose': 0,
     >>> }
     >>> config['backend'] = 'slurm'
     >>> queue = prep_feats(cmdline=False, **config)
@@ -45,94 +43,40 @@ Example:
 
 Ignore:
 
-    # For Drop5
-    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-    DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt')
-    # BUNDLE_DPATH=$DVC_DATA_DPATH/Aligned-Drop5-2022-10-11-c30-TA1-S2-L8-WV-PD-ACC
-    # KWCOCO_FPATH=$BUNDLE_DPATH/data.kwcoco.json
-
-    ln -s Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC Drop4-BAS
-    ln -s Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC Drop4-SC
-
-    pyblock "
-    import kwcoco
-    dset = kwcoco.CocoDataset('data.kwcoco.json')
-
-    from watch.utils import util_parallel
-    writer = util_parallel.BlockingJobQueue(max_workers=16)
-    for video in ub.ProgIter(dset.videos().objs, desc='Splitting dataset'):
-        vidname = video['name']
-        print(f'vidname={vidname}')
-        video_gids = list(dset.images(video_id=video['id']))
-        print(f'video_gids={video_gids}')
-        vid_subset = dset.subset(video_gids)
-        vid_subset.fpath = ub.Path(dset.bundle_dpath) / (vidname + '.kwcoco.json')
-        vid_subset.dump(vid_subset.fpath, newlines=False)
-    writer.wait_until_finished(desc="Finish write jobs")
-    "
-
-    # Drop 4
-    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-    BUNDLE_DPATH=$DVC_DATA_DPATH/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
-    KWCOCO_FPATH_PAT=$BUNDLE_DPATH/[KLNPUBAC]*_[RC]*0[1234].kwcoco.json
-    ls $KWCOCO_FPATH_PAT
-    python -m watch.cli.prepare_teamfeats \
-        --base_fpath="$KWCOCO_FPATH_PAT" \
-        --expt_dpath="$DVC_EXPT_DPATH" \
-        --with_landcover=0 \
-        --with_materials=0 \
-        --with_invariants=0 \
-        --with_invariants2=1 \
-        --with_depth=0 \
-        --do_splits=0 \
-        --skip_existing=0 \
-        --gres=0,1 --workers=2 --backend=tmux --run=0
-
-    ls combo_*_I.kwcoco*
-
-    kwcoco union --src  \
-        combo_AE_C001_I.kwcoco.json  combo_BR_R001_I.kwcoco.json  combo_NZ_R001_I.kwcoco.json  combo_US_C002_I.kwcoco.json combo_AE_C002_I.kwcoco.json  combo_BR_R002_I.kwcoco.json  combo_US_R001_I.kwcoco.json combo_AE_C003_I.kwcoco.json  combo_BR_R004_I.kwcoco.json  combo_PE_C001_I.kwcoco.json  combo_US_R004_I.kwcoco.json combo_AE_R001_I.kwcoco.json  combo_CH_R001_I.kwcoco.json  combo_PE_R001_I.kwcoco.json combo_BH_R001_I.kwcoco.json  combo_CN_C001_I.kwcoco.json  combo_LT_R001_I.kwcoco.json  combo_US_C001_I.kwcoco.json \
-    --dst combo_train_I.kwcoco.json
-
-
-    kwcoco union --src combo_KR_R001_I.kwcoco.json combo_KR_R002_I.kwcoco.json combo_US_R007_I.kwcoco.json --dst combo_vali_I.kwcoco.json
-
-    smartwatch stats combo_vali_I.kwcoco.json combo_train_I.kwcoco.json
-
-
     # Drop 6
     export CUDA_VISIBLE_DEVICES="0,1"
     DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+    DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
     BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6
     python -m watch.cli.prepare_teamfeats \
         --base_fpath "$BUNDLE_DPATH"/imganns-*.kwcoco.zip \
-        --expt_dpath="$DVC_EXPT_DPATH" \
+        --expt_dvc_dpath="$DVC_EXPT_DPATH" \
         --with_invariants2=1 \
         --with_landcover=0 \
         --with_materials=0 \
         --with_invariants=0 \
         --with_depth=0 \
         --with_cold=0 \
-        --do_splits=0 \
         --skip_existing=1 \
-        --gres=0,1 --workers=4 --backend=tmux --run=0
+        --gres=0,1 --tmux_workers=4 --backend=tmux --run=0
 
     # Drop 6
     export CUDA_VISIBLE_DEVICES="0,1"
     DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+    DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
     BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6
     python -m watch.cli.prepare_teamfeats \
         --base_fpath "$BUNDLE_DPATH"/imganns-KR_R00*.kwcoco.zip \
-        --expt_dpath="$DVC_EXPT_DPATH" \
+        --expt_dvc_dpath="$DVC_EXPT_DPATH" \
         --with_invariants2=1 \
         --with_landcover=0 \
         --with_materials=0 \
         --with_invariants=0 \
         --with_depth=0 \
         --with_cold=0 \
-        --do_splits=0 \
         --skip_existing=1 \
-        --gres=0,1 --workers=4 --backend=tmux --run=0
+        --assets_dname=teamfeats \
+        --gres=0,1 --tmux_workers=4 --backend=tmux --run=0
 """
 import scriptconfig as scfg
 import ubelt as ub
@@ -162,7 +106,7 @@ class TeamFeaturePipelineConfig(CMDQueueConfig):
             infer the location.
             '''), nargs=None, group='inputs')
 
-    # gres = scfg.Value('auto', help='comma separated list of gpus or auto', nargs=None)
+    gres = scfg.Value('auto', help='comma separated list of gpus or auto', nargs=None, group='cmd-queue')
 
     with_landcover = scfg.Value(False, help='Include DZYNE landcover features', nargs=None, group='team feature enablers')
     with_materials = scfg.Value(False, help='Include Rutgers material features', nargs=None, group='team feature enablers')
@@ -184,7 +128,21 @@ class TeamFeaturePipelineConfig(CMDQueueConfig):
             bashrc does not start it by default.
             '''), nargs=None)
 
-    data_workers = scfg.Value(2, help='dataloader workers for each proc', nargs=None)
+    skip_existing = scfg.Value(True, help='if True skip completed results', nargs=None, group='common options')
+
+    data_workers = scfg.Value(2, help='dataloader workers for each proc', nargs=None, group='common options')
+
+    kwcoco_ext = scfg.Value('.kwcoco.zip', help=ub.paragraph(
+            '''
+            use .kwcoco.json or .kwcoco.zip for outputs
+            '''), nargs=None, group='common options')
+
+    assets_dname = scfg.Value('_teamfeats', help=ub.paragraph(
+        '''
+        The name of the top-level directory to write new assets.
+        '''), group='common options')
+
+    check = scfg.Value(True, help='if True check files exist where we can', nargs=None, group='common options')
 
     cold_workers = scfg.Value(4, help='workers for pycold', nargs=None, group='cold options')
     cold_workermode = scfg.Value('process', help='workers mode for pycold', nargs=None, group='cold options')
@@ -197,30 +155,14 @@ class TeamFeaturePipelineConfig(CMDQueueConfig):
 
     # keep_sessions = scfg.Value(False, help='if True does not close tmux sessions', nargs=None)
 
-    workers = scfg.Value('auto', help=ub.paragraph(
-            '''
-            Maximum number of parallel jobs, 0 is no-nonsense serial
-            mode.
-            '''), nargs=None)
+    # workers = scfg.Value('auto', help=ub.paragraph(
+    #         '''
+    #         Maximum number of parallel jobs, 0 is no-nonsense serial
+    #         mode.
+    #         '''), nargs=None)
     # run = scfg.Value(0, help='if True execute the pipeline', nargs=None)
-    # skip_existing = scfg.Value(True, help='if True skip completed results', nargs=None)
-
-    do_splits = scfg.Value(False, help='if True also make splits. BROKEN', nargs=None)
-
     # serial = scfg.Value(False, help='if True use serial mode', nargs=None)
     # backend = scfg.Value('tmux', help=None, nargs=None)
-    check = scfg.Value(True, help='if True check files exist where we can', nargs=None)
-    verbose = scfg.Value(1, help='', nargs=None)
-
-    kwcoco_ext = scfg.Value('.kwcoco.zip', help=ub.paragraph(
-            '''
-            use .kwcoco.json or .kwcoco.zip for outputs
-            '''), nargs=None, group='common options')
-
-    assets_dname = scfg.Value('_teamfeats', help=ub.paragraph(
-        '''
-        The name of the top-level directory to write new assets.
-        '''), group='common options')
 
 
 def prep_feats(cmdline=True, **kwargs):
@@ -232,35 +174,23 @@ def prep_feats(cmdline=True, **kwargs):
     TODO:
         - [ ] Option to just dump the serial bash script that does everything.
     """
-    # from scriptconfig.smartcast import smartcast
+    from scriptconfig.smartcast import smartcast
     # import cmd_queue
     from watch.utils import util_path
 
-    config = TeamFeaturePipelineConfig.cli(cmdline=cmdline, data=kwargs)
-    print('config = {}'.format(ub.urepr(dict(config), nl=1)))
+    config = TeamFeaturePipelineConfig.cli(cmdline=cmdline, data=kwargs,
+                                           strict=True)
+    import rich
+    rich.print('config = {}'.format(ub.urepr(config, nl=2)))
 
-    # gres = config['gres']
-    # gres = smartcast(gres)
-    # if gres is None:
-    #     gres = 'auto'
-    # print('gres = {!r}'.format(gres))
-    # if gres  == 'auto':
-    #     import netharn as nh
-    #     gres = []
-    #     for gpu_idx, gpu_info in nh.device.gpu_info().items():
-    #         if len(gpu_info['procs']) == 0:
-    #             gres.append(gpu_idx)
-    # elif not ub.iterable(gres):
-    #     gres = [gres]
-    # workers = config['workers']
-    # if workers == 'auto':
-    #     if gres is None:
-    #         workers = 0
-    #     else:
-    #         workers = len(gres)
-    # if workers == 0:
-    #     gres = None
-    # size = max(1, workers)
+    gres = smartcast(config['gres'])
+    if gres is None:
+        gres = 'auto'
+    if gres == 'auto':
+        import torch
+        gres = list(range(torch.cuda.device_count()))
+    elif not ub.iterable(gres):
+        gres = [gres]
 
     if config['expt_dvc_dpath'] == 'auto':
         import watch
@@ -282,33 +212,12 @@ def prep_feats(cmdline=True, **kwargs):
         _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath,
                                  aligned_bundle_dpath, config)
 
-    # queue = cmd_queue.Queue.create(
-    #     name='watch-teamfeat',
-    #     backend=config['backend'],
-    #     # Tmux only
-    #     size=size, gres=gres,
-    # )
-
-    queue = config.create_queue()
-
-    # if config['virtualenv_cmd']:
-    #     queue.add_header_command(config['virtualenv_cmd'])
+    queue = config.create_queue(gres=gres)
 
     pipeline._populate_explicit_dependency_queue(queue)
     # pipeline._populate_implicit_dependency_queue(queue, skip_existing=config['skip_existing'])
 
-    # if config['verbose']:
-    #     queue.print_graph()
-    #     queue.print_commands(with_locks=0)
-
     config.run_queue(queue)
-
-    # if config['run']:
-    #     queue.run(
-    #         block=True,
-    #         # with_textual=False,
-    #         with_textual='auto',
-    #     )
 
     """
     Ignore:
@@ -666,18 +575,6 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
         depends=request_jobs
     )
 
-    # TODO: union?
-
-    if config['do_splits']:
-        raise NotImplementedError
-        # # Also call the prepare-splits script
-        # from watch.cli import prepare_splits
-        # base_fpath = str(base_combo_fpath)
-        # queue.sync()
-        # prepare_splits._submit_split_jobs(base_fpath, queue)
-
-    # return queue
-
 
 main = prep_feats
 
@@ -712,7 +609,7 @@ if __name__ == '__main__':
         python -m watch.cli.prepare_teamfeats \
             --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
             --gres=0,1 --with_depth=0 --with_materials=False  --with_invariants=False \
-            --run=0 --do_splits=True
+            --run=0
 
         ###
         DATASET_CODE=Aligned-Drop2-TA1-2022-02-24
@@ -727,7 +624,7 @@ if __name__ == '__main__':
             --with_invariants=1 \
             --with_materials=1 \
             --depth_workers=auto \
-            --do_splits=1  --skip_existing=0 --run=0
+            --skip_existing=0 --run=0
 
         ###
         DVC_DPATH=$(smartwatch_dvc)
@@ -743,13 +640,12 @@ if __name__ == '__main__':
             --depth_workers=auto \
             --invariant_pca=0 \
             --invariant_segmentation=0 \
-            --do_splits=0  --skip_existing=1 --run=0
+            --skip_existing=1 --run=0
 
         # Simple demo
         python -m watch.cli.prepare_teamfeats \
             --base_fpath=./mydata/data.kwcoco.json \
             --gres=0,1 \
-            --do_splits=0 \
             --with_depth=0 \
             --with_landcover=1 \
             --with_invariants=0 \

@@ -104,7 +104,7 @@ def predict(cmdline=1, **kwargs):
     from watch.tasks.fusion.coco_stitcher import CocoStitchingManager
     import rich
 
-    config = LandcoverPredictConfig.cli(cmdline=cmdline, data=kwargs)
+    config = LandcoverPredictConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
 
     rich.print('config = {}'.format(ub.urepr(config, align=':', nl=1)))
 

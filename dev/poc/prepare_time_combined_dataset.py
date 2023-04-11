@@ -84,6 +84,9 @@ def main(cmdline=1, **kwargs):
 
     queue = config.create_queue()
 
+    # Need these for landcover
+    other_s2_bands = '|coastal|cirrus|B05|B06|B07|B8A|B09'
+
     for region in all_regions:
 
         fmtdict = dict(
@@ -98,7 +101,7 @@ def main(cmdline=1, **kwargs):
             RESOLUTION=config.resolution,
             WORKERS=config.combine_workers,
             TRUE_SITE_DPATH=config.true_site_dpath,
-            CHANNELS='red|green|blue|nir|swir16|swir22|pan',
+            CHANNELS='red|green|blue|nir|swir16|swir22|pan' + other_s2_bands,
         )
 
         code = subtemplate(ub.codeblock(
@@ -111,6 +114,7 @@ def main(cmdline=1, **kwargs):
                 --time_window=$TIME_DURATION \
                 --start_time=2010-01-01 \
                 --merge_method=mean \
+                --assets_dname="raw_bands" \
                 --workers=$WORKERS
             '''), fmtdict)
         combine_job = queue.submit(code, name=f'combine-time-{region}')
@@ -140,16 +144,28 @@ if __name__ == '__main__':
 
     CommandLine:
 
+        python -m watch.cli.coco_time_combine \
+            --kwcoco_fpath="/home/joncrall/remote/namek/data/dvc-repos/smart_data_dvc/Drop6/imgonly-AE_C002.kwcoco.json" \
+            --output_kwcoco_fpath="/home/joncrall/remote/namek/data/dvc-repos/smart_data_dvc/Drop6-MeanYear10GSD/imgonly-AE_C002.kwcoco.zip" \
+            --channels="red|green|blue|nir|swir16|swir22|pan" \
+            --resolution="10GSD" \
+            --time_window=1year \
+            --start_time=2010-01-01 \
+            --merge_method=mean \
+            --assets_dname=raw_bands \
+            --workers=0
+
         DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
         python ~/code/watch/dev/poc/prepare_time_combined_dataset.py \
             --regions="[
                     # T&E Regions
-                    AE_R001, BH_R001, BR_R001, BR_R002, BR_R004, BR_R005, CH_R001,
-                    KR_R001, KR_R002, LT_R001, NZ_R001, US_R001, US_R004, US_R005,
-                    US_R006, US_R007,
+                    # AE_R001, BH_R001, BR_R001, BR_R002, BR_R004, BR_R005, CH_R001,
+                    # KR_R001, KR_R002, LT_R001, NZ_R001, US_R001, US_R004, US_R005,
+                    # US_R006, US_R007,
                     # iMerit Regions
-                    AE_C001, AE_C002, AE_C003,
-                    PE_C001, QA_C001, SA_C005, US_C000, US_C010, US_C011, US_C012,
+                    # AE_C001,
+                    AE_C002,
+                    # AE_C003, PE_C001, QA_C001, SA_C005, US_C000, US_C010, US_C011, US_C012,
             ]" \
             --input_bundle_dpath=$DVC_DATA_DPATH/Drop6 \
             --output_bundle_dpath=$DVC_DATA_DPATH/Drop6-MeanYear10GSD \
@@ -159,6 +175,14 @@ if __name__ == '__main__':
             --tmux_workers=4 \
             --combine_workers=0 \
             --resolution=10GSD \
+            --run=0
+
+        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+        python -m watch.cli.prepare_splits \
+            --base_fpath=$DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-*.kwcoco.zip \
+            --constructive_mode=True \
+            --suffix=rawbands \
+            --backend=tmux --tmux_workers=6 \
             --run=1
 
         smartwatch visualize /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6-MeanYear10GSD/imganns-NZ_R001.kwcoco.zip --smart
@@ -170,22 +194,21 @@ if __name__ == '__main__':
         BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6-MeanYear10GSD
         python -m watch.cli.prepare_teamfeats \
             --base_fpath "$BUNDLE_DPATH"/imganns-*.kwcoco.zip \
-            --expt_dpath="$DVC_EXPT_DPATH" \
+            --expt_dvc_dpath="$DVC_EXPT_DPATH" \
             --with_landcover=1 \
             --with_invariants2=1 \
             --with_materials=0 \
             --with_depth=0 \
             --with_cold=0 \
-            --do_splits=0 \
             --skip_existing=1 \
             --assets_dname=teamfeats \
-            --gres=0,1 --workers=4 --backend=serial --run=0
+            --gres=0,1 --tmux_workers=4 --backend=tmux --run=1
 
         DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
         python -m watch.cli.prepare_splits \
             --base_fpath=$DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-*.kwcoco.zip \
             --constructive_mode=True \
-            --suffix=rawbands \
+            --suffix=LI2 \
             --backend=tmux --tmux_workers=6 \
             --run=1
     """
