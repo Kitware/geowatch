@@ -183,7 +183,7 @@ if __name__ == '__main__':
         DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
         BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2
         python -m watch.cli.prepare_teamfeats \
-            --base_fpath "$BUNDLE_DPATH"/imganns-*.kwcoco.zip \
+            --base_fpath "$BUNDLE_DPATH"/imganns-*[0-9].kwcoco.zip \
             --expt_dvc_dpath="$DVC_EXPT_DPATH" \
             --with_landcover=1 \
             --with_invariants2=1 \
@@ -192,7 +192,7 @@ if __name__ == '__main__':
             --with_cold=0 \
             --skip_existing=1 \
             --assets_dname=teamfeats \
-            --gres=0,1 --tmux_workers=4 --backend=tmux --run=1
+            --gres=0,1 --tmux_workers=4 --backend=tmux --run=0
 
         DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
         python -m watch.cli.prepare_splits \

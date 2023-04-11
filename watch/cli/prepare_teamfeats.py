@@ -203,8 +203,21 @@ def prep_feats(cmdline=True, **kwargs):
     from watch.mlops.old import pipeline_v1
     pipeline = pipeline_v1.Pipeline()
 
+    blocklist = [
+        '_dzyne_landcover',
+        '_uky_invariants',
+    ]
+
     base_fpath_pat = config['base_fpath']
     for base_fpath in util_path.coerce_patterned_paths(base_fpath_pat):
+
+        # Hack to prevent doubling up.
+        # Should really just choose a better naming scheme so we don't have
+        # to break user expectations about glob
+        if any(b in base_fpath.name for b in blocklist):
+            print(f'blocked base_fpath={base_fpath}')
+            continue
+
         if config['check']:
             if not base_fpath.exists():
                 raise FileNotFoundError(
@@ -274,9 +287,9 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
         'cold': aligned_bundle_dpath / (subset_name + '_cold' + config['kwcoco_ext']),
     }
 
-    print('Exist check: ')
-    print('model_packages: ' + ub.urepr(ub.map_vals(lambda x: x.exists(), model_fpaths)))
-    print('feature outputs: ' + ub.urepr(ub.map_vals(lambda x: x.exists(), outputs)))
+    # print('Exist check: ')
+    # print('model_packages: ' + ub.urepr(ub.map_vals(lambda x: x.exists(), model_fpaths)))
+    # print('feature outputs: ' + ub.urepr(ub.map_vals(lambda x: x.exists(), outputs)))
 
     # TODO: different versions of features need different codes.
     codes = {

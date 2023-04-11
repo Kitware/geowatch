@@ -57,7 +57,6 @@ def main():
             new_fpath = repo_dpath / new_name / relpath
             new_fpath.parent.ensuredir()
             modname = ub.modpath_to_modname(node)
-            print(f'new_fpath={new_fpath}')
             if new_fpath.name == '__main__.py':
                 new_fpath.write_text(ub.codeblock(
                     f'''
