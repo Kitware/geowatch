@@ -1,14 +1,11 @@
 import argparse
 import json
-import kwcoco
 import os
 import pystac
 import re
 import sys
 import ubelt as ub
 
-from watch.utils import util_bands
-from watch.utils import util_time
 from os.path import basename, dirname, join
 
 try:
@@ -96,6 +93,7 @@ def _construct_sensor_channel_alias():
     Construct mappings from possible names for each bands to the ones that we
     want to use in kwcoco.
     """
+    from watch.utils import util_bands
     UTIL_BAND_INFOS = {
         'S2': util_bands.SENTINEL2,
         'L8': util_bands.LANDSAT8,
@@ -286,6 +284,7 @@ def _determine_l8_channels(asset_name, asset_dict):
 
 
 def _determine_wv_channels(asset_name, asset_dict):
+    from watch.utils import util_bands
     asset_href = asset_dict['href']
 
     eo_band_names = []
@@ -447,7 +446,7 @@ def _stac_item_to_kwcoco_image(stac_item,
                                from_collated=False,
                                populate_watch_fields=False,
                                verbose=0):
-
+    from watch.utils import util_time
     if populate_watch_fields:
         raise NotImplementedError('REMOVED: use coco_add_watch_feilds '
                                   'as a secondary step instead')
@@ -521,6 +520,7 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
                                   'as a secondary step instead')
 
     from watch.utils import util_parallel
+    import kwcoco
     jobs = util_parallel.coerce_num_workers(jobs)
 
     if isinstance(input_stac_catalog, str):

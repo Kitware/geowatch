@@ -493,17 +493,9 @@ def normalize_sensors(coco_dset):
     Convert internal representations of sensors to their IARPA standards
     '''
     # FIXME: should pull from heuristics
-    sensor_dict = {
-        'WV': 'WorldView',
-        'S2': 'Sentinel-2',
-        'LE': 'Landsat 7',
-        'LC': 'Landsat 8',
-        'L8': 'Landsat 8',
-        'WV1': 'WorldView 1',
-        'PD': 'Planet',
-    }
+    from watch.heuristics import TE_SENSOR_NAMES
+    sensor_dict = TE_SENSOR_NAMES
     good_sensors = set(sensor_dict.values())
-
     for img in coco_dset.imgs.values():
         try:
             sensor = img['sensor_coarse']

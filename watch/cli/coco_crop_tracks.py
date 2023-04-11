@@ -24,8 +24,6 @@ CommandLine:
         - [ ] option to merge overlapping regions?
 """
 import scriptconfig as scfg
-import kwcoco
-import kwimage
 import ubelt as ub
 # import xdev
 
@@ -109,6 +107,7 @@ def main(cmdline=0, **kwargs):
         kwargs = dict(src=src, dst=dst, include_sensors=include_sensors)
         kwargs['workers'] = 8
     """
+    import kwcoco
     config = CocoCropTrackConfig(cmdline=cmdline, data=kwargs)
     print('config = {}'.format(ub.urepr(dict(config), nl=1)))
     src = config['src']
@@ -241,6 +240,8 @@ def make_track_kwcoco_manifest(dst, dst_bundle_dpath, tid_to_assets,
         - [ ] populate auxiliary is taking a long time, speed it up.
     """
     from watch.utils import kwcoco_extensions
+    import kwimage
+    import kwcoco
     # Make the new kwcoco file where 1 track is mostly 1 video
     # TODO: we could crop the kwcoco annotations here too, but
     # we can punt on that for now and just reproject them.
@@ -365,7 +366,9 @@ def generate_crop_jobs(coco_dset, dst_bundle_dpath, channels=None, context_facto
     """
     import shapely
     from watch.utils import util_time
+    import kwcoco
     from shapely.affinity import affine_transform
+    import kwimage
 
     # Build to_extract-like objects so this script can eventually be combined
     # with coco-align-geotiffs to make something that's ultimately better.
@@ -562,6 +565,7 @@ def run_crop_asset_task(crop_asset_task, keep):
     from osgeo import osr
     osr.GetPROJSearchPaths()
     from watch.utils import util_gdal
+    import kwimage
     _crop_task = crop_asset_task.copy()
     src = _crop_task.pop('src')
     dst = _crop_task.pop('dst')

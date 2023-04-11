@@ -168,6 +168,20 @@ def populate_watch_fields(coco_dset, target_gsd=10.0, vidids=None,
         enable_valid_region=enable_valid_region,
         remove_broken=remove_broken)
 
+    # Modify videos to include cleared status
+    if 1:
+        from watch import heuristics
+        import watch
+        region_id_to_cleared = {d['region_id']: d['cleared'] for d in heuristics.REGION_STATUS}
+        pat = watch.utils.util_pattern.Pattern.coerce(r'\w+_R\d+(_\d+)?', 'regex')
+        for video in coco_dset.videos().objs:
+            video_name = video['name']
+            if pat.match(video_name):
+                region_id = '_'.join(video_name.split('_')[0:2])
+                cleared = region_id_to_cleared.get(region_id, False)
+                video['cleared'] = cleared
+                video['domain'] = region_id
+
     if enable_video_stats:
         for vidid in ub.ProgIter(vidids, total=len(vidids), desc='populate videos'):
             coco_populate_geo_video_stats(coco_dset, vidid, target_gsd=target_gsd)
@@ -399,6 +413,10 @@ def coco_populate_geo_img_heuristics2(coco_img, overwrite=False,
 
     if keep_geotiff_metadata:
         img['geotiff_metadata'] = primary_obj['geotiff_metadata']
+
+    if 'date_captured' in img:
+        from watch.utils import util_time
+        img['timestamp'] = util_time.coerce_datetime(img['date_captured']).timestamp()
 
     if 'geos_corners' in primary_obj:
         # FIXME: we are assuming this maps perfectly onto the image
@@ -818,7 +836,7 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
         gid = coco_dset.images().take(cands).lookup('id')[0]
 
         coco_img = coco_dset.coco_image(gid)
-        imdata = coco_img.delay('blue').finalize(nodata='float')
+        imdata = coco_img.imdelay('blue').finalize(nodata='float')
         valid_region_img = kwimage.MultiPolygon.coerce(coco_img.img['valid_region'])
         frac = valid_region_img.to_shapely().area / valid_region_img.bounding_box().area
         print('frac = {!r}'.format(frac))

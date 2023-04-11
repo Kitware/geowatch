@@ -32,7 +32,7 @@ for video_id in dset.videos():
         coco_image : kwcoco.CocoImage =  dset.coco_image(image_id)
 
         # Get a delayed image reference in "video space"
-        delayed_im = coco_image.delay(space='video')
+        delayed_im = coco_image.imdelay(space='video')
 
         # Do any scaling / cropping you want here in the aligned video space
         delayed_im = delayed_im.scale(0.5)

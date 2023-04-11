@@ -77,7 +77,7 @@ class WVRgbDataset(_CocoTorchDataset):
             # else:
             #     raise NotImplementedError(f'No Pan or RGB in {have_channels}')
 
-        delayed = coco_img.delay(channels=want_channels)
+        delayed = coco_img.imdelay(channels=want_channels)
         img = delayed.finalize(nodata='float')
         img = np.asarray(img).astype(np.float32)
 

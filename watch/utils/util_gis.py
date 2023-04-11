@@ -1040,6 +1040,7 @@ def load_geojson_datas(geojson_fpaths, format='dataframe', workers=0,
         >>> assert isinstance(dct, dict)
     """
     from watch.utils import util_gis
+    from watch.utils import util_progress
     # sites = []
     if desc is None:
         desc = 'load geojson datas'
@@ -1057,24 +1058,28 @@ def load_geojson_datas(geojson_fpaths, format='dataframe', workers=0,
     else:
         raise KeyError(format)
 
-    for fpath in ub.ProgIter(geojson_fpaths, **submit_progkw):
-        job = jobs.submit(loader, fpath)
-        job.fpath = fpath
+    pman = util_progress.ProgressManager()
+    with pman:
 
-    if yield_after_submit:
-        yield None
+        for fpath in pman.progiter(geojson_fpaths, **submit_progkw):
+            job = jobs.submit(loader, fpath)
+            job.fpath = fpath
 
-    result_progkw = {
-        'verbose': verbose,
-    }
-    for job in jobs.as_completed(desc=desc, progkw=result_progkw):
-        data = job.result()
-        info = {
-            'fpath': job.fpath,
-            'data': data,
-            'format': format,
+        if yield_after_submit:
+            yield None
+
+        result_progkw = {
+            'verbose': verbose,
         }
-        yield info
+        for job in pman.progiter(jobs.as_completed(), total=len(jobs),
+                                 desc=desc, **result_progkw):
+            data = job.result()
+            info = {
+                'fpath': job.fpath,
+                'data': data,
+                'format': format,
+            }
+            yield info
 
 
 def crs_geojson_to_gdf(geometry, crs_info=None):

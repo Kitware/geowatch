@@ -4,24 +4,17 @@ Main tracker logic
 SeeAlso:
     * ../../cli/kwcoco_to_geojson.py
 """
-from watch.utils import kwcoco_extensions
-from watch.heuristics import SITE_SUMMARY_CNAME, CNAMES_DCT
-import kwimage
-import kwarray
-import kwcoco
-import numpy as np
-import pandas as pd
 import ubelt as ub
-import geopandas as gpd
 import itertools
 import math
-from typing import Iterable, Tuple, Union, Optional, Literal
+from typing import Tuple, Union, Optional, Literal
 from dataclasses import dataclass
-from shapely.ops import unary_union
+
+from watch.heuristics import SITE_SUMMARY_CNAME, CNAMES_DCT
 from watch.tasks.tracking.utils import NoOpTrackFunction  # NOQA
 from watch.tasks.tracking.utils import (NewTrackFunction,
                                         mask_to_polygons,
-                                        Poly, _validate_keys, pop_tracks,
+                                        _validate_keys, pop_tracks,
                                         trackid_is_default,
                                         gpd_sort_by_gid, gpd_len,
                                         gpd_compute_scores)
@@ -59,6 +52,8 @@ def _norm(heatmaps, norm_ord):
     Example:
         >>> from watch.tasks.tracking.from_heatmap import *  # NOQA
         >>> from watch.tasks.tracking.from_heatmap import _norm
+        >>> import kwimage
+        >>> import numpy as np
         >>> num_frames = 16
         >>> num_sequences = 6
         >>> # Setup 5 sequences to norm
@@ -117,6 +112,7 @@ def _norm(heatmaps, norm_ord):
         >>>     subdata = df[df['col'] == c]
         >>>     sns.lineplot(data=subdata, x='x', y='value', hue='ord')
     """
+    import numpy as np
     heatmaps = np.array(heatmaps)
     if norm_ord == 0:
         import scipy.stats
@@ -140,6 +136,7 @@ def _norm(heatmaps, norm_ord):
 
 
 def binary(heatmaps, norm_ord, morph_kernel, thresh):
+    import kwimage
     probs = _norm(heatmaps, norm_ord)
 
     hard_probs = kwimage.morphology(probs > thresh, 'dilate', morph_kernel)
@@ -148,6 +145,9 @@ def binary(heatmaps, norm_ord, morph_kernel, thresh):
 
 
 def rescaled_binary(heatmaps, norm_ord, morph_kernel, thresh, upper_quantile=0.999):
+    import kwimage
+    import kwarray
+    import numpy as np
     probs = _norm(heatmaps, norm_ord)
     probs = kwarray.normalize(probs, min_val=0, max_val=np.quantile(probs, upper_quantile))
 
@@ -157,6 +157,8 @@ def rescaled_binary(heatmaps, norm_ord, morph_kernel, thresh, upper_quantile=0.9
 
 
 def probs(heatmaps, norm_ord, morph_kernel, thresh):
+    import kwimage
+    import numpy as np
     probs = _norm(heatmaps, norm_ord)
 
     hard_probs = kwimage.morphology(probs > thresh, 'dilate', morph_kernel)
@@ -176,6 +178,9 @@ def probs(heatmaps, norm_ord, morph_kernel, thresh):
 
 
 def rescaled_probs(heatmaps, norm_ord, morph_kernel, thresh, upper_quantile=0.999):
+    import kwimage
+    import kwarray
+    import numpy as np
     probs = _norm(heatmaps, norm_ord)
     probs = kwarray.normalize(probs, min_val=0, max_val=np.quantile(probs, upper_quantile))
 
@@ -190,6 +195,8 @@ def mean_normalized(heatmaps, norm_ord=1, morph_kernel=1, thresh=None):
     Normalize average_heatmap by applying a scaling based on max(heatmaps) and
     max(average_heatmap)
     '''
+    import numpy as np
+    import kwimage
     average = _norm(heatmaps, norm_ord)
 
     scale_factor = np.max(heatmaps) / (np.max(average) + 1e-9)
@@ -211,6 +218,8 @@ def frequency_weighted_mean(heatmaps, thresh, norm_ord=0, morph_kernel=3):
     Convert a list of heatmaps to an aggregated score, averaging is computed
     based on samples for every pixel
     '''
+    import kwimage
+    import numpy as np
     heatmaps = np.array(heatmaps)
 
     masks = 1 * (heatmaps > thresh)
@@ -312,6 +321,9 @@ class ResponsePolygonFilter:
 
 @profile
 def _add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
+    import kwcoco
+    import kwimage
+    import numpy as np
     key, bg_key = _validate_keys(key, bg_key)
 
     if tracks.empty:
@@ -359,6 +371,7 @@ def _add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
                        track_id=track_id)
         return new_ann
 
+    from watch.utils import kwcoco_extensions
     new_trackids = kwcoco_extensions.TrackidGenerator(sub_dset)
 
     all_new_anns = []
@@ -382,7 +395,9 @@ def _add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
     else:
         for tid, grp in tracks.groupby('track_idx', axis=0):
             score_chan = kwcoco.ChannelSpec('|'.join(key))
-            this_score = grp[(score_chan.spec, -1)]
+            import xdev
+            with xdev.embed_on_exception_context:
+                this_score = grp[(score_chan.spec, -1)]
             scores_dct = {k: grp[(k, -1)] for k in score_chan.unique()}
             scores_dct = [dict(zip(scores_dct, t))
                           for t in zip(*scores_dct.values())]
@@ -428,6 +443,7 @@ def site_validation(sub_dset, thresh=0.25, span_steps=15):
     #     # }
     #     for ann in sub_dset.dataset["annotations"]
     # ])
+    import pandas as pd
     imgs = pd.DataFrame(sub_dset.dataset["images"])
     if "timestamp" not in imgs.columns:
         imgs["timestamp"] = imgs["id"]
@@ -553,6 +569,9 @@ def time_aggregated_polys(
     #
     # --- input validation ---
     #
+    import kwimage
+    import geopandas as gpd
+    import numpy as np
 
     key, bg_key = _validate_keys(key, bg_key)
     _all_keys = set(key + bg_key)
@@ -786,6 +805,7 @@ def _merge_polys(p1, p2, poly_merge_method=None):
                 if combo.geom_type != 'Polygon':
                     raise Exception('!')
     '''
+    import numpy as np
     merged_polys = []
     if poly_merge_method is None:
         poly_merge_method = 'v1'
@@ -793,6 +813,7 @@ def _merge_polys(p1, p2, poly_merge_method=None):
     if poly_merge_method == 'v2':
         # Just combine anything that touches in both frames together
         from watch.utils import util_gis
+        import geopandas as gpd
         geom_df = gpd.GeoDataFrame(geometry=p1 + p2)
         isect_idxs = util_gis.geopandas_pairwise_overlaps(geom_df, geom_df)
         level_sets = {frozenset(v.tolist()) for v in isect_idxs.values()}
@@ -819,6 +840,7 @@ def _merge_polys(p1, p2, poly_merge_method=None):
                 else:
                     raise AssertionError(f'Unexpected type {combo.geom_type}')
     elif poly_merge_method == 'v1':
+        from shapely.ops import unary_union
         p1_seen = set()
         p2_seen = set()
         # add all polygons that overlap
@@ -871,6 +893,7 @@ def heatmaps_to_polys(heatmaps, bounds, agg_fn, thresh, morph_kernel,
     '''
     Use parameters: agg_fn, thresh, morph_kernel, thresh_hysteresis, norm_ord
     '''
+    import numpy as np
 
     # TODO: rename moving window size to "outer_window_size"
 
@@ -878,6 +901,7 @@ def heatmaps_to_polys(heatmaps, bounds, agg_fn, thresh, morph_kernel,
         return [p.to_shapely() for p in polys]
 
     def convert_to_kwimage_poly(shapely_polys):
+        import kwimage
         return [kwimage.Polygon.from_shapely(p) for p in shapely_polys]
 
     _agg_fn = AGG_FN_REGISTRY[agg_fn]
@@ -976,7 +1000,7 @@ def _gids_polys(
         inner_window_size=None,
         inner_agg_fn='mean',
         bounds=False,
-        poly_merge_method=None) -> Iterable[Union[int, Poly]]:
+        poly_merge_method=None):
     """
     Example:
         >>> from watch.tasks.tracking.from_heatmap import *  # NOQA
@@ -1007,7 +1031,11 @@ def _gids_polys(
         >>>     bounds=bounds,
         >>> ))
 
+    Returns:
+        Iterable[int | kwimage.Polygon | kwimage.MultiPolygon]
+
     """
+    import numpy as np
     if bounds:  # for SC
         raw_boundary_tracks = pop_tracks(sub_dset, [SITE_SUMMARY_CNAME])
         assert len(raw_boundary_tracks) > 0, 'need valid site boundaries!'
@@ -1025,6 +1053,7 @@ def _gids_polys(
         gids = sub_dset.images(vidid=vidid).gids
 
     from watch.utils import util_time
+    import kwimage
     images = sub_dset.images(gids)
     image_dates = [util_time.coerce_datetime(d)
                    for d in images.lookup('date_captured')]
@@ -1032,7 +1061,7 @@ def _gids_polys(
 
     key = '|'.join(key)
     imgs = sub_dset.images(gids).coco_images
-    _heatmaps = np.stack([i.delay(channels=key, space='video', resolution=resolution).finalize() for i in imgs], axis=0)
+    _heatmaps = np.stack([i.imdelay(channels=key, space='video', resolution=resolution).finalize() for i in imgs], axis=0)
     _heatmaps = _heatmaps.sum(axis=-1)  # sum over channels
     missing_ix = np.invert([key in i.channels for i in imgs])
     # TODO this was actually broken in orig, so turning it off here for now
@@ -1082,6 +1111,7 @@ def _gids_polys(
             # if poly.is_valid and not poly.is_empty:
             # yield (gids, poly)
         else:
+            from shapely.ops import unary_union
             poly = unary_union([p.to_shapely() for p in track_polys])
 
             if poly.is_valid and not poly.is_empty:
@@ -1371,6 +1401,8 @@ class TimeAggregatedSC(NewTrackFunction):
             'polys': generated polys will be the boundaries
             'none': generated polys will ignore the boundaries
         '''
+        import kwcoco
+        import kwimage
 
         if self.boundaries_as == 'polys':
             tracks = pop_tracks(
@@ -1395,6 +1427,7 @@ class TimeAggregatedSC(NewTrackFunction):
         return tracks
 
     def add_tracks_to_dset(self, sub_dset, tracks, **kwargs):
+        import kwcoco
         if self.boundaries_as != 'polys':
             col_map = {}
             for c in tracks.columns:
@@ -1466,6 +1499,8 @@ class TimeAggregatedSV(NewTrackFunction):
             'polys': generated polys will be the boundaries
             'none': generated polys will ignore the boundaries
         '''
+        import kwcoco
+        import kwimage
         if self.boundaries_as == 'polys':
             tracks = pop_tracks(
                 sub_dset,

@@ -903,7 +903,7 @@ def add_site_summary_to_kwcoco(possible_summaries,
         kwplot.autompl()
         gid = list(images)[0]
         coco_img = coco_dset.coco_image(gid)
-        canvas = coco_img.delay('red|green|blue', space='image').finalize()
+        canvas = coco_img.imdelay('red|green|blue', space='image').finalize()
         canvas = kwimage.normalize_intensity(canvas)
         kwplot.imshow(canvas)
         coco_dset.annots(gid=gid).detections.draw()

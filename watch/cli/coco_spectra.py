@@ -23,13 +23,17 @@ CommandLine:
     KWCOCO_FPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L_nowv_vali.kwcoco.json
     smartwatch spectra --src $KWCOCO_FPATH --show=True --show=True --include_channels="forest|water|bare_ground"
 """
-import pickle
 import ubelt as ub
 import scriptconfig as scfg
 import math
 
+try:
+    from xdev import profile
+except ImportError:
+    profile = ub.identity
 
-class CocoSpectraConfig(scfg.Config):
+
+class CocoSpectraConfig(scfg.DataConfig):
     """
     Updates image transforms in a kwcoco json file to align all videos to a
     target GSD.
@@ -172,12 +176,16 @@ class HistAccum:
         return full_df
 
 
+@profile
 def main(cmdline=True, **kwargs):
     r"""
+    CommandLine:
+        XDEV_PROFILE=1 xdoctest -m watch.cli.coco_spectra main
+
     Example:
         >>> from watch.cli.coco_spectra import *  # NOQA
         >>> import kwcoco
-        >>> test_dpath = ub.Path.appdir('watch/tests').ensuredir()
+        >>> test_dpath = ub.Path.appdir('watch/tests/cli/spectra').ensuredir()
         >>> image_fpath = test_dpath + '/intensityhist_demo.jpg'
         >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes-msi-multisensor-videos1-frames2-gsize8')
         >>> kwargs = {'src': coco_dset, 'dst': image_fpath, 'mode': 'thread'}
@@ -186,14 +194,14 @@ def main(cmdline=True, **kwargs):
         >>> kwargs['workers'] = 'avail'
         >>> kwargs['show'] = False
         >>> kwargs['draw'] = False
-        >>> main(**kwargs)
+        >>> main(cmdline=False, **kwargs)
 
     Example:
         >>> # xdoctest: +REQUIRES(--slow)
         >>> from watch.cli.coco_spectra import *  # NOQA
         >>> import kwcoco
         >>> import watch
-        >>> test_dpath = ub.Path.appdir('watch/tests').ensuredir()
+        >>> test_dpath = ub.Path.appdir('watch/tests/cli/spectra').ensuredir()
         >>> image_fpath = test_dpath + '/intensityhist_demo2.jpg'
         >>> coco_dset = watch.coerce_kwcoco('watch-msi')
         >>> kwargs = {
@@ -205,17 +213,15 @@ def main(cmdline=True, **kwargs):
         >>> }
         >>> kwargs['multiple'] = 'layer'
         >>> kwargs['element'] = 'step'
-        >>> main(**kwargs)
+        >>> main(cmdline=False, **kwargs)
     """
     from watch.utils import kwcoco_extensions
     from watch.utils import util_parallel
     import watch
     import kwcoco
     import numpy as np
-    import kwplot
-    kwplot.autosns()
 
-    config = CocoSpectraConfig(kwargs, cmdline=cmdline)
+    config = CocoSpectraConfig.cli(data=kwargs, cmdline=cmdline)
     print('config = {}'.format(ub.urepr(config.to_dict(), nl=1)))
 
     # coco_dset = kwcoco.CocoDataset.coerce(config['src'])
@@ -293,6 +299,8 @@ def main(cmdline=True, **kwargs):
             extra_text = None
 
     if config['draw']:
+        import kwplot
+        kwplot.autosns()
         fig = plot_intensity_histograms(full_df, config)
 
         title_lines = []
@@ -458,6 +466,7 @@ def sensor_stats_tables(full_df):
     return sensor_chan_stats, distance_metrics
 
 
+@profile
 def ensure_intensity_sidecar(fpath, recompute=False):
     """
     Write statistics next to the image
@@ -479,12 +488,14 @@ def ensure_intensity_sidecar(fpath, recompute=False):
         >>> stats_fpath1 = ensure_intensity_sidecar(fpath1)
         >>> fpath = fpath2
         >>> stats_fpath2 = ensure_intensity_sidecar(fpath1)
+        >>> import pickle
         >>> pickle.loads(stats_fpath1.read_bytes())
         >>> pickle.loads(stats_fpath2.read_bytes())
     """
     import os
     import kwarray
     import kwimage
+    import pickle
     stats_fpath = ub.Path(os.fspath(fpath) + '.stats_v1.pkl')
     if recompute or not stats_fpath.exists():
         imdata = kwimage.imread(fpath, backend='gdal', nodata_method='ma')
@@ -512,6 +523,7 @@ def ensure_intensity_sidecar(fpath, recompute=False):
     return stats_fpath
 
 
+@profile
 def ensure_intensity_stats(coco_img, recompute=False, include_channels=None, exclude_channels=None):
     """
     Ensures a sidecar file exists for the kwcoco image
@@ -520,6 +532,7 @@ def ensure_intensity_stats(coco_img, recompute=False, include_channels=None, exc
     import numpy as np
     import kwcoco
     import kwimage
+    import pickle
     intensity_stats = {'bands': []}
     for obj in coco_img.iter_asset_objs():
         fpath = join(coco_img.bundle_dpath, obj['file_name'])
@@ -601,6 +614,7 @@ def ensure_intensity_stats(coco_img, recompute=False, include_channels=None, exc
     return intensity_stats
 
 
+@profile
 def plot_intensity_histograms(full_df, config):
     unique_channels = full_df['channel'].unique()
     unique_sensors = full_df['sensor'].unique()
@@ -706,6 +720,7 @@ def plot_intensity_histograms(full_df, config):
 #     quantiles = cumtotal / cumtotal[-1]
 
 
+@profile
 def _weighted_auto_bins(data, xvar, weightvar):
     """
     Generalized histogram bandwidth estimators for weighted univariate data
@@ -780,6 +795,7 @@ def _weighted_auto_bins(data, xvar, weightvar):
     return n_equal_bins
 
 
+@profile
 def _fill_missing_colors(label_to_color):
     """
     label_to_color = {'foo': kwimage.Color('red').as01(), 'bar': None}

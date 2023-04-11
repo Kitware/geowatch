@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from watch.tasks.tracking.utils import TrackFunction
-from watch.utils.kwcoco_extensions import TrackidGenerator
 
 
 class MonoTrack(TrackFunction):
@@ -12,6 +11,7 @@ class MonoTrack(TrackFunction):
         self.kwargs = kwargs  # Unused
 
     def __call__(self, coco_dset):
+        from watch.utils.kwcoco_extensions import TrackidGenerator
         coco_dset.annots().set('track_id', next(TrackidGenerator(coco_dset)))
 
         return coco_dset
@@ -30,6 +30,7 @@ class OverlapTrack(TrackFunction):
     min_overlap: float = 0
 
     def __call__(self, coco_dset):
+        from watch.utils.kwcoco_extensions import TrackidGenerator
         new_trackids = TrackidGenerator(coco_dset)
 
         aid_to_poly = dict(

@@ -132,7 +132,16 @@ class ReprojectAnnotationsConfig(scfg.DataConfig):
             number of workers for geo-preprop / geojson io
             '''))
 
+    io_workers = scfg.Value('auto', help=ub.paragraph(
+            '''
+            number of workers for geojson io. Defaults to `workers`
+            '''))
+
     verbose = scfg.Value(1, help='use this to print details')
+
+    def __post_init__(self):
+        if self.io_workers == 'auto':
+            self.io_workers = self.workers
 
 
 DUMMY_START_DATE = '1970-01-01'
@@ -141,12 +150,16 @@ DUMMY_END_DATE = '2101-01-01'
 
 def main(cmdline=False, **kwargs):
     r"""
+    CommandLine:
+        xdoctest -m /home/joncrall/code/watch/watch/cli/reproject_annotations.py main
+        HAS_DVC=1 xdoctest -m watch.cli.reproject_annotations main
+
     Example:
-        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> # xdoctest: +REQUIRES(env:HAS_DVC)
         >>> from watch.cli.reproject_annotations import *  # NOQA
         >>> import watch
         >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-        >>> coco_fpath = dvc_dpath / 'Drop6/imgonly-KR_R001.kwcoco.json'
+        >>> coco_fpath = dvc_dpath / 'Drop6/imgonly-NZ_R001.kwcoco.json'
         >>> dpath = ub.Path.appdir('watch/tests/project_annots').ensuredir()
         >>> cmdline = False
         >>> output_fpath = dpath / 'test_project_data.kwcoco.json'
@@ -156,8 +169,9 @@ def main(cmdline=False, **kwargs):
         >>>     'dst': output_fpath,
         >>>     'viz_dpath': viz_dpath,
         >>>     'workers': 4,
-        >>>     'site_models': dvc_dpath / 'annotations/site_models',
-        >>>     'region_models': dvc_dpath / 'annotations/region_models',
+        >>>     'io_workers': 8,
+        >>>     'site_models': dvc_dpath / 'annotations/drop6/site_models/KR_R001*',
+        >>>     'region_models': dvc_dpath / 'annotations/drop6/region_models/KR_R001*',
         >>> }
         >>> main(cmdline=cmdline, **kwargs)
     """
@@ -168,9 +182,10 @@ def main(cmdline=False, **kwargs):
     from watch import heuristics
     from watch.utils import kwcoco_extensions
     import kwcoco
+    import rich
     import numpy as np
     config = ReprojectAnnotationsConfig.cli(data=kwargs, cmdline=cmdline)
-    print('config = {}'.format(ub.urepr(dict(config), nl=1)))
+    rich.print('config = {}'.format(ub.urepr(config, nl=1)))
 
     output_fpath = config['dst']
     if output_fpath is None:
@@ -191,6 +206,7 @@ def main(cmdline=False, **kwargs):
             print('auto-choose geo_preprop = {!r}'.format(geo_preprop))
 
     workers = util_parallel.coerce_num_workers(config['workers'])
+    io_workers = util_parallel.coerce_num_workers(config['io_workers'])
 
     if geo_preprop:
         kwcoco_extensions.coco_populate_geo_heuristics(
@@ -206,7 +222,9 @@ def main(cmdline=False, **kwargs):
     HACK_HANDLE_DUPLICATE_SITE_ROWS = envflag('HACK_HANDLE_DUPLICATE_SITE_ROWS', default=True)
 
     site_model_infos = list(
-        util_gis.coerce_geojson_datas(config['site_models'], desc='load site models', allow_raw=True, workers=workers))
+        util_gis.coerce_geojson_datas(
+            config['site_models'], desc='load site models',
+            allow_raw=True, workers=io_workers))
 
     status_to_catname_default = ub.udict(heuristics.PHASE_STATUS_TO_KWCOCO_CATNAME)
     status_to_catname = Yaml.coerce(config['status_to_catname'])
@@ -234,7 +252,7 @@ def main(cmdline=False, **kwargs):
             util_gis.coerce_geojson_datas(config['region_models'],
                                           desc='load geojson region-models',
                                           allow_raw=True,
-                                          workers=workers))
+                                          workers=io_workers))
         for info in region_model_infos:
             gdf = info['data']
             regions.append(gdf)
@@ -268,6 +286,9 @@ def main(cmdline=False, **kwargs):
 
     if output_fpath != 'return':
         # print('dump coco_dset.fpath = {!r}'.format(coco_dset.fpath))
+        needs_reroot = (ub.Path(output_fpath).parent.resolve() != ub.Path(coco_dset.fpath).parent.resolve())
+        if needs_reroot:
+            coco_dset.reroot(absolute=True)
         coco_dset.fpath = output_fpath
         coco_dset.dump(coco_dset.fpath)
 
@@ -289,6 +310,7 @@ def main(cmdline=False, **kwargs):
             fig.set_size_inches(np.array([16, 9]) * 1)
             plot_fpath = viz_dpath / f'time_propogation_{region_id}.png'
             fig.tight_layout()
+            print(f'plot_fpath={plot_fpath}')
             fig.savefig(plot_fpath)
 
     if output_fpath == 'return':
@@ -299,66 +321,74 @@ def check_sitemodel_assumptions(sites):
     """
     For debugging and checking assumptions about site models
     """
-    try:
-        for site_df in ub.ProgIter(sites, desc='checking site assumptions'):
-            first = site_df.iloc[0]
-            rest = site_df.iloc[1:]
-            assert first['type'] == 'site', (f'first row must have type of site, got {first["type"]}')
-            assert first['region_id'] is not None, (f'first row must have a region id. Got {first["region_id"]}')
-            assert rest['type'].apply(lambda x: x == 'observation').all(), (
-                f'rest of row must have type observation. Instead got: {rest["type"].unique()}')
-            # assert rest['region_id'].apply(lambda x: x is None).all(), (
-            #     f'rest of row must have region_id=None. Instead got {rest["region_id"].unique()}')
-    except AssertionError:
-        print(site_df)
-        raise
+    from watch.utils import util_progress
+    pman = util_progress.ProgressManager()
+    with pman:
+        try:
+            for site_df in pman.progiter(sites, desc='checking site assumptions'):
+                first = site_df.iloc[0]
+                rest = site_df.iloc[1:]
+                assert first['type'] == 'site', (f'first row must have type of site, got {first["type"]}')
+                assert first['region_id'] is not None, (f'first row must have a region id. Got {first["region_id"]}')
+                assert rest['type'].apply(lambda x: x == 'observation').all(), (
+                    f'rest of row must have type observation. Instead got: {rest["type"].unique()}')
+                # assert rest['region_id'].apply(lambda x: x is None).all(), (
+                #     f'rest of row must have region_id=None. Instead got {rest["region_id"].unique()}')
+        except AssertionError:
+            print(site_df)
+            raise
 
 
 def separate_region_model_types(regions):
     """
+    Break a region model into its site-summaries and header
+
     Split up each region model into its region info and site summary info
     """
     from watch.utils import util_time
+    from watch.utils import util_progress
     region_id_to_site_summaries = {}
     region_id_region_row = {}
-    for region_df in ub.ProgIter(regions, desc='checking region assumptions', verbose=3):
-        is_region = region_df['type'] == 'region'
-        region_part = region_df[is_region]
-        assert len(region_part) == 1, 'must have exactly one region in each region file'
-        assert region_part['region_id'].apply(lambda x: x is not None).all(), 'regions must have region ids'
+    pman = util_progress.ProgressManager()
+    with pman:
+        for region_df in pman.progiter(regions, desc='checking region assumptions', verbose=3):
+            is_region = region_df['type'] == 'region'
+            region_part = region_df[is_region]
+            assert len(region_part) == 1, 'must have exactly one region in each region file'
+            assert region_part['region_id'].apply(lambda x: x is not None).all(), 'regions must have region ids'
 
-        region_row = region_part.iloc[0]
-        region_id = region_row['region_id']
-        region_id_region_row[region_id] = region_row
-        assert region_id not in region_id_to_site_summaries
+            region_row = region_part.iloc[0]
+            region_id = region_row['region_id']
+            region_id_region_row[region_id] = region_row
+            assert region_id not in region_id_to_site_summaries
 
-        # Hack to set all region-ids
-        region_df.loc[:, 'region_id'] = region_id
-        sites_part = region_df[~is_region]
+            # Hack to set all region-ids
+            region_df.loc[:, 'region_id'] = region_id
+            sites_part = region_df[~is_region]
 
-        FIX_LEADING_SPACE = 1
-        if FIX_LEADING_SPACE:
-            sites_part.loc[sites_part['type'] == ' site_summary', 'type'] = 'site_summary'
+            FIX_LEADING_SPACE = 1
+            if FIX_LEADING_SPACE:
+                sites_part.loc[sites_part['type'] == ' site_summary', 'type'] = 'site_summary'
 
-        try:
-            assert (sites_part['type'] == 'site_summary').all(), 'rest of data must be site summaries'
-            assert sites_part['region_id'].apply(lambda x: (x is None) or x == region_id).all(), (
-                'site-summaries do not have region ids (unless we make them)')
-        except AssertionError:
-            print(sites_part['type'].unique())
-            import xdev
-            xdev.embed_if_requested()
-            raise
-        region_id_to_site_summaries[region_id] = sites_part
+            try:
+                assert (sites_part['type'] == 'site_summary').all(), 'rest of data must be site summaries'
+                assert sites_part['region_id'].apply(lambda x: (x is None) or x == region_id).all(), (
+                    'site-summaries do not have region ids (unless we make them)')
+            except AssertionError:
+                print(sites_part['type'].unique())
+                import xdev
+                xdev.embed_if_requested()
+                raise
+            region_id_to_site_summaries[region_id] = sites_part
 
-        # Check datetime errors
-        sitesum_start_dates = sites_part['start_date'].apply(lambda x: util_time.coerce_datetime(x or DUMMY_START_DATE))
-        sitesum_end_dates = sites_part['end_date'].apply(lambda x: util_time.coerce_datetime(x or DUMMY_END_DATE))
-        has_bad_time_range = sitesum_start_dates > sitesum_end_dates
-        bad_dates = sites_part[has_bad_time_range]
-        if len(bad_dates):
-            print('BAD DATES')
-            print(bad_dates)
+            # Check datetime errors
+            sitesum_start_dates = sites_part['start_date'].apply(lambda x: util_time.coerce_datetime(x or DUMMY_START_DATE))
+            sitesum_end_dates = sites_part['end_date'].apply(lambda x: util_time.coerce_datetime(x or DUMMY_END_DATE))
+            has_bad_time_range = sitesum_start_dates > sitesum_end_dates
+            bad_dates = sites_part[has_bad_time_range]
+            if len(bad_dates):
+                print('BAD DATES')
+                print(bad_dates)
     return region_id_to_site_summaries, region_id_region_row
 
 
@@ -378,6 +408,7 @@ def expand_site_models_with_site_summaries(sites, regions):
     """
     import pandas as pd
     import numpy as np
+    from watch.utils.util_pandas import pandas_reorder_columns
 
     if __debug__:
         check_sitemodel_assumptions(sites)
@@ -394,6 +425,13 @@ def expand_site_models_with_site_summaries(sites, regions):
     if VERYVERBOSE:
         print('region_id_to_num_sites = {}'.format(ub.urepr(region_id_to_num_sites, nl=1, sort=0)))
 
+    expected_keys = [
+        'index', 'observation_date', 'source', 'sensor_name', 'type', 'current_phase', 'is_occluded',
+        'is_site_boundary', 'region_id', 'site_id', 'version', 'status', 'mgrs', 'score', 'start_date', 'end_date',
+        'model_content', 'originator', 'validated', 'geometry', 'misc_info'
+    ]
+
+    # Build site header info (1)
     site_rows1 = []
     for region_id, region_sites in region_id_to_sites.items():
         for site in region_sites:
@@ -401,24 +439,24 @@ def expand_site_models_with_site_summaries(sites, regions):
             assert len(site_sum_rows) == 1
             site_rows1.append(site_sum_rows)
 
-    site_rows2 = []
-    for region_id, site_summaries in region_id_to_site_summaries.items():
-        site_rows2.append(site_summaries)
-
-    expected_keys = [
-        'index', 'observation_date', 'source', 'sensor_name', 'type', 'current_phase', 'is_occluded',
-        'is_site_boundary', 'region_id', 'site_id', 'version', 'status', 'mgrs', 'score', 'start_date', 'end_date',
-        'model_content', 'originator', 'validated', 'geometry', 'misc_info'
-    ]
-
     if site_rows1:
         site_df1 = pd.concat(site_rows1).reset_index()
         assert len(set(site_df1['site_id'])) == len(site_df1), 'site ids must be unique'
         site_df1 = site_df1.set_index('site_id', drop=False, verify_integrity=True).drop('index', axis=1)
         if 'misc_info' not in site_df1.columns:
             site_df1['misc_info'] = None
+
+        misc_info1 = site_df1['misc_info']
+        misc_info1 = [{} if is_nonish(d) else ub.udict.difference(d, {'commit_hash'}) for d in misc_info1]
+        site_df1['misc_info'] = misc_info1
+
     else:
         site_df1 = pd.DataFrame([], columns=expected_keys)
+
+    # Build site summary info (2)
+    site_rows2 = []
+    for region_id, site_summaries in region_id_to_site_summaries.items():
+        site_rows2.append(site_summaries)
 
     if site_rows2:
         site_df2 = pd.concat(site_rows2).reset_index()
@@ -434,9 +472,13 @@ def expand_site_models_with_site_summaries(sites, regions):
 
         if 'misc_info' not in site_df2.columns:
             site_df2['misc_info'] = None
+        misc_info2 = site_df2['misc_info']
+        misc_info2 = [{} if is_nonish(d) else ub.udict.difference(d, {'commit_hash'}) for d in misc_info2]
+        site_df2['misc_info'] = misc_info2
     else:
         site_df2 = pd.DataFrame([], columns=expected_keys)
 
+    # Compare site summaries (2) with site model headers (1)
     common_site_ids = sorted(set(site_df1['site_id']) & set(site_df2['site_id']))
     common1 = site_df1.loc[common_site_ids]
     common2 = site_df2.loc[common_site_ids]
@@ -444,29 +486,37 @@ def expand_site_models_with_site_summaries(sites, regions):
     common_columns = common1.columns.intersection(common2.columns)
     common_columns = common_columns.drop(['type', 'region_id'])
 
+    def col_na_eq(c1, c2):
+        return (c1 == c2) | (c1.isnull() & c2.isnull())
+
     col_to_flags = {}
     for col in common_columns:
-        error_flags = ~((common1[col] == common2[col]) | (common1[col].isnull() & common2[col].isnull()))
+        error_flags = ~col_na_eq(common1[col], common2[col])
         col_to_flags[col] = error_flags
 
-    print('col errors: ' + repr(ub.map_vals(sum, col_to_flags)))
-    any_error_flag = np.logical_or.reduce(list(col_to_flags.values()))
-    total_error_rows = any_error_flag.sum()
-    print('total_error_rows = {!r}'.format(total_error_rows))
-    if total_error_rows:
+    col_errors = ub.map_vals(sum, col_to_flags)
+    col_errors = {k: v for k, v in col_errors.items() if v}
+    if col_errors:
+        print('col_errors = {}'.format(ub.urepr(col_errors, nl=1)))
+        any_error_flag = np.logical_or.reduce(list(col_to_flags.values()))
+        total_error_rows = any_error_flag.sum()
+        print('total_error_rows = {!r}'.format(total_error_rows))
+
         error1 = common1[any_error_flag]
         error2 = common2[any_error_flag]
-        columns = [
-            'site_id', 'version', 'mgrs', 'start_date', 'end_date', 'status', 'originator', 'score', 'model_content',
-            'validated'
-        ]
 
-        error1 = reorder_columns(error1, columns)
-        error2 = reorder_columns(error2, columns)
-        print('Disagree rows for site models')
-        print(error1.drop(['type', 'region_id', 'misc_info'], axis=1))
-        print('Disagree rows for region models')
-        print(error2.drop(['type', 'region_id', 'validated'], axis=1))
+        columns = list(ub.oset(['site_id']) | list(col_errors.keys()) | [
+            'version', 'mgrs', 'start_date', 'end_date', 'status',
+            'originator', 'score', 'model_content', 'validated'
+        ])
+
+        error1 = pandas_reorder_columns(error1, columns)
+        error2 = pandas_reorder_columns(error2, columns)
+        print('Disagree rows for site models headers')
+        # print(error1.drop(['type', 'region_id', 'misc_info'], axis=1))
+        print(error1)
+        print('Disagree rows for region models site summaries')
+        print(error2)
 
     # Find sites that only have a site-summary
     summary_only_site_ids = sorted(set(site_df2['site_id']) - set(site_df1['site_id']))
@@ -508,9 +558,6 @@ def expand_site_models_with_site_summaries(sites, regions):
     region_id_to_num_sites = ub.map_vals(len, region_id_to_sites)
     if VERYVERBOSE:
         print('AFTER (sitesummary) region_id_to_num_sites = {}'.format(ub.urepr(region_id_to_num_sites, nl=1)))
-
-    def is_nonish(x):
-        return x is None or isinstance(x, float) and math.isnan(x)
 
     # Fix out of order observations
     FIX_OBS_ORDER = True
@@ -594,8 +641,8 @@ def make_pseudo_sitemodels(region_row, sitesummaries):
         'validated', 'misc_info', 'region_id', 'site_id'
     ]
     # Use region start/end date if the site does not have them
-    region_start_date = coerce_datetime2(region_row['start_date']) or coerce_datetime2(DUMMY_START_DATE)
-    region_end_date = coerce_datetime2(region_row['end_date']) or coerce_datetime2(DUMMY_END_DATE)
+    region_start_date = util_time.coerce_datetime(region_row['start_date']) or util_time.coerce_datetime(DUMMY_START_DATE)
+    region_end_date = util_time.coerce_datetime(region_row['end_date']) or util_time.coerce_datetime(DUMMY_END_DATE)
 
     region_start_date, region_end_date = sorted([region_start_date, region_end_date], key=util_time.coerce_datetime)
 
@@ -620,8 +667,8 @@ def make_pseudo_sitemodels(region_row, sitesummaries):
         psudo_site_prop = site_summary[has_keys].to_dict()
         psudo_site_prop['type'] = 'site'
         # TODO: how to handle missing start / end dates?
-        start_date = coerce_datetime2(site_summary['start_date']) or region_start_date
-        end_date = coerce_datetime2(site_summary['end_date']) or region_end_date
+        start_date = util_time.coerce_datetime(site_summary['start_date']) or region_start_date
+        end_date = util_time.coerce_datetime(site_summary['end_date']) or region_end_date
 
         # hack
         start_date, end_date = sorted([start_date, end_date])
@@ -929,6 +976,7 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
     from watch import heuristics
     import kwimage
     import numpy as np
+    from watch.geoannots.geomodels import SiteModel
 
     if __debug__ and 0:
         # Sanity check, the sites should have spatial overlap with each image in the video
@@ -936,18 +984,26 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
         num_unique_overlap_frames = set(ub.map_vals(len, image_overlaps).values())
         assert len(num_unique_overlap_frames) == 1
 
-    site_summary_row = site_gdf.iloc[0]
-    site_rows = site_gdf.iloc[1:]
-    track_id = site_summary_row['site_id']
-    status = site_summary_row['status']
-    status = status.lower().strip()
+    # Remove unset observation dates
+    flags = ~site_gdf['observation_date'].isnull()
+    flags[0] = True  # include header
+    assert site_gdf.iloc[0]['type'] == 'site'
+    valid_site_gdf = site_gdf[flags]
+    valid_site_rows = valid_site_gdf.iloc[1:]
+    observation_dates = np.array([util_time.coerce_datetime(x) for x in valid_site_rows['observation_date']])
 
+    site_model = SiteModel.from_dataframe(valid_site_gdf)
+    track_id = site_model.site_id
+    start_date = site_model.start_date
+    end_date = site_model.end_date
+    status = site_model.status.lower().strip()
     if status == 'pending':
         # hack for QFabric
         status = 'positive_pending'
 
-    start_date = coerce_datetime2(site_summary_row['start_date'])
-    end_date = coerce_datetime2(site_summary_row['end_date'])
+    if not np.all(flags):
+        import warnings
+        warnings.warn(f'Site {track_id} is missing {sum(flags)} / {len(flags)} observation dates')
 
     FIX_BACKWARDS_DATES = True
     if FIX_BACKWARDS_DATES:
@@ -958,11 +1014,6 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
                 warnings.warn('A site has flipped start/end dates. '
                               'Fixing here, but it should be fixed in the site model itself.')
                 start_date, end_date = end_date, start_date
-
-    flags = ~site_rows['observation_date'].isnull()
-    valid_site_rows = site_rows[flags]
-
-    observation_dates = np.array([coerce_datetime2(x) for x in valid_site_rows['observation_date']])
 
     # This check doesn't seem generally necessary.
     if start_date is not None and observation_dates[0] != start_date:
@@ -987,7 +1038,7 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
     # NOTE: https://github.com/Erotemic/misc/blob/main/learn/viz_searchsorted.py if you
     # need to remember or explain how searchsorted works
 
-    site_rows_list = site_rows.to_dict(orient='records')
+    observations = list(site_model.observations())
 
     PROJECT_ENDSTATE = True
     BACKPROJECT_START_STATES = 0  # turn off back-projection
@@ -1029,10 +1080,10 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
         # Convert this into the "new" simpler format where each site row is
         # simply associated with the frames it will propogate to.
         obs_associated_gxs = []
-        _iter = zip(forward_image_idxs_per_observation, backward_image_idxs_per_observation, site_rows_list)
-        for annot_idx, (forward_gxs, backward_gxs, site_row) in enumerate(_iter):
+        _iter = zip(forward_image_idxs_per_observation, backward_image_idxs_per_observation, observations)
+        for annot_idx, (forward_gxs, backward_gxs, obs_row) in enumerate(_iter):
             propogate_gxs = []
-            catname = site_row['current_phase']
+            catname = obs_row['properties']['current_phase']
             if catname is None:
                 # Based on the status choose a kwcoco category name
                 # using the watch heuristics
@@ -1062,14 +1113,13 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
                                   'Need to vet that the following code is equivalent to the above code')
 
         # For each annotation determine how it propogates in time.
-        site_rows_list
         image_times = [t.timestamp() for t in region_image_dates]
         key_infos = []
-        for annot_idx, (dt, site_row) in enumerate(zip(observation_dates, site_rows_list)):
+        for annot_idx, (dt, obs_row) in enumerate(zip(observation_dates, observations)):
             # SMART annotations apply to the future by default.
             applies = 'future'
             # But we may change that based on category
-            catname = site_row['current_phase']
+            catname = obs_row['properties']['current_phase']
             if catname is None:
                 catname = status_to_catname[status]
             if not PROJECT_ENDSTATE:
@@ -1097,16 +1147,24 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
     # level in the annotation file. This is really the annotation state
     # interpolation problem.
 
+    header_misc_info = ub.udict(site_model.header['properties'].get('misc_info', None) or {})
+
     # Create annotations on each frame we are associated with
     site_anns = []
     drawable_summary = []
-    _iter = zip(obs_associated_gxs, site_rows_list)
-    for annot_idx, (propogate_gxs, site_row) in enumerate(_iter):
+    _iter = zip(obs_associated_gxs, observations)
+    for annot_idx, (propogate_gxs, obs_row) in enumerate(_iter):
 
-        site_row_datetime = coerce_datetime2(site_row['observation_date'])
+        obs_props = obs_row['properties']
+
+        site_row_datetime = util_time.coerce_datetime(obs_props['observation_date'])
         assert site_row_datetime is not None
 
-        catname = site_row['current_phase']
+        catname = obs_props['current_phase']
+
+        obs_misc_info = ub.udict(obs_props.get('misc_info', None) or {})
+        misc_info = header_misc_info | obs_misc_info
+        ann_extra = misc_info.pop('kwcoco', {})
 
         if isinstance(catname, float) and math.isnan(catname):
             catname = None
@@ -1120,9 +1178,9 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
             HACK_TO_PASS = 1
             if HACK_TO_PASS:
                 # We should find out why this is happening
-                warnings.warn(f'Positive annotation without a class label: status={status}, {annot_idx}, {site_row}')
+                warnings.warn(f'Positive annotation without a class label: status={status}, {annot_idx}, {obs_row}')
                 continue
-            raise AssertionError(f'status={status}, {annot_idx}, {site_row}')
+            raise AssertionError(f'status={status}, {annot_idx}, {obs_row}')
 
         propogated_on = []
         category_colors = []
@@ -1141,9 +1199,23 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
         }
 
         site_polygons = [
-            p.to_geojson() for p in kwimage.MultiPolygon.from_shapely(site_row['geometry']).to_multi_polygon().data
+            p.to_geojson() for p in kwimage.MultiPolygon.from_geojson(obs_row['geometry']).to_multi_polygon().data
         ]
-        assert len(site_polygons) == len(site_catnames)
+
+        HACK_TO_FIX_HARDNEGS = 1
+        if HACK_TO_FIX_HARDNEGS:
+            if len(site_polygons) != len(site_catnames):
+                assert site_catnames == ['negative'], 'hack assumptions violated'
+                # Hack case, should fix this elsewhere
+                # should not produce multipolygon hard negatives, not sure why
+                # we are.
+                combo = kwimage.MultiPolygon.from_geojson(obs_row['geometry']).convex_hull
+                site_polygons = [
+                    p.to_geojson() for p in combo.to_multi_polygon().data
+                ]
+
+        if len(site_polygons) != len(site_catnames):
+            raise AssertionError('Should be equal')
 
         # Propogate each subsite
         for subsite_catname, poly in zip(site_catnames, site_polygons):
@@ -1165,7 +1237,7 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
                     'category_id': cid,
                     'track_id': track_id,
                 }
-                misc_info = site_row.get('misc_info', {})
+                ann.update(ann_extra)
                 if misc_info:
                     ann['misc_info'] = misc_info
                 site_anns.append(ann)
@@ -1412,12 +1484,6 @@ def plot_poc_keyframe_interpolate(image_times, key_times, key_assignment):
     ax.set_ylim(min(ylocs.values()) - 1, max(ylocs.values()) + 1)
 
 
-def coerce_datetime2(data):
-    """ Is this a monad 🦋 ? """
-    from watch.utils import util_time
-    return None if data is None or (isinstance(data, float) and math.isnan(data)) else util_time.coerce_datetime(data)
-
-
 def plot_image_and_site_times(coco_dset, region_image_dates, drawable_region_sites, region_id, ax=None):
     """
     References:
@@ -1435,6 +1501,7 @@ def plot_image_and_site_times(coco_dset, region_image_dates, drawable_region_sit
     import kwimage
     import numpy as np
     from watch.utils import util_kwplot
+    from watch.utils import util_progress
     hueristic_status_data = heuristics.HUERISTIC_STATUS_DATA
 
     status_to_color = {d['name']: kwimage.Color(d['color']).as01() for d in hueristic_status_data}
@@ -1448,56 +1515,58 @@ def plot_image_and_site_times(coco_dset, region_image_dates, drawable_region_sit
     # status_to_color = {d['name']: kwimage.Color(d['color']).as01()
     #                    for d in hueristic_status_data}
 
-    bounds_segments = []
-    for t in ub.ProgIter(region_image_dates, desc='plot bounds'):
-        y2 = len(drawable_region_sites) + 1
-        x1 = mpl.dates.date2num(t)
-        xy1 = (x1, 0)
-        xy2 = (x1, y2)
-        segment = [xy1, xy2]
-        bounds_segments.append(segment)
-        # ax.plot([t, t], [0, y2], color='darkblue', alpha=0.5)
-    line_group = mpl.collections.LineCollection(bounds_segments, color='darkblue', alpha=0.5)
-    ax.add_collection(line_group)
+    pman = util_progress.ProgressManager()
+    with pman:
+        bounds_segments = []
+        for t in pman.progiter(region_image_dates, desc='plot bounds'):
+            y2 = len(drawable_region_sites) + 1
+            x1 = mpl.dates.date2num(t)
+            xy1 = (x1, 0)
+            xy2 = (x1, y2)
+            segment = [xy1, xy2]
+            bounds_segments.append(segment)
+            # ax.plot([t, t], [0, y2], color='darkblue', alpha=0.5)
+        line_group = mpl.collections.LineCollection(bounds_segments, color='darkblue', alpha=0.5)
+        ax.add_collection(line_group)
 
-    if 1:
-        ax.autoscale_view()
-        ax.xaxis_date()
+        if 1:
+            ax.autoscale_view()
+            ax.xaxis_date()
 
-    all_times = []
+        all_times = []
 
-    propogate_attrs = {
-        'segments': [],
-        'colors': [],
-    }
-    for summary_idx, drawable_summary in enumerate(ub.ProgIter(drawable_region_sites, desc='plot region')):
-        site_dates = [r['site_row_datetime'] for r in drawable_summary]
-        all_times.extend(site_dates)
-        yloc = summary_idx
-        status_color = drawable_summary[0]['color']
+        propogate_attrs = {
+            'segments': [],
+            'colors': [],
+        }
+        for summary_idx, drawable_summary in enumerate(pman.progiter(drawable_region_sites, desc='plot region')):
+            site_dates = [r['site_row_datetime'] for r in drawable_summary]
+            all_times.extend(site_dates)
+            yloc = summary_idx
+            status_color = drawable_summary[0]['color']
 
-        # Draw propogations
-        for row in drawable_summary:
-            t1 = row['site_row_datetime']
-            cat_colors = row['category_colors']
-            yoffsets = np.linspace(0.5, 0.75, len(cat_colors))[::-1]
+            # Draw propogations
+            for row in drawable_summary:
+                t1 = row['site_row_datetime']
+                cat_colors = row['category_colors']
+                yoffsets = np.linspace(0.5, 0.75, len(cat_colors))[::-1]
 
-            # Draw a line for each "part" of the side at this timestep
-            # Note: some sites seem to have a ton of parts that could be
-            # consolodated? Is this real or is there a bug?
-            for yoff, color in zip(yoffsets, cat_colors):
-                for tp in row['propogated_on']:
-                    x1 = mpl.dates.date2num(t1)
-                    x2 = mpl.dates.date2num(tp)
-                    y1 = yloc
-                    y2 = yloc + yoff
-                    segment = [(x1, y1), (x2, y2)]
-                    propogate_attrs['segments'].append(segment)
-                    propogate_attrs['colors'].append(color)
-                    # ax.plot([x1, x2], [y1, y2], '-', color=color)
+                # Draw a line for each "part" of the side at this timestep
+                # Note: some sites seem to have a ton of parts that could be
+                # consolodated? Is this real or is there a bug?
+                for yoff, color in zip(yoffsets, cat_colors):
+                    for tp in row['propogated_on']:
+                        x1 = mpl.dates.date2num(t1)
+                        x2 = mpl.dates.date2num(tp)
+                        y1 = yloc
+                        y2 = yloc + yoff
+                        segment = [(x1, y1), (x2, y2)]
+                        propogate_attrs['segments'].append(segment)
+                        propogate_attrs['colors'].append(color)
+                        # ax.plot([x1, x2], [y1, y2], '-', color=color)
 
-        # Draw site keyframes
-        ax.plot(site_dates, [yloc] * len(site_dates), '-o', color=status_color, alpha=0.5)
+            # Draw site keyframes
+            ax.plot(site_dates, [yloc] * len(site_dates), '-o', color=status_color, alpha=0.5)
 
     propogate_group = mpl.collections.LineCollection(propogate_attrs['segments'],
                                                      color=propogate_attrs['colors'],
@@ -1549,12 +1618,11 @@ def draw_geospace(dvc_dpath, sites):
         gdf.plot(ax=ax, facecolor='none', edgecolor='red', alpha=0.5)
 
 
+def is_nonish(x):
+    return x is None or isinstance(x, float) and math.isnan(x)
+
+
 __config__ = ReprojectAnnotationsConfig
-
-
-def reorder_columns(df, columns):
-    remain = df.columns.difference(columns)
-    return df.reindex(columns=(columns + list(remain)))
 
 
 if __name__ == '__main__':

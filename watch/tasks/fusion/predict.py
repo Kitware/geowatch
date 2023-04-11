@@ -293,7 +293,7 @@ def resolve_datamodule(config, method, datamodule_defaults):
                 acceptable_keys.update(val.alias)
 
         common = ub.udict(other) & acceptable_keys
-        resolved = dict(config_cls(cmdline=0, data=common))
+        resolved = dict(config_cls.cli(cmdline=0, data=common))
         return resolved
 
     config_cls = datamodules.kwcoco_dataset.KWCocoVideoDatasetConfig
@@ -484,11 +484,11 @@ def predict(cmdline=False, **kwargs):
         >>>         warnings.warn('should have some change predictions elsewhere')
         >>> coco_img = dset.images().coco_images[1]
         >>> # Test that new quantization does not existing APIs
-        >>> pred1 = coco_img.delay('salient', nodata_method='float').finalize()
+        >>> pred1 = coco_img.imdelay('salient', nodata_method='float').finalize()
         >>> assert pred1.max() <= 1
         >>> # new delayed image does not make it easy to remove dequantization
         >>> # add test back in if we add support for that.
-        >>> # pred2 = coco_img.delay('salient').finalize(nodata_method='float', dequantize=False)
+        >>> # pred2 = coco_img.imdelay('salient').finalize(nodata_method='float', dequantize=False)
         >>> # assert pred2.max() > 1
 
     Example:
@@ -589,13 +589,14 @@ def predict(cmdline=False, **kwargs):
         >>>         warnings.warn('should have some change predictions elsewhere')
         >>> coco_img = dset.images().coco_images[1]
         >>> # Test that new quantization does not existing APIs
-        >>> pred1 = coco_img.delay('salient', nodata_method='float').finalize()
+        >>> pred1 = coco_img.imdelay('salient', nodata_method='float').finalize()
         >>> assert pred1.max() <= 1
         >>> # new delayed image does not make it easy to remove dequantization
         >>> # add test back in if we add support for that.
-        >>> # pred2 = coco_img.delay('salient').finalize(nodata_method='float', dequantize=False)
+        >>> # pred2 = coco_img.imdelay('salient').finalize(nodata_method='float', dequantize=False)
         >>> # assert pred2.max() > 1
     """
+    import rich
     args = make_predict_config(cmdline=cmdline, **kwargs)
     config = args.__dict__.copy()
     datamodule_defaults = args.datamodule_defaults
@@ -1132,6 +1133,9 @@ def predict(cmdline=False, **kwargs):
     # validate and save results
     if 0:
         print(result_dataset.validate())
+
+    pred_dpath = ub.Path(result_dataset.fpath).parent
+    rich.print(f'Pred Dpath: [link={pred_dpath}]{pred_dpath}[/link]')
     print('dump result_dataset.fpath = {!r}'.format(result_dataset.fpath))
     result_dataset.dump(result_dataset.fpath)
     print('return result_dataset.fpath = {!r}'.format(result_dataset.fpath))

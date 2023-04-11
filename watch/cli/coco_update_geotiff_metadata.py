@@ -1,4 +1,3 @@
-import kwcoco
 import ubelt as ub
 import scriptconfig as scfg
 # import numpy as np
@@ -79,6 +78,7 @@ def main(cmdline=True, **kwargs):
     config = UpdateGeotiffMetadataConfig(kwargs, cmdline=True)
 
     from watch.utils import kwcoco_extensions
+    import kwcoco
     coco_dset = kwcoco.CocoDataset.coerce(config['src'])
 
     valid_gids = kwcoco_extensions.filter_image_ids(

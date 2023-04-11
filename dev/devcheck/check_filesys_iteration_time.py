@@ -108,7 +108,7 @@ def main():
         for coco_img in prog:
             for stream in coco_img.channels.streams():
                 with ub.Timer() as t2:
-                    delayed = coco_img.delay(stream, space='asset')
+                    delayed = coco_img.imdelay(stream, space='asset')
                     try:
                         delayed.finalize()
                     except Exception as ex:
@@ -135,7 +135,7 @@ def main():
         for coco_img in prog:
             for stream in coco_img.channels.streams():
                 with ub.Timer() as t2:
-                    delayed = coco_img.delay(stream, space='asset')
+                    delayed = coco_img.imdelay(stream, space='asset')
                     try:
                         delayed.finalize()
                     except Exception as ex:

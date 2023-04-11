@@ -136,6 +136,7 @@ def _submit_constructive_split_jobs(base_fpath, suffix, queue, depends=[]):
         command = ub.codeblock(
             fr'''
             python -m kwcoco union \
+                --remember_parent=True \
                 --src {vali_parts_str} \
                 --dst {vali_split_fpath}
             ''')
@@ -144,6 +145,7 @@ def _submit_constructive_split_jobs(base_fpath, suffix, queue, depends=[]):
         command = ub.codeblock(
             fr'''
             python -m kwcoco union \
+                --remember_parent=True \
                 --src {train_parts_str} \
                 --dst {train_split_fpath}
             ''')
@@ -153,6 +155,7 @@ def _submit_constructive_split_jobs(base_fpath, suffix, queue, depends=[]):
     command = ub.codeblock(
         fr'''
         python -m kwcoco union \
+            --remember_parent=True \
             --src {all_parts_Str} \
             --dst {full_fpath}
         ''')

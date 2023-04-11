@@ -1,5 +1,4 @@
 import os
-import re
 import ubelt as ub
 import scriptconfig as scfg
 
@@ -14,6 +13,7 @@ def split_channel_names_by_grammar(channel_names):
     Returns:
         list(str): A list of strings that were originally divided by certain characters.
     """
+    import re
     channel_names = re.split(r",|\|", channel_names)
     return channel_names
 
@@ -166,12 +166,12 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         >>> # Check results
         >>> output_dset = kwcoco.CocoDataset(output_kwcoco_path)
         >>> gid = output_dset.images()[1]
-        >>> imdata1 = dset1.coco_image(gid).delay('salient', space='asset').finalize()
-        >>> imdata2 = dset2.coco_image(gid).delay('salient', space='asset').finalize()
-        >>> imdataM = output_dset.coco_image(gid).delay('salient', space='asset').finalize()
-        >>> imdata1_img = dset1.coco_image(gid).delay('salient', space='image').finalize()
-        >>> imdata2_img = dset2.coco_image(gid).delay('salient', space='image').finalize()
-        >>> imdataM_img = output_dset.coco_image(gid).delay('salient', space='image').finalize()
+        >>> imdata1 = dset1.coco_image(gid).imdelay('salient', space='asset').finalize()
+        >>> imdata2 = dset2.coco_image(gid).imdelay('salient', space='asset').finalize()
+        >>> imdataM = output_dset.coco_image(gid).imdelay('salient', space='asset').finalize()
+        >>> imdata1_img = dset1.coco_image(gid).imdelay('salient', space='image').finalize()
+        >>> imdata2_img = dset2.coco_image(gid).imdelay('salient', space='image').finalize()
+        >>> imdataM_img = output_dset.coco_image(gid).imdelay('salient', space='image').finalize()
         >>> print(f'Weights: {weights}')
         >>> print(f'Img1  mean: {np.nan_to_num(imdata1).mean()}')
         >>> print(f'Img2  mean: {np.nan_to_num(imdata2).mean()}')
@@ -236,12 +236,12 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         >>> # Check results
         >>> output_dset = kwcoco.CocoDataset(output_kwcoco_path)
         >>> gid = 3
-        >>> imdata1 = dset1.coco_image(gid).delay('salient', space='asset').finalize()
-        >>> imdata2 = dset2.coco_image(gid).delay('salient', space='asset').finalize()
-        >>> imdataM = output_dset.coco_image(gid).delay('salient', space='asset').finalize()
-        >>> imdata1_img = dset1.coco_image(gid).delay('salient', space='image').finalize()
-        >>> imdata2_img = dset2.coco_image(gid).delay('salient', space='image').finalize()
-        >>> imdataM_img = output_dset.coco_image(gid).delay('salient', space='image').finalize()
+        >>> imdata1 = dset1.coco_image(gid).imdelay('salient', space='asset').finalize()
+        >>> imdata2 = dset2.coco_image(gid).imdelay('salient', space='asset').finalize()
+        >>> imdataM = output_dset.coco_image(gid).imdelay('salient', space='asset').finalize()
+        >>> imdata1_img = dset1.coco_image(gid).imdelay('salient', space='image').finalize()
+        >>> imdata2_img = dset2.coco_image(gid).imdelay('salient', space='image').finalize()
+        >>> imdataM_img = output_dset.coco_image(gid).imdelay('salient', space='image').finalize()
         >>> print(f'Weights: {weights}')
         >>> print(f'Img1  mean: {np.nan_to_num(imdata1).mean()}')
         >>> print(f'Img2  mean: {np.nan_to_num(imdata2).mean()}')
@@ -414,7 +414,7 @@ def merge_kwcoco_channels(kwcoco_file_paths,
             asset = coco_img.find_asset_obj(channel_name)
 
             # Load the image in 'video' space to ensure consistent space for target resolution.
-            delayed = coco_img.delay(channel_name, space='video', resolution=resolution)
+            delayed = coco_img.imdelay(channel_name, space='video', resolution=resolution)
             gathered_parts.append({
                 'asset': asset,
                 'delayed': delayed,

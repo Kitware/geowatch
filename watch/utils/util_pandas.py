@@ -6,6 +6,11 @@ from watch.utils import slugify_ext
 from watch.utils.util_stringalgo import shortest_unique_suffixes
 
 
+def pandas_reorder_columns(df, columns):
+    remain = df.columns.difference(columns)
+    return df.reindex(columns=(columns + list(remain)))
+
+
 def pandas_argmaxima(data, columns, k=1):
     """
     Finds the top K indexes for each column.

@@ -792,3 +792,35 @@ SENSOR_TEMPORAL_SAMPLING_VALUES = {
     'sensor3': 5,
     'sensor4': 3,
 }
+
+
+# Hard coded values for which regions are cleared
+REGION_STATUS = [
+    {'region_id': 'AE_R001', 'cleared': True},
+    {'region_id': 'BH_R001', 'cleared': True},
+    {'region_id': 'BR_R001', 'cleared': True},
+    {'region_id': 'BR_R002', 'cleared': True},
+    {'region_id': 'BR_R004', 'cleared': True},
+    {'region_id': 'BR_R005', 'cleared': True},
+    {'region_id': 'CH_R001', 'cleared': True},
+    {'region_id': 'KR_R001', 'cleared': True},
+    {'region_id': 'KR_R002', 'cleared': True},
+    {'region_id': 'LT_R001', 'cleared': True},
+    {'region_id': 'NZ_R001', 'cleared': True},
+    {'region_id': 'PE_R001', 'cleared': True},
+    {'region_id': 'US_R001', 'cleared': True},
+    {'region_id': 'US_R004', 'cleared': True},
+    {'region_id': 'US_R005', 'cleared': True},
+]
+
+
+# Mapping from our sensor names to the official T&E sensor names
+TE_SENSOR_NAMES = {
+    'WV': 'WorldView',
+    'S2': 'Sentinel-2',
+    'LE': 'Landsat 7',
+    'LC': 'Landsat 8',
+    'L8': 'Landsat 8',
+    'WV1': 'WorldView 1',
+    'PD': 'Planet',
+}

@@ -40,7 +40,7 @@ __config__ = AnimateConfig
 
 def main(cmdline=True, **kwargs):
     import glob
-    config = AnimateConfig.legacy(cmdline=cmdline, data=kwargs)
+    config = AnimateConfig.cli(cmdline=cmdline, data=kwargs)
     print('config = {}'.format(ub.urepr(dict(config), nl=1)))
 
     image_paths = config['image_list']

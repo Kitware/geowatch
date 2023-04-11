@@ -25,7 +25,7 @@ def demo_kwcoco_with_heatmaps(num_videos=1, num_frames=20, image_size=(512, 512)
         for vidid in coco_dset.videos():
             frames = []
             for gid in coco_dset.images(vidid=vidid):
-                delayed = coco_dset._coco_image(gid).delay(channels=key, space='video')
+                delayed = coco_dset._coco_image(gid).imdelay(channels=key, space='video')
                 final = delayed.finalize()
                 frames.append(final)
             vid_stack = kwimage.stack_images_grid(frames, axis=1, pad=5, bg_value=1)
@@ -104,11 +104,26 @@ def hack_in_heatmaps(coco_dset, heatmap_dname='dummy_heatmaps', with_nan=False, 
         })
 
 
-def hack_in_timedata(coco_dset):
+def hack_in_timedata(coco_dset, dates=True, rng=None):
+    """
+    Adds date_captured fields to demo toydata
+    """
     from kwarray.distributions import Uniform
-    min_time = datetime_mod.datetime(year=1970, month=1, day=1)
-    max_time = datetime_mod.datetime(year=2101, month=1, day=1)
-    time_distri = Uniform(min_time.timestamp(), max_time.timestamp())
+    from watch.utils import util_time
+    datekw = ub.udict({
+        'start_time': '1970-01-01',
+        'end_time': '2101-01-01',
+    })
+    if isinstance(dates, dict):
+        extra = dates - datekw
+        if extra:
+            raise ValueError(f'Unexepcted date kwargs: {extra}')
+        datekw.update(dates)
+
+    rng = kwarray.ensure_rng(rng)
+    min_time = util_time.coerce_datetime(datekw['start_time'])
+    max_time = util_time.coerce_datetime(datekw['end_time'])
+    time_distri = Uniform(min_time.timestamp(), max_time.timestamp(), rng=rng)
 
     # Hack in other metadata
     for vidid in coco_dset.videos():
@@ -302,7 +317,7 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
         'geodata': geodata,
         'heatmap': heatmap,
         'bad_nodata': bad_nodata,
-        'version': 2,
+        'version': 5,
     }
 
     bundle_name = 'watch_vidshapes_' + ub.hash_data(depends)[0:8]
@@ -361,7 +376,7 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
         hack_in_heatmaps(coco_dset, rng=rng)
 
     if dates:
-        hack_in_timedata(coco_dset)
+        hack_in_timedata(coco_dset, dates, rng=rng)
 
     if geodata:
         for ann in coco_dset.anns.values():
@@ -503,7 +518,7 @@ def coerce_kwcoco(data='watch-msi', **kwargs):
         alias_to_key = {k: v for v, ks in vidkw_aliases.items() for k in ks}
         kwargs.update(_parse_demostr(data, defaults, alias_to_key)[0])
         kwargs.pop('sqlview', None)
-        print('kwargs = {}'.format(ub.urepr(kwargs, nl=1)))
+        # print('kwargs = {}'.format(ub.urepr(kwargs, nl=1)))
         return demo_kwcoco_multisensor(**kwargs)
     else:
         import os

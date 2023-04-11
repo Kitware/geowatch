@@ -6,9 +6,23 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Version 0.5.0 - Target 2023-04-x
 
+### Added
+* `coco_time_combine` can now ignore seasons / handle median images with less memory
+* `use_grid_negatives` as dataset option, which can be set to "cleared" to only use negatives from cleared regions.
+
 ### Changed
 
-Unpinned lightning for 2.x
+* Unpinned lightning for 2.x
+* kwcoco draw item `norm_over_time` now defaults to `auto`, which is true if
+  `normalize_peritem` or `normalize_perdomain` is on.
+* Started transition to a new package name: `geowatch`.
+* CI updated to `pyenv:3.11`
+* Cleanup `util_yaml`.
+
+### Fixed
+
+* Fixed gdal warnings
+* Visualization issue where annots would not always be rendered
 
 ### Removed
 

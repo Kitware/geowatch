@@ -14,7 +14,7 @@ do this, ensuring the file has the correct permissions.
 
 .. code:: bash
 
-    REMOTE_USERNAME="$USER"  # set to an identifier 
+    REMOTE_USERNAME="$USER"  # set to an identifier
     PRIVATE_KEY_FPATH="$HOME/.ssh/id_${REMOTE_USERNAME}_ed25519"
 
     if [ -f $PRIVATE_KEY_FPATH ]; then
@@ -34,7 +34,7 @@ do this, ensuring the file has the correct permissions.
     fi
 
 
-Remember to ensure the correct permissions: 
+Remember to ensure the correct permissions:
 
 .. code:: bash
 
@@ -104,7 +104,7 @@ like to refer to the server as ``horologic``.
     REMOTE_URI=horologic.kitware.com
     REMOTE_NICKNAME=$(echo $REMOTE_URI | cut -d. -f1)
 
-  
+
 Once you have this information, create an ssh identity (
 using the `ed25519 backend <https://en.wikipedia.org/wiki/EdDSA>`_). The
 following bash code shows how to do this, ensuring the file has the correct
@@ -171,7 +171,7 @@ code to ensure it exists programatically:
     if [[ "$HOST_IN_CONFIG" == "" ]]; then
         echo "Adding host do your config"
         codeblock "
-            # Programatically added bock 
+            # Programatically added bock
             Host $REMOTE_NICKNAME $REMOTE_URI
                 HostName $REMOTE_URI
                 Port 22
@@ -195,7 +195,7 @@ For the working example variables it may look like this:
         identityfile ~/.ssh/id_jon.crall_ed25519
 
 
-Remember to ensure the correct permissions: 
+Remember to ensure the correct permissions:
 
 .. code:: bash
 
@@ -205,3 +205,24 @@ Remember to ensure the correct permissions:
     chmod 600 ~/.ssh/known_hosts
     chmod 400 ~/.ssh/id_*
     chmod 644 ~/.ssh/id_*.pub
+
+
+
+Troubleshooting SSH Keys
+------------------------
+
+If you receive a permission error when you do a git pull and you are sure your
+public ssh key is correctly registered with gitlab, you can do the following to
+force git to use a particular ssh key.
+
+
+.. code:: bash
+
+    export GIT_SSH_COMMAND="ssh -i <path-to-key>"
+
+    # OR
+
+    git config --local core.sshCommand 'ssh -i <path-to-key>'
+
+
+Information from `SO41385199 <https://stackoverflow.com/questions/41385199/force-git-to-use-specific-key-pub>`_.

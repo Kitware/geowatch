@@ -427,7 +427,7 @@ def summary_visualization(dst_dset, out_dpath):
             if 1:
                 jobs = []
                 for coco_img in pman(images.coco_images, desc='submit delay jobs'):
-                    delayed = coco_img.delay('salient', resolution=resolution, nodata_method='float')
+                    delayed = coco_img.imdelay('salient', resolution=resolution, nodata_method='float')
                     job = executor.submit(delayed.finalize)
                     jobs.append(job)
                 from concurrent.futures import as_completed

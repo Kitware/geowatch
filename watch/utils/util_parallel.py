@@ -146,7 +146,6 @@ def coerce_num_workers(num_workers='auto', minimum=0):
             num_workers = None
         else:
             expr = num_workers.replace('all', 'all_')
-            # note: eval is not safe, using numexpr instead
             # limit chars even futher if eval is used
             if 1:
                 # Mitigate attack surface by restricting builtin usage
@@ -155,6 +154,7 @@ def coerce_num_workers(num_workers='auto', minimum=0):
                 num_workers = restricted_eval(expr, max_chars, local_dict,
                                               builtins_passlist)
             else:
+                # note: eval is not safe, mabye use numexpr instead
                 import numexpr
                 num_workers = numexpr.evaluate(expr, local_dict=local_dict,
                                                global_dict=local_dict)

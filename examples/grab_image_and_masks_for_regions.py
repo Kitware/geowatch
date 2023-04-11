@@ -41,7 +41,7 @@ def demo():
 
     for coco_img in images_for_video.coco_images:
         # Get the image data in "requested space"
-        delayed = coco_img.delay('salient', space='video', resolution=resolution, RESOLUTION_KEY='target_gsd')
+        delayed = coco_img.imdelay('salient', space='video', resolution=resolution, RESOLUTION_KEY='target_gsd')
         detections = get_annots_in_requested_space(coco_img, space='video', resolution=resolution)
 
         frame_data = delayed.finalize()

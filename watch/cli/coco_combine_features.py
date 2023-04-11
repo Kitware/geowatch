@@ -2,9 +2,6 @@
 Combine kwcoco files with different "auxiliary" features into a single kwcoco
 file.
 """
-
-
-import kwcoco
 import ubelt as ub
 import scriptconfig as scfg
 
@@ -30,6 +27,7 @@ def combine_auxiliary_features(dst_dset, src_dsets):
     """
     Example:
         >>> from watch.cli.coco_combine_features import *  # NOQA
+        >>> import kwcoco
         >>> base = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
         >>> dset1 = base.copy()
         >>> dset2 = base.copy()
@@ -102,6 +100,7 @@ def main(cmdline=True, **kwargs):
         >>> }
         >>> main(cmdline, **kwargs)
     """
+    import kwcoco
     config = CocoCombineFeatures(data=kwargs, cmdline=cmdline)
 
     fpaths = config['src']

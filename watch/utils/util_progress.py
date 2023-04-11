@@ -138,7 +138,7 @@ class RichProgIter:
         else:
             addtask_kw['description'] = ''
         addtask_kw['total'] = self.total
-        self.task_id = self.manager.rich_manager.add_task(**addtask_kw)
+        self.task_id = self.manager.rich_progress.add_task(**addtask_kw)
         self.transient = transient
         self.extra = None
 
@@ -159,7 +159,7 @@ class RichProgIter:
             self.manager.stop()
 
     def update(self, n=1):
-        self.manager.rich_manager.update(self.task_id, advance=n)
+        self.manager.rich_progress.update(self.task_id, advance=n)
 
     step = update
 
@@ -170,10 +170,10 @@ class RichProgIter:
             self.start()
             for item in self.iterable:
                 yield item
-                self.manager.rich_manager.update(self.task_id, advance=1)
+                self.manager.rich_progress.update(self.task_id, advance=1)
             if self.total is None:
-                task = self.manager.rich_manager._tasks[self.task_id]
-                self.manager.rich_manager.update(self.task_id, total=task.completed)
+                task = self.manager.rich_progress._tasks[self.task_id]
+                self.manager.rich_progress.update(self.task_id, total=task.completed)
             self.stop()
 
     def remove(self):
@@ -181,7 +181,7 @@ class RichProgIter:
         Remove this progress task from its rich manager
         """
         if self.enabled:
-            self.manager.rich_manager.remove_task(self.task_id)
+            self.manager.rich_progress.remove_task(self.task_id)
 
     def update_info(self, text):
         if self.enabled:
@@ -198,7 +198,7 @@ class RichProgIter:
             parts.append(self.extra)
         if self.enabled:
             description = ' '.join(parts)
-            self.manager.rich_manager.update(
+            self.manager.rich_progress.update(
                 self.task_id, description=description, refresh=refresh)
 
     set_postfix = set_postfix_str
@@ -228,6 +228,10 @@ class BaseProgIterManager:
         self.stop(exc_type=exc_type, exc_val=exc_val, exc_tb=exc_tb)
 
 
+# Global var
+MAIN_RICH_PMAN = None
+
+
 class _RichProgIterManager(BaseProgIterManager):
     """
     rich specific backend.
@@ -235,13 +239,25 @@ class _RichProgIterManager(BaseProgIterManager):
 
     def __init__(self, **kwargs):
         self.prog_iters = []
-        self.rich_manager = None
         self.enabled = kwargs.get('enabled', True)
+
+        self.info_panel = None
+        self.rich_progress = None
+        self._is_main_manager = None
+
         self.setup_rich()
+        self._active = False
+
+    # Can we make this work?
+    # def __del__(self):
+    #     if self._active:
+    #         self.stop()
 
     def progiter(self, iterable=None, total=None, desc=None, transient=False, spinner=False, verbose='auto', **kw):
+        if not self._active:
+            self.start()
         # Fixme remove circular ref
-        self.rich_manager.pman = self
+        # self.rich_progress.pman = self
         prog = RichProgIter(
             manager=self, iterable=iterable, total=total, desc=desc,
             transient=transient, spinner=spinner, **kw)
@@ -249,6 +265,7 @@ class _RichProgIterManager(BaseProgIterManager):
         return prog
 
     def setup_rich(self):
+        global MAIN_RICH_PMAN
         import rich
         import rich.progress
         from rich.console import Group
@@ -259,42 +276,51 @@ class _RichProgIterManager(BaseProgIterManager):
         from rich.progress import ProgressColumn, Text
         # from rich.style import Style
 
-        class ProgressRateColumn(ProgressColumn):
-            """Renders human readable transfer speed."""
+        if MAIN_RICH_PMAN is not None:
+            self._is_main_manager = False
+            self.live_context = None
+            self.rich_progress = MAIN_RICH_PMAN.rich_progress
+            self.progress_group = MAIN_RICH_PMAN.progress_group
+        else:
+            self._is_main_manager = True
 
-            def render(self, task) -> Text:
-                """Show progress speed speed."""
-                _iters_per_second = task.finished_speed or task.speed
-                if _iters_per_second is not None:
-                    rate_format = '4.2f' if _iters_per_second > .001 else 'g'
-                    fmt = '{:' + rate_format + '} Hz'
-                    text = fmt.format(_iters_per_second)
-                else:
-                    text = '?'
-                # style = Style(color="red")
-                style = 'progress.data.speed'
-                renderable = Text(text, style=style)
-                return renderable
+            class ProgressRateColumn(ProgressColumn):
+                """Renders human readable transfer speed."""
 
-        self.rich_manager = richProgress(
-            TextColumn("{task.description}"),
-            SpinnerColumn(),
-            BarColumn(),
-            "[progress.percentage]{task.percentage:>3.0f}%",
-            rich.progress.MofNCompleteColumn(),
-            # rich.progress.TransferSpeedColumn(),
-            ProgressRateColumn(),
-            'eta',
-            rich.progress.TimeRemainingColumn(),
-            'total',
-            rich.progress.TimeElapsedColumn(),
-        )
-        self.info_panel = None
-        self.progress_group = Group(
-            # self.info_panel,
-            self.rich_manager,
-        )
-        self.live_context = Live(self.progress_group)
+                def render(self, task) -> Text:
+                    """Show progress speed speed."""
+                    _iters_per_second = task.finished_speed or task.speed
+                    if _iters_per_second is not None:
+                        rate_format = '4.2f' if _iters_per_second > .001 else 'g'
+                        fmt = '{:' + rate_format + '} Hz'
+                        text = fmt.format(_iters_per_second)
+                    else:
+                        text = '?'
+                    # style = Style(color="red")
+                    style = 'progress.data.speed'
+                    renderable = Text(text, style=style)
+                    return renderable
+
+            self.rich_progress = richProgress(
+                TextColumn("{task.description}"),
+                SpinnerColumn(),
+                BarColumn(),
+                "[progress.percentage]{task.percentage:>3.0f}%",
+                rich.progress.MofNCompleteColumn(),
+                # rich.progress.TransferSpeedColumn(),
+                ProgressRateColumn(),
+                'eta',
+                rich.progress.TimeRemainingColumn(),
+                'total',
+                rich.progress.TimeElapsedColumn(),
+            )
+            self.info_panel = None
+            self.progress_group = Group(
+                # self.info_panel,
+                self.rich_progress,
+            )
+            self.live_context = Live(self.progress_group)
+            MAIN_RICH_PMAN = self
 
     def update_info(self, text):
         from rich.panel import Panel
@@ -305,16 +331,26 @@ class _RichProgIterManager(BaseProgIterManager):
             self.info_panel.renderable = text
 
     def start(self):
-        if self.enabled:
-            return self.live_context.__enter__()
+        if self.enabled and not self._active:
+            self._active = True
+            if self._is_main_manager:
+                return self.live_context.__enter__()
 
     def stop(self, **kw):
-        if self.enabled:
+        if self.enabled and self._active:
             if not kw:
                 kw['exc_type'] = None
                 kw['exc_val'] = None
                 kw['exc_tb'] = None
-            return self.live_context.__exit__(**kw)
+            if self._is_main_manager:
+                global MAIN_RICH_PMAN
+                MAIN_RICH_PMAN = None
+                ret = self.live_context.__exit__(**kw)
+                self._is_main_manager = False
+            else:
+                ret = None
+            self._active = False
+            return ret
 
 
 class _ProgIterManager(BaseProgIterManager):
@@ -514,6 +550,10 @@ class ProgressManager(BaseProgIterManager):
     def stop(self, *args, **kwargs):
         self.backend.stop(*args, **kwargs)
 
+    @property
+    def _is_main_manager(self):
+        return self.backend._is_main_manager
+
     @classmethod
     def stopall(self):
         """
@@ -525,3 +565,110 @@ class ProgressManager(BaseProgIterManager):
         """
         for pman in LIVE_PROGRESS_MANAGERS.values():
             pman.stop()
+
+
+def _progman_test_multiple_managers():
+    """
+
+    Note:
+        We want the user to be able let the user create multiple
+        ProgressManagers, but we are only allowed one live display, therefore
+        the first ProgressManager needs to becomes the "main" manager and all
+        others will be secondary. Getting this exactly right may require a
+        refactor and locks, but this tests that our simple implementation works
+        well enough.
+
+    CommandLine:
+        xdoctest -m watch.utils.util_progress _progman_test_multiple_managers
+
+    Example:
+        >>> _progman_test_multiple_managers()
+    """
+    from watch.utils import util_progress
+    import time
+    from rich import print
+
+    pman1 = util_progress.ProgressManager()
+
+    with pman1:
+        print(f'pman1._is_main_manager={pman1._is_main_manager}')
+        print('Print before loop 1')
+
+        for i in pman1.progiter(range(100), desc='PMAN(1) Iter(1)'):
+            time.sleep(0.01)
+
+        print('Print after loop 1 #1')
+        print('Print after loop 1 #2')
+        print('Print after loop 1 #3')
+
+        print('Print before loop 2')
+
+        for i in pman1.progiter(range(100), desc='PMAN(1) Iter(2)'):
+            time.sleep(0.009)
+
+        print('Print after loop 2 #1')
+        print('Print after loop 2 #2')
+        print('Print after loop 2 #3')
+
+        pman2 = util_progress.ProgressManager()
+        print(f'pman2._is_main_manager={pman2._is_main_manager}')
+
+        for idx in range(2):
+            for i in pman2.progiter(range(100), desc=f'PMAN(2) Iter({idx})'):
+                time.sleep(0.008)
+
+        print(f'pman2._is_main_manager={pman2._is_main_manager}')
+        print(f'pman1._is_main_manager={pman1._is_main_manager}')
+
+    print(f'pman1._is_main_manager={pman1._is_main_manager}')
+
+    pman3 = util_progress.ProgressManager()
+    print(f'pman3._is_main_manager={pman3._is_main_manager}')
+    with pman3:
+        print(f'pman3._is_main_manager={pman3._is_main_manager}')
+        for idx in range(3):
+            for i in pman2.progiter(range(100), desc=f'PMAN(3) Iter({idx})'):
+                time.sleep(0.005)
+        print(f'pman3._is_main_manager={pman3._is_main_manager}')
+
+    print(f'pman1._is_main_manager={pman1._is_main_manager}')
+
+
+def _progman_test_multiple_managers_tree():
+    """"
+    CommandLine:
+        xdoctest -m watch.utils.util_progress _progman_test_multiple_managers_tree
+
+    Example:
+        >>> _progman_test_multiple_managers_tree()
+    """
+    import time
+    from watch.utils import util_progress
+
+    sleep_time = 0.001
+
+    def _nested_loop(max_depth=0):
+
+        pman = util_progress.ProgressManager()
+        with pman:
+            prog1 = pman.progiter(range(100), desc=f'P1: max_depth={max_depth}')
+            for i in zip(prog1, range(50)):
+                time.sleep(sleep_time)
+                yield None
+
+            if max_depth > 0:
+                yield from _nested_loop(max_depth=max_depth - 1)
+
+            for i in zip(prog1, range(50)):
+                time.sleep(sleep_time)
+                yield None
+
+            if max_depth > 0:
+                yield from _nested_loop(max_depth=max_depth - 1)
+
+            prog2 = pman.progiter(range(91), desc=f'P2: max_depth={max_depth}')
+            for i in prog2:
+                time.sleep(sleep_time)
+                yield None
+
+    list(_nested_loop(max_depth=3))

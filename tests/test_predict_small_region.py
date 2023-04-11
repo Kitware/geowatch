@@ -88,8 +88,8 @@ def test_small_predict_region():
 
     coco_img = dset.images().coco_images[0]
     # Test that new quantization does not existing APIs
-    pred1 = coco_img.delay('salient').finalize(nodata='float')
-    pred2 = coco_img.delay('salient').finalize(nodata='float', dequantize=False)
+    pred1 = coco_img.imdelay('salient').finalize(nodata='float')
+    pred2 = coco_img.imdelay('salient').finalize(nodata='float', dequantize=False)
     assert pred1.max() <= 1
     assert pred2.max() > 1
 

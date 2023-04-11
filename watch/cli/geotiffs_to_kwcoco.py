@@ -3,15 +3,11 @@ Attempts to register directory of geotiffs into a kwcoco dataset
 """
 
 from dateutil.parser import isoparse
-import kwimage
 from os.path import join, basename, normpath, splitext
 import datetime
 import glob
-import kwcoco
 import scriptconfig as scfg
 import ubelt as ub
-import watch
-from watch.utils import util_bands
 
 
 class KWCocoFromGeotiffConfig(scfg.Config):
@@ -27,7 +23,7 @@ class KWCocoFromGeotiffConfig(scfg.Config):
     }
 
 
-def main(**kwargs):
+def main(cmdline=1, **kwargs):
     """
     Ignore:
         geotiff_dpath = '/home/joncrall/data/grab_tiles_out/fels'
@@ -39,13 +35,14 @@ def main(**kwargs):
         dset1 = kwcoco.CocoDataset(ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc/drop0/drop0.kwcoco.json'))
         dset2 = kwcoco.CocoDataset(ub.expandpath('$HOME/data/grab_tiles_out/fels/data.kwcoco.json'))
     """
-    config = KWCocoFromGeotiffConfig(data=kwargs, cmdline=True)
+    config = KWCocoFromGeotiffConfig.cli(data=kwargs, cmdline=cmdline)
     geotiff_dpath = config['geotiff_dpath']
     dst = config['dst']
 
     imgs = find_geotiffs(geotiff_dpath, workers=config['workers'],
                          strict=config['strict'])
 
+    import kwcoco
     dset = kwcoco.CocoDataset()
     for img in imgs:
         dset.add_image(**img)
@@ -76,6 +73,8 @@ def filter_band_files(fpaths, band_list, with_tci=True):
 
 
 def ingest_landsat_directory(lc_dpath):
+    import watch
+    from watch.utils import util_bands
     name = basename(normpath(lc_dpath))
     tiffs = sorted(glob.glob(join(lc_dpath, '*.TIF')))
     if len(tiffs) == 0:
@@ -99,6 +98,8 @@ def ingest_sentinel2_directory(s2_dpath):
     # Are we in the safedir, the granuledir or some arbitrary dir?
     # Try to use the granuledir as name if available;
     # it's a better unique ID.
+    import watch
+    from watch.utils import util_bands
     granules = sorted(glob.glob(join(s2_dpath, 'GRANULE', '*')))
     if len(granules) == 1:
         granule = granules[0]
@@ -134,6 +135,9 @@ def make_coco_img_from_geotiff(tiff_fpath, name=None, force_affine=True,
         >>> img = make_coco_img_from_geotiff(tiff_fpath)
         >>> print('img = {}'.format(ub.urepr(img, nl=1)))
     """
+    import watch
+    from watch.utils import util_bands
+    import kwimage
     img = {}
     if name is not None:
         img['name'] = name
@@ -251,6 +255,7 @@ def find_geotiffs(geotiff_dpath, workers=0, strict=False):
     geotiff_dpath = '/home/joncrall/data/grab_tiles_out/fels'
     """
     import os
+    import watch
     dpath_list = list(watch.gis.geotiff.walk_geotiff_products(geotiff_dpath))
 
     print(f'Found candidate {len(dpath_list)} geotiff products')

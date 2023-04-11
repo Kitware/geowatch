@@ -7,6 +7,9 @@ Usage:
 source ~/code/watch/dev/devsetup/dev_pkgs.sh
 "
 
+# Place where the source packages are located
+CODE_DPATH=$HOME/code
+
 mylibs=(
 ubelt
 mkinit
@@ -23,7 +26,7 @@ ndsampler
 )
 
 
-DO_FETCH=0
+DO_FETCH=1
 DRY_RUN=0
 
 
@@ -32,11 +35,12 @@ if [[ "$DO_FETCH" == "1" ]]; then
     for name in "${mylibs[@]}"
     do
         echo "name = $name"
-        dpath=$HOME/code/$name
-        if [[ -d "$dpath" ]]; then
-            git fetch
+        dpath=$CODE_DPATH/$name
+        if [ -d "$dpath" ]; then
+            #git fetch
             #(cd "$dpath" && gup)
-            (cd "$dpath" && python ~/local/git_tools/git_devbranch.py update)
+            echo "dpath = $dpath"
+            (cd "$dpath" && git fetch && python ~/local/git_tools/git_devbranch.py update)
         else
             echo "does not exist dpath = $dpath"
         fi
@@ -48,7 +52,7 @@ needs_install=()
 for name in "${mylibs[@]}"
 do
     echo "name = $name"
-    dpath=$HOME/code/$name
+    dpath=$CODE_DPATH/$name
     if [[ -d $dpath ]]; then
         #base_fpath=$(python -c "import $name; print($name.__file__)")
         if python -c "import sys, $name; sys.exit(1 if 'site-packages' in $name.__file__ else 0)"; then

@@ -92,7 +92,7 @@ def random_region_model(region_id=None, num_sites=3, num_observations=5,
                     },
                     'properties': {
                         'type': 'region',
-                        'region_id': 'DR_0684',
+                        'region_id': 'DR_R684',
                         'version': '2.4.3',
                         'mgrs': '51PXM',
                         'start_date': '2011-05-28',
@@ -112,7 +112,7 @@ def random_region_model(region_id=None, num_sites=3, num_observations=5,
                         'type': 'site_summary',
                         'status': 'positive_annotated',
                         'version': '2.0.1',
-                        'site_id': 'DR_0684_000',
+                        'site_id': 'DR_R684_0000',
                         'mgrs': '51PXM',
                         'start_date': '2015-03-16',
                         'end_date': '2018-09-13',
@@ -133,7 +133,7 @@ def random_region_model(region_id=None, num_sites=3, num_observations=5,
                         'type': 'site_summary',
                         'status': 'positive_annotated',
                         'version': '2.0.1',
-                        'site_id': 'DR_0684_001',
+                        'site_id': 'DR_R684_0001',
                         'mgrs': '51PXM',
                         'start_date': '2011-05-28',
                         'end_date': '2018-09-13',
@@ -155,7 +155,7 @@ def random_region_model(region_id=None, num_sites=3, num_observations=5,
         raise ValueError('must have at least one observation')
 
     if region_id is None:
-        region_id = 'DR_{:04d}'.format(rng.randint(0, 1000))
+        region_id = 'DR_R{:03d}'.format(rng.randint(0, 1000))
 
     region_poly = demo_utils.random_geo_polygon(max_rt_area=10_000, rng=rng)
 
@@ -196,7 +196,7 @@ def random_region_model(region_id=None, num_sites=3, num_observations=5,
     sites = []
     site_summaries = []
     for site_num in range(num_sites):
-        site_id = f"{region_id}_{site_num:03d}"
+        site_id = f"{region_id}_{site_num:04d}"
         sitesum, site = random_site_model(
             region_id, site_id, region_corners, observables,
             p_observe=p_observe, p_transition=p_transition, rng=rng)

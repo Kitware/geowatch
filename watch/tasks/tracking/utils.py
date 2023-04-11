@@ -1,18 +1,10 @@
 import collections
-import geopandas as gpd
 import itertools
-import kwcoco
-import kwimage
-import numpy as np
-import pandas as pd
-import shapely.geometry
 import ubelt as ub
 import warnings
 from abc import abstractmethod
-from scipy.ndimage import label as ndm_label
 from functools import lru_cache
-from typing import Union, Iterable, Optional, Dict
-
+from typing import Iterable, Optional, Dict
 from dataclasses import dataclass
 
 try:
@@ -35,7 +27,7 @@ def trackid_is_default(trackid):
         return False
 
 
-Poly = Union[kwimage.Polygon, kwimage.MultiPolygon]
+# Poly = Union[kwimage.Polygon, kwimage.MultiPolygon]
 
 
 class TrackFunction(collections.abc.Callable):
@@ -44,9 +36,12 @@ class TrackFunction(collections.abc.Callable):
     '''
 
     @abstractmethod
-    def __call__(self, sub_dset) -> kwcoco.CocoDataset:
+    def __call__(self, sub_dset):
         '''
         Ensure each annotation in coco_dset has a track_id.
+
+        Returns:
+            kwcoco.CocoDataset
         '''
         raise NotImplementedError('must be implemented by subclasses')
 
@@ -54,6 +49,7 @@ class TrackFunction(collections.abc.Callable):
         '''
         Main entrypoint for this class.
         '''
+        import kwcoco
         legacy = False
 
         tracked_subdsets = []
@@ -144,6 +140,7 @@ class TrackFunction(collections.abc.Callable):
 
     @profile
     def safe_apply(self, coco_dset, gids, overwrite, legacy=True):
+        import numpy as np
         DEBUG_JSON_SERIALIZABLE = 0
         if DEBUG_JSON_SERIALIZABLE:
             from watch.utils.util_json import debug_json_unserializable
@@ -273,12 +270,25 @@ class NewTrackFunction(TrackFunction):
         return sub_dset
 
     @abstractmethod
-    def create_tracks(self, sub_dset) -> gpd.GeoDataFrame:
+    def create_tracks(self, sub_dset):
+        """
+        Args:
+            sub_dset (CocoDataset):
+
+        Returns:
+            GeoDataFrame
+        """
         raise NotImplementedError('must be implemented by subclasses')
 
     @abstractmethod
-    def add_tracks_to_dset(self, sub_dset,
-                           tracks: gpd.GeoDataFrame) -> kwcoco.CocoDataset:
+    def add_tracks_to_dset(self, sub_dset, tracks):
+        """
+        Args:
+            tracks (GeoDataFrame):
+
+        Returns:
+            kwcoco.CocoDataset
+        """
         raise NotImplementedError('must be implemented by subclasses')
 
 
@@ -321,6 +331,8 @@ def gpd_compute_scores(
         ks: Dict,
         USE_DASK=False,
         resolution=None):
+    import numpy as np
+    import pandas as pd
 
     def compute_scores(grp, thrs=[], keys=[]):
         gid = getattr(grp, 'name', None)
@@ -333,10 +345,10 @@ def gpd_compute_scores(
             for k in keys:
                 # TODO handle keys as channelcodes
                 if k in img.channels:
-                    heatmap = img.delay(k, space='video', resolution=resolution).finalize()
+                    heatmap = img.imdelay(k, space='video', resolution=resolution).finalize()
                     heatmap = np.squeeze(heatmap, -1)
                 else:
-                    w, h = img.delay(space='video', resolution=resolution).dsize
+                    w, h = img.imdelay(space='video', resolution=resolution).dsize
                     heatmap = np.zeros((h, w))
                 heatmaps.append(heatmap)
             heatmaps = np.stack(heatmaps, axis=0)
@@ -409,25 +421,31 @@ def gpd_compute_scores(
 
 
 @profile
-def pop_tracks(coco_dset: kwcoco.CocoDataset,
+def pop_tracks(coco_dset,
                cnames: Iterable[str],
                remove: bool = True,
-               score_chan: Optional[kwcoco.ChannelSpec] = None,
+               score_chan=None,
                resolution: Optional[str] = None):
     '''
     Convert kwcoco annotations into tracks.
 
     Args:
-        coco_dset
+        coco_dset (kwcoco.CocoDataset):
+
         cnames: category names
+
         remove: remove the annotations from coco_dset
-        score_chan: score the track polygons by image overlap with this channel
+
+        score_chan (kwcoco.ChannelSpec | None):
+            score the track polygons by image overlap with this channel
 
     Returns:
         gpd dataframe.
         Mutates coco_dset if remove=True.
     '''
     # TODO could refactor to work on coco_dset.annots() and integrate
+    import geopandas as gpd
+    import numpy as np
     cnames = list(set(cnames))
 
     annots = coco_dset.annots()
@@ -468,6 +486,7 @@ def pop_tracks(coco_dset: kwcoco.CocoDataset,
 
 @lru_cache(maxsize=512)
 def _rasterized_poly(shp_poly, h, w, pixels_are):
+    import kwimage
     poly = kwimage.MultiPolygon.from_shapely(shp_poly)
     mask = poly.to_mask((h, w), pixels_are=pixels_are).data
     return mask
@@ -489,6 +508,8 @@ def score_poly(poly, probs, threshold=-1, use_rasterio=True):
         in which case returns all of them.
 
     '''
+    import kwimage
+    import numpy as np
     if not isinstance(poly, (kwimage.Polygon, kwimage.MultiPolygon)):
         poly = kwimage.MultiPolygon.from_shapely(poly)  # 2.4% of runtime
 
@@ -592,6 +613,10 @@ def mask_to_polygons(probs,
         >>> for poly in polys2:
         >>>     poly.draw(facecolor='none', edgecolor='kitware_green', alpha=0.5, linewidth=8)
     """
+    import kwimage
+    import numpy as np
+    import shapely.geometry
+    from scipy.ndimage import label as ndm_label
     # Threshold scores
     if thresh_hysteresis is None:
         binary_mask = (probs > thresh).astype(np.uint8)

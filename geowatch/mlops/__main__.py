@@ -1,0 +1,1 @@
+from watch.mlops.__main__ import *  # NOQA

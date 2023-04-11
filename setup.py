@@ -229,20 +229,21 @@ if __name__ == '__main__':
         python_requires='>=3.9',
         # https://pypi.org/classifiers/
         classifiers=[
-            'Development Status :: 3 - Alpha',
+            'Development Status :: 4 - Beta',
             'Intended Audience :: Developers',
             'Natural Language :: English',
             'Programming Language :: Python :: 3',
-            'Programming Language :: Python :: 3.8',
             'Programming Language :: Python :: 3.9',
             'Programming Language :: Python :: 3.10',
+            'Programming Language :: Python :: 3.11',
         ],
         description="",
         entry_points={
             'console_scripts': [
-                'watch-cli = watch.cli.__main__:main',
                 'smartwatch= watch.cli.__main__:main',
                 'smartwatch_dvc= watch.cli.find_dvc:_CLI.main',
+                'geowatch= watch.cli.__main__:main',
+                'geowatch_dvc= watch.cli.find_dvc:_CLI.main',
                 # 'smartwatch_dvc= watch.cli.find_dvc:__config__.main',
             ],
         },
@@ -261,7 +262,11 @@ if __name__ == '__main__':
             ],
         },
         name='watch',
-        packages=find_packages(include=['watch', 'watch.*']),
+        packages=find_packages(include=[
+            'watch', 'watch.*',
+            # Alias the module while we transition to a new name.
+            'geowatch', 'geowatch.*',
+        ]),
         url='https://gitlab.kitware.com/watch/watch.git',
         version=VERSION,
         zip_safe=False,

@@ -907,6 +907,12 @@ def _write_ann_visualizations2(coco_dset,
         local_frame_index = -1
     frame_id = f'{local_frame_index:0{num_digits}d}'
 
+    if verbose > 2:
+        _body = f'--- Render frame {frame_id} ---'
+        rich.print('=' * len(_body))
+        rich.print(_body)
+        rich.print('=' * len(_body))
+
     from watch import heuristics
     header_lines = heuristics.build_image_header_text(
         img=img,
@@ -914,6 +920,9 @@ def _write_ann_visualizations2(coco_dset,
         _header_extra=_header_extra,
         coco_dset=coco_dset,
     )
+
+    if verbose > 2:
+        rich.print('header_lines = {}'.format(ub.urepr(header_lines, nl=1)))
 
     coco_img = coco_dset.coco_image(img['id'])
     finalize_opts = {
@@ -1075,12 +1084,17 @@ def _write_ann_visualizations2(coco_dset,
     else:
         # If unspecified draw all roles on the first part
         stack_idx_to_roles = {0: list(role_to_anns.keys())}
-    # print(f'role_to_anns={role_to_anns}')
-    # print(f'role_order={role_order}')
-    # print(f'stack_idx_to_roles={stack_idx_to_roles}')
 
-    for stack_idx, chan_row in enumerate(chan_groups):
+    if 1 and verbose > 100:
+        rich.print(f'role_to_num_anns={ub.udict(role_to_anns).map_values(len)}')
+        rich.print(f'role_order={role_order}')
+        rich.print(f'stack_idx_to_roles={stack_idx_to_roles}')
+
+    stack_idx = 0
+    for chan_row in chan_groups:
         request_roles = stack_idx_to_roles.get(stack_idx, [])
+        if verbose > 2:
+            rich.print(f'... render {chan_row=}')
         try:
             stack_img_item, stack_ann_item = draw_chan_group(
                 coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
@@ -1093,11 +1107,16 @@ def _write_ann_visualizations2(coco_dset,
                 img_stack.append(stack_img_item)
                 ann_stack.append(stack_ann_item)
         except SkipChanGroup:
-            ...
-        # else:
-        #     break
+            if verbose > 2:
+                rich.print(f'... skipped render {chan_row=}')
+        else:
+            stack_idx += 1
+            if verbose > 2:
+                rich.print(f'... success render {chan_row=}')
 
     if stack:
+        if verbose > 2:
+            rich.print('... stacking')
         img_stacked_dpath = (img_view_dpath / 'stack')
         ann_stacked_dpath = (ann_view_dpath / 'stack')
 
@@ -1164,6 +1183,9 @@ def _write_ann_visualizations2(coco_dset,
             view_img_fpath.parent.ensuredir()
             kwimage.imwrite(view_img_fpath, img_canvas)
 
+    if verbose > 2:
+        rich.print(f'--- End frame {frame_id}')
+
 
 def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
                     delayed, chan_row, finalize_opts, verbose, skip_missing,
@@ -1206,7 +1228,7 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
         rich.print('chan_list = {!r}'.format(chan_list))
         try:
             # chan_stats = kwarray.stats_dict(raw_canvas, axis=2, nan=True)
-            chan_stats = kwarray.stats_dict(raw_canvas, axis=(0, 1), nan=True)
+            chan_stats = kwarray.stats_dict(raw_canvas, axis=(0, 1), nan=True, quantile=False)
             rich.print('chan_stats = {}'.format(ub.urepr(chan_stats, nl=1)))
         except Exception as ex:
             rich.print(f'ex={ex}')
@@ -1228,6 +1250,7 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
     #         raise SkipFrame
 
     if 0 and str(chan_group) == 'salient':
+        # TEST CODE
         # blur1 = kwarray.atleast_nd(kwimage.gaussian_blur(raw_canvas, sigma=1.6), n=3)
         # blur2 = kwarray.atleast_nd(kwimage.gaussian_blur(raw_canvas, sigma=3.2), n=3)
         blur1 = kwarray.atleast_nd(kwimage.gaussian_blur(raw_canvas, sigma=0.8), n=3)
@@ -1388,6 +1411,11 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
 
     if verbose > 100:
         print('before canvas parts')
+
+        rich.print(f'draw_imgs_alone={draw_imgs_alone}')
+        rich.print(f'draw_anns_alone={draw_anns_alone}')
+        rich.print(f'stack_imgs={stack_imgs}')
+        rich.print(f'stack_anns={stack_anns}')
 
     if draw_imgs_alone or stack_imgs:
         img_canvas = kwimage.ensure_uint255(canvas, copy=True)

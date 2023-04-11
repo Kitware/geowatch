@@ -108,7 +108,9 @@ class Pipeline:
             node_dict = self.nodes
         else:
             node_names = [node.name for node in self.nodes]
-            assert len(node_names) == len(set(node_names))
+            if len(node_names) != len(set(node_names)):
+                print('node_names = {}'.format(ub.urepr(node_names, nl=1)))
+                raise AssertionError(f'{len(node_names)}, {len(set(node_names))}')
             node_dict = dict(zip(node_names, self.nodes))
         return node_dict
 
@@ -842,7 +844,8 @@ class ProcessNode(Node):
         del aliases
 
         if name is None and executable is not None:
-            name = 'unnamed_' + ub.hash_data(executable)[0:8]
+            name = 'unnamed_process_node_' + str(id(self))  # ub.hash_data(executable)[0:8]
+
         args = locals()
         fallbacks = {
             'resources': {

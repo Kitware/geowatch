@@ -1,4 +1,16 @@
 #!/bin/bash
+__doc__="
+This logic is for formating and mounting a new drive. This handles:
+
+* formatting the disk with a filesystem (btrfs)
+* adding it to fstab
+* creating the mount point
+* mounting it
+* modifying directory permissions so all new folders should default to the smart group
+
+To setup the data see:
+    horologic_flash_dvc_setup.py
+"
 
 ####
 ## NOTE: flashfs inode usage is a bit constraining
@@ -11,10 +23,10 @@
 # https://www.phoronix.com/scan.php?page=news_item&px=Linux-5.14-File-Systems
 #sudo apt-get install f2fs-tools -y  # Dont use F2FS, inodes are too low
 # Use btrfs instead
-sudo apt install btrfs-progs -y 
+sudo apt install btrfs-progs -y
 
 # Output info about file systems to determine which disk devices to format
-lsblk -fs 
+lsblk -fs
 lsblk | grep disk
 
 # Configure what device, filesystem, and mountpoint to use
@@ -37,8 +49,8 @@ sudo mkfs -t "$FS_FORMAT" -f "$DEVICE_DPATH"
 
 
 # Create mount point with group permissions
-sudo mkdir -p "$MOUNT_DPATH" 
-sudo chown "$MOUNT_OWNER":"$MOUNT_GROUP" "$MOUNT_DPATH" 
+sudo mkdir -p "$MOUNT_DPATH"
+sudo chown "$MOUNT_OWNER":"$MOUNT_GROUP" "$MOUNT_DPATH"
 
 # Setup fstab to auto-mount the device on startup (if it doesnt exist)
 FSTAB_LINE="${DEVICE_DPATH}  ${MOUNT_DPATH}              $FS_FORMAT    defaults        0 0  # from flash setup script"
@@ -61,7 +73,7 @@ fi
 # After mounting set the owner and permissions
 
 # Reset the owner on the mounted filesystem
-sudo chown "$MOUNT_OWNER":"$MOUNT_GROUP" "$MOUNT_DPATH" 
+sudo chown "$MOUNT_OWNER":"$MOUNT_GROUP" "$MOUNT_DPATH"
 # Set group and user permissions to be permissive
 # Restrict other permissions
 sudo chmod ug+srwx $MOUNT_DPATH
