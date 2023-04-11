@@ -40,7 +40,6 @@ def _find_valid_regions():
     for dset in dsets:
         if dset.n_images > 0:
             print('- ' + ub.Path(dset.fpath).name.split('-')[1].split('.')[0])
-        ...
 
 
 def main(cmdline=1, **kwargs):
@@ -196,9 +195,9 @@ if __name__ == '__main__':
 
         DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
         python -m watch.cli.prepare_splits \
-            --base_fpath=$DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-*.kwcoco.zip \
+            --base_fpath=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns*_I2L*.kwcoco.zip \
             --constructive_mode=True \
-            --suffix=LI2 \
+            --suffix=I2L \
             --backend=tmux --tmux_workers=6 \
             --run=1
     """

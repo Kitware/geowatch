@@ -293,8 +293,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
         config['backend'], name=config['queue_name'],
         size=queue_size, environ=environ,
         dpath=queue_dpath, gres=GPUS,
-        account='myaccount',
-        partition='mypartition',
+        # account='myaccount',
+        # partition='mypartition',
     )
 
     virtualenv_cmd = config['virtualenv_cmd']

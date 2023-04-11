@@ -1135,3 +1135,61 @@ python -m watch.mlops.schedule_evaluation --params="
     --pipeline=bas --skip_existing=1 \
     --print_commands=1
     --run=0
+
+
+
+# SITE VISIT 2022-04 SPLIT 1 Analysis
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+python -m watch.mlops.schedule_evaluation --params="
+    matrix:
+        bas_pxl.package_fpath:
+            - $HOME/code/watch/dev/reports/split1_models_filter1.pt
+        bas_pxl.test_dataset:
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-KR_R002.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-KR_R001.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-NZ_R001.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-CH_R001.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BH_R001.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BR_R001.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BR_R002.kwcoco.zip
+        bas_pxl.chip_overlap: 0.3
+        bas_pxl.chip_dims:
+            - auto
+        bas_pxl.time_span:
+            - auto
+        bas_pxl.time_sampling:
+            - auto
+        bas_poly.input_resolution:
+            - 10GSD
+        bas_poly.output_resolution:
+            - 10GSD
+        bas_poly.window_resolution:
+            - 10GSD
+        bas_poly.thresh:
+            - 0.4
+        bas_poly.polygon_simplify_tolerance:
+            - 1
+        bas_poly.agg_fn:
+            - probs
+        bas_poly.resolution:
+            - 10GSD
+        bas_poly.moving_window_size:
+            - null
+        bas_poly.min_area_square_meters:
+            - 7200
+        bas_poly.max_area_square_meters:
+            - 8000000
+        bas_poly_eval.true_site_dpath: $DVC_DATA_DPATH/annotations/drop6/site_models
+        bas_poly_eval.true_region_dpath: $DVC_DATA_DPATH/annotations/drop6/region_models
+        bas_pxl.enabled: 1
+        bas_pxl_eval.enabled: 1
+        bas_poly.enabled: 1
+        bas_poly_eval.enabled: 1
+        bas_poly_viz.enabled: 0
+    " \
+    --root_dpath="$DVC_EXPT_DPATH/_namek_split1_eval_filter1_MeanYear10GSD" \
+    --devices="0,1" --queue_size=4 \
+    --backend=tmux --queue_name "_namek_split1_eval_filter1_MeanYear10GSD" \
+    --pipeline=bas --skip_existing=1 \
+    --run=1
