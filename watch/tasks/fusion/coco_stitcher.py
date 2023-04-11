@@ -42,6 +42,9 @@ class CocoStitchingManager(object):
             Compression algorithm to use when writing probabilities to disk.
             Can be any GDAL compression code, e.g LZW, DEFLATE, RAW, etc.
 
+        prob_blocksize (int):
+            tiled blocksize for output predictions. Defaults to 128.
+
         polygon_categories (List[str] | None):
             These are the list of channels that should be transformed into
             polygons. If not set, all are used.
@@ -90,7 +93,8 @@ class CocoStitchingManager(object):
     Example:
         >>> from watch.tasks.fusion.coco_stitcher import *  # NOQA
         >>> import watch
-        >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, multispectral=True)
+        >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True,
+        >>>                            multispectral=True)
         >>> result_dataset = dset.copy()
         >>> self = CocoStitchingManager(
         >>>     result_dataset=result_dataset,
@@ -104,7 +108,9 @@ class CocoStitchingManager(object):
         >>> my_feature = kwimage.imresize(hidden, scale=0.5)
         >>> asset_dsize = my_feature.shape[0:2][::-1]
         >>> space_slice = None
-        >>> self.accumulate_image(gid, space_slice, my_feature, asset_dsize=asset_dsize, scale_asset_from_stitchspace=0.5)
+        >>> self.accumulate_image(gid, space_slice, my_feature,
+        >>>                       asset_dsize=asset_dsize,
+        >>>                       scale_asset_from_stitchspace=0.5)
         >>> self.finalize_image(gid)
         >>> # The new auxiliary image is now in our result dataset
         >>> result_img = result_dataset.coco_image(gid)
@@ -118,7 +124,8 @@ class CocoStitchingManager(object):
     Example:
         >>> from watch.tasks.fusion.coco_stitcher import *  # NOQA
         >>> import watch
-        >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, multispectral=True)
+        >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True,
+        >>>                            multispectral=True)
         >>> result_dataset = dset.copy()
         >>> self = CocoStitchingManager(
         >>>     result_dataset=result_dataset,
@@ -132,7 +139,9 @@ class CocoStitchingManager(object):
         >>> my_feature = kwimage.imresize(hidden, scale=0.5)
         >>> asset_dsize = my_feature.shape[0:2][::-1]
         >>> space_slice = None
-        >>> self.accumulate_image(gid, space_slice, my_feature, asset_dsize=asset_dsize, scale_asset_from_stitchspace=0.5)
+        >>> self.accumulate_image(gid, space_slice, my_feature,
+        >>>                       asset_dsize=asset_dsize,
+        >>>                       scale_asset_from_stitchspace=0.5)
         >>> self.finalize_image(gid)
         >>> # The new auxiliary image is now in our result dataset
         >>> result_img = result_dataset.coco_image(gid)
@@ -144,13 +153,26 @@ class CocoStitchingManager(object):
         >>> assert im2.shape[0] == 300
     """
 
-    def __init__(self, result_dataset, short_code=None, chan_code=None,
-                 stiching_space='video', device='numpy', thresh=0.5,
-                 write_probs=True, write_preds=False, num_bands='auto',
-                 prob_compress='DEFLATE', polygon_categories=None,
-                 expected_minmax=None, quantize=True, writer_queue=None,
-                 write_prediction_attrs=True, assets_dname='_assets',
+    def __init__(self,
+                 result_dataset,
+                 short_code=None,
+                 chan_code=None,
+                 stiching_space='video',
+                 device='numpy',
+                 thresh=0.5,
+                 write_probs=True,
+                 write_preds=False,
+                 num_bands='auto',
+                 prob_compress='DEFLATE',
+                 prob_blocksize=128,
+                 polygon_categories=None,
+                 expected_minmax=None,
+                 quantize=True,
+                 writer_queue=None,
+                 write_prediction_attrs=True,
+                 assets_dname='_assets',
                  dtype='float32'):
+
         from watch.utils import util_parallel
         self.short_code = short_code
         self.result_dataset = result_dataset
@@ -158,7 +180,10 @@ class CocoStitchingManager(object):
         self.chan_code = chan_code
         self.thresh = thresh
         self.num_bands = num_bands
-        self.prob_compress = prob_compress
+        self.imwrite_kwargs = {
+            'compress': prob_compress,
+            'blocksize': prob_blocksize,
+        }
         self.polygon_categories = polygon_categories
         self.quantize = quantize
         self.expected_minmax = expected_minmax
@@ -355,11 +380,17 @@ class CocoStitchingManager(object):
         if is_3d:
             weights = weights[..., None]
 
-        if stitcher.shape[0] < asset_space_slice[0].stop or stitcher.shape[1] < asset_space_slice[1].stop:
-            # By embedding the space slice in the stitcher dimensions we can get a
-            # slice corresponding to the valid region in the stitcher, and the extra
-            # padding encodes the valid region of the data we are trying to stitch into.
-            subslice, padding = kwarray.embed_slice(asset_space_slice[0:2], stitcher.shape[0:2])
+        shapes_disagree = (
+            stitcher.shape[0] < asset_space_slice[0].stop or
+            stitcher.shape[1] < asset_space_slice[1].stop
+        )
+        if shapes_disagree:
+            # By embedding the space slice in the stitcher dimensions we can
+            # get a slice corresponding to the valid region in the stitcher,
+            # and the extra padding encodes the valid region of the data we are
+            # trying to stitch into.
+            subslice, padding = kwarray.embed_slice(asset_space_slice[0:2],
+                                                    stitcher.shape[0:2])
 
             slice_h = (asset_space_slice[0].stop - asset_space_slice[0].start)
             slice_w = (asset_space_slice[1].stop - asset_space_slice[1].start)
@@ -385,7 +416,8 @@ class CocoStitchingManager(object):
         invalid_output_mask = np.isnan(asset_data)
         if np.any(invalid_output_mask):
             if is_3d:
-                spatial_valid_mask = (1 - invalid_output_mask.any(axis=2, keepdims=True))
+                spatial_valid_mask = (
+                    1 - invalid_output_mask.any(axis=2, keepdims=True))
             else:
                 assert is_2d
                 spatial_valid_mask = (1 - invalid_output_mask)
@@ -473,7 +505,6 @@ class CocoStitchingManager(object):
                     'Attempted to finalize image gid={}, but we already '
                     'finalized it').format(gid))
             else:
-                raise KeyError('Attempted to finalize image gid={}, but no data was ever accumulated for it'.format(gid))
                 raise KeyError((
                     'Attempted to finalize image gid={}, but no data '
                     'was ever accumulated for it ').format(gid))
@@ -493,7 +524,7 @@ class CocoStitchingManager(object):
         # that all of the angles in the polygon are right angles, what is an
         # efficient algorithm to decompose it into a minimal set of disjoint
         # rectangles?
-        # https://stackoverflow.com/questions/5919298/algorithm-for-finding-the-fewest-rectangles-to-cover-a-set-of-rectangles-without/6634668#6634668
+        # https://stackoverflow.com/questions/5919298/
         # Or... just write out a polygon... KISS
         # Mark that we made a prediction on this image.
         if self.write_prediction_attrs:
@@ -503,7 +534,10 @@ class CocoStitchingManager(object):
             _poly = _mask.to_multi_polygon()
             predicted_region = _poly.to_geojson()
             img['prediction_region'] = predicted_region
-            img['has_predictions'] = ub.dict_union(img.get('has_predictions', {}), {self.chan_code: True})
+            img['has_predictions'] = ub.udict.union(
+                img.get('has_predictions', {}),
+                {self.chan_code: True}
+            )
 
         # Get spatial relationship between the stitch space and image space
         if self.stiching_space == 'video':
@@ -517,7 +551,8 @@ class CocoStitchingManager(object):
         n_anns = 0
         total_prob = 0
 
-        stitch_from_asset = kwimage.Affine.coerce(scale=scale_asset_from_stitchspace).inv()
+        asset_from_stitch = kwimage.Affine.coerce(scale=scale_asset_from_stitchspace)
+        stitch_from_asset = asset_from_stitch.inv()
         img_from_asset = img_from_stitch @ stitch_from_asset
 
         if self.write_probs:
@@ -527,7 +562,10 @@ class CocoStitchingManager(object):
             #
             # Save probabilities (or feature maps) as a new auxiliary image
             bundle_dpath = self.result_dataset.bundle_dpath
-            new_fname = img.get('name', str(img['id'])) + f'_{self.suffix_code}.tif'  # FIXME
+            new_fname = (  # FIXME
+                img.get('name', str(img['id'])) +
+                f'_{self.suffix_code}.tif'
+            )
             new_fpath = self.prob_dpath / new_fname
 
             aux = {
@@ -544,9 +582,7 @@ class CocoStitchingManager(object):
             total_prob += np.nansum(final_probs)
 
             # Save the prediction to disk
-            write_kwargs = {}
-            write_kwargs['blocksize'] = 128
-            write_kwargs['compress'] = self.prob_compress
+            write_kwargs = self.imwrite_kwargs.copy()
 
             if 'wld_crs_info' in img:
                 from osgeo import osr
@@ -749,7 +785,9 @@ def quantize_image(imdata, old_min=None, old_max=None, quantize_dtype=np.int16):
 
     if imdata is not None:
         invalid_mask = np.isnan(imdata)
-        new_imdata = (imdata.clip(old_min, old_max) - old_min) * quant_factor + quantize_min
+        new_imdata = (
+            (imdata.clip(old_min, old_max) - old_min) * quant_factor +
+            quantize_min)
         with warnings.catch_warnings():
             warnings.filterwarnings('ignore', 'invalid value encountered')
             new_imdata = new_imdata.astype(quantize_dtype)
@@ -792,7 +830,8 @@ def quantize_float01(imdata, old_min=0, old_max=1, quantize_dtype=np.int16):
         >>> from watch.tasks.fusion.coco_stitcher import *  # NOQA
         >>> from delayed_image.helpers import dequantize
         >>> imdata = np.random.randn(32, 32, 3)
-        >>> quant1, quantization1 = quantize_float01(imdata, old_min=0, old_max=1, quantize_dtype=np.uint8)
+        >>> quant1, quantization1 = quantize_float01(imdata, old_min=0, old_max=1,
+        >>>                                          quantize_dtype=np.uint8)
         >>> recon1 = dequantize(quant1, quantization1)
         >>> error1 = np.abs((recon1 - imdata)).sum()
         >>> print('error1 = {!r}'.format(error1))
@@ -833,7 +872,8 @@ def quantize_float01(imdata, old_min=0, old_max=1, quantize_dtype=np.int16):
 
     if imdata is not None:
         invalid_mask = np.isnan(imdata)
-        new_imdata = (imdata.clip(old_min, old_max) - old_min) * quant_factor + quantize_min
+        new_imdata = (
+            imdata.clip(old_min, old_max) - old_min) * quant_factor + quantize_min
         new_imdata = new_imdata.astype(quantize_dtype)
         new_imdata[invalid_mask] = quantize_nan
     else:
