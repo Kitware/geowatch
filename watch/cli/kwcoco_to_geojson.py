@@ -649,7 +649,7 @@ else:
 
 
 def _coerce_site_summaries(site_summary_or_region_model,
-                           default_region_id=None, strict=True) -> List[Tuple[str, Dict]]:
+                           default_region_id=None):
     """
     Possible input formats:
         - file path
@@ -665,21 +665,30 @@ def _coerce_site_summaries(site_summary_or_region_model,
         strict: if True, raise error on unknown input
 
     Returns:
-        List[Tuple[region_id: str, site_summary: Dict]]
+        List[Tuple[str, Dict]]
+           Each tuple is a (region_id, site_summary) pair
     """
     from watch.utils import util_gis
+    import watch
     import jsonschema
+    from watch.geoannots import geomodels
+
+    TRUST_REGION_SCHEMA = 0
 
     geojson_infos = list(util_gis.coerce_geojson_datas(
         site_summary_or_region_model, format='json', allow_raw=True))
 
     # validate the json
     site_summaries = []
+    import xdev
+    xdev.embed()
 
     for info in geojson_infos:
         site_summary_or_region_model = info['data']
 
-        if strict and not isinstance(site_summary_or_region_model, dict):
+        region_model = geomodels.RegionModel(**site_summary_or_region_model)
+
+        if not isinstance(site_summary_or_region_model, dict):
             raise AssertionError(
                 f'unknown site summary {type(site_summary_or_region_model)=}'
             )
@@ -688,8 +697,6 @@ def _coerce_site_summaries(site_summary_or_region_model,
             # Unfortunately, we can't trust the region file schema
             region_model = site_summary_or_region_model
 
-            TRUST_REGION_SCHEMA = 0
-            import watch
             if TRUST_REGION_SCHEMA:
                 region_model_schema = watch.rc.load_region_model_schema()
                 jsonschema.validate(region_model, schema=region_model_schema)

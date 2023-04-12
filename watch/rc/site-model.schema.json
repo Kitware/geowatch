@@ -137,9 +137,7 @@
             "iai",
             "kit",
             "str",
-            "iMERIT", 
-            "demo", 
-            "demo-truth"
+            "iMERIT"
           ]
         },
         "score": {
@@ -258,9 +256,7 @@
                 "Landsat 8",
                 "Sentinel-2",
                 "WorldView",
-                "Planet",
-                "demosat-1",
-                "demosat-2"
+                "Planet"
               ]
             }
           ]

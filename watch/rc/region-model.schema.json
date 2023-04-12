@@ -59,7 +59,7 @@
         "model_content": {"enum": ["empty", "annotation", "proposed"]},
         "start_date": {"oneOf": [{"type": "null"}, {"type": "string", "format": "date"}]},
         "end_date": {"oneOf": [{"type": "null"}, {"type": "string", "format": "date"}]},
-        "originator": {"enum": ["te", "pmo", "acc", "ara", "ast", "bla", "iai", "kit", "str", "iMERIT", "demo", "demo-truth"]},
+        "originator": {"enum": ["te", "pmo", "acc", "ara", "ast", "bla", "iai", "kit", "str", "iMERIT"]},
         "comments": {"type": ["string", "null"]},
         "performer_cache": {"type": "object"}
       },
@@ -77,7 +77,7 @@
         "model_content": {"enum": ["annotation", "proposed"]},
         "start_date": {"oneOf": [{"type": "null"}, {"type": "string", "format": "date"}]},
         "end_date": {"oneOf": [{"type": "null"}, {"type": "string", "format": "date"}]},
-        "originator": {"enum": ["te", "pmo", "acc", "ast", "ast", "bla", "iai", "kit", "str", "iMERIT", "demo", "demo-truth"]},
+        "originator": {"enum": ["te", "pmo", "acc", "ast", "ast", "bla", "iai", "kit", "str", "iMERIT"]},
         "score": {"type": "number", "minimum": 0, "maximum": 1},
         "validated": {"enum": ["True", "False"]},
         "annotation_cache": {"type": "object"}

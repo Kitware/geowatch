@@ -1,5 +1,8 @@
 """
 Geojson object oriented interface for region and site models
+
+SeeAlso:
+    ../rc/registry.py
 """
 import ubelt as ub
 import geopandas as gpd
@@ -81,7 +84,7 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
             if prop['type'] == self._header_type:
                 return feat
 
-    def validate(self):
+    def validate(self, strict=True):
         import rich
         header = self.header
         if header is not self.features[0]:
@@ -90,7 +93,7 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
         feature_types = ub.dict_hist([f['properties']['type'] for f in self.features])
         assert feature_types.pop(self._header_type, 0) == 1
         assert set(feature_types).issubset({self._body_type})
-        schema = self.load_schema()
+        schema = self.load_schema(strict=strict)
         try:
             jsonschema.validate(self, schema)
         except jsonschema.ValidationError as e:
@@ -131,9 +134,9 @@ class RegionModel(_Model):
         }
         return info
 
-    def load_schema(self):
+    def load_schema(self, strict=True):
         import watch
-        schema = watch.rc.registry.load_region_model_schema()
+        schema = watch.rc.registry.load_region_model_schema(strict=strict)
         return schema
 
     def site_summaries(self):
@@ -177,9 +180,9 @@ class SiteModel(_Model):
         }
         return info
 
-    def load_schema(self):
+    def load_schema(self, strict=True):
         import watch
-        schema = watch.rc.registry.load_site_model_schema()
+        schema = watch.rc.registry.load_site_model_schema(strict=strict)
         return schema
 
     @property

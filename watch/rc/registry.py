@@ -10,37 +10,89 @@ commit fe4343521d05e433d4ccfcf080d9bcf46c9d2e83
 
 Geoidgrid is taken from
 https://smartgitlab.com/TE/annotations/-/wikis/WorldView-Annotations#notes-on-the-egm96-geoidgrid-file
+
+SeeAlso:
+    ../geoannots/geomodels.py
 """
 import json
 from importlib import resources as importlib_resources
 import ubelt as ub
 
 
-def load_site_model_schema():
+def load_site_model_schema(strict=True):
     """
+    Args:
+        strict (bool):
+            if True we make a few changes the schema to be more permissive
+            towards things like region names and originator.
+
     Example:
         >>> from watch.rc.registry import *  # NOQA
-        >>> data = load_site_model_schema()
-        >>> print('data = {!r}'.format(data))
+        >>> data = load_site_model_schema(strict=False)
+        >>> import rich
+        >>> rich.print('data = {}'.format(ub.urepr(data, nl=-2)))
     """
     # with importlib_resources.path('watch.rc', name) as path:
     #     print('path = {!r}'.format(path))
     # list(importlib_resources.contents('watch.rc'))
     file = importlib_resources.open_text('watch.rc', 'site-model.schema.json')
     data = json.load(file)
+    if not strict:
+        from kwcoco.util.jsonschema_elements import STRING
+        from kwcoco.util.jsonschema_elements import ONEOF
+        from kwcoco.util.jsonschema_elements import NULL
+        any_identifier = STRING(pattern='^[A-Za-z0-9_-]+$')
+        walker = ub.IndexableWalker(data)
+        if 0:
+            # Identify the paths to the schema element we are going to modify
+            for p, v in walker:
+                if p[-1] in {'region_id', 'site_id', 'originator', 'sensor_name'}:
+                    print(f'p={p}')
+                    print(f'v={v}')
+        walker[['definitions', 'associated_site_properties', 'properties',
+                'region_id']] = any_identifier
+        walker[['definitions', 'associated_site_properties', 'properties',
+                'site_id']] = any_identifier
+        walker[['definitions', 'unassociated_site_properties', 'properties',
+                'region_id']] = ONEOF(NULL, any_identifier)
+        walker[['definitions', 'unassociated_site_properties', 'properties',
+                'site_id']] = any_identifier
+        walker[['definitions', '_site_properties', 'properties',
+                'originator']] = any_identifier
+        walker[['definitions', 'observation_properties', 'properties',
+                'sensor_name']] = ONEOF(NULL, any_identifier)
     return data
 
 
-def load_region_model_schema():
+def load_region_model_schema(strict=True):
     """
+    Args:
+        strict (bool):
+            if True we make a few changes the schema to be more permissive
+            towards things like region names and originator.
+
     Example:
         >>> from watch.rc.registry import *  # NOQA
-        >>> data = load_region_model_schema()
-        >>> print('data = {!r}'.format(data))
+        >>> data = load_site_model_schema(strict=False)
+        >>> import rich
+        >>> rich.print('data = {}'.format(ub.urepr(data, nl=-2)))
     """
     file = importlib_resources.open_text('watch.rc',
                                          'region-model.schema.json')
     data = json.load(file)
+    if not strict:
+        from kwcoco.util.jsonschema_elements import STRING
+        any_identifier = STRING(pattern='^[A-Za-z0-9_-]+$')
+        walker = ub.IndexableWalker(data)
+        # Allow any alphanumeric region id
+        walker[['definitions', 'region_properties',
+                'properties', 'region_id']] = any_identifier
+        walker[['definitions', 'region_properties',
+                'properties', 'originator']] = any_identifier
+        walker[['definitions', 'site_summary_properties',
+                'properties', 'site_id']] = any_identifier
+        walker[['definitions', 'site_summary_properties',
+                'properties', 'originator']] = any_identifier
     return data
 
 
