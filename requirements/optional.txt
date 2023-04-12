@@ -14,4 +14,6 @@ codecarbon >= 2.0.0
 
 humanize >= 4.4.0
 
-argcomplete >= 2.0.0
+# Nicer CLIs
+rich_argparse>=1.1.0; python_version >= '3.7'
+argcomplete>=3.0.5
