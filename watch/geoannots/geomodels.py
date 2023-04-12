@@ -68,7 +68,7 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
     def end_date(self):
         return util_time.coerce_datetime(self.header['properties']['end_date'])
 
-    def load_schema(self):
+    def load_schema(self, strict=True):
         raise NotImplementedError('abstract')
 
     def body_features(self):
@@ -90,6 +90,16 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
         if header is not self.features[0]:
             raise AssertionError('Header should be the first feature')
 
+        def print_validation_error_info(ex, depth=1):
+            if ex.parent is not None:
+                max_depth = print_validation_error_info(ex.parent, depth=depth + 1)
+            else:
+                max_depth = depth
+
+            rich.print(f'[yellow] validation error depth = {depth} / {max_depth}')
+            print('ex.__dict__ = {}'.format(ub.urepr(ex.__dict__, nl=3)))
+            return depth
+
         feature_types = ub.dict_hist([f['properties']['type'] for f in self.features])
         assert feature_types.pop(self._header_type, 0) == 1
         assert set(feature_types).issubset({self._body_type})
@@ -98,11 +108,19 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
             jsonschema.validate(self, schema)
         except jsonschema.ValidationError as e:
             ex = e
-            ex.instance
-            rich.print('[red] ERROR')
+            rich.print('[red] JSON VALIDATION ERROR')
             print(f'self={self}')
-            print('ex.__dict__ = {}'.format(ub.urepr(ex.__dict__, nl=3)))
-            rich.print('[red] ERROR')
+            print_validation_error_info(ex)
+            # ub.IndexableWalker(self)[ex.absolute_path]
+            # ub.IndexableWalker(schema)[ex.schema_path]
+            rich.print(ub.codeblock(
+                '''
+                [yellow] jsonschema validation notes:
+                    * depsite our efforts, information to debug the issue may not be shown, double check your schema and instance manually.
+                    * anyOf schemas may print the error, and not the part you intended to match.
+                    * oneOf schemas may not explicitly say that you matched both.
+                '''))
+            rich.print('[red] JSON VALIDATION ERROR')
             raise
 
         start_date = self.start_date
@@ -120,7 +138,8 @@ class RegionModel(_Model):
         >>> from watch.geoannots.geomodels import *  # NOQA
         >>> self = RegionModel.random()
         >>> print(self)
-        >>> self.validate()
+        >>> self.validate(strict=False)
+
     """
     _header_type = 'region'
     _body_type = 'site_summary'
@@ -166,7 +185,7 @@ class SiteModel(_Model):
         >>> from watch.geoannots.geomodels import *  # NOQA
         >>> self = SiteModel.random()
         >>> print(self)
-        >>> self.validate()
+        >>> self.validate(strict=False)
     """
     _header_type = 'site'
     _body_type = 'observation'

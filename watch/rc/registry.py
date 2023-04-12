@@ -39,9 +39,9 @@ def load_site_model_schema(strict=True):
     data = json.load(file)
     if not strict:
         from kwcoco.util.jsonschema_elements import STRING
-        from kwcoco.util.jsonschema_elements import ONEOF
+        from kwcoco.util.jsonschema_elements import ONEOF, ANYOF
         from kwcoco.util.jsonschema_elements import NULL
-        any_identifier = STRING(pattern='^[A-Za-z0-9_-]+$')
+        any_identifier = STRING(pattern='^[A-Za-z_][A-Za-z0-9_-]*$')
         walker = ub.IndexableWalker(data)
         if 0:
             # Identify the paths to the schema element we are going to modify
@@ -61,6 +61,14 @@ def load_site_model_schema(strict=True):
                 'originator']] = any_identifier
         walker[['definitions', 'observation_properties', 'properties',
                 'sensor_name']] = ONEOF(NULL, any_identifier)
+
+        # By setting strict=False, unassociated and associated site properties
+        # are no longer distinguished, so we have to just pick one.
+        walker[['properties', 'features', 'items', 'anyOf', 0, 'properties',
+                'properties']] = ANYOF(
+            {'$ref': '#/definitions/associated_site_properties'},
+            {'$ref': '#/definitions/unassociated_site_properties'},
+        )
     return data
 
 
@@ -73,7 +81,7 @@ def load_region_model_schema(strict=True):
 
     Example:
         >>> from watch.rc.registry import *  # NOQA
-        >>> data = load_site_model_schema(strict=False)
+        >>> data = load_region_model_schema(strict=False)
         >>> import rich
         >>> rich.print('data = {}'.format(ub.urepr(data, nl=-2)))
     """
@@ -82,7 +90,7 @@ def load_region_model_schema(strict=True):
     data = json.load(file)
     if not strict:
         from kwcoco.util.jsonschema_elements import STRING
-        any_identifier = STRING(pattern='^[A-Za-z0-9_-]+$')
+        any_identifier = STRING(pattern='^[A-Za-z_][A-Za-z0-9_-]*$')
         walker = ub.IndexableWalker(data)
         # Allow any alphanumeric region id
         walker[['definitions', 'region_properties',
