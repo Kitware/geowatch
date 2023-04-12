@@ -268,7 +268,7 @@ echo "
     # Set this to a place where you can write temp files
     export STAGING_DPATH=$HOME/tmp/watch-img-staging
 
-
+    cd 
     rm -rf $STAGING_DPATH
     mkdir -p $STAGING_DPATH
 
