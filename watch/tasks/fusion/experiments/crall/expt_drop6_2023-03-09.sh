@@ -1686,7 +1686,7 @@ torch_globals:
 
 initializer:
     init: /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6-MeanYear10GSD/runs/Drop6_TCombo1Year_BAS_10GSD_split6_V43/lightning_logs/version_0/checkpoints/epoch=73-step=18944.ckpt
-"
+" --ckpt_path=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6-MeanYear10GSD/runs/Drop6_TCombo1Year_BAS_10GSD_split6_V43_cont1/lightning_logs/version_0/checkpoints/epoch=55-step=1792.ckpt
 
 
 # On yardrat

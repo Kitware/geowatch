@@ -218,6 +218,7 @@ class PolygonPrediction(ProcessNode):
     in_paths = {
         'pred_pxl_fpath',
         'site_summary',
+        'boundary_region',
     }
 
     # also
@@ -237,16 +238,18 @@ class PolygonPrediction(ProcessNode):
     def command(self):
         fmtkw = self.final_config.copy()
         fmtkw['default_track_fn'] = self.default_track_fn
-        track_kwargs = self.final_algo_config.copy() - {'site_summary'}
+        external_args = {'site_summary', 'boundary_region'}
+        track_kwargs = self.final_algo_config.copy() - external_args
         fmtkw['kwargs_str'] = shlex.quote(json.dumps(track_kwargs))
         command = ub.codeblock(
             r'''
             python -m watch.cli.run_tracker \
-                "{pred_pxl_fpath}" \
+                --in_file "{pred_pxl_fpath}" \
                 --default_track_fn {default_track_fn} \
                 --track_kwargs {kwargs_str} \
-                --clear_annots \
+                --clear_annots=True \
                 --site_summary '{site_summary}' \
+                --boundary_region '{boundary_region}' \
                 --out_site_summaries_fpath "{site_summaries_fpath}" \
                 --out_site_summaries_dir "{site_summaries_dpath}" \
                 --out_sites_fpath "{sites_fpath}" \
@@ -290,6 +293,7 @@ class PolygonEvaluation(ProcessNode):
 
         # Hack:
         if fmtkw['true_site_dpath'] is None:
+            raise Exception('You must specify true_site_dpath and true_region_dpath')
             dvc_dpath = _phase2_dvc_data_dpath()
             fmtkw['true_site_dpath'] = dvc_dpath / 'annotations/site_models'
             fmtkw['true_region_dpath'] = dvc_dpath / 'annotations/region_models'

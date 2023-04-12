@@ -107,18 +107,15 @@ def main(cmdline=True, **kwargs):
         >>>     'pipeline': 'bas',
         >>>     'io_workers': 10,
         >>> }
-
         config = AggregateEvluationConfig.cli(cmdline=cmdline, data=kwargs)
         agg_dpath = ub.Path(config['root_dpath']) / 'aggregate'
-
         eval_type_to_results = build_tables(config)
         eval_type_to_aggregator = build_aggregators(eval_type_to_results, agg_dpath)
         agg = ub.peek(eval_type_to_aggregator.values())
         agg = eval_type_to_aggregator.get('bas_poly_eval', None)
-
         agg = eval_type_to_aggregator.get('bas_pxl_eval', None)
-
         >>> ## Execute
+        >>> cmdline = 0
         >>> main(cmdline=cmdline, **kwargs)
     """
 

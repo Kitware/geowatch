@@ -304,7 +304,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
     # Expand paramater search grid
     if config['params'] is not None:
         from watch.utils.util_yaml import Yaml
-        param_arg = Yaml.coerce(config['params'])
+        param_arg = Yaml.coerce(config['params']) or {}
         # print('param_arg = {}'.format(ub.urepr(param_arg, nl=1)))
         all_param_grid = list(expand_param_grid(
             param_arg,
@@ -405,6 +405,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
     else:
         driver_fpath = queue.write()
         print('Wrote script: to run execute:\n{}'.format(driver_fpath))
+
+    return dag, queue
 
 
 def ensure_iterable(inputs):
