@@ -1,6 +1,8 @@
 """
-This submodule contains tools relating to the IARPA region and site model
-geojson formats.
+This submodule contains tools relating to:
+
+    * the IARPA region and site model geojson formats.
+    * geographic kwcoco extensions
 
 At the time of creation we have many various tools scattered across the repo to
 deal with these, but we should work to consolidate the ones pertaining strictly

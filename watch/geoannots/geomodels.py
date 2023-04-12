@@ -32,6 +32,10 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
     def deepcopy(self):
         return copy.deepcopy(self)
 
+    def dumps(self, **kw):
+        import json
+        return json.dumps(self, **kw)
+
     @classmethod
     def coerce(cls, data):
         if isinstance(data, cls):
@@ -184,12 +188,24 @@ class RegionModel(_Model):
         gdf = gpd.GeoDataFrame.from_features(list(self.site_summaries()))
         return gdf
 
+    def pandas_region(self):
+        """
+        Returns:
+            geopandas.GeoDataFrame: the region header as a data frame
+        """
+        gdf = gpd.GeoDataFrame.from_features([self.header])
+        return gdf
+
     @classmethod
-    def random(cls):
+    def random(cls, **kwargs):
         from watch.demo.metrics_demo import demo_truth
-        region, _, _ = demo_truth.random_region_model()
-        # print('region = {}'.format(ub.urepr(region, nl=-1)))
+        region, _, _ = demo_truth.random_region_model(
+            **kwargs, with_renderables=False)
         return cls(**region)
+
+    @property
+    def region_id(self):
+        return self.header['properties']['region_id']
 
 
 class SiteModel(_Model):

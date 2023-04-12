@@ -9,22 +9,17 @@ For official documentation about the KWCOCO json format see [1]_. A formal
 json-schema can be found in ``kwcoco.coco_schema``
 
 For official documentation about the IARPA json format see [2, 3]_. A formal
-json-schema can be found in ``watch/rc/site-model.schema.json``.
+json-schema can be found in ``../../watch/rc/site-model.schema.json``.
 
 References:
     .. [1] https://gitlab.kitware.com/computer-vision/kwcoco
     .. [2] https://infrastructure.smartgitlab.com/docs/pages/api/
     .. [3] https://smartgitlab.com/TE/annotations
 
-
 SeeAlso:
     * ../tasks/tracking/from_heatmap.py
     * ../tasks/tracking/utils.py
-
-DESIGN TODO:
-    - [ ] Separate out into two processes:
-        1) given a kwcoco file, does tracking and produces another kwcoco file with predicted "tracked" annotations.
-        2) given a kwcoco file with predicted "tracked" annotations, convert that back to geojson
+    * ../../tests/test_tracker.py
 
 Ignore:
     python -m watch.cli.run_tracker \
@@ -48,9 +43,6 @@ Ignore:
         "
 
         smartwatch visualize /data/joncrall/dvc-repos/smart_expt_dvc/_debug/metrics/bas-fusion/bas_fusion_kwcoco_tracked3.json --smart
-
-
-
 """
 import os
 import scriptconfig as scfg
@@ -102,7 +94,8 @@ class KWCocoToGeoJSONConfig(scfg.DataConfig):
     # in_file = None
     # in_file : scfg.Value[help='Input KWCOCO to convert', position=1]
 
-    in_file = scfg.Value(None, required=True, help='Input KWCOCO to convert', position=1)
+    in_file = scfg.Value(None, required=True, help='Input KWCOCO to convert',
+                         position=1)
 
     out_kwcoco = scfg.Value(None, help=ub.paragraph(
             '''
@@ -188,6 +181,18 @@ class KWCocoToGeoJSONConfig(scfg.DataConfig):
             '''
             Append sites to existing region GeoJSON.
             '''), group='behavior')
+
+    boundary_region = scfg.Value(None, help=ub.paragraph(
+            '''
+            A path or globstring coercable to one or more region files that
+            will define the bounds of where the tracker is allowed to predict
+            sites. Any site outside of these bounds will be removed.
+            '''), group='behavior')
+    # filter_out_of_bounds = scfg.Value(False, isflag=True, help=ub.paragraph(
+    #         '''
+    #         if True, any tracked site outside of the region bounds
+    #         (as specified in the site summary) will be removed.
+    #         '''), group='behavior')
 
 
 __config__ = KWCocoToGeoJSONConfig
@@ -915,7 +920,7 @@ def add_site_summary_to_kwcoco(possible_summaries,
 
 
 @profile
-def main(args=None, **kwargs):
+def main(argv=None, **kwargs):
     """
     Example:
         >>> # test BAS and default (SC) modes
@@ -941,7 +946,7 @@ def main(args=None, **kwargs):
         >>> bas_fpath = dpath / 'bas_sites.json'
         >>> sc_fpath = dpath / 'sc_sites.json'
         >>> # Run BAS
-        >>> args = bas_args = [
+        >>> argv = bas_args = [
         >>>     '--in_file', coco_dset.fpath,
         >>>     '--out_site_summaries_dir', str(regions_dir),
         >>>     '--out_site_summaries_fpath',  str(bas_fpath),
@@ -952,10 +957,10 @@ def main(args=None, **kwargs):
         >>>        'max_area_square_meters': None,
         >>>        'polygon_simplify_tolerance': 1}),
         >>> ]
-        >>> main(args)
+        >>> main(argv)
         >>> # Run SC on the same dset, but with BAS pred sites removed
         >>> sites_dir = dpath / 'sites'
-        >>> args = sc_args = [
+        >>> argv = sc_args = [
         >>>     '--in_file', coco_dset.fpath,
         >>>     '--out_sites_dir', str(sites_dir),
         >>>     '--out_sites_fpath', str(sc_fpath),
@@ -966,7 +971,7 @@ def main(args=None, **kwargs):
         >>>         {'thresh': 1e-9, 'min_area_square_meters': None, 'max_area_square_meters': None,
         >>>          'polygon_simplify_tolerance': 1, 'key': 'salient'}),
         >>> ]
-        >>> main(args)
+        >>> main(argv)
         >>> # Check expected results
         >>> bas_coco_dset = kwcoco.CocoDataset(bas_coco_fpath)
         >>> sc_coco_dset = kwcoco.CocoDataset(sc_coco_fpath)
@@ -1014,9 +1019,9 @@ def main(args=None, **kwargs):
         >>>     'track_fn': 'saliency_heatmaps',
         >>>     'track_kwargs': track_kwargs,
         >>> }
-        >>> args = None
+        >>> argv = None
         >>> # Test case for no results
-        >>> main(args=args, **kwargs)
+        >>> main(argv=argv, **kwargs)
         >>> from watch.utils import util_gis
         >>> assert len(list(util_gis.coerce_geojson_datas(bas_fpath))) == 0
         >>> # Try to get results here
@@ -1034,8 +1039,8 @@ def main(args=None, **kwargs):
         >>>     'track_fn': 'saliency_heatmaps',
         >>>     'track_kwargs': track_kwargs,
         >>> }
-        >>> args = None
-        >>> main(args=args, **kwargs)
+        >>> argv = None
+        >>> main(argv=argv, **kwargs)
         >>> assert len(list(util_gis.coerce_geojson_datas(bas_fpath))) > 0
 
     Example:
@@ -1074,7 +1079,7 @@ def main(args=None, **kwargs):
         >>> demo(coco_dset, regions_dir, coco_dset_sc, sites_dir, cleanup=True)
 
     """
-    args = KWCocoToGeoJSONConfig.cli(cmdline=args, data=kwargs, strict=True)
+    args = KWCocoToGeoJSONConfig.cli(argv=argv, data=kwargs, strict=True)
     import rich
     rich.print('args = {}'.format(ub.urepr(args, nl=1)))
 
@@ -1084,6 +1089,7 @@ def main(args=None, **kwargs):
     import safer
     import watch
     from kwcoco.util import util_json
+    from watch.utils import util_gis
     from watch.utils import process_context
     from watch.utils.util_yaml import Yaml
 
@@ -1196,6 +1202,24 @@ def main(args=None, **kwargs):
         raise KeyError(
             f'Unknown Default Track Function: {args.default_track_fn} not in {list(_KNOWN_TRACK_FUNCS.keys())}')
 
+    if args.boundary_region is not None:
+        from watch.geoannots import geomodels
+        region_infos = list(util_gis.coerce_geojson_datas(
+            args.boundary_region, format='json', allow_raw=True))
+        import pandas as pd
+        region_parts = []
+        for info in region_infos:
+            # Need to deterimine which one to use
+            region_model = geomodels.RegionModel(**info['data'])
+            region_gdf = region_model.pandas_region()
+            region_parts.append(region_gdf)
+        boundary_regions_gdf = pd.concat(region_parts).reset_index()
+    else:
+        boundary_regions_gdf = None
+        # if args.site_summary is None:
+        #     raise ValueError('You must specify a region as a site summary if you ')
+        ...
+
     # add site summaries (site boundary annotations)
     if args.site_summary is not None:
         coco_dset = add_site_summary_to_kwcoco(args.site_summary, coco_dset,
@@ -1213,6 +1237,62 @@ def main(args=None, **kwargs):
     coco_dset = watch.tasks.tracking.normalize.run_tracking_pipeline(
         coco_dset, track_fn=track_fn, gt_dset=gt_dset,
         viz_out_dir=args.viz_out_dir, **track_kwargs)
+
+    if boundary_regions_gdf is not None:
+        # Remove any tracks that are outside of region bounds.
+
+        # First find which regions correspond to which videos.
+        from watch.geoannots.geococo_objects import CocoGeoVideo
+        import geopandas as gpd
+        crs84_parts = []
+        crs84 = util_gis.get_crs84()
+        for video in coco_dset.videos().objs:
+            coco_video = CocoGeoVideo(video=video, dset=coco_dset)
+            utm_part = coco_video.wld_corners_gdf
+            crs84_part = utm_part.to_crs(crs84)
+            crs84_parts.append(crs84_part)
+        video_gdf = pd.concat(crs84_parts).reset_index()
+        idx1_to_idxs2 = util_gis.geopandas_pairwise_overlaps(video_gdf, boundary_regions_gdf)
+        assignments = []
+        for idx1, idxs2 in idx1_to_idxs2.items():
+            video_gdf.iloc[idx1]['name']
+
+            if len(idxs2) == 0:
+                raise AssertionError('no region for video')
+
+            if len(idxs2) > 1:
+                video_goem = video_gdf.iloc[idx1]['geometry']
+                chosen_id2 = boundary_regions_gdf.iloc[idxs2].geometry.intersection(video_goem).area.idxmax()
+                chosen_idx2 = chosen_id2  # can do this bc of reset index
+                idxs2 = [chosen_idx2]
+                raise NotImplementedError('multiple regions for video, not sure if impl is correct')
+            idx2 = idxs2[0]
+            video_name = video_gdf.iloc[idx1]['name']
+            region_name = boundary_regions_gdf.iloc[idx2]['region_id']
+            region_geom = boundary_regions_gdf.iloc[idx2]['geometry']
+            assignments.append((video_name, region_name, region_geom))
+
+        # Actually remove the offending annots
+        for assign in assignments:
+            video_name, region_name, region_geom = assign
+            video_id = coco_dset.index.name_to_video[video_name]['id']
+            video_imgs = coco_dset.images(video_id=video_id)
+            video_aids = list(ub.flatten(video_imgs.annots))
+            video_annots = coco_dset.annots(video_aids)
+            from shapely.geometry import shape
+            annot_geos = gpd.GeoDataFrame([
+                {
+                    'annot_id': obj['id'],
+                    'geometry': shape(obj['segmentation_geos']),
+                } for obj in video_annots.objs],
+                columns=['annot_id', 'geometry'], crs=crs84)
+
+            is_oob = annot_geos.intersection(region_geom).is_empty
+
+            print(annot_geos.intersection(region_geom))
+
+            # region_geom
+            idx1_to_idxs2 = util_gis.geopandas_pairwise_overlaps(video_gdf, annot_geos)
 
     # Measure how long tracking takes
     proc_context.stop()

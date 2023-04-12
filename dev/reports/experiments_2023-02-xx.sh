@@ -1086,7 +1086,7 @@ python -m watch.mlops.schedule_evaluation --params="
             - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2_epoch3_step941.pt
         bas_pxl.test_dataset:
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-KR_R001.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-KR_R002.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-KR_R002.kwcoco.zip
         bas_pxl.chip_overlap: 0.3
         bas_pxl.chip_dims:
             - auto
@@ -1095,17 +1095,17 @@ python -m watch.mlops.schedule_evaluation --params="
         bas_pxl.time_sampling:
             - auto
         bas_poly.thresh:
-            - 0.35
-            - 0.38
+            #- 0.35
+            #- 0.38
             - 0.4
         bas_poly.inner_window_size:
             - 1y
-            - null
+            #- null
         bas_poly.inner_agg_fn:
             - mean
         bas_poly.norm_ord:
             - 1
-            - inf
+            #- inf
         bas_poly.polygon_simplify_tolerance:
             - 1
         bas_poly.agg_fn:
@@ -1114,7 +1114,7 @@ python -m watch.mlops.schedule_evaluation --params="
             - 10GSD
         bas_poly.moving_window_size:
             - null
-            - 1
+            #- 1
         bas_poly.poly_merge_method:
             - 'v2'
         bas_poly.min_area_square_meters:
@@ -1131,7 +1131,7 @@ python -m watch.mlops.schedule_evaluation --params="
     " \
     --root_dpath="$DVC_EXPT_DPATH/_mlops_output" \
     --devices="0,1" --queue_size=8 \
-    --backend=slurm --queue_name "_mlops_output" \
+    --backend=serial --queue_name "_mlops_output" \
     --pipeline=bas --skip_existing=1 \
     --print_commands=1 \
     --run=0
