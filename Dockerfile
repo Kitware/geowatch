@@ -163,6 +163,9 @@ RUN --mount=type=cache,target=/root/.cache <<EOF
 #!/bin/bash
 #source $HOME/activate
 
+# Not sure why I need the unset here
+unset PYENV_VERSION
+
 echo "
 Preparing to pip install watch
 "
