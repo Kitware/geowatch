@@ -267,8 +267,11 @@ echo "
 
     cd $HOME/code/watch
 
+    # Set this to the path of your watch repo
+    export LOCAL_REPO_DPATH=$HOME/code/watch
+
     mkdir -p $HOME/tmp/watch-img-staging
-    git clone --origin=host-$HOSTNAME $HOME/code/watch/.git $HOME/tmp/watch-img-staging/watch
+    git clone --origin=host-$HOSTNAME $LOCAL_REPO_DPATH/.git $HOME/tmp/watch-img-staging/watch
     cd $HOME/tmp/watch-img-staging/watch
     git remote add origin git@gitlab.kitware.com:smart/watch.git
 
