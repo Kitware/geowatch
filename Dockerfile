@@ -203,6 +203,9 @@ RUN --mount=type=cache,target=/root/.cache <<EOF
 #!/bin/bash
 #source $HOME/activate
 
+# Not sure why I need the unset here
+unset PYENV_VERSION
+
 cd /root/code/watch
 if [ "$BUILD_STRICT" -eq 1 ]; then
     echo "FINALIZE STRICT VARIANT DEPS"
@@ -224,6 +227,9 @@ COPY .git          /root/code/watch/.git
 RUN --mount=type=cache,target=/root/.cache <<EOF
 #!/bin/bash
 #source $HOME/activate
+
+# Not sure why I need the unset here
+unset PYENV_VERSION
 
 # python -m pip install dvc[all]>=2.13.0
 # pip install scikit-image>=0.18.1
