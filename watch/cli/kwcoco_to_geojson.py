@@ -1174,7 +1174,6 @@ def main(argv=None, **kwargs):
     saliency_cats = ['salient']
 
     track_fn = args.track_fn
-    print(f'track_fn={track_fn}')
     if track_fn is None:
         track_fn = (
             watch.tasks.tracking.utils.NoOpTrackFunction
@@ -1182,7 +1181,6 @@ def main(argv=None, **kwargs):
             args.default_track_fn
         )
 
-    print(f'track_fn={track_fn}')
     if isinstance(track_fn, str):
         # TODO: we should be able to let the user know about these algorithms
         # and parameters. Can jsonargparse help here?
@@ -1196,7 +1194,6 @@ def main(argv=None, **kwargs):
         if track_fn is None:
             raise RuntimeError('Old code would have evaled track_fn, we dont want to do that. '
                                'Please change your code to specify a known track function')
-        print(f'track_fn={track_fn}')
 
     if track_fn is None:
         raise KeyError(
