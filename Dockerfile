@@ -262,28 +262,31 @@ echo "
     # docker login
     # docker pull docker/dockerfile:1.3.0-labs
 
-    #### You need to build the pyenv image first:
-    # ./pyenv.Dockerfile
-
-    cd $HOME/code/watch
-
     # Set this to the path of your watch repo
     export LOCAL_REPO_DPATH=$HOME/code/watch
 
-    mkdir -p $HOME/tmp/watch-img-staging
-    git clone --origin=host-$HOSTNAME $LOCAL_REPO_DPATH/.git $HOME/tmp/watch-img-staging/watch
-    cd $HOME/tmp/watch-img-staging/watch
+    # Set this to a place where you can write temp files
+    export STAGING_DPATH=$HOME/tmp/watch-img-staging
+
+
+    rm -rf $STAGING_DPATH
+    mkdir -p $STAGING_DPATH
+
+    git clone --origin=host-$HOSTNAME $LOCAL_REPO_DPATH/.git $STAGING_DPATH/watch
+
+    # Add the real origin to the repo as a convinience
+    cd $STAGING_DPATH/watch
     git remote add origin git@gitlab.kitware.com:smart/watch.git
 
 
     #### 3.11 (strict)
-    cd $HOME/tmp/watch-img-staging/watch
+    cd $STAGING_DPATH/watch
 
     DOCKER_BUILDKIT=1 docker build --progress=plain \
         -t "watch:311-strict" \
         --build-arg BUILD_STRICT=1 \
         --build-arg PYTHON_VERSION=3.11.2 \
-        -f ./dockerfiles/watch.Dockerfile .
+        -f ./Dockerfile 
 
     # Tests
     docker run \
