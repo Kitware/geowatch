@@ -55,7 +55,6 @@ Ignore:
 import os
 import scriptconfig as scfg
 import ubelt as ub
-from typing import Dict, List, Tuple
 
 if not os.environ.get('_ARGCOMPLETE', ''):
     from watch.tasks.tracking import from_heatmap, from_polygon
@@ -234,7 +233,7 @@ sep = ','
 
 
 @profile
-def geojson_feature(anns, coco_dset, with_properties=True):
+def coco_create_observation(coco_dset, anns, with_properties=True):
     '''
     Group kwcoco annotations in the same track (site) and image
     into one Feature in an IARPA site model
@@ -300,13 +299,6 @@ def geojson_feature(anns, coco_dset, with_properties=True):
             'sensor_name': img['sensor_coarse']
         }
 
-    if with_properties:
-        image_properties_dct = {}
-        gids = {ann['image_id'] for ann in anns}
-        for gid in gids:
-            coco_img = coco_dset.coco_image(gid).detach()
-            image_properties_dct[gid] = _per_image_properties(coco_img)
-
     def single_properties(ann):
 
         current_phase = coco_dset.cats[ann['category_id']]['name']
@@ -321,10 +313,6 @@ def geojson_feature(anns, coco_dset, with_properties=True):
             },
             **image_properties_dct[ann['image_id']]
         }
-
-    geometry_list = list(map(single_geometry, anns))
-    if with_properties:
-        properties_list = list(map(single_properties, anns))
 
     def combined_properties(properties_list, geometry_list):
         # list of dicts -> dict of lists for easy indexing
@@ -388,21 +376,31 @@ def geojson_feature(anns, coco_dset, with_properties=True):
         return properties
 
     if with_properties:
+        image_properties_dct = {}
+        gids = {ann['image_id'] for ann in anns}
+        for gid in gids:
+            coco_img = coco_dset.coco_image(gid).detach()
+            image_properties_dct[gid] = _per_image_properties(coco_img)
+
+    geometry_list = list(map(single_geometry, anns))
+    if with_properties:
+        properties_list = list(map(single_properties, anns))
+
+    if with_properties:
         geometry = _ensure_multi(_combined_geometries(geometry_list))
         properties = combined_properties(properties_list, geometry_list)
     else:
         geometry = _combined_geometries(geometry_list)
         properties = {}
 
+    # from watch.geoannots import geomodels
+    # return geomodels.Observation(geometry=geometry, properties=properties)
     return geojson.Feature(geometry=geometry, properties=properties)
 
 
 @profile
-def track_to_site(coco_dset,
-                  trackid,
-                  region_id,
-                  site_idx=None,
-                  as_summary=False):
+def coco_track_to_site(coco_dset, trackid, region_id, site_idx=None,
+                       as_summary=False):
     '''
     Turn a kwcoco track into an IARPA site model or site summary
     '''
@@ -413,7 +411,7 @@ def track_to_site(coco_dset,
     gids, anns = annots.gids, annots.objs
 
     features = [
-        geojson_feature(_anns, coco_dset, with_properties=(not as_summary))
+        coco_create_observation(coco_dset, _anns, with_properties=(not as_summary))
         for gid, _anns in ub.group_items(anns, gids).items()
     ]
 
@@ -429,10 +427,10 @@ def track_to_site(coco_dset,
         region_id = '_'.join(site_id.split('_')[:2])
 
     if as_summary:
-        return site_feature(coco_dset, region_id, site_id, trackid, gids, features, as_summary)
+        return coco_create_site_header(coco_dset, region_id, site_id, trackid, gids, features, as_summary)
     else:
-        _site_feat = site_feature(coco_dset, region_id, site_id, trackid, gids, features, as_summary)
-        return geojson.FeatureCollection([_site_feat] + features)
+        site_header = coco_create_site_header(coco_dset, region_id, site_id, trackid, gids, features, as_summary)
+        return geojson.FeatureCollection([site_header] + features)
 
 
 def predict_phase_changes(site_id, features):
@@ -492,7 +490,7 @@ def predict_phase_changes(site_id, features):
         return {}
 
 
-def site_feature(coco_dset, region_id, site_id, trackid, gids, features, as_summary):
+def coco_create_site_header(coco_dset, region_id, site_id, trackid, gids, features, as_summary):
     '''
     Feature containing metadata about the site
     '''
@@ -535,7 +533,7 @@ def site_feature(coco_dset, region_id, site_id, trackid, gids, features, as_summ
     import watch
     properties = {
         'site_id': site_id,
-        'version': watch.__version__,
+        'version': watch.__version__,  # Shouldn't this be a schema version?
         'mgrs': MGRS().toMGRS(*centroid_latlon, MGRSPrecision=0),
         'status': status,
         'model_content': 'proposed',
@@ -560,6 +558,31 @@ def site_feature(coco_dset, region_id, site_id, trackid, gids, features, as_summ
                 **predict_phase_changes(site_id, features), 'misc_info': {}
             })
 
+    return geojson.Feature(geometry=geometry, properties=properties)
+
+
+@profile
+def create_region_header(region_id, site_summaries):
+    import geojson
+    geometry = _combined_geometries([
+        _single_geometry(summary['geometry'])
+        for summary in site_summaries
+    ]).envelope
+    start_date = min(summary['properties']['start_date']
+                     for summary in site_summaries)
+    end_date = max(summary['properties']['end_date']
+                   for summary in site_summaries)
+    properties = {
+        'type': 'region',
+        'region_id': region_id,
+        'version': site_summaries[0]['properties']['version'],
+        'mgrs': site_summaries[0]['properties']['mgrs'],
+        'model_content': site_summaries[0]['properties']['model_content'],
+        'start_date': start_date,
+        'end_date': end_date,
+        'originator': site_summaries[0]['properties']['originator'],
+        'comments': None
+    }
     return geojson.Feature(geometry=geometry, properties=properties)
 
 
@@ -612,23 +635,11 @@ def convert_kwcoco_to_iarpa(coco_dset,
         sub_dset = coco_dset.subset(gids=gids)
 
         for site_idx, trackid in enumerate(sub_dset.index.trackid_to_aids):
-            site = track_to_site(sub_dset, trackid, region_id, site_idx,
-                                 as_summary)
+            site = coco_track_to_site(sub_dset, trackid, region_id, site_idx,
+                                      as_summary)
             sites.append(site)
 
     return sites
-
-
-def _validate():
-    # jsonschema.validate(site, schema=SITE_SCHEMA)
-    import json
-    import jsonschema
-    import watch
-    SITE_SCHEMA = watch.rc.load_site_model_schema()
-    site_fpaths = list(ub.Path('.').glob('*.geojson'))
-    for fpath in site_fpaths:
-        site = json.load(open(fpath, 'r'))
-        jsonschema.validate(site, schema=SITE_SCHEMA)
 
 
 # debug mode is for comparing against a set of known GT site models
@@ -904,31 +915,6 @@ def add_site_summary_to_kwcoco(possible_summaries,
 
 
 @profile
-def create_region_header(region_id, site_summaries):
-    import geojson
-    geometry = _combined_geometries([
-        _single_geometry(summary['geometry'])
-        for summary in site_summaries
-    ]).envelope
-    start_date = min(summary['properties']['start_date']
-                     for summary in site_summaries)
-    end_date = max(summary['properties']['end_date']
-                   for summary in site_summaries)
-    properties = {
-        'type': 'region',
-        'region_id': region_id,
-        'version': site_summaries[0]['properties']['version'],
-        'mgrs': site_summaries[0]['properties']['mgrs'],
-        'model_content': site_summaries[0]['properties']['model_content'],
-        'start_date': start_date,
-        'end_date': end_date,
-        'originator': site_summaries[0]['properties']['originator'],
-        'comments': None
-    }
-    return geojson.Feature(geometry=geometry, properties=properties)
-
-
-@profile
 def main(args=None, **kwargs):
     """
     Example:
@@ -1088,13 +1074,18 @@ def main(args=None, **kwargs):
         >>> demo(coco_dset, regions_dir, coco_dset_sc, sites_dir, cleanup=True)
 
     """
-    import json
-    from watch.utils import process_context
-    from kwcoco.util import util_json
+    args = KWCocoToGeoJSONConfig.cli(cmdline=args, data=kwargs, strict=True)
+    import rich
+    rich.print('args = {}'.format(ub.urepr(args, nl=1)))
+
     import geojson
+    import json
     import kwcoco
-    args = KWCocoToGeoJSONConfig.cli(cmdline=args, data=kwargs)
-    print('args = {}'.format(ub.urepr(dict(args), nl=1)))
+    import safer
+    import watch
+    from kwcoco.util import util_json
+    from watch.utils import process_context
+    from watch.utils.util_yaml import Yaml
 
     coco_fpath = ub.Path(args.in_file)
 
@@ -1122,12 +1113,7 @@ def main(args=None, **kwargs):
             raise ValueError('out_site_summaries_fpath should have a .json extension')
 
     # load the track kwargs
-    from watch.utils.util_yaml import Yaml
     track_kwargs = Yaml.coerce(args.track_kwargs)
-    # if os.path.isfile(args.track_kwargs):
-    #     track_kwargs = json.load(args.track_kwargs)
-    # else:
-    #     track_kwargs = json.loads(args.track_kwargs)
     assert isinstance(track_kwargs, dict)
 
     # Read the kwcoco file
@@ -1177,7 +1163,6 @@ def main(args=None, **kwargs):
     # Pick a track_fn
     # HACK remove potentially conflicting annotations as well
     # we shouldn't have saliency annots when we want class or vice versa
-    import watch
     CLEAN_DSET = 1
     class_cats = [cat['name'] for cat in watch.heuristics.CATEGORIES]
     saliency_cats = ['salient']
@@ -1203,12 +1188,8 @@ def main(args=None, **kwargs):
 
         track_fn = _KNOWN_TRACK_FUNCS.get(track_fn, None)
         if track_fn is None:
-            raise RuntimeError('Old code would have evaled track_fn, we dont want to do that. Please change your code to specify a known track function')
-            # Not sure what the purpose of this was.
-            # args_track_fn = from_heatmap.TimeAggregatedBAS
-            # track_kwargs['key'] = [args.default_track_fn]
-            # if CLEAN_DSET:
-            #     coco_dset.remove_categories(class_cats)
+            raise RuntimeError('Old code would have evaled track_fn, we dont want to do that. '
+                               'Please change your code to specify a known track function')
         print(f'track_fn={track_fn}')
 
     if track_fn is None:
@@ -1249,7 +1230,6 @@ def main(args=None, **kwargs):
         coco_dset.dump(out_kwcoco, indent=2)
 
     # Convert kwcoco to sites
-    import safer
     verbose = 1
 
     if args.out_sites_dir is not None:
@@ -1321,11 +1301,9 @@ def main(args=None, **kwargs):
             json.dump(site_summary_tracking_output, file, indent='    ')
 
 
-def demo(coco_dset,
-         regions_dir,
-         coco_dset_sc,
-         sites_dir,
-         cleanup=True):
+def demo(coco_dset, regions_dir, coco_dset_sc, sites_dir, cleanup=True):
+    import json
+    from tempfile import NamedTemporaryFile
     bas_args = [
         coco_dset.fpath,
         '--out_site_summaries_dir',
@@ -1338,8 +1316,6 @@ def demo(coco_dset,
     # reload it with tracks
     # coco_dset = kwcoco.CocoDataset(coco_dset.fpath)
     # run SC on both of them
-    import json
-    from tempfile import NamedTemporaryFile
     sc_args = [
         '--out_site_sites_dir',
         sites_dir,
@@ -1375,26 +1351,6 @@ def demo(coco_dset,
             os.remove(coco_dset.fpath)
         if not os.path.isabs(coco_dset_sc.fpath):
             os.remove(coco_dset_sc.fpath)
-
-
-def _fix_pred_info():
-    # Hack to fix data provinence
-    import json
-    from watch.utils import util_path
-    track_fpaths = util_path.coerce_patterned_paths('models/fusion/eval3_candidates/pred/**/tracks.json')
-    for fpath in track_fpaths:
-        data = json.loads(fpath.read_text())
-        for info_item in data['info']:
-            if info_item['type'] == 'process' and info_item['properties']['name'] == 'watch.cli.kwcoco_to_geojson':
-                pred_kwcoco_json = info_item['properties']['args']['in_file']
-                import kwcoco
-                pred_dset = kwcoco.CocoDataset(pred_kwcoco_json)
-                pred_info = pred_dset.dataset.get('info', [])
-                info_item['properties']['pred_info'] = pred_info
-
-        import safer
-        with safer.open(fpath, 'w', temp_file=True) as file:
-            json.dump(data, file)
 
 
 if __name__ == '__main__':
