@@ -95,11 +95,6 @@ eval "$($PYENV_ROOT/bin/pyenv init -)"
 pyenv global $PYTHON_VERSION
 pyenv global
 
-echo "Make envs dir"
-
-mkdir -p $PYENV_PREFIX/envs
-echo "Make virutalenv"
-
 # Not sure why I need the unset here
 unset PYENV_VERSION
 
