@@ -272,12 +272,8 @@ echo "
     cd $HOME/tmp/watch-img-staging/watch
     git remote add origin git@gitlab.kitware.com:smart/watch.git
 
-    # Either build the pyenv image or
-    #docker pull gitlab.kitware.com:4567/smart/watch/pyenv:311
-    #docker tag gitlab.kitware.com:4567/smart/watch/pyenv:311 pyenv:311 
 
-    #### 3.11
-
+    #### 3.11 (strict)
     cd $HOME/tmp/watch-img-staging/watch
 
     DOCKER_BUILDKIT=1 docker build --progress=plain \
@@ -286,13 +282,14 @@ echo "
         --build-arg PYTHON_VERSION=3.11.2 \
         -f ./dockerfiles/watch.Dockerfile .
 
+    # Tests
     docker run \
         --volume "$HOME/code/watch":/host-watch:ro \
         --runtime=nvidia -it watch:311-strict bash
 
     git remote add dockerhost /host-watch/.git
 
-   # Push the container to smartgitlab
+    # Optional: Push the container to smartgitlab
     IMAGE_NAME=watch:311-strict
     docker tag $IMAGE_NAME registry.smartgitlab.com/kitware/$IMAGE_NAME
     docker push registry.smartgitlab.com/kitware/$IMAGE_NAME
