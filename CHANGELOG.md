@@ -12,6 +12,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+* Added `boundary_region` arg to the tracker to crop all outputs to the region.
 * Unpinned lightning for 2.x
 * kwcoco draw item `norm_over_time` now defaults to `auto`, which is true if
   `normalize_peritem` or `normalize_perdomain` is on.

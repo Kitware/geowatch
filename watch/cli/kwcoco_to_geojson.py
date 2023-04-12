@@ -1200,6 +1200,7 @@ def main(argv=None, **kwargs):
             f'Unknown Default Track Function: {args.default_track_fn} not in {list(_KNOWN_TRACK_FUNCS.keys())}')
 
     if args.boundary_region is not None:
+        print('Loading boundary regions')
         from watch.geoannots import geomodels
         region_infos = list(util_gis.coerce_geojson_datas(
             args.boundary_region, format='json', allow_raw=True))
@@ -1212,6 +1213,7 @@ def main(argv=None, **kwargs):
             region_parts.append(region_gdf)
         boundary_regions_gdf = pd.concat(region_parts).reset_index()
     else:
+        print('No boundary regions specified')
         boundary_regions_gdf = None
         # if args.site_summary is None:
         #     raise ValueError('You must specify a region as a site summary if you ')
@@ -1236,6 +1238,7 @@ def main(argv=None, **kwargs):
         viz_out_dir=args.viz_out_dir, **track_kwargs)
 
     if boundary_regions_gdf is not None:
+        print('Cropping to boundary regions')
         coco_remove_out_of_bound_tracks(coco_dset, boundary_regions_gdf)
 
     # Measure how long tracking takes
