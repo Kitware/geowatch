@@ -176,14 +176,15 @@ def prep_feats(cmdline=True, **kwargs):
     TODO:
         - [ ] Option to just dump the serial bash script that does everything.
     """
-    from scriptconfig.smartcast import smartcast
-    # import cmd_queue
-    from watch.utils import util_path
-
     config = TeamFeaturePipelineConfig.cli(cmdline=cmdline, data=kwargs,
                                            strict=True)
     import rich
     rich.print('config = {}'.format(ub.urepr(config, nl=2)))
+    from scriptconfig.smartcast import smartcast
+    from watch.utils import util_path
+
+    # hack for cmd-queue, will be fixed soon
+    config.slurm_options = config.slurm_options or {}
 
     gres = smartcast(config['gres'])
     if gres is None:

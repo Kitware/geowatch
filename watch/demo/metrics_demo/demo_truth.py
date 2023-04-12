@@ -194,7 +194,7 @@ def random_region_model(region_id=None, region_poly=None, num_sites=3,
         end_time = util_time.coerce_datetime(end_time)
 
     if start_time is None:
-        start_time = observables[0]['datetime'].date().isoformat()
+        start_time = observables[0]['datetime']
     else:
         from watch.utils import util_time
         start_time = util_time.coerce_datetime(start_time)

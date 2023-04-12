@@ -1180,11 +1180,11 @@ python -m watch.mlops.schedule_evaluation --params="
         bas_pxl.enabled: 0
         bas_pxl_eval.enabled: 1
         bas_poly.enabled: 1
-        bas_poly_eval.enabled: 0
+        bas_poly_eval.enabled: 1
         bas_poly_viz.enabled: 0
     " \
     --root_dpath="$DVC_EXPT_DPATH/_namek_split1_eval_filter1_MeanYear10GSD" \
     --devices="0,1" --queue_size=8 \
     --backend=tmux --queue_name "_namek_split1_eval_filter1_MeanYear10GSD" \
     --pipeline=bas --skip_existing=1 \
-    --run=0 --max_configs=1
+    --run=1

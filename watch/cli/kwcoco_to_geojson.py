@@ -1019,7 +1019,7 @@ def main(argv=None, **kwargs):
         >>>     'track_fn': 'saliency_heatmaps',
         >>>     'track_kwargs': track_kwargs,
         >>> }
-        >>> argv = None
+        >>> argv = []
         >>> # Test case for no results
         >>> main(argv=argv, **kwargs)
         >>> from watch.utils import util_gis
@@ -1039,7 +1039,7 @@ def main(argv=None, **kwargs):
         >>>     'track_fn': 'saliency_heatmaps',
         >>>     'track_kwargs': track_kwargs,
         >>> }
-        >>> argv = None
+        >>> argv = []
         >>> main(argv=argv, **kwargs)
         >>> assert len(list(util_gis.coerce_geojson_datas(bas_fpath))) > 0
 
