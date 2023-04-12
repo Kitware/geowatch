@@ -33,6 +33,9 @@ def main(cmdline=True, **kw):
         'gifify',
         'coco_average_features',
         'coco_time_combine',
+        'crop_sites_to_regions',
+        'coco_remove_bad_images',
+        'coco_average_features',
     ]
 
     cmd_alias = {
@@ -49,8 +52,10 @@ def main(cmdline=True, **kw):
         'watch.cli.kwcoco_to_geojson': ['run_tracker'],
         'watch.cli.find_dvc': ['dvcdir'],
         'watch.cli.gifify': ['animate'],
-        'watch.cli.coco_average_features': ['average_features'],
+        'watch.cli.coco_average_features': ['average_features', 'ensemble'],
         'watch.cli.coco_time_combine': ['time_combine'],
+        'watch.cli.crop_sites_to_regions': ['crop_sitemodels'],
+        'watch.cli.coco_remove_bad_images': ['remove_bad_images'],
     }
 
     module_lut = {}

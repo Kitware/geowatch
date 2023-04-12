@@ -1,13 +1,16 @@
+#!/usr/bin/env python3
+# PYTHON_ARGCOMPLETE_OK
 import scriptconfig as scfg
 import warnings
 import ubelt as ub
 
-from shapely.geometry import MultiPolygon
 
-
-class CropSitesToRegionsConfig(scfg.Config):
+class CropSitesToRegionsConfig(scfg.DataConfig):
     r"""
-    Crops site models to the bounds of a region model
+    Crops site models to the bounds of a region model.
+
+    TODO:
+        - [ ] Rename this to TrimSiteModels?
 
     Example:
         DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
@@ -58,10 +61,12 @@ USE_LISTS = 0  # turn on for eager debugging
 
 def main(cmdline=False, **kwargs):
     from watch.utils import util_gis
+    from shapely.geometry import MultiPolygon
     import geopandas as gpd
     import safer
 
-    config = CropSitesToRegionsConfig(data=kwargs, cmdline=cmdline)
+    config = CropSitesToRegionsConfig.cli(data=kwargs, cmdline=cmdline,
+                                          strict=True)
     print('config = {}'.format(ub.urepr(dict(config), nl=1)))
 
     new_site_dpath = config['new_site_dpath']
@@ -368,6 +373,8 @@ def crop_gdf_in_utm(gdf, crop_geom_utm, utm_epsg, output_crs):
     # Project back to the output CRS
     valid_gdf_crs84 = valid_gdf_utm.to_crs(output_crs)
     return valid_gdf_crs84
+
+__config__ = CropSitesToRegionsConfig
 
 
 if __name__ == '__main__':

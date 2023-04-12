@@ -144,38 +144,28 @@ if __name__ == '__main__':
 
     CommandLine:
 
-        python -m watch.cli.coco_time_combine \
-            --kwcoco_fpath="/home/joncrall/remote/namek/data/dvc-repos/smart_data_dvc/Drop6/imgonly-AE_C002.kwcoco.json" \
-            --output_kwcoco_fpath="/home/joncrall/remote/namek/data/dvc-repos/smart_data_dvc/Drop6-MeanYear10GSD/imgonly-AE_C002.kwcoco.zip" \
-            --channels="red|green|blue|nir|swir16|swir22|pan" \
-            --resolution="10GSD" \
-            --time_window=1year \
-            --start_time=2010-01-01 \
-            --merge_method=mean \
-            --assets_dname=raw_bands \
-            --workers=0
-
         DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
         python ~/code/watch/dev/poc/prepare_time_combined_dataset.py \
             --regions="[
                     # T&E Regions
-                    # AE_R001, BH_R001, BR_R001, BR_R002, BR_R004, BR_R005, CH_R001,
-                    # KR_R001, KR_R002, LT_R001, NZ_R001, US_R001, US_R004, US_R005,
-                    # US_R006, US_R007,
+                    AE_R001, BH_R001, BR_R001, BR_R002, BR_R004, BR_R005, CH_R001,
+                    KR_R001, KR_R002, LT_R001, NZ_R001, US_R001, US_R004, US_R005,
+                    US_R006, US_R007,
                     # iMerit Regions
-                    # AE_C001,
+                    AE_C001,
                     AE_C002,
-                    # AE_C003, PE_C001, QA_C001, SA_C005, US_C000, US_C010, US_C011, US_C012,
+                    AE_C003, PE_C001, QA_C001, SA_C005, US_C000, US_C010,
+                    US_C011, US_C012,
             ]" \
             --input_bundle_dpath=$DVC_DATA_DPATH/Drop6 \
-            --output_bundle_dpath=$DVC_DATA_DPATH/Drop6-MeanYear10GSD \
+            --output_bundle_dpath=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2 \
             --true_site_dpath=$DVC_DATA_DPATH/annotations/drop6_hard_v1/site_models \
             --true_region_dpath=$DVC_DATA_DPATH/annotations/drop6_hard_v1/region_models \
             --backend=tmux \
             --tmux_workers=4 \
-            --combine_workers=0 \
+            --combine_workers=2 \
             --resolution=10GSD \
-            --run=0
+            --run=1
 
         DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
         python -m watch.cli.prepare_splits \
@@ -191,7 +181,7 @@ if __name__ == '__main__':
         export CUDA_VISIBLE_DEVICES="0,1"
         DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
         DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
-        BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6-MeanYear10GSD
+        BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2
         python -m watch.cli.prepare_teamfeats \
             --base_fpath "$BUNDLE_DPATH"/imganns-*.kwcoco.zip \
             --expt_dvc_dpath="$DVC_EXPT_DPATH" \

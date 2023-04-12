@@ -3,6 +3,73 @@ import ubelt as ub
 import scriptconfig as scfg
 
 
+class CocoAverageFeaturesConfig(scfg.DataConfig):
+    """
+    Create a new kwcoco file with averaged features from multiple kwcoco files.
+
+    High Level Steps:
+        1. Load kwcoco files. Must have at least two kwcoco files.
+        2. Create new kwcoco file by copying first kwcoco file.
+        3. For each image ID in the kwcoco file, load the features from each kwcoco file.
+            a. Average the features from each kwcoco file.
+            b. Save the averaged features to the new kwcoco image.
+        4. Save the new kwcoco file.
+
+    """
+    kwcoco_file_paths = scfg.Value(None,
+                                   type=str,
+                                   required=True,
+                                   help=ub.paragraph('''
+            Path to at least two kwcoco paths with predictions.
+            '''),
+                                   nargs='+')
+    output_kwcoco_path = scfg.Value(None,
+                                    type=str,
+                                    required=True,
+                                    help=ub.paragraph('''
+            Path to the combined features kwcoco file.
+            '''))
+    channel_name = scfg.Value(None,
+                              type=str,
+                              required=True,
+                              help=ub.paragraph('''
+            Name of the channel in kwcoco files to merge.
+            '''),
+                              nargs='+')
+    weights = scfg.Value(None,
+                         type=float,
+                         help=ub.paragraph('''
+            Combination weight value for each prediction from kwcoco
+            file. Default: All predictions are equally weighted.
+            '''),
+                         nargs='+')
+    sensors = scfg.Value(None,
+                         type=str,
+                         choices=[None, 'all', 'S2', 'L8', 'WV'],
+                         help=ub.paragraph('''
+            Only merge channels from this type of sensor.
+            '''))
+    output_channel_names = scfg.Value(None,
+                                      type=str,
+                                      help=ub.paragraph('''
+            What the name of the output channels will be after
+            averaging. Needs to have the same number of channel names as
+            both of the input channel names. NOTE: Channel names can be
+            separated by ',' or '|' characters.
+            '''))
+    flexible_merge = scfg.Value(False,
+                                isflag=True,
+                                help=ub.paragraph('''
+            If active, skip images that dont contain band when merging.
+            '''))
+    resolution = scfg.Value(None,
+                            type=float,
+                            help=ub.paragraph('''
+            Set the resolution that the features will be loaded at
+            and then merged.
+            '''))
+
+
 def split_channel_names_by_grammar(channel_names):
     """Split a string containing channel names by commas (,) and pipes (|).
 
@@ -459,6 +526,8 @@ def merge_kwcoco_channels(kwcoco_file_paths,
         # Check if there is already an asset with the same channel_names.
         output_obj = merge_coco_img.find_asset_obj(output_channels)
 
+        # TODO: use the CocoSticher here
+
         # Find the transformation from target to image space.
         if resolution is None:
             scale_target_from_vid = kwimage.Affine.scale(
@@ -514,76 +583,6 @@ def merge_kwcoco_channels(kwcoco_file_paths,
     print(f"Saved merged kwcoco file to: {output_kwcoco_path}")
 
 
-class CocoAverageFeaturesConfig(scfg.DataConfig):
-    """
-    Create a new kwcoco file with averaged features from multiple kwcoco files.
-
-    High Level Steps:
-        1. Load kwcoco files. Must have at least two kwcoco files.
-        2. Create new kwcoco file by copying first kwcoco file.
-        3. For each image ID in the kwcoco file, load the features from each kwcoco file.
-            a. Average the features from each kwcoco file.
-            b. Save the averaged features to the new kwcoco image.
-        4. Save the new kwcoco file.
-
-    """
-    kwcoco_file_paths = scfg.Value(None,
-                                   type=str,
-                                   required=True,
-                                   help=ub.paragraph('''
-            Path to at least two kwcoco paths with predictions.
-            '''),
-                                   nargs='+')
-    output_kwcoco_path = scfg.Value(None,
-                                    type=str,
-                                    required=True,
-                                    help=ub.paragraph('''
-            Path to the combined features kwcoco file.
-            '''))
-    channel_name = scfg.Value(None,
-                              type=str,
-                              required=True,
-                              help=ub.paragraph('''
-            Name of the channel in kwcoco files to merge.
-            '''),
-                              nargs='+')
-    weights = scfg.Value(None,
-                         type=float,
-                         help=ub.paragraph('''
-            Combination weight value for each prediction from kwcoco
-            file. Default: All predictions are equally weighted.
-            '''),
-                         nargs='+')
-    sensors = scfg.Value(None,
-                         type=str,
-                         choices=[None, 'all', 'S2', 'L8', 'WV'],
-                         help=ub.paragraph('''
-            Only merge channels from this type of sensor.
-            '''))
-    output_channel_names = scfg.Value(None,
-                                      type=str,
-                                      help=ub.paragraph('''
-            What the name of the output channels will be after
-            averaging. Needs to have the same number of channel names as
-            both of the input channel names. NOTE: Channel names can be
-            separated by ',' or '|' characters.
-            '''))
-    flexible_merge = scfg.Value(False,
-                                isflag=True,
-                                help=ub.paragraph('''
-            If active, skip images that dont contain band when merging.
-            '''))
-    resolution = scfg.Value(None,
-                            type=float,
-                            help=ub.paragraph('''
-            Set the resolution that the features will be loaded at
-            and then merged.
-            '''))
-
-
-__config__ = CocoAverageFeaturesConfig
-
-
 def main(cmdline=True, **kw):
     """
     Main function for merge_kwcoco_channels.
@@ -591,7 +590,7 @@ def main(cmdline=True, **kw):
 
     TODO: Add examples
     """
-    config = CocoAverageFeaturesConfig(default=kw, cmdline=cmdline)
+    config = CocoAverageFeaturesConfig.cli(default=kw, cmdline=cmdline, strict=True)
     config_dict = config.to_dict()
 
     # Merge kwcoco files along certain channels.
@@ -605,6 +604,9 @@ def main(cmdline=True, **kw):
         resolution=config_dict['resolution'],
         flexible_merge=config_dict['flexible_merge'],
     )
+
+
+__config__ = CocoAverageFeaturesConfig
 
 
 if __name__ == "__main__":

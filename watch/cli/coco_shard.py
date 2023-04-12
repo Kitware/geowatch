@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+"""
+UNUSED AND UNDEVELOEPD
+"""
 import ubelt as ub
 import scriptconfig as scfg
 
@@ -6,6 +9,8 @@ import scriptconfig as scfg
 class CocoShardConfig(scfg.Config):
     """
     Shards a kwcoco dataset into multiple subparts
+
+    UNUSED AND UNDEVELOEPD
     """
     __default__ = {
         'src': scfg.Value(None, help='input dataset to split', position=1),

@@ -3,11 +3,12 @@ import ubelt as ub
 import scriptconfig as scfg
 
 
-class RemoveEmptyImagesConfig(scfg.Config):
+class CocoRemoveBadImagesConfig(scfg.DataConfig):
     """
-    Updates image transforms in a kwcoco json file to align all videos to a
-    target GSD.
+    Remove image frames that have little or nothing useful in them from a
+    kwcoco file. Can also delete the asset data if desired.
     """
+    __command__ = 'remove_bad_images'
     __default__ = {
         'src': scfg.Value('data.kwcoco.json', help='input kwcoco filepath'),
 
@@ -30,7 +31,7 @@ class RemoveEmptyImagesConfig(scfg.Config):
 def main(cmdline=True, **kwargs):
     """
     Ignore:
-        from watch.cli.coco_remove_empty_images import *  # NOQA
+        from watch.cli.coco_bad_empty_images import *  # NOQA
         kwargs = {}
         kwargs['src'] = 'imgonly_S2_L8_WV.kwcoco.json'
         kwargs['dst'] = 'imgonly_S2_L8_WV.kwcoco.json.tmp'
@@ -39,11 +40,14 @@ def main(cmdline=True, **kwargs):
         kwargs['channels'] = 'red'
         cmdline = False
     """
-    config = RemoveEmptyImagesConfig.cli(cmdline=cmdline, data=kwargs)
-    import kwcoco
+    config = CocoRemoveBadImagesConfig.cli(cmdline=cmdline, data=kwargs,
+                                           strict=True)
     mode = config['mode']
 
+    import kwcoco
     from watch.utils import util_parallel
+    from rich.prompt import Confirm
+    import safer
     workers = util_parallel.coerce_num_workers(config['workers'])
 
     main_channels = config['channels']
@@ -62,7 +66,6 @@ def main(cmdline=True, **kwargs):
                                  workers=workers, overview=overview)
 
     if config['interactive']:
-        from rich.prompt import Confirm
         if delete_assets == 'auto':
             total_bytes = compute_asset_disk_usage(dset, bad_gids, mode, workers)
             msg = 'Total bad space: {} MB'.format(total_bytes / 2 ** 20)
@@ -93,7 +96,6 @@ def main(cmdline=True, **kwargs):
                 img['auxiliary'] = sorted(img['auxiliary'], key=lambda aux: aux['channels'])
 
     # dset.fpath = config['dst']
-    import safer
     dst_fpath = config['dst']
     print('Write to dst_fpath = {!r}'.format(dst_fpath))
     with safer.open(dst_fpath, 'w', temp_file=True) as file:
@@ -203,6 +205,7 @@ def is_image_empty(coco_img, main_channels=None, overview=-1):
 def find_empty_images(dset, main_channels, overview=-1, mode='process',
                       workers=0):
     import numpy as np
+    import pandas as pd
     gid_to_infos = {}
     pool = ub.JobPool(mode=mode, max_workers=workers)
     all_gids = list(dset.index.imgs.keys())
@@ -252,7 +255,6 @@ def find_empty_images(dset, main_channels, overview=-1, mode='process',
     print('{len(bad_images)=}')
 
     bad_gids = [b['gid'] for b in bad_img_infos]
-    import pandas as pd
 
     all_images = dset.images()
     bad_images = dset.images(bad_gids)
@@ -287,12 +289,12 @@ def find_empty_images(dset, main_channels, overview=-1, mode='process',
     return bad_gids
 
 
-__config__ = RemoveEmptyImagesConfig
+__config__ = CocoRemoveBadImagesConfig
 
 
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/watch/cli/coco_remove_empty_images.py
+        python ~/code/watch/watch/cli/coco_bad_empty_images.py
     """
     main()
