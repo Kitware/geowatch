@@ -669,67 +669,52 @@ def _coerce_site_summaries(site_summary_or_region_model,
            Each tuple is a (region_id, site_summary) pair
     """
     from watch.utils import util_gis
-    import watch
-    import jsonschema
     from watch.geoannots import geomodels
+    import jsonschema
 
-    TRUST_REGION_SCHEMA = 0
+    TRUST_REGION_SCHEMA = 1
 
     geojson_infos = list(util_gis.coerce_geojson_datas(
         site_summary_or_region_model, format='json', allow_raw=True))
 
     # validate the json
     site_summaries = []
-    import xdev
-    xdev.embed()
 
     for info in geojson_infos:
-        site_summary_or_region_model = info['data']
+        data = info['data']
 
-        region_model = geomodels.RegionModel(**site_summary_or_region_model)
-
-        if not isinstance(site_summary_or_region_model, dict):
+        if not isinstance(data, dict):
             raise AssertionError(
-                f'unknown site summary {type(site_summary_or_region_model)=}'
+                f'unknown site summary {type(data)=}'
             )
 
         try:  # is this a region model?
-            # Unfortunately, we can't trust the region file schema
-            region_model = site_summary_or_region_model
+
+            region_model = geomodels.RegionModel(**data)
 
             if TRUST_REGION_SCHEMA:
-                region_model_schema = watch.rc.load_region_model_schema()
-                jsonschema.validate(region_model, schema=region_model_schema)
-            else:
-                if region_model['type'] != 'FeatureCollection':
-                    raise AssertionError
+                region_model.validate(strict=False)
 
-                for feat in region_model['features']:
-                    assert feat['type'] == 'Feature'
-                    row_type = feat['properties']['type']
-                    if row_type not in {'region', 'site_summary'}:
-                        raise jsonschema.ValidationError('not a region')
+            region_model._validate_quick_checks()
+            region_header = region_model.header
+            # assert region_header['type'] == 'Feature'
+            # if region_header['properties']['type'] not in {'region', 'site_summary'}:
+            #     raise jsonschema.ValidationError('not a region')
 
             _summaries = [
-                f for f in region_model['features']
-                if (f['properties']['type'] == 'site_summary'
-                    and f['properties']['status'] in SITE_SUMMARY_POS_STATUS)
+                f for f in region_model.site_summaries()
+                if f['properties']['status'] in SITE_SUMMARY_POS_STATUS
             ]
-            region_feat = None
-            for f in region_model['features']:
-                if f['properties']['type'] == 'region':
-                    if region_feat is not None:
-                        raise AssertionError('Region files needs exactly one region type but got multiple')
-                    region_feat = f
-            if region_feat is None:
-                raise AssertionError('Region files needs exactly one region type but got 0')
-            assert region_feat['properties']['type'] == 'region'
-            region_id = region_feat['properties'].get('region_id',
-                                                      default_region_id)
+            region_id = region_header['properties'].get('region_id', default_region_id)
             site_summaries.extend([(region_id, s) for s in _summaries])
 
-        except jsonschema.ValidationError:  # or a site model?
-            # TODO validate this
+        except jsonschema.ValidationError:
+            # In this case we expect the input to be a list of site summaries.
+            # However, we really shouldn't hit this case.
+            raise AssertionError(
+                'Jon thinks we wont hit this case. '
+                'If you see this error, he is wrong and the error can be removed. '
+                'Otherwise we should remove this extra code')
             site_summary = site_summary_or_region_model
             site_summaries.append((default_region_id, site_summary))
 
@@ -919,7 +904,7 @@ def add_site_summary_to_kwcoco(possible_summaries,
 
 
 @profile
-def create_region_feature(region_id, site_summaries):
+def create_region_header(region_id, site_summaries):
     import geojson
     geometry = _combined_geometries([
         _single_geometry(summary['geometry'])
@@ -1315,7 +1300,7 @@ def main(args=None, **kwargs):
                     print(f'writing to existing region {region_fpath}')
             else:
                 region = geojson.FeatureCollection(
-                    [create_region_feature(region_id, site_summaries)])
+                    [create_region_header(region_id, site_summaries)])
                 if verbose:
                     print(f'writing to new region {region_fpath}')
             for site_summary in site_summaries:

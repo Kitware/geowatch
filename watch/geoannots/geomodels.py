@@ -84,25 +84,42 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
             if prop['type'] == self._header_type:
                 return feat
 
-    def validate(self, strict=True):
-        import rich
+    def _validate_quick_checks(self):
         header = self.header
+        if header is None:
+            raise AssertionError('Geo Model has no header')
+
         if header is not self.features[0]:
             raise AssertionError('Header should be the first feature')
 
+        if header['properties']['type'] != self._header_type:
+            raise AssertionError('Header type is wrong')
+
+        if self['type'] != 'FeatureCollection':
+            raise AssertionError('GeoModels should be FeatureCollections')
+
+        feature_types = ub.dict_hist([
+            f['properties']['type'] for f in self.features])
+        assert feature_types.pop(self._header_type, 0) == 1
+        assert set(feature_types).issubset({self._body_type})
+
+        start_date = self.start_date
+        end_date = self.end_date
+        if start_date is not None and end_date is not None:
+            if end_date < start_date:
+                raise AssertionError('bad date')
+
+    def _validate_schema(self, strict=True):
+        import rich
         def print_validation_error_info(ex, depth=1):
             if ex.parent is not None:
                 max_depth = print_validation_error_info(ex.parent, depth=depth + 1)
             else:
                 max_depth = depth
-
-            rich.print(f'[yellow] validation error depth = {depth} / {max_depth}')
+            rich.print(f'[yellow] error depth = {depth} / {max_depth}')
             print('ex.__dict__ = {}'.format(ub.urepr(ex.__dict__, nl=3)))
             return depth
 
-        feature_types = ub.dict_hist([f['properties']['type'] for f in self.features])
-        assert feature_types.pop(self._header_type, 0) == 1
-        assert set(feature_types).issubset({self._body_type})
         schema = self.load_schema(strict=strict)
         try:
             jsonschema.validate(self, schema)
@@ -123,11 +140,9 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
             rich.print('[red] JSON VALIDATION ERROR')
             raise
 
-        start_date = self.start_date
-        end_date = self.end_date
-        if start_date is not None and end_date is not None:
-            if end_date < start_date:
-                raise AssertionError('bad date')
+    def validate(self, strict=True):
+        self._validate_quick_checks()
+        self._validate_schema(strict=strict)
 
 
 class RegionModel(_Model):
