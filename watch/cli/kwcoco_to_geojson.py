@@ -1239,60 +1239,7 @@ def main(argv=None, **kwargs):
         viz_out_dir=args.viz_out_dir, **track_kwargs)
 
     if boundary_regions_gdf is not None:
-        # Remove any tracks that are outside of region bounds.
-
-        # First find which regions correspond to which videos.
-        from watch.geoannots.geococo_objects import CocoGeoVideo
-        import geopandas as gpd
-        crs84_parts = []
-        crs84 = util_gis.get_crs84()
-        for video in coco_dset.videos().objs:
-            coco_video = CocoGeoVideo(video=video, dset=coco_dset)
-            utm_part = coco_video.wld_corners_gdf
-            crs84_part = utm_part.to_crs(crs84)
-            crs84_parts.append(crs84_part)
-        video_gdf = pd.concat(crs84_parts).reset_index()
-        idx1_to_idxs2 = util_gis.geopandas_pairwise_overlaps(video_gdf, boundary_regions_gdf)
-        assignments = []
-        for idx1, idxs2 in idx1_to_idxs2.items():
-            video_gdf.iloc[idx1]['name']
-
-            if len(idxs2) == 0:
-                raise AssertionError('no region for video')
-
-            if len(idxs2) > 1:
-                video_goem = video_gdf.iloc[idx1]['geometry']
-                chosen_id2 = boundary_regions_gdf.iloc[idxs2].geometry.intersection(video_goem).area.idxmax()
-                chosen_idx2 = chosen_id2  # can do this bc of reset index
-                idxs2 = [chosen_idx2]
-                raise NotImplementedError('multiple regions for video, not sure if impl is correct')
-            idx2 = idxs2[0]
-            video_name = video_gdf.iloc[idx1]['name']
-            region_name = boundary_regions_gdf.iloc[idx2]['region_id']
-            region_geom = boundary_regions_gdf.iloc[idx2]['geometry']
-            assignments.append((video_name, region_name, region_geom))
-
-        # Actually remove the offending annots
-        for assign in assignments:
-            video_name, region_name, region_geom = assign
-            video_id = coco_dset.index.name_to_video[video_name]['id']
-            video_imgs = coco_dset.images(video_id=video_id)
-            video_aids = list(ub.flatten(video_imgs.annots))
-            video_annots = coco_dset.annots(video_aids)
-            from shapely.geometry import shape
-            annot_geos = gpd.GeoDataFrame([
-                {
-                    'annot_id': obj['id'],
-                    'geometry': shape(obj['segmentation_geos']),
-                } for obj in video_annots.objs],
-                columns=['annot_id', 'geometry'], crs=crs84)
-
-            is_oob = annot_geos.intersection(region_geom).is_empty
-
-            print(annot_geos.intersection(region_geom))
-
-            # region_geom
-            idx1_to_idxs2 = util_gis.geopandas_pairwise_overlaps(video_gdf, annot_geos)
+        coco_remove_out_of_bound_tracks(coco_dset, boundary_regions_gdf)
 
     # Measure how long tracking takes
     proc_context.stop()
@@ -1379,6 +1326,80 @@ def main(argv=None, **kwargs):
         print(f'Write tracked site summary result to {out_site_summaries_fpath}')
         with safer.open(out_site_summaries_fpath, 'w', temp_file=True) as file:
             json.dump(site_summary_tracking_output, file, indent='    ')
+
+
+def coco_remove_out_of_bound_tracks(coco_dset, boundary_regions_gdf):
+    # Remove any tracks that are outside of region bounds.
+    # First find which regions correspond to which videos.
+    import pandas as pd
+    from watch.utils import util_gis
+    from shapely.geometry import shape
+    from watch.geoannots.geococo_objects import CocoGeoVideo
+    import geopandas as gpd
+    crs84 = util_gis.get_crs84()
+    crs84_parts = []
+    for video in coco_dset.videos().objs:
+        coco_video = CocoGeoVideo(video=video, dset=coco_dset)
+        utm_part = coco_video.wld_corners_gdf
+        crs84_part = utm_part.to_crs(crs84)
+        crs84_parts.append(crs84_part)
+    video_gdf = pd.concat(crs84_parts).reset_index()
+    idx1_to_idxs2 = util_gis.geopandas_pairwise_overlaps(video_gdf, boundary_regions_gdf)
+    assignments = []
+    for idx1, idxs2 in idx1_to_idxs2.items():
+        video_gdf.iloc[idx1]['name']
+
+        if len(idxs2) == 0:
+            raise AssertionError('no region for video')
+
+        if len(idxs2) > 1:
+            video_goem = video_gdf.iloc[idx1]['geometry']
+            chosen_id2 = boundary_regions_gdf.iloc[idxs2].geometry.intersection(video_goem).area.idxmax()
+            chosen_idx2 = chosen_id2  # can do this bc of reset index
+            idxs2 = [chosen_idx2]
+            raise NotImplementedError('multiple regions for video, not sure if impl is correct')
+        idx2 = idxs2[0]
+        video_name = video_gdf.iloc[idx1]['name']
+        region_name = boundary_regions_gdf.iloc[idx2]['region_id']
+        region_geom = boundary_regions_gdf.iloc[idx2]['geometry']
+        assignments.append((video_name, region_name, region_geom))
+
+    # Actually remove the offending annots
+    to_remove_trackids = set()
+    for assign in assignments:
+        video_name, region_name, region_geom = assign
+        video_id = coco_dset.index.name_to_video[video_name]['id']
+        video_imgs = coco_dset.images(video_id=video_id)
+        video_aids = list(ub.flatten(video_imgs.annots))
+        video_annots = coco_dset.annots(video_aids)
+        annot_geos = gpd.GeoDataFrame([
+            {
+                'annot_id': obj['id'],
+                'geometry': shape(obj['segmentation_geos']),
+            } for obj in video_annots.objs],
+            columns=['annot_id', 'geometry'], crs=crs84)
+
+        is_oob = annot_geos.intersection(region_geom).is_empty
+        inbound_annots = video_annots.compress(~is_oob)
+        outofbounds_annots = video_annots.compress(is_oob)
+
+        # Only remove tracks that are always out of bounds.
+        inbound_tracks = set(inbound_annots.lookup('track_id'))
+        outofbound_tracks = set(outofbounds_annots.lookup('track_id'))
+        always_outofbound_tracks = outofbound_tracks - inbound_tracks
+        to_remove_trackids.update(always_outofbound_tracks)
+
+    to_remove_aids = []
+    for tid in to_remove_trackids:
+        to_remove_aids.extend(list(coco_dset.annots(track_id=tid)))
+
+    if to_remove_aids:
+        print(f'Removing {len(to_remove_trackids)} out-of-bounds tracks '
+              f'with {len(to_remove_aids)} annotations')
+    else:
+        print('All annotations are in bounds')
+
+    coco_dset.remove_annotations(to_remove_aids)
 
 
 def demo(coco_dset, regions_dir, coco_dset_sc, sites_dir, cleanup=True):
