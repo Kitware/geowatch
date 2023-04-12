@@ -286,8 +286,7 @@ echo "
         -t "watch:311-strict" \
         --build-arg BUILD_STRICT=1 \
         --build-arg PYTHON_VERSION=3.11.2 \
-        --target module_stage \
-        -f ./Dockerfile 
+        --target module_stage .
 
     # Tests
     docker run \
