@@ -154,6 +154,7 @@ COPY watch          /root/code/watch/watch
 
 ARG BUILD_STRICT=0
 
+
 #SHELL ["/bin/bash", "--login", "-c"]
 
 # Setup primary dependencies
@@ -236,6 +237,10 @@ unset PYENV_VERSION
 pip install awscli
 
 EOF
+
+
+# Does this get rid of the unset issue?
+ARG PYENV_VERSION=
 
 
 # Run simple tests
