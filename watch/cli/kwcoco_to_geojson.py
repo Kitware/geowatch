@@ -1077,9 +1077,13 @@ def main(argv=None, **kwargs):
         >>> sites_dir = 'sites/'
         >>> # moved this to a separate function for length
         >>> demo(coco_dset, regions_dir, coco_dset_sc, sites_dir, cleanup=True)
-
     """
-    args = KWCocoToGeoJSONConfig.cli(argv=argv, data=kwargs, strict=True)
+    cmdline = True
+    if isinstance(argv, list) and argv == []:
+        # Workaround an issue in scriptconfig tha twill be fixed in 0.7.8
+        # after that, remove cmdline completely
+        cmdline = False
+    args = KWCocoToGeoJSONConfig.cli(cmdline=cmdline, argv=argv, data=kwargs, strict=True)
     import rich
     rich.print('args = {}'.format(ub.urepr(args, nl=1)))
 
