@@ -1193,16 +1193,16 @@ python -m watch.mlops.schedule_evaluation --params="
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
 gwmlops aggregate \
     --pipeline=bas \
-    --stdout_report=True \
     --target \
         "$DVC_EXPT_DPATH/_namek_split1_eval_filter1_MeanYear10GSD" \
     --resource_report=True \
     --stdout_report="
-        top_k: 3
+        top_k: 30
         per_group: 1
         macro_analysis: 0
         analyze: 0
-        reference_region: final
+        reference_region: KR_R002
+        print_models: True
     "
     #--rois=KR_R002 \
 
@@ -1227,6 +1227,7 @@ agg.build_macro_tables(['KR_R002'])
 _ = agg.report_best()
 
 agg = eval_type_to_aggregator['bas_pxl_eval']
+agg = eval_type_to_aggregator['bas_poly_eval']
 
 
 "
