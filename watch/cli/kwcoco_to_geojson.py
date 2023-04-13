@@ -1361,7 +1361,10 @@ def coco_remove_out_of_bound_tracks(coco_dset, boundary_regions_gdf):
             chosen_id2 = boundary_regions_gdf.iloc[idxs2].geometry.intersection(video_goem).area.idxmax()
             chosen_idx2 = chosen_id2  # can do this bc of reset index
             idxs2 = [chosen_idx2]
+            import xdev
+            xdev.embed()
             raise NotImplementedError('multiple regions for video, not sure if impl is correct')
+
         idx2 = idxs2[0]
         video_name = video_gdf.iloc[idx1]['name']
         region_name = boundary_regions_gdf.iloc[idx2]['region_id']
