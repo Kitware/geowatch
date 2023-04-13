@@ -159,6 +159,7 @@ def main(cmdline=False, **kwargs):
         >>> from watch.demo import smart_kwcoco_demodata
         >>> import ubelt as ub
         >>> dpath = ub.Path.appdir('watch/tests/reproject/doctest0')
+        >>> dpath.delete()
         >>> coco_dset, region_dpath, site_dpath = smart_kwcoco_demodata.demo_dataset_with_regions_and_sites(dpath)
         >>> coco_fpath = coco_dset.fpath
         >>> cmdline = False
