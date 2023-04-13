@@ -4,7 +4,7 @@ This changelog follows the specifications detailed in: [Keep a Changelog](https:
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
 
-## Version 0.5.0 - Target 2023-04-x
+## Version 0.5.4 - Target 2023-04-x
 
 ### Added
 * `coco_time_combine` can now ignore seasons / handle median images with less memory
@@ -12,6 +12,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+* Added `boundary_region` arg to the tracker to crop all outputs to the region.
 * Unpinned lightning for 2.x
 * kwcoco draw item `norm_over_time` now defaults to `auto`, which is true if
   `normalize_peritem` or `normalize_perdomain` is on.

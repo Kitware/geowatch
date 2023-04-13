@@ -65,7 +65,6 @@ class TimeCombineConfig(scfg.DataConfig):
     Averages kwcoco images over a sliding temporal window in a video.
     """
     __command__ = 'time_combine'
-    __fuzzy_hyphens__ = True
 
     input_kwcoco_fpath = scfg.Value(None, help=ub.paragraph(
             '''
@@ -137,6 +136,11 @@ class TimeCombineConfig(scfg.DataConfig):
             '''
             A list of sensors to include in the combination operation.
             '''))
+
+    assets_dname = scfg.Value('_assets', help=ub.paragraph(
+        '''
+        The name of the top-level directory to write new assets.
+        '''))
 
     exclude_sensors = scfg.Value(None, help=ub.paragraph(
             '''
@@ -626,10 +630,11 @@ def combine_kwcoco_channels_temporally(config):
                 window_coco_images = [g.detach() for g in window_coco_images]
 
                 job = jobs.submit(merge_images, window_coco_images,
-                                    merge_method, requested_chans, space,
-                                    resolution, new_bundle_dpath,
-                                    mask_low_quality, sensor_weights,
-                                    og_kwcoco_fpath, spatial_tile_size)
+                                  merge_method, requested_chans, space,
+                                  resolution, new_bundle_dpath,
+                                  mask_low_quality, sensor_weights,
+                                  og_kwcoco_fpath, spatial_tile_size,
+                                  config=config)
                 job.merge_images = merge_images
 
             for job in pman.progiter(jobs.as_completed(),
@@ -722,7 +727,7 @@ def get_quality_mask(coco_image, space, resolution, avoid_quality_values=['cloud
 
 def merge_images(window_coco_images, merge_method, requested_chans, space,
                  resolution, new_bundle_dpath, mask_low_quality,
-                 sensor_weights, og_kwcoco_fpath, spatial_tile_size):
+                 sensor_weights, og_kwcoco_fpath, spatial_tile_size, config):
     """
     Args:
         window_coco_images (List[kwcoco.CocoImage]): images with channels to merge
@@ -968,6 +973,7 @@ def merge_images(window_coco_images, merge_method, requested_chans, space,
         chan_code=merge_chans.spec,
         stiching_space='video',
         write_prediction_attrs=False,
+        assets_dname=config.assets_dname,
     )
 
     gid = new_coco_img.img['id']

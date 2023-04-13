@@ -307,7 +307,7 @@ prepare_cropped_from_tracks(){
     DVC_DPATH=$(smartwatch_dvc --hardware="ssd")
     IMGONLY_FPATH="$DVC_DPATH/Cropped-Drop3-TA1-2022-03-10/imgonly_S2_L8_WV.kwcoco.json"
     echo "IMGONLY_FPATH = $IMGONLY_FPATH"
-    python -m watch.cli.coco_remove_empty_images \
+    python -m watch.cli.coco_bad_empty_images \
         --src="$IMGONLY_FPATH" \
         --dst="$IMGONLY_FPATH.tmp" \
         --workers=8 \

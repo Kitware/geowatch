@@ -29,6 +29,11 @@ Example:
     python -m watch.mlops.manager "list" --dataset_codes Drop6 Drop4-BAS
     python -m watch.mlops.manager "list" --dataset_codes Drop6 Drop6-MeanYear10GSD
 
+    python -m watch.mlops.manager "push packages" --dataset_codes Drop6-MeanYear10GSD
+
+    python -m watch.mlops.manager "list" --dataset_codes Drop6-MeanYear10GSD
+    python -m watch.mlops.manager "pull packages" --dataset_codes Drop6-MeanYear10GSD
+
     # On training machine
     python -m watch.mlops.manager "push packages" --dataset_codes Drop6
     python -m watch.mlops.manager "push packages" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
@@ -70,18 +75,9 @@ TODO:
     python -m watch.mlops.manager "status" --dataset_codes=Drop6
     python -m watch.mlops.manager "add packages" --dataset_codes=Drop6
 """
-import pandas as pd
 import ubelt as ub
-# import platform
 import scriptconfig as scfg
-from watch.utils import simple_dvc
-from watch import heuristics
 import warnings
-import parse
-from watch.utils import util_pattern
-from watch.utils import util_path
-from watch.mlops import repackager
-from rich.prompt import Confirm
 
 
 class ManagerConfig(scfg.DataConfig):
@@ -89,6 +85,8 @@ class ManagerConfig(scfg.DataConfig):
     Certain parts of these names have special nomenclature to make them easier
     to work with in Python and Bash.
     """
+    __command__ = 'manager'
+
     command = scfg.Value(None, nargs='*', help='if specified, will overload other options', position=1)
 
     dvc_remote = scfg.Value('aws', help='dvc remote to sync to/from')
@@ -158,6 +156,7 @@ def main(cmdline=True, **kwargs):
     dataset_codes = config['dataset_codes']
 
     if config['expt_dvc_dpath'] == 'auto':
+        from watch import heuristics
         config['expt_dvc_dpath'] = heuristics.auto_expt_dvc()
 
     expt_dvc_dpath = config['expt_dvc_dpath']
@@ -232,6 +231,7 @@ class DVCExptManager(ub.NiceRepr):
 
     def __init__(manager, expt_dvc_dpath, dvc_remote='aws', dataset_codes='*',
                  model_pattern='*'):
+        from watch.utils import simple_dvc
         manager.model_pattern = model_pattern
         manager.expt_dvc_dpath = expt_dvc_dpath
         manager.dvc_remote = dvc_remote
@@ -270,6 +270,7 @@ class DVCExptManager(ub.NiceRepr):
         manager.states = states
 
     def pull_packages(manager, yes=None):
+        from rich.prompt import Confirm
         # Assume just one git repo and manually pull
         print('We need to git pull to check if there are updates')
         if not yes and not Confirm.ask('Do a git pull?'):
@@ -469,6 +470,7 @@ class ExperimentState(ub.NiceRepr):
         return self.dataset_code
 
     def _parse_pattern_attrs(self, template, path):
+        import parse
         row = {}
         parser = parse.Parser(str(template))
         results = parser.parse(str(path))
@@ -493,6 +495,7 @@ class ExperimentState(ub.NiceRepr):
         # Some checkpoints may not have been repackaged yet.
         # Some packages may have had their checkpoints deleted.
         # None of these files are in DVC, this is entirely volitile state.
+        from watch.utils import util_pattern
         default = {'ckpt_path': None, 'spkg_fpath': None}
         _id_to_row = ub.ddict(default.copy)
 
@@ -608,6 +611,7 @@ class ExperimentState(ub.NiceRepr):
             notypes = None
             with_attrs = 1
         """
+        from watch.utils import util_path
         keys = ['pkg_fpath']
         if types is not None:
             keys = types
@@ -659,6 +663,7 @@ class ExperimentState(ub.NiceRepr):
                     yield row
 
     def staging_table(self):
+        import pandas as pd
         # import numpy as np
         staging_rows = list(self.staging_rows())
         staging_df = pd.DataFrame(staging_rows)
@@ -684,6 +689,7 @@ class ExperimentState(ub.NiceRepr):
         Information includes its real path if it exists, its dvc path if it exists
         and what sort of actions need to be done to synchronize it.
         """
+        import pandas as pd
         versioned_rows = list(self.versioned_rows(**kw))
         versioned_df = pd.DataFrame(versioned_rows)
         if len(versioned_df) == 0:
@@ -693,6 +699,7 @@ class ExperimentState(ub.NiceRepr):
 
     def cross_referenced_tables(self):
         import kwarray
+        import pandas as pd
         # Cross reference the versioned table with the staging table to
         # populate items in the staging table. Namely, if we have already
         # completed the staging process or not.
@@ -791,6 +798,8 @@ class ExperimentState(ub.NiceRepr):
         summarize_tables(tables)
 
     def package_checkpoints(self, yes=None):
+        from watch.mlops import repackager
+        from rich.prompt import Confirm
         staging_df = self.staging_table()
         needs_package = staging_df[~staging_df['is_packaged']]
 
@@ -812,6 +821,7 @@ class ExperimentState(ub.NiceRepr):
 
     def copy_packages_to_dvc(self, yes=None):
         # Rebuild the tables to ensure we are up to date
+        from rich.prompt import Confirm
         tables = self.cross_referenced_tables()
         staging_df, versioned_df = ub.take(tables, ['staging', 'versioned'])
         needs_copy = staging_df[~staging_df['is_copied']]
@@ -830,6 +840,7 @@ class ExperimentState(ub.NiceRepr):
                 ub.Path(src).copy(dst)
 
     def add_packages_to_dvc(self, yes=None):
+        from rich.prompt import Confirm
         perf_config = {
             'push_workers': 8,
         }
@@ -939,6 +950,7 @@ def checkpoint_filepath_info(fname):
         info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v0'}
         info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v2'}
     """
+    import parse
     # We assume it must have this
     suffix = ''.join(fname.partition('epoch')[1:])
     # Hack: making name assumptions
@@ -1012,6 +1024,7 @@ class UserAbort(Exception):
 
 
 __config__ = ManagerConfig
+__config__.main = main
 
 
 if __name__ == '__main__':

@@ -523,7 +523,10 @@ class TimeWindowSampler(CommonSamplerMixin):
             if self.affinity_type == 'soft':
                 version = 1
             else:
-                version = int(self.affinity_type[4:])
+                try:
+                    version = int(self.affinity_type[4:])
+                except ValueError:
+                    version = self.affinity_type[4:]
             # Soft affinity
             self.affinity = soft_frame_affinity(
                 unixtimes=self.unixtimes,

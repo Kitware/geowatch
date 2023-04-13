@@ -170,7 +170,7 @@ animate_visualizations - Helper to make animated gifs from visualize videos. Sho
 
 coco_shard - The idea is to split kwcoco files into multiple smaller ones. Not really used.
 
-coco_remove_empty_images - helper to find images with no data in a kwcoco file and remove them
+coco_bad_empty_images - helper to find images with no data in a kwcoco file and remove them
 
 coco_reformat_channels - helps quantize data to uint16 if any underlying image data is float32, this is a fixit script for old results that didnt quantize predictions. Might still be useful.
 

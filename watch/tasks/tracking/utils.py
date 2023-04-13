@@ -76,7 +76,7 @@ class TrackFunction(collections.abc.Callable):
             # In the case they were updated the existing track ids should
             # be disjoint. All new tracks should not overlap with
 
-            _debug = 1
+            _debug = 0
 
             from watch.utils import kwcoco_extensions
             new_trackids = kwcoco_extensions.TrackidGenerator(None)
@@ -265,8 +265,8 @@ class NewTrackFunction(TrackFunction):
         tracks = self.create_tracks(sub_dset)
         print('Add tracks to dset')
         sub_dset = self.add_tracks_to_dset(sub_dset, tracks)
-        print('After tracking')
-        print(sub_dset.basic_stats())
+        print('After tracking sub_dset.stats(): ' +
+              ub.urepr(sub_dset.basic_stats()))
         return sub_dset
 
     @abstractmethod

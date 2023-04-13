@@ -1,5 +1,8 @@
 """
 Geojson object oriented interface for region and site models
+
+SeeAlso:
+    ../rc/registry.py
 """
 import ubelt as ub
 import geopandas as gpd
@@ -28,6 +31,10 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
 
     def deepcopy(self):
         return copy.deepcopy(self)
+
+    def dumps(self, **kw):
+        import json
+        return json.dumps(self, **kw)
 
     @classmethod
     def coerce(cls, data):
@@ -65,7 +72,7 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
     def end_date(self):
         return util_time.coerce_datetime(self.header['properties']['end_date'])
 
-    def load_schema(self):
+    def load_schema(self, strict=True):
         raise NotImplementedError('abstract')
 
     def body_features(self):
@@ -81,32 +88,65 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
             if prop['type'] == self._header_type:
                 return feat
 
-    def validate(self):
-        import rich
+    def _validate_quick_checks(self):
         header = self.header
+        if header is None:
+            raise AssertionError('Geo Model has no header')
+
         if header is not self.features[0]:
             raise AssertionError('Header should be the first feature')
 
-        feature_types = ub.dict_hist([f['properties']['type'] for f in self.features])
+        if header['properties']['type'] != self._header_type:
+            raise AssertionError('Header type is wrong')
+
+        if self['type'] != 'FeatureCollection':
+            raise AssertionError('GeoModels should be FeatureCollections')
+
+        feature_types = ub.dict_hist([
+            f['properties']['type'] for f in self.features])
         assert feature_types.pop(self._header_type, 0) == 1
         assert set(feature_types).issubset({self._body_type})
-        schema = self.load_schema()
-        try:
-            jsonschema.validate(self, schema)
-        except jsonschema.ValidationError as e:
-            ex = e
-            ex.instance
-            rich.print('[red] ERROR')
-            print(f'self={self}')
-            print('ex.__dict__ = {}'.format(ub.urepr(ex.__dict__, nl=3)))
-            rich.print('[red] ERROR')
-            raise
 
         start_date = self.start_date
         end_date = self.end_date
         if start_date is not None and end_date is not None:
             if end_date < start_date:
                 raise AssertionError('bad date')
+
+    def _validate_schema(self, strict=True):
+        import rich
+        def print_validation_error_info(ex, depth=1):
+            if ex.parent is not None:
+                max_depth = print_validation_error_info(ex.parent, depth=depth + 1)
+            else:
+                max_depth = depth
+            rich.print(f'[yellow] error depth = {depth} / {max_depth}')
+            print('ex.__dict__ = {}'.format(ub.urepr(ex.__dict__, nl=3)))
+            return depth
+
+        schema = self.load_schema(strict=strict)
+        try:
+            jsonschema.validate(self, schema)
+        except jsonschema.ValidationError as e:
+            ex = e
+            rich.print('[red] JSON VALIDATION ERROR')
+            print(f'self={self}')
+            print_validation_error_info(ex)
+            # ub.IndexableWalker(self)[ex.absolute_path]
+            # ub.IndexableWalker(schema)[ex.schema_path]
+            rich.print(ub.codeblock(
+                '''
+                [yellow] jsonschema validation notes:
+                    * depsite our efforts, information to debug the issue may not be shown, double check your schema and instance manually.
+                    * anyOf schemas may print the error, and not the part you intended to match.
+                    * oneOf schemas may not explicitly say that you matched both.
+                '''))
+            rich.print('[red] JSON VALIDATION ERROR')
+            raise
+
+    def validate(self, strict=True):
+        self._validate_quick_checks()
+        self._validate_schema(strict=strict)
 
 
 class RegionModel(_Model):
@@ -117,7 +157,8 @@ class RegionModel(_Model):
         >>> from watch.geoannots.geomodels import *  # NOQA
         >>> self = RegionModel.random()
         >>> print(self)
-        >>> self.validate()
+        >>> self.validate(strict=False)
+
     """
     _header_type = 'region'
     _body_type = 'site_summary'
@@ -131,9 +172,9 @@ class RegionModel(_Model):
         }
         return info
 
-    def load_schema(self):
+    def load_schema(self, strict=True):
         import watch
-        schema = watch.rc.registry.load_region_model_schema()
+        schema = watch.rc.registry.load_region_model_schema(strict=strict)
         return schema
 
     def site_summaries(self):
@@ -147,12 +188,24 @@ class RegionModel(_Model):
         gdf = gpd.GeoDataFrame.from_features(list(self.site_summaries()))
         return gdf
 
+    def pandas_region(self):
+        """
+        Returns:
+            geopandas.GeoDataFrame: the region header as a data frame
+        """
+        gdf = gpd.GeoDataFrame.from_features([self.header])
+        return gdf
+
     @classmethod
-    def random(cls):
+    def random(cls, **kwargs):
         from watch.demo.metrics_demo import demo_truth
-        region, _, _ = demo_truth.random_region_model()
-        # print('region = {}'.format(ub.urepr(region, nl=-1)))
+        region, _, _ = demo_truth.random_region_model(
+            **kwargs, with_renderables=False)
         return cls(**region)
+
+    @property
+    def region_id(self):
+        return self.header['properties']['region_id']
 
 
 class SiteModel(_Model):
@@ -163,7 +216,7 @@ class SiteModel(_Model):
         >>> from watch.geoannots.geomodels import *  # NOQA
         >>> self = SiteModel.random()
         >>> print(self)
-        >>> self.validate()
+        >>> self.validate(strict=False)
     """
     _header_type = 'site'
     _body_type = 'observation'
@@ -177,9 +230,9 @@ class SiteModel(_Model):
         }
         return info
 
-    def load_schema(self):
+    def load_schema(self, strict=True):
         import watch
-        schema = watch.rc.registry.load_site_model_schema()
+        schema = watch.rc.registry.load_site_model_schema(strict=strict)
         return schema
 
     @property

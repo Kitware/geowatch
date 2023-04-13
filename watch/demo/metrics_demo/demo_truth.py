@@ -38,8 +38,10 @@ class SiteModelGenerator:
     ]
 
 
-def random_region_model(region_id=None, num_sites=3, num_observations=5,
-                        p_observe=0.5, p_transition=0.15, rng=None):
+def random_region_model(region_id=None, region_poly=None, num_sites=3,
+                        num_observations=5, p_observe=0.5, p_transition=0.15,
+                        start_time=None, end_time=None,
+                        with_renderables=True, rng=None):
     """
     Generate a random region model with random sites and observation support.
 
@@ -59,6 +61,10 @@ def random_region_model(region_id=None, num_sites=3, num_observations=5,
         region_name (str | None): Name of the region.
             If unspecified, a random one is created.
 
+        region_poly (kwimage.Polygon | None):
+            if specified use this crs84 region polygon, otherwise make a random
+            one.
+
         num_sites (int): number of random sites
 
         num_observations (int): number of random observations
@@ -71,11 +77,17 @@ def random_region_model(region_id=None, num_sites=3, num_observations=5,
             truth phase transition model. Currently just the probability
             the phase changes on any particular observation.
 
+        with_renderables (bool): if False dont generate renderables.
+
+        start_time (Any): min time coercable
+
+        end_time (Any): max time coercable
+
         rng : seed or random number generator
 
     Returns:
-        Tuple[geojson.FeatureCollection, List[geojson.FeatureCollection]]:
-            A region model and its corresponding site models
+        Tuple[geojson.FeatureCollection, List[geojson.FeatureCollection], List | None]:
+            A region model and its corresponding site models and renderables
 
     Example:
         >>> from watch.demo.metrics_demo.demo_truth import *  # NOQA
@@ -157,7 +169,8 @@ def random_region_model(region_id=None, num_sites=3, num_observations=5,
     if region_id is None:
         region_id = 'DR_R{:03d}'.format(rng.randint(0, 1000))
 
-    region_poly = demo_utils.random_geo_polygon(max_rt_area=10_000, rng=rng)
+    if region_poly is None:
+        region_poly = demo_utils.random_geo_polygon(max_rt_area=10_000, rng=rng)
 
     region_geom = region_poly.to_shapely()
 
@@ -165,13 +178,26 @@ def random_region_model(region_id=None, num_sites=3, num_observations=5,
     mgrs_code = mgrs.MGRS().toMGRS(lat, lon, MGRSPrecision=0)
 
     # Determine how we made each observation
-    observables = random_observables(num_observations, rng=rng)
+    observables = random_observables(num_observations, start_time=start_time,
+                                     end_time=end_time, rng=rng)
     wld_polygon = region_poly
     for observation in observables:
         # Could be more complex here, but other code would have to change
         # Making assumptions everything is aligned in initial pass
         observation['mgrs_code'] = mgrs_code
         observation['wld_polygon'] = wld_polygon
+
+    if end_time is None:
+        end_time = observables[-1]['datetime']
+    else:
+        from watch.utils import util_time
+        end_time = util_time.coerce_datetime(end_time)
+
+    if start_time is None:
+        start_time = observables[0]['datetime']
+    else:
+        from watch.utils import util_time
+        start_time = util_time.coerce_datetime(start_time)
 
     # Define the region feature
     region_feature = geojson.Feature(
@@ -180,8 +206,8 @@ def random_region_model(region_id=None, num_sites=3, num_observations=5,
             "region_id": region_id,
             "version": "2.4.3",
             "mgrs": mgrs_code,
-            "start_date": observables[0]['datetime'].date().isoformat(),
-            "end_date": observables[-1]['datetime'].date().isoformat(),
+            "start_date": start_time.date().isoformat(),
+            "end_date": end_time.date().isoformat(),
             "originator": "demo-truth",
             "model_content": "annotation",
             "comments": "demo-data",
@@ -206,53 +232,58 @@ def random_region_model(region_id=None, num_sites=3, num_observations=5,
     region = geojson.FeatureCollection([region_feature] + site_summaries)
 
     # Create information about how we should render dummy images
-    renderables = []
-    for frame_idx, observable in enumerate(observables):
+    if not with_renderables:
+        renderables = None
+    else:
+        renderables = []
+        for frame_idx, observable in enumerate(observables):
 
-        # For each observed date, generate information about the toy images we
-        # "observed" and what visible data is in them.
-        image_box = kwimage.Boxes([[0, 0, 800, 600]], "xywh")
-        image_corners = image_box.corners().astype(float)
-        tf_image_from_region = kwimage.Affine.fit(region_corners, image_corners)
+            # For each observed date, generate information about the toy images we
+            # "observed" and what visible data is in them.
+            image_box = kwimage.Boxes([[0, 0, 800, 600]], "xywh")
+            image_corners = image_box.corners().astype(float)
+            tf_image_from_region = kwimage.Affine.fit(region_corners, image_corners)
 
-        datetime = observable["datetime"]
+            datetime = observable["datetime"]
 
-        visible_polys = []
-        for sitesum in site_summaries:
-            site_d1 = datetime_cls.fromisoformat(sitesum["properties"]["start_date"])
-            site_d2 = datetime_cls.fromisoformat(sitesum["properties"]["end_date"])
-            # TODO: more date range intersection query, can blend between geom
-            # observations
-            if site_d1 <= datetime and datetime <= site_d2:
-                wld_site_poly = kwimage.Polygon.coerce(sitesum["geometry"])
-                img_site_poly = wld_site_poly.warp(tf_image_from_region)
-                img_site_poly.meta["color"] = sitesum["properties"]["misc_info"][
-                    "color"
-                ]
-                visible_polys.append(img_site_poly)
+            visible_polys = []
+            for sitesum in site_summaries:
+                site_d1 = datetime_cls.fromisoformat(sitesum["properties"]["start_date"])
+                site_d2 = datetime_cls.fromisoformat(sitesum["properties"]["end_date"])
+                # TODO: more date range intersection query, can blend between geom
+                # observations
+                if site_d1 <= datetime and datetime <= site_d2:
+                    wld_site_poly = kwimage.Polygon.coerce(sitesum["geometry"])
+                    img_site_poly = wld_site_poly.warp(tf_image_from_region)
+                    img_site_poly.meta["color"] = sitesum["properties"]["misc_info"][
+                        "color"
+                    ]
+                    visible_polys.append(img_site_poly)
 
-        img_width = image_box.width.ravel()[0]
-        img_height = image_box.height.ravel()[0]
-        image_dsize = [img_width, img_height]
-        renderable = {
-            "image_dsize": image_dsize,
-            "visible_polys": visible_polys,
-            "date": datetime,
-            "wld_polygon": observable["wld_polygon"],
-            "sensor": observable["sensor_name"],
-            "frame_idx": frame_idx,
-        }
-        renderables.append(renderable)
+            img_width = image_box.width.ravel()[0]
+            img_height = image_box.height.ravel()[0]
+            image_dsize = [img_width, img_height]
+            renderable = {
+                "image_dsize": image_dsize,
+                "visible_polys": visible_polys,
+                "date": datetime,
+                "wld_polygon": observable["wld_polygon"],
+                "sensor": observable["sensor_name"],
+                "frame_idx": frame_idx,
+            }
+            renderables.append(renderable)
 
     return region, sites, renderables
 
 
-def random_observables(num_observations, rng=None):
+def random_observables(num_observations, start_time=None, end_time=None, rng=None):
     """
     Create a random sequence of sensor observations
 
     Args:
         num_observations (int): number of observations
+        start_time (Any): min time coercable
+        end_time (Any): max time coercable
         rng : random seed or generator
 
     Returns:
@@ -276,7 +307,9 @@ def random_observables(num_observations, rng=None):
     """
     rng = kwarray.ensure_rng(rng)
     observed_times = demo_utils.random_time_sequence(
-        "2010-01-01", "2020-01-01", num_observations, rng=rng
+        start_time or "2010-01-01",
+        end_time or "2020-01-01",
+        num_observations, rng=rng
     )
     # A list of simulated sensors we pretend an observation might be from
     demo_sensors = [

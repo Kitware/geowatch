@@ -33,6 +33,9 @@ def main(cmdline=True, **kw):
         'gifify',
         'coco_average_features',
         'coco_time_combine',
+        'crop_sites_to_regions',
+        'coco_remove_bad_images',
+        'coco_average_features',
     ]
 
     cmd_alias = {
@@ -43,14 +46,16 @@ def main(cmdline=True, **kw):
         'watch.cli.reproject_annotations': ['reproject', 'project'],
         'watch.cli.coco_add_watch_fields': ['add_fields'],
         'watch.cli.coco_spectra': ['spectra', 'intensity_histograms'],
-        # 'watch.cli.mlops_cli': ['mlops'],
         'watch.cli.run_metrics_framework': ['iarpa_eval'],
         'watch.cli.coco_clean_geotiffs': ['clean_geotiffs'],
         'watch.cli.kwcoco_to_geojson': ['run_tracker'],
         'watch.cli.find_dvc': ['dvcdir'],
         'watch.cli.gifify': ['animate'],
-        'watch.cli.coco_average_features': ['average_features'],
+        'watch.cli.coco_average_features': ['average_features', 'ensemble'],
         'watch.cli.coco_time_combine': ['time_combine'],
+        'watch.cli.crop_sites_to_regions': ['crop_sitemodels'],
+        'watch.cli.coco_remove_bad_images': ['remove_bad_images'],
+        'watch.cli.mlops_cli': ['mlops'],
     }
 
     module_lut = {}
@@ -67,7 +72,14 @@ def main(cmdline=True, **kw):
     from scriptconfig.modal import ModalCLI
     modal = ModalCLI(description=ub.codeblock(
         '''
-        The SMART WATCH CLI
+                      🧠
+                    👁️   👁️
+        🌍🌎🌏 The GEO-WATCH CLI 🌏🌎🌍
+
+        An open source research and production environment for image and video
+        segmentation and detection with geospatial awareness.
+
+        Developed by [link=https://www.kitware.com/]Kitware[/link] funded by the [link=https://www.iarpa.gov/research-programs/smart]IARPA SMART[/link] challenge.
         '''))
 
     def get_version(self):
@@ -78,8 +90,10 @@ def main(cmdline=True, **kw):
     for cli_module in cli_modules:
 
         cli_subconfig = None
-        assert hasattr(cli_module, '__config__'), (
-            'We are only supporting scriptconfig CLIs')
+        if not hasattr(cli_module, '__config__'):
+            if hasattr(cli_module, 'modal'):
+                continue
+            raise AssertionError('We are only supporting scriptconfig CLIs')
         # scriptconfig cli pattern
         cli_subconfig = cli_module.__config__
 

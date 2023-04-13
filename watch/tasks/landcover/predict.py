@@ -71,6 +71,10 @@ class LandcoverPredictConfig(scfg.DataConfig):
     with_hidden = scfg.Value(None, type=int, help='if true, also write out this many of the hidden activations')
     track_emissions = scfg.Value(True, help='Set to False to disable codecarbon')
     window_dim = scfg.Value(1024, help='Set to False to disable codecarbon')
+    assets_dname = scfg.Value('_assets', help=ub.paragraph(
+        '''
+        The name of the top-level directory to write new assets.
+        '''))
 
 
 def predict(cmdline=1, **kwargs):
@@ -95,13 +99,14 @@ def predict(cmdline=1, **kwargs):
         >>> predict(cmdline, **kwargs)
     """
     from watch.utils.lightning_ext import util_device
-    from watch.tasks.fusion.predict import CocoStitchingManager
     from watch.utils import process_context
     from watch.utils import kwcoco_extensions
+    from watch.tasks.fusion.coco_stitcher import CocoStitchingManager
+    import rich
 
-    config = LandcoverPredictConfig.cli(cmdline=cmdline, data=kwargs)
+    config = LandcoverPredictConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
 
-    print('config = {}'.format(ub.urepr(dict(config), align=':', nl=1)))
+    rich.print('config = {}'.format(ub.urepr(config, align=':', nl=1)))
 
     coco_dset_filename = config.dataset
     weights_filename = Path(config.deployed)
@@ -154,6 +159,7 @@ def predict(cmdline=1, **kwargs):
         stiching_space='image',
         writer_queue=writer_queue,
         expected_minmax=(0, 1),
+        assets_dname=config.assets_dname,
     )
 
     num_hidden = config.with_hidden
@@ -166,6 +172,7 @@ def predict(cmdline=1, **kwargs):
             chan_code=f'landcover_hidden.0:{num_hidden}',
             stiching_space='image',
             writer_queue=writer_queue,
+            assets_dname=config.assets_dname,
         )
         hidden_stitcher.num_hidden = num_hidden
     else:

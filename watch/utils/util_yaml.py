@@ -212,6 +212,10 @@ class Yaml:
             None
 
         Example:
+            >>> from watch.utils.util_yaml import *  # NOQA
+            >>> assert Yaml.coerce('') is None
+
+        Example:
             >>> dpath = ub.Path.appdir('cmd_queue/tests/util_yaml').ensuredir()
             >>> fpath = dpath / 'external.yaml'
             >>> fpath.write_text(Yaml.dumps({'foo': 'bar'}))
@@ -236,7 +240,7 @@ class Yaml:
         """
         if isinstance(data, str):
             maybe_path = None
-            if '\n' not in data:
+            if '\n' not in data and len(data.strip()) > 0:
                 # Ambiguous case: might this be path-like?
                 maybe_path = ub.Path(data)
                 try:
