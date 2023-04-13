@@ -606,6 +606,12 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
             Drops frames in a fraction of training batches
             ''')),
 
+        'modality_dropout': scfg.Value(0.0, type=float, help=ub.paragraph(
+            '''
+            Drops late-fused modalities in each frame with this probability,
+            except if the frame only has one modality left.
+            ''')),
+
         'reseed_fit_random_generators': scfg.Value(True, type=float, help=ub.paragraph(
             '''
             This option forces the dataloader random number generator to reseed

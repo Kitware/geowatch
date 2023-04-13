@@ -1099,17 +1099,19 @@ python -m watch.mlops schedule --params="
             - auto
         bas_pxl.time_sampling:
             - auto
+            - soft5
+            - soft4
         bas_poly.thresh:
             - 0.33
             #- 0.38
             #- 0.4
         bas_poly.inner_window_size:
             - 1y
-            #- null
+            - null
         bas_poly.inner_agg_fn:
             - mean
         bas_poly.norm_ord:
-            #- 1
+            - 1
             - inf
         bas_poly.polygon_simplify_tolerance:
             - 1
@@ -1119,9 +1121,10 @@ python -m watch.mlops schedule --params="
             - 10GSD
         bas_poly.moving_window_size:
             - null
-            #- 1
+            - 1
         bas_poly.poly_merge_method:
             - 'v2'
+            - 'v1'
         bas_poly.min_area_square_meters:
             - 7200
         bas_poly.max_area_square_meters:
