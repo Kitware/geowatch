@@ -1125,6 +1125,7 @@ python -m watch.mlops schedule --params="
             - 7200
         bas_poly.max_area_square_meters:
             - 8000000
+        bas_poly.boundary_region: $DVC_DATA_DPATH/annotations/drop6/region_models
         bas_poly_eval.true_site_dpath: $DVC_DATA_DPATH/annotations/drop6/site_models
         bas_poly_eval.true_region_dpath: $DVC_DATA_DPATH/annotations/drop6/region_models
         bas_pxl.enabled: 1
@@ -1143,7 +1144,7 @@ DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch.mlops aggregate \
     --pipeline=bas \
     --target "
-        - $DVC_EXPT_DPATH/_namek_split1_eval_filter1_MeanYear10GSD-V2
+        - $DVC_EXPT_DPATH/_mlops_eval10_baseline
     " \
     --output_dpath="$DVC_EXPT_DPATH/_mlops_eval10_baseline/aggregate" \
     --resource_report=True \
