@@ -86,6 +86,7 @@ class ManagerConfig(scfg.DataConfig):
     to work with in Python and Bash.
     """
     __command__ = 'manager'
+    __alias__ = ['mlops_manager']
 
     command = scfg.Value(None, nargs='*', help='if specified, will overload other options', position=1)
 

@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+# PYTHON_ARGCOMPLETE_OK
 """
 Exposes the mlops tools in the CLI
 """
@@ -13,7 +15,7 @@ modal = ModalCLI(description=ub.codeblock(
     MLOPs CLI
     '''))
 modal.__command__ = 'mlops'
-modal.__group__ = 'learning'
+# modal.__group__ = 'learning'
 
 
 modal.register(manager.__config__)

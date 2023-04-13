@@ -16,9 +16,9 @@ class CocoAverageFeaturesConfig(scfg.DataConfig):
         4. Save the new kwcoco file.
 
     """
-    __command__ = 'average_features',
+    __command__ = 'average_features'
     __alias__ = ['ensemble']
-    __group__ = 'kwcoco'
+    # __group__ = 'kwcoco'
 
     kwcoco_file_paths = scfg.Value(None,
                                    type=str,
