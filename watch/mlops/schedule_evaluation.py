@@ -199,6 +199,7 @@ class ScheduleEvaluationConfig(CMDQueueConfig):
     (i.e. one at a time). This is a [link=https://gitlab.kitware.com/computer-vision/cmd_queue]cmd_queue[/link] CLI.
     """
     __command__ = 'schedule'
+    __alias__ = ['mlops_schedule']
 
     params = scfg.Value(None, type=str, help='a yaml/json grid/matrix of prediction params')
 

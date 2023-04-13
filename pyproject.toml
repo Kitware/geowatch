@@ -49,6 +49,12 @@ filterwarnings = [
 
 [tool.coverage.run]
 branch = true
+omit = [
+    "watch/stac/_notebook.py",
+    "watch/mlops/_notebook.py",
+    "watch/tasks/fusion/datamodules/_notebook.py",
+    "watch/tasks/fusion/datamodules/temporal_sampling/_notebook.py",
+]
 
 [tool.coverage.report]
 exclude_lines = [

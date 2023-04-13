@@ -23,7 +23,6 @@ import kwcoco
 import ndsampler
 # import numpy as np
 # import watch
-# from watch.utils.util_norm import *
 # import matplotlib.pyplot as plt
 # from tqdm import tqdm
 import torch

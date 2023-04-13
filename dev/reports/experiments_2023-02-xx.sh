@@ -1078,15 +1078,20 @@ python -m watch.mlops.aggregate \
     #--output_dpath="$DVC_EXPT_DPATH"/_split6_toothbrush_meanyear/_aggregate
 
 
+# Eval10 baseline
 DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops.schedule_evaluation --params="
+python -m watch.mlops schedule --params="
     matrix:
         bas_pxl.package_fpath:
             - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2_epoch3_step941.pt
         bas_pxl.test_dataset:
-            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-KR_R001.kwcoco.zip
-            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-KR_R002.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R002.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-BR_R002.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-CH_R001.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-NZ_R001.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R001.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-AE_R001.kwcoco.zip
         bas_pxl.chip_overlap: 0.3
         bas_pxl.chip_dims:
             - auto
@@ -1094,18 +1099,20 @@ python -m watch.mlops.schedule_evaluation --params="
             - auto
         bas_pxl.time_sampling:
             - auto
+            - soft5
+            - soft4
         bas_poly.thresh:
-            #- 0.35
+            - 0.33
             #- 0.38
-            - 0.4
+            #- 0.4
         bas_poly.inner_window_size:
             - 1y
-            #- null
+            - null
         bas_poly.inner_agg_fn:
             - mean
         bas_poly.norm_ord:
             - 1
-            #- inf
+            - inf
         bas_poly.polygon_simplify_tolerance:
             - 1
         bas_poly.agg_fn:
@@ -1114,13 +1121,15 @@ python -m watch.mlops.schedule_evaluation --params="
             - 10GSD
         bas_poly.moving_window_size:
             - null
-            #- 1
+            - 1
         bas_poly.poly_merge_method:
             - 'v2'
+            - 'v1'
         bas_poly.min_area_square_meters:
             - 7200
         bas_poly.max_area_square_meters:
             - 8000000
+        bas_poly.boundary_region: $DVC_DATA_DPATH/annotations/drop6/region_models
         bas_poly_eval.true_site_dpath: $DVC_DATA_DPATH/annotations/drop6/site_models
         bas_poly_eval.true_region_dpath: $DVC_DATA_DPATH/annotations/drop6/region_models
         bas_pxl.enabled: 1
@@ -1129,12 +1138,27 @@ python -m watch.mlops.schedule_evaluation --params="
         bas_poly_eval.enabled: 1
         bas_poly_viz.enabled: 0
     " \
-    --root_dpath="$DVC_EXPT_DPATH/_mlops_output" \
-    --devices="0,1" --tmux_workers=8 \
-    --backend=serial --queue_name "_mlops_output" \
+    --root_dpath="$DVC_EXPT_DPATH/_mlops_eval10_baseline" \
+    --devices="0,1" --tmux_workers=4 \
+    --backend=tmux --queue_name "_mlops_eval10_baseline" \
     --pipeline=bas --skip_existing=1 \
-    --print_commands=1 \
-    --run=0
+    --run=1
+
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+python -m watch.mlops aggregate \
+    --pipeline=bas \
+    --target "
+        - $DVC_EXPT_DPATH/_mlops_eval10_baseline
+    " \
+    --output_dpath="$DVC_EXPT_DPATH/_mlops_eval10_baseline/aggregate" \
+    --resource_report=0 \
+    --stdout_report="
+        top_k: 10
+        per_group: 1
+        macro_analysis: 0
+        analyze: 0
+        reference_region: final
+    "
 
 
 
@@ -1144,15 +1168,15 @@ DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch.mlops.schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
-            #- $HOME/code/watch/dev/reports/split1_all_models.yaml
-            - $HOME/code/watch/dev/reports/split1_shortlist_v2.yaml
+            - $HOME/code/watch/dev/reports/split1_all_models.yaml
+            #- $HOME/code/watch/dev/reports/split1_shortlist_v2.yaml
         bas_pxl.test_dataset:
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-KR_R002.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BR_R002.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-CH_R001.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BR_R002.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-CH_R001.kwcoco.zip
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-NZ_R001.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-KR_R001.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-AE_R001.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-KR_R001.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-AE_R001.kwcoco.zip
         bas_pxl.chip_overlap: 0.3
         bas_pxl.chip_dims:
             - auto
@@ -1190,9 +1214,9 @@ python -m watch.mlops.schedule_evaluation --params="
           bas_poly.resolution:
               - 10GSD
     " \
-    --root_dpath="$DVC_EXPT_DPATH/_namek_split1_eval_filter1_MeanYear10GSD" \
-    --devices="0,1" --tmux_workers=8 \
-    --backend=tmux --queue_name "_namek_split1_eval_filter1_MeanYear10GSD" \
+    --root_dpath="$DVC_EXPT_DPATH/_namek_split1_eval_filter1_MeanYear10GSD-V2" \
+    --devices="0,1" --tmux_workers=4 \
+    --backend=tmux --queue_name "_namek_split1_eval_filter1_MeanYear10GSD-V2" \
     --pipeline=bas --skip_existing=1 \
     --run=1
 
@@ -1201,7 +1225,7 @@ DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
 gwmlops aggregate \
     --pipeline=bas \
     --target \
-        "$DVC_EXPT_DPATH/_namek_split1_eval_filter1_MeanYear10GSD" \
+        "$DVC_EXPT_DPATH/_namek_split1_eval_filter1_MeanYear10GSD-V2" \
     --resource_report=True \
     --stdout_report="
         top_k: 30

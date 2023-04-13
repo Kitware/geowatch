@@ -6,7 +6,7 @@ import ubelt as ub
 import scriptconfig as scfg
 
 
-class CocoCombineFeatures(scfg.Config):
+class CocoCombineFeatures(scfg.DataConfig):
     """
     Combine kwcoco files with different "auxiliary" features into a single
     kwcoco file.
@@ -18,6 +18,8 @@ class CocoCombineFeatures(scfg.Config):
         'src': scfg.Value([], nargs='+', help='path to datasets. The first one will be the "base"', position=1),
 
         'dst': scfg.Value(None, help='dataset to write to'),
+
+        'io_workers': scfg.Value('avail', help='number of workers used to read multiple datasets'),
 
         'absolute': scfg.Value(False, isflag=True, help='if True, use absolute paths'),
     }
@@ -102,12 +104,15 @@ def main(cmdline=True, **kwargs):
     """
     import kwcoco
     config = CocoCombineFeatures(data=kwargs, cmdline=cmdline)
+    import rich
+    rich.print(ub.urepr(config))
 
     fpaths = config['src']
 
+    dset_iter = kwcoco.CocoDataset.coerce_multiple(
+        fpaths, workers=config.io_workers)
     dset_list = []
-    for fpath in ub.ProgIter(fpaths, desc='read src datasets'):
-        dset = kwcoco.CocoDataset.coerce(fpath)
+    for dset in dset_iter:
         if config['absolute']:
             dset.reroot(absolute=True)
         dset_list.append(dset)

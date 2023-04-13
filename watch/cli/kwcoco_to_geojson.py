@@ -1204,10 +1204,10 @@ def main(argv=None, **kwargs):
             f'Unknown Default Track Function: {args.default_track_fn} not in {list(_KNOWN_TRACK_FUNCS.keys())}')
 
     if args.boundary_region is not None:
-        print('Loading boundary regions')
         from watch.geoannots import geomodels
         region_infos = list(util_gis.coerce_geojson_datas(
-            args.boundary_region, format='json', allow_raw=True))
+            args.boundary_region, format='json', allow_raw=True,
+            desc='load boundary regions'))
         import pandas as pd
         region_parts = []
         for info in region_infos:
@@ -1216,12 +1216,16 @@ def main(argv=None, **kwargs):
             region_gdf = region_model.pandas_region()
             region_parts.append(region_gdf)
         boundary_regions_gdf = pd.concat(region_parts).reset_index()
+        video_gdf = coco_video_gdf(coco_dset)
+        video_region_assignments = assign_videos_to_regions(video_gdf, boundary_regions_gdf)
     else:
-        print('No boundary regions specified')
+        import rich
+        if args.site_summary is not None:
+            rich.print('[yellow]Warning: No boundary regions or site summaries specified')
+        else:
+            rich.print('No boundary regions specified')
         boundary_regions_gdf = None
-        # if args.site_summary is None:
-        #     raise ValueError('You must specify a region as a site summary if you ')
-        ...
+        video_region_assignments = None
 
     # add site summaries (site boundary annotations)
     if args.site_summary is not None:
@@ -1243,7 +1247,7 @@ def main(argv=None, **kwargs):
 
     if boundary_regions_gdf is not None:
         print('Cropping to boundary regions')
-        coco_remove_out_of_bound_tracks(coco_dset, boundary_regions_gdf)
+        coco_remove_out_of_bound_tracks(coco_dset, video_region_assignments)
 
     # Measure how long tracking takes
     proc_context.stop()
@@ -1332,14 +1336,10 @@ def main(argv=None, **kwargs):
             json.dump(site_summary_tracking_output, file, indent='    ')
 
 
-def coco_remove_out_of_bound_tracks(coco_dset, boundary_regions_gdf):
-    # Remove any tracks that are outside of region bounds.
-    # First find which regions correspond to which videos.
+def coco_video_gdf(coco_dset):
     import pandas as pd
     from watch.utils import util_gis
-    from shapely.geometry import shape
     from watch.geoannots.geococo_objects import CocoGeoVideo
-    import geopandas as gpd
     crs84 = util_gis.get_crs84()
     crs84_parts = []
     for video in coco_dset.videos().objs:
@@ -1348,34 +1348,75 @@ def coco_remove_out_of_bound_tracks(coco_dset, boundary_regions_gdf):
         crs84_part = utm_part.to_crs(crs84)
         crs84_parts.append(crs84_part)
     video_gdf = pd.concat(crs84_parts).reset_index()
+    return video_gdf
+
+
+def assign_videos_to_regions(video_gdf, boundary_regions_gdf):
+    from watch.utils import util_gis
     idx1_to_idxs2 = util_gis.geopandas_pairwise_overlaps(video_gdf, boundary_regions_gdf)
-    assignments = []
+    video_region_assignments = []
     for idx1, idxs2 in idx1_to_idxs2.items():
-        video_gdf.iloc[idx1]['name']
+        video_row = video_gdf.iloc[idx1]
+        video_name = video_row['name']
+        region_rows = boundary_regions_gdf.iloc[idxs2]
 
         if len(idxs2) == 0:
-            raise AssertionError('no region for video')
+            raise AssertionError(ub.paragraph(
+                f'''
+                The coco video {video_name} has no intersecting candidate
+                boundary regions in the {len(boundary_regions_gdf)} that were
+                searched.
+                '''))
+        elif len(idxs2) > 1:
+            # In the case that there are multiple candidates, use the one with
+            # the highest IOU and emit a warning.
+            isect_area = region_rows.intersection(video_row['geometry']).area
+            union_area = region_rows.union(video_row['geometry']).area
+            iou = isect_area / union_area
+            iou = iou.sort_values(ascending=False)
+            region_rows = region_rows.loc[iou.index]
+            region_name = region_rows.iloc[0]['region_id']
+            region_geom = region_rows.iloc[0]['geometry']
 
-        if len(idxs2) > 1:
-            video_goem = video_gdf.iloc[idx1]['geometry']
-            chosen_id2 = boundary_regions_gdf.iloc[idxs2].geometry.intersection(video_goem).area.idxmax()
-            chosen_idx2 = chosen_id2  # can do this bc of reset index
-            idxs2 = [chosen_idx2]
-            raise NotImplementedError('multiple regions for video, not sure if impl is correct')
-        idx2 = idxs2[0]
-        video_name = video_gdf.iloc[idx1]['name']
-        region_name = boundary_regions_gdf.iloc[idx2]['region_id']
-        region_geom = boundary_regions_gdf.iloc[idx2]['geometry']
-        assignments.append((video_name, region_name, region_geom))
+            import warnings
+            warnings.warn(ub.paragraph(
+                f'''
+                The coco video {video_name} has {len(region_rows)} intersecting
+                candidate boundary regions. Choosing region {region_name} with
+                the highest IOU of {iou.iloc[0]:0.4f}.
+
+                The runner up regions are:
+                {ub.urepr(region_rows.iloc[1:3]['region_id'].tolist(), nl=0)}
+                with ious:
+                {ub.urepr(iou.iloc[1:3].tolist(), precision=4, nl=0)}
+                '''))
+        else:
+            region_name = region_rows.iloc[0]['region_id']
+            region_geom = region_rows.iloc[0]['geometry']
+
+        video_region_assignments.append((video_name, region_name, region_geom))
+    return video_region_assignments
+
+
+def coco_remove_out_of_bound_tracks(coco_dset, video_region_assignments):
+    # Remove any tracks that are outside of region bounds.
+    # First find which regions correspond to which videos.
+    from watch.utils import util_gis
+    from shapely.geometry import shape
+    import rich
+    import geopandas as gpd
+    crs84 = util_gis.get_crs84()
 
     # Actually remove the offending annots
     to_remove_trackids = set()
-    for assign in assignments:
+    all_track_ids = set()
+    for assign in video_region_assignments:
         video_name, region_name, region_geom = assign
         video_id = coco_dset.index.name_to_video[video_name]['id']
         video_imgs = coco_dset.images(video_id=video_id)
         video_aids = list(ub.flatten(video_imgs.annots))
         video_annots = coco_dset.annots(video_aids)
+        all_track_ids.update(video_annots.lookup('track_id'))
         annot_geos = gpd.GeoDataFrame([
             {
                 'annot_id': obj['id'],
@@ -1398,10 +1439,17 @@ def coco_remove_out_of_bound_tracks(coco_dset, boundary_regions_gdf):
         to_remove_aids.extend(list(coco_dset.annots(track_id=tid)))
 
     if to_remove_aids:
-        print(f'Removing {len(to_remove_trackids)} out-of-bounds tracks '
-              f'with {len(to_remove_aids)} annotations')
+        num_remove_tracks = len(to_remove_trackids)
+        num_remove_annots = len(to_remove_aids)
+        num_total_tracks = len(all_track_ids)
+        num_total_annots = coco_dset.n_annots
+        rich.print(ub.paragraph(
+            f'''
+            [yellow]Removing {num_remove_tracks} / {num_total_tracks} out-of-bounds
+            tracks with {num_remove_annots} / {num_total_annots} annotations
+            '''))
     else:
-        print('All annotations are in bounds')
+        rich.print('[green]All annotations are in bounds')
 
     coco_dset.remove_annotations(to_remove_aids)
 

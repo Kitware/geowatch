@@ -257,6 +257,7 @@ def resolve_datamodule(config, method, datamodule_defaults):
     Breakup the sections that handle getting the traintime params, resolving
     the datamodule args, and building the datamodule.
     """
+    import rich
     # init datamodule from args
     datamodule_class = getattr(datamodules, config['datamodule'])
     datamodule_vars = datamodule_class.compatible(config)
@@ -326,7 +327,7 @@ def resolve_datamodule(config, method, datamodule_defaults):
         f_val = traintime_datavars[key]  # fit-time value
         p_val = datamodule_vars[key]  # pred-time value
         if f_val != p_val:
-            print(f'    {key!r}: {f_val!r} -> {p_val!r}')
+            rich.print(f'    {key!r}: {f_val!r} -> {p_val!r}')
 
     HACK_FIX_MODELS_WITH_BAD_CHANNEL_SPEC = True
     if HACK_FIX_MODELS_WITH_BAD_CHANNEL_SPEC:
@@ -600,8 +601,8 @@ def predict(cmdline=False, **kwargs):
     args = make_predict_config(cmdline=cmdline, **kwargs)
     config = args.__dict__.copy()
     datamodule_defaults = args.datamodule_defaults
-    print('kwargs = {}'.format(ub.urepr(kwargs, nl=1)))
-    print('config = {}'.format(ub.urepr(config, nl=2)))
+    # print('kwargs = {}'.format(ub.urepr(kwargs, nl=1)))
+    rich.print('config = {}'.format(ub.urepr(config, nl=2)))
 
     package_fpath = ub.Path(config['package_fpath']).expand()
 

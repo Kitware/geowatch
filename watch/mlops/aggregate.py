@@ -60,7 +60,7 @@ class AggregateEvluationConfig(DataConfig):
     Aggregates results from multiple DAG evaluations.
     """
     __command__ = 'aggregate'
-    __fuzzy_hyphens__ = True
+    __alias__ = ['mlops_aggregate']
 
     target = Value(None, help=ub.paragraph(
         '''

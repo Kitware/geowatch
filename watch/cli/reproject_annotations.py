@@ -155,6 +155,33 @@ def main(cmdline=False, **kwargs):
         HAS_DVC=1 xdoctest -m watch.cli.reproject_annotations main
 
     Example:
+        >>> from watch.cli import reproject_annotations
+        >>> from watch.demo import smart_kwcoco_demodata
+        >>> import ubelt as ub
+        >>> dpath = ub.Path.appdir('watch/tests/reproject/doctest0')
+        >>> dpath.delete()
+        >>> coco_dset, region_dpath, site_dpath = smart_kwcoco_demodata.demo_dataset_with_regions_and_sites(dpath)
+        >>> coco_fpath = coco_dset.fpath
+        >>> cmdline = False
+        >>> output_fpath = dpath / 'test_project_data.kwcoco.json'
+        >>> viz_dpath = (dpath / 'viz').ensuredir()
+        >>> kwargs = {
+        >>>     'src': coco_fpath,
+        >>>     'dst': output_fpath,
+        >>>     'viz_dpath': viz_dpath,
+        >>>     'workers': 4,
+        >>>     'io_workers': 8,
+        >>>     'clear_existing': True,
+        >>>     'site_models': site_dpath,
+        >>>     'region_models': region_dpath,
+        >>> }
+        >>> reproject_annotations.main(cmdline=cmdline, **kwargs)
+        >>> import kwcoco
+        >>> output_dset = kwcoco.CocoDataset(output_fpath)
+        >>> num_tracks_out = len(set(output_dset.annots().lookup('track_id')))
+        >>> assert len(site_dpath.ls()) == num_tracks_out
+
+    Example:
         >>> # xdoctest: +REQUIRES(env:HAS_DVC)
         >>> from watch.cli.reproject_annotations import *  # NOQA
         >>> import watch
@@ -490,9 +517,14 @@ def expand_site_models_with_site_summaries(sites, regions):
         return (c1 == c2) | (c1.isnull() & c2.isnull())
 
     col_to_flags = {}
-    for col in common_columns:
-        error_flags = ~col_na_eq(common1[col], common2[col])
-        col_to_flags[col] = error_flags
+    for colname in common_columns:
+        col1 = common1[colname]
+        col2 = common2[colname]
+        if col1.dtype.kind == 'O':
+            col1 = col1.apply(lambda x: str(x).lower())
+            col2 = col2.apply(lambda x: str(x).lower())
+        error_flags = ~col_na_eq(col1, col2)
+        col_to_flags[colname] = error_flags
 
     col_errors = ub.map_vals(sum, col_to_flags)
     col_errors = {k: v for k, v in col_errors.items() if v}
@@ -655,7 +687,8 @@ def make_pseudo_sitemodels(region_row, sitesummaries):
 
         try:
             poly_json = kwimage.Polygon.from_shapely(geom.convex_hull).to_geojson()
-        except Exception as ex:
+        except Exception as e:
+            ex = e
             print(f'ex={ex}')
             import xdev
             xdev.embed_if_requested()

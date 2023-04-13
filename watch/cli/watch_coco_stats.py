@@ -3,7 +3,7 @@ import scriptconfig as scfg
 import ubelt as ub
 
 
-class WatchCocoStats(scfg.Config):
+class WatchCocoStats(scfg.DataConfig):
     """
     Print watch-relevant information about a kwcoco dataset.
 
@@ -37,6 +37,8 @@ class WatchCocoStats(scfg.Config):
                     special:vidshapes8-msi
                 '''), position=1),
 
+        'io_workers': scfg.Value('avail', help='number of workers used to read multiple datasets'),
+
         'with_video_info': scfg.Value(
             False, isflag=True, help='Show more per-video details')
     }
@@ -47,14 +49,15 @@ class WatchCocoStats(scfg.Config):
         Example:
             >>> from watch.cli import watch_coco_stats
             >>> import watch
-            >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, heatmap=True)
-            >>> kw = dict(src=[dset.fpath])
+            >>> dset1 = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, heatmap=True)
+            >>> dset2 = watch.coerce_kwcoco('vidshapes8')
+            >>> kw = dict(src=[dset1.fpath, dset2.fpath])
             >>> cmdline = 0
             >>> watch_coco_stats.__config__.main(cmdline=cmdline, **kw)
         """
         import pandas as pd
         import rich
-        config = WatchCocoStats(kw, cmdline=cmdline)
+        config = WatchCocoStats.cli(data=kw, cmdline=cmdline, strict=True)
 
         fpaths = config['src']
         rich.print('config = {}'.format(ub.urepr(config, nl=1, sort=0)))
@@ -68,13 +71,16 @@ class WatchCocoStats(scfg.Config):
             fpaths = [fpaths]
 
         # TODO: tabulate stats when possible.
-        import watch
+        import kwcoco
         collatables = []
         video_sensor_rows = []
         all_sensors = set()
-        for fpath in ub.ProgIter(fpaths, verbose=3, desc='Load dataset stats'):
+
+        dset_iter = kwcoco.CocoDataset.coerce_multiple(
+            fpaths, workers=config.io_workers)
+        for dset in dset_iter:
             print('\n--- Single Dataset Stats ---')
-            dset = watch.coerce_kwcoco(fpath)
+            # dset = watch.coerce_kwcoco(fpath)
             print('dset = {!r}'.format(dset))
             stat_info = coco_watch_stats(
                 dset, with_video_info=config['with_video_info'])
@@ -101,7 +107,10 @@ class WatchCocoStats(scfg.Config):
         print('\n--- Multi Dataset Stats --')
 
         import math
-        all_sensors = sorted(all_sensors)
+        try:
+            all_sensors = sorted(all_sensors)
+        except TypeError:
+            ...
         if video_sensor_rows:
             if config['with_video_info']:
                 video_sensor_df = pd.DataFrame(video_sensor_rows)

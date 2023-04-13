@@ -63,6 +63,10 @@ def main(cmdline=True, **kw):
         mod = ub.import_module_from_name('watch.cli.{}'.format(name))
         module_lut[name] = mod
 
+    module_lut['schedule'] = ub.import_module_from_name('watch.mlops.schedule_evaluation')
+    module_lut['manager'] = ub.import_module_from_name('watch.mlops.manager')
+    module_lut['aggregate'] = ub.import_module_from_name('watch.mlops.aggregate')
+
     # Create a list of all submodules with CLI interfaces
     cli_modules = list(module_lut.values())
 
@@ -110,10 +114,11 @@ def main(cmdline=True, **kw):
         cli_rel_modname = cli_modname.split('.')[-1]
 
         cmdname_aliases = ub.oset()
-        alias = getattr(cli_module, '__alias__', [])
+        alias = getattr(cli_subconfig, '__alias__', [])
         if isinstance(alias, str):
             alias = [alias]
         command = getattr(cli_module, '__command__', None)
+        command = getattr(cli_subconfig, '__command__', command)
         if command is not None:
             cmdname_aliases.add(command)
         cmdname_aliases.update(alias)
@@ -122,8 +127,10 @@ def main(cmdline=True, **kw):
         # parserkw = {}
         primary_cmdname = cmdname_aliases[0]
         secondary_cmdnames = cmdname_aliases[1:]
+        if not isinstance(primary_cmdname, str):
+            raise AssertionError(primary_cmdname)
         cli_subconfig.__command__ = primary_cmdname
-        cli_subconfig.__alias__ = secondary_cmdnames
+        cli_subconfig.__alias__ = list(secondary_cmdnames)
         modal.register(cli_subconfig)
 
     ret = modal.run(strict=not WATCH_LOOSE_CLI)

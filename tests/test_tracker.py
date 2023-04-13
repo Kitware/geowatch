@@ -128,30 +128,6 @@ def test_tracker():
     # dpath.delete()
 
 
-def random_inscribed_polygon(bounding_polygon, rng=None):
-    """
-        if 1:
-            import kwplot
-            kwplot.plt.ion()
-            bounding_box.draw(facecolor='blue', alpha=0.8, setlim=1, fill=True, edgecolor='darkblue')
-            utm_poly.draw(facecolor='orange', alpha=0.8, setlim=1, fill=True, edgecolor='darkorange')
-            rando_utm.draw(facecolor='green', alpha=0.8, setlim=1, fill=True, edgecolor='darkgreen')
-            inscribed_utm.draw(facecolor='red', alpha=0.8, setlim=1, fill=True, edgecolor='darkred')
-    """
-    import kwimage
-    # Make a random polygon inscribed in the utm region
-    bounding_box = kwimage.Box(bounding_polygon.bounding_box())
-    rano_01 = kwimage.Polygon.random(tight=1, rng=rng)
-    # Move to the origin, scale to match the box, and then move to the center
-    # of the polygon of interest.
-    rando = rano_01.translate((-.5, -.5)).scale((
-        bounding_box.width, bounding_box.height)).translate(
-            bounding_polygon.centroid)
-    # Take the intersection ito inscribe
-    inscribed = rando.intersection(bounding_polygon)
-    return inscribed
-
-
 def test_tracker_bas_with_boundary_region():
     """
     Runs two variants of the tracker, one with region bounds on and another
@@ -161,6 +137,8 @@ def test_tracker_bas_with_boundary_region():
     CommandLine:
         pytest tests/test_tracker.py -k test_tracker_bas_with_boundary_region -s
     """
+
+    from watch.demo.smart_kwcoco_demodata import random_inscribed_polygon
     import json
     import kwcoco
     import ubelt as ub

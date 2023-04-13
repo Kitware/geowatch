@@ -1,7 +1,6 @@
 """
 Data augmentation utilities
 """
-import kwarray
 import kwimage
 import ubelt as ub
 
@@ -120,7 +119,7 @@ class SpacetimeAugmentMixin:
             do_shift = True
         if do_shift:
             # Spatial augmentation
-            rng = kwarray.ensure_rng(None)
+            rng = self.augment_rng
 
             vidid = target_['video_id']
             video = self.sampler.dset.index.videos[vidid]
