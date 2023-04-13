@@ -182,9 +182,10 @@ Example:
 """
 import ubelt as ub
 import rich
-import cmd_queue
+# import cmd_queue
 import scriptconfig as scfg
 from watch.utils.util_param_grid import expand_param_grid
+from cmd_queue.cli_boilerplate import CMDQueueConfig
 
 try:
     from xdev import profile  # NOQA
@@ -192,7 +193,7 @@ except ImportError:
     from ubelt import identity as profile
 
 
-class ScheduleEvaluationConfig(scfg.DataConfig):
+class ScheduleEvaluationConfig(CMDQueueConfig):
     """
     Driver for WATCH mlops evaluation
 
@@ -200,37 +201,19 @@ class ScheduleEvaluationConfig(scfg.DataConfig):
     """
     params = scfg.Value(None, type=str, help='a yaml/json grid/matrix of prediction params')
 
-    run = scfg.Value(False, help='if False, only prints the commands, otherwise executes them')
-
-    devices = scfg.Value('auto', help=(
+    devices = scfg.Value(None, help=(
         'if using tmux or serial, indicate which gpus are available for use '
         'as a comma separated list: e.g. 0,1'))
-
-    virtualenv_cmd = scfg.Value(None, help=(
-        'command to activate a virtualenv if needed. '
-        '(might have issues with slurm backend)'))
 
     skip_existing = scfg.Value(False, help=(
         'if True dont submit commands where the expected '
         'products already exist'))
 
-    backend = scfg.Value('tmux', help=(
-        'The cmd_queue backend. Can be tmux, slurm, or serial'))
-
-    queue_name = scfg.Value('schedule-eval', help='Name of the queue')
-
     pred_workers = scfg.Value(4, help='number of prediction workers in each process')
-
-    # shuffle_jobs = scfg.Value(True, help='if True, shuffles the jobs so they are submitted in a random order')
-    # annotations_dpath = scfg.Value(None, help='path to IARPA annotations dpath for IARPA eval')
 
     root_dpath = scfg.Value('auto', help=(
         'Where do dump all results. If "auto", uses <expt_dvc_dpath>/dag_runs'))
     pipeline = scfg.Value('joint_bas_sc', help='the name of the pipeline to run')
-
-    check_other_sessions = scfg.Value('auto', help=(
-        'if True, will ask to kill other sessions that might exist'))
-    queue_size = scfg.Value('auto', help='if auto, defaults to number of GPUs')
 
     enable_links = scfg.Value(True, isflag=True, help='if true enable symlink jobs')
     cache = scfg.Value(True, isflag=True, help=(
@@ -239,14 +222,49 @@ class ScheduleEvaluationConfig(scfg.DataConfig):
     draw_heatmaps = scfg.Value(1, isflag=True, help='if true draw heatmaps on eval')
     draw_curves = scfg.Value(1, isflag=True, help='if true draw curves on eval')
 
-    partition = scfg.Value(None, help='specify slurm partition (slurm backend only)')
-    mem = scfg.Value(None, help='specify slurm memory per task (slurm backend only)')
-
     max_configs = scfg.Value(None, help='if specified only run at most this many of the grid search configs')
 
+    queue_size = scfg.Value(None, help='if auto, defaults to number of GPUs')
+
     print_varied = scfg.Value('auto', isflag=True, help='print the varied parameters')
-    print_commands = scfg.Value('auto', isflag=True, help='enable / disable rprint before exec', alias=['rprint'])
-    print_queue = scfg.Value('auto', isflag=True, help='print the cmd queue DAG')
+
+    # shuffle_jobs = scfg.Value(True, help='if True, shuffles the jobs so they are submitted in a random order')
+    # annotations_dpath = scfg.Value(None, help='path to IARPA annotations dpath for IARPA eval')
+    # virtualenv_cmd = scfg.Value(None, help=(
+    #     'command to activate a virtualenv if needed. '
+    #     '(might have issues with slurm backend)'))
+    # backend = scfg.Value('tmux', help=(
+    #     'The cmd_queue backend. Can be tmux, slurm, or serial'))
+    # queue_name = scfg.Value('schedule-eval', help='Name of the queue')
+    # partition = scfg.Value(None, help='specify slurm partition (slurm backend only)')
+    # mem = scfg.Value(None, help='specify slurm memory per task (slurm backend only)')
+    # run = scfg.Value(False, help='if False, only prints the commands, otherwise executes them')
+    # print_commands = scfg.Value('auto', isflag=True, help='enable / disable rprint before exec', alias=['rprint'])
+    # print_queue = scfg.Value('auto', isflag=True, help='print the cmd queue DAG')
+    # check_other_sessions = scfg.Value('auto', help=(
+    #     'if True, will ask to kill other sessions that might exist'), group='deprecated')
+
+    def __post_init__(self):
+        super().__post_init__()
+        if self.queue_name is None:
+            self.queue_name = 'schedule-eval'
+        if self.queue_size is not None:
+            raise Exception('The queue_size argument to schedule evaluation has been removed. Use the tmux_workers argument instead')
+            # self.tmux_workers = self.queue_size
+        from cmd_queue.util.util_yaml import Yaml
+        self.slurm_options = Yaml.coerce(self.slurm_options) or {}
+
+        devices = self.devices
+        print('devices = {!r}'.format(self.devices))
+        if devices == 'auto':
+            GPUS = _auto_gpus()
+        else:
+            GPUS = None if devices is None else ensure_iterable(devices)
+        self.devices = GPUS
+
+        # queue_size = config['queue_size']
+        # if queue_size == 'auto':
+        #     queue_size = len(GPUS)
 
 
 @profile
@@ -255,12 +273,12 @@ def schedule_evaluation(cmdline=False, **kwargs):
     First ensure that models have been copied to the DVC repo in the
     appropriate path. (as noted by model_dpath)
     """
+    config = ScheduleEvaluationConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
     import watch
     from watch.mlops import smart_pipeline
     from watch.utils import util_progress
     import pandas as pd
-    config = ScheduleEvaluationConfig.cli(cmdline=cmdline, data=kwargs)
-    print('ScheduleEvaluationConfig config = {}'.format(ub.urepr(dict(config), nl=1, sv=1)))
+    rich.print('ScheduleEvaluationConfig config = {}'.format(ub.urepr(config, nl=1, sv=1)))
 
     if config['root_dpath'] in {None, 'auto'}:
         expt_dvc_dpath = watch.find_smart_dvc_dpath(tags='phase2_expt', hardware='auto')
@@ -276,30 +294,29 @@ def schedule_evaluation(cmdline=False, **kwargs):
     queue_dpath = root_dpath / '_cmd_queue_schedule'
     queue_dpath.ensuredir()
 
-    devices = config['devices']
-    print('devices = {!r}'.format(devices))
-    if devices == 'auto':
-        GPUS = _auto_gpus()
-    else:
-        GPUS = None if devices is None else ensure_iterable(devices)
-    print('GPUS = {!r}'.format(GPUS))
+    # devices = config['devices']
+    # print('devices = {!r}'.format(devices))
+    # if devices == 'auto':
+    #     GPUS = _auto_gpus()
+    # else:
+    #     GPUS = None if devices is None else ensure_iterable(devices)
+    # print('GPUS = {!r}'.format(GPUS))
+    # queue_size = config['queue_size']
+    # if queue_size == 'auto':
+    #     queue_size = len(GPUS)
 
-    queue_size = config['queue_size']
-    if queue_size == 'auto':
-        queue_size = len(GPUS)
-
-    environ = {}
-    queue = cmd_queue.Queue.create(
-        config['backend'], name=config['queue_name'],
-        size=queue_size, environ=environ,
-        dpath=queue_dpath, gres=GPUS,
-        # account='myaccount',
-        # partition='mypartition',
-    )
-
-    virtualenv_cmd = config['virtualenv_cmd']
-    if virtualenv_cmd:
-        queue.add_header_command(virtualenv_cmd)
+    # environ = {}
+    queue = config.create_queue(gres=config.devices)
+    # queue = cmd_queue.Queue.create(
+    #     config['backend'], name=config['queue_name'],
+    #     size=queue_size, environ=environ,
+    #     dpath=queue_dpath, gres=GPUS,
+    #     # account='myaccount',
+    #     # partition='mypartition',
+    # )
+    # virtualenv_cmd = config['virtualenv_cmd']
+    # if virtualenv_cmd:
+    #     queue.add_header_command(virtualenv_cmd)
 
     # Expand paramater search grid
     if config['params'] is not None:
@@ -340,21 +357,21 @@ def schedule_evaluation(cmdline=False, **kwargs):
     print(f'len(queue)={len(queue)}')
 
     print_thresh = 30
-    if config['print_commands'] == 'auto':
-        if len(queue) < print_thresh:
-            config['print_commands'] = 1
-        else:
-            print(f'More than {print_thresh} jobs, skip queue.print_commands. '
-                  'If you want to see them explicitly specify print_commands=1')
-            config['print_commands'] = 0
+    # if config['print_commands'] == 'auto':
+    #     if len(queue) < print_thresh:
+    #         config['print_commands'] = 1
+    #     else:
+    #         print(f'More than {print_thresh} jobs, skip queue.print_commands. '
+    #               'If you want to see them explicitly specify print_commands=1')
+    #         config['print_commands'] = 0
 
-    if config['print_queue'] == 'auto':
-        if len(queue) < print_thresh:
-            config['print_queue'] = 1
-        else:
-            print(f'More than {print_thresh} jobs, skip queue.print_graph. '
-                  'If you want to see them explicitly specify print_queue=1')
-            config['print_queue'] = 0
+    # if config['print_queue'] == 'auto':
+    #     if len(queue) < print_thresh:
+    #         config['print_queue'] = 1
+    #     else:
+    #         print(f'More than {print_thresh} jobs, skip queue.print_graph. '
+    #               'If you want to see them explicitly specify print_queue=1')
+    #         config['print_queue'] = 0
 
     if config['print_varied'] == 'auto':
         if len(queue) < print_thresh:
@@ -380,31 +397,37 @@ def schedule_evaluation(cmdline=False, **kwargs):
         displayable = relevant.applymap(pandas_preformat)
         rich.print(displayable.to_string())
 
-    if config['print_queue']:
-        queue.print_graph()
+    # if config['print_queue']:
+    #     queue.print_graph()
 
-    if config['print_commands']:
-        queue.print_commands(
-            with_status=0, with_rich=0, with_locks=0,
-            exclude_tags=['boilerplate'])
+    # if config['print_commands']:
+    #     queue.print_commands(
+    #         with_status=0, with_rich=0, with_locks=0,
+    #         exclude_tags=['boilerplate'])
 
     for job in queue.jobs:
         # TODO: should be able to set this as a queue param.
         job.log = False
 
-    # RUN
-    if config['run']:
-        # ub.cmd('bash ' + str(driver_fpath), verbose=3, check=True)
+    if config.run:
         ub.ensuredir(dag.root_dpath)
-        queue.run(
-            block=True,
-            # not in cmd_queue 0.1.2?
-            # check_other_sessions=config['check_other_sessions']
-            with_textual=False,  # needed for backend=tmux
-        )
-    else:
+
+    config.run_queue(queue)
+
+    if not config.run:
         driver_fpath = queue.write()
         print('Wrote script: to run execute:\n{}'.format(driver_fpath))
+
+    # # RUN
+    # if config['run']:
+    #     # ub.cmd('bash ' + str(driver_fpath), verbose=3, check=True)
+    #     queue.run(
+    #         block=True,
+    #         # not in cmd_queue 0.1.2?
+    #         # check_other_sessions=config['check_other_sessions']
+    #         with_textual=False,  # needed for backend=tmux
+    #     )
+    # else:
 
     return dag, queue
 
@@ -414,13 +437,12 @@ def ensure_iterable(inputs):
 
 
 def _auto_gpus():
+    from watch.utils.util_nvidia import nvidia_smi
     # TODO: liberate the needed code from netharn
     # Use all unused devices
-    import netharn as nh
     GPUS = []
-    for gpu_idx, gpu_info in nh.device.gpu_info().items():
-        print('gpu_idx = {!r}'.format(gpu_idx))
-        print('gpu_info = {!r}'.format(gpu_info))
+    gpu_info = nvidia_smi()
+    for gpu_idx, gpu_info in gpu_info.items():
         if len(gpu_info['procs']) == 0:
             GPUS.append(gpu_idx)
     return GPUS

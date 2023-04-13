@@ -8,10 +8,11 @@ class CocoGeoVideo(AliasedDictProxy, ub.NiceRepr):
     TODO: general coco scalars
 
     Example:
+        >>> from watch.geoannots.geococo_objects import *  # NOQA
+        >>> import watch
         >>> coco_dset = watch.coerce_kwcoco('watch-msi', heatmap=True, geodata=True, dates=True)
         >>> video = coco_dset.videos().objs[0]
         >>> self = CocoGeoVideo(video, coco_dset)
-
     """
     __alias_to_primary__ = {}
 

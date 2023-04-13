@@ -209,7 +209,7 @@ python -m watch.mlops.schedule_evaluation --params="
         bas_poly_viz.enabled: 0
     " \
     --root_dpath="$DVC_EXPT_DPATH/_namek_eval" \
-    --devices="0,1" --queue_size=8 --print_commands=0 \
+    --devices="0,1" --tmux_workers=8 --print_commands=0 \
     --backend=tmux --queue_name "bas-namek-evaluation-grid" \
     --pipeline=bas --skip_existing=1 \
     --run=1
@@ -372,7 +372,7 @@ python -m watch.mlops.schedule_evaluation --params="
         bas_poly_viz.enabled: 0
     " \
     --root_dpath="$DVC_EXPT_DPATH/_namek_eval" \
-    --devices="0,1" --queue_size=2 --print_commands=0 \
+    --devices="0,1" --tmux_workers=2 --print_commands=0 \
     --backend=tmux --queue_name "bas-namek-evaluation-grid" \
     --pipeline=bas --skip_existing=1 \
     --run=1
@@ -481,7 +481,7 @@ python -m watch.mlops.schedule_evaluation \
             bas_poly_viz.enabled: 0
     " \
     --root_dpath="$DVC_EXPT_DPATH/_namek_eval" \
-    --devices="0,1" --queue_size=2 \
+    --devices="0,1" --tmux_workers=2 \
     --backend=tmux --queue_name "bas-namek-evaluation-grid" \
     --pipeline=bas --skip_existing=1 \
     --run=1
@@ -523,7 +523,7 @@ python -m watch.mlops.schedule_evaluation \
             bas_poly_viz.enabled: 0
     " \
     --root_dpath="$DVC_EXPT_DPATH/_namek_eval" \
-    --devices="0,1" --queue_size=2 \
+    --devices="0,1" --tmux_workers=2 \
     --backend=tmux --queue_name "bas-namek-evaluation-grid" \
     --pipeline=bas --skip_existing=1 \
     --run=0
@@ -642,7 +642,7 @@ python -m watch.mlops.schedule_evaluation \
 
     " \
     --root_dpath="$DVC_EXPT_DPATH/_timekernel_test_drop4" \
-    --devices="0,1" --queue_size=4 \
+    --devices="0,1" --tmux_workers=4 \
     --backend=tmux --queue_name "_timekernel_test_drop4" \
     --pipeline=bas --skip_existing=1 \
     --print_varied=0  \
@@ -747,7 +747,7 @@ python -m watch.mlops.schedule_evaluation --params="
         bas_poly_viz.enabled: 0
     " \
     --root_dpath="$DVC_EXPT_DPATH/_namek_split1_eval_small" \
-    --devices="0,1" --queue_size=4 \
+    --devices="0,1" --tmux_workers=4 \
     --backend=tmux --queue_name "_namek_split1_eval_small" \
     --pipeline=bas --skip_existing=1 \
     --run=1
@@ -803,7 +803,7 @@ python -m watch.mlops.schedule_evaluation --params="
         bas_poly_viz.enabled: 0
     " \
     --root_dpath="$DVC_EXPT_DPATH/_namek_split1_eval_filter1_MeanYear10GSD" \
-    --devices="0,1" --queue_size=4 \
+    --devices="0,1" --tmux_workers=4 \
     --backend=tmux --queue_name "_namek_split1_eval_filter1_MeanYear10GSD" \
     --pipeline=bas --skip_existing=1 \
     --run=1
@@ -881,7 +881,7 @@ python -m watch.mlops.schedule_evaluation --params="
         bas_poly_viz.enabled: 0
     " \
     --root_dpath="$DVC_EXPT_DPATH/_namek_split2_eval_small" \
-    --devices="0,1" --queue_size=4 \
+    --devices="0,1" --tmux_workers=4 \
     --backend=tmux --queue_name "_namek_split2_eval_small" \
     --pipeline=bas --skip_existing=1 \
     --run=0
@@ -955,7 +955,7 @@ python -m watch.mlops.schedule_evaluation --params="
         bas_poly_viz.enabled: 0
     " \
     --root_dpath="$DVC_EXPT_DPATH/_toothbrush_eval_split6_MeanYear10GSD" \
-    --devices="0," --queue_size=1 \
+    --devices="0," --tmux_workers=1 \
     --backend=serial --queue_name "_toothbrush_eval_split6_MeanYear10GSD" \
     --pipeline=bas --skip_existing=1 \
     --run=1
@@ -1053,7 +1053,7 @@ python -m watch.mlops.schedule_evaluation --params="
         bas_poly_viz.enabled: 0
     " \
     --root_dpath="$DVC_EXPT_DPATH/_split6_toothbrush_meanyear" \
-    --devices="0,1" --queue_size=8 \
+    --devices="0,1" --tmux_workers=8 \
     --backend=tmux --queue_name "_split6_toothbrush_meanyear" \
     --pipeline=bas --skip_existing=1 \
     --run=1
@@ -1130,7 +1130,7 @@ python -m watch.mlops.schedule_evaluation --params="
         bas_poly_viz.enabled: 0
     " \
     --root_dpath="$DVC_EXPT_DPATH/_mlops_output" \
-    --devices="0,1" --queue_size=8 \
+    --devices="0,1" --tmux_workers=8 \
     --backend=serial --queue_name "_mlops_output" \
     --pipeline=bas --skip_existing=1 \
     --print_commands=1 \
@@ -1184,7 +1184,7 @@ python -m watch.mlops.schedule_evaluation --params="
         bas_poly_viz.enabled: 0
     " \
     --root_dpath="$DVC_EXPT_DPATH/_namek_split1_eval_filter1_MeanYear10GSD" \
-    --devices="0,1" --queue_size=8 \
+    --devices="0,1" --tmux_workers=8 \
     --backend=tmux --queue_name "_namek_split1_eval_filter1_MeanYear10GSD" \
     --pipeline=bas --skip_existing=1 \
-    --run=1
+    --run=0
