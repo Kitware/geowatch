@@ -883,10 +883,10 @@ def coerce_geojson_paths(data, return_manifests=False):
         >>> # Setup a bunch of geojson files
         >>> outdir = ub.Path.appdir("watch/tests/gis/coerce_geojson")
         >>> info1 = generate_demodata.generate_demo_metrics_framework_data(roi='DR_R001', outdir=outdir)
-        >>> #info2 = generate_demodata.generate_demo_metrics_framework_data(roi='DR_R002', outdir=outdir)
-        >>> #info3 = generate_demodata.generate_demo_metrics_framework_data(roi='DR_R003', outdir=outdir)
-        >>> #info4 = generate_demodata.generate_demo_metrics_framework_data(roi='DR_R012', outdir=outdir)
-        >>> #info5 = generate_demodata.generate_demo_metrics_framework_data(roi='DR_R022', outdir=outdir)
+        >>> info2 = generate_demodata.generate_demo_metrics_framework_data(roi='DR_R002', outdir=outdir)
+        >>> info3 = generate_demodata.generate_demo_metrics_framework_data(roi='DR_R003', outdir=outdir)
+        >>> info4 = generate_demodata.generate_demo_metrics_framework_data(roi='DR_R012', outdir=outdir)
+        >>> info5 = generate_demodata.generate_demo_metrics_framework_data(roi='DR_R022', outdir=outdir)
         >>> region_fpaths = sorted(info1['true_region_dpath'].glob('*.geojson'))
         >>> site_fpaths = sorted(info1['true_site_dpath'].glob('*.geojson'))
         >>> manifest_fpath1 =  info1['output_dpath'] / 'demo_manifest1.json'

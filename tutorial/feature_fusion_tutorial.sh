@@ -8,8 +8,8 @@ This tutorial assumes you have:
 
     1. Setup the project DVC repo
 
-    2. Have registered the location of your DVC repo with smartwatch_dvc.  
-    
+    2. Have registered the location of your DVC repo with smartwatch_dvc.
+
     4. Have pulled the appropriate dataset (in this case Drop4)
        and have unzipped the annotations.
 
@@ -56,7 +56,7 @@ Your predict command must specify:
 
     4. any other CLI parameters to configure details of feature prediction.
 
-You will have to specify the exact details for your features, but as an example we 
+You will have to specify the exact details for your features, but as an example we
 provide a script that will work to predict invariant features if your machine has
 enough resources (you need over 100GB of RAM as of 2022-12-21; we would like to fix
 this in the future).
@@ -195,7 +195,7 @@ smartwatch model_stats "$PRETRAINED_STATE"
 __doc_channel_conf__='
 When training a fusion model, you must specify a channel configuration.
 By default we recommend imputing your features as a separate "stream" in
-addition to the original six raw bands. 
+addition to the original six raw bands.
 
 Remember, early fused channels are separated with a pipe (|) and late fused
 channel groups are separated with a comma.  This means in the sensorchan
@@ -204,7 +204,7 @@ configuration, separate your channels from the raw channels with a comma.  E.g.
     blue|green|red|nir|swir16|swir22,invariants.0:17
 
 
-By default each channel assumes it exists in each sensor. You can specify 
+By default each channel assumes it exists in each sensor. You can specify
 which channels belong to what sensors by prefixing a group. For instance:
 
     (S2,L8):(blue|green|red|nir|swir16|swir22),(S2):(invariants.0:17)
@@ -219,7 +219,7 @@ as a baseline.
 
 CHANNELS="(S2,L8):(blue|green|red|nir|swir16|swir22),(S2,L8):(invariants.0:17)"
 
-# We recommend this training directory layout to differentiate 
+# We recommend this training directory layout to differentiate
 # training runs on different machines / from different people.
 WORKDIR=$EXPT_DVC_DPATH/training/$HOSTNAME/$USER
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
@@ -235,13 +235,13 @@ python -m watch.tasks.fusion fit --config "
         time_steps              : 5
         chip_dims               : '224,224'
         batch_size              : 2
-        window_space_scale      : 10GSD 
+        window_space_scale      : 10GSD
         input_space_scale       : 10GSD
-        output_space_scale      : 10GSD 
+        output_space_scale      : 10GSD
         dist_weights            : false
         neg_to_pos_ratio        : 0.1
         time_sampling           : soft2-contiguous-hardish3
-        time_span               : '3m-6m-1y' 
+        time_span               : '3m-6m-1y'
         use_centered_positives  : true
         normalize_inputs        : 128
         temporal_dropout        : 0.5
@@ -251,17 +251,16 @@ python -m watch.tasks.fusion fit --config "
         class_path: MultimodalTransformer
         init_args:
             name                   : $EXPERIMENT_NAME
-            arch_name              : smt_it_stm_p8 
+            arch_name              : smt_it_stm_p8
             tokenizer              : linconv
             decoder                : mlp
             stream_channels        : 16
-            stream_channels        : 16
-            saliency_weights       : 1:70 
+            saliency_weights       : 1:70
             class_loss             : focal
             saliency_loss          : focal
-            global_change_weight   : 0.00 
-            global_class_weight    : 0.00 
-            global_saliency_weight : 1.00 
+            global_change_weight   : 0.00
+            global_class_weight    : 0.00
+            global_saliency_weight : 1.00
     lr_scheduler:
       class_path: torch.optim.lr_scheduler.OneCycleLR
       init_args:
@@ -280,10 +279,10 @@ python -m watch.tasks.fusion fit --config "
     trainer:
       accumulate_grad_batches: 8
       default_root_dir     : $DEFAULT_ROOT_DIR
-      accelerator          : gpu 
+      accelerator          : gpu
       devices              : 0,
       #devices             : 0,1
-      #strategy            : ddp 
+      #strategy            : ddp
       check_val_every_n_epoch: 1
       enable_checkpointing: true
       enable_model_summary: true
@@ -339,7 +338,7 @@ smartwatch model_stats "$BASELINE_PACKAGE_FPATH"
 # The schedule evaluation script originally ran on a single coco file that
 # contains all of the validation regions. A more stable way to run the system
 # involves splitting the larger validation dataset into a single kwcoco file
-# per region, and then running it on all regions separately. 
+# per region, and then running it on all regions separately.
 python -m watch.cli.split_videos "$DATA_DVC_DPATH"/Drop4-BAS/data_vali_invariants.kwcoco.json
 
 python -m watch.mlops.schedule_evaluation \
