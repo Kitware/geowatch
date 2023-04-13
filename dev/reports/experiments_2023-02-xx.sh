@@ -1177,7 +1177,7 @@ python -m watch.mlops.schedule_evaluation --params="
         bas_poly.boundary_region: $DVC_DATA_DPATH/annotations/drop6/region_models
         bas_poly_eval.true_site_dpath: $DVC_DATA_DPATH/annotations/drop6/site_models
         bas_poly_eval.true_region_dpath: $DVC_DATA_DPATH/annotations/drop6/region_models
-        bas_pxl.enabled: 0
+        bas_pxl.enabled: 1
         bas_pxl_eval.enabled: 1
         bas_poly.enabled: 1
         bas_poly_eval.enabled: 1
@@ -1187,4 +1187,4 @@ python -m watch.mlops.schedule_evaluation --params="
     --devices="0,1" --tmux_workers=8 \
     --backend=tmux --queue_name "_namek_split1_eval_filter1_MeanYear10GSD" \
     --pipeline=bas --skip_existing=1 \
-    --run=0
+    --run=1
