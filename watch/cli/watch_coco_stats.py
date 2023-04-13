@@ -76,8 +76,8 @@ class WatchCocoStats(scfg.DataConfig):
         video_sensor_rows = []
         all_sensors = set()
 
-        dset_iter = kwcoco.CocoDataset.coerce_multiple(fpaths, workers=config.io_workers)
-
+        dset_iter = kwcoco.CocoDataset.coerce_multiple(
+            fpaths, workers=config.io_workers)
         for dset in dset_iter:
             print('\n--- Single Dataset Stats ---')
             # dset = watch.coerce_kwcoco(fpath)

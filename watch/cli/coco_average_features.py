@@ -39,7 +39,7 @@ class CocoAverageFeaturesConfig(scfg.DataConfig):
                               help=ub.paragraph('''
             Name of the channel in kwcoco files to merge.
             '''),
-                              nargs='+')
+                              nargs='+', alias='channels')
     weights = scfg.Value(None,
                          type=float,
                          help=ub.paragraph('''
@@ -72,6 +72,9 @@ class CocoAverageFeaturesConfig(scfg.DataConfig):
             Set the resolution that the features will be loaded at
             and then merged.
             '''))
+
+    io_workers = scfg.Value(
+        'avail', help='number of workers used to read multiple datasets')
 
 
 def split_channel_names_by_grammar(channel_names):
@@ -159,7 +162,8 @@ def merge_kwcoco_channels(kwcoco_file_paths,
                           output_channel_names,
                           sensor_names=None,
                           resolution=None,
-                          flexible_merge=False):
+                          flexible_merge=False,
+                          io_workers='avail'):
     """
     Compute a weighted mean of channels from separate kwcoco file and save into
     merged kwcoco file.
@@ -406,7 +410,9 @@ def merge_kwcoco_channels(kwcoco_file_paths,
 
     # Load and merge images from kwcoco files.
     ## Load kwcoco files.
-    kwcoco_files = [kwcoco.CocoDataset.coerce(p) for p in kwcoco_file_paths]
+    # kwcoco_files = [kwcoco.CocoDataset.coerce(p) for p in kwcoco_file_paths]
+    kwcoco_files = list(kwcoco.CocoDataset.coerce_multiple(
+        kwcoco_file_paths, workers=io_workers))
 
     ## Check kwcoco files to see that they exist and contain the required channels.
     all_available_image_names, all_missing_image_names = [], []
@@ -593,20 +599,60 @@ def main(cmdline=True, **kw):
     See :class:``CocoAverageFeaturesConfig` for details
 
     TODO: Add examples
+
+    Example:
+        >>> from watch.cli.coco_average_features import *  # NOQA
+        >>> import watch
+        >>> import kwimage
+        >>> import numpy as np
+        >>> from kwcoco.demo.perterb import perterb_coco
+        >>> import kwcoco
+        >>> dpath = ub.Path.appdir('watch/test/coco_average_features_main')
+        >>> base_dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, image_size=(64, 64), num_videos=2, num_frames=2)
+        >>> # Construct two copies of the same data with slightly different heatmaps
+        >>> dset1 = perterb_coco(base_dset.copy(), box_noise=0.5, cls_noise=0.5, n_fp=10, n_fn=10, rng=32)
+        >>> dset2 = base_dset.copy()
+        >>> for video in dset1.dataset['videos']:
+        ...      video['resolution'] = '10GSD'
+        >>> for video in dset2.dataset['videos']:
+        ...      video['resolution'] = '10GSD'
+        >>> dset1.fpath = ub.Path(dset1.fpath).augment(stemsuffix='_heatmap1')
+        >>> dset2.fpath = ub.Path(dset2.fpath).augment(stemsuffix='_heatmap2')
+        >>> watch.demo.smart_kwcoco_demodata.hack_in_heatmaps(dset1, heatmap_dname='dummy_heatmap1', with_nan=0, rng=423432)
+        >>> watch.demo.smart_kwcoco_demodata.hack_in_heatmaps(dset2, heatmap_dname='dummy_heatmap2', with_nan=0, rng=132129)
+        >>> dset1.dump(dset1.fpath)
+        >>> dset2.dump(dset2.fpath)
+        >>> output_kwcoco_path = dpath / 'output.kwcoco.zip'
+        >>> # Execute merge
+        >>> kwargs = {
+        >>>     'kwcoco_file_paths': [dset1.fpath, dset2.fpath],
+        >>>     'output_kwcoco_path': output_kwcoco_path,
+        >>>     'channels': ['notsalient|salient'],
+        >>>     'resolution': 30,
+        >>> }
+        >>> cmdline = 0
+        >>> main(cmdline=cmdline, **kwargs)
+        >>> output_dset = kwcoco.CocoDataset(output_kwcoco_path)
+        >>> coco_img = output_dset.images().coco_images[0]
+        >>> import numpy as np
+        >>> assert not np.all(np.isnan(coco_img.imdelay('salient').finalize()))
     """
-    config = CocoAverageFeaturesConfig.cli(default=kw, cmdline=cmdline, strict=True)
-    config_dict = config.to_dict()
+    config = CocoAverageFeaturesConfig.cli(
+        data=kw, cmdline=cmdline, strict=True)
+    import rich
+    rich.print(ub.urepr(config))
 
     # Merge kwcoco files along certain channels.
     merge_kwcoco_channels(
-        config_dict['kwcoco_file_paths'],
-        config_dict['output_kwcoco_path'],
-        config_dict['channel_name'],
-        config_dict['weights'],
-        config_dict['output_channel_names'],
-        sensor_names=config_dict['sensors'],
-        resolution=config_dict['resolution'],
-        flexible_merge=config_dict['flexible_merge'],
+        config['kwcoco_file_paths'],
+        config['output_kwcoco_path'],
+        config['channel_name'],
+        config['weights'],
+        config['output_channel_names'],
+        sensor_names=config['sensors'],
+        resolution=config['resolution'],
+        flexible_merge=config['flexible_merge'],
+        io_workers=config.io_workers,
     )
 
 

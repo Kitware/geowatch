@@ -20,7 +20,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * CI updated to `pyenv:3.11`
 * Cleanup `util_yaml`.
 * Lots of CLI improvements.
-* Faster loading of multiple kwcoco files in smartwatch stats.
+* Faster loading of multiple kwcoco files in smartwatch stats, ensemble, combine.
 
 ### Fixed
 
