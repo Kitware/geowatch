@@ -102,6 +102,7 @@ def main(cmdline=True, **kwargs):
         >>>     'pipeline': 'bas',
         >>>     'io_workers': 10,
         >>> }
+
         config = AggregateEvluationConfig.cli(cmdline=cmdline, data=kwargs)
         agg_dpath = ub.Path(config['root_dpath']) / 'aggregate'
         from watch.mlops.aggregate_loader import build_tables
@@ -115,8 +116,9 @@ def main(cmdline=True, **kwargs):
         >>> main(cmdline=cmdline, **kwargs)
     """
 
-    config = AggregateEvluationConfig.cli(cmdline=cmdline, data=kwargs)
-    print('config = {}'.format(ub.urepr(dict(config), nl=1)))
+    config = AggregateEvluationConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
+    import rich
+    rich.print('config = {}'.format(ub.urepr(config, nl=1)))
 
     eval_type_to_aggregator = coerce_aggregators(config)
 
@@ -919,7 +921,7 @@ class AggregatorAnalysisMixin:
         # analysis.results
         analysis.analysis()
 
-    def report_best(agg, top_k=3, shorten=True, per_group=2, verbose=1, reference_region=None):
+    def report_best(agg, top_k=3, shorten=True, per_group=2, verbose=1, reference_region=None, print_models=False):
         """
         Report the top k pointwise results for each region / macro-region.
 
@@ -951,7 +953,6 @@ class AggregatorAnalysisMixin:
         import rich
         import pandas as pd
         from watch.utils import util_pandas
-        import numpy as np
         region_id_to_summary = {}
         big_param_lut = {}
         region_id_to_ntotal = {}
@@ -967,7 +968,7 @@ class AggregatorAnalysisMixin:
             metric_group = group[group.columns.intersection(agg.metrics.columns)]
             metric_group = metric_group.sort_values(agg.primary_metric_cols)
             top_idxs = util_pandas.pandas_argmaxima(metric_group, agg.primary_metric_cols, k=top_k)
-            param_hashids = group.iloc[top_idxs]['param_hashid']
+            param_hashids = group.loc[top_idxs]['param_hashid']
             _agg = agg.filterto(param_hashids=param_hashids)
             if region_id in agg.macro_key_to_regions:
                 rois = agg.macro_key_to_regions[region_id]
@@ -1044,8 +1045,7 @@ class AggregatorAnalysisMixin:
                     rich.print(summary_table.iloc[::-1].to_string())
                     rich.print('')
 
-        PRINT_MODELS = verbose
-        if PRINT_MODELS and 0:
+        if print_models:
             # FIXME: handle macro regions
             tocombine_indexes = []
             for region_id, summary in region_id_to_summary.items():
@@ -1059,45 +1059,45 @@ class AggregatorAnalysisMixin:
             table.loc[top_indexes, 'rank'] = list(range(len(top_indexes)))
             table = table.sort_values('rank')
 
+            model_col = agg.model_cols[0]
+
             chosen_indexes = []
             if 0:
                 for expt, group in table.groupby('resolved_params.bas_pxl_fit.name'):
-                    group['params.bas_pxl.package_fpath'].tolist()
+                    group[model_col].tolist()
                     group = group.sort_values('rank')
                     chosen_indexes.extend(group.index[0:2])
                 chosen_indexes = table.loc[chosen_indexes, 'rank'].sort_values().index
             else:
-                table['_hackname'] = [ub.Path(p).parent.name for p in table['params.bas_pxl.package_fpath'].tolist()]
+                table['_hackname'] = [ub.Path(p).parent.name for p in table[model_col].tolist()]
                 for expt, group in table.groupby('_hackname'):
-                    # group['params.bas_pxl.package_fpath'].tolist()
+                    # group[model_col].tolist()
                     flags = (group[_agg.primary_metric_cols] > 0).any(axis=1)
                     group = group[flags]
                     group = group.sort_values('rank')
                     chosen_indexes.extend(group.index[0:per_group])
                 chosen_indexes = table.loc[chosen_indexes, 'rank'].sort_values().index
 
-            all_models_fpath = ub.Path('$HOME/code/watch/dev/reports/split1_all_models.yaml').expand()
-            from watch.utils.util_yaml import Yaml
-            known_models = Yaml.coerce(all_models_fpath)
-
             top_k = 40
             chosen_indexes = chosen_indexes[:top_k]
 
             chosen_table = table.loc[chosen_indexes]
 
-            # Need to remove invariants for now
-            flags = ~np.array(['invariants' in chan for chan in chosen_table['resolved_params.bas_pxl_fit.channels']])
-            chosen_table = chosen_table[flags]
+            # # Need to remove invariants for now
+            # flags = ~np.array(['invariants' in chan for chan in chosen_table['resolved_params.bas_pxl_fit.channels']])
+            # chosen_table = chosen_table[flags]
 
-            chosen_models = chosen_table['params.bas_pxl.package_fpath'].tolist()
-            set(known_models).issuperset(set(chosen_models))
-
+            from watch.utils.util_yaml import Yaml
+            chosen_models = chosen_table[model_col].tolist()
             shortlist_text = Yaml.dumps(chosen_models)
             print(shortlist_text)
 
-            if 0:
-                new_models_fpath = ub.Path('$HOME/code/watch/dev/reports/unnamed_shortlist.yaml').expand()
-                new_models_fpath.write_text(shortlist_text)
+            # all_models_fpath = ub.Path('$HOME/code/watch/dev/reports/split1_all_models.yaml').expand()
+            # known_models = Yaml.coerce(all_models_fpath)
+            # set(known_models).issuperset(set(chosen_models))
+            # if 0:
+            #     new_models_fpath = ub.Path('$HOME/code/watch/dev/reports/unnamed_shortlist.yaml').expand()
+            # new_models_fpath.write_text(shortlist_text)
 
         return region_id_to_summary, top_param_lut
 
@@ -1442,6 +1442,8 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             else:
                 from watch.utils.util_yaml import Yaml
                 regions_of_interest = Yaml.coerce(rois)
+                if isinstance(regions_of_interest, str):
+                    regions_of_interest = [regions_of_interest]
         else:
             regions_of_interest = rois
         return regions_of_interest

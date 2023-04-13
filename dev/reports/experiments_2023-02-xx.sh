@@ -1191,13 +1191,12 @@ python -m watch.mlops.schedule_evaluation --params="
 
 
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m geowatch.mlops aggregate \
+gwmlops aggregate \
     --pipeline=bas \
     --stdout_report=True \
     --target \
         "$DVC_EXPT_DPATH/_namek_split1_eval_filter1_MeanYear10GSD" \
     --resource_report=True \
-    --rois=KR_R002 \
     --stdout_report="
         top_k: 3
         per_group: 1
@@ -1205,3 +1204,29 @@ python -m geowatch.mlops aggregate \
         analyze: 0
         reference_region: final
     "
+    #--rois=KR_R002 \
+
+python -c "if 1:
+
+from watch.mlops.aggregate import *  # NOQA
+import watch
+data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+cmdline = 0
+kwargs = {
+    'target': [expt_dvc_dpath / '_namek_split1_eval_filter1_MeanYear10GSD'],
+    'pipeline': 'bas',
+    'io_workers': 10,
+}
+config = AggregateEvluationConfig.cli(cmdline=cmdline, data=kwargs)
+eval_type_to_aggregator = coerce_aggregators(config)
+
+reference_region = 'KR_R002'
+
+agg.build_macro_tables(['KR_R002'])
+_ = agg.report_best()
+
+agg = eval_type_to_aggregator['bas_pxl_eval']
+
+
+"
