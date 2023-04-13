@@ -1078,7 +1078,7 @@ python -m watch.mlops.aggregate \
     #--output_dpath="$DVC_EXPT_DPATH"/_split6_toothbrush_meanyear/_aggregate
 
 
-# Eval 10 baseline
+# Eval10 baseline
 DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch.mlops schedule --params="
@@ -1148,7 +1148,7 @@ python -m watch.mlops aggregate \
         - $DVC_EXPT_DPATH/_mlops_eval10_baseline
     " \
     --output_dpath="$DVC_EXPT_DPATH/_mlops_eval10_baseline/aggregate" \
-    --resource_report=True \
+    --resource_report=0 \
     --stdout_report="
         top_k: 10
         per_group: 1

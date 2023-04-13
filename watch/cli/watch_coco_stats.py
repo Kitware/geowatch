@@ -51,7 +51,7 @@ class WatchCocoStats(scfg.DataConfig):
             >>> import watch
             >>> dset1 = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, heatmap=True)
             >>> dset2 = watch.coerce_kwcoco('vidshapes8')
-            >>> kw = dict(src=[dset.fpath, dset2.fpath])
+            >>> kw = dict(src=[dset1.fpath, dset2.fpath])
             >>> cmdline = 0
             >>> watch_coco_stats.__config__.main(cmdline=cmdline, **kw)
         """

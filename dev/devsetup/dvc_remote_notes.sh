@@ -10,13 +10,24 @@ dvc pull -R . -r toothbrush
 dvc pull -R . -r namek
 
 
+
+### Data Remotes
+
 dvc remote add --local horologic ssh://horologic.kitware.com/data/dvc-caches/smart_watch_dvc
 
 dvc remote add --local namek ssh://namek/media/joncrall/raid/home/joncrall/data/dvc-repos/smart_watch_dvc/.dvc/cache
-dvc remote add --local toothbrush ssh://toothbrush/data/joncrall/dvc-repos/smart_watch_dvc-hdd/.dvc/cache
+dvc remote add --local toothbrush ssh://toothbrush/data/joncrall/dvc-repos/smart_data_dvc-hdd/.dvc/cache
 
-dvc remote add --local ooo ssh://ooo/media/joncrall/raid/dvc-repos/smart_watch_dvc/.dvc/cache
-dvc remote add --local ooo_flash ssh://ooo/flash/smart_data_dvc/.dvc/cache
+dvc remote add --local ooo ssh://ooo/data/joncrall/dvc-repos/smart_data_dvc/.dvc/cache -f
+dvc remote add --local ooo_flash ssh://ooo/flash/smart_data_dvc/.dvc/cache -f
+
+
+
+
+
+
+
+### Expt Remotes
 
 dvc remote add --local toothbrush ssh://toothbrush/data/joncrall/dvc-repos/smart_expt_dvc/.dvc/cache
 

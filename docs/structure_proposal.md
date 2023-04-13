@@ -44,7 +44,6 @@
     │   ├── swin.py
     │   └── ... 
     ├── utils                                       # generic re-usable utilities
-    │   ├── util_norm.py            
     │   ├── util_raster.py      
     │   ├── util_girder.py         
     │   ├── util_visualization.py    
