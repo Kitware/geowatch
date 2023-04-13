@@ -1060,10 +1060,23 @@ def _gids_polys(
     # image_years = [d.year for d in image_dates]
 
     key = '|'.join(key)
-    imgs = sub_dset.images(gids).coco_images
-    _heatmaps = np.stack([i.imdelay(channels=key, space='video', resolution=resolution).finalize() for i in imgs], axis=0)
+    coco_images = sub_dset.images(gids).coco_images
+
+    load_workers = 0  # TODO: configure
+    load_jobs = ub.JobPool(mode='process', max_workers=load_workers)
+
+    for coco_img in coco_images:
+        delayed = coco_img.imdelay(channels=key, space='video', resolution=resolution)
+        load_jobs.submit(delayed.finalize)
+
+    _heatmaps = []
+    for job in ub.ProgIter(load_jobs.jobs, desc='collect load jobs'):
+        _heatmap = job.result()
+        _heatmaps.append(_heatmap)
+
+    _heatmaps = np.stack(_heatmaps, axis=0)
     _heatmaps = _heatmaps.sum(axis=-1)  # sum over channels
-    missing_ix = np.invert([key in i.channels for i in imgs])
+    missing_ix = np.invert([key in i.channels for i in coco_images])
     # TODO this was actually broken in orig, so turning it off here for now
     interpolate = 0
     if interpolate:
@@ -1119,7 +1132,7 @@ def _gids_polys(
                 yield (track['gid'], kwimage.MultiPolygon.from_shapely(poly))
 
     # no benefit so far
-    exc = ub.Executor('serial', max_workers=8)
+    exc = ub.Executor('serial', max_workers=0)
     jobs = []
     for _, track in boundary_tracks:
         jobs.append(exc.submit(_process, track))
@@ -1335,7 +1348,6 @@ class TimeAggregatedBAS(NewTrackFunction):
         _resolve_arg_values(self)
 
     def create_tracks(self, sub_dset):
-
         aggkw = ub.compatible(self.__dict__, time_aggregated_polys)
         tracks = time_aggregated_polys(sub_dset, **aggkw)
         return tracks
