@@ -96,7 +96,7 @@ def _is_running_a_fast_cli_tool():
         return True
     if sys.argv and sys.argv == ['-m']:
         return True
-    if sys.argv and '--help' in sys.argv:
+    if sys.argv and ('--help' in sys.argv or '-h' in sys.argv):
         return True
     return False
 

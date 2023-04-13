@@ -181,10 +181,8 @@ Example:
     xdev tree --dirblocklist "_*" my_expt_dir/_testpipe/ --max_files=1
 """
 import ubelt as ub
-import rich
 # import cmd_queue
 import scriptconfig as scfg
-from watch.utils.util_param_grid import expand_param_grid
 from cmd_queue.cli_boilerplate import CMDQueueConfig
 
 try:
@@ -195,10 +193,13 @@ except ImportError:
 
 class ScheduleEvaluationConfig(CMDQueueConfig):
     """
-    Driver for WATCH mlops evaluation
+    Driver for WATCH mlops evaluation scheduling
 
-    Builds commands and optionally executes them.
+    Builds commands and optionally executes them via slurm, tmux, or serial
+    (i.e. one at a time). This is a [link=https://gitlab.kitware.com/computer-vision/cmd_queue]cmd_queue[/link] CLI.
     """
+    __command__ = 'schedule'
+
     params = scfg.Value(None, type=str, help='a yaml/json grid/matrix of prediction params')
 
     devices = scfg.Value(None, help=(
@@ -274,11 +275,13 @@ def schedule_evaluation(cmdline=False, **kwargs):
     appropriate path. (as noted by model_dpath)
     """
     config = ScheduleEvaluationConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
+    import rich
+    rich.print('ScheduleEvaluationConfig config = {}'.format(ub.urepr(config, nl=1, sv=1)))
     import watch
     from watch.mlops import smart_pipeline
     from watch.utils import util_progress
     import pandas as pd
-    rich.print('ScheduleEvaluationConfig config = {}'.format(ub.urepr(config, nl=1, sv=1)))
+    from watch.utils.util_param_grid import expand_param_grid
 
     if config['root_dpath'] in {None, 'auto'}:
         expt_dvc_dpath = watch.find_smart_dvc_dpath(tags='phase2_expt', hardware='auto')
@@ -490,6 +493,10 @@ Ignore:
     parser.save(args)
 
 """
+
+
+__config__ = ScheduleEvaluationConfig
+__config__.main = schedule_evaluation
 
 # profile.add_module()
 

@@ -46,7 +46,6 @@ def main(cmdline=True, **kw):
         'watch.cli.reproject_annotations': ['reproject', 'project'],
         'watch.cli.coco_add_watch_fields': ['add_fields'],
         'watch.cli.coco_spectra': ['spectra', 'intensity_histograms'],
-        # 'watch.cli.mlops_cli': ['mlops'],
         'watch.cli.run_metrics_framework': ['iarpa_eval'],
         'watch.cli.coco_clean_geotiffs': ['clean_geotiffs'],
         'watch.cli.kwcoco_to_geojson': ['run_tracker'],
@@ -56,6 +55,7 @@ def main(cmdline=True, **kw):
         'watch.cli.coco_time_combine': ['time_combine'],
         'watch.cli.crop_sites_to_regions': ['crop_sitemodels'],
         'watch.cli.coco_remove_bad_images': ['remove_bad_images'],
+        'watch.cli.mlops_cli': ['mlops'],
     }
 
     module_lut = {}
@@ -90,8 +90,10 @@ def main(cmdline=True, **kw):
     for cli_module in cli_modules:
 
         cli_subconfig = None
-        assert hasattr(cli_module, '__config__'), (
-            'We are only supporting scriptconfig CLIs')
+        if not hasattr(cli_module, '__config__'):
+            if hasattr(cli_module, 'modal'):
+                continue
+            raise AssertionError('We are only supporting scriptconfig CLIs')
         # scriptconfig cli pattern
         cli_subconfig = cli_module.__config__
 

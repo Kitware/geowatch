@@ -25,9 +25,10 @@ class WatchCocoStats(scfg.Config):
     SeeAlso:
         kwcoco stats
     """
+    __command__ = 'stats'
     __default__ = {
         'src': scfg.Value(
-            ['special:shapes8'], nargs='+', help=ub.paragraph(
+            None, nargs='+', help=ub.paragraph(
                 '''
                 one or more datasets coercables, i.e. a path, live dataset, or
                 demodata code. Example demo codes are:
@@ -56,7 +57,10 @@ class WatchCocoStats(scfg.Config):
         config = WatchCocoStats(kw, cmdline=cmdline)
 
         fpaths = config['src']
-        rich.print('config = {}'.format(ub.urepr(dict(config), nl=1, sort=0)))
+        rich.print('config = {}'.format(ub.urepr(config, nl=1, sort=0)))
+
+        if fpaths is None or len(fpaths) == 0:
+            raise ValueError('no files to compute stats on')
 
         if isinstance(fpaths, str):
             if ',' in fpaths:

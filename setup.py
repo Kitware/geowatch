@@ -244,6 +244,7 @@ if __name__ == '__main__':
                 'smartwatch_dvc= watch.cli.find_dvc:_CLI.main',
                 'geowatch= watch.cli.__main__:main',
                 'geowatch_dvc= watch.cli.find_dvc:_CLI.main',
+                'gwmlops= watch.mlops.__main__:main',
                 # 'smartwatch_dvc= watch.cli.find_dvc:__config__.main',
             ],
         },
