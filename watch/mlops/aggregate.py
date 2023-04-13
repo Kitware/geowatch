@@ -1439,6 +1439,9 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         if isinstance(rois, str):
             if rois == 'max' or rois == 'auto':
                 regions_of_interest = ub.argmax(agg.macro_compatible, key=len)
+            else:
+                from watch.utils.util_yaml import Yaml
+                regions_of_interest = Yaml.coerce(rois)
         else:
             regions_of_interest = rois
         return regions_of_interest

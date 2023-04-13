@@ -1188,3 +1188,20 @@ python -m watch.mlops.schedule_evaluation --params="
     --backend=tmux --queue_name "_namek_split1_eval_filter1_MeanYear10GSD" \
     --pipeline=bas --skip_existing=1 \
     --run=1
+
+
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+python -m geowatch.mlops aggregate \
+    --pipeline=bas \
+    --stdout_report=True \
+    --target \
+        "$DVC_EXPT_DPATH/_namek_split1_eval_filter1_MeanYear10GSD" \
+    --resource_report=True \
+    --rois=KR_R002 \
+    --stdout_report="
+        top_k: 3
+        per_group: 1
+        macro_analysis: 0
+        analyze: 0
+        reference_region: final
+    "
