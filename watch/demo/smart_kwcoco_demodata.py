@@ -556,3 +556,100 @@ def _parse_demostr(data, defaults, alias_to_key=None):
             handled[key] = value
             unhandled.pop(key, None)
     return handled, unhandled
+
+
+def random_inscribed_polygon(bounding_polygon, rng=None):
+    """
+        if 1:
+            import kwplot
+            kwplot.plt.ion()
+            bounding_box.draw(facecolor='blue', alpha=0.8, setlim=1, fill=True, edgecolor='darkblue')
+            utm_poly.draw(facecolor='orange', alpha=0.8, setlim=1, fill=True, edgecolor='darkorange')
+            rando_utm.draw(facecolor='green', alpha=0.8, setlim=1, fill=True, edgecolor='darkgreen')
+            inscribed_utm.draw(facecolor='red', alpha=0.8, setlim=1, fill=True, edgecolor='darkred')
+    """
+    import kwimage
+    # Make a random polygon inscribed in the utm region
+    bounding_box = kwimage.Box(bounding_polygon.bounding_box())
+    rano_01 = kwimage.Polygon.random(tight=1, rng=rng)
+    # Move to the origin, scale to match the box, and then move to the center
+    # of the polygon of interest.
+    rando = rano_01.translate((-.5, -.5)).scale((
+        bounding_box.width, bounding_box.height)).translate(
+            bounding_polygon.centroid)
+    # Take the intersection ito inscribe
+    inscribed = rando.intersection(bounding_polygon)
+    return inscribed
+
+
+def demo_dataset_with_regions_and_sites(dpath=None):
+    """
+    Get a demo coco dataset with region and site models.
+    """
+    import ubelt as ub
+    import watch
+    from watch.geoannots import geomodels
+    from watch.geoannots.geococo_objects import CocoGeoVideo
+    from watch.utils import util_gis
+    import kwimage
+    import kwarray
+
+    coco_dset = watch.coerce_kwcoco('watch-msi', heatmap=True, geodata=True,
+                                    dates=True, image_size=(96, 96))
+    rng = kwarray.ensure_rng(4329423)
+
+    # Make some region models for this dataset
+    import geopandas as gpd
+    region_and_sites = []
+    crs84 = util_gis.get_crs84()
+
+    video_name_to_crs84_bounds = {}
+
+    for video in coco_dset.videos().objs:
+        coco_video = CocoGeoVideo(video=video, dset=coco_dset)
+
+        dates = coco_video.images.lookup('date_captured')
+        start_time = min(dates)
+        end_time = max(dates)
+
+        utm_part = coco_video.wld_corners_gdf
+        utm_poly = kwimage.Polygon.coerce(utm_part.iloc[0]['geometry'])
+        # Make a random inscribed polygon to use as the test region
+        utm_region_poly = random_inscribed_polygon(utm_poly, rng=rng)
+
+        # Shrink it so we are more likely to remove annotations
+        utm_region_poly = utm_region_poly.scale(0.5, about='centroid')
+
+        crs84_region_poly = kwimage.Polygon.coerce(gpd.GeoDataFrame(
+            geometry=[utm_region_poly],
+            crs=utm_part.crs).to_crs(crs84).iloc[0]['geometry'])
+
+        video_name_to_crs84_bounds[coco_video['name']] = crs84_region_poly
+
+        region_model, sites = geomodels.RegionModel.random(
+            region_id=coco_video['name'], region_poly=crs84_region_poly,
+            rng=rng, start_time=start_time, end_time=end_time, with_sites=True)
+        region_and_sites.append((region_model, sites))
+
+    video0 = coco_dset.videos().objs[0]
+    video0_images = coco_dset.images(video_id=video0['id'])
+    assert len(video0_images) >= 10, 'should have a several frames'
+    assert len(set(video0_images.lookup('date_captured'))) > 5, (
+        'should be on different dates')
+
+    if dpath is None:
+        dpath = ub.Path.appdir('watch', 'demo', 'regions_and_sites').ensuredir()
+    dpath.delete().ensuredir()
+
+    # Write region models to disk
+    region_dpath = (dpath / 'region_models').ensuredir()
+    site_dpath = (dpath / 'site_models').ensuredir()
+    for region_model, sites in region_and_sites:
+        region_fpath = region_dpath / (region_model.region_id + '.geojson')
+        region_fpath.write_text(region_model.dumps(indent=4))
+
+        for site in sites:
+            site_fpath = site_dpath / (site.site_id + '.geojson')
+            site_fpath.write_text(site.dumps(indent=' ' * 4))
+
+    return coco_dset, region_dpath, site_dpath

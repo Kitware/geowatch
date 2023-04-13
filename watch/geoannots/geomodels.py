@@ -197,11 +197,34 @@ class RegionModel(_Model):
         return gdf
 
     @classmethod
-    def random(cls, **kwargs):
+    def random(cls, with_sites=False, **kwargs):
+        """
+        Args:
+            with_sites (bool):
+                also returns site models if True
+            **kwargs : passed to :func:`demo_truth.random_region_model`
+
+        Returns:
+            RegionModel | Tuple[RegionModel, SiteModelCollection]
+
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> region1 = RegionModel.random(with_sites=False, rng=0)
+            >>> region2, sites2 = RegionModel.random(with_sites=True, rng=0)
+            >>> assert region1 == region2, 'rngs should be the same'
+        """
         from watch.demo.metrics_demo import demo_truth
-        region, _, _ = demo_truth.random_region_model(
+
+        region, sites, _ = demo_truth.random_region_model(
             **kwargs, with_renderables=False)
-        return cls(**region)
+
+        region = cls(**region)
+
+        if with_sites:
+            sites = SiteModelCollection([SiteModel(**s) for s in sites])
+            return region, sites
+        else:
+            return region
 
     @property
     def region_id(self):
