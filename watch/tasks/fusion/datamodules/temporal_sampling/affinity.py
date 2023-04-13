@@ -892,9 +892,9 @@ def soft_frame_affinity(unixtimes, sensors=None, time_kernel=None,
             heuristics = {'daylight', 'season', 'sensor_similiarty'}
         elif version == 3:
             heuristics = {'daylight', 'season', 'sensor_similiarty', 'sensor_value'}
-        elif version == 4:
+        elif version in {4, 'sval'}:
             heuristics = {'sensor_value'}
-        elif version == 5:
+        elif version in {5, 'ssim'}:
             heuristics = {'sensor_similiarty'}
 
     missing_date = np.isnan(unixtimes)
