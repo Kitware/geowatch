@@ -1610,10 +1610,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         resolution_info = self._resolve_resolution(target_, video)
 
-        print('target_ = {}'.format(ub.urepr(target_, nl=1)))
         allow_augment = target_.get('allow_augment', (not self.disable_augmenter) and self.mode == 'fit')
         target_['allow_augment'] = allow_augment
-        print('target_ = {}'.format(ub.urepr(target_, nl=1)))
         if allow_augment:
             target_ = self._augment_spacetime_target(target_)
 
