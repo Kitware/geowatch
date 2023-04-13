@@ -711,7 +711,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         >>> print({c.get('sensor_coarse') for c in coco_dset.images().coco_images})
         >>> print({c.channels.spec for c in coco_dset.images().coco_images})
         >>> sampler = ndsampler.CocoSampler(coco_dset)
-        >>> self = KWCocoVideoDataset(sampler, time_dims=5, window_dims=(200, 300),
+        >>> self = KWCocoVideoDataset(sampler, time_dims=4, window_dims=(100, 200),
         >>>                           input_space_scale='native',
         >>>                           window_space_scale='0.05GSD',
         >>>                           output_space_scale='native',
@@ -719,11 +719,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         >>> )
         >>> self.disable_augmenter = True
         >>> target = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
-        >>> Box = util_kwimage.Box
-        >>> #target['space_slice'] = Box.from_slice(target['space_slice']).translate((30, 0)).quantize().to_slice()
-        >>> target['verbose_ndsample'] = True
         >>> item = self[target]
-        >>> #print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
         >>> canvas = self.draw_item(item, overlay_on_image=0, rescale=0, max_channels=3)
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
