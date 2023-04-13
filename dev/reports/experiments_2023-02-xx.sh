@@ -1160,21 +1160,14 @@ python -m watch.mlops.schedule_evaluation --params="
             - auto
         bas_pxl.input_space_scale:
             - 10GSD
-        bas_pxl.window_space_scale:
-            - 10GSD
-        bas_pxl.output_space_scale:
-            - 10GSD
         bas_pxl.time_sampling:
-            #- auto
             - soft5
         bas_poly.thresh:
-            - 0.4
+            - 0.3
         bas_poly.polygon_simplify_tolerance:
             - 1
         bas_poly.agg_fn:
             - probs
-        bas_poly.resolution:
-            - 10GSD
         bas_poly.moving_window_size:
             - null
         bas_poly.min_area_square_meters:
@@ -1189,15 +1182,19 @@ python -m watch.mlops.schedule_evaluation --params="
         bas_poly.enabled: 1
         bas_poly_eval.enabled: 1
         bas_poly_viz.enabled: 0
+
     submatrices:
-        - bas_pxl.time_span: null
+        - bas_pxl.input_space_scale: 10GSD
           bas_pxl.window_space_scale: 10GSD
+          bas_pxl.output_space_scale: 10GSD
+          bas_poly.resolution:
+              - 10GSD
     " \
     --root_dpath="$DVC_EXPT_DPATH/_namek_split1_eval_filter1_MeanYear10GSD" \
     --devices="0,1" --tmux_workers=8 \
     --backend=tmux --queue_name "_namek_split1_eval_filter1_MeanYear10GSD" \
     --pipeline=bas --skip_existing=1 \
-    --run=0
+    --run=1
 
 
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
@@ -1217,7 +1214,6 @@ gwmlops aggregate \
     #--rois=KR_R002 \
 
 python -c "if 1:
-
 from watch.mlops.aggregate import *  # NOQA
 import watch
 data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
@@ -1238,6 +1234,84 @@ _ = agg.report_best()
 
 agg = eval_type_to_aggregator['bas_pxl_eval']
 agg = eval_type_to_aggregator['bas_poly_eval']
-
-
 "
+
+
+
+# SITE VISIT 2022-04 SPLIT 2 Analysis
+# OOO Variant Analysis
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+python -m watch.mlops.schedule_evaluation --params="
+    matrix:
+        bas_pxl.package_fpath:
+            - $DVC_EXPT_DPATH/model_candidates/split2_mixed_ooo.yaml
+            #- /home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V45/Drop6_TCombo1Year_BAS_10GSD_split6_V45_epoch73_step18944.pt
+            #- /home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6/packages/Drop6_BAS_2022_12_10GSD_BGRN_V11_CONT4/Drop6_BAS_2022_12_10GSD_BGRN_V11_CONT4_v0_epoch6_step22939.pt
+            #- $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V46/Drop6_TCombo1Year_BAS_10GSD_split6_V46_epoch118_step22253.pt
+        bas_pxl.test_dataset:
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R002.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-BR_R002.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-CH_R001.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-NZ_R001.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R001.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-AE_R001.kwcoco.zip
+        bas_pxl.chip_overlap: 0.3
+        bas_pxl.chip_dims:
+            - auto
+        bas_pxl.time_span:
+            - auto
+        bas_pxl.input_space_scale:
+            - 10GSD
+        bas_pxl.time_sampling:
+            - soft5
+        bas_poly.thresh:
+            - 0.3
+        bas_poly.polygon_simplify_tolerance:
+            - 1
+        bas_poly.agg_fn:
+            - probs
+        bas_poly.moving_window_size:
+            - null
+        bas_poly.min_area_square_meters:
+            - 7200
+        bas_poly.max_area_square_meters:
+            - 8000000
+        bas_poly.boundary_region: $DVC_DATA_DPATH/annotations/drop6/region_models
+        bas_poly_eval.true_site_dpath: $DVC_DATA_DPATH/annotations/drop6/site_models
+        bas_poly_eval.true_region_dpath: $DVC_DATA_DPATH/annotations/drop6/region_models
+        bas_pxl.enabled: 1
+        bas_pxl_eval.enabled: 0
+        bas_poly.enabled: 1
+        bas_poly_eval.enabled: 1
+        bas_poly_viz.enabled: 0
+
+    submatrices:
+        - bas_pxl.input_space_scale: 10GSD
+          bas_pxl.window_space_scale: 10GSD
+          bas_pxl.output_space_scale: 10GSD
+          bas_poly.resolution:
+              - 10GSD
+    " \
+    --root_dpath="$DVC_EXPT_DPATH/_ooo_split2_eval_filter1_MeanYear10GSD-V2" \
+    --devices="0,1" --tmux_workers=2 \
+    --backend=tmux --queue_name "_ooo_split2_eval_filter1_MeanYear10GSD-V2" \
+    --pipeline=bas --skip_existing=1 \
+    --run=1
+
+
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+gwmlops aggregate \
+    --pipeline=bas \
+    --target \
+        "$DVC_EXPT_DPATH/_ooo_split2_eval_filter1_MeanYear10GSD-V2" \
+    --resource_report=True \
+    --stdout_report="
+        top_k: 30
+        per_group: 2
+        macro_analysis: 0
+        analyze: 0
+        # reference_region: KR_R002
+        # print_models: True
+    "
+    #--rois=KR_R002 \

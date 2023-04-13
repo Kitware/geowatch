@@ -65,7 +65,6 @@ class TimeCombineConfig(scfg.DataConfig):
     Averages kwcoco images over a sliding temporal window in a video.
     """
     __command__ = 'time_combine'
-    __fuzzy_hyphens__ = True
 
     input_kwcoco_fpath = scfg.Value(None, help=ub.paragraph(
             '''

@@ -200,6 +200,24 @@ if __name__ == '__main__':
             --suffix=I2L \
             --backend=tmux --tmux_workers=6 \
             --run=1
+
+        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+        DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+        TRUE_SITE_DPATH=$DVC_DATA_DPATH/annotations/drop6_hard_v1/site_models
+        OUTPUT_BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2
+        python -m watch reproject \
+            --src data_vali_I2L_split6.kwcoco.zip \
+            --dst data_vali_I2L_split6.kwcoco.zip \
+            --site_models=$TRUE_SITE_DPATH
+
+        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+        DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+        TRUE_SITE_DPATH=$DVC_DATA_DPATH/annotations/drop6_hard_v1/site_models
+        OUTPUT_BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2
+        python -m watch reproject \
+            --src data_train_I2L_split6.kwcoco.zip \
+            --dst data_train_I2L_split6.kwcoco.zip \
+            --site_models=$TRUE_SITE_DPATH
     """
     main()
 
