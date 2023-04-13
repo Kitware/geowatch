@@ -996,7 +996,7 @@ def heatmaps_to_polys(heatmaps, bounds, agg_fn, thresh, morph_kernel,
     # initialize heatmaps and initial polygons on the first set of heatmaps
     h_init = heatmaps[:final_size]
 
-    prog = ub.ProgIter(total=len(n_steps), desc='process-step')
+    prog = ub.ProgIter(total=n_steps, desc='process-step')
     with prog:
         polys_final = _process_1_step(h_init, _agg_fn, thresh, morph_kernel,
                                       norm_ord, thresh_hysteresis, bounds)
