@@ -5,11 +5,11 @@ The parameters to each are handled by scriptconfig objects, which prevents us
 from needing to specify what the available options are in multiple places.
 
 Example:
-    >>> # Demo with toy data
+    >>> # Demo toy data without augmentation
     >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
     >>> import kwcoco
     >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=10)
-    >>> channels = 'B10|B8a|B1|B8'
+    >>> channels = 'B10,B8a|B1,B8'
     >>> self = KWCocoVideoDataset(coco_dset, time_dims=3, window_dims=(300, 300),
     >>>                           channels=channels,
     >>>                           input_space_scale='native',
@@ -17,10 +17,38 @@ Example:
     >>>                           window_space_scale=1.2,
     >>>                           time_sampling='soft2+distribute',
     >>>                           time_kernel='-1y,0,1y',
+    >>>                           modality_dropout=0.5,
     >>>                           temporal_dropout=0.5)
-    >>> self.disable_augmenter = True
+    >>> self.disable_augmenter = False
     >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
     >>> item = self[index]
+    >>> print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
+    >>> canvas = self.draw_item(item, overlay_on_image=0, rescale=0)
+    >>> # xdoctest: +REQUIRES(--show)
+    >>> import kwplot
+    >>> kwplot.autompl()
+    >>> kwplot.imshow(canvas)
+    >>> kwplot.show_if_requested()
+
+Example:
+    >>> # Demo toy data with augmentation
+    >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+    >>> import kwcoco
+    >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=10)
+    >>> channels = 'B10,B8a|B1,B8'
+    >>> self = KWCocoVideoDataset(coco_dset, time_dims=3, window_dims=(300, 300),
+    >>>                           channels=channels,
+    >>>                           input_space_scale='native',
+    >>>                           output_space_scale=None,
+    >>>                           window_space_scale=1.2,
+    >>>                           time_sampling='soft2+distribute',
+    >>>                           time_kernel='-1y,0,1y',
+    >>>                           modality_dropout=0.5,
+    >>>                           temporal_dropout=0.5)
+    >>> assert not self.disable_augmenter
+    >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
+    >>> item = self[index]
+    >>> assert item['target']['allow_augment']
     >>> print('item summary: ' + ub.urepr(self.summarize_item(item), nl=3))
     >>> canvas = self.draw_item(item, overlay_on_image=0, rescale=0)
     >>> # xdoctest: +REQUIRES(--show)
@@ -581,6 +609,8 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         ### TODO: these should likely become a nested jsonargparse
         ### style config for a more general "augmentation scheme".
 
+        # See: ./data_augment.py
+
         'augment_space_shift_rate': scfg.Value(0.9, help=ub.paragraph(
             '''
             In fit mode, perform translation augmentations this fraction of the
@@ -794,6 +824,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         channels = config['channels']
         max_epoch_length = config['max_epoch_length']
 
+        self.disable_augmenter = False
+        self.augment_rng = kwarray.ensure_rng(None)
+
         import os
         grid_workers = int(os.environ.get('WATCH_GRID_WORKERS', 0))
         common_grid_kw = dict(
@@ -975,8 +1008,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             )
 
         self.mode = mode
-
-        self.disable_augmenter = False
 
         # hidden option for now (todo: expose this)
         self.inference_only = False
@@ -1259,9 +1290,18 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         if sensor_channels.numel() == 0:
             force_bad = 'Missing requested channels'
 
+        modality_streams = sensor_channels.streams()
+        if target_['allow_augment']:
+            # Augment by dropping out modalities, but always keep at least one.
+            if self.config.modality_dropout:
+                keep_score = self.augment_rng.rand(len(modality_streams))
+                keep_idxs = util_kwarray.argsort_threshold(
+                    keep_score, self.config.modality_dropout, num_top=1)
+                modality_streams = list(ub.take(modality_streams, keep_idxs))
+
         # Sample information from each stream (each stream is a separate mode)
         sample_streams = {}
-        for stream in sensor_channels.streams():
+        for stream in modality_streams:
             if stop_on_bad_image and force_bad:
                 break
             tr_frame['channels'] = stream
@@ -1570,7 +1610,10 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         resolution_info = self._resolve_resolution(target_, video)
 
-        allow_augment = target_.get('allow_augment', True)
+        print('target_ = {}'.format(ub.urepr(target_, nl=1)))
+        allow_augment = target_.get('allow_augment', (not self.disable_augmenter) and self.mode == 'fit')
+        target_['allow_augment'] = allow_augment
+        print('target_ = {}'.format(ub.urepr(target_, nl=1)))
         if allow_augment:
             target_ = self._augment_spacetime_target(target_)
 
@@ -1804,10 +1847,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         # or something like that)
         tr_subset = ub.dict_isect(target_, {
             'gids', 'space_slice', 'video_id', 'fliprot_params',
-            'main_idx', 'scale', 'main_skip_reason'
+            'main_idx', 'scale', 'main_skip_reason', 'allow_augment'
         })
-        # dont allow augmenting on resample by default
-        tr_subset['allow_augment'] = False
 
         resolved_input_scale = resolution_info['resolved_input_scale']
         resolved_output_scale = resolution_info['resolved_output_scale']

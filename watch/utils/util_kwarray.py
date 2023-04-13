@@ -1076,3 +1076,58 @@ class Remedian:
         if self.obs_count == self.t:
             self.remedian = np.median(self.arrs[-1], axis=-1,
                                       overwrite_input=True)
+
+
+def argsort_threshold(arr, threshold=None, num_top=None, objective='maximize'):
+    """
+    Find all indexes over a threshold, but always return at least the
+    `num_top`, and potentially more.
+
+    Args:
+        arr (ndarray): array of scores
+
+        threshold (float):
+            return indexes that are better than this threshold.
+
+        num_top (int):
+            always return at least this number of "best" indexes.
+
+        objective (str):
+            if maximize, filters things above the threshold, otherwise filters
+            below the threshold.
+
+    Returns:
+        ndarray: top indexes
+
+    Example:
+        >>> from watch.utils.util_kwarray import *  # NOQA
+        >>> arr = np.array([0.3, .2, 0.1, 0.15, 0.11, 0.15, 0.2, 0.6, 0.32])
+        >>> argsort_threshold(arr, threshold=0.5, num_top=0)
+        array([7])
+        >>> argsort_threshold(arr, threshold=0.5, num_top=3)
+        array([7, 8, 0])
+        >>> argsort_threshold(arr, threshold=0.0, num_top=3)
+    """
+    # Find the "best" indices and their scores
+    ascending_sortx = arr.argsort()
+    # Mark any index "better" than the score threshold
+    if objective == 'maximize':
+        sortx = ascending_sortx[::-1]
+        sorted_arr = arr[sortx]
+        flags = sorted_arr > threshold
+    elif objective == 'minimize':
+        sortx = ascending_sortx
+        sorted_arr = arr[sortx]
+        flags = sorted_arr < threshold
+    else:
+        raise KeyError(objective)
+
+    if num_top is not None:
+        # Always return at least `num_top`
+        flags[0:num_top] = True
+
+        fallback_thresh = sorted_arr[num_top - 1]
+        threshold = min(fallback_thresh, threshold)
+
+    top_inds = sortx[flags]
+    return top_inds
