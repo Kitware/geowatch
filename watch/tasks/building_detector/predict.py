@@ -8,15 +8,158 @@ import ubelt as ub
 
 
 class BuildingDetectorConfig(scfg.DataConfig):
-    coco_fpath = scfg.Value(None, help='input')
-    out_coco_fpath = scfg.Value(None, help='input')
-    package_fpath = scfg.Value(None, help='input')
+    coco_fpath = scfg.Value(None, help='input kwcoco dataset')
+    out_coco_fpath = scfg.Value(None, help='output')
+    package_fpath = scfg.Value(None, help='pytorch packaged model')
     data_workers = 2
     window_dims = (256, 256)
     fixed_resolution = "5GSD"
     batch_size = 1
     device = scfg.Value(0)
     select_images = None
+    track_emissions = True
+
+
+def main(cmdline=1, **kwargs):
+    """
+    Ignore:
+        /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/kitware/xview_building_detector/checkpoint_best_regular.pth
+
+    Example:
+        >>> # xdoctest: +SKIP
+        >>> from watch.tasks.building_detector.predict import *  # NOQA
+        >>> import ubelt as ub
+        >>> import watch
+        >>> import kwcoco
+        >>> dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> dvc_expt_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+        >>> coco_fpath = dvc_data_dpath / 'Drop6-MeanYear10GSD-V2/imgonly-KR_R001.kwcoco.zip'
+        >>> package_fpath = dvc_expt_dpath / 'models/kitware/xview_dino.pt'
+        >>> out_coco_fpath = ub.Path.appdir('watch/tests/dino/doctest0').ensuredir() / 'pred_boxes.kwcoco.zip'
+        >>> kwargs = {
+        >>>     'coco_fpath': coco_fpath,
+        >>>     'package_fpath': package_fpath,
+        >>>     'out_coco_fpath': out_coco_fpath,
+        >>>     'fixed_resolution': '10GSD',
+        >>>     'window_dims': (256, 256),
+        >>> }
+        >>> cmdline = 0
+        >>> _ = main(cmdline=cmdline, **kwargs)
+        >>> out_dset = kwcoco.CocoDataset(out_coco_fpath)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> import kwimage
+        >>> kwplot.plt.ion()
+        >>> gid = out_dset.images()[0]
+        >>> annots = out_dset.annots(gid=gid)
+        >>> dets = annots.detections
+        >>> list(map(len, out_dset.images().annots))
+        >>> config = out_dset.dataset['info'][-1]['properties']['config']
+        >>> delayed = out_dset.coco_image(gid).imdelay(channels='red|green|blue', resolution=config['fixed_resolution'])
+        >>> rgb = kwimage.normalize_intensity(delayed.finalize())
+        >>> import kwplot
+        >>> kwplot.plt.ion()
+        >>> kwplot.imshow(rgb, doclf=1)
+        >>> top_dets = dets.compress(dets.scores > 0.2)
+        >>> top_dets.draw()
+    """
+    import rich
+    config = BuildingDetectorConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
+    rich.print('config = ' + ub.urepr(config, nl=1))
+
+    from watch.tasks.fusion.utils import load_model_from_package
+    import torch
+    device = config.device
+    model = load_model_from_package(config.package_fpath)
+    model = model.eval()
+    model = model.to(device)
+    model.device = device
+    # Specific hacks for this specific model
+    model.building_id = ub.invert_dict(model.id2name)['Building']
+
+    from watch.tasks.fusion.datamodules import kwcoco_datamodule
+    datamodule = kwcoco_datamodule.KWCocoVideoDataModule(
+        test_dataset=config.coco_fpath,
+        batch_size=config.batch_size,
+        fixed_resolution=config.fixed_resolution,
+        num_workers=config.data_workers,
+        window_dims=config.window_dims,
+        select_images=config.select_images,
+        time_steps=1,
+        include_sensors=['WV'],
+        channels="(WV):red|green|blue",
+    )
+    datamodule.setup('test')
+
+    loader = datamodule.torch_datasets['test'].make_loader()
+    batch_iter = iter(loader)
+
+    coco_dset = loader.dataset.sampler.dset
+
+    from watch.utils import util_progress
+    from watch.utils import process_context
+    proc = process_context.ProcessContext(
+        name='box.predict',
+        config=dict(config),
+        track_emissions=config.track_emissions,
+    )
+    proc.start()
+    proc.add_disk_info(coco_dset.fpath)
+
+    # pman = util_progress.ProgressManager('progiter')
+    pman = util_progress.ProgressManager()
+    gid_to_dets_accum = ub.ddict(list)
+    # torch.set_grad_enabled(False)
+    with pman, torch.no_grad():
+        for batch in pman.progiter(batch_iter, total=len(loader), desc='🦖 dino box detector'):
+            batch_dets = dino_predict(model, batch)
+
+            # TODO: downweight the scores of boxes on the edge of the window.
+
+            for item, dets in zip(batch, batch_dets):
+                frame0 = item['frames'][0]
+                gid = frame0['gid']
+                sl_y, sl_x = frame0['output_space_slice']
+                offset_x = sl_x.start
+                offset_y = sl_y.start
+                imgspace_dets = dets.translate((offset_x, offset_y))
+                gid_to_dets_accum[gid].append(imgspace_dets)
+
+    coco_dset.clear_annotations()
+
+    obj = proc.stop()
+    from kwcoco.util import util_json
+    obj = util_json.ensure_json_serializable(obj)
+
+    out_dset = coco_dset.copy()
+
+    # TODO: graceful bundle changes
+    out_dset.reroot(absolute=True)
+    out_dset.dataset['info'].append(obj)
+
+    out_fpath = ub.Path(config.out_coco_fpath)
+    out_dset.fpath = out_fpath
+    out_dset._ensure_json_serializable()
+
+    import kwimage
+    gid_to_dets = ub.udict(gid_to_dets_accum).map_values(kwimage.Detections.concatenate)
+    for gid, dets in gid_to_dets.items():
+        for cls in dets.classes:
+            out_dset.ensure_category(cls)
+        for ann in dets.to_coco(dset=out_dset):
+            out_dset.add_annotation(**ann, image_id=gid)
+
+    # Hack, could make filtering in the dataloader easier.
+    images = out_dset.images()
+    wv_images = images.compress([
+        s == 'WV' for s in images.lookup('sensor_coarse')])
+    out_dset = out_dset.subset(wv_images)
+
+    pred_dpath = ub.Path(out_dset.fpath).parent
+    rich.print(f'Pred Dpath: [link={pred_dpath}]{pred_dpath}[/link]')
+    out_dset.fpath = out_fpath
+    out_dset.dump(out_dset.fpath, indent='    ')
+    return out_dset
 
 
 def dino_preproc_item(item):
@@ -27,7 +170,6 @@ def dino_preproc_item(item):
     hwc = chw.permute(1, 2, 0).cpu().numpy()
     normed_rgb = kwimage.normalize_intensity(hwc)
     normed_rgb = np.nan_to_num(normed_rgb)
-    item['frames'][0]['THUMB'] = normed_rgb
     hardcoded_mean = [0.485, 0.456, 0.406]
     hardcoded_std = [0.229, 0.224, 0.225]
     chw = F.to_tensor(normed_rgb)
@@ -71,226 +213,6 @@ def dino_predict(model, batch):
 
     batch_dets.append(dets)
     return batch_dets
-
-
-def main(cmdline=1, **kwargs):
-    """
-    Ignore:
-        /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/kitware/xview_building_detector/checkpoint_best_regular.pth
-
-    Example:
-        >>> # xdoctest: +SKIP
-        >>> from watch.tasks.building_detector.predict import *  # NOQA
-        >>> import ubelt as ub
-        >>> import watch
-        >>> dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-        >>> dvc_expt_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
-        >>> coco_fpath = dvc_data_dpath / 'Drop6-MeanYear10GSD-V2/imgonly-KR_R001.kwcoco.zip'
-        >>> package_fpath = dvc_expt_dpath / 'models/kitware/xview_dino.pt'
-        >>> out_coco_fpath = '/tmp/out_coco.kwcoco.zip'
-        >>> kwargs = {
-        >>>     'coco_fpath': coco_fpath,
-        >>>     'package_fpath': package_fpath,
-        >>>     'out_coco_fpath': out_coco_fpath,
-        >>>     'fixed_resolution': '10GSD',
-        >>>     'window_dims': (256, 256),
-        >>> }
-        >>> cmdline = 0
-        >>> _ = main(cmdline=cmdline, **kwargs)
-        >>> output_dset = kwcoco.CocoDataset(out_coco_fpath)
-        >>> # xdoctest: +REQUIRES(--show)
-        >>> import kwplot
-        >>> kwplot.plt.ion()
-        >>> gid = output_dset.images()[0]
-        >>> annots = output_dset.annots(gid=gid)
-        >>> dets = annots.detections
-        >>> list(map(len, output_dset.images().annots))
-        >>> delayed = coco_dset.coco_image(gid).imdelay(channels='red|green|blue', resolution=config.fixed_resolution)
-        >>> rgb = kwimage.normalize_intensity(delayed.finalize())
-        >>> import kwplot
-        >>> kwplot.plt.ion()
-        >>> kwplot.imshow(rgb, doclf=1)
-        >>> top_dets = dets.compress(dets.scores > 0.2)
-        >>> top_dets.draw()
-    """
-    import rich
-    config = BuildingDetectorConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
-    rich.print('config = ' + ub.urepr(config, nl=1))
-
-    from watch.tasks.fusion.utils import load_model_from_package
-    import torch
-    device = config.device
-    model = load_model_from_package(config.package_fpath)
-    model = model.eval()
-    model = model.to(device)
-    model.device = device
-    # Specific hacks for this specific model
-    model.building_id = ub.invert_dict(model.id2name)['Building']
-
-    from watch.tasks.fusion.datamodules import kwcoco_datamodule
-    datamodule = kwcoco_datamodule.KWCocoVideoDataModule(
-        test_dataset=config.coco_fpath,
-        batch_size=config.batch_size,
-        fixed_resolution=config.fixed_resolution,
-        num_workers=config.data_workers,
-        window_dims=config.window_dims,
-        select_images=config.select_images,
-        time_steps=1,
-        include_sensors=['WV'],
-        channels="(WV):red|green|blue",
-    )
-    datamodule.setup('test')
-
-    loader = datamodule.torch_datasets['test'].make_loader()
-    batch_iter = iter(loader)
-
-    gid_to_dets_accum = ub.ddict(list)
-
-    coco_dset = loader.dataset.sampler.dset
-
-    from watch.utils import util_progress
-
-    from watch.utils import process_context
-    proc = process_context.ProcessContext(
-        name='box.predict',
-        config=dict(config),
-        track_emissions=True
-    )
-    proc.start()
-
-    pman = util_progress.ProgressManager('progiter')
-    # torch.set_grad_enabled(False)
-    with pman, torch.no_grad():
-        for batch in pman.progiter(batch_iter, total=len(loader), desc='box detector'):
-            batch_dets = dino_predict(model, batch)
-
-            # TODO: downweight the scores of boxes on the edge of the window.
-
-            for item, dets in zip(batch, batch_dets):
-                frame0 = item['frames'][0]
-                gid = frame0['gid']
-                sl_y, sl_x = frame0['output_space_slice']
-                offset_x = sl_x.start
-                offset_y = sl_y.start
-                imgspace_dets = dets.translate((offset_x, offset_y))
-                gid_to_dets_accum[gid].append(imgspace_dets)
-
-    import kwimage
-    coco_dset.clear_annotations()
-
-    obj = proc.stop()
-    from kwcoco.util import util_json
-    obj = util_json.ensure_json_serializable(obj)
-
-    output_dset = coco_dset.copy()
-
-    images = output_dset.images()
-    wv_images = images.compress([s == 'WV' for s in images.lookup('sensor_coarse')])
-
-    output_dset.reroot(absolute=True)
-    output_dset.dataset['info'].append(obj)
-
-    out_fpath = ub.Path(config.out_coco_fpath)
-    output_dset.fpath = out_fpath
-    output_dset._ensure_json_serializable()
-
-    gid_to_dets = ub.udict(gid_to_dets_accum).map_values(kwimage.Detections.concatenate)
-    for gid, dets in gid_to_dets.items():
-        for cls in dets.classes:
-            output_dset.ensure_category(cls)
-        for ann in dets.to_coco(dset=output_dset):
-            output_dset.add_annotation(**ann, image_id=gid)
-
-    output_dset = output_dset.subset(wv_images)
-    output_dset.dump(output_dset.fpath, indent='    ')
-    return output_dset
-
-    if 0:
-        gid = ub.peek(gid_to_dets)
-        gid = list(gid_to_dets)[1]
-        dets = gid_to_dets[gid]
-        delayed = coco_dset.coco_image(gid).imdelay(channels='red|green|blue', resolution=config.fixed_resolution)
-        rgb = kwimage.normalize_intensity(delayed.finalize())
-
-        # dets = batch_dets[0]
-        # item = batch[0]
-        # rgb = item['frames'][0]['THUMB']
-
-        import kwplot
-        kwplot.plt.ion()
-
-        kwplot.imshow(rgb, doclf=1)
-        top_dets = dets.compress(dets.scores > 0.4)
-        top_dets.draw()
-
-
-def demo_item():
-    # xdoctest: +REQUIRES(env:DVC_DPATH)
-    # This shows how you can use the dataloader to sample an arbitrary
-    # spacetime volume.
-    import watch
-    import kwcoco
-    dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-    coco_fpath = dvc_dpath / 'Drop6/data_vali_split1.kwcoco.zip'
-    coco_dset = kwcoco.CocoDataset(coco_fpath)
-    ##'red|green|blue',
-    from watch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
-    self = KWCocoVideoDataset(
-        coco_dset,
-        time_dims=7, window_dims=(1024, 1024),
-        window_overlap=0,
-        channels="(WV):red|green|blue",
-        input_space_scale='0.3GSD',
-        window_space_scale='0.3GSD',
-        output_space_scale='0.3GSD',
-        include_sensors='WV',
-        #normalize_peritem='nir',
-        dist_weights=0,
-        quality_threshold=0,
-        neg_to_pos_ratio=0, time_sampling='soft2',
-    )
-    self.requested_tasks['change'] = 1
-    self.requested_tasks['saliency'] = 1
-    self.requested_tasks['class'] = 0
-    self.requested_tasks['boxes'] = 1
-    item = self[0]
-
-    # target = {
-    #     'main_idx': 16,
-    #     'video_id': 1,
-    #     'gids': [171, 112, 172, 154, 331, 128, 424],
-    #     'space_slice': (slice(58, 143, None), slice(411, 496, None)),
-    #     'scale': 3.0303030303030303,
-    #     'fliprot_params': {'rot_k': 1, 'flip_axis': None},
-    #     'allow_augment': False}
-    # item = self[target]
-
-    target = {'main_idx': 4,
-              'video_id': 2,
-              'gids': [769, 498, 497, 713, 522, 562, 764],
-              'space_slice': (slice(236, 267, None), slice(602, 633, None)),
-              'scale': 33.333333333333336,
-              'fliprot_params': {'rot_k': 1, 'flip_axis': (0,)},
-              'allow_augment': False}
-    item = self[target]
-    return item
-
-
-def _devtest():
-    item = demo_item()
-
-    import kwplot
-    kwplot.plt.ion()
-    kwplot.imshow(normed_rgb, doclf=1)
-    top_dets = dets.compress(dets.scores > 0.2)
-    top_dets.draw()
-
-    # kwplot.imshow(normed_item)
-    # canvas = self.draw_item(item)
-    # import kwplot
-    # kwplot.plt.ion()
-    # kwplot.imshow(canvas)
-
 
 
 if __name__ == '__main__':
