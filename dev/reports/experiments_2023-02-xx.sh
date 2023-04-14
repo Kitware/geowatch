@@ -1081,7 +1081,7 @@ python -m watch.mlops.aggregate \
 # Eval10 baseline
 DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops schedule --params="
+geowatch schedule --params="
     matrix:
         bas_pxl.package_fpath:
             - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2_epoch3_step941.pt
@@ -1099,19 +1099,19 @@ python -m watch.mlops schedule --params="
             - auto
         bas_pxl.time_sampling:
             - auto
-            - soft5
-            - soft4
+            #- soft5
+            #- soft4
         bas_poly.thresh:
             - 0.33
             #- 0.38
             #- 0.4
         bas_poly.inner_window_size:
             - 1y
-            - null
+            #- null
         bas_poly.inner_agg_fn:
             - mean
         bas_poly.norm_ord:
-            - 1
+            #- 1
             - inf
         bas_poly.polygon_simplify_tolerance:
             - 1
@@ -1121,9 +1121,9 @@ python -m watch.mlops schedule --params="
             - 10GSD
         bas_poly.moving_window_size:
             - null
-            - 1
+            #- 1
         bas_poly.poly_merge_method:
-            - 'v2'
+            #- 'v2'
             - 'v1'
         bas_poly.min_area_square_meters:
             - 7200
@@ -1145,15 +1145,16 @@ python -m watch.mlops schedule --params="
     --run=1
 
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
-python -m watch.mlops aggregate \
+geowatch aggregate \
     --pipeline=bas \
     --target "
         - $DVC_EXPT_DPATH/_mlops_eval10_baseline
     " \
     --output_dpath="$DVC_EXPT_DPATH/_mlops_eval10_baseline/aggregate" \
     --resource_report=0 \
+    --rois="[KR_R002,BR_R002,CH_R001,NZ_R001,KR_R001,AE_R001]" \
     --stdout_report="
-        top_k: 10
+        top_k: 1
         per_group: 1
         macro_analysis: 0
         analyze: 0
