@@ -80,8 +80,6 @@ Using ``python -m watch --help`` or ``geowatch --help`` shows the top level moda
                     {add_fields,align,stats,reproject,visualize,spectra,dvcdir,run_tracker,iarpa_eval,model_stats,clean_geotiffs,animate,average_features,time_combine,crop_sitemodels,remove_bad_images,schedule,manager,aggregate}
                     ...
 
-    🛰️ ⌚🛰️           🧠       🛰️ ⌚🛰️
-    🌍🌎🌏        👁️   👁️      🌏🌎🌍
     🌐🌐🌐 The GEO-WATCH CLI 🌐🌐🌐
 
     An open source research and production environment for image and video
