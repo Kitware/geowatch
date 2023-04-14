@@ -74,16 +74,20 @@ def main(cmdline=True, **kw):
     WATCH_LOOSE_CLI = os.environ.get('WATCH_LOOSE_CLI', '')
 
     from scriptconfig.modal import ModalCLI
+
+    # https://emojiterra.com/time/
+
     modal = ModalCLI(description=ub.codeblock(
         '''
-                      🧠
-                    👁️   👁️
-        🌍🌎🌏 The GEO-WATCH CLI 🌏🌎🌍
+
+        🛰️ ⌚🛰️           🧠       🛰️ ⌚🛰️
+        🌍🌎🌏        👁️   👁️      🌏🌎🌍
+        🌐🌐🌐 The GEO-WATCH CLI 🌐🌐🌐
 
         An open source research and production environment for image and video
         segmentation and detection with geospatial awareness.
 
-        Developed by [link=https://www.kitware.com/]Kitware[/link] funded by the [link=https://www.iarpa.gov/research-programs/smart]IARPA SMART[/link] challenge.
+        Developed by [link=https://www.kitware.com/]Kitware[/link]. Funded by the [link=https://www.iarpa.gov/research-programs/smart]IARPA SMART[/link] challenge.
         '''))
 
     def get_version(self):
