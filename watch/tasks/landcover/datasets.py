@@ -115,9 +115,8 @@ class S2Dataset(_CocoTorchDataset):
 
     def _load(self, gid):
         img = self._load_channels_stacked(gid, self.channels_list, resolution=10)
-        is_samecolor = util_kwimage.find_samecolor_regions(
-                img[:,:,0], scale=0.4, min_region_size=49,
-            values={0})
+        is_samecolor = util_kwimage.find_samecolor_regions(img[:, :, 0], scale=0.4,
+                                                           min_region_size=49, values={0})
         img[is_samecolor > 0] = np.nan
         img[img == -9999] = np.nan
         return img
@@ -150,9 +149,8 @@ class WVDataset(_CocoTorchDataset):
 
     def _load(self, gid):
         img = self._load_channels_stacked(gid, self.channels_list, resolution=2)
-        is_samecolor = util_kwimage.find_samecolor_regions(
-                img[:,:,0], scale=0.4, min_region_size=49,
-            values={0})
+        is_samecolor = util_kwimage.find_samecolor_regions(img[:, :, 0], scale=0.4,
+                                                           min_region_size=49, values={0})
         img[is_samecolor > 0] = np.nan
         img[img == -9999] = np.nan
         return img

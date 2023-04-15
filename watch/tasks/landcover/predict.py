@@ -43,7 +43,6 @@ CommandLine:
 """
 import torch
 import datetime
-import numpy as np
 import ubelt as ub
 from pathlib import Path
 

@@ -5,7 +5,6 @@ import numpy as np
 import torch
 
 from .nets import UNetR
-from .utils import setup_logging
 
 log = logging.getLogger(__name__)
 
@@ -51,7 +50,7 @@ def predict_image(image, model):
     output = model(t_image)
 
     pred = torch.softmax(output, dim=1)
-    pred = pred.squeeze().detach().cpu().numpy().transpose(1,2,0)
+    pred = pred.squeeze().detach().cpu().numpy().transpose(1, 2, 0)
     return pred
 
 
@@ -59,7 +58,7 @@ def normalize(image, invalid_mask, low=2, high=98):
     normalized_bands = []
     for band_idx in range(image.shape[2]):
         band = image[:, :, band_idx]
-        mask = invalid_mask[:,:, band_idx]
+        mask = invalid_mask[:, :, band_idx]
         if np.all(mask):
             raise ValueError
 
