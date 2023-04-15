@@ -44,6 +44,36 @@ def pad(fn):
 
 @pad
 def predict_image(image, model):
+    """
+    Example:
+        >>> from watch.tasks.landcover.detector import *  # NOQA
+        >>> import kwimage
+        >>> def fake_model(t_image):
+        ...     np_img = t_image.cpu().numpy()[0].transpose(1, 2, 0)
+        ...     np_out = kwimage.gaussian_blur(np_img)
+        ...     output = torch.from_numpy(np_out).permute(2, 0, 1)[None, ...]
+        ...     return output
+        >>> model = fake_model
+        >>> fake_model.device = 'cpu'
+        >>> # orig_image = np.random.rand(32, 32, 3)
+        >>> orig_image = kwimage.ensure_float01(kwimage.grab_test_image())
+        >>> nan_poly = kwimage.Polygon.random(rng=421).scale(orig_image.shape[0] // 2)
+        >>> # Note: the zero polygon will not be contiguous, so we wont see it in the output
+        >>> zero_poly = kwimage.Polygon.random(rng=49120).scale(orig_image.shape[0])
+        >>> img = orig_image.copy()
+        >>> img = zero_poly.fill(img, 0)
+        >>> img = nan_poly.fill(img, np.nan)
+        >>> # Set bands of regions to be -0
+        >>> img[10:100, :] = 0
+        >>> img[0:100, -250:] = 0
+        >>> img[:, -50:-10] = 0
+        >>> pred = predict_image(img, model)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(img, pnum=(1, 2, 1), doclf=True)
+        >>> kwplot.imshow(pred, pnum=(1, 2, 2))
+    """
     device = get_model_device(model)
     t_image = torch.from_numpy(image).permute(2, 0, 1)[None, ...].to(device)
 
@@ -55,6 +85,37 @@ def predict_image(image, model):
 
 
 def normalize(image, invalid_mask, low=2, high=98):
+    """
+    Example:
+        >>> from watch.tasks.landcover.detector import *  # NOQA
+        >>> import kwimage
+        >>> # orig_image = np.random.rand(32, 32, 3)
+        >>> orig_image = kwimage.ensure_float01(kwimage.grab_test_image())
+        >>> image = kwimage.Polygon.random().scale(orig_image.shape[0]).fill(orig_image.copy(), np.nan)
+        >>> invalid_mask = np.isnan(image)
+        >>> output = normalize(image, invalid_mask)
+        >>> assert np.isnan(image).sum() == np.isnan(output).sum()
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(image, pnum=(1, 2, 1), doclf=True)
+        >>> kwplot.imshow(output, pnum=(1, 2, 2))
+
+    Example:
+        >>> from watch.tasks.landcover.detector import *  # NOQA
+        >>> # Test 100% nan case
+        >>> image = np.full((32, 32, 3), fill_value=np.nan)
+        >>> invalid_mask = np.isnan(image)
+        >>> import pytest
+        >>> with pytest.raises(ValueError):
+        >>>     output = normalize(image, invalid_mask)
+        >>> # Test 100% nan in a single band case
+        >>> image = np.random.rand(32, 32, 3)
+        >>> image[..., 1] = np.nan
+        >>> invalid_mask = np.isnan(image)
+        >>> with pytest.raises(ValueError):
+        >>>     output = normalize(image, invalid_mask)
+    """
     normalized_bands = []
     for band_idx in range(image.shape[2]):
         band = image[:, :, band_idx]
@@ -90,7 +151,10 @@ def get_model_device(model):
     """
     Return the device associated with the model
     """
-    device = next(model.parameters()).device
+    if hasattr(model, 'device'):
+        device =  model.device
+    else:
+        device = next(model.parameters()).device
     return device
 
 
