@@ -6,10 +6,7 @@ TODO:
 SeeAlso:
     ~/code/watch/watch/cli/stac_search.py
 """
-import argparse
-import json
 import os
-import pystac
 import re
 import sys
 import ubelt as ub
@@ -522,6 +519,8 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
                                   'as a secondary step instead')
 
     from watch.utils import util_parallel
+    import pystac
+    import json
     import kwcoco
     jobs = util_parallel.coerce_num_workers(jobs)
 
@@ -535,8 +534,9 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
     outdir = dirname(outpath)
     os.makedirs(outdir, exist_ok=True)
 
-    executor = ub.JobPool(mode='process' if jobs > 1 else 'serial',
-                          max_workers=jobs)
+    if jobs == 1:
+        jobs = 0
+    executor = ub.JobPool(mode='process', max_workers=jobs)
 
     all_items = [stac_item for stac_item in catalog.get_all_items()]
 
