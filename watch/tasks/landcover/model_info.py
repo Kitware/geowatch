@@ -5,10 +5,9 @@ from typing import Union
 
 import kwcoco
 import torch.utils.data
-# from torch.utils.data import ConcatDataset
 
 from . import detector
-from .datasets import S2Dataset
+from .datasets import S2Dataset, WVDataset
 
 log = logging.getLogger(__name__)
 
@@ -60,8 +59,32 @@ class S2ModelInfo(ModelInfo):
                                    device=device)
 
 
+class WVModelInfo(ModelInfo):
+    """
+    This model was trained on 8-band WorldView-3 data with 5
+    segmentation classes
+    """
+
+    def create_dataset(self, coco_dset):
+        return WVDataset(coco_dset)
+
+    @property
+    def model_outputs(self):
+        return [
+            'water', 'forest', 'field', 'impervious', 'barren',
+        ]
+
+    def load_model(self, weights_filename, device):
+        assert len(self.model_outputs) == 5
+        return detector.load_model(weights_filename,
+                                   num_outputs=5,
+                                   num_channels=8,
+                                   device=device)
+
+
 __mapping = {
     'sentinel2': S2ModelInfo,
+    'worldview': WVModelInfo,
 }
 
 

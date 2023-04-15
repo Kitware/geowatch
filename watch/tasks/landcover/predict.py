@@ -41,13 +41,12 @@ CommandLine:
         --animate=True --channels="red|green|blue,barren|forest|water,landcover_hidden.0:3,landcover_hidden.3:6" \
         --skip_missing=True --workers=4 --draw_anns=False --smart=True
 """
-import datetime
 import torch
+import datetime
 import ubelt as ub
 from pathlib import Path
 
 import kwcoco
-# import kwimage
 from torch.utils.data import DataLoader
 
 from watch.utils import util_parallel
@@ -139,6 +138,7 @@ def predict(cmdline=1, **kwargs):
 
     print('Creating output dataset')
     output_dset = input_dset.copy()
+    output_dset.fpath = output_dset_filename
 
     print('Initialize dataloader')
     dataloader = DataLoader(ptdataset, num_workers=config.num_workers,
@@ -272,13 +272,18 @@ def _predict_single(img_info,
                                    keepbound=True,
                                    allow_overshoot=True)
 
+    valid_pred = False
     for img_slice in slider:
         subimg = img[img_slice]
         pred = detector.run(model, subimg, img_info)
+
         if pred is None:
             continue
+        else:
+            valid_pred = True
 
-        landcover_stitcher.accumulate_image(gid, img_slice, pred)
+        scale = img.shape[0] / img_info["height"]
+        landcover_stitcher.accumulate_image(gid, img_slice, pred, asset_dsize=img.shape[0:2][::-1], scale_asset_from_stitchspace=scale)
 
         if hidden_stitcher is not None:
             # Lots of hardcoded things here.
@@ -299,9 +304,10 @@ def _predict_single(img_info,
                     gid, hidden_slice, hidden, asset_dsize=hidden_dsize,
                     scale_asset_from_stitchspace=hidden_scale)
 
-    landcover_stitcher.submit_finalize_image(gid)
-    if hidden_stitcher is not None:
-        hidden_stitcher.submit_finalize_image(gid)
+    if valid_pred:
+        landcover_stitcher.submit_finalize_image(gid)
+        if hidden_stitcher is not None:
+            hidden_stitcher.submit_finalize_image(gid)
 
 
 def get_output_file(output):

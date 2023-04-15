@@ -1,21 +1,20 @@
 import logging
-# from copy import deepcopy
 import kwcoco
 import kwimage
 import numpy as np
 import torch.utils.data
+from watch.utils import util_kwimage
 
 log = logging.getLogger(__name__)
 
 
 class _CocoTorchDataset(torch.utils.data.Dataset):
     """
-    Base dataset for landcover and depth tasks
+    Base dataset for landcover task
     """
 
     def __init__(self, dset):
         self.dset = kwcoco.CocoDataset.coerce(dset)
-
         self.gids = sorted(list(filter(self._include, self.dset.imgs.keys())))
 
     def __len__(self):
@@ -23,7 +22,6 @@ class _CocoTorchDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         gid = self.gids[idx]
-        # should not need a deep copy here, shallow should be fine.
         img_info = self.dset.imgs[gid].copy()
         try:
             img_info['imgdata'] = self._load(gid)
@@ -45,36 +43,34 @@ class _CocoTorchDataset(torch.utils.data.Dataset):
         """
         raise NotImplementedError('subclass must override _load')
 
-    def _load_channels_stacked(self, gid, channels_list):
-        channel_images = [self._try_load_channel(gid, channels) for channels in channels_list]
+    def _load_channels_stacked(self, gid, channels_list, resolution):
+        channel_images = [self._try_load_channel(gid, channels, resolution) for channels in channels_list]
 
         # size of largest channel from list
         dsize = max(img.shape for img in channel_images)
         dsize = (dsize[1], dsize[0])
 
         channel_images = [
-            imresize(img, dsize=dsize, interpolation='linear')
+            imresize(img, dsize=dsize, interpolation='bilinear')
             for img in channel_images
         ]
         img = np.dstack(channel_images).astype(np.float32)
-
-        # set no data to nan
-        img[img == -9999] = np.nan
         return img
 
-    def _try_load_channel(self, gid, channels):
+    def _try_load_channel(self, gid, channels, resolution):
         if isinstance(channels, (list, tuple)):
             ex = None
             for chan in channels:
                 try:
-                    return self._try_load_channel(gid, chan)
+                    return self._try_load_channel(gid, chan, resolution)
                 except Exception as e:
                     ex = e
             raise Exception('Unable to load any channels {} from image {}: {}'.format(channels, gid, str(ex))) from ex
         else:
             try:
                 coco_img = self.dset.coco_image(gid)
-                imdata = coco_img.imdelay(channels, space='image').finalize(nodata='float')
+
+                imdata = coco_img.imdelay(channels, space='image', resolution=resolution).finalize(nodata='float')
                 return imdata
             except Exception as ex:
                 img = self.dset.imgs[gid]
@@ -87,61 +83,13 @@ class _CocoTorchDataset(torch.utils.data.Dataset):
                     )) from ex
 
 
-class L8asWV3Dataset(_CocoTorchDataset):
-    """
-    Load L8 images and stack them to look like WV3 images.
-    """
-
-    def _include(self, gid):
-        return self.dset.imgs[gid]['sensor_coarse'] == 'L8'
-
-    def _load(self, gid):
-        channels_list = [
-            'coastal',
-            'blue',
-            'green',
-            'green',  # or pan
-            'red',
-            'red',
-            'nir',
-            'nir'
-        ]
-        return self._load_channels_stacked(gid, channels_list)
-
-
-class S2asWV3Dataset(_CocoTorchDataset):
-    """
-    Load S2 images and stack them to look like WV3 images.
-    """
-
-    def _include(self, gid):
-        return self.dset.imgs[gid]['sensor_coarse'] == 'S2'
-
-    def _load(self, gid):
-        channels_list = [
-            'coastal',
-            'blue',
-            'green',
-            'green',  # wrong, S2 doesn't cover this wavelength
-            'red',
-            'B06',
-            ('B08', 'B8A', 'B07'),
-            'B09'
-        ]
-
-        return self._load_channels_stacked(gid, channels_list)
-
-
 class S2Dataset(_CocoTorchDataset):
     """
     Load S2 images and stack.
     """
 
-    def _include(self, gid):
-        return self.dset.imgs[gid]['sensor_coarse'] == 'S2'
-
-    def _load(self, gid):
-        channels_list = [
+    def __init__(self, dset):
+        self.channels_list = [
             'coastal',
             'blue',
             'green',
@@ -156,12 +104,72 @@ class S2Dataset(_CocoTorchDataset):
             'swir16',
             'swir22'
         ]
+        super(S2Dataset, self).__init__(dset)
 
-        return self._load_channels_stacked(gid, channels_list)
+    def _include(self, gid):
+        sensor_type = self.dset.imgs[gid]['sensor_coarse']
+        available_channels = [x["channels"] for x in self.dset.imgs[gid]["auxiliary"]]
+        has_valid_sensor = sensor_type == 'S2'
+        has_valid_channels = set(self.channels_list).issubset(available_channels)
+        return has_valid_sensor and has_valid_channels
+
+    def _load(self, gid):
+        img = self._load_channels_stacked(gid, self.channels_list, resolution=10)
+        is_samecolor = util_kwimage.find_samecolor_regions(img[:, :, 0], scale=0.4,
+                                                           min_region_size=49, values={0})
+        img[is_samecolor > 0] = np.nan
+        img[img == -9999] = np.nan
+        return img
+
+
+class WVDataset(_CocoTorchDataset):
+    """
+    Load WorldView images and stack.
+    """
+
+    def __init__(self, dset):
+        self.channels_list = [
+            'coastal',
+            'blue',
+            'green',
+            'yellow',
+            'red',
+            'rededge',
+            'nir08',
+            'nir09'
+        ]
+        super(WVDataset, self).__init__(dset)
+
+    def _include(self, gid):
+        sensor_type = self.dset.imgs[gid]['sensor_coarse']
+        available_channels = [x["channels"] for x in self.dset.imgs[gid]["auxiliary"]]
+        has_valid_sensor = sensor_type == 'WV'
+        has_valid_channels = set(self.channels_list).issubset(available_channels)
+        return has_valid_sensor and has_valid_channels
+
+    def _load(self, gid):
+        img = self._load_channels_stacked(gid, self.channels_list, resolution=2)
+        is_samecolor = util_kwimage.find_samecolor_regions(img[:, :, 0], scale=0.4,
+                                                           min_region_size=49, values={0})
+        img[is_samecolor > 0] = np.nan
+        img[img == -9999] = np.nan
+        return img
 
 
 def imresize(img, **kwargs):
     if kwargs.get('dsize') == (img.shape[1], img.shape[0]):
         return img
-
     return kwimage.imresize(img, **kwargs)
+
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--coco_dset", type=str, required=True)
+    args = parser.parse_args()
+
+    coco_dset = WVDataset(args.coco_dset)
+    print(len(coco_dset))
+
+    img = coco_dset._load(coco_dset.gids[0])
+    print(img.shape)
