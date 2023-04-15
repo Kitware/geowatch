@@ -75,7 +75,7 @@ def _import_troublesome_module(modname):
 
 def _is_running_a_fast_cli_tool():
     """
-    Determine if we are running a fast-cli tool.
+    Determine if we are running a fast cli tool.
 
     This is used to short circuit the pre-imports for certain command line
     tools so we don't incur the import time, which can be multiple seconds.

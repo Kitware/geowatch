@@ -1079,8 +1079,8 @@ python -m watch.mlops.aggregate \
 
 
 # Eval10 baseline
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 geowatch schedule --params="
     matrix:
         bas_pxl.package_fpath:
@@ -1123,8 +1123,8 @@ geowatch schedule --params="
             - null
             #- 1
         bas_poly.poly_merge_method:
-            #- 'v2'
-            - 'v1'
+            - 'v2'
+            #- 'v1'
         bas_poly.min_area_square_meters:
             - 7200
         bas_poly.max_area_square_meters:
@@ -1144,7 +1144,7 @@ geowatch schedule --params="
     --pipeline=bas --skip_existing=1 \
     --run=1
 
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 geowatch aggregate \
     --pipeline=bas \
     --target "
