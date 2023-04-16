@@ -84,6 +84,69 @@ except Exception:
     profile = ub.identity
 
 
+class AssetExtractConfig(scfg.DataConfig):
+    """
+    Part of the extract config for asset jobs
+    """
+    keep = 'none'
+    include_channels = None
+    exclude_channels = None
+    force_nodata = None
+    tries = 2
+    asset_timeout = None
+    force_min_gsd  =  None
+    hack_lazy = False
+    verbose = 0
+
+
+class ImageExtractConfig(scfg.DataConfig):
+    """
+    Part of the extract config for image jobs
+    """
+    rpc_align_method = 'orthorectify'
+    aux_workers = 0
+    keep = 'none'
+    include_channels = None
+    exclude_channels = None
+    force_nodata = None
+    tries = 2
+    image_timeout = None
+    asset_timeout = None
+    force_min_gsd  =  None
+    hack_lazy = False
+    verbose = 0
+    num_start_frames = None
+    num_end_frames = None
+
+
+class ExtractConfig(scfg.DataConfig):
+    """
+    This is a subset of the above config for arguments a passed to
+    extract_overlaps. We may use this config as a base class to inherit from,
+    but for now we duplicate param names.
+    """
+    rpc_align_method = 'orthorectify'
+    write_subsets = True
+    visualize = True
+    img_workers = 0
+    aux_workers = 0
+    keep = 'none'
+    target_gsd = 10
+    debug_valid_regions = False
+    include_channels = None
+    exclude_channels = None
+    tries = 2
+    image_timeout = None
+    asset_timeout = None
+    force_nodata = None
+    verbose = 0
+    force_min_gsd  =  None
+    hack_lazy = False
+    max_frames = None
+    num_start_frames = None
+    num_end_frames = None
+
+
 class CocoAlignGeotiffConfig(scfg.DataConfig):
     """
     Create a dataset of aligned temporal sequences around objects of interest
@@ -103,6 +166,7 @@ class CocoAlignGeotiffConfig(scfg.DataConfig):
             '''
             bundle directory or kwcoco json file for the output
             '''))
+
     img_workers = scfg.Value(0, type=str, help=ub.paragraph(
             '''
             number of parallel procs. This can also be an expression
@@ -243,13 +307,13 @@ class CocoAlignGeotiffConfig(scfg.DataConfig):
             construct the aligned kwcoco dataset as normal.
             '''))
 
-    start_observations = scfg.Value(None, help=ub.paragraph(
+    num_start_frames = scfg.Value(None, help=ub.paragraph(
         '''
         if specified, attempt to only gather this many high quality images at
         the start of a sequence.
         '''))
 
-    end_observations = scfg.Value(None, help=ub.paragraph(
+    num_end_frames = scfg.Value(None, help=ub.paragraph(
         '''
         if specified, attempt to only gather this many high quality images at
         the end of a sequence.
@@ -263,65 +327,6 @@ class CocoAlignGeotiffConfig(scfg.DataConfig):
         if isinstance(config['force_min_gsd'], str):
             if config['force_min_gsd'].lower().endswith('gsd'):
                 config['force_min_gsd'] = float(config['force_min_gsd'][:-3].strip())
-
-
-class ExtractConfig(scfg.DataConfig):
-    """
-    This is a subset of the above config for arguments a passed to
-    extract_overlaps. We may use this config as a base class to inherit from,
-    but for now we duplicate param names.
-    """
-    rpc_align_method = 'orthorectify'
-    write_subsets = True
-    visualize = True
-    img_workers = 0
-    aux_workers = 0
-    keep = 'none'
-    target_gsd = 10
-    max_frames = None
-    debug_valid_regions = False
-    include_channels = None
-    exclude_channels = None
-    tries = 2
-    image_timeout = None
-    asset_timeout = None
-    force_nodata = None
-    verbose = 0
-    force_min_gsd  =  None
-    hack_lazy = False
-
-
-class ImageExtractConfig(scfg.DataConfig):
-    """
-    Part of the extract config for image jobs
-    """
-    rpc_align_method = 'orthorectify'
-    aux_workers = 0
-    keep = 'none'
-    include_channels = None
-    exclude_channels = None
-    force_nodata = None
-    tries = 2
-    image_timeout = None
-    asset_timeout = None
-    force_min_gsd  =  None
-    hack_lazy = False
-    verbose = 0
-
-
-class AssetExtractConfig(scfg.DataConfig):
-    """
-    Part of the extract config for asset jobs
-    """
-    keep = 'none'
-    include_channels = None
-    exclude_channels = None
-    force_nodata = None
-    tries = 2
-    asset_timeout = None
-    force_min_gsd  =  None
-    hack_lazy = False
-    verbose = 0
 
 
 @profile
@@ -576,7 +581,7 @@ def main(cmdline=True, **kw):
     }
     print('process_info = {}'.format(ub.urepr(process_info, nl=3, sort=0)))
 
-    config.workers = util_parallel.coerce_num_workers(config['workers'])
+    config.img_workers = util_parallel.coerce_num_workers(config['img_workers'])
     config.aux_workers = util_parallel.coerce_num_workers(config['aux_workers'])
     print('img_workers = {!r}'.format(config.img_workers))
     print('aux_workers = {!r}'.format(config.aux_workers))
@@ -610,6 +615,7 @@ def main(cmdline=True, **kw):
                 elif 'site_summary' in type_to_subdf:
                     # This is a region model
                     df = type_to_subdf['site_summary']
+                    df['region_id'] = type_to_subdf['region']['region_id'].iloc[0]
             else:
                 if 'site' in type_to_subdf:
                     # This is a site model
@@ -716,8 +722,6 @@ def main(cmdline=True, **kw):
 
     extract_kwargs = ub.udict(config) & ExtractConfig.__default__.keys()
     extract_kwargs['tries'] = config['warp_tries']
-    # import xdev
-    # xdev.embed()
 
     for image_overlaps in ub.ProgIter(to_extract, desc='extract ROI videos', verbose=3):
         video_name = image_overlaps['video_name']
@@ -726,9 +730,9 @@ def main(cmdline=True, **kw):
         sub_bundle_dpath = ub.Path(extract_dpath) / video_name
         print('sub_bundle_dpath = {!r}'.format(sub_bundle_dpath))
 
-        extract_config = ExtractConfig(**extract_kwargs)
+        extract_kwargs = ExtractConfig(**extract_kwargs)
         new_dset = cube.extract_overlaps(
-            image_overlaps, extract_dpath, new_dset=new_dset, **extract_config
+            image_overlaps, extract_dpath, new_dset=new_dset, **extract_kwargs
         )
         if config['hack_lazy']:
             lazy_commands.extend(new_dset)
@@ -965,6 +969,7 @@ class SimpleDataCube(object):
         """
         from kwcoco.util.util_json import ensure_json_serializable
         import geopandas as gpd
+        from watch.utils import util_time
         from watch.utils import util_gis
         import kwimage
 
@@ -1044,14 +1049,19 @@ class SimpleDataCube(object):
                 # Special case where we are extracting a region with a name
                 video_name = region_row.get('region_model_id', space_str)  # V1 spec
                 video_name = region_row.get('region_id', video_name)  # V2 spec
+                sub_bundle_dname = video_name
+            elif region_row.get('type', None) == 'site_summary':
+                # Special case where we are extracting a site model with a name
+                video_name = region_row.get('site_id', space_str)  # V2 spec
+                region_id = region_row.get('region_id', 'unknown_region')  # V2 spec
+                sub_bundle_dname = f'{region_id}/{video_name}'
             else:
                 video_name = space_str
+                sub_bundle_dname = video_name
 
             if len(gidxs) == 0:
                 print('Warning: No spatial matches to {}'.format(video_name))
             else:
-                from watch.utils import util_time
-
                 # TODO: filter dates out of range
                 query_start_date = region_row.get('start_date', None)
                 query_end_date = region_row.get('end_date', None)
@@ -1113,13 +1123,14 @@ class SimpleDataCube(object):
                         'video_name': video_name,
                         'properties': region_props,
                         'local_epsg': local_epsg,
+                        'sub_bundle_dname': sub_bundle_dname,
                     }
                     to_extract.append(image_overlaps)
         return to_extract
 
     @profile
     def extract_overlaps(cube, image_overlaps, extract_dpath, new_dset=None,
-                         **kwargs):
+                         **extract_kwargs):
         """
         Given a region of interest, extract an aligned temporal sequence
         of data to a specified directory.
@@ -1175,18 +1186,14 @@ class SimpleDataCube(object):
         """
         from kwcoco.util.util_json import ensure_json_serializable
         import geopandas as gpd
-        import pandas as pd  # NOQA
-        from shapely import geometry
         from watch.utils import util_time
         from watch.utils import util_gis
         from watch.utils import kwcoco_extensions
         import kwcoco
         import kwimage
-        # import watch
         coco_dset = cube.coco_dset
-        extract_config = ExtractConfig(**kwargs)
+        extract_config = ExtractConfig(**extract_kwargs)
 
-        # print('image_overlaps = {}'.format(ub.urepr(image_overlaps, nl=1)))
         datetime_to_gids = image_overlaps['datetime_to_gids']
         space_str = image_overlaps['space_str']
         space_box = image_overlaps['space_box']
@@ -1204,7 +1211,7 @@ class SimpleDataCube(object):
         if new_dset is None:
             new_dset = kwcoco.CocoDataset()
 
-        sub_bundle_dpath = (ub.Path(extract_dpath) / video_name).ensuredir()
+        sub_bundle_dpath = (ub.Path(extract_dpath) / image_overlaps['sub_bundle_dname']).ensuredir()
 
         subdata_fpath = ub.Path(sub_bundle_dpath) / 'subdata.kwcoco.json'
         if subdata_fpath.exists() and extract_config.keep in {'roi-img', 'roi'}:
@@ -1258,7 +1265,6 @@ class SimpleDataCube(object):
         # Manage new ids such that parallelization does not impact their order
         start_gid = new_dset._next_ids.get('images')
         start_aid = new_dset._next_ids.get('annotations')
-        frame_index = 0
 
         # parallelize over images
         image_jobs = ub.JobPool(mode='thread', max_workers=extract_config.img_workers)
@@ -1270,10 +1276,40 @@ class SimpleDataCube(object):
         space_region_local = space_region_crs84.to_crs(local_epsg)
         sh_space_region_local = space_region_local.geometry.iloc[0]
 
+        # No restrictions, we just want all the frames
+        want_all_frames = (
+            extract_config.num_start_frames is None and
+            extract_config.num_end_frames is None
+            # extract_config.max_frames
+        )
+
+        # Determine what frames we actually want inside the valid range
+        num_avail_frames = len(datetimes)
+        all_frame_indexes = ub.oset(range(num_avail_frames))
+        if want_all_frames:
+            requested_frame_indexes = all_frame_indexes
+            unrequested_datetimes = ub.oset()
+        else:
+            if extract_config.num_start_frames is None:
+                extract_config.num_start_frames = 0
+            if extract_config.num_end_frames is None:
+                extract_config.num_end_frames = 0
+            end_start_index = max(0, num_avail_frames - extract_config.num_end_frames)
+            front_end_index = min(num_avail_frames, extract_config.num_start_frames)
+            take_end_idxs = ub.oset(range(end_start_index, num_avail_frames))
+            take_start_idxs = ub.oset(range(0, front_end_index))
+
+            all_frame_indexes = ub.oset(range(num_avail_frames))
+            requested_frame_indexes = take_start_idxs | take_end_idxs
+            unrequested_datetimes = all_frame_indexes - requested_frame_indexes
+
         frame_count = 0
-        prog = ub.ProgIter(datetimes, desc='submit extract jobs', verbose=1)
-        dtiter = iter(prog)
-        for datetime_ in dtiter:
+        frame_index = 0   # Note: this may need to be corrected later
+        prog = ub.ProgIter(requested_frame_indexes, desc='submit extract jobs', verbose=1)
+        piter = iter(prog)
+        for request_idx in piter:
+
+            datetime_ = datetimes[request_idx]
 
             if extract_config.max_frames is not None:
                 if frame_count > extract_config.max_frames:
@@ -1285,94 +1321,21 @@ class SimpleDataCube(object):
             # TODO: Is there any other consideration we should make when
             # multiple images have the same timestamp?
             # if len(gids) > 0:
-            groups = []
             if len(gids) > 0:
                 # We got multiple images for the same timestamp.  Im not sure
                 # if this is necessary but thig logic attempts to sort them
                 # such that the "best" image to use is first.  Ideally gdalwarp
                 # would take care of this but I'm not sure it does.
-                conflict_imges = coco_dset.images(gids)
-                sensors = list(conflict_imges.lookup('sensor_coarse', None))
-                for sensor_coarse, sensor_gids in ub.group_items(conflict_imges, sensors).items():
-                    rows = []
-                    for gid in sensor_gids:
-                        coco_img = coco_dset.coco_image(gid)
-
-                        # Should more than just the primary asset be used here?
-                        primary_asset = coco_img.primary_asset()
-                        fpath = ub.Path(coco_dset.bundle_dpath) / primary_asset['file_name']
-
-                        # Note: valid region data is not necessary as input but
-                        # we use it if it exists.
-                        valid_region_utm = coco_img.img.get('valid_region_utm', None)
-                        if valid_region_utm is not None:
-                            geos_valid_region_utm = coco_img.img['valid_region_utm']
-                            try:
-                                this_utm_crs = geos_valid_region_utm['properties']['crs']['auth']
-                            except KeyError:
-                                this_utm_crs = coco_img.img['utm_crs_info']['auth']
-                            sh_valid_region_utm = geometry.shape(geos_valid_region_utm)
-                            valid_region_utm = gpd.GeoDataFrame({'geometry': [sh_valid_region_utm]}, crs=this_utm_crs)
-                            valid_region_local = valid_region_utm.to_crs(local_epsg)
-                            sh_valid_region_local = valid_region_local.geometry.iloc[0]
-                            isect_area = sh_valid_region_local.intersection(sh_space_region_local).area
-                            other_area = sh_space_region_local.area
-                            valid_iooa = isect_area / other_area
-                        else:
-                            # If the valid_utm region does not exist, do we at
-                            # least have corners?
-                            geos_corners = coco_img.img.get('geos_corners', None)
-                            if geos_corners is not None:
-                                corners_gdf = util_gis.crs_geojson_to_gdf(geos_corners)
-                                valid_region_local = corners_gdf.to_crs(local_epsg)
-                                sh_valid_region_local = valid_region_local.geometry.iloc[0]
-                                isect_area = sh_valid_region_local.intersection(sh_space_region_local).area
-                                other_area = sh_space_region_local.area
-                                valid_iooa = isect_area / other_area
-                            else:
-                                sh_valid_region_local = None
-                                valid_iooa = -1
-
-                        score = valid_iooa
-                        rows.append({
-                            'score': score,
-                            'gid': gid,
-                            'valid_iooa': valid_iooa,
-                            'fname': fpath.name,
-                            'geometry': sh_valid_region_local,
-                        })
-
-                    # The order doesnt matter here. We will fix it after we
-                    # crop the images.
-                    final_gids = [
-                        r['gid'] for r in sorted(rows, key=lambda r: r['score'], reverse=True)]
-                    groups.append({
-                        'main_gid': final_gids[0],
-                        # 'other_gids': [],
-                        'other_gids': final_gids[1:],
-                        'sensor_coarse': sensor_coarse,
-                    })
-                    # Output a visualization of this group and its overlaps but
-                    # only if we have that info
-                    can_vis_geos = any(row['geometry'] is not None for row in rows)
-                    if extract_config.debug_valid_regions:
-                        prog.ensure_newline()
-                        print('debug_valid_regions = {!r}'.format(extract_config.debug_valid_regions))
-                        print('can_vis_geos = {!r}'.format(can_vis_geos))
-                    if extract_config.debug_valid_regions and can_vis_geos:
-                        _debug_valid_regions(
-                            cube, coco_dset, space_region_crs84,
-                            space_region_local, final_gids, rows,
-                            sh_space_region_local, local_epsg, extract_dpath,
-                            video_name, iso_time, space_str, sensor_coarse)
-
+                groups = _handle_multiple_images_per_date(
+                    coco_dset, gids, local_epsg, sh_space_region_local,
+                    extract_config, prog, cube, space_region_crs84,
+                    extract_dpath, video_name, iso_time, space_str,
+                    space_region_local)
             else:
-                groups.append({
+                groups = [{
                     'main_gid': gids[0],
                     'other_gids': [],
-                })
-
-            # continue
+                }]
 
             for num, group in enumerate(groups):
                 main_gid = group['main_gid']
@@ -1388,10 +1351,6 @@ class SimpleDataCube(object):
                     for other_gid in other_gids:
                         anns += [coco_dset.index.anns[aid] for aid in
                                  coco_dset.index.gid_to_aids[other_gid]]
-
-                # if len(other_gids) == 0:
-                #     # Hack: only look at weird cases
-                #     continue
 
                 sensor_coarse = img.get('sensor_coarse', 'unknown')
                 # Construct a name for the subregion to extract.
@@ -1428,6 +1387,7 @@ class SimpleDataCube(object):
                     local_epsg=local_epsg,
                     other_imgs=other_imgs,
                     **img_config)
+                job.request_idx = request_idx
                 start_gid = start_gid + 1
                 start_aid = start_aid + len(anns)
                 frame_index = frame_index + 1
@@ -1449,6 +1409,10 @@ class SimpleDataCube(object):
             try:
                 new_img, new_anns = job.result(timeout=image_timeout)
             except SkipImage:
+                # TODO: if we are only requesting a subset of images we may
+                # want to submit a new image job to take the place of this
+                # failed image.
+                unrequested_datetimes
                 continue
             except TimeoutError:
                 print('\n\nAn image job timed out!\n\n')
@@ -1575,10 +1539,106 @@ class SimpleDataCube(object):
             sub_dset.fpath = os.fspath(ub.Path(sub_bundle_dpath) / 'subdata.kwcoco.json')
             sub_dset.reroot(new_root=os.fspath(sub_bundle_dpath), absolute=False)
 
+            # Fix frame order issue
             kwcoco_extensions.reorder_video_frames(sub_dset)
 
             sub_dset.dump(sub_dset.fpath, newlines=True)
         return new_dset
+
+
+def _handle_multiple_images_per_date(coco_dset, gids, local_epsg,
+                                     sh_space_region_local, extract_config,
+                                     prog, cube, space_region_crs84,
+                                     extract_dpath, video_name, iso_time,
+                                     space_str, space_region_local):
+    import geopandas as gpd
+    import pandas as pd  # NOQA
+    from shapely import geometry
+    from watch.utils import util_gis
+    # We got multiple images for the same timestamp.  Im not sure
+    # if this is necessary but thig logic attempts to sort them
+    # such that the "best" image to use is first.  Ideally gdalwarp
+    # would take care of this but I'm not sure it does.
+    conflict_imges = coco_dset.images(gids)
+    sensors = list(conflict_imges.lookup('sensor_coarse', None))
+
+    groups = []
+
+    for sensor_coarse, sensor_gids in ub.group_items(conflict_imges, sensors).items():
+        rows = []
+        for gid in sensor_gids:
+            coco_img = coco_dset.coco_image(gid)
+
+            # Should more than just the primary asset be used here?
+            primary_asset = coco_img.primary_asset()
+            fpath = ub.Path(coco_dset.bundle_dpath) / primary_asset['file_name']
+
+            # Note: valid region data is not necessary as input but
+            # we use it if it exists.
+            valid_region_utm = coco_img.img.get('valid_region_utm', None)
+            if valid_region_utm is not None:
+                geos_valid_region_utm = coco_img.img['valid_region_utm']
+                try:
+                    this_utm_crs = geos_valid_region_utm['properties']['crs']['auth']
+                except KeyError:
+                    this_utm_crs = coco_img.img['utm_crs_info']['auth']
+                sh_valid_region_utm = geometry.shape(geos_valid_region_utm)
+                valid_region_utm = gpd.GeoDataFrame({'geometry': [sh_valid_region_utm]}, crs=this_utm_crs)
+                valid_region_local = valid_region_utm.to_crs(local_epsg)
+                sh_valid_region_local = valid_region_local.geometry.iloc[0]
+                isect_area = sh_valid_region_local.intersection(sh_space_region_local).area
+                other_area = sh_space_region_local.area
+                valid_iooa = isect_area / other_area
+            else:
+                # If the valid_utm region does not exist, do we at
+                # least have corners?
+                geos_corners = coco_img.img.get('geos_corners', None)
+                if geos_corners is not None:
+                    corners_gdf = util_gis.crs_geojson_to_gdf(geos_corners)
+                    valid_region_local = corners_gdf.to_crs(local_epsg)
+                    sh_valid_region_local = valid_region_local.geometry.iloc[0]
+                    isect_area = sh_valid_region_local.intersection(sh_space_region_local).area
+                    other_area = sh_space_region_local.area
+                    valid_iooa = isect_area / other_area
+                else:
+                    sh_valid_region_local = None
+                    valid_iooa = -1
+
+            tiebreaker = '*' if sensor_coarse is None else sensor_coarse
+            score = (valid_iooa, tiebreaker)
+            rows.append({
+                'score': score,
+                'gid': gid,
+                'valid_iooa': valid_iooa,
+                'fname': fpath.name,
+                'geometry': sh_valid_region_local,
+            })
+
+        # The order doesnt matter here. We will fix it after we
+        # crop the images.
+        final_gids = [
+            r['gid'] for r in sorted(rows, key=lambda r: r['score'], reverse=True)]
+
+        groups.append({
+            'main_gid': final_gids[0],
+            # 'other_gids': [],
+            'other_gids': final_gids[1:],
+            'sensor_coarse': sensor_coarse,
+        })
+        # Output a visualization of this group and its overlaps but
+        # only if we have that info
+        can_vis_geos = any(row['geometry'] is not None for row in rows)
+        if extract_config.debug_valid_regions:
+            prog.ensure_newline()
+            print('debug_valid_regions = {!r}'.format(extract_config.debug_valid_regions))
+            print('can_vis_geos = {!r}'.format(can_vis_geos))
+        if extract_config.debug_valid_regions and can_vis_geos:
+            _debug_valid_regions(
+                cube, coco_dset, space_region_crs84,
+                space_region_local, final_gids, rows,
+                sh_space_region_local, local_epsg, extract_dpath,
+                video_name, iso_time, space_str, sensor_coarse)
+    return groups
 
 
 @profile

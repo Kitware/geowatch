@@ -91,6 +91,7 @@ class AggregateEvluationConfig(DataConfig):
 
 def main(cmdline=True, **kwargs):
     """
+
     Ignore:
         >>> from watch.mlops.aggregate import *  # NOQA
         >>> import watch
@@ -111,9 +112,11 @@ def main(cmdline=True, **kwargs):
         agg = ub.peek(eval_type_to_aggregator.values())
         agg = eval_type_to_aggregator.get('bas_poly_eval', None)
         agg = eval_type_to_aggregator.get('bas_pxl_eval', None)
-        >>> ## Execute
-        >>> cmdline = 0
-        >>> main(cmdline=cmdline, **kwargs)
+
+        ## Execute
+
+        cmdline = 0
+        main(cmdline=cmdline, **kwargs)
     """
 
     config = AggregateEvluationConfig.cli(cmdline=cmdline, data=kwargs, strict=True)

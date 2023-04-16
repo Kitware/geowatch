@@ -90,7 +90,7 @@ Example:
     >>> #
     >>> root_dpath = data_dvc_dpath / '_testdag'
     >>> #
-    >>> nodes = joint_bas_sc_nodes()
+    >>> nodes = make_smart_pipeline_nodes()
     >>> #nodes = bas_nodes()
     >>> from watch.mlops.pipeline_nodes import PipelineDAG
     >>> self = dag = PipelineDAG(nodes)
@@ -121,7 +121,7 @@ class FeatureComputation(ProcessNode):
     executable = 'python -m watch.cli.run_metrics_framework'
     group_dname = PREDICT_NAME
 
-    node_dname = 'feats/{src_dset}'
+    # node_dname = 'feats/{src_dset}'
 
     in_paths = {'src'}
 
@@ -465,8 +465,8 @@ class BAS_HeatmapPrediction(HeatmapPrediction):
         >>> print(command)
     """
     name = 'bas_pxl'
-    # node_dname = 'bas_pxl/{bas_model}/{bas_test_dset}/{bas_pxl_algo_id}/{bas_pxl_id}'
-    node_dname = 'bas_pxl/{bas_pxl_algo_id}/{bas_pxl_id}'
+    # # node_dname = 'bas_pxl/{bas_model}/{bas_test_dset}/{bas_pxl_algo_id}/{bas_pxl_id}'
+    # node_dname = 'bas_pxl/{bas_pxl_algo_id}/{bas_pxl_id}'
 
     perf_params = ub.udict(HeatmapPrediction.perf_params) | {
         'with_saliency': True,
@@ -484,8 +484,8 @@ class BAS_HeatmapPrediction(HeatmapPrediction):
 
 class SC_HeatmapPrediction(HeatmapPrediction):
     name = 'sc_pxl'
-    # node_dname = 'sc_pxl/{sc_model}/{sc_test_dset}/{sc_pxl_algo_id}/{sc_pxl_id}'
-    node_dname = 'sc_pxl/{sc_pxl_algo_id}/{sc_pxl_id}'
+    # # node_dname = 'sc_pxl/{sc_model}/{sc_test_dset}/{sc_pxl_algo_id}/{sc_pxl_id}'
+    # node_dname = 'sc_pxl/{sc_pxl_algo_id}/{sc_pxl_id}'
 
     perf_params = ub.udict(HeatmapPrediction.perf_params) | {
         'with_saliency': False,
@@ -505,7 +505,7 @@ class SC_HeatmapPrediction(HeatmapPrediction):
 
 class BAS_PolygonPrediction(PolygonPrediction):
     name = 'bas_poly'
-    node_dname = 'bas_poly/{bas_poly_algo_id}/{bas_poly_id}'
+    # node_dname = 'bas_poly/{bas_poly_algo_id}/{bas_poly_id}'
     default_track_fn = 'saliency_heatmaps'
 
     @property
@@ -518,7 +518,7 @@ class BAS_PolygonPrediction(PolygonPrediction):
 
 class SC_PolygonPrediction(PolygonPrediction):
     name = 'sc_poly'
-    node_dname = 'sc_poly/{sc_poly_algo_id}/{sc_poly_id}'
+    # node_dname = 'sc_poly/{sc_poly_algo_id}/{sc_poly_id}'
     default_track_fn = 'class_heatmaps'
 
     @property
@@ -532,53 +532,47 @@ class SC_PolygonPrediction(PolygonPrediction):
 
 class BAS_HeatmapEvaluation(HeatmapEvaluation):
     name = 'bas_pxl_eval'
-    node_dname = 'bas_pxl_eval'
+    # node_dname = 'bas_pxl_eval'
 
 
 class SC_HeatmapEvaluation(HeatmapEvaluation):
     name = 'sc_pxl_eval'
-    node_dname = 'sc_pxl_eval'
+    # node_dname = 'sc_pxl_eval'
 
 
 # ---
 
 class BAS_PolygonEvaluation(PolygonEvaluation):
     name = 'bas_poly_eval'
-    node_dname = 'bas_poly_eval'
+    # node_dname = 'bas_poly_eval'
 
 
 class SC_PolygonEvaluation(PolygonEvaluation):
     name = 'sc_poly_eval'
-    node_dname = 'sc_poly_eval'
+    # node_dname = 'sc_poly_eval'
 
 # ---
 
 
 class BAS_Visualization(KWCocoVisualization):
     name = 'bas_poly_viz'
-    node_dname = 'bas_poly_viz'
+    # node_dname = 'bas_poly_viz'
 
 
 class SC_Visualization(KWCocoVisualization):
     name = 'sc_poly_viz'
-    node_dname = 'sc_poly_viz'
+    # node_dname = 'sc_poly_viz'
 
 
 # ---
 
 
-class SiteCropping(ProcessNode):
-    name = 'sitecrop'
-    node_dname = 'sitecrop/{src_dset}/{regions_id}/{sitecrop_algo_id}/{sitecrop_id}'
+class Cropping(ProcessNode):
+    """
+    Used for both site cropping and validation-cropping
+    """
+    executable = 'python -m watch.cli.align'
     group_dname = PREDICT_NAME
-
-    in_paths = {
-        'crop_src_fpath',
-        'regions',
-    }
-    out_paths = {
-        'crop_dst_fpath': 'sitecrop.kwcoco.zip'
-    }
 
     algo_params = {
         # 'include_channels': 'red|green|blue|cloudmask',  # fixme: not a good default
@@ -640,6 +634,119 @@ class SiteCropping(ProcessNode):
         #     #     secret_fpath
         #         # command = f'source {secret_fpath} && ' + command
         command = 'AWS_DEFAULT_PROFILE=iarpa GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR ' + command
+        return command
+
+
+class ValidationCropping(Cropping):
+    """
+    Crop to high res images as the start / end of a sequence
+    """
+    name = 'valicrop'
+    # node_dname = 'valicrop/{src_dset}/{regions_id}/{valicrop_algoid}/{sitecrop_id}'
+
+    algo_params = {
+        # 'include_channels': 'red|green|blue|cloudmask',  # fixme: not a good default
+        'include_sensors': 'WV',
+        # None,
+        # 'exclude_sensors': 'L8',  # fixme: not a good default
+        # 'context_factor': 2.0,
+        'context_factor': 1.3,
+        'force_nodata': -9999,
+        'rpc_align_method': 'orthorectify',
+        'minimum_size': '128x128@2GSD',
+        'target_gsd': 2,
+        'force_min_gsd': 2,
+        'convexify_regions': True,
+        'num_end_frames': 3,
+        'num_start_frames': 3,
+    }
+
+    in_paths = {
+        'crop_src_fpath',
+        'regions',
+    }
+    out_paths = {
+        'crop_dst_fpath': 'valicrop.kwcoco.zip'
+    }
+
+
+class SiteCropping(Cropping):
+    """
+    Crop to each image of every site.
+    """
+    name = 'sitecrop'
+    # node_dname = 'sitecrop/{src_dset}/{regions_id}/{sitecrop_algo_id}/{sitecrop_id}'
+
+    algo_params = {
+        # 'include_channels': 'red|green|blue|cloudmask',  # fixme: not a good default
+        'include_channels': None,
+        'exclude_sensors': 'L8',  # fixme: not a good default
+        'target_gsd': 4,
+        # 'context_factor': 2.0,
+        'context_factor': 1.0,
+        'force_nodata': -9999,
+        'rpc_align_method': 'orthorectify',
+        'convexify_regions': True,
+        'minimum_size': '128x128@10GSD',
+        'force_min_gsd': 2,
+    }
+
+    in_paths = {
+        'crop_src_fpath',
+        'regions',
+    }
+    out_paths = {
+        'crop_dst_fpath': 'sitecrop.kwcoco.zip'
+    }
+
+
+class BuildingPrediction(ProcessNode):
+    """
+    Used for both site cropping and validation-cropping
+    """
+    name = 'buildings'
+    executable = 'python -m watch.tasks.building_detector.predict'
+    group_dname = PREDICT_NAME
+
+    in_paths = {
+        'coco_fpath',
+        'package_fpath',
+    }
+    out_paths = {
+        'out_coco_fpath': 'pred_boxes.kwcoco.zip'
+    }
+
+    algo_params = {
+        'fixed_resolution': "2GSD",
+        'batch_size': 1,
+    }
+
+    # The best setting of this depends on if the data is remote or not.  When
+    # networking, around 20+ workers is a good idea, but that's a very bad idea
+    # for local images or if the images are too big.
+    perf_params = {
+        'device': 0,
+        'data_workers': 2,
+    }
+
+    # @property
+    # def condensed(self):
+    #     condensed = super().condensed
+    #     condensed['regions_id'] = 'todo'
+    #     condensed['src_dset'] = 'todo'
+    #     return condensed
+
+    @profile
+    def command(self):
+        fmtkw = {}
+        # Not sure why final-config doesn't have everything
+        config = (ub.udict(self.final_config) | self.final_algo_config) | self.final_perf_config
+        fmtkw['config_argstr'] = self._make_argstr(config)
+        command = ub.codeblock(
+            r'''
+            python -m watch.tasks.building_detector.predict \
+                {config_argstr}
+            ''').format(**fmtkw)
         return command
 
 
@@ -721,32 +828,54 @@ def sc_nodes():
     return nodes
 
 
-def joint_bas_sc_nodes(with_bas=True, crops=True):
+def make_smart_pipeline_nodes(with_bas=True, validation_crops=False,
+                              site_crops=True, with_sc=True):
     nodes = {}
 
     if with_bas:
         nodes.update(bas_nodes())
 
-    if crops:
+    if validation_crops:
+
+        nodes['valicrop'] = ValidationCropping()
+        if with_bas:
+            nodes['bas_poly'].outputs['site_summaries_fpath'].connect(
+                nodes['valicrop'].inputs['regions']
+            )
+            nodes['bas_pxl'].inputs['test_dataset'].connect(
+                nodes['valicrop'].inputs['crop_src_fpath']
+            )
+
+        nodes['buildingpred'] = BuildingPrediction()
+        nodes['valicrop'].outputs['crop_dst_fpath'].connect(nodes['buildingpred'].inputs['coco_fpath'])
+
+    if site_crops:
         nodes['sitecrop'] = SiteCropping()
 
+        sitecrop_region_src = None
         if with_bas:
             # outputs['site_summaries_fpath'].connect(
-            nodes['bas_poly'].connect(
-                nodes['sitecrop'],
-                param_mapping={
-                    'site_summaries_fpath': 'regions',
-                }
-            )
+            sitecrop_region_src = nodes['bas_poly'].outputs['site_summaries_fpath']
+
+            if validation_crops:
+                raise NotImplementedError
+
+            sitecrop_region_src.connect(nodes['sitecrop'].inputs['regions'])
+            # nodes['bas_poly'].connect(
+            #     nodes['sitecrop'],
+            #     param_mapping={
+            #         'site_summaries_fpath': 'regions',
+            #     }
+            # )
 
             nodes['bas_pxl'].inputs['test_dataset'].connect(
                 nodes['sitecrop'].inputs['crop_src_fpath']
             )
 
-    if 1:
+    if with_sc:
         nodes.update(sc_nodes())
 
-        if crops:
+        if site_crops:
             nodes['sitecrop'].connect(
                 nodes['sc_pxl'],
                 param_mapping={
@@ -769,15 +898,26 @@ def joint_bas_sc_nodes(with_bas=True, crops=True):
 def make_smart_pipeline(name):
     """
     Get an unconfigured instance of the SMART pipeline
+
+    CommandLine:
+        xdoctest -m watch.mlops.smart_pipeline make_smart_pipeline
+
+    Example:
+        >>> from watch.mlops.smart_pipeline import *  # NOQA
+        >>> dag = make_smart_pipeline('bas_building_vali')
+        >>> dag.print_graphs()
     """
     from watch.mlops.pipeline_nodes import PipelineDAG
     from functools import partial
     node_makers = {
-        'joint_bas_sc': partial(joint_bas_sc_nodes, crops=True),
-        'joint_bas_sc_nocrop': partial(joint_bas_sc_nodes, crops=False),
-        'crop_sc': partial(joint_bas_sc_nodes, with_bas=False, crops=True),
+        'joint_bas_sc': partial(make_smart_pipeline_nodes, site_crops=True),
+        'joint_bas_sc_nocrop': partial(make_smart_pipeline_nodes, site_crops=False),
+        'crop_sc': partial(make_smart_pipeline_nodes, with_bas=False, site_crops=True),
         'sc': sc_nodes,
         'bas': bas_nodes,
+        'bas_building_vali': partial(make_smart_pipeline_nodes, with_bas=True,
+                                     validation_crops=True, site_crops=False,
+                                     with_sc=False),
     }
     make_nodes = node_makers[name]
     nodes = make_nodes()

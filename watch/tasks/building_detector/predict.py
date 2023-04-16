@@ -1,10 +1,11 @@
 """
 SeeAlso:
-    * /data/joncrall/dvc-repos/smart_expt_dvc/models/kitware/xview_dino/package_trained_model.py
+    * ~/data/dvc-repos/smart_expt_dvc/models/kitware/xview_dino/package_trained_model.py
 """
 #!/usr/bin/env python3
 import scriptconfig as scfg
 import ubelt as ub
+from torch.utils import data
 
 
 class BuildingDetectorConfig(scfg.DataConfig):
@@ -18,6 +19,21 @@ class BuildingDetectorConfig(scfg.DataConfig):
     device = scfg.Value(0)
     select_images = None
     track_emissions = True
+
+
+class WrapperDataset(data.Dataset):
+
+    def __init__(self, subdset):
+        self.subdset = subdset
+
+    def __len__(self):
+        return len(self.subdset)
+
+    def __getitem__(self, index):
+        item = self.subdset[index]
+        chw, _ = dino_preproc_item(item)
+        item['chw'] = chw
+        return item
 
 
 def main(cmdline=1, **kwargs):
@@ -85,16 +101,29 @@ def main(cmdline=1, **kwargs):
         num_workers=config.data_workers,
         window_dims=config.window_dims,
         select_images=config.select_images,
+        window_overlap=0.3,
+        force_bad_frames=True,
+        resample_invalid_frames=0,
         time_steps=1,
-        include_sensors=['WV'],
-        channels="(WV):red|green|blue",
+        include_sensors=['WV', 'WV1'],
+        channels="(WV):red|green|blue,(WV,WV1):pan",
     )
     datamodule.setup('test')
 
-    loader = datamodule.torch_datasets['test'].make_loader()
+    torch_dataset = datamodule.torch_datasets['test']
+    dino_dset = WrapperDataset(torch_dataset)
+    # loader = torch_dataset.make_loader()
+
+    # from watch.tasks.fusion.datamodules.kwcoco_dataset import worker_init_fn
+    loader = torch.utils.data.DataLoader(
+        dino_dset, batch_size=config.batch_size, num_workers=config.data_workers,
+        shuffle=False, pin_memory=False,
+        # worker_init_fn=worker_init_fn,
+        collate_fn=ub.identity,  # disable collation
+    )
     batch_iter = iter(loader)
 
-    coco_dset = loader.dataset.sampler.dset
+    coco_dset = torch_dataset.sampler.dset
 
     from watch.utils import util_progress
     from watch.utils import process_context
@@ -107,23 +136,41 @@ def main(cmdline=1, **kwargs):
     proc.add_disk_info(coco_dset.fpath)
 
     # pman = util_progress.ProgressManager('progiter')
+    import kwimage
     pman = util_progress.ProgressManager()
     gid_to_dets_accum = ub.ddict(list)
+
+    images = coco_dset.images()
+    gid_to_cocoimg = ub.dzip(images, images.coco_images)
     # torch.set_grad_enabled(False)
     with pman, torch.no_grad():
         for batch in pman.progiter(batch_iter, total=len(loader), desc='🦖 dino box detector'):
             batch_dets = dino_predict(model, batch)
-
             # TODO: downweight the scores of boxes on the edge of the window.
-
             for item, dets in zip(batch, batch_dets):
                 frame0 = item['frames'][0]
                 gid = frame0['gid']
+
+                # Compute the transform from this window outspace back to image
+                # space.
                 sl_y, sl_x = frame0['output_space_slice']
                 offset_x = sl_x.start
                 offset_y = sl_y.start
-                imgspace_dets = dets.translate((offset_x, offset_y))
+                vidspace_offset = (offset_x, offset_y)
+                scale_out_from_vid = frame0['scale_outspace_from_vid']
+                scale_vid_from_out = 1 / scale_out_from_vid
+                warp_vid_from_out = kwimage.Affine.affine(
+                    scale=scale_vid_from_out,
+                    offset=vidspace_offset)
+                coco_img = gid_to_cocoimg[gid]
+                warp_img_from_vid = coco_img.warp_img_from_vid
+                warp_img_from_out = warp_img_from_vid @ warp_vid_from_out
+
+                imgspace_dets = dets.warp(warp_img_from_out)
                 gid_to_dets_accum[gid].append(imgspace_dets)
+
+    unseen_gids = set(coco_dset.images()) - set(gid_to_dets_accum)
+    print('unseen_gids = {}'.format(ub.urepr(unseen_gids, nl=1)))
 
     coco_dset.clear_annotations()
 
@@ -138,6 +185,7 @@ def main(cmdline=1, **kwargs):
     out_dset.dataset['info'].append(obj)
 
     out_fpath = ub.Path(config.out_coco_fpath)
+    out_fpath.parent.ensuredir()
     out_dset.fpath = out_fpath
     out_dset._ensure_json_serializable()
 
@@ -146,6 +194,7 @@ def main(cmdline=1, **kwargs):
     for gid, dets in gid_to_dets.items():
         for cls in dets.classes:
             out_dset.ensure_category(cls)
+        dets = dets.non_max_supress(thresh=0.2, perclass=True)
         for ann in dets.to_coco(dset=out_dset):
             out_dset.add_annotation(**ann, image_id=gid)
 
@@ -165,15 +214,40 @@ def main(cmdline=1, **kwargs):
 def dino_preproc_item(item):
     import torchvision.transforms.functional as F
     import kwimage
-    import numpy as np
-    chw = item['frames'][0]['modes']['red|green|blue']
+    import torch
+    # import numpy as np
+    frames = item['frames']
+    modes = frames[0]['modes']
+
+    if 'red|green|blue' in modes:
+        chw = modes['red|green|blue']
+        is_nan = torch.isnan(chw)
+        rgb_nan_frac = is_nan.sum() / is_nan.numel()
+    else:
+        rgb_nan_frac = 1.0
+
+    # print('----')
+    # print(f'rgb_nan_frac={rgb_nan_frac}')
+    if rgb_nan_frac >= 0.0:
+        # fallback on pan
+        if 'pan' in modes:
+            pan_chw = modes['pan']
+            pan_is_nan = torch.isnan(pan_chw)
+            pan_nan_frac = pan_is_nan.sum() / pan_is_nan.numel()
+            # print(f'pan_nan_frac={pan_nan_frac}')
+            if rgb_nan_frac > pan_nan_frac:
+                pan_hwc = pan_chw.permute(1, 2, 0).cpu().numpy()
+                pan_hwc = kwimage.atleast_3channels(pan_hwc)
+                chw = torch.Tensor(pan_hwc).permute(2, 0, 1)
+
     hwc = chw.permute(1, 2, 0).cpu().numpy()
     normed_rgb = kwimage.normalize_intensity(hwc)
-    normed_rgb = np.nan_to_num(normed_rgb)
     hardcoded_mean = [0.485, 0.456, 0.406]
     hardcoded_std = [0.229, 0.224, 0.225]
     chw = F.to_tensor(normed_rgb)
     chw = F.normalize(chw, mean=hardcoded_mean, std=hardcoded_std)
+    chw = torch.nan_to_num(chw)
+    # normed_rgb = np.nan_to_num(normed_rgb)
     return chw, normed_rgb
 
 
@@ -183,7 +257,7 @@ def dino_predict(model, batch):
 
     dino_batch_items = []
     for item in batch:
-        chw, normed_rgb = dino_preproc_item(item)
+        chw = item['chw']
         dino_batch_items.append(chw)
 
     dino_batch = torch.stack(dino_batch_items, dim=0)
@@ -210,6 +284,8 @@ def dino_predict(model, batch):
         FILTER_NON_BUILDING = 0
         if FILTER_NON_BUILDING:
             dets = dets.compress(dets.class_idxs == model.building_id)
+        # Do a very small threshold first
+        dets = dets.compress(dets.scores > 0.01)
 
     batch_dets.append(dets)
     return batch_dets
