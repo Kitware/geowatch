@@ -13,9 +13,10 @@ class BuildingDetectorConfig(scfg.DataConfig):
     out_coco_fpath = scfg.Value(None, help='output')
     package_fpath = scfg.Value(None, help='pytorch packaged model')
     data_workers = 2
-    window_dims = (256, 256)
-    fixed_resolution = "5GSD"
+    window_dims = (1024, 1024)
+    fixed_resolution = "1GSD"
     batch_size = 1
+    window_overlap = 0.5
     device = scfg.Value(0)
     select_images = None
     track_emissions = True
@@ -39,11 +40,11 @@ class WrapperDataset(data.Dataset):
 def main(cmdline=1, **kwargs):
     """
     Ignore:
-        /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/kitware/xview_building_detector/checkpoint_best_regular.pth
+        /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/kitware/xview_dino_detector/checkpoint_best_regular.pth
 
     Example:
         >>> # xdoctest: +SKIP
-        >>> from watch.tasks.building_detector.predict import *  # NOQA
+        >>> from watch.tasks.dino_detector.predict import *  # NOQA
         >>> import ubelt as ub
         >>> import watch
         >>> import kwcoco
@@ -101,7 +102,7 @@ def main(cmdline=1, **kwargs):
         num_workers=config.data_workers,
         window_dims=config.window_dims,
         select_images=config.select_images,
-        window_overlap=0.3,
+        window_overlap=config.window_overlap,
         force_bad_frames=True,
         resample_invalid_frames=0,
         time_steps=1,
@@ -295,6 +296,6 @@ if __name__ == '__main__':
     """
 
     CommandLine:
-        xdoctest -m watch.tasks.building_detector.predict
+        xdoctest -m watch.tasks.dino_detector.predict
     """
     main()

@@ -705,7 +705,7 @@ class BuildingPrediction(ProcessNode):
     Used for both site cropping and validation-cropping
     """
     name = 'buildings'
-    executable = 'python -m watch.tasks.building_detector.predict'
+    executable = 'python -m watch.tasks.dino_detector.predict'
     group_dname = PREDICT_NAME
 
     in_paths = {
@@ -744,7 +744,7 @@ class BuildingPrediction(ProcessNode):
         fmtkw['config_argstr'] = self._make_argstr(config)
         command = ub.codeblock(
             r'''
-            python -m watch.tasks.building_detector.predict \
+            python -m watch.tasks.dino_detector.predict \
                 {config_argstr}
             ''').format(**fmtkw)
         return command

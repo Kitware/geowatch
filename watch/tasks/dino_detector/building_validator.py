@@ -68,8 +68,8 @@ if __name__ == '__main__':
     """
 
     CommandLine:
-        python ~/code/watch/watch/tasks/building_detector/building_validator.py
-        python -m watch.tasks.building_detector.building_validator
+        python ~/code/watch/watch/tasks/dino_detector/building_validator.py
+        python -m watch.tasks.dino_detector.building_validator
     """
     main()
 
@@ -83,12 +83,12 @@ Ignore:
             bas_pxl.package_fpath:
                 - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2/Drop6_TCombo1Year_BAS_10GSD_split6_V42_cont2_epoch3_step941.pt
             bas_pxl.test_dataset:
-                # - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R002.kwcoco.zip
-                # - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-BR_R002.kwcoco.zip
-                # - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-CH_R001.kwcoco.zip
-                # - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-NZ_R001.kwcoco.zip
+                - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R002.kwcoco.zip
+                - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-BR_R002.kwcoco.zip
+                - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-CH_R001.kwcoco.zip
+                - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-NZ_R001.kwcoco.zip
                 - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R001.kwcoco.zip
-                # - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-AE_R001.kwcoco.zip
+                - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-AE_R001.kwcoco.zip
             bas_pxl.chip_overlap: 0.3
             bas_pxl.chip_dims:
                 - auto
@@ -96,8 +96,8 @@ Ignore:
                 - auto
             bas_pxl.time_sampling:
                 - auto
-                #- soft5
-                #- soft4
+                - soft5
+                - soft4
             bas_poly.thresh:
                 - 0.33
                 #- 0.38
@@ -136,20 +136,35 @@ Ignore:
             bas_poly.enabled: 1
             bas_poly_eval.enabled: 1
             bas_poly_viz.enabled: 0
+            valicrop.enabled: 1
             valicrop.minimum_size: "256x256@2GSD"
             valicrop.num_start_frames: 3
             valicrop.num_end_frames: 3
             valicrop.context_factor: 1.5
+            buildings.enabled: 1
             buildings.package_fpath: $DVC_EXPT_DPATH/models/kitware/xview_dino.pt
+            buildings.window_dims: 1024
+            buildings.window_overlap: "0.5"
+            buildings.fixed_resolution: "1GSD"
         submatrices:
             - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R001.kwcoco.zip
               valicrop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-KR_R001.kwcoco.json
+            - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R002.kwcoco.zip
+              valicrop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-KR_R002.kwcoco.json
+            - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-BR_R002.kwcoco.zip
+              valicrop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-BR_R002.kwcoco.json
+            - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-CH_R001.kwcoco.zip
+              valicrop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-CH_R001.kwcoco.json
+            - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-NZ_R001.kwcoco.zip
+              valicrop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-NZ_R001.kwcoco.json
+            - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-AE_R001.kwcoco.zip
+              valicrop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-AE_R001.kwcoco.json
         " \
         --root_dpath="$DVC_EXPT_DPATH/_mlops_eval10_baseline" \
-        --devices="0,1" --tmux_workers=4 \
-        --backend=serial --queue_name "_mlops_eval10_baseline" \
+        --devices="0," --tmux_workers=2 \
+        --backend=tmux --queue_name "_mlops_eval10_baseline" \
         --pipeline=bas_building_vali --skip_existing=1 \
-        --run=0
+        --run=1
 
 geowatch align \
     --src "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6/imgonly-KR_R001.kwcoco.json" \
@@ -179,7 +194,7 @@ geowatch visualize /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dv
 python ~/code/watch/dev/wip/grid_sitevali_crops.py /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/valicrop/valicrop_id_2e8c8dc3/_viz_*
 
 
-python -m watch.tasks.building_detector.predict \
+python -m watch.tasks.dino_detector.predict \
     --package_fpath="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/kitware/xview_dino.pt" \
     --coco_fpath="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/valicrop/valicrop_id_2e8c8dc3/valicrop.kwcoco.zip" \
     --out_coco_fpath="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/buildings/buildings_id_61b8c2c7/pred_boxes.kwcoco.zip" \
@@ -207,13 +222,11 @@ geowatch reproject \
         --role=truth \
         --clear_existing=False
 
-geowatch visualize /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/buildings/buildings_id_61b8c2c7/pred_boxes_with_polys.kwcoco.zip \
+geowatch visualize /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/buildings/buildings_id_61b8c2c7/pred_and_truth.kwcoco.zip \
         --resolution=2GSD \
         --smart \
         --ann_score_thresh=0.3 \
         --viz_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/buildings/buildings_id_61b8c2c7/_vizme
-
-/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/bas_poly/bas_poly_id_dc32b2a6/site_summaries_manifest.json
 
 python ~/code/watch/dev/wip/grid_sitevali_crops.py --sub=_anns \
     /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/buildings/buildings_id_61b8c2c7/_vizme
