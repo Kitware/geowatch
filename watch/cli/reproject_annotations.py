@@ -139,6 +139,8 @@ class ReprojectAnnotationsConfig(scfg.DataConfig):
 
     verbose = scfg.Value(1, help='use this to print details')
 
+    validate_checks = scfg.Value(True, help='disable if you know you have valid data')
+
     def __post_init__(self):
         if self.io_workers == 'auto':
             self.io_workers = self.workers
@@ -287,7 +289,8 @@ def main(cmdline=False, **kwargs):
     if config['clear_existing']:
         coco_dset.clear_annotations()
 
-    region_id_to_sites = expand_site_models_with_site_summaries(sites, regions)
+    region_id_to_sites = expand_site_models_with_site_summaries(
+        sites, regions, validate_checks=config.validate_checks)
 
     propogate_strategy = config['propogate_strategy']
     viz_dpath = config['viz_dpath']
@@ -419,7 +422,7 @@ def separate_region_model_types(regions):
     return region_id_to_site_summaries, region_id_region_row
 
 
-def expand_site_models_with_site_summaries(sites, regions):
+def expand_site_models_with_site_summaries(sites, regions, validate_checks=True):
     """
     Takes all site summaries from region models that do not have a
     corresponding site model and makes a "pseudo-site-model" for use in BAS.
@@ -437,7 +440,7 @@ def expand_site_models_with_site_summaries(sites, regions):
     import numpy as np
     from watch.utils.util_pandas import pandas_reorder_columns
 
-    if __debug__:
+    if validate_checks:
         check_sitemodel_assumptions(sites)
 
     region_id_to_site_summaries, region_id_region_row = separate_region_model_types(regions)

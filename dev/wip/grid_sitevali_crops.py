@@ -33,23 +33,30 @@ def main(cmdline=1, **kwargs):
         print(f'img_dpath={img_dpath}')
         track_to_frames[track_dpath.name] = sorted(img_dpath.ls())
 
-    tmp_dpath = (viz_dpath / '_tmpcombotracks').ensuredir()
+    out_dpath = viz_dpath.augment(suffix='_gallary')
+    out_dpath.ensuredir()
 
-    track_to_now = {}
+    chunk_rtsize = 5
+    chunked_tracks = ub.chunks(track_to_frames, chunksize=chunk_rtsize ** 2)
+    for chunk_idx, tracks in enumerate(ub.ProgIter(chunked_tracks, desc='chunks')):
+        track_to_frame_ = ub.udict(track_to_frames).subdict(tracks)
 
-    grid_fpaths = []
-    for fx, frames_at_time in enumerate(it.zip_longest(*track_to_frames.values())):
-        for track, fpath in zip(track_to_frames, frames_at_time):
-            if fpath is not None:
-                track_to_now[track] = kwimage.imread(fpath)
+        chunk_dpath = (out_dpath / f'chunk_{chunk_idx:03d}').ensuredir()
 
-        frame = kwimage.stack_images_grid(track_to_now.values())
-        grid_fpath = tmp_dpath / f'frame_{fx:03d}.jpg'
-        grid_fpaths.append(grid_fpath)
-        kwimage.imwrite(grid_fpath, frame)
+        track_to_now = {}
+        grid_fpaths = []
+        for fx, frames_at_time in enumerate(it.zip_longest(*track_to_frame_.values())):
+            for track, fpath in zip(track_to_frame_, frames_at_time):
+                if fpath is not None:
+                    track_to_now[track] = kwimage.imread(fpath)
 
-    gif_fpath = tmp_dpath.parent / '_videogrid.gif'
-    gifify.ffmpeg_animate_frames(grid_fpaths, gif_fpath)
+            frame = kwimage.stack_images_grid(track_to_now.values())
+            grid_fpath = chunk_dpath / f'frame_{fx:03d}.jpg'
+            grid_fpaths.append(grid_fpath)
+            kwimage.imwrite(grid_fpath, frame)
+
+        gif_fpath = out_dpath / f'chunk_{chunk_idx:03d}.gif'
+        gifify.ffmpeg_animate_frames(grid_fpaths, gif_fpath)
 
 if __name__ == '__main__':
     """

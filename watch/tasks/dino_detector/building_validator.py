@@ -26,6 +26,14 @@ Given a site model:
     ----------+---------+-------
         F     |    F    | Reject
     ----------+---------+-------
+        ?     |    T    | Accept
+    ----------+---------+-------
+        T     |    ?    | Reject
+    ----------+---------+-------
+        ?     |    F    | Reject
+    ----------+---------+-------
+        F     |    ?    | Accept
+    ----------+---------+-------
 
 
 Dataflow:
@@ -204,32 +212,47 @@ python -m watch.tasks.dino_detector.predict \
     --window_dims="2048" \
     --batch_size="1"
 
-geowatch reproject \
-        --src "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/buildings/buildings_id_61b8c2c7/pred_boxes.kwcoco.zip" \
-        --dst "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/buildings/buildings_id_61b8c2c7/pred_boxes_with_polys.kwcoco.zip" \
-        --region_models="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/bas_poly/bas_poly_id_dc32b2a6/site_summaries_manifest.json" \
-        --status_to_catname="{system_confirmed: positive}" \
-        --role=pred_poly \
-        --clear_existing=False
+geowatch visualize /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/buildings/buildings_id_61b8c2c7/pred_and_truth.kwcoco.zip \
+    --resolution=2GSD \
+    --smart \
+    --ann_score_thresh=0.3 \
+    --viz_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/buildings/buildings_id_61b8c2c7/_vizme
+
+python ~/code/watch/dev/wip/grid_sitevali_crops.py --sub=_anns \
+    /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/buildings/buildings_id_61b8c2c7/_vizme
+
+
+NODE_DPATH=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/buildings/buildings_id_fd298dba/
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 geowatch reproject \
-        --src "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/buildings/buildings_id_61b8c2c7/pred_boxes_with_polys.kwcoco.zip" \
-        --dst "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/buildings/buildings_id_61b8c2c7/pred_and_truth.kwcoco.zip" \
-        --region_models="$DVC_DATA_DPATH/annotations/drop6/region_models/KR_R001.geojson" \
-        --site_models="$DVC_DATA_DPATH/annotations/drop6/site_models/KR_R001_*.geojson" \
+        --src "$NODE_DPATH/pred_boxes.kwcoco.zip" \
+        --dst "$NODE_DPATH/pred_boxes_with_polys.kwcoco.zip" \
+        --region_models "$NODE_DPATH/.pred/valicrop/*/.pred/bas_poly/*/site_summaries_manifest.json" \
+        --status_to_catname="{system_confirmed: positive}" \
+        --role=pred_poly \
+        --validate_checks=False \
+        --clear_existing=False
+
+geowatch reproject \
+        --src "$NODE_DPATH/pred_boxes_with_polys.kwcoco.zip" \
+        --dst "$NODE_DPATH/pred_and_truth.kwcoco.zip" \
+        --region_models="$DVC_DATA_DPATH/annotations/drop6/region_models/*.geojson" \
+        --site_models="$DVC_DATA_DPATH/annotations/drop6/site_models/*.geojson" \
         --status_to_catname="{system_confirmed: positive}" \
         --role=truth \
         --clear_existing=False
 
-geowatch visualize /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/buildings/buildings_id_61b8c2c7/pred_and_truth.kwcoco.zip \
-        --resolution=2GSD \
-        --smart \
-        --ann_score_thresh=0.3 \
-        --viz_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/buildings/buildings_id_61b8c2c7/_vizme
+gw visualize --smart 1 \
+    --ann_score_thresh 0.5 \
+    --draw_labels False \
+    --alpha 0.5 \
+    --src $NODE_DPATH/pred_and_truth.kwcoco.zip \
+    --viz_dpath $NODE_DPATH/_vizme \
 
-python ~/code/watch/dev/wip/grid_sitevali_crops.py --sub=_anns \
-    /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/buildings/buildings_id_61b8c2c7/_vizme
+python ~/code/watch/dev/wip/grid_sitevali_crops.py \
+    --sub=_anns \
+    $NODE_DPATH/_vizme
 
 
 """

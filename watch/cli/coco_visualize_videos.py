@@ -118,6 +118,7 @@ class CocoVisualizeConfig(scfg.Config):
 
         'only_boxes': scfg.Value(False, isflag=True, help='If false, draws full annotation - which can be time consuming if there are a lot'),
         'draw_labels': scfg.Value(True, help='if True draw text labels on polygons'),
+        'alpha': scfg.Value(None, help='transparency / opacity of annotations'),
 
         # TODO: better support for this
         # TODO: use the kwcoco_video_data, has good logic for this
@@ -456,6 +457,7 @@ def main(cmdline=True, **kwargs):
             'stack', 'min_dim', 'min_dim', 'verbose', 'only_boxes',
             'draw_labels', 'fixed_normalization_scheme', 'any3', 'cmap',
             'role_order', 'smart', 'ann_score_thresh',
+            'alpha',
         }
 
         if config['zoom_to_tracks']:
@@ -886,6 +888,7 @@ def _write_ann_visualizations2(coco_dset,
                                role_order=None,
                                smart=None,
                                ann_score_thresh=0,
+                               alpha=None,
                                ):
     """
     Dumps an intensity normalized "space-aligned" kwcoco image visualization
@@ -1122,7 +1125,7 @@ def _write_ann_visualizations2(coco_dset,
                 skip_aggressive, chan_to_normalizer, cmap, header_lines,
                 valid_image_poly, draw_imgs, draw_anns, only_boxes, draw_labels,
                 role_to_dets, valid_video_poly, stack, draw_header, stack_idx,
-                request_roles, ann_score_thresh)
+                request_roles, ann_score_thresh, alpha)
             if stack:
                 img_stack.append(stack_img_item)
                 ann_stack.append(stack_ann_item)
@@ -1213,7 +1216,8 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
                     skip_aggressive, chan_to_normalizer, cmap, header_lines,
                     valid_image_poly, draw_imgs, draw_anns, only_boxes,
                     draw_labels, role_to_dets, valid_video_poly, stack,
-                    draw_header, stack_idx, request_roles, ann_score_thresh):
+                    draw_header, stack_idx, request_roles, ann_score_thresh,
+                    alpha):
     from watch.utils import util_kwimage
     import kwimage
     import kwarray
@@ -1413,13 +1417,13 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
         # Draw the valid region specified at the image level
         if any([p.data['exterior'].data.size for p in valid_image_poly.data]):
             canvas = valid_image_poly.draw_on(canvas, color='kitware_green',
-                                              fill=False, border=True)
+                                              fill=False, border=True, alpha=alpha)
 
     if valid_video_poly is not None:
         # Draw the valid region specified at the video level
         if any([p.data['exterior'].data.size for p in valid_video_poly.data]):
             canvas = valid_video_poly.draw_on(canvas, color='lawngreen',
-                                              fill=False, border=True)
+                                              fill=False, border=True, alpha=alpha)
 
     stack_imgs = draw_imgs and stack
     stack_anns = draw_anns and stack
@@ -1497,7 +1501,7 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
                     color=colors,
                     ssegkw={'fill': False, 'border': True, 'edgecolor': colors},
                     # color='classes',
-                    **draw_on_kwargs)
+                    **draw_on_kwargs, alpha=alpha)
                 if verbose > 100:
                     print('That seemed to work')
 
