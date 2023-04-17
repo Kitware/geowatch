@@ -1070,7 +1070,7 @@ python -m watch.mlops.aggregate \
     --stdout_report="
         top_k: 3
         per_group: 1
-        macro_analysis: 0
+        macro_analysis: 1
         analyze: 0
         reference_region: final
     "
@@ -1156,7 +1156,7 @@ geowatch aggregate \
     --stdout_report="
         top_k: 1
         per_group: 1
-        macro_analysis: 0
+        macro_analysis: 1
         analyze: 0
         reference_region: final
     "

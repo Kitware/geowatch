@@ -104,7 +104,7 @@ class ReprojectAnnotationsConfig(scfg.DataConfig):
             new ones.
             '''))
 
-    propogate_strategy = scfg.Value('SMART', help=ub.paragraph(
+    propogate_strategy = scfg.Value('NEW-SMART', help=ub.paragraph(
             '''
             strategy for how to interpolate annotations over time
             '''))
@@ -112,10 +112,11 @@ class ReprojectAnnotationsConfig(scfg.DataConfig):
     geo_preprop = scfg.Value('auto', help='force if we check geo properties or not')
 
     geospace_lookup = scfg.Value('auto', help=ub.paragraph(
-            '''
-            if False assumes region-ids can be used to lookup
-            association
-            '''))
+        '''
+        if True the geographic bounds of each video to assign regions/sites to
+        videos. Otherwise, we assume each region-id corresponds to a video name
+        and use that to build the association.
+        '''))
 
     status_to_catname = scfg.Value(None, help=ub.paragraph(
             '''
@@ -308,6 +309,11 @@ def main(cmdline=False, **kwargs):
         for ann in propogated_annotations:
             ann['role'] = _role
         del _role
+
+    if config.validate_checks:
+        groups = ub.group_items(propogated_annotations, lambda x: x['track_id'])
+        for _, group in groups.items():
+            assert not ub.find_duplicates([g['image_id'] for g in group])
 
     for ann in propogated_annotations:
         coco_dset.add_annotation(**ann)
@@ -648,7 +654,7 @@ def expand_site_models_with_site_summaries(sites, regions, validate_checks=True)
             subdf = subdf.sort_values('status')
             print(subdf.to_string())
 
-    if __debug__:
+    if validate_checks:
         for region_id, region_sites in ub.ProgIter(region_id_to_sites.items(), desc='validate sites'):
             for site_df in region_sites:
                 validate_site_dataframe(site_df)
@@ -941,11 +947,18 @@ def assign_sites_to_images(coco_dset,
             video_id = video['id']
             video_id_to_region_id[video_id] = region_id
 
-    print('Found Association: video_id_to_region_id = {}'.format(ub.urepr(video_id_to_region_id, nl=1)))
+    from watch.utils.slugify_ext import smart_truncate
+    print('Found Association: video_id_to_region_id = {}'.format(
+        smart_truncate(
+            ub.urepr(video_id_to_region_id, nl=1),
+            max_length=500, trunc_loc=0.5, head='\n~...', tail='\n...~')
+    ))
+
     propogated_annotations = []
-    for video_id, region_id in video_id_to_region_id.items():
+    for video_id, region_id in ub.ProgIter(list(video_id_to_region_id.items()), desc='reproject'):
         region_sites = region_id_to_sites[region_id]
-        print(f'{region_id=} {video_id=} #sites={len(region_sites)}')
+        if 0:
+            print(f'{region_id=} {video_id=} #sites={len(region_sites)}')
         # Grab the images data frame for that video
         subimg_df = vidid_to_imgdf[video_id]
         region_image_dates = np.array(list(map(dateutil.parser.parse, subimg_df['date_captured'])))
@@ -966,7 +979,9 @@ def assign_sites_to_images(coco_dset,
                     # print('iou = {!r}'.format(iou))
                     filtered_region_sites.append(site_gdf)
             region_sites = filtered_region_sites
-            print(f'{region_id=} {video_id=} #filtered(sites)={len(region_sites)}')
+
+            if 0:
+                print(f'{region_id=} {video_id=} #filtered(sites)={len(region_sites)}')
 
         drawable_region_sites = []
 
@@ -1079,14 +1094,17 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
     PROJECT_ENDSTATE = True
     BACKPROJECT_START_STATES = 0  # turn off back-projection
 
-    if propogate_strategy == 'SMART':
+    if propogate_strategy == 'OLD-SMART':
         # TODO: This should be replaced with NEW-SMART
         # The original, but inflexible, propogate strategy
+
+        # NOTE: This seems to have a bug where the first frame may be
+        # duplicated.
 
         # To future-propogate:
         # (1) assign each observation to its nearest image (temporally)
         # without "going over" (i.e. the assigned image must be at or after
-        # the observation)
+        # the observaion)
         # (2) Splitting the image observations and taking all but the first
         # gives all current-and-future images for each observation that
         # happen before the next observation.
@@ -1145,8 +1163,8 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
         obs_associated_gxs = keyframe_interpolate(image_times, key_infos)
 
     elif propogate_strategy == "NEW-SMART":
-        raise NotImplementedError('TODO: use the new logic, but with smart heuristics for the behavior. '
-                                  'Need to vet that the following code is equivalent to the above code')
+        # raise NotImplementedError('TODO: use the new logic, but with smart heuristics for the behavior. '
+        #                           'Need to vet that the following code is equivalent to the above code')
 
         # For each annotation determine how it propogates in time.
         image_times = [t.timestamp() for t in region_image_dates]
@@ -1171,6 +1189,10 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
             })
         obs_associated_gxs = keyframe_interpolate(image_times, key_infos)
     else:
+        if propogate_strategy == 'SMART':
+            print(
+                'ERROR: to use the old SMART strategy use OLD-SMART, but note '
+                'this has a bug in it and will be removed. Switch to NEW-SMART ')
         raise KeyError(propogate_strategy)
 
     ###

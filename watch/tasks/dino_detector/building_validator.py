@@ -51,11 +51,105 @@ import ubelt as ub
 
 
 class BuildingValidatorConfig(scfg.DataConfig):
-    input_kwcoco_fpath = scfg.Value(None, help='input')
+    input_kwcoco = scfg.Value(None, help='input')
+    input_site_summaries = scfg.Value(None)
+    output_site_summaries = scfg.Value(None)
+
+    box_isect_threshold = scfg.Value(0.1, help='This fraction of the a detected building box must intersect the proposed polygon')
+    box_score_threshold = scfg.Value(0.1, help='The detected building boxes must have a score higher than this')
+    start_score_thresh = scfg.Value(0.0, help='The max building score needed in the start sequence')
+    end_score_thresh = scfg.Value(0.3, help='The max building score needed in the end sequence')
+
+
+IGNORE_CLASS_NAMES = ub.codeblock(
+    '''
+    Fixed-wing Aircraft
+    Small Aircraft
+    Cargo Plane
+    Helicopter
+    Passenger Vehicle
+    Small Car
+    Bus
+    Pickup Truck
+    Utility Truck
+    Truck
+    Cargo Truck
+    Truck w/Box
+    Truck Tractor
+    Trailer
+    Truck w/Flatbed
+    Truck w/Liquid
+    Crane Truck
+    Railway Vehicle
+    Passenger Car
+    Cargo Car
+    Flat Car
+    Tank car
+    Locomotive
+    Maritime Vessel
+    Motorboat
+    Sailboat
+    Tugboat
+    Barge
+    Fishing Vessel
+    Ferry
+    Yacht
+    Container Ship
+    Oil Tanker
+    Engineering Vehicle
+    Tower crane
+    Container Crane
+    Reach Stacker
+    Straddle Carrier
+    Mobile Crane
+    Dump Truck
+    Haul Truck
+    Scraper/Tractor
+    Front loader/Bulldozer
+    Excavator
+    Cement Mixer
+    Ground Grader
+    ''').split('\n')
+
+DONT_IGNORE_CLASSNAMES = ub.codeblock(
+    '''
+    Aircraft Hangar
+    Helipad
+    Storage Tank
+    Hut/Tent
+    Shipping container lot
+    Shipping Container
+    Pylon
+    Tower
+    Shed
+    Building
+    Damaged Building
+    Facility
+    Construction Site
+    Vehicle Lot
+    ''').split('\n')
 
 
 def main(cmdline=1, **kwargs):
     """
+    Ignore:
+        from watch.tasks.dino_detector.building_validator import *  # NOQA
+        NODE_DPATH = '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/buildings/buildings_id_fd298dba'
+        from watch.utils.partial_format import fsubtemplate
+        coco_fpath = fsubtemplate('$NODE_DPATH/pred_boxes.kwcoco.zip')
+        from watch.utils.util_path import coerce_patterned_paths
+        site_summary = ub.Path(fsubtemplate('$NODE_DPATH/.pred/valicrop/*/.pred/bas_poly/*/site_summaries_manifest.json'))
+        site_summary = coerce_patterned_paths(site_summary)[0]
+
+        output_site_summaries = ub.Path(fsubtemplate('$NODE_DPATH/filtered_site_summaries.geojson'))
+
+        kwargs = {
+            'input_kwcoco': coco_fpath,
+            'input_site_summaries': site_summary,
+            'output_site_summaries': output_site_summaries,
+        }
+        cmdline = 0
+
     Ignore:
         >>> import watch
         >>> dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
@@ -71,6 +165,149 @@ def main(cmdline=1, **kwargs):
     config = BuildingValidatorConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
     import rich
     rich.print('config = ' + ub.urepr(config, nl=1))
+
+    from watch.geoannots import geomodels
+    import kwcoco
+    input_coco = kwcoco.CocoDataset(config.input_kwcoco)
+    region_model = geomodels.RegionModel.coerce(config.input_site_summaries)
+    output_site_summaries = ub.Path(config.output_site_summaries)
+    # set(input_coco.annots().lookup('track_id', None))
+
+    site_id_to_summary = {}
+    for summary in region_model.site_summaries():
+        assert summary.site_id not in site_id_to_summary
+        site_id_to_summary[summary.site_id] = summary
+
+    from watch.cli import reproject_annotations
+    from watch.utils import util_time
+    # util_time.coerce_datetime()
+
+    output_kwcoco = reproject_annotations.main(
+        cmdline=0, src=input_coco.copy(),
+        dst='return',
+        region_models=config.input_site_summaries,
+        status_to_catname={'system_confirmed': 'positive'},
+        role='pred_poly',
+        validate_checks=True,
+        clear_existing=False,
+    )
+
+    site_to_accept = {}
+    for video_id in ub.ProgIter(output_kwcoco.videos(), desc='validate sites'):
+        video = output_kwcoco.index.videos[video_id]
+        video_name = video['name']  # the vide name should be the site id
+        summary = site_id_to_summary[video_name]
+        site_id = summary.site_id
+        video_images = output_kwcoco.images(video_id=video_id)
+
+        start_date = summary.start_date
+        end_date = summary.end_date
+
+        # Get the starting and ending observations
+        start_images = []
+        end_images = []
+        for coco_img in video_images.coco_images:
+            img_time = util_time.coerce_datetime(coco_img['date_captured'])
+            dist_start = abs(img_time - start_date)
+            dist_end = abs(img_time - end_date)
+            if dist_end < dist_start:
+                end_images.append(coco_img)
+            else:
+                start_images.append(coco_img)
+
+        start_features = []
+        for coco_img in start_images:
+            feat = building_in_image_features(coco_img, site_id, config)
+            start_features.append(feat)
+
+        end_features = []
+        for coco_img in end_images:
+            feat = building_in_image_features(coco_img, site_id, config)
+            end_features.append(feat)
+
+        if len(start_features) and len(end_features):
+            max_start_score = max(f['max_score'] for f in start_features)
+            max_end_score = max(f['max_score'] for f in end_features)
+            accept = (
+                max_start_score < config.start_score_thresh and
+                max_end_score > config.end_score_thresh
+            )
+        else:
+            # Unobservable case, automatically accept
+            accept = True
+        site_to_accept[site_id] = accept
+
+    accept_sites = [s for s, f in site_to_accept.items() if f]
+    new_summaries = ub.udict(site_id_to_summary).subdict(accept_sites).values()
+
+    new_region_model = geomodels.RegionModel.from_features(
+        [region_model.header] + list(new_summaries))
+
+    output_site_summaries.parent.ensuredir()
+    output_site_summaries.write_text(new_region_model.dumps(indent=4))
+
+
+def building_in_image_features(coco_img, site_id, config):
+    import numpy as np
+    import kwimage
+    import geopandas as gpd
+    import warnings
+    annots = coco_img.annots()
+    flags = np.array([r == 'pred_poly' for r in annots.lookup('role', None)])
+    box_annots = annots.compress(~flags)
+    poly_annots = annots.compress(flags)
+    is_main_poly = [t == site_id for t in poly_annots.lookup('track_id')]
+    main_poly_annot = poly_annots.compress(is_main_poly)
+    assert len(main_poly_annot) == 1
+
+    flags = [cname not in IGNORE_CLASS_NAMES for cname in box_annots.category_names]
+    box_annots = box_annots.compress(flags)
+
+    iooa_thresh = config.box_isect_threshold
+    score_thresh = config.box_score_threshold
+
+    box_gdf = gpd.GeoDataFrame({
+        'geometry': box_annots.boxes.to_shapely(),
+        'class': box_annots.category_names,
+        'score': box_annots.lookup('score'),
+    })
+    box_gdf = box_gdf[box_gdf.score > score_thresh]
+
+    proposal_gdf = gpd.GeoDataFrame({
+        'geometry': [
+            kwimage.MultiPolygon.coerce(p).to_shapely() for p in main_poly_annot.lookup('segmentation')
+        ],
+    })
+    proposal_geom = proposal_gdf.iloc[0]['geometry']
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', 'invalid value encountered in intersection')
+        intersections = box_gdf.intersection(proposal_geom)
+        bad_flags = (intersections.isnull() | intersections.is_empty)
+        isect_flags = (~bad_flags) & (intersections.is_valid)
+        feat = {
+            'max_iou': 0,
+            'max_iooa': 0,
+            'max_score': 0,
+            'num_cands': 0,
+        }
+        if isect_flags.any():
+            cand_boxes = box_gdf[isect_flags]
+            cand_isects = intersections[isect_flags]
+            cand_iooa1 = cand_isects.area / cand_boxes.area
+            ioaa_flags = cand_iooa1 > iooa_thresh
+            if ioaa_flags.any():
+                cand_boxes = cand_boxes[ioaa_flags]
+
+                cand_unions = cand_boxes.union(proposal_geom)
+                cand_ious = cand_isects.area / cand_unions.area
+
+                feat['max_iou'] = cand_ious.max()
+                feat['max_iooa'] = cand_iooa1.max()
+                feat['max_score'] = cand_boxes['score'].max()
+                feat['num_cands'] = len(cand_boxes)
+        return feat
+
 
 if __name__ == '__main__':
     """
@@ -223,8 +460,8 @@ python ~/code/watch/dev/wip/grid_sitevali_crops.py --sub=_anns \
 
 
 NODE_DPATH=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/buildings/buildings_id_fd298dba/
-
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+
 geowatch reproject \
         --src "$NODE_DPATH/pred_boxes.kwcoco.zip" \
         --dst "$NODE_DPATH/pred_boxes_with_polys.kwcoco.zip" \
@@ -253,6 +490,15 @@ gw visualize --smart 1 \
 python ~/code/watch/dev/wip/grid_sitevali_crops.py \
     --sub=_anns \
     $NODE_DPATH/_vizme
+
+python watch.tasks.dino_detector.building_validator \
+    --input_kwcoco "$NODE_DPATH/pred_boxes.kwcoco.zip" \
+    --input_site_summaries "$NODE_DPATH/.pred/valicrop/*/.pred/bas_poly/*/site_summaries_manifest.json" \
+    --output_site_summaries "$NODE_DPATH/filtered_summaries.json" \
+    --box_isect_threshold 0.1 \
+    --box_score_threshold 0.1 \
+    --start_score_thresh 0.0 \
+    --end_score_thresh 0.3
 
 
 """
