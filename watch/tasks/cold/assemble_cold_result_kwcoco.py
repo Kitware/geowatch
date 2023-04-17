@@ -36,6 +36,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 tz = pytz.timezone('US/Eastern')
 
+
 class AssembleColdKwcocoConfig(scfg.DataConfig):
     """
     TODO: write docs
@@ -201,15 +202,15 @@ def assemble_main(cmdline=1, **kwargs):
     img_names = sorted(img_names)
     if timestamp:
         ordinal_day_list = img_dates
-    if combine:        
+    if combine:
         combined_coco_dset = kwcoco.CocoDataset(combined_coco_fpath)
-        
+
         # filter by sensors
         all_images = combined_coco_dset.images(list(ub.flatten(combined_coco_dset.videos().images)))
         flags = [s in sensors for s in all_images.lookup('sensor_coarse')]
         all_images = all_images.compress(flags)
         image_id_iter = iter(all_images)
-        
+
         # Get ordinal date of combined coco image
         ordinal_dates = []
         img_names = []
@@ -224,7 +225,7 @@ def assemble_main(cmdline=1, **kwargs):
             ordinal_dates.append(ordinal)
             img_names.append(coco_img_name)
         ordinal_day_list = ordinal_dates
-        
+
     # else:
     #     # Get only the first ordinal date of each year
     #     first_ordinal_dates = []
@@ -302,7 +303,7 @@ def assemble_main(cmdline=1, **kwargs):
 
             asset_w = vid_w
             asset_h = vid_h
-            
+
             for band_name in band_names:
                 for coef in coef_names:
                     band = BAND_INFO[band_name]
@@ -322,21 +323,21 @@ def assemble_main(cmdline=1, **kwargs):
                         warp_asset_from_vid = kwimage.Affine.scale(scale_asset_from_vid)
                         warp_vid_from_asset = warp_asset_from_vid.inv()
                         warp_img_from_asset = warp_img_from_vid @ warp_vid_from_asset
-                        
+
                         # Use the CocoImage helper which will augment the coco dictionary with
-                        # your information.                        
+                        # your information.
                         combined_coco_image.add_asset(os.fspath(new_fpath),
                                             channels=channels, width=asset_w,
                                             height=asset_h,
-                                            warp_aux_to_img=warp_img_from_asset)                        
+                                            warp_aux_to_img=warp_img_from_asset)
                         logger.info(f'Added to the asset {new_fpath}')
-    else:                    
+    else:
         # add new asset to each image
         for image_id in coco_dset.images():
             # Create a CocoImage object for each image.
             coco_image: kwcoco.CocoImage = coco_dset.coco_image(image_id)
             image_name = coco_image.img['name']
-            
+
             asset_w = vid_w
             asset_h = vid_h
 
@@ -359,14 +360,14 @@ def assemble_main(cmdline=1, **kwargs):
                         warp_asset_from_vid = kwimage.Affine.scale(scale_asset_from_vid)
                         warp_vid_from_asset = warp_asset_from_vid.inv()
                         warp_img_from_asset = warp_img_from_vid @ warp_vid_from_asset
-                        
+
                         # Use the CocoImage helper which will augment the coco dictionary with
-                        # your information.                        
+                        # your information.
                         coco_image.add_asset(os.fspath(new_fpath),
                                                 channels=channels, width=asset_w,
                                                 height=asset_h,
                                                 warp_aux_to_img=warp_img_from_asset)
-                        
+
                         logger.info(f'Added to the asset {new_fpath}')
 
     if proc_context is not None:

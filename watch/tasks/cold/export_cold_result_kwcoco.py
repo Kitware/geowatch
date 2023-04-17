@@ -122,7 +122,7 @@ def export_cold_main(cmdline=1, **kwargs):
     combine = config_in['combine']
     timestamp = config_in['timestamp']
     sensors = config_in['sensors']
-    
+
     assert (combine and not timestamp) or (not combine and timestamp), "combine and timestamp must be either True and False, or False and True."
     # TODO: MPI mode
     # if config_in['rank'] == 'MPI':
@@ -241,15 +241,15 @@ def export_cold_main(cmdline=1, **kwargs):
     img_names = sorted(img_names)
     if timestamp:
         ordinal_day_list = img_dates
-    if combine:        
+    if combine:
         combined_coco_dset = kwcoco.CocoDataset(combined_coco_fpath)
-        
+
         # filter by sensors
         all_images = combined_coco_dset.images(list(ub.flatten(combined_coco_dset.videos().images)))
         flags = [s in sensors for s in all_images.lookup('sensor_coarse')]
         all_images = all_images.compress(flags)
         image_id_iter = iter(all_images)
-        
+
         # Get ordinal date of combined coco image
         ordinal_dates = []
         ordinal_dates_july_first = []
@@ -264,7 +264,7 @@ def export_cold_main(cmdline=1, **kwargs):
             ordinal_dates_july_first.append(july_first)
 
         ordinal_day_list = ordinal_dates
-        
+
         # Back up
         # first_ordinal_dates = []
         # first_img_names = []
@@ -319,18 +319,18 @@ def export_cold_main(cmdline=1, **kwargs):
                     print(f'the rec_cg file {reccg_fpath} has failed status')
                     results_block_coefs
                 else:
-                    cold_block = np.array(np.load(reccg_fpath), dtype=dt)                
+                    cold_block = np.array(np.load(reccg_fpath), dtype=dt)
                     cold_block_split = np.split(cold_block, np.argwhere(np.diff(cold_block['pos']) != 0)[:, 0] + 1)
-                    
+
                     nan_val = -9999
                     feature_outputs = coefs
                     feature_set = set(feature_outputs)
-                    
+
                     if not feature_set.issubset({'a0', 'c1', 'a1', 'b1', 'a2', 'b2', 'a3', 'b3', 'cv', 'rmse'}):
                         raise Exception('the outputted feature must be in [a0, c1, a1, b1, a2, b2, a3, b3, cv, rmse]')
-                    
+
                     for element in cold_block_split:
-                        # Degugging mode 
+                        # Degugging mode
                         # if element[0]["pos"] == 4:
                         #     print(element)
                         # the relative column number in the block
@@ -338,24 +338,23 @@ def export_cold_main(cmdline=1, **kwargs):
                                 (current_block_x - 1) * block_width
                         i_row = int((element[0]["pos"] - 1) / n_cols) - \
                                 (current_block_y - 1) * block_height
-                        
+
                         for band_idx, band in enumerate(coefs_bands):
                             feature_row = extract_features(element, band, ordinal_dates_july_first, nan_val, timestamp,
-                                                            feature_outputs, feature_set)                    
+                                                            feature_outputs, feature_set)
                             # Degugging mode
                             # if current_block_x == 1 and current_block_y == 1:
                             #     if i_col == 3 and i_row == 0:
                             #         print(element[0]["pos"])
                             #         print((current_block_x, current_block_y), (i_col, i_row), (band_idx, band))
                             #         print('feature_row', feature_row)
-                            
+
                             for index, coef in enumerate(coefs):
                                 # Degugging mode
                                 # if i_col == 3 and i_row == 0 and element[0]["pos"] == 4:
                                 #     print(feature_row[index])
                                 results_block_coefs[i_row][i_col][index + band_idx * len(coefs)][:] = \
                                     feature_row[index]
-                                    
 
         # save the temp dataset out
         for day in range(len(ordinal_day_list)):
