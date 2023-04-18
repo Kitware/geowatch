@@ -34,6 +34,7 @@ except ImportError:
     from ubelt import identity as profile
 
 logger = logging.getLogger(__name__)
+# FIXME: note for Jon to be more general than assuming US/East locality in the future
 tz = pytz.timezone('US/Eastern')
 
 
