@@ -393,7 +393,7 @@ def extract_features(cold_plot, band, ordinal_day_list,
     # max_days_list = [datetime_mod.date(last_year, 12, 31).toordinal()] * len(cold_plot)
 
     break_year_list = [-9999 if not (curve['t_break'] > 0 and curve['change_prob'] == 100) else
-                    pd.Timestamp.fromordinal(curve['t_break']).year for curve in cold_plot]
+                       pd.Timestamp.fromordinal(curve['t_break']).year for curve in cold_plot]
 
     possible_features = ['a0', 'c1', 'a1', 'b1', 'rmse', 'cv']
     fk_to_idx = {
@@ -422,7 +422,7 @@ def extract_features(cold_plot, band, ordinal_day_list,
     try:
         idxs_iter = itertools.product(idx_day_year_list, mday_byear_curve_list)
         for (day_idx, ordinal_day, ord_year), (max_day,
-                                            break_year, cold_curve) in idxs_iter:
+                                               break_year, cold_curve) in idxs_iter:
             if cv_idx is not None:
                 if cold_curve['t_break'] != 0 and cold_curve['change_prob'] == 100:
                     if (timestamp and ordinal_day == cold_curve['t_break']) or (

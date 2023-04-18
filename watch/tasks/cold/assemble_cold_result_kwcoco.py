@@ -327,9 +327,8 @@ def assemble_main(cmdline=1, **kwargs):
                         # Use the CocoImage helper which will augment the coco dictionary with
                         # your information.
                         combined_coco_image.add_asset(os.fspath(new_fpath),
-                                            channels=channels, width=asset_w,
-                                            height=asset_h,
-                                            warp_aux_to_img=warp_img_from_asset)
+                                                      channels=channels, width=asset_w,
+                                                      height=asset_h, warp_aux_to_img=warp_img_from_asset)
                         logger.info(f'Added to the asset {new_fpath}')
     else:
         # add new asset to each image
