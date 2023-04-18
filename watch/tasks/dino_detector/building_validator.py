@@ -51,19 +51,19 @@ import ubelt as ub
 
 
 class BuildingValidatorConfig(scfg.DataConfig):
-    input_kwcoco = scfg.Value(None, help='input', tags='input')
+    input_kwcoco = scfg.Value(None, help='input')
 
-    input_region = scfg.Value(None, tags='input')
-    input_sites = scfg.Value(None, tags='input')
+    input_region = scfg.Value(None)
+    input_sites = scfg.Value(None)
 
-    output_region_fpath = scfg.Value(None, tags='output')
-    output_sites_dpath = scfg.Value(None, tags='output')
-    output_site_manifest_fpath = scfg.Value(None, tags='output')
+    output_region_fpath = scfg.Value(None)
+    output_sites_dpath = scfg.Value(None)
+    output_site_manifest_fpath = scfg.Value(None)
 
-    box_isect_threshold = scfg.Value(0.1, help='This fraction of the a detected building box must intersect the proposed polygon', tags='algo')
-    box_score_threshold = scfg.Value(0.01, help='The detected building boxes must have a score higher than this', tags='algo')
-    start_max_score = scfg.Value(1.0, help='The max building score needed in the start sequence', tags='algo')
-    end_min_score = scfg.Value(0.1, help='The min building score needed in the end sequence', tags='algo')
+    box_isect_threshold = scfg.Value(0.1, help='This fraction of the a detected building box must intersect the proposed polygon')
+    box_score_threshold = scfg.Value(0.01, help='The detected building boxes must have a score higher than this')
+    start_max_score = scfg.Value(1.0, help='The max building score needed in the start sequence')
+    end_min_score = scfg.Value(0.1, help='The min building score needed in the end sequence')
 
 
 IGNORE_CLASS_NAMES = ub.codeblock(
@@ -389,7 +389,7 @@ Ignore:
                 - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-CH_R001.kwcoco.zip
                 - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-NZ_R001.kwcoco.zip
                 - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R001.kwcoco.zip
-                # - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-AE_R001.kwcoco.zip
+                - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-AE_R001.kwcoco.zip
             bas_pxl.chip_overlap: 0.3
             bas_pxl.chip_dims:
                 - auto
@@ -442,21 +442,32 @@ Ignore:
             valicrop.context_factor: 1.5
             sv_dino_boxes.enabled: 1
             sv_dino_boxes.package_fpath: $DVC_EXPT_DPATH/models/kitware/xview_dino.pt
-            sv_dino_boxes.window_dims: 1024
-            sv_dino_boxes.window_overlap: "0.5"
-            sv_dino_boxes.fixed_resolution: "1GSD"
+            sv_dino_boxes.window_dims:
+                - 512
+                - 1024
+                - 1536
+            sv_dino_boxes.window_overlap:
+                - "0.5"
+            sv_dino_boxes.fixed_resolution:
+                - "1GSD"
+                - "2GSD"
             sv_dino_filter.box_isect_threshold:
                 - 0.1
             sv_dino_filter.box_score_threshold:
                 - 0.01
             sv_dino_filter.start_max_score:
                 - 1.0
+                - 0.8
+                - 0.5
             sv_dino_filter.end_min_score:
                 - 0.0
+                - 0.05
                 - 0.1
+                - 0.15
                 - 0.2
                 - 0.3
                 - 0.4
+                - 0.5
         submatrices:
             - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R001.kwcoco.zip
               valicrop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-KR_R001.kwcoco.json
@@ -491,7 +502,7 @@ gwmlops aggregate \
         analyze: 0
         reference_region: final
         shorten: 1
-    " --eval_nodes="[sv_poly_eval]" --io_workers=0
+    " --eval_nodes="[sv_poly_eval]"
 
     --rois='[NZ_R001,KR_R001]' \
 
