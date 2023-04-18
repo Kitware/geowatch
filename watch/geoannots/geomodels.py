@@ -115,6 +115,7 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
 
     def _validate_schema(self, strict=True):
         import rich
+
         def print_validation_error_info(ex, depth=1):
             if ex.parent is not None:
                 max_depth = print_validation_error_info(ex.parent, depth=depth + 1)

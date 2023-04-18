@@ -436,6 +436,7 @@ def summary_visualization(dst_dset, viz_dpath):
                 'red|green|blue',
                 'pan',
             ]
+
             def acceptable_channels(channels, chan_priority):
                 import kwcoco
                 for want in chan_priority:
