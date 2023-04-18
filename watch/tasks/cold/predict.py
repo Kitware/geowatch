@@ -93,10 +93,11 @@ CommandLine:
     DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="auto")
     EXPT_DVC_DPATH=$(smartwatch_dvc --tags=phase2_expt --hardware="auto")
     python -m watch.tasks.cold.predict \
-        --coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly-KR_R001.kwcoco.json" \
-        --out_dpath="$DATA_DVC_DPATH/Drop6/_pycold" \
+        --coco_fpath="$DATA_DVC_DPATH/Drop6/data_vali_split1_KR_R001.kwcoco.json" \
+        --combined_coco_fpath="$DATA_DVC_DPATH/Drop6_MeanYear/data_vali_split1_KR_R001_MeanYear.kwcoco.json" \
+        --out_dpath="$DATA_DVC_DPATH/Drop6/_pycold_combine" \
         --sensors='L8' \
-        --mod_coco_fpath="$DATA_DVC_DPATH/Drop6/_pycold/imgonly-KR_R001-cold.kwcoco.json" \
+        --mod_coco_fpath="$DATA_DVC_DPATH/Drop6_MeanYear/data_vali_split1_KR_R001_MeanYear_cold.kwcoco.json" \
         --adj_cloud=False \
         --method='COLD' \
         --prob=0.99 \
@@ -107,6 +108,8 @@ CommandLine:
         --coefs=cv,rmse,a0,a1,b1,c1 \
         --coefs_bands=0,1,2,3,4,5 \
         --timestamp=False \
+        --combine=True \
+        --resolution='10GSD' \
         --workermode='process' \
         --workers=8
 
@@ -176,6 +179,11 @@ class ColdPredictConfig(scfg.DataConfig):
         '''
         a path to a file to input kwcoco file
         '''))
+    combined_coco_fpath = scfg.Value(None, help=ub.paragraph(
+        '''
+        a path to a file to combined kwcoco file
+        '''))
+    mod_coco_fpath = scfg.Value(None, help='file path for modified coco json')
     out_dpath = scfg.Value(None, help='output directory for the output. If unspecified uses the output kwcoco bundle')
     sensors = scfg.Value('L8', type=str, help='sensor type, default is "L8"')
     adj_cloud = scfg.Value(False, help='How to treat QA band, default is False: ignoring adj. cloud class')
@@ -187,8 +195,8 @@ class ColdPredictConfig(scfg.DataConfig):
     year_highbound = scfg.Value(None, help='max year for saving geotiff, e.g., 2022')
     coefs = scfg.Value(None, type=str, help="list of COLD coefficients for saving geotiff, e.g., a0,c1,a1,b1,a2,b2,a3,b3,cv,rmse")
     coefs_bands = scfg.Value(None, type=str, help='indicate the ba_nds for output coefs_bands, e.g., 0,1,2,3,4,5')
-    timestamp = scfg.Value(True, help='True: exporting cold result by timestamp, False: exporting cold result by year, Default is False')
-    mod_coco_fpath = scfg.Value(None, help='file path for modified coco json')
+    timestamp = scfg.Value(False, help='True: exporting cold result by timestamp, False: exporting cold result by year, Default is False')
+    combine = scfg.Value(True, help='for temporal combined mode, Default is True')
     track_emissions = scfg.Value(True, help='if True use codecarbon for emission tracking')
     resolution = scfg.Value('30GSD', help='if specified then data is processed at this resolution')
     workers = scfg.Value(16, help='total number of workers')
@@ -319,11 +327,13 @@ def cold_predict_main(cmdline=1, **kwargs):
         export_kwargs['stack_path'] = tile_kwargs['stack_path']
         export_kwargs['reccg_path'] = tile_kwargs['reccg_path']
         export_kwargs['meta_fpath'] = meta_fpath
+        export_kwargs['combined_coco_fpath'] = config['combined_coco_fpath']
         export_kwargs['year_lowbound'] = config['year_lowbound']
         export_kwargs['year_highbound'] = config['year_highbound']
         export_kwargs['coefs'] = config['coefs']
         export_kwargs['coefs_bands'] = config['coefs_bands']
         export_kwargs['timestamp'] = config['timestamp']
+        export_kwargs['sensors'] = sensors
         if use_subprogress:
             export_kwargs['pman'] = pman
 
@@ -348,6 +358,7 @@ def cold_predict_main(cmdline=1, **kwargs):
         assemble_kwargs['stack_path'] = tile_kwargs['stack_path']
         assemble_kwargs['reccg_path'] = tile_kwargs['reccg_path']
         assemble_kwargs['coco_fpath'] = coco_fpath
+        assemble_kwargs['combined_coco_fpath'] = config['combined_coco_fpath']
         assemble_kwargs['mod_coco_fpath'] = config['mod_coco_fpath']
         assemble_kwargs['meta_fpath'] = meta_fpath
         assemble_kwargs['year_lowbound'] = config['year_lowbound']
@@ -355,7 +366,9 @@ def cold_predict_main(cmdline=1, **kwargs):
         assemble_kwargs['coefs'] = config['coefs']
         assemble_kwargs['coefs_bands'] = config['coefs_bands']
         assemble_kwargs['timestamp'] = config['timestamp']
+        assemble_kwargs['combine'] = config['combine']
         assemble_kwargs['resolution'] = config.resolution
+        assemble_kwargs['sensors'] = sensors
 
         if True:
             assemble_kwargs['pman'] = pman
@@ -364,7 +377,7 @@ def cold_predict_main(cmdline=1, **kwargs):
         main_prog.step()
 
         # remove stacked image
-        # main_prog.set_postfix('Cleanup')
+        main_prog.set_postfix('Cleanup')
         shutil.rmtree(tile_kwargs['stack_path'])
         main_prog.step()
 

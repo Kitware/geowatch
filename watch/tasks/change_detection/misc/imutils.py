@@ -397,7 +397,7 @@ def im2arr(img_path, mode=1, dtype=np.uint8):
         arr = tifffile.imread(img_path)
         if arr.ndim == 3:
             a, b, c = arr.shape
-            if a < b and a < c: # 当arr为C*H*W时，需要交换通道顺序
+            if a < b and a < c:  # 当arr为C*H*W时，需要交换通道顺序
                 arr = arr.transpose([1, 2, 0])
     # print('shape: ', arr.shape, 'dytpe: ',arr.dtype)
     return arr
