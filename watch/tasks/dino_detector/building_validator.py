@@ -389,7 +389,7 @@ Ignore:
                 - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-CH_R001.kwcoco.zip
                 - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-NZ_R001.kwcoco.zip
                 - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R001.kwcoco.zip
-                - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-AE_R001.kwcoco.zip
+                # - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-AE_R001.kwcoco.zip
             bas_pxl.chip_overlap: 0.3
             bas_pxl.chip_dims:
                 - auto
@@ -444,13 +444,17 @@ Ignore:
             sv_dino_boxes.package_fpath: $DVC_EXPT_DPATH/models/kitware/xview_dino.pt
             sv_dino_boxes.window_dims:
                 - 512
+                - 768
                 - 1024
-                - 1536
+                # - 1536
             sv_dino_boxes.window_overlap:
                 - "0.5"
             sv_dino_boxes.fixed_resolution:
                 - "1GSD"
                 - "2GSD"
+                - "2.5GSD"
+                - "3GSD"
+                - "3.3GSD"
             sv_dino_filter.box_isect_threshold:
                 - 0.1
             sv_dino_filter.box_score_threshold:
@@ -458,15 +462,16 @@ Ignore:
             sv_dino_filter.start_max_score:
                 - 1.0
                 - 0.8
-                - 0.5
+                # - 0.5
             sv_dino_filter.end_min_score:
                 - 0.0
-                - 0.05
+                # - 0.05
                 - 0.1
                 - 0.15
                 - 0.2
+                - 0.25
                 - 0.3
-                - 0.4
+                # - 0.4
                 - 0.5
         submatrices:
             - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R001.kwcoco.zip
@@ -502,7 +507,10 @@ gwmlops aggregate \
         analyze: 0
         reference_region: final
         shorten: 1
-    " --eval_nodes="[sv_poly_eval]"
+    " --eval_nodes="[sv_poly_eval]" \
+    --plot_params="
+        enabled: True
+    " \
 
     --rois='[NZ_R001,KR_R001]' \
 
@@ -598,8 +606,6 @@ python watch.tasks.dino_detector.building_validator \
     --box_score_threshold 0.1 \
     --start_max_score 0.0 \
     --end_min_score 0.3
-
-
 
 python -m watch.tasks.dino_detector.building_validator \
     --input_kwcoco="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/buildings/buildings_id_663bd461/pred_boxes.kwcoco.zip" \

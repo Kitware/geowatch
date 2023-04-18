@@ -93,6 +93,11 @@ class AggregateEvluationConfig(DataConfig):
     def __post_init__(self):
         from watch.utils.util_yaml import Yaml
         self.eval_nodes = Yaml.coerce(self.eval_nodes)
+        self.plot_params = Yaml.coerce(self.plot_params)
+        if self.plot_params is True:
+            self.plot_params = {
+                'enabled': True
+            }
 
 
 def main(cmdline=True, **kwargs):
@@ -399,102 +404,9 @@ class ParamPlotter:
             size_inches=np.array([6.4, 4.8]) * 1.0,
         )
 
-        blocklist = {
-            'resolved_params.bas_poly_eval.pred_sites',
-            'resolved_params.bas_poly_eval.gt_dpath',
-            'resolved_params.bas_poly_eval.true_site_dpath',
-            'resolved_params.bas_poly_eval.true_region_dpath',
-            'resolved_params.bas_poly_eval.out_dir',
-            'resolved_params.bas_poly_eval.merge',
-            'resolved_params.bas_poly_eval.merge_fpath',
-            'resolved_params.bas_poly_eval.merge_fbetas',
-            'resolved_params.bas_poly_eval.tmp_dir',
-            'resolved_params.bas_poly_eval.enable_viz',
-            'resolved_params.bas_poly_eval.name',
-            'resolved_params.bas_poly_eval.use_cache',
-            'resolved_params.bas_poly_eval.load_workers',
-            'resolved_params.bas_poly.in_file',
-            'resolved_params.bas_poly.out_kwcoco',
-            'resolved_params.bas_poly.out_sites_dir',
-            'resolved_params.bas_poly.out_site_summaries_dir',
-            'resolved_params.bas_poly.out_sites_fpath',
-            'resolved_params.bas_poly.out_site_summaries_fpath',
-            'resolved_params.bas_poly.in_file_gt',
-            'resolved_params.bas_poly.region_id',
-            'resolved_params.bas_poly.default_track_fn',
-            'resolved_params.bas_poly.site_summary',
-            'resolved_params.bas_poly.clear_annots',
-            'resolved_params.bas_poly.append_mode',
-            'resolved_params.bas_pxl.config_file',
-            'resolved_params.bas_pxl.write_out_config_file_to_this_path',
-            'resolved_params.bas_pxl.datamodule',
-            'resolved_params.bas_pxl.pred_dataset',
-            'resolved_params.bas_pxl.devices',
-            'resolved_params.bas_pxl.with_change',
-            'resolved_params.bas_pxl.with_class',
-            'resolved_params.bas_pxl.with_saliency',
-            'resolved_params.bas_pxl.compress',
-            'resolved_params.bas_pxl.track_emissions',
-            'resolved_params.bas_pxl.quantize',
-            'resolved_params.bas_pxl.clear_annots',
-            'resolved_params.bas_pxl.write_workers',
-            'resolved_params.bas_pxl.write_preds',
-            'resolved_params.bas_pxl.write_probs',
-            'resolved_params.bas_pxl.train_dataset',
-            'resolved_params.bas_pxl.vali_dataset',
-            'resolved_params.bas_pxl.test_dataset',
-            'resolved_params.bas_pxl.batch_size',
-            'resolved_params.bas_pxl.normalize_inputs',
-            'resolved_params.bas_pxl.num_workers',
-            'resolved_params.bas_pxl.torch_sharing_strategy',
-            'resolved_params.bas_pxl.torch_start_method',
-            'resolved_params.bas_pxl.sqlview',
-            'resolved_params.bas_pxl.max_epoch_length',
-            'resolved_params.bas_pxl.use_centered_positives',
-            'resolved_params.bas_pxl.use_grid_positives',
-            'resolved_params.bas_pxl.use_grid_valid_regions',
-            'resolved_params.bas_pxl.neg_to_pos_ratio',
-            'resolved_params.bas_pxl.use_grid_cache',
-            'resolved_params.bas_pxl.ignore_dilate',
-            'resolved_params.bas_pxl.weight_dilate',
-            'resolved_params.bas_pxl.min_spacetime_weight',
-            'resolved_params.bas_pxl.upweight_centers',
-            'resolved_params.bas_pxl.upweight_time',
-            'resolved_params.bas_pxl.dist_weights',
-            'resolved_params.bas_pxl.balance_areas',
-            'resolved_params.bas_pxl.resample_invalid_frames',
-            'resolved_params.bas_pxl.downweight_nan_regions',
-            'resolved_params.bas_pxl.temporal_dropout',
-            'resolved_params.bas_pxl_fit.accelerator',
-            'resolved_params.bas_pxl_fit.accumulate_grad_batches',
-            'resolved_params.bas_pxl_fit.datamodule',
-            'resolved_params.bas_pxl_fit.devices',
-            'resolved_params.bas_pxl_fit.gradient_clip_algorithm',
-            'resolved_params.bas_pxl_fit.gradient_clip_val',
-            'resolved_params.bas_pxl_fit.max_epochs',
-            'resolved_params.bas_pxl_fit.max_steps',
-            'resolved_params.bas_pxl_fit.method',
-            'resolved_params.bas_pxl_fit.name',
-            'resolved_params.bas_pxl_fit.patience',
-            'resolved_params.bas_pxl_fit.precision',
-            'resolved_params.bas_pxl_fit.sqlview',
-            'resolved_params.bas_pxl_fit.stochastic_weight_avg',
-            'resolved_params.bas_pxl_fit.inference_mode',
-            'resolved_params.bas_pxl_fit.use_grid_cache',
-            'resolved_params.bas_pxl_fit.use_grid_valid_regions',
-            'resolved_params.bas_pxl_eval.balance_area',
-            'resolved_params.bas_pxl_eval.draw_curves',
-            'resolved_params.bas_pxl_eval.draw_heatmaps',
-            'resolved_params.bas_pxl_eval.draw_workers',
-            'resolved_params.bas_pxl_eval.eval_dpath',
-            'resolved_params.bas_pxl_eval.eval_fpath',
-            'resolved_params.bas_pxl_eval.pred_dataset',
-            'resolved_params.bas_pxl_eval.resolution',
-            'resolved_params.bas_pxl_eval.score_space',
-            'resolved_params.bas_pxl_eval.true_dataset',
-            'resolved_params.bas_pxl_eval.viz_thresh',
-            'resolved_params.bas_pxl_eval.workers',
-        }
+        from watch.mlops.smart_global_helper import SMART_HELPER
+        blocklist = SMART_HELPER.VIZ_BLOCKLIST
+
         from watch.utils import util_pandas
         resolved_params = util_pandas.DotDictDataFrame(macro_table).subframe('resolved_params', drop_prefix=False)
         valid_cols = resolved_params.columns.difference(blocklist)
@@ -530,8 +442,6 @@ class ParamPlotter:
         from kwcoco.metrics.drawing import concice_si_display
         for rank, param_name in enumerate(ub.ProgIter(ranked_params, desc='plot param for ' + vantage['name'], verbose=3)):
 
-            param_dpath = (param_group_dpath / param_name).ensuredir().resolve()
-
             stats = param_name_to_stats.get(param_name, {})
             # stats['moments']
             anova_rank_p = stats.get('anova_rank_p', None)
@@ -550,6 +460,24 @@ class ParamPlotter:
             # Number of samples we have for each value of this parameter
             param_histogram = ub.udict(macro_table.groupby(param_name).size().to_dict())
             param_histogram = param_histogram.map_keys(str)
+
+            sub_macro_table = macro_table
+
+            MIN_VARIATIONS = 1
+            # min_variations = config.plot_params.get('min_variations', 1)
+            if MIN_VARIATIONS > 1:
+                ignore_params = [k for k, v in param_histogram.items() if v < MIN_VARIATIONS]
+                param_histogram = ub.udict(param_histogram) - set(ignore_params)
+                import kwarray
+                row_is_ignored = kwarray.isect_flags(macro_table[param_name], ignore_params)
+                sub_macro_table = macro_table[~row_is_ignored]
+
+                if len(param_histogram) == 1:
+                    print('Skip plot')
+                    continue
+                ...
+
+            param_dpath = (param_group_dpath / param_name).ensuredir().resolve()
 
             text_len_thresh = 20
             param_labels = [str(p) for p in param_histogram]
@@ -591,16 +519,16 @@ class ParamPlotter:
 
             # SCATTER
             fig = kwplot.figure(fnum=4, doclf=True)
-            ax = sns.scatterplot(data=macro_table, x=x, y=y, hue=param_name, legend=True, **snskw)
+            ax = sns.scatterplot(data=sub_macro_table, x=x, y=y, hue=param_name, legend=True, **snskw)
             if anova_rank_p is not None:
-                ax.set_title(f'BAS Results (n={len(macro_table)})\n'
+                ax.set_title(f'BAS Results (n={len(sub_macro_table)})\n'
                              f'Macro Analysis over {ub.urepr(rois, sv=1, nl=0)}\n'
                              f'Effect of {param_name}: anova_rank_p={concice_si_display(anova_rank_p)}')
             else:
-                ax.set_title(f'BAS Results (n={len(macro_table)})\n'
+                ax.set_title(f'BAS Results (n={len(sub_macro_table)})\n'
                              f'Macro Analysis over {ub.urepr(rois, sv=1, nl=0)}')
-            if 'is_star' in macro_table:
-                scatterplot_highlight(data=macro_table, x=x, y=y, highlight='is_star', ax=ax, size=300)
+            if 'is_star' in sub_macro_table:
+                scatterplot_highlight(data=sub_macro_table, x=x, y=y, highlight='is_star', ax=ax, size=300)
             ax.set_xscale(xscale)
             ax.set_yscale(yscale)
             modifier.relabel(ax, ticks=False)
@@ -634,10 +562,10 @@ class ParamPlotter:
             print(f'param_fpath={param_fpath}')
             if not param_fpath.exists():
                 fig = kwplot.figure(fnum=5, doclf=True)
-                ax = sns.boxplot(data=macro_table, x=param_name, y=y, **snskw)
+                ax = sns.boxplot(data=sub_macro_table, x=param_name, y=y, **snskw)
                 freq_mapper_box.relabel_xticks(ax)
                 if anova_rank_p is not None:
-                    ax.set_title(f'BAS Results (n={len(macro_table)})\n'
+                    ax.set_title(f'BAS Results (n={len(sub_macro_table)})\n'
                                  f'Macro Analysis over {ub.urepr(rois, sv=1, nl=0)}')
                 modifier.relabel(ax, ticks=False)
                 modifier.relabel_xticks(ax)
