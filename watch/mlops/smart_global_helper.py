@@ -182,6 +182,48 @@ class SmartGlobalHelper:
                     'objective1': 'minimize',
                 },
             ]
+        elif eval_type == 'sv_poly_eval':
+            vantage_points = [
+                {
+                    'metric1': 'metrics.sv_poly_eval.bas_faa_f1',
+                    'metric2': 'metrics.sv_poly_eval.bas_tpr',
+
+                    'scale1': 'linear',
+                    'scale2': 'linear',
+
+                    'objective1': 'maximize',
+                },
+
+                {
+                    'metric1': 'metrics.sv_poly_eval.bas_ppv',
+                    'metric2': 'metrics.sv_poly_eval.bas_tpr',
+
+                    'scale1': 'linear',
+                    'scale2': 'linear',
+
+                    'objective1': 'maximize',
+                },
+
+                {
+                    'metric1': 'metrics.sv_poly_eval.bas_f1',
+                    'metric2': 'metrics.sv_poly_eval.bas_ffpa',
+
+                    'scale1': 'linear',
+                    'scale2': 'linear',
+
+                    'objective1': 'maximize',
+                },
+
+                {
+                    'metric1': 'metrics.sv_poly_eval.bas_space_FAR',
+                    'metric2': 'metrics.sv_poly_eval.bas_tpr',
+
+                    'scale1': 'linear',
+                    'scale2': 'linear',
+
+                    'objective1': 'minimize',
+                },
+            ]
         elif eval_type == 'bas_pxl_eval':
             vantage_points = [
                 {
@@ -199,7 +241,7 @@ class SmartGlobalHelper:
 
     def _default_metrics(self, agg):
         _display_metrics_suffixes = []
-        if agg.type == 'bas_poly_eval':
+        if agg.type in { 'bas_poly_eval', 'sv_poly_eval'}:
             _display_metrics_suffixes = [
                 'bas_tp',
                 'bas_fp',
@@ -207,8 +249,8 @@ class SmartGlobalHelper:
                 'bas_f1',
                 'bas_ffpa',
                 'bas_faa_f1',
-                'bas_tpr',
-                'bas_ppv',
+                # 'bas_tpr',
+                # 'bas_ppv',
             ]
             _primary_metrics_suffixes = [
                 # 'bas_faa_f1'

@@ -5,6 +5,47 @@ SeeAlso:
 
 "
 
+
+# Demo with slurm
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+geowatch schedule_evaluation --params="
+    matrix:
+        bas_pxl.package_fpath:
+            - $DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
+        bas_pxl.test_dataset:
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-KR_R001.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-KR_R002.kwcoco.zip
+        bas_pxl.chip_overlap: 0.3
+        bas_pxl.chip_dims:
+            - auto
+        bas_pxl.time_span:
+            - auto
+        bas_pxl.time_sampling:
+            - auto
+        bas_poly_eval.true_site_dpath: $DVC_DATA_DPATH/annotations/drop6/site_models
+        bas_poly_eval.true_region_dpath: $DVC_DATA_DPATH/annotations/drop6/region_models
+        bas_pxl.enabled: 1
+        bas_pxl_eval.enabled: 0
+        bas_poly.enabled: 0
+        bas_poly_eval.enabled: 0
+        bas_poly_viz.enabled: 0
+    " \
+    --root_dpath="$DVC_EXPT_DPATH/slurm_demo" \
+    --backend=slurm --queue_name "_slurm_demo" \
+    --pipeline=bas --skip_existing=1 \
+    --devices="0,1" \
+    --slurm_options '
+    account: public-default
+    partition: general-gpu
+    ntasks: 1
+    cpus_per_task: 4
+    gres: "gpu:1"
+    ' \
+    --print-commands \
+    --run=0
+
+
 #### Eval9 Models (Namek)
 
 DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=hdd)
@@ -751,6 +792,8 @@ python -m watch.mlops.schedule_evaluation --params="
     --backend=tmux --queue_name "_namek_split1_eval_small" \
     --pipeline=bas --skip_existing=1 \
     --run=1
+
+
 
 
 # SPLIT 1 - filter1 analysis

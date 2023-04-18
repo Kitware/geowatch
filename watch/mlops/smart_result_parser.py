@@ -205,13 +205,13 @@ def load_bas_poly_eval(fpath, expt_dvc_dpath=None, arg_prefix='trk.'):
         import rich
         write_network_text(graph, path=rich.print, end='', max_depth=None)
 
-    param_types = parse_tracker_params(tracker_info, expt_dvc_dpath, arg_prefix=arg_prefix)
+    # param_types = parse_tracker_params(tracker_info, expt_dvc_dpath, arg_prefix=arg_prefix)
 
     # extra_attrs = _add_prefix(arg_prefix + 'poly.metrics.', metrics)
     info = {
         'fpath': fpath,
         'metrics': metrics,
-        'param_types': param_types,
+        # 'param_types': param_types,
         # 'other': {
         #     'extra_attrs': extra_attrs,
         # },
@@ -221,33 +221,45 @@ def load_bas_poly_eval(fpath, expt_dvc_dpath=None, arg_prefix='trk.'):
 
 
 @xdev.profile
-def load_sc_poly_eval(fpath, expt_dvc_dpath=None, arg_prefix='act.'):
+def load_iarpa_poly_eval(fpath):
     metrics, iarpa_info = load_iarpa_evaluation(fpath)
-
-    tracker_info = iarpa_info.get('parent_info', None)
-    if tracker_info is not None:
-        param_types = parse_tracker_params(tracker_info, expt_dvc_dpath, arg_prefix=arg_prefix)
-    else:
-        param_types = {}
-    # Hack to grab information that we should have already had.
-    HACK_HANDLE_CROPPED_AND_TRACK_PARAMS = 1
-    if HACK_HANDLE_CROPPED_AND_TRACK_PARAMS:
-        try:
-            trk_param_types, extra_attrs = _handle_crop_and_trk_params(param_types, expt_dvc_dpath)
-        except Exception:
-            trk_param_types = {}
-            extra_attrs = {}
-        param_types.update(trk_param_types)
-    else:
-        extra_attrs = {}
-    extra_attrs.update(_add_prefix('act.poly.metrics.', metrics))
     info = {
         'fpath': fpath,
         'metrics': metrics,
-        'param_types': param_types,
-        'other': {
-            'extra_attrs': extra_attrs,
-        },
+        'json_info': iarpa_info,
+    }
+    return info
+
+
+@xdev.profile
+def load_sc_poly_eval(fpath, expt_dvc_dpath=None, arg_prefix='act.'):
+    metrics, iarpa_info = load_iarpa_evaluation(fpath)
+
+    # tracker_info = iarpa_info.get('parent_info', None)
+    # if tracker_info is not None:
+    #     param_types = parse_tracker_params(tracker_info, expt_dvc_dpath, arg_prefix=arg_prefix)
+    # else:
+    #     param_types = {}
+    # # Hack to grab information that we should have already had.
+    # HACK_HANDLE_CROPPED_AND_TRACK_PARAMS = 1
+    # if HACK_HANDLE_CROPPED_AND_TRACK_PARAMS:
+    #     try:
+    #         trk_param_types, extra_attrs = _handle_crop_and_trk_params(param_types, expt_dvc_dpath)
+    #     except Exception:
+    #         trk_param_types = {}
+    #         extra_attrs = {}
+    #     param_types.update(trk_param_types)
+    # else:
+    #     extra_attrs = {}
+    # extra_attrs.update(_add_prefix('act.poly.metrics.', metrics))
+
+    info = {
+        'fpath': fpath,
+        'metrics': metrics,
+        # 'param_types': param_types,
+        # 'other': {
+        #     'extra_attrs': extra_attrs,
+        # },
         'json_info': iarpa_info,
     }
     return info
@@ -705,7 +717,10 @@ def parse_resource_item(item, arg_prefix='', add_prefix=True):
     start_time = util_time.coerce_datetime(pred_prop.get('start_timestamp', None))
     end_time = util_time.coerce_datetime(pred_prop.get('end_timestamp', pred_prop.get('stop_timestamp', None)))
     iters_per_second = pred_prop.get('iters_per_second', None)
-    total_hours = (end_time - start_time).total_seconds() / (60 * 60)
+    if start_time is None or end_time is None:
+        total_hours = None
+    else:
+        total_hours = (end_time - start_time).total_seconds() / (60 * 60)
     resources['total_hours'] = total_hours
     if iters_per_second is not None:
         resources['iters_per_second'] = iters_per_second

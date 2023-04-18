@@ -277,12 +277,17 @@ class Pipeline:
                 else:
                     data['label'] = data['node'].name
 
+                # SMART specific hack: remove later
                 if 'bas' in data['label']:
                     data['label'] = '[yellow]' + data['label']
                 elif 'sc' in data['label']:
                     data['label'] = '[cyan]' + data['label']
                 elif 'crop' in data['label']:
                     data['label'] = '[white]' + data['label']
+                elif 'building' in data['label']:
+                    data['label'] = '[bright_magenta]' + data['label']
+                elif 'sv' in data['label']:
+                    data['label'] = '[bright_magenta]' + data['label']
         labelize_graph(self.io_graph)
         labelize_graph(self.proc_graph)
 

@@ -51,14 +51,19 @@ import ubelt as ub
 
 
 class BuildingValidatorConfig(scfg.DataConfig):
-    input_kwcoco = scfg.Value(None, help='input')
-    input_site_summaries = scfg.Value(None)
-    output_site_summaries = scfg.Value(None)
+    input_kwcoco = scfg.Value(None, help='input', tags='input')
 
-    box_isect_threshold = scfg.Value(0.1, help='This fraction of the a detected building box must intersect the proposed polygon')
-    box_score_threshold = scfg.Value(0.1, help='The detected building boxes must have a score higher than this')
-    start_score_thresh = scfg.Value(0.0, help='The max building score needed in the start sequence')
-    end_score_thresh = scfg.Value(0.3, help='The max building score needed in the end sequence')
+    input_region = scfg.Value(None, tags='input')
+    input_sites = scfg.Value(None, tags='input')
+
+    output_region_fpath = scfg.Value(None, tags='output')
+    output_sites_dpath = scfg.Value(None, tags='output')
+    output_site_manifest_fpath = scfg.Value(None, tags='output')
+
+    box_isect_threshold = scfg.Value(0.1, help='This fraction of the a detected building box must intersect the proposed polygon', tags='algo')
+    box_score_threshold = scfg.Value(0.01, help='The detected building boxes must have a score higher than this', tags='algo')
+    start_max_score = scfg.Value(1.0, help='The max building score needed in the start sequence', tags='algo')
+    end_min_score = scfg.Value(0.1, help='The min building score needed in the end sequence', tags='algo')
 
 
 IGNORE_CLASS_NAMES = ub.codeblock(
@@ -141,12 +146,12 @@ def main(cmdline=1, **kwargs):
         site_summary = ub.Path(fsubtemplate('$NODE_DPATH/.pred/valicrop/*/.pred/bas_poly/*/site_summaries_manifest.json'))
         site_summary = coerce_patterned_paths(site_summary)[0]
 
-        output_site_summaries = ub.Path(fsubtemplate('$NODE_DPATH/filtered_site_summaries.geojson'))
+        output_region_fpath = ub.Path(fsubtemplate('$NODE_DPATH/filtered_site_summaries.geojson'))
 
         kwargs = {
             'input_kwcoco': coco_fpath,
-            'input_site_summaries': site_summary,
-            'output_site_summaries': output_site_summaries,
+            'input_region': site_summary,
+            'output_region_fpath': output_region_fpath,
         }
         cmdline = 0
 
@@ -167,28 +172,56 @@ def main(cmdline=1, **kwargs):
     rich.print('config = ' + ub.urepr(config, nl=1))
 
     from watch.geoannots import geomodels
+    from watch.utils import util_gis
     import kwcoco
+    from watch.cli import reproject_annotations
+    from watch.utils import util_time
+    from kwcoco.util import util_json
+    from watch.utils import process_context
+    import os
+    import safer
+    import json
+
+    # Args will be serailized in kwcoco, so make sure it can be coerced to json
+    jsonified_config = util_json.ensure_json_serializable(config.asdict())
+    walker = ub.IndexableWalker(jsonified_config)
+    for problem in util_json.find_json_unserializable(jsonified_config):
+        bad_data = problem['data']
+        walker[problem['loc']] = str(bad_data)
+    filter_output = {
+        'type': 'tracking_result',
+        'info': [],
+        'files': [],
+    }
+    # Track process info
+    proc_context = process_context.ProcessContext(
+        name='watch.tasks.dino_detector.building_validator', type='process',
+        config=jsonified_config,
+        track_emissions=False,
+    )
+    proc_context.start()
+    filter_output['info'].append(proc_context.obj)
+
     input_coco = kwcoco.CocoDataset(config.input_kwcoco)
-    region_model = geomodels.RegionModel.coerce(config.input_site_summaries)
-    output_site_summaries = ub.Path(config.output_site_summaries)
+    region_model = geomodels.RegionModel.coerce(config.input_region)
+    output_region_fpath = ub.Path(config.output_region_fpath)
+
+    input_site_fpaths = util_gis.coerce_geojson_paths(config.input_sites)
     # set(input_coco.annots().lookup('track_id', None))
 
     site_id_to_summary = {}
     for summary in region_model.site_summaries():
         assert summary.site_id not in site_id_to_summary
         site_id_to_summary[summary.site_id] = summary
-
-    from watch.cli import reproject_annotations
-    from watch.utils import util_time
-    # util_time.coerce_datetime()
+    ##
 
     output_kwcoco = reproject_annotations.main(
         cmdline=0, src=input_coco.copy(),
         dst='return',
-        region_models=config.input_site_summaries,
+        region_models=config.input_region,
         status_to_catname={'system_confirmed': 'positive'},
         role='pred_poly',
-        validate_checks=True,
+        validate_checks=False,
         clear_existing=False,
     )
 
@@ -229,8 +262,8 @@ def main(cmdline=1, **kwargs):
             max_start_score = max(f['max_score'] for f in start_features)
             max_end_score = max(f['max_score'] for f in end_features)
             accept = (
-                max_start_score < config.start_score_thresh and
-                max_end_score > config.end_score_thresh
+                max_start_score <= config.start_max_score and
+                max_end_score >= config.end_min_score
             )
         else:
             # Unobservable case, automatically accept
@@ -238,13 +271,36 @@ def main(cmdline=1, **kwargs):
         site_to_accept[site_id] = accept
 
     accept_sites = [s for s, f in site_to_accept.items() if f]
+    print(f'Filter to {len(accept_sites)} / {len(site_id_to_summary)} sites')
     new_summaries = ub.udict(site_id_to_summary).subdict(accept_sites).values()
+
+    site_to_site_fpath = ub.udict({
+        p.stem: p for p in input_site_fpaths
+    })
+    assert set(site_to_site_fpath) ==  set(site_id_to_summary)
+
+    # Copy the filtered site models over to the output directory
+    keep_site_fpaths = site_to_site_fpath.subdict(accept_sites)
+    output_sites_dpath = ub.Path(config.output_sites_dpath)
+    output_sites_dpath.ensuredir()
+    for old_fpath in keep_site_fpaths.values():
+        new_fpath = output_sites_dpath / old_fpath.name
+        old_fpath.copy(new_fpath, overwrite=True)
 
     new_region_model = geomodels.RegionModel.from_features(
         [region_model.header] + list(new_summaries))
 
-    output_site_summaries.parent.ensuredir()
-    output_site_summaries.write_text(new_region_model.dumps(indent=4))
+    output_region_fpath.parent.ensuredir()
+    with safer.open(output_region_fpath, 'w', temp_file=True) as file:
+        json.dump(new_region_model, file, indent=4)
+
+    proc_context.stop()
+
+    if config.output_site_manifest_fpath is not None:
+        filter_output['files'] = [os.fspath(output_region_fpath)]
+        print(f'Write filtered site result to {config.output_site_manifest_fpath}')
+        with safer.open(config.output_site_manifest_fpath, 'w', temp_file=True) as file:
+            json.dump(filter_output, file, indent=4)
 
 
 def building_in_image_features(coco_img, site_id, config):
@@ -333,15 +389,15 @@ Ignore:
                 - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-CH_R001.kwcoco.zip
                 - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-NZ_R001.kwcoco.zip
                 - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R001.kwcoco.zip
-                - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-AE_R001.kwcoco.zip
+                # - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-AE_R001.kwcoco.zip
             bas_pxl.chip_overlap: 0.3
             bas_pxl.chip_dims:
                 - auto
             bas_pxl.time_span:
                 - auto
             bas_pxl.time_sampling:
-                - auto
-                - soft5
+                # - auto
+                # - soft5
                 - soft4
             bas_poly.thresh:
                 - 0.33
@@ -374,8 +430,6 @@ Ignore:
             bas_poly.boundary_region: $DVC_DATA_DPATH/annotations/drop6/region_models
             bas_poly_eval.true_site_dpath: $DVC_DATA_DPATH/annotations/drop6/site_models
             bas_poly_eval.true_region_dpath: $DVC_DATA_DPATH/annotations/drop6/region_models
-            sc_poly_eval.true_site_dpath: $DVC_DATA_DPATH/annotations/drop6/site_models
-            sc_poly_eval.true_region_dpath: $DVC_DATA_DPATH/annotations/drop6/region_models
             bas_pxl.enabled: 1
             bas_pxl_eval.enabled: 1
             bas_poly.enabled: 1
@@ -386,11 +440,23 @@ Ignore:
             valicrop.num_start_frames: 3
             valicrop.num_end_frames: 3
             valicrop.context_factor: 1.5
-            buildings.enabled: 1
-            buildings.package_fpath: $DVC_EXPT_DPATH/models/kitware/xview_dino.pt
-            buildings.window_dims: 1024
-            buildings.window_overlap: "0.5"
-            buildings.fixed_resolution: "1GSD"
+            sv_dino_boxes.enabled: 1
+            sv_dino_boxes.package_fpath: $DVC_EXPT_DPATH/models/kitware/xview_dino.pt
+            sv_dino_boxes.window_dims: 1024
+            sv_dino_boxes.window_overlap: "0.5"
+            sv_dino_boxes.fixed_resolution: "1GSD"
+            sv_dino_filter.box_isect_threshold:
+                - 0.1
+            sv_dino_filter.box_score_threshold:
+                - 0.01
+            sv_dino_filter.start_max_score:
+                - 1.0
+            sv_dino_filter.end_min_score:
+                - 0.0
+                - 0.1
+                - 0.2
+                - 0.3
+                - 0.4
         submatrices:
             - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R001.kwcoco.zip
               valicrop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-KR_R001.kwcoco.json
@@ -406,10 +472,32 @@ Ignore:
               valicrop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-AE_R001.kwcoco.json
         " \
         --root_dpath="$DVC_EXPT_DPATH/_mlops_eval10_baseline" \
-        --devices="0," --tmux_workers=2 \
+        --devices="0," --tmux_workers=4 \
         --backend=tmux --queue_name "_mlops_eval10_baseline" \
         --pipeline=bas_building_vali --skip_existing=1 \
         --run=1
+
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+gwmlops aggregate \
+    --pipeline=bas_building_vali \
+    --target \
+        "$DVC_EXPT_DPATH/_mlops_eval10_baseline" \
+    --resource_report=0 \
+    --rois='[KR_R002,KR_R001,BR_R002,CH_R001,NZ_R001]' \
+    --stdout_report="
+        top_k: 5
+        per_group: 1
+        macro_analysis: 0
+        analyze: 0
+        reference_region: final
+        shorten: 1
+    " --eval_nodes="[sv_poly_eval]" --io_workers=0
+
+    --rois='[NZ_R001,KR_R001]' \
+
+
+
+        print_models: True
 
 geowatch align \
     --src "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6/imgonly-KR_R001.kwcoco.json" \
@@ -493,12 +581,26 @@ python ~/code/watch/dev/wip/grid_sitevali_crops.py \
 
 python watch.tasks.dino_detector.building_validator \
     --input_kwcoco "$NODE_DPATH/pred_boxes.kwcoco.zip" \
-    --input_site_summaries "$NODE_DPATH/.pred/valicrop/*/.pred/bas_poly/*/site_summaries_manifest.json" \
-    --output_site_summaries "$NODE_DPATH/filtered_summaries.json" \
+    --input_region "$NODE_DPATH/.pred/valicrop/*/.pred/bas_poly/*/site_summaries_manifest.json" \
+    --output_region_fpath "$NODE_DPATH/filtered_summaries.json" \
     --box_isect_threshold 0.1 \
     --box_score_threshold 0.1 \
-    --start_score_thresh 0.0 \
-    --end_score_thresh 0.3
+    --start_max_score 0.0 \
+    --end_min_score 0.3
+
+
+
+python -m watch.tasks.dino_detector.building_validator \
+    --input_kwcoco="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/buildings/buildings_id_663bd461/pred_boxes.kwcoco.zip" \
+    --input_region="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/bas_poly/bas_poly_id_f8061df6/site_summaries_manifest.json" \
+    --input_sites="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/bas_poly/bas_poly_id_f8061df6/sites_manifest.json" \
+    --output_region_fpath="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/building_validate/building_validate_id_60a56eed/out_region.geojson" \
+    --output_sites_dpath="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/building_validate/building_validate_id_60a56eed/out_sites" \
+    --output_site_manifest_fpath="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/building_validate/building_validate_id_60a56eed/out_site_manifest.json" \
+    --box_isect_threshold="0.1" \
+    --box_score_threshold="0.1" \
+    --start_max_score="0.1" \
+    --end_min_score="0.3"
 
 
 """

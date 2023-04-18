@@ -86,7 +86,13 @@ class AggregateEvluationConfig(DataConfig):
 
     io_workers = Value('avail', help='number of processes to load results')
 
+    eval_nodes = Value(None, help='eval nodes to look at')
+
     rois = Value('auto', help='Comma separated regions of interest')
+
+    def __post_init__(self):
+        from watch.utils.util_yaml import Yaml
+        self.eval_nodes = Yaml.coerce(self.eval_nodes)
 
 
 def main(cmdline=True, **kwargs):
@@ -181,7 +187,7 @@ def coerce_aggregators(config):
     for target in input_targets:
         if target.is_dir():
             # Assume Pipeline Output dir
-            eval_type_to_results = build_tables(target, config.pipeline, config.io_workers)
+            eval_type_to_results = build_tables(target, config.pipeline, config.io_workers, config.eval_nodes)
             for type, results in eval_type_to_results.items():
                 table = pd.concat(list(results.values()), axis=1)
                 eval_type_to_tables[type].append(table)
@@ -262,8 +268,9 @@ def build_all_param_plots(agg, rois, config):
     plotter.rois = rois
 
     for vantage in plotter.vantage_points:
-        print(vantage['name'])
-        plotter.plot_vantage(vantage)
+        print('Plot vantage overview: ' + vantage['name'])
+        plotter.plot_vantage_overview(vantage)
+        print('Plot vantage params: ' + vantage['name'])
         # plotter.plot_vantage_overview(vantage)
         plotter.plot_vantage_params(vantage)
 
@@ -286,9 +293,9 @@ class ParamPlotter:
             vantage['name'] = name
         plotter.vantage_points = vantage_points
 
-    def plot_vantage(plotter, vantage):
-        plotter.plot_vantage_overview(vantage)
-        plotter.plot_vantage_params(vantage)
+    # def plot_vantage(plotter, vantage):
+    #     plotter.plot_vantage_overview(vantage)
+    #     plotter.plot_vantage_params(vantage)
 
     def plot_vantage_overview(plotter, vantage):
         from watch.utils import util_kwplot
@@ -505,7 +512,7 @@ class ParamPlotter:
                 results, metrics=[main_metric], metric_objectives=metric_objectives)
             analysis.build()
             analysis.analysis()
-            # print('analysis.varied = {}'.format(ub.urepr(analysis.varied, nl=2)))
+            print('analysis.varied = {}'.format(ub.urepr(analysis.varied, nl=2)))
             ranked_stats = list(sorted(analysis.statistics, key=lambda x: x['anova_rank_p']))
             param_name_to_stats = {s['param_name']: s for s in ranked_stats}
             ranked_params = ub.oset(param_name_to_stats.keys())
@@ -517,6 +524,8 @@ class ParamPlotter:
             param_name_to_stats = {}
 
         # ranked_params = ['bas_poly_eval.params.bas_pxl.package_fpath']
+        if len(ranked_params):
+            print('Warning: no ranked params')
 
         from kwcoco.metrics.drawing import concice_si_display
         for rank, param_name in enumerate(ub.ProgIter(ranked_params, desc='plot param for ' + vantage['name'], verbose=3)):
@@ -976,7 +985,12 @@ class AggregatorAnalysisMixin:
             if region_id in agg.macro_key_to_regions:
                 rois = agg.macro_key_to_regions[region_id]
                 _agg.build_macro_tables(rois)
+            reference_hashids = param_hashids
+            reference_hashid_to_rank = {
+                hashid: rank for rank, hashid in enumerate(reference_hashids)
+            }
         else:
+            reference_hashids = None
             _agg = agg
 
         for region_id, group in _agg.region_to_tables.items():
@@ -996,6 +1010,14 @@ class AggregatorAnalysisMixin:
             summary_table = pd.concat([top_indexes, top_metrics], axis=1)
             if shorten:
                 summary_table = util_pandas.pandas_shorten_columns(summary_table)
+
+            if reference_hashids is not None:
+                # When a reference region is given, order all per-region rows
+                # to align with the reference region.
+                ranking = summary_table['param_hashid'].apply(lambda x: reference_hashid_to_rank.get(x, len(reference_hashid_to_rank)))
+                sortx = ranking.sort_values().index
+                summary_table = summary_table.loc[sortx]
+
             region_id_to_summary[region_id] = summary_table
             region_id_to_ntotal[region_id] = len(metric_group)
 
@@ -1233,15 +1255,16 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         _primary_metrics_suffixes, _display_metrics_suffixes = SMART_HELPER._default_metrics(agg)
 
         if agg.primary_metric_cols == 'auto':
-            agg.primary_metric_cols = util_pandas.pandas_suffix_columns(  # fixme sorting
-                agg.metrics, _primary_metrics_suffixes)
-
+            # agg.primary_metric_cols = util_pandas.pandas_suffix_columns(  # fixme sorting
+            #     agg.metrics, _primary_metrics_suffixes)
+            agg.primary_metric_cols = [f'metrics.{agg.type}.{s}' for s in _primary_metrics_suffixes]
         if agg.display_metric_cols == 'auto':
-            agg.display_metric_cols = util_pandas.pandas_suffix_columns(  # fixme sorting
-                agg.metrics, _display_metrics_suffixes)
+            # agg.display_metric_cols = util_pandas.pandas_suffix_columns(  # fixme sorting
+            #     agg.metrics, _display_metrics_suffixes)
+            agg.display_metric_cols = [f'metrics.{agg.type}.{s}' for s in _display_metrics_suffixes]
 
         _model_suffixes = ['package_fpath']
-        _testdset_suffixes = ['test_dataset']
+        _testdset_suffixes = ['test_dataset', 'crop_src_fpath']
 
         agg.model_cols = util_pandas.pandas_suffix_columns(
             agg.requested_params, _model_suffixes)
@@ -1400,6 +1423,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         """
         import pandas as pd
         table = pd.concat([agg.index, agg.metrics, agg.resolved_params], axis=1)
+        table[['param_hashid']]
 
         # Macro aggregation over regions.
         macro_compatible = ub.ddict(list)
@@ -1469,6 +1493,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         """
         Builds a single macro table for a choice of regions.
         """
+
         import pandas as pd
         import numpy as np
         # Given a specific group of regions,
@@ -1494,9 +1519,10 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         # Gather groups that can be aggregated
         comparable_groups = agg.gather_macro_compatable_groups(regions_of_interest)
         if len(comparable_groups) == 0:
-            print(ub.paragraph(
+            import rich
+            rich.print(ub.paragraph(
                 f'''
-                WARNING: Failed to build macro results. No comparable groups
+                [yellow]WARNING: Failed to build macro results. No comparable groups
                 for rois={rois}
                 '''))
         else:
