@@ -1259,7 +1259,7 @@ python -m watch.mlops.schedule_evaluation --params="
               - 10GSD
     " \
     --root_dpath="$DVC_EXPT_DPATH/_namek_split1_eval_filter1_MeanYear10GSD-V2" \
-    --devices="0,1" --tmux_workers=4 \
+    --devices="0,1" --tmux_workers=6 \
     --backend=tmux --queue_name "_namek_split1_eval_filter1_MeanYear10GSD-V2" \
     --pipeline=bas --skip_existing=1 \
     --run=1
@@ -1276,9 +1276,9 @@ gwmlops aggregate \
         per_group: 1
         macro_analysis: 0
         analyze: 0
-        reference_region: KR_R002
-    "
+        reference_region: null
         print_models: True
+    "
     #--rois=KR_R002 \
 
 python -c "if 1:
@@ -1383,3 +1383,47 @@ gwmlops aggregate \
         # print_models: True
     "
     #--rois=KR_R002 \
+
+
+
+
+### Build namek aggregate
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+gwmlops aggregate \
+    --pipeline=bas \
+    --target "
+        - $DVC_EXPT_DPATH/_namek_split1_eval_filter1_MeanYear10GSD-V2
+        - $DVC_EXPT_DPATH/_namek_split1_eval_filter1_MeanYear10GSD
+        - $DVC_EXPT_DPATH/_namek_split1_eval_filter1
+        - $DVC_EXPT_DPATH/_namek_split1_eval_small
+        - $DVC_EXPT_DPATH/_namek_split2_eval_small
+        - $DVC_EXPT_DPATH/_quick_split1_checks
+        - $DVC_EXPT_DPATH/_timekernel_test_drop4
+        - $DVC_EXPT_DPATH/_mlops_eval10_baseline
+    " \
+    --export_tables=True \
+    --output_dpath="$DVC_EXPT_DPATH/aggregate_results/namek"
+
+
+### Build toothbrush aggregate
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+gwmlops aggregate \
+    --pipeline=bas_building_vali \
+    --target "
+        - $DVC_EXPT_DPATH/_mlops_eval10_baseline
+        - $DVC_EXPT_DPATH/_toothbrush_eval_split6_MeanYear10GSD
+        - $DVC_EXPT_DPATH/_split6_toothbrush_meanyear
+    " \
+    --export_tables=True \
+    --output_dpath="$DVC_EXPT_DPATH/aggregate_results/toothbrush"
+
+
+### Build toothbrush aggregate
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+gwmlops aggregate \
+    --pipeline=bas_building_vali \
+    --target "
+        - $DVC_EXPT_DPATH/_ooo_split2_eval_filter1_MeanYear10GSD-V2
+    " \
+    --export_tables=True \
+    --output_dpath="$DVC_EXPT_DPATH/aggregate_results/ooo"

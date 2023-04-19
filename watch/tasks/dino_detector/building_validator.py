@@ -389,7 +389,7 @@ Ignore:
                 - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-CH_R001.kwcoco.zip
                 - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-NZ_R001.kwcoco.zip
                 - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R001.kwcoco.zip
-                # - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-AE_R001.kwcoco.zip
+                - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-AE_R001.kwcoco.zip
             bas_pxl.chip_overlap: 0.3
             bas_pxl.chip_dims:
                 - auto
@@ -443,6 +443,7 @@ Ignore:
             sv_dino_boxes.enabled: 1
             sv_dino_boxes.package_fpath: $DVC_EXPT_DPATH/models/kitware/xview_dino.pt
             sv_dino_boxes.window_dims:
+                - 256
                 - 512
                 - 768
                 - 1024
@@ -488,7 +489,7 @@ Ignore:
               valicrop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-AE_R001.kwcoco.json
         " \
         --root_dpath="$DVC_EXPT_DPATH/_mlops_eval10_baseline" \
-        --devices="0," --tmux_workers=4 \
+        --devices="0," --tmux_workers=8 \
         --backend=tmux --queue_name "_mlops_eval10_baseline" \
         --pipeline=bas_building_vali --skip_existing=1 \
         --run=1

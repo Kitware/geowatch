@@ -55,12 +55,10 @@ except ImportError:
     profile = ub.identity
 
 
-class AggregateEvluationConfig(DataConfig):
+class AggregateLoader(DataConfig):
     """
-    Aggregates results from multiple DAG evaluations.
+    Just the part of the config related to loading
     """
-    __command__ = 'aggregate'
-    __alias__ = ['mlops_aggregate']
 
     target = Value(None, help=ub.paragraph(
         '''
@@ -69,12 +67,58 @@ class AggregateEvluationConfig(DataConfig):
         (2) one or more pre-aggregated files,
         '''), nargs='+')
 
+    pipeline = Value('joint_bas_sc', help='the name of the pipeline to run')
+
+    io_workers = Value('avail', help='number of processes to load results')
+
+    eval_nodes = Value(None, help='eval nodes to look at')
+
+    def __post_init__(self):
+        from watch.utils.util_yaml import Yaml
+        self.eval_nodes = Yaml.coerce(self.eval_nodes)
+
+    @profile
+    def coerce_aggregators(config):
+        from watch.utils import util_path
+        from watch.mlops.aggregate_loader import build_tables
+        import pandas as pd
+        input_targets = util_path.coerce_patterned_paths(config.target)
+        eval_type_to_tables = ub.ddict(list)
+        print(f'Found {len(input_targets)} input targets')
+        for target in ub.ProgIter(input_targets, desc='loading targets', verbose=3):
+            if target.is_dir():
+                # Assume Pipeline Output dir
+                eval_type_to_results = build_tables(target, config.pipeline, config.io_workers, config.eval_nodes)
+                for type, results in eval_type_to_results.items():
+                    table = pd.concat(list(results.values()), axis=1)
+                    eval_type_to_tables[type].append(table)
+            if target.is_file():
+                # Assume CSV file
+                table = pd.read_csv(target, low_memory=False)
+                if len(table):
+                    type = table['node'].iloc[0]
+                    eval_type_to_tables[type].append(table)
+
+        eval_type_to_aggregator = {}
+        for type, tables in eval_type_to_tables.items():
+            table = tables[0] if len(tables) == 1 else pd.concat(tables).reset_index(drop=True)
+            agg = Aggregator(table)
+            agg.build()
+            eval_type_to_aggregator[type] = agg
+        return eval_type_to_aggregator
+
+
+class AggregateEvluationConfig(AggregateLoader):
+    """
+    Aggregates results from multiple DAG evaluations.
+    """
+    __command__ = 'aggregate'
+    __alias__ = ['mlops_aggregate']
+
     output_dpath = Value('./aggregate', help=ub.paragraph(
         '''
         The path where the aggregator can write results (e.g. tables / plots).
         '''))
-
-    pipeline = Value('joint_bas_sc', help='the name of the pipeline to run')
 
     export_tables = Value(False, isflag=True, help='if True, aggregated tables will be written to the output directory')
 
@@ -84,15 +128,11 @@ class AggregateEvluationConfig(DataConfig):
 
     resource_report = Value(False, isflag=True, help='if True report resource utilization')
 
-    io_workers = Value('avail', help='number of processes to load results')
-
-    eval_nodes = Value(None, help='eval nodes to look at')
-
     rois = Value('auto', help='Comma separated regions of interest')
 
     def __post_init__(self):
+        super().__init__()
         from watch.utils.util_yaml import Yaml
-        self.eval_nodes = Yaml.coerce(self.eval_nodes)
         self.plot_params = Yaml.coerce(self.plot_params)
         if self.plot_params is True:
             self.plot_params = {
@@ -134,7 +174,11 @@ def main(cmdline=True, **kwargs):
     import rich
     rich.print('config = {}'.format(ub.urepr(config, nl=1)))
 
-    eval_type_to_aggregator = coerce_aggregators(config)
+    eval_type_to_aggregator = config.coerce_aggregators()
+
+    output_dpath = ub.Path(config['output_dpath'])
+    for agg in eval_type_to_aggregator.values():
+        agg.output_dpath = output_dpath
 
     rois = config.rois
     # rois = {'KR_R001', 'KR_R002', 'BR_R002'}
@@ -180,39 +224,6 @@ def main(cmdline=True, **kwargs):
             if len(agg):
                 build_all_param_plots(agg, rois, config)
     # automated_analysis(eval_type_to_aggregator, config)
-
-
-@profile
-def coerce_aggregators(config):
-    from watch.utils import util_path
-    from watch.mlops.aggregate_loader import build_tables
-    import pandas as pd
-    input_targets = util_path.coerce_patterned_paths(config.target)
-    eval_type_to_tables = ub.ddict(list)
-    for target in input_targets:
-        if target.is_dir():
-            # Assume Pipeline Output dir
-            eval_type_to_results = build_tables(target, config.pipeline, config.io_workers, config.eval_nodes)
-            for type, results in eval_type_to_results.items():
-                table = pd.concat(list(results.values()), axis=1)
-                eval_type_to_tables[type].append(table)
-        if target.is_file():
-            # Assume CSV file
-            table = pd.read_csv(target, low_memory=False)
-            if len(table):
-                type = table['node'].iloc[0]
-                eval_type_to_tables[type].append(table)
-
-    output_dpath = ub.Path(config['output_dpath'])
-
-    eval_type_to_aggregator = {}
-    for type, tables in eval_type_to_tables.items():
-        table = tables[0] if len(tables) == 1 else pd.concat(tables).reset_index(drop=True)
-        agg = Aggregator(table)
-        agg.output_dpath = output_dpath
-        agg.build()
-        eval_type_to_aggregator[type] = agg
-    return eval_type_to_aggregator
 
 
 @profile

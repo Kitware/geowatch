@@ -7,6 +7,19 @@ from watch.mlops.aggregate import fix_duplicate_param_hashids
 from watch.utils import util_pandas
 
 
+
+def _sitevisit_2023_april_report():
+    import watch
+    from watch.mlops.aggregate import AggregateLoader
+    expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+    loader = AggregateLoader(
+        target=[
+            expt_dvc_dpath / 'aggregate_results/toothbrush/*.csv.zip'
+        ])
+    eval_type_to_aggregator = loader.coerce_aggregators()
+    agg = eval_type_to_aggregator['bas_poly_eval']
+
+
 def _gather_namek_shortlist_results():
     """
 
