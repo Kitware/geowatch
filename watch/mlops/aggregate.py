@@ -368,10 +368,10 @@ class ParamPlotter:
         if 'delivered_params' in single_table:
             import kwimage
             val_to_color = {
-                # 'Eval6': kwimage.Color('kitware_red').as01(),
-                'Eval7': kwimage.Color('kitware_orange').as01(),
-                'Eval8': kwimage.Color('kitware_green').as01(),
-                'Eval10': kwimage.Color('kitware_blue').as01(),
+                'Eval7': kwimage.Color('kitware_yellow').as01(),
+                'Eval8': kwimage.Color('kitware_orange').as01(),
+                'Eval9': kwimage.Color('kitware_darkgreen').as01(),
+                'Eval10': kwimage.Color('kitware_darkblue').as01(),
             }
             if 0:
                 kwplot.imshow(kwplot.make_legend_img(val_to_color, mode='star', dpi=300))
@@ -409,7 +409,7 @@ class ParamPlotter:
             assert len(region_ids) == 1
             macro_region_id = region_ids[0]
             palette = {
-                macro_region_id: kwimage.Color('kitware_yellow').as01()
+                macro_region_id: kwimage.Color('kitware_darkgray').as01()
             }
             ax = sns.scatterplot(data=macro_table, x=x, y=y, hue='region_id', ax=ax, palette=palette)
             if 'is_star' in macro_table:
@@ -419,9 +419,9 @@ class ParamPlotter:
             if 'delivered_params' in macro_table:
                 import kwimage
                 val_to_color = {
-                    # 'Eval6': kwimage.Color('kitware_red').as01(),
-                    'Eval7': kwimage.Color('kitware_orange').as01(),
-                    'Eval8': kwimage.Color('kitware_green').as01(),
+                    'Eval7': kwimage.Color('kitware_yellow').as01(),
+                    'Eval8': kwimage.Color('kitware_red').as01(),
+                    'Eval9': kwimage.Color('kitware_green').as01(),
                     'Eval10': kwimage.Color('kitware_blue').as01(),
                 }
                 if 0:

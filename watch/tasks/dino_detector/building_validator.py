@@ -511,7 +511,7 @@ gwmlops aggregate \
     " --eval_nodes="[sv_poly_eval]" \
     --plot_params="
         enabled: True
-    " \
+    "
 
     --rois='[NZ_R001,KR_R001]' \
 

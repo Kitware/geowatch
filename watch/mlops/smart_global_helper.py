@@ -458,7 +458,7 @@ class SmartGlobalHelper:
                 # 'bas_pxl.chip_dims': '[256, 256]',
                 'bas_pxl.chip_dims': '[196, 196]',
                 'bas_poly.moving_window_size': 'None',
-                'bas_poly.min_area_square_meters': 7200.0,
+                'bas_poly.min_area_square_meters': 72000.0,
             },
 
             {
