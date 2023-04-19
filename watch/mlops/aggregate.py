@@ -905,6 +905,10 @@ class AggregatorAnalysisMixin:
             else:
                 region_id = reference_region
             group = agg.region_to_tables[region_id]
+            if len(group) == 0:
+                region_to_len = ub.udict(agg.region_to_tables).map_values(len)
+                print('region_to_len = {}'.format(ub.urepr(region_to_len, nl=1)))
+                raise Exception(f'reference {region_id=} group is empty')
             metric_group = group[group.columns.intersection(agg.metrics.columns)]
             metric_group = metric_group.sort_values(agg.primary_metric_cols)
             top_idxs = util_pandas.pandas_argmaxima(metric_group, agg.primary_metric_cols, k=top_k)
