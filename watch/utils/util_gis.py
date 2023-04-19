@@ -806,6 +806,9 @@ def coerce_geojson_datas(arg, format='dataframe', allow_raw=False, workers=0,
         else:
             return False
 
+    if arg is None:
+        return
+
     if allow_raw:
         # Normally the function assumes we are only inputing things that are
         # coercable to paths, and then to geojson. But sometimes we might want

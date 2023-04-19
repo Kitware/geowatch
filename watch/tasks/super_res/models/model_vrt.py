@@ -14,6 +14,7 @@ from models.model_plain import ModelPlain
 
 class ModelVRT(ModelPlain):
     """Train video restoration  with pixel loss"""
+
     def __init__(self, opt):
         super(ModelVRT, self).__init__(opt)
         self.fix_iter = self.opt_train.get('fix_iter', 0)

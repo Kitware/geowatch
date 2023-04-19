@@ -23,6 +23,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Lots of CLI improvements.
 * Faster loading of multiple kwcoco files in smartwatch stats, ensemble, combine.
 
+* DATALOADER CHANGE: We were previously nan-ing all bands if red was nan. We no longer do this because it clobbers pan.
+
 ### Fixed
 
 * Fixed gdal warnings

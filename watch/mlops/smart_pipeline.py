@@ -90,7 +90,7 @@ Example:
     >>> #
     >>> root_dpath = data_dvc_dpath / '_testdag'
     >>> #
-    >>> nodes = joint_bas_sc_nodes()
+    >>> nodes = make_smart_pipeline_nodes()
     >>> #nodes = bas_nodes()
     >>> from watch.mlops.pipeline_nodes import PipelineDAG
     >>> self = dag = PipelineDAG(nodes)
@@ -121,7 +121,7 @@ class FeatureComputation(ProcessNode):
     executable = 'python -m watch.cli.run_metrics_framework'
     group_dname = PREDICT_NAME
 
-    node_dname = 'feats/{src_dset}'
+    # node_dname = 'feats/{src_dset}'
 
     in_paths = {'src'}
 
@@ -465,8 +465,8 @@ class BAS_HeatmapPrediction(HeatmapPrediction):
         >>> print(command)
     """
     name = 'bas_pxl'
-    # node_dname = 'bas_pxl/{bas_model}/{bas_test_dset}/{bas_pxl_algo_id}/{bas_pxl_id}'
-    node_dname = 'bas_pxl/{bas_pxl_algo_id}/{bas_pxl_id}'
+    # # node_dname = 'bas_pxl/{bas_model}/{bas_test_dset}/{bas_pxl_algo_id}/{bas_pxl_id}'
+    # node_dname = 'bas_pxl/{bas_pxl_algo_id}/{bas_pxl_id}'
 
     perf_params = ub.udict(HeatmapPrediction.perf_params) | {
         'with_saliency': True,
@@ -484,8 +484,8 @@ class BAS_HeatmapPrediction(HeatmapPrediction):
 
 class SC_HeatmapPrediction(HeatmapPrediction):
     name = 'sc_pxl'
-    # node_dname = 'sc_pxl/{sc_model}/{sc_test_dset}/{sc_pxl_algo_id}/{sc_pxl_id}'
-    node_dname = 'sc_pxl/{sc_pxl_algo_id}/{sc_pxl_id}'
+    # # node_dname = 'sc_pxl/{sc_model}/{sc_test_dset}/{sc_pxl_algo_id}/{sc_pxl_id}'
+    # node_dname = 'sc_pxl/{sc_pxl_algo_id}/{sc_pxl_id}'
 
     perf_params = ub.udict(HeatmapPrediction.perf_params) | {
         'with_saliency': False,
@@ -505,7 +505,7 @@ class SC_HeatmapPrediction(HeatmapPrediction):
 
 class BAS_PolygonPrediction(PolygonPrediction):
     name = 'bas_poly'
-    node_dname = 'bas_poly/{bas_poly_algo_id}/{bas_poly_id}'
+    # node_dname = 'bas_poly/{bas_poly_algo_id}/{bas_poly_id}'
     default_track_fn = 'saliency_heatmaps'
 
     @property
@@ -518,7 +518,7 @@ class BAS_PolygonPrediction(PolygonPrediction):
 
 class SC_PolygonPrediction(PolygonPrediction):
     name = 'sc_poly'
-    node_dname = 'sc_poly/{sc_poly_algo_id}/{sc_poly_id}'
+    # node_dname = 'sc_poly/{sc_poly_algo_id}/{sc_poly_id}'
     default_track_fn = 'class_heatmaps'
 
     @property
@@ -532,53 +532,47 @@ class SC_PolygonPrediction(PolygonPrediction):
 
 class BAS_HeatmapEvaluation(HeatmapEvaluation):
     name = 'bas_pxl_eval'
-    node_dname = 'bas_pxl_eval'
+    # node_dname = 'bas_pxl_eval'
 
 
 class SC_HeatmapEvaluation(HeatmapEvaluation):
     name = 'sc_pxl_eval'
-    node_dname = 'sc_pxl_eval'
+    # node_dname = 'sc_pxl_eval'
 
 
 # ---
 
 class BAS_PolygonEvaluation(PolygonEvaluation):
     name = 'bas_poly_eval'
-    node_dname = 'bas_poly_eval'
+    # node_dname = 'bas_poly_eval'
 
 
 class SC_PolygonEvaluation(PolygonEvaluation):
     name = 'sc_poly_eval'
-    node_dname = 'sc_poly_eval'
+    # node_dname = 'sc_poly_eval'
 
 # ---
 
 
 class BAS_Visualization(KWCocoVisualization):
     name = 'bas_poly_viz'
-    node_dname = 'bas_poly_viz'
+    # node_dname = 'bas_poly_viz'
 
 
 class SC_Visualization(KWCocoVisualization):
     name = 'sc_poly_viz'
-    node_dname = 'sc_poly_viz'
+    # node_dname = 'sc_poly_viz'
 
 
 # ---
 
 
-class SiteCropping(ProcessNode):
-    name = 'sitecrop'
-    node_dname = 'sitecrop/{src_dset}/{regions_id}/{sitecrop_algo_id}/{sitecrop_id}'
+class Cropping(ProcessNode):
+    """
+    Used for both site cropping and validation-cropping
+    """
+    executable = 'python -m watch.cli.align'
     group_dname = PREDICT_NAME
-
-    in_paths = {
-        'crop_src_fpath',
-        'regions',
-    }
-    out_paths = {
-        'crop_dst_fpath': 'sitecrop.kwcoco.zip'
-    }
 
     algo_params = {
         # 'include_channels': 'red|green|blue|cloudmask',  # fixme: not a good default
@@ -640,6 +634,197 @@ class SiteCropping(ProcessNode):
         #     #     secret_fpath
         #         # command = f'source {secret_fpath} && ' + command
         command = 'AWS_DEFAULT_PROFILE=iarpa GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR ' + command
+        return command
+
+
+class SV_Cropping(Cropping):
+    """
+    Crop to high res images as the start / end of a sequence
+    """
+    name = 'valicrop'  # TODO: sv_crop
+    # node_dname = 'valicrop/{src_dset}/{regions_id}/{valicrop_algoid}/{sitecrop_id}'
+
+    algo_params = {
+        # 'include_channels': 'red|green|blue|cloudmask',  # fixme: not a good default
+        'include_sensors': 'WV',
+        # None,
+        # 'exclude_sensors': 'L8',  # fixme: not a good default
+        # 'context_factor': 2.0,
+        'context_factor': 1.3,
+        'force_nodata': -9999,
+        'rpc_align_method': 'orthorectify',
+        'minimum_size': '128x128@2GSD',
+        'target_gsd': 2,
+        'force_min_gsd': 2,
+        'convexify_regions': True,
+        'num_end_frames': 3,
+        'num_start_frames': 3,
+    }
+
+    in_paths = {
+        'crop_src_fpath',
+        'regions',
+    }
+    out_paths = {
+        'crop_dst_fpath': 'valicrop.kwcoco.zip'
+    }
+
+
+class SC_Cropping(Cropping):
+    """
+    Crop to each image of every site.
+    """
+    name = 'sc_crop'
+    group_dname = 'crops'
+    # node_dname = 'sitecrop/{src_dset}/{regions_id}/{sitecrop_algo_id}/{sitecrop_id}'
+
+    algo_params = {
+        # 'include_channels': 'red|green|blue|cloudmask',  # fixme: not a good default
+        'include_channels': None,
+        'exclude_sensors': 'L8',  # fixme: not a good default
+        'target_gsd': 4,
+        # 'context_factor': 2.0,
+        'context_factor': 1.0,
+        'force_nodata': -9999,
+        'rpc_align_method': 'orthorectify',
+        'convexify_regions': True,
+        'minimum_size': '128x128@10GSD',
+        'force_min_gsd': 2,
+    }
+
+    in_paths = {
+        'crop_src_fpath',
+        'regions',
+    }
+    out_paths = {
+        'crop_dst_fpath': 'sitecrop.kwcoco.zip'
+    }
+
+
+class DinoBoxDetector(ProcessNode):
+    """
+    Used for both site cropping and validation-cropping
+
+    Example:
+        >>> node = DinoBoxDetector(root_dpath='/root/dpath/')
+        >>> node.configure({
+        >>>     'coco_fpath': 'foo.kwcoco',
+        >>>     'package_fpath': 'model.pt',
+        >>> })
+        >>> print(node.command())
+        >>> algo_id1 = node.algo_id
+        >>> print(f'node.algo_id={node.algo_id}')
+        >>> print(f'node.process_id={node.process_id}')
+        >>> node.configure({
+        >>>     'data_workers': 10,
+        >>> })
+        >>> algo_id2 = node.algo_id
+        >>> node.configure({
+        >>>     'fixed_resolution': "10GSD",
+        >>> })
+        >>> algo_id3 = node.algo_id
+        >>> assert algo_id1 == algo_id2, 'perf params dont change hash'
+        >>> assert algo_id1 != algo_id3, 'algo params do change hash'
+    """
+    name = 'sv_dino_boxes'
+    executable = 'python -m watch.tasks.dino_detector.predict'
+    group_dname = PREDICT_NAME
+
+    in_paths = {
+        'coco_fpath',
+        'package_fpath',
+    }
+    out_paths = {
+        'out_coco_fpath': 'pred_boxes.kwcoco.zip'
+    }
+
+    algo_params = {
+        'fixed_resolution': "2GSD",
+        'batch_size': 1,
+    }
+
+    # The best setting of this depends on if the data is remote or not.  When
+    # networking, around 20+ workers is a good idea, but that's a very bad idea
+    # for local images or if the images are too big.
+    perf_params = {
+        'device': 0,
+        'data_workers': 2,
+    }
+
+    # @property
+    # def condensed(self):
+    #     condensed = super().condensed
+    #     condensed['regions_id'] = 'todo'
+    #     condensed['src_dset'] = 'todo'
+    #     return condensed
+
+    @profile
+    def command(self):
+        fmtkw = {}
+        # Not sure why final-config doesn't have everything
+        config = (ub.udict(self.final_config) | self.final_algo_config) | self.final_perf_config
+        assert config['package_fpath']  is not None
+        fmtkw['config_argstr'] = self._make_argstr(config)
+        command = ub.codeblock(
+            r'''
+            python -m watch.tasks.dino_detector.predict \
+                {config_argstr}
+            ''').format(**fmtkw)
+        return command
+
+
+from watch.tasks.dino_detector import building_validator  # NOQA
+ub.udict(building_validator.BuildingValidatorConfig.__default__)
+
+
+class DinoBuildingFilter(ProcessNode):
+    """
+    Used for both site cropping and validation-cropping
+
+    Example:
+        >>> node = DinoBuildingFilter(root_dpath='/root/dpath/')
+        >>> node.configure({
+        >>>     'input_kwcoco': 'foo.kwcoco',
+        >>>     'input_region': 'region.geojson',
+        >>>     'input_sites': 'input_sites',
+        >>> })
+        >>> print(node.command())
+    """
+    name = 'sv_dino_filter'
+    executable = 'python -m watch.tasks.dino_detector.building_validator'
+    group_dname = PREDICT_NAME
+
+    in_paths = {
+        'input_kwcoco',
+        'input_region',
+        'input_sites',
+    }
+    out_paths = {
+        'output_region_fpath': 'out_region.geojson',
+        'output_sites_dpath': 'out_sites',
+        'output_site_manifest_fpath': 'out_site_manifest.json',
+    }
+
+    algo_params = {
+        'box_isect_threshold': 0.1,
+        'box_score_threshold': 0.1,
+        'start_max_score': 1.0,
+        'end_min_score': 0.1,
+    }
+
+    @profile
+    def command(self):
+        # Not sure why final-config doesn't have everything
+        config = (ub.udict(self.final_config) | self.final_algo_config) | self.final_perf_config
+        config_argstr = self._make_argstr(config)
+        command = ub.codeblock(
+            r'''
+            {executable} \
+                {config_argstr}
+            ''').format(
+                executable=self.executable,
+                config_argstr=config_argstr,
+            )
         return command
 
 
@@ -721,63 +906,109 @@ def sc_nodes():
     return nodes
 
 
-def joint_bas_sc_nodes(with_bas=True, crops=True):
+def make_smart_pipeline_nodes(with_bas=True, building_validation=False,
+                              site_crops=True, with_sc=True):
     nodes = {}
+
+    sc_input_region = None
+    sc_input_kwcoco = None
+    bas_input_kwcoco = None
+
+    true_regions = None
+    true_sites = None
 
     if with_bas:
         nodes.update(bas_nodes())
+        bas_output_region = nodes['bas_poly'].outputs['site_summaries_fpath']
+        bas_output_sites = nodes['bas_poly'].outputs['sites_fpath']
 
-    if crops:
-        nodes['sitecrop'] = SiteCropping()
+        bas_input_kwcoco = nodes['bas_pxl'].inputs['test_dataset']
+        sc_input_kwcoco = bas_input_kwcoco
 
-        if with_bas:
-            # outputs['site_summaries_fpath'].connect(
-            nodes['bas_poly'].connect(
-                nodes['sitecrop'],
-                param_mapping={
-                    'site_summaries_fpath': 'regions',
-                }
-            )
+        # By default the input regions to SC are BAS outputs
+        sc_input_region = bas_output_region
 
-            nodes['bas_pxl'].inputs['test_dataset'].connect(
-                nodes['sitecrop'].inputs['crop_src_fpath']
-            )
+        # By default SC will use the same input as BAS
+        sc_input_kwcoco = sc_input_kwcoco
 
-    if 1:
+        true_regions = nodes['bas_poly_eval'].inputs['true_region_dpath']
+        true_sites = nodes['bas_poly_eval'].inputs['true_site_dpath']
+
+    if building_validation:
+        nodes['valicrop'] = SV_Cropping()
+
+        if bas_input_kwcoco is not None:
+            bas_output_region.connect(nodes['valicrop'].inputs['regions'])
+            bas_input_kwcoco.connect(nodes['valicrop'].inputs['crop_src_fpath'])
+
+        nodes['sv_dino_boxes'] = DinoBoxDetector()
+        nodes['valicrop'].outputs['crop_dst_fpath'].connect(nodes['sv_dino_boxes'].inputs['coco_fpath'])
+
+        nodes['sv_dino_filter'] = DinoBuildingFilter()
+        nodes['sv_dino_boxes'].outputs['out_coco_fpath'].connect(nodes['sv_dino_filter'].inputs['input_kwcoco'])
+        bas_output_region.connect(nodes['sv_dino_filter'].inputs['input_region'])
+        bas_output_sites.connect(nodes['sv_dino_filter'].inputs['input_sites'])
+
+        # If we have a validation step, use those as inputs to SC instead
+        sv_output_region = nodes['sv_dino_filter'].outputs['output_region_fpath']
+        sv_output_sites = nodes['sv_dino_filter'].outputs['output_sites_dpath']
+
+        # Add an evaluation step after bas validation
+        nodes['sv_poly_eval'] = PolygonEvaluation(name='sv_poly_eval')
+        sv_output_sites.connect(nodes['sv_poly_eval'].inputs['sites_fpath'])
+        sc_input_region = sv_output_region
+
+        if true_regions is not None:
+            true_regions.connect(nodes['sv_poly_eval'].inputs['true_region_dpath'])
+            true_sites.connect(nodes['sv_poly_eval'].inputs['true_site_dpath'])
+
+    if site_crops:
+        nodes['sc_crop'] = SC_Cropping()
+        # If we predicted regions to go to SC, crop to those.
+        if sc_input_region is not None:
+            sc_input_region.connect(nodes['sc_crop'].inputs['regions'])
+            # nodes['bas_pxl'].inputs['test_dataset'].connect(sc_input_kwcoco)
+            # If we are site cropping, then use its outputs as SC input
+            sc_input_kwcoco = nodes['sc_crop'].outputs['crop_dst_fpath']
+
+    if with_sc:
         nodes.update(sc_nodes())
 
-        if crops:
-            nodes['sitecrop'].connect(
-                nodes['sc_pxl'],
-                param_mapping={
-                    'crop_dst_fpath': 'test_dataset',
-                }
-            )
-        else:
-            if with_bas:
-                nodes['bas_pxl'].inputs['test_dataset'].connect(
-                    nodes['sc_pxl'].inputs['test_dataset']
-                )
+        if sc_input_kwcoco is not None:
+            sc_input_kwcoco.connect(nodes['sc_pxl'].inputs['test_dataset'])
 
-        if with_bas:
-            nodes['bas_poly'].outputs['site_summaries_fpath'].connect(
-                nodes['sc_poly'].inputs['site_summary']
-            )
+        if sc_input_region is not None:
+            sc_input_region.connect(nodes['sc_poly'].inputs['site_summary'])
+
+        if true_regions is not None:
+            true_regions.connect(nodes['sc_poly_eval'].inputs['true_region_dpath'])
+            true_sites.connect(nodes['sc_poly_eval'].inputs['true_site_dpath'])
     return nodes
 
 
 def make_smart_pipeline(name):
     """
     Get an unconfigured instance of the SMART pipeline
+
+    CommandLine:
+        xdoctest -m watch.mlops.smart_pipeline make_smart_pipeline
+
+    Example:
+        >>> from watch.mlops.smart_pipeline import *  # NOQA
+        >>> dag = make_smart_pipeline('bas_building_vali')
+        >>> dag.print_graphs()
     """
     from watch.mlops.pipeline_nodes import PipelineDAG
     from functools import partial
     node_makers = {
-        'joint_bas_sc': partial(joint_bas_sc_nodes, crops=True),
-        'joint_bas_sc_nocrop': partial(joint_bas_sc_nodes, crops=False),
-        'crop_sc': partial(joint_bas_sc_nodes, with_bas=False, crops=True),
+        'joint_bas_sc': partial(make_smart_pipeline_nodes, site_crops=True),
+        'joint_bas_sc_nocrop': partial(make_smart_pipeline_nodes, site_crops=False),
+        'crop_sc': partial(make_smart_pipeline_nodes, with_bas=False, site_crops=True),
         'sc': sc_nodes,
         'bas': bas_nodes,
+        'bas_building_vali': partial(make_smart_pipeline_nodes, with_bas=True,
+                                     building_validation=True,
+                                     site_crops=False, with_sc=False),
     }
     make_nodes = node_makers[name]
     nodes = make_nodes()

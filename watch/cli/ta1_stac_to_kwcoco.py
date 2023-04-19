@@ -1,10 +1,16 @@
-import argparse
-import json
+#!/usr/bin/env python3
+"""
+TODO:
+    - [ ] Rename to stac_to_kwcoco
+
+SeeAlso:
+    ~/code/watch/watch/cli/stac_search.py
+"""
 import os
-import pystac
 import re
 import sys
 import ubelt as ub
+import scriptconfig as scfg
 
 from os.path import basename, dirname, join
 
@@ -14,47 +20,40 @@ except Exception:
     profile = ub.probile
 
 
-def main():
-    from scriptconfig.smartcast import smartcast
+class StacToCocoConfig(scfg.DataConfig):
+    """
+    Convert a STAC catalog to a KWCOCO manifest
+    """
+    input_stac_catalog = scfg.Value(None, type=str, position=1, required=True, help='Input STAC Catalog to convert to KWCOCO')
 
-    parser = argparse.ArgumentParser(
-        description="Convert a STAC catalog to a KWCOCO manifest")
+    outpath = scfg.Value(None, type=str, short_alias=['o'], help='Output path for updated STAC catalog')
 
-    parser.add_argument('input_stac_catalog',
-                        type=str,
-                        help="Input STAC Catalog to convert to KWCOCO")
-    parser.add_argument("-o", "--outpath",
-                        type=str,
-                        help="Output path for updated STAC catalog")
-    parser.add_argument("--assume-relative",
-                        action='store_true',
-                        default=False,
-                        help="Assume the data is in subdirectories relative "
-                             "to the output KWCOCO manifest")
-    parser.add_argument("--from-collated",
-                        action='store_true',
-                        default=False,
-                        help="Data to convert has been run through TA-1 "
-                             "collation")
-    parser.add_argument("--ignore_duplicates",
-                        action='store_true',
-                        default=False,
-                        help="Ignore duplicate items when creating the kwcoco file")
-    parser.add_argument("--populate-watch-fields",
-                        action='store_true',
-                        default=False,
-                        help="Populate video / watch fields")
-    parser.add_argument("--verbose",
-                        type=smartcast,
-                        default=1,
-                        help="verbosity")
-    parser.add_argument("-j", "--jobs",
-                        type=str,
-                        default=1,
-                        required=False,
-                        help="Number of jobs to run in parallel")
+    assume_relative = scfg.Value(False, isflag=True, help=ub.paragraph(
+            '''
+            Assume the data is in subdirectories relative to the output
+            KWCOCO manifest
+            '''))
 
-    ta1_stac_to_kwcoco(**vars(parser.parse_args()))
+    from_collated = scfg.Value(False, isflag=True, help=ub.paragraph(
+            '''
+            Data to convert has been run through TA-1 collation
+            '''))
+
+    ignore_duplicates = scfg.Value(False, isflag=True, help=ub.paragraph(
+            '''
+            Ignore duplicate items when creating the kwcoco file
+            '''))
+
+    populate_watch_fields = scfg.Value(False, isflag=True, help='Populate video / watch fields')
+
+    verbose = scfg.Value(1, help='verbosity')
+
+    jobs = scfg.Value(1, type=str, short_alias=['j'], help='Number of jobs to run in parallel')
+
+
+def main(cmdline=True, **kwargs):
+    config = StacToCocoConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
+    ta1_stac_to_kwcoco(**config)
     return 0
 
 
@@ -520,6 +519,8 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
                                   'as a secondary step instead')
 
     from watch.utils import util_parallel
+    import pystac
+    import json
     import kwcoco
     jobs = util_parallel.coerce_num_workers(jobs)
 
@@ -533,8 +534,9 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
     outdir = dirname(outpath)
     os.makedirs(outdir, exist_ok=True)
 
-    executor = ub.JobPool(mode='process' if jobs > 1 else 'serial',
-                          max_workers=jobs)
+    if jobs == 1:
+        jobs = 0
+    executor = ub.JobPool(mode='process', max_workers=jobs)
 
     all_items = [stac_item for stac_item in catalog.get_all_items()]
 

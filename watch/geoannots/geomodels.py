@@ -37,15 +37,42 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
         return json.dumps(self, **kw)
 
     @classmethod
+    def coerce_multiple(cls, data):
+        from watch.utils import util_gis
+        infos = list(util_gis.coerce_geojson_datas(data, format='json'))
+        for info in infos:
+            yield cls(**info['data'])
+
+    @classmethod
     def coerce(cls, data):
+        import os
         if isinstance(data, cls):
             return data
         elif isinstance(data, dict):
             return cls.from_dict(data)
+        elif isinstance(data, list):
+            if all(isinstance(d, dict) and d['type'] == 'Feature' for d in data):
+                return cls.from_features(data)
+            else:
+                raise TypeError('lists must a list of Features')
+            return cls.from_dict(data)
         elif isinstance(data, gpd.GeoDataFrame):
             return cls.from_dataframe(data)
+        elif isinstance(data, (str, os.PathLike)):
+            got = list(cls.coerce_multiple(data))
+            assert len(got) == 1
+            return got[0]
         else:
             raise TypeError
+
+    @classmethod
+    def from_features(cls, features):
+        """
+        Args:
+            gdf (GeoDataFrame):
+        """
+        self = cls(features=features)
+        return self
 
     @classmethod
     def from_dataframe(cls, gdf):
@@ -115,6 +142,7 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
 
     def _validate_schema(self, strict=True):
         import rich
+
         def print_validation_error_info(ex, depth=1):
             if ex.parent is not None:
                 max_depth = print_validation_error_info(ex.parent, depth=depth + 1)
@@ -178,7 +206,24 @@ class RegionModel(_Model):
         return schema
 
     def site_summaries(self):
-        yield from self.body_features()
+        yield from (SiteSummary(**f) for f in self.body_features())
+
+    @classmethod
+    def coerce(cls, data):
+        """
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> import ubelt as ub
+            >>> dpath = ub.Path.appdir('watch/tests/geoannots/coerce').ensuredir()
+            >>> region = RegionModel.random(with_sites=False, rng=0)
+            >>> data = fpath = (dpath/ 'region.geojson')
+            >>> fpath.write_text(region.dumps())
+            >>> region_models = list(RegionModel.coerce_multiple(fpath))
+            >>> region_model = RegionModel.coerce(fpath)
+        """
+        self = super().coerce(data)
+        assert self.header['properties']['type'] == 'region'
+        return self
 
     def pandas_summaries(self):
         """
@@ -343,11 +388,29 @@ class Observation(_Feature):
     ...
 
 
-class SiteSummary(_Feature):
+class _SiteOrSummary(_Feature):
+    """
+    Site summaries and site headers are nearly the same
+    """
+
+    @property
+    def start_date(self):
+        return util_time.coerce_datetime(self['properties']['start_date'])
+
+    @property
+    def end_date(self):
+        return util_time.coerce_datetime(self['properties']['end_date'])
+
+    @property
+    def site_id(self):
+        return self['properties']['site_id']
+
+
+class SiteSummary(_SiteOrSummary):
     ...
 
 
-class SiteHeader(_Feature):
+class SiteHeader(_SiteOrSummary):
     ...
 
 

@@ -277,12 +277,17 @@ class Pipeline:
                 else:
                     data['label'] = data['node'].name
 
+                # SMART specific hack: remove later
                 if 'bas' in data['label']:
                     data['label'] = '[yellow]' + data['label']
                 elif 'sc' in data['label']:
                     data['label'] = '[cyan]' + data['label']
                 elif 'crop' in data['label']:
                     data['label'] = '[white]' + data['label']
+                elif 'building' in data['label']:
+                    data['label'] = '[bright_magenta]' + data['label']
+                elif 'sv' in data['label']:
+                    data['label'] = '[bright_magenta]' + data['label']
         labelize_graph(self.io_graph)
         labelize_graph(self.proc_graph)
 
@@ -602,7 +607,12 @@ class IONode(Node):
         if value is None:
             preds = list(self.pred)
             if preds:
-                assert len(preds) == 1
+                if len(preds) != 1:
+                    raise AssertionError(ub.paragraph(
+                        f'''
+                        Expected len(preds) == 1, but got {len(preds)}
+                        {preds}
+                        '''))
                 value = preds[0].final_value
         return value
 
@@ -781,7 +791,7 @@ class ProcessNode(Node):
         >>>     out_paths={'dst': 'there.txt'},
         >>>     perf_params={'num_workers'},
         >>>     group_dname='predictions',
-        >>>     node_dname='proc1/{proc1_algo_id}/{proc1_id}',
+        >>>     #node_dname='proc1/{proc1_algo_id}/{proc1_id}',
         >>>     executable=f'python -c "{chr(10)}{pycode}{chr(10)}"',
         >>>     root_dpath=dpath,
         >>> )
@@ -802,7 +812,7 @@ class ProcessNode(Node):
     group_dname : Optional[str] = None
 
     # A path relative to a prefix used to construct an output directory.
-    node_dname : Optional[str] = None
+    #node_dname : Optional[str] = None
 
     resources : Collection = None
 
@@ -831,7 +841,7 @@ class ProcessNode(Node):
                  in_paths=None,
                  out_paths=None,
                  group_dname=None,
-                 node_dname=None,
+                 #node_dname=None,
                  root_dpath=None,
                  config=None,
                  _overwrite_node_dpath=None,  # overwrites the configured node dpath
@@ -863,9 +873,9 @@ class ProcessNode(Node):
 
         self._configured_cache = {}
 
-        if self.node_dname is None:
-            self.node_dname = '.'
-        self.node_dname = ub.Path(self.node_dname)
+        # if self.node_dname is None:
+        #     self.node_dname = '.'
+        # self.node_dname = ub.Path(self.node_dname)
 
         if self.group_dname is None:
             self.group_dname = '.'
@@ -1115,28 +1125,30 @@ class ProcessNode(Node):
     #     return depends_config
     #     # return self.config & self.algo_params
 
-    @memoize_configured_property
-    def template_dag_dname(self):
-        return self.template_depends_dname / self.node_dname
+    # @memoize_configured_property
+    # def template_dag_dname(self):
+    #     raise AssertionError
+    #     return self.template_depends_dname / self.node_dname
 
     @memoize_configured_property
     def template_root_dpath(self):
         return self.root_dpath
 
-    @memoize_configured_property
-    @profile
-    def template_depends_dname(self):
-        """
-        Predecessor part of the output path.
-        """
-        pred_nodes = self.predecessor_process_nodes()
-        if not pred_nodes:
-            return ub.Path('.')
-        elif len(pred_nodes) == 1:
-            return pred_nodes[0].template_dag_dname
-        else:
-            return ub.Path('.')
-            # return ub.Path('multi' + str(pred_nodes))
+    # @memoize_configured_property
+    # @profile
+    # def template_depends_dname(self):
+    #     """
+    #     Predecessor part of the output path.
+    #     """
+    #     pred_nodes = self.predecessor_process_nodes()
+    #     raise AssertionError
+    #     if not pred_nodes:
+    #         return ub.Path('.')
+    #     elif len(pred_nodes) == 1:
+    #         return pred_nodes[0].template_dag_dname
+    #     else:
+    #         return ub.Path('.')
+    #         # return ub.Path('multi' + str(pred_nodes))
 
     @memoize_configured_method
     @profile

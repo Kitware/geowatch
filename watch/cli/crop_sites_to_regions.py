@@ -374,6 +374,7 @@ def crop_gdf_in_utm(gdf, crop_geom_utm, utm_epsg, output_crs):
     valid_gdf_crs84 = valid_gdf_utm.to_crs(output_crs)
     return valid_gdf_crs84
 
+
 __config__ = CropSitesToRegionsConfig
 
 
