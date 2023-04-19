@@ -14,10 +14,148 @@ def _sitevisit_2023_april_report():
     expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
     loader = AggregateLoader(
         target=[
-            expt_dvc_dpath / 'aggregate_results/toothbrush/*.csv.zip'
+            expt_dvc_dpath / 'aggregate_results/toothbrush/*.csv.zip',
+            expt_dvc_dpath / 'aggregate_results/ooo/*.csv.zip',
+            expt_dvc_dpath / 'aggregate_results/namek/*.csv.zip',
         ])
     eval_type_to_aggregator = loader.coerce_aggregators()
-    agg = eval_type_to_aggregator['bas_poly_eval']
+    pxl_agg = eval_type_to_aggregator['bas_pxl_eval']
+    poly_agg = eval_type_to_aggregator['bas_poly_eval']
+    sv_poly_agg = eval_type_to_aggregator['sv_poly_eval']
+
+    agg = poly_agg
+    agg.output_dpath = expt_dvc_dpath / 'site_visit_plots'
+    print(ub.urepr(ub.udict(agg.macro_compatible).map_values(len).sorted_values()))
+    rois = ['KR_R001', 'KR_R002']
+    rois = ['AE_R001', 'BR_R002', 'CH_R001', 'KR_R001', 'KR_R002', 'NZ_R001']
+
+    from watch.utils.util_pandas import DotDictDataFrame
+    table = DotDictDataFrame(agg.table)
+    import rich
+    rich.print('resolved.nested_columns = {}'.format(ub.urepr(table.nested_columns, nl=True)))
+    from watch.mlops.smart_global_helper import SmartGlobalHelper
+
+
+    def experiment_timeline():
+        import pandas  as pd
+        from watch.utils import util_time
+        resources = agg.resources
+        duration_cols = [k for k in resources.keys() if k.endswith('.duration')]
+        start_time_cols = [k for k in agg.table.keys() if k.endswith('.start_timestamp')]
+        end_time_cols = [k for k in agg.table.keys() if k.endswith('.stop_timestamp')]
+        for k in duration_cols:
+            table.loc[:, k] = table.loc[:, k].apply(lambda x: util_time.coerce_timedelta(x) if not pd.isnull(x) else x)
+        for k in start_time_cols:
+            table.loc[:, k] = table.loc[:, k].apply(lambda x: util_time.coerce_datetime(x) if not pd.isnull(x) else x)
+        for k in end_time_cols:
+            table.loc[:, k] = table.loc[:, k].apply(lambda x: util_time.coerce_datetime(x) if not pd.isnull(x) else x)
+
+        run_rows = []
+        for k in duration_cols:
+            a, b, c = k.split('.')
+            uuid_key = f'context.{b}.uuid'
+            start_time_col = f'context.{b}.start_timestamp'
+            end_time_col = f'context.{b}.stop_timestamp'
+            co2_key = f'{a}.{b}.co2_kg'
+            kwh_key = f'{a}.{b}.kwh'
+
+            chosen = []
+            for _, group in table.groupby(uuid_key):
+                idx = group[k].idxmax()
+                chosen.append(idx)
+
+            unique_rows = table.loc[chosen]
+            for _row in unique_rows.to_dict('records'):
+                ...
+                row = {
+                    'node': b,
+                    'resource': c,
+                    'duration': _row[k],
+                    'start_time': _row[start_time_col],
+                    'end_time': _row[end_time_col],
+                    'co2_kg': _row.get(co2_key, None),
+                    'kwh': _row.get(kwh_key, None),
+                }
+                run_rows.append(row)
+
+        start_times = []
+        end_times = []
+        for idx, row in enumerate(run_rows):
+            start_times.append(row['start_time'])
+            end_times.append(row['end_time'])
+        end_times = np.array(end_times)
+        start_times = np.array(start_times)
+
+        earliest = start_times.min()
+        latest = end_times.max()
+
+        num_buckets = 5000
+        bucketsize = (latest - earliest) / num_buckets
+        buckets = earliest + np.arange(num_buckets) * bucketsize
+        interval_assign = np.searchsorted(buckets, start_times)
+
+        import kwarray
+        bkt_to_idxs = ub.dzip(*kwarray.group_indices(interval_assign))
+        y_values = np.empty(len(interval_assign))
+        for bkt, groupxs in bkt_to_idxs.items():
+            y_values[groupxs] = np.arange(len(groupxs))
+
+        # ub.group_items(start_times, interval_assign)
+        import kwplot
+        kwplot.autompl()
+
+        import matplotlib as mpl
+
+        segments = []
+        min_x = float('inf')
+        max_x = -float('inf')
+        for y, row in zip(y_values, run_rows):
+            x1 = mpl.dates.date2num(row['start_time'])
+            x2 = mpl.dates.date2num(row['end_time'])
+            max_x = max(max_x, x2)
+            min_x = min(min_x, x1)
+            segments.append([(x1, y), (x2, y)])
+        data_lines = mpl.collections.LineCollection(segments, color='blue', alpha=0.5, linewidths=10)
+        ax = kwplot.plt.gca()
+        ax.set_xlim(min_x, max_x)
+        ax.set_ylim(0, max(y_values) + 1)
+        ax.add_collection(data_lines)
+
+        ax.autoscale_view()
+        ax.xaxis_date()
+
+
+        # from collections import Counter
+        # c = Counter()
+        # for
+        # c[1]
+
+        max(ub.dict_hist().values())
+
+
+        np.sea
+
+        # starts_after1 = start_times[None, :] >= start_times[:, None]
+        # ends_after1 = start_times[None, :] <= end_times[:, None]
+        # interval_overlaps = (is_after_start) & (is_before_end)
+
+        interval_overlaps[0]
+
+        start_times >= start_times
+
+        if 0:
+            fig = px.timeline(df, x_start="Start", x_end="Finish", y="Task", color="Completion_pct")
+
+
+        resource_summary_df = pd.DataFrame(resource_summary)
+        import rich
+        rich.print(resource_summary_df.to_string())
+
+
+
+    table['resolved_params.bas_pxl.package_fpath']
+
+    rois = None
 
 
 def _gather_namek_shortlist_results():

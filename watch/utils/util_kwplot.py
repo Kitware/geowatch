@@ -156,21 +156,36 @@ def humanize_dataframe(df, col_formats=None, human_labels=None, index_format=Non
     return df2_style
 
 
-def scatterplot_highlight(data, x, y, highlight, size=10, color='orange', marker='*', ax=None):
+def scatterplot_highlight(data, x, y, highlight, size=10, color='orange',
+                          marker='*', val_to_color=None, ax=None):
     if ax is None:
         import kwplot
         plt = kwplot.autoplt()
         ax = plt.gca()
     _starkw = {
         's': size,
-        'edgecolor': color,
+        # 'edgecolor': color,
         'facecolor': 'none',
     }
     flags = data[highlight].apply(bool)
     star_data = data[flags]
     star_x = star_data[x]
     star_y = star_data[y]
-    ax.scatter(star_x, star_y, marker=marker, **_starkw)
+
+    if color != 'group':
+        _starkw['edgecolor'] = color
+        ax.scatter(star_x, star_y, marker=marker, **_starkw)
+    else:
+        val_to_group = dict(list(star_data.groupby(highlight)))
+        if val_to_color is None:
+            import kwimage
+            val_to_color = ub.dzip(val_to_group, kwimage.Color.distinct(len(val_to_group)))
+        for val, group in val_to_group.items():
+            star_x = group[x]
+            star_y = group[y]
+            edgecolor = val_to_color[val]
+            ax.scatter(star_x, star_y, marker=marker, edgecolor=edgecolor,
+                       **_starkw)
 
 
 def humanize_labels():

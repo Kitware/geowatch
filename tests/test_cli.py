@@ -1,44 +1,45 @@
 
 
 def test_cli_help_message():
-    verbose = 0
-
+    verbose = 3
     import ubelt as ub
-    info = ub.cmd('python -m watch.cli --help', verbose=verbose)
+    exe = 'python -m watch'
+
+    info = ub.cmd(f'{exe} --help', verbose=verbose)
     assert info['ret'] == 0
 
-    info = ub.cmd('python -m watch.cli align --help', verbose=verbose)
+    info = ub.cmd(f'{exe} align --help', verbose=verbose)
     assert info['ret'] == 0
 
-    info = ub.cmd('python -m watch.cli dvcdir --help', verbose=verbose)
+    info = ub.cmd(f'{exe} dvcdir --help', verbose=verbose)
     assert info['ret'] == 0
 
-    info = ub.cmd('python -m watch.cli find_dvc --help', verbose=verbose)
+    info = ub.cmd(f'{exe} find_dvc --help', verbose=verbose)
     assert info['ret'] == 0
 
-    info = ub.cmd('python -m watch.cli stats --help', verbose=verbose)
+    info = ub.cmd(f'{exe} stats --help', verbose=verbose)
     assert info['ret'] == 0
 
-    info = ub.cmd('python -m watch.cli add_fields --help', verbose=verbose)
+    info = ub.cmd(f'{exe} add_fields --help', verbose=verbose)
     assert info['ret'] == 0
 
-    info = ub.cmd('python -m watch.cli model_stats --help', verbose=verbose)
+    info = ub.cmd(f'{exe} model_stats --help', verbose=verbose)
     assert info['ret'] == 0
 
-    info = ub.cmd('python -m watch.cli reproject --help', verbose=verbose)
+    info = ub.cmd(f'{exe} reproject --help', verbose=verbose)
     assert info['ret'] == 0
 
-    info = ub.cmd('python -m watch.cli average_features --help', verbose=verbose)
+    info = ub.cmd(f'{exe} average_features --help', verbose=verbose)
     assert info['ret'] == 0
 
-    info = ub.cmd('python -m watch.cli time_combine --help', verbose=verbose)
+    info = ub.cmd(f'{exe} time_combine --help', verbose=verbose)
     assert info['ret'] == 0
 
-    info = ub.cmd('python -m watch.cli iarpa_eval --help', verbose=verbose)
+    info = ub.cmd(f'{exe} iarpa_eval --help', verbose=verbose)
     assert info['ret'] == 0
 
-    info = ub.cmd('python -m watch.cli spectra --help', verbose=verbose)
+    info = ub.cmd(f'{exe} spectra --help', verbose=verbose)
     assert info['ret'] == 0
 
-    info = ub.cmd('python -m watch.cli visualize --help', verbose=verbose)
+    info = ub.cmd(f'{exe} visualize --help', verbose=verbose)
     assert info['ret'] == 0

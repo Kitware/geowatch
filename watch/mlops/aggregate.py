@@ -131,7 +131,7 @@ class AggregateEvluationConfig(AggregateLoader):
     rois = Value('auto', help='Comma separated regions of interest')
 
     def __post_init__(self):
-        super().__init__()
+        super().__post_init__()
         from watch.utils.util_yaml import Yaml
         self.plot_params = Yaml.coerce(self.plot_params)
         if self.plot_params is True:
@@ -230,46 +230,62 @@ def main(cmdline=True, **kwargs):
 def build_all_param_plots(agg, rois, config):
     from watch.mlops.smart_global_helper import SMART_HELPER
     from watch.utils import util_pandas
-    resolved_params = util_pandas.DotDictDataFrame(agg.resolved_params)
 
-    part1 = resolved_params.query_column('batch_size')
-    part2 = resolved_params.query_column('accumulate_grad_batches')
-    prefix_to_batchsize = ub.group_items(part1, key=lambda x: x.rsplit('.', 1)[0])
-    prefix_to_accumbatch = ub.group_items(part2, key=lambda x: x.rsplit('.', 1)[0])
+    def build_special_columns(agg):
+        resolved_params = util_pandas.DotDictDataFrame(agg.resolved_params)
+        part1 = resolved_params.query_column('batch_size')
+        if len(part1) > 1:
+            # Disambiguate fit and pred batch size
+            part1_ = [p for p in part1 if '_fit' in p]
+            if len(part1_) == 1:
+                part1 = part1_
 
-    for prefix in set(prefix_to_batchsize) | set(prefix_to_accumbatch):
-        cols1 = prefix_to_batchsize.get(prefix, None)
-        cols2 = prefix_to_accumbatch.get(prefix, None)
-        assert len(cols1) == 1
-        val_accum = 1
-        val_bsize = resolved_params[cols1[0]]
-        if cols2 is not None:
-            assert len(cols2) == 1
-            val_accum = resolved_params[cols2[0]]
-        val_effective_bsize = val_bsize * val_accum
-        agg.table.loc[:, prefix + '.effective_batch_size'] = val_effective_bsize
+        part2 = resolved_params.query_column('accumulate_grad_batches')
+        prefix_to_batchsize = ub.group_items(part1, key=lambda x: x.rsplit('.', 1)[0])
+        prefix_to_accumbatch = ub.group_items(part2, key=lambda x: x.rsplit('.', 1)[0])
+
+        for prefix in set(prefix_to_batchsize) | set(prefix_to_accumbatch):
+            cols1 = prefix_to_batchsize.get(prefix, None)
+            cols2 = prefix_to_accumbatch.get(prefix, None)
+            val_accum = 1
+            val_bsize = resolved_params[cols1[0]]
+            if cols2 is not None:
+                assert len(cols2) == 1
+                val_accum = resolved_params[cols2[0]].copy()
+                val_accum[val_accum.isnull()] = 1
+                val_accum[val_accum == 'None'] = 1
+            val_effective_bsize = val_bsize * val_accum
+            agg.table.loc[:, prefix + '.effective_batch_size'] = val_effective_bsize
+
+    build_special_columns(agg)
     agg.build()
 
-    agg.build_macro_tables(rois)
+    def preprocess_table(table):
+        fillna_cols = table.columns.intersection(agg.resolved_params.columns.union(agg.resolved_params.columns))
+        table.loc[:, fillna_cols] = table.loc[:, fillna_cols].fillna('None')
+        table = table.applymap(lambda x: str(x) if isinstance(x, list) else x)
+        return table
 
-    macro_table = agg.region_to_tables[agg.primary_macro_region].copy()
-    single_table = agg.table
-
-    fillna_cols = single_table.columns.intersection(agg.resolved_params.columns.union(agg.resolved_params.columns))
-    fillna_cols = macro_table.columns.intersection(agg.resolved_params.columns.union(agg.resolved_params.columns))
-    single_table.loc[:, fillna_cols] = single_table.loc[:, fillna_cols].fillna('None')
-    macro_table.loc[:, fillna_cols] = macro_table.loc[:, fillna_cols].fillna('None')
-
-    macro_table = macro_table.applymap(lambda x: str(x) if isinstance(x, list) else x)
-    single_table = single_table.applymap(lambda x: str(x) if isinstance(x, list) else x)
-
-    if 0:
-        SMART_HELPER.old_hacked_model_case(macro_table)
+    single_table = table = agg.table
+    single_table = preprocess_table(table)
+    SMART_HELPER.mark_delivery(single_table)
 
     modifier = SMART_HELPER.label_modifier()
-    param_to_palette = SMART_HELPER.shared_palletes(macro_table)
-    if 0:
-        SMART_HELPER.mark_star_models(macro_table)
+
+    if rois is not None:
+        agg.build_macro_tables(rois)
+        macro_table = agg.region_to_tables[agg.primary_macro_region].copy()
+        macro_table = preprocess_table(macro_table)
+
+        SMART_HELPER.mark_delivery(macro_table)
+        if 0:
+            SMART_HELPER.old_hacked_model_case(macro_table)
+        param_to_palette = SMART_HELPER.shared_palletes(macro_table)
+        if 0:
+            SMART_HELPER.mark_star_models(macro_table)
+    else:
+        macro_table = None
+        param_to_palette = SMART_HELPER.shared_palletes(single_table)
 
     # agg = plotter.agg
     agg_group_dpath = (agg.output_dpath / ('all_params' + ub.timestamp())).ensuredir()
@@ -282,6 +298,8 @@ def build_all_param_plots(agg, rois, config):
     plotter.macro_table = macro_table
     plotter.single_table = single_table
     plotter.rois = rois
+
+    vantage = plotter.vantage_points[0]
 
     for vantage in plotter.vantage_points:
         print('Plot vantage overview: ' + vantage['name'])
@@ -315,6 +333,7 @@ class ParamPlotter:
 
     def plot_vantage_overview(plotter, vantage):
         from watch.utils import util_kwplot
+        from watch.utils.util_kwplot import scatterplot_highlight
         import numpy as np
         import kwplot
         sns = kwplot.autosns()
@@ -346,6 +365,21 @@ class ParamPlotter:
 
         fig = kwplot.figure(fnum=2, doclf=True)
         ax = sns.scatterplot(data=single_table, x=x, y=y, hue='region_id')
+        if 'delivered_params' in single_table:
+            import kwimage
+            val_to_color = {
+                # 'Eval6': kwimage.Color('kitware_red').as01(),
+                'Eval7': kwimage.Color('kitware_orange').as01(),
+                'Eval8': kwimage.Color('kitware_green').as01(),
+                'Eval10': kwimage.Color('kitware_blue').as01(),
+            }
+            if 0:
+                kwplot.imshow(kwplot.make_legend_img(val_to_color, mode='star', dpi=300))
+            scatterplot_highlight(data=single_table, x=x, y=y,
+                                  highlight='delivered_params', ax=ax,
+                                  color='group',
+                                  size=300, val_to_color=val_to_color)
+
         ax.set_title(f'BAS Per-Region Results (n={len(agg)})')
         ax.set_xscale(xscale)
         ax.set_yscale(yscale)
@@ -364,22 +398,45 @@ class ParamPlotter:
             }).relabel_xticks(ax)
             modifier.relabel(ax, ticks=False)
             finalize_figure.finalize(fig, 'single_results_boxplot.png')
+
         except Exception as ex:
             print(f'ex={ex}')
 
-        from watch.utils.util_kwplot import scatterplot_highlight
-        fig = kwplot.figure(fnum=3, doclf=True)
-        ax = fig.gca()
-        ax = sns.scatterplot(data=macro_table, x=x, y=y, hue='region_id', ax=ax)
-        if 'is_star' in macro_table:
-            scatterplot_highlight(data=macro_table, x=x, y=y, highlight='is_star', ax=ax, size=300)
-        ax.set_title(f'BAS Results (n={len(macro_table)})\n'
-                     f'Macro Analysis over {ub.urepr(rois, sv=1, nl=0)}')
-        ax.set_xscale(xscale)
-        ax.set_yscale(yscale)
-        finalize_figure.finalize(fig, 'macro_results.png')
-        # ax.set_xlim(1e-2, npe.quantile(agg.metrics[x], 0.99))
-        # ax.set_xlim(1e-2, 0.7)
+        if macro_table is not None:
+            fig = kwplot.figure(fnum=3, doclf=True)
+            ax = fig.gca()
+            region_ids = macro_table['region_id'].unique()
+            assert len(region_ids) == 1
+            macro_region_id = region_ids[0]
+            palette = {
+                macro_region_id: kwimage.Color('kitware_yellow').as01()
+            }
+            ax = sns.scatterplot(data=macro_table, x=x, y=y, hue='region_id', ax=ax, palette=palette)
+            if 'is_star' in macro_table:
+                scatterplot_highlight(
+                    data=macro_table, x=x, y=y, highlight='is_star', ax=ax,
+                    size=300)
+            if 'delivered_params' in macro_table:
+                import kwimage
+                val_to_color = {
+                    # 'Eval6': kwimage.Color('kitware_red').as01(),
+                    'Eval7': kwimage.Color('kitware_orange').as01(),
+                    'Eval8': kwimage.Color('kitware_green').as01(),
+                    'Eval10': kwimage.Color('kitware_blue').as01(),
+                }
+                if 0:
+                    kwplot.imshow(kwplot.make_legend_img(val_to_color, mode='star', dpi=300))
+                scatterplot_highlight(data=macro_table, x=x, y=y,
+                                      highlight='delivered_params', ax=ax,
+                                      color='group', size=300,
+                                      val_to_color=val_to_color)
+            ax.set_title(f'BAS Results (n={len(macro_table)})\n'
+                         f'Macro Analysis over {ub.urepr(rois, sv=1, nl=0)}')
+            ax.set_xscale(xscale)
+            ax.set_yscale(yscale)
+            finalize_figure.finalize(fig, 'macro_results.png')
+            # ax.set_xlim(1e-2, npe.quantile(agg.metrics[x], 0.99))
+            # ax.set_xlim(1e-2, 0.7)
 
     def plot_vantage_params(plotter, vantage):
         from watch.utils import util_kwplot
