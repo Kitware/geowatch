@@ -27,7 +27,7 @@ python -m watch.cli.prepare_ta2_dataset \
     --convert_workers=8 \
     --align_workers=4 \
     --align_aux_workers=0 \
-    --max_queue_size=4 \
+    --tmux_workers=4 \
     --ignore_duplicates=1 \
     --separate_region_queues=1 \
     --separate_align_jobs=1 \

@@ -184,13 +184,6 @@ def main(cmdline=False, **kwargs):
     import rich
     rich.print('config = {}'.format(ub.urepr(dict(config), nl=1)))
 
-    if config['serial']:
-        config['backend'] = 'serial'
-        config['convert_workers'] = 0
-        config['fields_workers'] = 0
-        config['align_workers'] = 0
-        config['align_aux_workers'] = 0
-
     out_dpath = config['out_dpath']
     if out_dpath == 'auto':
         import watch
