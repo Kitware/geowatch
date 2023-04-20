@@ -561,9 +561,10 @@ class ChannelwiseTransformerEncoderLayer(nn.Module):
                     mask_rearrange_op = f"{self.default_mask_shape_str} -> {mask_axial_shape}"
                     kpm = einops.rearrange(key_padding_mask, mask_rearrange_op, **mask_shape_dict)
                     # previous_mask_axial_shape = mask_axial_shape
+                    y = attention_layer(x, key_padding_mask=kpm)
                 else:
                     kpm = None
-                y = attention_layer(x, key_padding_mask=kpm)
+                    y = attention_layer(x)
                 x = y
                 previous_axial_shape = axial_shape
             else:

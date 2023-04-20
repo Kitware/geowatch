@@ -1314,7 +1314,7 @@ python -m watch.mlops.schedule_evaluation --params="
 
 
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
-gwmlops aggregate \
+geowatch aggregate \
     --pipeline=bas \
     --target \
         "$DVC_EXPT_DPATH/_namek_split1_eval_filter1_MeanYear10GSD-V2" \
@@ -1418,7 +1418,7 @@ python -m watch.mlops.schedule_evaluation --params="
 
 
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
-gwmlops aggregate \
+geowatch aggregate \
     --pipeline=bas \
     --target \
         "$DVC_EXPT_DPATH/_ooo_split2_eval_filter1_MeanYear10GSD-V2" \
@@ -1438,7 +1438,7 @@ gwmlops aggregate \
 
 ### Build namek aggregate
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
-gwmlops aggregate \
+geowatch aggregate \
     --pipeline=bas \
     --target "
         - $DVC_EXPT_DPATH/_namek_split1_eval_filter1_MeanYear10GSD-V2
@@ -1456,7 +1456,7 @@ gwmlops aggregate \
 
 ### Build toothbrush aggregate
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
-gwmlops aggregate \
+geowatch aggregate \
     --pipeline=bas_building_vali \
     --target "
         - $DVC_EXPT_DPATH/_mlops_eval10_baseline
@@ -1469,10 +1469,164 @@ gwmlops aggregate \
 
 ### Build toothbrush aggregate
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
-gwmlops aggregate \
+geowatch aggregate \
     --pipeline=bas_building_vali \
     --target "
         - $DVC_EXPT_DPATH/_ooo_split2_eval_filter1_MeanYear10GSD-V2
     " \
     --export_tables=True \
     --output_dpath="$DVC_EXPT_DPATH/aggregate_results/ooo"
+
+
+# New  VISIT 2022-04 SPLIT 2 Analysis
+# OOO Variant Analysis
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+python -m watch.mlops.schedule_evaluation --params="
+    matrix:
+        bas_pxl.package_fpath:
+            - $DVC_EXPT_DPATH/model_candidates/split2_mixed_ooo.yaml
+            #- /home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V45/Drop6_TCombo1Year_BAS_10GSD_split6_V45_epoch73_step18944.pt
+            #- /home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6/packages/Drop6_BAS_2022_12_10GSD_BGRN_V11_CONT4/Drop6_BAS_2022_12_10GSD_BGRN_V11_CONT4_v0_epoch6_step22939.pt
+            #- $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V46/Drop6_TCombo1Year_BAS_10GSD_split6_V46_epoch118_step22253.pt
+        bas_pxl.test_dataset:
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R002.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-BR_R002.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-CH_R001.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-NZ_R001.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R001.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-AE_R001.kwcoco.zip
+        bas_pxl.chip_overlap: 0.3
+        bas_pxl.chip_dims:
+            - auto
+        bas_pxl.time_span:
+            - auto
+        bas_pxl.input_space_scale:
+            - 10GSD
+        bas_pxl.time_sampling:
+            - soft5
+        bas_poly.thresh:
+            - 0.3
+        bas_poly.polygon_simplify_tolerance:
+            - 1
+        bas_poly.agg_fn:
+            - probs
+        bas_poly.moving_window_size:
+            - null
+        bas_poly.min_area_square_meters:
+            - 7200
+        bas_poly.max_area_square_meters:
+            - 8000000
+        bas_poly.boundary_region: $DVC_DATA_DPATH/annotations/drop6/region_models
+        bas_poly_eval.true_site_dpath: $DVC_DATA_DPATH/annotations/drop6/site_models
+        bas_poly_eval.true_region_dpath: $DVC_DATA_DPATH/annotations/drop6/region_models
+        bas_pxl.enabled: 1
+        bas_pxl_eval.enabled: 0
+        bas_poly.enabled: 1
+        bas_poly_eval.enabled: 1
+        bas_poly_viz.enabled: 0
+
+    submatrices:
+        - bas_pxl.input_space_scale: 10GSD
+          bas_pxl.window_space_scale: 10GSD
+          bas_pxl.output_space_scale: 10GSD
+          bas_poly.resolution:
+              - 10GSD
+    " \
+    --root_dpath="$DVC_EXPT_DPATH/_ooo_split2_eval_filter1_MeanYear10GSD-V2" \
+    --devices="0,1" --tmux_workers=2 \
+    --backend=tmux --queue_name "_ooo_split2_eval_filter1_MeanYear10GSD-V2" \
+    --pipeline=bas --skip_existing=1 \
+    --run=1
+
+
+
+### Evaluate promissing landcover models on toothbrush
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+python -m watch.mlops.schedule_evaluation --params="
+    matrix:
+        bas_pxl.package_fpath:
+            - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
+            #- $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V45/Drop6_TCombo1Year_BAS_10GSD_split6_V45_epoch73_step18944.pt
+            #- $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V48/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V48_epoch106_step6848.pt
+        bas_pxl.test_dataset:
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R002_I2L.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-BR_R002_I2L.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-CH_R001_I2L.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-NZ_R001_I2L.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R001_I2L.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-AE_R001_I2L.kwcoco.zip
+        bas_pxl.chip_overlap: 0.3
+        bas_pxl.chip_dims:
+            - auto
+            - '196,196'
+            - '256,256'
+            - '320,320'
+        bas_pxl.time_span:
+            - auto
+        bas_pxl.fixed_resolution:
+            - 10GSD
+        bas_pxl.time_sampling:
+            - auto
+            - soft5
+            - soft4
+        bas_poly.thresh:
+            - 0.25
+            #- 0.275
+            #- 0.3
+            #- 0.325
+            - 0.35
+            #- 0.375
+            #- 0.4
+            #- 0.425
+            - 0.45
+        bas_poly.time_thresh:
+            - 1.0
+            #- 0.95
+            - 0.9
+            #- 0.85
+            - 0.8
+        bas_poly.inner_window_size:
+            - 1y
+        bas_poly.inner_agg_fn:
+            - mean
+        bas_poly.norm_ord:
+            #- 1
+            #- 2
+            - inf
+        bas_poly.resolution:
+            - 10GSD
+        bas_poly.moving_window_size:
+            - null
+        bas_poly.poly_merge_method:
+            - 'v2'
+        bas_poly.polygon_simplify_tolerance:
+            - 1
+        bas_poly.agg_fn:
+            - probs
+        bas_poly.min_area_square_meters:
+            - 7200
+        bas_poly.max_area_square_meters:
+            - 8000000
+        bas_poly.boundary_region: $DVC_DATA_DPATH/annotations/drop6/region_models
+        bas_poly_eval.true_site_dpath: $DVC_DATA_DPATH/annotations/drop6/site_models
+        bas_poly_eval.true_region_dpath: $DVC_DATA_DPATH/annotations/drop6/region_models
+        bas_pxl.enabled: 1
+        bas_pxl_eval.enabled: 0
+        bas_poly.enabled: 1
+        bas_poly_eval.enabled: 1
+        bas_poly_viz.enabled: 0
+    submatrices:
+        - bas_pxl.fixed_resolution: 10GSD
+          bas_poly.resolution:
+              - 10GSD
+        - bas_pxl.fixed_resolution: 8GSD
+          bas_poly.resolution:
+              - 8GSD
+    " \
+    --root_dpath="$DVC_EXPT_DPATH/_toothbrush_split6_landcover_MeanYear10GSD-V2" \
+    --devices="0,1" --tmux_workers=8 \
+    --backend=tmux --queue_name "_toothbrush_split6_landcover_MeanYear10GSD-V2" \
+    --pipeline=bas --skip_existing=1 \
+    --run=1
