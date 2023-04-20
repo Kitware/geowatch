@@ -136,6 +136,8 @@ def ensure_thumbnails(image_root, region_id, sites):
     '''
     image_root = ub.Path(image_root)
 
+    verbose = 0
+
     # gather images and dates
     site_img_date_dct = dict()
     for site in sites:
@@ -151,7 +153,8 @@ def ensure_thumbnails(image_root, region_id, sites):
                 if img_path.is_file():
                     img_date_dct[img_path] = props['observation_date']
                 else:
-                    print(f'warning: image {img_path}' ' is not a valid path')
+                    if verbose:
+                        print(f'warning: image {img_path}' ' is not a valid path')
 
             elif props['type'] == 'site':
                 site_id = props['site_id']
@@ -171,7 +174,8 @@ def ensure_thumbnails(image_root, region_id, sites):
         if img_path.exists():
             ub.symlink(img_path, link_path, verbose=0)
         else:
-            print(f'warning: {img_path=} not found')
+            if verbose:
+                print(f'warning: {img_path=} not found')
 
     # build site viz
     for site_id, img_date_dct in site_img_date_dct.items():
@@ -184,7 +188,8 @@ def ensure_thumbnails(image_root, region_id, sites):
             if img_path.exists():
                 ub.symlink(img_path, link_path, verbose=0)
             else:
-                print(f'warning: {img_path=} not found')
+                if verbose:
+                    print(f'warning: {img_path=} not found')
 
 
 def main(cmdline=True, **kwargs):

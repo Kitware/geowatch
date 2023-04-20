@@ -1205,6 +1205,24 @@ geowatch aggregate \
     "
 
 
+#Prep models
+python -c "if 1:
+from watch.utils.util_yaml import Yaml
+from watch.utils import simple_dvc
+import watch
+import platform
+host = platform.node()
+expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+dvc = simple_dvc.SimpleDVC(expt_dvc_dpath)
+cand_list_fpath = expt_dvc_dpath / 'model_candidates/split1_shortlist_v3.yaml'
+suffixes = Yaml.coerce(cand_list_fpath)
+resolved_fpaths = [os.fspath(expt_dvc_dpath / s) for s in suffixes]
+new_cand_fpath = cand_list_fpath.augment(prefix=host + '_')
+new_cand_fpath.write_text(Yaml.dumps(resolved_fpaths))
+print(new_cand_fpath)
+
+dvc.pull(resolved_fpaths)
+"
 
 # SITE VISIT 2022-04 SPLIT 1 Analysis
 DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
@@ -1212,14 +1230,15 @@ DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch.mlops.schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
-            - $HOME/code/watch/dev/reports/split1_all_models.yaml
+            #- $HOME/code/watch/dev/reports/split1_all_models.yaml
             #- $HOME/code/watch/dev/reports/split1_shortlist_v2.yaml
+            - $DVC_EXPT_DPATH/model_candidates/namek_split1_shortlist_v3.yaml
         bas_pxl.test_dataset:
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-KR_R002.kwcoco.zip
-            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BR_R002.kwcoco.zip
-            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-CH_R001.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BR_R002.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-CH_R001.kwcoco.zip
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-NZ_R001.kwcoco.zip
-            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-KR_R001.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-KR_R001.kwcoco.zip
             #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-AE_R001.kwcoco.zip
         bas_pxl.chip_overlap: 0.3
         bas_pxl.chip_dims:
@@ -1270,14 +1289,15 @@ gwmlops aggregate \
     --pipeline=bas \
     --target \
         "$DVC_EXPT_DPATH/_namek_split1_eval_filter1_MeanYear10GSD-V2" \
-    --resource_report=True \
+    --rois=KR_R001,KR_R002,CH_R001,NZ_R001,BR_R002 \
+    --resource_report=0 \
     --stdout_report="
-        top_k: 30
+        top_k: 10
         per_group: 1
         macro_analysis: 0
         analyze: 0
-        reference_region: null
-        print_models: True
+        reference_region: final
+        print_models: 1
     "
     #--rois=KR_R002 \
 

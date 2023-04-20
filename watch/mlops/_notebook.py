@@ -23,11 +23,23 @@ def _sitevisit_2023_april_report():
     poly_agg = eval_type_to_aggregator['bas_poly_eval']
     sv_poly_agg = eval_type_to_aggregator['sv_poly_eval']
 
+    # sv_poly_agg.resource_summary_table()
+    import kwplot
+    from watch.utils import util_kwplot
+    kwplot.plt.ion()
+    resource_summary_df = poly_agg.resource_summary_table()
+    util_kwplot.dataframe_table(resource_summary_df, 'resource_summary_bas.png')
+    resource_summary_df2 = sv_poly_agg.resource_summary_table()
+    util_kwplot.dataframe_table(resource_summary_df2, 'resource_summary_sv.png')
+
+    _ = poly_agg.report_best(top_k=10, print_models=True)
+
+
     agg = poly_agg
     agg.output_dpath = expt_dvc_dpath / 'site_visit_plots'
     print(ub.urepr(ub.udict(agg.macro_compatible).map_values(len).sorted_values()))
     rois = ['KR_R001', 'KR_R002']
-    rois = ['AE_R001', 'BR_R002', 'CH_R001', 'KR_R001', 'KR_R002', 'NZ_R001']
+    # rois = ['AE_R001', 'BR_R002', 'CH_R001', 'KR_R001', 'KR_R002', 'NZ_R001']
 
     from watch.utils.util_pandas import DotDictDataFrame
     table = DotDictDataFrame(agg.table)

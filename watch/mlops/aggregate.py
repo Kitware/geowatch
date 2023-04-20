@@ -1074,7 +1074,8 @@ class AggregatorAnalysisMixin:
             # FIXME: handle macro regions
             tocombine_indexes = []
             for region_id, summary in region_id_to_summary.items():
-                tocombine_indexes.append(list(summary.index))
+                if not region_id.startswith('macro_'):
+                    tocombine_indexes.append(list(summary.index))
 
             import itertools as it
             top_indexes = list(ub.oset([x for x in ub.flatten(
@@ -1113,8 +1114,9 @@ class AggregatorAnalysisMixin:
             # chosen_table = chosen_table[flags]
 
             from watch.utils.util_yaml import Yaml
-            chosen_models = chosen_table[model_col].tolist()
+            chosen_models = list(ub.oset(chosen_table[model_col].tolist()))
             shortlist_text = Yaml.dumps(chosen_models)
+            print('Model shortlist (top of the list is a higher scoring model):')
             print(shortlist_text)
 
             # all_models_fpath = ub.Path('$HOME/code/watch/dev/reports/split1_all_models.yaml').expand()
@@ -1126,7 +1128,7 @@ class AggregatorAnalysisMixin:
 
         return region_id_to_summary, top_param_lut
 
-    def report_resources(agg):
+    def resource_summary_table(agg):
         import pandas as pd
         from watch.utils import util_time
         table = agg.table.copy()
@@ -1140,21 +1142,23 @@ class AggregatorAnalysisMixin:
             table.loc[:, k] = table.loc[:, k].apply(lambda x: util_time.coerce_timedelta(x) if not pd.isnull(x) else x)
 
         resource_summary = []
-        for k in duration_cols:
-            a, b, c = k.split('.')
+        for duration_key in duration_cols:
+            a, b, c = duration_key.split('.')
             uuid_key = f'context.{b}.uuid'
 
             chosen = []
             for _, group in table.groupby(uuid_key):
-                idx = group[k].idxmax()
+                idx = group[duration_key].idxmax()
                 chosen.append(idx)
+
+            asec = util_time.coerce_timedelta('1second')
 
             unique_rows = table.loc[chosen]
             row = {
                 'node': b,
                 'resource': c,
-                'total': unique_rows[k].sum(),
-                'mean': unique_rows[k].mean(),
+                'total': unique_rows[duration_key].sum().round(asec),
+                'mean': unique_rows[duration_key].mean().round(asec),
                 'num': len(chosen),
             }
             resource_summary.append(row)
@@ -1183,7 +1187,11 @@ class AggregatorAnalysisMixin:
                 }
                 resource_summary.append(row)
         resource_summary_df = pd.DataFrame(resource_summary)
+        return resource_summary_df
+
+    def report_resources(agg):
         import rich
+        resource_summary_df = agg.resource_summary_table()
         rich.print(resource_summary_df.to_string())
 
 
