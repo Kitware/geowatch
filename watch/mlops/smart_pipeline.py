@@ -640,6 +640,10 @@ class Cropping(ProcessNode):
 class SV_Cropping(Cropping):
     """
     Crop to high res images as the start / end of a sequence
+
+    Example:
+        >>> node = SV_Cropping()
+        >>> print(node.command())
     """
     name = 'sv_crop'  # TODO: sv_crop
     # node_dname = 'sv_crop/{src_dset}/{regions_id}/{valicrop_algoid}/{sitecrop_id}'
@@ -673,6 +677,10 @@ class SV_Cropping(Cropping):
 class SC_Cropping(Cropping):
     """
     Crop to each image of every site.
+
+    Example:
+        >>> node = SC_Cropping()
+        >>> print(node.command())
     """
     name = 'sc_crop'
     group_dname = 'crops'
@@ -773,21 +781,26 @@ class DinoBoxDetector(ProcessNode):
         return command
 
 
-from watch.tasks.dino_detector import building_validator  # NOQA
-ub.udict(building_validator.BuildingValidatorConfig.__default__)
-
+# from watch.tasks.dino_detector import building_validator  # NOQA
+# ub.udict(building_validator.BuildingValidatorConfig.__default__)
 
 class DinoBuildingFilter(ProcessNode):
     """
     Used for both site cropping and validation-cropping
 
     Example:
-        >>> node = DinoBuildingFilter(root_dpath='/root/dpath/')
+        >>> from watch.mlops.smart_pipeline import *  # NOQA
+        >>> self = node = DinoBuildingFilter(root_dpath='/ROOT/DPATH/')
         >>> node.configure({
         >>>     'input_kwcoco': 'foo.kwcoco',
         >>>     'input_region': 'region.geojson',
         >>>     'input_sites': 'input_sites',
+        >>>     #'output_sites_dpath': 'I_WANT_OUT_SITES_HERE',
+        >>>     'output_region_fpath': 'I_WANT_OUT_REGIONS_HERE',
+        >>>     'output_site_manifest_fpath': 'I_WANT_SITE_MANIFESTS_HERE',
         >>> })
+        >>> print('self.template_out_paths = {}'.format(ub.urepr(self.template_out_paths, nl=1)))
+        >>> print('self.final_out_paths = {}'.format(ub.urepr(self.final_out_paths, nl=1)))
         >>> print(node.command())
     """
     name = 'sv_dino_filter'

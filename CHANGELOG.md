@@ -26,7 +26,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Faster loading of multiple kwcoco files in smartwatch stats, ensemble, combine.
 * Improvements to mlops.aggregate
 * Updated prepare-ta2-dataset with new cmd-queue and ACC-3 data
-
+* Users can now overwrite mlops output locations.
 * DATALOADER CHANGE: We were previously nan-ing all bands if red was nan. We no longer do this because it clobbers pan.
 
 ### Fixed

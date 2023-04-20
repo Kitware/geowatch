@@ -886,9 +886,6 @@ class ProcessNode(Node):
 
         self.templates = None
 
-        self.template_outdir = None
-        self.template_opaths = None
-
         self.final_outdir = None
         self.final_opaths = None
         self.enabled = True
@@ -915,6 +912,7 @@ class ProcessNode(Node):
         self._configured_cache.clear()  # Reset memoization caches
         if config is None:
             config = {}
+        config = _fixup_config(config)
         self.enabled = config.pop('enabled', enabled)
         self.config = ub.udict(config)
 
@@ -1062,6 +1060,13 @@ class ProcessNode(Node):
 
     @memoize_configured_property
     def template_out_paths(self):
+        """
+        Note: template out paths are not impacted by out path config overrides,
+        but the final out paths are.
+
+        SeeAlso:
+            :func:`ProcessNode.final_out_paths`
+        """
         if not isinstance(self.out_paths, dict):
             out_paths = self.config & self.out_paths
         else:
@@ -1075,12 +1080,22 @@ class ProcessNode(Node):
 
     @memoize_configured_property
     def final_out_paths(self):
+        """
+        These are the locations each output will actually be written to.
+
+        This is based on :func:`ProcessNode.template_out_paths` as well as any
+        manual overrides specified in ``self.config``.
+        """
         condensed = self.condensed
         template_out_paths = self.template_out_paths
         final_out_paths = {
             k: ub.Path(v.format(**condensed))
             for k, v in template_out_paths.items()
         }
+        # The use config is allowed to overload outpaths
+        overloads = self.config & final_out_paths.keys()
+        if overloads:
+            final_out_paths.update(overloads)
         return final_out_paths
 
     @memoize_configured_property
@@ -1269,25 +1284,38 @@ class ProcessNode(Node):
     @cached_property
     @profile
     def inputs(self):
-        # inputs = {k: InputNode(name=self.name + '.' + k) for k in self.in_paths}
+        """
+        Input nodes representing specific input locations.
+
+        The output nodes of other processes can be connected to these.
+        Also input nodes for one process can connect to input nodes of another
+        process representing that they share the same input data.
+
+        Returns:
+            Dict[str, InputNode]
+        """
         inputs = {k: InputNode(name=k, parent=self) for k in self.in_paths}
-        # for v in inputs.values():
-        #     v.connect(self)
         return inputs
 
     @cached_property
     @profile
     def outputs(self):
-        # outputs = {k: OutputNode(name=self.name + '.' + k) for k in self.out_paths}
+        """
+        Output nodes representing specific output locations. These can be
+        connected to the input nodes of other processes.
+
+        Returns:
+            Dict[str, OutputNode]
+        """
         outputs = {k: OutputNode(name=k, parent=self) for k in self.out_paths}
-        # for v in outputs.values():
-        #     self.connect(v)
         return outputs
 
     @property
     @profile
-    def command(self):
+    def command(self) -> str:
         """
+        Returns the string shell command that will execute the process.
+
         Basic version of command, can be overwritten
         """
         argstr = self._make_argstr(self.final_config)
@@ -1308,7 +1336,11 @@ class ProcessNode(Node):
 
     @memoize_configured_property
     @profile
-    def does_exist(self):
+    def does_exist(self) -> bool:
+        """
+        Check if all of the output paths that would be written by this node
+        already exists.
+        """
         if len(self.final_out_paths) == 0:
             # Can only cache if we know what output paths are
             return False
@@ -1324,6 +1356,10 @@ class ProcessNode(Node):
 
     @profile
     def final_command(self):
+        """
+        Wraps ``self.command`` with optional checks to prevent the command from
+        executing if its outputs already exist.
+        """
         command = self._raw_command()
 
         # Cleanup the command
@@ -1390,33 +1426,6 @@ class ProcessNode(Node):
         print(f'num_started={num_started}')
         return rows
 
-    @memoize_configured_property
-    @profile
-    def node_info(self):
-        # Can probably remove
-        ancestors = self.ancestor_process_nodes()
-        # TODO:
-        # We need to know what input paths have not been represented.  This
-        # involves finding input paths that are not connected to the output of
-        # a node involved in building this id.
-        info = {
-            'node': self.name,
-            'process_id': self.process_id,
-            'algo_id': self.algo_id,
-            'depends': self.depends,
-            'config': self.config,
-            'ancestors': []
-        }
-        for node in ancestors[::-1]:
-            info['ancestors'].append({
-                'node': node.name,
-                'process_id': node.process_id,
-                'algo_id': node.algo_id,
-                'config': node.config,
-                'depends': node.depends,
-            })
-        return info
-
 
 def _load_json(fpath):
     import json
@@ -1426,6 +1435,17 @@ def _load_json(fpath):
 
 def _add_prefix(prefix, dict_):
     return {prefix + k: v for k, v in dict_.items()}
+
+
+def _fixup_config(config):
+    # Do minor chanes to make the config json serializable.
+    fixed_config = {}
+    for k, v in config.items():
+        if isinstance(v, os.PathLike):
+            fixed_config[k] = os.fspath(v)
+        else:
+            fixed_config[k] = v
+    return fixed_config
 
 
 def demo_pipeline():
@@ -1582,6 +1602,8 @@ def demo_pipeline():
     dag.configure({
         'node_A1.src': str(input1_fpath),
         'node_A2.src': str(input2_fpath),
+        'node_A2.dst': dpath / 'DST_OVERRIDE',
+        'node_C1.perf_param3': 'GOFAST',
     }, root_dpath=runs_dpath, cache=False)
 
     dag.print_graphs()
