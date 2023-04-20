@@ -768,7 +768,7 @@ def main(cmdline=False, **kwargs):
 
     queue = config.create_queue(environ=environ)
 
-    queue.tmux_workers = min(len(stac_jobs), queue.tmux_workers)
+    config.tmux_workers = min(len(stac_jobs), config.tmux_workers)
     queue = cmd_queue.Queue.create(
         backend=config['backend'], name=config['queue_name'], size=1,
         gres=None, environ=environ)
