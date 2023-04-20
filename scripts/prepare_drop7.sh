@@ -36,9 +36,6 @@ python -m watch.cli.prepare_ta2_dataset \
     --cache=0 \
     --verbose=100 \
     --skip_existing=0 \
-    --warp_tries=1 \
-    --asset_timeout="1hour" \
-    --image_timeout="1hour" \
     --force_min_gsd=2.0 \
     --backend=tmux --run=0
 
