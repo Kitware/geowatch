@@ -768,12 +768,11 @@ def main(cmdline=False, **kwargs):
     self = pipeline
     pipeline._update_stage_otf_cache(cache)
 
-    queue = config.create_queue(environ=environ)
-
     config.tmux_workers = min(len(stac_jobs), config.tmux_workers)
-    queue = cmd_queue.Queue.create(
-        backend=config['backend'], name=config['queue_name'], size=1,
-        gres=None, environ=environ)
+    queue = config.create_queue(environ=environ)
+    # queue = cmd_queue.Queue.create(
+    #     backend=config['backend'], name=config['queue_name'], size=1,
+    #     gres=None, environ=environ)
 
     # self._populate_explicit_dependency_queue(queue)
     self._populate_implicit_dependency_queue(
