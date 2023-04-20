@@ -641,8 +641,8 @@ class SV_Cropping(Cropping):
     """
     Crop to high res images as the start / end of a sequence
     """
-    name = 'valicrop'  # TODO: sv_crop
-    # node_dname = 'valicrop/{src_dset}/{regions_id}/{valicrop_algoid}/{sitecrop_id}'
+    name = 'sv_crop'  # TODO: sv_crop
+    # node_dname = 'sv_crop/{src_dset}/{regions_id}/{valicrop_algoid}/{sitecrop_id}'
 
     algo_params = {
         # 'include_channels': 'red|green|blue|cloudmask',  # fixme: not a good default
@@ -666,7 +666,7 @@ class SV_Cropping(Cropping):
         'regions',
     }
     out_paths = {
-        'crop_dst_fpath': 'valicrop.kwcoco.zip'
+        'crop_dst_fpath': 'sv_crop.kwcoco.zip'
     }
 
 
@@ -935,14 +935,14 @@ def make_smart_pipeline_nodes(with_bas=True, building_validation=False,
         true_sites = nodes['bas_poly_eval'].inputs['true_site_dpath']
 
     if building_validation:
-        nodes['valicrop'] = SV_Cropping()
+        nodes['sv_crop'] = SV_Cropping()
 
         if bas_input_kwcoco is not None:
-            bas_output_region.connect(nodes['valicrop'].inputs['regions'])
-            bas_input_kwcoco.connect(nodes['valicrop'].inputs['crop_src_fpath'])
+            bas_output_region.connect(nodes['sv_crop'].inputs['regions'])
+            bas_input_kwcoco.connect(nodes['sv_crop'].inputs['crop_src_fpath'])
 
         nodes['sv_dino_boxes'] = DinoBoxDetector()
-        nodes['valicrop'].outputs['crop_dst_fpath'].connect(nodes['sv_dino_boxes'].inputs['coco_fpath'])
+        nodes['sv_crop'].outputs['crop_dst_fpath'].connect(nodes['sv_dino_boxes'].inputs['coco_fpath'])
 
         nodes['sv_dino_filter'] = DinoBuildingFilter()
         nodes['sv_dino_boxes'].outputs['out_coco_fpath'].connect(nodes['sv_dino_filter'].inputs['input_kwcoco'])

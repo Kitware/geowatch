@@ -10,6 +10,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * `coco_time_combine` can now ignore seasons / handle median images with less memory
 * `use_grid_negatives` as dataset option, which can be set to "cleared" to only use negatives from cleared regions.
 * Add `modality_dropout` to kwcoco dataloader
+* Add DINO site validation prediction to mlops pipeline
 
 ### Changed
 
@@ -22,6 +23,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Cleanup `util_yaml`.
 * Lots of CLI improvements.
 * Faster loading of multiple kwcoco files in smartwatch stats, ensemble, combine.
+* Improvements to mlops.aggregate
 
 * DATALOADER CHANGE: We were previously nan-ing all bands if red was nan. We no longer do this because it clobbers pan.
 

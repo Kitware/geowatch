@@ -146,7 +146,7 @@ import ubelt as ub
 import scriptconfig as scfg
 
 
-class StacSearchConfig(scfg.Config):
+class StacSearchConfig(scfg.DataConfig):
     """
     Execute a STAC query
     """

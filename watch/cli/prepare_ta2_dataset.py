@@ -70,7 +70,7 @@ import ubelt as ub
 import warnings
 
 
-class PrepareTA2Config(scfg.Config):
+class PrepareTA2Config(scfg.DataConfig):
     __default__ = {
         'dataset_suffix': scfg.Value(None, help=''),
 
@@ -183,13 +183,12 @@ def main(cmdline=False, **kwargs):
         }
 
     """
+    config = PrepareTA2Config.cli(cmdline=cmdline, data=kwargs, strict=True)
     import cmd_queue
     from watch.utils import slugify_ext
     from watch.utils import util_gis
-
-    # import shlex
-    config = PrepareTA2Config(cmdline=cmdline, data=kwargs)
-    print('config = {}'.format(ub.urepr(dict(config), nl=1)))
+    import rich
+    rich.print('config = {}'.format(ub.urepr(dict(config), nl=1)))
 
     if config['serial']:
         config['backend'] = 'serial'

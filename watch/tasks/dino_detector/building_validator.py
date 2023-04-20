@@ -500,7 +500,7 @@ gwmlops aggregate \
     --target \
         "$DVC_EXPT_DPATH/_mlops_eval10_baseline" \
     --resource_report=0 \
-    --rois='[KR_R002,KR_R001,BR_R002,CH_R001,NZ_R001]' \
+    --rois='[KR_R002,KR_R001,BR_R002,CH_R001,NZ_R001,AE_R001]' \
     --stdout_report="
         top_k: 5
         per_group: 1

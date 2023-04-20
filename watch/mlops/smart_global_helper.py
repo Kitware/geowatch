@@ -9,6 +9,15 @@ class SmartGlobalHelper:
     Should be stateless
     """
 
+    def __init__(self):
+        import kwimage
+        self.delivery_to_color = {
+            'Eval7': kwimage.Color('kitware_yellow').as01(),
+            'Eval8': kwimage.Color('kitware_orange').as01(),
+            'Eval9': kwimage.Color('kitware_darkgreen').as01(),
+            'Eval10': kwimage.Color('kitware_darkblue').as01(),
+        }
+
     VIZ_BLOCKLIST = {
         'resolved_params.bas_poly_eval.pred_sites',
         'resolved_params.bas_poly_eval.gt_dpath',

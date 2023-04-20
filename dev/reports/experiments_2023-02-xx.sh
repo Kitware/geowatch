@@ -1232,14 +1232,14 @@ python -m watch.mlops.schedule_evaluation --params="
         bas_pxl.package_fpath:
             #- $HOME/code/watch/dev/reports/split1_all_models.yaml
             #- $HOME/code/watch/dev/reports/split1_shortlist_v2.yaml
-            - $DVC_EXPT_DPATH/model_candidates/namek_split1_shortlist_v3.yaml
+            - $DVC_EXPT_DPATH/model_candidates/namek_split1_shortlist_v4.yaml
         bas_pxl.test_dataset:
-            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-KR_R002.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-BR_R002.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-CH_R001.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-NZ_R001.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-KR_R001.kwcoco.zip
-            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-AE_R001.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R002_I2L.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-BR_R002_I2L.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-CH_R001_I2L.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-NZ_R001_I2L.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R001_I2L.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-AE_R001_I2L.kwcoco.zip
         bas_pxl.chip_overlap: 0.3
         bas_pxl.chip_dims:
             - auto
@@ -1249,14 +1249,43 @@ python -m watch.mlops.schedule_evaluation --params="
             - 10GSD
         bas_pxl.time_sampling:
             - soft5
+            - soft4
         bas_poly.thresh:
+            - 0.25
+            - 0.275
             - 0.3
+            - 0.325
+            - 0.35
+            - 0.375
+            - 0.4
+            - 0.425
+            - 0.45
+        bas_poly.time_thresh:
+            - 1.0
+            - 0.8
+        bas_poly.inner_window_size:
+            - 1y
+            #- null
+        bas_poly.inner_agg_fn:
+            - mean
+        bas_poly.norm_ord:
+            #- 1
+            #- 2
+            - inf
+        bas_poly.resolution:
+            - 10GSD
+        bas_poly.moving_window_size:
+            - null
+            #- 1
+            #- 2
+            #- 3
+            #- 4
+        bas_poly.poly_merge_method:
+            - 'v2'
         bas_poly.polygon_simplify_tolerance:
             - 1
         bas_poly.agg_fn:
             - probs
-        bas_poly.moving_window_size:
-            - null
         bas_poly.min_area_square_meters:
             - 7200
         bas_poly.max_area_square_meters:
@@ -1292,8 +1321,8 @@ gwmlops aggregate \
     --rois=KR_R001,KR_R002,CH_R001,NZ_R001,BR_R002 \
     --resource_report=0 \
     --stdout_report="
-        top_k: 10
-        per_group: 1
+        top_k: 20
+        per_group: 2
         macro_analysis: 0
         analyze: 0
         reference_region: final

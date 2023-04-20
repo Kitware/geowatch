@@ -268,7 +268,10 @@ def build_all_param_plots(agg, rois, config):
 
     single_table = table = agg.table
     single_table = preprocess_table(table)
-    SMART_HELPER.mark_delivery(single_table)
+
+    MARK_DELIVERED = 0
+    if MARK_DELIVERED:
+        SMART_HELPER.mark_delivery(single_table)
 
     modifier = SMART_HELPER.label_modifier()
 
@@ -277,7 +280,8 @@ def build_all_param_plots(agg, rois, config):
         macro_table = agg.region_to_tables[agg.primary_macro_region].copy()
         macro_table = preprocess_table(macro_table)
 
-        SMART_HELPER.mark_delivery(macro_table)
+        if MARK_DELIVERED:
+            SMART_HELPER.mark_delivery(macro_table)
         if 0:
             SMART_HELPER.old_hacked_model_case(macro_table)
         param_to_palette = SMART_HELPER.shared_palletes(macro_table)
@@ -336,6 +340,7 @@ class ParamPlotter:
         from watch.utils.util_kwplot import scatterplot_highlight
         import numpy as np
         import kwplot
+        from watch.mlops.smart_global_helper import SMART_HELPER
         sns = kwplot.autosns()
         plt = kwplot.autoplt()  # NOQA
         kwplot.close_figures()
@@ -367,12 +372,7 @@ class ParamPlotter:
         ax = sns.scatterplot(data=single_table, x=x, y=y, hue='region_id')
         if 'delivered_params' in single_table:
             import kwimage
-            val_to_color = {
-                'Eval7': kwimage.Color('kitware_yellow').as01(),
-                'Eval8': kwimage.Color('kitware_orange').as01(),
-                'Eval9': kwimage.Color('kitware_darkgreen').as01(),
-                'Eval10': kwimage.Color('kitware_darkblue').as01(),
-            }
+            val_to_color = SMART_HELPER.delivery_to_color
             if 0:
                 kwplot.imshow(kwplot.make_legend_img(val_to_color, mode='star', dpi=300))
             scatterplot_highlight(data=single_table, x=x, y=y,
@@ -418,12 +418,7 @@ class ParamPlotter:
                     size=300)
             if 'delivered_params' in macro_table:
                 import kwimage
-                val_to_color = {
-                    'Eval7': kwimage.Color('kitware_yellow').as01(),
-                    'Eval8': kwimage.Color('kitware_red').as01(),
-                    'Eval9': kwimage.Color('kitware_green').as01(),
-                    'Eval10': kwimage.Color('kitware_blue').as01(),
-                }
+                val_to_color = SMART_HELPER.delivery_to_color
                 if 0:
                     kwplot.imshow(kwplot.make_legend_img(val_to_color, mode='star', dpi=300))
                 scatterplot_highlight(data=macro_table, x=x, y=y,
@@ -531,6 +526,7 @@ class ParamPlotter:
 
             sub_macro_table = macro_table
 
+            # TODO: parameterize
             MIN_VARIATIONS = 1
             # min_variations = config.plot_params.get('min_variations', 1)
             if MIN_VARIATIONS > 1:
@@ -661,22 +657,8 @@ class ParamPlotter:
 
 
 def automated_analysis(eval_type_to_aggregator, config):
-
     timestamp = ub.timestamp()
-
     output_dpath = ub.Path(config['root_dpath']) / 'aggregate'
-
-    # TODO: save this for custom analysis, let automatic choose
-    # for generality
-    # macro_groups = [
-    #     {'KR_R001', 'KR_R002'},
-    #     {'KR_R001', 'KR_R002', 'US_R007'},
-    #     {'KR_R001', 'KR_R002', 'BR_R002', 'AE_R001'},
-    #     {'KR_R001', 'KR_R002', 'BR_R002', 'AE_R001', 'US_R007'},
-    # ]
-    # rois = macro_groups  # NOQA
-    # selector = {'BR_R002', 'KR_R001', 'KR_R002', 'AE_R001'}
-    # selector = {'BR_R002', 'KR_R001', 'KR_R002'}
     macro_groups = None
     selector = None
 
