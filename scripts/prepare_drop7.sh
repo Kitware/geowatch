@@ -27,7 +27,8 @@ python -m watch.cli.prepare_ta2_dataset \
     --convert_workers=8 \
     --align_workers=4 \
     --align_aux_workers=0 \
-    --tmux_workers=4 \
+    --backend=tmux \
+    --tmux_workers=10 \
     --ignore_duplicates=1 \
     --separate_region_queues=1 \
     --separate_align_jobs=1 \
@@ -37,5 +38,4 @@ python -m watch.cli.prepare_ta2_dataset \
     --verbose=100 \
     --skip_existing=0 \
     --force_min_gsd=2.0 \
-    --backend=tmux --run=0 \
-    --print-graph
+    --run=1
