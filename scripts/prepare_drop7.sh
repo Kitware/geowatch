@@ -5,8 +5,8 @@ source "$HOME"/code/watch/secrets/secrets
 DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="hdd")
 SENSORS=TA1-S2-L8-WV-PD-ACC-3
 DATASET_SUFFIX=Drop7
-REGION_GLOBSTR="$DATA_DVC_DPATH/annotations/region_models/drop6_hard_v1/*.geojson"
-SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/drop6_hard_v1/*.geojson"
+REGION_GLOBSTR="$DATA_DVC_DPATH/annotations/drop6_hard_v1/region_models/*.geojson"
+SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/drop6_hard_v1/site_models/*.geojson"
 
 export GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR
 
@@ -37,6 +37,5 @@ python -m watch.cli.prepare_ta2_dataset \
     --verbose=100 \
     --skip_existing=0 \
     --force_min_gsd=2.0 \
-    --backend=tmux --run=0
-
-    #--exclude_channels=pan \
+    --backend=tmux --run=0 \
+    --print-graph

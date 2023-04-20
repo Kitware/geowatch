@@ -298,8 +298,10 @@ def main(cmdline=False, **kwargs):
                 if 1:
                     regions_without_sites = set(region_id_to_fpath) - set(region_id_to_site_fpaths)
                     sites_without_regions = set(region_id_to_site_fpaths) - set(region_id_to_fpath)
-                    print(f'regions_without_sites={slugify_ext.smart_truncate(ub.urepr(regions_without_sites, nl=1), max_length=1000)}')
-                    print(f'sites_without_regions={slugify_ext.smart_truncate(ub.urepr(sites_without_regions, nl=1), max_length=1000)}')
+                    regions_without_sites_str = slugify_ext.smart_truncate(ub.urepr(regions_without_sites, nl=1), max_length=1000, head="~~\n~~\n", tail="\n~~\n~~")
+                    sites_without_regions_str = slugify_ext.smart_truncate(ub.urepr(sites_without_regions, nl=1), max_length=1000, head="~~\n~~\n", tail="\n~~\n~~")
+                    print(f'regions_without_sites={regions_without_sites_str}')
+                    print(f'sites_without_regions={sites_without_regions_str}')
             else:
                 raise NotImplementedError(
                     'TODO: implement more robust alternative that reads '
