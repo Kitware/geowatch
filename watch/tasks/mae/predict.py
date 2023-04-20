@@ -11,7 +11,7 @@ Basline Example:
         --output_kwcoco="$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/mae_v1_train_split6.kwcoco.zip"\
         --window_space_scale=1.0 \
         --workers=8 \
-        --io_workers=8 \
+        --io_workers=8
 
     # After your model predicts the outputs, you should be able to use the
     # smartwatch visualize tool to inspect your features.
@@ -745,7 +745,7 @@ if __name__ == '__main__':
         --output_kwcoco="$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/mae_v1_train_split6.kwcoco.zip"\
         --window_space_scale=1.0 \
         --workers=8 \
-        --io_workers=8 \
+        --io_workers=8
 
         python -m watch visualize $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/mae_v1_train_split6.kwcoco.zip \
         --channels "red|green|blue,mae.8:11,mae.14:17" --stack=only --workers=avail --animate=True \
