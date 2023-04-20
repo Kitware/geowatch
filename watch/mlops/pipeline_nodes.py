@@ -18,14 +18,13 @@ process inputs. This DAG can then be configured with customized input paths and
 parameters. The resulting jobs can then be submitted to a cmd_queue.Queue for
 actual execution.
 """
-import ubelt as ub
+import functools
 import networkx as nx
 import os
-import functools
+import ubelt as ub
 from functools import cached_property
-from cmd_queue.util import util_networkx  # NOQA
-from watch.utils import util_dotdict  # NOQA
 from typing import Union, Dict, Set, List, Any, Optional
+from watch.utils import util_dotdict
 
 Collection = Optional[Union[Dict, Set, List]]
 Configurable = Optional[Dict[str, Any]]
@@ -133,8 +132,6 @@ class Pipeline:
             # for p in node.pred:
             for p in node.predecessor_process_nodes():
                 self.proc_graph.add_edge(p.name, node.name)
-
-        # util_networkx.write_network_text(self.proc_graph)
 
         self.io_graph = nx.DiGraph()
         for name, node in node_dict.items():
@@ -292,6 +289,7 @@ class Pipeline:
         labelize_graph(self.proc_graph)
 
         import rich
+        from cmd_queue.util import util_networkx
         print('')
         print('Process Graph')
         util_networkx.write_network_text(self.proc_graph, path=rich.print, end='')
@@ -305,6 +303,9 @@ class Pipeline:
                     write_invocations=True, write_configs=True):
         """
         Submits the jobs to an existing command queue or creates a new one.
+
+        Also takes care of adding special bookkeeping jobs that add helper
+        files and symlinks to node output paths.
         """
         import cmd_queue
         import shlex
@@ -522,6 +523,12 @@ class Node(ub.NiceRepr):
         self.succ = []
 
     def _connect_single(self, other, src_map, dst_map):
+        """
+        Handles connection rules between this node and another one.
+
+        TODO: cleanup, these rules are too complex and confusing.
+        There is a reasonable subset here. Restrict to that.
+        """
         # TODO: CLEANUP
         # print(f'Connect {type(self).__name__} {self.name} to '
         #       f'{type(other).__name__} {other.name}')
@@ -750,12 +757,14 @@ def memoize_configured_property(fget):
 # memoize_configured_property = property
 
 
-# @dataclass(kw_only=True)  # makes things harder
 class ProcessNode(Node):
     """
     Represents a process in the pipeline.
 
     ProcessNodes are connected via their input / output nodes.
+
+    You can create an instance of this directly, or inherit from it and set its
+    class variables.
 
     CommandLine:
         xdoctest -m watch.mlops.pipeline_nodes ProcessNode
@@ -1047,15 +1056,6 @@ class ProcessNode(Node):
 
         for key, input_node in self.inputs.items():
             final_in_paths[key] = input_node.final_value
-            # preds = list(input_node.pred)
-            # if preds:
-            #     assert len(preds) == 1
-            #     pred = preds[0]
-            #     value = pred.final_value
-            #     # parent._finalize_templates()['out_paths'][pred.name]
-            #     final_in_paths[key] = value
-            # else:
-            #     final_in_paths[key] = self.config.get(key, None)
         return final_in_paths
 
     @memoize_configured_property
@@ -1131,39 +1131,9 @@ class ProcessNode(Node):
         key = self.name + '_id'
         return self.template_group_dpath / ('{' + key + '}')
 
-    # @memoize_configured_property
-    # @profile
-    # def depends_config(self):
-    #     # Any manually specified inputs need to be inserted into this
-    #     # dictionary. Derived inputs can be ignored.
-    #     depends_config = self.final_algo_config.copy()
-    #     return depends_config
-    #     # return self.config & self.algo_params
-
-    # @memoize_configured_property
-    # def template_dag_dname(self):
-    #     raise AssertionError
-    #     return self.template_depends_dname / self.node_dname
-
     @memoize_configured_property
     def template_root_dpath(self):
         return self.root_dpath
-
-    # @memoize_configured_property
-    # @profile
-    # def template_depends_dname(self):
-    #     """
-    #     Predecessor part of the output path.
-    #     """
-    #     pred_nodes = self.predecessor_process_nodes()
-    #     raise AssertionError
-    #     if not pred_nodes:
-    #         return ub.Path('.')
-    #     elif len(pred_nodes) == 1:
-    #         return pred_nodes[0].template_dag_dname
-    #     else:
-    #         return ub.Path('.')
-    #         # return ub.Path('multi' + str(pred_nodes))
 
     @memoize_configured_method
     @profile
@@ -1171,22 +1141,11 @@ class ProcessNode(Node):
         """
         Predecessor process nodes
         """
-        # if 1:
-        # Faster?
         nodes = [
             pred.parent
             for k, v in self.inputs.items()
             for pred in v.pred
         ]
-        # else:
-        #     nodes = []
-        #     for k, v in self.inputs.items():
-        #         for pred in v.pred:
-        #             # assert isinstance(pred, OutputNode)
-        #             proc = pred.parent
-        #             assert proc.__node_type__ == 'process'
-        #             # assert isinstance(proc, ProcessNode)
-        #             nodes.append(proc)
         return nodes
 
     @memoize_configured_method
@@ -1200,14 +1159,6 @@ class ProcessNode(Node):
             for k, v in self.outputs.items()
             for succ in v.succ
         ]
-        # nodes = []
-        # for k, v in self.outputs.items():
-        #     for succ in v.succ:
-        #         # assert isinstance(pred, OutputNode)
-        #         proc = succ.parent
-        #         assert proc.__node_type__ == 'process'
-        #         # assert isinstance(proc, ProcessNode)
-        #         nodes.append(proc)
         return nodes
 
     @memoize_configured_method
@@ -1248,7 +1199,7 @@ class ProcessNode(Node):
 
     @memoize_configured_property
     @profile
-    def algo_id(self):
+    def algo_id(self) -> str:
         """
         A unique id to represent the output of a deterministic process.
 
@@ -1261,7 +1212,7 @@ class ProcessNode(Node):
 
     @memoize_configured_property
     @profile
-    def process_id(self):
+    def process_id(self) -> str:
         """
         A unique id to represent the output of a deterministic process in a
         pipeline. This id combines the hashes of all ancestors in the DAG with
