@@ -1680,7 +1680,7 @@ python -m watch.mlops.schedule_evaluation --params="
     --root_dpath="$DVC_EXPT_DPATH/_toothbrush_split6_landcover_MeanYear10GSD-V2" \
     --devices="0,1" --tmux_workers=8 \
     --backend=tmux --queue_name "_toothbrush_split6_landcover_MeanYear10GSD-V2" \
-    --pipeline=bas --skip_existing=1 \
+    --pipeline=bas_building_vali --skip_existing=1 \
     --run=1
 
 
