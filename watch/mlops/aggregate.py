@@ -340,6 +340,7 @@ class ParamPlotter:
         from watch.utils.util_kwplot import scatterplot_highlight
         import numpy as np
         import kwplot
+        import kwimage
         from watch.mlops.smart_global_helper import SMART_HELPER
         sns = kwplot.autosns()
         plt = kwplot.autoplt()  # NOQA
@@ -371,7 +372,6 @@ class ParamPlotter:
         fig = kwplot.figure(fnum=2, doclf=True)
         ax = sns.scatterplot(data=single_table, x=x, y=y, hue='region_id')
         if 'delivered_params' in single_table:
-            import kwimage
             val_to_color = SMART_HELPER.delivery_to_color
             if 0:
                 kwplot.imshow(kwplot.make_legend_img(val_to_color, mode='star', dpi=300))

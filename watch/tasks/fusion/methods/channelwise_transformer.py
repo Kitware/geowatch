@@ -742,7 +742,10 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         # TODO:
         # - coerce schedulers
         if self.has_trainer:
-            max_epochs = self.trainer.max_epochs
+            try:
+                max_epochs = self.trainer.max_epochs
+            except ReferenceError:
+                max_epochs = 20
         else:
             max_epochs = 20
 
