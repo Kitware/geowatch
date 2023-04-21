@@ -178,7 +178,6 @@ def main(cmdline=False, **kwargs):
 
     """
     config = PrepareTA2Config.cli(cmdline=cmdline, data=kwargs, strict=True)
-    import cmd_queue
     from watch.utils import slugify_ext
     from watch.utils import util_gis
     import rich
