@@ -284,7 +284,7 @@ def run_stac_to_cropped_kwcoco(input_path,
     ta1_cropped_kwcoco_path = os.path.join(ta1_cropped_dir,
                                            'cropped_kwcoco_for_bas.json')
     # include_channels = 'blue|green|red|nir|swir16|swir22|quality'
-    include_channels = 'blue|green|red|nir|swir16|swir22|pan|quality'
+    include_channels = 'coastal|blue|green|red|B05|B06|B07|nir|B8A|B09|cirrus|swir16|swir22|pan|quality'
     subprocess.run(['python', '-m', 'watch.cli.coco_align',
                     '--visualize', 'False',
                     '--src', ta1_bas_kwcoco_path,
@@ -306,7 +306,7 @@ def run_stac_to_cropped_kwcoco(input_path,
     # Ensure that only data bands are used here (i.e. not quality)
     subprocess.run(['python', '-m', 'watch.cli.coco_clean_geotiffs',
                     '--src', ta1_cropped_kwcoco_path,
-                    '--channels', "red|green|blue|nir|swir16|swir22",
+                    '--channels', 'coastal|blue|green|red|B05|B06|B07|nir|B8A|B09|cirrus|swir16|swir22',
                     '--prefilter_channels', "red",
                     '--min_region_size', '256',
                     '--nodata_value', '-9999',
