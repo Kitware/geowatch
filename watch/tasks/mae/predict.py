@@ -51,6 +51,7 @@ from vit_pytorch.vit import Transformer
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 from watch.tasks.fusion.predict import CocoStitchingManager
 
+
 class WatchDataset(Dataset):
     S2_l2a_channel_names = [
         'B02.tif', 'B01.tif', 'B03.tif', 'B04.tif', 'B05.tif', 'B06.tif', 'B07.tif', 'B08.tif', 'B09.tif', 'B11.tif', 'B12.tif', 'B8A.tif'
@@ -61,6 +62,7 @@ class WatchDataset(Dataset):
     L8_channel_names = [
         'coastal', 'lwir11', 'lwir12', 'blue', 'green', 'red', 'nir', 'swir16', 'swir22', 'pan', 'cirrus'
     ]
+
     def __init__(self, coco_dset, sensor=['S2'], bands=['shared'],
                  segmentation=False, patch_size=224, mask_patch_size=16, num_images=2,
                  mode='train', patch_overlap=.25, bas=True, rng=None, mask_pct=.5, mask_time_width=2,
@@ -176,7 +178,6 @@ class WatchDataset(Dataset):
             self.ignore_indices = [6]
         print('finished dataset init')
 
-        
         self.temporal_mode = temporal_mode
 
     def __len__(self):
@@ -199,28 +200,26 @@ class WatchDataset(Dataset):
         else:
             images = np.zeros_like(images)
 
-        if self.temporal_mode=='cat':
+        if self.temporal_mode == 'cat':
             images = torch.cat([torch.tensor(x) for x in images], dim=0).permute(2, 0, 1)
         else:
             images = torch.tensor(images).permute(0, 3, 1, 2)
 
         vidspace_box = util_kwimage.Box.from_slice(tr['space_slice'])
-        
-        scale_outspace_from_vidspace = tr['scale'] / 4 ####### Add it back
+
+        scale_outspace_from_vidspace = tr['scale'] / 4  # Add it back
         outspace_box = vidspace_box.scale(scale_outspace_from_vidspace).quantize().astype(np.int32)
         item = dict()
         im1_id = gids[0]
         img_obj1 : dict = self.coco_dset.index.imgs[im1_id]
         video_obj = self.coco_dset.index.videos[img_obj1['video_id']]
 
-        
         full_stitch_vidspace_box = util_kwimage.Box.coerce([0, 0, video_obj['width'], video_obj['height']], format='xywh')
         full_stitch_outspace_box = full_stitch_vidspace_box.scale(scale_outspace_from_vidspace).quantize().astype(np.int32)
 
         item['full_stitch_outspace_ltrb'] = torch.from_numpy(full_stitch_outspace_box.data)
         item['sample_outspace_ltrb'] = torch.from_numpy(outspace_box.data)
         item['scale_outspace_from_vid'] = scale_outspace_from_vidspace
-
 
         return images, item
 
@@ -241,6 +240,7 @@ class WatchDataset(Dataset):
         target['_input_gsd'] = resolved_input_scale['gsd']
         target['_native_video_gsd'] = resolved_input_scale['data_gsd']
         return target
+
 
 class MAEPredictConfig(scfg.DataConfig):
     """
@@ -284,19 +284,23 @@ class MAEPredictConfig(scfg.DataConfig):
         The name of the top-level directory to write new assets.
         '''))
 
+
 def pair(t):
     return t if isinstance(t, tuple) else (t, t)
+
 
 class PreNorm(nn.Module):
     def __init__(self, dim, fn):
         super().__init__()
         self.norm = nn.LayerNorm(dim)
         self.fn = fn
+
     def forward(self, x, **kwargs):
         return self.fn(self.norm(x), **kwargs)
 
+
 class FeedForward(nn.Module):
-    def __init__(self, dim, hidden_dim, dropout = 0.):
+    def __init__(self, dim, hidden_dim, dropout=0.):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(dim, hidden_dim),
@@ -305,11 +309,13 @@ class FeedForward(nn.Module):
             nn.Linear(hidden_dim, dim),
             nn.Dropout(dropout)
         )
+
     def forward(self, x):
         return self.net(x)
 
+
 class Attention(nn.Module):
-    def __init__(self, dim, heads = 8, dim_head = 64, dropout = 0.):
+    def __init__(self, dim, heads=8, dim_head=64, dropout=0.):
         super().__init__()
         inner_dim = dim_head *  heads
         project_out = not (heads == 1 and dim_head == dim)
@@ -317,10 +323,10 @@ class Attention(nn.Module):
         self.heads = heads
         self.scale = dim_head ** -0.5
 
-        self.attend = nn.Softmax(dim = -1)
+        self.attend = nn.Softmax(dim=-1)
         self.dropout = nn.Dropout(dropout)
 
-        self.to_qkv = nn.Linear(dim, inner_dim * 3, bias = False)
+        self.to_qkv = nn.Linear(dim, inner_dim * 3, bias=False)
 
         self.to_out = nn.Sequential(
             nn.Linear(inner_dim, dim),
@@ -328,8 +334,8 @@ class Attention(nn.Module):
         ) if project_out else nn.Identity()
 
     def forward(self, x):
-        qkv = self.to_qkv(x).chunk(3, dim = -1)
-        q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h = self.heads), qkv)
+        qkv = self.to_qkv(x).chunk(3, dim=-1)
+        q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h=self.heads), qkv)
 
         dots = torch.matmul(q, k.transpose(-1, -2)) * self.scale
 
@@ -340,23 +346,26 @@ class Attention(nn.Module):
         out = rearrange(out, 'b h n d -> b n (h d)')
         return self.to_out(out)
 
+
 class Transformer(nn.Module):
-    def __init__(self, dim, depth, heads, dim_head, mlp_dim, dropout = 0.):
+    def __init__(self, dim, depth, heads, dim_head, mlp_dim, dropout=0.):
         super().__init__()
         self.layers = nn.ModuleList([])
         for _ in range(depth):
             self.layers.append(nn.ModuleList([
-                PreNorm(dim, Attention(dim, heads = heads, dim_head = dim_head, dropout = dropout)),
-                PreNorm(dim, FeedForward(dim, mlp_dim, dropout = dropout))
+                PreNorm(dim, Attention(dim, heads=heads, dim_head=dim_head, dropout=dropout)),
+                PreNorm(dim, FeedForward(dim, mlp_dim, dropout=dropout))
             ]))
+
     def forward(self, x):
         for attn, ff in self.layers:
             x = attn(x) + x
             x = ff(x) + x
         return x
 
+
 class ViT(nn.Module):
-    def __init__(self, *, image_size, image_patch_size, frames, frame_patch_size, dim, depth, heads, mlp_dim, channels = 6, dim_head = 64, dropout = 0., emb_dropout = 0.):
+    def __init__(self, *, image_size, image_patch_size, frames, frame_patch_size, dim, depth, heads, mlp_dim, channels=6, dim_head=64, dropout=0., emb_dropout=0.):
         super().__init__()
         image_height, image_width = pair(image_size)
         patch_height, patch_width = pair(image_patch_size)
@@ -370,7 +379,7 @@ class ViT(nn.Module):
         #assert pool in {'cls', 'mean'}, 'pool type must be either cls (cls token) or mean (mean pooling)'
 
         self.to_patch_embedding = nn.Sequential(
-            Rearrange('b (f pf) c (h p1) (w p2) -> b (f h w) (p1 p2 pf c)', p1 = patch_height, p2 = patch_width, pf = frame_patch_size),
+            Rearrange('b (f pf) c (h p1) (w p2) -> b (f h w) (p1 p2 pf c)', p1=patch_height, p2=patch_width, pf=frame_patch_size),
             nn.Linear(patch_dim, dim),
         )
 
@@ -403,16 +412,17 @@ class ViT(nn.Module):
         #x = self.to_latent(x)
         return x
 
+
 class MAE(nn.Module):
     def __init__(
         self,
         *,
         encoder,
         decoder_dim,
-        masking_ratio = 0.75,
-        decoder_depth = 8,
-        decoder_heads = 8,
-        decoder_dim_head = 64
+        masking_ratio=0.75,
+        decoder_depth=8,
+        decoder_heads=8,
+        decoder_dim_head=64
     ):
         super().__init__()
         assert masking_ratio > 0 and masking_ratio < 1, 'masking ratio must be kept between 0 and 1'
@@ -429,12 +439,12 @@ class MAE(nn.Module):
         self.decoder_dim = decoder_dim
         self.enc_to_dec = nn.Linear(encoder_dim, decoder_dim) if encoder_dim != decoder_dim else nn.Identity()
         self.mask_token = nn.Parameter(torch.randn(decoder_dim))
-        self.decoder = Transformer(dim = decoder_dim, depth = decoder_depth, heads = decoder_heads, dim_head = decoder_dim_head, mlp_dim = decoder_dim * 4)
+        self.decoder = Transformer(dim=decoder_dim, depth=decoder_depth, heads=decoder_heads, dim_head=decoder_dim_head, mlp_dim=decoder_dim * 4)
         #self.decoder_pos_emb = nn.Embedding(num_patches, decoder_dim)
         self.decoder_pos_emb = nn.Parameter(torch.randn(num_patches, decoder_dim))
         self.to_pixels = nn.Linear(decoder_dim, pixel_values_per_patch)
         self.out = nn.Sigmoid()
-    
+
     def forward(self, img):
         #import code; code.interact(local=locals());
         patches = self.to_patch(img)
@@ -450,18 +460,19 @@ class MAE(nn.Module):
 
         return encoded_tokens
 
+
 class MaeCityscape(LightningModule):
     def __init__(self, dataset, **kwargs):
         super().__init__()
         self.vit = ViT(
-            image_size = 128,
+            image_size=128,
             image_patch_size=4,
             frames=4,
             frame_patch_size=2,
-            dim = 16,
-            depth = 12,
-            heads = 12,
-            mlp_dim = 1024,
+            dim=16,
+            depth=12,
+            heads=12,
+            mlp_dim=1024,
             dropout=0.1
         )
         self.model = MAE(
@@ -484,11 +495,11 @@ class MaeCityscape(LightningModule):
 
         pred, gt, viz, mi, ui = self(x)
         #gt = repeat(gt, 'b n d -> b (n n2) d', n2= 2)
-        batch_range = torch.arange(x.shape[0], device = x.device)[:, None]
-        loss = 0.999*self.acc(pred[batch_range, mi], gt[batch_range, mi]) + 0.001*self.acc(pred[batch_range, ui], gt[batch_range, ui])
+        batch_range = torch.arange(x.shape[0], device=x.device)[:, None]
+        loss = 0.999 * self.acc(pred[batch_range, mi], gt[batch_range, mi]) + 0.001 * self.acc(pred[batch_range, ui], gt[batch_range, ui])
         #loss = self.acc(pred, gt)
         return loss, viz, pred, gt
-    
+
     def pred_dataloader(self):
         return DataLoader(self.dataset,
                         shuffle=False,
@@ -502,8 +513,10 @@ class MaeCityscape(LightningModule):
         scheduler = CosineAnnealingWarmRestarts(optimizer, 51)
         return [optimizer], [scheduler]
 
+
 def sigmoid(a):
     return 1 / (1 + np.exp(-a))
+
 
 class Predict():
     def __init__(self, args):
@@ -515,15 +528,15 @@ class Predict():
                     mode='train', mask_pct=0.5, patch_overlap=args.patch_overlap,
                     temporal_mode='stack',
                     mask_time_width=2, window_space_scale=args.window_space_scale)
-        
+
         print("Dataset load finished ...")
 
         self.model = MaeCityscape(self.dataset)
-        
+
         self.model = self.model.load_from_checkpoint(args.mae_ckpt_path, dataset=self.dataset)
         print("Model load finished ...")
 
-        if self.device=='cpu':
+        if self.device == 'cpu':
             trainer = pl.Trainer(
             num_nodes=1
             )
@@ -616,7 +629,7 @@ class Predict():
                     assert gid not in seen_images
                     seen_images.add(gid)
                     self.stitch_manager.submit_finalize_image(gid)
-                
+
                 gid1, gid2, gid3, gid4 = target['gids']
 
                 sample_outspace_ltrb = util_kwimage.Box.coerce(item['sample_outspace_ltrb'].numpy(), format='ltrb')
@@ -630,7 +643,6 @@ class Predict():
                 feat3 = preds2[:, 0, :, :, :].squeeze()
                 feat4 = preds2[:, 1, :, :, :].squeeze()
 
-                
                 self.stitch_manager.accumulate_image(
                     gid1, outspace_slice, feat1,
                     dsize=outspace_dsize,
@@ -650,7 +662,7 @@ class Predict():
                     gid4, outspace_slice, feat4,
                     dsize=outspace_dsize,
                     scale=scale_outspace_from_vid)
-                
+
             print('Finalize already compelted jobs')
             writer_queue.wait_until_finished(desc='Finalize submitted jobs')
 
@@ -658,7 +670,7 @@ class Predict():
                 if gid not in seen_images:
                     seen_images.add(gid)
                     self.stitch_manager.submit_finalize_image(gid)
-            
+
             print('Finalize loose jobs')
             writer_queue.wait_until_finished()
 
