@@ -237,7 +237,7 @@ class MAEPredictConfig(scfg.DataConfig):
             number of background data writing workers
             '''), alias=['write_workers'])
 
-    window_resolution = scfg.Value(1.0, help='The window GSD to build the grid at', alias=['window_space_scale'])
+    window_space_scale = scfg.Value(1.0, help='The window GSD to build the grid at', alias=['window_space_scale'])
 
     sensor = scfg.Value(['S2', 'L8'], nargs='+')
     bands = scfg.Value(['shared'], type=str, help=ub.paragraph(
