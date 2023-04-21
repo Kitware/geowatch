@@ -645,7 +645,7 @@ class SV_Cropping(Cropping):
         >>> node = SV_Cropping()
         >>> print(node.command())
     """
-    name = 'sv_crop'  # TODO: sv_crop
+    name = 'sv_crop'
     # node_dname = 'sv_crop/{src_dset}/{regions_id}/{valicrop_algoid}/{sitecrop_id}'
 
     algo_params = {
