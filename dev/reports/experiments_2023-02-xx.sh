@@ -1625,38 +1625,38 @@ python -m watch.mlops.schedule_evaluation --params="
         sv_dino_boxes.enabled: 1
         sv_dino_boxes.package_fpath: $DVC_EXPT_DPATH/models/kitware/xview_dino.pt
         sv_dino_boxes.window_dims:
-            - 256
+            #- 256
             - 512
-            - 768
-            - 1024
-            # - 1536
+            #- 768
+            #- 1024
+            #- 1536
         sv_dino_boxes.window_overlap:
             - 0.5
         sv_dino_boxes.fixed_resolution:
             #- 1GSD
             #- 2GSD
-            - 2.5GSD
+            #- 2.5GSD
             - 3GSD
-            - 3.3GSD
+            #- 3.3GSD
         sv_dino_filter.box_isect_threshold:
             - 0.1
         sv_dino_filter.box_score_threshold:
             - 0.01
         sv_dino_filter.start_max_score:
             - 1.0
-            - 0.9
+            #- 0.9
             # - 0.8
             # - 0.5
         sv_dino_filter.end_min_score:
             - 0.0
-            - 0.05
+            #- 0.05
             - 0.1
-            - 0.15
-            #- 0.2
+            #- 0.15
+            - 0.2
             #- 0.25
-            - 0.3
+            #- 0.3
             # - 0.4
-            - 0.5
+            #- 0.5
     submatrices:
         - bas_pxl.fixed_resolution: 10GSD
           bas_poly.resolution:
@@ -1681,7 +1681,7 @@ python -m watch.mlops.schedule_evaluation --params="
     --devices="0,1" --tmux_workers=8 \
     --backend=tmux --queue_name "_toothbrush_split6_landcover_MeanYear10GSD-V2" \
     --pipeline=bas_building_vali --skip_existing=1 \
-    --run=1
+    --run=0
 
 
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
@@ -1698,6 +1698,6 @@ geowatch aggregate \
         analyze: 0
         reference_region: final
         # print_models: True
-    "\
+    " \
     --plot_params=True \
     --output_dpath="$DVC_EXPT_DPATH"/_toothbrush_split6_landcover_MeanYear10GSD-V2/_aggregate
