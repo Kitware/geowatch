@@ -20,35 +20,22 @@ Basline Example:
         --draw_anns=False
 
 """
-import torch
 import ubelt as ub
 from watch.utils import util_kwimage  # NOQA
 from watch.utils import util_parallel
-from watch.utils.lightning_ext import util_device
-
 import scriptconfig as scfg
 import albumentations as A
 import kwcoco
 import ndsampler
-import torchvision
-from torchvision import transforms
-import datetime
 import sys
 import torch
 import torch.nn as nn
-import pytorch_lightning as pl
 from pytorch_lightning import LightningModule
 from torch.nn import L1Loss as MSE
-from torch.utils.data import DataLoader, Dataset, random_split
-from torchvision import transforms, datasets
-#import albumentations as A
-import torch.nn.functional as F
-from einops import repeat, rearrange
+from torch.utils.data import DataLoader, Dataset
+from einops import rearrange
 from einops.layers.torch import Rearrange
-from pytorch_lightning.callbacks import ModelCheckpoint
 import numpy as np
-from vit_pytorch.vit import Transformer
-from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 from watch.tasks.fusion.predict import CocoStitchingManager
 
 
@@ -72,7 +59,7 @@ class WatchDataset(Dataset):
             bands = [bands]
         if not isinstance(sensor, list):
             sensor = [sensor]
-        assert(temporal_mode in ['cat', 'stack'])
+        assert (temporal_mode in ['cat', 'stack'])
 
         # initialize dataset
         print('load dataset')
@@ -131,27 +118,19 @@ class WatchDataset(Dataset):
                 )
         grouped = ub.sorted_keys(grouped)
         self.patches : list[dict] = list(ub.flatten(grouped.values()))
-        #target : dict = self.patches[idx]
-        #all_bands = [aux.get('channels', None) for aux in self.coco_dset.index.imgs[self.images._ids[0]].get('auxiliary', [])]
-
-        #if 'r|g|b' in all_bands:
-            #all_bands.remove('r|g|b')
         self.bands = []
         # no channels selected
         if len(bands) < 1:
-            raise ValueError(f'bands must be specified. Options are {", ".join(all_bands)}, or all')
+            raise ValueError(f'bands must be specified. Options are {", ".join(bands)}, or all')
         # all channels selected
         elif len(bands) == 1:
             if bands[0].lower() == 'all':
-                self.bands = all_bands
+                self.bands = bands
             elif bands[0].lower() == 'shared':
                 self.bands = ['red', 'green', 'blue', 'nir', 'swir16', 'swir22']
             elif bands[0] == 'r|g|b':
                 self.bands.append('r|g|b')
-        #else:
-            #for band in bands:
-                #if band in all_bands:
-                    #self.bands.append(band)
+
         self.num_channels = len(self.bands)
         self.bands = "|".join(self.bands)
 
@@ -376,40 +355,26 @@ class ViT(nn.Module):
         num_patches = (image_height // patch_height) * (image_width // patch_width) * (frames // frame_patch_size)
         patch_dim = channels * patch_height * patch_width * frame_patch_size
 
-        #assert pool in {'cls', 'mean'}, 'pool type must be either cls (cls token) or mean (mean pooling)'
-
         self.to_patch_embedding = nn.Sequential(
             Rearrange('b (f pf) c (h p1) (w p2) -> b (f h w) (p1 p2 pf c)', p1=patch_height, p2=patch_width, pf=frame_patch_size),
             nn.Linear(patch_dim, dim),
         )
 
         self.pos_embedding = nn.Parameter(torch.randn(1, num_patches + 1, dim))
-        #self.cls_token = nn.Parameter(torch.randn(1, 1, dim))
+
         self.dropout = nn.Dropout(emb_dropout)
 
         self.transformer = Transformer(dim, depth, heads, dim_head, mlp_dim, dropout)
-
-        #self.pool = pool
-        #self.to_latent = nn.Identity()
-
-        #self.mlp_head = nn.Sequential(
-            #nn.LayerNorm(dim),
-            #nn.Linear(dim, num_classes)
-        #)
 
     def forward(self, video):
         x = self.to_patch_embedding(video)
         b, n, _ = x.shape
 
-        #cls_tokens = repeat(self.cls_token, '1 1 d -> b 1 d', b = b)
-        #x = torch.cat((cls_tokens, x), dim=1)
         x += self.pos_embedding[:, :(n + 1)]
         x = self.dropout(x)
 
         x = self.transformer(x)
 
-        #x = x.mean(dim = 1) if self.pool == 'mean' else x[:, 0]
-        #x = self.to_latent(x)
         return x
 
 
@@ -446,7 +411,7 @@ class MAE(nn.Module):
         self.out = nn.Sigmoid()
 
     def forward(self, img):
-        #import code; code.interact(local=locals());
+
         patches = self.to_patch(img)
 
         tokens = self.patch_to_emb(patches)
@@ -455,8 +420,6 @@ class MAE(nn.Module):
         encoded_tokens = self.encoder.transformer(tokens)
 
         encoded_tokens = rearrange(encoded_tokens, 'b (f h w) d -> b f h w d', h=32, w=32)
-        #encoded_tokens = rearrange(encoded_tokens, 'b (f h w) (p1 p2 pf c) -> b f (p1 p2 pf c) h w', h=8, w=8, p1 = 16, p2 = 16, pf = 2)
-        #encoded_tokens = rearrange(encoded_tokens, 'b (f h w) (p1 p2 pf c) -> b (f pf) c (h p1) (h p2)', h=8, w=8, p1=16, p2=16, pf=2)
 
         return encoded_tokens
 
@@ -500,19 +463,6 @@ class MaeCityscape(LightningModule):
         #loss = self.acc(pred, gt)
         return loss, viz, pred, gt
 
-    def pred_dataloader(self):
-        return DataLoader(self.dataset,
-                        shuffle=False,
-                        batch_size=self.batch_size,
-                        num_workers=self.num_workers,
-                        persistent_workers=False,
-                        pin_memory=True)
-
-    def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=0.0001)
-        scheduler = CosineAnnealingWarmRestarts(optimizer, 51)
-        return [optimizer], [scheduler]
-
 
 def sigmoid(a):
     return 1 / (1 + np.exp(-a))
@@ -524,10 +474,10 @@ class Predict():
         self.device = args.device
         self.data_path = args.input_kwcoco
         self.dataset = WatchDataset(self.data_path, sensor=args.sensor, bands=args.bands,
-                    segmentation=False, patch_size=128, mask_patch_size=16, num_images=4,
-                    mode='train', mask_pct=0.5, patch_overlap=args.patch_overlap,
-                    temporal_mode='stack',
-                    mask_time_width=2, window_space_scale=args.window_space_scale)
+                                    segmentation=False, patch_size=128, mask_patch_size=16, num_images=4,
+                                    mode='train', mask_pct=0.5, patch_overlap=args.patch_overlap,
+                                    temporal_mode='stack',
+                                    mask_time_width=2, window_space_scale=args.window_space_scale)
 
         print("Dataset load finished ...")
 
@@ -536,23 +486,12 @@ class Predict():
         self.model = self.model.load_from_checkpoint(args.mae_ckpt_path, dataset=self.dataset)
         print("Model load finished ...")
 
-        if self.device == 'cpu':
-            trainer = pl.Trainer(
-            num_nodes=1
-            )
-        else:
-            trainer = pl.Trainer(
-                accelerator='gpu',
-                devices=1,
-                num_nodes=1
-                )
-
         self.dataloader = DataLoader(self.dataset,
-                        shuffle=False,
-                        batch_size=1,
-                        num_workers=args.workers,
-                        persistent_workers=False,
-                        pin_memory=True)
+                                     shuffle=False,
+                                     batch_size=1,
+                                     num_workers=args.workers,
+                                     persistent_workers=False,
+                                     pin_memory=True)
 
         print('copy dataset')
         self.output_dset = self.dataset.coco_dset.copy()
@@ -583,7 +522,6 @@ class Predict():
         )
 
         from watch.utils import process_context
-        import sys
         self.proc_context = process_context.ProcessContext(
             args=sys.argv,
             type='process',
@@ -592,7 +530,6 @@ class Predict():
 
     def __call__(self):
 
-        from watch.utils import util_parallel
         writer_queue = util_parallel.BlockingJobQueue(max_workers=4)
         self.stitch_manager.writer_queue = writer_queue
 
