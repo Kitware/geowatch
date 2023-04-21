@@ -1556,7 +1556,7 @@ python -m watch.mlops.schedule_evaluation --params="
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-CH_R001_I2L.kwcoco.zip
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-NZ_R001_I2L.kwcoco.zip
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R001_I2L.kwcoco.zip
-            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-AE_R001_I2L.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-AE_R001_I2L.kwcoco.zip
         bas_pxl.chip_overlap: 0.3
         bas_pxl.chip_dims:
             - auto
@@ -1686,13 +1686,13 @@ python -m watch.mlops.schedule_evaluation --params="
 
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
 geowatch aggregate \
-    --pipeline=bas \
+    --pipeline=bas_building_vali \
     --target \
         "$DVC_EXPT_DPATH/_toothbrush_split6_landcover_MeanYear10GSD-V2" \
     --resource_report=True \
-    --rois=KR_R001,KR_R002,CH_R001,NZ_R001,BR_R002,AE_R001 \
+    --rois=KR_R001,KR_R002,CH_R001,NZ_R001,BR_R002 \
     --stdout_report="
-        top_k: 30
+        top_k: 10
         per_group: 2
         macro_analysis: 0
         analyze: 0

@@ -1191,6 +1191,7 @@ class SimpleDataCube(object):
         from watch.utils import kwcoco_extensions
         import kwcoco
         import kwimage
+        import pandas as pd
         coco_dset = cube.coco_dset
         extract_config = ExtractConfig(**extract_kwargs)
 
@@ -1207,6 +1208,19 @@ class SimpleDataCube(object):
         print('video_name = {}'.format(ub.urepr(video_name, nl=1)))
         print('video_props = {}'.format(ub.urepr(video_props, nl=1)))
         print('local_epsg = {}'.format(ub.urepr(local_epsg, nl=1)))
+
+        if 1:
+            # Remove specific null properties from video_props
+            keys = [
+                'predicted_phase_transition_date',
+                'predicted_phase_transition',
+                'score',
+            ]
+            for k in keys:
+                if k in video_props:
+                    v = video_props[k]
+                    if pd.isnull(v):
+                        video_props.pop(k)
 
         if new_dset is None:
             new_dset = kwcoco.CocoDataset()
