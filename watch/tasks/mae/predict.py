@@ -237,7 +237,7 @@ class MAEPredictConfig(scfg.DataConfig):
             number of background data writing workers
             '''), alias=['write_workers'])
 
-    window_space_scale = scfg.Value(1.0, help='The window GSD to build the grid at', alias=['window_space_scale'])
+    window_resolution = scfg.Value(1.0, help='The window GSD to build the grid at', alias=['window_space_scale'])
 
     sensor = scfg.Value(['S2', 'L8'], nargs='+')
     bands = scfg.Value(['shared'], type=str, help=ub.paragraph(
@@ -477,7 +477,7 @@ class Predict():
                                     segmentation=False, patch_size=128, mask_patch_size=16, num_images=4,
                                     mode='train', mask_pct=0.5, patch_overlap=args.patch_overlap,
                                     temporal_mode='stack',
-                                    mask_time_width=2, window_space_scale=args.window_space_scale)
+                                    mask_time_width=2, window_space_scale=args.window_resolution)
 
         print("Dataset load finished ...")
 
