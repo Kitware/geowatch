@@ -18,13 +18,13 @@ Example:
     >>> queue = prep_splits(cmdline=False, **config)
     >>> config['backend'] = 'slurm'
     >>> queue = prep_splits(cmdline=False, **config)
-    >>> queue.rprint(0, 0)
+    >>> queue.print_commands()
     >>> config['backend'] = 'tmux'
     >>> queue = prep_splits(cmdline=False, **config)
-    >>> queue.rprint(0, 0)
+    >>> queue.print_commands()
     >>> config['backend'] = 'serial'
     >>> queue = prep_splits(cmdline=False, **config)
-    >>> queue.rprint(0, 0)
+    >>> queue.print_commands()
 
 """
 

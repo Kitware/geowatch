@@ -146,7 +146,7 @@ import ubelt as ub
 import scriptconfig as scfg
 
 
-class StacSearchConfig(scfg.Config):
+class StacSearchConfig(scfg.DataConfig):
     """
     Execute a STAC query
     """
@@ -373,8 +373,9 @@ def main(cmdline=True, **kwargs):
         >>>     print(item['properties']['eo:cloud_cover'])
         >>>     print(item['properties']['datetime'])
     """
-    config = StacSearchConfig(cmdline=cmdline, data=kwargs)
-    print('config = {}'.format(ub.urepr(dict(config), nl=1)))
+    config = StacSearchConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
+    import rich
+    rich.print('config = {}'.format(ub.urepr(config, nl=1)))
     args = config.namespace
 
     logger = util_logging.get_logger(verbose=args.verbose)

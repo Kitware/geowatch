@@ -68,45 +68,39 @@ Example:
 import scriptconfig as scfg
 import ubelt as ub
 import warnings
+from cmd_queue.cli_boilerplate import CMDQueueConfig
 
 
-class PrepareTA2Config(scfg.Config):
+class PrepareTA2Config(CMDQueueConfig):
     __default__ = {
         'dataset_suffix': scfg.Value(None, help=''),
 
-        'stac_query_mode': scfg.Value(None, help='if set to auto we try to make the .input files. Mutex with s3_fpath'),
         'cloud_cover': scfg.Value(10, help='maximum cloud cover percentage (ignored if s3_fpath given)'),
         'sensors': scfg.Value("L2", help='(ignored if s3_fpath given)'),
         'max_products_per_region': scfg.Value(None, help='does uniform affinity sampling over time to filter down to this many results per region'),
-        'api_key': scfg.Value('env:SMART_STAC_API_KEY', help='The API key or where to get it (ignored if s3_fpath given)'),
+
+        'stac_query_mode': scfg.Value(None, help='if set to auto we try to make the .input files. Mutex with s3_fpath', group='stac'),
+        'api_key': scfg.Value('env:SMART_STAC_API_KEY', help='The API key or where to get it (ignored if s3_fpath given)', group='stac'),
 
         'separate_region_queues': scfg.Value(True, help='if True, create jobs for each region separately. This option to disable this may be removed in the future.'),
         'separate_align_jobs': scfg.Value(True, help='if True, perform alignment for each region in its own job. The option to disable this may be removed in the future.'),
 
-        's3_fpath': scfg.Value(None, nargs='+', help='A list of .input files which were the results of an existing stac query. Mutex with stac_query_* args. Mutex with sensors.'),
+        's3_fpath': scfg.Value(None, nargs='+', help='A list of .input files which were the results of an existing stac query. Mutex with stac_query_* args. Mutex with sensors.', group='stac'),
+        'aws_profile': scfg.Value('iarpa', help='AWS profile to use for remote data access', group='stac'),
 
         'out_dpath': scfg.Value('auto', help='This is the path that all resulting files will be written to. Defaults the the phase2 DATA_DVC_DPATH', alias=['dvc_dpath']),
 
-        'run': scfg.Value('0', isflag=1, help='if True execute the pipeline'),
         'collated': scfg.Value([True], nargs='+', help='set to false if the input data is not collated'),
+        'queue_name': scfg.Value('prep-ta2-dataset', help='name for the command queue', group='cmd_queue'),
 
-        'backend': scfg.Value('serial', help='can be serial, tmux, or slurm. Using tmux is recommended.'),
-        'serial': scfg.Value(False, isflag=True, help='if True, override other settings to disable parallelism. DEPRECATE. Set backend=serial instead'),
-        'with_textual': scfg.Value('auto', help='setting for cmd-queue monitoring'),
-        'other_session_handler': scfg.Value('ask', help='for tmux backend only. How to handle conflicting sessions. Can be ask, kill, or ignore, or auto'),
-        'queue_name': scfg.Value('prep-ta2-dataset', help='name for the command queue'),
-        'rprint': scfg.Value(False, isflag=True, help='enable rich printing of the commands'),
-
-        'max_queue_size': scfg.Value(10, help='the number of regions allowed to be processed in parallel with tmux backend'),
         'max_regions': None,
-
-        'aws_profile': scfg.Value('iarpa', help='AWS profile to use for remote data access'),
 
         'query_workers': scfg.Value('0', help='workers for STAC search'),
         'convert_workers': scfg.Value('min(avail,8)', help='workers for stac-to-kwcoco script'),
         'fields_workers': scfg.Value('min(avail,max(all/2,8))', help='workers for add-watch-fields script'),
-        'align_workers': scfg.Value(0, help='primary workers for align script'),
-        'align_aux_workers': scfg.Value(0, help='threads per align process (typically set this to 0)'),
+
+        'align_workers': scfg.Value(0, help='primary workers for align script', group='align'),
+        'align_aux_workers': scfg.Value(0, help='threads per align process (typically set this to 0)', group='align'),
 
         'ignore_duplicates': scfg.Value(1, help='workers for align script'),
 
@@ -121,10 +115,13 @@ class PrepareTA2Config(scfg.Config):
         'debug': scfg.Value(False, isflag=1, help='if enabled, turns on debug visualizations'),
         'select_images': scfg.Value(False, help='if enabled only uses select images'),
 
-        'cache': scfg.Value(1, isflag=1, help='If 1 or 0 globally enable/disable caching. If a comma separated list of strings, only cache those stages'),
 
-        'include_channels': scfg.Value(None, help='specific channels to use in align crop'),
-        'exclude_channels': scfg.Value(None, help='specific channels to NOT use in align crop'),
+        'include_channels': scfg.Value(None, help='specific channels to use in align crop', group='align'),
+        'exclude_channels': scfg.Value(None, help='specific channels to NOT use in align crop', group='align'),
+        'target_gsd': scfg.Value(10, group='align'),
+        'force_min_gsd': scfg.Value(None, group='align'),
+        'align_keep': scfg.Value('img', choices=['img', 'img-roi', 'none', None], help='if the coco align script caches or recomputes images / rois', group='align'),
+        'force_nodata': scfg.Value(None, help='if specified, forces nodata to this value', group='align'),
 
         'splits': scfg.Value(False, isflag=1, help='if True do splits'),
 
@@ -133,13 +130,10 @@ class PrepareTA2Config(scfg.Config):
 
         'propogate_strategy': scfg.Value('SMART', help='changes propogation behavior'),
 
-        'target_gsd': 10,
         'remove_broken': scfg.Value(True, isflag=1, help='if True, will remove any image that fails population (e.g. caused by a 404)'),
-        'force_nodata': scfg.Value(None, help='if specified, forces nodata to this value'),
 
-        'align_keep': scfg.Value('img', choices=['img', 'img-roi', 'none', None], help='if the coco align script caches or recomputes images / rois'),
-
-        'skip_existing': scfg.Value(False, help='Unlike cache=1, which checks for file existence at runtime, this will explicitly not submit any job with a product that already exist'),
+        'cache': scfg.Value(1, isflag=1, help='If 1 or 0 globally enable/disable caching. If a comma separated list of strings, only cache those stages', group='queue-related'),
+        'skip_existing': scfg.Value(False, help='Unlike cache=1, which checks for file existence at runtime, this will explicitly not submit any job with a product that already exist', group='queue-related'),
 
         'rpc_align_method': scfg.Value('orthorectify', help=ub.paragraph(
             '''
@@ -183,20 +177,11 @@ def main(cmdline=False, **kwargs):
         }
 
     """
-    import cmd_queue
+    config = PrepareTA2Config.cli(cmdline=cmdline, data=kwargs, strict=True)
     from watch.utils import slugify_ext
     from watch.utils import util_gis
-
-    # import shlex
-    config = PrepareTA2Config(cmdline=cmdline, data=kwargs)
-    print('config = {}'.format(ub.urepr(dict(config), nl=1)))
-
-    if config['serial']:
-        config['backend'] = 'serial'
-        config['convert_workers'] = 0
-        config['fields_workers'] = 0
-        config['align_workers'] = 0
-        config['align_aux_workers'] = 0
+    import rich
+    rich.print('config = {}'.format(ub.urepr(dict(config), nl=1)))
 
     out_dpath = config['out_dpath']
     if out_dpath == 'auto':
@@ -312,8 +297,10 @@ def main(cmdline=False, **kwargs):
                 if 1:
                     regions_without_sites = set(region_id_to_fpath) - set(region_id_to_site_fpaths)
                     sites_without_regions = set(region_id_to_site_fpaths) - set(region_id_to_fpath)
-                    print(f'regions_without_sites={slugify_ext.smart_truncate(ub.urepr(regions_without_sites, nl=1), max_length=1000)}')
-                    print(f'sites_without_regions={slugify_ext.smart_truncate(ub.urepr(sites_without_regions, nl=1), max_length=1000)}')
+                    regions_without_sites_str = slugify_ext.smart_truncate(ub.urepr(regions_without_sites, nl=1), max_length=1000, head="~~\n~~\n", tail="\n~~\n~~")
+                    sites_without_regions_str = slugify_ext.smart_truncate(ub.urepr(sites_without_regions, nl=1), max_length=1000, head="~~\n~~\n", tail="\n~~\n~~")
+                    print(f'regions_without_sites={regions_without_sites_str}')
+                    print(f'sites_without_regions={sites_without_regions_str}')
             else:
                 raise NotImplementedError(
                     'TODO: implement more robust alternative that reads '
@@ -611,10 +598,10 @@ def main(cmdline=False, **kwargs):
         # else:
         #     align_keep = 'none'
 
-        debug_valid_regions = config['debug']
-        align_visualize = config['debug']
-        include_channels = config['include_channels']
-        exclude_channels = config['exclude_channels']
+        debug_valid_regions = config.debug
+        align_visualize = config.debug
+        include_channels = config.include_channels
+        exclude_channels = config.exclude_channels
 
         align_job = pipeline.submit(command=ub.codeblock(
             rf'''
@@ -626,18 +613,19 @@ def main(cmdline=False, **kwargs):
                 --regions "{region_globstr}" \
                 --context_factor=1 \
                 --geo_preprop=auto \
-                --keep={config['align_keep']} \
-                --force_nodata={config['force_nodata']} \
+                --keep={config.align_keep} \
+                --force_nodata={config.force_nodata} \
                 --include_channels="{include_channels}" \
                 --exclude_channels="{exclude_channels}" \
                 --visualize={align_visualize} \
                 --debug_valid_regions={debug_valid_regions} \
-                --rpc_align_method {config['rpc_align_method']} \
-                --verbose={config['verbose']} \
-                --aux_workers={config['align_aux_workers']} \
-                --target_gsd={config['target_gsd']} \
-                --workers={config['align_workers']} \
-                --hack_lazy={config['hack_lazy']}
+                --rpc_align_method {config.rpc_align_method} \
+                --verbose={config.verbose} \
+                --aux_workers={config.align_aux_workers} \
+                --target_gsd={config.target_gsd} \
+                --force_min_gsd={config.force_min_gsd} \
+                --workers={config.align_workers} \
+                --hack_lazy={config.hack_lazy}
             '''),
             depends=parent_job,
             name=f'align-geotiffs-{name}',
@@ -686,14 +674,14 @@ def main(cmdline=False, **kwargs):
 
             # Visualization here is too slow, add on another option if we really
             # need to
-            # viz_part = '--viz_dpath=auto' if config['visualize'] else ''
+            # viz_part = '--viz_dpath=auto' if config.visualize else ''
             viz_part = ''
             project_anns_job = pipeline.submit(command=ub.codeblock(
                 rf'''
                 python -m watch reproject_annotations \
                     --src "{aligned_imgonly_fpath}" \
                     --dst "{aligned_imganns_fpath}" \
-                    --propogate_strategy="{config['propogate_strategy']}" \
+                    --propogate_strategy="{config.propogate_strategy}" \
                     --site_models="{site_globstr}" \
                     --region_models="{region_globstr}" {viz_part}
                 '''), depends=[align_job], name=f'project-annots-{name}',
@@ -706,7 +694,7 @@ def main(cmdline=False, **kwargs):
                 stage='project_annots',
             )
 
-            if config['visualize']:
+            if config.visualize:
                 pipeline.submit(command=ub.codeblock(
                     rf'''
                     python -m watch visualize \
@@ -737,7 +725,7 @@ def main(cmdline=False, **kwargs):
         align_info['job'] = project_anns_job
         alignment_jobs.append(align_info)
 
-    if config['separate_align_jobs']:
+    if config.separate_align_jobs:
         # Need a final union step
         aligned_fpaths = [d['aligned_imganns_fpath'] for d in alignment_jobs]
         union_depends_jobs = [d['job'] for d in alignment_jobs]
@@ -772,29 +760,28 @@ def main(cmdline=False, **kwargs):
     # force all submissions to finish before starting new ones.
 
     # Determine what stages will be cached.
-    cache = config['cache']
+    cache = config.cache
     if isinstance(cache, str):
         cache = [p.strip() for p in cache.split(',')]
 
     self = pipeline
     pipeline._update_stage_otf_cache(cache)
 
-    queue = cmd_queue.Queue.create(
-        backend=config['backend'], name=config['queue_name'], size=1,
-        gres=None, environ=environ)
-
-    # hack to set number of parallel sessions based on job size
-    queue.size = min(len(stac_jobs), config['max_queue_size'])
+    config.tmux_workers = min(len(stac_jobs), config.tmux_workers)
+    queue = config.create_queue(environ=environ)
+    # queue = cmd_queue.Queue.create(
+    #     backend=config['backend'], name=config['queue_name'], size=1,
+    #     gres=None, environ=environ)
 
     # self._populate_explicit_dependency_queue(queue)
     self._populate_implicit_dependency_queue(
-        queue, skip_existing=config['skip_existing'])
+        queue, skip_existing=config.skip_existing)
 
     # queue.print_graph()
     # queue.rprint()
 
     # Do Basic Splits
-    if config['splits']:
+    if config.splits:
         # Note: we probably could just do unions more cleverly rather than
         # splitting.
         from watch.cli import prepare_splits
@@ -832,16 +819,16 @@ def main(cmdline=False, **kwargs):
     #         --run=1 --serial=True
     #     '''))
 
-    if config['rprint']:
-        queue.print_graph()
-        queue.rprint()
+    config.run_queue(queue)
 
-    if config['run']:
-
-        # This logic will exist in cmd-queue itself
-        other_session_handler = config['other_session_handler']
-        queue.run(block=True, system=True, with_textual=config['with_textual'],
-                  other_session_handler=other_session_handler)
+    # if config.rprint:
+    #     queue.print_graph()
+    #     queue.rprint()
+    # if config.run:
+    #     # This logic will exist in cmd-queue itself
+    #     other_session_handler = config.other_session_handler
+    #     queue.run(block=True, system=True, with_textual=config.with_textual,
+    #               other_session_handler=other_session_handler)
 
     # TODO: team features
     """

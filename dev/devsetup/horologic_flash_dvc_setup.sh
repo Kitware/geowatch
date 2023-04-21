@@ -5,6 +5,7 @@ cd /flash
 git clone git@gitlab.kitware.com:smart/smart_data_dvc.git /flash/smart_data_dvc
 
 # Lookup the location of the hard drive cache
+HDD_CACHE_DIR=$(dvc cache dir)
 HDD_CACHE_DIR=$(cd "$HOME"/data/dvc-repos/smart_data_dvc && dvc cache dir)
 echo "HDD_CACHE_DIR = $HDD_CACHE_DIR"
 

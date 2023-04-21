@@ -1,3 +1,7 @@
+"""
+References:
+    https://smartgitlab.com/TE/evaluations/-/wikis/Accenture-TA-1-Processing-Status
+"""
 import os
 import ubelt as ub
 from watch.stac.stac_search_builder import SENSOR_TO_DEFAULTS
@@ -192,10 +196,15 @@ def check_processed_regions():
     collections_of_interest = [c.id for c in all_collections if pat.match(c.id)]
 
     collections_of_interest = [
-        'ta1-s2-acc-2',
-        'ta1-ls-acc-2',
-        'ta1-wv-acc-2',
-        'ta1-pd-acc-2',
+        # 'ta1-s2-acc-2',
+        # 'ta1-ls-acc-2',
+        # 'ta1-wv-acc-2',
+        # 'ta1-pd-acc-2',
+
+        'ta1-s2-acc-3',
+        'ta1-ls-acc-3',
+        'ta1-wv-acc-3',
+        'ta1-pd-acc-3',
 
         # 'ta1-s2-acc',
         # 'ta1-s2-acc-1',
@@ -283,6 +292,8 @@ def check_processed_regions():
     for row in peryear_rows + peritem_rows:
         if row['collection'].endswith('acc-2'):
             row['processing'] = 'acc-2'
+        elif row['collection'].endswith('acc-3'):
+            row['processing'] = 'acc-3'
         elif row['collection'].endswith('acc-1'):
             row['processing'] = 'acc-1'
         elif row['collection'].endswith('acc'):

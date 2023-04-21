@@ -310,7 +310,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
     #     queue_size = len(GPUS)
 
     # environ = {}
-    queue = config.create_queue(gres=config.devices)
+    queue = config.create_queue(gpus=config.devices)
     # queue = cmd_queue.Queue.create(
     #     config['backend'], name=config['queue_name'],
     #     size=queue_size, environ=environ,
@@ -416,7 +416,13 @@ def schedule_evaluation(cmdline=False, **kwargs):
     if config.run:
         ub.ensuredir(dag.root_dpath)
 
-    config.run_queue(queue)
+    print_kwargs = {
+        'with_status': 0,
+        'with_rich': 0,
+        'with_locks': 0,
+        'exclude_tags': ['boilerplate'],
+    }
+    config.run_queue(queue, print_kwargs=print_kwargs)
 
     if not config.run:
         driver_fpath = queue.write()

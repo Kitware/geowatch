@@ -885,6 +885,54 @@ def _merge_polys(p1, p2, poly_merge_method=None):
     return merged_polys
 
 
+def _process(track, _heatmaps, image_dates, agg_fn, gids, thresh, morph_kernel,
+             thresh_hysteresis, norm_ord, moving_window_size,
+             inner_window_size, inner_agg_fn, poly_merge_method):
+    from shapely.ops import unary_union
+    import kwimage
+    import numpy as np
+    # TODO when bounds are time-varying, this lets individual frames
+    # go outside them; only enforces the union. Problem?
+    # currently bounds come from site summaries, which are not
+    # time-varying.
+    if track is None:
+        track_bounds = None
+        _heatmaps_in_track = _heatmaps
+        heatmap_dates = image_dates
+    else:
+        track_bounds = track['poly'].unary_union
+        track_gids = track['gid']
+        flags = np.in1d(gids, track_gids)
+        _heatmaps_in_track = np.compress(flags, _heatmaps, axis=0)
+        heatmap_dates = list(ub.compress(image_dates, flags))
+
+    # this is another hot spot, heatmaps_to_polys -> mask_to_polygons ->
+    # rasterize. Figure out how to vectorize over bounds.
+    track_polys = heatmaps_to_polys(_heatmaps_in_track, track_bounds,
+                                    agg_fn, thresh, morph_kernel,
+                                    thresh_hysteresis, norm_ord,
+                                    moving_window_size,
+                                    inner_window_size=inner_window_size,
+                                    inner_agg_fn=inner_agg_fn,
+                                    heatmap_dates=heatmap_dates,
+                                    poly_merge_method=poly_merge_method,)
+    if track is None:
+        # BUG: The polygons retunred from heatmap-to-polys might not be
+        # corresponding to the gids in this case.
+        yield from zip(itertools.repeat(gids), track_polys)
+        # for poly in polys:  # convert to shapely to check this
+        # if poly.is_valid and not poly.is_empty:
+        # yield (gids, poly)
+    else:
+        poly = unary_union([p.to_shapely() for p in track_polys])
+
+        if poly.is_valid and not poly.is_empty:
+            yield (track['gid'], kwimage.MultiPolygon.from_shapely(poly))
+
+
+viz_n_window = 0  # FIXME, no dynamic globals
+
+
 @profile
 def heatmaps_to_polys(heatmaps, bounds, agg_fn, thresh, morph_kernel,
                       thresh_hysteresis, norm_ord, moving_window_size,
@@ -893,6 +941,7 @@ def heatmaps_to_polys(heatmaps, bounds, agg_fn, thresh, morph_kernel,
     '''
     Use parameters: agg_fn, thresh, morph_kernel, thresh_hysteresis, norm_ord
     '''
+    global viz_n_window
     import numpy as np
 
     # TODO: rename moving window size to "outer_window_size"
@@ -905,30 +954,6 @@ def heatmaps_to_polys(heatmaps, bounds, agg_fn, thresh, morph_kernel,
         return [kwimage.Polygon.from_shapely(p) for p in shapely_polys]
 
     _agg_fn = AGG_FN_REGISTRY[agg_fn]
-
-    viz_n_window = 0
-
-    def _process_1_step(heatmaps):
-        nonlocal viz_n_window
-        global VIZ_DPATH
-        if VIZ_DPATH is not None:
-            VIZ_DPATH = (VIZ_DPATH / f'heatmaps_{viz_n_window}').mkdir(exist_ok=True)
-
-        aggregated = _agg_fn(heatmaps,
-                             thresh=thresh,
-                             morph_kernel=morph_kernel,
-                             norm_ord=norm_ord)
-
-        if VIZ_DPATH is not None:
-            VIZ_DPATH = VIZ_DPATH.parent
-            viz_n_window += 1
-
-        polygons = list(
-            mask_to_polygons(aggregated,
-                             thresh,
-                             thresh_hysteresis=thresh_hysteresis,
-                             bounds=bounds))
-        return polygons
 
     if isinstance(inner_window_size, float) and math.isnan(inner_window_size):
         inner_window_size = None
@@ -970,21 +995,52 @@ def heatmaps_to_polys(heatmaps, bounds, agg_fn, thresh, morph_kernel,
 
     # initialize heatmaps and initial polygons on the first set of heatmaps
     h_init = heatmaps[:final_size]
-    polys_final = _process_1_step(h_init)
 
-    if n_steps > 1:
-        polys_final = convert_to_shapely(polys_final)
+    prog = ub.ProgIter(total=n_steps, desc='process-step')
+    with prog:
+        polys_final = _process_1_step(h_init, _agg_fn, thresh, morph_kernel,
+                                      norm_ord, thresh_hysteresis, bounds)
+        prog.step()
 
-        for i in range(n_steps - 1):
-            h1 = heatmaps[(i + 1) * final_size:(i + 2) * final_size]
-            p1 = _process_1_step(h1)
-            p1 = convert_to_shapely(p1)
-            polys_final = _merge_polys(polys_final, p1,
-                                       poly_merge_method=poly_merge_method)
+        if n_steps > 1:
+            polys_final = convert_to_shapely(polys_final)
 
-        polys_final = convert_to_kwimage_poly(polys_final)
+            for i in range(n_steps - 1):
+                prog.step()
+                h1 = heatmaps[(i + 1) * final_size:(i + 2) * final_size]
+                p1 = _process_1_step(h1, _agg_fn, thresh, morph_kernel, norm_ord,
+                                     thresh_hysteresis, bounds)
+                p1 = convert_to_shapely(p1)
+                polys_final = _merge_polys(polys_final, p1,
+                                           poly_merge_method=poly_merge_method)
 
+            polys_final = convert_to_kwimage_poly(polys_final)
     return polys_final
+
+
+def _process_1_step(heatmaps, _agg_fn, thresh, morph_kernel, norm_ord,
+                    thresh_hysteresis, bounds):
+    # FIXME: no dynamic globals.
+    global viz_n_window
+    global VIZ_DPATH
+    if VIZ_DPATH is not None:
+        VIZ_DPATH = (VIZ_DPATH / f'heatmaps_{viz_n_window}').mkdir(exist_ok=True)
+
+    aggregated = _agg_fn(heatmaps,
+                         thresh=thresh,
+                         morph_kernel=morph_kernel,
+                         norm_ord=norm_ord)
+
+    if VIZ_DPATH is not None:
+        VIZ_DPATH = VIZ_DPATH.parent
+        viz_n_window += 1
+
+    polygons = list(
+        mask_to_polygons(aggregated,
+                         thresh,
+                         thresh_hysteresis=thresh_hysteresis,
+                         bounds=bounds))
+    return polygons
 
 
 def _gids_polys(
@@ -1035,6 +1091,7 @@ def _gids_polys(
         Iterable[int | kwimage.Polygon | kwimage.MultiPolygon]
 
     """
+    from watch.utils import util_time
     import numpy as np
     if bounds:  # for SC
         raw_boundary_tracks = pop_tracks(sub_dset, [SITE_SUMMARY_CNAME])
@@ -1052,18 +1109,31 @@ def _gids_polys(
         vidid = list(sub_dset.index.vidid_to_gids.keys())[0]
         gids = sub_dset.images(vidid=vidid).gids
 
-    from watch.utils import util_time
-    import kwimage
     images = sub_dset.images(gids)
     image_dates = [util_time.coerce_datetime(d)
                    for d in images.lookup('date_captured')]
     # image_years = [d.year for d in image_dates]
 
     key = '|'.join(key)
-    imgs = sub_dset.images(gids).coco_images
-    _heatmaps = np.stack([i.imdelay(channels=key, space='video', resolution=resolution).finalize() for i in imgs], axis=0)
+    coco_images = sub_dset.images(gids).coco_images
+
+    load_workers = 0  # TODO: configure
+    load_jobs = ub.JobPool(mode='process', max_workers=load_workers)
+
+    with load_jobs:
+        for coco_img in ub.ProgIter(coco_images, desc='submit heatmap jobs'):
+            delayed = coco_img.imdelay(channels=key, space='video', resolution=resolution)
+            load_jobs.submit(delayed.finalize)
+
+        _heatmaps = []
+        for job in ub.ProgIter(load_jobs.jobs, desc='collect heatmap jobs'):
+            _heatmap = job.result()
+            _heatmaps.append(_heatmap)
+    _heatmaps = np.stack(_heatmaps, axis=0)
+    print(f'(presum) _heatmaps.shape={_heatmaps.shape}')
     _heatmaps = _heatmaps.sum(axis=-1)  # sum over channels
-    missing_ix = np.invert([key in i.channels for i in imgs])
+    print(f'_heatmaps.shape={_heatmaps.shape}')
+    missing_ix = np.invert([key in i.channels for i in coco_images])
     # TODO this was actually broken in orig, so turning it off here for now
     interpolate = 0
     if interpolate:
@@ -1076,57 +1146,20 @@ def _gids_polys(
     else:
         _heatmaps[missing_ix] = 0
 
-    def _process(track):
-
-        # TODO when bounds are time-varying, this lets individual frames
-        # go outside them; only enforces the union. Problem?
-        # currently bounds come from site summaries, which are not
-        # time-varying.
-        if track is None:
-            track_bounds = None
-            _heatmaps_in_track = _heatmaps
-            heatmap_dates = image_dates
-        else:
-            track_bounds = track['poly'].unary_union
-            track_gids = track['gid']
-            flags = np.in1d(gids, track_gids)
-            _heatmaps_in_track = np.compress(flags, _heatmaps, axis=0)
-            heatmap_dates = list(ub.compress(image_dates, flags))
-
-        # this is another hot spot, heatmaps_to_polys -> mask_to_polygons ->
-        # rasterize. Figure out how to vectorize over bounds.
-        track_polys = heatmaps_to_polys(_heatmaps_in_track, track_bounds,
-                                        agg_fn, thresh, morph_kernel,
-                                        thresh_hysteresis, norm_ord,
-                                        moving_window_size,
-                                        inner_window_size=inner_window_size,
-                                        inner_agg_fn=inner_agg_fn,
-                                        heatmap_dates=heatmap_dates,
-                                        poly_merge_method=poly_merge_method,)
-        if track is None:
-            # BUG: The polygons retunred from heatmap-to-polys might not be
-            # corresponding to the gids in this case.
-            yield from zip(itertools.repeat(gids), track_polys)
-            # for poly in polys:  # convert to shapely to check this
-            # if poly.is_valid and not poly.is_empty:
-            # yield (gids, poly)
-        else:
-            from shapely.ops import unary_union
-            poly = unary_union([p.to_shapely() for p in track_polys])
-
-            if poly.is_valid and not poly.is_empty:
-
-                yield (track['gid'], kwimage.MultiPolygon.from_shapely(poly))
-
     # no benefit so far
-    exc = ub.Executor('serial', max_workers=8)
-    jobs = []
-    for _, track in boundary_tracks:
-        jobs.append(exc.submit(_process, track))
+    proc_jobs = ub.JobPool('process', max_workers=0)
+    with proc_jobs:
 
-    result_gen = itertools.chain.from_iterable(j.result() for j in jobs)
-    result_gen = list(result_gen)
-    return result_gen
+        for _, track in ub.ProgIter(boundary_tracks, desc='submit proc jobs'):
+            proc_jobs.submit(_process, track, _heatmaps, image_dates, agg_fn, gids,
+                             thresh, morph_kernel, thresh_hysteresis, norm_ord,
+                             moving_window_size, inner_window_size, inner_agg_fn,
+                             poly_merge_method)
+
+        result_gen = itertools.chain.from_iterable(
+            j.result() for j in ub.ProgIter(proc_jobs.jobs, desc='collect proc jobs'))
+        result_gen = list(result_gen)
+        return result_gen
 
 #
 # --- wrappers ---
@@ -1335,7 +1368,6 @@ class TimeAggregatedBAS(NewTrackFunction):
         _resolve_arg_values(self)
 
     def create_tracks(self, sub_dset):
-
         aggkw = ub.compatible(self.__dict__, time_aggregated_polys)
         tracks = time_aggregated_polys(sub_dset, **aggkw)
         return tracks

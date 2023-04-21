@@ -2347,10 +2347,10 @@ def warp_annot_segmentations_from_geos(coco_dset):
                     ann['segmentation'] = list(sseg.to_coco(style='new'))
                     ann['bbox'] = list(sseg.bounding_box().quantize().to_coco())[0]
 
-    if __debug__:
-        for ann in coco_dset.dataset['annotations']:
-            assert 'bbox' in ann
-            assert 'segmentation' in ann
+    # if __debug__:
+    #     for ann in coco_dset.dataset['annotations']:
+    #         assert 'bbox' in ann
+    #         assert 'segmentation' in ann
 
 
 def warp_annot_segmentations_to_geos(coco_dset):

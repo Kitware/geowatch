@@ -71,6 +71,21 @@ class ResidualSequential(nn.Sequential):
         return x + super().forward(x)
 
 
+class ResidualAttentionSequential(ResidualSequential):
+    """
+    Special case of ResidualSequential to support masking
+    """
+
+    def __init__(self, norm, attention):
+        super().__init__(norm, attention)
+
+    def forward(self, x, key_padding_mask=None):
+        h = x
+        h = self[0](h)
+        h = self[1](h, key_padding_mask=key_padding_mask)
+        return x + h
+
+
 class MultiheadSelfAttention(torch.nn.MultiheadAttention):
     """
     Inherits from :class:`torch.nn.MultiheadAttention`
@@ -91,7 +106,8 @@ class MultiheadSelfAttention(torch.nn.MultiheadAttention):
     Example:
         >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
         >>> self = MultiheadSelfAttention(4, 1).eval()
-        >>> x  = (torch.rand(7, 3, 4) * 10).round()
+        >>> S, B, F = (7, 3, 4)
+        >>> x  = (torch.rand(S, B, F) * 10).round()
         >>> # Results should be independent of the batch dim
         >>> y  = self.forward(x)
         >>> y0 = self.forward(x[:, 0:1, :])
@@ -100,22 +116,29 @@ class MultiheadSelfAttention(torch.nn.MultiheadAttention):
         >>> assert torch.allclose(y[:, 0:1, :], y0)
         >>> assert torch.allclose(y[:, 1:2, :], y1)
         >>> assert torch.allclose(y[:, 2:3, :], y2)
+
+        >>> key_padding_mask = torch.rand(B, S) > 0.5
+        >>> masked_result = self.forward(x, key_padding_mask=key_padding_mask)
     """
 
     def __init__(self, embed_dim, num_heads, *args, **kwargs):
         super().__init__(embed_dim, num_heads, *args, **kwargs)
 
-    def forward(self, x):
+    def forward(self, x, key_padding_mask=None):
         """
         Args:
-            x : of shape (seq, batch, feature)
+            x (Tensor) : of shape (seq, batch, feature)
+
+            key_padding_mask (Tensor) : of shape (batch, seq).
+                A value of True means we will **ignore** the token.
 
         Returns:
             attn_out : of shape (seq, batch, feature)
         """
         # attention returns a tuple of output and weights, so just take the
         # output
-        outs = super().forward(x, x, x)
+        outs = super().forward(
+            query=x, key=x, value=x, key_padding_mask=key_padding_mask)
         attn_out, attn_weights = outs
         return attn_out
 
@@ -154,7 +177,7 @@ try:
                 no_projection=False)
 
         @profile
-        def forward(self, x):
+        def forward(self, x, key_padding_mask=None):
             # import xdev
             # xdev.embed()
             # make compatible with nn.MultiheadAttention
@@ -162,6 +185,8 @@ try:
             # e = self.dim_heads
             # h = self.num_heads
             # Much faster than einops
+            if key_padding_mask is not None:
+                raise NotImplementedError
             # q = x.contiguous().view(s, b, h, e).permute(1, 2, 0, 3)
             q = einops.rearrange(x, 's b (h e) -> b h s e', e=self.dim_heads)
             # a = FastAttention.forward(self, q, q, q)
@@ -211,7 +236,9 @@ try:
                 bucket_size=64, n_hashes=8, causal=False)
 
         @profile
-        def forward(self, x):
+        def forward(self, x, key_padding_mask=None):
+            if key_padding_mask is not None:
+                raise NotImplementedError
             s, b, he = x.shape
             bsd = x.permute(1, 0, 2)
             # a = LSHSelfAttention.forward(self, bsd)
@@ -231,7 +258,7 @@ def new_attention_layer(embedding_size, n_heads, attention_impl='exact'):
         >>> embedding_size = 4
         >>> n_heads = 2
         >>> num_tokens = 3
-        >>> input_shape = (batch_size, num_tokens, embedding_size)
+        >>> input_shape = (num_tokens, batch_size, embedding_size)
         >>> inputs = torch.rand(*input_shape)
         >>> layer1 = new_attention_layer(embedding_size, n_heads, 'exact')
         >>> outputs1 = layer1(inputs)
@@ -240,6 +267,20 @@ def new_attention_layer(embedding_size, n_heads, attention_impl='exact'):
         >>> layer2 = new_attention_layer(embedding_size, n_heads, 'performer')
         >>> outputs2 = layer2(inputs)
         >>> assert outputs2.shape == input_shape
+
+    Example:
+        >>> # Test with a mask
+        >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
+        >>> import torch
+        >>> batch_size = 1
+        >>> embedding_size = 4
+        >>> n_heads = 2
+        >>> num_tokens = 3
+        >>> input_shape = (num_tokens, batch_size, embedding_size)
+        >>> inputs = torch.rand(*input_shape)
+        >>> key_padding_mask = torch.rand(batch_size, num_tokens) > 0.5
+        >>> layer1 = new_attention_layer(embedding_size, n_heads, 'exact')
+        >>> outputs1 = layer1(inputs, key_padding_mask=key_padding_mask)
     """
     if attention_impl == 'exact':
         attention = MultiheadSelfAttention(embedding_size, n_heads)
@@ -256,7 +297,7 @@ def new_attention_layer(embedding_size, n_heads, attention_impl='exact'):
     # num_groups = num_groups_hueristic(embedding_size)
     # norm = nn.GroupNorm(num_groups=num_groups, num_channels=embedding_size)
     norm = nn.LayerNorm(embedding_size)
-    layer = ResidualSequential(
+    layer = ResidualAttentionSequential(
         norm,
         attention,
     )
@@ -393,7 +434,11 @@ class ChannelwiseTransformerEncoderLayer(nn.Module):
 
         self.axsep = ' '
 
+        self.default_mask_shape = [s for s in self.default_shape
+                                   if s != self.feature_axis]
+
         self.default_shape_str = self.axsep.join(default_shape)
+        self.default_mask_shape_str = self.axsep.join(self.default_mask_shape)
 
         self.attention_modules = nn.ModuleDict({
             self.axsep.join(axis): new_attention_layer(
@@ -403,19 +448,39 @@ class ChannelwiseTransformerEncoderLayer(nn.Module):
         self.mlp = new_mlp_layer(embedding_size, dropout)
 
     @profile
-    def forward(self, inputs, flat_coordinates=None):
+    def forward(self, inputs, flat_coordinates=None, key_padding_mask=None):
         r"""
         Args:
-            x (Tensor): of shape B, T, M, H, W, F
+            x (Tensor):
+                of shape B, T, M, H, W, F if flat_coordinates is unspecified
+                otherwise it should be of shape N, F where N is the total
+                number of tokens
 
-        Ignore:
+            flat_coordinates (Dict[str, Tensor]):
+                the time, mode, height, and width coordinate of each token
+                if specified batches are unsupported
+
+            key_padding_mask (Tensor):
+                of shape B, T, M, H, W if flat_coordinates is unspecified
+                otherwise should be of shape N. A True value means ignore the
+                token.
+
+        CommandLine:
+            xdoctest -m watch.tasks.fusion.architectures.transformer ChannelwiseTransformerEncoderLayer.forward
+
+        Example:
             >>> # Test that coordinate aware implementation exactly reproduces aligned variant
             >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
+            >>> import numpy as np
             >>> F = embedding_size = 4
             >>> B, T, M, H, W = 1, 3, 5, 7, 11
             >>> aligned_inputs = aligned_x = (torch.rand(B, T, M, H, W, F) * 100).round() / 10
+            >>> key_padding_mask = torch.rand(B, T, M, H, W) > 0.9
             >>> flat_inputs = flat_x = aligned_inputs.view(-1, embedding_size)
-            >>> inputs = flat_inputs
+            >>> flat_kpm = key_padding_mask.view(-1)
+            >>> #inputs = flat_inputs
+            >>> flat_coordinates = None
+            >>> inputs = aligned_inputs
             >>> # Test that coordinate-aware flat attention works
             >>> t_coords, m_coords, h_coords, w_coords = np.meshgrid(np.arange(T), np.arange(M), np.arange(H), np.arange(W), indexing='ij')
             >>> flat_coordinates = {
@@ -440,17 +505,29 @@ class ChannelwiseTransformerEncoderLayer(nn.Module):
             >>>     flat_y = self.forward(flat_inputs, flat_coordinates)
             >>>     print('----')
             >>>     aligned_y = self.forward(aligned_inputs)
+            >>>     print('----')
+            >>>     aligned_y_mask = self.forward(aligned_inputs, key_padding_mask=key_padding_mask)
+            >>>     print('----')
+            >>>     flat_y_mask = self.forward(flat_inputs, flat_coordinates, key_padding_mask=flat_kpm)
             >>> print('----====-')
             >>> recon_y1 = aligned_y.view(-1, embedding_size)
+            >>> recon_y1_mask = aligned_y_mask.view(-1, embedding_size)
             >>> print('flat_y=\n{!r}'.format(flat_y))
             >>> print('recon_y1=\n{!r}'.format(recon_y1))
             >>> abs_diff = (flat_y - recon_y1).abs().max()
             >>> print('abs_diff = {!r}'.format(abs_diff))
             >>> assert abs_diff < 1e-5
+            >>> #
+            >>> flat_y_mask.nan_to_num_()
+            >>> recon_y1_mask.nan_to_num_()
+            >>> abs_diff_mask = (flat_y_mask - recon_y1_mask).abs().max()
+            >>> print('abs_diff_mask = {!r}'.format(abs_diff_mask))
+            >>> assert abs_diff_mask < 1e-5
             >>> #flags = torch.isclose(flat_y, recon_y1)
             >>> #assert flags.all()
         """
         shape_dict = dict(zip(self.default_shape, inputs.shape))
+        mask_shape_dict = ub.udict(shape_dict) - {self.feature_axis}
 
         if flat_coordinates:
             flat_x = inputs
@@ -458,6 +535,8 @@ class ChannelwiseTransformerEncoderLayer(nn.Module):
             x = inputs
 
         previous_axial_shape = self.default_shape_str
+        # previous_mask_axial_shape = self.axsep.join(self.default_shape[:-1])
+
         for axis in self.axes:
             if not isinstance(axis, (list, tuple)):
                 axis = [axis]
@@ -476,7 +555,16 @@ class ChannelwiseTransformerEncoderLayer(nn.Module):
                 axial_shape = f"({sequence_axes}) ({batch_axes}) {self.feature_axis}"
                 rearrange_op = f"{previous_axial_shape} -> {axial_shape}"
                 x = einops.rearrange(x, rearrange_op, **shape_dict)
-                y = attention_layer(x)
+
+                if key_padding_mask is not None:
+                    mask_axial_shape = f"({batch_axes}) ({sequence_axes})"
+                    mask_rearrange_op = f"{self.default_mask_shape_str} -> {mask_axial_shape}"
+                    kpm = einops.rearrange(key_padding_mask, mask_rearrange_op, **mask_shape_dict)
+                    # previous_mask_axial_shape = mask_axial_shape
+                    y = attention_layer(x, key_padding_mask=kpm)
+                else:
+                    kpm = None
+                    y = attention_layer(x)
                 x = y
                 previous_axial_shape = axial_shape
             else:
@@ -485,6 +573,10 @@ class ChannelwiseTransformerEncoderLayer(nn.Module):
                 # New generalized coordinate method
                 batch_coords = ub.dict_diff(flat_coordinates, axis)
                 # axial_coords = ub.dict_subset(flat_coordinates, axis)
+
+                # For each dimension, build groups of indices where only
+                # one coordinate is varied in that dimension (e.g.
+                # the same mode,x/y position over different times.
                 groupids = torch.stack(list(batch_coords.values())).T.contiguous()
                 groupids_numpy = groupids.numpy()
                 arr = groupids_numpy
@@ -493,12 +585,22 @@ class ChannelwiseTransformerEncoderLayer(nn.Module):
                 groupids_bytes = [r.tobytes() for r in arr_view]
                 group_to_idxs = ub.group_items(range(len(groupids_bytes)), groupids_bytes)
 
-                # TODO: just build a mask and do masked attention
+                if key_padding_mask is None:
+                    flat_kpm = None
+                else:
+                    flat_kpm = key_padding_mask.view(-1)
+
+                # TODO: can we build a mask and do masked attention?
                 flat_y = torch.empty_like(flat_x)
                 for groupid, idxs in group_to_idxs.items():
                     x_part = flat_x[idxs]
                     x_attn = x_part[:, None, :]
-                    y_attn = attention_layer(x_attn)
+                    if flat_kpm is None:
+                        y_attn = attention_layer(x_attn)
+                    else:
+                        kpm_part = flat_kpm[idxs]
+                        kpm = kpm_part[None, :]
+                        y_attn = attention_layer(x_attn, key_padding_mask=kpm)
                     y_part = y_attn[:, 0, :]
                     flat_y[idxs] = y_part
                 flat_x = flat_y
@@ -825,11 +927,14 @@ class FusionEncoder(nn.Module):
         self.first = first
         self.layers = nn.Sequential(*_layers)
 
-    def forward(self, x, flat_coordinates=None):
+    def forward(self, x, flat_coordinates=None, key_padding_mask=None, mask=None):
+        if mask is not None:
+            key_padding_mask = mask
         x = self.first(x)
         for layer in self.layers:
-            # Hack around sequential
-            x = layer(x, flat_coordinates=flat_coordinates)
+            # Can't use sequentail because we need extra args
+            x = layer(x, flat_coordinates=flat_coordinates,
+                      key_padding_mask=key_padding_mask)
         return x
 
 
@@ -917,12 +1022,8 @@ encoder_configs = _build_global_configs()
 # ========================================
 
 
-def exists(val):
-    return val is not None
-
-
 def default(val, d):
-    return val if exists(val) else d
+    return val if val is not None else d
 
 
 def cache_fn(f):
@@ -947,12 +1048,12 @@ class PreNorm(nn.Module):
         super().__init__()
         self.fn = fn
         self.norm = nn.LayerNorm(dim)
-        self.norm_context = nn.LayerNorm(context_dim) if exists(context_dim) else None
+        self.norm_context = nn.LayerNorm(context_dim) if context_dim is not None else None
 
     def forward(self, x, **kwargs):
         x = self.norm(x)
 
-        if exists(self.norm_context):
+        if self.norm_context is not None:
             context = kwargs['context']
             normed_context = self.norm_context(context)
             kwargs.update(context=normed_context)
@@ -1003,7 +1104,7 @@ class Attention(nn.Module):
 
         sim = einsum('b i d, b j d -> b i j', q, k) * self.scale
 
-        if exists(mask):
+        if mask is not None:
             mask = rearrange(mask, 'b ... -> b (...)')
             max_neg_value = -torch.finfo(sim.dtype).max
             mask = repeat(mask, 'b j -> (b h) () j', h=h)
@@ -1092,7 +1193,7 @@ class TransformerEncoderDecoder(nn.Module, BackboneEncoderDecoder):
                     ]
                 self.decoder_layers.append(nn.ModuleList(layers))
 
-        self.to_logits = nn.Linear(dim, logits_dim) if exists(logits_dim) else nn.Identity()
+        self.to_logits = nn.Linear(dim, logits_dim) if logits_dim is not None else nn.Identity()
 
     def forward(
         self,
@@ -1107,7 +1208,7 @@ class TransformerEncoderDecoder(nn.Module, BackboneEncoderDecoder):
             x = self_attn(x, mask=mask) + x
             x = self_ff(x) + x
 
-        if (not exists(queries)) or (not self.has_decoder):
+        if queries is None or not self.has_decoder:
             return self.to_logits(x)
 
         # make sure queries contains batch dimension

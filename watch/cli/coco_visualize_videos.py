@@ -104,6 +104,8 @@ class CocoVisualizeConfig(scfg.Config):
         'num_frames': scfg.Value(None, type=str, help='show the first N frames from each video, if None, all are shown'),
         'start_frame': scfg.Value(0, type=str, help='If specified each video will start on this frame'),
 
+        'ann_score_thresh': scfg.Value(0, help='If annotations have a score, remove any under this threshold'),
+
         'skip_missing': scfg.Value(True, isflag=True, help=ub.paragraph(
             '''
             If true, skip any image that does not have the requested channels. Otherwise a nan image will be shown
@@ -116,6 +118,7 @@ class CocoVisualizeConfig(scfg.Config):
 
         'only_boxes': scfg.Value(False, isflag=True, help='If false, draws full annotation - which can be time consuming if there are a lot'),
         'draw_labels': scfg.Value(True, help='if True draw text labels on polygons'),
+        'alpha': scfg.Value(None, help='transparency / opacity of annotations'),
 
         # TODO: better support for this
         # TODO: use the kwcoco_video_data, has good logic for this
@@ -453,7 +456,8 @@ def main(cmdline=True, **kwargs):
             'resolution', 'draw_header', 'draw_chancode', 'skip_aggressive',
             'stack', 'min_dim', 'min_dim', 'verbose', 'only_boxes',
             'draw_labels', 'fixed_normalization_scheme', 'any3', 'cmap',
-            'role_order',
+            'role_order', 'smart', 'ann_score_thresh',
+            'alpha',
         }
 
         if config['zoom_to_tracks']:
@@ -679,7 +683,7 @@ def select_fixed_normalization(fixed_normalization_scheme, sensor_coarse):
 
 
 def _resolve_channel_groups(coco_img, channels, verbose, request_grouped_bands,
-                            any3):
+                            any3, smart):
     """
     Resolve which channel groups should be requested.
     """
@@ -882,6 +886,9 @@ def _write_ann_visualizations2(coco_dset,
                                draw_chancode=True,
                                resolution=None,
                                role_order=None,
+                               smart=None,
+                               ann_score_thresh=0,
+                               alpha=None,
                                ):
     """
     Dumps an intensity normalized "space-aligned" kwcoco image visualization
@@ -960,7 +967,7 @@ def _write_ann_visualizations2(coco_dset,
         rich.print(f'channels={channels}')
 
     chan_groups = _resolve_channel_groups(coco_img, channels, verbose,
-                                          request_grouped_bands, any3)
+                                          request_grouped_bands, any3, smart)
 
     img_view_dpath = sub_dpath / '_imgs'
     ann_view_dpath = sub_dpath / '_anns'
@@ -996,8 +1003,13 @@ def _write_ann_visualizations2(coco_dset,
             colors.append(color)
 
         role_dets = kwimage.Detections.from_coco_annots(role_anns, dset=coco_dset)
-        role_dets = role_dets.warp(warp_viz_from_img)
         role_dets.data['colors'] = np.array(colors)
+
+        if ann_score_thresh:
+            flags = [float(ann.get('score', 1)) > ann_score_thresh for ann in role_anns]
+            role_dets = role_dets.compress(flags)
+
+        role_dets = role_dets.warp(warp_viz_from_img)
         role_to_dets[role] = role_dets
 
     # TODO: asset space
@@ -1091,8 +1103,19 @@ def _write_ann_visualizations2(coco_dset,
         rich.print(f'stack_idx_to_roles={stack_idx_to_roles}')
 
     stack_idx = 0
+
+    handled_specs = set()
     for chan_row in chan_groups:
         request_roles = stack_idx_to_roles.get(stack_idx, [])
+        if smart:
+            # not sure how to encode this with sensible cli args.  could use help
+            # with this API.  The idea is we only need to visualize one set of
+            # visualizable channels, we only need rgb or pan, not both
+            if 'red|green|blue' in handled_specs and chan_row['chan'].spec == 'pan':
+                # already visualized rgb, dont need pan
+                if verbose > 2:
+                    rich.print(f'... smart skip {chan_row=}')
+                continue
         if verbose > 2:
             rich.print(f'... render {chan_row=}')
         try:
@@ -1102,7 +1125,7 @@ def _write_ann_visualizations2(coco_dset,
                 skip_aggressive, chan_to_normalizer, cmap, header_lines,
                 valid_image_poly, draw_imgs, draw_anns, only_boxes, draw_labels,
                 role_to_dets, valid_video_poly, stack, draw_header, stack_idx,
-                request_roles)
+                request_roles, ann_score_thresh, alpha)
             if stack:
                 img_stack.append(stack_img_item)
                 ann_stack.append(stack_ann_item)
@@ -1111,6 +1134,7 @@ def _write_ann_visualizations2(coco_dset,
                 rich.print(f'... skipped render {chan_row=}')
         else:
             stack_idx += 1
+            handled_specs.add(chan_row['chan'].spec)
             if verbose > 2:
                 rich.print(f'... success render {chan_row=}')
 
@@ -1192,7 +1216,8 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
                     skip_aggressive, chan_to_normalizer, cmap, header_lines,
                     valid_image_poly, draw_imgs, draw_anns, only_boxes,
                     draw_labels, role_to_dets, valid_video_poly, stack,
-                    draw_header, stack_idx, request_roles):
+                    draw_header, stack_idx, request_roles, ann_score_thresh,
+                    alpha):
     from watch.utils import util_kwimage
     import kwimage
     import kwarray
@@ -1360,11 +1385,19 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
                 print('doing 1 channel cmap')
             import matplotlib as mpl
             import matplotlib.cm  # NOQA
-            cmap_ = mpl.cm.get_cmap(cmap)
-            canvas = np.nan_to_num(canvas)
-            if len(canvas.shape) == 3:
-                canvas = canvas[..., 0]
-                canvas = cmap_(canvas)[..., 0:3].astype(np.float32)
+            if chan_group == 'pan':
+                # Use grayscale for certain 1 band images
+                canvas = np.nan_to_num(canvas)
+                canvas = kwimage.atleast_3channels(canvas)
+                if len(canvas) == 3:
+                    canvas = canvas[..., 0]
+                # canvas = kwimage.ensure_float01(canvas)
+            else:
+                cmap_ = mpl.cm.get_cmap(cmap)
+                canvas = np.nan_to_num(canvas)
+                if len(canvas.shape) == 3:
+                    canvas = canvas[..., 0]
+                    canvas = cmap_(canvas)[..., 0:3].astype(np.float32)
 
     if verbose > 100:
         print('after cmap part')
@@ -1384,13 +1417,13 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
         # Draw the valid region specified at the image level
         if any([p.data['exterior'].data.size for p in valid_image_poly.data]):
             canvas = valid_image_poly.draw_on(canvas, color='kitware_green',
-                                              fill=False, border=True)
+                                              fill=False, border=True, alpha=alpha)
 
     if valid_video_poly is not None:
         # Draw the valid region specified at the video level
         if any([p.data['exterior'].data.size for p in valid_video_poly.data]):
             canvas = valid_video_poly.draw_on(canvas, color='lawngreen',
-                                              fill=False, border=True)
+                                              fill=False, border=True, alpha=alpha)
 
     stack_imgs = draw_imgs and stack
     stack_anns = draw_anns and stack
@@ -1462,12 +1495,13 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
                 draw_on_kwargs['labels'] = draw_labels
                 if verbose > 100:
                     print('About to draw dets on a canvas')
+
                 ann_canvas = role_dets.draw_on(
                     ann_canvas,
                     color=colors,
                     ssegkw={'fill': False, 'border': True, 'edgecolor': colors},
                     # color='classes',
-                    **draw_on_kwargs)
+                    **draw_on_kwargs, alpha=alpha)
                 if verbose > 100:
                     print('That seemed to work')
 

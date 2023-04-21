@@ -13,7 +13,7 @@ from watch.mlops import smart_pipeline
 from watch.mlops import smart_result_parser
 
 
-def build_tables(root_dpath, pipeline, io_workers):
+def build_tables(root_dpath, pipeline, io_workers, eval_nodes):
     import pandas as pd
     from watch.utils import util_progress
     dag = smart_pipeline.make_smart_pipeline(pipeline)
@@ -39,6 +39,9 @@ def build_tables(root_dpath, pipeline, io_workers):
          'result_loader': smart_result_parser.load_sc_poly_eval},
         {'name': 'bas_poly_eval', 'out_key': 'eval_fpath',
          'result_loader': smart_result_parser.load_bas_poly_eval},
+
+        {'name': 'sv_poly_eval', 'out_key': 'eval_fpath',
+         'result_loader': smart_result_parser.load_iarpa_poly_eval},
     ]
 
     from concurrent.futures import as_completed
@@ -46,7 +49,14 @@ def build_tables(root_dpath, pipeline, io_workers):
     # pman = util_progress.ProgressManager(backend='progiter')
     with pman:
         eval_type_to_results = {}
-        eval_node_prog = pman.progiter(node_eval_infos, desc='Loading node results')
+
+        if eval_nodes is None:
+            node_eval_infos_chosen = node_eval_infos
+        else:
+            lut = ub.udict({info['name']: info for info in node_eval_infos})
+            node_eval_infos_chosen = list(lut.take(eval_nodes))
+
+        eval_node_prog = pman.progiter(node_eval_infos_chosen, desc='Loading node results')
 
         for node_eval_info in eval_node_prog:
             node_name = node_eval_info['name']
@@ -119,6 +129,8 @@ def _lookup_result_loader(node_name):
         result_loader_fn = smart_result_parser.load_pxl_eval
     elif node_name == 'bas_poly_eval':
         result_loader_fn = smart_result_parser.load_bas_poly_eval
+    elif node_name == 'sv_poly_eval':
+        result_loader_fn = smart_result_parser.load_bas_poly_eval
     elif node_name == 'sc_poly_eval':
         result_loader_fn = smart_result_parser.load_sc_poly_eval
     else:
@@ -138,7 +150,7 @@ def load_result_worker(fpath, node_name, out_node_key):
     from watch.utils import util_json
     import safer
     fpath = ub.Path(fpath)
-    resolved_json_fpath = fpath.parent / 'resolved_result_row_v5.json'
+    resolved_json_fpath = fpath.parent / 'resolved_result_row_v6.json'
     if resolved_json_fpath.exists():
         # Load the cached row data
         result = json.loads(resolved_json_fpath.read_text())
@@ -312,7 +324,7 @@ def load_result_resolved(node_dpath):
         flat_resolved = util_dotdict.DotDict.from_nested(nest_resolved)
         flat_resolved = flat_resolved.insert_prefix(node_type, index=1)
 
-    elif node_type in {'bas_poly_eval', 'sc_poly_eval'}:
+    elif node_type in {'bas_poly_eval', 'sc_poly_eval', 'sv_poly_eval'}:
         fpath = node_dpath / 'poly_eval.json'
         iarpa_result = smart_result_parser.load_iarpa_evaluation(fpath)
         proc_item = smart_result_parser.find_metrics_framework_item(
@@ -339,8 +351,28 @@ def load_result_resolved(node_dpath):
 
         flat_resolved = util_dotdict.DotDict.from_nested(nest_resolved)
         flat_resolved = flat_resolved.insert_prefix(node_type, 1)
+
+    elif node_type in {'valicrop'}:
+
+        # TODO: parse resolved params
+        # nest_resolved = {}
+        # flat_resolved = util_dotdict.DotDict.from_nested(nest_resolved)
+        # flat_resolved = flat_resolved.insert_prefix(node_type, index=1)
+        node_process_name = 'coco_align'
+        fpath = node_dpath / 'valicrop.kwcoco.zip'
+        flat_resolved = _generalized_process_flat_resolved(fpath, node_process_name, node_type)
+
+    elif node_type in {'sv_dino_boxes'}:
+        node_process_name = 'box.predict'
+        fpath = node_dpath / 'pred_boxes.kwcoco.zip'
+        flat_resolved = _generalized_process_flat_resolved(fpath, node_process_name, node_type)
+
+    elif node_type in {'sv_dino_filter'}:
+        node_process_name = 'watch.tasks.dino_detector.building_validator'
+        fpath = node_dpath / 'out_site_manifest.json'
+        flat_resolved = _generalized_process_flat_resolved(fpath, node_process_name, node_type)
     else:
-        raise NotImplementedError
+        raise NotImplementedError(node_type)
 
     predecessor_dpath = node_dpath / '.pred'
     for predecessor_node_type_dpath in predecessor_dpath.glob('*'):
@@ -349,6 +381,27 @@ def load_result_resolved(node_dpath):
             if predecessor_node_dpath.exists():
                 flat_resolved |= load_result_resolved(predecessor_node_dpath)
 
+    return flat_resolved
+
+
+def _generalized_process_flat_resolved(fpath, node_process_name, node_type):
+    """
+    Parses info out of json files where we conform to a pattern that the top
+    level json object has an "info" section as list of ProcessContext info
+    objects. We grab the context of a metric-less node there. We do need to
+    know the filepath of this json file and what the name used in process
+    context was.
+    """
+    info = smart_result_parser.parse_json_header(fpath)
+    proc_item = smart_result_parser.find_info_items(info, {'process'}, {node_process_name})
+    items = list(proc_item)
+    import xdev
+    with xdev.embed_on_exception_context:
+        assert len(items) == 1
+    proc_item = items[0]
+    nest_resolved = new_process_context_parser(proc_item)
+    flat_resolved = util_dotdict.DotDict.from_nested(nest_resolved)
+    flat_resolved = flat_resolved.insert_prefix(node_type, index=1)
     return flat_resolved
 
 

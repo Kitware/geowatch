@@ -18,14 +18,13 @@ process inputs. This DAG can then be configured with customized input paths and
 parameters. The resulting jobs can then be submitted to a cmd_queue.Queue for
 actual execution.
 """
-import ubelt as ub
+import functools
 import networkx as nx
 import os
-import functools
+import ubelt as ub
 from functools import cached_property
-from cmd_queue.util import util_networkx  # NOQA
-from watch.utils import util_dotdict  # NOQA
 from typing import Union, Dict, Set, List, Any, Optional
+from watch.utils import util_dotdict
 
 Collection = Optional[Union[Dict, Set, List]]
 Configurable = Optional[Dict[str, Any]]
@@ -133,8 +132,6 @@ class Pipeline:
             # for p in node.pred:
             for p in node.predecessor_process_nodes():
                 self.proc_graph.add_edge(p.name, node.name)
-
-        # util_networkx.write_network_text(self.proc_graph)
 
         self.io_graph = nx.DiGraph()
         for name, node in node_dict.items():
@@ -277,16 +274,22 @@ class Pipeline:
                 else:
                     data['label'] = data['node'].name
 
+                # SMART specific hack: remove later
                 if 'bas' in data['label']:
                     data['label'] = '[yellow]' + data['label']
                 elif 'sc' in data['label']:
                     data['label'] = '[cyan]' + data['label']
                 elif 'crop' in data['label']:
                     data['label'] = '[white]' + data['label']
+                elif 'building' in data['label']:
+                    data['label'] = '[bright_magenta]' + data['label']
+                elif 'sv' in data['label']:
+                    data['label'] = '[bright_magenta]' + data['label']
         labelize_graph(self.io_graph)
         labelize_graph(self.proc_graph)
 
         import rich
+        from cmd_queue.util import util_networkx
         print('')
         print('Process Graph')
         util_networkx.write_network_text(self.proc_graph, path=rich.print, end='')
@@ -300,6 +303,9 @@ class Pipeline:
                     write_invocations=True, write_configs=True):
         """
         Submits the jobs to an existing command queue or creates a new one.
+
+        Also takes care of adding special bookkeeping jobs that add helper
+        files and symlinks to node output paths.
         """
         import cmd_queue
         import shlex
@@ -517,6 +523,12 @@ class Node(ub.NiceRepr):
         self.succ = []
 
     def _connect_single(self, other, src_map, dst_map):
+        """
+        Handles connection rules between this node and another one.
+
+        TODO: cleanup, these rules are too complex and confusing.
+        There is a reasonable subset here. Restrict to that.
+        """
         # TODO: CLEANUP
         # print(f'Connect {type(self).__name__} {self.name} to '
         #       f'{type(other).__name__} {other.name}')
@@ -602,7 +614,12 @@ class IONode(Node):
         if value is None:
             preds = list(self.pred)
             if preds:
-                assert len(preds) == 1
+                if len(preds) != 1:
+                    raise AssertionError(ub.paragraph(
+                        f'''
+                        Expected len(preds) == 1, but got {len(preds)}
+                        {preds}
+                        '''))
                 value = preds[0].final_value
         return value
 
@@ -740,12 +757,14 @@ def memoize_configured_property(fget):
 # memoize_configured_property = property
 
 
-# @dataclass(kw_only=True)  # makes things harder
 class ProcessNode(Node):
     """
     Represents a process in the pipeline.
 
     ProcessNodes are connected via their input / output nodes.
+
+    You can create an instance of this directly, or inherit from it and set its
+    class variables.
 
     CommandLine:
         xdoctest -m watch.mlops.pipeline_nodes ProcessNode
@@ -781,7 +800,7 @@ class ProcessNode(Node):
         >>>     out_paths={'dst': 'there.txt'},
         >>>     perf_params={'num_workers'},
         >>>     group_dname='predictions',
-        >>>     node_dname='proc1/{proc1_algo_id}/{proc1_id}',
+        >>>     #node_dname='proc1/{proc1_algo_id}/{proc1_id}',
         >>>     executable=f'python -c "{chr(10)}{pycode}{chr(10)}"',
         >>>     root_dpath=dpath,
         >>> )
@@ -802,7 +821,7 @@ class ProcessNode(Node):
     group_dname : Optional[str] = None
 
     # A path relative to a prefix used to construct an output directory.
-    node_dname : Optional[str] = None
+    #node_dname : Optional[str] = None
 
     resources : Collection = None
 
@@ -831,7 +850,7 @@ class ProcessNode(Node):
                  in_paths=None,
                  out_paths=None,
                  group_dname=None,
-                 node_dname=None,
+                 #node_dname=None,
                  root_dpath=None,
                  config=None,
                  _overwrite_node_dpath=None,  # overwrites the configured node dpath
@@ -863,9 +882,9 @@ class ProcessNode(Node):
 
         self._configured_cache = {}
 
-        if self.node_dname is None:
-            self.node_dname = '.'
-        self.node_dname = ub.Path(self.node_dname)
+        # if self.node_dname is None:
+        #     self.node_dname = '.'
+        # self.node_dname = ub.Path(self.node_dname)
 
         if self.group_dname is None:
             self.group_dname = '.'
@@ -875,9 +894,6 @@ class ProcessNode(Node):
         self.root_dpath = ub.Path(self.root_dpath)
 
         self.templates = None
-
-        self.template_outdir = None
-        self.template_opaths = None
 
         self.final_outdir = None
         self.final_opaths = None
@@ -905,6 +921,7 @@ class ProcessNode(Node):
         self._configured_cache.clear()  # Reset memoization caches
         if config is None:
             config = {}
+        config = _fixup_config(config)
         self.enabled = config.pop('enabled', enabled)
         self.config = ub.udict(config)
 
@@ -1039,19 +1056,17 @@ class ProcessNode(Node):
 
         for key, input_node in self.inputs.items():
             final_in_paths[key] = input_node.final_value
-            # preds = list(input_node.pred)
-            # if preds:
-            #     assert len(preds) == 1
-            #     pred = preds[0]
-            #     value = pred.final_value
-            #     # parent._finalize_templates()['out_paths'][pred.name]
-            #     final_in_paths[key] = value
-            # else:
-            #     final_in_paths[key] = self.config.get(key, None)
         return final_in_paths
 
     @memoize_configured_property
     def template_out_paths(self):
+        """
+        Note: template out paths are not impacted by out path config overrides,
+        but the final out paths are.
+
+        SeeAlso:
+            :func:`ProcessNode.final_out_paths`
+        """
         if not isinstance(self.out_paths, dict):
             out_paths = self.config & self.out_paths
         else:
@@ -1065,12 +1080,22 @@ class ProcessNode(Node):
 
     @memoize_configured_property
     def final_out_paths(self):
+        """
+        These are the locations each output will actually be written to.
+
+        This is based on :func:`ProcessNode.template_out_paths` as well as any
+        manual overrides specified in ``self.config``.
+        """
         condensed = self.condensed
         template_out_paths = self.template_out_paths
         final_out_paths = {
             k: ub.Path(v.format(**condensed))
             for k, v in template_out_paths.items()
         }
+        # The use config is allowed to overload outpaths
+        overloads = self.config & final_out_paths.keys()
+        if overloads:
+            final_out_paths.update(overloads)
         return final_out_paths
 
     @memoize_configured_property
@@ -1106,37 +1131,9 @@ class ProcessNode(Node):
         key = self.name + '_id'
         return self.template_group_dpath / ('{' + key + '}')
 
-    # @memoize_configured_property
-    # @profile
-    # def depends_config(self):
-    #     # Any manually specified inputs need to be inserted into this
-    #     # dictionary. Derived inputs can be ignored.
-    #     depends_config = self.final_algo_config.copy()
-    #     return depends_config
-    #     # return self.config & self.algo_params
-
-    @memoize_configured_property
-    def template_dag_dname(self):
-        return self.template_depends_dname / self.node_dname
-
     @memoize_configured_property
     def template_root_dpath(self):
         return self.root_dpath
-
-    @memoize_configured_property
-    @profile
-    def template_depends_dname(self):
-        """
-        Predecessor part of the output path.
-        """
-        pred_nodes = self.predecessor_process_nodes()
-        if not pred_nodes:
-            return ub.Path('.')
-        elif len(pred_nodes) == 1:
-            return pred_nodes[0].template_dag_dname
-        else:
-            return ub.Path('.')
-            # return ub.Path('multi' + str(pred_nodes))
 
     @memoize_configured_method
     @profile
@@ -1144,22 +1141,11 @@ class ProcessNode(Node):
         """
         Predecessor process nodes
         """
-        # if 1:
-        # Faster?
         nodes = [
             pred.parent
             for k, v in self.inputs.items()
             for pred in v.pred
         ]
-        # else:
-        #     nodes = []
-        #     for k, v in self.inputs.items():
-        #         for pred in v.pred:
-        #             # assert isinstance(pred, OutputNode)
-        #             proc = pred.parent
-        #             assert proc.__node_type__ == 'process'
-        #             # assert isinstance(proc, ProcessNode)
-        #             nodes.append(proc)
         return nodes
 
     @memoize_configured_method
@@ -1173,14 +1159,6 @@ class ProcessNode(Node):
             for k, v in self.outputs.items()
             for succ in v.succ
         ]
-        # nodes = []
-        # for k, v in self.outputs.items():
-        #     for succ in v.succ:
-        #         # assert isinstance(pred, OutputNode)
-        #         proc = succ.parent
-        #         assert proc.__node_type__ == 'process'
-        #         # assert isinstance(proc, ProcessNode)
-        #         nodes.append(proc)
         return nodes
 
     @memoize_configured_method
@@ -1221,7 +1199,7 @@ class ProcessNode(Node):
 
     @memoize_configured_property
     @profile
-    def algo_id(self):
+    def algo_id(self) -> str:
         """
         A unique id to represent the output of a deterministic process.
 
@@ -1234,7 +1212,7 @@ class ProcessNode(Node):
 
     @memoize_configured_property
     @profile
-    def process_id(self):
+    def process_id(self) -> str:
         """
         A unique id to represent the output of a deterministic process in a
         pipeline. This id combines the hashes of all ancestors in the DAG with
@@ -1257,25 +1235,38 @@ class ProcessNode(Node):
     @cached_property
     @profile
     def inputs(self):
-        # inputs = {k: InputNode(name=self.name + '.' + k) for k in self.in_paths}
+        """
+        Input nodes representing specific input locations.
+
+        The output nodes of other processes can be connected to these.
+        Also input nodes for one process can connect to input nodes of another
+        process representing that they share the same input data.
+
+        Returns:
+            Dict[str, InputNode]
+        """
         inputs = {k: InputNode(name=k, parent=self) for k in self.in_paths}
-        # for v in inputs.values():
-        #     v.connect(self)
         return inputs
 
     @cached_property
     @profile
     def outputs(self):
-        # outputs = {k: OutputNode(name=self.name + '.' + k) for k in self.out_paths}
+        """
+        Output nodes representing specific output locations. These can be
+        connected to the input nodes of other processes.
+
+        Returns:
+            Dict[str, OutputNode]
+        """
         outputs = {k: OutputNode(name=k, parent=self) for k in self.out_paths}
-        # for v in outputs.values():
-        #     self.connect(v)
         return outputs
 
     @property
     @profile
-    def command(self):
+    def command(self) -> str:
         """
+        Returns the string shell command that will execute the process.
+
         Basic version of command, can be overwritten
         """
         argstr = self._make_argstr(self.final_config)
@@ -1296,7 +1287,11 @@ class ProcessNode(Node):
 
     @memoize_configured_property
     @profile
-    def does_exist(self):
+    def does_exist(self) -> bool:
+        """
+        Check if all of the output paths that would be written by this node
+        already exists.
+        """
         if len(self.final_out_paths) == 0:
             # Can only cache if we know what output paths are
             return False
@@ -1312,6 +1307,10 @@ class ProcessNode(Node):
 
     @profile
     def final_command(self):
+        """
+        Wraps ``self.command`` with optional checks to prevent the command from
+        executing if its outputs already exist.
+        """
         command = self._raw_command()
 
         # Cleanup the command
@@ -1378,33 +1377,6 @@ class ProcessNode(Node):
         print(f'num_started={num_started}')
         return rows
 
-    @memoize_configured_property
-    @profile
-    def node_info(self):
-        # Can probably remove
-        ancestors = self.ancestor_process_nodes()
-        # TODO:
-        # We need to know what input paths have not been represented.  This
-        # involves finding input paths that are not connected to the output of
-        # a node involved in building this id.
-        info = {
-            'node': self.name,
-            'process_id': self.process_id,
-            'algo_id': self.algo_id,
-            'depends': self.depends,
-            'config': self.config,
-            'ancestors': []
-        }
-        for node in ancestors[::-1]:
-            info['ancestors'].append({
-                'node': node.name,
-                'process_id': node.process_id,
-                'algo_id': node.algo_id,
-                'config': node.config,
-                'depends': node.depends,
-            })
-        return info
-
 
 def _load_json(fpath):
     import json
@@ -1414,6 +1386,17 @@ def _load_json(fpath):
 
 def _add_prefix(prefix, dict_):
     return {prefix + k: v for k, v in dict_.items()}
+
+
+def _fixup_config(config):
+    # Do minor chanes to make the config json serializable.
+    fixed_config = {}
+    for k, v in config.items():
+        if isinstance(v, os.PathLike):
+            fixed_config[k] = os.fspath(v)
+        else:
+            fixed_config[k] = v
+    return fixed_config
 
 
 def demo_pipeline():
@@ -1570,6 +1553,8 @@ def demo_pipeline():
     dag.configure({
         'node_A1.src': str(input1_fpath),
         'node_A2.src': str(input2_fpath),
+        'node_A2.dst': dpath / 'DST_OVERRIDE',
+        'node_C1.perf_param3': 'GOFAST',
     }, root_dpath=runs_dpath, cache=False)
 
     dag.print_graphs()

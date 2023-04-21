@@ -4,12 +4,14 @@ This changelog follows the specifications detailed in: [Keep a Changelog](https:
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
 
-## Version 0.5.4 - Target 2023-04-x
+## Version 0.5.5 - Target 2023-04-x
 
 ### Added
 * `coco_time_combine` can now ignore seasons / handle median images with less memory
 * `use_grid_negatives` as dataset option, which can be set to "cleared" to only use negatives from cleared regions.
 * Add `modality_dropout` to kwcoco dataloader
+* Add DINO site validation prediction to mlops pipeline
+* Add split attention backbones to heterogeneous model.
 
 ### Changed
 
@@ -22,6 +24,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Cleanup `util_yaml`.
 * Lots of CLI improvements.
 * Faster loading of multiple kwcoco files in smartwatch stats, ensemble, combine.
+* Improvements to mlops.aggregate
+* Updated prepare-ta2-dataset with new cmd-queue and ACC-3 data
+* Users can now overwrite mlops output locations.
+* DATALOADER CHANGE: We were previously nan-ing all bands if red was nan. We no longer do this because it clobbers pan.
 
 ### Fixed
 

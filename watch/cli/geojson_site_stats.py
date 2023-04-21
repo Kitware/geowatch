@@ -17,12 +17,12 @@ class GeojsonSiteStatConfig(scfg.DataConfig):
     """
     Compute statistics about geojson sites
     """
-    site_models = scfg.Value(None, help='site model coercable')
+    site_models = scfg.Value(None, help='site model coercable', nargs='+')
 
     viz_dpath = None
 
 
-def main(cmdline=0, **kwargs):
+def main(cmdline=1, **kwargs):
     """
     Ignore:
         from watch.cli.geojson_site_stats import *  # NOQA
@@ -35,13 +35,15 @@ def main(cmdline=0, **kwargs):
 
         kwargs['site_models'] = '/data/joncrall/dvc-repos/smart_expt_dvc/smartflow_evals/kit_pre_eval_8_20230131/BR_R001/sc_out_site_models'
     """
+    config = GeojsonSiteStatConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
     import ubelt as ub
     import pandas as pd
     from watch.utils import util_gis
     from watch.utils import util_time
     import matplotlib.dates as mdates
+    import rich
+    rich.print(config)
 
-    config = GeojsonSiteStatConfig.cli(cmdline=cmdline, data=kwargs)
     site_infos = list(util_gis.coerce_geojson_datas(config['site_models']))
 
     viz_dpath = config['viz_dpath']
@@ -297,3 +299,11 @@ def geopandas_shape_stats(df):
     # df['boundary_amplitude'] = df.geometry.apply(shapestats.compactness.boundary_amplitude)
     # df['eig_seitzinger'] = df.geometry.apply(shapestats.compactness.eig_seitzinger)
     return df
+
+
+if __name__ == '__main__':
+    """
+    CommandLine:
+        python ~/code/watch/watch/cli/geojson_site_stats.py
+    """
+    main()

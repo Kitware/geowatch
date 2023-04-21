@@ -6,12 +6,12 @@ from rich import print
 
 # Special keys correspond to predefined pipelines.
 # Choose the pipeline we want to run.
-pipeline = smart_pipeline.make_smart_pipeline('joint_bas_sc')
+pipeline = smart_pipeline.make_smart_pipeline('bas_building_vali')
 
 # Visualize the pipeline on a process and IO level
 pipeline.print_graphs()
 
-if 0:
+if 1:
     # We can also visualize the graph for real
     import kwplot
     kwplot.autompl()

@@ -19,6 +19,7 @@ from watch.tasks.fusion.methods.network_modules import coerce_criterion
 from watch.tasks.fusion.methods.network_modules import RobustModuleDict
 from watch.tasks.fusion.methods.watch_module_mixins import WatchModuleMixins
 from watch.tasks.fusion.architectures.transformer import BackboneEncoderDecoder, TransformerEncoderDecoder
+from watch.tasks.fusion.architectures import transformer
 
 from abc import ABCMeta, abstractmethod
 
@@ -27,6 +28,9 @@ try:
     profile = xdev.profile
 except Exception:
     profile = ub.identity
+
+
+SPLIT_ATTENTION_ENCODERS = list(transformer.encoder_configs.keys())
 
 
 def to_next_multiple(n, mult):
@@ -510,6 +514,14 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                 vit_model = ViT('B_16', pretrained=True)
                 backbone = vit_model.transformer
                 # assert token_dim == 708
+            elif backbone in SPLIT_ATTENTION_ENCODERS:
+                encoder_config = transformer.encoder_configs[backbone]
+                backbone = transformer.FusionEncoder(
+                    **encoder_config,
+                    in_features=position_encoder.output_dim + token_dim,
+                    # attention_impl=self.hparams.attention_impl,
+                    dropout=0.1,
+                )
             else:
                 raise KeyError(backbone)
 
