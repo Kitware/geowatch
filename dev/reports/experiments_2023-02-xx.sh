@@ -1671,8 +1671,7 @@ python -m watch.mlops.schedule_evaluation --params="
     --devices="0,1" --tmux_workers=8 \
     --backend=tmux --queue_name "_namek_split6_landcover_MeanYear10GSD-V2" \
     --pipeline=bas_building_vali --skip_existing=1 \
-    --run=0
-
+    --run=1
 
 
 
@@ -1819,12 +1818,12 @@ python -m watch.mlops.schedule_evaluation --params="
     --run=1
 
 
+
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
 geowatch aggregate \
     --pipeline=bas_building_vali \
     --target \
         "$DVC_EXPT_DPATH/_toothbrush_split6_landcover_MeanYear10GSD-V2" \
-    --resource_report=True \
     --rois=KR_R001,KR_R002,CH_R001,NZ_R001,BR_R002 \
     --stdout_report="
         top_k: 10
@@ -1834,5 +1833,31 @@ geowatch aggregate \
         reference_region: final
         # print_models: True
     " \
-    --plot_params=True \
-    --output_dpath="$DVC_EXPT_DPATH"/_toothbrush_split6_landcover_MeanYear10GSD-V2/_aggregate
+    --resource_report=0 \
+    --plot_params=0 \
+    --export_tables=0 \
+    --output_dpath="$DVC_EXPT_DPATH/_toothbrush_split6_landcover_MeanYear10GSD-V2/aggregate"
+
+
+
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+geowatch aggregate \
+    --pipeline=bas \
+    --target "
+        - $DVC_EXPT_DPATH/aggregate_results/toothbrush/*.csv.zip
+        - $DVC_EXPT_DPATH/aggregate_results/ooo/*.csv.zip
+        - $DVC_EXPT_DPATH/aggregate_results/namek/*.csv.zip
+    " \
+    --rois=KR_R001,KR_R002,CH_R001,NZ_R001,BR_R002 \
+    --stdout_report="
+        top_k: 10
+        per_group: 2
+        macro_analysis: 0
+        analyze: 0
+        reference_region: final
+        print_models: False
+    " \
+    --resource_report=False \
+    --plot_params=False \
+    --export_tables=False \
+    --output_dpath="my_output_location"

@@ -182,12 +182,16 @@ machine.
     docker push registry.smartgitlab.com/kitware/$WATCH_IMAGE
 
 
+**How to make a quick image update**
+
+See: Update the code / models in an existing image
+
+
 How to Bake a Model into a Pyenv Dockerfile
 -------------------------------------------
 
 Assuming that you have already build a pyenv docker image we will add a model
 to it.
-
 
 .. code:: bash
 

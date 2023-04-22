@@ -419,11 +419,10 @@ def main(cmdline=True, **kwargs):
             '--output_dir',
             os.fspath(out_dir),
             ## Restrict to make this faster
-            #'--tau', '0.2',
-            #'--rho', '0.5',
-            '--activity',
-            'overall',
-            #'--loglevel', 'error',
+            '--tau', '0.2',
+            '--rho', '0.5',
+            '--activity', 'overall',
+            '--loglevel', 'error',
         ]
 
         print(f'METRICS_VERSION={METRICS_VERSION}')
