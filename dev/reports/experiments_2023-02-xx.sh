@@ -1544,6 +1544,7 @@ python -m watch.mlops.schedule_evaluation --params="
 ### Evaluate promissing landcover models on namek
 DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_HDD_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=hdd)
 python -m watch.mlops.schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
@@ -1655,17 +1656,17 @@ python -m watch.mlops.schedule_evaluation --params="
           bas_poly.resolution:
               - 8GSD
         - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R001_I2L.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-KR_R001.kwcoco.json
+          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Drop6/imgonly-KR_R001.kwcoco.json
         - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R002_I2L.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-KR_R002.kwcoco.json
+          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Drop6/imgonly-KR_R002.kwcoco.json
         - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-BR_R002_I2L.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-BR_R002.kwcoco.json
+          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Drop6/imgonly-BR_R002.kwcoco.json
         - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-CH_R001_I2L.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-CH_R001.kwcoco.json
+          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Drop6/imgonly-CH_R001.kwcoco.json
         - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-NZ_R001_I2L.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-NZ_R001.kwcoco.json
+          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Drop6/imgonly-NZ_R001.kwcoco.json
         - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-AE_R001_I2L.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-AE_R001.kwcoco.json
+          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Drop6/imgonly-AE_R001.kwcoco.json
     " \
     --root_dpath="$DVC_EXPT_DPATH/_namek_split6_landcover_MeanYear10GSD-V2" \
     --devices="0,1" --tmux_workers=8 \
