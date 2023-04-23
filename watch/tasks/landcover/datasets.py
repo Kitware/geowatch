@@ -1,4 +1,5 @@
 import logging
+import itertools
 import kwcoco
 import kwimage
 import numpy as np
@@ -109,6 +110,9 @@ class S2Dataset(_CocoTorchDataset):
     def _include(self, gid):
         sensor_type = self.dset.imgs[gid]['sensor_coarse']
         available_channels = [x["channels"] for x in self.dset.imgs[gid]["auxiliary"]]
+        # Needed to handled time-averaged input images (which combine
+        # all channels into a single image)
+        available_channels = set(itertools.chain(*[c.split('|') for c in available_channels]))
         has_valid_sensor = sensor_type == 'S2'
         has_valid_channels = set(self.channels_list).issubset(available_channels)
         return has_valid_sensor and has_valid_channels
@@ -143,6 +147,9 @@ class WVDataset(_CocoTorchDataset):
     def _include(self, gid):
         sensor_type = self.dset.imgs[gid]['sensor_coarse']
         available_channels = [x["channels"] for x in self.dset.imgs[gid]["auxiliary"]]
+        # Needed to handled time-averaged input images (which combine
+        # all channels into a single image)
+        available_channels = set(itertools.chain(*[c.split('|') for c in available_channels]))
         has_valid_sensor = sensor_type == 'WV'
         has_valid_channels = set(self.channels_list).issubset(available_channels)
         return has_valid_sensor and has_valid_channels
