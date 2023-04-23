@@ -331,7 +331,7 @@ def run_stac_to_cropped_kwcoco(input_path,
 
     # 6. Do the time_combine for BAS
     from watch.utils.util_yaml import Yaml
-    default_time_combine_config = ub.dict(
+    default_time_combine_config = ub.odict(
         time_window='1y',
         resolution='10GSD',
         workers='avail',
