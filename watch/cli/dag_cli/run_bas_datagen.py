@@ -339,9 +339,6 @@ def run_stac_to_cropped_kwcoco(input_path,
     )
     user_time_combine_config = Yaml.coerce(time_combine)
 
-    if user_time_combine_config - default_time_combine_config:
-        raise ValueError(f'Unexpected config args: {user_time_combine_config - default_time_combine_config}')
-
     if user_time_combine_config not in {False, None}:
         if user_time_combine_config is True:
             user_time_combine_config = {}
