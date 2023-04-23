@@ -78,6 +78,12 @@ class BASDatasetConfig(scfg.DataConfig):
 
     target_gsd = scfg.Value(10, type=int, help='Target GSD of output KWCOCO video space')
 
+    time_combine = scfg.Value(False, help=ub.paragraph(
+            '''
+            Perform time combine on BAS dataset
+            '''))
+
+
 
 def main():
     config = BASDatasetConfig.cli(strict=True)
@@ -170,7 +176,8 @@ def run_stac_to_cropped_kwcoco(input_path,
                                virtual=False,
                                dont_recompute=False,
                                previous_input_path=None,
-                               target_gsd=10):
+                               target_gsd=10,
+                               time_combine=False):
     if aws_profile is not None:
         aws_ls_command = ['aws', 's3', '--profile', aws_profile, 'ls']
     else:
@@ -322,9 +329,38 @@ def run_stac_to_cropped_kwcoco(input_path,
                     '--workers', str(jobs),  # noqa: 501
                     ], check=True)
 
-    # TODO: do the time_combine for BAS here.
+    # 6. Do the time_combine for BAS
+    from watch.utils.util_yaml import Yaml
+    default_time_combine_config = ub.dict(
+        time_window='1y',
+        resolution='10GSD',
+        workers='avail',
+        start_time='1970-01-01',
+    )
+    user_time_combine_config = Yaml.coerce(time_combine)
 
-    # 6. Egress (envelop KWCOCO dataset in a STAC item and egress;
+    if user_time_combine_config - default_time_combine_config:
+        raise ValueError(f'Unexpected config args: {user_time_combine_config - default_time_combine_config}')
+
+    if user_time_combine_config not in {False, None}:
+        if user_time_combine_config is True:
+            user_time_combine_config = {}
+
+        time_combine_config = (default_time_combine_config
+                               | user_time_combine_config)
+
+        from watch.cli import coco_time_combine
+        preproc_kwcoco_fpath = ub.Path(ta1_cropped_kwcoco_path).augment(
+            stemsuffix='_timecombined', ext='.kwcoco.zip', multidot=True)
+        coco_time_combine.main(
+            cmdline=0,
+            input_kwcoco_fpath=ta1_cropped_kwcoco_path,
+            output_kwcoco_fpath=preproc_kwcoco_fpath,
+            **time_combine_config
+        )
+        ta1_cropped_kwcoco_path = os.fspath(preproc_kwcoco_fpath)
+
+    # 7. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)
     print("* Egressing KWCOCO dataset and associated STAC item *")

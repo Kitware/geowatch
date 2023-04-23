@@ -52,11 +52,6 @@ class BasFusionConfig(scfg.DataConfig):
             S3 Output directory for previous interval BAS fusion output
             '''))
 
-    time_combine = scfg.Value(False, isflag=True, help=ub.paragraph(
-            '''
-            Quick and dirty hack to run time combine before fusion
-            '''))
-
     bas_pxl_config = scfg.Value(None, type=str, help=ub.paragraph(
             '''
             Raw json/yaml or a path to a json/yaml file that specifies the
@@ -177,22 +172,6 @@ def run_bas_fusion_for_baseline(config):
     # Determine the region_id in the region file.
     region_id = determine_region_id(local_region_path)
 
-    if config.time_combine:
-        from watch.cli import coco_time_combine
-        preproc_kwcoco_fpath = ub.Path(ingress_kwcoco_path).augment(
-            stemsuffix='_timecombined', ext='.kwcoco.zip', multidot=True)
-        coco_time_combine.main(
-            cmdline=0,
-            input_kwcoco_fpath=ingress_kwcoco_path,
-            output_kwcoco_fpath=preproc_kwcoco_fpath,
-            time_window='1y',
-            resolution='10GSD',
-            workers='avail',
-        )
-        predict_input_fpath = os.fspath(preproc_kwcoco_fpath)
-    else:
-        predict_input_fpath = ingress_kwcoco_path
-
     # 3. Run fusion
     print("* Running BAS fusion *")
     bas_fusion_kwcoco_path = os.path.join(
@@ -222,7 +201,7 @@ def run_bas_fusion_for_baseline(config):
             with_change=False,
             with_saliency=True,
             with_class=False,
-            test_dataset=predict_input_fpath,
+            test_dataset=ingress_kwcoco_path,
             pred_dataset=bas_fusion_kwcoco_path,
             **bas_pxl_config)
 
