@@ -1,16 +1,12 @@
+#!/usr/bin/env python3
 """
 Attempts to register directory of geotiffs into a kwcoco dataset
 """
-
-from dateutil.parser import isoparse
-from os.path import join, basename, normpath, splitext
-import datetime
-import glob
 import scriptconfig as scfg
 import ubelt as ub
 
 
-class KWCocoFromGeotiffConfig(scfg.Config):
+class KWCocoFromGeotiffConfig(scfg.DataConfig):
     """
     Create a kwcoco manifest of a set of on-disk geotiffs
     """
@@ -61,6 +57,7 @@ def filter_band_files(fpaths, band_list, with_tci=True):
 
     with_tci: include true color thumbnail
     """
+    from os.path import basename, splitext
     band_names = set(b['name'] for b in band_list)
     if with_tci:
         band_names.add('TCI')
@@ -75,6 +72,9 @@ def filter_band_files(fpaths, band_list, with_tci=True):
 def ingest_landsat_directory(lc_dpath):
     import watch
     from watch.utils import util_bands
+    from dateutil.parser import isoparse
+    from os.path import join, basename, normpath
+    import glob
     name = basename(normpath(lc_dpath))
     tiffs = sorted(glob.glob(join(lc_dpath, '*.TIF')))
     if len(tiffs) == 0:
@@ -100,6 +100,10 @@ def ingest_sentinel2_directory(s2_dpath):
     # it's a better unique ID.
     import watch
     from watch.utils import util_bands
+    import datetime as datetime_mod
+    from dateutil.parser import isoparse
+    from os.path import join, basename, normpath
+    import glob
     granules = sorted(glob.glob(join(s2_dpath, 'GRANULE', '*')))
     if len(granules) == 1:
         granule = granules[0]
@@ -116,7 +120,7 @@ def ingest_sentinel2_directory(s2_dpath):
 
     baseinfo = watch.gis.geotiff.geotiff_filepath_info(s2_dpath)
     capture_time = isoparse(baseinfo['filename_meta']['sense_start_time'])
-    img['date_captured'] = datetime.datetime.isoformat(capture_time)
+    img['date_captured'] = datetime_mod.datetime.isoformat(capture_time)
     img['sensor_coarse'] = 'S2'
     return img
 
@@ -256,6 +260,7 @@ def find_geotiffs(geotiff_dpath, workers=0, strict=False):
     """
     import os
     import watch
+    from os.path import basename
     dpath_list = list(watch.gis.geotiff.walk_geotiff_products(geotiff_dpath))
 
     print(f'Found candidate {len(dpath_list)} geotiff products')

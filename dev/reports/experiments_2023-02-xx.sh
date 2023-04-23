@@ -1694,7 +1694,7 @@ python -m watch.mlops.schedule_evaluation --params="
             #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-AE_R001_I2L.kwcoco.zip
         bas_pxl.chip_overlap: 0.3
         bas_pxl.chip_dims:
-            - auto
+            #- auto
             - '196,196'
             - '256,256'
             - '320,320'
@@ -1772,7 +1772,7 @@ python -m watch.mlops.schedule_evaluation --params="
             #- 2GSD
             #- 2.5GSD
             - 3GSD
-            #- 3.3GSD
+            - 3.3GSD
         sv_dino_filter.box_isect_threshold:
             - 0.1
         sv_dino_filter.box_score_threshold:
@@ -1784,9 +1784,9 @@ python -m watch.mlops.schedule_evaluation --params="
             # - 0.5
         sv_dino_filter.end_min_score:
             - 0.0
-            #- 0.05
+            - 0.05
             - 0.1
-            #- 0.15
+            - 0.15
             - 0.2
             #- 0.25
             #- 0.3
@@ -1825,7 +1825,6 @@ geowatch aggregate \
     --pipeline=bas_building_vali \
     --target \
         "$DVC_EXPT_DPATH/_toothbrush_split6_landcover_MeanYear10GSD-V2" \
-    --rois=KR_R001,KR_R002,CH_R001,NZ_R001,BR_R002 \
     --stdout_report="
         top_k: 10
         per_group: 2
@@ -1838,27 +1837,27 @@ geowatch aggregate \
     --plot_params=0 \
     --export_tables=0 \
     --output_dpath="$DVC_EXPT_DPATH/_toothbrush_split6_landcover_MeanYear10GSD-V2/aggregate"
+    #--rois=KR_R001,KR_R002,CH_R001,NZ_R001,BR_R002 \
 
 
 
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
-geowatch aggregate \
-    --pipeline=bas \
-    --target "
-        - $DVC_EXPT_DPATH/aggregate_results/toothbrush/*.csv.zip
-        - $DVC_EXPT_DPATH/aggregate_results/ooo/*.csv.zip
-        - $DVC_EXPT_DPATH/aggregate_results/namek/*.csv.zip
-    " \
-    --rois=KR_R001,KR_R002,CH_R001,NZ_R001,BR_R002 \
-    --stdout_report="
-        top_k: 10
-        per_group: 2
-        macro_analysis: 0
-        analyze: 0
-        reference_region: final
-        print_models: False
-    " \
-    --resource_report=False \
-    --plot_params=False \
-    --export_tables=False \
-    --output_dpath="my_output_location"
+#DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+#geowatch aggregate \
+#    --pipeline=bas \
+#    --target "
+#        - $DVC_EXPT_DPATH/aggregate_results/toothbrush/*.csv.zip
+#        - $DVC_EXPT_DPATH/aggregate_results/ooo/*.csv.zip
+#        - $DVC_EXPT_DPATH/aggregate_results/namek/*.csv.zip
+#    " \
+#    --rois=KR_R001,KR_R002,CH_R001,NZ_R001,BR_R002 \
+#    --stdout_report="
+#        top_k: 3
+#        per_group: 2
+#        macro_analysis: 0
+#        analyze: 0
+#        reference_region: final
+#        print_models: False
+#    " \
+#    --resource_report=False \
+#    --plot_params=False \
+#    --export_tables=False \

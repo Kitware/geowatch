@@ -4,12 +4,10 @@ import sys
 import ubelt as ub
 
 __devnotes__ = """
-
 # We may want to delay actual imports, gdal import time can be excessive
 
 python -X importtime -c "import watch"
 WATCH_HACK_IMPORT_ORDER="" python  -X importtime -m watch.cli find_dvc
-
 """
 
 
@@ -18,28 +16,39 @@ def main(cmdline=True, **kw):
     The watch command line interface
     """
     modnames = [
+        'watch_coco_stats',
+        'geojson_site_stats',
+        'torch_model_stats',
+        'coco_spectra',
+
+        # 'geotiffs_to_kwcoco'  # TODO: cleanup and add
+
+        'coco_visualize_videos',
+        'gifify',
+
+        'find_dvc',
+
         'coco_add_watch_fields',
         'coco_align',
-        'watch_coco_stats',
-        'reproject_annotations',
-        'coco_visualize_videos',
-        'coco_spectra',
-        'find_dvc',
-        'kwcoco_to_geojson',
-        'run_metrics_framework',
-        'torch_model_stats',
         'coco_clean_geotiffs',
-        # 'mlops_cli',
-        'gifify',
         'coco_average_features',
         'coco_time_combine',
+
+        'reproject_annotations',
+
+        'kwcoco_to_geojson',
+        'run_metrics_framework',
+
         'crop_sites_to_regions',
         'coco_remove_bad_images',
         'coco_average_features',
+
+        # 'mlops_cli',
     ]
 
     cmd_alias = {
         'watch.cli.torch_model_stats': ['model_stats', 'model_info'],
+        'watch.cli.geojson_site_stats': ['site_stats'],
         'watch.cli.watch_coco_stats': ['stats'],
         'watch.cli.coco_visualize_videos': ['visualize'],
         'watch.cli.coco_align': ['align', 'coco_align_geotiffs'],
@@ -71,12 +80,11 @@ def main(cmdline=True, **kw):
     cli_modules = list(module_lut.values())
 
     import os
+    from scriptconfig.modal import ModalCLI
+    import watch
     WATCH_LOOSE_CLI = os.environ.get('WATCH_LOOSE_CLI', '')
 
-    from scriptconfig.modal import ModalCLI
-
     # https://emojiterra.com/time/
-
     fun_header = ub.codeblock(
         '''
         🛰️ ⌚🛰️           🧠       🛰️ ⌚🛰️
@@ -84,13 +92,15 @@ def main(cmdline=True, **kw):
         ''')
 
     boring_description =  ub.codeblock(
-        '''
+        f'''
         🌐🌐🌐 The GEO-WATCH CLI 🌐🌐🌐
 
         An open source research and production environment for image and video
         segmentation and detection with geospatial awareness.
 
         Developed by [link=https://www.kitware.com/]Kitware[/link]. Funded by the [link=https://www.iarpa.gov/research-programs/smart]IARPA SMART[/link] challenge.
+
+        Version: {watch.__version__}
         ''')
 
     FUN = (os.getenv('FUN', '') or 1) and not os.getenv('NOFUN', '')
@@ -101,10 +111,7 @@ def main(cmdline=True, **kw):
 
     modal = ModalCLI(description)
 
-    def get_version(self):
-        import watch
-        return watch.__version__
-    modal.__class__.version = property(get_version)
+    modal.__class__.version = watch.__version__
 
     for cli_module in cli_modules:
 
