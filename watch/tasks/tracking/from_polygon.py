@@ -33,8 +33,9 @@ class OverlapTrack(TrackFunction):
         from watch.utils.kwcoco_extensions import TrackidGenerator
         new_trackids = TrackidGenerator(coco_dset)
 
-        aid_to_poly = dict(
-            zip(coco_dset.annots().aids, as_shapely_polys(coco_dset.annots())))
+        annots = coco_dset.annots()
+
+        aid_to_poly = dict(zip(annots.aids, as_shapely_polys(annots)))
 
         def _search(aid, aid_groups):
             poly1 = aid_to_poly[aid]

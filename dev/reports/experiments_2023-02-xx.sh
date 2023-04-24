@@ -1760,7 +1760,8 @@ python -m watch.mlops.schedule_evaluation --params="
         sv_dino_boxes.enabled: 1
         sv_dino_boxes.package_fpath: $DVC_EXPT_DPATH/models/kitware/xview_dino.pt
         sv_dino_boxes.window_dims:
-            #- 256
+            - 256
+            - 320
             - 512
             #- 768
             #- 1024

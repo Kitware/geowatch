@@ -1,5 +1,4 @@
 """
-
 Our data might look like this, a sequence of frames where the frames can contain
 heterogeneous data:
 
