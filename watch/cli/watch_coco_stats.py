@@ -345,7 +345,8 @@ def build_year_summary(image_df):
     year_summary_df = pd.DataFrame(year_summaries)
     year_summary_df = year_summary_df.sort_values('time')
 
-    year_pivot = year_summary_df.pivot(['video', 'sensor'], ['time'], ['count'])
+    year_pivot = year_summary_df.pivot(
+        index=['video', 'sensor'], columns=['time'], values=['count'])
     year_pivot = year_pivot.fillna('0').astype(int)
     return year_pivot
 

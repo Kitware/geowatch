@@ -43,7 +43,7 @@ def _auto_kernel_sigma(kernel=None, sigma=None, autokernel_mode='ours'):
         >>>     rows.append({'k': k, 's': s, 'type': 'auto_kernel (ours)'})
         >>> import pandas as pd
         >>> df = pd.DataFrame(rows)
-        >>> p = df.pivot(['s'], ['type'], ['k'])
+        >>> p = df.pivot(index=['s'], columns=['type'], values=['k'])
         >>> print(p[~p.droplevel(0, axis=1).auto_sigma.isnull()])
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
