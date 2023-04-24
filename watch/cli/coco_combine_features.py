@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Combine kwcoco files with different "auxiliary" features into a single kwcoco
 file.
@@ -103,6 +104,7 @@ def main(cmdline=True, **kwargs):
         >>> chan_stats1 = kwcoco_extensions.coco_channel_stats(dset1)['chan_hist']
         >>> chan_stats2 = kwcoco_extensions.coco_channel_stats(dset2)['chan_hist']
         >>> assert chan_stats1 != chan_stats0, 'channels should be different'
+        >>> # Combining the two modified kwcoco files should result in the original
         >>> dst_fpath = dpath / 'combo.kwcoco.json'
         >>> kwargs = {
         >>>     'src': [str(dset1.fpath), str(dset2.fpath)],
