@@ -108,11 +108,23 @@ def run_landcover_for_baseline(input_path,
                     '--device', '0'],
                    check=True)
 
-    # 3. Egress (envelop KWCOCO dataset in a STAC item and egress;
+    # 3. Combining landcover features with input features to pass to BAS
+    print("* Combining input features with computed landcover features *")
+    combo_features_kwcoco_path = os.path.join(
+        ingress_dir, 'features_combo_with_landcover_kwcoco.json')
+    subprocess.run(['python', '-m', 'watch.cli.coco_combine_features',
+                    '--src',
+                    ingress_kwcoco_path,
+                    dzyne_landcover_features_kwcoco_path,
+                    '--dst',
+                    combo_features_kwcoco_path],
+                   check=True)
+
+    # 4. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)
     print("* Egressing KWCOCO dataset and associated STAC item *")
-    baseline_framework_kwcoco_egress(dzyne_landcover_features_kwcoco_path,
+    baseline_framework_kwcoco_egress(combo_features_kwcoco_path,
                                      local_region_path,
                                      output_path,
                                      outbucket,
