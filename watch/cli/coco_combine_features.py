@@ -81,6 +81,41 @@ def combine_auxiliary_features(dst_dset, src_dsets):
 def main(cmdline=True, **kwargs):
     """
     Example:
+        >>> from watch.cli import coco_combine_features
+        >>> import watch
+        >>> dset = watch.coerce_kwcoco('watch-msi')
+        >>> dpath = ub.Path.appdir('watch/tests/combine_fetures').ensuredir()
+        >>> # Breakup the data into two parts with different features
+        >>> dset1 = dset.copy()
+        >>> dset2 = dset.copy()
+        >>> dset1.fpath = dpath / 'part1.kwcoco.json'
+        >>> dset2.fpath = dpath / 'part2.kwcoco.json'
+        >>> # Remove all but the first asset from dset1
+        >>> for coco_img in dset1.images().coco_images:
+        ...     del coco_img.img['auxiliary'][1:]
+        >>> # Remove the first asset from dset2
+        >>> for coco_img in dset2.images().coco_images:
+        ...     del coco_img.img['auxiliary'][0]
+        >>> dset1.dump()
+        >>> dset2.dump()
+        >>> from watch.utils import kwcoco_extensions
+        >>> chan_stats0 = kwcoco_extensions.coco_channel_stats(dset)['chan_hist']
+        >>> chan_stats1 = kwcoco_extensions.coco_channel_stats(dset1)['chan_hist']
+        >>> chan_stats2 = kwcoco_extensions.coco_channel_stats(dset2)['chan_hist']
+        >>> assert chan_stats1 != chan_stats0, 'channels should be different'
+        >>> dst_fpath = dpath / 'combo.kwcoco.json'
+        >>> kwargs = {
+        >>>     'src': [str(dset1.fpath), str(dset2.fpath)],
+        >>>     'dst': str(dst_fpath),
+        >>> }
+        >>> cmdline = 0
+        >>> coco_combine_features.main(cmdline=cmdline, **kwargs)
+        >>> dst_dset = watch.coerce_kwcoco(dst_fpath)
+        >>> chan_stats3 = kwcoco_extensions.coco_channel_stats(dst_dset)['chan_hist']
+        >>> assert chan_stats3 == chan_stats0, (
+        >>>     'combine features should have the same as the original dset')
+
+    Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> # xdoctest: +SKIP
         >>> # drop1-S2-L8-aligned-old deprecated
