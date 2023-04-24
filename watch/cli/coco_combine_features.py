@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Combine kwcoco files with different "auxiliary" features into a single kwcoco
-file.
+Combine kwcoco files with different "auxiliary" / "asset" features into a
+single kwcoco file.
 """
 import ubelt as ub
 import scriptconfig as scfg
@@ -9,74 +9,35 @@ import scriptconfig as scfg
 
 class CocoCombineFeatures(scfg.DataConfig):
     """
-    Combine kwcoco files with different "auxiliary" features into a single
-    kwcoco file.
+    Combine kwcoco files with different "auxiliary" / "asset" features into a
+    single kwcoco file.
+
+    The names of the kwcoco images in all of the input ``src`` datasets must be
+    the same.
 
     TODO:
         - [ ] This might go in kwcoco proper? This could be folded into "union"
     """
-    __default__ = {
-        'src': scfg.Value([], nargs='+', help='path to datasets. The first one will be the "base"', position=1),
+    src = scfg.Value([], nargs='+', position=1, help=ub.paragraph(
+        '''
+        Paths to the input kwcoco datasets. The first one will be the "base"
+        '''))
 
-        'dst': scfg.Value(None, help='dataset to write to'),
+    dst = scfg.Value(None, help=ub.paragraph(
+        '''
+        Path to the destination combined kwcoco dataset to write.
+        '''))
 
-        'io_workers': scfg.Value('avail', help='number of workers used to read multiple datasets'),
+    io_workers = scfg.Value('avail', help=ub.paragraph(
+        '''
+        Number of workers used to read multiple datasets. Can be numeric
+        or a string code like "avail", which uses all available CPUs.
+        '''))
 
-        'absolute': scfg.Value(False, isflag=True, help='if True, use absolute paths'),
-    }
-
-
-def combine_auxiliary_features(dst_dset, src_dsets):
-    """
-    Example:
-        >>> from watch.cli.coco_combine_features import *  # NOQA
-        >>> import kwcoco
-        >>> base = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
-        >>> dset1 = base.copy()
-        >>> dset2 = base.copy()
-        >>> dset3 = base.copy()
-        >>> dset4 = base.copy()
-        >>> for img in dset1.index.imgs.values():
-        >>>     del img['auxiliary'][0::3]
-        >>> for img in dset2.index.imgs.values():
-        >>>     del img['auxiliary'][1::3]
-        >>> dset2.remove_images([2, 3])
-        >>> for img in dset3.index.imgs.values():
-        >>>     del img['auxiliary'][2::3]
-        >>> dset3.remove_images([2, 3])
-        >>> for img in dset4.index.imgs.values():
-        >>>     del img['auxiliary'][0::2]
-        >>> dset4.remove_images([2, 3])
-        >>> dst_dset = dset1
-        >>> src_dsets = [dset2, dset3, dset4]
-        >>> for img in dset1.index.imgs.values():
-        ...     assert len(img['auxiliary']) != 5
-        >>> dst_dset = combine_auxiliary_features(dst_dset, src_dsets)
-        >>> lens1 = list(map(len, dset1.images(set(dset1.imgs) - {2, 3}).lookup('auxiliary')))
-        >>> assert ub.allsame([5] + lens1)
-        >>> lens2 = list(map(len, dset1.images({2, 3}).lookup('auxiliary')))
-        >>> assert ub.allsame([3] + lens2)
-    """
-
-    for src_dset in src_dsets:
-        gids1, gids2, report = associate_images(dst_dset, src_dset)
-        print('report = {!r}'.format(report))
-        for gid1, gid2 in zip(gids1, gids2):
-            dst_img = dst_dset.index.imgs[gid1]
-            src_img = src_dset.index.imgs[gid2]
-            dst_auxiliary = dst_img.get('auxiliary')
-            src_auxiliary = src_img.get('auxiliary')
-            if src_auxiliary is None:
-                src_auxiliary = []  # nothing will happen in this case
-            if dst_auxiliary is None:
-                dst_auxiliary = dst_img['auxiliary'] = []
-            have_channels = set(aux.get('channels') for aux in dst_auxiliary)
-            assert src_img['name'] == dst_img['name']
-            for src_aux in src_auxiliary:
-                if src_aux['channels'] not in have_channels:
-                    have_channels.add(src_aux['channels'])
-                    dst_auxiliary.append(src_aux)
-    return dst_dset
+    absolute = scfg.Value(False, isflag=True, help=ub.paragraph(
+        '''
+        if True, reroot all inputs to use absolute paths
+        '''))
 
 
 def main(cmdline=True, **kwargs):
@@ -144,20 +105,14 @@ def main(cmdline=True, **kwargs):
     import rich
     rich.print(ub.urepr(config))
 
-    fpaths = config['src']
-
     dset_iter = kwcoco.CocoDataset.coerce_multiple(
-        fpaths, workers=config.io_workers)
+        config.src, workers=config.io_workers)
+
     dset_list = []
     for dset in dset_iter:
         if config['absolute']:
             dset.reroot(absolute=True)
         dset_list.append(dset)
-
-    dset1 = dset_list[0]
-
-    for dset2 in dset_list[1:]:
-        gids1, gids2, report = associate_images(dset1, dset2)
 
     src_dsets = dset_list[1:]
     dst_dset = dset_list[0]
@@ -189,9 +144,85 @@ def main(cmdline=True, **kwargs):
     dst_dset.dump(dst_dset.fpath, newlines=True)
 
 
+def combine_auxiliary_features(dst_dset, src_dsets):
+    """
+    Copies all non-existing assets from ``src_dsets`` into ``dst_dset``.
+
+    Updates each image in ``dst_dset`` with all non-existing asset (as
+    determined by the 'channels' attribute) in each corresponding image in each
+    ``src_dsets``.
+
+    Args:
+        dst_dset (kwcoco.CocoDataset): modified inplace
+        src_dsets (List[kwcoco.CocoDataset]):
+
+    Returns:
+        kwcoco.CocoDataset: returns input ``dst_dset``.
+
+    Example:
+        >>> from watch.cli.coco_combine_features import *  # NOQA
+        >>> import kwcoco
+        >>> base = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
+        >>> dset1 = base.copy()
+        >>> dset2 = base.copy()
+        >>> dset3 = base.copy()
+        >>> dset4 = base.copy()
+        >>> for img in dset1.index.imgs.values():
+        >>>     del img['auxiliary'][0::3]
+        >>> for img in dset2.index.imgs.values():
+        >>>     del img['auxiliary'][1::3]
+        >>> dset2.remove_images([2, 3])
+        >>> for img in dset3.index.imgs.values():
+        >>>     del img['auxiliary'][2::3]
+        >>> dset3.remove_images([2, 3])
+        >>> for img in dset4.index.imgs.values():
+        >>>     del img['auxiliary'][0::2]
+        >>> dset4.remove_images([2, 3])
+        >>> dst_dset = dset1
+        >>> src_dsets = [dset2, dset3, dset4]
+        >>> for img in dset1.index.imgs.values():
+        ...     assert len(img['auxiliary']) != 5
+        >>> dst_dset = combine_auxiliary_features(dst_dset, src_dsets)
+        >>> lens1 = list(map(len, dset1.images(set(dset1.imgs) - {2, 3}).lookup('auxiliary')))
+        >>> assert ub.allsame([5] + lens1)
+        >>> lens2 = list(map(len, dset1.images({2, 3}).lookup('auxiliary')))
+        >>> assert ub.allsame([3] + lens2)
+    """
+
+    for src_dset in src_dsets:
+        gids1, gids2, report = associate_images(dst_dset, src_dset)
+        print('report = {!r}'.format(report))
+        for gid1, gid2 in zip(gids1, gids2):
+            dst_img = dst_dset.index.imgs[gid1]
+            src_img = src_dset.index.imgs[gid2]
+            dst_auxiliary = dst_img.get('auxiliary')
+            src_auxiliary = src_img.get('auxiliary')
+            if src_auxiliary is None:
+                src_auxiliary = []  # nothing will happen in this case
+            if dst_auxiliary is None:
+                dst_auxiliary = dst_img['auxiliary'] = []
+            have_channels = set(aux.get('channels') for aux in dst_auxiliary)
+            assert src_img['name'] == dst_img['name']
+            for src_aux in src_auxiliary:
+                if src_aux['channels'] not in have_channels:
+                    have_channels.add(src_aux['channels'])
+                    dst_auxiliary.append(src_aux)
+    return dst_dset
+
+
 def associate_images(dset1, dset2):
     """
-    Hueristic for getting pairs of images that correspond between two datasets
+    Get image ids for images in two datasets that share the same name.
+
+    This is a hueristic for getting pairs of images that correspond between two
+    datasets.
+
+    Args:
+        dset1 (kwcoco.CocoDataset):
+        dset2 (kwcoco.CocoDataset):
+
+    Returns:
+        Tuple[List[int], List[int], Dict]:
     """
     dset1_img_names = set(dset1.index.name_to_img)
     dset2_img_names = set(dset2.index.name_to_img)
