@@ -312,7 +312,7 @@ def coco_create_observation(coco_dset, anns, with_properties=True):
             'type': 'observation',
             'current_phase': current_phase,
             'is_site_boundary': True,  # HACK
-            'score': ann.get('score', 1.0),
+            'score': max(min(ann.get('score', 1.0), 1.0), 0.0),
             'misc_info': {
                 'phase_transition_days': ann.get('phase_transition_days', None)
             },
