@@ -61,6 +61,7 @@ SUPPORTED_COARSE_PLATFORMS = {
     'S2': {'S2A', 'S2B', 'sentinel-2a', 'sentinel-2b', 'S2'},  # Sentinel-2
     'L8': {'OLI_TIRS', 'LANDSAT_8', 'L8'},  # Landsat-8
     'WV': {'DigitalGlobe', 'worldview-2', 'worldview-3', 'WV', 'WV02', 'WV03'},  # Worldview
+    'WV1': {'WV01'},  # Worldview 1
     'PD': {'PlanetScope', 'dove', 'PD'},  # Planet
 }
 
@@ -383,6 +384,10 @@ def make_coco_aux_from_stac_asset(asset_name,
         if verbose:
             print('Detected WV channels')
         channels = _determine_wv_channels(asset_name, asset_dict)
+    elif platform in SUPPORTED_COARSE_PLATFORMS['WV1']:
+        if verbose:
+            print('Detected WV channels')
+        channels = _determine_wv_channels(asset_name, asset_dict)
     else:
         raise NotImplementedError(
             "Unsupported platform '{}'".format(platform))
@@ -455,6 +460,11 @@ def _stac_item_to_kwcoco_image(stac_item,
     if 'constellation' in stac_item_dict['properties']:
         if stac_item_dict['properties']['constellation'] == 'dove':
             platform = 'PD'
+
+    if platform == 'DigitalGlobe' and stac_item_dict['properties']['mission'] == 'WV01':
+        # Ensure we can differentiate between WV01 (which sometimes
+        # has 'DigitalGlobe' as the 'platform') and other WV imagery
+        platform = 'WV01'
 
     # Convet to standard case
     platform = PLATFORM_NORMALIZED_TO_PLATFORM_STANDARD_CASE.get(normalize_str(platform), platform)
