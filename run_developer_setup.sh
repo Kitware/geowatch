@@ -80,45 +80,43 @@ python -m pip install pip setuptools wheel build -U
 if [[ "$WATCH_STRICT" == "1" ]]; then
     ./dev/make_strict_req.sh
 
-    python -m pip install -r requirements-strict.txt -v
-
     python -m pip install -r requirements-strict/gdal.txt
-
-    python -m pip install -r requirements-strict/headless.txt
 
     python -m pip install -r requirements-strict/linting.txt
 
-    python -m pip install -r requirements-strict/tests.txt
-
-    python -m pip install -r requirements-strict/optional.txt
+    # Install the watch module in development mode
+    python -m pip install -e .[all-strict,headless-strict]
 
     python -m pip install "dvc[all]>=2.9.3"
 
-    python -m pip install lru-dict || echo "unable to install lru-dict"
+    python -m pip install -r requirements-strict/linting.txt
 
-    # Install the watch module in development mode
-    python -m pip install -e .[runtime-strict]
+    if ! command -v nvidia-smi &> /dev/null
+    then
+        echo "nvidia-smi detected"
+        python -m pip install -r requirements-strict/mmcv.txt
+    else
+        echo "nvidia-smi not found, assuming CUDA does not exist"
+    fi
 
 else
 
-    python -m pip install -r requirements.txt -v
-
     python -m pip install -r requirements/gdal.txt
-
-    python -m pip install -r requirements/headless.txt
 
     python -m pip install -r requirements/linting.txt
 
-    python -m pip install -r requirements/tests.txt
-
-    python -m pip install -r requirements/optional.txt
-
     python -m pip install "dvc[all]>=2.9.3"
 
-    python -m pip install lru-dict || echo "unable to install lru-dict"
-
     # Install the watch module in development mode
-    python -m pip install -e .
+    python -m pip install -e .[all,headless]
+
+    if ! command -v nvidia-smi &> /dev/null
+    then
+        echo "nvidia-smi detected"
+        python -m pip install -r requirements/mmcv.txt
+    else
+        echo "nvidia-smi not found, assuming CUDA does not exist"
+    fi
 
 fi
 

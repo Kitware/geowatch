@@ -1,0 +1,4 @@
+# https://mmcv.readthedocs.io/en/latest/get_started/installation.html
+# --prefer-binary
+--find-links https://download.openmmlab.com/mmcv/dist/cu118/torch2.0/index.html
+mmcv>=2.0.0
