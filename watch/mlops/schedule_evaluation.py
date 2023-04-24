@@ -257,7 +257,6 @@ class ScheduleEvaluationConfig(CMDQueueConfig):
         self.slurm_options = Yaml.coerce(self.slurm_options) or {}
 
         devices = self.devices
-        print('devices = {!r}'.format(self.devices))
         if devices == 'auto':
             GPUS = _auto_gpus()
         else:
