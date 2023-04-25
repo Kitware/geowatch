@@ -1,5 +1,5 @@
 GEOWATCH Docs
-----------
+-------------
 
 This is the entry point for GEOWATCH documentation. There is a combination of
 internal SMART related docs as well as more general system-level docs. MRs to
@@ -14,12 +14,12 @@ To get started:
 For coding guides see:
 
 
-* `coding tips <coding_tips.rst>`_.
-* `coding conventions <coding_conventions.rst>`_.
-* `testing practices <testing_practices.rst>`_.
+* `coding tips <development/coding_tips.rst>`_.
+* `coding conventions <development/coding_conventions.rst>`_.
+* `testing practices <testing/testing_practices.rst>`_.
 
 
 For contribution see:
 
-* `contribution instructions <contribution_instructions.rst>`_.
-* `rebasing procedure <rebasing_procedure.rst>`_.
+* `contribution instructions <development/contribution_instructions.rst>`_.
+* `rebasing procedure <development/rebasing_procedure.rst>`_.
