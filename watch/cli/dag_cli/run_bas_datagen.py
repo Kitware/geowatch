@@ -331,11 +331,14 @@ def run_stac_to_cropped_kwcoco(input_path,
 
     # 6. Do the time_combine for BAS
     from watch.utils.util_yaml import Yaml
-    default_time_combine_config = ub.odict(
+    default_time_combine_config = ub.udict(
         time_window='1y',
+        channels='coastal|blue|green|red|B05|B06|B07|nir|B8A|B09|cirrus|swir16|swir22|pan',
         resolution='10GSD',
         workers='avail',
         start_time='1970-01-01',
+        merge_method='mean',
+        assets_dname='raw_bands',
     )
     user_time_combine_config = Yaml.coerce(time_combine)
 
@@ -356,6 +359,14 @@ def run_stac_to_cropped_kwcoco(input_path,
             **time_combine_config
         )
         ta1_cropped_kwcoco_path = os.fspath(preproc_kwcoco_fpath)
+
+        # Add watch fields
+        print("* Adding watch fields to time combined data *")
+        coco_add_watch_fields.main(cmdline=False,
+                                   src=ta1_cropped_kwcoco_path,
+                                   dst=ta1_cropped_kwcoco_path,
+                                   target_gsd=target_gsd,
+                                   workers=jobs)
 
     # 7. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
