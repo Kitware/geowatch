@@ -6,6 +6,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Version 0.6.0 - Target 2023-05-x
 
+### Changed
+
+* Reorganized docs
+* `coco_align` now uses process context
+
 ## Version 0.5.6 - Target 2023-04-30
 
 ### Added

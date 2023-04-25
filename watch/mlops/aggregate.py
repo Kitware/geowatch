@@ -1538,11 +1538,16 @@ def aggregate_param_cols(df, aggregator=None, hash_cols=None, allow_nonuniform=F
     dataset-specific columns to be hashed. All other columns should
     be effectively the same, otherwise we will warn.
 
+    Args:
+        hash_cols (None | List[str]):
+            columns whos values should be hashed together.
+
     TODO:
         - [ ] optimize this
     """
     import pandas as pd
     import numpy as np
+    import rich
     agg_row = df.iloc[0]
     if len(df) == 1:
         return agg_row
@@ -1550,7 +1555,16 @@ def aggregate_param_cols(df, aggregator=None, hash_cols=None, allow_nonuniform=F
         if hash_cols:
             df_comparable = df.drop(hash_cols, axis=1)
             df_hashable = df[hash_cols]
-            hashed = {c: hash_regions(v) for c, v in df_hashable.T.iterrows()}
+            hashed = {}
+            for col, values in df_hashable.T.iterrows():
+                try:
+                    hashed[col] = hash_regions(values)
+                except TypeError:
+                    rich.print(ub.codeblock(
+                        f'''
+                        [red]ERROR[/red] when hashing column: {col=}
+                        '''))
+                    raise
         else:
             df_comparable = df
             hashed = {}
@@ -1600,7 +1614,11 @@ def macro_aggregate(agg, group, aggregator):
 
     # Check if there is more than one run per-region per-param and
     # average them to keep the stats balanced.
-    has_multiple_param_runs = (table['region_id'].value_counts() > 1).any()
+    runs_per_region = table['region_id'].value_counts()
+    has_multiple_param_runs = (runs_per_region > 1).any()
+
+    allow_nonuniform = True
+
     if has_multiple_param_runs:
 
         # All aggregations are the mean when combining over the same region id
@@ -1612,7 +1630,10 @@ def macro_aggregate(agg, group, aggregator):
         subrows = []
         try:
             for _, subgroup in subgroups:
-                subrow = aggregate_param_cols(subgroup, aggregator=sub_aggregator, hash_cols=sub_hash_cols, allow_nonuniform=True)
+                subrow = aggregate_param_cols(df=subgroup,
+                                              aggregator=sub_aggregator,
+                                              hash_cols=sub_hash_cols,
+                                              allow_nonuniform=allow_nonuniform)
                 subrows.append(subrow)
         except Exception:
             print(f'_={_}')
@@ -1621,7 +1642,9 @@ def macro_aggregate(agg, group, aggregator):
         # Now each region is in exactly one row.
         table = pd.DataFrame(subrows)
 
-    macro_row = aggregate_param_cols(table, aggregator=aggregator, hash_cols=hash_cols, allow_nonuniform=True)
+    macro_row = aggregate_param_cols(df=table, aggregator=aggregator,
+                                     hash_cols=hash_cols,
+                                     allow_nonuniform=allow_nonuniform)
     return macro_row
 
 

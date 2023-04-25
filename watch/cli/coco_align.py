@@ -548,7 +548,7 @@ def main(cmdline=True, **kw):
     from watch.utils import kwcoco_extensions
     import os
     import kwcoco
-    import socket
+    # import socket
     import pandas as pd
     import warnings
     import kwimage
@@ -569,17 +569,25 @@ def main(cmdline=True, **kw):
         os.environ['GDAL_DISABLE_READDIR_ON_OPEN'] = 'EMPTY_DIR'
 
     # TODO: use ProcessContext instead
-    process_info = {
-        'type': 'process',
-        'properties': {
-            'name': 'coco_align',
-            'args': config_dict,
-            'hostname': socket.gethostname(),
-            'cwd': os.getcwd(),
-            'timestamp': ub.timestamp(),
-        }
-    }
-    print('process_info = {}'.format(ub.urepr(process_info, nl=3, sort=0)))
+    # process_info = {
+    #     'type': 'process',
+    #     'properties': {
+    #         'name': 'coco_align',
+    #         'args': config_dict,
+    #         'hostname': socket.gethostname(),
+    #         'cwd': os.getcwd(),
+    #         'timestamp': ub.timestamp(),
+    #     }
+    # }
+    from watch.utils import process_context
+    proc_context = process_context.ProcessContext(
+        name='coco_align',
+        type='process',
+        config=config_dict,
+    )
+    proc_context.start()
+    process_info = proc_context.obj
+    # print('process_info = {}'.format(ub.urepr(process_info, nl=3, sort=0)))
 
     config.img_workers = util_parallel.coerce_num_workers(config['img_workers'])
     config.aux_workers = util_parallel.coerce_num_workers(config['aux_workers'])
@@ -634,6 +642,9 @@ def main(cmdline=True, **kw):
         include_sensors=config['include_sensors'],
         exclude_sensors=config['exclude_sensors'],
     )
+
+    if proc_context is not None:
+        proc_context.add_disk_info(coco_dset.fpath)
 
     geo_preprop = config['geo_preprop']
     if config['skip_geo_preprop']:
@@ -766,6 +777,9 @@ def main(cmdline=True, **kw):
         raise Exception('hack_lazy always fails')
 
     kwcoco_extensions.reorder_video_frames(new_dset)
+
+    proc_context.stop()
+
     new_dset.fpath = dst_fpath
     print('Dumping new_dset.fpath = {!r}'.format(new_dset.fpath))
     try:
