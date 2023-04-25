@@ -103,7 +103,7 @@ def main(cmdline=True, **kwargs):
         >>> main(cmdline, **kwargs)
     """
     import kwcoco
-    config = CocoCombineFeatures(data=kwargs, cmdline=cmdline)
+    config = CocoCombineFeatures.cli(data=kwargs, cmdline=cmdline)
     import rich
     rich.print(ub.urepr(config))
 
