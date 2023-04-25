@@ -68,14 +68,9 @@ else
     "
 fi
 
-#pip install -r requirements/no-deps.txt
-
 # Do everything
-python -m pip install pip setuptools wheel build -U
+python -m pip install setuptools wheel build -U
 
-# FIXME: Something in the req is pinning scikit-image to be less than 0.19 but
-# I'm not sure what it is.
-#pip install scikit-image
 
 if [[ "$WATCH_STRICT" == "1" ]]; then
     ./dev/make_strict_req.sh
@@ -84,7 +79,7 @@ if [[ "$WATCH_STRICT" == "1" ]]; then
 
     python -m pip install -r requirements-strict/linting.txt
 
-    # Install the watch module in development mode
+    # Install the geowatch module in development mode
     python -m pip install -e .[all-strict,headless-strict]
 
     python -m pip install "dvc[all]>=2.9.3"
@@ -107,7 +102,7 @@ else
 
     python -m pip install "dvc[all]>=2.9.3"
 
-    # Install the watch module in development mode
+    # Install the geowatch module in development mode
     python -m pip install -e .[all,headless]
 
     if ! command -v nvidia-smi &> /dev/null

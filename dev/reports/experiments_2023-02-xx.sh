@@ -1703,7 +1703,7 @@ python -m watch.mlops.schedule_evaluation --params="
         bas_pxl.fixed_resolution:
             - 10GSD
         bas_pxl.time_sampling:
-            - auto
+            #- auto
             - soft5
             - soft4
         bas_poly.thresh:
@@ -1784,11 +1784,11 @@ python -m watch.mlops.schedule_evaluation --params="
             # - 0.8
             # - 0.5
         sv_dino_filter.end_min_score:
-            - 0.0
+            #- 0.0
             - 0.05
             - 0.1
-            - 0.15
-            - 0.2
+            #- 0.15
+            #- 0.2
             #- 0.25
             #- 0.3
             # - 0.4
