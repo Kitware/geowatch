@@ -1,4 +1,4 @@
-To install Miniconda3, follow the instructions below for Linux. For Windows 10
+To install Miniconda3, follow the instructions below for Linux. For Windows 11
 users, the Windows Subsystem for Linux (WSL) allows you to run Linux within
 Windows.
 
@@ -15,22 +15,22 @@ Windows.
 
     # For security, it is important to verify the hash
     CONDA_EXPECTED_SHA256=1314b90489f154602fd794accfc90446111514a5a72fe1f71ab83e07de9504a7
-    echo "${CONDA_EXPECTED_SHA256}  ${CONDA_INSTALL_SCRIPT}" > conda_expected_hash.sha256 
+    echo "${CONDA_EXPECTED_SHA256}  ${CONDA_INSTALL_SCRIPT}" > conda_expected_hash.sha256
     if ! sha256sum --status -c conda_expected_hash.sha256; then
         echo "Downloaded file does not match hash! DO NOT CONTINUE!"
     else
         echo "Hash verified, continue with install"
-        chmod +x $CONDA_INSTALL_SCRIPT 
+        chmod +x $CONDA_INSTALL_SCRIPT
         # Install miniconda to user local directory
         _CONDA_ROOT=$HOME/.local/conda
         sh $CONDA_INSTALL_SCRIPT -b -p $_CONDA_ROOT
         # Activate the basic conda environment
         source $_CONDA_ROOT/etc/profile.d/conda.sh
-        # Update the base 
-        conda update --name base conda --yes 
+        # Update the base
+        conda update --name base conda --yes
     fi
 
-NOTE: If using conda, do NOT use ``conda install`` to install Python packages. 
+NOTE: If using conda, do NOT use ``conda install`` to install Python packages.
 
 
 Create WATCH environment with Conda

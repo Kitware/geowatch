@@ -3,3 +3,12 @@
 def __getattr__(key):
     import watch.tasks.fusion.predict as mirror
     return getattr(mirror, key)
+
+
+if __name__ == '__main__':
+    """
+    CommandLine:
+        python ~/code/watch/geowatch/tasks/fusion/predict.py
+    """
+    from watch.tasks.fusion.predict import main
+    main()

@@ -10,6 +10,7 @@ TEST:
 __submodules__ = {
     '*': [],
     'util_data': ['find_smart_dvc_dpath', 'find_dvc_dpath'],
+    'util_yaml': ['Yaml'],
 }
 
 
@@ -74,10 +75,13 @@ __getattr__, __dir__, __all__ = lazy_loader.attach(
             'find_smart_dvc_dpath',
             'find_dvc_dpath',
         ],
+        'util_yaml': [
+            'Yaml',
+        ],
     },
 )
 
-__all__ = ['configargparse_ext', 'ext_monai', 'find_dvc_dpath',
+__all__ = ['Yaml', 'configargparse_ext', 'ext_monai', 'find_dvc_dpath',
            'find_smart_dvc_dpath', 'ijson_ext', 'kwcoco_extensions',
            'lightning_ext', 'partial_format', 'process_context',
            'result_analysis', 'reverse_hashid', 'simple_dvc', 'slugify_ext',

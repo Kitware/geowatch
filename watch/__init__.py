@@ -11,7 +11,7 @@ import ubelt as ub
 import warnings
 
 
-__version__ = '0.5.3'
+__version__ = '0.5.6'
 
 
 # ~/code/watch/dev/maintain/generate_authors.py
@@ -92,7 +92,10 @@ def _is_running_a_fast_cli_tool():
     """
     if os.environ.get('_ARGCOMPLETE', ''):
         return True
-    if sys.argv and 'smartwatch_dvc' in sys.argv[0]:
+    if sys.argv and 'smartwatch_dvc' in sys.argv[0] or 'geowatch_dvc' in sys.argv[0]:
+        return True
+    if sys.argv and len(sys.argv):
+        # No args given case
         return True
     if sys.argv and sys.argv == ['-m']:
         return True

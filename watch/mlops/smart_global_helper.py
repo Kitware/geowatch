@@ -250,6 +250,16 @@ class SmartGlobalHelper:
                 },
 
                 {
+                    'metric1': 'metrics.bas_poly_eval.bas_tpr',
+                    'metric2': 'metrics.bas_poly_eval.bas_f1',
+
+                    'objective1': 'maximize',
+
+                    'scale1': 'linear',
+                    'scale2': 'linear',
+                },
+
+                {
                     'metric1': 'metrics.sv_poly_eval.bas_ppv',
                     'metric2': 'metrics.sv_poly_eval.bas_tpr',
 

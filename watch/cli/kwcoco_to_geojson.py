@@ -446,52 +446,70 @@ def predict_phase_changes(site_id, features):
     day (latest available image). See tracking.normalize.normalize_phases
     for what happens if the site has ended.
 
-    https://smartgitlab.com/TE/standards/-/wikis/Site-Model-Specification
+    Args:
+        site_id (str): site identifier
+        features (List[Dict]): observation feature dictionaries for the site
+
+    Returns:
+        dict
+
+    References:
+        https://smartgitlab.com/TE/standards/-/wikis/Site-Model-Specification
+        https://gitlab.kitware.com/smart/standards-wiki/-/blob/main/Site-Model-Specification.md
+
+    Example:
+        >>> from watch.geoannots import geomodels
+        >>> site = geomodels.SiteModel.random(rng=0, num_observations=20)
+        >>> site_id = site.site_id
+        >>> features = list(site.body_features())
+        >>> features[-1]['properties']['misc_info'] = {'phase_transition_days': [100]}
+        >>> predict_phase_changes(site_id, features)
     '''
     import datetime as datetime_mod
     import dateutil.parser
-    import itertools
-    all_phases = [
-        feat['properties']['current_phase'].split(sep) for feat in features
-    ]
 
-    tomorrow = (dateutil.parser.parse(
-        features[-1]['properties']['observation_date']) +
-                datetime_mod.timedelta(days=1)).isoformat()
+    feature_properties = [feat['properties'] for feat in features]
+
+    # Ensure features are in temporal order
+    # (they probably are already, but we are being safe)
+    feature_properties = sorted(
+        feature_properties,
+        key=lambda prop: dateutil.parser.parse(prop['observation_date']))
+
+    feature_phases = [prop['current_phase'].split(sep) for prop in feature_properties]
 
     def transition_date_from(phase):
-        for feat, phases in zip(reversed(features), reversed(all_phases)):
+        for props, phases in zip(reversed(feature_properties), reversed(feature_phases)):
             if phase in phases:
-                return (dateutil.parser.parse(
-                    feat['properties']['observation_date']) +
-                        datetime_mod.timedelta(
-                            int(feat['properties']['misc_info']
-                                ['phase_transition_days'][phases.index(
-                                    phase)]))).isoformat()
+                _idx = phases.index(phase)
+                misc_info = props.get('misc_info', {})
+                obs_date = dateutil.parser.parse(props['observation_date'])
+                days = misc_info['phase_transition_days'][_idx]
+                pred_delta = datetime_mod.timedelta(days=int(days))
+                return (obs_date + pred_delta).isoformat()
         print(f'warning: {site_id=} is missing {phase=}')
-        return tomorrow
+        final_date = dateutil.parser.parse(
+            feature_properties[-1]['observation_date'])
+        tomorrow = final_date + datetime_mod.timedelta(days=1)
+        return tomorrow.isoformat()
 
-    all_phases_set = set(itertools.chain.from_iterable(all_phases))
+    final_phase = feature_phases[-1]
 
-    if 'Post Construction' in all_phases_set:
+    if 'Post Construction' in final_phase:
         return {}
-    elif 'Active Construction' in all_phases_set:
+    elif 'Active Construction' in final_phase:
         return {
-            'predicted_phase_transition':
-            'Post Construction',
-            'predicted_phase_transition_date':
-            transition_date_from('Active Construction')
+            'predicted_phase_transition': 'Post Construction',
+            'predicted_phase_transition_date': transition_date_from('Active Construction')
         }
-    elif 'Site Preparation' in all_phases_set:
+    elif 'Site Preparation' in final_phase:
         return {
-            'predicted_phase_transition':
-            'Active Construction',
-            'predicted_phase_transition_date':
-            transition_date_from('Site Preparation')
+            'predicted_phase_transition': 'Active Construction',
+            'predicted_phase_transition_date': transition_date_from('Site Preparation')
         }
     else:
         # raise ValueError(f'missing phases: {site_id=} {all_phases_set=}')
-        print(f'missing phases: {site_id=} {all_phases_set=}')
+        print(f'missing phases: {site_id=} {final_phase=}')
         return {}
 
 

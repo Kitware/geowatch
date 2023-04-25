@@ -7,6 +7,24 @@ from watch.mlops.aggregate import fix_duplicate_param_hashids
 from watch.utils import util_pandas
 
 
+def _debug_roi_issue():
+    import watch
+    from watch.mlops.aggregate import AggregateLoader
+    expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+    loader = AggregateLoader(
+        pipeline='bas_building_vali',
+        target=[
+            expt_dvc_dpath / '_toothbrush_split6_landcover_MeanYear10GSD-V2',
+        ])
+    eval_type_to_aggregator = loader.coerce_aggregators()
+    pxl_agg = eval_type_to_aggregator['bas_pxl_eval']
+    poly_agg = eval_type_to_aggregator['bas_poly_eval']
+    sv_poly_agg = eval_type_to_aggregator['sv_poly_eval']
+
+    agg = sv_poly_agg
+
+
+
 
 def _sitevisit_2023_april_report():
     import watch

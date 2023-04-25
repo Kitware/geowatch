@@ -1,16 +1,12 @@
+#!/usr/bin/env python3
 """
-
-
 CommandLine:
     DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
     python -m watch.cli.geojson_site_stats.py \
         --site_models="$DVC_DATA_DPATH/annotations/drop6/site_models/*"
-
-
 """
-
 import scriptconfig as scfg
-import numpy as np
+import ubelt as ub
 
 
 class GeojsonSiteStatConfig(scfg.DataConfig):
@@ -36,13 +32,13 @@ def main(cmdline=1, **kwargs):
         kwargs['site_models'] = '/data/joncrall/dvc-repos/smart_expt_dvc/smartflow_evals/kit_pre_eval_8_20230131/BR_R001/sc_out_site_models'
     """
     config = GeojsonSiteStatConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
-    import ubelt as ub
+    import rich
+    rich.print('config = ' + ub.repr2(config))
     import pandas as pd
+    import numpy as np
     from watch.utils import util_gis
     from watch.utils import util_time
     import matplotlib.dates as mdates
-    import rich
-    rich.print(config)
 
     site_infos = list(util_gis.coerce_geojson_datas(config['site_models']))
 
@@ -282,6 +278,7 @@ def geopandas_shape_stats(df):
     Compute shape statistics about a geopandas dataframe (assume UTM CRS)
     """
     import kwimage
+    import numpy as np
     # df['area'] = df.geometry.area
     # df['hull_area'] = df.geometry.convex_hull.area
     df['hull_rt_area'] = np.sqrt(df.geometry.convex_hull.area)
@@ -300,6 +297,8 @@ def geopandas_shape_stats(df):
     # df['eig_seitzinger'] = df.geometry.apply(shapestats.compactness.eig_seitzinger)
     return df
 
+
+__config__ = GeojsonSiteStatConfig
 
 if __name__ == '__main__':
     """

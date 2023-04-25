@@ -322,11 +322,11 @@ class SiteModel(_Model):
         return gdf
 
     @classmethod
-    def random(cls):
+    def random(cls, rng=None, **kwargs):
         """
         """
         from watch.demo.metrics_demo import demo_truth
-        _, sites, _ = demo_truth.random_region_model(num_sites=1)
+        _, sites, _ = demo_truth.random_region_model(num_sites=1, rng=rng, **kwargs)
         return cls(**sites[0])
 
     def as_summary(self):

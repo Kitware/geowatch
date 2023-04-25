@@ -4,6 +4,10 @@ passing the right metadata to functions that need it. This module serves as a
 place to store hard-coded heuristics so we are explicit about where we are
 cutting corners or using magic numbers. The idea is that  this will make it
 easier for us to go back and make the code robust.
+
+References:
+    https://gitlab.kitware.com/smart/annotations-wiki/-/blob/main/Annotation-Status-Types.md
+
 """
 import ubelt as ub
 

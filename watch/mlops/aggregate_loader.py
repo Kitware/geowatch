@@ -208,9 +208,10 @@ def load_result_worker(fpath, node_name, out_node_key):
 
             # Cache this resolved row data
             result = util_json.ensure_json_serializable(result)
-        except Exception:
+        except Exception as ex:
             print(f'Failed to load results for: {node_name}')
             print(f'node_dpath={str(node_dpath)!r}')
+            print('ex = {}'.format(ub.urepr(ex, nl=1)))
             raise
 
         with safer.open(resolved_json_fpath, 'w') as file:
@@ -352,14 +353,16 @@ def load_result_resolved(node_dpath):
         flat_resolved = util_dotdict.DotDict.from_nested(nest_resolved)
         flat_resolved = flat_resolved.insert_prefix(node_type, 1)
 
-    elif node_type in {'valicrop'}:
+    elif node_type in {'valicrop', 'sv_crop'}:
 
         # TODO: parse resolved params
         # nest_resolved = {}
         # flat_resolved = util_dotdict.DotDict.from_nested(nest_resolved)
         # flat_resolved = flat_resolved.insert_prefix(node_type, index=1)
         node_process_name = 'coco_align'
-        fpath = node_dpath / 'valicrop.kwcoco.zip'
+        fpath = node_dpath / 'sv_crop.kwcoco.zip'
+        if not fpath.exists():
+            fpath = node_dpath / 'valicrop.kwcoco.zip'
         flat_resolved = _generalized_process_flat_resolved(fpath, node_process_name, node_type)
 
     elif node_type in {'sv_dino_boxes'}:

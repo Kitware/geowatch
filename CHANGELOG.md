@@ -4,7 +4,7 @@ This changelog follows the specifications detailed in: [Keep a Changelog](https:
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
 
-## Version 0.5.5 - Target 2023-04-x
+## Version 0.5.6 - Target 2023-04-x
 
 ### Added
 * `coco_time_combine` can now ignore seasons / handle median images with less memory
@@ -28,6 +28,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Updated prepare-ta2-dataset with new cmd-queue and ACC-3 data
 * Users can now overwrite mlops output locations.
 * DATALOADER CHANGE: We were previously nan-ing all bands if red was nan. We no longer do this because it clobbers pan.
+* Phase change prediction now only uses the last observation.
 
 ### Fixed
 

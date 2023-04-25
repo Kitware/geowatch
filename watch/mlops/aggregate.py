@@ -1610,9 +1610,14 @@ def macro_aggregate(agg, group, aggregator):
         sub_hash_cols = agg.test_dset_cols
         subgroups = table.groupby('region_id')
         subrows = []
-        for _, subgroup in subgroups:
-            subrow = aggregate_param_cols(subgroup, aggregator=sub_aggregator, hash_cols=sub_hash_cols, allow_nonuniform=True)
-            subrows.append(subrow)
+        try:
+            for _, subgroup in subgroups:
+                subrow = aggregate_param_cols(subgroup, aggregator=sub_aggregator, hash_cols=sub_hash_cols, allow_nonuniform=True)
+                subrows.append(subrow)
+        except Exception:
+            print(f'_={_}')
+            print('len(subgroup) = {}'.format(ub.urepr(len(subgroup), nl=1)))
+            raise
         # Now each region is in exactly one row.
         table = pd.DataFrame(subrows)
 
@@ -1646,7 +1651,13 @@ def hash_param(row, version=1):
 
 
 def hash_regions(rois):
-    suffix = ub.hash_data(sorted(rois), base=16)[0:6]
+    try:
+        suffix = ub.hash_data(sorted(rois), base=16)[0:6]
+    except Exception:
+        print('Error---')
+        print('rois = {}'.format(ub.urepr(rois, nl=1)))
+        print('Error---')
+        raise
     macro_key = f'macro_{len(rois):02d}_{suffix}'
     return macro_key
 

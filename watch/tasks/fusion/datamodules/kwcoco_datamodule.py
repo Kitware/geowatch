@@ -46,6 +46,8 @@ class KWCocoVideoDataModuleConfig(KWCocoVideoDatasetConfig):
             '''
             if True, computes the mean/std for this dataset on each mode
             so this can be passed to the model.
+            If set to a number it will only draw that many samples to estimate
+            the mean/std.
             '''))
 
     num_workers = scfg.Value(4, type=str, alias=['workers'], help=ub.paragraph(

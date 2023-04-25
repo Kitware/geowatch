@@ -1,4 +1,7 @@
-def test_tracker():
+def test_tracker_with_sv():
+    """
+    Tests tracker with site verification on
+    """
     import json
     import kwcoco
     import pandas as pd
@@ -310,3 +313,57 @@ def test_tracker_bas_with_boundary_region():
             'but then the tests should be fixed to ensure there are oob sites '
             'being removed'
         )
+
+
+def test_tracker_nan_params():
+    """
+    Test that nan params are properly handled
+    """
+    import json
+    import kwcoco
+    import ubelt as ub
+    from watch.cli import kwcoco_to_geojson
+    import watch
+
+    coco_dset = watch.coerce_kwcoco('watch-msi', heatmap=True, geodata=True, dates=True)
+
+    video0 = coco_dset.videos().objs[0]
+    video0_images = coco_dset.images(video_id=video0['id'])
+    assert len(video0_images) >= 10, 'should have a several frames'
+    assert len(set(video0_images.lookup('date_captured'))) > 5, (
+        'should be on different dates')
+
+    #coco_dset = smart_kwcoco_demodata.demo_smart_aligned_kwcoco()
+    dpath = ub.Path.appdir('watch', 'test', 'tracking', 'unit_test1').ensuredir()
+    dpath.delete().ensuredir()
+
+    coco_dset.reroot(absolute=True)
+    coco_dset.fpath = dpath / 'bas_input.kwcoco.json'
+    coco_dset.clear_annotations()
+    coco_dset.dump(coco_dset.fpath, indent=2)
+
+    regions_dir = dpath / 'regions/'
+    bas_coco_fpath = dpath / 'bas_output.kwcoco.json'
+    bas_fpath = dpath / 'bas_sites.json'
+    # Run BAS
+    bas_argv = [
+        '--in_file', coco_dset.fpath,
+        '--out_site_summaries_dir', str(regions_dir),
+        '--out_site_summaries_fpath',  str(bas_fpath),
+        '--out_kwcoco', str(bas_coco_fpath),
+        '--track_fn', 'saliency_heatmaps',
+        '--track_kwargs', json.dumps({
+            'thresh': 0.5,
+            'time_thresh': .8,
+            'min_area_square_meters': None,
+            'moving_window_size': None,
+            'max_area_square_meters': None,
+            'polygon_simplify_tolerance': 1,
+        }),
+    ]
+    kwcoco_to_geojson.main(bas_argv)
+
+    bas_coco_dset = kwcoco.CocoDataset(bas_coco_fpath)
+    bas_trackids = bas_coco_dset.annots().lookup('track_id', None)
+    assert len(bas_trackids) > len(set(bas_trackids)), (
+        'should have multiple observations per track')

@@ -9,6 +9,7 @@ import itertools
 import math
 from typing import Tuple, Union, Optional, Literal
 from dataclasses import dataclass
+import scriptconfig as scfg
 
 from watch.heuristics import SITE_SUMMARY_CNAME, CNAMES_DCT
 from watch.tasks.tracking.utils import NoOpTrackFunction  # NOQA
@@ -480,6 +481,32 @@ def site_validation(sub_dset, thresh=0.25, span_steps=15):
         sub_dset.remove_annotations(ann_ids_to_drop)
 
     return sub_dset
+
+
+class TimeAggregatedPolysConfig(scfg.DataConfig):
+    """
+    This is an intermediate config that we will use to transition between the
+    current dataclass configuration and a new scriptconfig based one.
+    """
+    thresh = 0.0
+    morph_kernel = 3
+    key = 'salient'
+    bg_key = None
+    time_thresh = 1
+    response_thresh = None
+    use_boundaries = False
+    norm_ord = 1
+    agg_fn = 'probs'
+    moving_window_size = None
+    min_area_square_meters = None
+    max_area_square_meters = None
+    max_area_behavior = 'drop'
+    thresh_hysteresis = None
+    polygon_simplify_tolerance = None
+    resolution = None
+    inner_window_size = None
+    inner_agg_fn = None
+    poly_merge_method = None
 
 
 @profile

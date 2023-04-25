@@ -1541,6 +1541,141 @@ python -m watch.mlops.schedule_evaluation --params="
 
 
 
+### Evaluate promissing landcover models on namek
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_HDD_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=hdd)
+python -m watch.mlops.schedule_evaluation --params="
+    matrix:
+        bas_pxl.package_fpath:
+            - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
+            #- $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_split6_V45/Drop6_TCombo1Year_BAS_10GSD_split6_V45_epoch73_step18944.pt
+            #- $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V48/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V48_epoch106_step6848.pt
+        bas_pxl.test_dataset:
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R002_I2L.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-BR_R002_I2L.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-CH_R001_I2L.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-NZ_R001_I2L.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R001_I2L.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-AE_R001_I2L.kwcoco.zip
+        bas_pxl.chip_overlap: 0.3
+        bas_pxl.chip_dims:
+            - '196,196'
+        bas_pxl.time_span:
+            - auto
+        bas_pxl.fixed_resolution:
+            - 10GSD
+        bas_pxl.time_sampling:
+            - auto
+            - soft5
+            - soft4
+        bas_poly.thresh:
+            - 0.25
+            - 0.3
+            - 0.35
+            - 0.4
+            - 0.45
+            - 0.5
+        bas_poly.time_thresh:
+            - 1.0
+            - 0.9
+            - 0.8
+        bas_poly.inner_window_size:
+            - 1y
+        bas_poly.inner_agg_fn:
+            - mean
+        bas_poly.norm_ord:
+            - inf
+        bas_poly.resolution:
+            - 10GSD
+        bas_poly.moving_window_size:
+            - null
+        bas_poly.poly_merge_method:
+            - 'v2'
+        bas_poly.polygon_simplify_tolerance:
+            - 1
+        bas_poly.agg_fn:
+            - probs
+        bas_poly.min_area_square_meters:
+            - 7200
+        bas_poly.max_area_square_meters:
+            - 8000000
+        bas_poly.boundary_region: $DVC_DATA_DPATH/annotations/drop6/region_models
+        bas_poly_eval.true_site_dpath: $DVC_DATA_DPATH/annotations/drop6/site_models
+        bas_poly_eval.true_region_dpath: $DVC_DATA_DPATH/annotations/drop6/region_models
+        bas_pxl.enabled: 1
+        bas_pxl_eval.enabled: 0
+        bas_poly.enabled: 1
+        bas_poly_eval.enabled: 1
+        bas_poly_viz.enabled: 0
+        sv_crop.enabled: 1
+        sv_crop.minimum_size: 256x256@3GSD
+        sv_crop.num_start_frames: 3
+        sv_crop.num_end_frames: 3
+        sv_crop.context_factor: 1.6
+        sv_dino_boxes.enabled: 1
+        sv_dino_boxes.package_fpath: $DVC_EXPT_DPATH/models/kitware/xview_dino.pt
+        sv_dino_boxes.window_dims:
+            #- 256
+            - 512
+            #- 768
+            #- 1024
+            #- 1536
+        sv_dino_boxes.window_overlap:
+            - 0.5
+        sv_dino_boxes.fixed_resolution:
+            #- 1GSD
+            #- 2GSD
+            #- 2.5GSD
+            - 3GSD
+            #- 3.3GSD
+        sv_dino_filter.box_isect_threshold:
+            - 0.1
+        sv_dino_filter.box_score_threshold:
+            - 0.01
+        sv_dino_filter.start_max_score:
+            - 1.0
+            #- 0.9
+            # - 0.8
+            # - 0.5
+        sv_dino_filter.end_min_score:
+            - 0.0
+            #- 0.05
+            - 0.1
+            #- 0.15
+            - 0.2
+            #- 0.25
+            #- 0.3
+            # - 0.4
+            #- 0.5
+    submatrices:
+        - bas_pxl.fixed_resolution: 10GSD
+          bas_poly.resolution:
+              - 10GSD
+        - bas_pxl.fixed_resolution: 8GSD
+          bas_poly.resolution:
+              - 8GSD
+        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R001_I2L.kwcoco.zip
+          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Drop6/imgonly-KR_R001.kwcoco.json
+        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R002_I2L.kwcoco.zip
+          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Drop6/imgonly-KR_R002.kwcoco.json
+        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-BR_R002_I2L.kwcoco.zip
+          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Drop6/imgonly-BR_R002.kwcoco.json
+        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-CH_R001_I2L.kwcoco.zip
+          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Drop6/imgonly-CH_R001.kwcoco.json
+        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-NZ_R001_I2L.kwcoco.zip
+          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Drop6/imgonly-NZ_R001.kwcoco.json
+        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-AE_R001_I2L.kwcoco.zip
+          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Drop6/imgonly-AE_R001.kwcoco.json
+    " \
+    --root_dpath="$DVC_EXPT_DPATH/_namek_split6_landcover_MeanYear10GSD-V2" \
+    --devices="0,1" --tmux_workers=8 \
+    --backend=tmux --queue_name "_namek_split6_landcover_MeanYear10GSD-V2" \
+    --pipeline=bas_building_vali --skip_existing=1 \
+    --run=1
+
+
+
 ### Evaluate promissing landcover models on toothbrush
 DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
@@ -1559,7 +1694,7 @@ python -m watch.mlops.schedule_evaluation --params="
             #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-AE_R001_I2L.kwcoco.zip
         bas_pxl.chip_overlap: 0.3
         bas_pxl.chip_dims:
-            - auto
+            #- auto
             - '196,196'
             - '256,256'
             - '320,320'
@@ -1568,7 +1703,7 @@ python -m watch.mlops.schedule_evaluation --params="
         bas_pxl.fixed_resolution:
             - 10GSD
         bas_pxl.time_sampling:
-            - auto
+            #- auto
             - soft5
             - soft4
         bas_poly.thresh:
@@ -1617,25 +1752,26 @@ python -m watch.mlops.schedule_evaluation --params="
         bas_poly.enabled: 1
         bas_poly_eval.enabled: 1
         bas_poly_viz.enabled: 0
-        valicrop.enabled: 1
-        valicrop.minimum_size: 256x256@3GSD
-        valicrop.num_start_frames: 3
-        valicrop.num_end_frames: 3
-        valicrop.context_factor: 1.6
+        sv_crop.enabled: 1
+        sv_crop.minimum_size: 256x256@3GSD
+        sv_crop.num_start_frames: 3
+        sv_crop.num_end_frames: 3
+        sv_crop.context_factor: 1.6
         sv_dino_boxes.enabled: 1
         sv_dino_boxes.package_fpath: $DVC_EXPT_DPATH/models/kitware/xview_dino.pt
         sv_dino_boxes.window_dims:
             - 256
+            - 320
             - 512
-            - 768
-            - 1024
-            # - 1536
+            #- 768
+            #- 1024
+            #- 1536
         sv_dino_boxes.window_overlap:
             - 0.5
         sv_dino_boxes.fixed_resolution:
             #- 1GSD
             #- 2GSD
-            - 2.5GSD
+            #- 2.5GSD
             - 3GSD
             - 3.3GSD
         sv_dino_filter.box_isect_threshold:
@@ -1644,19 +1780,19 @@ python -m watch.mlops.schedule_evaluation --params="
             - 0.01
         sv_dino_filter.start_max_score:
             - 1.0
-            - 0.9
+            #- 0.9
             # - 0.8
             # - 0.5
         sv_dino_filter.end_min_score:
-            - 0.0
+            #- 0.0
             - 0.05
             - 0.1
-            - 0.15
+            #- 0.15
             #- 0.2
             #- 0.25
-            - 0.3
+            #- 0.3
             # - 0.4
-            - 0.5
+            #- 0.5
     submatrices:
         - bas_pxl.fixed_resolution: 10GSD
           bas_poly.resolution:
@@ -1665,17 +1801,17 @@ python -m watch.mlops.schedule_evaluation --params="
           bas_poly.resolution:
               - 8GSD
         - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R001_I2L.kwcoco.zip
-          valicrop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-KR_R001.kwcoco.json
+          sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-KR_R001.kwcoco.json
         - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R002_I2L.kwcoco.zip
-          valicrop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-KR_R002.kwcoco.json
+          sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-KR_R002.kwcoco.json
         - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-BR_R002_I2L.kwcoco.zip
-          valicrop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-BR_R002.kwcoco.json
+          sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-BR_R002.kwcoco.json
         - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-CH_R001_I2L.kwcoco.zip
-          valicrop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-CH_R001.kwcoco.json
+          sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-CH_R001.kwcoco.json
         - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-NZ_R001_I2L.kwcoco.zip
-          valicrop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-NZ_R001.kwcoco.json
+          sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-NZ_R001.kwcoco.json
         - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-AE_R001_I2L.kwcoco.zip
-          valicrop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-AE_R001.kwcoco.json
+          sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-AE_R001.kwcoco.json
     " \
     --root_dpath="$DVC_EXPT_DPATH/_toothbrush_split6_landcover_MeanYear10GSD-V2" \
     --devices="0,1" --tmux_workers=8 \
@@ -1684,20 +1820,45 @@ python -m watch.mlops.schedule_evaluation --params="
     --run=1
 
 
+
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
 geowatch aggregate \
-    --pipeline=bas \
+    --pipeline=bas_building_vali \
     --target \
         "$DVC_EXPT_DPATH/_toothbrush_split6_landcover_MeanYear10GSD-V2" \
-    --resource_report=True \
-    --rois=KR_R001,KR_R002,CH_R001,NZ_R001,BR_R002,AE_R001 \
     --stdout_report="
-        top_k: 30
+        top_k: 10
         per_group: 2
         macro_analysis: 0
         analyze: 0
         reference_region: final
         # print_models: True
-    "\
-    --plot_params=True \
-    --output_dpath="$DVC_EXPT_DPATH"/_toothbrush_split6_landcover_MeanYear10GSD-V2/_aggregate
+    " \
+    --resource_report=0 \
+    --plot_params=0 \
+    --export_tables=0 \
+    --output_dpath="$DVC_EXPT_DPATH/_toothbrush_split6_landcover_MeanYear10GSD-V2/aggregate"
+    #--rois=KR_R001,KR_R002,CH_R001,NZ_R001,BR_R002 \
+
+
+
+#DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+#geowatch aggregate \
+#    --pipeline=bas \
+#    --target "
+#        - $DVC_EXPT_DPATH/aggregate_results/toothbrush/*.csv.zip
+#        - $DVC_EXPT_DPATH/aggregate_results/ooo/*.csv.zip
+#        - $DVC_EXPT_DPATH/aggregate_results/namek/*.csv.zip
+#    " \
+#    --rois=KR_R001,KR_R002,CH_R001,NZ_R001,BR_R002 \
+#    --stdout_report="
+#        top_k: 3
+#        per_group: 2
+#        macro_analysis: 0
+#        analyze: 0
+#        reference_region: final
+#        print_models: False
+#    " \
+#    --resource_report=False \
+#    --plot_params=False \
+#    --export_tables=False \

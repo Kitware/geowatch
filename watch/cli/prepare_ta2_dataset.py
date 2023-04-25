@@ -62,6 +62,9 @@ Example:
 
     smartwatch visualize $HOME/data/dvc-repos/smart_watch_dvc/Aligned-Drop2-TA1-2022-02-24/data.kwcoco_c9ea8bb9.json
 
+TODO:
+    handl GE01 and WV01 platforms
+
 """
 
 
@@ -128,7 +131,7 @@ class PrepareTA2Config(CMDQueueConfig):
         'region_globstr': scfg.Value('annotations/region_models', help='region model globstr (relative to the dvc path, unless absolute or prefixed by "./")'),
         'site_globstr': scfg.Value('annotations/site_models', help='site model globstr (relative to the dvc path, unless absolute or prefixed by "./")'),
 
-        'propogate_strategy': scfg.Value('SMART', help='changes propogation behavior'),
+        'propogate_strategy': scfg.Value('NEW-SMART', help='changes propogation behavior'),
 
         'remove_broken': scfg.Value(True, isflag=1, help='if True, will remove any image that fails population (e.g. caused by a 404)'),
 

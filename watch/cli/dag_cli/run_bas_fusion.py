@@ -279,9 +279,12 @@ def run_bas_fusion_for_baseline(config):
                     '--out_kwcoco', tracked_bas_kwcoco_path,
                     '--default_track_fn', 'saliency_heatmaps',
                     '--append_mode', 'True',
+                    # TODO:
+                    # use boundary_region here
                     '--track_kwargs', json.dumps(bas_tracking_config)],
                    check=True)
 
+    # Remove after boundary_region here
     cropped_region_models_outdir = os.path.join(ingress_dir,
                                                 'cropped_region_models_bas')
     subprocess.run(['python', '-m', 'watch.cli.crop_sites_to_regions',
