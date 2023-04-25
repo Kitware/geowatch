@@ -112,9 +112,16 @@ def run_generate_sc_cropped_kwcoco(input_path,
         raise RuntimeError("Couldn't parse 'region_id' from input region file")
 
     # Paths to inputs generated in previous pipeline steps
-    bas_region_path = os.path.join(ingress_dir,
-                                   'cropped_region_models_bas',
-                                   '{}.geojson'.format(region_id))
+    input_region_path = os.path.join(ingress_dir,
+                                     'sv_out_region_models',
+                                     '{}.geojson'.format(region_id))
+    if not os.path.isfile(input_region_path):
+        print("* Didn't find region output from SV; using region output "
+              "from BAS *")
+        input_region_path = os.path.join(ingress_dir,
+                                         'cropped_region_models_bas',
+                                         '{}.geojson'.format(region_id))
+
     ta1_sc_kwcoco_path = os.path.join(ingress_dir,
                                       'kwcoco_for_sc.json')
 
@@ -128,7 +135,7 @@ def run_generate_sc_cropped_kwcoco(input_path,
                     '--visualize', 'False',
                     '--src', ta1_sc_kwcoco_path,
                     '--dst', ta1_sc_cropped_kwcoco_path,
-                    '--regions', bas_region_path,
+                    '--regions', input_region_path,
                     '--force_nodata', '-9999',
                     '--include_channels', include_channels,
                     '--site_summary', 'True',
