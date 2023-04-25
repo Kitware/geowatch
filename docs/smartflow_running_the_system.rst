@@ -31,7 +31,7 @@ High level:
 
 
 
-Building the Pyenv-WATCH Docker Image
+Building the Pyenv-GEOWATCH Docker Image
 -------------------------------------
 
 If you have not built a docker image, we will need to do so.
@@ -160,7 +160,7 @@ It is a good idea to run some tests to ensure the image built properly
     docker run --runtime=nvidia -it $WATCH_IMAGE python --version
 
     # Ensure the watch module is exposed by default
-    docker run --runtime=nvidia -it $WATCH_IMAGE smartwatch --version
+    docker run --runtime=nvidia -it $WATCH_IMAGE geowatch --version
 
     # if you have a GPU you can run
     docker run --runtime=nvidia -it $WATCH_IMAGE nvidia-smi

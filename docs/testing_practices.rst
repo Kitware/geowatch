@@ -13,12 +13,12 @@ file.
 Writing tests
 -------------
 
-Watch uses the ``pytest`` module for running unit tests. Unit tests
+GEOWATCH uses the ``pytest`` module for running unit tests. Unit tests
 should be added into the ``tests`` directory and files should be
 prefixed with ``test_``.
 
-Additionally, code blocks in function docstrings will be interpreted as tests using 
-`xdoctest <https://xdoctest.readthedocs.io/en/latest/autoapi/xdoctest/index.html>`_ 
+Additionally, code blocks in function docstrings will be interpreted as tests using
+`xdoctest <https://xdoctest.readthedocs.io/en/latest/autoapi/xdoctest/index.html>`_
 as part of the `Google docstring convention <https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html>`_.
 
 For example here are what doctests look like for a class and for a function:
@@ -34,12 +34,12 @@ For example here are what doctests look like for a class and for a function:
             >>> from watch.utils.util_raster import *
             >>> from watch.demo.landsat_demodata import grab_landsat_product
             >>> path = grab_landsat_product()['bands'][0]
-            >>> 
+            >>>
             >>> # standard use:
             >>> dataset = gdal.Open(path)
             >>> print(dataset.GetDescription())  # do stuff
             >>> del dataset  # or 'dataset = None'
-            >>> 
+            >>>
             >>> # equivalent:
             >>> with GdalOpen(path) as dataset:
             >>>     print(dataset.GetDescription())  # do stuff
@@ -48,7 +48,7 @@ For example here are what doctests look like for a class and for a function:
 
     def my_cool_function(inputs):
         """
-        The purpose of this function is to demonstrate how to write a doctest. 
+        The purpose of this function is to demonstrate how to write a doctest.
 
         Example:
             >>> # An example of how to use my cool function

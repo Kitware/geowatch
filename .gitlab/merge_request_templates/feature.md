@@ -9,12 +9,12 @@ See https://semver.org for versioning information:
 >        MINOR version when you add functionality in a backwards compatible manner, and
 >        PATCH version when you make backwards compatible bug fixes.
 
-Major version number is 0 for no expectation of backwards comatibility.
+Major version number is 0 for no expectation of backwards compatibility.
 
-"feature" template should be used for significant features that increment WATCH's minor version number.
+"feature" template should be used for significant features that increment GEOWATCH's minor version number.
 (Ex. 0.5.0 -> 0.6.0)
 
-"patch" template should be used for bugfixes or minor features that increment WATCH's patch version number.
+"patch" template should be used for bugfixes or minor features that increment GEOWATCH's patch version number.
 (Ex. 0.5.0 -> 0.5.1)
 </details>
 </p>

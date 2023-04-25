@@ -1,5 +1,5 @@
 """
-The SMART WATCH module
+The GEOWATCH module
 
 Useful environs:
     DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
@@ -11,14 +11,14 @@ import ubelt as ub
 import warnings
 
 
-__version__ = '0.5.6'
+__version__ = '0.6.0'
 
 
 # ~/code/watch/dev/maintain/generate_authors.py
-__author__ = 'WATCH Developers, Kitware Inc., Jon Crall, David Joy, Matthew Bernstein, Connor Greenwell, Benjamin Brodie, Peri Akiva, Usman Rafique, Jacob DeRosa, Matthew Purri, Ajay Upadhyaya, Ji Won Suh, Jacob Birge, Ryan LaClair, Scott Workman, Dexter Lau, Sergii Skakun, Aram Ansary Ogholbake, Cohen Archbold, Bane Sullivan, Srikumar Sastry, Armin Hadzic'
+__author__ = 'GEOWATCH Developers, Kitware Inc., Jon Crall, David Joy, Matthew Bernstein, Connor Greenwell, Benjamin Brodie, Peri Akiva, Usman Rafique, Jacob DeRosa, Matthew Purri, Ajay Upadhyaya, Ji Won Suh, Jacob Birge, Ryan LaClair, Scott Workman, Dexter Lau, Sergii Skakun, Aram Ansary Ogholbake, Cohen Archbold, Bane Sullivan, Srikumar Sastry, Armin Hadzic'
 
 __author_email__ = 'kitware@kitware.com, jon.crall@kitware.com'
-__url__ = 'https://gitlab.kitware.com/watch/watch'
+__url__ = 'https://gitlab.kitware.com/computer-vision/geowatch'
 
 
 os.environ['USE_PYGEOS'] = '0'

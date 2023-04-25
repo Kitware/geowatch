@@ -33,37 +33,37 @@ Windows.
 NOTE: If using conda, do NOT use ``conda install`` to install Python packages.
 
 
-Create WATCH environment with Conda
+Create GEOWATCH environment with Conda
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-If using conda, the instructions below can be used to create the WATCH Conda
+If using conda, the instructions below can be used to create the GEOWATCH Conda
 environment.
 
 .. code:: bash
 
    mkdir WATCH_DIR #(pick a name of your choice)
    cd WATCH_DIR
-   git clone https://gitlab.kitware.com/smart/watch.git
-   cd watch
+   git clone https://gitlab.kitware.com/computer-vision/geowatch.git
+   cd geowatch
    conda env create -f conda_env.yml
-   conda activate watch
+   conda activate geowatch
 
-To deactivate the watch environment, run:
+To deactivate the geowatch environment, run:
 
 .. code:: bash
 
    conda deactivate
 
-To remove the watch environment, run:
+To remove the geowatch environment, run:
 
 .. code:: bash
 
-   conda deactivate #(if watch is activated before)
-   conda remove --name watch --all
+   conda deactivate #(if geowatch is activated before)
+   conda remove --name geowatch --all
 
-To update the watch environment when new packages have been added, run:
+To update the geowatch environment when new packages have been added, run:
 
 .. code:: bash
 
-   conda activate watch
+   conda activate geowatch
    conda env update -f deployment/conda/conda_env.yml

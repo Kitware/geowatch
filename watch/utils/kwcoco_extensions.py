@@ -102,7 +102,7 @@ def populate_watch_fields(coco_dset, target_gsd=10.0, vidids=None,
                           mode='thread',
                           remove_broken=False):
     """
-    Aggregate populate function for fields useful to WATCH.
+    Aggregate populate function for fields useful to GEOWATCH.
 
     Args:
         coco_dset (Dataset): dataset to work with

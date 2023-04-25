@@ -224,7 +224,7 @@ EXTRAS_REQUIRES = {
 
 if __name__ == '__main__':
     setup(
-        author="WATCH developers",
+        author="GEOWATCH developers",
         author_email='kitware@kitware.com',
         python_requires='>=3.9',
         # https://pypi.org/classifiers/
@@ -244,7 +244,7 @@ if __name__ == '__main__':
                 'smartwatch_dvc= watch.cli.find_dvc:_CLI.main',
                 'geowatch= watch.cli.__main__:main',
                 'geowatch_dvc= watch.cli.find_dvc:_CLI.main',
-                'gwmlops= watch.mlops.__main__:main',
+                # 'gwmlops= watch.mlops.__main__:main',
                 # 'smartwatch_dvc= watch.cli.find_dvc:__config__.main',
             ],
         },
@@ -268,7 +268,7 @@ if __name__ == '__main__':
             # Alias the module while we transition to a new name.
             'geowatch', 'geowatch.*',
         ]),
-        url='https://gitlab.kitware.com/watch/watch.git',
+        url='https://gitlab.kitware.com/computer-vision/geowatch.git',
         version=VERSION,
         zip_safe=False,
         license='Apache 2',

@@ -1,31 +1,31 @@
-Important WATCH Scripts
+Important GEOWATCH Scripts
 -----------------------
 
-The SMART WATCH module comes with a command line interface (CLI). This can be invoked
-via ``python -m watch --help`` (note: if the module has been pip installed
-``python -m watch`` can be replaced with ``smartwatch`` for primary CLI commands).
+The GEOWATCH module comes with a command line interface (CLI). This can be
+invoked via ``geowatch --help`` (note: alternatively you can invoke the module
+directly via python using ``python -m geowatch``).
 
 
-In these examples we use the ``smartwatch`` invocation to be concise, but you
-can simply replace them with ``python -m smartwatch`` if your shell does not
+In these examples we use the ``geowatch`` invocation to be concise, but you
+can simply replace them with ``python -m geowatch`` if your shell does not
 support the entrypoint.
 
 
 The following is a list of the primary CLI commands:
 
-* ``smartwatch find_dvc --help`` - Helper to return the path the the WATCH DVC Repo (if it is a known location)
+* ``geowatch find_dvc --help`` - Helper to return the path the the GEOWATCH DVC Repo (if it is a known location)
 
-* ``smartwatch stats --help`` - Print statistics about a kwcoco file with a focus on sensor / channel frequency and region information.
+* ``geowatch stats --help`` - Print statistics about a kwcoco file with a focus on sensor / channel frequency and region information.
 
-* ``smartwatch coco_intensity_histograms --help`` - Show per-band / per-sensor histograms of pixel intensities. This is useful for acessing the harmonization between sensors.
+* ``geowatch coco_intensity_histograms --help`` - Show per-band / per-sensor histograms of pixel intensities. This is useful for acessing the harmonization between sensors.
 
-* ``smartwatch coco_visualize_videos --help`` - Visualize a video sequence with and without annotations. This can also create an animation of arbitrary feature channels.
+* ``geowatch coco_visualize_videos --help`` - Visualize a video sequence with and without annotations. This can also create an animation of arbitrary feature channels.
 
-* ``smartwatch coco_align_geotiffs --help`` - Crop a set of unstructured kwcoco file (that registers a set of geotiffs) into a TA-2 ready kwcoco file containing cropped video sequences corresponding to each region in a specified set of regions files.
+* ``geowatch coco_align_geotiffs --help`` - Crop a set of unstructured kwcoco file (that registers a set of geotiffs) into a TA-2 ready kwcoco file containing cropped video sequences corresponding to each region in a specified set of regions files.
 
-* ``smartwatch reproject_annotations --help`` - Project annotations from raw site/region models onto the pixel space of a kwcoco file. This also propogates these annotations in time as needed.
+* ``geowatch reproject_annotations --help`` - Project annotations from raw site/region models onto the pixel space of a kwcoco file. This also propogates these annotations in time as needed.
 
-* ``smartwatch kwcoco_to_geojson --help`` - Transform "saliency" or "class" heatmaps into tracked geojson site models, and optionally score these with IARPA metrics.
+* ``geowatch kwcoco_to_geojson --help`` - Transform "saliency" or "class" heatmaps into tracked geojson site models, and optionally score these with IARPA metrics.
 
 
 Using ``--help`` shows the top level modal CLI:
@@ -33,37 +33,51 @@ Using ``--help`` shows the top level modal CLI:
 
 .. code::
 
-        usage: smartwatch [-h] [--version] {command}
+        usage: geowatch [-h] [--version] {command}
                           ...
 
-        The SMART WATCH CLI
+        The SMART GEOWATCH CLI
 
         positional arguments:
-            coco_add_watch_fields (add_fields)
-                                Updates image transforms in a kwcoco json file to align all videos to a
-            coco_align_geotiffs (align)
-                                Create a dataset of aligned temporal sequences around objects of interest
-            coco_extract_geo_bounds
-                                Extract bounds of geojson tiffs (in a kwcoco file) into a regions file
-            geotiffs_to_kwcoco  Create a kwcoco manifest of a set of on-disk geotiffs
-            watch_coco_stats (stats)
-                                Print watch-relevant information about a kwcoco dataset
-            merge_region_models
-                                Combine the specific features from multiple region files into a single one.
-            reproject_annotations (project)
-                                Projects annotations from geospace onto a kwcoco dataset and optionally
-            coco_show_auxiliary
-                                Visualize kwcoco auxiliary channels to spot-inspect if they are aligned
-            coco_visualize_videos (visualize)
-                                Visualizes annotations on kwcoco video frames on each band
-            coco_intensity_histograms (intensity_histograms)
-                                Updates image transforms in a kwcoco json file to align all videos to a
-            find_dvc            Command line helper to find the path to the watch DVC repo
-            kwcoco_to_geojson   opaque sub command
-            run_metrics_framework
-                                opaque sub command
-            torch_model_stats (model_info)
+            stats (watch_coco_stats)
+                                Print geowatch-relevant information about a kwcoco dataset.
+            site_stats (geojson_site_stats)
+                                Compute statistics about geojson sites
+            model_stats (model_info, torch_model_stats)
                                 Print stats about a torch model.
+            spectra (intensity_histograms, coco_spectra)
+                                Updates image transforms in a kwcoco json file to align all videos to a
+            visualize (coco_visualize_videos)
+                                Visualizes annotations on kwcoco video frames on each band
+            animate (gifify)    Convert a sequence of images into a video or gif.
+            dvcdir (find_dvc)   Command line helper to find the path to the watch DVC repo
+            add_fields (coco_add_watch_fields)
+                                Updates image transforms in a kwcoco json file to align all videos to a
+            align (coco_align, coco_align_geotiff, coco_align_geotiffs)
+                                Create a dataset of aligned temporal sequences around objects of interest
+            clean_geotiffs (coco_clean_geotiffs)
+                                A preprocessing step for geotiff datasets.
+            average_features (ensemble, coco_average_features)
+                                Create a new kwcoco file with averaged features from multiple kwcoco files.
+            time_combine (coco_time_combine)
+                                Averages kwcoco images over a sliding temporal window in a video.
+            reproject (project, reproject_annotations)
+                                Projects annotations from geospace onto a kwcoco dataset and optionally
+            run_tracker (kwcoco_to_geojson)
+                                Convert KWCOCO to IARPA GeoJSON
+            iarpa_eval (run_metrics_framework)
+                                Score IARPA site model GeoJSON files using IARPA's metrics-and-test-framework
+            crop_sitemodels (crop_sites_to_regions)
+                                Crops site models to the bounds of a region model.
+            remove_bad_images (coco_remove_bad_images)
+                                Remove image frames that have little or nothing useful in them from a
+            schedule (mlops_schedule, schedule_evaluation)
+                                Driver for GEOWATCH mlops evaluation scheduling
+            manager (mlops_manager)
+                                Certain parts of these names have special nomenclature to make them easier
+            aggregate (mlops_aggregate)
+                                Aggregates results from multiple DAG evaluations.
+
 
 
         optional arguments:
@@ -74,22 +88,22 @@ Using ``--help`` shows the top level modal CLI:
 
 Other important commands that are not exposed via the main CLI are:
 
-* ``python -m watch.tasks.fusion.fit --help`` - Train a TA2 fusion model.
+* ``python -m geowatch.tasks.fusion.fit --help`` - Train a TA2 fusion model.
 
-* ``python -m watch.tasks.fusion.predict --help`` - Predict using a pretrained TA2 fusion model on a target dataset.
+* ``python -m geowatch.tasks.fusion.predict --help`` - Predict using a pretrained TA2 fusion model on a target dataset.
 
-* ``python -m watch.tasks.fusion.evaluate --help`` - Measure pixel-level quality metrics between a prediction and truth kwcoco file.
+* ``python -m geowatch.tasks.fusion.evaluate --help`` - Measure pixel-level quality metrics between a prediction and truth kwcoco file.
 
 
 Note to developers: if an important script exists and is not listed here,
 please submit an MR.
 
-New Python command line scripts can be added under the ``watch/cli`` directory.
-New tools can be registered with the ``watch-cli`` tool in the
-``watch/cli/__main__.py`` file, or invoked explicitly via ``python -m
-watch.cli.<script-name>``.
+New Python command line scripts can be added under the ``geowatch/cli`` directory.
+New tools can be registered with the ``geowatch`` tool in the
+``geowatch/cli/__main__.py`` file, or invoked explicitly via ``python -m
+geowatch.cli.<script-name>``.
 
-Scripts that don’t quite belong in the WATCH Python module itself
+Scripts that don’t quite belong in the GEOWATCH Python module itself
 (e.g. due to a lack of general purpose use, or lack of polish) can be
 added to the ``scripts`` or ``dev`` directory. Generally, the ``scripts``
 directory is for data processing and ``dev`` is for scripts related to
@@ -97,11 +111,11 @@ repository maintenence.
 
 
 
-Summary of WATCH Scripts
+Summary of GEOWATCH Scripts
 ------------------------
 
 
-The following document summarizes some of the scripts in the smartwatch CLI.
+The following document summarizes some of the scripts in the geowatch CLI.
 
 
 Main Commands / Scripts
@@ -115,7 +129,7 @@ torch_model_stats - Very useful. Human readable metadata report for a trained to
 
 coco_intensity_histograms - Reasonably useful. Makes histograms to visualize and compare channel intensity across sensors / videos.
 
-find_dvc - This is "smartwatch_dvc". This helps register / recall paths to DVC repos based on tags to help allow scripts to be written in a magic agnostic way.
+find_dvc - This is "geowatch_dvc". This helps register / recall paths to DVC repos based on tags to help allow scripts to be written in a magic agnostic way.
 
 
 Dataset Preparation / Management
@@ -140,11 +154,11 @@ prepare_splits - Runs after "prepare_ta2_dataset" to finalize train/valiation sp
 Production / Prediction / Evaluation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-* Note: new watch.mlops stuff will go in this category.
+* Note: new geowatch.mlops stuff will go in this category.
 
-* TODO: The watch.<task>.predict scripts should be exposed here.
+* TODO: The geowatch.<task>.predict scripts should be exposed here.
 
-* TODO: The watch.<task>.evaluate scripts should be exposed here.
+* TODO: The geowatch.<task>.evaluate scripts should be exposed here.
 
 prepare_teamfeats - The cmdqueue team feature computation script. Computes team features on an existing raw kwcoco dataset. Part of evaluation.
 
@@ -190,16 +204,16 @@ baseline_framework_kwcoco_ingress - Useful for both TA-1 and TA-2 to download ST
 
 
 
-The "smartwatch_dvc" command
+The "geowatch_dvc" command
 ----------------------------
 
-We provide a utility to help manage data paths called "smartwatch_dvc".  It
+We provide a utility to help manage data paths called "geowatch_dvc".  It
 comes preconfigured with common paths for core-developer machines You can see
 what paths are available by using the "list" command
 
 .. code:: bash
 
-    smartwatch_dvc list
+    geowatch_dvc list
 
 which outputs something like this:
 
@@ -213,7 +227,7 @@ which outputs something like this:
     3    drop4_data_hdd      hdd  phase2_data                                /root/data/dvc-repos/smart_data_dvc   False
 
 
-To see full help use `smartwatch_dvc --help`
+To see full help use `geowatch_dvc --help`
 
 .. code:: bash
 

@@ -22,25 +22,29 @@ The following table provides links to relevant resources for the SMART WATCH pro
 +----------------------------------------------------------+----------------------------------------------------------------+
 | The Public GEOWATCH Python Module                        | https://gitlab.kitware.com/computer-vision/geowatch/           |
 +----------------------------------------------------------+----------------------------------------------------------------+
-| The Internal SMART WATCH Python Module                   | https://gitlab.kitware.com/smart/watch/                        |
+| The Internal SMART GEOWATCH Python Module                | https://gitlab.kitware.com/smart/watch/                        |
 +----------------------------------------------------------+----------------------------------------------------------------+
-| The Phase 2 Internal SMART WATCH DVC Data Repo           | https://gitlab.kitware.com/smart/smart_data_dvc/               |
+| The Phase 2 Internal SMART GEOWATCH DVC Data Repo        | https://gitlab.kitware.com/smart/smart_data_dvc/               |
 +----------------------------------------------------------+----------------------------------------------------------------+
-| The Phase 2 Internal SMART WATCH DVC Experiment Repo     | https://gitlab.kitware.com/smart/smart_expt_dvc/               |
+| The Phase 2 Internal SMART GEOWATCH DVC Experiment Repo  | https://gitlab.kitware.com/smart/smart_expt_dvc/               |
 +----------------------------------------------------------+----------------------------------------------------------------+
 
 
 Getting Started
 ---------------
 
-To quickly get started locally, clone the watch repo:
+To quickly get started locally, clone the geowatch repo:
 
 
 .. code:: bash
 
    # Create a directory for CODE
    mkdir -p $HOME/code
-   git clone https://gitlab.kitware.com/smart/watch/  $HOME/code/watch
+   # Internal
+   # git clone https://gitlab.kitware.com/smart/watch/  $HOME/code/watch
+
+   # Public
+   git clone https://gitlab.kitware.com/computer-vision/geowatch/  $HOME/code/watch
 
 
 Then run:
@@ -57,7 +61,7 @@ Test everything is working by running
 
    ./run_tests.py
 
-For more details see the `installing watch for development guide <docs/installing_watch.rst>`_.
+For more details see the `installing GEOWATCH for development guide <docs/installing_watch.rst>`_.
 
 
 Development
@@ -68,11 +72,11 @@ For new collaberators, please refer to the `onboarding docs <docs/onboarding.rst
 For internal collaberators, please refer to the `internal docs <docs/internal_resources.rst>`_
 
 
-The Watch CLI
--------------
+The GEOWATCH CLI
+----------------
 
-The watch module comes with a set of command line tools.
-Using ``python -m watch --help`` or ``geowatch --help`` shows the top level modal CLI:
+The ``geowatch`` module comes with a set of command line tools.
+Using ``python -m geowatch --help`` or ``geowatch --help`` shows the top level modal CLI:
 
 .. code::
 
@@ -125,7 +129,7 @@ Using ``python -m watch --help`` or ``geowatch --help`` shows the top level moda
         remove_bad_images (coco_remove_bad_images)
                             Remove image frames that have little or nothing useful in them from a
         schedule (mlops_schedule, schedule_evaluation)
-                            Driver for WATCH mlops evaluation scheduling
+                            Driver for GEOWATCH mlops evaluation scheduling
         manager (mlops_manager)
                             Certain parts of these names have special nomenclature to make them easier
         aggregate (mlops_aggregate)
@@ -135,7 +139,7 @@ Using ``python -m watch --help`` or ``geowatch --help`` shows the top level moda
 
 As a researcher / developer / user the most important commands for you to know are:
 
-* ``geowatch stats <kwcoco_file>`` - Get watch-relevant statistics about data in a kwcoco file
+* ``geowatch stats <kwcoco_file>`` - Get geowatch-relevant statistics about data in a kwcoco file
 
 * ``geowatch visualize <kwcoco_file>`` - Visualize the image / videos / annotations in a kwcoco file.
 
@@ -154,8 +158,8 @@ As a researcher / developer / user the most important commands for you to know a
 * ``smartwatch_dvc`` - Helper to register / retreive your DVC paths so scripts can be written agnostic to filesystem layouts. See `docs <docs/using_smartwatch_dvc.rst>`_ for more details.
 
 
-For more details about the WATCH CLI and other CLI tools included in this package see:
-`the WATCH CLI docs <docs/watch_cli.rst>`_
+For more details about the GEOWATCH CLI and other CLI tools included in this package see:
+`the GEOWATCH CLI docs <docs/watch_cli.rst>`_
 
 
 Documentation
@@ -167,7 +171,7 @@ For quick reference, a list of current documentation files is:
 
 * `Internal Resources <docs/internal_resources.rst>`_
 
-* `The WATCH CLI <docs/watch_cli.rst>`_
+* `The GEOWATCH CLI <docs/watch_cli.rst>`_
 
 * Contribution:
 
@@ -183,7 +187,7 @@ For quick reference, a list of current documentation files is:
 
 * Installing:
 
-  + `Installing WATCH <docs/installing_watch.rst>`_
+  + `Installing GEOWATCH <docs/installing_watch.rst>`_
 
   + `Installing Python via Conda <docs/install_python_conda.rst>`_
 

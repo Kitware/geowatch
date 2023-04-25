@@ -193,7 +193,7 @@ except ImportError:
 
 class ScheduleEvaluationConfig(CMDQueueConfig):
     """
-    Driver for WATCH mlops evaluation scheduling
+    Driver for GEOWATCH mlops evaluation scheduling
 
     Builds commands and optionally executes them via slurm, tmux, or serial
     (i.e. one at a time). This is a [link=https://gitlab.kitware.com/computer-vision/cmd_queue]cmd_queue[/link] CLI.
