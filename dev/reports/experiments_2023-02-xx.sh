@@ -1773,7 +1773,7 @@ python -m watch.mlops.schedule_evaluation --params="
             #- 2GSD
             #- 2.5GSD
             - 3GSD
-            - 3.3GSD
+            #- 3.3GSD
         sv_dino_filter.box_isect_threshold:
             - 0.1
         sv_dino_filter.box_score_threshold:
@@ -1787,19 +1787,20 @@ python -m watch.mlops.schedule_evaluation --params="
             #- 0.0
             - 0.05
             - 0.1
-            #- 0.15
+            - 0.15
             #- 0.2
             #- 0.25
             #- 0.3
             # - 0.4
             #- 0.5
-    submatrices:
+    submatrices1:
         - bas_pxl.fixed_resolution: 10GSD
           bas_poly.resolution:
               - 10GSD
         - bas_pxl.fixed_resolution: 8GSD
           bas_poly.resolution:
               - 8GSD
+    submatrices2:
         - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R001_I2L.kwcoco.zip
           sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-KR_R001.kwcoco.json
         - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R002_I2L.kwcoco.zip
