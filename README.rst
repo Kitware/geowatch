@@ -207,13 +207,13 @@ For quick reference, a list of current documentation files is:
 
 * Tutorials:
 
-  + Tutorial 1: `Toy RGB Fusion Model Example <tutorial/toy_experiments_rgb.sh>`_
+  + Tutorial 1: `Toy RGB Fusion Model Example <tutorial/tutorial1_rgb_network.sh>`_
 
-  + Tutorial 2: `Toy MSI Fusion Model Example <tutorial/toy_experiments_msi.sh>`_
+  + Tutorial 2: `Toy MSI Fusion Model Example <tutorial/tutorial2_msi_network.sh>`_
 
-  + Tutorial 3: `Feature Fusion Tutorial <tutorial/feature_fusion_tutorial.sh>`_
+  + Tutorial 3: `Feature Fusion Tutorial <tutorial/tutorial3_feature_fusion.sh>`_
 
-  + Tutorial 4: `Misc Training Tutorial <tutorial/toy_experiments_msi_v2.sh>`_
+  + Tutorial 4: `Misc Training Tutorial <tutorial/tutorial4_advanced_training.sh>`_
 
 
 Acknowledgement

@@ -334,7 +334,7 @@ areas of confusion higlighted.
 
 This concludes the basic RGB tutorial.
 
-The next tutorial lives in toy_experiments_msi.sh and will use a different
+The next tutorial lives in tutorial2_msi_network.sh and will use a different
 variant of kwcoco generated data that more closely matches the watch problem by
 simulating different sensors with different channels.
 '
