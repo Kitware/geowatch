@@ -31,7 +31,64 @@ def _debug_roi_issue():
     rois = 'KR_R001,KR_R002,CH_R001,NZ_R001,BR_R002'.split(',')
     agg.build_macro_tables(rois)
 
-    agg.table['params.sv_crop.crop_src_fpath'].isnull().sum()
+    flags = agg.table['params.sv_crop.crop_src_fpath'].isnull()
+    subagg = agg.compress(flags)
+    subagg.build_macro_tables(rois)
+     _ = subagg.report_best()
+    macro = subagg.region_to_tables['macro_05_75012b']
+
+    macro = macro.sort_values('metrics.sv_poly_eval.bas_f1')
+    points = macro[['region_id', 'param_hashid', 'metrics.bas_poly_eval.bas_f1', 'metrics.sv_poly_eval.bas_f1', 'metrics.bas_poly_eval.bas_tpr', 'metrics.sv_poly_eval.bas_tpr']]
+
+    import kwplot
+    import matplotlib as mpl
+    kwplot.plt.ion()
+    kwplot.figure()
+    ax = kwplot.plt.gca()
+    ax.cla()
+
+    segments = []
+    min_x = float('inf')
+    max_x = -float('inf')
+    for row in points.to_dict('records'):
+        x1 = row['metrics.bas_poly_eval.bas_tpr']
+        y1 = row['metrics.bas_poly_eval.bas_f1']
+        x2 = row['metrics.sv_poly_eval.bas_tpr']
+        y2 = row['metrics.sv_poly_eval.bas_f1']
+        segments.append([(x1, y1), (x2, y2)])
+    pts1 = [s[0] for s in segments]
+    pts2 = [s[1] for s in segments]
+    data_lines = mpl.collections.LineCollection(segments, color='blue', alpha=0.5, linewidths=1)
+    ax.add_collection(data_lines)
+    ax.plot(*zip(*pts1), 'rx', label='before SV')
+    ax.plot(*zip(*pts2), 'bo', label='after SV')
+    ax.legend()
+    ax.set_xlabel('bas_tpr')
+    ax.set_ylabel('bas_f1')
+    ax.set_title('Effect of SV')
+
+    kwplot.sns.scatterplot(data=points, y='metrics.bas_poly_eval.bas_f1', x='metrics.sv_poly_eval.bas_tpr', markers='x', ax=ax)
+    kwplot.sns.scatterplot(data=points, y='metrics.sv_poly_eval.bas_f1', x='metrics.sv_poly_eval.bas_tpr', markers='o', ax=ax)
+
+
+    subagg.
+
+    agg.table['resolved_params.sv_crop.src'].unique()
+
+    bad_values['resolved_params.sv_crop.src'].unique()
+    good_values['resolved_params.sv_crop.src'].unique()
+
+    bad_values = agg.table[flags]
+    good_values = agg.table[~flags]
+
+
+    node_dpath = '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_toothbrush_split6_landcover_MeanYear10GSD-V2/eval/flat/sv_poly_eval/sv_poly_eval_id_cb328495/.pred/sv_dino_filter/sv_dino_filter_id_321a821e/.pred/sv_dino_boxes/sv_dino_boxes_id_c6cc58bf/.pred/sv_crop/sv_crop_id_55fc5fce/'
+    from watch.mlops.aggregate_loader import load_result_resolved
+    r = load_result_resolved(node_dpath)
+
+    fpath = '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_toothbrush_split6_landcover_MeanYear10GSD-V2/eval/flat/sv_poly_eval/sv_poly_eval_id_cb328495/poly_eval.json'
+    node_name = agg.type
+    out_node_key = 'sv_poly_eval.eval_fpath'
 
 
 

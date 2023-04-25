@@ -459,6 +459,7 @@ def extended_github_action_matrix(arg):
                  ''')
         >>> grid_items = list(extended_github_action_matrix(arg))
         >>> print('grid_items = {}'.format(ub.urepr(grid_items, nl=1)))
+        >>> assert len(grid_items) == 5
 
     Example:
         >>> from watch.utils.util_param_grid import *  # NOQA
@@ -492,6 +493,41 @@ def extended_github_action_matrix(arg):
                  ''')
         >>> grid_items = list(extended_github_action_matrix(arg))
         >>> print('grid_items = {}'.format(ub.urepr(grid_items, nl=1)))
+        >>> assert len(grid_items) == 14
+
+    Example:
+        >>> from watch.utils.util_param_grid import *  # NOQA
+        >>> from watch.utils import util_param_grid
+        >>> arg = ub.codeblock(
+                 '''
+                 matrix:
+                   step1.src:
+                       - dset1
+                       - dset2
+                       - dset3
+                       - dset4
+                   step1.resolution:
+                       - 10
+                       - 20
+                       - 30
+                 submatrices1:
+                    - step1.resolution: 10
+                      step2.resolution: [10, 15]
+                    - step1.resolution: 20
+                      step2.resolution: 20
+                 submatrices2:
+                    - step1.src: dset1
+                      step2.src: big_dset1A
+                    - step1.src: dset2
+                      step2.src:
+                         - big_dset2A
+                         - big_dset2B
+                    - step1.src: dset3
+                      step2.src: big_dset3A
+                 ''')
+        >>> grid_items = list(extended_github_action_matrix(arg))
+        >>> print('grid_items = {}'.format(ub.urepr(grid_items, nl=1)))
+        >>> assert len(grid_items) == 20
     """
     import ruamel.yaml
     from watch.utils.util_yaml import Yaml
@@ -505,10 +541,12 @@ def extended_github_action_matrix(arg):
 
     include = matrix.pop('include', data.pop('include', []))
     exclude = matrix.pop('exclude', data.pop('exclude', []))
+
     submatrices = matrix.pop('submatrices', data.pop('submatrices', []))
+    submatrices = list(map(ub.udict, submatrices))
+
     include = list(map(ub.udict, include))
     exclude = list(map(ub.udict, exclude))
-    submatrices = list(map(ub.udict, submatrices))
 
     def coerce_matrix_value(v):
         if not ub.iterable(v):
@@ -522,11 +560,38 @@ def extended_github_action_matrix(arg):
                 final.append(item)
         return final
 
-    submatrices_ = []
-    for submatrix in submatrices:
-        submatrix_ = {k: coerce_matrix_value(v)
-                      for k, v in submatrix.items()}
-        submatrices_.extend(list(map(ub.udict, ub.named_product(submatrix_))))
+    # Special submatrices for more cartesian products, it would be good to come
+    # up with a solution that does not require hard coded and a fixed number of
+    # variables.
+    submatrices1 = matrix.pop('submatrices1', data.pop('submatrices1', []))
+    submatrices2 = matrix.pop('submatrices2', data.pop('submatrices2', []))
+    submatrices3 = matrix.pop('submatrices3', data.pop('submatrices3', []))
+
+    MULTI_SUBMATRICES = 1
+    if MULTI_SUBMATRICES:
+        # Try allowing for more variations. The idea is we effectively
+        # want to take the cross product of multiple lists of submatrices.
+        multi_submatrices = [
+            submatrices, submatrices1, submatrices2, submatrices3
+        ]
+        multi_submatrices_ = []
+        for submats in multi_submatrices:
+            submats[:] = list(map(ub.udict, submats))
+            submats_ = []
+            for submatrix in submats:
+                submatrix_ = {k: coerce_matrix_value(v)
+                              for k, v in submatrix.items()}
+                submats_.extend(list(map(ub.udict, ub.named_product(submatrix_))))
+            multi_submatrices_.append(submats_)
+    else:
+        submatrices_ = []
+        for submatrix in submatrices:
+            submatrix_ = {k: coerce_matrix_value(v)
+                          for k, v in submatrix.items()}
+            submatrices_.extend(list(map(ub.udict, ub.named_product(submatrix_))))
+
+    if len(data) != 0:
+        raise Exception(f'Unexpected top level keys: {list(data.keys())}')
 
     matrix_ = {k: coerce_matrix_value(v)
                for k, v in matrix.items()}
@@ -553,7 +618,19 @@ def extended_github_action_matrix(arg):
                 grid_item = grid_item | include_item
         return grid_item
 
-    def submatrix_variants(mat_item):
+    def multisubmatrix_variants(mat_item, multi_submatrices_):
+        # New version: every group of submatrices has the opportunity to
+        # modify the item before yielding.
+        curr_items = [mat_item]
+        for submatrices_ in multi_submatrices_:
+            curr_items = _submatrix_variants_loop(curr_items, submatrices_)
+        yield from curr_items
+
+    def _submatrix_variants_loop(mat_items, submatrices_):
+        for item in mat_items:
+            yield from submatrix_variants(item, submatrices_)
+
+    def submatrix_variants(mat_item, submatrices_):
         """
         For each object in the include list, the key:value pairs in the object
         will be added to each of the matrix combinations if none of the
@@ -591,7 +668,11 @@ def extended_github_action_matrix(arg):
                     return True
 
     for mat_item in map(ub.udict, ub.named_product(matrix_)):
-        for item in submatrix_variants(mat_item):
+        if MULTI_SUBMATRICES:
+            submat_gen = multisubmatrix_variants(mat_item, multi_submatrices_)
+        else:
+            submat_gen = submatrix_variants(mat_item, submatrices_)
+        for item in submat_gen:
             item = include_modifiers(item)
             if not is_excluded(item):
                 yield item
