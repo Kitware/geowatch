@@ -84,7 +84,6 @@ class BASDatasetConfig(scfg.DataConfig):
             '''))
 
 
-
 def main():
     config = BASDatasetConfig.cli(strict=True)
     print('config = {}'.format(ub.urepr(dict(config), nl=1, align=':')))
