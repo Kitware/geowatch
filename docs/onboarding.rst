@@ -43,10 +43,10 @@ recommend the following directory structure:
 
 
 For details on installing the geowatch system in development mode see
-`installing geowatch for development guide <installing_watch.rst>`_.
+`installing geowatch for development guide <../docs/environment/installing_watch.rst>`_.
 
 For more detailed instructions on setting up the DVC repos see:
-`accessing dvc repos <access_dvc_repos.rst>`_.
+`accessing dvc repos <../docs/data/access_dvc_repos.rst>`_.
 
 
 This onboarding document is a work in progress. While things are are still
@@ -58,15 +58,15 @@ For quick reference, review the list of current documentation files in the `READ
 
 Please ensure you review :
 
-  + `Contribution Instructions <contribution_instructions.rst>`_
+  + `Contribution Instructions <../docs/development/contribution_instructions.rst>`_
 
-  + `Rebasing Procedure <rebasing_procedure.rst>`_
+  + `Rebasing Procedure <../docs/development/rebasing_procedure.rst>`_
 
-  + `Testing Practices <testing_practices.rst>`_
+  + `Testing Practices <../docs/testing/testing_practices.rst>`_
 
-  + `Coding Conventions <coding_conventions.rst>`_
+  + `Coding Conventions <../docs/development/coding_conventions.rst>`_
 
-  + `Supporting Projects <supporting_projects.rst>`_
+  + `Supporting Projects <../docs/misc/supporting_projects.rst>`_
 
 
 TODO: Point to the FAQ examples in kwcoco and other projects with them

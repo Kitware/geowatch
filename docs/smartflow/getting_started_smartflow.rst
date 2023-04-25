@@ -4,9 +4,9 @@ Requirements
 ------------
 We assume you have the aws and kubernetes command line tools installed.
 
-* `get started with aws <getting_started_aws.rst>`
+* `get started with aws <../../docs/environment/getting_started_aws.rst>`
 
-* `get started with kubectl <getting_started_kubectl.rst>`
+* `get started with kubectl <../../docs/environment/getting_started_kubectl.rst>`
 
 
 Configure Kubernetes

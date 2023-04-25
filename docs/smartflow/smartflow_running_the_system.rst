@@ -1,9 +1,9 @@
 Prerequisites
 -------------
 
-* `AWS <getting_started_aws.rst>`
+* `AWS <../../docs/environment/getting_started_aws.rst>`
 
-* `Kubectl <getting_started_kubectl.rst>`
+* `Kubectl <../../docs/environment/getting_started_kubectl.rst>`
 
 * `Smartflow Setup <getting_started_smartflow.rst>`
 
@@ -37,9 +37,9 @@ Building the Pyenv-GEOWATCH Docker Image
 If you have not built a docker image, we will need to do so.
 
 There are two images that need to be build, first the
-`pyenv dockerfile <../dockerfiles/pyenv.Dockerfile>`_.
+`pyenv dockerfile <../../dockerfiles/pyenv.Dockerfile>`_.
 And then the watch dockerfile that builds on top of it
-`watch dockerfile <../dockerfiles/watch.Dockerfile>`_. The heredocs in these
+`watch dockerfile <../../dockerfiles/watch.Dockerfile>`_. The heredocs in these
 files provide futher instructions.
 
 Here we will go over the basic use case for a specific version of Python /
