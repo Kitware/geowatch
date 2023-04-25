@@ -61,7 +61,7 @@ Test everything is working by running
 
    ./run_tests.py
 
-For more details see the `installing GEOWATCH for development guide <docs/installing_watch.rst>`_.
+For more details see the `installing GEOWATCH for development guide <docs/environment/installing_watch.rst>`_.
 
 
 Development
@@ -69,7 +69,7 @@ Development
 
 For new collaberators, please refer to the `onboarding docs <docs/onboarding.rst>`_
 
-For internal collaberators, please refer to the `internal docs <docs/internal_resources.rst>`_
+For internal collaberators, please refer to the `internal docs <docs/data/internal_resources.rst>`_
 
 
 The GEOWATCH CLI
@@ -155,7 +155,7 @@ As a researcher / developer / user the most important commands for you to know a
 
 * ``geowatch geotiffs_to_kwcoco`` - Create a kwcoco file from a set of on-disk geotiffs.
 
-* ``smartwatch_dvc`` - Helper to register / retreive your DVC paths so scripts can be written agnostic to filesystem layouts. See `docs <docs/using_smartwatch_dvc.rst>`_ for more details.
+* ``smartwatch_dvc`` - Helper to register / retreive your DVC paths so scripts can be written agnostic to filesystem layouts. See `docs <docs/data/using_smartwatch_dvc.rst>`_ for more details.
 
 
 For more details about the GEOWATCH CLI and other CLI tools included in this package see:
@@ -169,41 +169,41 @@ For quick reference, a list of current documentation files is:
 
 * `Onboarding Docs <docs/onboarding.rst>`_
 
-* `Internal Resources <docs/internal_resources.rst>`_
+* `Internal Resources <docs/data/internal_resources.rst>`_
 
 * `The GEOWATCH CLI <docs/watch_cli.rst>`_
 
 * Contribution:
 
-  + `Contribution Instructions <docs/contribution_instructions.rst>`_
+  + `Contribution Instructions <docs/development/contribution_instructions.rst>`_
 
-  + `Rebasing Procedure <docs/rebasing_procedure.rst>`_
+  + `Rebasing Procedure <docs/development/rebasing_procedure.rst>`_
 
-  + `Testing Practices <docs/testing_practices.rst>`_
+  + `Testing Practices <docs/testing/testing_practices.rst>`_
 
-  + `Supporting Projects <docs/supporting_projects.rst>`_
+  + `Supporting Projects <docs/misc/supporting_projects.rst>`_
 
-  + `Coding Conventions <docs/coding_conventions.rst>`_
+  + `Coding Conventions <docs/development/coding_conventions.rst>`_
 
 * Installing:
 
-  + `Installing GEOWATCH <docs/installing_watch.rst>`_
+  + `Installing GEOWATCH <docs/environment/installing_watch.rst>`_
 
-  + `Installing Python via Conda <docs/install_python_conda.rst>`_
+  + `Installing Python via Conda <docs/environment/install_python_conda.rst>`_
 
-  + `Installing Python via PyEnv <docs/install_python_pyenv.rst>`_
+  + `Installing Python via PyEnv <docs/environment/install_python_pyenv.rst>`_
 
 * Fusion Related Docs:
 
-  + `TA2 Fusion Overview <docs/fusion_overview.rst>`_
+  + `TA2 Fusion Overview <docs/algorithms/fusion_overview.rst>`_
 
-  + `TA2 Deep Dive Info <docs/ta2_deep_dive_info.md>`_
+  + `TA2 Deep Dive Info <docs/algorithms/ta2_deep_dive_info.md>`_
 
-  + `TA2 Feature Integration <docs/ta2_feature_integration.md>`_
+  + `TA2 Feature Integration <docs/development/ta2_feature_integration.md>`_
 
 * Older Design Docs:
 
-  + `Structure Proposal <docs/structure_proposal.md>`_
+  + `Structure Proposal <docs/misc/structure_proposal.md>`_
 
 * Tutorials:
 
