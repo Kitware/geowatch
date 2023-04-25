@@ -551,7 +551,7 @@ class Predict():
             for batch_idx, batch in prog:
                 x, item = batch
                 x = x.to(self.device)
-                x2 = rearrange(x, 'b (f pf) c h w -> b (pf f) c h w', pf=2)
+                #x2 = rearrange(x, 'b (f pf) c h w -> b (pf f) c h w', pf=2)
 
                 pred = self.model(x)
                 #pred2 = self.model(x2)
