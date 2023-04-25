@@ -554,9 +554,9 @@ class Predict():
                 x2 = rearrange(x, 'b (f pf) c h w -> b (pf f) c h w', pf=2)
 
                 pred = self.model(x)
-                pred2 = self.model(x2)
+                #pred2 = self.model(x2)
                 preds = pred.cpu().detach().numpy()
-                preds2 = pred2.cpu().detach().numpy()
+                #preds2 = pred2.cpu().detach().numpy()
 
                 target = self.dataset.patches[batch_idx]
 
@@ -577,8 +577,8 @@ class Predict():
 
                 feat1 = preds[:, 0, :, :, :].squeeze()
                 feat2 = preds[:, 1, :, :, :].squeeze()
-                feat3 = preds2[:, 0, :, :, :].squeeze()
-                feat4 = preds2[:, 1, :, :, :].squeeze()
+                feat3 = preds[:, 2, :, :, :].squeeze()
+                feat4 = preds[:, 3, :, :, :].squeeze()
 
                 self.stitch_manager.accumulate_image(
                     gid1, outspace_slice, feat1,
