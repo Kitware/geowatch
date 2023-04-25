@@ -1,5 +1,5 @@
 Installing GEOWATCH For Development
-================================
+===================================
 
 
 There are two methods for installing GEOWATCH in development mode.
