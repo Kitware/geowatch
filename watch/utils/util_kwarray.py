@@ -761,7 +761,10 @@ def combine_mean_stds(means, stds, nums=None, axis=None, keepdims=False,
         numer_p2 = (((means - combo_mean) ** 2)).sum(axis=axis, keepdims=1)
         numer = numer_p1 + numer_p2
         denom = len(stds)
-        combo_std = np.sqrt(numer / denom)
+        if denom == 0:
+            combo_std = np.sqrt(numer / denom)
+        else:
+            combo_std = np.full_like(numer, fill_value=np.nan)
     else:
         combo_num = nums.sum(axis=axis, keepdims=1)
         weights = nums / combo_num
@@ -771,7 +774,10 @@ def combine_mean_stds(means, stds, nums=None, axis=None, keepdims=False,
         numer_p2 = (nums * ((means - combo_mean) ** 2)).sum(axis=axis, keepdims=1)
         numer = numer_p1 + numer_p2
         denom = combo_num - bessel
-        combo_std = np.sqrt(numer / denom)
+        if denom == 0:
+            combo_std = np.sqrt(numer / denom)
+        else:
+            combo_std = np.full_like(numer, fill_value=np.nan)
 
     if not keepdims:
         indexer = _no_keepdim_indexer(combo_mean, axis)
