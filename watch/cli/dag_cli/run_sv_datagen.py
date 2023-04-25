@@ -129,9 +129,12 @@ def run_generate_sv_cropped_kwcoco(input_path,
 
     sv_cropping_config = Yaml.coerce(sv_cropping_config or {})
 
-    SV_Cropping.configure({'crop_src_fpath': ta1_sc_kwcoco_path,
-                           'regions': bas_region_path,
-                           'crop_dset_fpath': ta1_sv_cropped_kwcoco_path})
+    sv_cropping = SV_Cropping.configure({
+        'crop_src_fpath': ta1_sc_kwcoco_path,
+        'regions': bas_region_path,
+        'crop_dset_fpath': ta1_sv_cropped_kwcoco_path})
+
+    subprocess.run(sv_cropping.command(), check=True)
 
     # 5. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
