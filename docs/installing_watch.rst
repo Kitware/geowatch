@@ -1,8 +1,8 @@
-Installing Watch For Development
+Installing GEOWATCH For Development
 ================================
 
 
-There are two methods for installing watch in development mode. 
+There are two methods for installing GEOWATCH in development mode.
 The first is a local install (recommended), and the second is using a docker
 image. This document goes over both options.
 
@@ -14,7 +14,7 @@ Option 1: Local Install
 Install Python
 ~~~~~~~~~~~~~~
 
-Python 3.8+ is required for watch. Python versions can be managed with either
+Python 3.8+ is required for GEOWATCH. Python versions can be managed with either
 conda or pyenv. Working with conda is more beginner friendly, but pyenv has
 less commercial restrictions, but requires a compiler certain system libraries
 (e.g. openssl, sqlite3, readline, ffi, curses, bz2, etc..) to compile Python.
@@ -32,8 +32,8 @@ manage packages.
 Non-Python Requirements
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-There are several binary libraries that some components of the watch module
-might assume exist, but don't have Python distributions. These are:
+There are several binary libraries that some components of the ``geowatch``
+module might assume exist, but don't have Python distributions. These are:
 
 * ffmpeg - for making animated gifs
 * tmux - for the tmux queue (to be replaced by slurm)
@@ -51,7 +51,7 @@ Installing
 ~~~~~~~~~~
 
 Assuming you have cloned this repo, and you are in a Python virtual
-environment, the watch repo can be setup as:
+environment, the geowatch repo can be setup as:
 
 .. code:: bash
 
@@ -64,7 +64,7 @@ environment, the watch repo can be setup as:
    # Install linting tools
    pip install -r requirements/linting.txt
 
-   # Install the main watch package with all development extras
+   # Install the main geowatch package with all development extras
    pip install -e .[development,optional,headless]
 
 
@@ -72,7 +72,7 @@ environment, the watch repo can be setup as:
 Testing
 ~~~~~~~
 
-You can test that watch is correctly installed by running the run tests script:
+You can test that geowatch is correctly installed by running the run tests script:
 
 
 .. code:: bash
@@ -84,8 +84,8 @@ Option 2: Docker Image
 -----------------------
 
 This repository also includes a ``Dockerfile`` that can be used to
-build the WATCH Docker image.  The built Docker image will have the
-WATCH Conda environment and WATCH Python module pre-installed.
+build the GEOWATCH Docker image.  The built Docker image will have the
+GEOWATCH Conda environment and GEOWATCH Python module pre-installed.
 
 To build the conda Docker image:
 
@@ -105,4 +105,5 @@ To build the pyenv Docker image:
     DOCKER_BUILDKIT=1 docker build --progress=plain -t "watch_pyenv310" -f ./dockerfiles/pyenv.Dockerfile .
 
 
-We will eventually deprecate the usage of conda. Using pyenv is recommended.
+The usage of conda is no longer directly supported, but still exists for user
+convinience. However, pyenv is strongly recommended.

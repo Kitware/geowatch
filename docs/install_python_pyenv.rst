@@ -121,7 +121,7 @@ On ubuntu this can be setup as follows:
     #### END BASHRC PART ####
 
 
-Create WATCH environment with Pyenv
+Create GEOWATCH environment with Pyenv
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 First create and activate a new virtual environment (note this could be done
@@ -138,16 +138,16 @@ virtual environment.
     pyenv shell $CHOSEN_PYTHON_VERSION
 
     # Create the virtual environment
-    python -m venv $(pyenv prefix)/envs/pyenv-watch
+    python -m venv $(pyenv prefix)/envs/pyenv-geowatch
 
     # Activate the virtual environment
-    source $(pyenv prefix)/envs/pyenv-watch/bin/activate
+    source $(pyenv prefix)/envs/pyenv-geowatch/bin/activate
 
 
 Once you are in a virtual environment (managed by either conda or pyenv), the
-WATCH Python module can then be installed with ``pip`` via the following
-command, where ``/path/to/watch-repo`` is the absolute path to the directory
-containing to WATCH repo.
+GEOWATCH Python module can then be installed with ``pip`` via the following
+command, where ``/path/to/geowatch-repo`` is the absolute path to the directory
+containing to GEOWATCH repo.
 
 NOTE: It is important you install the module with the editable (``-e``) flag,
 otherwise changes you make to the module, will not be reflected when you run
@@ -155,21 +155,21 @@ your scripts.
 
 .. code:: bash
 
-   pip install -e /path/to/watch-repo
+   pip install -e /path/to/geowatch-repo
 
 
 This is more commonly done as
 
 .. code:: bash
 
-   cd /path/to/watch-repo
+   cd /path/to/geowatch-repo
    pip install -e .
 
 This installation process is also scripted in the top-level
 ``run_developer_setup.sh`` script and takes care of issues that can arise with
 opencv-python.
 
-After the ``watch`` module has been installed to your python environment, it
+After the ``geowatch`` module has been installed to your python environment, it
 can be imported from anywhere regardless of the current working directory as
 long as the virtual environment was installed in is active.
 

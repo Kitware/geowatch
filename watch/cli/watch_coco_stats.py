@@ -5,7 +5,7 @@ import ubelt as ub
 
 class WatchCocoStats(scfg.DataConfig):
     """
-    Print watch-relevant information about a kwcoco dataset.
+    Print geowatch-relevant information about a kwcoco dataset.
 
     This provides summary information about:
 

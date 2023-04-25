@@ -180,7 +180,7 @@ def maps(_item_map=None, history_entry=None):
                     os.path.join(item_outdir,
                                  "{}.json".format(output_stac_item.id)))
 
-                # Roughly keeping track of what WATCH processes have been
+                # Roughly keeping track of what GEOWATCH processes have been
                 # run on this particular item
                 output_stac_item.properties.setdefault(
                     'watch:process_history', []).append(history_entry)
