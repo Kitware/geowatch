@@ -600,6 +600,11 @@ class Cropping(ProcessNode):
         'geo_preprop': 'auto',
     }
 
+    in_paths = {
+        'crop_src_fpath',
+        'regions',
+    }
+
     @property
     def condensed(self):
         condensed = super().condensed
@@ -665,10 +670,6 @@ class SV_Cropping(Cropping):
         'num_start_frames': 3,
     }
 
-    in_paths = {
-        'crop_src_fpath',
-        'regions',
-    }
     out_paths = {
         'crop_dst_fpath': 'sv_crop.kwcoco.zip'
     }
@@ -700,10 +701,6 @@ class SC_Cropping(Cropping):
         'force_min_gsd': 2,
     }
 
-    in_paths = {
-        'crop_src_fpath',
-        'regions',
-    }
     out_paths = {
         'crop_dst_fpath': 'sitecrop.kwcoco.zip'
     }

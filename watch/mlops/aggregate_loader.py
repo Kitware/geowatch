@@ -215,7 +215,7 @@ def load_result_worker(fpath, node_name, out_node_key):
             raise
 
         with safer.open(resolved_json_fpath, 'w') as file:
-            json.dump(result, file)
+            json.dump(result, file, indent=4)
 
     return result
 
