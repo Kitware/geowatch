@@ -577,8 +577,8 @@ class Predict():
 
                 feat1 = preds[:, 0, :, :, :].squeeze()
                 feat2 = preds[:, 1, :, :, :].squeeze()
-                feat3 = preds2[:, 2, :, :, :].squeeze()
-                feat4 = preds2[:, 3, :, :, :].squeeze()
+                feat3 = preds[:, 2, :, :, :].squeeze()
+                feat4 = preds[:, 3, :, :, :].squeeze()
 
                 self.stitch_manager.accumulate_image(
                     gid1, outspace_slice, feat1,
