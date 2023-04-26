@@ -1687,10 +1687,10 @@ python -m watch.mlops.schedule_evaluation --params="
             #- $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V48/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V48_epoch106_step6848.pt
         bas_pxl.test_dataset:
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R002_I2L.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-BR_R002_I2L.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-BR_R002_I2L.kwcoco.zip
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-CH_R001_I2L.kwcoco.zip
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-NZ_R001_I2L.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R001_I2L.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R001_I2L.kwcoco.zip
             #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-AE_R001_I2L.kwcoco.zip
         bas_pxl.chip_overlap: 0.3
         bas_pxl.chip_dims:
@@ -1704,24 +1704,25 @@ python -m watch.mlops.schedule_evaluation --params="
             - 10GSD
         bas_pxl.time_sampling:
             #- auto
-            - soft5
+            #- soft5
             - soft4
         bas_poly.thresh:
             - 0.25
             #- 0.275
-            #- 0.3
-            #- 0.325
+            - 0.3
+            - 0.325
             - 0.35
-            #- 0.375
-            #- 0.4
-            #- 0.425
+            - 0.375
+            - 0.4
+            - 0.425
             - 0.45
         bas_poly.time_thresh:
             - 1.0
             #- 0.95
             - 0.9
-            #- 0.85
+            - 0.85
             - 0.8
+            - 0.75
         bas_poly.inner_window_size:
             - 1y
         bas_poly.inner_agg_fn:
@@ -1770,10 +1771,11 @@ python -m watch.mlops.schedule_evaluation --params="
             - 0.5
         sv_dino_boxes.fixed_resolution:
             #- 1GSD
-            #- 2GSD
+            - 2GSD
             #- 2.5GSD
             - 3GSD
-            #- 3.3GSD
+            - 3.3GSD
+            #- 4.0GSD
         sv_dino_filter.box_isect_threshold:
             - 0.1
         sv_dino_filter.box_score_threshold:
@@ -1788,7 +1790,7 @@ python -m watch.mlops.schedule_evaluation --params="
             - 0.05
             - 0.1
             - 0.15
-            #- 0.2
+            - 0.2
             #- 0.25
             #- 0.3
             # - 0.4
