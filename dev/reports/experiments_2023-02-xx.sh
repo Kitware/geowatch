@@ -1771,10 +1771,10 @@ python -m watch.mlops.schedule_evaluation --params="
             - 0.5
         sv_dino_boxes.fixed_resolution:
             #- 1GSD
-            - 2GSD
+            #- 2GSD
             #- 2.5GSD
             - 3GSD
-            - 3.3GSD
+            #- 3.3GSD
             #- 4.0GSD
         sv_dino_filter.box_isect_threshold:
             - 0.1

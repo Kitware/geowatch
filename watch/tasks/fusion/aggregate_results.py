@@ -76,7 +76,7 @@ class AggregateResultsConfig(scfg.Config):
 
         'classes_of_interest': scfg.Value('*', nargs='+', help='One or more glob patterns'),
 
-        'embed': scfg.Value(False, help='if true embed into IPython before viz'),
+        # 'embed': scfg.Value(False, help='if true embed into IPython before viz'),
 
         'max_per_expt_salient_curves': 3,
     }
@@ -2022,9 +2022,9 @@ def main(cmdline=False, **kwargs):
 
     _ = best_candidates(class_rows, mean_rows)
 
-    if config['embed']:
-        import xdev
-        xdev.embed()
+    # if config['embed']:
+    #     import xdev
+    #     xdev.embed()
 
     DRAW = 1
     if DRAW:

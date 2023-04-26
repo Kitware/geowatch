@@ -307,6 +307,8 @@ def custom_lint(mode : str = DEFAULT_MODE, dpath : str = DEFAULT_DPATH, index=No
         if VERBOSE > 1:
             print('ignore = {!r}'.format(ignore))
         ret = exec_flake8(dpaths, select, ignore, max_line_length)
+
+        our_code_checks(dpath)
     else:
         raise KeyError(mode)
 
@@ -314,6 +316,16 @@ def custom_lint(mode : str = DEFAULT_MODE, dpath : str = DEFAULT_DPATH, index=No
         print('autofix = {!r}'.format(autofix))
 
     return ret
+
+
+def our_code_checks(dpath):
+    import re
+    import xdev
+    results = xdev.grep(re.compile(r'^ *\bxdev.embed\b'), dpath=dpath, include='*.py', exclude=['.git'])
+    if len(results):
+        print('ERROR: remove xdev.embed statements')
+        return 1
+    return 0
 
 
 if __name__ == '__main__':
