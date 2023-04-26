@@ -172,7 +172,6 @@ def run_dino_sv(config):
         default_dino_detect_config = ub.udict({
             'package_fpath': None,
             'batch_size': 1,
-            'num_workers': 2,
             'device': 0})
         dino_detect_config = (default_dino_detect_config
                               | Yaml.coerce(dino_detect_config or {}))
