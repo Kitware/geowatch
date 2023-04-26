@@ -170,6 +170,7 @@ def run_dino_sv(config):
         print("* Running Dino Detect *")
 
         default_dino_detect_config = ub.udict({
+            'coco_fpath': ingress_kwcoco_path,
             'package_fpath': None,
             'batch_size': 1,
             'device': 0})
