@@ -21,20 +21,22 @@ def _debug_roi_issue():
     poly_agg = eval_type_to_aggregator['bas_poly_eval']
     sv_poly_agg = eval_type_to_aggregator['sv_poly_eval']
 
-    poly_agg.build_macro_tables(rois)
-    _ = poly_agg.report_best()
+    # poly_agg.build_macro_tables(rois)
+    # _ = poly_agg.report_best()
 
     print(ub.urepr(ub.udict(sv_poly_agg.macro_compatible).map_values(len)))
     print(ub.urepr(ub.udict(poly_agg.macro_compatible).map_values(len)))
 
     agg = sv_poly_agg
-    rois = 'KR_R001,KR_R002,CH_R001,NZ_R001,BR_R002'.split(',')
-    agg.build_macro_tables(rois)
+    # rois = 'KR_R001,KR_R002,CH_R001,NZ_R001,BR_R002'.split(',')
+    rois = 'KR_R002,CH_R001,NZ_R001'.split(',')
+    # agg.build_macro_tables(rois)
 
     flags = agg.table['params.sv_crop.crop_src_fpath'].isnull()
-    subagg = agg.compress(flags)
+    subagg = agg.compress(~flags)
     subagg.build_macro_tables(rois)
-     _ = subagg.report_best()
+    _ = subagg.report_best()
+
     macro = subagg.region_to_tables['macro_05_75012b']
 
     macro = macro.sort_values('metrics.sv_poly_eval.bas_f1')
