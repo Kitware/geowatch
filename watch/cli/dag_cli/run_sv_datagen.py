@@ -133,7 +133,7 @@ def run_generate_sv_cropped_kwcoco(input_path,
     sv_cropping.configure({
         'crop_src_fpath': ta1_sc_kwcoco_path,
         'regions': bas_region_path,
-        'crop_dset_fpath': ta1_sv_cropped_kwcoco_path})
+        'crop_dst_fpath': ta1_sv_cropped_kwcoco_path})
 
     ub.cmd(sv_cropping.command(), check=True, verbose=3)
 
