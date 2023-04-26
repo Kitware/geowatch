@@ -15,10 +15,16 @@ Example:
     >>>                           input_space_scale='native',
     >>>                           output_space_scale=None,
     >>>                           window_space_scale=1.2,
-    >>>                           time_sampling='soft2+distribute',
+    >>>                           use_grid_negatives=False,
+    >>>                           use_grid_positives=False,
+    >>>                           use_centered_positives=True,
+    >>>                           time_sampling='uniform',
     >>>                           time_kernel='-1y,0,1y',
     >>>                           modality_dropout=0.5,
     >>>                           temporal_dropout=0.5)
+    >>> # Add weights to annots
+    >>> annots = self.sampler.dset.annots()
+    >>> annots.set('weight', np.random.rand(len(annots)) * 3)
     >>> self.disable_augmenter = False
     >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
     >>> item = self[index]
@@ -2122,8 +2128,11 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         for gid, frame_dets in gid_to_dets.items():
             aids = frame_dets.data['aids']
             cids = frame_dets.data['cids']
-            tids = dset.annots(aids).lookup('track_id', None)
+            frame_annots = dset.annots(aids)
+            tids = frame_annots.lookup('track_id', None)
             frame_dets.data['tids'] = tids
+            frame_dets.data['weights'] = frame_annots.lookup('weight', 1.0)
+
             for tid, aid, cid in zip(tids, aids, cids):
                 tid_to_aids[tid].append(aid)
                 tid_to_cids[tid].append(cid)
@@ -2347,11 +2356,16 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         task_target_weight = {}
 
         # Rasterize frame targets into semantic segmentation masks
-        ann_polys = dets.data['segmentations'].to_polygon_list()
-        ann_aids = dets.data['aids']
-        ann_cids = dets.data['cids']
-        ann_tids = dets.data['tids']
-        ann_ltrb = dets.data['boxes'].to_ltrb().data
+        ann_polys   = dets.data['segmentations'].to_polygon_list()
+        ann_aids    = dets.data['aids']
+        ann_cids    = dets.data['cids']
+        ann_tids    = dets.data['tids']
+        ann_weights = dets.data['weights']
+        ann_ltrb    = dets.data['boxes'].to_ltrb().data
+
+        # Associate weights with polygons
+        for poly, weight in zip(ann_polys, ann_weights):
+            poly.meta['weight'] = weight
 
         # frame_poly_saliency_weights = np.ones(space_shape, dtype=np.float32)
         # frame_poly_class_weights = np.ones(space_shape, dtype=np.float32)
@@ -2436,14 +2450,20 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 task_target_weight['saliency'][:] = 1
 
             for poly in saliency_sseg_groups['background']:
+                weight = poly.meta['weight']
                 if self.config['balance_areas']:
-                    weight = (1 - (poly.area / (total_area + 1)))
+                    area_weight = (1 - (poly.area / (total_area + 1)))
+                    weight = weight * area_weight
+                if weight != 1:
                     poly.fill(task_target_weight['saliency'], value=weight, assert_inplace=True)
 
             for poly in saliency_sseg_groups['foreground']:
                 task_target_ohe['saliency'] = poly.fill(task_target_ohe['saliency'], value=1, assert_inplace=True)
+                weight = poly.meta['weight']
                 if self.config['balance_areas']:
-                    weight = (1 - (poly.area / (total_area + 1)))
+                    area_weight = (1 - (poly.area / (total_area + 1)))
+                    weight = weight * area_weight
+                if weight != 1:
                     poly.fill(task_target_weight['saliency'], value=weight, assert_inplace=True)
 
                 if self.dist_weights:
@@ -2522,9 +2542,13 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
             for poly in class_sseg_groups['foreground']:
                 poly.fill(task_target_ohe['class'][poly.meta['new_class_cidx']], value=1, assert_inplace=True)
+                weight = poly.meta['weight']
 
                 if self.config['balance_areas']:
-                    weight = (1 - (poly.area / (total_area + 1)))
+                    area_weight = (1 - (poly.area / (total_area + 1)))
+                    weight = weight * area_weight
+
+                if weight != 1:
                     poly.fill(task_target_weight['class'], value=weight, assert_inplace=True)
 
                 if self.dist_weights:

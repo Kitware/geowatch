@@ -8,6 +8,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+* The kwcoco video dataset now respects the weight attribute in annotations.
 * Reorganized docs
 * `coco_align` now uses process context
 
