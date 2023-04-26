@@ -135,7 +135,7 @@ def run_generate_sv_cropped_kwcoco(input_path,
         'regions': bas_region_path,
         'crop_dset_fpath': ta1_sv_cropped_kwcoco_path})
 
-    ub.cmd(sv_cropping.command(), check=True)
+    ub.cmd(sv_cropping.command(), check=True, verbose=3)
 
     # 5. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
