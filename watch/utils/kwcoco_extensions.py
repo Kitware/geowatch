@@ -230,8 +230,7 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
         raise NotImplementedError(ub.paragraph(
             '''
             Cannot keep keep geotiff metadata when using process parallelism.
-            import xdev
-            xdev.embed()
+
             Need to serialize gdal objects (i.e. RPC transforms and
             SwigPyObject) returned from ``watch.gis.geotiff.geotiff_metadata``
             to be able do this.
