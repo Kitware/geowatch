@@ -634,7 +634,6 @@ class Cropping(ProcessNode):
         #     #     secret_fpath
         #         # command = f'source {secret_fpath} && ' + command
         # command = 'AWS_DEFAULT_PROFILE=iarpa GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR ' + command
-        command = 'GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR ' + command
         return command
 
 
