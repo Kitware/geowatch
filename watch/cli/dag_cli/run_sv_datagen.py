@@ -130,7 +130,7 @@ def run_generate_sv_cropped_kwcoco(input_path,
     sv_cropping_config = Yaml.coerce(sv_cropping_config or {})
 
     sv_cropping = SV_Cropping(root_dpath='/tmp/ingress')
-    sv_cropping = sv_cropping.configure({
+    sv_cropping.configure({
         'crop_src_fpath': ta1_sc_kwcoco_path,
         'regions': bas_region_path,
         'crop_dset_fpath': ta1_sv_cropped_kwcoco_path})
