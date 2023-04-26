@@ -1697,7 +1697,7 @@ python -m watch.mlops.schedule_evaluation --params="
             #- auto
             - '196,196'
             - '256,256'
-            - '320,320'
+            #- '320,320'
         bas_pxl.time_span:
             - auto
         bas_pxl.fixed_resolution:
@@ -1707,7 +1707,7 @@ python -m watch.mlops.schedule_evaluation --params="
             #- soft5
             - soft4
         bas_poly.thresh:
-            - 0.25
+            #- 0.25
             #- 0.275
             - 0.3
             - 0.325
@@ -1715,14 +1715,14 @@ python -m watch.mlops.schedule_evaluation --params="
             - 0.375
             - 0.4
             - 0.425
-            - 0.45
+            #- 0.45
         bas_poly.time_thresh:
             - 1.0
             #- 0.95
             - 0.9
-            - 0.85
+            #- 0.85
             - 0.8
-            - 0.75
+            #- 0.75
         bas_poly.inner_window_size:
             - 1y
         bas_poly.inner_agg_fn:
@@ -1790,7 +1790,7 @@ python -m watch.mlops.schedule_evaluation --params="
             - 0.05
             - 0.1
             - 0.15
-            - 0.2
+            #- 0.2
             #- 0.25
             #- 0.3
             # - 0.4
