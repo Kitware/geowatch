@@ -185,7 +185,7 @@ def run_dino_sv(config):
             'out_coco_fpath': dino_boxes_kwcoco_path,
             **dino_detect_config})
 
-        ub.cmd(dino_box_detector.command(), check=True, verbose=3)
+        ub.cmd(dino_box_detector.command(), check=True, verbose=3, system=True)
 
         # 3.3 Run DinoBuildingFilter
         print("* Running Dino Building Filter *")
@@ -208,7 +208,7 @@ def run_dino_sv(config):
             'output_site_manifest_fpath': site_models_manifest_outpath,
             })
 
-        ub.cmd(dino_building_filter.command(), check=True, verbose=3)
+        ub.cmd(dino_building_filter.command(), check=True, verbose=3, system=True)
 
     # 4. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
