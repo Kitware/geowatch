@@ -181,7 +181,7 @@ def run_dino_sv(config):
             raise ValueError('Requires package_fpath')
 
         dino_box_detector = DinoBoxDetector(root_dpath='/tmp/ingress')
-        dino_box_detector = DinoBoxDetector.configure({
+        dino_box_detector.configure({
             'out_coco_fpath': dino_boxes_kwcoco_path,
             **dino_detect_config})
 
@@ -199,7 +199,7 @@ def run_dino_sv(config):
         output_region_model = os.path.join(region_models_outdir,
                                            '{}.geojson'.format(region_id))
         dino_building_filter = DinoBuildingFilter(root_dpath='/tmp/ingress')
-        dino_building_filter = dino_building_filter.configure({
+        dino_building_filter.configure({
             'input_kwcoco': dino_boxes_kwcoco_path,
             'input_region': input_region_model_bas,
             'input_sites': cropped_site_models_bas,
