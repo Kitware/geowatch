@@ -1,32 +1,79 @@
+import cv2
 import geojson
 import json
-import os
-
-from watch.tasks.depthPCD.model import getModel, normalize
-import numpy as np
-import cv2
+import kwcoco
 import kwimage
 import ndsampler
-
+import numpy as np
+import os
 import pandas as pd
 import scriptconfig as scfg
 import ubelt as ub
-from kwcoco.util import util_json
-from tqdm import tqdm
 
-import watch
-from watch.cli.kwcoco_to_geojson import convert_kwcoco_to_iarpa, create_region_feature, KWCocoToGeoJSONConfig
+from tqdm import tqdm
+from kwcoco.util import util_json
+
+from watch.tasks.depthPCD.model import getModel, normalize
+from watch.cli.kwcoco_to_geojson import convert_kwcoco_to_iarpa, create_region_feature
 from watch.utils import process_context
 
-# important imported last
-import kwcoco
+
+class ScoreTracksConfig(scfg.DataConfig):
+    """
+    Score and Convert KWCOCO to IARPA GeoJSON
+    """
+    in_file = scfg.Value(None, required=True, help='Input KWCOCO to convert',
+                         position=1)
+
+    images = scfg.Value(None, required=True, help=ub.paragraph(
+        '''
+            kwcoco file with images where to score polygons.
+            '''), group='track scoring')
+
+    threshold = scfg.Value(0.3, help=ub.paragraph(
+        '''
+            threshold to filter polygons, very sensitive
+            '''), group='track scoring')
+
+    model_fpath = scfg.Value(None, help='Path to the depthPCD site validation model')
+
+    region_id = scfg.Value(None, help=ub.paragraph(
+            '''
+            ID for region that sites belong to. If None, try to infer
+            from kwcoco file.
+            '''), group='convenience')
+
+    out_kwcoco = scfg.Value(None, help=ub.paragraph(
+            '''
+            The file path to write the "tracked" kwcoco file to.
+            '''))
+
+    out_sites_dir = scfg.Value(None, help=ub.paragraph(
+        '''
+        The directory where site model geojson files will be written.
+        '''))
+
+    out_site_summaries_dir = scfg.Value(None, help=ub.paragraph(
+        '''
+        The directory path where site summary geojson files will be written.
+        '''))
+
+    out_sites_fpath = scfg.Value(None, help=ub.paragraph(
+        '''
+        The file path where a manifest of all site models will be written.
+        '''))
+
+    out_site_summaries_fpath = scfg.Value(None, help=ub.paragraph(
+        '''
+        The file path where a manifest of all site summary geojson files will
+        be written.
+        '''))
 
 
 def score_tracks(coco_dset, imCoco_dset, thresh):
-    expt_dvc_dpath = watch.find_smart_dvc_dpath(tags='phase2_expt', hardware='auto')
     print('loading site validation model')
     model = getModel()
-    model.load_weights(expt_dvc_dpath + '/models/depthPCD/basicModel2.h5', by_name=True, skip_mismatch=True)
+    # model.load_weights(expt_dvc_dpath + '/models/depthPCD/basicModel2.h5', by_name=True, skip_mismatch=True)
     # model.load_weights('/media/hdd2/antonio/models/urbanTCDs-use.h5')
 
     to_keep = []
@@ -184,23 +231,10 @@ def score_tracks(coco_dset, imCoco_dset, thresh):
     return coco_dset
 
 
-class scoreTracksConfig(KWCocoToGeoJSONConfig):
-    """
-    Score and Convert KWCOCO to IARPA GeoJSON
-    """
-    images = scfg.Value(None, required=True, help=ub.paragraph(
-        '''
-            kwcoco file with images where to score polygons.
-            '''), group='track scoring')
-    threshold = scfg.Value(0.4, help=ub.paragraph(
-        '''
-            threshold to filter polygons, very sensitive
-            '''), group='track scoring')
-
-
 def main(**kwargs):
-    args = scoreTracksConfig.cli(cmdline=True, data=kwargs)
-    print('args = {}'.format(ub.urepr(dict(args), nl=1)))
+    args = ScoreTracksConfig.cli(cmdline=True, data=kwargs, strict=True)
+    import rich
+    rich.print('args = {}'.format(ub.urepr(args, nl=1)))
 
     coco_dset = kwcoco.CocoDataset.coerce(args.in_file)
 
@@ -318,84 +352,92 @@ def main(**kwargs):
 
 
 r'''
-python -m watch.tasks.depthPCD.score_tracks /media/barcelona/Drop6/bas_baseline/polyb.kwcoco.zip
-        --images /media/barcelona/Drop6/valT.kwcoco.zip
-        --out_site_summaries_fpath "/media/barcelona/Drop6/tronexperiments/debug/site_summaries_manifest.json"
-        --out_site_summaries_dir "/media/barcelona/Drop6/tronexperiments/debug/site_summaries"
-        --out_sites_fpath "/media/barcelona/Drop6/tronexperiments/debug/sites_manifest.json"
-        --out_sites_dir "/media/barcelona/Drop6/tronexperiments/debug/sites"
-        --out_kwcoco "some file with filtered poly if you need"
-        --threshold 0.3 (default)
+Ignore:
 
-BAS_MODEL_FPATH=$DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
-
-python -m watch.tasks.fusion.predict \
-    --package_fpath="$BAS_MODEL_FPATH" \
-    --test_dataset=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R002_I2L.kwcoco.zip \
-    --pred_dataset=$DVC_EXPT_DPATH/_test_dzyne_sv/pred_heatmaps.kwcoco.zip \
-    --chip_overlap="0.3" \
-    --chip_dims="196,196" \
-    --time_span="auto" \
-    --fixed_resolution="10GSD" \
-    --time_sampling="soft4" \
-    --drop_unused_frames="True"  \
-    --num_workers="4" \
-    --devices="0," \
-    --batch_size="1" \
-    --with_saliency="True" \
-    --with_class="False" \
-    --with_change="False"
+    python -m watch.tasks.depthPCD.score_tracks /media/barcelona/Drop6/bas_baseline/polyb.kwcoco.zip
+            --images /media/barcelona/Drop6/valT.kwcoco.zip
+            --out_site_summaries_fpath "/media/barcelona/Drop6/tronexperiments/debug/site_summaries_manifest.json"
+            --out_site_summaries_dir "/media/barcelona/Drop6/tronexperiments/debug/site_summaries"
+            --out_sites_fpath "/media/barcelona/Drop6/tronexperiments/debug/sites_manifest.json"
+            --out_sites_dir "/media/barcelona/Drop6/tronexperiments/debug/sites"
+            --out_kwcoco "some file with filtered poly if you need"
+            --threshold 0.3 (default)
 
 
-python -m watch.cli.run_tracker \
-    --in_file "$DVC_EXPT_DPATH/_test_dzyne_sv/pred_heatmaps.kwcoco.zip" \
-    --default_track_fn saliency_heatmaps \
-    --track_kwargs '{
-        "agg_fn": "probs",
-        "thresh": 0.4,
-        "time_thresh": 0.8,
-        "inner_window_size": "1y",
-        "inner_agg_fn": "mean",
-        "norm_ord": "inf",
-        "resolution": "10GSD",
-        "moving_window_size": null,
-        "poly_merge_method": "v2",
-        "polygon_simplify_tolerance": 1,
-        "min_area_square_meters": 7200,
-        "max_area_square_meters": 8000000
-    }' \
-    --clear_annots=True \
-    --site_summary 'None' \
-    --boundary_region $DVC_DATA_DPATH/annotations/drop6/region_models \
-    --out_site_summaries_fpath "$DVC_EXPT_DPATH/_test_dzyne_sv/site_summaries_manifest.json" \
-    --out_site_summaries_dir "$DVC_EXPT_DPATH/_test_dzyne_sv/site_summaries" \
-    --out_sites_fpath "$DVC_EXPT_DPATH/_test_dzyne_sv/sites_manifest.json" \
-    --out_sites_dir "$DVC_EXPT_DPATH/_test_dzyne_sv/sites" \
-    --out_kwcoco "$DVC_EXPT_DPATH/_test_dzyne_sv/poly.kwcoco.zip"
+Example:
+
+    ### Run BAS and then run SV on top of it.
+
+    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+    DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+    BAS_MODEL_FPATH=$DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
+
+    python -m watch.tasks.fusion.predict \
+        --package_fpath="$BAS_MODEL_FPATH" \
+        --test_dataset=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R002_I2L.kwcoco.zip \
+        --pred_dataset=$DVC_EXPT_DPATH/_test_dzyne_sv/pred_heatmaps.kwcoco.zip \
+        --chip_overlap="0.3" \
+        --chip_dims="196,196" \
+        --time_span="auto" \
+        --fixed_resolution="10GSD" \
+        --time_sampling="soft4" \
+        --drop_unused_frames="True"  \
+        --num_workers="4" \
+        --devices="0," \
+        --batch_size="1" \
+        --with_saliency="True" \
+        --with_class="False" \
+        --with_change="False"
 
 
-python -m watch.cli.run_metrics_framework \
-    --merge=True \
-    --name "todo" \
-    --true_site_dpath "$DVC_DATA_DPATH/annotations/drop6/site_models" \
-    --true_region_dpath "$DVC_DATA_DPATH/annotations/drop6/region_models" \
-    --pred_sites "$DVC_EXPT_DPATH/_test_dzyne_sv/sites_manifest.json" \
-    --tmp_dir "$DVC_EXPT_DPATH/_test_dzyne_sv/eval_before/tmp" \
-    --out_dir "$DVC_EXPT_DPATH/_test_dzyne_sv/eval_before" \
-    --merge_fpath "$DVC_EXPT_DPATH/_test_dzyne_sv/eval_before/poly_eval_before.json"
+    python -m watch.cli.run_tracker \
+        --in_file "$DVC_EXPT_DPATH/_test_dzyne_sv/pred_heatmaps.kwcoco.zip" \
+        --default_track_fn saliency_heatmaps \
+        --track_kwargs '{
+            "agg_fn": "probs",
+            "thresh": 0.4,
+            "time_thresh": 0.8,
+            "inner_window_size": "1y",
+            "inner_agg_fn": "mean",
+            "norm_ord": "inf",
+            "resolution": "10GSD",
+            "moving_window_size": null,
+            "poly_merge_method": "v2",
+            "polygon_simplify_tolerance": 1,
+            "min_area_square_meters": 7200,
+            "max_area_square_meters": 8000000
+        }' \
+        --clear_annots=True \
+        --site_summary 'None' \
+        --boundary_region $DVC_DATA_DPATH/annotations/drop6/region_models \
+        --out_site_summaries_fpath "$DVC_EXPT_DPATH/_test_dzyne_sv/site_summaries_manifest.json" \
+        --out_site_summaries_dir "$DVC_EXPT_DPATH/_test_dzyne_sv/site_summaries" \
+        --out_sites_fpath "$DVC_EXPT_DPATH/_test_dzyne_sv/sites_manifest.json" \
+        --out_sites_dir "$DVC_EXPT_DPATH/_test_dzyne_sv/sites" \
+        --out_kwcoco "$DVC_EXPT_DPATH/_test_dzyne_sv/poly.kwcoco.zip"
 
 
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+    python -m watch.cli.run_metrics_framework \
+        --merge=True \
+        --name "todo" \
+        --true_site_dpath "$DVC_DATA_DPATH/annotations/drop6/site_models" \
+        --true_region_dpath "$DVC_DATA_DPATH/annotations/drop6/region_models" \
+        --pred_sites "$DVC_EXPT_DPATH/_test_dzyne_sv/sites_manifest.json" \
+        --tmp_dir "$DVC_EXPT_DPATH/_test_dzyne_sv/eval_before/tmp" \
+        --out_dir "$DVC_EXPT_DPATH/_test_dzyne_sv/eval_before" \
+        --merge_fpath "$DVC_EXPT_DPATH/_test_dzyne_sv/eval_before/poly_eval_before.json"
 
-python -m watch.tasks.depthPCD.score_tracks /media/barcelona/Drop6/bas_baseline/polyb.kwcoco.zip
-        --images /media/barcelona/Drop6/valT.kwcoco.zip
-        --out_site_summaries_fpath "/media/barcelona/Drop6/tronexperiments/debug/site_summaries_manifest.json"
-        --out_site_summaries_dir "/media/barcelona/Drop6/tronexperiments/debug/site_summaries"
-        --out_sites_fpath "/media/barcelona/Drop6/tronexperiments/debug/sites_manifest.json"
-        --out_sites_dir "/media/barcelona/Drop6/tronexperiments/debug/sites"
-        --out_kwcoco "some file with filtered poly if you need"
-        --threshold 0.3 (default)
+
+    python -m watch.tasks.depthPCD.score_tracks \
+        --in_file /media/barcelona/Drop6/bas_baseline/polyb.kwcoco.zip \
+        --images $DVC_DATA_DPATH/Drop6/imgonly-KR_R002.kwcoco.json \
+        --model_fpath $DVC_EXPT_DPATH/models/depthPCD/basicModel2.h5 \
+        --out_site_summaries_fpath "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_site_summaries_manifest.json" \
+        --out_site_summaries_dir "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_site_summaries" \
+        --out_sites_fpath  "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_sites_manifest.json" \
+        --out_sites_dir  "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_sites" \
+        --out_kwcoco "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_poly.kwcoco.zip"
+        --threshold 0.3
 '''
 if __name__ == '__main__':
     main()
