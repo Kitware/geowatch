@@ -1,12 +1,10 @@
-# import os
-# for lint needs to be set outside for avoiding tf warnings
-# os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-
-# Monkey patch in deeplab2 to sys.path
-# from ubelt.util_import import PythonPathContext
-import ubelt as ub
-import os
 if 1:
+    # Put imports in an if 1 to avoid linting errors
+    import ubelt as ub
+    import os
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
+    # Monkey patch in deeplab2 to sys.path
     try:
         PARENT_DPATH = ub.Path(__file__).parent
     except NameError:
@@ -17,8 +15,12 @@ if 1:
 
     import sys
     if TPL_DPATH not in sys.path:
+        # Ideally we would use the PythonPathContext to ensure we do not
+        # pollute the pythonpath (or better yet, not need to modify the
+        # pythonpath at all), but for now we will just append to sys.path
+        # directly.
+
         # with PythonPathContext(parent_dpath):
-        # from watch.tasks.depthPCD.model import getModel, normalize
         sys.path.append(os.fspath(TPL_DPATH))
 
     from deeplab2 import config_pb2
