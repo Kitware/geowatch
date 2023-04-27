@@ -317,7 +317,77 @@ def main(**kwargs):
             json.dump(site_summary_tracking_output, file, indent='    ')
 
 
-'''
+r'''
+python -m watch.tasks.depthPCD.score_tracks /media/barcelona/Drop6/bas_baseline/polyb.kwcoco.zip
+        --images /media/barcelona/Drop6/valT.kwcoco.zip
+        --out_site_summaries_fpath "/media/barcelona/Drop6/tronexperiments/debug/site_summaries_manifest.json"
+        --out_site_summaries_dir "/media/barcelona/Drop6/tronexperiments/debug/site_summaries"
+        --out_sites_fpath "/media/barcelona/Drop6/tronexperiments/debug/sites_manifest.json"
+        --out_sites_dir "/media/barcelona/Drop6/tronexperiments/debug/sites"
+        --out_kwcoco "some file with filtered poly if you need"
+        --threshold 0.3 (default)
+
+BAS_MODEL_FPATH=$DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
+
+python -m watch.tasks.fusion.predict \
+    --package_fpath="$BAS_MODEL_FPATH" \
+    --test_dataset=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R002_I2L.kwcoco.zip \
+    --pred_dataset=$DVC_EXPT_DPATH/_test_dzyne_sv/pred_heatmaps.kwcoco.zip \
+    --chip_overlap="0.3" \
+    --chip_dims="196,196" \
+    --time_span="auto" \
+    --fixed_resolution="10GSD" \
+    --time_sampling="soft4" \
+    --drop_unused_frames="True"  \
+    --num_workers="4" \
+    --devices="0," \
+    --batch_size="1" \
+    --with_saliency="True" \
+    --with_class="False" \
+    --with_change="False"
+
+
+python -m watch.cli.run_tracker \
+    --in_file "$DVC_EXPT_DPATH/_test_dzyne_sv/pred_heatmaps.kwcoco.zip" \
+    --default_track_fn saliency_heatmaps \
+    --track_kwargs '{
+        "agg_fn": "probs",
+        "thresh": 0.4,
+        "time_thresh": 0.8,
+        "inner_window_size": "1y",
+        "inner_agg_fn": "mean",
+        "norm_ord": "inf",
+        "resolution": "10GSD",
+        "moving_window_size": null,
+        "poly_merge_method": "v2",
+        "polygon_simplify_tolerance": 1,
+        "min_area_square_meters": 7200,
+        "max_area_square_meters": 8000000
+    }' \
+    --clear_annots=True \
+    --site_summary 'None' \
+    --boundary_region $DVC_DATA_DPATH/annotations/drop6/region_models \
+    --out_site_summaries_fpath "$DVC_EXPT_DPATH/_test_dzyne_sv/site_summaries_manifest.json" \
+    --out_site_summaries_dir "$DVC_EXPT_DPATH/_test_dzyne_sv/site_summaries" \
+    --out_sites_fpath "$DVC_EXPT_DPATH/_test_dzyne_sv/sites_manifest.json" \
+    --out_sites_dir "$DVC_EXPT_DPATH/_test_dzyne_sv/sites" \
+    --out_kwcoco "$DVC_EXPT_DPATH/_test_dzyne_sv/poly.kwcoco.zip"
+
+
+python -m watch.cli.run_metrics_framework \
+    --merge=True \
+    --name "todo" \
+    --true_site_dpath "$DVC_DATA_DPATH/annotations/drop6/site_models" \
+    --true_region_dpath "$DVC_DATA_DPATH/annotations/drop6/region_models" \
+    --pred_sites "$DVC_EXPT_DPATH/_test_dzyne_sv/sites_manifest.json" \
+    --tmp_dir "$DVC_EXPT_DPATH/_test_dzyne_sv/eval_before/tmp" \
+    --out_dir "$DVC_EXPT_DPATH/_test_dzyne_sv/eval_before" \
+    --merge_fpath "$DVC_EXPT_DPATH/_test_dzyne_sv/eval_before/poly_eval_before.json"
+
+
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+
 python -m watch.tasks.depthPCD.score_tracks /media/barcelona/Drop6/bas_baseline/polyb.kwcoco.zip
         --images /media/barcelona/Drop6/valT.kwcoco.zip
         --out_site_summaries_fpath "/media/barcelona/Drop6/tronexperiments/debug/site_summaries_manifest.json"
