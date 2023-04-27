@@ -6,6 +6,7 @@ See Old Script:
 import os
 import subprocess
 import json
+import shutil
 
 from watch.cli.baseline_framework_ingress import baseline_framework_ingress, load_input_stac_items
 from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress
@@ -74,6 +75,11 @@ class BASDatasetConfig(scfg.DataConfig):
     previous_input_path = scfg.Value(None, type=str, help=ub.paragraph(
             '''
             STAC json input file for previous interval
+            '''))
+
+    previous_outbucket = scfg.Value(None, type=str, help=ub.paragraph(
+            '''
+            Outbucket for previous interval BAS DatasetGen
             '''))
 
     target_gsd = scfg.Value(10, type=int, help='Target GSD of output KWCOCO video space')
@@ -175,8 +181,14 @@ def run_stac_to_cropped_kwcoco(input_path,
                                virtual=False,
                                dont_recompute=False,
                                previous_input_path=None,
+                               previous_outbucket=None,
                                target_gsd=10,
                                time_combine=False):
+    if aws_profile is not None:
+        aws_base_command = ['aws', 's3', '--profile', aws_profile, 'cp']
+    else:
+        aws_base_command = ['aws', 's3', 'cp']
+
     if aws_profile is not None:
         aws_ls_command = ['aws', 's3', '--profile', aws_profile, 'ls']
     else:
@@ -366,6 +378,38 @@ def run_stac_to_cropped_kwcoco(input_path,
                                    dst=ta1_cropped_kwcoco_path,
                                    target_gsd=target_gsd,
                                    workers=jobs)
+
+    # 6.1. Combine previous interval time-combined data for BAS
+    if previous_outbucket is not None:
+        combined_timecombined_kwcoco_path = os.path.join(
+                ingress_dir, 'combined_timecombined_kwcoco.json')
+
+        previous_ingress_dir = '/tmp/ingress_previous'
+        subprocess.run([*aws_base_command, '--recursive',
+                        previous_outbucket, previous_ingress_dir],
+                       check=True)
+
+        previous_timecombined_kwcoco_path = os.path.join(
+            previous_ingress_dir, 'combined_timecombined_kwcoco.json')
+
+        # On first interval nothing will be copied down so need to
+        # check that we have the input explicitly
+        from watch.cli.concat_kwcoco_videos import concat_kwcoco_datasets
+        if os.path.isfile(previous_timecombined_kwcoco_path):
+            concat_kwcoco_datasets(
+                (previous_timecombined_kwcoco_path, ta1_cropped_kwcoco_path),
+                combined_timecombined_kwcoco_path)
+            # Copy saliency assets from previous bas fusion
+            shutil.copy_tree(
+                os.path.join(previous_ingress_dir, 'raw_bands'),
+                os.path.join(ingress_dir, 'raw_bands'))
+        else:
+            # Copy current bas_fusion_kwcoco_path to combined path as
+            # this is the first interval
+            shutil.copy(ta1_cropped_kwcoco_path,
+                        combined_timecombined_kwcoco_path)
+    else:
+        combined_timecombined_kwcoco_path = ta1_cropped_kwcoco_path
 
     # 7. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
