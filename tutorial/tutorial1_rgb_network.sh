@@ -14,6 +14,14 @@ train a fusion model on RGB data.
 """
 
 
+# For those windows folks:
+if [[ "$(uname -a)" == "MINGW"* ]]; then
+    echo "detected windows"
+    export HOME=$USERPROFILE
+    export USER=$USERNAME
+fi
+
+
 # This tutorial will generate its own training data. Change these paths to
 # wherever you would like the data to go (or use the defaults).  In general
 # experiments will have a "data" DVC directory where the raw data lives, and an
