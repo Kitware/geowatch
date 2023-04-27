@@ -1,20 +1,54 @@
-import cv2
+# import cv2
+# import geojson
+# import json
+# import kwimage
+# import ndsampler
+# import numpy as np
+# import os
+# import pandas as pd
+# import scriptconfig as scfg
+# import ubelt as ub
+
+# from tqdm import tqdm
+
+# from watch.cli.kwcoco_to_geojson import convert_kwcoco_to_iarpa, create_region_header
+# from watch.utils import process_context
 import geojson
 import json
-import kwcoco
-import kwimage
-import ndsampler
-import numpy as np
 import os
-import pandas as pd
-import scriptconfig as scfg
 import ubelt as ub
 
-from tqdm import tqdm
-from kwcoco.util import util_json
+if 1:
+    # Monkey patch in deeplab2 to sys.path
+    # from ubelt.util_import import PythonPathContext
+    try:
+        PARENT_DPATH = ub.Path(__file__).parent
+    except NameError:
+        from watch.tasks import depthPCD as parent_package
+        PARENT_DPATH = ub.Path(parent_package.__file__).parent
 
-from watch.cli.kwcoco_to_geojson import convert_kwcoco_to_iarpa, create_region_header
-from watch.utils import process_context
+    import sys
+    if PARENT_DPATH not in sys.path:
+        # with PythonPathContext(parent_dpath):
+        # from watch.tasks.depthPCD.model import getModel, normalize
+        sys.path.append(os.fspath(PARENT_DPATH))
+
+    from watch.tasks.depthPCD.model import getModel, normalize
+    import numpy as np
+    import cv2
+    import kwimage
+    import ndsampler
+
+    import pandas as pd
+    import scriptconfig as scfg
+    import ubelt as ub
+    from tqdm import tqdm
+
+    from watch.cli.kwcoco_to_geojson import convert_kwcoco_to_iarpa, create_region_header
+    from watch.utils import process_context
+
+    import kwcoco
+    from kwcoco.util import util_json
 
 
 class ScoreTracksConfig(scfg.DataConfig):
@@ -71,17 +105,7 @@ class ScoreTracksConfig(scfg.DataConfig):
 
 def score_tracks(coco_dset, imCoco_dset, thresh):
     print('loading site validation model')
-
-    # Monkey patch in deeplab2 to sys.path
-    # from ubelt.util_import import PythonPathContext
-    from watch.tasks import depthPCD as parent_package
-    parent_dpath = ub.Path(parent_package.__file__).parent
-    proto_fpath = parent_dpath / 'deeplab2/max_deeplab_s_backbone_os16.textproto'
-    import sys
-    if parent_dpath not in sys.path:
-        sys.path.append(os.fspath(parent_dpath))
-    # with PythonPathContext(parent_dpath):
-    from watch.tasks.depthPCD.model import getModel, normalize
+    proto_fpath = PARENT_DPATH / 'deeplab2/max_deeplab_s_backbone_os16.textproto'
     model = getModel(proto=proto_fpath)
 
     # model.load_weights(expt_dvc_dpath + '/models/depthPCD/basicModel2.h5', by_name=True, skip_mismatch=True)
