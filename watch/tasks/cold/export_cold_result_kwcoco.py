@@ -114,7 +114,6 @@ def export_cold_main(cmdline=1, **kwargs):
     stack_path = ub.Path(config_in['stack_path'])
     reccg_path = ub.Path(config_in['reccg_path'])
     meta_fpath = ub.Path(config_in['meta_fpath'])
-    combined_coco_fpath = ub.Path(config_in['combined_coco_fpath'])
     year_lowbound = config_in['year_lowbound']
     year_highbound = config_in['year_highbound']
     coefs = config_in['coefs']
@@ -122,6 +121,11 @@ def export_cold_main(cmdline=1, **kwargs):
     combine = config_in['combine']
     timestamp = config_in['timestamp']
     sensors = config_in['sensors']
+
+    if combine:
+        combined_coco_fpath = ub.Path(config_in['combined_coco_fpath'])
+    else:
+        combined_coco_fpath = None
 
     assert (combine and not timestamp) or (not combine and timestamp), "combine and timestamp must be either True and False, or False and True."
     # TODO: MPI mode
