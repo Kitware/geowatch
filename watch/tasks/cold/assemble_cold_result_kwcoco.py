@@ -109,7 +109,6 @@ def assemble_main(cmdline=1, **kwargs):
     stack_path = ub.Path(config_in['stack_path'])
     reccg_path = ub.Path(config_in['reccg_path'])
     coco_fpath = ub.Path(config_in['coco_fpath'])
-    combined_coco_fpath = ub.Path(config_in['combined_coco_fpath'])
     mod_coco_fpath = ub.Path(config_in['mod_coco_fpath'])
     out_path = reccg_path / 'cold_feature'
     tmp_path = out_path / 'tmp'
@@ -122,6 +121,13 @@ def assemble_main(cmdline=1, **kwargs):
     combine = config_in['combine']
     resolution = config_in['resolution']
     sensors = config_in['sensors']
+
+    if config_in['combined_coco_fpath'] is not None:
+        combined_coco_fpath = ub.Path(config_in['combined_coco_fpath'])
+    else:
+        if combine:
+            raise ValueError('Must specify combined_coco_fpath if combine is True')
+        combined_coco_fpath = None
 
     # define variables
     config = json.loads(meta_fpath.read_text())

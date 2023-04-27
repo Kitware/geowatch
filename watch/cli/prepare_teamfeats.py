@@ -60,7 +60,7 @@ Ignore:
         --with_depth=0 \
         --with_cold=1 \
         --skip_existing=1 \
-        --gres=0,1 --tmux_workers=4 --backend=tmux --run=1
+        --gres=0,1 --tmux_workers=4 --backend=tmux --run=0 --print-commands
 
     # Drop 6
     export CUDA_VISIBLE_DEVICES="0,1"
