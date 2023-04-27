@@ -380,10 +380,11 @@ def run_stac_to_cropped_kwcoco(input_path,
                                    workers=jobs)
 
     # 6.1. Combine previous interval time-combined data for BAS
-    print(f"* PREVIOUS_OUTBUCKET: {previous_outbucket}")
     if previous_outbucket is not None:
+        print('* Combining previous interval time combined kwcoco with'
+              'current *')
         combined_timecombined_kwcoco_path = os.path.join(
-                ingress_dir, 'combined_timecombined_kwcoco.json')
+                ta1_cropped_dir, 'combined_timecombined_kwcoco.json')
 
         previous_ingress_dir = '/tmp/ingress_previous'
         subprocess.run([*aws_base_command, '--recursive',
@@ -393,26 +394,20 @@ def run_stac_to_cropped_kwcoco(input_path,
         previous_timecombined_kwcoco_path = os.path.join(
             previous_ingress_dir, 'combined_timecombined_kwcoco.json')
 
-        print(f"* COMBINED_TIMECOMBINED_KWCOCO_PATH: {combined_timecombined_kwcoco_path}")
-        print(f"* PREVIOUS_TIMECOMBINED_KWCOCO_PATH: {previous_timecombined_kwcoco_path}")
-
         # On first interval nothing will be copied down so need to
         # check that we have the input explicitly
         from watch.cli.concat_kwcoco_videos import concat_kwcoco_datasets
         if os.path.isfile(previous_timecombined_kwcoco_path):
-            print("* Previous timecombined kwcoco path exists!!")
             concat_kwcoco_datasets(
                 (previous_timecombined_kwcoco_path, ta1_cropped_kwcoco_path),
                 combined_timecombined_kwcoco_path)
             # Copy saliency assets from previous bas fusion
             shutil.copy_tree(
                 os.path.join(previous_ingress_dir, 'raw_bands'),
-                os.path.join(ingress_dir, 'raw_bands'))
+                os.path.join(ta1_cropped_dir, 'raw_bands'))
         else:
-            print("* Previous timecombined kwcoco path DOES NOT exist!!")
             # Copy current bas_fusion_kwcoco_path to combined path as
             # this is the first interval
-            print(f"* COPYING {ta1_cropped_kwcoco_path} to {combined_timecombined_kwcoco_path}")
             shutil.copy(ta1_cropped_kwcoco_path,
                         combined_timecombined_kwcoco_path)
     else:
@@ -422,7 +417,7 @@ def run_stac_to_cropped_kwcoco(input_path,
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)
     print("* Egressing KWCOCO dataset and associated STAC item *")
-    baseline_framework_kwcoco_egress(ta1_cropped_kwcoco_path,
+    baseline_framework_kwcoco_egress(combined_timecombined_kwcoco_path,
                                      local_region_path,
                                      output_path,
                                      outbucket,
