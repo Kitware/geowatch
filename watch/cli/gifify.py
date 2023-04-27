@@ -200,25 +200,19 @@ def ffmpeg_animate_frames(frame_fpaths, output_fpath, in_framerate=1, verbose=3,
         # evan_pad_option = '-filter:v pad="width=ceil(iw/2)*2:height=ceil(ih/2)*2"'
         # vid_options = '-c:v libx264 -profile:v high -crf 20 -pix_fmt yuv420p'
 
-        fmtkw = dict(
-            IN=temp_fpath,
-            OUT=output_fpath,
-        )
-
         global_options = []
         input_options = [
-            '-r {IN_FRAMERATE} ',
-            '-f concat -safe 0',
-            # '-framerate {IN_FRAMERATE} ',
+            '-r', f'{in_framerate}',
+            '-f', 'concat',
+            '-safe', '0',
+            # f'-framerate {in_framerate} ',
         ]
-        fmtkw.update(dict(
-            IN_FRAMERATE=in_framerate,
-        ))
 
+        # OUT_FRAMERATE=5,
         output_options = [
             # '-qscale 0',
             # '-crf 20',
-            # '-r {OUT_FRAMERATE}',
+            # f'-r {OUT_FRAMERATE}',
             # '-filter:v scale=512:-1',
 
             # higher quality
@@ -227,9 +221,6 @@ def ffmpeg_animate_frames(frame_fpaths, output_fpath, in_framerate=1, verbose=3,
             # '-filter_complex "fps=10;scale=500:-1:flags=lanczos,palettegen=stats_mode=full"'
             # '-filter_complex "fps=10;scale=500:-1:flags=lanczos,split[v1][v2]; [v1]palettegen=stats_mode=full [palette];[v2]palette]paletteuse=dither=sierra2_4a" -t 10'
         ]
-        fmtkw.update(dict(
-            # OUT_FRAMERATE=5,
-        ))
 
         filtergraph_parts = []
 
@@ -267,24 +258,22 @@ def ffmpeg_animate_frames(frame_fpaths, output_fpath, in_framerate=1, verbose=3,
         if filtergraph_parts:
             filtergraph = ','.join(filtergraph_parts)
             output_options += [
-                f'-filter:v "{filtergraph}"'
+                '-filter:v', f'{filtergraph}'
             ]
 
-        cmd_fmt = ' '.join(
+        cmd_parts = (
             [ffmpeg_exe, '-y'] +
             global_options +
             input_options +
-            ['-i {IN}'] +
+            ['-i', f'{temp_fpath}'] +
             output_options +
-            ["'{OUT}'"]
+            [output_fpath]
         )
-
-        command = cmd_fmt.format(**fmtkw)
 
         if verbose > 0:
             print('Converting {} images to animation: {}'.format(len(frame_fpaths), output_fpath))
 
-        info = ub.cmd(command, verbose=3 if verbose > 1 else 0, shell=True)
+        info = ub.cmd(cmd_parts, verbose=3 if verbose > 1 else 0, shell=False)
 
         if verbose > 0:
             print('finished')

@@ -179,8 +179,8 @@ trainer:
   logger: true
   max_steps: $MAX_STEPS
   num_sanity_val_steps: 0
-  limit_val_batches    : 64
-  limit_train_batches  : 16
+  limit_val_batches    : 8
+  limit_train_batches  : 32
   callbacks:
     - class_path: pytorch_lightning.callbacks.ModelCheckpoint
       init_args:
