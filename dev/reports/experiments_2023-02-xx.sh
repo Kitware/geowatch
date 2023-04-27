@@ -1687,16 +1687,16 @@ python -m watch.mlops.schedule_evaluation --params="
             #- $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V48/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V48_epoch106_step6848.pt
         bas_pxl.test_dataset:
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R002_I2L.kwcoco.zip
-            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-BR_R002_I2L.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-BR_R002_I2L.kwcoco.zip
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-CH_R001_I2L.kwcoco.zip
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-NZ_R001_I2L.kwcoco.zip
-            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R001_I2L.kwcoco.zip
-            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-AE_R001_I2L.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R001_I2L.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-AE_R001_I2L.kwcoco.zip
         bas_pxl.chip_overlap: 0.3
         bas_pxl.chip_dims:
             #- auto
             - '196,196'
-            - '256,256'
+            #- '256,256'
             #- '320,320'
         bas_pxl.time_span:
             - auto
@@ -1707,22 +1707,23 @@ python -m watch.mlops.schedule_evaluation --params="
             #- soft5
             - soft4
         bas_poly.thresh:
-            #- 0.25
-            #- 0.275
+            - 0.25
+            - 0.275
             - 0.3
             - 0.325
             - 0.35
             - 0.375
             - 0.4
             - 0.425
-            #- 0.45
+            - 0.45
         bas_poly.time_thresh:
-            - 1.0
+            #- 1.0
             #- 0.95
-            - 0.9
+            #- 0.9
             #- 0.85
             - 0.8
-            #- 0.75
+            - 0.75
+            - 0.70
         bas_poly.inner_window_size:
             - 1y
         bas_poly.inner_agg_fn:
@@ -1761,9 +1762,9 @@ python -m watch.mlops.schedule_evaluation --params="
         sv_dino_boxes.enabled: 1
         sv_dino_boxes.package_fpath: $DVC_EXPT_DPATH/models/kitware/xview_dino.pt
         sv_dino_boxes.window_dims:
-            - 256
+            #- 256
             - 320
-            - 512
+            #- 512
             #- 768
             #- 1024
             #- 1536
@@ -1787,12 +1788,12 @@ python -m watch.mlops.schedule_evaluation --params="
             # - 0.5
         sv_dino_filter.end_min_score:
             #- 0.0
-            - 0.05
+            #- 0.05
             - 0.1
             - 0.15
-            #- 0.2
-            #- 0.25
-            #- 0.3
+            - 0.2
+            - 0.25
+            - 0.3
             # - 0.4
             #- 0.5
     submatrices1:
