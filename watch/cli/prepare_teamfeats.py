@@ -53,14 +53,14 @@ Ignore:
     python -m watch.cli.prepare_teamfeats \
         --base_fpath "$BUNDLE_DPATH"/imganns-*.kwcoco.zip \
         --expt_dvc_dpath="$DVC_EXPT_DPATH" \
-        --with_invariants2=1 \
+        --with_invariants2=0 \
         --with_landcover=0 \
         --with_materials=0 \
         --with_invariants=0 \
         --with_depth=0 \
-        --with_cold=0 \
+        --with_cold=1 \
         --skip_existing=1 \
-        --gres=0,1 --tmux_workers=4 --backend=tmux --run=0
+        --gres=0,1 --tmux_workers=4 --backend=tmux --run=1
 
     # Drop 6
     export CUDA_VISIBLE_DEVICES="0,1"
@@ -356,9 +356,11 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
                 --cm_interval=60 \
                 --year_lowbound=None \
                 --year_highbound=None \
-                --coefs=cv \
+                --coefs=cv,rmse,a0,a1,b1,c1 \
                 --coefs_bands=0,1,2,3,4,5 \
-                --timestamp=True \
+                --timestamp=False \
+                --combine=True \
+                --resolution=10GSD \
                 --workermode="{config.cold_workermode}" \
                 --workers="{config.cold_workers}"
             ''')
