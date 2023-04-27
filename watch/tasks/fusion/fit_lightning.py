@@ -72,10 +72,13 @@ class TorchGlobals(pl.callbacks.Callback):
             # Detect if we have Ampere tensor cores
             # Ampere (V8) and later leverage tensor cores, where medium
             # float32_matmul_precision becomes useful
-            device_versions = [torch.cuda.get_device_capability(device_id)[0]
-                               for device_id in trainer.device_ids]
-            if all(v >= 8 for v in device_versions):
-                float32_matmul_precision = 'medium'
+            if torch.cuda.is_available():
+                device_versions = [torch.cuda.get_device_capability(device_id)[0]
+                                   for device_id in trainer.device_ids]
+                if all(v >= 8 for v in device_versions):
+                    float32_matmul_precision = 'medium'
+                else:
+                    float32_matmul_precision = None
             else:
                 float32_matmul_precision = None
         if float32_matmul_precision is not None:
