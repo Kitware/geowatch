@@ -6,7 +6,7 @@ GEOWATCH - Geographic Wide Area Terrestrial Change Hypercube
    :height: 100px
    :align: left
 
-|main-pipeline| |main-coverage|
+|main-pipeline| |main-coverage| |Pypi| |Downloads|
 
 
 This repository addresses the algorithmic challenges of the
@@ -233,3 +233,9 @@ copyright annotation therein
    :target: https://gitlab.kitware.com/smart/watch/-/pipelines/main/latest
 .. |main-coverage| image:: https://gitlab.kitware.com/smart/watch/badges/main/coverage.svg
    :target: https://gitlab.kitware.com/smart/watch/badges/main/coverage.svg
+.. |Pypi| image:: https://img.shields.io/pypi/v/geowatch.svg
+   :target: https://pypi.python.org/pypi/geowatch
+.. |Downloads| image:: https://img.shields.io/pypi/dm/geowatch.svg
+   :target: https://pypistats.org/packages/geowatch
+.. |ReadTheDocs| image:: https://readthedocs.org/projects/geowatch/badge/?version=latest
+    :target: http://geowatch.readthedocs.io/en/latest/
