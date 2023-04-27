@@ -1198,7 +1198,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             import secrets
             import time
             # Really try to be random
-            rng_seed = rng.randint(0, int(2 ** 32 - 2))
+            rng_seed = rng.randint(0, int(2 ** 31 - 2))
             rank_seed = int(ub.hash_data(int(os.environ.get('LOCAL_RANK', '0')), base=10)[0:9])
             secret_seed = secrets.randbits(22) + int(time.time())
             seed = secret_seed ^ rank_seed ^ rng_seed
