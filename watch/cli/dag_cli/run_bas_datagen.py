@@ -402,7 +402,7 @@ def run_stac_to_cropped_kwcoco(input_path,
                 (previous_timecombined_kwcoco_path, ta1_cropped_kwcoco_path),
                 combined_timecombined_kwcoco_path)
             # Copy saliency assets from previous bas fusion
-            shutil.copy_tree(
+            shutil.copytree(
                 os.path.join(previous_ingress_dir, 'raw_bands'),
                 os.path.join(ta1_cropped_dir, 'raw_bands'))
         else:
