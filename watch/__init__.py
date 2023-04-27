@@ -94,7 +94,7 @@ def _is_running_a_fast_cli_tool():
         return True
     if sys.argv and 'smartwatch_dvc' in sys.argv[0] or 'geowatch_dvc' in sys.argv[0]:
         return True
-    if sys.argv and len(sys.argv):
+    if sys.argv and len(sys.argv) == 1:
         # No args given case
         return True
     if sys.argv and sys.argv == ['-m']:

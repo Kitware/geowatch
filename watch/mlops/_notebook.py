@@ -29,7 +29,9 @@ def _debug_roi_issue():
 
     agg = sv_poly_agg
     # rois = 'KR_R001,KR_R002,CH_R001,NZ_R001,BR_R002'.split(',')
-    rois = 'KR_R002,CH_R001,NZ_R001'.split(',')
+    rois = 'KR_R001,KR_R002,CH_R001,NZ_R001,BR_R002,AE_R001'.split(',')
+    # rois = 'KR_R002,CH_R001,NZ_R001'.split(',')
+    # rois = ['KR_R002']
     # agg.build_macro_tables(rois)
 
     flags = agg.table['params.sv_crop.crop_src_fpath'].isnull()
@@ -37,7 +39,8 @@ def _debug_roi_issue():
     subagg.build_macro_tables(rois)
     _ = subagg.report_best()
 
-    macro = subagg.region_to_tables['macro_05_75012b']
+    macro_key = list(subagg.region_to_tables.keys())[-1]
+    macro = subagg.region_to_tables[macro_key]
 
     macro = macro.sort_values('metrics.sv_poly_eval.bas_f1')
     points = macro[['region_id', 'param_hashid', 'metrics.bas_poly_eval.bas_f1', 'metrics.sv_poly_eval.bas_f1', 'metrics.bas_poly_eval.bas_tpr', 'metrics.sv_poly_eval.bas_tpr']]
@@ -58,6 +61,9 @@ def _debug_roi_issue():
         x2 = row['metrics.sv_poly_eval.bas_tpr']
         y2 = row['metrics.sv_poly_eval.bas_f1']
         segments.append([(x1, y1), (x2, y2)])
+
+    points['metrics.bas_poly_eval.bas_f1']
+
     pts1 = [s[0] for s in segments]
     pts2 = [s[1] for s in segments]
     data_lines = mpl.collections.LineCollection(segments, color='blue', alpha=0.5, linewidths=1)
@@ -67,13 +73,48 @@ def _debug_roi_issue():
     ax.legend()
     ax.set_xlabel('bas_tpr')
     ax.set_ylabel('bas_f1')
-    ax.set_title('Effect of SV')
+    ax.set_title(f'Effect of SV: {rois}')
 
-    kwplot.sns.scatterplot(data=points, y='metrics.bas_poly_eval.bas_f1', x='metrics.sv_poly_eval.bas_tpr', markers='x', ax=ax)
-    kwplot.sns.scatterplot(data=points, y='metrics.sv_poly_eval.bas_f1', x='metrics.sv_poly_eval.bas_tpr', markers='o', ax=ax)
+    # kwplot.sns.scatterplot(data=macro, y='metrics.bas_poly_eval.bas_f1', x='metrics.bas_poly_eval.bas_tpr', markers='x', ax=ax, hue='resolved_params.bas_poly.thresh')
+
+    # kwplot.sns.scatterplot(data=macro, y='metrics.sv_poly_eval.bas_f1', x='metrics.sv_poly_eval.bas_tpr', markers='o', hue='resolved_params.sv_dino_filter.end_min_score', ax=ax)
+    # kwplot.sns.scatterplot(data=macro, y='metrics.sv_poly_eval.bas_f1', x='metrics.sv_poly_eval.bas_tpr', markers='o', hue='resolved_params.bas_poly.thresh', ax=ax)
+
+    if 1:
+        # Point A
+        target_pt = (0.6227, 0.57730)
+        delta = points[['metrics.bas_poly_eval.bas_tpr', 'metrics.bas_poly_eval.bas_f1']].values - target_pt
+        dist = np.linalg.norm(delta, axis=1)
+        point_A = points.iloc[np.argmin(dist)]
+        ax.plot(point_A['metrics.bas_poly_eval.bas_tpr'], point_A['metrics.bas_poly_eval.bas_f1'], '*', markersize=20, color='orange')
+        ax.plot(point_A['metrics.sv_poly_eval.bas_tpr'], point_A['metrics.sv_poly_eval.bas_f1'], '*', markersize=20, color='orange')
+        ax.text(*target_pt, 'A', fontdict={'weight': 'bold'})
 
 
-    subagg.
+        # Pt C
+        target_pt = (0.656, 0.60)
+        delta = points[['metrics.sv_poly_eval.bas_tpr', 'metrics.sv_poly_eval.bas_f1']].values - target_pt
+        dist = np.linalg.norm(delta, axis=1)
+        point_C = points.iloc[np.argmin(dist)]
+        ax.plot(point_C['metrics.bas_poly_eval.bas_tpr'], point_C['metrics.bas_poly_eval.bas_f1'], '*', markersize=20, color='orange')
+        ax.plot(point_C['metrics.sv_poly_eval.bas_tpr'], point_C['metrics.sv_poly_eval.bas_f1'], '*', markersize=20, color='orange')
+        ax.text(*target_pt, 'C', fontdict={'weight': 'bold'})
+
+        # Point B
+        target_pt = (0.7952, 0.5581)
+        delta = points[['metrics.sv_poly_eval.bas_tpr', 'metrics.sv_poly_eval.bas_f1']].values - target_pt
+        dist = np.linalg.norm(delta, axis=1)
+        point_B = points.iloc[np.argmin(dist)]
+        ax.plot(point_B['metrics.bas_poly_eval.bas_tpr'], point_B['metrics.bas_poly_eval.bas_f1'], '*', markersize=20, color='orange')
+        ax.plot(point_B['metrics.sv_poly_eval.bas_tpr'], point_B['metrics.sv_poly_eval.bas_f1'], '*', markersize=20, color='orange')
+        ax.text(*target_pt, 'B', fontdict={'weight': 'bold'})
+
+        special_params = {}
+        special_params['point_A'] = agg.hashid_to_params[point_A['param_hashid']]
+        special_params['point_B'] = agg.hashid_to_params[point_B['param_hashid']]
+        special_params['point_C'] = agg.hashid_to_params[point_C['param_hashid']]
+        print('special_params = {}'.format(ub.urepr(special_params, nl=2)))
+
 
     agg.table['resolved_params.sv_crop.src'].unique()
 
