@@ -108,7 +108,7 @@ CommandLine:
         --coefs=cv,rmse,a0,a1,b1,c1 \
         --coefs_bands=0,1,2,3,4,5 \
         --timestamp=False \
-        --combine=True \
+        --combine=False \
         --resolution='10GSD' \
         --workermode='process' \
         --workers=8

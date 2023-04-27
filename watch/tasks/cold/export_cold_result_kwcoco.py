@@ -127,7 +127,7 @@ def export_cold_main(cmdline=1, **kwargs):
     else:
         combined_coco_fpath = None
 
-    assert (combine and not timestamp) or (not combine and timestamp), "combine and timestamp must be either True and False, or False and True."
+    # assert (combine and not timestamp) or (not combine and timestamp), "combine and timestamp must be either True and False, or False and True."
     # TODO: MPI mode
     # if config_in['rank'] == 'MPI':
     #     ## MPI mode
@@ -270,16 +270,17 @@ def export_cold_main(cmdline=1, **kwargs):
         ordinal_day_list = ordinal_dates
 
         # Back up
-        # first_ordinal_dates = []
-        # first_img_names = []
-        # last_year = None
-        # for ordinal_day, img_name in zip(img_dates, img_names):
-        #     year = pd.Timestamp.fromordinal(ordinal_day).year
-        #     if year != last_year:
-        #         first_ordinal_dates.append(ordinal_day)
-        #         first_img_names.append(img_name)
-        #         last_year = year
-        # ordinal_day_list = first_ordinal_dates
+    if timestamp == False:
+        first_ordinal_dates = []
+        first_img_names = []
+        last_year = None
+        for ordinal_day, img_name in zip(img_dates, img_names):
+            year = pd.Timestamp.fromordinal(ordinal_day).year
+            if year != last_year:
+                first_ordinal_dates.append(ordinal_day)
+                first_img_names.append(img_name)
+                last_year = year
+        ordinal_day_list = first_ordinal_dates
 
     ranks_percore = int(np.ceil(n_blocks / n_cores))
     i_iter = range(ranks_percore)
@@ -344,7 +345,7 @@ def export_cold_main(cmdline=1, **kwargs):
                                 (current_block_y - 1) * block_height
 
                         for band_idx, band in enumerate(coefs_bands):
-                            feature_row = extract_features(element, band, ordinal_dates_july_first, nan_val, timestamp,
+                            feature_row = extract_features(element, band, ordinal_day_list, nan_val, timestamp,
                                                             feature_outputs, feature_set)
                             # Degugging mode
                             # if current_block_x == 1 and current_block_y == 1:

@@ -233,20 +233,20 @@ def assemble_main(cmdline=1, **kwargs):
             img_names.append(coco_img_name)
         ordinal_day_list = ordinal_dates
 
-    # else:
-    #     # Get only the first ordinal date of each year
-    #     first_ordinal_dates = []
-    #     first_img_names = []
-    #     last_year = None
-    #     for ordinal_day, img_name in zip(img_dates, img_names):
-    #         year = pd.Timestamp.fromordinal(ordinal_day).year
-    #         if year != last_year:
-    #             first_ordinal_dates.append(ordinal_day)
-    #             first_img_names.append(img_name)
-    #             last_year = year
+    else:
+        # Get only the first ordinal date of each year
+        first_ordinal_dates = []
+        first_img_names = []
+        last_year = None
+        for ordinal_day, img_name in zip(img_dates, img_names):
+            year = pd.Timestamp.fromordinal(ordinal_day).year
+            if year != last_year:
+                first_ordinal_dates.append(ordinal_day)
+                first_img_names.append(img_name)
+                last_year = year
 
-    #     ordinal_day_list = first_ordinal_dates
-    #     img_names = first_img_names
+        ordinal_day_list = first_ordinal_dates
+        img_names = first_img_names
 
     # assemble
     logger.info('Generating COLD output geotiff')
