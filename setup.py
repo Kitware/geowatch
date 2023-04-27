@@ -222,8 +222,11 @@ EXTRAS_REQUIRES = {
 # print('EXTRAS_REQUIRES = {}'.format(ub.urepr(EXTRAS_REQUIRES, nl=2)))
 
 
+NAME = 'geowatch'
+
 if __name__ == '__main__':
     setup(
+        name=NAME,
         author="GEOWATCH developers",
         author_email='kitware@kitware.com',
         python_requires='>=3.9',
@@ -262,7 +265,6 @@ if __name__ == '__main__':
                 'region-model.schema.json'
             ],
         },
-        name='watch',
         packages=find_packages(include=[
             'watch', 'watch.*',
             # Alias the module while we transition to a new name.

@@ -1,5 +1,5 @@
 GEOWATCH - Geographic Wide Area Terrestrial Change Hypercube
-==============================================
+============================================================
 
 .. The large version wont work because github strips rst image rescaling.
 .. image:: https://ipfs.io/ipfs/QmYftzG6enTebF2f143KeHiPiJGs66LJf3jT1fNYAiqQvq
