@@ -19,21 +19,8 @@ import os
 import ubelt as ub
 
 if 1:
-    # Monkey patch in deeplab2 to sys.path
-    # from ubelt.util_import import PythonPathContext
-    try:
-        PARENT_DPATH = ub.Path(__file__).parent
-    except NameError:
-        from watch.tasks import depthPCD as parent_package
-        PARENT_DPATH = ub.Path(parent_package.__file__).parent
 
-    import sys
-    if PARENT_DPATH not in sys.path:
-        # with PythonPathContext(parent_dpath):
-        # from watch.tasks.depthPCD.model import getModel, normalize
-        sys.path.append(os.fspath(PARENT_DPATH))
-
-    from watch.tasks.depthPCD.model import getModel, normalize
+    from watch.tasks.depthPCD.model import getModel, normalize, TPL_DPATH
     import numpy as np
     import cv2
     import kwimage
@@ -41,7 +28,6 @@ if 1:
 
     import pandas as pd
     import scriptconfig as scfg
-    import ubelt as ub
     from tqdm import tqdm
 
     from watch.cli.kwcoco_to_geojson import convert_kwcoco_to_iarpa, create_region_header
@@ -105,7 +91,7 @@ class ScoreTracksConfig(scfg.DataConfig):
 
 def score_tracks(coco_dset, imCoco_dset, thresh):
     print('loading site validation model')
-    proto_fpath = PARENT_DPATH / 'deeplab2/max_deeplab_s_backbone_os16.textproto'
+    proto_fpath = TPL_DPATH / 'deeplab2/max_deeplab_s_backbone_os16.textproto'
     model = getModel(proto=proto_fpath)
 
     # model.load_weights(expt_dvc_dpath + '/models/depthPCD/basicModel2.h5', by_name=True, skip_mismatch=True)

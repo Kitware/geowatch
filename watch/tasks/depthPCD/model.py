@@ -2,20 +2,39 @@
 # for lint needs to be set outside for avoiding tf warnings
 # os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
-from deeplab2 import config_pb2
-from deeplab2.model.deeplab import DeepLab
-import tensorflow as tf
+# Monkey patch in deeplab2 to sys.path
+# from ubelt.util_import import PythonPathContext
+import ubelt as ub
+import os
+if 1:
+    try:
+        PARENT_DPATH = ub.Path(__file__).parent
+    except NameError:
+        from watch.tasks import depthPCD as parent_package
+        PARENT_DPATH = ub.Path(parent_package.__file__).parent
 
-from google.protobuf import text_format
-from tensorflow.keras.layers import Layer, Dense, concatenate, Conv2D, \
-    BatchNormalization, \
-    GlobalAveragePooling2D, Dropout
-from tensorflow.keras.models import Model, Sequential
-import cv2
-import numpy as np
-# import sys
-# sys.path.append('watch/tasks/depthPCD')
-# sys.path.append('watch/tasks/depthPCD/deeplab2')
+    TPL_DPATH = PARENT_DPATH / 'tpl'
+
+    import sys
+    if TPL_DPATH not in sys.path:
+        # with PythonPathContext(parent_dpath):
+        # from watch.tasks.depthPCD.model import getModel, normalize
+        sys.path.append(os.fspath(TPL_DPATH))
+
+    from deeplab2 import config_pb2
+    from deeplab2.model.deeplab import DeepLab
+    import tensorflow as tf
+
+    from google.protobuf import text_format
+    from tensorflow.keras.layers import Layer, Dense, concatenate, Conv2D, \
+        BatchNormalization, \
+        GlobalAveragePooling2D, Dropout
+    from tensorflow.keras.models import Model, Sequential
+    import cv2
+    import numpy as np
+    # import sys
+    # sys.path.append('watch/tasks/depthPCD')
+    # sys.path.append('watch/tasks/depthPCD/deeplab2')
 
 
 img_size = 400
