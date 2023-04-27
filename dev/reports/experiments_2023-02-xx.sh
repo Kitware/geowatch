@@ -1841,8 +1841,8 @@ geowatch aggregate \
     --resource_report=0 \
     --plot_params=0 \
     --export_tables=0 \
-    --output_dpath="$DVC_EXPT_DPATH/_toothbrush_split6_landcover_MeanYear10GSD-V2/aggregate"
-    #--rois=KR_R001,KR_R002,CH_R001,NZ_R001,BR_R002 \
+    --output_dpath="$DVC_EXPT_DPATH/_toothbrush_split6_landcover_MeanYear10GSD-V2/aggregate" \
+    --rois=KR_R001,KR_R002,CH_R001,NZ_R001,BR_R002
 
 
 

@@ -217,6 +217,13 @@ def load_result_worker(fpath, node_name, out_node_key):
         with safer.open(resolved_json_fpath, 'w') as file:
             json.dump(result, file, indent=4)
 
+    HACK_FOR_BAD_SV_REQUEST = 1
+    if HACK_FOR_BAD_SV_REQUEST:
+        if node_name == 'sv_poly_eval':
+            import pandas as pd
+            if pd.isnull(result['requested_params'].get('params.sv_crop.crop_src_fpath', None)):
+                result['requested_params'] = None
+
     return result
 
 
