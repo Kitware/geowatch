@@ -332,6 +332,7 @@ def cold_predict_main(cmdline=1, **kwargs):
         export_kwargs['year_lowbound'] = config['year_lowbound']
         export_kwargs['year_highbound'] = config['year_highbound']
         export_kwargs['coefs'] = config['coefs']
+        export_kwargs['combine'] = config['combine']
         export_kwargs['coefs_bands'] = config['coefs_bands']
         export_kwargs['timestamp'] = config['timestamp']
         export_kwargs['sensors'] = sensors
