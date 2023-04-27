@@ -13,8 +13,7 @@ import ubelt as ub
 from tqdm import tqdm
 from kwcoco.util import util_json
 
-from watch.tasks.depthPCD.model import getModel, normalize
-from watch.cli.kwcoco_to_geojson import convert_kwcoco_to_iarpa, create_region_feature
+from watch.cli.kwcoco_to_geojson import convert_kwcoco_to_iarpa, create_region_header
 from watch.utils import process_context
 
 
@@ -25,7 +24,7 @@ class ScoreTracksConfig(scfg.DataConfig):
     in_file = scfg.Value(None, required=True, help='Input KWCOCO to convert',
                          position=1)
 
-    images = scfg.Value(None, required=True, help=ub.paragraph(
+    images_kwcoco = scfg.Value(None, required=True, help=ub.paragraph(
         '''
             kwcoco file with images where to score polygons.
             '''), group='track scoring')
@@ -72,7 +71,19 @@ class ScoreTracksConfig(scfg.DataConfig):
 
 def score_tracks(coco_dset, imCoco_dset, thresh):
     print('loading site validation model')
-    model = getModel()
+
+    # Monkey patch in deeplab2 to sys.path
+    # from ubelt.util_import import PythonPathContext
+    from watch.tasks import depthPCD as parent_package
+    parent_dpath = ub.Path(parent_package.__file__).parent
+    proto_fpath = parent_dpath / 'deeplab2/max_deeplab_s_backbone_os16.textproto'
+    import sys
+    if parent_dpath not in sys.path:
+        sys.path.append(os.fspath(parent_dpath))
+    # with PythonPathContext(parent_dpath):
+    from watch.tasks.depthPCD.model import getModel, normalize
+    model = getModel(proto=proto_fpath)
+
     # model.load_weights(expt_dvc_dpath + '/models/depthPCD/basicModel2.h5', by_name=True, skip_mismatch=True)
     # model.load_weights('/media/hdd2/antonio/models/urbanTCDs-use.h5')
 
@@ -237,7 +248,6 @@ def main(**kwargs):
     rich.print('args = {}'.format(ub.urepr(args, nl=1)))
 
     coco_dset = kwcoco.CocoDataset.coerce(args.in_file)
-
     pred_info = coco_dset.dataset.get('info', [])
 
     tracking_output = {
@@ -263,7 +273,7 @@ def main(**kwargs):
     proc_context.start()
     info.append(proc_context.obj)
 
-    images = kwcoco.CocoDataset.coerce(args.images)
+    images = kwcoco.CocoDataset.coerce(args.images_kwcoco)
     coco_dset = score_tracks(coco_dset, images, args.threshold)
 
     proc_context.stop()
@@ -330,7 +340,7 @@ def main(**kwargs):
                     print(f'writing to existing region {region_fpath}')
             else:
                 region = geojson.FeatureCollection(
-                    [create_region_feature(region_id, site_summaries)])
+                    [create_region_header(region_id, site_summaries)])
                 if verbose:
                     print(f'writing to new region {region_fpath}')
             for site_summary in site_summaries:
@@ -427,17 +437,16 @@ Example:
         --out_dir "$DVC_EXPT_DPATH/_test_dzyne_sv/eval_before" \
         --merge_fpath "$DVC_EXPT_DPATH/_test_dzyne_sv/eval_before/poly_eval_before.json"
 
-
     python -m watch.tasks.depthPCD.score_tracks \
-        --in_file /media/barcelona/Drop6/bas_baseline/polyb.kwcoco.zip \
-        --images $DVC_DATA_DPATH/Drop6/imgonly-KR_R002.kwcoco.json \
+        --in_file $DVC_EXPT_DPATH/_test_dzyne_sv/poly.kwcoco.zip \
+        --images_kwcoco $DVC_DATA_DPATH/Drop6/imgonly-KR_R002.kwcoco.json \
         --model_fpath $DVC_EXPT_DPATH/models/depthPCD/basicModel2.h5 \
         --out_site_summaries_fpath "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_site_summaries_manifest.json" \
         --out_site_summaries_dir "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_site_summaries" \
         --out_sites_fpath  "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_sites_manifest.json" \
         --out_sites_dir  "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_sites" \
-        --out_kwcoco "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_poly.kwcoco.zip"
-        --threshold 0.3
+        --out_kwcoco "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_poly.kwcoco.zip" \
+        --threshold 0.4
 '''
 if __name__ == '__main__':
     main()
