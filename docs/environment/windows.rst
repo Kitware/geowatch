@@ -1,5 +1,5 @@
 GEOWATCH On Windows
-~~~~~~~~~~~~~~~~~~~
+===================
 
 Windows usage is far less tested than Linux. If possible use Linux, but we will
 try to support windows.  This document outlines high level steps to get
@@ -18,3 +18,16 @@ From the start menu, run the Anaconda Prompt (miniconda).
 
 
 https://gitlab.kitware.com/computer-vision/geowatch.git
+
+
+Dependencies
+~~~~~~~~~~~~
+
+Not all dependencies are easilly available on Windows. The following commands
+should help work around
+
+
+.. code:: bash
+
+    # Get gdal on windows via conda
+    conda install -c conda-forge gdal
