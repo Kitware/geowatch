@@ -231,6 +231,12 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.vali_kwcoco = self.config['vali_dataset']
         self.test_kwcoco = self.config['test_dataset']
 
+        if ub.WIN32:
+            from watch.utils import util_windows
+            self.train_kwcoco = util_windows.fix_msys_path(self.train_kwcoco)
+            self.vali_kwcoco = util_windows.fix_msys_path(self.vali_kwcoco)
+            self.test_kwcoco = util_windows.fix_msys_path(self.test_kwcoco)
+
         common_keys = set(KWCocoVideoDatasetConfig.__default__.keys())
         # Pass the relevant parts of the config to the underlying datasets
         self.train_dataset_config = ub.dict_subset(cfgdict, common_keys)
