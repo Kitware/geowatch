@@ -36,7 +36,11 @@ def configure_global_attributes(**config):
         request_nofile_limits()
         want_shm_per_worker = 0.5
         want_shm = want_shm_per_worker * num_workers
-        check_shm_limits(want_shm)
+        try:
+            check_shm_limits(want_shm)
+        except IOError as ex:
+            import warnings
+            warnings.warn(str(ex))
 
     key = 'torch_sharing_strategy'
     value = config.get(key, None)
