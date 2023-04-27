@@ -108,7 +108,7 @@ def export_cold_main(cmdline=1, **kwargs):
     >>> export_cold_main(cmdline, **kwargs)
     """
     pman = kwargs.pop('pman', None)
-    config_in = ExportColdKwcocoConfig.cli(cmdline=cmdline, data=kwargs)
+    config_in = ExportColdKwcocoConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
     rank = config_in['rank']
     n_cores = config_in['n_cores']
     stack_path = ub.Path(config_in['stack_path'])

@@ -359,7 +359,7 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
                 --coefs=cv,rmse,a0,a1,b1,c1 \
                 --coefs_bands=0,1,2,3,4,5 \
                 --timestamp=False \
-                --combine=True \
+                --combine=False \
                 --resolution=10GSD \
                 --workermode="{config.cold_workermode}" \
                 --workers="{config.cold_workers}"

@@ -242,8 +242,9 @@ def cold_predict_main(cmdline=1, **kwargs):
     from watch.tasks.cold import export_cold_result_kwcoco
     from watch.tasks.cold import assemble_cold_result_kwcoco
 
-    config = ColdPredictConfig.cli(cmdline=cmdline, data=kwargs)
-    print('config = {}'.format(ub.urepr(dict(config), nl=1)))
+    config = ColdPredictConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
+    import rich
+    rich.print('config = {}'.format(ub.urepr(config, nl=1)))
 
     from watch.utils import process_context
     from watch.utils import util_parallel
