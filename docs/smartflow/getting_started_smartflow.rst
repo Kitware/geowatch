@@ -1,12 +1,15 @@
+==============================
+Getting Started With Smartflow
+==============================
 
 
 Requirements
 ------------
 We assume you have the aws and kubernetes command line tools installed.
 
-* `get started with aws <../../docs/environment/getting_started_aws.rst>`
+* `Get started with aws CLI <../../docs/environment/getting_started_aws.rst>`_.
 
-* `get started with kubectl <../../docs/environment/getting_started_kubectl.rst>`
+* `Get started with kubectl CLI <../../docs/environment/getting_started_kubectl.rst>`_.
 
 
 Configure Kubernetes
@@ -14,10 +17,22 @@ Configure Kubernetes
 
 To configure kubernetes to talk to the Kitware smartflow server run:
 
-NOTE: If you have an old configuration you should remove it. You can list
-existing contexts with ``kubectl config get-contexts``, and
-``kubectl config delete-context <chosen-context>`` to remove a context, or simply delete
-``rm -rf $HOME/.kube/config`` if you want to start fresh.
+
+.. note::
+
+    If you have an old configuration you should remove it. You can list
+    existing contexts with
+
+    ``kubectl config get-contexts``
+
+    To remove a context:
+
+    ``kubectl config delete-context <chosen-context>``
+
+    If you want to start fresh, delete the .kube/config directory
+
+    ``rm -rf $HOME/.kube/config``
+
 
 .. code:: bash
 
@@ -71,10 +86,8 @@ In your browser navigate to ``localhost:2746/home``, which can be done via the c
 
 .. code:: bash
 
-   # Not working?
+   # I'm not sure why, but does not seem to be working correctly.
    python -c "import webbrowser; webbrowser.open('https://localhost:2746/home', new=1)"
-
-   # python -c "import webbrowser; webbrowser.open('https://127.0.0.1:2746/home', new=1)"
 
 
 References
@@ -90,6 +103,8 @@ Blacksky also has detailed instructions for setting up smartflow and setting up 
 Next Steps
 ----------
 
-* `running smartflow <smartflow_running_the_system.rst>`
-* `copy large files to EFS <smartflow_copying_large_files_to_efs.md>`
-* `training fusion models on AWS <smartflow_training_fusion_models.md>`
+* `Running smartflow <smartflow_running_the_system.rst>`_
+
+* `Copy large files to EFS <smartflow_copying_large_files_to_efs.md>`_
+
+* `Training fusion models on AWS <smartflow_training_fusion_models.md>`_

@@ -1,46 +1,56 @@
+===============================
+Running The System In Smartflow
+===============================
+
+.. note ::
+
+   This file is currently a working document and contains a lot of notes
+
+This goes over how to run the GEOWATCH system in smartflow.
+
+The outline of this document is:
+
+* `Building the Docker Image <SectionBuildDocker_>`__,
+    + `Building the Pyenv Base Image <BuildPyenv_>`__,
+    + `Building the GEOWATCH Image 2 <BuildGeowatch_>`__.
+    + `Baking Models into the Image <BakeModel_>`__.
+    + `Updating Existing Images <UpdateImage>`__.
+* `Submit a DAG <SubmitDAG_>`__.
+    + `Debugging a DAG <DebugDAGS_>`__.
+* `Old Notes <OldNotes_>`__.
+
 Prerequisites
--------------
+=============
 
-* `AWS <../../docs/environment/getting_started_aws.rst>`
+Be sure you have
 
-* `Kubectl <../../docs/environment/getting_started_kubectl.rst>`
+* `Setup the AWS CLI <../../docs/environment/getting_started_aws.rst>`_
 
-* `Smartflow Setup <getting_started_smartflow.rst>`
+* `Setup the kubectl CLI <../../docs/environment/getting_started_kubectl.rst>`_
 
-
-NOTE: this file is currently a working notes document.
-
-
-SeeAlso
--------
-
-* `Connors Smartflow Training Nodes <smartflow_training_fusion_models.md>`
-
-* Dags live in: https://gitlab.kitware.com/smart/watch-smartflow-dags
+* `Setup smartflow <getting_started_smartflow.rst>`_
 
 
-High level:
+.. _SectionBuildDocker:
 
-    * build container
+Section 1: The GEOWATCH Docker Image
+====================================
 
-    * bake model into it
+In this section we will go over how to build the docker image used in a submission:
 
-    * push container into T&E gitlab
-
-    * tweak dags to point to new container
-
-
-
-Building the Pyenv-GEOWATCH Docker Image
--------------------------------------
-
-If you have not built a docker image, we will need to do so.
 
 There are two images that need to be build, first the
 `pyenv dockerfile <../../dockerfiles/pyenv.Dockerfile>`_.
 And then the watch dockerfile that builds on top of it
-`watch dockerfile <../../dockerfiles/watch.Dockerfile>`_. The heredocs in these
-files provide futher instructions.
+`watch dockerfile <../../dockerfiles/watch.Dockerfile>`_.
+The heredocs in these files provide futher instructions.
+We will also need to add models to the image
+
+
+.. _BuildPyenv:
+
+Building the Pyenv Base Image
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Here we will go over the basic use case for a specific version of Python /
 dependencies. We will use Python 3.11 and strict dependencies. We will assume
@@ -94,6 +104,11 @@ Now that the pyenv image ``pyenv:3.11.2`` has been created we can quickly test i
     # if you have a GPU you can run
     docker run --runtime=nvidia -it $PYENV_IMAGE nvidia-smi
 
+
+.. _BuildGeowatch:
+
+Building the GEOWATCH Image
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Now we build the watch image on top of the pyenv image. To ensure we do this
 cleanly we will make a fresh clone of your local repo which will ensure you
@@ -182,13 +197,10 @@ machine.
     docker push registry.smartgitlab.com/kitware/$WATCH_IMAGE
 
 
-**How to make a quick image update**
-
-See: Update the code / models in an existing image
-
+.. _BakeModel:
 
 How to Bake a Model into a Pyenv Dockerfile
--------------------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Assuming that you have already build a pyenv docker image we will add a model
 to it.
@@ -269,8 +281,10 @@ to it.
    docker push gitlab.kitware.com:4567/smart/watch/$WATCH_IMAGE
 
 
-Update the code / models in an existing image
----------------------------------------------
+.. _UpdateImage:
+
+Update An Existing Image
+^^^^^^^^^^^^^^^^^^^^^^^^
 
 Say you need to make a small change to the code, but don't want to rebuild the
 entire model. We can handle that case by mounting the latest repos onto the
@@ -310,13 +324,17 @@ latest code, and commiting the change as a new image.
    docker push registry.smartgitlab.com/kitware/$NEW_IMAGE_NAME
 
 
+.. _SubmitDAG:
+
 How to Submit a DAG
--------------------
+===================
 
 .. .. SeeAlso: ~/code/watch-smartflow-dags/KIT_TA2_PREEVAL10_PYENV_V13.py
    ~/code/watch-smartflow-dags/KIT_TA2_PREEVAL10_V13.py
 
-Ensure that you have the DAG repo
+
+We maintain the airflow DAGS in the `watch-smartflow-dags repo <https://gitlab.kitware.com/smart/watch-smartflow-dags>`_.
+Ensure that you have the DAG repo:
 
 .. code:: bash
 
@@ -324,8 +342,12 @@ Ensure that you have the DAG repo
    git clone git@gitlab.kitware.com:smart/watch-smartflow-dags.git $HOME/code/watch-smartflow-dags
 
 
-Choose a DAG file and modify it as necessary (TODO, describe this in more
-detail).
+Choose a DAG file and modify it as necessary
+
+
+.. note::
+
+    TODO: Describe in more detail
 
 
 Once you have a DAG file ready upload it to AWS via:
@@ -359,53 +381,15 @@ which can be done via the command:
    python -c "import webbrowser; webbrowser.open('https://localhost:2746/home', new=1)"
 
 
-To debug interactively you can log into an existing run:
+.. _RunningDAGS:
 
+Running DAGS
+^^^^^^^^^^^^
 
-.. code:: bash
+In the GUI you can simply search for your dag and hit the run buttom.
 
-    kubectl -n airflow get pods
-    # Find your POD_ADDR
-    # POD_ADDR=site-cropped-kwcoco-6254ac27fab04f0b8eb302ac19b09745
-    # kubectl -n airflow exec -it pods/$POD_ADDR -- bash
-
-    # Script to list and exec into a running pod
-    python -c "if True:
-    import json
-    import pandas as pd
-    import rich
-    import ubelt as ub
-    info = ub.cmd('kubectl -n airflow get pods -o json')
-    data = json.loads(info['out'])
-
-    rows = []
-    for item in data['items']:
-        row = {
-            'name': item['metadata']['name'],
-            'status': item['status']['phase'],
-            'startTime': item['status']['startTime'],
-        }
-        rows.append(row)
-    df = pd.DataFrame(rows)
-    rich.print(df.to_string())
-    import rich.prompt
-    ans = rich.prompt.Prompt.ask('which one?', choices=list(map(str, df.index.to_list())))
-    idx = int(ans)
-    pod_addr = df.iloc[idx]['name']
-    ub.cmd(f'kubectl -n airflow exec -it pods/{pod_addr} -- bash', system=True)
-    "
-
-
-More notes:
-
-.. code:: bash
-
-    kubectl -n airflow logs pods/{pod_addr}
-
-
-
-To interact with airflow on the command line, you need to exec into the airflow
-scheduler pod.
+To programatically interact with airflow on the command line, you need to exec
+into the airflow scheduler pod.
 
 
 .. code:: bash
@@ -489,8 +473,84 @@ scheduler pod.
 
 
 
+.. _DebugDAGS:
+
+Debuggging DAGS
+^^^^^^^^^^^^^^^
+
+Here is a useful command to get a list of running pods that contain jobs.
+
+.. code:: bash
+
+    kubectl -n airflow get pods
+
+
+Given a pod id there are useful commands
+
+.. code:: bash
+
+    # Pod logs
+    kubectl -n airflow logs pods/{pod_addr}
+
+    # Exec into a pod
+    kubectl -n airflow exec -it pods/{pod_addr} -- bash
+
+
+Here is a snippet to automatically list pods and allow you to select one to
+exec info:
+
+.. code:: bash
+
+    kubectl -n airflow get pods
+    # Find your POD_ADDR
+    # POD_ADDR=site-cropped-kwcoco-6254ac27fab04f0b8eb302ac19b09745
+    # kubectl -n airflow exec -it pods/$POD_ADDR -- bash
+
+    # Script to list and exec into a running pod
+    python -c "if True:
+    import json
+    import pandas as pd
+    import rich
+    import ubelt as ub
+    info = ub.cmd('kubectl -n airflow get pods -o json')
+    data = json.loads(info['out'])
+
+    from dateutil.parser import isoparse
+    from datetime import datetime as datetime_cls
+    utc_now = datetime_cls.utcnow()
+
+    rows = []
+    for item in data['items']:
+        restart_count = sum([cs['restartCount'] for cs in item['status']['containerStatuses']])
+        start_time = item['status']['startTime']
+        start_dt = isoparse(start_time)
+        utc_now = utc_now.replace(tzinfo=start_dt.tzinfo)
+        age_delta = utc_now - start_dt
+        row = {
+            'name': item['metadata']['name'],
+            'status': item['status']['phase'],
+            'startTime': start_time,
+            'restarts': restart_count,
+            'age': str(age_delta),
+        }
+        rows.append(row)
+    df = pd.DataFrame(rows)
+    rich.print(df.to_string())
+    import rich.prompt
+    ans = rich.prompt.Prompt.ask('which one?', choices=list(map(str, df.index.to_list())))
+    idx = int(ans)
+    pod_addr = df.iloc[idx]['name']
+    ub.cmd(f'kubectl -n airflow exec -it pods/{pod_addr} -- bash', system=True)
+    "
+
+
+.. _OldNotes:
+
+Old Notes
+=========
+
 How to Bake a Model into a Dockerfile (OLD)
--------------------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 * Must be run in repo root
 * Ensure whatever variant of the repo you want to be run is checked out.
@@ -509,7 +569,7 @@ Need to push container to smartgitlab
 
 
 Running Dags After Containers are Using (OLD)
----------------------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Now we edit a DAG file for airflow
 
@@ -518,14 +578,12 @@ Now we edit a DAG file for airflow
 
 
 Choose a DAG file in ~/code/watch-smartflow-dags/ then edit it to give it a unique name
-
-.e.g. ~/code/watch-smartflow-dags/KIT_TA2_20221121_BATCH.py
+.e.g. ``~/code/watch-smartflow-dags/KIT_TA2_20221121_BATCH.py``
 
 
 * change name of file and then change ``EVALUATION`` to be a unique string to name it what you want.
 
-* change the image names / tags e.g.
-    image="registry.smartgitlab.com/kitware/watch/ta2:Ph2Nov21EvalBatch", these are all "pod tasks" create_pod_task
+* change the image names / tags e.g. ``image="registry.smartgitlab.com/kitware/watch/ta2:Ph2Nov21EvalBatch"``, these are all "pod tasks" create_pod_task
 
 * ``purpose`` is something about the node that it runs on.
   For a subset of valid options see: https://smartgitlab.com/blacksky/smartflow/-/blob/118140a81362c5721b5e9bb65ab967fb8bd28163/CHANGELOG.md
@@ -533,7 +591,10 @@ Choose a DAG file in ~/code/watch-smartflow-dags/ then edit it to give it a uniq
 * make cpu limit a bit less than what is availble on the pod.
 
 * Copy the DAG to smartflow S3:
-    aws s3 --profile iarpa cp Kit_DatasetGeneration.py s3://smartflow-023300502152-us-west-2/smartflow/env/kitware-prod-v2/dags/Kit_DatasetGeneration.py
+
+  .. code:: bash
+
+      aws s3 --profile iarpa cp Kit_DatasetGeneration.py s3://smartflow-023300502152-us-west-2/smartflow/env/kitware-prod-v2/dags/Kit_DatasetGeneration.py
 
 
 Need to run service to access airflow gui:
@@ -542,7 +603,14 @@ Need to run service to access airflow gui:
 
     kubectl -n airflow port-forward service/airflow-webserver 2746:8080
 
-navigate to localhost:2746/home
-
+navigate to ``localhost:2746/home``
 
 Now dags show up in the GUI.
+
+
+SeeAlso
+^^^^^^^
+
+* `Connor's Smartflow Training Nodes <smartflow_training_fusion_models.md>`_
+
+* Dags live in: https://gitlab.kitware.com/smart/watch-smartflow-dags
