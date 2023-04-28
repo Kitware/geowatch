@@ -29,9 +29,9 @@ def _debug_roi_issue():
 
     agg = sv_poly_agg
     # rois = 'KR_R001,KR_R002,CH_R001,NZ_R001,BR_R002'.split(',')
-    rois = 'KR_R001,KR_R002,CH_R001,NZ_R001,BR_R002,AE_R001'.split(',')
+    # rois = 'KR_R001,KR_R002,CH_R001,NZ_R001,BR_R002,AE_R001'.split(',')
     # rois = 'KR_R002,CH_R001,NZ_R001'.split(',')
-    # rois = ['KR_R002']
+    rois = ['KR_R002']
     # agg.build_macro_tables(rois)
 
     flags = agg.table['params.sv_crop.crop_src_fpath'].isnull()
@@ -47,6 +47,7 @@ def _debug_roi_issue():
 
     import kwplot
     import matplotlib as mpl
+    kwplot.autosns()
     kwplot.plt.ion()
     kwplot.figure()
     ax = kwplot.plt.gca()
@@ -55,14 +56,17 @@ def _debug_roi_issue():
     segments = []
     min_x = float('inf')
     max_x = -float('inf')
-    for row in points.to_dict('records'):
-        x1 = row['metrics.bas_poly_eval.bas_tpr']
-        y1 = row['metrics.bas_poly_eval.bas_f1']
-        x2 = row['metrics.sv_poly_eval.bas_tpr']
-        y2 = row['metrics.sv_poly_eval.bas_f1']
+    for row in macro.to_dict('records'):
+        x1 = row['metrics.bas_poly_eval.bas_tp']
+        x2 = row['metrics.sv_poly_eval.bas_tp']
+
+        y1 = row['metrics.bas_poly_eval.bas_fp']
+        y2 = row['metrics.sv_poly_eval.bas_fp']
+        # y1 = row['metrics.bas_poly_eval.bas_f1']
+        # y2 = row['metrics.sv_poly_eval.bas_f1']
         segments.append([(x1, y1), (x2, y2)])
 
-    points['metrics.bas_poly_eval.bas_f1']
+    macro['metrics.bas_poly_eval.bas_f1']
 
     pts1 = [s[0] for s in segments]
     pts2 = [s[1] for s in segments]
@@ -71,8 +75,9 @@ def _debug_roi_issue():
     ax.plot(*zip(*pts1), 'rx', label='before SV')
     ax.plot(*zip(*pts2), 'bo', label='after SV')
     ax.legend()
-    ax.set_xlabel('bas_tpr')
-    ax.set_ylabel('bas_f1')
+    ax.set_xlabel('bas_tp')
+    # ax.set_ylabel('bas_f1')
+    ax.set_ylabel('bas_fp')
     ax.set_title(f'Effect of SV: {rois}')
 
     # kwplot.sns.scatterplot(data=macro, y='metrics.bas_poly_eval.bas_f1', x='metrics.bas_poly_eval.bas_tpr', markers='x', ax=ax, hue='resolved_params.bas_poly.thresh')

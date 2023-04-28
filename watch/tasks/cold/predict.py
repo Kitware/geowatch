@@ -113,18 +113,21 @@ CommandLine:
         --workermode='serial' \
         --workers=0
 
+    kwcoco stats "$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold.kwcoco.zip
+    geowatch stats "$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold.kwcoco.zip
+
     # Fix path problem because we wrote a different directory
     # TODO: fix this script so the output always uses absolute paths?
     # or at least doesn't write invalid data that needs fixing?
     DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="auto")
     kwcoco reroot \
-        --src="$DATA_DVC_DPATH"/Drop6/_pycold/imgonly-KR_R001-cold.kwcoco.json \
-        --dst="$DATA_DVC_DPATH"/Drop6/_pycold/imgonly-KR_R001-cold.fixed.kwcoco.zip \
+        --src="$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold.kwcoco.zip \
+        --dst="$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold_fixed.kwcoco.zip \
         --old_prefix="KR_R001" --new_prefix="../KR_R001"
 
     DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="auto")
     smartwatch visualize \
-        "$DATA_DVC_DPATH"/Drop6/_pycold/imgonly-KR_R001-cold.fixed.kwcoco.zip \
+        "$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold.kwcoco.zip \
         --channels="L8:(red|green|blue,red_COLD_a1|green_COLD_a1|blue_COLD_a1,red_COLD_cv|green_COLD_cv|blue_COLD_cv,red_COLD_rmse|green_COLD_rmse|blue_COLD_rmse)" \
         --smart=True
 

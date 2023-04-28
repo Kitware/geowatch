@@ -396,6 +396,14 @@ To debug interactively you can log into an existing run:
     "
 
 
+More notes:
+
+.. code:: bash
+
+    kubectl -n airflow logs pods/{pod_addr}
+
+
+
 To interact with airflow on the command line, you need to exec into the airflow
 scheduler pod.
 
