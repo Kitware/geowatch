@@ -89,6 +89,7 @@ def score_tracks(coco_dset, imCoco_dset, thresh, model_fpath):
 
     sampler = ndsampler.CocoSampler(dset)
 
+    # FIXME: pandas is slow, we likely want to use an alternative impl
     imgs = pd.DataFrame(coco_dset.dataset["images"])
     if "timestamp" not in imgs.columns:
         imgs["timestamp"] = imgs["id"]
@@ -270,7 +271,6 @@ def main(**kwargs):
         raise IOError(f'Specified {model_fpath=} does not exist')
 
     coco_dset = kwcoco.CocoDataset.coerce(args.in_file)
-    pred_info = coco_dset.dataset.get('info', [])
 
     tracking_output = {
         'type': 'tracking_result',
@@ -289,7 +289,6 @@ def main(**kwargs):
     proc_context = process_context.ProcessContext(
         name='watch.tasks.depthPCD.score_tracks', type='process',
         config=jsonified_config,
-        extra={'pred_info': pred_info},
         track_emissions=False,
     )
     proc_context.start()
@@ -478,10 +477,10 @@ Example:
         --name "todo" \
         --true_site_dpath "$DVC_DATA_DPATH/annotations/drop6/site_models" \
         --true_region_dpath "$DVC_DATA_DPATH/annotations/drop6/region_models" \
-        --pred_sites "$DVC_EXPT_DPATH/_test_dzyne_sv/sites_manifest.json" \
-        --tmp_dir "$DVC_EXPT_DPATH/_test_dzyne_sv/eval_before/tmp" \
-        --out_dir "$DVC_EXPT_DPATH/_test_dzyne_sv/eval_before" \
-        --merge_fpath "$DVC_EXPT_DPATH/_test_dzyne_sv/eval_before/poly_eval_before.json"
+        --pred_sites "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_sites_manifest.json" \
+        --tmp_dir "$DVC_EXPT_DPATH/_test_dzyne_sv/eval_after/tmp" \
+        --out_dir "$DVC_EXPT_DPATH/_test_dzyne_sv/eval_after" \
+        --merge_fpath "$DVC_EXPT_DPATH/_test_dzyne_sv/eval_after/poly_eval_after.json"
 '''
 if __name__ == '__main__':
     main()
