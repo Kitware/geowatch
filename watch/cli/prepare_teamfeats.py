@@ -360,7 +360,7 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
                 --coefs_bands=0,1,2,3,4,5 \
                 --timestamp=False \
                 --combine=False \
-                --resolution=10GSD \
+                --resolution=30GSD \
                 --workermode="{config.cold_workermode}" \
                 --workers="{config.cold_workers}"
             ''')
