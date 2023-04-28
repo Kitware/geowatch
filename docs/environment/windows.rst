@@ -6,28 +6,74 @@ try to support windows.  This document outlines high level steps to get
 geowatch running on windows.  We will use miniconda3 for Python. Other options
 will works.
 
-
-
 Steps I used on windows 10:
+
+
+Installer Miniconda
+~~~~~~~~~~~~~~~~~~~
 
 Download `Miniconda3 Windows 64-bit installer <https://docs.conda.io/en/latest/miniconda.html>`_ (with Python 3.10 as the default).
 
 Run the installer (using default settings).
 
-From the start menu, run the Anaconda Prompt (miniconda).
 
-
-https://gitlab.kitware.com/computer-vision/geowatch.git
-
-
-Dependencies
+Install Bash
 ~~~~~~~~~~~~
 
-Not all dependencies are easilly available on Windows. The following commands
-should help work around
+We will also need msys or git-bash
 
+Download `the git-bash installer <https://git-scm.com/download/win>` and install it.
+
+
+Environment Setup
+~~~~~~~~~~~~~~~~~
+
+From the start menu, run the Anaconda Prompt (miniconda).
+
+BEFORE installing geowatch we will need to use conda to get some dependencies
+that don't have windows binaries hosted on pypi.
+
+It is recommened to be in a virtual enviornment
 
 .. code:: bash
 
-    # Get gdal on windows via conda
-    conda install -c conda-forge gdal
+   conda create -n geowatch python=3.10
+   conda activate geowatch
+
+   conda install gdal jq scikit-learn ffmpeg -c conda-forge
+
+   # If you don't have a GPU
+   conda install pytorch torchvision cpuonly -c pytorch
+
+   # If you have a NVIDIA GPU (untested)
+   conda install pytorch torchvision pytorch-cuda=11.8 -c pytorch nvidia
+
+
+Now that these initial requirements have been satisfied we will use pip to
+install the rest of the requirements:
+
+.. code:: bash
+
+   pip install geowatch[headless]
+
+   # Or install from source
+   # git clone https://gitlab.kitware.com/computer-vision/geowatch.git
+   # cd geowatch
+   # pip install -e .[headless]
+
+
+Running The Tutorial
+~~~~~~~~~~~~~~~~~~~~
+
+Unfortunately I've been unable to figure out how to get the bash kernel for
+Jupyter notebooks to work on Windows. To run the tutorial you will need to run
+the bash commands directly in msys or git-bash.
+
+From the start menu, run git-bash. Then we need to activate our conda virtualenv:
+
+.. code:: bash
+
+   conda activate geowatch
+
+
+Now run the tutorial commands one at a time.
