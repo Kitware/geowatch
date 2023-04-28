@@ -53,7 +53,7 @@ class ScoreTracksConfig(scfg.DataConfig):
             threshold to filter polygons, very sensitive
             '''), group='track scoring')
 
-    model_fpath = scfg.Value(os.environ['DVC_EXPT_DPATH']+'/models/depthPCD/basicModel2.h5',
+    model_fpath = scfg.Value(os.environ['DVC_EXPT_DPATH'] + '/models/depthPCD/basicModel2.h5',
                              help='Path to the depthPCD site validation model')
 
     region_id = scfg.Value(None, help=ub.paragraph(
@@ -401,6 +401,7 @@ Example:
     DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
     BAS_MODEL_FPATH=$DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
 
+    # Predict BAS Heatmaps
     python -m watch.tasks.fusion.predict \
         --package_fpath="$BAS_MODEL_FPATH" \
         --test_dataset=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R002_I2L.kwcoco.zip \
@@ -418,7 +419,7 @@ Example:
         --with_class="False" \
         --with_change="False"
 
-
+    # Convert Heatmaps to Polygons
     python -m watch.cli.run_tracker \
         --in_file "$DVC_EXPT_DPATH/_test_dzyne_sv/pred_heatmaps.kwcoco.zip" \
         --default_track_fn saliency_heatmaps \
@@ -445,7 +446,7 @@ Example:
         --out_sites_dir "$DVC_EXPT_DPATH/_test_dzyne_sv/sites" \
         --out_kwcoco "$DVC_EXPT_DPATH/_test_dzyne_sv/poly.kwcoco.zip"
 
-
+    # Score the Initial Predictions
     python -m watch.cli.run_metrics_framework \
         --merge=True \
         --name "todo" \
@@ -456,6 +457,7 @@ Example:
         --out_dir "$DVC_EXPT_DPATH/_test_dzyne_sv/eval_before" \
         --merge_fpath "$DVC_EXPT_DPATH/_test_dzyne_sv/eval_before/poly_eval_before.json"
 
+    # Run the Site Validation Filter
     python -m watch.tasks.depthPCD.score_tracks \
         --in_file $DVC_EXPT_DPATH/_test_dzyne_sv/poly.kwcoco.zip \
         --images_kwcoco $DVC_DATA_DPATH/Drop6/imgonly-KR_R002.kwcoco.json \
@@ -466,6 +468,17 @@ Example:
         --out_sites_dir  "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_sites" \
         --out_kwcoco "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_poly.kwcoco.zip" \
         --threshold 0.4
+
+    # Score the Filtered Predictions
+    python -m watch.cli.run_metrics_framework \
+        --merge=True \
+        --name "todo" \
+        --true_site_dpath "$DVC_DATA_DPATH/annotations/drop6/site_models" \
+        --true_region_dpath "$DVC_DATA_DPATH/annotations/drop6/region_models" \
+        --pred_sites "$DVC_EXPT_DPATH/_test_dzyne_sv/sites_manifest.json" \
+        --tmp_dir "$DVC_EXPT_DPATH/_test_dzyne_sv/eval_before/tmp" \
+        --out_dir "$DVC_EXPT_DPATH/_test_dzyne_sv/eval_before" \
+        --merge_fpath "$DVC_EXPT_DPATH/_test_dzyne_sv/eval_before/poly_eval_before.json"
 '''
 if __name__ == '__main__':
     main()
