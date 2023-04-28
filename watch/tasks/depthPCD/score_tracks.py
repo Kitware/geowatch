@@ -293,7 +293,7 @@ def main(**kwargs):
     info.append(proc_context.obj)
 
     images = kwcoco.CocoDataset.coerce(args.images_kwcoco)
-    coco_dset = score_tracks(coco_dset, images, args.threshold,args.model_fpath)
+    coco_dset = score_tracks(coco_dset, images, args.threshold, args.model_fpath)
 
     proc_context.stop()
     out_kwcoco = args.out_kwcoco
