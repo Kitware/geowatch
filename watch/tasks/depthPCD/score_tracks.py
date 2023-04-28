@@ -481,6 +481,23 @@ Example:
         --tmp_dir "$DVC_EXPT_DPATH/_test_dzyne_sv/eval_after/tmp" \
         --out_dir "$DVC_EXPT_DPATH/_test_dzyne_sv/eval_after" \
         --merge_fpath "$DVC_EXPT_DPATH/_test_dzyne_sv/eval_after/poly_eval_after.json"
+
+    python -c "if 1:
+        import pandas as pd
+        import rich
+        import json
+        import ubelt as ub
+        text1 = ub.Path('$DVC_EXPT_DPATH/_test_dzyne_sv/eval_before/poly_eval_before.json').read_text()
+        text2 = ub.Path('$DVC_EXPT_DPATH/_test_dzyne_sv/eval_after/poly_eval_after.json').read_text()
+        data1 = json.loads(text1)
+        data2 = json.loads(text2)
+        df1 = pd.read_json(json.dumps(data1['best_bas_rows']), orient='table')
+        df2 = pd.read_json(json.dumps(data2['best_bas_rows']), orient='table')
+        print('BEFORE:')
+        rich.print(df1)
+        print('After:')
+        rich.print(df2)
+    "
 '''
 if __name__ == '__main__':
     main()
