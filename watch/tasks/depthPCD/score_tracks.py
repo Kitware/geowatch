@@ -1,39 +1,9 @@
-# import cv2
-# import geojson
-# import json
-# import kwimage
-# import ndsampler
-# import numpy as np
-# import os
-# import pandas as pd
-# import scriptconfig as scfg
-# import ubelt as ub
-
-# from tqdm import tqdm
-
-# from watch.cli.kwcoco_to_geojson import convert_kwcoco_to_iarpa, create_region_header
-# from watch.utils import process_context
+#!/usr/bin/env python3
 import geojson
 import json
 import os
 import ubelt as ub
-
-if 1:
-    from watch.tasks.depthPCD.model import getModel, normalize, TPL_DPATH
-    import numpy as np
-    import cv2
-    import kwimage
-    import ndsampler
-
-    import pandas as pd
-    import scriptconfig as scfg
-    from tqdm import tqdm
-
-    from watch.cli.kwcoco_to_geojson import convert_kwcoco_to_iarpa, create_region_header
-    from watch.utils import process_context
-
-    import kwcoco
-    from kwcoco.util import util_json
+import scriptconfig as scfg
 
 
 class ScoreTracksConfig(scfg.DataConfig):
@@ -53,8 +23,7 @@ class ScoreTracksConfig(scfg.DataConfig):
             threshold to filter polygons, very sensitive
             '''), group='track scoring')
 
-    model_fpath = scfg.Value(os.environ['DVC_EXPT_DPATH'] + '/models/depthPCD/basicModel2.h5',
-                             help='Path to the depthPCD site validation model')
+    model_fpath = scfg.Value(None, help='Path to the depthPCD site validation model')
 
     region_id = scfg.Value(None, help=ub.paragraph(
         '''
@@ -95,6 +64,15 @@ class ScoreTracksConfig(scfg.DataConfig):
 
 
 def score_tracks(coco_dset, imCoco_dset, thresh, model_fpath):
+    from watch.tasks.depthPCD.model import getModel, normalize, TPL_DPATH
+
+    import numpy as np
+    import cv2
+    import kwimage
+    import ndsampler
+    import pandas as pd
+    from tqdm import tqdm
+
     print('loading site validation model')
     proto_fpath = TPL_DPATH / 'deeplab2/max_deeplab_s_backbone_os16.textproto'
     model = getModel(proto=proto_fpath)
@@ -266,6 +244,31 @@ def main(**kwargs):
     import rich
     rich.print('args = {}'.format(ub.urepr(args, nl=1)))
 
+    # Import this first
+    print('Importing tensorflow stuff (can take a while)')
+    from watch.tasks.depthPCD.model import getModel, normalize, TPL_DPATH  # NOQA
+
+    from watch.cli.kwcoco_to_geojson import convert_kwcoco_to_iarpa, create_region_header
+    from watch.utils import process_context
+
+    import kwcoco
+    from kwcoco.util import util_json
+
+    if args.model_fpath is None:
+        print('warning: the path to the model was not explicitly specified, '
+              'attempting to automatically infer it')
+        cand_model_path = ub.Path(os.environ.get('DVC_EXPT_DPATH', '')) / 'models/depthPCD/basicModel2.h5'
+        if cand_model_path.exists():
+            args.model_fpath = cand_model_path
+        else:
+            raise IOError(
+                f'Attempted to infer model path {cand_model_path}, '
+                'but it does not exist. Please specify it explicitly')
+
+    model_fpath = ub.Path(args.model_fpath)
+    if not model_fpath.exists():
+        raise IOError(f'Specified {model_fpath=} does not exist')
+
     coco_dset = kwcoco.CocoDataset.coerce(args.in_file)
     pred_info = coco_dset.dataset.get('info', [])
 
@@ -293,7 +296,7 @@ def main(**kwargs):
     info.append(proc_context.obj)
 
     images = kwcoco.CocoDataset.coerce(args.images_kwcoco)
-    coco_dset = score_tracks(coco_dset, images, args.threshold, args.model_fpath)
+    coco_dset = score_tracks(coco_dset, images, args.threshold, model_fpath)
 
     proc_context.stop()
     out_kwcoco = args.out_kwcoco
