@@ -49,6 +49,9 @@ It is recommened to be in a virtual enviornment
    conda install pytorch torchvision pytorch-cuda=11.8 -c pytorch nvidia
 
 
+.. .. pip install msvc-runtime
+
+
 Now that these initial requirements have been satisfied we will use pip to
 install the rest of the requirements:
 

@@ -93,11 +93,11 @@ CommandLine:
     DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="auto")
     EXPT_DVC_DPATH=$(smartwatch_dvc --tags=phase2_expt --hardware="auto")
     python -m watch.tasks.cold.predict \
-        --coco_fpath="$DATA_DVC_DPATH/Drop6/data_vali_split1_KR_R001.kwcoco.json" \
-        --combined_coco_fpath="$DATA_DVC_DPATH/Drop6_MeanYear/data_vali_split1_KR_R001_MeanYear.kwcoco.json" \
-        --out_dpath="$DATA_DVC_DPATH/Drop6/_pycold_combine" \
+        --coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly_KR_R001.kwcoco.json" \
+        --combined_coco_fpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imgonly_KR_R001.kwcoco.zip" \
+        --out_dpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/_pycold_combine" \
         --sensors='L8' \
-        --mod_coco_fpath="$DATA_DVC_DPATH/Drop6_MeanYear/data_vali_split1_KR_R001_MeanYear_cold.kwcoco.json" \
+        --mod_coco_fpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold.kwcoco.zip" \
         --adj_cloud=False \
         --method='COLD' \
         --prob=0.99 \
@@ -110,8 +110,8 @@ CommandLine:
         --timestamp=False \
         --combine=False \
         --resolution='10GSD' \
-        --workermode='process' \
-        --workers=8
+        --workermode='serial' \
+        --workers=0
 
     # Fix path problem because we wrote a different directory
     # TODO: fix this script so the output always uses absolute paths?
