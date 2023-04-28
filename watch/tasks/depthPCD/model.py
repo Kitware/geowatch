@@ -23,9 +23,12 @@ if 1:
         # with PythonPathContext(parent_dpath):
         sys.path.append(os.fspath(TPL_DPATH))
 
+    import tensorflow as tf
+    # print(tf.config.list_physical_devices('GPU'))
+
     from deeplab2 import config_pb2
     from deeplab2.model.deeplab import DeepLab
-    import tensorflow as tf
+
 
     from google.protobuf import text_format
     from tensorflow.keras.layers import Layer, Dense, concatenate, Conv2D, \
@@ -70,13 +73,12 @@ def getModel(proto='watch/tasks/depthPCD/deeplab2/max_deeplab_s_backbone_os16.te
     outs = model(i, training=True)
     ll = concatenate([tf.expand_dims(outs['center_heatmap'], axis=-1), outs['offset_map']], axis=-1)
     lo = outs['semantic_logits']
-    l3 = ll
-    l4 = ll
-    l5 = Layer(name='imapx')(img_size * Dense(1, name='imapxDense')(l3)[..., 0])
-    l6 = Layer(name='imapy')(img_size * Dense(1, name='imapyDense')(l4)[..., 0])
 
-    l3 = Layer(name='mapx')(img_size * Dense(1, name='mapxDense')(l3)[..., 0])
-    l4 = Layer(name='mapy')(img_size * Dense(1, name='mapyDense')(l4)[..., 0])
+    l5 = Layer(name='imapx')(img_size * Dense(1, name='imapxDense')(ll)[..., 0])
+    l6 = Layer(name='imapy')(img_size * Dense(1, name='imapyDense')(ll)[..., 0])
+
+    l3 = Layer(name='mapx')(img_size * Dense(1, name='mapxDense')(ll)[..., 0])
+    l4 = Layer(name='mapy')(img_size * Dense(1, name='mapyDense')(ll)[..., 0])
 
     m1 = concatenate([tf.expand_dims(l4, axis=-1), tf.expand_dims(l3, axis=-1)], axis=-1)
     m2 = concatenate([tf.expand_dims(l6, axis=-1), tf.expand_dims(l5, axis=-1)], axis=-1)

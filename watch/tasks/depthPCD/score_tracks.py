@@ -19,7 +19,6 @@ import os
 import ubelt as ub
 
 if 1:
-
     from watch.tasks.depthPCD.model import getModel, normalize, TPL_DPATH
     import numpy as np
     import cv2
@@ -49,21 +48,22 @@ class ScoreTracksConfig(scfg.DataConfig):
             kwcoco file with images where to score polygons.
             '''), group='track scoring')
 
-    threshold = scfg.Value(0.3, help=ub.paragraph(
+    threshold = scfg.Value(0.4, help=ub.paragraph(
         '''
             threshold to filter polygons, very sensitive
             '''), group='track scoring')
 
-    model_fpath = scfg.Value(None, help='Path to the depthPCD site validation model')
+    model_fpath = scfg.Value(os.environ['DVC_EXPT_DPATH']+'/models/depthPCD/basicModel2.h5',
+                             help='Path to the depthPCD site validation model')
 
     region_id = scfg.Value(None, help=ub.paragraph(
-            '''
+        '''
             ID for region that sites belong to. If None, try to infer
             from kwcoco file.
             '''), group='convenience')
 
     out_kwcoco = scfg.Value(None, help=ub.paragraph(
-            '''
+        '''
             The file path to write the "tracked" kwcoco file to.
             '''))
 
@@ -88,14 +88,19 @@ class ScoreTracksConfig(scfg.DataConfig):
         be written.
         '''))
 
+    append_mode = scfg.Value(False, isflag=True, help=ub.paragraph(
+        '''
+        Append sites to existing region GeoJSON.
+        '''), group='behavior')
 
-def score_tracks(coco_dset, imCoco_dset, thresh):
+
+def score_tracks(coco_dset, imCoco_dset, thresh, model_fpath):
     print('loading site validation model')
     proto_fpath = TPL_DPATH / 'deeplab2/max_deeplab_s_backbone_os16.textproto'
     model = getModel(proto=proto_fpath)
 
-    # model.load_weights(expt_dvc_dpath + '/models/depthPCD/basicModel2.h5', by_name=True, skip_mismatch=True)
-    # model.load_weights('/media/hdd2/antonio/models/urbanTCDs-use.h5')
+    model.load_weights(model_fpath, by_name=True, skip_mismatch=True)
+    # model.load_weights('/media/hdd2/antonio/models/urbanTCDs-use.h5', by_name=True, skip_mismatch=True)
 
     to_keep = []
     for coco_img in imCoco_dset.images().coco_images:
@@ -128,7 +133,8 @@ def score_tracks(coco_dset, imCoco_dset, thresh):
 
     regions = []
     tannots = annots.groupby('track_id', axis=0)
-    for track_id, track_group in tqdm(tannots):
+    tq = tqdm(total=len(tannots))
+    for track_id, track_group in tannots:
 
         first_annot_id = track_group["id"].tolist()[0]
         first_image_id = track_group["image_id"].tolist()[0]
@@ -181,6 +187,7 @@ def score_tracks(coco_dset, imCoco_dset, thresh):
             if v['name'] == videoName:
                 vidid = v['id']
         if vidid == -1:
+            tq.update(1)
             continue
         target = {
             'vidid': vidid,
@@ -208,6 +215,7 @@ def score_tracks(coco_dset, imCoco_dset, thresh):
         # a little average at start vs end
         nAvg = 2
         if len(good_ims) < nAvg + 1:
+            tq.update(1)
             continue
         ims = []
         for i in range(nAvg):
@@ -217,9 +225,10 @@ def score_tracks(coco_dset, imCoco_dset, thresh):
                 ims.append(np.stack([first, 0.5 * first + 0.5 * last, last], axis=-1).astype(np.float32))
 
         score = np.mean(model.predict(np.array(ims), batch_size=1, verbose=False)[8])
-
+        tq.set_description('%s-%d score %3.2f' % (videoName, track_id, score))
+        tq.update(1)
         if 0:
-            print(score)
+
             cv2.namedWindow('main', cv2.WINDOW_GUI_NORMAL)
             i = 1
             first = good_ims[0]
@@ -284,11 +293,11 @@ def main(**kwargs):
     info.append(proc_context.obj)
 
     images = kwcoco.CocoDataset.coerce(args.images_kwcoco)
-    coco_dset = score_tracks(coco_dset, images, args.threshold)
+    coco_dset = score_tracks(coco_dset, images, args.threshold,args.model_fpath)
 
     proc_context.stop()
     out_kwcoco = args.out_kwcoco
-    if out_kwcoco is not None and 0:
+    if out_kwcoco is not None:
         coco_dset = coco_dset.reroot(absolute=True, check=False)
         # Add tracking audit data to the kwcoco file
         coco_info = coco_dset.dataset.get('info', [])
@@ -414,18 +423,18 @@ Example:
         --in_file "$DVC_EXPT_DPATH/_test_dzyne_sv/pred_heatmaps.kwcoco.zip" \
         --default_track_fn saliency_heatmaps \
         --track_kwargs '{
-            "agg_fn": "probs",
-            "thresh": 0.4,
-            "time_thresh": 0.8,
-            "inner_window_size": "1y",
-            "inner_agg_fn": "mean",
-            "norm_ord": "inf",
-            "resolution": "10GSD",
-            "moving_window_size": null,
-            "poly_merge_method": "v2",
-            "polygon_simplify_tolerance": 1,
-            "min_area_square_meters": 7200,
-            "max_area_square_meters": 8000000
+            \"agg_fn\": \"probs\",
+            \"thresh\": 0.4,
+            \"time_thresh\": 0.8,
+            \"inner_window_size\": \"1y\",
+            \"inner_agg_fn\": \"mean\",
+            \"norm_ord\": \"inf\",
+            \"resolution\": \"10GSD\",
+            \"moving_window_size\": null,
+            \"poly_merge_method\": \"v2\",
+            \"polygon_simplify_tolerance\": 1,
+            \"min_area_square_meters\": 7200,
+            \"max_area_square_meters\": 8000000
         }' \
         --clear_annots=True \
         --site_summary 'None' \
