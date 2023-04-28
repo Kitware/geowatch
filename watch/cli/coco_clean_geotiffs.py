@@ -185,18 +185,16 @@ def main(cmdline=1, **kwargs):
     import kwcoco
 
     config = CleanGeotiffConfig.cli(cmdline=cmdline, data=kwargs)
-    print('config = {}'.format(ub.urepr(dict(config), nl=1)))
+    import rich
+    rich.print('config = {}'.format(ub.urepr(config, nl=1)))
 
     print('Loading dataset')
     coco_dset = kwcoco.CocoDataset.coerce(config['src'])
 
     workers = util_parallel.coerce_num_workers(config['workers'])
     print('workers = {}'.format(ub.urepr(workers, nl=1)))
-    jobs = ub.JobPool(mode='process', max_workers=workers)
-
-    have_transience = hasattr(jobs, 'transient')
-    if have_transience:
-        jobs.transient = True
+    jobs = ub.JobPool(mode='process', max_workers=workers, transient=True)
+    print('Created job pool')
 
     if config['channels'] is None or config['channels'] == '*':
         channels = None
@@ -224,12 +222,15 @@ def main(cmdline=1, **kwargs):
         'nodata_value': config['nodata_value'],
     }
 
+    print('Grabbing coco images')
     coco_imgs = coco_dset.images().coco_images
+    print('About to start looping')
 
     from watch.utils import util_progress
-    # mprog = util_progress.ProgressManager(backend='progiter')
-    mprog = util_progress.ProgressManager(backend='rich')
-    with mprog:
+    mprog = util_progress.ProgressManager(backend='progiter')
+    # mprog = util_progress.ProgressManager(backend='rich')
+    with mprog, jobs:
+        print('In the with statement')
         mprog.update_info('Looking for geotiff issues')
 
         # TODO: may need to use the blocking job queue to limit the maximum
@@ -240,9 +241,6 @@ def main(cmdline=1, **kwargs):
 
         def collect_jobs(jobs):
             for job in mprog.new(jobs.as_completed(), total=len(jobs), desc='Collect probe jobs'):
-                if not have_transience:
-                    # hack in transience to conserve memory.
-                    jobs.jobs.remove(job)
                 image_summary = job.result()
                 yield image_summary
 
