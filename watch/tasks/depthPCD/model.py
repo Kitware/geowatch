@@ -29,7 +29,6 @@ if 1:
     from deeplab2 import config_pb2
     from deeplab2.model.deeplab import DeepLab
 
-
     from google.protobuf import text_format
     from tensorflow.keras.layers import Layer, Dense, concatenate, Conv2D, \
         BatchNormalization, \
