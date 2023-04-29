@@ -2103,7 +2103,7 @@ VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_I2L_split6.kwcoco.zip
 CHANNELS="(L8,S2):(blue|green|red|nir),(WV):(blue|green|red),(WV,WV1):pan,(S2):(water|forest|field|impervious|barren|landcover_hidden.0:32)"
 EXPERIMENT_NAME=Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V50
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-TARGET_LR=1e-5
+TARGET_LR=1e-6
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
@@ -2173,7 +2173,7 @@ lr_scheduler:
     anneal_strategy: cos
     pct_start: 0.05
 trainer:
-    accumulate_grad_batches: 128
+    accumulate_grad_batches: 64
     default_root_dir     : $DEFAULT_ROOT_DIR
     accelerator          : gpu
     devices              : 0,
@@ -2188,5 +2188,7 @@ torch_globals:
     float32_matmul_precision: auto
 
 initializer:
-    init: $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
+    #init: $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
+    #init: /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6-MeanYear10GSD-V2/runs/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V50/lightning_logs/version_0/checkpoints/epoch=77-step=1248.ckpt
+    init: /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop6-MeanYear10GSD-V2/runs/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V50/lightning_logs/version_2/checkpoints/epoch=8-step=144.ckpt
 "
