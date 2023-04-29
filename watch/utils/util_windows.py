@@ -38,3 +38,23 @@ def fix_msys_path(path):
     if was_pathlike:
         new_path = input_path.__class__(new_path)
     return new_path
+
+
+def is_windows_path(path):
+    """
+    Example:
+        >>> from watch.utils.util_windows import *  # NOQA
+        >>> assert is_windows_path('C:')
+        >>> assert is_windows_path('C:/')
+        >>> assert is_windows_path('C:\\')
+        >>> assert is_windows_path('C:/foo')
+        >>> assert is_windows_path('C:\\foo')
+        >>> assert not is_windows_path('/foo')
+    """
+    import re
+    drive_pat = '(?P<drive>[A-Za-z])'
+    slash_pat = r'[/\\]'
+    pat1 = re.compile(f'^{drive_pat}:$')
+    pat2 = re.compile(f'^{drive_pat}:{slash_pat}.*$')
+    match = pat1.match(path) or pat2.match(path)
+    return bool(match)
