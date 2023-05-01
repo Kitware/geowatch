@@ -1037,6 +1037,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             ub.oset(['impervious', 'forest', 'water']),
             ub.oset(['baren', 'field', 'water']),
             ub.oset(['landcover_hidden.0', 'landcover_hidden.1', 'landcover_hidden.2']),
+            ub.oset(['sam.0', 'sam.1', 'sam.2']),
+            ub.oset(['sam.3', 'sam.4', 'sam.5']),
         ] + heuristics.HUERISTIC_COMBINABLE_CHANNELS
 
         self.prenormalizers = None
