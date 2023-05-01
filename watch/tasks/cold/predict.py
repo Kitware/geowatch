@@ -96,8 +96,8 @@ CommandLine:
         --coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly-KR_R001.kwcoco.json" \
         --combined_coco_fpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imgonly-KR_R001.kwcoco.zip" \
         --out_dpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/_pycold_combine" \
-        --sensors='L8' \
         --mod_coco_fpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold.kwcoco.zip" \
+        --sensors='L8' \
         --adj_cloud=False \
         --method='COLD' \
         --prob=0.99 \
@@ -180,13 +180,14 @@ class ColdPredictConfig(scfg.DataConfig):
 
     coco_fpath = scfg.Value(None, position=1, help=ub.paragraph(
         '''
-        a path to a file to input kwcoco file
+        a path to a file to input kwcoco file (to predict on)
         '''))
     combined_coco_fpath = scfg.Value(None, help=ub.paragraph(
         '''
-        a path to a file to combined kwcoco file
+        a path to a file to combined input kwcoco file (to merge with)
         '''))
-    mod_coco_fpath = scfg.Value(None, help='file path for modified coco json')
+    mod_coco_fpath = scfg.Value(None, help='file path for modified output coco json')
+
     out_dpath = scfg.Value(None, help='output directory for the output. If unspecified uses the output kwcoco bundle')
     sensors = scfg.Value('L8', type=str, help='sensor type, default is "L8"')
     adj_cloud = scfg.Value(False, help='How to treat QA band, default is False: ignoring adj. cloud class')
