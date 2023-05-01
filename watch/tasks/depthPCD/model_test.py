@@ -1,5 +1,6 @@
 """
-   Example:
+Example:
+    >>> # xdoctest: +REQUIRES(env:HAS_DVC)
     >>> import numpy as np
     >>> import watch
     >>> from watch.tasks.depthPCD.model import getModel
