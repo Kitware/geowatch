@@ -1,8 +1,4 @@
 #!/usr/bin/env python3
-"""
-See Old Script:
-    ~/code/watch/scripts/run_generate_sc_cropped_kwcoco.py
-"""
 import os
 import subprocess
 import json
@@ -12,9 +8,11 @@ from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco
 from watch.utils.util_framework import download_region
 import ubelt as ub
 import scriptconfig as scfg
+from watch.mlops.smart_pipeline import SV_Cropping
+from watch.utils.util_yaml import Yaml
 
 
-class SCDatasetConfig(scfg.DataConfig):
+class SVDatasetConfig(scfg.DataConfig):
     """
     Generate cropped KWCOCO dataset for SC
     """
@@ -46,15 +44,20 @@ class SCDatasetConfig(scfg.DataConfig):
             Will not recompute if output_path already exists
             '''))
     force_one_job_for_cropping = scfg.Value(False, isflag=True, help='Force jobs=1 for cropping')
+    sv_cropping_config = scfg.Value(None, type=str, help=ub.paragraph(
+            '''
+            Raw json/yaml or a path to a json/yaml file that specifies the
+            config for SV_Cropping.
+            '''))
 
 
 def main():
-    config = SCDatasetConfig.cli(strict=True)
+    config = SVDatasetConfig.cli(strict=True)
     print('config = {}'.format(ub.urepr(dict(config), nl=1, align=':')))
-    run_generate_sc_cropped_kwcoco(**config)
+    run_generate_sv_cropped_kwcoco(**config)
 
 
-def run_generate_sc_cropped_kwcoco(input_path,
+def run_generate_sv_cropped_kwcoco(input_path,
                                    input_region_path,
                                    output_path,
                                    outbucket,
@@ -63,7 +66,8 @@ def run_generate_sc_cropped_kwcoco(input_path,
                                    newline=False,
                                    jobs=1,
                                    dont_recompute=False,
-                                   force_one_job_for_cropping=False):
+                                   force_one_job_for_cropping=False,
+                                   sv_cropping_config=None):
     if dont_recompute:
         if aws_profile is not None:
             aws_ls_command = ['aws', 's3', '--profile', aws_profile, 'ls']
@@ -112,63 +116,32 @@ def run_generate_sc_cropped_kwcoco(input_path,
         raise RuntimeError("Couldn't parse 'region_id' from input region file")
 
     # Paths to inputs generated in previous pipeline steps
-    input_region_path = os.path.join(ingress_dir,
-                                     'sv_out_region_models',
-                                     '{}.geojson'.format(region_id))
-    if not os.path.isfile(input_region_path):
-        print("* Didn't find region output from SV; using region output "
-              "from BAS *")
-        input_region_path = os.path.join(ingress_dir,
-                                         'cropped_region_models_bas',
-                                         '{}.geojson'.format(region_id))
-
+    bas_region_path = os.path.join(ingress_dir,
+                                   'cropped_region_models_bas',
+                                   '{}.geojson'.format(region_id))
     ta1_sc_kwcoco_path = os.path.join(ingress_dir,
                                       'kwcoco_for_sc.json')
 
-    # 4. Crop ingress KWCOCO dataset to region for SC
-    print("* Cropping KWCOCO dataset to region for SC*")
-    ta1_sc_cropped_kwcoco_path = os.path.join(ingress_dir,
-                                              'cropped_kwcoco_for_sc.json')
-    # Crops to BAS generated site_summaries
-    include_channels = 'red|green|blue|quality'
-    subprocess.run(['python', '-m', 'watch.cli.coco_align',
-                    '--visualize', 'False',
-                    '--src', ta1_sc_kwcoco_path,
-                    '--dst', ta1_sc_cropped_kwcoco_path,
-                    '--regions', input_region_path,
-                    '--force_nodata', '-9999',
-                    '--include_channels', include_channels,
-                    '--site_summary', 'True',
-                    '--geo_preprop', 'auto',
-                    '--keep', 'none',
-                    '--convexify_regions', 'True',
-                    '--target_gsd', '4',  # TODO: Expose as cli parameter
-                    '--context_factor', '1.5',  # TODO: Expose as cli parameter
-                    '--workers', '1' if force_one_job_for_cropping else str(jobs),  # noqa: 501
-                    '--aux_workers', '2',  # str(include_channels.count('|') + 1),  # noqa: 501
-                    '--rpc_align_method', 'affine_warp',  # Maybe needs to change to "orthorectified"  # noqa
-                    '--force_min_gsd', '8',
-                    '--verbose', '4',
-                    '--image_timeout', '20minutes',
-                    '--asset_timeout', '10minutes',
-                    ], check=True)
+    # 4. Crop ingress KWCOCO dataset to region for SV
+    print("* Cropping KWCOCO dataset to region for SV*")
+    ta1_sv_cropped_kwcoco_path = os.path.join(ingress_dir,
+                                              'cropped_kwcoco_for_sv.json')
 
-    # 5. "Clean" dataset
-    # print("* Cleaning cropped KWCOCO dataset *")
-    # subprocess.run(['python', '-m', 'watch.cli.coco_clean_geotiffs',
-    #                 '--src', ta1_sc_cropped_kwcoco_path,
-    #                 '--channels', "red|green|blue",
-    #                 '--prefilter_channels', "red",
-    #                 '--min_region_size', '256',
-    #                 '--nodata_value', '-9999',
-    #                 '--workers', '1' if force_one_job_for_cropping else str(jobs),  # noqa: 501
-    #                 ], check=True)
+    sv_cropping_config = Yaml.coerce(sv_cropping_config or {})
 
-    # 6. Egress (envelop KWCOCO dataset in a STAC item and egress;
+    sv_cropping = SV_Cropping(root_dpath='/tmp/ingress')
+    sv_cropping.configure({
+        'crop_src_fpath': ta1_sc_kwcoco_path,
+        'regions': bas_region_path,
+        'crop_dst_fpath': ta1_sv_cropped_kwcoco_path})
+
+    ub.cmd(sv_cropping.command(), check=True, verbose=3, system=True)
+
+    # 5. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)
     print("* Egressing KWCOCO dataset and associated STAC item *")
-    baseline_framework_kwcoco_egress(ta1_sc_cropped_kwcoco_path,
+    baseline_framework_kwcoco_egress(ta1_sv_cropped_kwcoco_path,
                                      local_region_path,
                                      output_path,
                                      outbucket,

@@ -47,6 +47,12 @@ class BasFusionConfig(scfg.DataConfig):
             S3 Output directory for STAC item / asset egress
             '''))
 
+    ta2_s3_collation_bucket = scfg.Value(None, type=str, help=ub.paragraph(
+            '''
+            S3 Location for collated TA-2 output (bucket name should
+            include up to eval name)
+            '''))
+
     previous_bas_outbucket = scfg.Value(None, type=str, help=ub.paragraph(
             '''
             S3 Output directory for previous interval BAS fusion output
@@ -139,6 +145,7 @@ def run_bas_fusion_for_baseline(config):
     aws_profile = config.aws_profile
     dryrun = config.dryrun
     previous_bas_outbucket = config.previous_bas_outbucket
+    ta2_s3_collation_bucket = config.ta2_s3_collation_bucket
 
     if aws_profile is not None:
         aws_base_command = ['aws', 's3', '--profile', aws_profile, 'cp']
@@ -247,11 +254,18 @@ def run_bas_fusion_for_baseline(config):
     region_models_outdir = os.path.join(ingress_dir, 'region_models')
     os.makedirs(region_models_outdir, exist_ok=True)
 
+    bas_site_models_outdir = os.path.join(ingress_dir, 'site_models_bas')
+    os.makedirs(bas_site_models_outdir, exist_ok=True)
+
     region_models_manifest_outdir = os.path.join(
         ingress_dir, 'tracking_manifests_bas')
     os.makedirs(region_models_manifest_outdir, exist_ok=True)
     region_models_manifest_outpath = os.path.join(
         region_models_manifest_outdir, 'region_models_manifest.json')
+
+    site_models_manifest_outpath = os.path.join(
+        region_models_manifest_outdir, 'site_models_manifest.json')
+
     # Copy input region model into region_models outdir to be updated
     # (rather than generated from tracking, which may not have the
     # same bounds as the original)
@@ -267,12 +281,15 @@ def run_bas_fusion_for_baseline(config):
         "polygon_simplify_tolerance": 1,
         "max_area_behavior": 'ignore'
     })
-    bas_tracking_config = default_bas_tracking_config | Yaml.coerce(config.bas_poly_config or {})
+    bas_tracking_config = (default_bas_tracking_config
+                           | Yaml.coerce(config.bas_poly_config or {}))
 
     tracked_bas_kwcoco_path = '_tracked'.join(
         os.path.splitext(bas_fusion_kwcoco_path))
     subprocess.run(['python', '-m', 'watch.cli.run_tracker',
                     combined_bas_fusion_kwcoco_path,
+                    '--out_sites_dir', bas_site_models_outdir,
+                    '--out_sites_fpath', site_models_manifest_outpath,
                     '--out_site_summaries_dir', region_models_outdir,
                     '--out_site_summaries_fpath',
                     region_models_manifest_outpath,
@@ -287,12 +304,28 @@ def run_bas_fusion_for_baseline(config):
     # Remove after boundary_region here
     cropped_region_models_outdir = os.path.join(ingress_dir,
                                                 'cropped_region_models_bas')
+    os.makedirs(cropped_region_models_outdir, exist_ok=True)
+
+    cropped_site_models_outdir = os.path.join(ingress_dir,
+                                              'cropped_site_models_bas')
+    os.makedirs(cropped_site_models_outdir, exist_ok=True)
+
     subprocess.run(['python', '-m', 'watch.cli.crop_sites_to_regions',
+                    '--site_models',
+                    os.path.join(bas_site_models_outdir, '*.geojson'),
                     '--region_models',
                     os.path.join(region_models_outdir, '*.geojson'),
-                    '--new_site_dpath', cropped_region_models_outdir,
+                    '--new_site_dpath', cropped_site_models_outdir,
                     '--new_region_dpath', cropped_region_models_outdir],
                    check=True)
+
+    # 6. (Optional) collate TA-2 output
+    if ta2_s3_collation_bucket is not None:
+        print("* Collating TA-2 output")
+        _ta2_collate_output(aws_base_command,
+                            cropped_region_models_outdir,
+                            cropped_site_models_outdir,
+                            ta2_s3_collation_bucket)
 
     # 6. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
