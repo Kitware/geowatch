@@ -30,8 +30,8 @@ def _debug_roi_issue():
     agg = sv_poly_agg
     # rois = 'KR_R001,KR_R002,CH_R001,NZ_R001,BR_R002'.split(',')
     # rois = 'KR_R001,KR_R002,CH_R001,NZ_R001,BR_R002,AE_R001'.split(',')
-    # rois = 'KR_R002,CH_R001,NZ_R001'.split(',')
-    rois = ['KR_R002']
+    rois = 'KR_R002,CH_R001,NZ_R001'.split(',')
+    # rois = ['KR_R002']
     # agg.build_macro_tables(rois)
 
     flags = agg.table['params.sv_crop.crop_src_fpath'].isnull()
@@ -43,7 +43,11 @@ def _debug_roi_issue():
     macro = subagg.region_to_tables[macro_key]
 
     macro = macro.sort_values('metrics.sv_poly_eval.bas_f1')
-    points = macro[['region_id', 'param_hashid', 'metrics.bas_poly_eval.bas_f1', 'metrics.sv_poly_eval.bas_f1', 'metrics.bas_poly_eval.bas_tpr', 'metrics.sv_poly_eval.bas_tpr']]
+    points = macro[['region_id', 'param_hashid',
+                    'metrics.bas_poly_eval.bas_f1',
+                    'metrics.sv_poly_eval.bas_f1',
+                    'metrics.bas_poly_eval.bas_tpr',
+                    'metrics.sv_poly_eval.bas_tpr']]
 
     import kwplot
     import matplotlib as mpl
@@ -57,15 +61,14 @@ def _debug_roi_issue():
     min_x = float('inf')
     max_x = -float('inf')
     for row in macro.to_dict('records'):
-        x1 = row['metrics.bas_poly_eval.bas_tp']
-        x2 = row['metrics.sv_poly_eval.bas_tp']
+        x1 = row['metrics.bas_poly_eval.bas_tpr']
+        x2 = row['metrics.sv_poly_eval.bas_tpr']
 
-        y1 = row['metrics.bas_poly_eval.bas_fp']
-        y2 = row['metrics.sv_poly_eval.bas_fp']
-        # y1 = row['metrics.bas_poly_eval.bas_f1']
-        # y2 = row['metrics.sv_poly_eval.bas_f1']
+        # y1 = row['metrics.bas_poly_eval.bas_fp']
+        # y2 = row['metrics.sv_poly_eval.bas_fp']
+        y1 = row['metrics.bas_poly_eval.bas_f1']
+        y2 = row['metrics.sv_poly_eval.bas_f1']
         segments.append([(x1, y1), (x2, y2)])
-
     macro['metrics.bas_poly_eval.bas_f1']
 
     pts1 = [s[0] for s in segments]
@@ -76,8 +79,8 @@ def _debug_roi_issue():
     ax.plot(*zip(*pts2), 'bo', label='after SV')
     ax.legend()
     ax.set_xlabel('bas_tp')
-    # ax.set_ylabel('bas_f1')
-    ax.set_ylabel('bas_fp')
+    ax.set_ylabel('bas_f1')
+    # ax.set_ylabel('bas_fp')
     ax.set_title(f'Effect of SV: {rois}')
 
     # kwplot.sns.scatterplot(data=macro, y='metrics.bas_poly_eval.bas_f1', x='metrics.bas_poly_eval.bas_tpr', markers='x', ax=ax, hue='resolved_params.bas_poly.thresh')
@@ -120,6 +123,34 @@ def _debug_roi_issue():
         special_params['point_C'] = agg.hashid_to_params[point_C['param_hashid']]
         print('special_params = {}'.format(ub.urepr(special_params, nl=2)))
 
+        if 0:
+            chosen_param_hashid = point_C['param_hashid']
+            chosen_agg = agg.filterto(param_hashids=[chosen_param_hashid])
+            _ = chosen_agg.report_best()
+            print(ub.repr2(chosen_agg.table['fpath'].tolist()))
+            out_dpath = ub.Path('./chosen')
+            eval_links = (out_dpath / 'eval_links').ensuredir()
+            for _, row in chosen_agg.table.iterrows():
+                node_dpath = ub.Path(row['fpath']).parent
+                link_fpath = eval_links / (row['region_id'] + '_' + node_dpath.name)
+                ub.symlink(node_dpath, link_fpath)
+
+    if 0:
+        # Find high TPR example:
+        idx = subagg.table['metrics.bas_poly_eval.bas_tpr'].idxmax()
+        high_tpr_param_hashid = subagg.table.loc[idx]['param_hashid']
+        high_tpr_agg = agg.filterto(param_hashids=[high_tpr_param_hashid])
+        _ = high_tpr_agg.report_best()
+        print(ub.repr2(high_tpr_agg.table['fpath'].tolist()))
+
+        out_dpath = ub.Path('./high-tpr')
+        eval_links = (out_dpath / 'eval_links').ensuredir()
+        for _, row in high_tpr_agg.table.iterrows():
+            node_dpath = ub.Path(row['fpath']).parent
+            link_fpath = eval_links / (row['region_id'] + '_' + node_dpath.name)
+            ub.symlink(node_dpath, link_fpath)
+
+            ...
 
     agg.table['resolved_params.sv_crop.src'].unique()
 

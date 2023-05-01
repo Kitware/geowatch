@@ -80,3 +80,33 @@ From the start menu, run git-bash. Then we need to activate our conda virtualenv
 
 
 Now run the tutorial commands one at a time.
+
+
+
+WSL2 Instructions
+-----------------
+
+Ensure you have WSL2 enabled:
+
+In the start menu search for "Turn Windows Features On or Off". A Windows
+Features dialog will pop up. Scroll down to "Windows Subsystem for Linux" and
+ensure it is checked. Press OK, and restart your computer when prompted.
+
+After rebooting type "powershell" in the start menu. Right click the powershell
+icon and click run as administrator.
+
+.. code:: bash
+
+
+    wsl --install -d Ubuntu
+
+
+You might be prompted to visit a web page for more information. You will need
+to do this to download and install a WSL2 Linux kernel update package.
+
+
+You might get an error:
+
+"Error: 0x80370102 The virtual machine could not be started because a required feature is not installed."
+
+Which means you need to enable virtualization in your BIOS.
