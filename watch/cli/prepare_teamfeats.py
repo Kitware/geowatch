@@ -79,6 +79,47 @@ Ignore:
         --skip_existing=1 \
         --assets_dname=teamfeats \
         --gres=0,1 --tmux_workers=4 --backend=tmux --run=0
+
+
+    # TimeCombined V2
+    export CUDA_VISIBLE_DEVICES="0,1"
+    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+    DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+    BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2
+    python -m watch.cli.prepare_teamfeats \
+        --base_fpath "$BUNDLE_DPATH"/imganns-*[0-9].kwcoco.zip \
+        --expt_dvc_dpath="$DVC_EXPT_DPATH" \
+        --with_landcover=1 \
+        --with_invariants2=1 \
+        --with_sam=1 \
+        --with_materials=0 \
+        --with_depth=0 \
+        --with_cold=0 \
+        --skip_existing=1 \
+        --assets_dname=teamfeats \
+        --gres=0, --tmux_workers=1 --backend=tmux --run=0
+
+    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+    python -m watch.cli.prepare_splits \
+        --base_fpath=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns*_I2LS*.kwcoco.zip \
+        --constructive_mode=True \
+        --suffix=I2LS \
+        --backend=tmux --tmux_workers=6 \
+        --run=1
+
+    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+    DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+    TRUE_SITE_DPATH=$DVC_DATA_DPATH/annotations/drop6_hard_v1/site_models
+    OUTPUT_BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2
+    python -m watch reproject \
+        --src $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/data_vali_I2LS_split6.kwcoco.zip \
+        --inplace \
+        --site_models=$TRUE_SITE_DPATH
+
+    python -m watch reproject \
+        --src $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/data_train_I2LS_split6.kwcoco.zip \
+        --inplace \
+        --site_models=$TRUE_SITE_DPATH
 """
 import scriptconfig as scfg
 import ubelt as ub
@@ -116,6 +157,7 @@ class TeamFeaturePipelineConfig(CMDQueueConfig):
     with_invariants2 = scfg.Value(False, help='Include UKY invariant features', nargs=None, group='team feature enablers')
     with_depth = scfg.Value(False, help='Include DZYNE WorldView depth features', nargs=None, group='team feature enablers')
     with_cold = scfg.Value(False, help='Include COLD features', nargs=None)
+    with_sam = scfg.Value(False, help='Include SAM features', nargs=None)
 
     invariant_segmentation = scfg.Value(False, help=ub.paragraph(
             '''
@@ -274,6 +316,8 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
         # TODO: use v1 on RGB and v2 on PAN
         'dzyne_depth': expt_dvc_dpath / 'models/depth/weights_v1.pt',
         # 'dzyne_depth': dvc_dpath / 'models/depth/weights_v2_gray.pt',
+
+        'sam': expt_dvc_dpath / 'models/sam/sam_vit_h_4b8939.pth'
     }
 
     subset_name = base_fpath.name.split('.')[0]
@@ -286,6 +330,7 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
         'dzyne_depth': aligned_bundle_dpath / (subset_name + '_dzyne_depth' + config['kwcoco_ext']),
         'uky_invariants': aligned_bundle_dpath / (subset_name + '_uky_invariants' + config['kwcoco_ext']),
         'cold': aligned_bundle_dpath / (subset_name + '_cold' + config['kwcoco_ext']),
+        'sam': aligned_bundle_dpath / (subset_name + '_sam' + config['kwcoco_ext']),
     }
 
     # print('Exist check: ')
@@ -300,6 +345,7 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
         'with_invariants': 'I',
         'with_invariants2': 'I2',
         'with_cold': 'C',
+        'with_sam': 'S',
     }
 
     # tmux queue is still limited. The order of submission matters.
@@ -489,7 +535,7 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
                 --window_space_scale=10GSD \
                 --patch_size=256 \
                 --do_pca {config['invariant_pca']} \
-                --patch_overlap=0.3 \
+                --window_overlap=0.33333 \
                 --workers="{data_workers}" \
                 --io_workers 2 \
                 --tasks before_after pretext
@@ -537,6 +583,36 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
         combo_code_parts.append(codes[key])
         job = pipeline.submit(
             name='invariants2' + name_suffix,
+            command=task['command'],
+            in_paths=[base_fpath],
+            out_paths={
+                'output_fpath': task['output_fpath']
+            },
+        )
+        task_jobs.append(job)
+
+    key = 'with_sam'
+    if config[key]:
+        simple_dvc.SimpleDVC().request(model_fpaths['sam'])
+        task = {}
+        if not model_fpaths['sam'].exists():
+            print('Warning: SAM model does not exist')
+        task['output_fpath'] = outputs['sam']
+        task['gpus'] = 1
+        task['command'] = ub.codeblock(
+            fr'''
+            python -m watch.tasks.sam.predict \
+                --input_kwcoco "{base_fpath}" \
+                --output_kwcoco "{task['output_fpath']}" \
+                --weights_fpath "{model_fpaths['sam']}" \
+                --window_overlap=0.3 \
+                --data_workers="{data_workers}" \
+                --io_workers 0 \
+                --assets_dname="{config.assets_dname}"
+            ''')
+        combo_code_parts.append(codes[key])
+        job = pipeline.submit(
+            name='sam' + name_suffix,
             command=task['command'],
             in_paths=[base_fpath],
             out_paths={
