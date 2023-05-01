@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
-
 import json
 import os
 import scriptconfig as scfg
-import shutil
 import subprocess
 import ubelt as ub
 from glob import glob
@@ -43,6 +41,7 @@ class DzyneParallelSiteValiConfig(scfg.DataConfig):
             '''
             S3 Output directory for STAC item / asset egress
             '''))
+
 
 def main():
     config = DzyneParallelSiteValiConfig.cli(strict=True)
@@ -106,10 +105,10 @@ def _ta2_collate_output(aws_base_command,
 def run_dzyne_parallel_site_vali_for_baseline(config):
     from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress
     from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress
-    from watch.cli.concat_kwcoco_videos import concat_kwcoco_datasets
+    # from watch.cli.concat_kwcoco_videos import concat_kwcoco_datasets
     from watch.utils.util_framework import download_region, determine_region_id
-    from watch.tasks.fusion.predict import predict
-    from watch.utils.util_yaml import Yaml
+    # from watch.tasks.fusion.predict import predict
+    # from watch.utils.util_yaml import Yaml
 
     input_path = config.input_path
     input_region_path = config.input_region_path
@@ -134,6 +133,7 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
         ingress_dir,
         aws_profile,
         dryrun)
+    print(f'ingress_kwcoco_path={ingress_kwcoco_path}')
 
     # # 2. Download and prune region file
     print("* Downloading and pruning region file *")
@@ -149,7 +149,6 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
 
     # Determine the region_id in the region file.
     region_id = determine_region_id(local_region_path)
-
 
     # 3. Run the Site Validation Filter
     print("* Running the Site Validation Filter *")
@@ -170,7 +169,6 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
         out_kwcoco=site_vali_kwcoco_path,
         threshold=0.4,
     )
-
 
     # 4. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
