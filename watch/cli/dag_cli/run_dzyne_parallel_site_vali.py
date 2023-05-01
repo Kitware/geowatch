@@ -44,7 +44,6 @@ class DzyneParallelSiteValiConfig(scfg.DataConfig):
             S3 Output directory for STAC item / asset egress
             '''))
 
-
 def main():
     config = DzyneParallelSiteValiConfig.cli(strict=True)
     print('config = {}'.format(ub.urepr(dict(config), nl=1, align=':')))
