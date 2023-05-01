@@ -10,8 +10,6 @@ import json
 import os
 import shutil
 import subprocess
-import sys
-import traceback
 
 import scriptconfig as scfg
 import ubelt as ub
