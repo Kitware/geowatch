@@ -270,7 +270,7 @@ def export_cold_main(cmdline=1, **kwargs):
         ordinal_day_list = ordinal_dates
 
         # Back up
-    if timestamp == False:
+    if not timestamp:
         first_ordinal_dates = []
         first_img_names = []
         last_year = None
