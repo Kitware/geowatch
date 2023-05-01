@@ -22,7 +22,7 @@ Install Bash
 
 We will also need msys or git-bash
 
-Download `the git-bash installer <https://git-scm.com/download/win>` and install it.
+Download `the git-bash 64-bit standalone installer <https://git-scm.com/download/win>` and install it with default settings.
 
 
 Environment Setup
