@@ -98,7 +98,7 @@ def main(cmdline=True, **kwargs):
     # dset.fpath = config['dst']
     dst_fpath = config['dst']
     print('Write to dst_fpath = {!r}'.format(dst_fpath))
-    with safer.open(dst_fpath, 'w', temp_file=True) as file:
+    with safer.open(dst_fpath, 'w', temp_file=not ub.WIN32) as file:
         dset.dump(file, indent='    ', newlines=True)
     print('Wrote to dst_fpath = {!r}'.format(dst_fpath))
 

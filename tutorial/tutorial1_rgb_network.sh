@@ -273,11 +273,15 @@ Note that the test dataset contains groundtruth annotations. All annotations
 are stripped and ignored during prediction.
 '
 
+# Note: --format=png is only necessary on windows, due to issues that can
+# happen with the GDAL geotiff drivers. On other systems it is recommended to
+# remove this option.
 
 # Predict
 python -m geowatch.tasks.fusion.predict \
     --test_dataset="$TEST_FPATH" \
     --package_fpath="$PACKAGE_FPATH"  \
+    --format="png"  \
     --pred_dataset="$DVC_EXPT_DPATH"/predictions/pred.kwcoco.json
 
 echo '

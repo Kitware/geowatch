@@ -84,10 +84,12 @@ Unfortunately I've been unable to figure out how to get the bash kernel for
 Jupyter notebooks to work on Windows. To run the tutorial you will need to run
 the bash commands directly in msys or git-bash.
 
-From the start menu, run git-bash. Then we need to activate our conda virtualenv:
+From the start menu, open an anaconda prompt. In this shell we need to start bash and then activate our conda virtualenv:
 
 
 .. code:: bash
+
+    "C:\Program Files\Git\bin\bash.exe"
 
     source $USERPROFILE/miniconda3/etc/profile.d/conda.sh
     conda activate geowatch
@@ -117,7 +119,8 @@ OR if you cloned the source repo:
     ./tutorial/tutorial1_rgb_network.sh
 
 
-Now run the tutorial commands one at a time.
+Or you can run the tutorial commands one at a time by copy / pasting commands
+from the script into your terminal.
 
 
 

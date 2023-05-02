@@ -303,7 +303,7 @@ def main(cmdline=1, **kwargs):
         [region_model.header] + list(new_summaries))
 
     output_region_fpath.parent.ensuredir()
-    with safer.open(output_region_fpath, 'w', temp_file=True) as file:
+    with safer.open(output_region_fpath, 'w', temp_file=not ub.WIN32) as file:
         json.dump(new_region_model, file, indent=4)
 
     proc_context.stop()
@@ -311,7 +311,7 @@ def main(cmdline=1, **kwargs):
     if config.output_site_manifest_fpath is not None:
         filter_output['files'] = [os.fspath(output_region_fpath)]
         print(f'Write filtered site result to {config.output_site_manifest_fpath}')
-        with safer.open(config.output_site_manifest_fpath, 'w', temp_file=True) as file:
+        with safer.open(config.output_site_manifest_fpath, 'w', temp_file=not ub.WIN32) as file:
             json.dump(filter_output, file, indent=4)
 
 

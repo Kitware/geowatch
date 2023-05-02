@@ -204,7 +204,7 @@ def main(cmdline=0, **kwargs):
     new_dset = make_track_kwcoco_manifest(dst, dst_bundle_dpath, tid_to_assets,
                                           target_gsd=target_gsd)
     import safer
-    with safer.open(dst, 'w', temp_file=True) as file:
+    with safer.open(dst, 'w', temp_file=not ub.WIN32) as file:
         new_dset.dump(file, newlines=True, indent='    ')
 
     r"""

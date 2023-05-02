@@ -1303,7 +1303,7 @@ def main(argv=None, **kwargs):
             site_fpath = sites_dir / (site_props['site_id'] + '.geojson')
             site_fpaths.append(os.fspath(site_fpath))
 
-            with safer.open(site_fpath, 'w', temp_file=True) as f:
+            with safer.open(site_fpath, 'w', temp_file=not ub.WIN32) as f:
                 geojson.dump(site, f, indent=2)
 
     if args.out_sites_fpath is not None:
@@ -1311,7 +1311,7 @@ def main(argv=None, **kwargs):
         site_tracking_output['files'] = site_fpaths
         out_sites_fpath = ub.Path(args.out_sites_fpath)
         print(f'Write tracked site result to {out_sites_fpath}')
-        with safer.open(out_sites_fpath, 'w', temp_file=True) as file:
+        with safer.open(out_sites_fpath, 'w', temp_file=not ub.WIN32) as file:
             json.dump(site_tracking_output, file, indent='    ')
 
     # Convert kwcoco to sites summaries
@@ -1343,7 +1343,7 @@ def main(argv=None, **kwargs):
                 region['features'].append(site_summary)
 
             site_summary_fpaths.append(os.fspath(region_fpath))
-            with safer.open(region_fpath, 'w', temp_file=True) as f:
+            with safer.open(region_fpath, 'w', temp_file=not ub.WIN32) as f:
                 geojson.dump(region, f, indent=2)
 
     if args.out_site_summaries_fpath is not None:
@@ -1352,7 +1352,7 @@ def main(argv=None, **kwargs):
         out_site_summaries_fpath = ub.Path(args.out_site_summaries_fpath)
         out_site_summaries_fpath.parent.ensuredir()
         print(f'Write tracked site summary result to {out_site_summaries_fpath}')
-        with safer.open(out_site_summaries_fpath, 'w', temp_file=True) as file:
+        with safer.open(out_site_summaries_fpath, 'w', temp_file=not ub.WIN32) as file:
             json.dump(site_summary_tracking_output, file, indent='    ')
 
 

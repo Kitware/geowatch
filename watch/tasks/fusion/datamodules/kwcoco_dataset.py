@@ -254,6 +254,16 @@ except Exception:
 # See ~/code/watch/docs/coding_conventions.rst
 
 
+SPACE_GROUP = 'spacetime (space)'
+TIME_GROUP = 'spacetime (time)'
+SAMPLE_GROUP = 'sampling'
+FILTER_GROUP = 'filtering'
+WEIGHT_GROUP = 'weighting'
+NORM_GROUP = 'normalization'
+AUGMENTATION_GROUP = 'augmentation'
+SELECTION_GROUP = 'selection'
+
+
 class KWCocoVideoDatasetConfig(scfg.DataConfig):
     """
     This is the configuration for a single dataset that could be used for
@@ -277,15 +287,14 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
 
         'chip_dims': scfg.Value(128, help=ub.paragraph(
             '''
-            spatial height/width per batch. If given as a single number, used
-            as both width and height. Default is currently taken from
-            deprecated chip_size, but in the future will be 128.
-            '''), alias=['window_space_dims', 'window_dims', 'chip_size'], nargs='+'),
+            Spatial height/width per batch. If given as a single number, used
+            as both width and height.
+            '''), alias=['window_space_dims', 'window_dims', 'chip_size'], nargs='+', group=SPACE_GROUP),
 
         'fixed_resolution': scfg.Value(None, help=ub.paragraph(
             '''
             If specified, fixes resolution of window, output, and input space.
-            ''')),
+            '''), group=SPACE_GROUP),
 
         'window_space_scale': scfg.Value(None, help=ub.paragraph(
             '''
@@ -300,7 +309,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
             "target_gsd", then this can be set to as an absolute by including
             the "GSD" suffix. (e.g. If this is set to "10GSD", then video space
             will be scaled to match).
-            '''), alias=['window_resolution']),
+            '''), alias=['window_resolution'], group=SPACE_GROUP),
 
         'input_space_scale': scfg.Value(None, help=ub.paragraph(
             '''
@@ -316,14 +325,14 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
             will be scaled to match).
 
             This can also be set to "native" to use heterogeneous sampling.
-            '''), alias=['space_scale', 'data_space_scale', 'input_resolution']),
+            '''), alias=['space_scale', 'data_space_scale', 'input_resolution'], group=SPACE_GROUP),
 
         'output_space_scale': scfg.Value(None, help=ub.paragraph(
             '''
             Change the "scale" or resolution of the desired target resolution.
 
             Follows other GSD / scale semantics.
-            '''), alias=['target_space_scale', 'output_resolution']),
+            '''), alias=['target_space_scale', 'output_resolution'], group=SPACE_GROUP),
 
         # 'time_overlap': scfg.Value(0.0, help='fraction of time steps to overlap'),
         'chip_overlap': scfg.Value(
@@ -333,13 +342,14 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
                 Only applies to training dataset when used in the data module.
                 '''),
             alias=['window_space_overlap', 'window_overlap'],
+            group=SPACE_GROUP
         ),
 
         ##############
         # TIME OPTIONS
         ##############
 
-        'time_steps': scfg.Value(2, help='number of temporal sampler per batch', alias=['time_dims']),
+        'time_steps': scfg.Value(2, help='number of temporal sampler per batch', alias=['time_dims'], group=TIME_GROUP),
 
 
         'time_sampling': scfg.Value('contiguous', type=str, help=ub.paragraph(
@@ -347,18 +357,18 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
             Strategy for expanding the time window across non-contiguous
             frames. Can be auto, contiguous, hard+distribute, or
             dilate_affinity
-            ''')),
+            '''), group=TIME_GROUP),
 
         'time_span': scfg.Value(None, help=ub.paragraph(
             '''
             Roughly how much time should be between sample frames.
             This argument needs reworking.
-            ''')),
+            '''), group=TIME_GROUP),
 
         'time_kernel': scfg.Value(None, type=str, help=ub.paragraph(
             '''
             Mutually exclusive with time_span.
-            ''')),
+            '''), group=TIME_GROUP),
 
         ##############
         # MODE OPTIONS
@@ -367,18 +377,18 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         'channels': scfg.Value(None, type=str, help=ub.paragraph(
             '''
             channels to use should be SensorChanSpec coercable
-            ''')),
+            '''), group='sensorchan'),
 
         'include_sensors': scfg.Value(None, help=ub.paragraph(
             '''
             if specified can be comma separated valid sensors. NOTE: this
             should be specified via a sensorchan speci in channels instead
-            ''')),
+            '''), group='sensorchan'),
 
         'exclude_sensors': scfg.Value(None, type=str, help=ub.paragraph(
             '''
             comma delimited list of sensors to avoid, such as S2 or L8
-            ''')),
+            '''), group='sensorchan'),
 
         ##############
         # SIZE OPTIONS
@@ -406,7 +416,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
                 where myattr is either val1 or val4.
 
                 Requries the "jq" python library is installed.
-                ''')),
+                '''), group=SELECTION_GROUP),
 
         'select_videos': scfg.Value(
             None, help=ub.paragraph(
@@ -423,7 +433,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
                 Only applicable for dataset that contain videos.
 
                 Requries the "jq" python library is installed.
-                ''')),
+                '''), group=SELECTION_GROUP),
 
         'max_epoch_length': scfg.Value(None, help=ub.paragraph(
             '''
@@ -441,21 +451,21 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
             (an ILP solution). If None is passed, set cover is not computed.
             The 'exact' method requires the pulp package (and can be very slow
             so it is generally not recommended).
-            ''')),
+            '''), group=SAMPLE_GROUP),
 
         'use_centered_positives': scfg.Value(False, help=ub.paragraph(
             '''
             Use centers of annotations as window centers
             Only applies to training dataset when used in the data module.
             Validation/test dataset defaults to False.
-            ''')),
+            '''), group=SAMPLE_GROUP),
 
         'use_grid_positives': scfg.Value(True, help=ub.paragraph(
             '''
             Use sliding window cells that overlap with positive annotations as
             positives.  Only applies to training dataset when used in the data
             module.  Validation/test dataset defaults to True.
-            ''')),
+            '''), group=SAMPLE_GROUP),
 
         'use_grid_negatives': scfg.Value(True, help=ub.paragraph(
             '''
@@ -464,12 +474,12 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
             "cleared" attribute contribute grid negatives. Only applies to
             training dataset when used in the data module. Validation/test
             dataset defaults to True.
-            ''')),
+            '''), group=SAMPLE_GROUP),
 
         'use_grid_valid_regions': scfg.Value(True, help=ub.paragraph(
             '''
             If True, the initial grid will only place windows in valid regions.
-            ''')),
+            '''), group=SAMPLE_GROUP),
 
         # Overwritten for non-train
         'neg_to_pos_ratio': scfg.Value(1.0, type=float, help=ub.paragraph(
@@ -478,13 +488,13 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
             annots.
             Only applies to training dataset when used in the data module.
             Validation/test dataset defaults to zero.
-            ''')),
+            '''), group=SAMPLE_GROUP),
 
         'use_grid_cache': scfg.Value(True, help=ub.paragraph(
             '''
             If true, will cache the spacetime grid to make multiple
             runs quicker.
-            ''')),
+            '''), group=SAMPLE_GROUP),
 
         ############################
         # DATA NORMALIZATION OPTIONS
@@ -513,7 +523,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
                 * sensor
 
             If set to True, then we try to automatically compute these values.
-            ''')),
+            '''), group=NORM_GROUP),
 
         'normalize_perframe': scfg.Value(False, help=ub.paragraph(
             '''
@@ -521,7 +531,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
             This is not recommended unless you have a larger chip size
             because there needs to be enough data within a frame for
             the normalization to be effective.
-            ''')),
+            '''), group=NORM_GROUP),
 
         'normalize_peritem': scfg.Value(None, type=str, help=ub.paragraph(
             '''
@@ -531,45 +541,45 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
             Can be specified as a ChannelSpec, and in this case will only be
             applied to these channels. If True all channels are normalized this
             way.
-            ''')),
+            '''), group=NORM_GROUP),
 
         ###################
         # WEIGHTING OPTIONS
         ###################
 
-        'ignore_dilate': scfg.Value(0, help='Dilation applied to ignore masks.'),
-        'weight_dilate': scfg.Value(0, help='Dilation applied to weight masks.'),
+        'ignore_dilate': scfg.Value(0, help='Dilation applied to ignore masks.', group=WEIGHT_GROUP),
+        'weight_dilate': scfg.Value(0, help='Dilation applied to weight masks.', group=WEIGHT_GROUP),
 
         'absolute_weighting': scfg.Value(False, help=ub.paragraph(
             '''
             if True allow weights to be larger than 1, otherwise item weights
             are rescaled.
-            ''')),
+            '''), group=WEIGHT_GROUP),
 
         'min_spacetime_weight': scfg.Value(0.9, help=ub.paragraph(
             '''
             Minimum space-time dilation weight. Used in conjunction with
-            ''')),
+            '''), group=WEIGHT_GROUP),
 
         'upweight_centers': scfg.Value(True, help=ub.paragraph(
             '''
             Applies a weighting such that the center of the frame incurs more
             loss.
-            ''')),
+            '''), group=WEIGHT_GROUP),
 
         'upweight_time': scfg.Value(None, help=ub.paragraph(
             '''
             A number between 0.0 and 1.0 representing where to upweight time
             the most (1.0 is last frame 0.0 is the first frame).
-            ''')),
+            '''), group=WEIGHT_GROUP),
 
         'dist_weights': scfg.Value(0, help=ub.paragraph(
             '''
             To use distance-transform based weights on annotations or
             not
-            ''')),
+            '''), group=WEIGHT_GROUP),
 
-        'balance_areas': scfg.Value(False, help='if True balance the weight of small and large polygons'),
+        'balance_areas': scfg.Value(False, help='if True balance the weight of small and large polygons', group=WEIGHT_GROUP),
 
         ##################################
         # DYNAMIC FILTER / MASKING OPTIONS
@@ -580,7 +590,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
             Allow the dataloader to use the quality band to skip frames.
             DEPRECATED: set quality_threshold=0 to disable the cloudmask.
             Set to a positive value to use it, up to that threshold.
-            ''')),
+            '''), group=FILTER_GROUP),
 
         'quality_threshold': scfg.Value(0.0, help=ub.paragraph(
             '''
@@ -588,17 +598,17 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
             If a frame has fewer than this fraction of usable pixels (i.e. not
             clouds or other quality flags), it is marked for resampling as a
             "bad" frame.
-            ''')),
+            '''), group=FILTER_GROUP),
 
-        'mask_low_quality': scfg.Value(False, help='if True, mask low quality pixels with nans'),
+        'mask_low_quality': scfg.Value(False, help='if True, mask low quality pixels with nans', group=FILTER_GROUP),
 
         'mask_samecolor_method': scfg.Value(None, help=ub.paragraph(
             '''
             If enabled, set as method to use for SAMECOLOR_QUALITY_HEURISTIC.
             Can be histogram or region.
-            ''')),
+            '''), group=FILTER_GROUP),
 
-        'force_bad_frames': scfg.Value(False, help='if True, force loading, even if data is nan / missing'),
+        'force_bad_frames': scfg.Value(False, help='if True, force loading, even if data is nan / missing', group=FILTER_GROUP),
 
         'observable_threshold': scfg.Value(0.0, help=ub.paragraph(
             '''
@@ -606,15 +616,15 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
             If a frame has fewer than this fraction of usable pixels (i.e. not
             clouds or other quality flags), it is marked for resampling as a
             "bad" frame.
-            ''')),
+            '''), group=FILTER_GROUP),
 
         'resample_invalid_frames': scfg.Value(3, help=ub.paragraph(
             '''
             Number of attempts to resample any frame marked as invalid via
             quality or nodata checks.
-            '''), alias=['resample_max_tries']),
+            '''), alias=['resample_max_tries'], group=FILTER_GROUP),
 
-        'downweight_nan_regions': scfg.Value(True, help='if True, unobservable (i.e. nan) pixels are downweighted'),
+        'downweight_nan_regions': scfg.Value(True, help='if True, unobservable (i.e. nan) pixels are downweighted', group=FILTER_GROUP),
 
         ######################
         # AUGMENTATION OPTIONS
@@ -628,32 +638,32 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
             '''
             In fit mode, perform translation augmentations this fraction of the
             time.
-            ''')),
+            '''), group=AUGMENTATION_GROUP),
 
         'augment_space_xflip': scfg.Value(True, help=ub.paragraph(
-            '''In fit mode, if true, perform random x-flips''')),
+            '''In fit mode, if true, perform random x-flips'''), group=AUGMENTATION_GROUP),
 
         'augment_space_yflip': scfg.Value(True, help=ub.paragraph(
-            '''In fit mode, if true, perform random y-flips''')),
+            '''In fit mode, if true, perform random y-flips'''), group=AUGMENTATION_GROUP),
 
         'augment_space_rot': scfg.Value(True, help=ub.paragraph(
-            '''In fit mode, if true, perform random 90 degree rotations''')),
+            '''In fit mode, if true, perform random 90 degree rotations'''), group=AUGMENTATION_GROUP),
 
         'augment_time_resample_rate': scfg.Value(0.8, help=ub.paragraph(
             '''
             In fit mode, perform temporal jitter this fraction of the time.
-            ''')),
+            '''), group=AUGMENTATION_GROUP),
 
         'temporal_dropout': scfg.Value(0.0, type=float, help=ub.paragraph(
             '''
             Drops frames in a fraction of training batches
-            ''')),
+            '''), group=AUGMENTATION_GROUP),
 
         'modality_dropout': scfg.Value(0.0, type=float, help=ub.paragraph(
             '''
             Drops late-fused modalities in each frame with this probability,
             except if the frame only has one modality left.
-            ''')),
+            '''), group=AUGMENTATION_GROUP),
 
         'reseed_fit_random_generators': scfg.Value(True, type=float, help=ub.paragraph(
             '''
@@ -666,7 +676,7 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
             and if this was set to False dataloader clones for ddp or multiple
             workers would generate the same sequence of data regardless of
             split indexes.
-            ''')),
+            '''), group=AUGMENTATION_GROUP),
     }
 
     def __post_init__(self):
