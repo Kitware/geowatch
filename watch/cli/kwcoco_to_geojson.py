@@ -722,7 +722,7 @@ def _coerce_site_summaries(site_summary_or_region_model,
     from watch.geoannots import geomodels
     import jsonschema
 
-    TRUST_REGION_SCHEMA = 1
+    TRUST_REGION_SCHEMA = 0
 
     geojson_infos = list(util_gis.coerce_geojson_datas(
         site_summary_or_region_model, format='json', allow_raw=True))
