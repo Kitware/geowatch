@@ -28,9 +28,11 @@ def load_site_model_schema(strict=True):
 
     Example:
         >>> from watch.rc.registry import *  # NOQA
-        >>> data = load_site_model_schema(strict=False)
+        >>> data1 = load_site_model_schema(strict=True)
+        >>> data2 = load_site_model_schema(strict=False)
         >>> import rich
-        >>> rich.print('data = {}'.format(ub.urepr(data, nl=-2)))
+        >>> rich.print('data = {}'.format(ub.urepr(data1, nl=-2)))
+        >>> rich.print('data = {}'.format(ub.urepr(data2, nl=-2)))
     """
     # with importlib_resources.path('watch.rc', name) as path:
     #     print('path = {!r}'.format(path))
@@ -39,36 +41,60 @@ def load_site_model_schema(strict=True):
     data = json.load(file)
     if not strict:
         from kwcoco.util.jsonschema_elements import STRING
-        from kwcoco.util.jsonschema_elements import ONEOF, ANYOF
+        from kwcoco.util.jsonschema_elements import ONEOF
+        # from kwcoco.util.jsonschema_elements import ANYOF
         from kwcoco.util.jsonschema_elements import NULL
         any_identifier = STRING(pattern='^[A-Za-z_][A-Za-z0-9_-]*$')
         walker = ub.IndexableWalker(data)
         if 0:
             # Identify the paths to the schema element we are going to modify
+            leaf_to_loose = {
+                'region_id': 'any_identifier',
+                'site_id': 'any_identifier',
+                'originator': 'any_identifier',
+                'sensor_name': 'ONEOF(NULL, any_identifier)',
+            }
+            suggestions = []
             for p, v in walker:
-                if p[-1] in {'region_id', 'site_id', 'originator', 'sensor_name'}:
+                if p[-1] in leaf_to_loose:
                     print(f'p={p}')
                     print(f'v={v}')
-        walker[['definitions', 'associated_site_properties', 'properties',
-                'region_id']] = any_identifier
-        walker[['definitions', 'associated_site_properties', 'properties',
-                'site_id']] = any_identifier
-        walker[['definitions', 'unassociated_site_properties', 'properties',
-                'region_id']] = ONEOF(NULL, any_identifier)
-        walker[['definitions', 'unassociated_site_properties', 'properties',
-                'site_id']] = any_identifier
-        walker[['definitions', '_site_properties', 'properties',
-                'originator']] = any_identifier
-        walker[['definitions', 'observation_properties', 'properties',
-                'sensor_name']] = ONEOF(NULL, any_identifier)
+                    loose_val = leaf_to_loose[p[-1]]
+                    suggestions.append(f'walker[{p}] = {loose_val}  # previous: {v!r}')
+            print('Suggestions: ')
+            print('\n'.join(suggestions))
+
+        walker[['$defs', 'site_properties', 'allOf', 4, 'then', 'properties', 'site_id']] = any_identifier  # previous: {'type': 'string', 'pattern': '^[A-Z]{2}_([RS]\\d{3}|C[0-7]\\d{2})_\\d{4}$'}
+        walker[['$defs', 'site_properties', 'allOf', 4, 'if', 'properties', 'region_id']] = any_identifier  # previous: {'type': 'string', 'pattern': '^[A-Z]{2}_([RS]\\d{3}|C[0-7]\\d{2})$'}
+        walker[['$defs', 'site_properties', 'allOf', 3, 'then', 'properties', 'site_id']] = any_identifier  # previous: {'type': 'string', 'pattern': '^[A-Z]{2}_[RC][Xx]{3}_\\d{4}$'}
+        walker[['$defs', 'site_properties', 'allOf', 3, 'if', 'properties', 'region_id']] = any_identifier  # previous: {'type': 'string', 'pattern': '^[A-Z]{2}_[RC][Xx]{3}$'}
+        walker[['$defs', 'site_properties', 'allOf', 0, 'then', 'properties', 'originator']] = any_identifier  # previous: {'enum': ['te', 'iMERIT', 'pmo']}
+        walker[['$defs', 'site_properties', 'properties', 'site_id']] = any_identifier  # previous: {'type': 'string', 'pattern': '^[A-Z]{2}_([RS]\\d{3}|C[0-7]\\d{2}|[RC][Xx]{3})_\\d{4}$'}
+        walker[['$defs', 'site_properties', 'properties', 'region_id']] = any_identifier  # previous: {'oneOf': [{'type': 'null'}, {'type': 'string', 'pattern': '^[A-Z]{2}_([RS]\\d{3}|C[0-7]\\d{2}|[RC][Xx]{3})$'}]}
+        walker[['$defs', 'site_properties', 'properties', 'originator']] = any_identifier  # previous: {'enum': ['te', 'pmo', 'acc', 'ast', 'ast', 'bla', 'iai', 'kit', 'str', 'iMERIT']}
+        walker[['$defs', 'observation_properties', 'properties', 'sensor_name']] = ONEOF(NULL, any_identifier)  # previous: {'oneOf': [{'type': 'null'}, {'type': 'string', 'pattern': '^((Landsat 8|Sentinel-2|WorldView|Planet), )*(Landsat 8|Sentinel-2|WorldView|Planet)$'}]}
+
+        # walker[['definitions', 'associated_site_properties', 'properties',
+        #         'region_id']] = any_identifier
+        # walker[['definitions', 'associated_site_properties', 'properties',
+        #         'site_id']] = any_identifier
+        # walker[['definitions', 'unassociated_site_properties', 'properties',
+        #         'region_id']] = ONEOF(NULL, any_identifier)
+        # walker[['definitions', 'unassociated_site_properties', 'properties',
+        #         'site_id']] = any_identifier
+        # walker[['definitions', '_site_properties', 'properties',
+        #         'originator']] = any_identifier
+        # walker[['definitions', 'observation_properties', 'properties',
+        #         'sensor_name']] = ONEOF(NULL, any_identifier)
 
         # By setting strict=False, unassociated and associated site properties
         # are no longer distinguished, so we have to just pick one.
-        walker[['properties', 'features', 'items', 'anyOf', 0, 'properties',
-                'properties']] = ANYOF(
-            {'$ref': '#/definitions/associated_site_properties'},
-            {'$ref': '#/definitions/unassociated_site_properties'},
-        )
+        # walker[['properties', 'features', 'items', 'anyOf', 0, 'properties',
+        #         'properties']] = ANYOF(
+        #     {'$ref': '#/definitions/associated_site_properties'},
+        #     {'$ref': '#/definitions/unassociated_site_properties'},
+        # )
+
     return data
 
 
@@ -81,26 +107,50 @@ def load_region_model_schema(strict=True):
 
     Example:
         >>> from watch.rc.registry import *  # NOQA
-        >>> data = load_region_model_schema(strict=False)
+        >>> data1 = load_region_model_schema(strict=True)
+        >>> data2 = load_region_model_schema(strict=False)
         >>> import rich
-        >>> rich.print('data = {}'.format(ub.urepr(data, nl=-2)))
+        >>> rich.print('data = {}'.format(ub.urepr(data1, nl=-2)))
+        >>> rich.print('data = {}'.format(ub.urepr(data2, nl=-2)))
     """
     file = importlib_resources.open_text('watch.rc',
                                          'region-model.schema.json')
     data = json.load(file)
     if not strict:
         from kwcoco.util.jsonschema_elements import STRING
+
+        # Allow any alphanumeric region id
         any_identifier = STRING(pattern='^[A-Za-z_][A-Za-z0-9_-]*$')
         walker = ub.IndexableWalker(data)
-        # Allow any alphanumeric region id
-        walker[['definitions', 'region_properties',
-                'properties', 'region_id']] = any_identifier
-        walker[['definitions', 'region_properties',
-                'properties', 'originator']] = any_identifier
-        walker[['definitions', 'site_summary_properties',
-                'properties', 'site_id']] = any_identifier
-        walker[['definitions', 'site_summary_properties',
-                'properties', 'originator']] = any_identifier
+        if 0:
+            # Identify the paths to the schema element we are going to modify
+            leaf_to_loose = {
+                'region_id': 'any_identifier',
+                'site_id': 'any_identifier',
+                'originator': 'any_identifier',
+            }
+            suggestions = []
+            for p, v in walker:
+                if p[-1] in leaf_to_loose:
+                    print(f'p={p}')
+                    print(f'v={v}')
+                    loose_val = leaf_to_loose[p[-1]]
+                    suggestions.append(f'walker[{p}] = {loose_val}  # previous: {v!r}')
+            print('Suggestions: ')
+            print('\n'.join(suggestions))
+
+        walker[['$defs', 'site_summary_properties', 'properties', 'site_id']] = any_identifier  # previous: {'type': 'string', 'pattern': '^[A-Z]{2}_([RS]\\d{3}|C[0-7]\\d{2})_\\d{4}$'}
+        walker[['$defs', 'site_summary_properties', 'properties', 'originator']] = any_identifier  # previous: {'enum': ['te', 'pmo', 'acc', 'ast', 'ast', 'bla', 'iai', 'kit', 'str', 'iMERIT']}
+        walker[['$defs', 'region_properties', 'properties', 'region_id']] = any_identifier  # previous: {'type': 'string', 'pattern': '^[A-Z]{2}_([RS]\\d{3}|C[0-7]\\d{2})$'}
+        walker[['$defs', 'region_properties', 'properties', 'originator']] = any_identifier  # previous: {'enum': ['te', 'pmo', 'acc', 'ara', 'ast', 'bla', 'iai', 'kit', 'str', 'iMERIT']}
+        walker[['$defs', 'proposed_originator', 'then', 'properties', 'originator']] = any_identifier  # previous: {'enum': ['acc', 'ara', 'ast', 'bla', 'iai', 'kit', 'str']}
+        walker[['$defs', 'annotation_originator', 'then', 'properties', 'originator']] = any_identifier  # previous: {'enum': ['te', 'iMERIT', 'pmo']}
+
+        # walker[['definitions', 'region_properties', 'properties', 'region_id']] = any_identifier
+        # walker[['definitions', 'region_properties', 'properties', 'originator']] = any_identifier
+        # walker[['definitions', 'site_summary_properties', 'properties', 'site_id']] = any_identifier
+        # walker[['definitions', 'site_summary_properties', 'properties', 'originator']] = any_identifier
+
     return data
 
 
