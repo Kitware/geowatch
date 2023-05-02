@@ -10,11 +10,11 @@ Windows.
 
     # To update to a newer version see:
     # https://docs.conda.io/en/latest/miniconda_hashes.html for updating
-    CONDA_INSTALL_SCRIPT=Miniconda3-py39_4.12.0-Linux-x86_64.sh
+    CONDA_INSTALL_SCRIPT=Miniconda3-py310_23.3.1-0-Linux-x86_64.sh
     curl https://repo.anaconda.com/miniconda/$CONDA_INSTALL_SCRIPT > $CONDA_INSTALL_SCRIPT
 
     # For security, it is important to verify the hash
-    CONDA_EXPECTED_SHA256=1314b90489f154602fd794accfc90446111514a5a72fe1f71ab83e07de9504a7
+    CONDA_EXPECTED_SHA256=aef279d6baea7f67940f16aad17ebe5f6aac97487c7c03466ff01f4819e5a651
     echo "${CONDA_EXPECTED_SHA256}  ${CONDA_INSTALL_SCRIPT}" > conda_expected_hash.sha256
     if ! sha256sum --status -c conda_expected_hash.sha256; then
         echo "Downloaded file does not match hash! DO NOT CONTINUE!"
