@@ -231,5 +231,4 @@ pytorch_msssim==0.1.5
 
 absl_py>=1.4.0
 PyYAML>=6.0
-tensorflow>2.11
 tqdm>=4.64.1
