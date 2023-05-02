@@ -73,8 +73,7 @@ If you want to use the source code directly, open an anaconda prompt and run:
     source $USERPROFILE/miniconda3/etc/profile.d/conda.sh
     conda activate geowatch
 
-    #git clone https://gitlab.kitware.com/computer-vision/geowatch
-    git clone --branch dev/0.6.1 https://gitlab.kitware.com/computer-vision/geowatch
+    git clone https://gitlab.kitware.com/computer-vision/geowatch
     cd geowatch
     pip install -e .[headless]
 
