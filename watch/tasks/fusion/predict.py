@@ -62,7 +62,6 @@ def make_predict_config(cmdline=False, **kwargs):
     parser.add_argument('--with_class', type=smartcast, default='auto')
     parser.add_argument('--with_saliency', type=smartcast, default='auto')
 
-    parser.add_argument('--compress', type=str, default='DEFLATE', help='type of compression for prob images')
     parser.add_argument('--track_emissions', type=smartcast, default=True, help='set to false to disable emission tracking')
     parser.add_argument('--record_context', default=True, type=smartcast, help='If enabled records process context stats')
 
@@ -74,6 +73,9 @@ def make_predict_config(cmdline=False, **kwargs):
     parser.add_argument('--clear_annots', type=smartcast, default=1, help='Clear existing annotations in output file. Otherwise keep them')
     parser.add_argument('--drop_unused_frames', type=smartcast, default=0, help='if True, remove any images that were not predicted on')
     parser.add_argument('--write_workers', type=smartcast, default='datamodule', help='workers to use for writing results. If unspecified uses the datamodule num_workers')
+
+    parser.add_argument('--compress', type=str, default='DEFLATE', help='type of compression for prob images')
+    parser.add_argument('--format', type=str, default='cog', help='the output format of the predicted images')
 
     # TODO:
     # parser.add_argument('--cache', type=smartcast, default=0, help='if True, dont rerun prediction on images where predictions exist'),
@@ -159,6 +161,7 @@ def build_stitching_managers(config, method, result_dataset, writer_queue=None):
         write_probs=config['write_probs'],
         write_preds=config['write_preds'],
         prob_compress=config['compress'],
+        prob_format=config['format'],
         quantize=config['quantize'],
         expected_minmax=(0, 1),
         writer_queue=writer_queue,

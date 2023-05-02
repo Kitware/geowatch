@@ -10,6 +10,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 * SAM - segment anything features
 * DZYNE site validation: depthPCD task
+* fusion.predict can now output pngs
 
 ### Changed
 
