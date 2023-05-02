@@ -1,5 +1,5 @@
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop6

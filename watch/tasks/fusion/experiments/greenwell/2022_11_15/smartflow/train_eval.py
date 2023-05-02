@@ -83,9 +83,9 @@ with DAG(
                 pip install -U delayed-image
                 python -c "import delayed_image; print('delayed_image.version = ', delayed_image.__version__)"
 
-                smartwatch_dvc add --name=toy_data_hdd --path=$DVC_DATA_DPATH --hardware=hdd --priority=100 --tags=toy_data_hdd
+                geowatch_dvc add --name=toy_data_hdd --path=$DVC_DATA_DPATH --hardware=hdd --priority=100 --tags=toy_data_hdd
                 mkdir -p $DVC_DATA_DPATH
-                smartwatch_dvc add --name=toy_expt_hdd --path=$DVC_EXPT_DPATH --hardware=hdd --priority=100 --tags=toy_expt_hdd
+                geowatch_dvc add --name=toy_expt_hdd --path=$DVC_EXPT_DPATH --hardware=hdd --priority=100 --tags=toy_expt_hdd
                 mkdir -p $DVC_EXPT_DPATH
 
                 USER=airflow_root

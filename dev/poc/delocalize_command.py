@@ -81,8 +81,8 @@ def main(cmdline=1, **kwargs):
         '''))
     print(ub.codeblock(
         '''
-        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-        DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+        DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
         '''))
     # print(shlex.join(delocalized_parts))
     print(' '.join(delocalized_parts))

@@ -5,8 +5,8 @@ Testing ddp
 
 # Fit
 export CUDA_VISIBLE_DEVICES=1
-PHASE2_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="ssd")
-PHASE2_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+PHASE2_DATA_DPATH=$(geowatch_dvc --tags="phase2_data" --hardware="ssd")
+PHASE2_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
 TRAIN_FNAME=combo_train_I.kwcoco.json
 VALI_FNAME=combo_vali_I.kwcoco.json

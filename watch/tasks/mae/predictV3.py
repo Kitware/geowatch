@@ -1,8 +1,8 @@
 """
 Basline Example:
 
-    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-    DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+    DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+    DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 
     python -m watch.tasks.mae.predict \
         --device="cuda:0"\
@@ -634,7 +634,7 @@ if __name__ == '__main__':
         ../../cli/prepare_teamfeats.py
 
         # Team Features on Drop3
-        DVC_DPATH=$(smartwatch_dvc)
+        DVC_DPATH=$(geowatch_dvc)
         KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10
         python -m watch.cli.prepare_teamfeats \
             --base_fpath=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
@@ -648,7 +648,7 @@ if __name__ == '__main__':
     CommandLine:
         python -m watch.tasks.template.predict --help
 
-        DVC_DPATH=$(smartwatch_dvc)
+        DVC_DPATH=$(geowatch_dvc)
         PRETEXT_PATH=$DVC_DPATH/models/uky/uky_invariants_2022_02_11/TA1_pretext_model/pretext_package.pt
         SSEG_PATH=$DVC_DPATH/models/uky/uky_invariants_2022_02_11/TA1_segmentation_model/segmentation_package.pt
         PCA_FPATH=$DVC_DPATH/models/uky/uky_invariants_2022_02_11/TA1_pretext_model/pca_projection_matrix.pt

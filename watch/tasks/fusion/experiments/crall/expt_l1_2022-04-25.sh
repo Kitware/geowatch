@@ -7,8 +7,8 @@ CROPPED_PRE_EVAL_AND_AGG(){
     #################################
     # 1. Repackage and commit new models
     #################################
-    DVC_DPATH=$(smartwatch_dvc --hardware="ssd")
-    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DVC_DPATH=$(geowatch_dvc --hardware="ssd")
+    DVC_DPATH=$(geowatch_dvc --hardware="hdd")
     cd "$DVC_DPATH"
     git pull
 
@@ -30,7 +30,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
     # 2. Pull new models (and existing evals) on eval machine
     #################################
 
-    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DVC_DPATH=$(geowatch_dvc --hardware="hdd")
     cd "$DVC_DPATH" 
     git pull
     dvc pull -r aws -R models/fusion/Aligned-Drop3-L1/packages
@@ -43,7 +43,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
     # 3. Run Prediction & Evaluation
     #################################
 
-    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DVC_DPATH=$(geowatch_dvc --hardware="hdd")
     DATASET_CODE=Aligned-Drop3-L1
     EXPT_GROUP_CODE=Aligned-Drop3-L1
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -71,7 +71,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
 
     # TODO: Use new sycn machine state script
 
-    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DVC_DPATH=$(geowatch_dvc --hardware="hdd")
     python -m watch.tasks.fusion.dvc_sync_manager --push=True --pull=False --dvc_remote=aws
 
     # Check for uncommited evaluations
@@ -97,7 +97,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
         --push=False --pull=True --dvc_remote=aws \
         --with_packages=False --with_evals=True
     #####
-    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DVC_DPATH=$(geowatch_dvc --hardware="hdd")
     EXPT_GROUP_CODE=Aligned-Drop3-L1
     #EXPT_NAME_PAT="*"
     EXPT_NAME_PAT="*"
@@ -119,7 +119,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
             #"Post Construction"
 }
 
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(geowatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 
 # Point to latest dataset version
@@ -185,7 +185,7 @@ python -m watch.tasks.fusion.fit \
 
 # ooo
 export CUDA_VISIBLE_DEVICES=0
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(geowatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-L1
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -209,7 +209,7 @@ python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=1
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(geowatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-L1
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -239,7 +239,7 @@ python -m watch.tasks.fusion.fit \
 
 ## Namek
 export CUDA_VISIBLE_DEVICES=0
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(geowatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-L1
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -267,7 +267,7 @@ python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=1
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(geowatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-L1
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE

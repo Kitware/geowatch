@@ -96,7 +96,7 @@ CommandLine:
     # Alternate invocation
     # Create a demo region file
 
-    DVC_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware=auto)
+    DVC_DPATH=$(geowatch_dvc --tags="phase2_data" --hardware=auto)
     REGION_FPATH=$DVC_DPATH/annotations/region_models/BR_R005.geojson
 
     # Define SMART_STAC_API_KEY
@@ -118,7 +118,7 @@ CommandLine:
     ###
     ### - Debug case
 
-    DVC_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware=auto)
+    DVC_DPATH=$(geowatch_dvc --tags="phase2_data" --hardware=auto)
 
     # Load SMART_STAC_API_KEY
     source "$HOME"/code/watch/secrets/secrets

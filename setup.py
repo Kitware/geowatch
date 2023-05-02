@@ -252,7 +252,7 @@ if __name__ == '__main__':
                 'geowatch= watch.cli.__main__:main',
                 'geowatch_dvc= watch.cli.find_dvc:_CLI.main',
                 # 'gwmlops= watch.mlops.__main__:main',
-                # 'smartwatch_dvc= watch.cli.find_dvc:__config__.main',
+                # 'geowatch_dvc= watch.cli.find_dvc:__config__.main',
             ],
         },
         install_requires=REQUIREMENTS,

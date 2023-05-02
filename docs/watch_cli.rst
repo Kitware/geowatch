@@ -108,7 +108,7 @@ As a researcher / developer / user the most important commands for you to know a
 
 * ``geowatch geotiffs_to_kwcoco`` - Create a kwcoco file from a set of on-disk geotiffs.
 
-* ``geowatch_dvc`` - Helper to register / retreive your DVC paths so scripts can be written agnostic to filesystem layouts. See `docs <docs/data/using_smartwatch_dvc.rst>`_ for more details.
+* ``geowatch_dvc`` - Helper to register / retreive your DVC paths so scripts can be written agnostic to filesystem layouts. See `docs <docs/data/using_geowatch_dvc.rst>`_ for more details.
 
 
 

@@ -1,8 +1,8 @@
 #!/bin/bash
 
-#DVC_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="hdd")
+#DVC_DATA_DPATH=$(geowatch_dvc --tags="phase2_data" --hardware="hdd")
 DVC_DATA_DPATH=/home/local/KHQ/connor.greenwell/Projects/SMART/smart_watch_dvc
-# DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+# DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 DVC_EXPT_DPATH=/home/local/KHQ/connor.greenwell/data/dvc-repos/smart_expt_dvc
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 

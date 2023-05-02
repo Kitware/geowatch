@@ -19,21 +19,21 @@ MLOps is a wrapper around the cmd_queue library that provides a single entrypoin
 You can invoke any one of these things through `python -m watch...` without MLOps, but it handles all the plumbing of feeding jobs' input/output to each other and spawning them to use all your available compute resources.
 
 
-## using dvc and smartwatch_dvc
+## using dvc and geowatch_dvc
 
-`smartwatch_dvc` is an alias for `python -m watch.cli.find_dvc`.
+`geowatch_dvc` is an alias for `python -m watch.cli.find_dvc`.
 MLOps uses it to manage paths to your DVC repos.
 
 To get started:
-`smartwatch_dvc list`
+`geowatch_dvc list`
 
 Do you see a data and expt repo with exists=True? If not,
 
 a) you have an existing local DVC checkout, but it's not listed
 
 ```bash
-smartwatch_dvc add --name=my_data_repo --path=path/to/smart_data_dvc --hardware=hdd --priority=100 --tags=phase2_data
-smartwatch_dvc add --name=my_expt_repo --path=path/to/smart_expt_dvc --hardware=hdd --priority=100 --tags=phase2_expt
+geowatch_dvc add --name=my_data_repo --path=path/to/smart_data_dvc --hardware=hdd --priority=100 --tags=phase2_data
+geowatch_dvc add --name=my_expt_repo --path=path/to/smart_expt_dvc --hardware=hdd --priority=100 --tags=phase2_expt
 ```
 
 b) you don't have an existing local DVC checkout
@@ -48,7 +48,7 @@ these can also be overridden by environment variables; do so at your own risk
 
 if this worked, you can:
 ```bash
-cd $(smartwatch_dvc --tags="phase2_expt")
+cd $(geowatch_dvc --tags="phase2_expt")
 ```
 cd doesn't work when the terminal is too narrow for 1 line, because it'll prettyprint with linebreaks
 
@@ -90,11 +90,11 @@ the "versioned" table in more detail:
 
 TODO does "staging" still exist?
 
-models on disk live in `$(smartwatch_dvc --tags="phase2_expt")/models/fusion/${DATASET}/packages`.
+models on disk live in `$(geowatch_dvc --tags="phase2_expt")/models/fusion/${DATASET}/packages`.
 
-predictions on disk live in `$(smartwatch_dvc --tags="phase2_expt")/models/fusion/${DATASET}/pred`.
+predictions on disk live in `$(geowatch_dvc --tags="phase2_expt")/models/fusion/${DATASET}/pred`.
 
-evals on disk live in `$(smartwatch_dvc --tags="phase2_expt")/models/fusion/${DATASET}/eval`.
+evals on disk live in `$(geowatch_dvc --tags="phase2_expt")/models/fusion/${DATASET}/eval`.
 
 ## using mlops to run an evaluation
 
@@ -104,8 +104,8 @@ if you haven't used this TEST_DATASET yet, remember to unzip its splits.zip firs
 
 ```bash
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
-DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data")
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+DATA_DVC_DPATH=$(geowatch_dvc --tags="phase2_data")
+DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/data.kwcoco.json
 python -m watch.mlops.schedule_evaluation \
     --params="

@@ -795,7 +795,7 @@ class ExperimentState(ub.NiceRepr):
         print(ub.codeblock(
             f"""
             # On the evaluation remote you need to run something like:
-            DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+            DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
             cd $DVC_EXPT_DPATH
             git pull
             dvc pull -r aws --recursive models/fusion/{self.dataset_code}

@@ -27,7 +27,7 @@ References:
 
 Example:
 
-    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+    DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 
     python -m watch.cli.validate_annotation_schemas \
         --site_model_dpath="$DVC_DATA_DPATH"/annotations/drop6/site_models \

@@ -12,7 +12,7 @@ gather-checkpoints-repackage(){
     #################################
     # Repackage and commit new models
     #################################
-    DVC_DPATH=$(smartwatch_dvc)
+    DVC_DPATH=$(geowatch_dvc)
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10
     EXPT_GROUP_CODE=eval4_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -27,14 +27,14 @@ gather-checkpoints-repackage(){
 
 schedule-prediction-and-evlauation(){
 
-    DVC_DPATH=$(smartwatch_dvc)
+    DVC_DPATH=$(geowatch_dvc)
     cd "$DVC_DPATH" 
     git pull
     #################################
     # Pull new models on eval machine
     #################################
 
-    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DVC_DPATH=$(geowatch_dvc --hardware="hdd")
     cd "$DVC_DPATH" 
     git pull
     dvc pull -r aws -R models/fusion/eval4_candidates/packages
@@ -48,7 +48,7 @@ schedule-prediction-and-evlauation(){
     # - [ ] Argument general predict parameter grid
     # - [ ] Can a task request that slurm only schedule it on a specific GPU?
     # Note: change backend to tmux if slurm is not installed
-    DVC_DPATH=$(smartwatch_dvc)
+    DVC_DPATH=$(geowatch_dvc)
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10
     EXPT_GROUP_CODE=eval4_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -91,7 +91,7 @@ schedule-prediction-and-evlauation(){
     # Commit Evaluation Results
     #################################
     # Be sure to DVC add the eval results after!
-    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DVC_DPATH=$(geowatch_dvc --hardware="hdd")
     cd "$DVC_DPATH" 
     # Check for 
     ls -al models/fusion/eval4_candidates/eval/*/*/*/*/eval/curves/measures2.json
@@ -131,19 +131,19 @@ aggregate-results(){
     # Aggregate Results
     #################################
     # On other machines
-    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DVC_DPATH=$(geowatch_dvc --hardware="hdd")
 
-    DVC_DPATH=$(smartwatch_dvc)
+    DVC_DPATH=$(geowatch_dvc)
     cd "$DVC_DPATH" 
     git pull
     #dvc checkout aws models/fusion/eval4_candidates/eval/*/*/*/*/eval/curves/measures2.json.dvc
-    #DVC_DPATH=$(smartwatch_dvc)
+    #DVC_DPATH=$(geowatch_dvc)
     #cd "$DVC_DPATH" 
     git pull
     dvc pull -r aws -R models/fusion/eval4_candidates/eval/*/*/*/*/eval/curves/measures2.json.dvc
     #dvc pull -r aws -R models/fusion/eval4_candidates/eval
 
-    #DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    #DVC_DPATH=$(geowatch_dvc --hardware="hdd")
     EXPT_GROUP_CODE=eval4_candidates
     #EXPT_NAME_PAT="*"
     EXPT_NAME_PAT="*"
@@ -165,7 +165,7 @@ aggregate-results(){
         #--embed=True --force-iarpa
 
 
-    DVC_DPATH=$(smartwatch_dvc)
+    DVC_DPATH=$(geowatch_dvc)
     cd "$DVC_DPATH" 
     git pull
     dvc pull -r aws -R models/fusion/eval4_candidates/eval/*/*/*/*/eval/curves/measures2.json.dvc
@@ -186,7 +186,7 @@ aggregate-results(){
 
 schedule-prediction-and-evaluate-team-models(){
     # For Uncropped
-    DVC_DPATH=$(smartwatch_dvc)
+    DVC_DPATH=$(geowatch_dvc)
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
     EXPT_GROUP_CODE=eval4_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -199,7 +199,7 @@ schedule-prediction-and-evaluate-team-models(){
 }
 
 recovery_eval(){
-    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DVC_DPATH=$(geowatch_dvc --hardware="hdd")
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10
     EXPT_GROUP_CODE=eval4_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -237,7 +237,7 @@ recovery_eval(){
     #models/fusion/eval4_candidates/packages/BASELINE_EXPERIMENT_V001/BASELINE_EXPERIMENT_V001_epoch=8-step=47069.pt
     #models/fusion/eval4_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
     #models/fusion/eval4_candidates/packages/Drop3_SpotCheck_V313/Drop3_SpotCheck_V313_epoch=34-step=71679.pt
-    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DVC_DPATH=$(geowatch_dvc --hardware="hdd")
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10
     EXPT_GROUP_CODE=eval4_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -266,7 +266,7 @@ recovery_eval(){
             --bas_thresh=0.1 --hack_bas_grid=0 \
             --skip_existing=1 --backend=tmux --run=0
 
-    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DVC_DPATH=$(geowatch_dvc --hardware="hdd")
     EXPT_GROUP_CODE=eval4_candidates
     #MEASURE_GLOBSTR=$DVC_DPATH/models/fusion/eval4_candidates/eval/BASELINE_EXPERIMENT_V001/pred_BASELINE_EXPERIMENT_V001_epoch=11-step=62759/Aligned-Drop3-TA1-2022-03-10_combo_LM_nowv_vali.kwcoco/predcfg_abd043ec/eval/curves/measures2.json
     EXPT_GROUP_CODE=eval4_candidates
@@ -353,7 +353,7 @@ for p in fixme:
 
 singleton_commands(){
 
-    DVC_DPATH=$(smartwatch_dvc)
+    DVC_DPATH=$(geowatch_dvc)
     MODEL_FPATH=$DVC_DPATH/models/fusion/eval4_candidates/packages/Drop3_bells_mlp_V305/Drop3_bells_mlp_V305_epoch=5-step=3071-v1.pt
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -375,7 +375,7 @@ singleton_commands(){
 
 
     # Find all models that have predictions
-    DVC_DPATH=$(smartwatch_dvc)
+    DVC_DPATH=$(geowatch_dvc)
     cd "$DVC_DPATH"
     ls models/fusion/eval4_candidates/pred/*/*/*/*/pred.kwcoco.json
 }
@@ -385,8 +385,8 @@ singleton_commands(){
 
 export CUDA_VISIBLE_DEVICES=0
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(smartwatch_dvc)
-DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+DVC_DPATH=$(geowatch_dvc)
+DVC_DPATH=$(geowatch_dvc --hardware="hdd")
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -456,7 +456,7 @@ python -m watch.tasks.fusion.fit \
 # Its breaking when using this. Not sure why
 
 export CUDA_VISIBLE_DEVICES=1
-DVC_DPATH=$(smartwatch_dvc --hardware=hdd)
+DVC_DPATH=$(geowatch_dvc --hardware=hdd)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop4-2022-07-28-c20-TA1-S2-L8-ACC
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -508,7 +508,7 @@ python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=0
-DVC_DPATH=$(smartwatch_dvc --hardware=hdd)
+DVC_DPATH=$(geowatch_dvc --hardware=hdd)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop4-2022-07-28-c20-TA1-S2-L8-ACC
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -562,7 +562,7 @@ python -m watch.tasks.fusion.fit \
 
 # horologic
 export CUDA_VISIBLE_DEVICES=1
-DVC_DPATH=$(smartwatch_dvc --hardware=hdd)
+DVC_DPATH=$(geowatch_dvc --hardware=hdd)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop4-2022-07-28-c20-TA1-S2-L8-ACC
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -616,7 +616,7 @@ python -m watch.tasks.fusion.fit \
 
 # namek
 export CUDA_VISIBLE_DEVICES=1
-DVC_DPATH=$(smartwatch_dvc --hardware=hdd)
+DVC_DPATH=$(geowatch_dvc --hardware=hdd)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop4-2022-07-28-c20-TA1-S2-L8-ACC
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE

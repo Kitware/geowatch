@@ -14,7 +14,7 @@ coco_fpath = 'watch-msi'  # demo data code
 
 if 0:
     # To use project data ensure this path is appropriately set.
-    # See: smartwatch_dvc --help to register where your watch data dvc repo is.
+    # See: geowatch_dvc --help to register where your watch data dvc repo is.
     dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
     coco_fpath = dvc_data_dpath / 'Drop4-BAS/data_vali.kwcoco.json'
 

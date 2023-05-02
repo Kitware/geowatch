@@ -137,7 +137,7 @@ ls -al
 __devnote__='
 # The data was initialy copied into the efsdata cache manually via
 
-SMART_DVC_DPATH=$(smartwatch_dvc)
+SMART_DVC_DPATH=$(geowatch_dvc)
 du -sh $SMART_DVC_DPATH/.dvc/cache
 
 mkdir -p /efsdata/smart_watch_dvc/.dvc/
@@ -170,7 +170,7 @@ fi
 unzip -o splits.zip
 #7z x splits.zip
 
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(geowatch_dvc)
 echo "DVC_DPATH = $DVC_DPATH"
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-L1
@@ -227,7 +227,7 @@ python -m watch.tasks.fusion.fit \
     --dump "$WORKDIR/configs/drop3_l1_baseline_20220425.yaml"
 
 #export CUDA_VISIBLE_DEVICES=0
-#DVC_DPATH=$(smartwatch_dvc)
+#DVC_DPATH=$(geowatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-L1
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE

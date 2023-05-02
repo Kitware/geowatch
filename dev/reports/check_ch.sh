@@ -1,5 +1,5 @@
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=hdd)
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 
 python -m watch.cli.prepare_teamfeats \
     --base_fpath="$DVC_DATA_DPATH/Drop6/imganns-*BH_R001.kwcoco.zip" \
@@ -71,8 +71,8 @@ ls $DVC_DATA_DPATH/Drop6/combo_imganns-*_R001_I2.kwcoco.json
 
 
     # viz_dpath argument can be specified to visualize the algorithm details.
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch reproject_annotations \
     --src "$DVC_EXPT_DPATH"/_check_ch/pred/flat/bas_pxl/bas_pxl_id_ac952ddc/pred.kwcoco.zip \
     --dst "$DVC_EXPT_DPATH"/_check_ch/pred/flat/bas_pxl/bas_pxl_id_ac952ddc/pred_with_truth.kwcoco.zip \
@@ -84,8 +84,8 @@ smartwatch visualize "$DVC_EXPT_DPATH"/_check_ch/pred/flat/bas_pxl/bas_pxl_id_ac
 
 
 # viz_dpath argument can be specified to visualize the algorithm details.
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch reproject_annotations \
     --src "$DVC_EXPT_DPATH"/_check_ch/pred/flat/bas_pxl/bas_pxl_id_790d666a/pred.kwcoco.zip \
     --dst "$DVC_EXPT_DPATH"/_check_ch/pred/flat/bas_pxl/bas_pxl_id_790d666a/pred_with_truth.kwcoco.zip \
@@ -107,7 +107,7 @@ smartwatch visualize "$DVC_EXPT_DPATH"/_check_ch/pred/flat/bas_pxl/bas_pxl_id_79
 #    --out_kwcoco /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_check_ch/pred/flat/bas_poly/bas_poly_id_0836eaa2/poly.kwcoco.zip
 
 
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 cmd_queue new "my_spectra_queue"
 cmd_queue submit 'my_spectra_queue' --command "smartwatch spectra --channels 'red|green|blue' --valid_range=0:10000 '$DVC_DATA_DPATH'/Drop6/imgonly-AE_R001.kwcoco.json --workers=4 --dst spectra-AE_R001.png"
 cmd_queue submit 'my_spectra_queue' --command "smartwatch spectra --channels 'red|green|blue' --valid_range=0:10000 '$DVC_DATA_DPATH'/Drop6/imgonly-BH_R001.kwcoco.json --workers=4 --dst spectra-BH_R001.png"
@@ -131,8 +131,8 @@ cmd_queue run "my_spectra_queue" --backend=tmux --workers=8
 
 
 # viz_dpath argument can be specified to visualize the algorithm details.
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch reproject_annotations \
     --src "$DVC_EXPT_DPATH"/_check_ch/pred/flat/bas_pxl/bas_pxl_id_8e3baad5/pred.kwcoco.zip \
     --dst "$DVC_EXPT_DPATH"/_check_ch/pred/flat/bas_pxl/bas_pxl_id_8e3baad5/pred_with_truth_KR_R001.kwcoco.zip \
@@ -147,8 +147,8 @@ smartwatch spectra --channels 'salient' --valid_range=0:1 \
     --workers=4 --dst "$DVC_EXPT_DPATH"/_check_ch/pred/flat/bas_pxl/bas_pxl_id_8e3baad5/spectra-KR_R001.png  --title="nov7 model"
 
 ls /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_check_ch/pred/flat/bas_pxl/*/pred.kwcoco.zip
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 python -c "
 import ubelt as ub
 import json
@@ -223,8 +223,8 @@ source '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_check_ch
 
 
 # viz_dpath argument can be specified to visualize the algorithm details.
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch reproject_annotations \
     --src "$DVC_EXPT_DPATH"/_check_ch/pred/flat/bas_pxl/bas_pxl_id_8e3baad5/pred.kwcoco.zip \
     --dst "$DVC_EXPT_DPATH"/_check_ch/pred/flat/bas_pxl/bas_pxl_id_8e3baad5/pred_with_truth_KR_R001.kwcoco.zip \

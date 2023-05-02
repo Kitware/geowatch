@@ -23,8 +23,8 @@ train a fusion model on RGB data.
 # In this example we are not using any DVC directories, but we will use DVC in
 # the variable names to be consistent with future tutorials.
 
-DVC_DATA_DPATH=$(smartwatch_dvc --tags="toy_data_hdd" --hardware="hdd")
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags="toy_expt_hdd")
+DVC_DATA_DPATH=$(geowatch_dvc --tags="toy_data_hdd" --hardware="hdd")
+DVC_EXPT_DPATH=$(geowatch_dvc --tags="toy_expt_hdd")
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 
 mkdir -p "$DVC_DATA_DPATH"

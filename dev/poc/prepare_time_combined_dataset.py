@@ -143,7 +143,7 @@ if __name__ == '__main__':
 
     CommandLine:
 
-        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
         python ~/code/watch/dev/poc/prepare_time_combined_dataset.py \
             --regions="[
                     # T&E Regions
@@ -166,7 +166,7 @@ if __name__ == '__main__':
             --resolution=10GSD \
             --run=1
 
-        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
         python -m watch.cli.prepare_splits \
             --base_fpath=$DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-*.kwcoco.zip \
             --constructive_mode=True \
@@ -178,8 +178,8 @@ if __name__ == '__main__':
 
         # Drop 6
         export CUDA_VISIBLE_DEVICES="0,1"
-        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-        DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+        DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
         BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2
         python -m watch.cli.prepare_teamfeats \
             --base_fpath "$BUNDLE_DPATH"/imganns-*[0-9].kwcoco.zip \
@@ -193,7 +193,7 @@ if __name__ == '__main__':
             --assets_dname=teamfeats \
             --gres=0,1 --tmux_workers=4 --backend=tmux --run=0
 
-        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
         python -m watch.cli.prepare_splits \
             --base_fpath=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns*_I2L*.kwcoco.zip \
             --constructive_mode=True \
@@ -201,8 +201,8 @@ if __name__ == '__main__':
             --backend=tmux --tmux_workers=6 \
             --run=1
 
-        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-        DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+        DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
         TRUE_SITE_DPATH=$DVC_DATA_DPATH/annotations/drop6_hard_v1/site_models
         OUTPUT_BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2
         python -m watch reproject \
@@ -210,8 +210,8 @@ if __name__ == '__main__':
             --dst data_vali_I2L_split6.kwcoco.zip \
             --site_models=$TRUE_SITE_DPATH
 
-        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-        DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+        DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
         TRUE_SITE_DPATH=$DVC_DATA_DPATH/annotations/drop6_hard_v1/site_models
         OUTPUT_BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2
         python -m watch reproject \

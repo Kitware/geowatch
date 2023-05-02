@@ -1,5 +1,5 @@
-DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data")
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+DATA_DVC_DPATH=$(geowatch_dvc --tags="phase2_data")
+DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
 
@@ -45,8 +45,8 @@ python -m watch.tasks.fusion.predict \
 
 
 
-DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data")
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+DATA_DVC_DPATH=$(geowatch_dvc --tags="phase2_data")
+DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
 TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/data_BR_R002.kwcoco.json
 PACKAGE_FPATH=$DVC_EXPT_DPATH/models/fusion/$DATASET_CODE/packages/Drop4_BAS_Retrain_V002/Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt.pt

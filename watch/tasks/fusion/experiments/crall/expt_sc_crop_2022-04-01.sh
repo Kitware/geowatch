@@ -10,8 +10,8 @@ CROPPED_PRE_EVAL_AND_AGG(){
     python -m watch.tasks.fusion.dvc_sync_manager "pull evals"
     python -m watch.tasks.fusion.dvc_sync_manager "pull packages"
 
-    DVC_DPATH=$(smartwatch_dvc --hardware="ssd")
-    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DVC_DPATH=$(geowatch_dvc --hardware="ssd")
+    DVC_DPATH=$(geowatch_dvc --hardware="hdd")
     cd "$DVC_DPATH"
     git pull
 
@@ -29,7 +29,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
     # 2. Pull new models (and existing evals) on eval machine
     #################################
 
-    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DVC_DPATH=$(geowatch_dvc --hardware="hdd")
     cd "$DVC_DPATH" 
     git pull
     dvc pull -r aws -R models/fusion/eval3_sc_candidates/packages
@@ -39,7 +39,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
     # 3. Run Prediction & Evaluation
     #################################
 
-    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DVC_DPATH=$(geowatch_dvc --hardware="hdd")
     DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
     EXPT_GROUP_CODE=eval3_sc_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -54,7 +54,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
     BUNDLE_SUFFIX=combo_DLM_s2_wv_vali.kwcoco.json
     EXPT_MODEL_GLOBNAME="CropDrop3_SC_s2*wv_*tf*_*V*"
 
-    SSD_DVC_DPATH=$(smartwatch_dvc --hardware="ssd")
+    SSD_DVC_DPATH=$(geowatch_dvc --hardware="ssd")
     SSD_KWCOCO_BUNDLE_DPATH=$SSD_DVC_DPATH/$DATASET_CODE
     SSD_VALI_FPATH=$SSD_KWCOCO_BUNDLE_DPATH/$BUNDLE_SUFFIX
     VALI_FPATH=$KWCOCO_BUNDLE_DPATH/$BUNDLE_SUFFIX
@@ -92,7 +92,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
     #################################
     # 4. Commit Evaluation Results
     #################################
-    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DVC_DPATH=$(geowatch_dvc --hardware="hdd")
 
     python -m watch.tasks.fusion.dvc_sync_manager "push evals" --dvc_remote=aws
 
@@ -119,13 +119,13 @@ CROPPED_PRE_EVAL_AND_AGG(){
     # 5. Aggregate Results
     #################################
     # Pull all results onto the machine you want to eval on
-    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DVC_DPATH=$(geowatch_dvc --hardware="hdd")
     cd "$DVC_DPATH" 
     git pull
     dvc pull -r aws -R models/fusion/eval3_sc_candidates/eval
 
     #####
-    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DVC_DPATH=$(geowatch_dvc --hardware="hdd")
     EXPT_GROUP_CODE=eval3_sc_candidates
     #EXPT_NAME_PAT="*"
     EXPT_NAME_PAT="*"
@@ -151,7 +151,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
 
 
 special_evaluation(){
-    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DVC_DPATH=$(geowatch_dvc --hardware="hdd")
     cd "$DVC_DPATH" 
     source "$HOME"/local/init/utils.sh
     #smartwatch model_info models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_tf_xver7_V013/CropDrop3_SC_s2wv_tf_xver7_V013_epoch=0-step=2047-v1.pt
@@ -180,7 +180,7 @@ special_evaluation(){
     MODEL_GLOBSTR="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt"
     MODEL_GLOBSTR="$DVC_DPATH"/models/fusion/eval3_sc_candidates/models_of_interest.txt
 
-    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DVC_DPATH=$(geowatch_dvc --hardware="hdd")
     DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
     EXPT_GROUP_CODE=eval3_sc_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -211,7 +211,7 @@ special_evaluation(){
 
 prep_features(){
     export CUDA_VISIBLE_DEVICES=1
-    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DVC_DPATH=$(geowatch_dvc --hardware="hdd")
 
     echo "DVC_DPATH = $DVC_DPATH"
     BASE_DPATH="$DVC_DPATH/Cropped-Drop3-TA1-2022-03-10/data.kwcoco.json"
@@ -282,7 +282,7 @@ prep_features(){
 
 export CUDA_VISIBLE_DEVICES=1
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(geowatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -329,7 +329,7 @@ python -m watch.tasks.fusion.fit \
 # ooo
 export CUDA_VISIBLE_DEVICES=0
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(geowatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -374,7 +374,7 @@ python -m watch.tasks.fusion.fit \
 
 export CUDA_VISIBLE_DEVICES=1
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(geowatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -421,7 +421,7 @@ python -m watch.tasks.fusion.fit \
 
 export CUDA_VISIBLE_DEVICES=1
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(geowatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -465,7 +465,7 @@ python -m watch.tasks.fusion.fit \
 
 export CUDA_VISIBLE_DEVICES=0
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(geowatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -511,7 +511,7 @@ python -m watch.tasks.fusion.fit \
 # namek
 export CUDA_VISIBLE_DEVICES=0
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(geowatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -523,7 +523,7 @@ python -m watch.cli.prepare_splits \
 
 export CUDA_VISIBLE_DEVICES=0
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(geowatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -569,7 +569,7 @@ python -m watch.tasks.fusion.fit \
 
 export CUDA_VISIBLE_DEVICES=1
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(geowatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -616,14 +616,14 @@ python -m watch.tasks.fusion.fit \
 
 ##### oooo
 
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(geowatch_dvc)
 INIT_STATE_V001=$DVC_DPATH/models/fusion/eval3_sc_candidates/pred/CropDrop3_SC_V001/pred_CropDrop3_SC_V001_epoch=90-step=186367-v1/Cropped-Drop3-TA1-2022-03-10_data_wv_vali.kwcoco.pt
 (cd "$DVC_DPATH" && dvc pull -r aws smart_watch_dvc/models/fusion/eval3_sc_candidates/pred/CropDrop3_SC_V004/pred_CropDrop3_SC_V004_epoch=36-step=75775/Cropped-Drop3-TA1-2022-03-10_data_wv_vali.kwcoco.pt)
 
 
 export CUDA_VISIBLE_DEVICES=0
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(geowatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -670,7 +670,7 @@ python -m watch.tasks.fusion.fit \
 
 export CUDA_VISIBLE_DEVICES=1
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(geowatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -722,7 +722,7 @@ python -m watch.tasks.fusion.fit \
 
 export CUDA_VISIBLE_DEVICES=1
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(geowatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -769,7 +769,7 @@ python -m watch.tasks.fusion.fit \
 
 export CUDA_VISIBLE_DEVICES=0
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(geowatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -818,7 +818,7 @@ python -m watch.tasks.fusion.fit \
 
 export CUDA_VISIBLE_DEVICES=1
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(geowatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -865,12 +865,12 @@ python -m watch.tasks.fusion.fit \
 # tooshbrush cropped + Depth WV only (2022-04-12)
 # -----------------------------------------------
 
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(geowatch_dvc)
 INIT_STATE_V011="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_wvonly_D_V011/CropDrop3_SC_wvonly_D_V011_epoch=81-step=167935.pt"
 
 export CUDA_VISIBLE_DEVICES=1
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(geowatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -919,7 +919,7 @@ python -m watch.tasks.fusion.fit \
 
 export CUDA_VISIBLE_DEVICES=0
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(geowatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -971,7 +971,7 @@ python -m watch.tasks.fusion.fit \
 #INIT_STATE_V011="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_wvonly_D_V011/CropDrop3_SC_wvonly_D_V011_epoch=81-step=167935.pt"
 export CUDA_VISIBLE_DEVICES=1
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(geowatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -1018,7 +1018,7 @@ python -m watch.tasks.fusion.fit \
 
 export CUDA_VISIBLE_DEVICES=0
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(geowatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -1070,7 +1070,7 @@ python -m watch.tasks.fusion.fit \
 #INIT_STATE_V011="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_wvonly_D_V011/CropDrop3_SC_wvonly_D_V011_epoch=81-step=167935.pt"
 export CUDA_VISIBLE_DEVICES=0
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(geowatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -1119,7 +1119,7 @@ python -m watch.tasks.fusion.fit \
 
 export CUDA_VISIBLE_DEVICES=1
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(geowatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -1169,10 +1169,10 @@ python -m watch.tasks.fusion.fit \
 # tooshbrush cropped + Depth WV only (2022-04-13)
 # -----------------------------------------------
 
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(geowatch_dvc)
 export CUDA_VISIBLE_DEVICES=1
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(geowatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -1223,7 +1223,7 @@ python -m watch.tasks.fusion.fit \
 # -----------------------------------------------
 export CUDA_VISIBLE_DEVICES=1
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(geowatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -1274,7 +1274,7 @@ python -m watch.tasks.fusion.fit \
 
 export CUDA_VISIBLE_DEVICES=0
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(geowatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -1323,7 +1323,7 @@ python -m watch.tasks.fusion.fit \
 
 export CUDA_VISIBLE_DEVICES=1
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(geowatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -1374,7 +1374,7 @@ python -m watch.tasks.fusion.fit \
 
 export CUDA_VISIBLE_DEVICES=2
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(geowatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -1423,7 +1423,7 @@ python -m watch.tasks.fusion.fit \
 
 export CUDA_VISIBLE_DEVICES=3
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(geowatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -1474,7 +1474,7 @@ python -m watch.tasks.fusion.fit \
 
 export CUDA_VISIBLE_DEVICES=0
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(geowatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -1524,7 +1524,7 @@ python -m watch.tasks.fusion.fit \
 
 export CUDA_VISIBLE_DEVICES=1
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+DVC_DPATH=$(geowatch_dvc --hardware="hdd")
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -1576,7 +1576,7 @@ python -m watch.tasks.fusion.fit \
 
 export CUDA_VISIBLE_DEVICES=0
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+DVC_DPATH=$(geowatch_dvc --hardware="hdd")
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -1628,7 +1628,7 @@ python -m watch.tasks.fusion.fit \
 
 ##### toothbrush 2022-04-25 --continue
 export CUDA_VISIBLE_DEVICES=1
-DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+DVC_DPATH=$(geowatch_dvc --hardware="hdd")
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -1677,7 +1677,7 @@ python -m watch.tasks.fusion.fit \
 
 ##### toothbrush 2022-04-26 --continue fixed sampler
 export CUDA_VISIBLE_DEVICES=1
-DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+DVC_DPATH=$(geowatch_dvc --hardware="hdd")
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -1726,7 +1726,7 @@ python -m watch.tasks.fusion.fit \
 
 ##### toothbrush 2022-04-26 --continue fixed sampler
 export CUDA_VISIBLE_DEVICES=0
-DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+DVC_DPATH=$(geowatch_dvc --hardware="hdd")
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -1777,7 +1777,7 @@ python -m watch.tasks.fusion.fit \
 
 ##### horologic 2022-04-27 invariants
 export CUDA_VISIBLE_DEVICES=0
-DVC_DPATH=$(smartwatch_dvc --hardware="ssd")
+DVC_DPATH=$(geowatch_dvc --hardware="ssd")
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -1829,7 +1829,7 @@ python -m watch.tasks.fusion.fit \
 
 ##### toothbrush 2022-04-26 --continue fixed sampler
 export CUDA_VISIBLE_DEVICES=1
-DVC_DPATH=$(smartwatch_dvc --hardware="ssd")
+DVC_DPATH=$(geowatch_dvc --hardware="ssd")
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -1878,7 +1878,7 @@ python -m watch.tasks.fusion.fit \
 
 ##### toothbrush 2022-04-26 --continue fixed sampler
 export CUDA_VISIBLE_DEVICES=0
-DVC_DPATH=$(smartwatch_dvc --hardware="ssd")
+DVC_DPATH=$(geowatch_dvc --hardware="ssd")
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE

@@ -2,8 +2,8 @@
 The GEOWATCH module
 
 Useful environs:
-    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-    DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+    DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+    DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 """
 import os
 import sys
@@ -92,7 +92,7 @@ def _is_running_a_fast_cli_tool():
     """
     if os.environ.get('_ARGCOMPLETE', ''):
         return True
-    if sys.argv and 'smartwatch_dvc' in sys.argv[0] or 'geowatch_dvc' in sys.argv[0]:
+    if sys.argv and 'geowatch_dvc' in sys.argv[0] or 'geowatch_dvc' in sys.argv[0]:
         return True
     if sys.argv and len(sys.argv) == 1:
         # No args given case

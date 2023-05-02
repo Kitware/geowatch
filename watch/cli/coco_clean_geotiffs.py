@@ -17,7 +17,7 @@ class CleanGeotiffConfig(scfg.DataConfig):
     Usage:
         # It is a good idea to do a dry run first to check for issues
         # This can be done at a smaller scale for speed.
-        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
         smartwatch clean_geotiffs \
             --src "$DVC_DATA_DPATH/Drop4-BAS/data.kwcoco.json" \
             --channels="red|green|blue|nir|swir16|swir22" \

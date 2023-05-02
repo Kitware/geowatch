@@ -381,7 +381,7 @@ __config__ = CropSitesToRegionsConfig
 if __name__ == '__main__':
     """
     CommandLine:
-        DVC_DPATH=$(smartwatch_dvc)
+        DVC_DPATH=$(geowatch_dvc)
         python -m watch.cli.crop_sites_to_regions \
             --site_models=$DVC_DPATH/annotations/site_models/*KR*.geojson \
             --region_models=$DVC_DPATH/annotations/region_models/KR_R001.geojson \

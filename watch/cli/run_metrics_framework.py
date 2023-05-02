@@ -29,7 +29,7 @@ class MetricsConfig(scfg.DataConfig):
     gt_dpath = scfg.Value(None,
                           help=ub.paragraph('''
         Path to a local copy of the ground truth annotations,
-        https://smartgitlab.com/TE/annotations.  If None, use smartwatch_dvc to
+        https://smartgitlab.com/TE/annotations.  If None, use geowatch_dvc to
         find $DVC_DATA_DPATH/annotations.
         '''))
 

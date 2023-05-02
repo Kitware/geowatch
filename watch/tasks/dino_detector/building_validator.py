@@ -514,7 +514,7 @@ Ignore:
         --pipeline=bas_building_vali --skip_existing=1 \
         --run=1
 
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 gwmlops aggregate \
     --pipeline=bas_building_vali \
     --target \

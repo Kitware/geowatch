@@ -1,6 +1,6 @@
 # Determine the paths to your SMART data and experiment repositories.
-DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DATA_DVC_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+EXPT_DVC_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 
 
 echo "

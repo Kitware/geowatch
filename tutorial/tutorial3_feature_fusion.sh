@@ -8,7 +8,7 @@ This tutorial assumes you have:
 
     1. Setup the project DVC repo
 
-    2. Have registered the location of your DVC repo with smartwatch_dvc.
+    2. Have registered the location of your DVC repo with geowatch_dvc.
 
     4. Have pulled the appropriate dataset (in this case Drop4)
        and have unzipped the annotations.
@@ -23,7 +23,7 @@ This tutorial assumes you have:
 See these docs for details:
     ../docs/getting_started_dvc.rst
     ../docs/access_dvc_repos.rst
-    ../docs/using_smartwatch_dvc.rst
+    ../docs/using_geowatch_dvc.rst
 
 This tutorial will cover:
 
@@ -33,8 +33,8 @@ This tutorial will cover:
     4. Evaluating your fusion model against the baseline.
 '
 
-DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DATA_DVC_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+EXPT_DVC_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 
 echo "
 EXPT_DVC_DPATH=$EXPT_DVC_DPATH
@@ -137,8 +137,8 @@ file for the subsequent steps.
 
 .. code:: bash
 
-    DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware=auto)
-    EXPT_DVC_DPATH=$(smartwatch_dvc --tags=phase2_expt --hardware=auto)
+    DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware=auto)
+    EXPT_DVC_DPATH=$(geowatch_dvc --tags=phase2_expt --hardware=auto)
 
     kwcoco union \
         --src $DATA_DVC_DPATH/Drop4-BAS/*_train_*_uky_invariants*.kwcoco.json \
@@ -169,8 +169,8 @@ configuration as a baseline.
 # TODO: expose the unused GPU script and use that.
 export CUDA_VISIBLE_DEVICES=0
 
-DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DATA_DVC_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+EXPT_DVC_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 
 DATASET_CODE=Drop4-BAS
 KWCOCO_BUNDLE_DPATH=$DATA_DVC_DPATH/$DATASET_CODE
@@ -328,8 +328,8 @@ at the least include your model and the baseline model to determine if your
 features are driving an improvement in the scores.
 '
 
-DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DATA_DVC_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+EXPT_DVC_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 
 BASELINE_PACKAGE_FPATH="$EXPT_DVC_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
 smartwatch model_stats "$BASELINE_PACKAGE_FPATH"

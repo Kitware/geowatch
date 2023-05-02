@@ -2,7 +2,7 @@
 
 source "$HOME"/code/watch/secrets/secrets
 
-DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="auto")
+DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="auto")
 SENSORS=TA1-S2-L8-WV-PD-ACC-1
 DATASET_SUFFIX=Drop5-2022-11-07-c30-$SENSORS
 REGION_GLOBSTR="$DATA_DVC_DPATH/annotations/region_models/*.geojson"
@@ -68,7 +68,7 @@ print('total = {}'.format(xd.byte_str(total_size)))
 "
 
 add_dvc_data(){
-    DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=hdd)
+    DATA_DVC_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
     cd "$DATA_DVC_DPATH"
     ln -s "Aligned-Drop5-2022-11-07-c30-TA1-S2-L8-WV-PD-ACC-1" "Drop5"
     git add Drop5

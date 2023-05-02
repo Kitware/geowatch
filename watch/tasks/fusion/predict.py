@@ -1332,8 +1332,8 @@ if __name__ == '__main__':
 
     # Testing first heterogeneous model
 
-    DVC_EXPT_DPATH=$(WATCH_PREIMPORT=none smartwatch_dvc --tags='phase2_expt')
-    DVC_DATA_DPATH=$(WATCH_PREIMPORT=none smartwatch_dvc --tags=phase2_data --hardware=ssd)
+    DVC_EXPT_DPATH=$(WATCH_PREIMPORT=none geowatch_dvc --tags='phase2_expt')
+    DVC_DATA_DPATH=$(WATCH_PREIMPORT=none geowatch_dvc --tags=phase2_data --hardware=ssd)
     PACKAGE_FPATH=$DVC_EXPT_DPATH/package_epoch10_step200000.pt
     TEST_DATASET=$DVC_DATA_DPATH/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/KR_R001.kwcoco.json
     PRED_DATASET=$DVC_EXPT_DPATH/_testing/hg_kr1/pred.kwcoco.json

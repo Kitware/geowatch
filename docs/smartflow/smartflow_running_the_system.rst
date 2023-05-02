@@ -225,14 +225,14 @@ to it.
    models/landcover/sentinel2.pt
    "
 
-   DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+   DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 
    # Ensure the models of interest are pulled locally on your machine
    (cd $DVC_EXPT_DPATH && dvc pull -r aws $MODELS_OF_INTEREST)
 
    # We are also going to bake the metrics and data DVC into the repo too for
    # completeness
-   DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+   DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
    METRICS_REPO_DPATH=$(python -c "import iarpa_smart_metrics, pathlib; print(pathlib.Path(iarpa_smart_metrics.__file__).parent.parent)")
 
    # Run the base image as a container so we can put stuff into it
@@ -295,7 +295,7 @@ latest code, and commiting the change as a new image.
 
 
    export WATCH_REPO_DPATH=$HOME/code/watch
-   export DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+   export DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 
    IMAGE_NAME=watch:0.4.5-strict-pyenv3.11.2-models-2023-03-28
    NEW_IMAGE_NAME=watch:0.4.5-strict-pyenv3.11.2-models-2023-03-28-v04

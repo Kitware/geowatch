@@ -1,7 +1,7 @@
 #!/bin/bash
 
 
-DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+DVC_DPATH=$(geowatch_dvc --hardware="hdd")
 BAS_HEATMAPS=$DVC_DPATH/models/fusion/eval3_candidates/pred/Drop3_SpotCheck_V323/pred_Drop3_SpotCheck_V323_epoch=18-step=12976/Aligned-Drop3-TA1-2022-03-10_combo_LM_nowv_vali.kwcoco/predcfg_abd043ec/pred.kwcoco.json
 
 smartwatch stats "$BAS_HEATMAPS"
@@ -125,15 +125,15 @@ ax.plot([0, len(coco_images)], [sorted_percents[-120], sorted_percents[-120]])
 "
 
 
-HDD_DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
-SSD_DVC_DPATH=$(smartwatch_dvc --hardware="ssd")
+HDD_DVC_DPATH=$(geowatch_dvc --hardware="hdd")
+SSD_DVC_DPATH=$(geowatch_dvc --hardware="ssd")
 echo "HDD_DVC_DPATH = $HDD_DVC_DPATH"
 echo "SSD_DVC_DPATH = $SSD_DVC_DPATH"
 kwcoco stats "$HDD_DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/combo_LM_nowv_vali.kwcoco.json" "$SSD_DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/combo_LM_nowv_vali.kwcoco.json"
 kwcoco stats "$HDD_DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_vali.kwcoco.json" "$SSD_DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_vali.kwcoco.json"
 
 TMP_DPATH=$HOME/tmp/debug_pred
-DVC_DPATH=$(smartwatch_dvc --hardware="ssd")
+DVC_DPATH=$(geowatch_dvc --hardware="ssd")
 TEST_DATASET=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/combo_LM_nowv_vali.kwcoco.json
 SMALL_TEST_DATASET=$TMP_DPATH/small.kwcoco.json
 
