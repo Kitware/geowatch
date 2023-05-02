@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2016
 __doc__='
 Install watch development environment
 
@@ -132,9 +133,7 @@ if [[ "$WATCH_STRICT" == "1" ]]; then
     python -m pip install --prefer-binary -r requirements-strict/linting.txt
 
     # Install the geowatch module in development mode
-    python -m pip install --prefer-binary -e ".[all-strict,headless-strict]"
-
-    python -m pip install --prefer-binary "dvc[all]==2.9.3"
+    python -m pip install --prefer-binary -e ".[all-strict,headless-strict,dvc-strict]"
 
     if [[ "$WITH_MMCV" == "1" ]]; then
         python -m pip install --prefer-binary -r requirements-strict/mmcv.txt
@@ -146,9 +145,7 @@ else
     python -m pip install --prefer-binary -r requirements/linting.txt
 
     # Install the geowatch module in development mode
-    python -m pip install --prefer-binary -e ".[all,headless]"
-
-    python -m pip install --prefer-binary "dvc[all]>=2.9.3"
+    python -m pip install --prefer-binary -e ".[all,headless,dvc]"
 
     if [[ "$WITH_MMCV" == "1" ]]; then
         python -m pip install --prefer-binary -r requirements/mmcv.txt

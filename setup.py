@@ -202,6 +202,8 @@ EXTRAS_REQUIRES = {
     'development': parse_requirements('requirements/development.txt'),
     'tests': parse_requirements('requirements/tests.txt'),
     'optional': parse_requirements('requirements/optional.txt'),
+    'dvc': parse_requirements('requirements/dvc.txt'),
+    'tensorflow': parse_requirements('requirements/tensorflow.txt'),
     # Really annoying that this is the best we can do
     # The user *must* choose either headless or graphics
     # to get a complete working install.
@@ -212,6 +214,8 @@ EXTRAS_REQUIRES = {
     'development-strict': parse_requirements('requirements/development.txt', versions='strict'),
     'tests-strict': parse_requirements('requirements/tests.txt', versions='strict'),
     'optional-strict': parse_requirements('requirements/optional.txt', versions='strict'),
+    'dvc-strict': parse_requirements('requirements/dvc.txt', versions='strict'),
+    'tensorflow-strict': parse_requirements('requirements/tensorflow.txt', versions='strict'),
     # Really annoying that this is the best we can do
     # The user *must* choose either headless or graphics
     # to get a complete working install.

@@ -185,7 +185,8 @@ def assemble_main(cmdline=1, **kwargs):
     for meta in meta_files:
         meta_config = json.loads((block_folder / meta).read_text())
         ordinal_date = meta_config['ordinal_date']
-        img_name = meta_config['image_name'] + '.npy'
+        # img_name = meta_config['image_name'] + '.npy'
+        img_name = meta_config['image_name']
         img_dates.append(ordinal_date)
         img_names.append(img_name)
 
