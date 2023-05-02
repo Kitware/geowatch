@@ -193,7 +193,7 @@ except ImportError:
 
 class ScheduleEvaluationConfig(CMDQueueConfig):
     """
-    Driver for WATCH mlops evaluation scheduling
+    Driver for GEOWATCH mlops evaluation scheduling
 
     Builds commands and optionally executes them via slurm, tmux, or serial
     (i.e. one at a time). This is a [link=https://gitlab.kitware.com/computer-vision/cmd_queue]cmd_queue[/link] CLI.
@@ -297,29 +297,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
     queue_dpath = root_dpath / '_cmd_queue_schedule'
     queue_dpath.ensuredir()
 
-    # devices = config['devices']
-    # print('devices = {!r}'.format(devices))
-    # if devices == 'auto':
-    #     GPUS = _auto_gpus()
-    # else:
-    #     GPUS = None if devices is None else ensure_iterable(devices)
-    # print('GPUS = {!r}'.format(GPUS))
-    # queue_size = config['queue_size']
-    # if queue_size == 'auto':
-    #     queue_size = len(GPUS)
-
-    # environ = {}
     queue = config.create_queue(gpus=config.devices)
-    # queue = cmd_queue.Queue.create(
-    #     config['backend'], name=config['queue_name'],
-    #     size=queue_size, environ=environ,
-    #     dpath=queue_dpath, gres=GPUS,
-    #     # account='myaccount',
-    #     # partition='mypartition',
-    # )
-    # virtualenv_cmd = config['virtualenv_cmd']
-    # if virtualenv_cmd:
-    #     queue.add_header_command(virtualenv_cmd)
 
     # Expand paramater search grid
     if config['params'] is not None:
@@ -360,22 +338,6 @@ def schedule_evaluation(cmdline=False, **kwargs):
     print(f'len(queue)={len(queue)}')
 
     print_thresh = 30
-    # if config['print_commands'] == 'auto':
-    #     if len(queue) < print_thresh:
-    #         config['print_commands'] = 1
-    #     else:
-    #         print(f'More than {print_thresh} jobs, skip queue.print_commands. '
-    #               'If you want to see them explicitly specify print_commands=1')
-    #         config['print_commands'] = 0
-
-    # if config['print_queue'] == 'auto':
-    #     if len(queue) < print_thresh:
-    #         config['print_queue'] = 1
-    #     else:
-    #         print(f'More than {print_thresh} jobs, skip queue.print_graph. '
-    #               'If you want to see them explicitly specify print_queue=1')
-    #         config['print_queue'] = 0
-
     if config['print_varied'] == 'auto':
         if len(queue) < print_thresh:
             config['print_varied'] = 1

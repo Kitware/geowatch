@@ -382,7 +382,11 @@ class BatchVisualizationBuilder:
                             color='kw_red')
                         weight_overlay = kwimage.ensure_float01(weight_overlay)
                     else:
-                        weight_overlay = kwimage.atleast_3channels(weight_data)
+                        # Normally weights will range between 0 and 1, but in
+                        # some cases they may range higher.  We handle this by
+                        # coloring the 0-1 range in grayscale and the
+                        # 1-infinity range in color
+                        weight_overlay = colorize_weights(weight_data)
                     cell['overlay'] = weight_overlay
 
         # Normalize raw signal into visualizable range
@@ -952,3 +956,91 @@ def _debug_sample_in_context(self, target):
         print(f'box={box}')
         box.draw(color='kitware_orange', lw=4, alpha=0.8, ax=ax)
     ax.set_title('Sample Window in Video Space')
+
+
+def colorize_weights(weights):
+    """
+    Normally weights will range between 0 and 1, but in some cases they may
+    range higher.  We handle this by coloring the 0-1 range in grayscale and
+    the 1-infinity range in color
+
+    Example:
+        >>> from watch.tasks.fusion.datamodules.batch_visualization import *  # NOQA
+        >>> import kwarray
+        >>> weights = kwimage.gaussian_patch((32, 32))
+        >>> weights = kwarray.normalize(weights)
+        >>> weights[:16, :16] *= 10
+        >>> weights[16:, :16] *= 100
+        >>> weights[16:, 16:] *= 1000
+        >>> weights[:16, 16:] *= 10000
+        >>> canvas = colorize_weights(weights)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> canvas = kwimage.imresize(canvas, dsize=(512, 512), interpolation='nearest').clip(0, 1)
+        >>> canvas = kwimage.draw_text_on_image(canvas, '0-10', org=(1, 1), border=True)
+        >>> canvas = kwimage.draw_text_on_image(canvas, '0-100', org=(256, 1), border=True)
+        >>> canvas = kwimage.draw_text_on_image(canvas, '0-1000', org=(256, 256), border=True)
+        >>> canvas = kwimage.draw_text_on_image(canvas, '0-10000', org=(1, 256), border=True)
+        >>> import kwplot
+        >>> import kwplot
+        >>> kwplot.plt.ion()
+        >>> kwplot.imshow(canvas)
+
+    Example:
+        >>> from watch.tasks.fusion.datamodules.batch_visualization import *  # NOQA
+        >>> import kwarray
+        >>> weights = kwimage.gaussian_patch((32, 32))
+        >>> n = 512
+        >>> weight_rows = [
+        >>>     np.linspace(0, 1, n),
+        >>>     np.linspace(0, 10, n),
+        >>>     np.linspace(0, 100, n),
+        >>>     np.linspace(0, 1000, n),
+        >>>     np.linspace(0, 2000, n),
+        >>>     np.linspace(0, 5000, n),
+        >>>     np.linspace(0, 8000, n),
+        >>>     np.linspace(0, 10000, n),
+        >>>     np.linspace(0, 100000, n),
+        >>>     np.linspace(0, 1000000, n),
+        >>> ]
+        >>> canvas = np.array([colorize_weights(row[None, :])[0] for row in weight_rows])
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> canvas = kwimage.imresize(canvas, dsize=(512, 512), interpolation='nearest').clip(0, 1)
+        >>> p = int(512 / len(weight_rows))
+        >>> canvas = kwimage.draw_text_on_image(canvas, '0-1', org=(1, 1 + p * 0), border=True)
+        >>> canvas = kwimage.draw_text_on_image(canvas, '0-10', org=(1, 1 + p * 1), border=True)
+        >>> canvas = kwimage.draw_text_on_image(canvas, '0-100', org=(1, 1 + p * 2), border=True)
+        >>> canvas = kwimage.draw_text_on_image(canvas, '0-1000', org=(1, 1 + p * 3), border=True)
+        >>> canvas = kwimage.draw_text_on_image(canvas, '0-2000', org=(1, 1 + p * 4), border=True)
+        >>> canvas = kwimage.draw_text_on_image(canvas, '0-5000', org=(1, 1 + p * 5), border=True)
+        >>> canvas = kwimage.draw_text_on_image(canvas, '0-8000', org=(1, 1 + p * 6), border=True)
+        >>> canvas = kwimage.draw_text_on_image(canvas, '0-10000', org=(1, 1 + p * 7), border=True)
+        >>> canvas = kwimage.draw_text_on_image(canvas, '0-100000', org=(1, 1 + p * 8), border=True)
+        >>> canvas = kwimage.draw_text_on_image(canvas, '0-1000000', org=(1, 1 + p * 9), border=True)
+        >>> import kwplot
+        >>> import kwplot
+        >>> kwplot.plt.ion()
+        >>> kwplot.imshow(canvas)
+    """
+    canvas = kwimage.atleast_3channels(weights.copy())
+    is_gt_one = weights > 1.0
+    if np.any(is_gt_one):
+        import matplotlib as mpl
+        import matplotlib.cm  # NOQA
+        from scipy import interpolate
+
+        cmap_ = mpl.colormaps['YlOrRd']
+        # cmap_ = mpl.colormaps['gist_rainbow']
+
+        gt_one_values = weights[is_gt_one]
+
+        max_val = gt_one_values.max()
+        # Define a function that maps values from [1,inf) to [0,1]
+        # the last max value part does depend on the inputs, which is fine.
+        mapper = interpolate.interp1d(x=[1.0, 10.0, 100.0, max(max_val, 1000.0)],
+                                      y=[0.0,  0.5,  0.75, 1.0])
+        cmap_values = mapper(gt_one_values)
+        colors01 = cmap_(cmap_values)[..., 0:3]
+
+        rs, cs = np.where(is_gt_one)
+        canvas[rs, cs, :] = colors01
+    return canvas

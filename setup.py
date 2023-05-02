@@ -58,7 +58,7 @@ def parse_description():
     return ''
 
 
-def parse_requirements(fname='requirements.txt', versions=True):
+def parse_requirements(fname='requirements.txt', versions='loose'):
     """
     Parse the package dependencies listed in a requirements file but strips
     specific versioning information.
@@ -202,6 +202,8 @@ EXTRAS_REQUIRES = {
     'development': parse_requirements('requirements/development.txt'),
     'tests': parse_requirements('requirements/tests.txt'),
     'optional': parse_requirements('requirements/optional.txt'),
+    'dvc': parse_requirements('requirements/dvc.txt'),
+    'tensorflow': parse_requirements('requirements/tensorflow.txt'),
     # Really annoying that this is the best we can do
     # The user *must* choose either headless or graphics
     # to get a complete working install.
@@ -212,6 +214,8 @@ EXTRAS_REQUIRES = {
     'development-strict': parse_requirements('requirements/development.txt', versions='strict'),
     'tests-strict': parse_requirements('requirements/tests.txt', versions='strict'),
     'optional-strict': parse_requirements('requirements/optional.txt', versions='strict'),
+    'dvc-strict': parse_requirements('requirements/dvc.txt', versions='strict'),
+    'tensorflow-strict': parse_requirements('requirements/tensorflow.txt', versions='strict'),
     # Really annoying that this is the best we can do
     # The user *must* choose either headless or graphics
     # to get a complete working install.
@@ -222,9 +226,12 @@ EXTRAS_REQUIRES = {
 # print('EXTRAS_REQUIRES = {}'.format(ub.urepr(EXTRAS_REQUIRES, nl=2)))
 
 
+NAME = 'geowatch'
+
 if __name__ == '__main__':
     setup(
-        author="WATCH developers",
+        name=NAME,
+        author="GEOWATCH developers",
         author_email='kitware@kitware.com',
         python_requires='>=3.9',
         # https://pypi.org/classifiers/
@@ -244,7 +251,7 @@ if __name__ == '__main__':
                 'smartwatch_dvc= watch.cli.find_dvc:_CLI.main',
                 'geowatch= watch.cli.__main__:main',
                 'geowatch_dvc= watch.cli.find_dvc:_CLI.main',
-                'gwmlops= watch.mlops.__main__:main',
+                # 'gwmlops= watch.mlops.__main__:main',
                 # 'smartwatch_dvc= watch.cli.find_dvc:__config__.main',
             ],
         },
@@ -262,13 +269,12 @@ if __name__ == '__main__':
                 'region-model.schema.json'
             ],
         },
-        name='watch',
         packages=find_packages(include=[
             'watch', 'watch.*',
             # Alias the module while we transition to a new name.
             'geowatch', 'geowatch.*',
         ]),
-        url='https://gitlab.kitware.com/watch/watch.git',
+        url='https://gitlab.kitware.com/computer-vision/geowatch.git',
         version=VERSION,
         zip_safe=False,
         license='Apache 2',

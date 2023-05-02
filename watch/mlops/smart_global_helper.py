@@ -311,6 +311,7 @@ class SmartGlobalHelper:
                 'bas_tp',
                 'bas_fp',
                 'bas_fn',
+                'bas_tpr',
                 'bas_f1',
                 'bas_ffpa',
                 'bas_faa_f1',

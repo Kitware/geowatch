@@ -1,5 +1,8 @@
 """
 Setup the geowatch package mirror
+
+SeeAlso:
+    ~/code/watch/dev/maintain/port_to_geowatch.sh
 """
 
 

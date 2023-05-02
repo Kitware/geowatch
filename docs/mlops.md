@@ -1,8 +1,8 @@
-# Using the MLOps tool to run WATCH
+# Using the MLOps tool to run GEOWATCH
 
 NOTE: THE PATH FORMAT IS IN HIGH FLUX. DOCS MAY BE OUTDATED
 
-MLOps is a wrapper around the cmd_queue library that provides a single entrypoint for all steps of the WATCH TA-2 pipeline, starting with a model checkpoint and the program data:
+MLOps is a wrapper around the cmd_queue library that provides a single entrypoint for all steps of the GEOWATCH TA-2 pipeline, starting with a model checkpoint and the program data:
 
 1. Predict BAS on low-res data (S2/L8)
 2. Pixel evaluation metrics on BAS
@@ -166,7 +166,7 @@ python -m watch.mlops.schedule_evaluation \
     --run=0
 
 ```
-the enable pred, eval, crop, and viz flags are the various stages of the WATCH TA2 system. They are all enabled by default. Any params for a step with `--enable_*=0` will be ignored, and duplicate params will be grid-searched over.
+the enable pred, eval, crop, and viz flags are the various stages of the GEOWATCH TA2 system. They are all enabled by default. Any params for a step with `--enable_*=0` will be ignored, and duplicate params will be grid-searched over.
 
 The params are namespaced for convenience
   - trk.pxl - BAS predict and pixel evaluate
@@ -199,7 +199,7 @@ This might happen due to data workers not being cleaned up; you'll see "return d
 
 ## What does an mlops invocation run?
 
-You can dig through the sourced scripts to piece together what a full WATCH TA2 run looks like, minus the boilerplate and error handling. (There are plenty of examples in the mlops source code, but here's how to tell exactly what you were running.) For example, the pipeline above turns into:
+You can dig through the sourced scripts to piece together what a full GEOWATCH TA2 run looks like, minus the boilerplate and error handling. (There are plenty of examples in the mlops source code, but here's how to tell exactly what you were running.) For example, the pipeline above turns into:
 
 ```bash
 # prediction (omitted)

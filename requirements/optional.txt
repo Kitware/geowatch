@@ -5,7 +5,7 @@ PyQt5 >= 5.15
 
 ipython >= 7.25.0
 #xdev >= 0.2.4
-flake8 >= 4.0.1
+flake8 >= 5.0.0
 autopep8 >= 1.5.7
 mkinit >= 0.3.3
 

@@ -63,6 +63,9 @@ def check_shm_limits(threshold_gibibytes=1):
     Notes:
         Running docker run with `--shm-size=32768m` increases shm to 32GB
 
+    Raises:
+        IOError: if the system does not have a /dev/shm device.
+
     References:
         https://stackoverflow.com/questions/30210362/how-to-increase-the-size-of-the-dev-shm-in-docker-container
     """
@@ -74,7 +77,7 @@ def check_shm_limits(threshold_gibibytes=1):
         usage = psutil.disk_usage(shm)
         shm_bytes = usage.total
     else:
-        raise NotImplementedError('Dont know how to check shm size on this system')
+        raise IOError('Dont know how to check shm size on this system')
 
     # shm_gigabytes = (shm_bytes / 10 ** 9)
     shm_gibibytes = (shm_bytes / 2 ** 30)

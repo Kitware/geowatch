@@ -1342,8 +1342,7 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
     if verbose > 100:
         print('after normalizer part')
 
-    _kw = ub.compatible({'on_value': 0.3}, kwimage.fill_nans_with_checkers)
-    canvas = kwimage.fill_nans_with_checkers(canvas, **_kw)
+    canvas = kwimage.nodata_checkerboard(canvas, on_value=0.3)
 
     if verbose > 100:
         print('after checkers part')

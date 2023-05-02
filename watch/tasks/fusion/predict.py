@@ -951,8 +951,8 @@ def predict(cmdline=False, **kwargs):
                 import warnings
                 warnings.warn(msg)
                 from watch.utils import util_environ
-                import xdev
-                xdev.embed()
+                # import xdev
+                # xdev.embed()
                 if util_environ.envflag('WATCH_STRICT_PREDICT'):
                     raise
                 continue

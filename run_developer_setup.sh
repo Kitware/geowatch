@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2016
 __doc__='
 Install watch development environment
 
@@ -55,64 +56,100 @@ apt_ensure(){
     fi
 }
 
+command_exists(){
+    __doc__='
+    Returns 0 if the command exists and 1 if it does not
+    '
+    COMMAND=$1
+    command -v "$COMMAND" &> /dev/null
+}
+
 ###  ENSURE DEPENDENCIES ###
 
 # If on debian/ubuntu ensure the dependencies are installed
-if [[ "$(command -v apt)" != "" ]]; then
-    apt_ensure ffmpeg tmux jq tree p7zip-full rsync
-else
-    echo "
-    WARNING: Check and install of system packages is currently only supported
-    on Debian Linux. You will need to verify that ZLIB, GSL, OpenMP are
-    installed before running this script.
-    "
+if [[ "$WITH_APT_ENSURE" != "0" ]]; then
+    if command_exists apt; then
+        HAS_APT=1
+    else
+        HAS_APT=0
+        echo "
+        WARNING: Check and install of system packages is currently only supported
+        on Debian Linux. You will need to verify that ZLIB, GSL, OpenMP are
+        installed before running this script.
+        "
+    fi
 fi
 
+
+if [[ "$WITH_MMCV" != "0" ]]; then
+    if command_exists nvidia-smi; then
+        echo "nvidia-smi detected"
+        HAS_NVIDIA_SMI=1
+    else
+        echo "nvidia-smi not found"
+        HAS_NVIDIA_SMI=0
+    fi
+fi
+
+# User can overwrite this configuration
+WATCH_STRICT=${WATCH_STRICT:=0}
+WITH_MMCV=${WITH_MMCV:=$HAS_NVIDIA_SMI}
+WITH_DVC=${WITH_DVC:=1}
+WITH_APT_ENSURE=${WITH_APT_ENSURE:=$HAS_APT}
+
+echo "
+
+=======================================
+____ ____ ____ _ _ _ ____ ___ ____ _  _
+| __ |___ |  | | | | |__|  |  |    |__|
+|__] |___ |__| |_|_| |  |  |  |___ |  |
+
+=======================================
+
+Environment configuration:
+
+WATCH_STRICT=$WATCH_STRICT
+WITH_MMCV=$WITH_MMCV
+WITH_DVC=$WITH_DVC
+WITH_APT_ENSURE=$WITH_APT_ENSURE
+"
+
+
 # Do everything
+
+if [[ "$WITH_APT_ENSURE" == "1" ]]; then
+    apt_ensure ffmpeg tmux jq tree p7zip-full rsync
+fi
+
+
 python -m pip install setuptools wheel build -U
 
 
 if [[ "$WATCH_STRICT" == "1" ]]; then
     ./dev/make_strict_req.sh
 
-    python -m pip install -r requirements-strict/gdal.txt
+    python -m pip install --prefer-binary -r requirements-strict/gdal.txt
 
-    python -m pip install -r requirements-strict/linting.txt
+    python -m pip install --prefer-binary -r requirements-strict/linting.txt
 
     # Install the geowatch module in development mode
-    python -m pip install -e .[all-strict,headless-strict]
+    python -m pip install --prefer-binary -e ".[all-strict,headless-strict,dvc-strict]"
 
-    python -m pip install "dvc[all]>=2.9.3"
-
-    python -m pip install -r requirements-strict/linting.txt
-
-    if ! command -v nvidia-smi &> /dev/null
-    then
-        echo "nvidia-smi detected"
-        python -m pip install -r requirements-strict/mmcv.txt
-    else
-        echo "nvidia-smi not found, assuming CUDA does not exist"
+    if [[ "$WITH_MMCV" == "1" ]]; then
+        python -m pip install --prefer-binary -r requirements-strict/mmcv.txt
     fi
-
 else
 
-    python -m pip install -r requirements/gdal.txt
+    python -m pip install --prefer-binary -r requirements/gdal.txt
 
-    python -m pip install -r requirements/linting.txt
-
-    python -m pip install "dvc[all]>=2.9.3"
+    python -m pip install --prefer-binary -r requirements/linting.txt
 
     # Install the geowatch module in development mode
-    python -m pip install -e .[all,headless]
+    python -m pip install --prefer-binary -e ".[all,headless,dvc]"
 
-    if ! command -v nvidia-smi &> /dev/null
-    then
-        echo "nvidia-smi detected"
-        python -m pip install -r requirements/mmcv.txt
-    else
-        echo "nvidia-smi not found, assuming CUDA does not exist"
+    if [[ "$WITH_MMCV" == "1" ]]; then
+        python -m pip install --prefer-binary -r requirements/mmcv.txt
     fi
-
 fi
 
 fix_opencv_conflicts(){

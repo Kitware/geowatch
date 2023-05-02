@@ -600,6 +600,11 @@ class Cropping(ProcessNode):
         'geo_preprop': 'auto',
     }
 
+    in_paths = {
+        'crop_src_fpath',
+        'regions',
+    }
+
     @property
     def condensed(self):
         condensed = super().condensed
@@ -637,6 +642,37 @@ class Cropping(ProcessNode):
         return command
 
 
+class SC_Cropping(Cropping):
+    """
+    Crop to each image of every site.
+
+    Example:
+        >>> node = SC_Cropping()
+        >>> print(node.command())
+    """
+    name = 'sc_crop'
+    group_dname = 'crops'
+    # node_dname = 'sitecrop/{src_dset}/{regions_id}/{sitecrop_algo_id}/{sitecrop_id}'
+
+    algo_params = {
+        # 'include_channels': 'red|green|blue|cloudmask',  # fixme: not a good default
+        'include_channels': None,
+        'exclude_sensors': 'L8',  # fixme: not a good default
+        'target_gsd': 4,
+        # 'context_factor': 2.0,
+        'context_factor': 1.0,
+        'force_nodata': -9999,
+        'rpc_align_method': 'orthorectify',
+        'convexify_regions': True,
+        'minimum_size': '128x128@10GSD',
+        'force_min_gsd': 2,
+    }
+
+    out_paths = {
+        'crop_dst_fpath': 'sitecrop.kwcoco.zip'
+    }
+
+
 class SV_Cropping(Cropping):
     """
     Crop to high res images as the start / end of a sequence
@@ -665,47 +701,8 @@ class SV_Cropping(Cropping):
         'num_start_frames': 3,
     }
 
-    in_paths = {
-        'crop_src_fpath',
-        'regions',
-    }
     out_paths = {
         'crop_dst_fpath': 'sv_crop.kwcoco.zip'
-    }
-
-
-class SC_Cropping(Cropping):
-    """
-    Crop to each image of every site.
-
-    Example:
-        >>> node = SC_Cropping()
-        >>> print(node.command())
-    """
-    name = 'sc_crop'
-    group_dname = 'crops'
-    # node_dname = 'sitecrop/{src_dset}/{regions_id}/{sitecrop_algo_id}/{sitecrop_id}'
-
-    algo_params = {
-        # 'include_channels': 'red|green|blue|cloudmask',  # fixme: not a good default
-        'include_channels': None,
-        'exclude_sensors': 'L8',  # fixme: not a good default
-        'target_gsd': 4,
-        # 'context_factor': 2.0,
-        'context_factor': 1.0,
-        'force_nodata': -9999,
-        'rpc_align_method': 'orthorectify',
-        'convexify_regions': True,
-        'minimum_size': '128x128@10GSD',
-        'force_min_gsd': 2,
-    }
-
-    in_paths = {
-        'crop_src_fpath',
-        'regions',
-    }
-    out_paths = {
-        'crop_dst_fpath': 'sitecrop.kwcoco.zip'
     }
 
 

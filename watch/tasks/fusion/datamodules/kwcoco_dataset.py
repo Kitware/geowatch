@@ -15,10 +15,17 @@ Example:
     >>>                           input_space_scale='native',
     >>>                           output_space_scale=None,
     >>>                           window_space_scale=1.2,
-    >>>                           time_sampling='soft2+distribute',
+    >>>                           use_grid_negatives=False,
+    >>>                           use_grid_positives=False,
+    >>>                           use_centered_positives=True,
+    >>>                           absolute_weighting=True,
+    >>>                           time_sampling='uniform',
     >>>                           time_kernel='-1y,0,1y',
     >>>                           modality_dropout=0.5,
     >>>                           temporal_dropout=0.5)
+    >>> # Add weights to annots
+    >>> annots = self.sampler.dset.annots()
+    >>> annots.set('weight', 2 + np.random.rand(len(annots)) * 10)
     >>> self.disable_augmenter = False
     >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
     >>> item = self[index]
@@ -533,6 +540,12 @@ class KWCocoVideoDatasetConfig(scfg.DataConfig):
         'ignore_dilate': scfg.Value(0, help='Dilation applied to ignore masks.'),
         'weight_dilate': scfg.Value(0, help='Dilation applied to weight masks.'),
 
+        'absolute_weighting': scfg.Value(False, help=ub.paragraph(
+            '''
+            if True allow weights to be larger than 1, otherwise item weights
+            are rescaled.
+            ''')),
+
         'min_spacetime_weight': scfg.Value(0.9, help=ub.paragraph(
             '''
             Minimum space-time dilation weight. Used in conjunction with
@@ -1024,6 +1037,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             ub.oset(['impervious', 'forest', 'water']),
             ub.oset(['baren', 'field', 'water']),
             ub.oset(['landcover_hidden.0', 'landcover_hidden.1', 'landcover_hidden.2']),
+            ub.oset(['sam.0', 'sam.1', 'sam.2']),
+            ub.oset(['sam.3', 'sam.4', 'sam.5']),
         ] + heuristics.HUERISTIC_COMBINABLE_CHANNELS
 
         self.prenormalizers = None
@@ -1185,7 +1200,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             import secrets
             import time
             # Really try to be random
-            rng_seed = rng.randint(0, int(2 ** 32 - 2))
+            rng_seed = rng.randint(0, int(2 ** 31 - 2))
             rank_seed = int(ub.hash_data(int(os.environ.get('LOCAL_RANK', '0')), base=10)[0:9])
             secret_seed = secrets.randbits(22) + int(time.time())
             seed = secret_seed ^ rank_seed ^ rng_seed
@@ -1723,9 +1738,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     frame_change = (class_idxs1 != class_idxs2).astype(np.uint8)
                     # ToDO: configure kernel size here
                     frame_change = kwimage.morphology(frame_change, 'open', kernel=3)
-                    change_weights = class_weights1 * class_weights2
+                    change_weights = np.sqrt(class_weights1 * class_weights2)
                     frame2['change'] = frame_change
-                    frame2['change_weights'] = change_weights.clip(0, 1)
+                    frame2['change_weights'] = change_weights.clip(0, None)
 
         pixelwise_truth_keys = [
             'change', 'class_idxs',
@@ -2122,8 +2137,11 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         for gid, frame_dets in gid_to_dets.items():
             aids = frame_dets.data['aids']
             cids = frame_dets.data['cids']
-            tids = dset.annots(aids).lookup('track_id', None)
+            frame_annots = dset.annots(aids)
+            tids = frame_annots.lookup('track_id', None)
             frame_dets.data['tids'] = tids
+            frame_dets.data['weights'] = frame_annots.lookup('weight', 1.0)
+
             for tid, aid, cid in zip(tids, aids, cids):
                 tid_to_aids[tid].append(aid)
                 tid_to_cids[tid].append(cid)
@@ -2347,11 +2365,16 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         task_target_weight = {}
 
         # Rasterize frame targets into semantic segmentation masks
-        ann_polys = dets.data['segmentations'].to_polygon_list()
-        ann_aids = dets.data['aids']
-        ann_cids = dets.data['cids']
-        ann_tids = dets.data['tids']
-        ann_ltrb = dets.data['boxes'].to_ltrb().data
+        ann_polys   = dets.data['segmentations'].to_polygon_list()
+        ann_aids    = dets.data['aids']
+        ann_cids    = dets.data['cids']
+        ann_tids    = dets.data['tids']
+        ann_weights = dets.data['weights']
+        ann_ltrb    = dets.data['boxes'].to_ltrb().data
+
+        # Associate weights with polygons
+        for poly, weight in zip(ann_polys, ann_weights):
+            poly.meta['weight'] = weight
 
         # frame_poly_saliency_weights = np.ones(space_shape, dtype=np.float32)
         # frame_poly_class_weights = np.ones(space_shape, dtype=np.float32)
@@ -2436,14 +2459,20 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 task_target_weight['saliency'][:] = 1
 
             for poly in saliency_sseg_groups['background']:
+                weight = poly.meta['weight']
                 if self.config['balance_areas']:
-                    weight = (1 - (poly.area / (total_area + 1)))
+                    area_weight = (1 - (poly.area / (total_area + 1)))
+                    weight = weight * area_weight
+                if weight != 1:
                     poly.fill(task_target_weight['saliency'], value=weight, assert_inplace=True)
 
             for poly in saliency_sseg_groups['foreground']:
                 task_target_ohe['saliency'] = poly.fill(task_target_ohe['saliency'], value=1, assert_inplace=True)
+                weight = poly.meta['weight']
                 if self.config['balance_areas']:
-                    weight = (1 - (poly.area / (total_area + 1)))
+                    area_weight = (1 - (poly.area / (total_area + 1)))
+                    weight = weight * area_weight
+                if weight != 1:
                     poly.fill(task_target_weight['saliency'], value=weight, assert_inplace=True)
 
                 if self.dist_weights:
@@ -2462,9 +2491,10 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 poly.fill(task_target_ohe['saliency'], value=1, assert_inplace=True)
                 poly.fill(task_target_ignore['saliency'], value=1, assert_inplace=True)
 
-            max_weight = task_target_weight['saliency'].max()
-            if max_weight > 0:
-                task_target_weight['saliency'] /= max_weight
+            if not self.config.absolute_weighting:
+                max_weight = task_target_weight['saliency'].max()
+                if max_weight > 0:
+                    task_target_weight['saliency'] /= max_weight
 
         if wants_class_sseg:
             ### Build single frame CLASS target labels and weights
@@ -2522,9 +2552,13 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
             for poly in class_sseg_groups['foreground']:
                 poly.fill(task_target_ohe['class'][poly.meta['new_class_cidx']], value=1, assert_inplace=True)
+                weight = poly.meta['weight']
 
                 if self.config['balance_areas']:
-                    weight = (1 - (poly.area / (total_area + 1)))
+                    area_weight = (1 - (poly.area / (total_area + 1)))
+                    weight = weight * area_weight
+
+                if weight != 1:
                     poly.fill(task_target_weight['class'], value=weight, assert_inplace=True)
 
                 if self.dist_weights:
@@ -2539,9 +2573,10 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                         weight_mask = dist_weight + (1 - poly_mask)
                         task_target_weight['class'] = task_target_weight['class'] * weight_mask
 
-            max_weight = task_target_weight['class'].max()
-            if max_weight > 0:
-                task_target_weight['class'] /= max_weight
+            if not self.config.absolute_weighting:
+                max_weight = task_target_weight['class'].max()
+                if max_weight > 0:
+                    task_target_weight['class'] /= max_weight
 
         # frame_poly_weights = np.maximum(frame_poly_weights, self.min_spacetime_weight)
 
@@ -2599,7 +2634,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 generic_frame_weight
             )
             frame_item['class_idxs'] = frame_cidxs
-            frame_item['class_weights'] = np.clip(task_frame_weight, 0, 1)
+            frame_item['class_weights'] = np.clip(task_frame_weight, 0, None)
         if wants_saliency_sseg:
             task_frame_weight = (
                 (1 - task_target_ignore['saliency']) *
@@ -2607,7 +2642,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 generic_frame_weight
             )
             frame_item['saliency'] = task_target_ohe['saliency']
-            frame_item['saliency_weights'] = np.clip(task_frame_weight, 0, 1)
+            frame_item['saliency_weights'] = np.clip(task_frame_weight, 0, None)
 
     def cached_dataset_stats(self, num=None, num_workers=0, batch_size=2,
                              with_intensity=True, with_class=True):

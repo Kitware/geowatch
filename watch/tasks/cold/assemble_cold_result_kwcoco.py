@@ -109,7 +109,6 @@ def assemble_main(cmdline=1, **kwargs):
     stack_path = ub.Path(config_in['stack_path'])
     reccg_path = ub.Path(config_in['reccg_path'])
     coco_fpath = ub.Path(config_in['coco_fpath'])
-    combined_coco_fpath = ub.Path(config_in['combined_coco_fpath'])
     mod_coco_fpath = ub.Path(config_in['mod_coco_fpath'])
     out_path = reccg_path / 'cold_feature'
     tmp_path = out_path / 'tmp'
@@ -122,6 +121,13 @@ def assemble_main(cmdline=1, **kwargs):
     combine = config_in['combine']
     resolution = config_in['resolution']
     sensors = config_in['sensors']
+
+    if config_in['combined_coco_fpath'] is not None:
+        combined_coco_fpath = ub.Path(config_in['combined_coco_fpath'])
+    else:
+        if combine:
+            raise ValueError('Must specify combined_coco_fpath if combine is True')
+        combined_coco_fpath = None
 
     # define variables
     config = json.loads(meta_fpath.read_text())
@@ -179,7 +185,8 @@ def assemble_main(cmdline=1, **kwargs):
     for meta in meta_files:
         meta_config = json.loads((block_folder / meta).read_text())
         ordinal_date = meta_config['ordinal_date']
-        img_name = meta_config['image_name'] + '.npy'
+        # img_name = meta_config['image_name'] + '.npy'
+        img_name = meta_config['image_name']
         img_dates.append(ordinal_date)
         img_names.append(img_name)
 
@@ -227,20 +234,20 @@ def assemble_main(cmdline=1, **kwargs):
             img_names.append(coco_img_name)
         ordinal_day_list = ordinal_dates
 
-    # else:
-    #     # Get only the first ordinal date of each year
-    #     first_ordinal_dates = []
-    #     first_img_names = []
-    #     last_year = None
-    #     for ordinal_day, img_name in zip(img_dates, img_names):
-    #         year = pd.Timestamp.fromordinal(ordinal_day).year
-    #         if year != last_year:
-    #             first_ordinal_dates.append(ordinal_day)
-    #             first_img_names.append(img_name)
-    #             last_year = year
+    else:
+        # Get only the first ordinal date of each year
+        first_ordinal_dates = []
+        first_img_names = []
+        last_year = None
+        for ordinal_day, img_name in zip(img_dates, img_names):
+            year = pd.Timestamp.fromordinal(ordinal_day).year
+            if year != last_year:
+                first_ordinal_dates.append(ordinal_day)
+                first_img_names.append(img_name)
+                last_year = year
 
-    #     ordinal_day_list = first_ordinal_dates
-    #     img_names = first_img_names
+        ordinal_day_list = first_ordinal_dates
+        img_names = first_img_names
 
     # assemble
     logger.info('Generating COLD output geotiff')
@@ -296,97 +303,57 @@ def assemble_main(cmdline=1, **kwargs):
 
     logger.info('Starting adding new asset to kwcoco json')
     if combine:
-        combined_coco_dset = kwcoco.CocoDataset(combined_coco_fpath)
-        for image_id in combined_coco_dset.images():
-            combined_coco_image: kwcoco.CocoImage = combined_coco_dset.coco_image(image_id)
-            coco_image: kwcoco.CocoImage = coco_dset.coco_image(image_id)
-            image_name = coco_image.img['name']
-
-            asset_w = vid_w
-            asset_h = vid_h
-
-            for band_name in band_names:
-                for coef in coef_names:
-                    band = BAND_INFO[band_name]
-                    new_fpath = out_path / f'{image_name}_{band}_{method}_{coef}.tif'
-                    if new_fpath.exists():
-                        channels = kwcoco.ChannelSpec.coerce(f'{band}_{method}_{coef}')
-
-                        # COLD output was wrote based on transform information of
-                        # coco_dset, so it aligned to a scaled video space.
-                        warp_img_from_vid = combined_coco_image.warp_img_from_vid
-
-                        if resolution is None:
-                            scale_asset_from_vid = (1., 1.)
-                        else:
-                            scale_asset_from_vid = combined_coco_image._scalefactor_for_resolution(
-                                space='video', resolution=resolution)
-                        warp_asset_from_vid = kwimage.Affine.scale(scale_asset_from_vid)
-                        warp_vid_from_asset = warp_asset_from_vid.inv()
-                        warp_img_from_asset = warp_img_from_vid @ warp_vid_from_asset
-
-                        # Use the CocoImage helper which will augment the coco dictionary with
-                        # your information.
-                        combined_coco_image.add_asset(os.fspath(new_fpath),
-                                                      channels=channels, width=asset_w,
-                                                      height=asset_h, warp_aux_to_img=warp_img_from_asset)
-                        logger.info(f'Added to the asset {new_fpath}')
+        output_coco_dset = combined_coco_dset
     else:
-        # add new asset to each image
-        for image_id in coco_dset.images():
-            # Create a CocoImage object for each image.
-            coco_image: kwcoco.CocoImage = coco_dset.coco_image(image_id)
-            image_name = coco_image.img['name']
+        output_coco_dset = coco_dset
 
-            asset_w = vid_w
-            asset_h = vid_h
+    for image_id in output_coco_dset.images():
+        combined_coco_image: kwcoco.CocoImage = output_coco_dset.coco_image(image_id)
+        coco_image: kwcoco.CocoImage = output_coco_dset.coco_image(image_id)
+        image_name = coco_image.img['name']
 
-            for band_name in band_names:
-                for coef in coef_names:
-                    band = BAND_INFO[band_name]
-                    new_fpath = out_path / f'{image_name}_{band}_{method}_{coef}.tif'
-                    if new_fpath.exists():
-                        channels = kwcoco.ChannelSpec.coerce(f'{band}_{method}_{coef}')
+        asset_w = vid_w
+        asset_h = vid_h
 
-                        # COLD output was wrote based on transform information of
-                        # coco_dset, so it aligned to a scaled video space.
-                        warp_img_from_vid = coco_image.warp_img_from_vid
+        for band_name in band_names:
+            for coef in coef_names:
+                band = BAND_INFO[band_name]
+                new_fpath = out_path / f'{image_name}_{band}_{method}_{coef}.tif'
+                if new_fpath.exists():
+                    channels = kwcoco.ChannelSpec.coerce(f'{band}_{method}_{coef}')
 
-                        if resolution is None:
-                            scale_asset_from_vid = (1., 1.)
-                        else:
-                            scale_asset_from_vid = coco_image._scalefactor_for_resolution(
-                                space='video', resolution=resolution)
-                        warp_asset_from_vid = kwimage.Affine.scale(scale_asset_from_vid)
-                        warp_vid_from_asset = warp_asset_from_vid.inv()
-                        warp_img_from_asset = warp_img_from_vid @ warp_vid_from_asset
+                    # COLD output was wrote based on transform information of
+                    # coco_dset, so it aligned to a scaled video space.
+                    warp_img_from_vid = combined_coco_image.warp_img_from_vid
 
-                        # Use the CocoImage helper which will augment the coco dictionary with
-                        # your information.
-                        coco_image.add_asset(os.fspath(new_fpath),
-                                                channels=channels, width=asset_w,
-                                                height=asset_h,
-                                                warp_aux_to_img=warp_img_from_asset)
+                    if resolution is None:
+                        scale_asset_from_vid = (1., 1.)
+                    else:
+                        scale_asset_from_vid = combined_coco_image._scalefactor_for_resolution(
+                            space='video', resolution=resolution)
+                    warp_asset_from_vid = kwimage.Affine.scale(scale_asset_from_vid)
+                    warp_vid_from_asset = warp_asset_from_vid.inv()
+                    warp_img_from_asset = warp_img_from_vid @ warp_vid_from_asset
 
-                        logger.info(f'Added to the asset {new_fpath}')
+                    # Use the CocoImage helper which will augment the coco dictionary with
+                    # your information.
+                    combined_coco_image.add_asset(
+                        file_name=new_fpath,
+                        channels=channels,
+                        width=asset_w,
+                        height=asset_h,
+                        warp_aux_to_img=warp_img_from_asset)
+                    logger.info(f'Added to the asset {new_fpath}')
 
     if proc_context is not None:
         context_info = proc_context.stop()
-        if combine:
-            combined_coco_dset.dataset['info'].append(context_info)
-        else:
-            coco_dset.dataset['info'].append(context_info)
+        output_coco_dset.dataset['info'].append(context_info)
 
     # Write a modified kwcoco.json file
     logger.info(f'Writing kwcoco file to: {mod_coco_fpath}')
-    if combine:
-        combined_coco_dset.fpath = mod_coco_fpath
-        combined_coco_dset._ensure_json_serializable()
-        combined_coco_dset.dump()
-    else:
-        coco_dset.fpath = mod_coco_fpath
-        coco_dset._ensure_json_serializable()
-        coco_dset.dump()
+    output_coco_dset.fpath = mod_coco_fpath
+    output_coco_dset._ensure_json_serializable()
+    output_coco_dset.dump()
     logger.info(f'Finished writing kwcoco file to: {mod_coco_fpath}')
 
     gc.collect()

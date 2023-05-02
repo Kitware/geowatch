@@ -1,5 +1,6 @@
 # Requirements for running our linting policy
-flake8>=4.0.1
+flake8>=5.0.0
 ubelt>=1.2.4
 fire>=0.4.0
 rich>=12.3.0
+xdev>=1.2.0

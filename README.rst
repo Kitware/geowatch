@@ -1,12 +1,12 @@
 GEOWATCH - Geographic Wide Area Terrestrial Change Hypercube
-==============================================
+============================================================
 
 .. The large version wont work because github strips rst image rescaling.
 .. image:: https://ipfs.io/ipfs/QmYftzG6enTebF2f143KeHiPiJGs66LJf3jT1fNYAiqQvq
    :height: 100px
    :align: left
 
-|main-pipeline| |main-coverage|
+|main-pipeline| |main-coverage| |Pypi| |Downloads|
 
 
 This repository addresses the algorithmic challenges of the
@@ -22,25 +22,29 @@ The following table provides links to relevant resources for the SMART WATCH pro
 +----------------------------------------------------------+----------------------------------------------------------------+
 | The Public GEOWATCH Python Module                        | https://gitlab.kitware.com/computer-vision/geowatch/           |
 +----------------------------------------------------------+----------------------------------------------------------------+
-| The Internal SMART WATCH Python Module                   | https://gitlab.kitware.com/smart/watch/                        |
+| The Internal SMART GEOWATCH Python Module                | https://gitlab.kitware.com/smart/watch/                        |
 +----------------------------------------------------------+----------------------------------------------------------------+
-| The Phase 2 Internal SMART WATCH DVC Data Repo           | https://gitlab.kitware.com/smart/smart_data_dvc/               |
+| The Phase 2 Internal SMART GEOWATCH DVC Data Repo        | https://gitlab.kitware.com/smart/smart_data_dvc/               |
 +----------------------------------------------------------+----------------------------------------------------------------+
-| The Phase 2 Internal SMART WATCH DVC Experiment Repo     | https://gitlab.kitware.com/smart/smart_expt_dvc/               |
+| The Phase 2 Internal SMART GEOWATCH DVC Experiment Repo  | https://gitlab.kitware.com/smart/smart_expt_dvc/               |
 +----------------------------------------------------------+----------------------------------------------------------------+
 
 
 Getting Started
 ---------------
 
-To quickly get started locally, clone the watch repo:
+To quickly get started locally, clone the geowatch repo:
 
 
 .. code:: bash
 
    # Create a directory for CODE
    mkdir -p $HOME/code
-   git clone https://gitlab.kitware.com/smart/watch/  $HOME/code/watch
+   # Internal
+   # git clone https://gitlab.kitware.com/smart/watch/  $HOME/code/watch
+
+   # Public
+   git clone https://gitlab.kitware.com/computer-vision/geowatch/  $HOME/code/watch
 
 
 Then run:
@@ -57,7 +61,7 @@ Test everything is working by running
 
    ./run_tests.py
 
-For more details see the `installing watch for development guide <docs/installing_watch.rst>`_.
+For more details see the `installing GEOWATCH for development guide <docs/environment/installing_watch.rst>`_.
 
 
 Development
@@ -65,14 +69,14 @@ Development
 
 For new collaberators, please refer to the `onboarding docs <docs/onboarding.rst>`_
 
-For internal collaberators, please refer to the `internal docs <docs/internal_resources.rst>`_
+For internal collaberators, please refer to the `internal docs <docs/data/internal_resources.rst>`_
 
 
-The Watch CLI
--------------
+The GEOWATCH CLI
+----------------
 
-The watch module comes with a set of command line tools.
-Using ``python -m watch --help`` or ``geowatch --help`` shows the top level modal CLI:
+The ``geowatch`` module comes with a set of command line tools.
+Using ``python -m geowatch --help`` or ``geowatch --help`` shows the top level modal CLI:
 
 .. code::
 
@@ -125,7 +129,7 @@ Using ``python -m watch --help`` or ``geowatch --help`` shows the top level moda
         remove_bad_images (coco_remove_bad_images)
                             Remove image frames that have little or nothing useful in them from a
         schedule (mlops_schedule, schedule_evaluation)
-                            Driver for WATCH mlops evaluation scheduling
+                            Driver for GEOWATCH mlops evaluation scheduling
         manager (mlops_manager)
                             Certain parts of these names have special nomenclature to make them easier
         aggregate (mlops_aggregate)
@@ -135,7 +139,7 @@ Using ``python -m watch --help`` or ``geowatch --help`` shows the top level moda
 
 As a researcher / developer / user the most important commands for you to know are:
 
-* ``geowatch stats <kwcoco_file>`` - Get watch-relevant statistics about data in a kwcoco file
+* ``geowatch stats <kwcoco_file>`` - Get geowatch-relevant statistics about data in a kwcoco file
 
 * ``geowatch visualize <kwcoco_file>`` - Visualize the image / videos / annotations in a kwcoco file.
 
@@ -151,11 +155,11 @@ As a researcher / developer / user the most important commands for you to know a
 
 * ``geowatch geotiffs_to_kwcoco`` - Create a kwcoco file from a set of on-disk geotiffs.
 
-* ``smartwatch_dvc`` - Helper to register / retreive your DVC paths so scripts can be written agnostic to filesystem layouts. See `docs <docs/using_smartwatch_dvc.rst>`_ for more details.
+* ``smartwatch_dvc`` - Helper to register / retreive your DVC paths so scripts can be written agnostic to filesystem layouts. See `docs <docs/data/using_smartwatch_dvc.rst>`_ for more details.
 
 
-For more details about the WATCH CLI and other CLI tools included in this package see:
-`the WATCH CLI docs <docs/watch_cli.rst>`_
+For more details about the GEOWATCH CLI and other CLI tools included in this package see:
+`the GEOWATCH CLI docs <docs/watch_cli.rst>`_
 
 
 Documentation
@@ -165,51 +169,51 @@ For quick reference, a list of current documentation files is:
 
 * `Onboarding Docs <docs/onboarding.rst>`_
 
-* `Internal Resources <docs/internal_resources.rst>`_
+* `Internal Resources <docs/data/internal_resources.rst>`_
 
-* `The WATCH CLI <docs/watch_cli.rst>`_
+* `The GEOWATCH CLI <docs/watch_cli.rst>`_
 
 * Contribution:
 
-  + `Contribution Instructions <docs/contribution_instructions.rst>`_
+  + `Contribution Instructions <docs/development/contribution_instructions.rst>`_
 
-  + `Rebasing Procedure <docs/rebasing_procedure.rst>`_
+  + `Rebasing Procedure <docs/development/rebasing_procedure.rst>`_
 
-  + `Testing Practices <docs/testing_practices.rst>`_
+  + `Testing Practices <docs/testing/testing_practices.rst>`_
 
-  + `Supporting Projects <docs/supporting_projects.rst>`_
+  + `Supporting Projects <docs/misc/supporting_projects.rst>`_
 
-  + `Coding Conventions <docs/coding_conventions.rst>`_
+  + `Coding Conventions <docs/development/coding_conventions.rst>`_
 
 * Installing:
 
-  + `Installing WATCH <docs/installing_watch.rst>`_
+  + `Installing GEOWATCH <docs/environment/installing_watch.rst>`_
 
-  + `Installing Python via Conda <docs/install_python_conda.rst>`_
+  + `Installing Python via Conda <docs/environment/install_python_conda.rst>`_
 
-  + `Installing Python via PyEnv <docs/install_python_pyenv.rst>`_
+  + `Installing Python via PyEnv <docs/environment/install_python_pyenv.rst>`_
 
 * Fusion Related Docs:
 
-  + `TA2 Fusion Overview <docs/fusion_overview.rst>`_
+  + `TA2 Fusion Overview <docs/algorithms/fusion_overview.rst>`_
 
-  + `TA2 Deep Dive Info <docs/ta2_deep_dive_info.md>`_
+  + `TA2 Deep Dive Info <docs/algorithms/ta2_deep_dive_info.md>`_
 
-  + `TA2 Feature Integration <docs/ta2_feature_integration.md>`_
+  + `TA2 Feature Integration <docs/development/ta2_feature_integration.md>`_
 
 * Older Design Docs:
 
-  + `Structure Proposal <docs/structure_proposal.md>`_
+  + `Structure Proposal <docs/misc/structure_proposal.md>`_
 
 * Tutorials:
 
-  + Tutorial 1: `Toy RGB Fusion Model Example <tutorial/toy_experiments_rgb.sh>`_
+  + Tutorial 1: `Toy RGB Fusion Model Example <tutorial/tutorial1_rgb_network.sh>`_
 
-  + Tutorial 2: `Toy MSI Fusion Model Example <tutorial/toy_experiments_msi.sh>`_
+  + Tutorial 2: `Toy MSI Fusion Model Example <tutorial/tutorial2_msi_network.sh>`_
 
-  + Tutorial 3: `Feature Fusion Tutorial <tutorial/feature_fusion_tutorial.sh>`_
+  + Tutorial 3: `Feature Fusion Tutorial <tutorial/tutorial3_feature_fusion.sh>`_
 
-  + Tutorial 4: `Misc Training Tutorial <tutorial/toy_experiments_msi_v2.sh>`_
+  + Tutorial 4: `Misc Training Tutorial <tutorial/tutorial4_advanced_training.sh>`_
 
 
 Acknowledgement
@@ -229,3 +233,9 @@ copyright annotation therein
    :target: https://gitlab.kitware.com/smart/watch/-/pipelines/main/latest
 .. |main-coverage| image:: https://gitlab.kitware.com/smart/watch/badges/main/coverage.svg
    :target: https://gitlab.kitware.com/smart/watch/badges/main/coverage.svg
+.. |Pypi| image:: https://img.shields.io/pypi/v/geowatch.svg
+   :target: https://pypi.python.org/pypi/geowatch
+.. |Downloads| image:: https://img.shields.io/pypi/dm/geowatch.svg
+   :target: https://pypistats.org/packages/geowatch
+.. |ReadTheDocs| image:: https://readthedocs.org/projects/geowatch/badge/?version=latest
+    :target: http://geowatch.readthedocs.io/en/latest/

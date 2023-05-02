@@ -7,6 +7,10 @@ git rev-list --all --objects | awk '{print $1}' | git cat-file --batch-check | s
 
 # Noting that 2986e51827c9d86b651fe1cb6de8ed9c8842b614 is a very big object
 
+
+git log --all --find-object=fcba2687fb86ab911222bb73b6ff0b69fbf24527
+
+
 # Find which commit adds a specific object
 git log --all --find-object=2986e51827c9d86b651fe1cb6de8ed9c8842b614
 

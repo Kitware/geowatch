@@ -93,11 +93,11 @@ CommandLine:
     DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="auto")
     EXPT_DVC_DPATH=$(smartwatch_dvc --tags=phase2_expt --hardware="auto")
     python -m watch.tasks.cold.predict \
-        --coco_fpath="$DATA_DVC_DPATH/Drop6/data_vali_split1_KR_R001.kwcoco.json" \
-        --combined_coco_fpath="$DATA_DVC_DPATH/Drop6_MeanYear/data_vali_split1_KR_R001_MeanYear.kwcoco.json" \
-        --out_dpath="$DATA_DVC_DPATH/Drop6/_pycold_combine" \
+        --coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly-KR_R001.kwcoco.json" \
+        --combined_coco_fpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imgonly-KR_R001.kwcoco.zip" \
+        --out_dpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/_pycold_combine" \
+        --mod_coco_fpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold.kwcoco.zip" \
         --sensors='L8' \
-        --mod_coco_fpath="$DATA_DVC_DPATH/Drop6_MeanYear/data_vali_split1_KR_R001_MeanYear_cold.kwcoco.json" \
         --adj_cloud=False \
         --method='COLD' \
         --prob=0.99 \
@@ -108,23 +108,26 @@ CommandLine:
         --coefs=cv,rmse,a0,a1,b1,c1 \
         --coefs_bands=0,1,2,3,4,5 \
         --timestamp=False \
-        --combine=True \
+        --combine=False \
         --resolution='10GSD' \
-        --workermode='process' \
-        --workers=8
+        --workermode='serial' \
+        --workers=0
+
+    kwcoco stats "$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold.kwcoco.zip
+    geowatch stats "$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold.kwcoco.zip
 
     # Fix path problem because we wrote a different directory
     # TODO: fix this script so the output always uses absolute paths?
     # or at least doesn't write invalid data that needs fixing?
     DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="auto")
     kwcoco reroot \
-        --src="$DATA_DVC_DPATH"/Drop6/_pycold/imgonly-KR_R001-cold.kwcoco.json \
-        --dst="$DATA_DVC_DPATH"/Drop6/_pycold/imgonly-KR_R001-cold.fixed.kwcoco.zip \
+        --src="$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold.kwcoco.zip \
+        --dst="$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold_fixed.kwcoco.zip \
         --old_prefix="KR_R001" --new_prefix="../KR_R001"
 
     DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="auto")
     smartwatch visualize \
-        "$DATA_DVC_DPATH"/Drop6/_pycold/imgonly-KR_R001-cold.fixed.kwcoco.zip \
+        "$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold.kwcoco.zip \
         --channels="L8:(red|green|blue,red_COLD_a1|green_COLD_a1|blue_COLD_a1,red_COLD_cv|green_COLD_cv|blue_COLD_cv,red_COLD_rmse|green_COLD_rmse|blue_COLD_rmse)" \
         --smart=True
 
@@ -177,13 +180,14 @@ class ColdPredictConfig(scfg.DataConfig):
 
     coco_fpath = scfg.Value(None, position=1, help=ub.paragraph(
         '''
-        a path to a file to input kwcoco file
+        a path to a file to input kwcoco file (to predict on)
         '''))
     combined_coco_fpath = scfg.Value(None, help=ub.paragraph(
         '''
-        a path to a file to combined kwcoco file
+        a path to a file to combined input kwcoco file (to merge with)
         '''))
-    mod_coco_fpath = scfg.Value(None, help='file path for modified coco json')
+    mod_coco_fpath = scfg.Value(None, help='file path for modified output coco json')
+
     out_dpath = scfg.Value(None, help='output directory for the output. If unspecified uses the output kwcoco bundle')
     sensors = scfg.Value('L8', type=str, help='sensor type, default is "L8"')
     adj_cloud = scfg.Value(False, help='How to treat QA band, default is False: ignoring adj. cloud class')
@@ -242,8 +246,9 @@ def cold_predict_main(cmdline=1, **kwargs):
     from watch.tasks.cold import export_cold_result_kwcoco
     from watch.tasks.cold import assemble_cold_result_kwcoco
 
-    config = ColdPredictConfig.cli(cmdline=cmdline, data=kwargs)
-    print('config = {}'.format(ub.urepr(dict(config), nl=1)))
+    config = ColdPredictConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
+    import rich
+    rich.print('config = {}'.format(ub.urepr(config, nl=1)))
 
     from watch.utils import process_context
     from watch.utils import util_parallel
@@ -331,6 +336,7 @@ def cold_predict_main(cmdline=1, **kwargs):
         export_kwargs['year_lowbound'] = config['year_lowbound']
         export_kwargs['year_highbound'] = config['year_highbound']
         export_kwargs['coefs'] = config['coefs']
+        export_kwargs['combine'] = config['combine']
         export_kwargs['coefs_bands'] = config['coefs_bands']
         export_kwargs['timestamp'] = config['timestamp']
         export_kwargs['sensors'] = sensors

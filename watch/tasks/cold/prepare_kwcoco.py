@@ -340,6 +340,9 @@ def stack_kwcoco(coco_fpath, out_dir, sensors, adj_cloud, method, pman=None,
     # flags = [s in sensors for s in all_images.lookup('sensor_coarse')]
     all_images = all_images.compress(flags)
 
+    if len(all_images) == 0:
+        raise Exception('No images!')
+
     image_id_iter = iter(all_images)
 
     # For now, it supports only L8

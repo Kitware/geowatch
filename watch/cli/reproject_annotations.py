@@ -220,7 +220,7 @@ def main(cmdline=False, **kwargs):
     output_fpath = config['dst']
     if output_fpath is None:
         if config['inplace']:
-            config['dst'] = config['src']
+            output_fpath = config['dst'] = config['src']
         else:
             raise ValueError('must specify dst: {}'.format(config['dst']))
 
@@ -310,10 +310,15 @@ def main(cmdline=False, **kwargs):
             ann['role'] = _role
         del _role
 
-    if config.validate_checks:
-        groups = ub.group_items(propogated_annotations, lambda x: x['track_id'])
-        for _, group in groups.items():
-            assert not ub.find_duplicates([g['image_id'] for g in group])
+    # Are duplicate annotations for the same track id ok?
+    # I think they have to be to reprsent different parts of a track in
+    # different categories (i.e. subsites)
+    # if config.validate_checks:
+    #     groups = ub.group_items(propogated_annotations, lambda x: x['track_id'])
+    #     for _, group in groups.items():
+    #         dups = ub.find_duplicates([g['image_id'] for g in group])
+    #         if dups:
+    #             raise AssertionError(f'DUPLICATE TRACK IDS {dups!r} IN: {group!r}')
 
     for ann in propogated_annotations:
         coco_dset.add_annotation(**ann)
@@ -1039,9 +1044,18 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
     flags = ~site_gdf['observation_date'].isnull()
     flags[0] = True  # include header
     assert site_gdf.iloc[0]['type'] == 'site'
-    valid_site_gdf = site_gdf[flags]
-    valid_site_rows = valid_site_gdf.iloc[1:]
-    observation_dates = np.array([util_time.coerce_datetime(x) for x in valid_site_rows['observation_date']])
+    site_gdf1 = site_gdf[flags]
+    observation_dates1 = np.array([
+        util_time.coerce_datetime(x)
+        for x in site_gdf1.iloc[1:]['observation_date']])
+
+    # Remove duplicate observations at the same time.
+    flags2 = np.ones(len(site_gdf), dtype=bool)
+    for dup_date, dup_idxs in ub.find_duplicates(observation_dates1).items():
+        flags2[np.array(dup_idxs)[:-1] + 1] = False
+
+    valid_site_gdf = site_gdf1[flags2]
+    observation_dates = observation_dates1[flags2[1:]]
 
     site_model = SiteModel.from_dataframe(valid_site_gdf)
     track_id = site_model.site_id
@@ -1095,68 +1109,7 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
     BACKPROJECT_START_STATES = 0  # turn off back-projection
 
     if propogate_strategy == 'OLD-SMART':
-        # TODO: This should be replaced with NEW-SMART
-        # The original, but inflexible, propogate strategy
-
-        # NOTE: This seems to have a bug where the first frame may be
-        # duplicated.
-
-        # To future-propogate:
-        # (1) assign each observation to its nearest image (temporally)
-        # without "going over" (i.e. the assigned image must be at or after
-        # the observaion)
-        # (2) Splitting the image observations and taking all but the first
-        # gives all current-and-future images for each observation that
-        # happen before the next observation.
-        try:
-            found_forward_idxs = np.searchsorted(region_image_dates, observation_dates, 'left')
-        except TypeError:
-            # handle  can't compare offset-naive and offset-aware datetimes
-            region_image_dates = [util_time.ensure_timezone(dt) for dt in region_image_dates]
-            observation_dates = [util_time.ensure_timezone(dt) for dt in observation_dates]
-            found_forward_idxs = np.searchsorted(region_image_dates, observation_dates, 'left')
-
-        image_index_bins = np.split(region_image_indexes, found_forward_idxs)
-        forward_image_idxs_per_observation = image_index_bins[1:]
-
-        # To past-propogate:
-        # (1) assign each observation to its nearest image (temporally)
-        # without "going under" (i.e. the assigned image must be at or
-        # before the observation)
-        # (2) Splitting the image observations and taking all but the last
-        # gives all current-and-past-only images for each observation that
-        # happen after the previous observation.
-        # NOTE: we only really need to backward propogate the first label
-        # (if we even want to do that at all)
-        found_backward_idxs = np.searchsorted(region_image_dates, observation_dates, 'right')
-        backward_image_idxs_per_observation = np.split(region_image_indexes, found_backward_idxs)[:-1]
-
-        # Convert this into the "new" simpler format where each site row is
-        # simply associated with the frames it will propogate to.
-        obs_associated_gxs = []
-        _iter = zip(forward_image_idxs_per_observation, backward_image_idxs_per_observation, observations)
-        for annot_idx, (forward_gxs, backward_gxs, obs_row) in enumerate(_iter):
-            propogate_gxs = []
-            catname = obs_row['properties']['current_phase']
-            if catname is None:
-                # Based on the status choose a kwcoco category name
-                # using the watch heuristics
-                catname = status_to_catname[status]
-            current_and_forward_gxs = sorted(
-                forward_gxs, key=lambda gx: util_time.coerce_datetime(coco_dset.imgs[region_gids[gx]]['date_captured']))
-            # Always propogate at least to the nearest frame?
-            current_gxs = current_and_forward_gxs[0:1]
-            propogate_gxs.extend(current_gxs)
-            # Determine if this subsite propogates forward and/or backward
-            if PROJECT_ENDSTATE or catname not in heuristics.HEURISTIC_END_STATES:
-                propogate_gxs.extend(forward_gxs)
-
-            if BACKPROJECT_START_STATES:
-                # Only need to backpropogate the first label (and maybe even not that?)
-                if annot_idx == 0 and catname in heuristics.HEURISTIC_START_STATES:
-                    propogate_gxs.extend(backward_gxs)
-            obs_associated_gxs.append(propogate_gxs)
-
+        raise NotImplementedError('The old strategy had bugs, use the new one')
     elif propogate_strategy == "NEW-PAST":
         image_times = [t.timestamp() for t in region_image_dates]
         key_infos = [{'time': t.timestamp(), 'applies': 'past'} for t in observation_dates]
