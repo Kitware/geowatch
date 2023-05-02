@@ -41,7 +41,7 @@ def fix_msys_path(path):
 
 
 def is_windows_path(path):
-    """
+    r"""
     Example:
         >>> from watch.utils.util_windows import *  # NOQA
         >>> assert is_windows_path('C:')

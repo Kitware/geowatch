@@ -43,7 +43,7 @@ recommend the following directory structure:
 
 
 For details on installing the geowatch system in development mode see
-`installing geowatch for development guide <../docs/environment/installing_watch.rst>`_.
+`installing geowatch for development guide <../docs/environment/installing_geowatch.rst>`_.
 
 For more detailed instructions on setting up the DVC repos see:
 `accessing dvc repos <../docs/data/access_dvc_repos.rst>`_.
