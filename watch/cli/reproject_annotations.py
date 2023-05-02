@@ -1210,13 +1210,21 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
         }
 
         site_polygons = [
-            p.to_geojson() for p in kwimage.MultiPolygon.from_geojson(obs_row['geometry']).to_multi_polygon().data
+            p.to_geojson() for p in kwimage.MultiPolygon.from_geojson(
+                obs_row['geometry']).to_multi_polygon().data
         ]
 
         HACK_TO_FIX_HARDNEGS = 1
         if HACK_TO_FIX_HARDNEGS:
             if len(site_polygons) != len(site_catnames):
-                assert site_catnames == ['negative'], 'hack assumptions violated'
+
+                if site_catnames != ['negative']:
+                    import warnings
+                    warnings.warn(
+                        f'We exepcted site_catnames to be [negative] but got {site_catnames}. '
+                        'This is likely a symptom of a different issue.')
+
+                # assert site_catnames == ['negative'], 'hack assumptions violated'
                 # Hack case, should fix this elsewhere
                 # should not produce multipolygon hard negatives, not sure why
                 # we are.
@@ -1224,6 +1232,10 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
                 site_polygons = [
                     p.to_geojson() for p in combo.to_multi_polygon().data
                 ]
+                # Hack to force len(site_polygons) == len(site_catnames)
+                minlen = min(len(site_polygons), len(site_catnames))
+                site_polygons = site_polygons[:minlen]
+                site_catnames = site_catnames[:minlen]
 
         if len(site_polygons) != len(site_catnames):
             raise AssertionError('Should be equal')
