@@ -16,7 +16,7 @@ train a fusion model on RGB data.
 
 # For those windows folks:
 if [[ "$(uname -a)" == "MINGW"* ]]; then
-    echo "detected windows"
+    echo "detected windows with mingw"
     export HOME=$USERPROFILE
     export USER=$USERNAME
 fi
@@ -126,13 +126,21 @@ Other arguments:
 * optimizers
 * training strategies
 
-In this tutorial we will use 'gpu' as our lightning accelerator.
-Please read the lightning docs for other available trainer settings:
+In this tutorial - for compatability - we will use 'cpu' as our lightning
+accelerator. See the lightning docs for other available trainer settings:
 https://pytorch-lightning.readthedocs.io/en/stable/common/trainer.html#devices
 
 We will also specify a work directory that will be similar to directories used
 when real geowatch models are trained.
 "
+
+# For convinience we remind the user these variables need to be populated
+# even if they already ran the above steps.
+DVC_DATA_DPATH=$HOME/data/dvc-repos/toy_data_dvc
+DVC_EXPT_DPATH=$HOME/data/dvc-repos/toy_expt_dvc
+TRAIN_FPATH=$DVC_DATA_DPATH/vidshapes_rgb_train/data.kwcoco.json
+VALI_FPATH=$DVC_DATA_DPATH/vidshapes_rgb_vali/data.kwcoco.json
+TEST_FPATH=$DVC_DATA_DPATH/vidshapes_rgb_test/data.kwcoco.json
 
 
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
@@ -156,54 +164,19 @@ model:
     init_args:
         name        : $EXPERIMENT_NAME
         arch_name   : smt_it_stm_p8
-        window_size : 8
-        dropout     : 0.1
-lr_scheduler:
-  class_path: torch.optim.lr_scheduler.OneCycleLR
-  init_args:
-    max_lr: $TARGET_LR
-    total_steps: $MAX_STEPS
-    anneal_strategy: cos
-    pct_start: 0.05
 optimizer:
   class_path: torch.optim.AdamW
   init_args:
     lr: $TARGET_LR
     weight_decay: $WEIGHT_DECAY
-    betas:
-      - 0.9
-      - 0.99
 trainer:
-  accumulate_grad_batches: 1
   default_root_dir     : $DEFAULT_ROOT_DIR
   accelerator          : cpu
   devices              : 1
-  #devices             : 0,1
-  #strategy            : ddp
-  check_val_every_n_epoch: 1
-  enable_checkpointing: true
-  enable_model_summary: true
-  log_every_n_steps: 5
-  logger: true
   max_steps: $MAX_STEPS
   num_sanity_val_steps: 0
-  limit_val_batches    : 8
+  limit_val_batches    : 2
   limit_train_batches  : 32
-  callbacks:
-    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
-      init_args:
-        monitor: val_loss
-        mode: min
-        save_top_k: 3
-    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
-      init_args:
-        monitor: train_loss
-        mode: min
-        save_top_k: 3
-torch_globals:
-    float32_matmul_precision: auto
-initializer:
-    init: noop
 "
 
 # For more options with this particular model see:

@@ -37,16 +37,16 @@ It is recommened to be in a virtual enviornment
 
 .. code:: bash
 
-   conda create -n geowatch python=3.10
-   conda activate geowatch
+   conda create -n geowatch2 python=3.10 -y
+   conda activate geowatch2
 
-   conda install gdal jq scikit-learn ffmpeg -c conda-forge
+   conda install gdal jq scikit-learn ffmpeg -c conda-forge -y
 
    # If you don't have a GPU
-   conda install pytorch torchvision cpuonly -c pytorch
+   conda install pytorch torchvision cpuonly -c pytorch -y
 
    # If you have a NVIDIA GPU (untested)
-   conda install pytorch torchvision pytorch-cuda=11.8 -c pytorch nvidia
+   conda install pytorch torchvision pytorch-cuda=11.8 -c pytorch nvidia -y
 
 
 .. .. pip install msvc-runtime
@@ -59,11 +59,24 @@ install the rest of the requirements:
 
    pip install geowatch[headless]
 
-   # Or install from source
-   # git clone https://gitlab.kitware.com/computer-vision/geowatch.git
-   # cd geowatch
-   # pip install -e .[headless]
 
+Optional: Installing From Source
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+If you want to use the source code directly, open an anaconda prompt and run:
+
+.. code:: bash
+
+    # Or the path to wherever you installed the git bash executable
+    "C:\Program Files\Git\bin\bash.exe"
+
+    source $USERPROFILE/miniconda3/etc/profile.d/conda.sh
+    conda activate geowatch
+
+    #git clone https://gitlab.kitware.com/computer-vision/geowatch
+    git clone --branch dev/0.6.1 https://gitlab.kitware.com/computer-vision/geowatch
+    cd geowatch
+    pip install -e .[headless]
 
 Running The Tutorial
 ~~~~~~~~~~~~~~~~~~~~
@@ -76,7 +89,11 @@ From the start menu, run git-bash. Then we need to activate our conda virtualenv
 
 .. code:: bash
 
-   conda activate geowatch
+    source $USERPROFILE/miniconda3/etc/profile.d/conda.sh
+    conda activate geowatch
+
+    cd geowatch
+    ./tutorial/tutorial1_rgb_network.sh
 
 
 Now run the tutorial commands one at a time.
@@ -110,3 +127,6 @@ You might get an error:
 "Error: 0x80370102 The virtual machine could not be started because a required feature is not installed."
 
 Which means you need to enable virtualization in your BIOS.
+
+And I haven't gotten farther than that, but if you have it setup, it is much
+easier to run the software on Ubuntu.
