@@ -136,6 +136,11 @@ when real geowatch models are trained.
 
 # For convinience we remind the user these variables need to be populated
 # even if they already ran the above steps.
+if [[ "$(uname -a)" == "MINGW"* ]]; then
+    echo "detected windows with mingw"
+    export HOME=$USERPROFILE
+    export USER=$USERNAME
+fi
 DVC_DATA_DPATH=$HOME/data/dvc-repos/toy_data_dvc
 DVC_EXPT_DPATH=$HOME/data/dvc-repos/toy_expt_dvc
 TRAIN_FPATH=$DVC_DATA_DPATH/vidshapes_rgb_train/data.kwcoco.json
@@ -147,7 +152,7 @@ WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 EXPERIMENT_NAME=ToyRGB_Demo_V001
 DATASET_CODE=ToyRGB
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-MAX_STEPS=128
+MAX_STEPS=32
 TARGET_LR=3e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 1e-2)")
 python -m geowatch.tasks.fusion fit --config "
@@ -176,7 +181,7 @@ trainer:
   max_steps: $MAX_STEPS
   num_sanity_val_steps: 0
   limit_val_batches    : 2
-  limit_train_batches  : 32
+  limit_train_batches  : 4
 "
 
 # For more options with this particular model see:
@@ -209,7 +214,23 @@ We provide a CLI tool to summarize the info contained in a torch model via
 "geowatch torch_model_stats". Lets try that on the model we just built.
 '
 
-geowatch torch_model_stats "$DEFAULT_ROOT_DIR"/final_package.pt --stem_stats=True
+PACKAGE_FPATH="$DEFAULT_ROOT_DIR"/final_package.pt
+
+# Find a package if training did not complete
+PACKAGE_FPATH=$(python -c "if 1:
+    import pathlib
+    default_root = pathlib.Path(r'$DEFAULT_ROOT_DIR')
+    pkg = default_root / 'final_package.pt'
+    if pkg.exists():
+        print(pkg)
+    else:
+        cand = sorted(default_root.glob('package-interupt/*.pt'))
+        assert len(cand)
+        print(cand[-1])
+")
+echo "$PACKAGE_FPATH"
+
+geowatch torch_model_stats "$PACKAGE_FPATH" --stem_stats=True
 
 # NOTE: There are other model weights available in the
 # $DEFAULT_ROOT_DIR/*/*/checkpoints directory that can be converted into
@@ -256,7 +277,7 @@ are stripped and ignored during prediction.
 # Predict
 python -m geowatch.tasks.fusion.predict \
     --test_dataset="$TEST_FPATH" \
-    --package_fpath="$DEFAULT_ROOT_DIR"/final_package.pt  \
+    --package_fpath="$PACKAGE_FPATH"  \
     --pred_dataset="$DVC_EXPT_DPATH"/predictions/pred.kwcoco.json
 
 echo '

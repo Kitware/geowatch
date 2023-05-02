@@ -86,10 +86,32 @@ the bash commands directly in msys or git-bash.
 
 From the start menu, run git-bash. Then we need to activate our conda virtualenv:
 
+
 .. code:: bash
 
     source $USERPROFILE/miniconda3/etc/profile.d/conda.sh
     conda activate geowatch
+
+
+The bash tutorial lives `here
+<https://gitlab.kitware.com/computer-vision/geowatch/-/blob/main/tutorial/tutorial1_rgb_network.sh>`_,
+and can be downloaded and run via:
+
+.. code:: bash
+
+    conda install curl
+    curl https://gitlab.kitware.com/computer-vision/geowatch/-/raw/main/tutorial/tutorial1_rgb_network.sh -O tutorial1_rgb_network.sh
+
+    # Show the tutorial (it's readable)
+    cat tutorial1_rgb_network.sh
+
+    # The tutorial is self-executing.
+    ./tutorial1_rgb_network.sh
+
+
+OR if you cloned the source repo:
+
+.. code:: bash
 
     cd geowatch
     ./tutorial/tutorial1_rgb_network.sh
