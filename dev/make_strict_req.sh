@@ -15,3 +15,6 @@ sed 's/>=/==/g' requirements/tests.txt > requirements-strict/tests.txt
 sed 's/>=/==/g' requirements/optional.txt > requirements-strict/optional.txt
 sed 's/>=/==/g' requirements/gdal.txt > requirements-strict/gdal.txt
 sed 's/>=/==/g' requirements/mmcv.txt > requirements-strict/mmcv.txt
+sed 's/>=/==/g' requirements/linting.txt > requirements-strict/linting.txt
+sed 's/>=/==/g' requirements/dvc.txt > requirements-strict/dvc.txt
+sed 's/>=/==/g' requirements/tensorflow.txt > requirements-strict/tensorflow.txt
