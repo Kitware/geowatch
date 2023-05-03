@@ -72,12 +72,12 @@ class PredictConfig(DataModuleConfigMixin):
     """
     Prediction script for the fusion task
     """
-    config_file = scfg.Value(None, alias=['config'], help='config file path')
-    write_out_config_file_to_this_path = scfg.Value(None, alias=['dump'], help=ub.paragraph(
-            '''
-            takes the current command line args and writes them out to a
-            config file at the given path, then exits
-            '''))
+    # config_file = scfg.Value(None, alias=['config'], help='config file path')
+    # write_out_config_file_to_this_path = scfg.Value(None, alias=['dump'], help=ub.paragraph(
+    #         '''
+    #         takes the current command line args and writes them out to a
+    #         config file at the given path, then exits
+    #         '''))
     datamodule = scfg.Value('KWCocoVideoDataModule', help='This must always be KWCocoVideoDataModule for now')
     pred_dataset = scfg.Value(None, help=ub.paragraph(
             '''
