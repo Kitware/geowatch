@@ -6,6 +6,10 @@ Some of this is done hueristically. We assume images come from certain sensors.
 We assume input is orthorectified.  We assume some GSD "target" gsd for video
 and image processing. Note a video GSD will typically be much higher (i.e.
 lower resolution) than an image GSD.
+
+
+SeeAlso:
+    ~/code/watch/watch/utils/kwcoco_extensions.py
 """
 import ubelt as ub
 import scriptconfig as scfg
@@ -96,14 +100,15 @@ def main(cmdline=True, **kwargs):
         kwargs['src'] = kwargs['dst']
         main(**kwargs)
     """
+    import rich
+    config = AddWatchFieldsConfig(kwargs, cmdline=cmdline)
+    rich.print('config = {}'.format(ub.urepr(config, nl=1)))
     from watch import heuristics
     import numpy as np
     import kwcoco
     import kwimage
     from watch.utils import util_parallel
     from watch.utils import kwcoco_extensions
-    config = AddWatchFieldsConfig(kwargs, cmdline=cmdline)
-    print('config = {}'.format(ub.urepr(dict(config), nl=1)))
 
     if config['dst'] is None:
         if config['inplace']:
