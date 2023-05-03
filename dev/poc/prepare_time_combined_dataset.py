@@ -19,7 +19,10 @@ class PrepareTimeAverages(CMDQueueConfig):
 
     resolution = '10GSD'
 
-    integration_window = '1year'
+    time_window = '1year'
+    merge_method = 'mean'
+    remove_seasons = scfg.Value([], nargs='+')
+    spatial_tile_size = None
 
     combine_workers = scfg.Value(4, help='number of workers per combine job')
 
@@ -93,7 +96,6 @@ def main(cmdline=1, **kwargs):
             OUTPUT_BUNDLE_DPATH=config.output_bundle_dpath,
             INPUT_BUNDLE_DPATH=config.input_bundle_dpath,
             REGION=region,
-            TIME_DURATION=config.integration_window,
             # SUFFIX='MeanYear',
             # TIME_DURATION='3months',
             # SUFFIX='Mean3Month10GSD',
@@ -101,7 +103,9 @@ def main(cmdline=1, **kwargs):
             WORKERS=config.combine_workers,
             TRUE_SITE_DPATH=config.true_site_dpath,
             CHANNELS='red|green|blue|nir|swir16|swir22|pan' + other_s2_bands,
+            remove_seasons_str=','.join(config.remove_seasons),
         )
+        fmtdict.update(config)
 
         code = subtemplate(ub.codeblock(
             r'''
@@ -109,10 +113,12 @@ def main(cmdline=1, **kwargs):
                 --kwcoco_fpath="$INPUT_BUNDLE_DPATH/imgonly-${REGION}.kwcoco.json" \
                 --output_kwcoco_fpath="$OUTPUT_BUNDLE_DPATH/imgonly-${REGION}.kwcoco.zip" \
                 --channels="$CHANNELS" \
-                --resolution="$RESOLUTION" \
-                --time_window=$TIME_DURATION \
+                --resolution="$resolution" \
+                --time_window=$time_window \
+                --remove_seasons=$remove_seasons_str \
+                --merge_method=$merge_method \
+                --spatial_tile_size=$spatial_tile_size \
                 --start_time=2010-01-01 \
-                --merge_method=mean \
                 --assets_dname="raw_bands" \
                 --workers=$WORKERS
             '''), fmtdict)
@@ -123,7 +129,7 @@ def main(cmdline=1, **kwargs):
                 r'''
                 python -m watch add_fields \
                     --src $OUTPUT_BUNDLE_DPATH/imgonly-${REGION}.kwcoco.zip \
-                    --dst $OUTPUT_BUNDLE_DPATH/imgonly-${REGION}.kwcoco.zip \
+                    --inplace=True
                 ''', fmtdict)
             field_job = queue.submit(code, depends=[combine_job], name=f'add-fields-{region}')
             code = subtemplate(
@@ -144,6 +150,34 @@ if __name__ == '__main__':
     CommandLine:
 
         DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+        python ~/code/watch/dev/poc/prepare_time_combined_dataset.py \
+            --regions="[
+                    # T&E Regions
+                    AE_R001, BH_R001, BR_R001, BR_R002, BR_R004, BR_R005, CH_R001,
+                    KR_R001,
+                    KR_R002, LT_R001, NZ_R001, US_R001, US_R004, US_R005,
+                    US_R006, US_R007,
+                    # iMerit Regions
+                    AE_C001,
+                    AE_C002,
+                    AE_C003, PE_C001, QA_C001, SA_C005, US_C000, US_C010,
+                    US_C011, US_C012,
+            ]" \
+            --input_bundle_dpath=$DVC_DATA_DPATH/Drop6 \
+            --output_bundle_dpath=$DVC_DATA_DPATH/Drop6-MedianSummer10GSD \
+            --true_site_dpath=$DVC_DATA_DPATH/annotations/drop6_hard_v1/site_models \
+            --true_region_dpath=$DVC_DATA_DPATH/annotations/drop6_hard_v1/region_models \
+            --backend=tmux \
+            --spatial_tile_size=256 \
+            --merge_method=median \
+            --remove_seasons=spring,fall,winter \
+            --tmux_workers=4 \
+            --time_window=3m \
+            --combine_workers=2 \
+            --resolution=10GSD \
+            --run=1
+
+        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
         python ~/code/watch/dev/poc/prepare_time_combined_dataset.py \
             --regions="[
                     # T&E Regions
@@ -220,48 +254,3 @@ if __name__ == '__main__':
             --site_models=$TRUE_SITE_DPATH
     """
     main()
-
-
-__notes__ = r"""
-
-python -m watch.cli.coco_time_combine \
-    --kwcoco_fpath="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6/imgonly-KR_R001.kwcoco.json" \
-    --output_kwcoco_fpath="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6_MeanYear/imgonly-KR_R001.kwcoco.zip" \
-    --channels="red|green|blue" \
-    --resolution="10GSD" \
-    --temporal_window_duration=1year \
-    --merge_method=mean \
-    --workers=4
-
-
-python -m watch.cli.coco_time_combine \
-    --kwcoco_fpath="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6/imgonly-NZ_R001.kwcoco.json" \
-    --output_kwcoco_fpath="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6_MeanYear/imgonly-NZ_R001.kwcoco.zip" \
-    --channels="red|green|blue" \
-    --resolution="10GSD" \
-    --temporal_window_duration=1year \
-    --merge_method=mean \
-    --workers=4
-
-
-python -m watch.tasks.fusion.predict \
-    --package_fpath=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt \
-    --test_dataset=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6_MeanYear/imgonly-KR_R001.kwcoco.zip \
-    --pred_dataset=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6_MeanYear/pred-KR_R001.kwcoco.zip \
-    --chip_overlap="0.3" \
-    --chip_dims="auto" \
-    --time_span="auto" \
-    --time_sampling="auto" \
-    --drop_unused_frames="True"  \
-    --num_workers="0" \
-    --devices="0," \
-    --batch_size="1" \
-    --with_saliency="True" \
-    --with_class="False" \
-    --with_change="False"
-
-
-smartwatch stats /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6_MeanYear/imgonly-KR_R001.kwcoco.zip
-smartwatch visualize /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6_MeanYear/imgonly-KR_R001.kwcoco.zip --smart
-smartwatch visualize /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6_MeanYear/pred-KR_R001.kwcoco.zip --smart
-"""

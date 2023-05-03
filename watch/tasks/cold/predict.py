@@ -107,8 +107,8 @@ CommandLine:
         --year_highbound=None \
         --coefs=cv,rmse,a0,a1,b1,c1 \
         --coefs_bands=0,1,2,3,4,5 \
-        --timestamp=False \
-        --combine=False \
+        --timestamp=True \
+        --combine=True \
         --resolution='10GSD' \
         --workermode='serial' \
         --workers=0
@@ -123,13 +123,43 @@ CommandLine:
     kwcoco reroot \
         --src="$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold.kwcoco.zip \
         --dst="$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold_fixed.kwcoco.zip \
+        --absolute=True
+
         --old_prefix="KR_R001" --new_prefix="../KR_R001"
 
     DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="auto")
+    kwcoco validate "$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold_fixed.kwcoco.zip
+
     smartwatch visualize \
         "$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold.kwcoco.zip \
         --channels="L8:(red|green|blue,red_COLD_a1|green_COLD_a1|blue_COLD_a1,red_COLD_cv|green_COLD_cv|blue_COLD_cv,red_COLD_rmse|green_COLD_rmse|blue_COLD_rmse)" \
         --smart=True
+
+    ####################
+    ### FULL REGION TEST V2
+    ####################
+
+    DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="auto")
+    EXPT_DVC_DPATH=$(smartwatch_dvc --tags=phase2_expt --hardware="auto")
+    python -m watch.tasks.cold.predict \
+        --coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly-KR_R001.kwcoco.json" \
+        --combined_coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly-KR_R001.kwcoco.json" \
+        --out_dpath="$DATA_DVC_DPATH/Drop6/_pycold_combine" \
+        --sensors='L8' \
+        --adj_cloud=False \
+        --method='COLD' \
+        --prob=0.99 \
+        --conse=6 \
+        --cm_interval=60 \
+        --year_lowbound=None \
+        --year_highbound=None \
+        --coefs=cv,rmse,a0,a1,b1,c1 \
+        --coefs_bands=0,1,2,3,4,5 \
+        --timestamp=False \
+        --combine=False \
+        --resolution='10GSD' \
+        --workermode='serial' \
+        --workers=0
 
 
     ########################
