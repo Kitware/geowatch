@@ -9,6 +9,8 @@ dumping, manipulating, validating, and inspecting the data.
 A non exhaustive list of convenience methods / properties of note are shared by
 both site and region models are:
 
+    * dumps - convert to a geojson string
+
     * pandas - convert to a geopandas data frame
 
     * coerce_multiple - read multiple geojson files at once.
