@@ -10,7 +10,7 @@ import ubelt as ub
 import scriptconfig as scfg
 
 
-class AddWatchFieldsConfig(scfg.Config):
+class AddWatchFieldsConfig(scfg.DataConfig):
     """
     Updates image transforms in a kwcoco json file to align all videos to a
     target GSD.
@@ -19,6 +19,11 @@ class AddWatchFieldsConfig(scfg.Config):
         'src': scfg.Value('data.kwcoco.json', help='input kwcoco filepath', position=1),
 
         'dst': scfg.Value(None, help='output kwcoco filepath', position=2),
+
+        'inplace': scfg.Value(False, isflag=True, help=ub.paragraph(
+            '''
+            if True and dst is unspecified then the output will overwrite the input
+            ''')),
 
         'target_gsd': scfg.Value(10.0, help='compute transforms for a target gsd'),
 
@@ -100,6 +105,12 @@ def main(cmdline=True, **kwargs):
     from watch.utils import kwcoco_extensions
     config = AddWatchFieldsConfig(kwargs, cmdline=cmdline)
     print('config = {}'.format(ub.urepr(dict(config), nl=1)))
+
+    if config['dst'] is None:
+        if config['inplace']:
+            config['dst'] = config['dst'] = config['src']
+        else:
+            raise ValueError('must specify dst: {}'.format(config['dst']))
 
     print('read dataset')
     dset = kwcoco.CocoDataset.coerce(config['src'])

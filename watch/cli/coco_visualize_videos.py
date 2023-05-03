@@ -376,6 +376,8 @@ def main(cmdline=True, **kwargs):
         rich.print(f'Filtered {len(coco_images) - len(keep)} images without requested channels. Keeping {len(keep)}')
         selected_gids = keep
 
+    rich.print(f'Will write to: [link={viz_dpath}]{viz_dpath}[/link]')
+
     video_names = []
     for vidid, video in prog:
 

@@ -107,7 +107,7 @@ and can be downloaded and run via:
     cat tutorial1_rgb_network.sh
 
     # The tutorial is self-executing.
-    ./tutorial1_rgb_network.sh
+    source tutorial1_rgb_network.sh
 
 
 OR if you cloned the source repo:

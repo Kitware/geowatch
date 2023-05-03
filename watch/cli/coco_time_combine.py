@@ -158,11 +158,11 @@ class TimeCombineConfig(scfg.DataConfig):
             once.
         '''))
 
-    filter_season = scfg.Value(None, help=ub.paragraph(
+    filter_season = scfg.Value([], nargs='+', help=ub.paragraph(
         '''
             Images within this season(s) will be excluded from the average operation.
             Season options: ['spring', 'summer', 'fall', 'winter']
-        '''))
+        '''), alias=['remove_seasons'])
 
 
 def main(cmdline=1, **kwargs):
@@ -468,7 +468,6 @@ def combine_kwcoco_channels_temporally(config):
     from watch.utils import kwcoco_extensions
     from watch.utils import util_parallel
     from watch.utils.util_yaml import Yaml
-    from watch.tasks.rutgers_material_seg_v2.utils.util_misc import filter_image_ids_by_season
     # Check inputs.
 
     space = 'video'
@@ -986,6 +985,67 @@ def merge_images(window_coco_images, merge_method, requested_chans, space,
     final_img = tmp_dset.imgs[gid]
 
     return final_img
+
+
+def filter_image_ids_by_season(coco_dset, image_ids, filtered_seasons):
+    from watch.utils import util_time
+    hemipshere_to_season_map = {
+        'northern': {
+            'spring': [3, 4, 5],
+            'summer': [6, 7, 8],
+            'fall': [9, 10, 11],
+            'winter': [12, 1, 2]
+        },
+        'southern': {
+            'spring': [9, 10, 11],
+            'summer': [12, 1, 2],
+            'fall': [3, 4, 5],
+            'winter': [6, 7, 8]
+        }
+    }
+
+    if len(image_ids) == 0:
+        print('WARNING: No images to filter.')
+        return []
+
+    if not isinstance(filtered_seasons, list):
+        filtered_seasons = [filtered_seasons]
+
+    filtered_seasons = set(filtered_seasons)
+    valid_seasons = {'spring', 'summer', 'fall', 'winter'}
+
+    invalid_seasons = filtered_seasons - valid_seasons
+    if invalid_seasons:
+        raise ValueError(f'Invalid seasons: {invalid_seasons}')
+
+    # Get hemisphere of region.
+    coco_img = coco_dset.coco_image(image_ids[0])
+    lon, _ = coco_img.img['geos_corners']['coordinates'][0][0]
+
+    if lon > 0:
+        hemisphere = 'northern'
+    else:
+        hemisphere = 'southern'
+
+    month_to_season_map = {}
+    for season, months in hemipshere_to_season_map[hemisphere].items():
+        for month in months:
+            month_to_season_map[month] = season
+
+    final_image_ids = []
+    for image_id in image_ids:
+        coco_img = coco_dset.coco_image(image_id)
+
+        # Get month.
+        dt = util_time.coerce_datetime(coco_img['date_captured'])
+        month = dt.month
+
+        # Get season of month.
+        img_season = month_to_season_map[month]
+        if img_season not in filtered_seasons:
+            final_image_ids.append(image_id)
+
+    return final_image_ids
 
 
 __config__ = TimeCombineConfig

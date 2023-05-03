@@ -205,6 +205,7 @@ def main(cmdline=False, **kwargs):
         >>> }
         >>> main(cmdline=cmdline, **kwargs)
     """
+    config = ReprojectAnnotationsConfig.cli(data=kwargs, cmdline=cmdline)
     import geopandas as gpd  # NOQA
     from watch.utils import util_gis
     from watch.utils import util_parallel
@@ -214,7 +215,6 @@ def main(cmdline=False, **kwargs):
     import kwcoco
     import rich
     import numpy as np
-    config = ReprojectAnnotationsConfig.cli(data=kwargs, cmdline=cmdline)
     rich.print('config = {}'.format(ub.urepr(config, nl=1)))
 
     output_fpath = config['dst']
