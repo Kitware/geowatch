@@ -277,7 +277,7 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
                 print(f'ex={ex}')
                 print(f'ex.__dict__={ex.__dict__}')
                 coco_img = coco_dset.coco_image(gid)
-                print('coco_img = {}'.format(ub.urepr(coco_img, nl=3)))
+                print('coco_img = {}'.format(ub.urepr(coco_img.img, nl=3)))
                 raise
         else:
             if mode == 'process':
