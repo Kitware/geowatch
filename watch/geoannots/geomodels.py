@@ -1,8 +1,66 @@
 """
-Geojson object oriented interface for region and site models
+Geojson object oriented interface for region and site models.
+
+This defines two classes ``SiteModel`` and ``RegionModel``, both of which
+inherit from ``geojson.FeatureCollection``, so all geojson operations are
+valid, but these classes contain extra convenience methods for loading,
+dumping, manipulating, validating, and inspecting the data.
+
+A non exhaustive list of convenience methods / properties of note are shared by
+both site and region models are:
+
+    * pandas - convert to a geopandas data frame
+
+    * coerce_multiple - read multiple geojson files at once.
+
+    * header - a quick way to access the singular header row (region for region models and site for site models).
+
+    * body_features - any row that is not a header is a body feature (site_summaries for region models and observations for site models).
+
+    * validate - checks the site/region model against the schema.
+
+    * random - classmethod to make a random instance of the site / region model for testing
+
+New region model specific convenience methods / properties are:
+
+    * site_summaries
+    * region_id
+    * pandas_summaries
+    * pandas_region
+
+New site model specific convenience methods / properties are:
+
+    * observations
+    * pandas_observations
+    * as_summary
+    * region_id
+    * site_id
+    * status
 
 SeeAlso:
     ../rc/registry.py
+
+The following example illustrates how to read region / site models efficiently
+
+Example:
+    >>> # xdoctest: +REQUIRES(env:HAS_DVC)
+    >>> import watch
+    >>> dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+    >>> region_models_dpath = dvc_data_dpath / 'annotations/drop6/region_models'
+    >>> site_models_dpath = dvc_data_dpath / 'annotations/drop6/site_models'
+    >>> from watch.geoannots import geomodels
+    >>> region_models = list(geomodels.RegionModel.coerce_multiple(region_models_dpath))
+    >>> site_models = list(geomodels.SiteModel.coerce_multiple(site_models_dpath, workers=8))
+    >>> print(f'Number of region models: {len(region_models)}')
+    >>> print(f'Number of site models: {len(site_models)}')
+    >>> # Quick demo of associating sites to regions
+    >>> region_id_to_sites = ub.group_items(site_models, key=lambda s: s.header['properties']['region_id'])
+    >>> region_id_to_num_sites = ub.udict(region_id_to_sites).map_values(len)
+    >>> print('region_id_to_num_sites = {}'.format(ub.urepr(region_id_to_num_sites, nl=1)))
+    >>> # It is also easy to convert these models to geopandas
+    >>> region_model = region_models[0]
+    >>> gdf = region_model.pandas()
+    >>> print(gdf)
 """
 import ubelt as ub
 import geopandas as gpd
@@ -37,9 +95,24 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
         return json.dumps(self, **kw)
 
     @classmethod
-    def coerce_multiple(cls, data):
+    def coerce_multiple(cls, data, allow_raw=False, workers=0, mode='thread',
+                        verbose=1, desc=None):
+        """
+        Load multiple geojson files
+
+        Args:
+            arg (str | PathLike | List[str | PathLike]):
+                an argument that is coerceable to one or more geojson files.
+
+            **kwargs: see :func:`util_gis.coerce_geojson_datas`
+
+        Yields:
+            Self
+        """
         from watch.utils import util_gis
-        infos = list(util_gis.coerce_geojson_datas(data, format='json'))
+        infos = list(util_gis.coerce_geojson_datas(
+            data, format='json', allow_raw=allow_raw, workers=workers,
+            mode=mode, verbose=verbose, desc=desc))
         for info in infos:
             yield cls(**info['data'])
 
@@ -339,6 +412,10 @@ class SiteModel(_Model):
             assert summary['properties']['type'] == 'site'
             summary['properties']['type'] = 'site_summary'
             return SiteSummary(**summary)
+
+    @property
+    def region_id(self):
+        return self.header['properties']['region_id']
 
     @property
     def site_id(self):
