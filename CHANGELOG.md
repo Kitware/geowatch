@@ -13,6 +13,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * fusion.predict can now output pngs
 * Added `request_rlimit_nofile` to KWCocoVideoDataModule for easier ulimit configuration
 * The `fusion.predict` script can now output predictions in cog or png format
+* Added transient labels to heuristics
 
 ### Changed
 

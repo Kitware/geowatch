@@ -36,6 +36,7 @@ HEURISTIC_END_STATES = {
 # TODO: ensure consistency with IARPA?
 # https://smartgitlab.com/TE/annotations/-/wikis/Annotation-Status-Types
 # https://smartgitlab.com/TE/metrics-and-test-framework/-/blob/main/iarpa_smart_metrics/evaluation.py#L1205
+# https://gitlab.kitware.com/smart/annotations-wiki/-/blob/main/Annotation-Status-Types.md
 # NOTE: A "Status" is not a category.
 # It indicates what sort of annotation detail is available.
 HUERISTIC_STATUS_DATA = [
@@ -102,6 +103,12 @@ PHASE_STATUS_TO_KWCOCO_CATNAME = {
     'positive_excluded'         : 'ignore',  # This is positive, but is not "big" enough
     'positive_partial'          : 'positive',  # Does not have phase labels
     'positive_pending'          : 'positive',  # Does not have phase labels
+
+    'transient_positive'        : 'transient',
+    'transient_negative'        : 'negative',
+    'transient_excluded'        : 'ignore',
+    'transient_ignore'          : 'ignore',
+    'transient_pending'         : 'ignore',
 
     'positive_unbounded'        : 'positive',  # Start or end date might not be defined
 }
