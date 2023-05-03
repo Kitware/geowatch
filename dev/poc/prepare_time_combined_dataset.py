@@ -139,6 +139,7 @@ def main(cmdline=1, **kwargs):
                 python -m watch reproject \
                     --src $OUTPUT_BUNDLE_DPATH/imgonly-${REGION}.kwcoco.zip \
                     --dst $OUTPUT_BUNDLE_DPATH/imganns-${REGION}.kwcoco.zip \
+                    --status_to_catname="positive_excluded: positive" \
                     --site_models="$TRUE_SITE_DPATH/${REGION}_*.geojson"
                 ''', fmtdict)
             queue.submit(code, depends=[field_job], name=f'reproject-ann-{region}')
@@ -177,6 +178,14 @@ if __name__ == '__main__':
             --combine_workers=4 \
             --resolution=10GSD \
             --backend=tmux \
+            --run=1
+
+        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+        python -m watch.cli.prepare_splits \
+            --base_fpath=$DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-*.kwcoco.zip \
+            --constructive_mode=True \
+            --suffix=rawbands \
+            --backend=tmux --tmux_workers=6 \
             --run=1
 
         DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
