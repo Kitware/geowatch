@@ -40,89 +40,162 @@ HEURISTIC_END_STATES = {
 # NOTE: A "Status" is not a category.
 # It indicates what sort of annotation detail is available.
 HUERISTIC_STATUS_DATA = [
-    {'name': 'seen', 'color': 'cyan'},
-    {'name': 'train', 'color': 'cyan'},
+    ### Misc Rows
+    {
+        'status': 'seen',
+        'color': 'cyan',
+        'kwcoco_catname': None,
+        'positive_match_confusion': 'gt_seen',
+    },
+    {
+        'status': 'train',
+        'color': 'cyan',
+        'kwcoco_catname': None,
+        'positive_match_confusion': 'gt_seen',
+    },
 
-    {'name': 'ignore', 'color': 'lightsalmon'},
+    ### Ignore Rows
+    {
+        'status': 'ignore',
+        'color': 'lightsalmon',
+        'kwcoco_catname': 'ignore',
+        'positive_match_confusion': 'gt_ignore',
+    },
 
+    ### Negative Rows
     # Note: 'colors for these status labels are undefined, using neutral gray
-    {'name': 'negative', 'color': 'gray'},
-    {'name': 'negative_unbounded', 'color': 'gray'},
+    {
+        'status': 'negative',
+        'color': 'gray',
+        'kwcoco_catname': 'negative',
+        'positive_match_confusion': 'gt_false_pos',
+    },
+    {
+        'status': 'negative_unbounded',
+        'color': 'gray',
+        'kwcoco_catname': 'negative',
+        'positive_match_confusion': 'gt_false_pos',
+    },
 
-    {'name': 'positive_excluded', 'color': 'gray'},
+    ### Positive Rows
+    {
+        'status': 'positive_annotated',
+        'color': 'black',
+        'kwcoco_catname': None,  # Requires a category phase label, do not use status to map
+        'positive_match_confusion': 'gt_true_pos',
+    },
+    {
+        'status': 'positive_annotated_static',
+        'color': 'black',
+        'kwcoco_catname': None,  # Requires a category phase label, do not use status to map
+        'positive_match_confusion': 'gt_true_pos',
+    },
+    {
+        'status': 'positive_excluded',
+        'color': 'gray',
+        'kwcoco_catname': 'positive_excluded',  # This is positive, but is not "big" enough
+        'positive_match_confusion': 'gt_false_pos',
+    },
+    {
+        'status': 'positive_partial',
+        'color': 'black',
+        'kwcoco_catname': 'positive',
+        'positive_match_confusion': 'gt_true_pos',
+    },
+    {
+        'status': 'positive_pending',
+        'color': 'black',
+        'kwcoco_catname': 'positive',
+        'positive_match_confusion': 'gt_true_pos',
+    },
 
-    {'name': 'positive_annotated', 'color': 'black'},
-    {'name': 'positive_annotated_static', 'color': 'black'},
-    {'name': 'positive_partial', 'color': 'black'},
-    {'name': 'positive_pending', 'color': 'black'},
+    {
+        'status': 'positive_unbounded',
+        'color': 'darkviolet',
+        'kwcoco_catname': 'positive',   # Start or end date might not be defined
+        'positive_match_confusion': 'gt_positive_unbounded',
+    },
 
-    {'name': 'positive_unbounded', 'color': 'darkviolet'},
+    ### Prediction Rows
 
     # TODO? Add alias of pending for "positive_pending"? For QFabric?
-
-    {'name': 'system_confirmed', 'color': 'kitware_blue'},
+    {
+        'name': 'system_confirmed',
+        'color': 'kitware_blue'
+    },
 ]
+
+# Backwards compat
+for row in HUERISTIC_STATUS_DATA:
+    row['name'] = row['status']
+
+
+# Convinience mappings used in reproject annotations
+PHASE_STATUS_TO_KWCOCO_CATNAME = {
+    row['name']: row['kwcoco_catname'] for row in HUERISTIC_STATUS_DATA
+    if 'kwcoco_catname' in row
+}
 
 
 # "Positive Match Confusion" is the label the truth is given when it has some
 # match in our set of positive predictions.  Denote what type of confusion a
 # truth status incurs when it is matched.
-PHASE_STATUS_TO_MATCHED_CONFUSION = {
-    'seen'                      : 'gt_seen',
-    'train'                     : 'gt_seen',
+# PHASE_STATUS_TO_MATCHED_CONFUSION = {
+#     'seen'                      : 'gt_seen',
+#     'train'                     : 'gt_seen',
 
-    'ignore'                    : 'gt_ignore',
+#     'ignore'                    : 'gt_ignore',
 
-    'negative'                  : 'gt_false_pos',
-    'negative_unbounded'        : 'gt_false_pos',
+#     'negative'                  : 'gt_false_pos',
+#     'negative_unbounded'        : 'gt_false_pos',
 
-    'positive_excluded'         : 'gt_false_pos',
+#     'positive_excluded'         : 'gt_false_pos',
 
-    'positive_annotated'        : 'gt_true_pos',
-    'positive_annotated_static' : 'gt_true_pos',
-    'positive_partial'          : 'gt_true_pos',
-    'positive_pending'          : 'gt_true_pos',
+#     'positive_annotated'        : 'gt_true_pos',
+#     'positive_annotated_static' : 'gt_true_pos',
+#     'positive_partial'          : 'gt_true_pos',
+#     'positive_pending'          : 'gt_true_pos',
 
-    'positive_unbounded'        : 'gt_positive_unbounded',
+#     'positive_unbounded'        : 'gt_positive_unbounded',
 
-}
+# }
 
 # Mapping of annotation status to the kwcoco category name
 # Used in project annotations
-PHASE_STATUS_TO_KWCOCO_CATNAME = {
-    'seen'                     : None,
-    'train'                    : None,
+# PHASE_STATUS_TO_KWCOCO_CATNAME = {
+#     'seen'                     : None,
+#     'train'                    : None,
 
-    'ignore'                    : 'ignore',
+#     'ignore'                    : 'ignore',
 
-    'negative'                  : 'negative',
-    'negative_unbounded'        : 'negative',
+#     'negative'                  : 'negative',
+#     'negative_unbounded'        : 'negative',
 
-    'positive_annotated'        : None,  # This must have a category already do not map
-    'positive_annotated_static' : None,  # This must have a category already do not map
-    'positive_excluded'         : 'ignore',  # This is positive, but is not "big" enough
-    'positive_partial'          : 'positive',  # Does not have phase labels
-    'positive_pending'          : 'positive',  # Does not have phase labels
+#     'positive_annotated'        : None,  # This must have a category already do not map
+#     'positive_annotated_static' : None,  # This must have a category already do not map
+#     'positive_excluded'         : 'ignore',  # This is positive, but is not "big" enough
+#     'positive_partial'          : 'positive',  # Does not have phase labels
+#     'positive_pending'          : 'positive',  # Does not have phase labels
 
-    'transient_positive'        : 'transient',
-    'transient_negative'        : 'negative',
-    'transient_excluded'        : 'ignore',
-    'transient_ignore'          : 'ignore',
-    'transient_pending'         : 'ignore',
+#     'transient_positive'        : 'transient',
+#     'transient_negative'        : 'negative',
+#     'transient_excluded'        : 'ignore',
+#     'transient_ignore'          : 'ignore',
+#     'transient_pending'         : 'ignore',
 
-    'positive_unbounded'        : 'positive',  # Start or end date might not be defined
-}
+#     'positive_unbounded'        : 'positive',  # Start or end date might not be defined
+# }
 
 IARPA_STATUS_TO_INFO = {row['name']: row for row in HUERISTIC_STATUS_DATA}
 
 # update HUERISTIC_STATUS_DATA
-for name, row in IARPA_STATUS_TO_INFO.items():
-    if name in PHASE_STATUS_TO_KWCOCO_CATNAME:
-        row['kwcoco_catname'] = PHASE_STATUS_TO_KWCOCO_CATNAME[name]
+# for name, row in IARPA_STATUS_TO_INFO.items():
+#     if name in PHASE_STATUS_TO_KWCOCO_CATNAME:
+#         row['kwcoco_catname'] = PHASE_STATUS_TO_KWCOCO_CATNAME[name]
 
-for name, row in IARPA_STATUS_TO_INFO.items():
-    if name in PHASE_STATUS_TO_MATCHED_CONFUSION:
-        row['positive_match_confusion'] = PHASE_STATUS_TO_MATCHED_CONFUSION[name]
+# for name, row in IARPA_STATUS_TO_INFO.items():
+#     if name in PHASE_STATUS_TO_MATCHED_CONFUSION:
+#         row['positive_match_confusion'] = PHASE_STATUS_TO_MATCHED_CONFUSION[name]
 
 
 if 0:
