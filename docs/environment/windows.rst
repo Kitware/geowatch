@@ -40,7 +40,7 @@ It is recommened to be in a virtual enviornment
    conda create -n geowatch python=3.10 -y
    conda activate geowatch
 
-   conda install gdal jq scikit-learn ffmpeg -c conda-forge -y
+   conda install gdal jq scikit-learn ffmpeg curl -c conda-forge -y
 
    # If you don't have a GPU
    conda install pytorch torchvision cpuonly -c pytorch -y
@@ -101,7 +101,6 @@ and can be downloaded and run via:
 
 .. code:: bash
 
-    conda install curl
     curl -LJO https://gitlab.kitware.com/computer-vision/geowatch/-/raw/main/tutorial/tutorial1_rgb_network.sh
 
     # Show the tutorial (it's readable)

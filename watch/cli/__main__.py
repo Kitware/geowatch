@@ -85,9 +85,10 @@ def main(cmdline=True, **kw):
     WATCH_LOOSE_CLI = os.environ.get('WATCH_LOOSE_CLI', '')
 
     # https://emojiterra.com/time/
+    # Not sure how to make this consistent on different terminals
     fun_header = ub.codeblock(
         '''
-        🛰️ ⌚🛰️           🧠       🛰️ ⌚🛰️
+        🛰️⌚🛰️           🧠       🛰️⌚🛰️
         🌍🌎🌏        👁️   👁️      🌏🌎🌍
         ''')
 
@@ -103,7 +104,7 @@ def main(cmdline=True, **kw):
         Version: {watch.__version__}
         ''')
 
-    FUN = (os.getenv('FUN', '') or 1) and not os.getenv('NOFUN', '')
+    FUN = os.getenv('FUN', '1') and not os.getenv('NOFUN', '')
     if FUN:
         description = fun_header + '\n' + boring_description
     else:
