@@ -101,7 +101,7 @@ def main(cmdline=True, **kwargs):
         main(**kwargs)
     """
     import rich
-    config = AddWatchFieldsConfig(kwargs, cmdline=cmdline)
+    config = AddWatchFieldsConfig.cli(default=kwargs, cmdline=cmdline, strict=True)
     rich.print('config = {}'.format(ub.urepr(config, nl=1)))
     from watch import heuristics
     import numpy as np
