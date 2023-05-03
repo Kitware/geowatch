@@ -17,8 +17,8 @@ dvc pull -r local_store annotations.dvc
 
 cd /flash/smart_data_dvc/Drop6
 
-SSD_DVC_DATA_DPATH=$(smartwatch_dvc --tags phase2_data --hardware=ssd)
-HDD_DVC_DATA_DPATH=$(smartwatch_dvc --tags phase2_data --hardware=hdd)
+SSD_DVC_DATA_DPATH=$(geowatch_dvc --tags phase2_data --hardware=ssd)
+HDD_DVC_DATA_DPATH=$(geowatch_dvc --tags phase2_data --hardware=hdd)
 echo "SSD_DVC_DATA_DPATH = $SSD_DVC_DATA_DPATH"
 echo "HDD_DVC_DATA_DPATH = $HDD_DVC_DATA_DPATH"
 

@@ -47,8 +47,8 @@ Ignore:
 
     # Drop 6
     export CUDA_VISIBLE_DEVICES="0,1"
-    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-    DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+    DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+    DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
     BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6
     python -m watch.cli.prepare_teamfeats \
         --base_fpath "$BUNDLE_DPATH"/imganns-*.kwcoco.zip \
@@ -64,8 +64,8 @@ Ignore:
 
     # Drop 6
     export CUDA_VISIBLE_DEVICES="0,1"
-    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-    DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+    DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+    DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
     BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6
     python -m watch.cli.prepare_teamfeats \
         --base_fpath "$BUNDLE_DPATH"/imganns-KR_R00*.kwcoco.zip \
@@ -83,8 +83,8 @@ Ignore:
 
     # TimeCombined V2
     export CUDA_VISIBLE_DEVICES="0,1"
-    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-    DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+    DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+    DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
     BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2
     python -m watch.cli.prepare_teamfeats \
         --base_fpath "$BUNDLE_DPATH"/imganns-*[0-9].kwcoco.zip \
@@ -99,7 +99,7 @@ Ignore:
         --assets_dname=teamfeats \
         --gres=0, --tmux_workers=1 --backend=tmux --run=0
 
-    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+    DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
     python -m watch.cli.prepare_splits \
         --base_fpath=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns*_I2LS*.kwcoco.zip \
         --constructive_mode=True \
@@ -107,8 +107,8 @@ Ignore:
         --backend=tmux --tmux_workers=6 \
         --run=1
 
-    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-    DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+    DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+    DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
     TRUE_SITE_DPATH=$DVC_DATA_DPATH/annotations/drop6_hard_v1/site_models
     OUTPUT_BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2
     python -m watch reproject \
@@ -675,7 +675,7 @@ main = prep_feats
 if __name__ == '__main__':
     """
     CommandLine:
-        DVC_DPATH=$(smartwatch_dvc)
+        DVC_DPATH=$(geowatch_dvc)
         python -m watch.cli.prepare_teamfeats \
             --base_fpath="$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json" \
             --gres=0 \
@@ -690,7 +690,7 @@ if __name__ == '__main__':
 
         # TO UPDATE ANNOTS
         # Update to whatever the state of the annotations submodule is
-        DVC_DPATH=$(smartwatch_dvc)
+        DVC_DPATH=$(geowatch_dvc)
         python -m watch reproject_annotations \
             --src $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
             --dst $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
@@ -699,7 +699,7 @@ if __name__ == '__main__':
         kwcoco stats $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data_20220203.kwcoco.json $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json
 
         # Team Features on Drop2
-        DVC_DPATH=$(smartwatch_dvc)
+        DVC_DPATH=$(geowatch_dvc)
         python -m watch.cli.prepare_teamfeats \
             --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
             --gres=0,1 --with_depth=0 --with_materials=False  --with_invariants=False \
@@ -707,7 +707,7 @@ if __name__ == '__main__':
 
         ###
         DATASET_CODE=Aligned-Drop2-TA1-2022-02-24
-        DVC_DPATH=$(smartwatch_dvc)
+        DVC_DPATH=$(geowatch_dvc)
         DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
         KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
         python -m watch.cli.prepare_teamfeats \
@@ -721,7 +721,7 @@ if __name__ == '__main__':
             --skip_existing=0 --run=0
 
         ###
-        DVC_DPATH=$(smartwatch_dvc)
+        DVC_DPATH=$(geowatch_dvc)
         DATASET_CODE=Aligned-Drop3-TA1-2022-03-10
         KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
         python -m watch.cli.prepare_teamfeats \

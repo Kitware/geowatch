@@ -248,25 +248,28 @@ def main(cmdline=1, **kwargs):
             else:
                 start_images.append(coco_img)
 
-        start_features = []
-        for coco_img in start_images:
-            feat = building_in_image_features(coco_img, site_id, config)
-            start_features.append(feat)
+        try:
+            start_features = []
+            for coco_img in start_images:
+                feat = building_in_image_features(coco_img, site_id, config)
+                start_features.append(feat)
 
-        end_features = []
-        for coco_img in end_images:
-            feat = building_in_image_features(coco_img, site_id, config)
-            end_features.append(feat)
+            end_features = []
+            for coco_img in end_images:
+                feat = building_in_image_features(coco_img, site_id, config)
+                end_features.append(feat)
 
-        if len(start_features) and len(end_features):
-            max_start_score = max(f['max_score'] for f in start_features)
-            max_end_score = max(f['max_score'] for f in end_features)
-            accept = (
-                max_start_score <= config.start_max_score and
-                max_end_score >= config.end_min_score
-            )
-        else:
-            # Unobservable case, automatically accept
+            if len(start_features) and len(end_features):
+                max_start_score = max(f['max_score'] for f in start_features)
+                max_end_score = max(f['max_score'] for f in end_features)
+                accept = (
+                    max_start_score <= config.start_max_score and
+                    max_end_score >= config.end_min_score
+                )
+            else:
+                # Unobservable case, automatically accept
+                accept = True
+        except CouldNotValidate:
             accept = True
         site_to_accept[site_id] = accept
 
@@ -277,7 +280,16 @@ def main(cmdline=1, **kwargs):
     site_to_site_fpath = ub.udict({
         p.stem: p for p in input_site_fpaths
     })
-    assert set(site_to_site_fpath) ==  set(site_id_to_summary)
+
+    # assert set(site_to_site_fpath) == set(site_id_to_summary)
+    sites_with_paths = set(site_to_site_fpath)
+    sites_with_summary = set(site_id_to_summary)
+    if sites_with_paths != sites_with_summary:
+        print('sites_with_paths = {}'.format(ub.urepr(sites_with_paths, nl=1)))
+        print('sites_with_summary = {}'.format(ub.urepr(sites_with_summary, nl=1)))
+        raise AssertionError(
+            f'sites with paths {len(sites_with_paths)} are not the same as '
+            f'sites with summaries {len(sites_with_summary)}')
 
     # Copy the filtered site models over to the output directory
     keep_site_fpaths = site_to_site_fpath.subdict(accept_sites)
@@ -291,7 +303,7 @@ def main(cmdline=1, **kwargs):
         [region_model.header] + list(new_summaries))
 
     output_region_fpath.parent.ensuredir()
-    with safer.open(output_region_fpath, 'w', temp_file=True) as file:
+    with safer.open(output_region_fpath, 'w', temp_file=not ub.WIN32) as file:
         json.dump(new_region_model, file, indent=4)
 
     proc_context.stop()
@@ -299,7 +311,7 @@ def main(cmdline=1, **kwargs):
     if config.output_site_manifest_fpath is not None:
         filter_output['files'] = [os.fspath(output_region_fpath)]
         print(f'Write filtered site result to {config.output_site_manifest_fpath}')
-        with safer.open(config.output_site_manifest_fpath, 'w', temp_file=True) as file:
+        with safer.open(config.output_site_manifest_fpath, 'w', temp_file=not ub.WIN32) as file:
             json.dump(filter_output, file, indent=4)
 
 
@@ -313,8 +325,11 @@ def building_in_image_features(coco_img, site_id, config):
     box_annots = annots.compress(~flags)
     poly_annots = annots.compress(flags)
     is_main_poly = [t == site_id for t in poly_annots.lookup('track_id')]
-    main_poly_annot = poly_annots.compress(is_main_poly)
-    assert len(main_poly_annot) == 1
+    main_poly_annots = poly_annots.compress(is_main_poly)
+    if len(main_poly_annots) > 1:
+        warnings.warn('FIXME: Len of "main-poly-annots" is not 1.')
+    elif len(main_poly_annots) == 0:
+        raise CouldNotValidate('We dont expect to be here')
 
     flags = [cname not in IGNORE_CLASS_NAMES for cname in box_annots.category_names]
     box_annots = box_annots.compress(flags)
@@ -331,7 +346,8 @@ def building_in_image_features(coco_img, site_id, config):
 
     proposal_gdf = gpd.GeoDataFrame({
         'geometry': [
-            kwimage.MultiPolygon.coerce(p).to_shapely() for p in main_poly_annot.lookup('segmentation')
+            kwimage.MultiPolygon.coerce(p).to_shapely()
+            for p in main_poly_annots.lookup('segmentation')
         ],
     })
     proposal_geom = proposal_gdf.iloc[0]['geometry']
@@ -363,6 +379,10 @@ def building_in_image_features(coco_img, site_id, config):
                 feat['max_score'] = cand_boxes['score'].max()
                 feat['num_cands'] = len(cand_boxes)
         return feat
+
+
+class CouldNotValidate(Exception):
+    ...
 
 
 if __name__ == '__main__':
@@ -494,7 +514,7 @@ Ignore:
         --pipeline=bas_building_vali --skip_existing=1 \
         --run=1
 
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 gwmlops aggregate \
     --pipeline=bas_building_vali \
     --target \
@@ -567,7 +587,7 @@ python ~/code/watch/dev/wip/grid_sitevali_crops.py --sub=_anns \
     /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/buildings/buildings_id_61b8c2c7/_vizme
 
 
-NODE_DPATH=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/buildings/buildings_id_fd298dba/
+NODE_DPATH=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/buildings/buildings_id_fd298dba
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 
 geowatch reproject \
@@ -599,9 +619,9 @@ python ~/code/watch/dev/wip/grid_sitevali_crops.py \
     --sub=_anns \
     $NODE_DPATH/_vizme
 
-python watch.tasks.dino_detector.building_validator \
+python -m watch.tasks.dino_detector.building_validator \
     --input_kwcoco "$NODE_DPATH/pred_boxes.kwcoco.zip" \
-    --input_region "$NODE_DPATH/.pred/valicrop/*/.pred/bas_poly/*/site_summaries_manifest.json" \
+    --input_region $NODE_DPATH/.pred/valicrop/*/.pred/bas_poly/*/site_summaries_manifest.json \
     --output_region_fpath "$NODE_DPATH/filtered_summaries.json" \
     --box_isect_threshold 0.1 \
     --box_score_threshold 0.1 \

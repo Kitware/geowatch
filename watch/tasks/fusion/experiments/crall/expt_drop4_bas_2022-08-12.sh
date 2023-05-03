@@ -2,19 +2,19 @@
 __doc__='
 
 # Sync yardrat
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags=phase2_expt --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags=phase2_expt --hardware=auto)
 rsync -avprPR yardrat:data/dvc-repos/smart_expt_dvc/./training/yardrat/jon.crall/Drop6/runs/ "$DVC_EXPT_DPATH"
 
 '
 
 # Register wherever your data lives
-smartwatch_dvc add --name=smart_data --path="$HOME"/data/dvc-repos/smart_data_dvc --hardware=hdd --priority=100 --tags=phase2_data
-smartwatch_dvc add --name=smart_expt --path="$HOME"/data/dvc-repos/smart_expt_dvc --hardware=hdd --priority=100 --tags=phase2_expt
-smartwatch_dvc list
+geowatch_dvc add --name=smart_data --path="$HOME"/data/dvc-repos/smart_data_dvc --hardware=hdd --priority=100 --tags=phase2_data
+geowatch_dvc add --name=smart_expt --path="$HOME"/data/dvc-repos/smart_expt_dvc --hardware=hdd --priority=100 --tags=phase2_expt
+geowatch_dvc list
 
-PHASE1_DATA_DPATH=$(smartwatch_dvc --tags="phase1_data")
-PHASE2_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data")
-PHASE2_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+PHASE1_DATA_DPATH=$(geowatch_dvc --tags="phase1_data")
+PHASE2_DATA_DPATH=$(geowatch_dvc --tags="phase2_data")
+PHASE2_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 echo "PHASE1_DATA_DPATH = $PHASE1_DATA_DPATH"
 echo "PHASE2_DATA_DPATH = $PHASE2_DATA_DPATH"
 echo "PHASE2_EXPT_DPATH = $PHASE2_EXPT_DPATH"
@@ -24,8 +24,8 @@ INITIAL_STATE_V323="$PHASE1_DATA_DPATH"/models/fusion/eval3_candidates/packages/
 export CUDA_VISIBLE_DEVICES=0
 PHASE2_DATA_DPATH=$HOME/data/dvc-repos/smart_data_dvc
 PHASE2_EXPT_DPATH=$HOME/data/dvc-repos/smart_expt_dvc
-#PHASE2_DATA_DPATH=$(smartwatch_dvc)
-#PHASE2_DATA_DPATH=$(smartwatch_dvc --hardware="hdd")
+#PHASE2_DATA_DPATH=$(geowatch_dvc)
+#PHASE2_DATA_DPATH=$(geowatch_dvc --hardware="hdd")
 WORKDIR=$PHASE2_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
 KWCOCO_BUNDLE_DPATH=$PHASE2_DATA_DPATH/$DATASET_CODE
@@ -97,9 +97,9 @@ python -m watch.tasks.fusion.fit \
 
 #### Retrain on Drop4
 export CUDA_VISIBLE_DEVICES=1
-PHASE1_DATA_DPATH=$(smartwatch_dvc --tags="phase1_data")
-PHASE2_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data")
-PHASE2_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+PHASE1_DATA_DPATH=$(geowatch_dvc --tags="phase1_data")
+PHASE2_DATA_DPATH=$(geowatch_dvc --tags="phase2_data")
+PHASE2_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
 TRAIN_FNAME=data_train.kwcoco.json
 VALI_FNAME=data_vali.kwcoco.json
@@ -137,9 +137,9 @@ python -m watch.tasks.fusion.fit \
 
 #### Retrain on Drop4
 export CUDA_VISIBLE_DEVICES=1
-PHASE1_DATA_DPATH=$(smartwatch_dvc --tags="phase1_data")
-PHASE2_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data")
-PHASE2_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+PHASE1_DATA_DPATH=$(geowatch_dvc --tags="phase1_data")
+PHASE2_DATA_DPATH=$(geowatch_dvc --tags="phase2_data")
+PHASE2_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
 TRAIN_FNAME=data_train.kwcoco.json
 VALI_FNAME=data_vali.kwcoco.json
@@ -180,8 +180,8 @@ python -m watch.tasks.fusion.fit \
 
 #### Continue training on 10GSD From V001
 export CUDA_VISIBLE_DEVICES=0
-PHASE2_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware='ssd')
-PHASE2_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+PHASE2_DATA_DPATH=$(geowatch_dvc --tags="phase2_data" --hardware='ssd')
+PHASE2_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 #ls -altr $PHASE2_EXPT_DPATH/training/horologic/jon.crall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_Retrain_V001/lightning_logs/version_3/checkpoints/
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
 TRAIN_FNAME=data_train.kwcoco.json
@@ -214,8 +214,8 @@ python -m watch.tasks.fusion.fit \
 
 #### Continue training on 15GSD From V001 with dicefocal
 export CUDA_VISIBLE_DEVICES=1
-PHASE2_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware='ssd')
-PHASE2_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+PHASE2_DATA_DPATH=$(geowatch_dvc --tags="phase2_data" --hardware='ssd')
+PHASE2_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
 TRAIN_FNAME=data_train.kwcoco.json
 VALI_FNAME=data_vali.kwcoco.json
@@ -251,8 +251,8 @@ python -m watch.tasks.fusion.fit \
 
 #### Continue training on 10GSD From V002
 export CUDA_VISIBLE_DEVICES=2
-PHASE2_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware='ssd')
-PHASE2_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+PHASE2_DATA_DPATH=$(geowatch_dvc --tags="phase2_data" --hardware='ssd')
+PHASE2_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
 TRAIN_FNAME=data_train.kwcoco.json
 VALI_FNAME=data_vali.kwcoco.json
@@ -286,8 +286,8 @@ python -m watch.tasks.fusion.fit \
 
 #### Start from scratch at 10GSD
 export CUDA_VISIBLE_DEVICES=3
-PHASE2_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware='ssd')
-PHASE2_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+PHASE2_DATA_DPATH=$(geowatch_dvc --tags="phase2_data" --hardware='ssd')
+PHASE2_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 #ls -altr $PHASE2_EXPT_DPATH/training/horologic/jon.crall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_Retrain_V001/lightning_logs/version_3/checkpoints/
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
 TRAIN_FNAME=data_train.kwcoco.json
@@ -324,8 +324,8 @@ python -m watch.tasks.fusion.fit \
 #### On Toothbrush
 #### Start from scratch at NATIVE GSD
 export CUDA_VISIBLE_DEVICES=1
-PHASE2_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware='ssd')
-PHASE2_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+PHASE2_DATA_DPATH=$(geowatch_dvc --tags="phase2_data" --hardware='ssd')
+PHASE2_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
 TRAIN_FNAME=data_train.kwcoco.json
 VALI_FNAME=data_vali.kwcoco.json
@@ -363,8 +363,8 @@ python -m watch.tasks.fusion.fit \
 
 #### On Horologic (Train a joint saliency + change + class network)
 export CUDA_VISIBLE_DEVICES=1
-PHASE2_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware='ssd')
-PHASE2_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+PHASE2_DATA_DPATH=$(geowatch_dvc --tags="phase2_data" --hardware='ssd')
+PHASE2_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
 TRAIN_FNAME=data_train.kwcoco.json
 VALI_FNAME=data_vali.kwcoco.json
@@ -414,8 +414,8 @@ python -m watch.tasks.fusion.fit \
 
 #### On Ooo
 export CUDA_VISIBLE_DEVICES=1
-PHASE2_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data")
-PHASE2_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+PHASE2_DATA_DPATH=$(geowatch_dvc --tags="phase2_data")
+PHASE2_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
 TRAIN_FNAME=data_train.kwcoco.json
 VALI_FNAME=data_vali.kwcoco.json
@@ -462,8 +462,8 @@ python -m watch.tasks.fusion.fit \
     --decouple_resolution=0 --auto_resume
 
 export CUDA_VISIBLE_DEVICES=1
-PHASE2_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data")
-PHASE2_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+PHASE2_DATA_DPATH=$(geowatch_dvc --tags="phase2_data")
+PHASE2_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
 TRAIN_FNAME=data_train.kwcoco.json
 VALI_FNAME=data_vali.kwcoco.json
@@ -513,8 +513,8 @@ python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=1
-PHASE2_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data")
-PHASE2_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+PHASE2_DATA_DPATH=$(geowatch_dvc --tags="phase2_data")
+PHASE2_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
 TRAIN_FNAME=data_train.kwcoco.json
 VALI_FNAME=data_vali.kwcoco.json
@@ -565,8 +565,8 @@ python -m watch.tasks.fusion.fit \
 #### On Yardrat
 
 export CUDA_VISIBLE_DEVICES=0
-PHASE2_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data")
-PHASE2_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+PHASE2_DATA_DPATH=$(geowatch_dvc --tags="phase2_data")
+PHASE2_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
 TRAIN_FNAME=data_train.kwcoco.json
 VALI_FNAME=data_vali.kwcoco.json
@@ -611,9 +611,9 @@ python -m watch.tasks.fusion.fit \
 # On Horologic
 #### Retrain on Drop4
 export CUDA_VISIBLE_DEVICES=0
-PHASE1_DATA_DPATH=$(smartwatch_dvc --tags="phase1_data")
-PHASE2_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware='ssd')
-PHASE2_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+PHASE1_DATA_DPATH=$(geowatch_dvc --tags="phase1_data")
+PHASE2_DATA_DPATH=$(geowatch_dvc --tags="phase2_data" --hardware='ssd')
+PHASE2_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
 TRAIN_FNAME=data_train.kwcoco.json
 VALI_FNAME=data_vali.kwcoco.json
@@ -660,9 +660,9 @@ python -m watch.tasks.fusion.fit \
 # On Namek
 #### Retrain on Drop4
 export CUDA_VISIBLE_DEVICES=1
-PHASE1_DATA_DPATH=$(smartwatch_dvc --tags="phase1_data")
-PHASE2_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data")
-PHASE2_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+PHASE1_DATA_DPATH=$(geowatch_dvc --tags="phase1_data")
+PHASE2_DATA_DPATH=$(geowatch_dvc --tags="phase2_data")
+PHASE2_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
 TRAIN_FNAME=data_train.kwcoco.json
 VALI_FNAME=data_vali.kwcoco.json
@@ -707,8 +707,8 @@ python -m watch.tasks.fusion.fit \
 
 ## On Toothbrush
 export CUDA_VISIBLE_DEVICES=1
-PHASE2_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="ssd")
-PHASE2_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+PHASE2_DATA_DPATH=$(geowatch_dvc --tags="phase2_data" --hardware="ssd")
+PHASE2_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
 TRAIN_FNAME=data_train.kwcoco.json
 VALI_FNAME=data_vali.kwcoco.json
@@ -758,8 +758,8 @@ python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=0
-PHASE2_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="ssd")
-PHASE2_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+PHASE2_DATA_DPATH=$(geowatch_dvc --tags="phase2_data" --hardware="ssd")
+PHASE2_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
 TRAIN_FNAME=data_train.kwcoco.json
 VALI_FNAME=data_vali.kwcoco.json
@@ -808,8 +808,8 @@ python -m watch.tasks.fusion.fit \
     --decouple_resolution=0
 
 export CUDA_VISIBLE_DEVICES=1
-PHASE2_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="ssd")
-PHASE2_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+PHASE2_DATA_DPATH=$(geowatch_dvc --tags="phase2_data" --hardware="ssd")
+PHASE2_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
 TRAIN_FNAME=data_train.kwcoco.json
 VALI_FNAME=data_vali.kwcoco.json
@@ -866,8 +866,8 @@ python -m watch.tasks.fusion.fit \
 
 # Fit 
 export CUDA_VISIBLE_DEVICES=1
-PHASE2_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="ssd")
-PHASE2_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+PHASE2_DATA_DPATH=$(geowatch_dvc --tags="phase2_data" --hardware="ssd")
+PHASE2_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
 TRAIN_FNAME=combo_train_I.kwcoco.json
 VALI_FNAME=combo_vali_I.kwcoco.json
@@ -945,9 +945,9 @@ python -m watch.tasks.fusion.fit \
 
 ### AAGGG FLASHFS!
 
-PHASE2_DATA_DPATH_HDD=$(smartwatch_dvc --tags="phase2_data" --hardware="hdd")
+PHASE2_DATA_DPATH_HDD=$(geowatch_dvc --tags="phase2_data" --hardware="hdd")
 echo "PHASE2_DATA_DPATH_HDD = $PHASE2_DATA_DPATH_HDD"
-PHASE2_DATA_DPATH_SSD=$(smartwatch_dvc --tags="phase2_data" --hardware="ssd")
+PHASE2_DATA_DPATH_SSD=$(geowatch_dvc --tags="phase2_data" --hardware="ssd")
 rsync -avprPR "$PHASE2_DATA_DPATH_SSD"/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/./_assets "$PHASE2_DATA_DPATH_HDD"/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/
 rsync -avp "$PHASE2_DATA_DPATH_SSD"/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/*.kwcoco.json "$PHASE2_DATA_DPATH_HDD"/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/
 
@@ -959,8 +959,8 @@ rsync -avprPR "$PHASE2_DATA_DPATH_HDD"/Drop4-BAS/./_assets "$PHASE2_DATA_DPATH_S
 rsync -avp "$PHASE2_DATA_DPATH_HDD"/Drop4-BAS/*.kwcoco.json "$PHASE2_DATA_DPATH_SSD"/Drop4-BAS
 
 
-PHASE2_DATA_DPATH_HDD=$(smartwatch_dvc --tags="phase2_data" --hardware="hdd")
-PHASE2_DATA_DPATH_SSD=$(smartwatch_dvc --tags="phase2_data" --hardware="ssd")
+PHASE2_DATA_DPATH_HDD=$(geowatch_dvc --tags="phase2_data" --hardware="hdd")
+PHASE2_DATA_DPATH_SSD=$(geowatch_dvc --tags="phase2_data" --hardware="ssd")
 rsync -avprPR "$PHASE2_DATA_DPATH_HDD"/Drop4-SC/./_assets "$PHASE2_DATA_DPATH_SSD"/Drop4-SC
 rsync -avp "$PHASE2_DATA_DPATH_HDD"/Drop4-SC/*.kwcoco.json "$PHASE2_DATA_DPATH_SSD"/Drop4-SC
 
@@ -972,8 +972,8 @@ rsync -avp "$PHASE2_DATA_DPATH_HDD"/Drop4-SC/*.kwcoco.json "$PHASE2_DATA_DPATH_S
 ### Run on OOO
 
 export CUDA_VISIBLE_DEVICES=1
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='hdd')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='hdd')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt')
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop4-BAS
 KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
@@ -1031,8 +1031,8 @@ python -m watch.tasks.fusion.fit \
 ### Run on Namek
 
 export CUDA_VISIBLE_DEVICES=0
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='hdd')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='hdd')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='hdd')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='hdd')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop4-BAS
@@ -1091,8 +1091,8 @@ python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=1
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop4-BAS
@@ -1155,8 +1155,8 @@ python -m watch.tasks.fusion.fit \
 
 ### Toothbrush
 export CUDA_VISIBLE_DEVICES=1
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop4-BAS
@@ -1238,8 +1238,8 @@ python -m watch.tasks.fusion.fit \
 
 ### Ooo
 export CUDA_VISIBLE_DEVICES=1
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop4-BAS
@@ -1308,8 +1308,8 @@ smartwatch model_stats /home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/t
 
 ### Horologic
 export CUDA_VISIBLE_DEVICES=0
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop4-BAS
@@ -1368,8 +1368,8 @@ python -m watch.tasks.fusion.fit \
 
 ### Yardrat Heterogeneous Test
 export CUDA_VISIBLE_DEVICES=0
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop4-BAS
@@ -1435,8 +1435,8 @@ rsync -avprPR yardrat:data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/D
 
 
 # Hard coded invariants on yardrat
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 
 python -m watch.tasks.invariants.predict \
     --input_kwcoco=$DVC_DATA_DPATH/Drop4-BAS/data_train.kwcoco.json \
@@ -1465,15 +1465,15 @@ python -m watch.tasks.invariants.predict \
     --tasks before_after pretext
 
 
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 python -m watch.cli.split_videos \
     --src "$DVC_DATA_DPATH/Drop4-BAS/data_train.kwcoco.json" \
           "$DVC_DATA_DPATH/Drop4-BAS/data_vali.kwcoco.json" \
     --dst_dpath "$DVC_DATA_DPATH/Drop4-BAS/"
 
 
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 #data_train_PE_C001.kwcoco.json
 
 python -m watch.cli.prepare_teamfeats \
@@ -1492,8 +1492,8 @@ python -m watch.cli.prepare_teamfeats \
     --gres=0, --workers=1 --backend=tmux --run=0
 
 
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch.cli.prepare_teamfeats \
     --base_fpath \
        "$DVC_DATA_DPATH/Drop4-BAS/data_train_*.kwcoco.json" \
@@ -1512,7 +1512,7 @@ kwcoco union --src ./*_train_*_uky_invariants*.kwcoco.json --dst combo_train_I2.
 kwcoco union --src ./*_vali_*_uky_invariants*.kwcoco.json --dst combo_vali_I2.kwcoco.json
 
 
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 rsync -avpP --include="*invariants*.kwcoco.json" --exclude="*" yardrat:data/dvc-repos/smart_data_dvc/Drop4-BAS/ "$DVC_DATA_DPATH/Drop4-BAS/"
 rsync -avprPR yardrat:data/dvc-repos/smart_data_dvc/Drop4-BAS/./_assets/pred_invariants "$DVC_DATA_DPATH/Drop4-BAS/"
 
@@ -1522,15 +1522,15 @@ rsync -avprPR "$DVC_DATA_DPATH/Drop4-BAS/"./_assets/pred_invariants horologic:da
 
 
 
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 rsync -avprPR yardrat:data/dvc-repos/smart_expt_dvc/./training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_15GSD_BGRNSH_invar_V8/lightning_logs/version_0 "$DVC_EXPT_DPATH"
 
 
 
 ### Toothbrush Invariants
 export CUDA_VISIBLE_DEVICES=1
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop4-BAS
@@ -1600,8 +1600,8 @@ python -m watch.tasks.fusion.fit \
 
 ### Yardrat Invariants
 export CUDA_VISIBLE_DEVICES=0
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop4-BAS
 KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
@@ -1659,7 +1659,7 @@ python -m watch.tasks.fusion.fit \
     --init=/home/local/KHQ/jon.crall/remote/yardrat/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_15GSD_BGRNSH_invar_V8/lightning_logs/version_0/checkpoints/epoch=30-step=15872.ckpt
 
 
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 rsync -avprPR yardrat:data/dvc-repos/smart_expt_dvc/./training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_15GSD_BGRNSH_invar_V8 "$DVC_EXPT_DPATH"
 
     #--init="$DVC_EXPT_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
@@ -1668,8 +1668,8 @@ rsync -avprPR yardrat:data/dvc-repos/smart_expt_dvc/./training/yardrat/jon.crall
 
 ### Horologic Invariants
 export CUDA_VISIBLE_DEVICES=0,1
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop4-BAS
@@ -1723,8 +1723,8 @@ python -m watch.tasks.fusion fit \
 
 ### Toothbrush Invariants - V10
 export CUDA_VISIBLE_DEVICES=1
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop4-BAS
@@ -1793,8 +1793,8 @@ python -m watch.tasks.fusion.fit \
 
 ### Ooo run - V 10... again
 export CUDA_VISIBLE_DEVICES=1
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop4-BAS
@@ -1858,7 +1858,7 @@ python -m watch.tasks.fusion.fit \
     #--init=/home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V5/lightning_logs/version_3/package-interupt/package_epoch6_step252174.pt
 
 
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 rsync -avprPR ooo:data/dvc-repos/smart_expt_dvc/./training/Ooo/joncrall/Drop4-BAS/runs "$DVC_EXPT_DPATH"
 rsync -avprPR ooo:data/dvc-repos/smart_expt_dvc/./training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V10 "$DVC_EXPT_DPATH"
 rsync -avprPR ooo:data/dvc-repos/smart_expt_dvc/./training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_10GSD_BGRN_V11 "$DVC_EXPT_DPATH"
@@ -1868,8 +1868,8 @@ Drop4_BAS_2022_12_10GSD_BGRN_V11  Drop4_BAS_2022_12_15GSD_BGRN_V10  Drop4_BAS_20
 
 ### Yardrat Invariants Scratch
 export CUDA_VISIBLE_DEVICES=0
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop4-BAS
 KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
@@ -1934,8 +1934,8 @@ python -m watch.tasks.fusion.fit \
     --max_epoch_length=16384 
 
 export CUDA_VISIBLE_DEVICES=0
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop4-BAS
 KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
@@ -2000,14 +2000,14 @@ python -m watch.tasks.fusion.fit \
     --max_epoch_length=16384  \
     --init=/home/local/KHQ/jon.crall/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_10GSD_BGRNSH_invar_V12/lightning_logs/version_1/package-interupt/package_epoch74_step76224.pt
 
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 rsync -avprPR yardrat:data/dvc-repos/smart_expt_dvc/./training/yardrat/jon.crall/Drop4-BAS/runs "$DVC_EXPT_DPATH"
 
 
 ### Continue of of the BGRN 10 model
 export CUDA_VISIBLE_DEVICES=1
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop6
@@ -2071,8 +2071,8 @@ WATCH_GRID_WORKERS=4 python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=1
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop6
@@ -2136,8 +2136,8 @@ WATCH_GRID_WORKERS=4 python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=1
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop4-BAS
@@ -2201,8 +2201,8 @@ WATCH_GRID_WORKERS=4 python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=1
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop6
@@ -2266,8 +2266,8 @@ WATCH_GRID_WORKERS=4 python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=1
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop6
@@ -2332,8 +2332,8 @@ WATCH_GRID_WORKERS=4 python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=1
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop6
@@ -2399,8 +2399,8 @@ WATCH_GRID_WORKERS=4 python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=1
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop6
@@ -2472,8 +2472,8 @@ WATCH_GRID_WORKERS=4 python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=0,1
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop6
@@ -2552,8 +2552,8 @@ WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config ~/code/watch/watc
 
 
 export CUDA_VISIBLE_DEVICES=1
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop6
@@ -2665,8 +2665,8 @@ python -m watch.tasks.fusion fit --optimizer.help=AdamW
 
 # YARDRAT
 export CUDA_VISIBLE_DEVICES=0
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop6
@@ -2733,8 +2733,8 @@ WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion.fit \
     
 
 export CUDA_VISIBLE_DEVICES=1
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop6
@@ -2812,11 +2812,11 @@ trainer:
 
 #
 # Yardrat landcover scratch, split2
-PHASE2_DATA_DPATH_SSD=$(smartwatch_dvc --tags="phase2_data" --hardware="hdd")
+PHASE2_DATA_DPATH_SSD=$(geowatch_dvc --tags="phase2_data" --hardware="hdd")
 rsync -avp yardrat:data/dvc-repos/smart_data_dvc-ssd/Drop6/*.kwcoco.* "$PHASE2_DATA_DPATH_SSD"/Drop6
 rsync -avprPR yardrat:data/dvc-repos/smart_data_dvc-ssd/Drop6/./_assets "$PHASE2_DATA_DPATH_SSD"/Drop6
 
-PHASE2_DATA_DPATH_SSD=$(smartwatch_dvc --tags="phase2_data" --hardware="ssd")
+PHASE2_DATA_DPATH_SSD=$(geowatch_dvc --tags="phase2_data" --hardware="ssd")
 cd "$PHASE2_DATA_DPATH_SSD/Drop6"
 python -m watch.cli.prepare_splits \
     --base_fpath "combo_imganns-*_L.kwcoco.json" \
@@ -2826,8 +2826,8 @@ python -m watch.cli.prepare_splits \
 
 # On Yardrat
 export CUDA_VISIBLE_DEVICES=0
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop6
@@ -2932,14 +2932,14 @@ trainer:
   replace_sampler_ddp: true
   track_grad_norm: 2
 "
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 rsync -avprPR yardrat:data/dvc-repos/smart_expt_dvc/./training/yardrat/jon.crall/Drop6/runs/Drop6_BAS_scratch_landcover_10GSD_split2_V3 "$DVC_EXPT_DPATH"
 
 
 # On Yardrat (smaller LR)
 export CUDA_VISIBLE_DEVICES=0
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop6
@@ -3049,8 +3049,8 @@ rsync -avprPR yardrat:data/dvc-repos/smart_expt_dvc/./training/yardrat/jon.crall
 
 # On Yardrat (longer,higher-decay,balanced,focal)
 export CUDA_VISIBLE_DEVICES=0
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop6
@@ -3157,7 +3157,7 @@ trainer:
   track_grad_norm: 2
 "
 
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 rsync -avprPR yardrat:data/dvc-repos/smart_expt_dvc/./training/yardrat/jon.crall/Drop6/runs/ "$DVC_EXPT_DPATH"
 
 
@@ -3165,8 +3165,8 @@ rsync -avprPR yardrat:data/dvc-repos/smart_expt_dvc/./training/yardrat/jon.crall
 
 # On Toothbrush (batch size change)
 export CUDA_VISIBLE_DEVICES=0
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop6
@@ -3275,8 +3275,8 @@ trainer:
 
 # On Toothbrush (back to smt)
 export CUDA_VISIBLE_DEVICES=0
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop6
@@ -3382,8 +3382,8 @@ cd /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/tooth
 
 # On Yardrat (train longer, f16, cos aneal, adamw)
 export CUDA_VISIBLE_DEVICES=0
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop6
@@ -3495,8 +3495,8 @@ trainer:
 # On Toothbrush (train longer, f16, cos aneal, adamw, VIT)
 # BROKEN. WHY?
 export CUDA_VISIBLE_DEVICES=1
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop6
@@ -3599,8 +3599,8 @@ trainer:
 
 # On Toothbrush (train longer, f16, cos aneal, adamw, VIT)
 export CUDA_VISIBLE_DEVICES=0
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop6
@@ -3711,8 +3711,8 @@ trainer:
 
 # On Toothbrush (train longer, f16, cos aneal, adamw, big Heterogeneous)
 export CUDA_VISIBLE_DEVICES=1
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop6
@@ -3849,8 +3849,8 @@ lightning_lite.utilities.exceptions.MisconfigurationException: We could not infe
 
 # On Toothbrush (train longer, f16, cos aneal, adamw, big Heterogeneous)
 export CUDA_VISIBLE_DEVICES=0
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop6
@@ -3959,8 +3959,8 @@ trainer:
 
 # On Toothbrush (train longer, f16, cos aneal, adamw, big Heterogeneous)
 export CUDA_VISIBLE_DEVICES=1
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop6
@@ -4074,8 +4074,8 @@ initializer:
 
 
 export CUDA_VISIBLE_DEVICES=1
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop6
@@ -4184,8 +4184,8 @@ trainer:
 #
 
 export CUDA_VISIBLE_DEVICES=1
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop6
@@ -4290,8 +4290,8 @@ trainer:
 
 # On Toothbrush (train longer, f16, cos aneal, adamw, big Heterogeneous)
 export CUDA_VISIBLE_DEVICES=0
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop6
@@ -4400,8 +4400,8 @@ trainer:
 
 # On Toothbrush (train longer, f16, cos aneal, adamw, big Heterogeneous)
 export CUDA_VISIBLE_DEVICES=0
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop6
@@ -4510,8 +4510,8 @@ trainer:
 
 # On Toothbrush (cos aneal, adamw, SITS)
 export CUDA_VISIBLE_DEVICES=0
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop6
@@ -4614,8 +4614,8 @@ initializer:
 
 
 export CUDA_VISIBLE_DEVICES=1
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop6
@@ -4719,8 +4719,8 @@ initializer:
 
 # On Yardrat
 export CUDA_VISIBLE_DEVICES=0
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop6
@@ -4829,8 +4829,8 @@ trainer:
 
 
 export CUDA_VISIBLE_DEVICES=1
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop6
@@ -4934,8 +4934,8 @@ initializer:
 
 
 export CUDA_VISIBLE_DEVICES=0
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop6
@@ -5042,8 +5042,8 @@ initializer:
 
 # On Toothbrush (train longer, f16, cos aneal, adamw, big Heterogeneous)
 export CUDA_VISIBLE_DEVICES=0,1
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop6
@@ -5155,8 +5155,8 @@ trainer:
 
 # On Ooo
 export CUDA_VISIBLE_DEVICES=0
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop6

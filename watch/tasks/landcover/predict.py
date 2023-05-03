@@ -6,8 +6,8 @@ visualizing a subset of the features.
 
 CommandLine:
 
-    DVC_EXPT_DPATH=$(smartwatch_dvc --tags=phase2_expt --hardware=auto)
-    DVC_DATA_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware=auto)
+    DVC_EXPT_DPATH=$(geowatch_dvc --tags=phase2_expt --hardware=auto)
+    DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware=auto)
 
     KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6
     DZYNE_LANDCOVER_MODEL_FPATH="$DVC_EXPT_DPATH/models/landcover/sentinel2.pt"

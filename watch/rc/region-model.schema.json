@@ -1,123 +1,166 @@
 {
   "$id": "region-model.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "definitions": {
+  "$defs": {
     "geojson_coordinates": {
       "description": "A longitude/latitude pair of coordinates",
-      "items": {
-        "type": "number"
-      },
+      "items": {"type": "number"},
       "minItems": 2,
       "maxItems": 2,
       "type": "array"
     },
     "geojson_ring": {
       "description": "A list of coordinate pairs, describing a perimeter",
-      "items": {
-        "$ref": "#/definitions/geojson_coordinates"
-      },
+      "items": {"$ref": "#/$defs/geojson_coordinates"},
       "minItems": 4,
       "type": "array"
     },
     "geojson_polygon": {
       "description": "A list of geojson rings, encoding a perimeter and zero or more voids within the polygon",
-      "items": {
-        "$ref": "#/definitions/geojson_ring"
-      },
+      "items": {"$ref": "#/$defs/geojson_ring"},
       "type": "array"
     },
     "geojson_multipolygon": {
       "description": "A list of geojson polygons, encoding a collection of polygons",
-      "items": {
-        "$ref": "#/definitions/geojson_polygon"
-      },
+      "items": {"$ref": "#/$defs/geojson_polygon"},
       "type": "array"
     },
     "polygon": {
       "description": "a GeoJSON spec compliant Polygon object",
       "properties": {
-        "coordinates": {
-          "$ref": "#/definitions/geojson_polygon"
-        },
-        "type": {
-          "const": "Polygon",
-          "type": "string"
-        }
+        "coordinates": {"$ref": "#/$defs/geojson_polygon"},
+        "type": {"const": "Polygon", "type": "string"}
       },
-      "required": [
-        "type",
-        "coordinates"
-      ],
+      "required": ["type", "coordinates"],
       "type": "object"
     },
-    "region_properties": {
+    "datestring": {
+      "description": "ISO-8601 compatible datestring",
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}"
+    },
+    "mgrsstring": {
+      "description": "MGRS string, specified at the 100km grid square",
+      "type": "string",
+      "pattern": "^\\d{2}[A-Z]{3}$"
+    },
+    "transient_annotation_cache": {
+      "description": "dictionary required in a transient annotation",
+      "type": "object", 
       "properties": {
-        "type": {"const": "region", "type": "string"},
-        "region_id": {"type": "string", "pattern": "^[A-Z]{2}_[RCS]\\d{3}$"},
+        "event_name": {"type": "string"},
+        "location_name": {"type": "string"},
+        "event_url": {"type": "string"},
+        "event_type": {"type": "string"}
+      },
+      "required": ["event_name", "location_name", "event_url", "event_type"]
+    },
+    "annotation_originator": {
+      "if": {"properties": {"model_content": {"const": "annotation"}}},
+      "then": {"properties": {"originator": {"enum": ["te", "iMERIT", "pmo"]}}}
+    },
+    "proposed_originator": {
+      "if": {"properties": {"model_content": {"const": "proposed"}}},
+      "then": {"properties": {"originator": {"enum": ["acc", "ara", "ast", "bla", "iai", "kit", "str"]}}}
+    },
+    "region_properties": {
+      "type": "object",
+      "properties": {
+        "type": {"const": "region"},
+        "region_id": {"type": "string", "pattern": "^[A-Z]{2}_([RS]\\d{3}|C[0-7]\\d{2})$"},
         "version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
-        "mgrs": {"type": "string", "pattern": "\\d{2}[A-Z]{3}"},
+        "mgrs": {"$ref":"#/$defs/mgrsstring"},
         "model_content": {"enum": ["empty", "annotation", "proposed"]},
-        "start_date": {"oneOf": [{"type": "null"}, {"type": "string", "format": "date"}]},
-        "end_date": {"oneOf": [{"type": "null"}, {"type": "string", "format": "date"}]},
+        "start_date": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/datestring"}]},
+        "end_date": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/datestring"}]},
         "originator": {"enum": ["te", "pmo", "acc", "ara", "ast", "bla", "iai", "kit", "str", "iMERIT"]},
         "comments": {"type": ["string", "null"]},
         "performer_cache": {"type": "object"}
       },
       "required": [
         "type", "region_id", "version", "mgrs", "model_content", "start_date", "end_date", "originator"
+      ],
+      "allOf": [
+        {"$ref": "#/$defs/annotation_originator"},
+        {"$ref": "#/$defs/proposed_originator"}
       ]
     },
     "site_summary_properties": {
+      "type": "object",
       "properties": {
-        "type": {"const": "site_summary", "type": "string"},
-        "site_id": {"type": "string", "pattern": "^[A-Z]{2}_[RCS]\\d{3}_\\d{4}$"},
+        "type": {"const": "site_summary"},
+        "site_id": {"type": "string", "pattern": "^[A-Z]{2}_([RS]\\d{3}|C[0-7]\\d{2})_\\d{4}$"},
         "version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
-        "mgrs": {"type": "string", "pattern": "\\d{2}[A-Z]{3}"},
-        "status": {"enum": ["system_proposed", "system_confirmed", "system_rejected", "positive_annotated", "positive_partial", "positive_annotated_static", "positive_partial_static", "positive_pending", "positive_excluded", "negative", "ignore"]},
+        "mgrs": {"$ref":"#/$defs/mgrsstring"},
+        "status": {"enum": ["system_proposed", "system_confirmed", "system_rejected", "positive_annotated", "positive_partial", "positive_annotated_static", "positive_partial_static", "positive_pending", "positive_excluded", "negative", "ignore", "transient_positive", "transient_pending", "transient_negative", "transient_excluded", "transient_ignore"]},
         "model_content": {"enum": ["annotation", "proposed"]},
-        "start_date": {"oneOf": [{"type": "null"}, {"type": "string", "format": "date"}]},
-        "end_date": {"oneOf": [{"type": "null"}, {"type": "string", "format": "date"}]},
+        "start_date": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/datestring"}]},
+        "end_date": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/datestring"}]},
         "originator": {"enum": ["te", "pmo", "acc", "ast", "ast", "bla", "iai", "kit", "str", "iMERIT"]},
         "score": {"type": "number", "minimum": 0, "maximum": 1},
         "validated": {"enum": ["True", "False"]},
+        "comments": {"type": ["string", "null"]},
         "annotation_cache": {"type": "object"}
       },
       "required": [
         "type", "site_id", "version", "mgrs", "model_content", "start_date", "end_date", "status", "originator"
+      ],
+      "allOf": [
+        {"$ref": "#/$defs/annotation_originator"},
+        {"$ref": "#/$defs/proposed_originator"},
+        {
+          "if": {"properties": {"model_content": {"const": "annotation"}}},
+          "then": {"properties": {"status": {"enum": ["positive_annotated", "positive_partial", "positive_annotated_static", "positive_partial_static", "positive_pending", "positive_excluded", "negative", "ignore", "transient_positive", "transient_pending", "transient_negative", "transient_excluded", "transient_ignore"]}}}
+        },{
+          "if": {"properties": {"model_content": {"const": "proposed"}}},
+          "then": {"properties": {"status": {"enum": ["system_proposed", "system_confirmed", "system_rejected"]}}}
+        },
+        {
+          "if": {"properties": {"model_content": {"const": "annotation"}, "status": {"enum": ["transient_positive", "transient_pending", "transient_negative", "transient_excluded", "transient_ignore"]}}},
+          "then": {
+            "properties": {
+              "annotation_cache": {"$ref": "#/$defs/transient_annotation_cache"}
+            },
+            "required": ["type", "site_id", "version", "mgrs", "model_content", "start_date", "end_date", "status", "originator", "annotation_cache"]
+          }
+        }
       ]
+    },
+    "region_feature": {
+      "type": "object",
+      "properties": {
+        "type": {"const": "Feature", "type": "string"},
+        "properties": {"$ref": "#/$defs/region_properties"},
+        "geometry": {"$ref": "#/$defs/polygon"}
+      },
+      "required": ["type", "properties", "geometry"] 
+    },
+    "site_summary_feature": {
+      "type": "object",
+      "properties": {
+        "type": {"const": "Feature", "type": "string"},
+        "properties": {"$ref": "#/$defs/site_summary_properties"},
+        "geometry": {"$ref": "#/$defs/polygon"}
+      },
+      "required": ["type", "properties", "geometry"] 
     }
   },
   "properties": {
     "features": {
+      "type": "array",
+      "contains": {"$ref": "#/$defs/region_feature"},
+      "minContains": 1,
+      "maxContains": 1,
+      "minItems": 1,
       "items": {
-        "properties": {
-          "geometry": {
-            "$ref": "#/definitions/polygon"
-          },
-          "type":{
-            "const": "Feature",
-            "type": "string"
-          },
-          "properties": {
-            "oneOf": [
-              {"$ref": "#/definitions/region_properties"},
-              {"$ref": "#/definitions/site_summary_properties"}
-            ]}
-          }
-        },
-        "required": [
-          "type", "geometry", "properties"
+        "oneOf": [
+          {"$ref": "#/$defs/region_feature"},
+          {"$ref": "#/$defs/site_summary_feature"}
         ]
-      },
-    "type": {
-      "const": "FeatureCollection",
-      "type": "string"
+      }
     }
   },
-  "required": [
-    "type",
-    "features"
-  ],
+  "required": ["type", "features"],
   "title": "Region Model object",
   "type": "object"
 }

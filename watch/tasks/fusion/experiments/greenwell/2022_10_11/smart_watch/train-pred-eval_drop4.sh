@@ -1,7 +1,7 @@
 #!/bin/bash
 
-DVC_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="hdd")
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+DVC_DATA_DPATH=$(geowatch_dvc --tags="phase2_data" --hardware="hdd")
+DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC

@@ -118,7 +118,7 @@ def main(cmdline=False, **kwargs):
         new_region_fpath = new_region_dpath / old_region_fpath.name
 
         # Not sure why this insists on bytes. I dont think it was before
-        with safer.open(new_region_fpath, temp_file=True, mode='w') as file:
+        with safer.open(new_region_fpath, temp_file=not ub.WIN32, mode='w') as file:
             cropped_region_json = cropped_region.to_json(na='drop', indent=2)
             file.write(cropped_region_json)
         print(f'Wrote cropped site summaries to {new_region_fpath}')
@@ -147,7 +147,7 @@ def main(cmdline=False, **kwargs):
                     cropped_site['predicted_phase_transition_date'] =\
                         cropped_site['predicted_phase_transition_date'].astype('string')
 
-                with safer.open(new_site_fpath, temp_file=True, mode='w') as file:
+                with safer.open(new_site_fpath, temp_file=not ub.WIN32, mode='w') as file:
                     cropped_site_json = cropped_site.to_json(
                         na='drop', indent=2)
                     file.write(cropped_site_json)
@@ -381,7 +381,7 @@ __config__ = CropSitesToRegionsConfig
 if __name__ == '__main__':
     """
     CommandLine:
-        DVC_DPATH=$(smartwatch_dvc)
+        DVC_DPATH=$(geowatch_dvc)
         python -m watch.cli.crop_sites_to_regions \
             --site_models=$DVC_DPATH/annotations/site_models/*KR*.geojson \
             --region_models=$DVC_DPATH/annotations/region_models/KR_R001.geojson \

@@ -1,8 +1,8 @@
 # Determine the paths to your SMART data and experiment repositories.
-# DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+# DATA_DVC_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 # DATA_DVC_DPATH=/home/local/KHQ/connor.greenwell/data/dvc-repos/smart_data_dvc/Drop4-BAS
 DATA_DVC_DPATH=/flash/smart_data_dvc/Drop6
-EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)/training/horologic/connor.greenwell/sym_lightning_logs
+EXPT_DVC_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)/training/horologic/connor.greenwell/sym_lightning_logs
 
 
 echo "

@@ -29,7 +29,7 @@ class MetricsConfig(scfg.DataConfig):
     gt_dpath = scfg.Value(None,
                           help=ub.paragraph('''
         Path to a local copy of the ground truth annotations,
-        https://smartgitlab.com/TE/annotations.  If None, use smartwatch_dvc to
+        https://smartgitlab.com/TE/annotations.  If None, use geowatch_dvc to
         find $DVC_DATA_DPATH/annotations.
         '''))
 
@@ -385,7 +385,7 @@ def main(cmdline=True, **kwargs):
         # copy site models to site_dpath
         for site in region_sites:
             geojson_fpath = pred_site_sub_dpath / (site['features'][0]['properties']['site_id'] + '.geojson')
-            with safer.open(geojson_fpath, 'w', temp_file=True) as f:
+            with safer.open(geojson_fpath, 'w', temp_file=not ub.WIN32) as f:
                 json.dump(site, f)
 
         ensure_thumbnails(image_dpath, region_id, region_sites)
@@ -510,7 +510,7 @@ def main(cmdline=True, **kwargs):
 
         merge_dpath = ub.Path(merge_dpath).ensuredir()
 
-        with safer.open(merge_fpath, 'w', temp_file=True) as f:
+        with safer.open(merge_fpath, 'w', temp_file=not ub.WIN32) as f:
             json.dump(json_data, f, indent=4)
         print('merge_fpath = {!r}'.format(merge_fpath))
 

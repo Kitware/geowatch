@@ -2,7 +2,7 @@
 
 source "$HOME"/code/watch/secrets/secrets
 
-DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="hdd")
+DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
 SENSORS=TA1-S2-L8-WV-PD-ACC-3
 DATASET_SUFFIX=Drop7
 REGION_GLOBSTR="$DATA_DVC_DPATH/annotations/drop6_hard_v1/region_models/*.geojson"

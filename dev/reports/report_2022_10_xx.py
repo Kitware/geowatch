@@ -23,8 +23,8 @@ US_R007_0015_box
 python -m watch find_dvc   --hardware=auto --tags=phase2_expt
 
 DATASET_CODE=Drop4-SC
-DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="auto")
-EXPT_DVC_DPATH=$(smartwatch_dvc --tags="phase2_expt" --hardware="auto")
+DATA_DVC_DPATH=$(geowatch_dvc --tags="phase2_data" --hardware="auto")
+EXPT_DVC_DPATH=$(geowatch_dvc --tags="phase2_expt" --hardware="auto")
 
 echo "
 DATA_DVC_DPATH = $DATA_DVC_DPATH
@@ -58,8 +58,8 @@ kwcoco subset \
 
 
 DATASET_CODE=Drop4-SC
-DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="auto")
-EXPT_DVC_DPATH=$(smartwatch_dvc --tags="phase2_expt" --hardware="auto")
+DATA_DVC_DPATH=$(geowatch_dvc --tags="phase2_data" --hardware="auto")
+EXPT_DVC_DPATH=$(geowatch_dvc --tags="phase2_expt" --hardware="auto")
 python -m watch.mlops.schedule_evaluation \
     --params="
         matrix:
@@ -425,8 +425,8 @@ def shrink_na_cols(df):
 Test connors models:
 
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
-DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="ssd")
-EXPT_DVC_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+DATA_DVC_DPATH=$(geowatch_dvc --tags="phase2_data" --hardware="ssd")
+EXPT_DVC_DPATH=$(geowatch_dvc --tags="phase2_expt")
 # TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/data.kwcoco.json
 TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/BR_R001.kwcoco.json
 
@@ -499,8 +499,8 @@ python -m watch.mlops.schedule_evaluation \
 
 
 DATASET_CODE=Drop4-BAS
-DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="auto")
-EXPT_DVC_DPATH=$(smartwatch_dvc --tags="phase2_expt" --hardware="auto")
+DATA_DVC_DPATH=$(geowatch_dvc --tags="phase2_data" --hardware="auto")
+EXPT_DVC_DPATH=$(geowatch_dvc --tags="phase2_expt" --hardware="auto")
 python -m watch.mlops.schedule_evaluation \
     --params="
         matrix:
@@ -649,8 +649,8 @@ python -m watch.cli.run_tracker \
 
 
 DATASET_CODE=Drop4-BAS
-DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="auto")
-EXPT_DVC_DPATH=$(smartwatch_dvc --tags="phase2_expt" --hardware="auto")
+DATA_DVC_DPATH=$(geowatch_dvc --tags="phase2_data" --hardware="auto")
+EXPT_DVC_DPATH=$(geowatch_dvc --tags="phase2_expt" --hardware="auto")
 python -m watch.mlops.schedule_evaluation \
     --params="
         matrix:

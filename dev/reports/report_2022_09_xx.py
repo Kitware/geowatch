@@ -4,9 +4,9 @@ smartwatch mlops status
 
 
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
-# DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="ssd")
-DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data")
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+# DATA_DVC_DPATH=$(geowatch_dvc --tags="phase2_data" --hardware="ssd")
+DATA_DVC_DPATH=$(geowatch_dvc --tags="phase2_data")
+DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 
 VALI_DATASET_SUBSET=$DATA_DVC_DPATH/$DATASET_CODE/data_vali_KR_R001.kwcoco.json
 if [ ! -f "$VALI_DATASET_SUBSET" ]; then
@@ -487,8 +487,8 @@ if __name__ == '__main__':
 
 
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
-DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data")
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+DATA_DVC_DPATH=$(geowatch_dvc --tags="phase2_data")
+DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 
 TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/data_septest.kwcoco.json
 if [ ! -f "$TEST_DATASET" ]; then
@@ -604,8 +604,8 @@ AWS_DEFAULT_PROFILE=iarpa GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR smartwatch add_
 
 
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
-DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data")
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+DATA_DVC_DPATH=$(geowatch_dvc --tags="phase2_data")
+DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 
 TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/data_kr1br2.kwcoco.json
 if [ ! -f "$TEST_DATASET" ]; then
@@ -700,8 +700,8 @@ AWS_DEFAULT_PROFILE=iarpa GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR smartwatch add_
 
 
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
-DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data")
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+DATA_DVC_DPATH=$(geowatch_dvc --tags="phase2_data")
+DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 
 TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/data_kr1br2.kwcoco.json
 if [ ! -f "$TEST_DATASET" ]; then
@@ -784,8 +784,8 @@ python -m watch.mlops.schedule_evaluation \
 
 
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
-DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data")
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+DATA_DVC_DPATH=$(geowatch_dvc --tags="phase2_data")
+DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/data_kr1br2.kwcoco.json
 python -m watch.mlops.schedule_evaluation \
     --params="
@@ -845,8 +845,8 @@ python -m watch.mlops.schedule_evaluation \
 
 
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
-DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data")
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+DATA_DVC_DPATH=$(geowatch_dvc --tags="phase2_data")
+DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/data.kwcoco.json
 python -m watch.mlops.schedule_evaluation \
     --params="

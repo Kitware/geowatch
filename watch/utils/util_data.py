@@ -286,7 +286,7 @@ def find_dvc_dpath(name=ub.NoParam, on_error="raise", **kwargs):
     NOTE: other team members can add their "standard" locations if they want.
 
     SeeAlso:
-        WATCH_DATA_DPATH=$(smartwatch_dvc)
+        WATCH_DATA_DPATH=$(geowatch_dvc)
 
         python -m watch.cli.find_dvc --hardware=hdd
         python -m watch.cli.find_dvc --hardware=ssd

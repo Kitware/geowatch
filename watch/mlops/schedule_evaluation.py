@@ -76,8 +76,8 @@ Example:
         --run=0
 
     # Real inputs, this actually will run something given the DVC repos
-    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-    DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+    DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+    DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 
     SC_MODEL=$DVC_EXPT_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt
     BAS_MODEL=$DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
@@ -119,8 +119,8 @@ Example:
 Example:
 
     # Real data
-    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-    DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+    DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+    DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 
     python -m watch.mlops.schedule_evaluation \
         --params="

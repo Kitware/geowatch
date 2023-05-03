@@ -6,7 +6,7 @@ SeeAlso:
 
 
 CommandLine:
-    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+    DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 
     python -m watch.cli.coco_time_combine \
         --input_kwcoco_fpath="$DVC_DATA_DPATH/Drop6/imgonly-KR_R002.kwcoco.zip" \
@@ -206,7 +206,7 @@ def main(cmdline=1, **kwargs):
         >>> coco_visualize_videos.main(cmdline=0, src=kwargs['output_kwcoco_fpath'], smart=True)
 
     Ignore:
-        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
         smartwatch stats $DVC_DATA_DPATH/Drop6/test-timeave-imgonly-KR_R001.kwcoco.zip
 
     Example:
@@ -229,7 +229,7 @@ def main(cmdline=1, **kwargs):
         >>> coco_visualize_videos.main(cmdline=0, src=kwargs['output_kwcoco_fpath'], smart=True)
 
     Ignore:
-        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
         smartwatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001.kwcoco.zip
 
     Example:
@@ -253,7 +253,7 @@ def main(cmdline=1, **kwargs):
         >>> coco_visualize_videos.main(cmdline=0, src=kwargs['output_kwcoco_fpath'], smart=True)
 
     Ignore:
-        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
         smartwatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001-cloudmask.kwcoco.zip
 
     Example:
@@ -278,7 +278,7 @@ def main(cmdline=1, **kwargs):
         >>> coco_visualize_videos.main(cmdline=0, src=kwargs['output_kwcoco_fpath'], smart=True)
 
     Ignore:
-        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
         smartwatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001-median.kwcoco.zip
 
     Example:
@@ -304,7 +304,7 @@ def main(cmdline=1, **kwargs):
         >>> coco_visualize_videos.main(cmdline=0, src=kwargs['output_kwcoco_fpath'], smart=True)
 
     Ignore:
-        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
         smartwatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001-cloudmask-median.kwcoco.zip
 
     Example:
@@ -330,7 +330,7 @@ def main(cmdline=1, **kwargs):
         >>> coco_visualize_videos.main(cmdline=0, src=kwargs['output_kwcoco_fpath'], smart=True)
 
     Ignore:
-        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
         smartwatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001-cloudmask-no_sensor_separate.kwcoco.zip
 
     Example:
@@ -357,7 +357,7 @@ def main(cmdline=1, **kwargs):
         >>> coco_visualize_videos.main(cmdline=0, src=kwargs['output_kwcoco_fpath'], smart=True)
 
     Ignore:
-        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
         smartwatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001-cloudmask-s2w_10.kwcoco.zip
 
     Example:
@@ -384,7 +384,7 @@ def main(cmdline=1, **kwargs):
         >>> coco_visualize_videos.main(cmdline=0, src=kwargs['output_kwcoco_fpath'], smart=True)
 
     Ignore:
-        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
         smartwatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001-cloudmask-s2w_10.kwcoco.zip
 
     Example:
@@ -412,7 +412,7 @@ def main(cmdline=1, **kwargs):
         >>> coco_visualize_videos.main(cmdline=0, src=kwargs['output_kwcoco_fpath'], smart=True)
 
     Ignore:
-        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
         smartwatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001-cloudmask-s2w_10.kwcoco.zip
 
     Example:
@@ -439,7 +439,7 @@ def main(cmdline=1, **kwargs):
         >>> coco_visualize_videos.main(cmdline=0, src=kwargs['output_kwcoco_fpath'], smart=True)
 
     Ignore:
-        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
         smartwatch stats $DVC_DATA_DPATH/Drop6/test-timeave-KR_R001-cloudmask-s2w_10.kwcoco.zip
 
     """

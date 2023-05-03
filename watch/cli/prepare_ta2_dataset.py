@@ -803,7 +803,7 @@ def main(cmdline=False, **kwargs):
         dvc add *.zip
         dvc add */WV */L8 */S2 */*.json *.zip
 
-        DVC_DPATH=$(smartwatch_dvc)
+        DVC_DPATH=$(geowatch_dvc)
         echo "DVC_DPATH='$DVC_DPATH'"
 
         cd $DVC_DPATH/
@@ -816,7 +816,7 @@ def main(cmdline=False, **kwargs):
 
     # pipeline.submit(ub.codeblock(
     #     '''
-    #     DVC_DPATH=$(smartwatch_dvc)
+    #     DVC_DPATH=$(geowatch_dvc)
     #     python -m watch.cli.prepare_splits \
     #         --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
     #         --run=1 --serial=True
@@ -836,7 +836,7 @@ def main(cmdline=False, **kwargs):
     # TODO: team features
     """
     DATASET_CODE=Aligned-Drop2-TA1-2022-03-07
-    DVC_DPATH=$(smartwatch_dvc)
+    DVC_DPATH=$(geowatch_dvc)
     DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
     python -m watch.cli.prepare_teamfeats \
@@ -851,7 +851,7 @@ def main(cmdline=False, **kwargs):
     """
 
 # dvc_dpath=$home/data/dvc-repos/smart_watch_dvc
-# #dvc_dpath=$(smartwatch_dvc)
+# #dvc_dpath=$(geowatch_dvc)
 # #s3_dpath=s3://kitware-smart-watch-data/processed/ta1/eval2/master_collation_working
 # query_basename=$(basename "$s3_fpath")
 # aligned_bundle_name=aligned-$dataset_suffix

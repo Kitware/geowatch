@@ -7,8 +7,8 @@ SeeAlso:
 
 
 # Demo with slurm
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 geowatch schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
@@ -48,7 +48,7 @@ geowatch schedule_evaluation --params="
 
 #### Eval9 Models (Namek)
 
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=hdd)
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
 python -m watch.cli.split_videos \
     --src "$DVC_DATA_DPATH/Drop4-BAS/data_train.kwcoco.json" \
           "$DVC_DATA_DPATH/Drop4-BAS/data_vali.kwcoco.json" \
@@ -56,8 +56,8 @@ python -m watch.cli.split_videos \
     --dst "$DVC_DATA_DPATH/Drop4-BAS/{src_name}_{video_name}.kwcoco.zip"
 
 
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=hdd)
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch.cli.prepare_teamfeats \
     --base_fpath \
        "$DVC_DATA_DPATH/Drop4-BAS/data_vali_KR_R001.kwcoco.zip" \
@@ -79,8 +79,8 @@ python -m watch.cli.prepare_teamfeats \
 
 
 
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 echo "
 - $DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
 - $DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_BAS_15GSD_BGRNSH_invar_V8/Drop4_BAS_15GSD_BGRNSH_invar_V8_epoch=16-step=8704.pt
@@ -118,8 +118,8 @@ echo "
 
 
 
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 
 python -m watch.mlops.schedule_evaluation --params="
     matrix:
@@ -261,8 +261,8 @@ python -m watch.mlops.schedule_evaluation --params="
 
 
 # NAMEK Pixel Eval
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 
 python -m watch.mlops.schedule_evaluation --params="
     matrix:
@@ -420,8 +420,8 @@ python -m watch.mlops.schedule_evaluation --params="
 
 
 
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch.mlops.schedule_evaluation \
     --params="
         matrix:
@@ -529,8 +529,8 @@ python -m watch.mlops.schedule_evaluation \
 
 
 
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch.mlops.schedule_evaluation \
     --params="
         matrix:
@@ -574,8 +574,8 @@ python -m watch.mlops.schedule_evaluation \
 #### QUICK Temporal Sampling Checks
 
 
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=hdd)
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch.mlops.schedule_evaluation \
     --params="
         matrix:
@@ -690,8 +690,8 @@ python -m watch.mlops.schedule_evaluation \
     --run=1
 
 
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 echo "DVC_DATA_DPATH = $DVC_DATA_DPATH"
 
 #"$DVC_DATA_DPATH/Drop6/imganns-KR*.kwcoco.zip" \
@@ -722,13 +722,13 @@ python -m watch.mlops.manager "list" --dataset_codes Drop6 Drop4-BAS
 # SPLIT 1 SMALL TEST
 ####
 
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
 python -m watch.cli.cluster_sites \
         --src "$DVC_DATA_DPATH/annotations/drop6/region_models/KR_R002.geojson" \
         --dst_dpath "$DVC_DATA_DPATH"/ValiRegionSmall/geojson \
         --draw_clusters True
 
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
 python -m watch.cli.coco_align \
     --src "$DVC_DATA_DPATH"/Drop6/combo_imganns-KR_R002_L.kwcoco.json \
     --dst "$DVC_DATA_DPATH"/ValiRegionSmall/small_KR_R002_odarcigm.kwcoco.zip \
@@ -743,8 +743,8 @@ python -m watch.cli.coco_align \
     --workers=8
 
 
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=hdd)
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch.cli.prepare_teamfeats \
     --base_fpath \
        "$DVC_DATA_DPATH/ValiRegionSmall/small_KR_R002_odarcigm.kwcoco.zip" \
@@ -764,8 +764,8 @@ python -m watch.cli.prepare_teamfeats \
 python -m watch.mlops.manager "list" --dataset_codes Drop6  | grep -v split2
 
 # SPLIT 1
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch.mlops.schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
@@ -797,8 +797,8 @@ python -m watch.mlops.schedule_evaluation --params="
 
 
 # SPLIT 1 - filter1 analysis
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch.mlops.schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
@@ -856,13 +856,13 @@ python -m watch.mlops.schedule_evaluation --params="
 # SPLIT 2 - SMALL TEST
 # ###################
 
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
 python -m watch.cli.cluster_sites \
         --src "$DVC_DATA_DPATH/annotations/drop6/region_models/NZ_R001.geojson" \
         --dst_dpath "$DVC_DATA_DPATH"/ValiRegionSmall/geojson/NZ_R001 \
         --draw_clusters True
 
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
 python -m watch.cli.coco_align \
     --src "$DVC_DATA_DPATH"/Drop6/combo_imganns-NZ_R001_L.kwcoco.json \
     --dst "$DVC_DATA_DPATH"/ValiRegionSmall/small_NZ_R001_swnykmah.kwcoco.zip \
@@ -877,8 +877,8 @@ python -m watch.cli.coco_align \
     --workers=8
 
 
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch.cli.prepare_teamfeats \
     --base_fpath \
        "$DVC_DATA_DPATH/ValiRegionSmall/small_NZ_R001_swnykmah.kwcoco.zip" \
@@ -900,8 +900,8 @@ python -m watch.mlops.manager "list" --dataset_codes Drop6  | grep split2
 
 /home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc/models/fusion/Drop6/packages/Drop6_BAS_scratch_landcover_10GSD_split2_V5/Drop6_BAS_scratch_landcover_10GSD_split2_V5_epoch18_step15200.pt
 
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch.mlops.schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
@@ -946,8 +946,8 @@ python -m watch.mlops.schedule_evaluation --params="
 
 #################################################################
 # SPLIT 6 - Time Model Checks
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch.mlops.schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
@@ -1004,7 +1004,7 @@ python -m watch.mlops.schedule_evaluation --params="
     --run=1
 
 
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch.mlops.aggregate \
     --pipeline=bas \
     --stdout_report=True \
@@ -1021,8 +1021,8 @@ python -m watch.mlops.aggregate \
 
 python -m watch.mlops.manager "list" --dataset_codes Drop6-MeanYear10GSD
 
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch.mlops.schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
@@ -1101,8 +1101,8 @@ python -m watch.mlops.schedule_evaluation --params="
     --pipeline=bas --skip_existing=1 \
     --run=1
 
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch.mlops.aggregate \
     --pipeline=bas \
     --target "
@@ -1225,8 +1225,8 @@ dvc.pull(resolved_fpaths)
 "
 
 # SITE VISIT 2022-04 SPLIT 1 Analysis
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch.mlops.schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
@@ -1313,7 +1313,7 @@ python -m watch.mlops.schedule_evaluation --params="
     --run=1
 
 
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 geowatch aggregate \
     --pipeline=bas \
     --target \
@@ -1357,8 +1357,8 @@ agg = eval_type_to_aggregator['bas_poly_eval']
 
 # SITE VISIT 2022-04 SPLIT 2 Analysis
 # OOO Variant Analysis
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch.mlops.schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
@@ -1417,7 +1417,7 @@ python -m watch.mlops.schedule_evaluation --params="
     --run=1
 
 
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 geowatch aggregate \
     --pipeline=bas \
     --target \
@@ -1437,7 +1437,7 @@ geowatch aggregate \
 
 
 ### Build namek aggregate
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 geowatch aggregate \
     --pipeline=bas \
     --target "
@@ -1455,7 +1455,7 @@ geowatch aggregate \
 
 
 ### Build toothbrush aggregate
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 geowatch aggregate \
     --pipeline=bas_building_vali \
     --target "
@@ -1468,7 +1468,7 @@ geowatch aggregate \
 
 
 ### Build toothbrush aggregate
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 geowatch aggregate \
     --pipeline=bas_building_vali \
     --target "
@@ -1480,8 +1480,8 @@ geowatch aggregate \
 
 # New  VISIT 2022-04 SPLIT 2 Analysis
 # OOO Variant Analysis
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch.mlops.schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
@@ -1542,9 +1542,9 @@ python -m watch.mlops.schedule_evaluation --params="
 
 
 ### Evaluate promissing landcover models on namek
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
-DVC_HDD_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=hdd)
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_HDD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
 python -m watch.mlops.schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
@@ -1677,8 +1677,8 @@ python -m watch.mlops.schedule_evaluation --params="
 
 
 ### Evaluate promissing landcover models on toothbrush
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch.mlops.schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
@@ -1825,7 +1825,7 @@ python -m watch.mlops.schedule_evaluation --params="
 
 
 
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 geowatch aggregate \
     --pipeline=bas_building_vali \
     --target \
@@ -1846,7 +1846,7 @@ geowatch aggregate \
 
 
 
-#DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+#DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 #geowatch aggregate \
 #    --pipeline=bas \
 #    --target "

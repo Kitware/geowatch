@@ -9,7 +9,7 @@ WORKDIR=/home/joncrall/data/dvc-repos/smart_data_dvc/tmp
 BUNDLE_DPATH=$WORKDIR/KR_R001_0.1BASThresh_40cloudcover_debug10_kwcoco
 BAS_TEST_DATASET=$BUNDLE_DPATH/cropped_kwcoco_for_bas.json
 SC_TEST_DATASET=$BUNDLE_DPATH/cropped_kwcoco_for_sc.json
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 BAS_MODEL_FPATH=$DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Retrain_V002/Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt.pt
 SC_MODEL_FPATH=$DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt.pt
 echo "
@@ -71,7 +71,7 @@ WORKDIR=/home/joncrall/data/dvc-repos/smart_data_dvc/tmp
 BUNDLE_DPATH=$WORKDIR/KR_R001_0.1BASThresh_40cloudcover_debug10_kwcoco
 BAS_TEST_DATASET=$BUNDLE_DPATH/cropped_kwcoco_for_bas.json
 SC_TEST_DATASET=$BUNDLE_DPATH/cropped_kwcoco_for_sc.json
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 BAS_MODEL_FPATH=$DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Retrain_V002/Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt.pt
 SC_MODEL_FPATH=$DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt.pt
 python -m watch.mlops.schedule_evaluation \
@@ -171,7 +171,7 @@ export AWS_PROFILE=iarpa
 WORKDIR=/home/joncrall/data/dvc-repos/smart_data_dvc/tmp
 BUNDLE_DPATH=$WORKDIR/KR_R001_0.1BASThresh_40cloudcover_debug10_kwcoco
 TEST_DATASET=$BUNDLE_DPATH/cropped_kwcoco_for_bas.json
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
 BAS_MODEL_FPATH=$DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Retrain_V002/Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt.pt
 SC_MODEL_FPATH=$DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt.pt
 mkdir -p $BUNDLE_DPATH/testing

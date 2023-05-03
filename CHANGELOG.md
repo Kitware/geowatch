@@ -4,10 +4,17 @@ This changelog follows the specifications detailed in: [Keep a Changelog](https:
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
 
-## Version 0.6.0 - Target 2023-05-x
+## Version 0.6.2 - Target 2023-05-x
+
+### Added
+
+* SAM - segment anything features
+* DZYNE site validation: depthPCD task
+* fusion.predict can now output pngs
 
 ### Changed
 
+* Tweaked dependencies for windows
 * The kwcoco video dataset now respects the weight attribute in annotations.
 * Reorganized docs
 * `coco_align` now uses process context
@@ -222,7 +229,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 
 ### Documentation
-* More docs on `smartwatch find_dvc` in the docstring and `docs/using_smartwatch_dvc.rst`
+* More docs on `smartwatch find_dvc` in the docstring and `docs/using_geowatch_dvc.rst`
 * Added `examples/feature_fusion_tutorial.sh` describing how to train/evaluate
   a fusion model with team features.
 
@@ -332,7 +339,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * The nir08 sensor for L8 is now aliased to nir for consistency.
 * Add support for lightning 1.7
 * Changed defaults of ignore_dilate to 0
-* Improved the `smartwatch_dvc` registry system.
+* Improved the `geowatch_dvc` registry system.
 * Using scriptconfig and key/value arguments for `run_metrics_framework`
 * The coco align geotiff now populates the `valid_region` for each video based
   on the query region in video space. The visualize video script will respect this.

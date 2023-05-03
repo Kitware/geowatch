@@ -28,8 +28,8 @@ agg1.report_best()
 mlops_cmd = ub.codeblock(
     r'''
     #!/bin/bash
-    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-    DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+    DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+    DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
     python -m watch.mlops.schedule_evaluation \
         --params="
             matrix:

@@ -11,7 +11,7 @@ This tutorial assumes you have:
 
     1. Setup the project DVC repo
 
-    2. Have registered the location of your DVC repo with smartwatch_dvc.  
+    2. Have registered the location of your DVC repo with geowatch_dvc.  
     
     3. Have pulled the appropriate dataset (in this case Drop4)
        and have unzipped the annotations.
@@ -29,8 +29,8 @@ This tutorial will cover:
 
 
 # Determine the paths to your SMART data and experiment repositories.
-DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DATA_DVC_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+EXPT_DVC_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 
 
 echo "

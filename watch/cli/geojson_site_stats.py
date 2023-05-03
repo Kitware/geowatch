@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 CommandLine:
-    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
+    DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
     python -m watch.cli.geojson_site_stats.py \
         --site_models="$DVC_DATA_DPATH/annotations/drop6/site_models/*"
 """

@@ -615,7 +615,7 @@ def _namek_check_pipeline_status():
 def _gather_all_results():
     r"""
     # On Namek
-    DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+    DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
     python -m watch.mlops.aggregate \
         --pipeline=bas \
         --target "
@@ -626,7 +626,7 @@ def _gather_all_results():
         --output_dpath="$DVC_EXPT_DPATH/namek_agg"
 
     # On Toothbrush
-    DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+    DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
     rsync -avprPR namek:data/dvc-repos/smart_expt_dvc/./namek_agg "$DVC_EXPT_DPATH"
 
     python -m watch.mlops.aggregate \

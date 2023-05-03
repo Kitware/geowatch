@@ -45,6 +45,9 @@ class CocoStitchingManager(object):
         prob_blocksize (int):
             tiled blocksize for output predictions. Defaults to 128.
 
+        prob_format (str):
+            the format of the output images. (png, tif, cog).
+
         polygon_categories (List[str] | None):
             These are the list of channels that should be transformed into
             polygons. If not set, all are used.
@@ -100,6 +103,7 @@ class CocoStitchingManager(object):
         >>>     result_dataset=result_dataset,
         >>>     short_code='demofeat',
         >>>     chan_code='df1|df2',
+        >>>     prob_format='png',
         >>>     stiching_space='video')
         >>> coco_img = result_dataset.images().coco_images[0]
         >>> # Compute a feature in 0.5 video space for a subset of an image
@@ -165,6 +169,7 @@ class CocoStitchingManager(object):
                  num_bands='auto',
                  prob_compress='DEFLATE',
                  prob_blocksize=128,
+                 prob_format='cog',
                  polygon_categories=None,
                  expected_minmax=None,
                  quantize=True,
@@ -184,6 +189,7 @@ class CocoStitchingManager(object):
             'compress': prob_compress,
             'blocksize': prob_blocksize,
         }
+        self.prob_format = prob_format
         self.polygon_categories = polygon_categories
         self.quantize = quantize
         self.expected_minmax = expected_minmax
@@ -559,12 +565,21 @@ class CocoStitchingManager(object):
             # This currently exists as an example to demonstrate how a
             # prediction script can write a pre-fusion TA-2 feature to disk and
             # register it with the kwcoco file.
+
+            if self.prob_format == 'cog':
+                prob_ext = '.tif'
+                imwrite_backend = 'gdal'
+            elif self.prob_format == 'png':
+                prob_ext = f'.{self.prob_format}'
+                imwrite_backend = 'cv2'
+            else:
+                raise KeyError(f'unknown prob_format={self.prob_format!r}')
             #
             # Save probabilities (or feature maps) as a new auxiliary image
             bundle_dpath = self.result_dataset.bundle_dpath
             new_fname = (  # FIXME
                 img.get('name', str(img['id'])) +
-                f'_{self.suffix_code}.tif'
+                f'_{self.suffix_code}{prob_ext}'
             )
             new_fpath = self.prob_dpath / new_fname
 
@@ -601,6 +616,19 @@ class CocoStitchingManager(object):
                 write_kwargs['crs'] = srs.ExportToWkt()
                 write_kwargs['transform'] = wld_from_asset
                 write_kwargs['overviews'] = 2
+                if prob_ext != '.tif':
+                    warnings.warn(
+                        'Cannot save geospatial information unless the '
+                        'output format is cog / tif')
+
+            if self.prob_format == 'png':
+                write_kwargs.clear()
+                quantize_dtype = np.uint8
+            else:
+                quantize_dtype = np.int16
+                write_kwargs['metadata'] = {
+                    'channels': self.chan_code,
+                }
 
             if self.quantize:
                 # Quantize
@@ -609,26 +637,21 @@ class CocoStitchingManager(object):
                 else:
                     old_min, old_max = self.expected_minmax
                 quant_probs, quantization = quantize_image(
-                    final_probs, old_min=old_min, old_max=old_max)
+                    final_probs, old_min=old_min, old_max=old_max,
+                    quantize_dtype=quantize_dtype)
                 aux['quantization'] = quantization
-
-                kwimage.imwrite(
-                    str(new_fpath), quant_probs, space=None, backend='gdal',
-                    metadata={
-                        'quantization': quantization,
-                        'channels': self.chan_code,
-                    },
-                    nodata=quantization['nodata'], **write_kwargs,
-                )
             else:
-                kwimage.imwrite(
-                    str(new_fpath), final_probs, space=None, backend='gdal',
-                    metadata={
-                        'channels': self.chan_code,
-                        'quantization': None,
-                    },
-                    **write_kwargs,
-                )
+                quantization = None
+
+            if self.prob_format != 'png':
+                write_kwargs['metadata'] = {
+                    'quantization': quantization,
+                }
+
+            kwimage.imwrite(
+                str(new_fpath), final_probs, space=None, backend=imwrite_backend,
+                **write_kwargs,
+            )
 
         if self.write_preds:
             from watch.tasks.tracking.utils import mask_to_polygons

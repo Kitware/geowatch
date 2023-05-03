@@ -2,7 +2,7 @@
 Print stats about a torch model
 
 Exapmle Usage:
-    DVC_DPATH=$(smartwatch_dvc)
+    DVC_DPATH=$(geowatch_dvc)
     PACKAGE_FPATH=$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v55/BOTH_smt_it_stm_p8_L1_DIL_v55_epoch=5-step=53819.pt
     python -m watch.cli.torch_model_stats $PACKAGE_FPATH
 """

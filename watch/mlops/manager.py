@@ -7,8 +7,8 @@ This is a new Phase2 Variant of this script.
 
 Example:
 
-    export DVC_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data")
-    export DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+    export DVC_DATA_DPATH=$(geowatch_dvc --tags="phase2_data")
+    export DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
     cd $DVC_EXPT_DPATH
 
     python -m watch.mlops.manager "status" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
@@ -879,7 +879,7 @@ class ExperimentState(ub.NiceRepr):
         print(ub.codeblock(
             f"""
             # On the evaluation remote you need to run something like:
-            DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+            DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
             cd $DVC_EXPT_DPATH
             git pull
             dvc pull -r aws --recursive models/fusion/{self.dataset_code}

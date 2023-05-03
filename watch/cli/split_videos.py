@@ -2,7 +2,7 @@ r"""
 Split a coco dataset into one per video.
 
 Ignore:
-    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+    DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
     python -m watch.cli.split_videos \
         --src "$DVC_DATA_DPATH/Drop4-BAS/data_train.kwcoco.json" \
               "$DVC_DATA_DPATH/Drop4-BAS/data_vali.kwcoco.json" \

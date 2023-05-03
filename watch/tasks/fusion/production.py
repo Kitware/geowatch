@@ -177,7 +177,7 @@ CANDIDATE_BAS_MODELS = [
 __notes__ = r'''
 
 
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(geowatch_dvc)
 cd $DVC_DPATH
 
 joinby(){

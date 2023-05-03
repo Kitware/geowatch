@@ -205,7 +205,7 @@ def main():
 if __name__ == '__main__':
     """
     CommandLine:
-        WATCH_DATA_DPATH=$(smartwatch_dvc)
+        WATCH_DATA_DPATH=$(geowatch_dvc)
 
     """
     main()

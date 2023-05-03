@@ -1,12 +1,12 @@
 #!/bin/bash
 set -e
 
-# smartwatch_dvc add --name=smart_data_hdd --path=/smart_data_dvc --tags=data_dir --hardware=hdd
-# smartwatch_dvc add --name=smart_expt_hdd --path=/bigdata_smart/smart_expt_dvc --tags=expt_dir --hardware=hdd
+# geowatch_dvc add --name=smart_data_hdd --path=/smart_data_dvc --tags=data_dir --hardware=hdd
+# geowatch_dvc add --name=smart_expt_hdd --path=/bigdata_smart/smart_expt_dvc --tags=expt_dir --hardware=hdd
 
 # Determine the paths to your SMART data and experiment repositories.
-DATA_DVC_DPATH=$(smartwatch_dvc --tags='data_dir' --hardware=auto)
-EXPT_DVC_DPATH=$(smartwatch_dvc --tags='expt_dir' --hardware=auto)
+DATA_DVC_DPATH=$(geowatch_dvc --tags='data_dir' --hardware=auto)
+EXPT_DVC_DPATH=$(geowatch_dvc --tags='expt_dir' --hardware=auto)
 
 echo "
 DATA_DVC_DPATH=$DATA_DVC_DPATH

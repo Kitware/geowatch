@@ -7,8 +7,8 @@ This is a new Phase2 Variant of this script.
 
 Example:
 
-    export DVC_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data")
-    export DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+    export DVC_DATA_DPATH=$(geowatch_dvc --tags="phase2_data")
+    export DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
     cd $DVC_EXPT_DPATH
 
     python -m watch mlops "status" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
@@ -99,8 +99,8 @@ class ExptManagerConfig(scfg.DataConfig):
     machine with the "watch" environment, the watch DVC repo is accessed as
     follows:
 
-        DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
-        DVC_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data")
+        DVC_EXPT_DPATH=$(geowatch_dvc --tags="phase2_expt")
+        DVC_DATA_DPATH=$(geowatch_dvc --tags="phase2_data")
 
     The workdir is where a user on a machine puts all of their experiments.
 

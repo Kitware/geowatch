@@ -23,6 +23,8 @@ from watch.tasks.fusion.coco_stitcher import quantize_float01  # NOQA
 # APPLY Monkey Patches
 from watch.monkey import monkey_torch
 from watch.monkey import monkey_torchmetrics
+import scriptconfig as scfg
+
 monkey_torchmetrics.fix_torchmetrics_compatability()
 
 try:
@@ -31,8 +33,123 @@ except Exception:
     profile = ub.identity
 
 
-def make_predict_config(cmdline=False, **kwargs):
+class DataModuleConfigMixin(scfg.DataConfig):
+    __default__ = {
+        k: v.copy()
+        for k, v in datamodules.kwcoco_datamodule.KWCocoVideoDataModuleConfig.__default__.items()}
+    __default__['batch_size'].value = 1
+    __default__['chip_overlap'].value = 0.3
+
+    # Handle hacky overloadable stuff
+    # Set the default of all of thse to be "auto", but remember the original
+    # value in a custom variable
+    __DATAMODULE_DEFAULTS__ = {}
+    __OVERLOADABLE_DATAMODULE_KEYS__ = [
+        'channels',
+        'normalize_peritem',
+        'chip_dims',
+        'time_steps',
+        'time_sampling',
+        'time_span',
+        'time_kernel',
+        'input_space_scale',
+        'window_space_scale',
+        'output_space_scale',
+        'use_cloudmask',
+        'mask_low_quality',
+        'observable_threshold',
+        'quality_threshold',
+        'resample_invalid_frames',
+        'set_cover_algo',
+    ]
+    for key in __OVERLOADABLE_DATAMODULE_KEYS__:
+        __DATAMODULE_DEFAULTS__[key] = __default__[key].value
+        __default__[key].value = 'auto'
+        ...
+
+
+class PredictConfig(DataModuleConfigMixin):
     """
+    Prediction script for the fusion task
+    """
+    config_file = scfg.Value(None, alias=['config'], help='config file path')
+    write_out_config_file_to_this_path = scfg.Value(None, alias=['dump'], help=ub.paragraph(
+            '''
+            takes the current command line args and writes them out to a
+            config file at the given path, then exits
+            '''))
+    datamodule = scfg.Value('KWCocoVideoDataModule', help='This must always be KWCocoVideoDataModule for now')
+    pred_dataset = scfg.Value(None, help=ub.paragraph(
+            '''
+            path to the output dataset (note: test_dataset is the input
+            dataset)
+            '''))
+    package_fpath = scfg.Value(None, type=str, help=None)
+    devices = scfg.Value(None, help='lightning devices')
+    thresh = scfg.Value(0.01, help=None)
+    with_change = scfg.Value('auto', help=None)
+    with_class = scfg.Value('auto', help=None)
+    with_saliency = scfg.Value('auto', help=None)
+    track_emissions = scfg.Value(True, help=ub.paragraph(
+            '''
+            set to false to disable emission tracking
+            '''))
+    record_context = scfg.Value(True, help='If enabled records process context stats')
+    quantize = scfg.Value(True, help='quantize outputs')
+    tta_fliprot = scfg.Value(0, help=ub.paragraph(
+            '''
+            number of times to flip/rotate the frame, can be in [0,7]
+            '''))
+    tta_time = scfg.Value(0, help=ub.paragraph(
+            '''
+            number of times to expand the temporal sample for a frame
+            '''))
+    clear_annots = scfg.Value(1, help=ub.paragraph(
+            '''
+            Clear existing annotations in output file. Otherwise keep
+            them
+            '''))
+    drop_unused_frames = scfg.Value(0, help=ub.paragraph(
+            '''
+            if True, remove any images that were not predicted on
+            '''))
+    write_workers = scfg.Value('datamodule', help=ub.paragraph(
+            '''
+            workers to use for writing results. If unspecified uses the
+            datamodule num_workers
+            '''))
+    compress = scfg.Value('DEFLATE', type=str, help='type of compression for prob images')
+    format = scfg.Value('cog', type=str, help=ub.paragraph(
+            '''
+            the output format of the predicted images
+            '''))
+    write_preds = scfg.Value(False, help=ub.paragraph(
+            '''
+            If True, convert probability maps into raw "hard"
+            predictions and write them as annotations to the prediction
+            kwcoco file.
+            '''))
+    write_probs = scfg.Value(True, help=ub.paragraph(
+            '''
+            If True, write raw "soft" probability maps into the kwcoco
+            file as a new auxiliary channel. The channel name is
+            currently hard-coded based on expected output heads. This
+            may change in the future.
+            '''))
+
+
+def make_new_predict_config(cmdline=False, **kwargs):
+    """
+    NEW scriptconfig config.
+    """
+    args = PredictConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
+    args.datamodule_defaults = args.__DATAMODULE_DEFAULTS__
+    return args
+
+
+def make_old_predict_config(cmdline=False, **kwargs):
+    """
+    OLD configargparse config.
     Configuration for fusion prediction
     """
     # TODO: switch to jsonargparse / scriptconfig + jsonargparse
@@ -62,7 +179,6 @@ def make_predict_config(cmdline=False, **kwargs):
     parser.add_argument('--with_class', type=smartcast, default='auto')
     parser.add_argument('--with_saliency', type=smartcast, default='auto')
 
-    parser.add_argument('--compress', type=str, default='DEFLATE', help='type of compression for prob images')
     parser.add_argument('--track_emissions', type=smartcast, default=True, help='set to false to disable emission tracking')
     parser.add_argument('--record_context', default=True, type=smartcast, help='If enabled records process context stats')
 
@@ -74,6 +190,9 @@ def make_predict_config(cmdline=False, **kwargs):
     parser.add_argument('--clear_annots', type=smartcast, default=1, help='Clear existing annotations in output file. Otherwise keep them')
     parser.add_argument('--drop_unused_frames', type=smartcast, default=0, help='if True, remove any images that were not predicted on')
     parser.add_argument('--write_workers', type=smartcast, default='datamodule', help='workers to use for writing results. If unspecified uses the datamodule num_workers')
+
+    parser.add_argument('--compress', type=str, default='DEFLATE', help='type of compression for prob images')
+    parser.add_argument('--format', type=str, default='cog', help='the output format of the predicted images')
 
     # TODO:
     # parser.add_argument('--cache', type=smartcast, default=0, help='if True, dont rerun prediction on images where predictions exist'),
@@ -159,6 +278,7 @@ def build_stitching_managers(config, method, result_dataset, writer_queue=None):
         write_probs=config['write_probs'],
         write_preds=config['write_preds'],
         prob_compress=config['compress'],
+        prob_format=config['format'],
         quantize=config['quantize'],
         expected_minmax=(0, 1),
         writer_queue=writer_queue,
@@ -514,7 +634,7 @@ def predict(cmdline=False, **kwargs):
         >>> datamodule = datamodules.kwcoco_video_data.KWCocoVideoDataModule(
         >>>     train_dataset=train_dset, #'special:vidshapes8-multispectral-multisensor',
         >>>     test_dataset=test_dset, #'special:vidshapes8-multispectral-multisensor',
-        >>>     chip_size=32,
+        >>>     chip_dims=32,
         >>>     channels="r|g|b",
         >>>     batch_size=1, time_steps=3, num_workers=2, normalize_inputs=10)
         >>> datamodule.setup('fit')
@@ -598,11 +718,18 @@ def predict(cmdline=False, **kwargs):
         >>> # assert pred2.max() > 1
     """
     import rich
-    args = make_predict_config(cmdline=cmdline, **kwargs)
-    config = args.__dict__.copy()
-    datamodule_defaults = args.datamodule_defaults
-    # print('kwargs = {}'.format(ub.urepr(kwargs, nl=1)))
-    rich.print('config = {}'.format(ub.urepr(config, nl=2)))
+    if 1:
+        args = make_new_predict_config(cmdline=cmdline, **kwargs)
+        config = args.asdict()
+        datamodule_defaults = args.datamodule_defaults
+        # print('kwargs = {}'.format(ub.urepr(kwargs, nl=1)))
+        rich.print('config = {}'.format(ub.urepr(args, nl=2)))
+    else:
+        args = make_old_predict_config(cmdline=cmdline, **kwargs)
+        config = args.__dict__.copy()
+        datamodule_defaults = args.datamodule_defaults
+        # print('kwargs = {}'.format(ub.urepr(kwargs, nl=1)))
+        rich.print('config = {}'.format(ub.urepr(args, nl=2)))
 
     package_fpath = ub.Path(config['package_fpath']).expand()
 
@@ -844,12 +971,10 @@ def predict(cmdline=False, **kwargs):
                         bad_data._build_hashid())
         return jsonified
 
-    jsonified_args = jsonify(args.__dict__)
     config_resolved = jsonify(config)
     traintime_params = jsonify(traintime_params)
 
     from kwcoco.util import util_json
-    assert not list(util_json.find_json_unserializable(jsonified_args))
     assert not list(util_json.find_json_unserializable(config_resolved))
     assert not list(util_json.find_json_unserializable(traintime_params))
 
@@ -1207,8 +1332,8 @@ if __name__ == '__main__':
 
     # Testing first heterogeneous model
 
-    DVC_EXPT_DPATH=$(WATCH_PREIMPORT=none smartwatch_dvc --tags='phase2_expt')
-    DVC_DATA_DPATH=$(WATCH_PREIMPORT=none smartwatch_dvc --tags=phase2_data --hardware=ssd)
+    DVC_EXPT_DPATH=$(WATCH_PREIMPORT=none geowatch_dvc --tags='phase2_expt')
+    DVC_DATA_DPATH=$(WATCH_PREIMPORT=none geowatch_dvc --tags=phase2_data --hardware=ssd)
     PACKAGE_FPATH=$DVC_EXPT_DPATH/package_epoch10_step200000.pt
     TEST_DATASET=$DVC_DATA_DPATH/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/KR_R001.kwcoco.json
     PRED_DATASET=$DVC_EXPT_DPATH/_testing/hg_kr1/pred.kwcoco.json

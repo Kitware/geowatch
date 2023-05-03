@@ -135,8 +135,8 @@ if __name__ == '__main__':
 
     CommandLine:
 
-        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-        DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+        DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 
         python ~/code/watch/dev/poc/reproject_all_annotations.py \
             --bundle_dpath $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2 \

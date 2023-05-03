@@ -51,7 +51,15 @@ Installing
 ~~~~~~~~~~
 
 Assuming you have cloned this repo, and you are in a Python virtual
-environment, the geowatch repo can be setup as:
+environment, cd into the root of the repo and then geowatch can be setup using
+the ``run_developer_setup`` script.
+
+.. code:: bash
+
+   cd $HOME/code/watch
+   bash ./run_developer_setup.sh
+
+or more explicitly via:
 
 .. code:: bash
 

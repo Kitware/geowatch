@@ -2,7 +2,7 @@
 
 source "$HOME"/code/watch/secrets/secrets
 
-DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="auto")
+DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="auto")
 SENSORS=TA1-S2-L8-WV-PD-ACC-2
 DATASET_SUFFIX=Drop6-2022-12-01-c30-$SENSORS
 REGION_GLOBSTR="$DATA_DVC_DPATH/annotations/region_models/*.geojson"
@@ -72,7 +72,7 @@ print('total = {}'.format(xd.byte_str(total_size)))
 
 #add_dvc_data(){
 #    # TODO: before doing this, remember to change the bundle name
-#    DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=hdd)
+#    DATA_DVC_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
 #    cd "$DATA_DVC_DPATH"
 #    git add Drop6
 #    cd "$DATA_DVC_DPATH/Drop6"
@@ -86,7 +86,7 @@ print('total = {}'.format(xd.byte_str(total_size)))
 #### FIXUP
 
 #COCO_FPATH="$DVC_DATA_DPATH/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/imganns-AE_R001.kwcoco.json"
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 COCO_FPATH="$DVC_DATA_DPATH/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/data.kwcoco.json"
 smartwatch clean_geotiffs \
     --src "$COCO_FPATH" \
@@ -103,7 +103,7 @@ smartwatch clean_geotiffs \
 
 source "$HOME"/code/watch/secrets/secrets
 ### TEST
-DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="auto")
+DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="auto")
 SENSORS=L2-S2-L8
 DATASET_SUFFIX=Drop6-c10-$SENSORS
 REGION_GLOBSTR="$DATA_DVC_DPATH/annotations/drop6/region_models/*.geojson"
@@ -187,7 +187,7 @@ dvc_add(){
 
     du -sh */*.zip
 
-    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+    DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
     cd "$DVC_DATA_DPATH"
     ln -s Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2 Drop6
 
@@ -206,7 +206,7 @@ queue_archive_dmj_assets(){
     REGION_ID=$1 
     QUEUE_NAME=$2
 
-    DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="hdd")
+    DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
     DMJ_DPATH=/home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan
     DST_DPATH=$DATA_DVC_DPATH/Drop6
 
@@ -236,7 +236,7 @@ queue_dmj_reproject(){
     REGION_ID=$1 
     QUEUE_NAME=$2
 
-    DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="hdd")
+    DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
     DMJ_DPATH=/home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan
     DST_DPATH=$DATA_DVC_DPATH/Drop6
 
@@ -273,7 +273,7 @@ update_from_dmj_constructions(){
 
     REGION_IDS=(AE_C003 PE_C003 QA_C001 SA_C005 US_C000 US_C010 US_C011 US_C012 US_C014)
     REGION_ID=BH_R001
-    DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="hdd")
+    DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
     DMJ_DPATH=/home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan
     DST_DPATH=$DATA_DVC_DPATH/Drop6
 
@@ -298,7 +298,7 @@ update_from_dmj_constructions(){
     cmd_queue show $QUEUE_NAME --backend=serial
     cmd_queue run $QUEUE_NAME --backend=serial
 
-    DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="hdd")
+    DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
     TODO_ZIPS=( )
     cd $DATA_DVC_DPATH/Drop6
     for REGION_ID in "${REGION_IDS[@]}"; do
@@ -332,18 +332,18 @@ update_from_dmj_constructions(){
     ls /home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan/KR_R001/kwcoco-dataset/KR_R001/
     ls /home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_data_dvc/Drop6/KR_R001 
 
-    DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="hdd")
+    DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
     DMJ_DPATH=/home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan
     DST_DPATH=$DATA_DVC_DPATH/Drop6
     ls $DMJ_DPATH
 
 
-    DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="hdd")
+    DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
     DMJ_DPATH=/home/local/KHQ/jon.crall/data/david.joy/DatasetGeneration2023Jan
     DST_DPATH=$DATA_DVC_DPATH/Drop6
 
     ### DO THIS AT THE VERY END.
-    DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="hdd")
+    DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
     DST_DPATH=$DATA_DVC_DPATH/Drop6
     cd $DST_DPATH
 

@@ -19,7 +19,7 @@ See Also:
 # TODO: add a resource for this?
 source "$HOME"/code/watch/secrets/secrets
 
-DATA_DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+DATA_DVC_DPATH=$(geowatch_dvc --hardware="hdd")
 SENSORS=TA1-S2-L8-ACC
 #SENSORS=TA1-S2-ACC
 #SENSORS=L2-S2-L8
@@ -62,7 +62,7 @@ python -m watch.cli.prepare_ta2_dataset \
 build_drop4_BAS(){
     source "$HOME"/code/watch/secrets/secrets
     SENSORS=TA1-S2-L8-ACC
-    DATA_DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DATA_DVC_DPATH=$(geowatch_dvc --hardware="hdd")
     DATASET_SUFFIX=Drop4-2022-07-28-c20-$SENSORS
     REGION_GLOBSTR="$DATA_DVC_DPATH/annotations/region_models/*.geojson"
     SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
@@ -101,7 +101,7 @@ build_drop4_v2_BAS(){
     source "$HOME"/code/watch/secrets/secrets
     SENSORS=TA1-S2-L8-ACC
     DATA_DVC_DPATH=$HOME/data/dvc-repos/smart_data_dvc
-    #DATA_DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    #DATA_DVC_DPATH=$(geowatch_dvc --hardware="hdd")
 
     DATASET_SUFFIX=Drop4-2022-08-08-$SENSORS
     REGION_GLOBSTR="$DATA_DVC_DPATH/annotations/region_models/*.geojson"
@@ -140,7 +140,7 @@ build_drop4_v2_SC(){
     source "$HOME"/code/watch/secrets/secrets
     SENSORS=TA1-S2-WV-PD-ACC
     DATA_DVC_DPATH=$HOME/data/dvc-repos/smart_data_dvc
-    #DATA_DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    #DATA_DVC_DPATH=$(geowatch_dvc --hardware="hdd")
 
     DATASET_SUFFIX=Drop4-2022-08-08-$SENSORS
     REGION_GLOBSTR="$DATA_DVC_DPATH/subregions/*.geojson"
@@ -280,7 +280,7 @@ dvc_add_SC(){
 rgb_medium_drop4_only(){
     source "$HOME"/code/watch/secrets/secrets
 
-    DATA_DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DATA_DVC_DPATH=$(geowatch_dvc --hardware="hdd")
     SENSORS=TA1-S2-L8-ACC
     #SENSORS=TA1-S2-ACC
     #SENSORS=L2-S2-L8
@@ -321,7 +321,7 @@ rgb_medium_drop4_only(){
 
 
 small_onesite(){
-    DATA_DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DATA_DVC_DPATH=$(geowatch_dvc --hardware="hdd")
     source ~/code/watch/secrets/secrets
     SENSORS=TA1-S2-L8-WV-PD-ACC
     #SENSORS=L2-S2
@@ -366,7 +366,7 @@ small_onesite(){
 }
 
 small_teregions(){
-    DATA_DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DATA_DVC_DPATH=$(geowatch_dvc --hardware="hdd")
     SENSORS=L2-S2
     DATASET_SUFFIX=Drop4-2022-07-18-$SENSORS-small-teregion
     #REGION_GLOBSTR="$DATA_DVC_DPATH/annotations/region_models/*_R*.geojson"
@@ -402,7 +402,7 @@ small_teregions(){
 }
 
 small_allsites(){
-    DATA_DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DATA_DVC_DPATH=$(geowatch_dvc --hardware="hdd")
     DATASET_SUFFIX=Drop4-S2-L2A-2022-07-15-demo8
     REGION_GLOBSTR="$DATA_DVC_DPATH/annotations/region_models/*.geojson"
     SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
@@ -437,7 +437,7 @@ small_allsites(){
         --backend=tmux --run=1
 
 
-    DATA_DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DATA_DVC_DPATH=$(geowatch_dvc --hardware="hdd")
     DATASET_SUFFIX=Drop4-S2-L2A-2022-07-16-c40
     REGION_GLOBSTR="$DATA_DVC_DPATH/annotations/region_models/*.geojson"
     SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
@@ -515,7 +515,7 @@ dvc_add(){
 
 
 update_local(){
-    DATA_DVC_DPATH=$(smartwatch_dvc --hardware=hdd)
+    DATA_DVC_DPATH=$(geowatch_dvc --hardware=hdd)
     cd "$DATA_DVC_DPATH"/Aligned-Drop4-2022-07-28-c20-TA1-S2-L8-ACC
     git pull
     dvc pull -r aws splits.zip.dvc
@@ -528,7 +528,7 @@ update_local(){
 prepare_qfabric(){
     source "$HOME"/code/watch/secrets/secrets
 
-    DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="hdd")/public
+    DATA_DVC_DPATH=$(geowatch_dvc --tags="phase2_data" --hardware="hdd")/public
     SENSORS=worldview-nitf
     #DATASET_SUFFIX=QFabric-c30-$SENSORS
     DATASET_SUFFIX=QFabric-c80-$SENSORS
@@ -571,7 +571,7 @@ prepare_qfabric(){
 prepare_qfabric_horologic(){
     source "$HOME"/code/watch/secrets/secrets
 
-    DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="hdd")/public
+    DATA_DVC_DPATH=$(geowatch_dvc --tags="phase2_data" --hardware="hdd")/public
     SENSORS=worldview-nitf,smart-landsat-c2l2-sr,sentinel-s2-l2a-cogs
     #DATASET_SUFFIX=QFabric-c30-$SENSORS
     DATASET_SUFFIX=QFabric-wvs2l8-c80
@@ -615,7 +615,7 @@ prepare_qfabric_horologic(){
 
 #### FIXUP
 fixup_nodata(){
-    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+    DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
     smartwatch clean_geotiffs \
         --src "$DVC_DATA_DPATH/Drop4-BAS/data_vali.kwcoco.json" \
         --channels="red|green|blue|nir|swir16|swir22" \
@@ -627,7 +627,7 @@ fixup_nodata(){
         --dry=True
 
 
-    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+    DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
     smartwatch clean_geotiffs \
         --src "$DVC_DATA_DPATH/Drop4-BAS/data_train.kwcoco.json" \
         --channels="red|green|blue|nir|swir16|swir22" \

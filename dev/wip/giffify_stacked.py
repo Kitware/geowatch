@@ -106,7 +106,7 @@ if __name__ == '__main__':
     """
     CommandLine:
 
-        DVC_DPATH=$(smartwatch_dvc)
+        DVC_DPATH=$(geowatch_dvc)
         python ~/code/watch/dev/giffify_stacked.py \
             -i $DVC_DPATH/_tmp/_viz__tmp_without_tta.kwcoco_7c4ce4ca/KR_R001/_anns/salient \
             -i $DVC_DPATH/_tmp/_viz__tmp_without_tta.kwcoco_7c4ce4ca/KR_R001/_anns/red_green_blue \

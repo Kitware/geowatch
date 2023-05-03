@@ -329,7 +329,7 @@ def main(**kwargs):
             site_fpath = sites_dir / (site_props['site_id'] + '.geojson')
             site_fpaths.append(os.fspath(site_fpath))
 
-            with safer.open(site_fpath, 'w', temp_file=True) as f:
+            with safer.open(site_fpath, 'w', temp_file=not ub.WIN32) as f:
                 geojson.dump(site, f, indent=2)
 
     if args.out_sites_fpath is not None:
@@ -337,7 +337,7 @@ def main(**kwargs):
         site_tracking_output['files'] = site_fpaths
         out_sites_fpath = ub.Path(args.out_sites_fpath)
         print(f'Write tracked site result to {out_sites_fpath}')
-        with safer.open(out_sites_fpath, 'w', temp_file=True) as file:
+        with safer.open(out_sites_fpath, 'w', temp_file=not ub.WIN32) as file:
             json.dump(site_tracking_output, file, indent='    ')
 
     # Convert kwcoco to sites summaries
@@ -369,7 +369,7 @@ def main(**kwargs):
                 region['features'].append(site_summary)
 
             site_summary_fpaths.append(os.fspath(region_fpath))
-            with safer.open(region_fpath, 'w', temp_file=True) as f:
+            with safer.open(region_fpath, 'w', temp_file=not ub.WIN32) as f:
                 geojson.dump(region, f, indent=2)
 
     if args.out_site_summaries_fpath is not None:
@@ -378,7 +378,7 @@ def main(**kwargs):
         out_site_summaries_fpath = ub.Path(args.out_site_summaries_fpath)
         out_site_summaries_fpath.parent.ensuredir()
         print(f'Write tracked site summary result to {out_site_summaries_fpath}')
-        with safer.open(out_site_summaries_fpath, 'w', temp_file=True) as file:
+        with safer.open(out_site_summaries_fpath, 'w', temp_file=not ub.WIN32) as file:
             json.dump(site_summary_tracking_output, file, indent='    ')
 
 
@@ -399,8 +399,8 @@ Example:
 
     ### Run BAS and then run SV on top of it.
 
-    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-    DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+    DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+    DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
     BAS_MODEL_FPATH=$DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
 
     # Predict BAS Heatmaps

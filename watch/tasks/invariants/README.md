@@ -7,7 +7,7 @@ With example below, the `output_kwcoco` of predict.py generates an 8 dimension f
 Ex: 
 
 ```
-SMART_WATCH_DVC=$(smartwatch_dvc)
+SMART_WATCH_DVC=$(geowatch_dvc)
 
 export CUDA_VISIBLE_DEVICES=2
 python -m watch.tasks.invariants.predict \

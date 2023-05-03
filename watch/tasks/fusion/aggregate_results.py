@@ -26,7 +26,7 @@ CommandLine:
 
     # TODO: - [ ] watch command to "register" which DVC directory to use
     # Locate a registered DVC directory
-    DVC_DPATH=$(smartwatch_dvc)
+    DVC_DPATH=$(geowatch_dvc)
 
     # Replace with the name of the latest dataset
     DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
@@ -2143,7 +2143,7 @@ def main(cmdline=False, **kwargs):
 if __name__ == '__main__':
     """
     CommandLine:
-        # DVC_DPATH=$(smartwatch_dvc)
+        # DVC_DPATH=$(geowatch_dvc)
         DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
         MEASURE_GLOBSTR=$DVC_DPATH/models/fusion/SC-20201117/*_TA1*/*/*/eval/curves/measures2.json
         python -m watch.tasks.fusion.aggregate_results \
