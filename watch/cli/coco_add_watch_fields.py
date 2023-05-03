@@ -23,7 +23,7 @@ class AddWatchFieldsConfig(scfg.DataConfig):
         'inplace': scfg.Value(False, isflag=True, help=ub.paragraph(
             '''
             if True and dst is unspecified then the output will overwrite the input
-            '''))
+            ''')),
 
         'target_gsd': scfg.Value(10.0, help='compute transforms for a target gsd'),
 
