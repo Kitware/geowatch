@@ -12,6 +12,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * DZYNE site validation: depthPCD task
 * fusion.predict can now output pngs
 * Added `request_rlimit_nofile` to KWCocoVideoDataModule for easier ulimit configuration
+* The `fusion.predict` script can now output predictions in cog or png format
 
 ### Changed
 
@@ -20,6 +21,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Reorganized docs
 * `coco_align` now uses process context
 * Change weights now use geometric mean instead of direct product
+* Documentation improvements
+* Now using scriptconfig in fusion.predict
+* Reworked how submatrices behave in mlops, added submatrices1, submatrices2. Concept might need refinement.
+* Update site / region schemas
+
+### Fixed
+* safer no longer uses `temp_file` on windows
+* Erroneous assertion errors in reproject and kwcoco-to-geotiffs
 
 
 ## Version 0.5.6 - Target 2023-04-30
