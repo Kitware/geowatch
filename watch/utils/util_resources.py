@@ -3,14 +3,16 @@ Utilities to configure / inspect system resources
 """
 
 
-def request_nofile_limits(requested_limit='auto'):
+def request_nofile_limits(request_rlimit_nofile='auto', requested_limit=None):
     """
     Attempts to increase the limit of open file descriptors on the system.
 
+    Does nothing on non-linux operating systems.
+
     Args:
-        requested_limit (int | str):
+        request_rlimit_nofile (int | str):
             attempt to increase rlimit_nofile to this number of open files,
-            if auto, uses a hueristic
+            if auto, uses a hueristic, which currently defaults to 8192.
 
     Ignore:
         # Helpful file descriptor monitor script:
@@ -36,19 +38,27 @@ def request_nofile_limits(requested_limit='auto'):
         >>> util_resources.request_nofile_limits()
     """
     import ubelt as ub
+
+    if requested_limit is not None:
+        ub.schedule_deprecation(
+            'watch', 'requested_limit', 'arg',
+            migration='Use request_rlimit_nofile instead',
+            deprecate='0.6.4', error='0.7.0', remove='0.8.0')
+        request_rlimit_nofile = requested_limit
+
     if ub.LINUX:
         import resource
-        if isinstance(requested_limit, str):
-            if requested_limit == 'auto':
-                requested_limit = 8192
+        if isinstance(request_rlimit_nofile, str):
+            if request_rlimit_nofile == 'auto':
+                request_rlimit_nofile = 8192
             else:
-                raise KeyError(requested_limit)
+                raise KeyError(request_rlimit_nofile)
         soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
-        if requested_limit > soft:
-            print('Requesting FileLimit = {!r}'.format(requested_limit))
+        if request_rlimit_nofile > soft:
+            print('Requesting FileLimit = {!r}'.format(request_rlimit_nofile))
             print(' * Before FileLimit: soft={}, hard={}'.format(soft, hard))
             try:
-                resource.setrlimit(resource.RLIMIT_NOFILE, (requested_limit, hard))
+                resource.setrlimit(resource.RLIMIT_NOFILE, (request_rlimit_nofile, hard))
             except Exception as ex:
                 print(f'ERROR ex={ex}')
             soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
@@ -60,14 +70,19 @@ def check_shm_limits(threshold_gibibytes=1):
     When running training in docker you may need more shared memory than
     its default provide. Warns if shared memory is not above a threshold.
 
+    Args:
+        threshold_gibibytes (float):
+            The amount of shared memory we want to have access to.
+
     Notes:
-        Running docker run with `--shm-size=32768m` increases shm to 32GB
+        Running docker run with ``--shm-size=32768m`` increases shm to 32GB
 
     Raises:
         IOError: if the system does not have a /dev/shm device.
 
     References:
-        https://stackoverflow.com/questions/30210362/how-to-increase-the-size-of-the-dev-shm-in-docker-container
+        .. [SO30210362] https://stackoverflow.com/questions/30210362/how-to-increase-the-size-of-the-dev-shm-in-docker-container
+        .. [SO58804022] https://stackoverflow.com/questions/58804022/how-to-resize-dev-shm
     """
     import ubelt as ub
     import psutil
@@ -84,8 +99,18 @@ def check_shm_limits(threshold_gibibytes=1):
 
     if shm_gibibytes < threshold_gibibytes:
         import warnings
+        import math
+        thresh_mb = math.ceil(threshold_gibibytes * (2 ** 30 / 10 ** 6))
         print(f'shm_gibibytes={shm_gibibytes}')
-        warnings.warn('Likely do not have enough /dev/shm space')
+        warnings.warn(ub.paragraph(
+            f'''
+            Likely do not have enough /dev/shm space.
+            Current /dev/shm space is {shm_gibibytes} GiB,
+            but we requested {threshold_gibibytes} GiB.
+            Changing the size of /dev/shm of a host machine requires system
+            level configuration. For docker images you can call docker run
+            with --shm-size={thresh_mb}m.
+            '''))
 
     if 0:
         disk_parts = psutil.disk_partitions(all=True)

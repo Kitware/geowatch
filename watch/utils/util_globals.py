@@ -18,7 +18,9 @@ def configure_global_attributes(**config):
 
             * "torch_sharing_strategy" to specify the torch multiprocessing backend
 
-        **kw: can also be used to specify config items
+            * "request_rlimit_nofile"
+                the maximum number of open files to request ulimit raise the
+                soft limit to.
 
     Modules we currently hack:
         * cv2 - fix thread count
@@ -33,8 +35,9 @@ def configure_global_attributes(**config):
     if num_workers is not None and num_workers > 0:
         import cv2
         cv2.setNumThreads(0)
-        request_nofile_limits()
-        want_shm_per_worker = 0.5
+        request_rlimit_nofile = config.get('request_rlimit_nofile', 'auto')
+        request_nofile_limits(request_rlimit_nofile=request_rlimit_nofile)
+        want_shm_per_worker = 0.5  # gibibytes
         want_shm = want_shm_per_worker * num_workers
         try:
             check_shm_limits(want_shm)

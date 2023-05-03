@@ -120,6 +120,12 @@ class WatchModuleMixins:
                     'red|green|blue': rng.rand(3, H1, W1).astype("float32"),
                     'nir|swir16|swir22': rng.rand(3, H2, W2).astype("float32"),
                 }
+
+                # Add in channels the model exepcts
+                for stream in self.input_sensorchan.streams():
+                    C = stream.chans.numel()
+                    modes[stream.chans.spec] = rng.rand(C, H1, W1).astype("float32")
+
                 frame = {}
                 if time_index == 0:
                     frame['change'] = None
