@@ -6,7 +6,7 @@ import ubelt as ub
 import scriptconfig as scfg
 
 
-class CocoShardConfig(scfg.Config):
+class CocoShardConfig(scfg.DataConfig):
     """
     Shards a kwcoco dataset into multiple subparts
 
@@ -39,7 +39,7 @@ def main(cmdline=True, **kw):
         >>> main(cmdline, **kw)
     """
     import kwcoco
-    config = CocoShardConfig(kw, cmdline=cmdline)
+    config = CocoShardConfig.cli(data=kw, cmdline=cmdline, strict=True)
     print('config = {}'.format(ub.urepr(dict(config), nl=1)))
 
     if config['src'] is None:

@@ -25,10 +25,9 @@ CommandLine:
 """
 import scriptconfig as scfg
 import ubelt as ub
-# import xdev
 
 
-class CocoCropTrackConfig(scfg.Config):
+class CocoCropTrackConfig(scfg.DataConfig):
     """
     Create a dataset of aligned temporal sequences around objects of interest
     in an unstructured collection of annotated geotiffs.
@@ -108,8 +107,8 @@ def main(cmdline=0, **kwargs):
         kwargs['workers'] = 8
     """
     import kwcoco
-    config = CocoCropTrackConfig(cmdline=cmdline, data=kwargs)
-    print('config = {}'.format(ub.urepr(dict(config), nl=1)))
+    config = CocoCropTrackConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
+    print('config = {}'.format(ub.urepr(config, nl=1)))
     src = config['src']
     dst = ub.Path(config['dst'])
     dst_bundle_dpath = dst.parent

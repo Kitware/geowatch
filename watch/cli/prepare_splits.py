@@ -32,7 +32,7 @@ import scriptconfig as scfg
 import ubelt as ub
 
 
-class PrepareSplitsConfig(scfg.Config):
+class PrepareSplitsConfig(scfg.DataConfig):
     """
     This generates the bash commands necessary to split a base kwcoco file into
     the standard train / validation splits.
@@ -40,8 +40,6 @@ class PrepareSplitsConfig(scfg.Config):
     Ignore:
         base_fpath = 'imganns*.kwcoco.*'
     """
-    __fuzzy_hyphens__ = 1
-
     __default__ = {
         'base_fpath': scfg.Value(None, nargs='+', help='base coco file to split or a globstring in constructive mode', position=1),
 
@@ -236,8 +234,7 @@ def prep_splits(cmdline=False, **kwargs):
     TODO:
         - [ ] Option to just dump the serial bash script that does everything.
     """
-    config = PrepareSplitsConfig(cmdline=cmdline)
-    config.update(kwargs)
+    config = PrepareSplitsConfig.cli(data=kwargs, cmdline=cmdline, strict=True)
     print('config = {}'.format(ub.urepr(dict(config), nl=1)))
 
     if config['base_fpath'] == 'auto':

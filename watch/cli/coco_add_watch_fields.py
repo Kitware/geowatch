@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Adds fields needed by ndsampler to correctly "watch" a region.
 
@@ -15,36 +16,34 @@ class AddWatchFieldsConfig(scfg.DataConfig):
     Updates image transforms in a kwcoco json file to align all videos to a
     target GSD.
     """
-    __default__ = {
-        'src': scfg.Value('data.kwcoco.json', help='input kwcoco filepath', position=1),
+    src = scfg.Value('data.kwcoco.json', help='input kwcoco filepath', position=1)
 
-        'dst': scfg.Value(None, help='output kwcoco filepath', position=2),
+    dst = scfg.Value(None, help='output kwcoco filepath', position=2)
 
-        'inplace': scfg.Value(False, isflag=True, help=ub.paragraph(
-            '''
-            if True and dst is unspecified then the output will overwrite the input
-            ''')),
+    inplace = scfg.Value(False, isflag=True, help=ub.paragraph(
+        '''
+        if True and dst is unspecified then the output will overwrite the input
+        '''))
 
-        'target_gsd': scfg.Value(10.0, help='compute transforms for a target gsd'),
+    target_gsd = scfg.Value(10.0, help='compute transforms for a target gsd')
 
-        'overwrite': scfg.Value(False, help='if True overwrites introspectable fields'),
+    overwrite = scfg.Value(False, help='if True overwrites introspectable fields')
 
-        'edit_geotiff_metadata': scfg.Value(False, help='if True MODIFIES THE UNDERLYING IMAGES to ensure geodata is propogated'),
+    edit_geotiff_metadata = scfg.Value(False, help='if True MODIFIES THE UNDERLYING IMAGES to ensure geodata is propogated')
 
-        'default_gsd': scfg.Value(None, help='if specified, assumed any images without geo-metadata have this GSD'),
+    default_gsd = scfg.Value(None, help='if specified, assumed any images without geo-metadata have this GSD')
 
-        'workers': scfg.Value(0, type=str, help='number of io threads'),
+    workers = scfg.Value(0, type=str, help='number of io threads')
 
-        'mode': scfg.Value('process', help='can be thread, process, or serial'),
+    mode = scfg.Value('process', help='can be thread, process, or serial')
 
-        'enable_video_stats': scfg.Value(True, help='set to False to disable video stats'),
+    enable_video_stats = scfg.Value(True, help='set to False to disable video stats')
 
-        'enable_valid_region': scfg.Value(False, help='set to True to enable valid region computation'),
+    enable_valid_region = scfg.Value(False, help='set to True to enable valid region computation')
 
-        'enable_intensity_stats': scfg.Value(False, help='if True, will compute intensity statistics on each channel of each image'),
+    enable_intensity_stats = scfg.Value(False, help='if True, will compute intensity statistics on each channel of each image')
 
-        'remove_broken': scfg.Value(False, help='if True, will remove any image that fails population (e.g. caused by a 404)')
-    }
+    remove_broken = scfg.Value(False, help='if True, will remove any image that fails population (e.g. caused by a 404)')
 
 
 def main(cmdline=True, **kwargs):

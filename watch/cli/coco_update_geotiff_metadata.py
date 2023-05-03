@@ -4,7 +4,7 @@ import scriptconfig as scfg
 # import kwimage
 
 
-class UpdateGeotiffMetadataConfig(scfg.Config):
+class UpdateGeotiffMetadataConfig(scfg.DataConfig):
     """
     Simplified version of coco-add-watch-fields that only ensures that geotiff
     metadata is propogated to all auxiliary assets within an image.
@@ -75,7 +75,8 @@ def main(cmdline=True, **kwargs):
         base_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/dzyne_landcover.kwcoco.json'
         kwargs = {'src': base_fpath}
     """
-    config = UpdateGeotiffMetadataConfig(kwargs, cmdline=True)
+    config = UpdateGeotiffMetadataConfig.cli(data=kwargs, cmdline=cmdline,
+                                             strict=True)
 
     from watch.utils import kwcoco_extensions
     import kwcoco

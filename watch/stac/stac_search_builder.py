@@ -19,7 +19,7 @@ import ubelt as ub
 import scriptconfig as scfg
 
 
-class StacSearchBuilderConfig(scfg.Config):
+class StacSearchBuilderConfig(scfg.DataConfig):
     """
     Helper to create STAC search json queries
     """
@@ -495,7 +495,8 @@ def main(cmdline=1, **kwargs):
         >>> main(cmdline=cmdline, **kwargs)
     """
     import json
-    config = StacSearchBuilderConfig(cmdline=cmdline, data=kwargs)
+    config = StacSearchBuilderConfig.cli(cmdline=cmdline, data=kwargs,
+                                         strict=True)
 
     search_json = build_search_json(**ub.compatible(config, build_search_json))
     text = json.dumps(search_json, indent='    ')

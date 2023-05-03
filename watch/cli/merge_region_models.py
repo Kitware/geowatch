@@ -6,27 +6,24 @@ import scriptconfig as scfg
 import json
 
 
-class MergeRegionModelConfig(scfg.Config):
+class MergeRegionModelConfig(scfg.DataConfig):
     """
     Combine the specific features from multiple region files into a single one.
     """
     __default__ = {
-        'src':
-        scfg.Value([],
-                   help='paths to input geojson region files',
-                   nargs='+',
-                   position=1),
-        'dst':
-        scfg.Value(None, help='path to combined multi-region file'),
-        'match_type':
-        scfg.Value('region',
-                   help=ub.paragraph('''
+        'src': scfg.Value([], nargs='+', position=1,
+                          help='paths to input geojson region files'),
+
+        'dst': scfg.Value(None, help='path to combined multi-region file'),
+
+        'match_type': scfg.Value('region', help=ub.paragraph(
+            '''
             regex that filters results to only contain features where
             properties.type match.
             ''')),
-        'match_subtype':
-        scfg.Value('site',
-                   help=ub.paragraph('''
+
+        'match_subtype': scfg.Value('site', help=ub.paragraph(
+            '''
             regex that filters results to include subregion features as
             metadata inside regions, where properties.type match.
             ''')),
@@ -66,8 +63,8 @@ def main(cmdline=False, **kwargs):
 
     """
     import geojson
-    config = MergeRegionModelConfig(data=kwargs, cmdline=cmdline)
-    # print('config = {}'.format(ub.urepr(dict(config), nl=1)))
+    config = MergeRegionModelConfig.cli(data=kwargs, cmdline=cmdline, strict=True)
+    print('config = {}'.format(ub.urepr(config, nl=1)))
 
     json_paths = config['src']
     output_fpath = config['dst']
