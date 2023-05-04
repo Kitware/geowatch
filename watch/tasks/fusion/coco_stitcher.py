@@ -497,6 +497,7 @@ class CocoStitchingManager(object):
         Args:
             gid (int): the image-id to finalize
         """
+        import os
         # Remove this image from the managed set.
         img = self.result_dataset.index.imgs[gid]
 
@@ -652,7 +653,7 @@ class CocoStitchingManager(object):
 
             try:
                 kwimage.imwrite(
-                    str(new_fpath), write_data, space=None, backend=imwrite_backend,
+                    os.fspath(new_fpath), write_data, space=None, backend=imwrite_backend,
                     **write_kwargs,
                 )
             except Exception as ex:
