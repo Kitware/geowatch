@@ -180,6 +180,31 @@ if __name__ == '__main__':
             --backend=tmux \
             --run=1
 
+        # Drop 6
+        export CUDA_VISIBLE_DEVICES="0,1"
+        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+        DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
+        BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6-MedianSummer10GSD
+        python -m watch.cli.prepare_teamfeats \
+            --base_fpath "$BUNDLE_DPATH"/imganns-*[0-9].kwcoco.zip \
+            --expt_dvc_dpath="$DVC_EXPT_DPATH" \
+            --with_landcover=1 \
+            --with_invariants2=1 \
+            --with_materials=0 \
+            --with_depth=0 \
+            --with_cold=0 \
+            --skip_existing=1 \
+            --assets_dname=teamfeats \
+            --gres=0,1 --tmux_workers=1 --backend=tmux --run=1
+
+        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+        python -m watch.cli.prepare_splits \
+            --base_fpath=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns*_I2L*.kwcoco.zip \
+            --constructive_mode=True \
+            --suffix=I2L \
+            --backend=tmux --tmux_workers=6 \
+            --run=1
+
         DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
         python -m watch.cli.prepare_splits \
             --base_fpath=$DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-*.kwcoco.zip \

@@ -7,7 +7,6 @@ We assume input is orthorectified.  We assume some GSD "target" gsd for video
 and image processing. Note a video GSD will typically be much higher (i.e.
 lower resolution) than an image GSD.
 
-
 SeeAlso:
     ~/code/watch/watch/utils/kwcoco_extensions.py
 """
@@ -77,8 +76,8 @@ def main(cmdline=True, **kwargs):
             --dst=$HOME/data/dvc-repos/smart_watch_dvc/drop0_aligned_msi/data.kwcoco.new.json \
             --target_gsd=10
 
-    jq .images[0].auxiliary[0] $HOME/data/dvc-repos/smart_watch_dvc/drop0_aligned_msi/data.kwcoco.new.json
-    jq .images[0].auxiliary[0] $HOME/data/dvc-repos/smart_watch_dvc/drop0_aligned_msi/data.kwcoco.json
+        jq .images[0].auxiliary[0] $HOME/data/dvc-repos/smart_watch_dvc/drop0_aligned_msi/data.kwcoco.new.json
+        jq .images[0].auxiliary[0] $HOME/data/dvc-repos/smart_watch_dvc/drop0_aligned_msi/data.kwcoco.json
 
     Example:
         >>> from watch.cli.coco_add_watch_fields import *  # NOQA
@@ -87,18 +86,9 @@ def main(cmdline=True, **kwargs):
         >>> dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
         >>> print('dset = {!r}'.format(dset))
         >>> target_gsd = 13.0
-        >>> main(cmdline=False, src=dset, target_gsd=target_gsd, default_gsd=1)
+        >>> main(cmdline=False, src=dset, dst='return', target_gsd=target_gsd, default_gsd=1)
         >>> print('dset.index.imgs[1] = ' + ub.urepr(dset.index.imgs[1], nl=2))
         >>> print('dset.index.videos = {}'.format(ub.urepr(dset.index.videos, nl=1)))
-
-    Ignore:
-        kwargs = {
-            'src': ub.expandpath('~/data/dvc-repos/smart_watch_dvc/drop0_aligned/data.kwcoco.json'),
-            'target_gsd': 10.0,
-            'dst': None,
-        }
-        kwargs['src'] = kwargs['dst']
-        main(**kwargs)
     """
     import rich
     config = AddWatchFieldsConfig.cli(default=kwargs, cmdline=cmdline, strict=True)
@@ -149,7 +139,9 @@ def main(cmdline=True, **kwargs):
                 print('offset = {!r}'.format(offset))
                 print('{}, {}'.format(gid, img['warp_img_to_vid']))
 
-    if config['dst'] is not None:
+    if config['dst'] == 'return':
+        return dset
+    elif config['dst'] is not None:
         print('write dataset')
         dset.fpath = config['dst']
         print('dset.fpath = {!r}'.format(dset.fpath))
