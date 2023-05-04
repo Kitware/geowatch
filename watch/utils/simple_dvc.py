@@ -103,14 +103,20 @@ class SimpleDVC(ub.NiceRepr):
         return remote
 
     def _resolve_root_and_relative_paths(self, paths):
-        if 1:
-            # Handle symlinks: https://dvc.org/doc/user-guide/troubleshooting#add-symlink
-            # not sure if this is safe
-            dvc_root = self._ensure_root(paths).resolve()
-            rel_paths = [os.fspath(p.resolve().relative_to(dvc_root)) for p in paths]
-        else:
-            dvc_root = self._ensure_root(paths)
-            rel_paths = [os.fspath(p.relative_to(dvc_root)) for p in paths]
+        # try:
+        #     dvc_root = self._ensure_root(paths)
+        #     rel_paths = [os.fspath(p.relative_to(dvc_root)) for p in paths]
+        # except Exception as ex:
+        #     print(f'ex={ex}')
+        # Handle symlinks: https://dvc.org/doc/user-guide/troubleshooting#add-symlink
+        # not sure if this is safe
+        dvc_root = self._ensure_root(paths).resolve()
+        # Note: this could resolve the symlink to the dvc cache which we dont want
+        # rel_paths = [os.fspath(p.resolve().relative_to(dvc_root)) for p in paths]
+        # Fixed version?
+        parent_resolved = [p.parent.resolve() / p.name for p in paths]
+        rel_paths = [os.fspath(p.relative_to(dvc_root)) for p in parent_resolved]
+
         return dvc_root, rel_paths
 
     def add(self, path, verbose=0):
