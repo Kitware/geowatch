@@ -93,10 +93,10 @@ def export_cold_main(cmdline=1, **kwargs):
     >>> kwargs= dict(
     >>>    rank = 0,
     >>>    n_cores = 1,
-    >>>    stack_path = "/home/jws18003/data/dvc-repos/smart_data_dvc/Drop6/_pycold_combine/stacked/KR_R001/",
-    >>>    reccg_path = "/home/jws18003/data/dvc-repos/smart_data_dvc/Drop6/_pycold_combine/reccg/KR_R001/",
-    >>>    meta_fpath = '/home/jws18003/data/dvc-repos/smart_data_dvc/Drop6/_pycold_combine/stacked/KR_R001/block_x9_y9/crop_20210807T010000Z_N37.643680E128.649453_N37.683356E128.734073_L8_0.json',
-    >>>    combined_coco_fpath = "/home/jws18003/data/dvc-repos/smart_data_dvc/Drop6_MeanYear/data_vali_split1_KR_R001_MeanYear.kwcoco.json",
+    >>>    stack_path = "/gpfs/scratchfs1/zhz18039/jws18003/new-repos/smart_data_dvc2/Drop6-MeanYear10GSD-V2/_pycold_combine2/stacked/KR_R001/",
+    >>>    reccg_path = "/gpfs/scratchfs1/zhz18039/jws18003/new-repos/smart_data_dvc2/Drop6-MeanYear10GSD-V2/_pycold_combine2/reccg/KR_R001/",
+    >>>    meta_fpath = '/gpfs/scratchfs1/zhz18039/jws18003/new-repos/smart_data_dvc2/Drop6-MeanYear10GSD-V2/_pycold_combine2/stacked/KR_R001/block_x10_y1/crop_20140115T020000Z_N37.643680E128.649453_N37.683356E128.734073_L8_0.json',
+    >>>    combined_coco_fpath = "/gpfs/scratchfs1/zhz18039/jws18003/new-repos/smart_data_dvc2/Drop6-MeanYear10GSD-V2/imgonly-KR_R001.kwcoco.zip",
     >>>    coefs = 'cv,rmse,a0,a1,b1,c1',
     >>>    year_lowbound = None,
     >>>    year_highbound = None,
@@ -245,6 +245,17 @@ def export_cold_main(cmdline=1, **kwargs):
     img_names = sorted(img_names)
     if timestamp:
         ordinal_day_list = img_dates
+    if not timestamp:
+        first_ordinal_dates = []
+        first_img_names = []
+        last_year = None
+        for ordinal_day, img_name in zip(img_dates, img_names):
+            year = pd.Timestamp.fromordinal(ordinal_day).year
+            if year != last_year:
+                first_ordinal_dates.append(ordinal_day)
+                first_img_names.append(img_name)
+                last_year = year
+        ordinal_day_list = first_ordinal_dates
     if combine:
         combined_coco_dset = kwcoco.CocoDataset(combined_coco_fpath)
 
@@ -268,19 +279,6 @@ def export_cold_main(cmdline=1, **kwargs):
             ordinal_dates_july_first.append(july_first)
 
         ordinal_day_list = ordinal_dates
-
-        # Back up
-    if not timestamp:
-        first_ordinal_dates = []
-        first_img_names = []
-        last_year = None
-        for ordinal_day, img_name in zip(img_dates, img_names):
-            year = pd.Timestamp.fromordinal(ordinal_day).year
-            if year != last_year:
-                first_ordinal_dates.append(ordinal_day)
-                first_img_names.append(img_name)
-                last_year = year
-        ordinal_day_list = first_ordinal_dates
 
     ranks_percore = int(np.ceil(n_blocks / n_cores))
     i_iter = range(ranks_percore)

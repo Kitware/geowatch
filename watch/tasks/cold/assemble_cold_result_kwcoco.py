@@ -82,12 +82,12 @@ def assemble_main(cmdline=1, **kwargs):
     >>> from watch.tasks.cold.assemble_cold_result_kwcoco import assemble_main
     >>> from watch.tasks.cold.assemble_cold_result_kwcoco import *
     >>> kwargs= dict(
-    >>>    stack_path = "/home/jws18003/data/dvc-repos/smart_data_dvc/Drop6/_pycold_combine/stacked/KR_R001/",
-    >>>    reccg_path = "/home/jws18003/data/dvc-repos/smart_data_dvc/Drop6/_pycold_combine/reccg/KR_R001/",
-    >>>    coco_fpath = ub.Path('/home/jws18003/data/dvc-repos/smart_data_dvc/Drop6/data_vali_split1_KR_R001.kwcoco.json'),
-    >>>    mod_coco_fpath = ub.Path('/home/jws18003/data/dvc-repos/smart_data_dvc/Drop6/_pycold_combine/test.json'),
-    >>>    meta_fpath = '/home/jws18003/data/dvc-repos/smart_data_dvc/Drop6/_pycold_combine/stacked/KR_R001/block_x9_y9/crop_20210807T010000Z_N37.643680E128.649453_N37.683356E128.734073_L8_0.json',
-    >>>    combined_coco_fpath = ub.Path('/home/jws18003/data/dvc-repos/smart_data_dvc/Drop6_MeanYear/data_vali_split1_KR_R001_MeanYear.kwcoco.json'),
+    >>>    stack_path = "/gpfs/scratchfs1/zhz18039/jws18003/new-repos/smart_data_dvc2/Drop6-MeanYear10GSD-V2/_pycold_combine2/stacked/KR_R001/",
+    >>>    reccg_path = "/gpfs/scratchfs1/zhz18039/jws18003/new-repos/smart_data_dvc2/Drop6-MeanYear10GSD-V2/_pycold_combine2/reccg/KR_R001/",
+    >>>    coco_fpath = ub.Path('/gpfs/scratchfs1/zhz18039/jws18003/new-repos/smart_data_dvc2/Drop6/imgonly-KR_R001.kwcoco.json'),
+    >>>    mod_coco_fpath = ub.Path('/gpfs/scratchfs1/zhz18039/jws18003/new-repos/smart_data_dvc2/Drop6/imgonly_KR_R001_cold.kwcoco.zip'),
+    >>>    meta_fpath = '/gpfs/scratchfs1/zhz18039/jws18003/new-repos/smart_data_dvc2/Drop6-MeanYear10GSD-V2/_pycold_combine2/stacked/KR_R001/block_x10_y1/crop_20140115T020000Z_N37.643680E128.649453_N37.683356E128.734073_L8_0.json',
+    >>>    combined_coco_fpath = ub.Path('/gpfs/scratchfs1/zhz18039/jws18003/new-repos/smart_data_dvc2/Drop6-MeanYear10GSD-V2/imgonly-KR_R001.kwcoco.zip'),
     >>>    coefs = 'cv,rmse,a0,a1,b1,c1',
     >>>    year_lowbound = None,
     >>>    year_highbound = None,
@@ -185,8 +185,7 @@ def assemble_main(cmdline=1, **kwargs):
     for meta in meta_files:
         meta_config = json.loads((block_folder / meta).read_text())
         ordinal_date = meta_config['ordinal_date']
-        # img_name = meta_config['image_name'] + '.npy'
-        img_name = meta_config['image_name']
+        img_name = meta_config['image_name']  # + '.npy'
         img_dates.append(ordinal_date)
         img_names.append(img_name)
 
@@ -233,7 +232,7 @@ def assemble_main(cmdline=1, **kwargs):
             ordinal_dates.append(ordinal)
             img_names.append(coco_img_name)
         ordinal_day_list = ordinal_dates
-
+        print(ordinal_day_list)
     else:
         # Get only the first ordinal date of each year
         first_ordinal_dates = []
@@ -257,6 +256,8 @@ def assemble_main(cmdline=1, **kwargs):
         if pman is not None:
             day_iter = pman.progiter(day_iter, total=len(ordinal_day_list))
         for day in day_iter:
+            print(day)
+            print(ordinal_day_list[day])
             tmp_map_blocks = [np.load(
                 tmp_path / f'tmp_coefmap_block{x + 1}_{ordinal_day_list[day]}.npy')
                 for x in range(n_blocks)]
