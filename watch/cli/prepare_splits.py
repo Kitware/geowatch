@@ -57,7 +57,7 @@ class PrepareSplitsConfig(scfg.DataConfig):
         'constructive_mode': scfg.Value(False, help='if True use the new constructive mode'),
 
         'verbose': scfg.Value(1, help=''),
-        'workers': scfg.Value(2, help=''),
+        'workers': scfg.Value(2, help='', alias=['tmux_workers']),
 
         'suffix': scfg.Value('', help='suffix for the output split filenames'),
     }

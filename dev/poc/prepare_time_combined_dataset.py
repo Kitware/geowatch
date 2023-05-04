@@ -195,11 +195,19 @@ if __name__ == '__main__':
             --with_cold=0 \
             --skip_existing=1 \
             --assets_dname=teamfeats \
-            --gres=0,1 --tmux_workers=1 --backend=tmux --run=1
+            --gres=0, --tmux_workers=1 --backend=tmux --run=1
 
         DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
         python -m watch.cli.prepare_splits \
-            --base_fpath=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns*_I2L*.kwcoco.zip \
+            --base_fpath=$DVC_DATA_DPATH/Drop6-MedianSummer10GSD/combo_imganns*_L*.kwcoco.zip \
+            --constructive_mode=True \
+            --suffix=L \
+            --backend=tmux --workers=6 \
+            --run=1
+
+        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+        python -m watch.cli.prepare_splits \
+            --base_fpath=$DVC_DATA_DPATH/Drop6-MedianSummer10GSD/combo_imganns*_I2L*.kwcoco.zip \
             --constructive_mode=True \
             --suffix=I2L \
             --backend=tmux --tmux_workers=6 \
@@ -207,11 +215,26 @@ if __name__ == '__main__':
 
         DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
         python -m watch.cli.prepare_splits \
-            --base_fpath=$DVC_DATA_DPATH/Drop6-MeanYear10GSD/imganns-*.kwcoco.zip \
+            --base_fpath=$DVC_DATA_DPATH/Drop6-MedianSummer10GSD/imganns-*.kwcoco.zip \
             --constructive_mode=True \
             --suffix=rawbands \
             --backend=tmux --tmux_workers=6 \
             --run=1
+
+        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+        DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
+        TRUE_SITE_DPATH=$DVC_DATA_DPATH/annotations/drop6_hard_v1/site_models
+        OUTPUT_BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2
+        geowatch reproject \
+            --src $DVC_DATA_DPATH/Drop6-MedianSummer10GSD/data_vali_L_split6.kwcoco.zip \
+            --dst $DVC_DATA_DPATH/Drop6-MedianSummer10GSD/data_vali_L_split6.kwcoco.zip \
+            --status_to_catname="positive_excluded: positive" \
+            --site_models=$TRUE_SITE_DPATH
+        geowatch reproject \
+            --src $DVC_DATA_DPATH/Drop6-MedianSummer10GSD/data_train_L_split6.kwcoco.zip \
+            --dst $DVC_DATA_DPATH/Drop6-MedianSummer10GSD/data_train_L_split6.kwcoco.zip \
+            --status_to_catname="positive_excluded: positive" \
+            --site_models=$TRUE_SITE_DPATH
 
         DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
         python ~/code/watch/dev/poc/prepare_time_combined_dataset.py \

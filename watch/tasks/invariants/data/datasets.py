@@ -437,23 +437,25 @@ class GriddedDataset(torch.utils.data.Dataset):
         rng = kwarray.ensure_rng(None)
         offset_box = None
         attempts = 0
-        while offset_box is None:
-            attempts += 1
-            offset_box = kwimage.Boxes([[0, 0, img_width, img_height]], 'ltrb')
-            offset_x = rng.randint(0, max(vid_width - img_width, 1))
-            offset_y = rng.randint(0, max(vid_height - img_height, 1))
-            offset_box = offset_box.translate((offset_x, offset_y))
-            if attempts > 10:
-                # Give up
-                break
-            sh_box = offset_box.to_shapely()[0]
-            orig_overlap = sh_space_box.intersection(sh_box).area / sh_space_box.area
-            if orig_overlap > 0.001:
-                offset_box = None
-            if sh_valid_poly is not None:
-                valid_frac = sh_valid_poly.intersection(sh_box).area / sh_box.area
-                if valid_frac < 0.5:
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', 'invalid value encountered in intersection')
+            while offset_box is None:
+                attempts += 1
+                offset_box = kwimage.Boxes([[0, 0, img_width, img_height]], 'ltrb')
+                offset_x = rng.randint(0, max(vid_width - img_width, 1))
+                offset_y = rng.randint(0, max(vid_height - img_height, 1))
+                offset_box = offset_box.translate((offset_x, offset_y))
+                if attempts > 10:
+                    # Give up
+                    break
+                sh_box = offset_box.to_shapely()[0]
+                orig_overlap = sh_space_box.intersection(sh_box).area / sh_space_box.area
+                if orig_overlap > 0.001:
                     offset_box = None
+                if sh_valid_poly is not None:
+                    valid_frac = sh_valid_poly.intersection(sh_box).area / sh_box.area
+                    if valid_frac < 0.5:
+                        offset_box = None
 
         # Create a new target for the offset region
         offset_tr = target.copy()
