@@ -76,6 +76,7 @@ class FocalLoss(_Loss):
         gamma: float = 2.0,
         weight: Optional[Union[Sequence[float], float, int, torch.Tensor]] = None,
         reduction: Union[LossReduction, str] = LossReduction.MEAN,
+        ohem_ratio: Optional[float] = None,
     ) -> None:
         """
         Args:
@@ -94,6 +95,7 @@ class FocalLoss(_Loss):
                 - ``"none"``: no reduction will be applied.
                 - ``"mean"``: the sum of the output will be divided by the number of elements in the output.
                 - ``"sum"``: the output will be summed.
+            ohem_ratio: whether to use OHEM (online hard example mining) to train the model. Defaults to None aka inactive.
 
         Example:
             >>> import torch
@@ -108,6 +110,7 @@ class FocalLoss(_Loss):
         self.to_onehot_y = to_onehot_y
         self.gamma = gamma
         self.weight: Optional[Union[Sequence[float], float, int, torch.Tensor]] = weight
+        self.ohem_ratio = ohem_ratio
 
     def forward(self, input: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         """
@@ -184,6 +187,17 @@ class FocalLoss(_Loss):
         # (1-p_t)^gamma * log(p_t) with reduced chance of overflow
         p = F.logsigmoid(-i * (t * 2.0 - 1.0))
         flat_loss: torch.Tensor = (p * self.gamma).exp() * ce
+
+        if self.ohem_ratio is not None:
+            # Compute Online Hard Example Mining (OHEM) loss based on "slow" method from
+            # https://arxiv.org/pdf/1604.03540.pdf
+            
+            ## Find the top k% of regions with the highest loss and create a binary mask 
+            ## to zero out the loss for the low loss regions.
+            mask = _ohem_mask(ce, self.ohem_ratio)
+
+            ## Apply the mask to the loss regions.
+            ce = ce * mask
 
         # Previously there was a mean over the last dimension, which did not
         # return a compatible BCE loss. To maintain backwards compatible
@@ -398,6 +412,13 @@ class MaskedDiceLoss(DiceLoss):
         """
         return self.spatial_weighted(input=input, target=target, mask=mask)
 
+
+def _ohem_mask(loss, ohem_ratio):
+    with torch.no_grad():
+        values, _ = torch.topk(loss.reshape(-1),
+                               int(loss.nelement() * ohem_ratio))
+        mask = loss >= values[-1]
+    return mask.float()
 
 # class GeneralizedDiceLoss(_Loss):
 #     """
@@ -930,6 +951,7 @@ class DiceFocalLoss(_Loss):
         focal_weight: Optional[Union[Sequence[float], float, int, torch.Tensor]] = None,
         lambda_dice: float = 1.0,
         lambda_focal: float = 1.0,
+        ohem_ratio_focal: Optional[float] = None,
     ) -> None:
         """
         Args:
@@ -967,7 +989,9 @@ class DiceFocalLoss(_Loss):
                 Defaults to 1.0.
             lambda_focal: the trade-off weight value for focal loss. The value should be no less than 0.0.
                 Defaults to 1.0.
-
+            ohem_ratio_focal: Whether to use OHEM (online hard example mining) to train 
+                the model during focal loss. Defaults to None aka inactive.
+                
         """
         super().__init__()
         self.dice = DiceLoss(
@@ -989,6 +1013,7 @@ class DiceFocalLoss(_Loss):
             gamma=gamma,
             weight=focal_weight,
             reduction=reduction,
+            ohem_ratio=ohem_ratio_focal,
         )
         if lambda_dice < 0.0:
             raise ValueError("lambda_dice should be no less than 0.0.")
@@ -1023,3 +1048,13 @@ dice_ce = DiceCELoss
 dice_focal = DiceFocalLoss
 # generalized_dice = GeneralizedDiceLoss
 generalized_wasserstein_dice = GeneralizedWassersteinDiceLoss
+
+
+if __name__ == '__main__':
+    input = torch.randn(2, 2, 3, 3)
+    target = torch.randn(2, 2, 3, 3)
+    # ex_loss_func = CrossEntropyLossWithOHEM(ohem_ratio=0.7)
+    # ex_loss = ex_loss_func(input, target)
+
+    loss_func = FocalLoss(reduction="none")
+    loss = loss_func(input, target)
