@@ -639,8 +639,10 @@ class CocoStitchingManager(object):
                 quant_probs, quantization = quantize_image(
                     final_probs, old_min=old_min, old_max=old_max,
                     quantize_dtype=quantize_dtype)
+                write_data = quant_probs
                 aux['quantization'] = quantization
             else:
+                write_data = final_probs
                 quantization = None
 
             if self.prob_format != 'png':
@@ -650,7 +652,7 @@ class CocoStitchingManager(object):
 
             try:
                 kwimage.imwrite(
-                    str(new_fpath), final_probs, space=None, backend=imwrite_backend,
+                    str(new_fpath), write_data, space=None, backend=imwrite_backend,
                     **write_kwargs,
                 )
             except Exception as ex:
@@ -658,8 +660,8 @@ class CocoStitchingManager(object):
                 print('ERROR ex = {}'.format(ub.urepr(ex, nl=1)))
                 print('new_fpath = {}'.format(ub.urepr(new_fpath, nl=1)))
                 print(f'imwrite_backend={imwrite_backend}')
-                print(f'final_probs.shape={final_probs.shape}')
-                print(f'final_probs.dtype={final_probs.dtype}')
+                print(f'write_data.shape={write_data.shape}')
+                print(f'write_data.dtype={write_data.dtype}')
                 print(f'write_kwargs={write_kwargs}')
                 raise
 
