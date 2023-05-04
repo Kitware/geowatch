@@ -1899,9 +1899,9 @@ python -m watch.mlops.schedule_evaluation --params="
         bas_pxl.package_fpath:
             - $DVC_EXPT_DPATH/model_candidates/namek_split1_shortlist_v4.yaml
         bas_pxl.test_dataset:
-            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R002_I2L.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-CH_R001_I2L.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-NZ_R001_I2L.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R002_I2LS.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-CH_R001_I2LS.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-NZ_R001_I2LS.kwcoco.zip
         bas_pxl.chip_overlap: 0.3
         bas_pxl.chip_dims:
             - auto
@@ -1910,7 +1910,6 @@ python -m watch.mlops.schedule_evaluation --params="
         bas_pxl.input_space_scale:
             - 10GSD
         bas_pxl.time_sampling:
-            - soft5
             - soft4
         bas_poly.thresh:
             - 0.3
@@ -1924,17 +1923,11 @@ python -m watch.mlops.schedule_evaluation --params="
         bas_poly.inner_agg_fn:
             - mean
         bas_poly.norm_ord:
-            #- 1
-            #- 2
             - inf
         bas_poly.resolution:
             - 10GSD
         bas_poly.moving_window_size:
             - null
-            #- 1
-            #- 2
-            #- 3
-            #- 4
         bas_poly.poly_merge_method:
             - 'v2'
         bas_poly.polygon_simplify_tolerance:
@@ -1961,8 +1954,8 @@ python -m watch.mlops.schedule_evaluation --params="
           bas_poly.resolution:
               - 10GSD
     " \
-    --root_dpath="$DVC_EXPT_DPATH/_namek_split1_eval_filter1_MeanYear10GSD-V2" \
+    --root_dpath="$DVC_EXPT_DPATH/_namek_preeval12" \
     --devices="0,1" --tmux_workers=6 \
-    --backend=tmux --queue_name "_namek_split1_eval_filter1_MeanYear10GSD-V2" \
+    --backend=tmux --queue_name "_namek_preeval12" \
     --pipeline=bas --skip_existing=1 \
     --run=1
