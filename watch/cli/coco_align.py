@@ -768,11 +768,14 @@ def main(cmdline=True, **kw):
                 prev = queue.submit(command, depends=prev)
                 prev.logs = False
 
+        queue.print_commands()
+
         print(f'{len(queue.jobs)=}')
-        queue.run(
-            # with_textual=False
-            with_textual='auto'
-        )
+        if config['hack_lazy'] != 'dry':
+            queue.run(
+                # with_textual=False
+                with_textual='auto'
+            )
 
         raise Exception('hack_lazy always fails')
 
@@ -2075,7 +2078,10 @@ def _aligncrop(obj_group,
 
     input_gnames = [obj.get('file_name', None) for obj in obj_group]
     assert all(n is not None for n in input_gnames)
-    input_gpaths = [str(ub.Path(bundle_dpath) / n) for n in input_gnames]
+
+    # Cant use Path because it strips http:// to http:/
+    from os.path import join
+    input_gpaths = [join(bundle_dpath, n) for n in input_gnames]
 
     dst = {
         'file_name': os.fspath(dst_gpath),

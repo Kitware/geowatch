@@ -255,6 +255,16 @@ _PUBLIC_L2_PRODUCTS['planetarycomputer'] = {
     "endpoint": "https://planetarycomputer.microsoft.com/api/stac/v1",
 }
 
+_PUBLIC_L2_PRODUCTS['planetarycomputer_l8'] = {
+    'collections': ['landsat-c2-l2'],
+    "endpoint": "https://planetarycomputer.microsoft.com/api/stac/v1",
+}
+
+_PUBLIC_L2_PRODUCTS['planetarycomputer_s2'] = {
+    'collections': ['sentinel-2-l2a'],
+    "endpoint": "https://planetarycomputer.microsoft.com/api/stac/v1",
+}
+
 
 _PUBLIC_ARD_PRODUCTS = {
     # https://stacindex.org/catalogs/usgs-landsat-collection-2-api#/
