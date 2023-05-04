@@ -174,7 +174,7 @@ def main(cmdline=True, **kwargs):
         model_pattern=config['model_pattern'])
 
     if 'pull' in actions:
-        manager.pull(targets)
+        manager.pull(targets, yes=config.yes)
 
     if 'add' in actions and 'packages' in targets:
         manager.add_packages(yes=config.yes)
