@@ -232,7 +232,6 @@ def assemble_main(cmdline=1, **kwargs):
             ordinal_dates.append(ordinal)
             img_names.append(coco_img_name)
         ordinal_day_list = ordinal_dates
-        print(ordinal_day_list)
     else:
         # Get only the first ordinal date of each year
         first_ordinal_dates = []
@@ -250,14 +249,11 @@ def assemble_main(cmdline=1, **kwargs):
 
     # assemble
     logger.info('Generating COLD output geotiff')
-
     if coefs is not None:
         day_iter = range(len(ordinal_day_list))
         if pman is not None:
             day_iter = pman.progiter(day_iter, total=len(ordinal_day_list))
         for day in day_iter:
-            print(day)
-            print(ordinal_day_list[day])
             tmp_map_blocks = [np.load(
                 tmp_path / f'tmp_coefmap_block{x + 1}_{ordinal_day_list[day]}.npy')
                 for x in range(n_blocks)]
