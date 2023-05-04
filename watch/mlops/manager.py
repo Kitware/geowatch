@@ -32,9 +32,13 @@ Example:
 
     python -m watch.mlops.manager "push packages" --dataset_codes Drop6-MeanYear10GSD --yes
     python -m watch.mlops.manager "push packages" --dataset_codes Drop6-MeanYear10GSD-V2 --yes
+    python -m watch.mlops.manager "push packages" --dataset_codes Drop6-MedianSummer10GSD --yes
 
     python -m watch.mlops.manager "status" --dataset_codes Drop6-MeanYear10GSD-V2
     python -m watch.mlops.manager "pull packages" --dataset_codes Drop6-MeanYear10GSD --yes
+    python -m watch.mlops.manager "pull packages" --dataset_codes Drop6-MeanYear10GSD-V2 --yes
+    python -m watch.mlops.manager "pull packages" --dataset_codes Drop6-MedianSummer10GSD --yes
+
     python -m watch.mlops.manager "pull packages" --dataset_codes Drop6-MeanYear10GSD-V2 --yes
 
     # On training machine
