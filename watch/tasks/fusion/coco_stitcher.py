@@ -648,10 +648,20 @@ class CocoStitchingManager(object):
                     'quantization': quantization,
                 }
 
-            kwimage.imwrite(
-                str(new_fpath), final_probs, space=None, backend=imwrite_backend,
-                **write_kwargs,
-            )
+            try:
+                kwimage.imwrite(
+                    str(new_fpath), final_probs, space=None, backend=imwrite_backend,
+                    **write_kwargs,
+                )
+            except Exception as ex:
+                print()
+                print('ERROR ex = {}'.format(ub.urepr(ex, nl=1)))
+                print('new_fpath = {}'.format(ub.urepr(new_fpath, nl=1)))
+                print(f'imwrite_backend={imwrite_backend}')
+                print(f'final_probs.shape={final_probs.shape}')
+                print(f'final_probs.dtype={final_probs.dtype}')
+                print(f'write_kwargs={write_kwargs}')
+                raise
 
         if self.write_preds:
             from watch.tasks.tracking.utils import mask_to_polygons

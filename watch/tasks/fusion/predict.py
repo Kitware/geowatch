@@ -296,11 +296,12 @@ def build_stitching_managers(config, method, result_dataset, writer_queue=None):
         head_keep_classes = list(ub.take(head_classes, head_keep_idxs))
         chan_code = '|'.join(head_keep_classes)
         task_keep_indices[task_name] = head_keep_idxs
-        print('task_name = {!r}'.format(task_name))
-        print('head_classes = {!r}'.format(head_classes))
-        print('head_keep_classes = {!r}'.format(head_keep_classes))
-        print('chan_code = {!r}'.format(chan_code))
-        print('head_keep_idxs = {!r}'.format(head_keep_idxs))
+        if 0:
+            print('task_name = {!r}'.format(task_name))
+            print('head_classes = {!r}'.format(head_classes))
+            print('head_keep_classes = {!r}'.format(head_keep_classes))
+            print('chan_code = {!r}'.format(chan_code))
+            print('head_keep_idxs = {!r}'.format(head_keep_idxs))
         stitch_managers[task_name] = CocoStitchingManager(
             result_dataset,
             chan_code=chan_code,
@@ -328,11 +329,12 @@ def build_stitching_managers(config, method, result_dataset, writer_queue=None):
         head_keep_classes = list(ub.take(head_classes, head_keep_idxs))
         task_keep_indices[task_name] = head_keep_idxs
         chan_code = '|'.join(list(head_keep_classes))
-        print('task_name = {!r}'.format(task_name))
-        print('head_classes = {!r}'.format(head_classes))
-        print('head_keep_classes = {!r}'.format(head_keep_classes))
-        print('chan_code = {!r}'.format(chan_code))
-        print('head_keep_idxs = {!r}'.format(head_keep_idxs))
+        if 0:
+            print('task_name = {!r}'.format(task_name))
+            print('head_classes = {!r}'.format(head_classes))
+            print('head_keep_classes = {!r}'.format(head_keep_classes))
+            print('chan_code = {!r}'.format(chan_code))
+            print('head_keep_idxs = {!r}'.format(head_keep_idxs))
         stitch_managers[task_name] = CocoStitchingManager(
             result_dataset,
             chan_code=chan_code,
@@ -353,11 +355,12 @@ def build_stitching_managers(config, method, result_dataset, writer_queue=None):
         head_keep_classes = list(ub.take(head_classes, head_keep_idxs))
         task_keep_indices[task_name] = head_keep_idxs
         chan_code = '|'.join(head_keep_classes)
-        print('task_name = {!r}'.format(task_name))
-        print('head_classes = {!r}'.format(head_classes))
-        print('head_keep_classes = {!r}'.format(head_keep_classes))
-        print('chan_code = {!r}'.format(chan_code))
-        print('head_keep_idxs = {!r}'.format(head_keep_idxs))
+        if 0:
+            print('task_name = {!r}'.format(task_name))
+            print('head_classes = {!r}'.format(head_classes))
+            print('head_keep_classes = {!r}'.format(head_keep_classes))
+            print('chan_code = {!r}'.format(chan_code))
+            print('head_keep_idxs = {!r}'.format(head_keep_idxs))
         stitch_managers[task_name] = CocoStitchingManager(
             result_dataset,
             chan_code=chan_code,
