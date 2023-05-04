@@ -39,3 +39,36 @@ python -m watch.cli.prepare_ta2_dataset \
     --skip_existing=1 \
     --force_min_gsd=2.0 \
     --run=1
+
+# ~/code/watch/dev/poc/prepare_time_combined_dataset.py
+
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
+python ~/code/watch/dev/poc/prepare_time_combined_dataset.py \
+    --regions=all \
+    --input_bundle_dpath="$DVC_DATA_DPATH"/Aligned-Drop7 \
+    --output_bundle_dpath="$DVC_DATA_DPATH"/Drop7-MedianSummer10GSD \
+    --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop6_hard_v1/site_models \
+    --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop6_hard_v1/region_models \
+    --spatial_tile_size=256 \
+    --merge_method=median \
+    --remove_seasons=spring,fall,winter \
+    --tmux_workers=2 \
+    --time_window=1y \
+    --combine_workers=4 \
+    --resolution=10GSD \
+    --backend=tmux \
+    --run=1
+
+
+    #--regions="[
+    #        # T&E Regions
+    #        AE_R001, BH_R001, BR_R001, BR_R002, BR_R004, BR_R005, CH_R001,
+    #        KR_R001,
+    #        KR_R002, LT_R001, NZ_R001, US_R001, US_R004, US_R005,
+    #        US_R006, US_R007,
+    #        # # iMerit Regions
+    #        AE_C001,
+    #        AE_C002,
+    #        AE_C003, PE_C001, QA_C001, SA_C005, US_C000, US_C010,
+    #        US_C011, US_C012,
+    #]" \
