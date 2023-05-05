@@ -1900,11 +1900,14 @@ python -m watch.mlops.schedule_evaluation --params="
             - $DVC_EXPT_DPATH/model_candidates/namek_split1_shortlist_v4.yaml
         bas_pxl.test_dataset:
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R002_I2LS.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-CH_R001_I2LS.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-NZ_R001_I2LS.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-CH_R001_I2LS.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-NZ_R001_I2LS.kwcoco.zip
         bas_pxl.chip_overlap: 0.3
         bas_pxl.chip_dims:
             - auto
+            #- [196,196]
+            - [256,256]
+            - [320,320]
         bas_pxl.time_span:
             - auto
         bas_pxl.input_space_scale:
@@ -1924,10 +1927,10 @@ python -m watch.mlops.schedule_evaluation --params="
             - mean
         bas_poly.norm_ord:
             - inf
-        bas_poly.resolution:
-            - 10GSD
         bas_poly.moving_window_size:
             - null
+            - 1
+            - 2
         bas_poly.poly_merge_method:
             - 'v2'
         bas_poly.polygon_simplify_tolerance:
@@ -1951,11 +1954,38 @@ python -m watch.mlops.schedule_evaluation --params="
         - bas_pxl.input_space_scale: 10GSD
           bas_pxl.window_space_scale: 10GSD
           bas_pxl.output_space_scale: 10GSD
-          bas_poly.resolution:
-              - 10GSD
+          bas_poly.resolution: 10GSD
+        - bas_pxl.input_space_scale: 15GSD
+          bas_pxl.window_space_scale: 15GSD
+          bas_pxl.output_space_scale: 15GSD
+          bas_poly.resolution: 15GSD
+        - bas_pxl.input_space_scale: 5GSD
+          bas_pxl.window_space_scale: 5GSD
+          bas_pxl.output_space_scale: 5GSD
+          bas_poly.resolution: 5GSD
     " \
     --root_dpath="$DVC_EXPT_DPATH/_namek_preeval12" \
     --devices="0,1" --tmux_workers=6 \
     --backend=tmux --queue_name "_namek_preeval12" \
     --pipeline=bas --skip_existing=1 \
     --run=1
+
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+geowatch aggregate \
+    --pipeline=bas_building_vali \
+    --target \
+        "$DVC_EXPT_DPATH/_namek_preeval12" \
+    --stdout_report="
+        top_k: 10
+        per_group: 2
+        macro_analysis: 1
+        analyze: 0
+        reference_region: final
+        print_models: True
+    " \
+    --resource_report=0 \
+    --plot_params=0 \
+    --export_tables=0 \
+    --output_dpath="$DVC_EXPT_DPATH/_namek_preeval12/aggregate" \
+    --rois=KR_R002
+    #--rois=KR_R002,CH_R001,NZ_R001
