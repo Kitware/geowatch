@@ -191,8 +191,8 @@ class FocalLoss(_Loss):
         if self.ohem_ratio is not None:
             # Compute Online Hard Example Mining (OHEM) loss based on "slow" method from
             # https://arxiv.org/pdf/1604.03540.pdf
-            
-            ## Find the top k% of regions with the highest loss and create a binary mask 
+
+            ## Find the top k% of regions with the highest loss and create a binary mask
             ## to zero out the loss for the low loss regions.
             mask = _ohem_mask(ce, self.ohem_ratio)
 
@@ -989,9 +989,9 @@ class DiceFocalLoss(_Loss):
                 Defaults to 1.0.
             lambda_focal: the trade-off weight value for focal loss. The value should be no less than 0.0.
                 Defaults to 1.0.
-            ohem_ratio_focal: Whether to use OHEM (online hard example mining) to train 
+            ohem_ratio_focal: Whether to use OHEM (online hard example mining) to train
                 the model during focal loss. Defaults to None aka inactive.
-                
+
         """
         super().__init__()
         self.dice = DiceLoss(
@@ -1048,13 +1048,3 @@ dice_ce = DiceCELoss
 dice_focal = DiceFocalLoss
 # generalized_dice = GeneralizedDiceLoss
 generalized_wasserstein_dice = GeneralizedWassersteinDiceLoss
-
-
-if __name__ == '__main__':
-    input = torch.randn(2, 2, 3, 3)
-    target = torch.randn(2, 2, 3, 3)
-    # ex_loss_func = CrossEntropyLossWithOHEM(ohem_ratio=0.7)
-    # ex_loss = ex_loss_func(input, target)
-
-    loss_func = FocalLoss(reduction="none")
-    loss = loss_func(input, target)
