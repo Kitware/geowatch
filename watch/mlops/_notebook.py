@@ -149,8 +149,27 @@ def _debug_roi_issue():
             node_dpath = ub.Path(row['fpath']).parent
             link_fpath = eval_links / (row['region_id'] + '_' + node_dpath.name)
             ub.symlink(node_dpath, link_fpath)
-
             ...
+
+    if 0:
+        # Inspect one of the best ones.
+        ###
+        out_dpath = ub.Path('./chosen')
+        root_dpath = expt_dvc_dpath / '_toothbrush_split6_landcover_MeanYear10GSD-V2/'
+        out_dpath = root_dpath / '_custom'
+        max_id = macro['metrics.sv_poly_eval.bas_f1'].idxmax()
+        chosen_param_hashid = macro.loc[max_id]['param_hashid']
+
+        chosen_agg = agg.filterto(param_hashids=[chosen_param_hashid])
+        _ = chosen_agg.report_best()
+        print(ub.repr2(chosen_agg.table['fpath'].tolist()))
+        eval_links = (out_dpath / 'eval_links').ensuredir()
+        for _, row in chosen_agg.table.iterrows():
+            node_dpath = ub.Path(row['fpath']).parent
+            link_fpath = eval_links / (row['region_id'] + '_' + node_dpath.name)
+            ub.symlink(node_dpath, link_fpath)
+
+
 
     agg.table['resolved_params.sv_crop.src'].unique()
 

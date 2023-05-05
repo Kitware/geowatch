@@ -970,6 +970,6 @@ TE_SENSOR_NAMES = {
     'LE': 'Landsat 7',
     'LC': 'Landsat 8',
     'L8': 'Landsat 8',
-    'WV1': 'WorldView 1',
+    'WV1': 'WorldView',
     'PD': 'Planet',
 }

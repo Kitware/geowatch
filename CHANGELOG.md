@@ -31,6 +31,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Fixed
 * safer no longer uses `temp_file` on windows
 * Erroneous assertion errors in reproject and kwcoco-to-geotiffs
+* Issue where DINO_SV would write region models to the out-site-manifest, now correctly points at site models.
 
 
 ## Version 0.5.6 - Target 2023-04-30

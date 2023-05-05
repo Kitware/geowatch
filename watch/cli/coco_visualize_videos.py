@@ -378,7 +378,8 @@ def main(cmdline=True, **kwargs):
         rich.print(f'Filtered {len(coco_images) - len(keep)} images without requested channels. Keeping {len(keep)}')
         selected_gids = keep
 
-    rich.print(f'Will write to: [link={viz_dpath}]{viz_dpath}[/link]')
+    viz_dpath_abs = viz_dpath.absolute()
+    rich.print(f'Will write to: [link={viz_dpath_abs}]{viz_dpath_abs}[/link]')
 
     video_names = []
     for vidid, video in prog:
@@ -538,7 +539,7 @@ def main(cmdline=True, **kwargs):
         pool.jobs.clear()
 
     pman.__exit__(None, None, None)
-    rich.print(f'Wrote images to: [link={viz_dpath}]{viz_dpath}[/link]')
+    rich.print(f'Wrote images to: [link={viz_dpath_abs}]{viz_dpath_abs}[/link]')
 
     if config['animate']:
         # TODO: develop this idea more
