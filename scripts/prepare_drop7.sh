@@ -61,6 +61,7 @@ python ~/code/watch/dev/poc/prepare_time_combined_dataset.py \
 
 
 
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
 geowatch clean_geotiffs \
     --src "$DVC_DATA_DPATH/Aligned-Drop7/data.kwcoco.json" \
     --channels="*" \

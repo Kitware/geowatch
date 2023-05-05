@@ -411,7 +411,8 @@ def gdal_single_warp(in_fpath,
                      tries=1,
                      verbose=0,
                      force_spatial_res=None,
-                     eager=True):
+                     eager=True,
+                     use_tempfile=True):
     r"""
     Wrapper around gdalwarp
 
@@ -578,8 +579,13 @@ def gdal_single_warp(in_fpath,
                                 overviews='AUTO')
 
     if space_box is not None:
+
         # Data is from geo-pandas so this should be traditional order
-        lonmin, latmin, lonmax, latmax = space_box.data[0]
+        ltrb = space_box.to_ltrb()
+        if isinstance(ltrb, kwimage.Box):
+            lonmin, latmin, lonmax, latmax = ltrb.data
+        else:
+            lonmin, latmin, lonmax, latmax = ltrb.data[0]
         ymin, xmin, ymax, xmax = latmin, lonmin, latmax, lonmax
 
         # Coordinate Reference System of the "te" crop coordinates
@@ -645,20 +651,27 @@ def gdal_single_warp(in_fpath,
     builder.options['--config']['GDAL_CACHEMAX'] = '1500'
 
     builder.append(in_fpath)
-    builder.append(tmp_out_fpath)
+    if use_tempfile:
+        dst_fpath = tmp_out_fpath
+        builder.append(tmp_out_fpath)
+    else:
+        dst_fpath = out_fpath
+        builder.append(out_fpath)
 
     gdal_warp_command = builder.finalize()
 
     # Execute the command with checks to ensure gdal doesnt fail
     if eager:
         _execute_gdal_command_with_checks(
-            gdal_warp_command, tmp_out_fpath, tries=tries, verbose=verbose)
-        os.rename(tmp_out_fpath, out_fpath)
+            gdal_warp_command, dst_fpath, tries=tries, verbose=verbose)
+        if use_tempfile:
+            os.rename(tmp_out_fpath, out_fpath)
     else:
-        commands = [
-            gdal_warp_command,
-            f'mv "{tmp_out_fpath}" "{out_fpath}"',
-        ]
+        commands = [gdal_warp_command]
+        if use_tempfile:
+            commands += [
+                f'mv "{tmp_out_fpath}" "{out_fpath}"'
+            ]
         return commands
 
 
@@ -669,6 +682,9 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, blocksize=256,
                     eager=True, **kwargs):
     """
     See gdal_single_warp() for args
+
+    NOTE: it is important to set the nodata argument for gdalmerge [SO187522]_
+    if you want to preserver them.
 
     Example:
         >>> # xdoctest: +REQUIRES(--slow)
@@ -732,6 +748,9 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, blocksize=256,
         None | List[str]:
             Nothing if executing the command. If eager=False, returns the
             commands that would have been executed.
+
+    References:
+        .. [SO187522] https://gis.stackexchange.com/questions/187522/keep-nodata-values-when-using-gdal-merge
 
     Ignore:
         import os
@@ -839,6 +858,8 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, blocksize=256,
         builder.options['--config']['CPL_LOG'] = error_logfile
     if nodata is not None:
         builder['-n'] = str(nodata)
+        builder['-a_nodata'] = str(nodata)
+        builder['-init'] = str(nodata)
     builder['-o'] = tmp_out_fpath
     builder.extend(warped_gpaths)
 

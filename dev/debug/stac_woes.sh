@@ -353,3 +353,54 @@ itemgen = item_search.items()
 item = next(itemgen)
 
 "
+
+
+
+"
+in_fpath = '/vsis3/smart-data-accenture/ta-1/ta1-wv-acc-3/11/S/KD/2018/12/11/18DEC11220322-P1BS-014489713010_01_P001/18DEC11220322-P1BS-014489713010_01_P001_ACC_B01.tif'
+out_fpath = 'foo.tif'
+from watch.utils import util_gdal
+
+geos_corners = {'type': 'Polygon',
+    'coordinates': [[[-119.87286231977664, 39.570640694949425],
+      [-119.87030288427547, 39.50858235928912],
+      [-119.69118742654352, 39.5128698426366],
+      [-119.69358763209232, 39.57493758700605]]],
+    'properties': {'crs_info': {'axis_mapping': 'OAMS_TRADITIONAL_GIS_ORDER',
+      'auth': ['EPSG', '4326']}}}
+
+import kwimage
+poly = kwimage.Polygon.coerce(geos_corners)
+local_epsg = '32611'
+space_box = poly.to_box()
+
+commands = util_gdal.gdal_multi_warp(
+    [in_fpath], out_fpath,
+    space_box=space_box, local_epsg=local_epsg,
+    rpcs=None,
+    tries=1,
+    error_logfile=None,
+    verbose=1,
+    nodata=-9999,
+    force_spatial_res=10.0,
+    eager=False,
+    use_tempfile=False
+)
+
+for c in commands:
+    print(c)
+
+"
+
+
+gdalwarp -overwrite -multi --debug off -t_srs epsg:32611 -of COG -te -119.87286231977664 39.50858235928912 -119.69118742654352 39.57493758700605 -te_srs epsg:4326 -tr 10.0 10.0 -srcnodata -9999 -dstnodata -9999 -wm 1500 -co OVERVIEWS=AUTO -co BLOCKSIZE=256 -co COMPRESS=DEFLATE -co NUM_THREADS=2 --config GDAL_CACHEMAX 1500 /vsis3/smart-data-accenture/ta-1/ta1-wv-acc-3/11/S/KD/2018/12/11/18DEC11220322-P1BS-014489713010_01_P001/18DEC11220322-P1BS-014489713010_01_P001_ACC_B01.tif .tmpmerge.part00.foo.tif
+
+gdal_merge.py -init -9999 -n -9999 -a_nodata -9999 -o .tmpmerge.foo.tif -co NUM_THREADS=2 --config GDAL_CACHEMAX 1500 .tmpmerge.part00.foo.tif
+
+gdal_translate -of COG -co OVERVIEWS=AUTO -co BLOCKSIZE=256 -co COMPRESS=DEFLATE -co NUM_THREADS=ALL_CPUS --config GDAL_CACHEMAX 15% .tmpmerge.foo.tif .tmptrans..tmpcog.foo.tif
+
+mv ".tmptrans..tmpcog.foo.tif" ".tmpcog.foo.tif"
+rm ".tmpmerge.foo.tif"
+mv ".tmpcog.foo.tif" "foo.tif"
+
+gdalwarp -overwrite -multi --debug off -t_srs epsg:32611 -of COG -te -119.87286231977664 39.50858235928912 -119.69118742654352 39.57493758700605 -te_srs epsg:4326 -tr 2.0 2.0 -wm 1500 -co OVERVIEWS=AUTO -co BLOCKSIZE=256 -co COMPRESS=DEFLATE -co NUM_THREADS=2 --config GDAL_CACHEMAX 1500 /vsis3/smart-data-accenture/ta-1/ta1-wv-acc-3/11/S/KD/2018/12/11/18DEC11220322-P1BS-014489713010_01_P001/18DEC11220322-P1BS-014489713010_01_P001_ACC_B01.tif foo.tif
