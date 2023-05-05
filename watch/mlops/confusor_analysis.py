@@ -514,12 +514,16 @@ def summary_visualization(dst_dset, viz_dpath):
                 track_dets = all_dets.take(groupx)
                 misc_info = track_dets.data['misc_info'][0]
                 row = misc_info.copy()
-                # row['role'] = role
+                row['role'] = role
+                row['confusion_color'] = row['confusion']['color']
                 # assert row['role'] == role
                 sh_poly = unary_union([p.to_shapely() for p in track_dets.data['segmentations']])
                 kw_poly = kwimage.MultiPolygon.from_shapely(sh_poly)
                 row['poly'] = kw_poly
                 track_summaries.append(row)
+
+            role_to_summary = ub.udict(ub.group_items(track_summaries, key=lambda x: x.get('role', None)))
+            print(ub.udict(role_to_summary).map_values(len))
 
             # canvas = kwplot.make_heatmask(util_kwimage.exactly_1channel(mean_heatmap), cmap='magma')[:, :, 0:3]
 
@@ -554,9 +558,6 @@ def summary_visualization(dst_dset, viz_dpath):
                     'cfsn': canvas.copy(),
                 },
             }
-
-            role_to_summary = ub.udict(ub.group_items(track_summaries, key=lambda x: x.get('role', None)))
-            print(ub.udict(role_to_summary).map_values(len))
 
             alpha = 0.6
 
