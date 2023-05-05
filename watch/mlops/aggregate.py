@@ -54,8 +54,8 @@ try:
 except ImportError:
     profile = ub.identity
 
-import xdev
-xdev.make_warnings_print_tracebacks()
+# import xdev
+# xdev.make_warnings_print_tracebacks()
 
 
 class AggregateLoader(DataConfig):
