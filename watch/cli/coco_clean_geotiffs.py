@@ -18,7 +18,7 @@ class CleanGeotiffConfig(scfg.DataConfig):
         # It is a good idea to do a dry run first to check for issues
         # This can be done at a smaller scale for speed.
         DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-        smartwatch clean_geotiffs \
+        geowatch clean_geotiffs \
             --src "$DVC_DATA_DPATH/Drop4-BAS/data.kwcoco.json" \
             --channels="red|green|blue|nir|swir16|swir22" \
             --prefilter_channels="red" \
@@ -29,7 +29,7 @@ class CleanGeotiffConfig(scfg.DataConfig):
             --dry=True
 
         # Then execute a real run at full scale - optionally with a probe scale
-        smartwatch clean_geotiffs \
+        geowatch clean_geotiffs \
             --src "$DVC_DATA_DPATH/Drop4-BAS/data_vali.kwcoco.json" \
             --channels="red|green|blue|nir|swir16|swir22" \
             --prefilter_channels="red" \
@@ -42,23 +42,23 @@ class CleanGeotiffConfig(scfg.DataConfig):
 
     Ignore:
 
-        smartwatch clean_geotiffs \
+        geowatch clean_geotiffs \
             --src=data.kwcoco.zip --dry=True --workers=8  \
             --probe_scale=0.25 --prefilter_channels=pan --channels=pan
 
-        smartwatch clean_geotiffs \
+        geowatch clean_geotiffs \
             --dry=False --workers=2  \
             --probe_scale=0.0625 --prefilter_channels="pan" \
             --channels="pan" \
             --src=data.kwcoco.zip
 
-        smartwatch clean_geotiffs \
+        geowatch clean_geotiffs \
             --dry=False --workers=avail  \
             --probe_scale=0.0625 --prefilter_channels="red" \
             --channels="red|green|blue|nir|swir16|swir22" \
             --src=data.kwcoco.zip
 
-        smartwatch clean_geotiffs \
+        geowatch clean_geotiffs \
             --dry=False --workers=avail  \
             --probe_scale=0.25 --prefilter_channels="swir22" \
             --channels="swir16|swir22" \
@@ -69,9 +69,10 @@ class CleanGeotiffConfig(scfg.DataConfig):
 
     workers = scfg.Value(0, type=str, help='number of workers')
 
-    channels = scfg.Value('red|green|blue|nir|swir16|swir22', help=ub.paragraph(
+    channels = scfg.Value('*', help=ub.paragraph(
         '''
-        The channels to apply nodata fixes to.
+        The channels to apply nodata fixes to. A value of * means all channels
+        except the excluded ones.
         '''))
 
     exclude_channels = scfg.Value('quality|cloudmask', help=ub.paragraph(
@@ -356,7 +357,9 @@ def probe_image_issues(coco_img, channels=None, prefilter_channels=None, scale=N
 
         channels : the channels to check
 
-        prefilter_channels : the channels to check first for efficiency
+        prefilter_channels :
+            the channels to check first for efficiency. If they do not exist,
+            then the all channels are checked.
 
         possible_nodata_values (set[int]):
             the values that may be nodata if known

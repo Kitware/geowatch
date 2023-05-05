@@ -60,18 +60,31 @@ python ~/code/watch/dev/poc/prepare_time_combined_dataset.py \
     --run=1
 
 
-    #--regions="[
-    #        # T&E Regions
-    #        AE_R001, BH_R001, BR_R001, BR_R002, BR_R004, BR_R005, CH_R001,
-    #        KR_R001,
-    #        KR_R002, LT_R001, NZ_R001, US_R001, US_R004, US_R005,
-    #        US_R006, US_R007,
-    #        # # iMerit Regions
-    #        AE_C001,
-    #        AE_C002,
-    #        AE_C003, PE_C001, QA_C001, SA_C005, US_C000, US_C010,
-    #        US_C011, US_C012,
-    #]" \
+
+geowatch clean_geotiffs \
+    --src "$DVC_DATA_DPATH/Aligned-Drop7/data.kwcoco.json" \
+    --channels="*" \
+    --prefilter_channels="red" \
+    --min_region_size=256 \
+    --nodata_value=-9999 \
+    --workers="min(2,avail)" \
+    --probe_scale=None \
+    --use_fix_stamps=True \
+    --dry=True
+
+
+#--regions="[
+#        # T&E Regions
+#        AE_R001, BH_R001, BR_R001, BR_R002, BR_R004, BR_R005, CH_R001,
+#        KR_R001,
+#        KR_R002, LT_R001, NZ_R001, US_R001, US_R004, US_R005,
+#        US_R006, US_R007,
+#        # # iMerit Regions
+#        AE_C001,
+#        AE_C002,
+#        AE_C003, PE_C001, QA_C001, SA_C005, US_C000, US_C010,
+#        US_C011, US_C012,
+#]" \
 
 
 # Drop 6
