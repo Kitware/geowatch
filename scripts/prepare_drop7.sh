@@ -71,7 +71,8 @@ geowatch clean_geotiffs \
     --workers="min(2,avail)" \
     --probe_scale=None \
     --use_fix_stamps=True \
-    --dry=True
+    --dry=True \
+    --export_bad_fpath=bad_files.txt
 
 
 #--regions="[

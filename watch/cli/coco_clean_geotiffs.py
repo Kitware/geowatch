@@ -187,7 +187,7 @@ def main(cmdline=1, **kwargs):
     from watch.utils import util_parallel
     import kwcoco
 
-    config = CleanGeotiffConfig.cli(cmdline=cmdline, data=kwargs)
+    config = CleanGeotiffConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
     import rich
     rich.print('config = {}'.format(ub.urepr(config, nl=1)))
 
