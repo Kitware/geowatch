@@ -987,7 +987,45 @@ def merge_images(window_coco_images, merge_method, requested_chans, space,
     return final_img
 
 
-def filter_image_ids_by_season(coco_dset, image_ids, filtered_seasons):
+def filter_image_ids_by_season(coco_dset, image_ids, filtered_seasons, ignore_winter_torrid_zone=True):
+    """Filter a sequence of image ids by season and geolocation.
+
+    Args:
+        coco_dset (kwcoco.CocoDataset): A KWCOCO dataset object.
+        image_ids (List(int)): A list of image ids that belong in coco_dset.
+        filtered_seasons (str | List(str) | None): Which seasons to not include in the
+             returned image ids.
+        ignore_winter_torrid_zone (bool, optional): Do not filter images within the 
+            Torrid region when winter is one of the filtered seasons. Defaults to True.
+
+    Raises:
+        ValueError: Check if the filtered seasons varible is a correctable type.
+        ValueError: Check if one of the filtered seasons is not a valid season.
+
+    Returns:
+        List[int]: A list of filtered image ids. Should never be longer than the input
+             image ids.
+
+    Example:
+        >>> # 0: Baseline run.
+        >>> # xdoctest: +REQUIRES(env:DEVEL_TEST)
+        >>> from watch.cli.coco_time_combine import *  # NOQA
+        >>> import watch
+        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> # Load KWCOCO dataset.
+        >>> input_kwcoco_fpath = data_dvc_dpath / 'Drop6/imgonly-AE_C001.kwcoco.json'
+        >>> coco_dset = kwcoco.CocoDataset(input_kwcoco_fpath)
+        >>> image_ids = coco_dset.images().gids
+        >>> ignore_torrid_regions_gids = filter_image_ids_by_season(coco_dset, 
+        >>>                                image_ids, 
+        >>>                                filtered_seasons='winter', 
+        >>>                                ignore_winter_torrid_zone=True)
+        >>> all_filtered_gids = filter_image_ids_by_season(coco_dset, 
+        >>>                       image_ids, 
+        >>>                       filtered_seasons='winter', 
+        >>>                       ignore_winter_torrid_zone=True)
+        >>> assert len(all_filtered_gids) > len(ignore_torrid_regions_gids)
+    """
     from watch.utils import util_time
     hemipshere_to_season_map = {
         'northern': {
@@ -1004,13 +1042,22 @@ def filter_image_ids_by_season(coco_dset, image_ids, filtered_seasons):
         }
     }
 
+    # Check if there are any images to filter.
     if len(image_ids) == 0:
         print('WARNING: No images to filter.')
         return []
 
-    if not isinstance(filtered_seasons, list):
+    # Check type of filtered_seasons variable and try to convert to list.
+    if isinstance(filtered_seasons, str):
         filtered_seasons = [filtered_seasons]
+    elif filtered_seasons is None:
+        filtered_seasons = []
+    elif isinstance(filtered_seasons, list):
+        pass
+    else:
+        raise ValueError(f'Filtered seasons must be a list or string. Got "{type(filtered_seasons)}" type.')
 
+    # Get seasons to filter (invalid seasons).
     filtered_seasons = set(filtered_seasons)
     valid_seasons = {'spring', 'summer', 'fall', 'winter'}
 
@@ -1020,12 +1067,23 @@ def filter_image_ids_by_season(coco_dset, image_ids, filtered_seasons):
 
     # Get hemisphere of region.
     coco_img = coco_dset.coco_image(image_ids[0])
-    lon, _ = coco_img.img['geos_corners']['coordinates'][0][0]
+    import numpy as np
+    geo_corner_coords = np.asarray(coco_img.img['geos_corners']['coordinates'])
+    center_coord = geo_corner_coords.mean(axis=1)[0]
+    _, lat = center_coord[0], center_coord[1]
 
-    if lon > 0:
+    # Check if the latitude is in the northern or southern hemisphere.
+    if lat > 0:
         hemisphere = 'northern'
     else:
         hemisphere = 'southern'
+
+    # Check if the region is within the torrid zone.
+    # Torrid zone is generally warm and less likely to contain snow.
+    # https://en.wikipedia.org/wiki/Geographical_zone
+    # https://www.toppr.com/guides/chemistry/environmental-chemistry/torrid-zone/
+    # Should technically be 23.5 but bumpping up to 27 to include AE regions
+    within_torrid_zone = abs(lat) < 27
 
     month_to_season_map = {}
     for season, months in hemipshere_to_season_map[hemisphere].items():
@@ -1036,14 +1094,24 @@ def filter_image_ids_by_season(coco_dset, image_ids, filtered_seasons):
     for image_id in image_ids:
         coco_img = coco_dset.coco_image(image_id)
 
-        # Get month.
+        # Get month image was taken in.
         dt = util_time.coerce_datetime(coco_img['date_captured'])
         month = dt.month
 
-        # Get season of month.
+        # Get season of month (depends on northern or southern hemisphere).
         img_season = month_to_season_map[month]
-        if img_season not in filtered_seasons:
+
+        # Do not filter image if ALL conditions are met:
+        # 1) We are not removing images within the torrid zone during winter,
+        # 2) the region latitude is within the torrid zone (|lat| < 23.5),
+        # 3) winter is in the filtered seasons,
+        # 4) the image was captured during winter.
+        if ignore_winter_torrid_zone and within_torrid_zone and (img_season == 'winter') and ("winter" in filtered_seasons):
             final_image_ids.append(image_id)
+        else:
+            # Check if the season is not in the filtered seasons.
+            if img_season not in filtered_seasons:
+                final_image_ids.append(image_id)
 
     return final_image_ids
 
