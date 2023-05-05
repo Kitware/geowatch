@@ -102,6 +102,23 @@ class SimpleDVC(ub.NiceRepr):
             remote = self.remote
         return remote
 
+    def _resolve_root_and_relative_paths(self, paths):
+        # try:
+        #     dvc_root = self._ensure_root(paths)
+        #     rel_paths = [os.fspath(p.relative_to(dvc_root)) for p in paths]
+        # except Exception as ex:
+        #     print(f'ex={ex}')
+        # Handle symlinks: https://dvc.org/doc/user-guide/troubleshooting#add-symlink
+        # not sure if this is safe
+        dvc_root = self._ensure_root(paths).resolve()
+        # Note: this could resolve the symlink to the dvc cache which we dont want
+        # rel_paths = [os.fspath(p.resolve().relative_to(dvc_root)) for p in paths]
+        # Fixed version?
+        parent_resolved = [p.parent.resolve() / p.name for p in paths]
+        rel_paths = [os.fspath(p.relative_to(dvc_root)) for p in parent_resolved]
+
+        return dvc_root, rel_paths
+
     def add(self, path, verbose=0):
         """
         Args:
@@ -113,14 +130,7 @@ class SimpleDVC(ub.NiceRepr):
         if len(paths) == 0:
             print('No paths to add')
             return
-        if 1:
-            # Handle symlinks: https://dvc.org/doc/user-guide/troubleshooting#add-symlink
-            # not sure if this is safe
-            dvc_root = self._ensure_root(paths).resolve()
-            rel_paths = [os.fspath(p.resolve().relative_to(dvc_root)) for p in paths]
-        else:
-            dvc_root = self._ensure_root(paths)
-            rel_paths = [os.fspath(p.relative_to(dvc_root)) for p in paths]
+        dvc_root, rel_paths = self._resolve_root_and_relative_paths(paths)
         with util_path.ChDir(dvc_root):
             dvc_command = ['add'] + rel_paths
             extra_args = self._verbose_extra_args(verbose)
@@ -139,8 +149,7 @@ class SimpleDVC(ub.NiceRepr):
         if len(paths) == 0:
             print('No paths to add')
             return
-        dvc_root = self._ensure_root(paths)
-        rel_paths = [os.fspath(p.relative_to(dvc_root)) for p in paths]
+        dvc_root, rel_paths = self._resolve_root_and_relative_paths(paths)
         with util_path.ChDir(dvc_root):
             dvc_command = ['check-ignore'] + rel_paths
             if details:
@@ -223,10 +232,10 @@ class SimpleDVC(ub.NiceRepr):
             print('No paths to push')
             return
         remote = self._ensure_remote(remote)
-        dvc_root = self._ensure_root(paths)
+        dvc_root, rel_paths = self._resolve_root_and_relative_paths(paths)
         extra_args = self._remote_extra_args(remote, recursive, jobs, verbose)
         with util_path.ChDir(dvc_root):
-            dvc_command = ['push'] + extra_args + [str(p.relative_to(dvc_root)) for p in paths]
+            dvc_command = ['push'] + extra_args + [str(p) for p in rel_paths]
             dvc_main.main(dvc_command)
 
     def pull(self, path, remote=None, recursive=False, jobs=None, verbose=0):
@@ -236,10 +245,10 @@ class SimpleDVC(ub.NiceRepr):
             print('No paths to pull')
             return
         remote = self._ensure_remote(remote)
-        dvc_root = self._ensure_root(paths)
+        dvc_root, rel_paths = self._resolve_root_and_relative_paths(paths)
         extra_args = self._remote_extra_args(remote, recursive, jobs, verbose)
         with util_path.ChDir(dvc_root):
-            dvc_command = ['pull'] + extra_args + [str(p.relative_to(dvc_root)) for p in paths]
+            dvc_command = ['pull'] + extra_args + [str(p) for p in rel_paths]
             dvc_main.main(dvc_command)
 
     def request(self, path, remote=None):
@@ -259,13 +268,12 @@ class SimpleDVC(ub.NiceRepr):
         missing_data = [path for path in paths if not path.exists()]
 
         if missing_data:
-            dvc_root = self._ensure_root(paths)
+            dvc_root, rel_paths = self._resolve_root_and_relative_paths(missing_data)
 
-            def _find_sidecar(path):
-                first_cand = path.augment(stem=path.name, ext='.dvc')
+            def _find_sidecar(rel_path):
+                first_cand = dvc_root / rel_path.augment(stem=rel_path.name, ext='.dvc')
                 if first_cand.exists():
                     return first_cand
-                rel_path = path.relative_to(dvc_root)
                 rel_parts = rel_path.parts
                 for i in reversed(range(len(rel_parts))):
                     parts = rel_parts[0:i]
@@ -274,7 +282,7 @@ class SimpleDVC(ub.NiceRepr):
                     if cand_dvc.exists():
                         return cand_dvc
 
-            to_pull = [_find_sidecar(path) for path in missing_data]
+            to_pull = [_find_sidecar(rel_path) for rel_path in rel_paths]
             missing_sidecar = [dvc_fpath for dvc_fpath in to_pull if not dvc_fpath.exists()]
 
             if missing_sidecar:
@@ -291,8 +299,7 @@ class SimpleDVC(ub.NiceRepr):
         if len(paths) == 0:
             print('No paths to unprotect')
             return
-        dvc_root = self._ensure_root(paths)
-        rel_paths = [os.fspath(p.relative_to(dvc_root)) for p in paths]
+        dvc_root, rel_paths = self._resolve_root_and_relative_paths(paths)
         with util_path.ChDir(dvc_root):
             dvc_command = ['unprotect'] + rel_paths
             dvc_main.main(dvc_command)

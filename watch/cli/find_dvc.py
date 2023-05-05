@@ -54,7 +54,7 @@ Example Usage:
 import scriptconfig as scfg
 
 
-class FindDVCConfig(scfg.Config):
+class FindDVCConfig(scfg.DataConfig):
     """
     Command line helper to find the path to the watch DVC repo
 
@@ -96,7 +96,7 @@ class FindDVCConfig(scfg.Config):
         from rich import print
         import ubelt as ub
 
-        cli_config = FindDVCConfig(data=kwargs, cmdline=cmdline)
+        cli_config = FindDVCConfig.cli(data=kwargs, cmdline=cmdline, strict=True)
         config = dict(cli_config)
 
         command = config.pop('command')

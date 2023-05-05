@@ -129,7 +129,10 @@ class PrepareTA2Config(CMDQueueConfig):
         'splits': scfg.Value(False, isflag=1, help='if True do splits'),
 
         'region_globstr': scfg.Value('annotations/region_models', help='region model globstr (relative to the dvc path, unless absolute or prefixed by "./")'),
-        'site_globstr': scfg.Value('annotations/site_models', help='site model globstr (relative to the dvc path, unless absolute or prefixed by "./")'),
+        'site_globstr': scfg.Value(
+            None,
+            # 'annotations/site_models',
+            help='site model globstr (relative to the dvc path, unless absolute or prefixed by "./")'),
 
         'propogate_strategy': scfg.Value('NEW-SMART', help='changes propogation behavior'),
 

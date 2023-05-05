@@ -222,6 +222,7 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
         >>>                              keep_geotiff_metadata=False,
         >>>                              mode='process')
     """
+    import rich
     gids = coco_dset.images(gids)._ids
     # Cant multiprocess because of SwigPyObjects... bleh
     # keep_geotiff_metadata must be False to use mode=process
@@ -264,13 +265,19 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
             ]
             if any(known_errors):
                 broken_image_ids.append(gid)
+                print('')
+                rich.print('[yellow]WARNING: KNOWN ERROR IN GEO HEURISTICS')
                 print(f'ex={ex!r}')
                 print(f'ex={ex}')
                 print(f'ex.__dict__={ex.__dict__}')
             else:
+                print('')
+                rich.print('[red]ERROR: UNKNOWN ERROR IN GEO HEURISTICS')
                 print(f'ex={ex!r}')
                 print(f'ex={ex}')
                 print(f'ex.__dict__={ex.__dict__}')
+                coco_img = coco_dset.coco_image(gid)
+                print('coco_img = {}'.format(ub.urepr(coco_img.img, nl=3)))
                 raise
         else:
             if mode == 'process':

@@ -29,12 +29,17 @@ Example:
     python -m watch.mlops.manager "list" --dataset_codes Drop6 Drop4-BAS
     python -m watch.mlops.manager "list" --dataset_codes Drop6-MeanYear10GSD
     python -m watch.mlops.manager "list" --dataset_codes Drop6 Drop6-MeanYear10GSD-V2
+    python -m watch.mlops.manager "list" --dataset_codes Drop6 Drop6-MedianSummer10GSD
 
     python -m watch.mlops.manager "push packages" --dataset_codes Drop6-MeanYear10GSD --yes
     python -m watch.mlops.manager "push packages" --dataset_codes Drop6-MeanYear10GSD-V2 --yes
+    python -m watch.mlops.manager "push packages" --dataset_codes Drop6-MedianSummer10GSD --yes
 
     python -m watch.mlops.manager "status" --dataset_codes Drop6-MeanYear10GSD-V2
     python -m watch.mlops.manager "pull packages" --dataset_codes Drop6-MeanYear10GSD --yes
+    python -m watch.mlops.manager "pull packages" --dataset_codes Drop6-MeanYear10GSD-V2 --yes
+    python -m watch.mlops.manager "pull packages" --dataset_codes Drop6-MedianSummer10GSD --yes
+
     python -m watch.mlops.manager "pull packages" --dataset_codes Drop6-MeanYear10GSD-V2 --yes
 
     # On training machine
@@ -170,7 +175,7 @@ def main(cmdline=True, **kwargs):
         model_pattern=config['model_pattern'])
 
     if 'pull' in actions:
-        manager.pull(targets)
+        manager.pull(targets, yes=config.yes)
 
     if 'add' in actions and 'packages' in targets:
         manager.add_packages(yes=config.yes)

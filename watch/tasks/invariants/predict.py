@@ -148,6 +148,8 @@ class Predictor(object):
     """
 
     def __init__(self, args):
+        # import xdev
+        # xdev.make_warnings_print_tracebacks()
 
         # TODO: Add a cache flag. If cache==1, Determine what images we have
         # already predicted for and then take a kwcoco subset containing
@@ -289,6 +291,7 @@ class Predictor(object):
         # Start background processes
         # Build a task queue for background write results workers
         from watch.utils import util_parallel
+        from watch.utils import util_progress
         writer_queue = util_parallel.BlockingJobQueue(max_workers=self.io_workers)
         self.stitch_manager.writer_queue = writer_queue
 
@@ -300,9 +303,11 @@ class Predictor(object):
 
         print('Evaluating and saving features')
 
-        with torch.set_grad_enabled(False):
+        pman = util_progress.ProgressManager()
+
+        with torch.set_grad_enabled(False), pman:
             seen_images = set()
-            prog = ub.ProgIter(enumerate(loader), total=num_batches, desc='Compute features', verbose=1)
+            prog = pman.progiter(enumerate(loader), total=num_batches, desc='Compute invariants', verbose=1)
             for idx, batch in prog:
                 save_feat = []
                 save_feat2 = []
@@ -423,7 +428,7 @@ class Predictor(object):
             writer_queue.wait_until_finished(desc='Finalize submitted jobs')
 
             # Finalize everything else that hasn't completed
-            for gid in ub.ProgIter(list(self.stitch_manager.image_stitchers.keys()), desc='submit loose write jobs'):
+            for gid in pman.progiter(list(self.stitch_manager.image_stitchers.keys()), desc='submit loose write jobs'):
                 if gid not in seen_images:
                     seen_images.add(gid)
                     self.stitch_manager.submit_finalize_image(gid)

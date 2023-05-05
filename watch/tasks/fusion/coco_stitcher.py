@@ -497,6 +497,7 @@ class CocoStitchingManager(object):
         Args:
             gid (int): the image-id to finalize
         """
+        import os
         # Remove this image from the managed set.
         img = self.result_dataset.index.imgs[gid]
 
@@ -639,8 +640,10 @@ class CocoStitchingManager(object):
                 quant_probs, quantization = quantize_image(
                     final_probs, old_min=old_min, old_max=old_max,
                     quantize_dtype=quantize_dtype)
+                write_data = quant_probs
                 aux['quantization'] = quantization
             else:
+                write_data = final_probs
                 quantization = None
 
             if self.prob_format != 'png':
@@ -648,10 +651,20 @@ class CocoStitchingManager(object):
                     'quantization': quantization,
                 }
 
-            kwimage.imwrite(
-                str(new_fpath), final_probs, space=None, backend=imwrite_backend,
-                **write_kwargs,
-            )
+            try:
+                kwimage.imwrite(
+                    os.fspath(new_fpath), write_data, space=None, backend=imwrite_backend,
+                    **write_kwargs,
+                )
+            except Exception as ex:
+                print()
+                print('ERROR ex = {}'.format(ub.urepr(ex, nl=1)))
+                print('new_fpath = {}'.format(ub.urepr(new_fpath, nl=1)))
+                print(f'imwrite_backend={imwrite_backend}')
+                print(f'write_data.shape={write_data.shape}')
+                print(f'write_data.dtype={write_data.dtype}')
+                print(f'write_kwargs={write_kwargs}')
+                raise
 
         if self.write_preds:
             from watch.tasks.tracking.utils import mask_to_polygons

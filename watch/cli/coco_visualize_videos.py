@@ -31,7 +31,7 @@ import scriptconfig as scfg
 import ubelt as ub
 
 
-class CocoVisualizeConfig(scfg.Config):
+class CocoVisualizeConfig(scfg.DataConfig):
     """
     Visualizes annotations on kwcoco video frames on each band
 
@@ -225,6 +225,8 @@ def main(cmdline=True, **kwargs):
             'src': src,
         }
     """
+    config = CocoVisualizeConfig.cli(data=kwargs, cmdline=cmdline and
+                                     {'strict': True}, strict=True)
     from watch.utils import util_parallel
     from watch.utils import util_resources
     from watch.utils import kwcoco_extensions
@@ -232,10 +234,10 @@ def main(cmdline=True, **kwargs):
     import kwarray
     import rich
     import numpy as np
-    config = CocoVisualizeConfig(data=kwargs, cmdline=cmdline and {'strict': True})
+    rich.print('config = {}'.format(ub.urepr(dict(config), nl=2)))
+
     space = config['space']
     channels = config['channels']
-    rich.print('config = {}'.format(ub.urepr(dict(config), nl=2)))
 
     if config['smart']:
         if config['workers'] == 'auto':

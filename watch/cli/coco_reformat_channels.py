@@ -3,7 +3,7 @@ import scriptconfig as scfg
 import os
 
 
-class CocoReformatChannels(scfg.Config):
+class CocoReformatChannels(scfg.DataConfig):
     """
     Helper to remove channels from a coco file and reformat predictions from
     float32 to int16.
@@ -62,9 +62,9 @@ def main(cmdline=False, **kwargs):
         >>> #new_pred2 = new_coco_img.imdelay('salient').finalize(dequantize=False)
         >>> #assert new_pred2.dtype.kind == 'i'
     """
-    config = CocoReformatChannels.cli(data=kwargs, cmdline=cmdline)
+    config = CocoReformatChannels.cli(data=kwargs, cmdline=cmdline, strict=True)
     import kwcoco
-    print('config = {}'.format(ub.urepr(dict(config), nl=1)))
+    print('config = {}'.format(ub.urepr(config, nl=1)))
     dset = kwcoco.CocoDataset.coerce(config['src'])
 
     to_quantize = kwcoco.ChannelSpec.coerce('' if config['quantize'] is None else config['quantize']).fuse()

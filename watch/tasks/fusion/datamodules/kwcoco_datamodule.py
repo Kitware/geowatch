@@ -16,7 +16,7 @@ from watch.utils import util_parallel
 from watch.tasks.fusion import utils
 from watch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDatasetConfig, KWCocoVideoDataset
 
-from typing import Dict, List  # NOQA
+from typing import Dict
 
 try:
     import xdev
@@ -36,9 +36,9 @@ class KWCocoVideoDataModuleConfig(KWCocoVideoDatasetConfig):
 
     In the future this might be convertable to, or handled by omegaconfig
     """
-    train_dataset = scfg.Value(None, help='path to the train kwcoco file')
-    vali_dataset = scfg.Value(None, help='path to the validation kwcoco file')
-    test_dataset = scfg.Value(None, help='path to the test kwcoco file')
+    train_dataset = scfg.Value(None, help='path to the train kwcoco file', group='datasets')
+    vali_dataset = scfg.Value(None, help='path to the validation kwcoco file', group='datasets')
+    test_dataset = scfg.Value(None, help='path to the test kwcoco file', group='datasets')
 
     batch_size = scfg.Value(4, type=int, help=None)
 
@@ -56,6 +56,15 @@ class KWCocoVideoDataModuleConfig(KWCocoVideoDatasetConfig):
             expression.
             '''))
 
+    request_rlimit_nofile = scfg.Value('auto', help=ub.paragraph(
+        '''
+        As a convinience, on Linux systems this automatically requests that
+        ulimit raises the maximum number of open files allowed. Auto currently
+        simply sets this to 8192, so use a number higher than this if you run
+        into too many open file errors, or set your ulimit explicitly before
+        running this software.
+        '''), group='resources')
+
     torch_sharing_strategy = scfg.Value('default', help=ub.paragraph(
             '''
             Torch multiprocessing sharing strategy. Can be 'default',
@@ -66,14 +75,14 @@ class KWCocoVideoDataModuleConfig(KWCocoVideoDatasetConfig):
             help prevent the "received 0 items of ancdata" Error. It is
             unclear why using "file_descriptor" fails in this case for
             some datasets.
-            '''))
+            '''), group='resources')
 
     torch_start_method = scfg.Value('default', help=ub.paragraph(
             '''
             Torch multiprocessing sharing strategy. Can be "default",
             "fork", "spawn", "forkserver". The default method on Linux
             is "spawn".
-            '''))
+            '''), group='resources')
 
     sqlview = scfg.Value(False, help=ub.paragraph(
             '''
@@ -293,6 +302,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             'num_workers': self.num_workers,
             'torch_sharing_strategy': self.torch_sharing_strategy,
             'torch_start_method': self.torch_start_method,
+            'request_rlimit_nofile': self.request_rlimit_nofile,
         })
         sqlview = self.config['sqlview']
 

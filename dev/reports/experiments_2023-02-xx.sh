@@ -1866,3 +1866,96 @@ geowatch aggregate \
 #    --resource_report=False \
 #    --plot_params=False \
 #    --export_tables=False \
+
+
+
+
+#Prep models
+python -c "if 1:
+    from watch.utils.util_yaml import Yaml
+    from watch.utils import simple_dvc
+    import watch
+    import platform
+    import os
+    host = platform.node()
+    expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+    dvc = simple_dvc.SimpleDVC(expt_dvc_dpath)
+    cand_list_fpath = expt_dvc_dpath / 'model_candidates/split1_shortlist_v4.yaml'
+    suffixes = Yaml.coerce(cand_list_fpath)
+    resolved_fpaths = [os.fspath(expt_dvc_dpath / s) for s in suffixes]
+    new_cand_fpath = cand_list_fpath.augment(prefix=host + '_')
+    new_cand_fpath.write_text(Yaml.dumps(resolved_fpaths))
+    print(new_cand_fpath)
+
+    path = resolved_fpaths
+    dvc.pull(resolved_fpaths, remote='aws')
+"
+
+# SITE VISIT 2022-04 SPLIT 1 Analysis
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+python -m watch.mlops.schedule_evaluation --params="
+    matrix:
+        bas_pxl.package_fpath:
+            - $DVC_EXPT_DPATH/model_candidates/namek_split1_shortlist_v4.yaml
+        bas_pxl.test_dataset:
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R002_I2LS.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-CH_R001_I2LS.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-NZ_R001_I2LS.kwcoco.zip
+        bas_pxl.chip_overlap: 0.3
+        bas_pxl.chip_dims:
+            - auto
+        bas_pxl.time_span:
+            - auto
+        bas_pxl.input_space_scale:
+            - 10GSD
+        bas_pxl.time_sampling:
+            - soft4
+        bas_poly.thresh:
+            - 0.3
+            - 0.35
+            - 0.4
+        bas_poly.time_thresh:
+            - 0.8
+        bas_poly.inner_window_size:
+            - 1y
+            #- null
+        bas_poly.inner_agg_fn:
+            - mean
+        bas_poly.norm_ord:
+            - inf
+        bas_poly.resolution:
+            - 10GSD
+        bas_poly.moving_window_size:
+            - null
+        bas_poly.poly_merge_method:
+            - 'v2'
+        bas_poly.polygon_simplify_tolerance:
+            - 1
+        bas_poly.agg_fn:
+            - probs
+        bas_poly.min_area_square_meters:
+            - 7200
+        bas_poly.max_area_square_meters:
+            - 8000000
+        bas_poly.boundary_region: $DVC_DATA_DPATH/annotations/drop6/region_models
+        bas_poly_eval.true_site_dpath: $DVC_DATA_DPATH/annotations/drop6/site_models
+        bas_poly_eval.true_region_dpath: $DVC_DATA_DPATH/annotations/drop6/region_models
+        bas_pxl.enabled: 1
+        bas_pxl_eval.enabled: 1
+        bas_poly.enabled: 1
+        bas_poly_eval.enabled: 1
+        bas_poly_viz.enabled: 0
+
+    submatrices:
+        - bas_pxl.input_space_scale: 10GSD
+          bas_pxl.window_space_scale: 10GSD
+          bas_pxl.output_space_scale: 10GSD
+          bas_poly.resolution:
+              - 10GSD
+    " \
+    --root_dpath="$DVC_EXPT_DPATH/_namek_preeval12" \
+    --devices="0,1" --tmux_workers=6 \
+    --backend=tmux --queue_name "_namek_preeval12" \
+    --pipeline=bas --skip_existing=1 \
+    --run=1
