@@ -124,6 +124,8 @@ class CleanGeotiffConfig(scfg.DataConfig):
         to check it again.
         '''))
 
+    export_bad_fpath = scfg.Value(False, help='if True, export paths to bad files to this newline separated file, also works in dry mode')
+
     dry = scfg.Value(False, help='if True, only do a dry run. Report issues but do not fix them')
 
 
@@ -227,6 +229,14 @@ def main(cmdline=1, **kwargs):
     coco_imgs = coco_dset.images().coco_images
     print('About to start looping')
 
+    if config.export_bad_fpath is not None:
+        export_fpath = ub.Path(config.export_bad_fpath)
+        with open(export_fpath, 'w'):
+            ...
+        export_file = open(export_fpath, 'a')
+    else:
+        export_file = None
+
     from watch.utils import util_progress
     mprog = util_progress.ProgressManager(backend='progiter')
     # mprog = util_progress.ProgressManager(backend='rich')
@@ -303,6 +313,8 @@ def main(cmdline=1, **kwargs):
         if not config['dry']:
             correct_nodata_value = config['nodata_value']
             for asset_summary in mprog.new(needs_fix, desc='Cleaning identified issues'):
+                if export_file is not None:
+                    export_file.write(asset_summary['fpath'] + '\n')
                 fpath = ub.Path(asset_summary['fpath'])
                 fix_geotiff_ondisk(asset_summary,
                                    correct_nodata_value=correct_nodata_value)
@@ -319,8 +331,13 @@ def main(cmdline=1, **kwargs):
                     fix_fpath.write_text(json.dumps(fixes))
         else:
             for asset_summary in mprog.new(needs_fix, desc='Dry run: identifying issues'):
+                if export_file is not None:
+                    export_file.write(asset_summary['fpath'] + '\n')
                 print(asset_summary['fpath'])
                 ...
+
+    if export_file is not None:
+        export_file.close()
 
     # if 0:
     #     import xdev

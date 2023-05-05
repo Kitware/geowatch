@@ -119,3 +119,25 @@ HDD_DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
 SSD_DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="ssd")
 
 rsync -avprPR "$HDD_DVC_DATA_DPATH"/./Drop7-MedianSummer10GSD "$SSD_DVC_DATA_DPATH"
+
+
+geowatch visualize data.kwcoco.json --smart
+
+fixup="
+coco_images = dset.images().coco_images
+from watch.utils import util_gdal
+
+for img in coco_images:
+
+    img = coco_images[1]
+    print(img.img['sensor_coarse'])
+
+    for asset in img.assets:
+        fpath = ub.Path(img.bundle_dpath) / asset['file_name']
+        print(fpath)
+        ptr = util_gdal.GdalOpen(fpath, mode='r')
+        info = ptr.info()
+        print(info['bands'])
+        ...
+
+"
