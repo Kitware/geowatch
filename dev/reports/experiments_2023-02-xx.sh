@@ -1880,7 +1880,7 @@ python -c "if 1:
     host = platform.node()
     expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
     dvc = simple_dvc.SimpleDVC(expt_dvc_dpath)
-    cand_list_fpath = expt_dvc_dpath / 'model_candidates/split1_shortlist_v4.yaml'
+    cand_list_fpath = expt_dvc_dpath / 'model_candidates/split1_shortlist_v4_top.yaml'
     suffixes = Yaml.coerce(cand_list_fpath)
     resolved_fpaths = [os.fspath(expt_dvc_dpath / s) for s in suffixes]
     new_cand_fpath = cand_list_fpath.augment(prefix=host + '_')
@@ -1897,17 +1897,14 @@ DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch.mlops.schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
-            - $DVC_EXPT_DPATH/model_candidates/namek_split1_shortlist_v4.yaml
+            - $DVC_EXPT_DPATH/model_candidates/namek_split1_shortlist_v4_top.yaml
         bas_pxl.test_dataset:
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R002_I2LS.kwcoco.zip
-            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-CH_R001_I2LS.kwcoco.zip
-            #- $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-NZ_R001_I2LS.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-CH_R001_I2LS.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-NZ_R001_I2LS.kwcoco.zip
         bas_pxl.chip_overlap: 0.3
         bas_pxl.chip_dims:
-            - auto
-            #- [196,196]
-            - [256,256]
-            - [320,320]
+            - [196,196]
         bas_pxl.time_span:
             - auto
         bas_pxl.input_space_scale:
@@ -1955,14 +1952,6 @@ python -m watch.mlops.schedule_evaluation --params="
           bas_pxl.window_space_scale: 10GSD
           bas_pxl.output_space_scale: 10GSD
           bas_poly.resolution: 10GSD
-        - bas_pxl.input_space_scale: 15GSD
-          bas_pxl.window_space_scale: 15GSD
-          bas_pxl.output_space_scale: 15GSD
-          bas_poly.resolution: 15GSD
-        - bas_pxl.input_space_scale: 5GSD
-          bas_pxl.window_space_scale: 5GSD
-          bas_pxl.output_space_scale: 5GSD
-          bas_poly.resolution: 5GSD
     " \
     --root_dpath="$DVC_EXPT_DPATH/_namek_preeval12" \
     --devices="0,1" --tmux_workers=6 \
@@ -1984,7 +1973,7 @@ geowatch aggregate \
         print_models: True
     " \
     --resource_report=0 \
-    --plot_params=0 \
+    --plot_params=1 \
     --export_tables=0 \
     --io_workers=0 \
     --output_dpath="$DVC_EXPT_DPATH/_namek_preeval12/aggregate" \

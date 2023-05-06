@@ -451,8 +451,9 @@ into the airflow scheduler pod.
         # Build pattern to identify the jobs you want to run
         import xdev
         pattern = xdev.MultiPattern.coerce([
-            f'kit_ta2_preeval10_pyenv_t{t}*'
-            for t in [31, 35]
+            'kit_eval_11_rerun_batch'
+            ..f'kit_ta2_preeval10_pyenv_t{t}*'
+            ..for t in [31, 35]
         ])
         data = json.loads(pathlib.Path('dags_nocolor.json').read_text())
 

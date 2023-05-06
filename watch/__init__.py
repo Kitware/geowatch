@@ -4,6 +4,8 @@ The GEOWATCH module
 Useful environs:
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
     DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+    DATA_DVC_DPAVH=$DVC_DATA_DPATH
+    EXPT_DVC_DPATH=$DVC_EXPT_DPATH
 """
 import os
 import sys
