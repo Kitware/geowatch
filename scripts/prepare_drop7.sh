@@ -34,10 +34,11 @@ python -m watch.cli.prepare_ta2_dataset \
     --separate_align_jobs=1 \
     --visualize=0 \
     --target_gsd=10 \
-    --cache=1 \
+    --cache=0 \
     --verbose=100 \
     --skip_existing=1 \
     --force_min_gsd=2.0 \
+    --force_nodata=-9999 \
     --run=1
 
 # ~/code/watch/dev/poc/prepare_time_combined_dataset.py
@@ -128,17 +129,30 @@ fixup="
 coco_images = dset.images().coco_images
 from watch.utils import util_gdal
 
+coco_img = dset.coco_image(408)
+
+for asset in coco_img.assets:
+    fpath = ub.Path(coco_img.bundle_dpath) / asset['file_name']
+    bak_fpath = fpath.augment(prefix='_backup_')
+    fpath.move(bak_fpath)
+    print(fpath)
+
+
+problematic_paths = []
 for img in coco_images:
-
-    img = coco_images[1]
-    print(img.img['sensor_coarse'])
-
     for asset in img.assets:
-        fpath = ub.Path(img.bundle_dpath) / asset['file_name']
-        print(fpath)
-        ptr = util_gdal.GdalOpen(fpath, mode='r')
-        info = ptr.info()
-        print(info['bands'])
-        ...
+        if isinstance(asset['parent_file_name'], list) and len(asset['parent_file_name']) > 2:
+            print(len(asset['parent_file_name']))
+            problematic_paths.append(ub.Path(img.bundle_dpath) / asset['file_name'])
+
+for p in ub.ProgIter(problematic_paths):
+    p.delete()
+
+        #fpath = ub.Path(img.bundle_dpath) / asset['file_name']
+        #print(fpath)
+        #ptr = util_gdal.GdalOpen(fpath, mode='r')
+        #info = ptr.info()
+        #print(info['bands'])
+        #...
 
 "

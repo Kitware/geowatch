@@ -1498,7 +1498,14 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         # After input normalization happens, replace nans with zeros
         # which is effectively imputing the dataset mean
 
-        if self.rescale_nan_method == 'perframe':
+        try:
+            rescale_nan_method = self.rescale_nan_method
+        except AttributeError:
+            rescale_nan_method = None
+
+        if rescale_nan_method is None:
+            mode_val = mode_val.nan_to_num_()
+        elif rescale_nan_method == 'perframe':
             # Do a dropout-like rescaling to the nan input values.
             num_nan = mode_val.isnan()
             num_total = mode_val.numel()
@@ -1506,8 +1513,6 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             mode_val = mode_val.nan_to_num_()
             rescale_factor = 1 / (1 - p)
             mode_val *= rescale_factor
-        elif self.rescale_nan_method is None:
-            mode_val = mode_val.nan_to_num_()
         else:
             raise AssertionError
 

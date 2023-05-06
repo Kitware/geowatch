@@ -1986,6 +1986,7 @@ geowatch aggregate \
     --resource_report=0 \
     --plot_params=0 \
     --export_tables=0 \
+    --io_workers=0 \
     --output_dpath="$DVC_EXPT_DPATH/_namek_preeval12/aggregate" \
-    --rois=KR_R002
+    #--rois="KR_R002,"
     #--rois=KR_R002,CH_R001,NZ_R001

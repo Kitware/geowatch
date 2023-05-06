@@ -285,7 +285,11 @@ class CocoAlignGeotiffConfig(scfg.DataConfig):
             '''
             if specified, forces nodata to this value (e.g. -9999)
             Ideally this is not needed and all source geotiffs properly
-            specify nodata
+            specify nodata.
+
+            NOTE: We currently must specify this to handle gdal-merge
+            correctly. Perhasp in the future we may be able to introspect, but
+            for now specify it.
             '''))
 
     force_min_gsd = scfg.Value(None, help=ub.paragraph(

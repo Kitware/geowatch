@@ -48,7 +48,9 @@ def _import_troublesome_module(modname):
     """
     if modname == 'gdal':
         from osgeo import gdal as module
-        module.UseExceptions()
+        gdal = module
+        if getattr(gdal, '_UserHasSpecifiedIfUsingExceptions', lambda: False)():
+            gdal.UseExceptions()
     elif modname == 'pyproj':
         import pyproj as module
         from pyproj import CRS  # NOQA
