@@ -435,13 +435,19 @@ into the airflow scheduler pod.
     # Status queries
     airflow dags list-jobs -d kit_ta2_preeval10_pyenv_t33_post1_batch_KR_R001 -o yaml
     airflow dags list-runs -d kit_ta2_preeval10_pyenv_t33_post1_batch_KR_R001 -o yaml
+    airflow dags list-runs -d kit_eval_11_rerun_batch_AE_R001 -o yaml
     '
 
 
     ### Alternative - execute commands from local shell
     # Oddly this tends to send outputs with color that we need to strip out.
+    JQ_QUERY='.items[] | select(.metadata.name | startswith("airflow-scheduler-")) | .metadata.name'
+    AIRFLOW_SCHEDULER_POD_NAME=$(kubectl -n airflow get pods -o json | jq -r "$JQ_QUERY")
+    export AIRFLOW_SCHEDULER_POD_NAME
     kubectl -n airflow exec -it pods/$AIRFLOW_SCHEDULER_POD_NAME -- airflow dags list -o json > dags.json
     cat dags.json | sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2};?)?)?[mGK]//g" | cat > dags_nocolor.json
+
+    airflow dag_state kit_eval_11_rerun_batch_AE_C002
 
     python -c "if True:
         import json
@@ -451,11 +457,71 @@ into the airflow scheduler pod.
         # Build pattern to identify the jobs you want to run
         import xdev
         pattern = xdev.MultiPattern.coerce([
-            'kit_eval_11_rerun_batch'
-            ..f'kit_ta2_preeval10_pyenv_t{t}*'
-            ..for t in [31, 35]
+            'kit_eval_11_rerun_batch*'
+            #f'kit_ta2_preeval10_pyenv_t{t}*'
+            #for t in [31, 35]
         ])
-        data = json.loads(pathlib.Path('dags_nocolor.json').read_text())
+        # FIXME: the json can be output with an error, need to strip it.
+        text = pathlib.Path('dags_nocolor.json').read_text()
+        data = json.loads(text[86:])
+
+
+        valid_rows = []
+        for item in data:
+            if pattern.match(item['dag_id']):
+                valid_rows.append(item)
+
+
+        if 0:
+            # Query the status of the selected dags
+            import os
+            AIRFLOW_SCHEDULER_POD_NAME = os.environ['AIRFLOW_SCHEDULER_POD_NAME']
+            prefix = f'kubectl -n airflow exec -it pods/{AIRFLOW_SCHEDULER_POD_NAME} -- '
+
+            import base64
+            # easy-to-represent char encoding of the strip ansi pattern
+            pat = base64.b32decode(b'DNOFWKC3GAWTSXL3GEWDG7JIHNNTALJZLV5TCLBSPU5T6KJ7FE7VW3KHJNOQ====').decode('utf8')
+            import re
+            pat = re.compile(pat)
+            from watch.utils.util_yaml import Yaml
+            row_to_states = {}
+            for row in valid_rows:
+                dag_id = row['dag_id']
+                info = ub.cmd(prefix + f'airflow dags list-runs -d {dag_id} -o yaml', shell=True)
+                text = pat.sub('', info['out'])
+                states = Yaml.loads(text)
+                print(ub.urepr(states))
+                row_to_states[dag_id] = states
+
+            orig_row = {r['dag_id']: r for r in valid_rows}
+            dag_info_rows = []
+            for dag_id, states in row_to_states.items():
+                row = orig_row[dag_id]
+                if len(states) == 0:
+                    row['status'] = None
+                else:
+                    mrs = states[-1]
+                    row['status'] = mrs['state']
+                    row['execution_date'] = mrs['execution_date']
+                    row['run_id'] = mrs['run_id']
+                    row['start_date'] = mrs['start_date']
+                    row['end_date'] = mrs['end_date']
+                dag_info_rows.append(row)
+
+            import pandas as pd
+            df = pd.DataFrame(dag_info_rows)
+            import rich
+            rich.print(df)
+
+            num_need_run = pd.isna(df['status']).sum()
+            num_running = (df['status'] == 'running').sum()
+            print(f'num_need_run={num_need_run}')
+            print(f'num_running={num_running}')
+
+        import pandas as pd
+        df = pd.DataFrame(valid_rows)
+        import rich
+        rich.print(df)
 
         # Build cmd-queue with the commands to execute
         queue = cmd_queue.Queue.create(backend='serial')

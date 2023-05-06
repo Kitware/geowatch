@@ -89,6 +89,10 @@ python -m watch.cli.prepare_ta2_dataset \
     --max_products_per_region=10 \
     --backend=serial --run=1
 
+# Note: Depending on the size of the region / number of available images /
+# number of workers, this command can take a LOT of memory. This example is
+# fairly tame, but if your system has low memory you may need to dial down some
+# parameters.
 
 BAS_MODEL_FPATH=$DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
 
