@@ -1912,22 +1912,29 @@ python -m watch.mlops.schedule_evaluation --params="
         bas_pxl.time_sampling:
             - soft4
         bas_poly.thresh:
+            - 0.1
+            - 0.275
             - 0.3
+            - 0.325
             - 0.35
+            - 0.375
             - 0.4
+            - 0.5
         bas_poly.time_thresh:
             - 0.8
+            - 0.5
         bas_poly.inner_window_size:
             - 1y
             #- null
         bas_poly.inner_agg_fn:
             - mean
+            - max
         bas_poly.norm_ord:
             - inf
         bas_poly.moving_window_size:
             - null
             - 1
-            - 2
+            #- 2
         bas_poly.poly_merge_method:
             - 'v2'
         bas_poly.polygon_simplify_tolerance:
