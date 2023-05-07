@@ -22,6 +22,7 @@ import kwimage
 import os
 import ubelt as ub
 import subprocess
+import functools
 import retry
 
 
@@ -59,6 +60,14 @@ GDAL_VIRTUAL_FILESYSTEM_PREFIX = '/vsi'
 #     {'prefix': 'vsisparse', 'type': None},
 #     {'prefix': 'vsicrypt', 'type': None},
 # ]
+
+
+@functools.cache
+def _import_gdal():
+    from osgeo import gdal
+    if getattr(gdal, '_UserHasSpecifiedIfUsingExceptions', lambda: False)():
+        gdal.UseExceptions()
+    return gdal
 
 
 class DummyLogger:
@@ -952,7 +961,7 @@ def list_gdal_drivers():
         >>> print('drivers = {}'.format(ub.urepr(drivers, nl=1)))
         >>> assert ('GTiff', 'GeoTIFF', ['tif', 'tiff']) in drivers
     """
-    from osgeo import gdal
+    gdal = _import_gdal()
     result = []
     for idx in range(gdal.GetDriverCount()):
         driver = gdal.GetDriver(idx)
@@ -1135,7 +1144,7 @@ class GdalDataset(ub.NiceRepr):
         """
         Create a new dataset
         """
-        from osgeo import gdal
+        gdal = _import_gdal()
         _path = os.fspath(path)
 
         if isinstance(mode, str):
@@ -1186,7 +1195,7 @@ class GdalDataset(ub.NiceRepr):
         """
         Ensures the underlying object is a gdal dataset.
         """
-        from osgeo import gdal
+        gdal = _import_gdal()
         import pathlib
         if mode is None:
             mode = gdal.GA_ReadOnly
@@ -1273,7 +1282,7 @@ class GdalDataset(ub.NiceRepr):
         #                showRAT=True, showColorTable=True, listMDD=False,
         #                showFileList=True, allMetadata=False,
         #                extraMDDomains=None, wktFormat=None)
-        from osgeo import gdal
+        gdal = _import_gdal()
         info = gdal.Info(self, format='json', allMetadata=True, listMDD=True)
         # info = gdal.Info(self)
         # info = gdal.Info(self, allMetadata=True, listMDD=True)

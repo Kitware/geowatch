@@ -2816,12 +2816,12 @@ DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
-DATASET_CODE=Drop6-MedianSummer10GSD
+DATASET_CODE=Drop6-NoWinterMedian10GSD
 KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
-TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_L_split6.kwcoco.zip
-VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_L_split6.kwcoco.zip
-CHANNELS="(L8,S2):(blue|green|red|nir),(WV):(blue|green|red),(WV,WV1):pan,(S2):(water|forest|field|impervious|barren|landcover_hidden.0:32)"
-EXPERIMENT_NAME=Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V54
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_I2L_split6.kwcoco.zip
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_I2L_split6.kwcoco.zip
+CHANNELS="(L8,S2):(blue|green|red|nir),(WV):(blue|green|red),(WV,WV1):pan,(S2):(water|forest|field|impervious|barren|landcover_hidden.0:32,invariants:16)"
+EXPERIMENT_NAME=Drop6_TCombo1Year_BAS_10GSD_V2_landcover_invar_split6_V56
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=3e-6
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
@@ -2848,7 +2848,7 @@ data:
     channels               : '$CHANNELS'
     min_spacetime_weight   : 0.6
     temporal_dropout       : 0.1
-    modality_dropout       : 0.5
+    modality_dropout       : 0.2
     mask_low_quality       : False
     mask_samecolor_method  : None
     observable_threshold   : 0.0
@@ -2909,5 +2909,4 @@ torch_globals:
 
 initializer:
     init: $DVC_EXPT_DPATH/models/fusion/Drop6-MedianSummer10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V54/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V54_epoch359_step10440.pt
-    #init: $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
 "

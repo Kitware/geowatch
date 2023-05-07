@@ -449,6 +449,10 @@ into the airflow scheduler pod.
 
     airflow dag_state kit_eval_11_rerun_batch_AE_C002
 
+    # Note:
+    # This idea will be further developed in
+    ~/code/watch-smartflow-dags/monitor_dags.py
+
     python -c "if True:
         import json
         import pathlib

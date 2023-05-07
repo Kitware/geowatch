@@ -32,6 +32,9 @@ class PrepareTimeAverages(CMDQueueConfig):
     true_site_dpath = scfg.Value(None)
     true_region_dpath = scfg.Value(None)
 
+    skip_existing = scfg.Value(True)
+    cache = scfg.Value(True)
+
 
 def _find_valid_regions():
     import watch
@@ -69,6 +72,8 @@ def main(cmdline=1, **kwargs):
         from watch.utils.util_yaml import Yaml
         all_regions = Yaml.coerce(config.regions)
 
+    from watch.mlops.pipeline_nodes import ProcessNode
+
     rich.print('all_regions = {}'.format(ub.urepr(all_regions, nl=1)))
 
     # time_duration = '1year'
@@ -89,6 +94,14 @@ def main(cmdline=1, **kwargs):
     # Need these for landcover
     other_s2_bands = '|coastal|cirrus|B05|B06|B07|B8A|B09'
 
+    def submit_job_step(node, depends=None, name=None):
+        if config.skip_existing and node.outputs_exist:
+            job = None
+        else:
+            node.cache = config.cache
+            job = queue.submit(node.final_command(), depends=depends, name=name)
+        return job
+
     for region in all_regions:
 
         fmtdict = dict(
@@ -103,7 +116,7 @@ def main(cmdline=1, **kwargs):
             WORKERS=config.combine_workers,
             TRUE_SITE_DPATH=config.true_site_dpath,
             CHANNELS='red|green|blue|nir|swir16|swir22|pan' + other_s2_bands,
-            remove_seasons_str=','.join(config.remove_seasons),
+            remove_seasons_str=None if not config.remove_seasons else ','.join(config.remove_seasons),
         )
         fmtdict.update(config)
 
@@ -122,29 +135,139 @@ def main(cmdline=1, **kwargs):
                 --assets_dname="raw_bands" \
                 --workers=$WORKERS
             '''), fmtdict)
-        if 1:
-            code = subtemplate('test -e "$OUTPUT_BUNDLE_DPATH/imgonly-${REGION}.kwcoco.zip" || ', fmtdict) + code
-        combine_job = queue.submit(code, name=f'combine-time-{region}')
+        node = ProcessNode(
+            command=code,
+            out_paths={
+                'kwcoco_fpath': subtemplate('$OUTPUT_BUNDLE_DPATH/imgonly-${REGION}.kwcoco.zip', fmtdict),
+            },
+            _no_outarg=True
+        )
+        combine_job = submit_job_step(node, name=f'combine-time-{region}')
 
         if config.reproject:
-            code = subtemplate(
+            code = subtemplate(ub.codeblock(
                 r'''
                 python -m watch add_fields \
                     --src $OUTPUT_BUNDLE_DPATH/imgonly-${REGION}.kwcoco.zip \
-                    --inplace=True
-                ''', fmtdict)
-            field_job = queue.submit(code, depends=[combine_job], name=f'add-fields-{region}')
-            code = subtemplate(
+                    --dst $OUTPUT_BUNDLE_DPATH/imgonly-${REGION}-fielded.kwcoco.zip
+                '''), fmtdict)
+            node = ProcessNode(
+                command=code,
+                out_paths={
+                    'dst': subtemplate('$OUTPUT_BUNDLE_DPATH/imgonly-${REGION}-fielded.kwcoco.zip', fmtdict)
+                },
+                _no_outarg=True
+            )
+            field_job = submit_job_step(node, depends=[combine_job], name=f'add-fields-{region}')
+
+            code = subtemplate(ub.codeblock(
                 r'''
                 python -m watch reproject \
-                    --src $OUTPUT_BUNDLE_DPATH/imgonly-${REGION}.kwcoco.zip \
+                    --src $OUTPUT_BUNDLE_DPATH/imgonly-${REGION}-fielded.kwcoco.zip \
                     --dst $OUTPUT_BUNDLE_DPATH/imganns-${REGION}.kwcoco.zip \
                     --status_to_catname="positive_excluded: positive" \
                     --site_models="$TRUE_SITE_DPATH/${REGION}_*.geojson"
-                ''', fmtdict)
-            queue.submit(code, depends=[field_job], name=f'reproject-ann-{region}')
+                '''), fmtdict)
+            node = ProcessNode(
+                command=code,
+                out_paths={
+                    'dst': subtemplate('$OUTPUT_BUNDLE_DPATH/imganns-${REGION}.kwcoco.zip', fmtdict)
+                },
+                _no_outarg=True
+            )
+            field_job = submit_job_step(node, depends=[field_job], name=f'reproject-ann-{region}')
 
     config.run_queue(queue)
+
+
+SUMMER_CONFIG = """
+
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
+SSD_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=ssd)
+python -m watch.cli.queue_cli.prepare_time_combined_dataset \
+    --regions="[
+            # T&E Regions
+            AE_R001, BH_R001, BR_R001, BR_R002, BR_R004, BR_R005, CH_R001,
+            KR_R001,
+            KR_R002, LT_R001, NZ_R001, US_R001, US_R004, US_R005,
+            US_R006, US_R007,
+            # iMerit Regions
+            AE_C001,
+            AE_C002,
+            AE_C003, PE_C001, QA_C001, SA_C005, US_C000, US_C010,
+            US_C011, US_C012,
+    ]" \
+    --input_bundle_dpath=$SSD_DVC_DATA_DPATH/Drop6 \
+    --output_bundle_dpath=$DVC_DATA_DPATH/Drop6-NoWinterMedian10GSD \
+    --true_site_dpath=$DVC_DATA_DPATH/annotations/drop6_hard_v1/site_models \
+    --true_region_dpath=$DVC_DATA_DPATH/annotations/drop6_hard_v1/region_models \
+    --spatial_tile_size=256 \
+    --merge_method=median \
+    --remove_seasons=winter \
+    --tmux_workers=2 \
+    --time_window=1y \
+    --combine_workers=4 \
+    --resolution=10GSD \
+    --backend=tmux \
+    --run=1
+
+# Drop 6
+export CUDA_VISIBLE_DEVICES="0,1"
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
+BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6-NoWinterMedian10GSD
+python -m watch.cli.prepare_teamfeats \
+    --base_fpath "$BUNDLE_DPATH"/imganns-*[0-9].kwcoco.zip \
+    --expt_dvc_dpath="$DVC_EXPT_DPATH" \
+    --with_landcover=1 \
+    --with_invariants2=1 \
+    --with_materials=0 \
+    --with_depth=0 \
+    --with_cold=0 \
+    --skip_existing=1 \
+    --assets_dname=teamfeats \
+    --gres=0,1 --tmux_workers=4 --backend=tmux --run=1
+
+# DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+# python -m watch.cli.prepare_splits \
+#     --base_fpath=$DVC_DATA_DPATH/Drop6-NoWinterMedian10GSD/combo_imganns*_L*.kwcoco.zip \
+#     --constructive_mode=True \
+#     --suffix=L \
+#     --backend=tmux --workers=6 \
+#     --run=1
+
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+python -m watch.cli.prepare_splits \
+    --base_fpath=$DVC_DATA_DPATH/Drop6-NoWinterMedian10GSD/combo_imganns*_I2L*.kwcoco.zip \
+    --constructive_mode=True \
+    --suffix=I2L \
+    --backend=tmux --tmux_workers=6 \
+    --run=1
+
+# DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+# python -m watch.cli.prepare_splits \
+#     --base_fpath=$DVC_DATA_DPATH/Drop6-NoWinterMedian10GSD/imganns-*.kwcoco.zip \
+#     --constructive_mode=True \
+#     --suffix=rawbands \
+#     --backend=tmux --tmux_workers=6 \
+#     --run=1
+
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
+TRUE_SITE_DPATH=$DVC_DATA_DPATH/annotations/drop6_hard_v1/site_models
+OUTPUT_BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6-NoWinterMedian10GSD
+geowatch reproject \
+    --src $DVC_DATA_DPATH/Drop6-NoWinterMedian10GSD/data_vali_I2L_split6.kwcoco.zip \
+    --inplace=True \
+    --status_to_catname="positive_excluded: positive" \
+    --site_models=$TRUE_SITE_DPATH
+geowatch reproject \
+    --src $DVC_DATA_DPATH/Drop6-NoWinterMedian10GSD/data_train_I2L_split6.kwcoco.zip \
+    --inplace=True \
+    --status_to_catname="positive_excluded: positive" \
+    --site_models=$TRUE_SITE_DPATH
+
+"""
 
 
 if __name__ == '__main__':
@@ -152,92 +275,8 @@ if __name__ == '__main__':
 
     CommandLine:
 
-        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-        python ~/code/watch/dev/poc/prepare_time_combined_dataset.py \
-            --regions="[
-                    # T&E Regions
-                    AE_R001, BH_R001, BR_R001, BR_R002, BR_R004, BR_R005, CH_R001,
-                    KR_R001,
-                    KR_R002, LT_R001, NZ_R001, US_R001, US_R004, US_R005,
-                    US_R006, US_R007,
-                    # # iMerit Regions
-                    AE_C001,
-                    AE_C002,
-                    AE_C003, PE_C001, QA_C001, SA_C005, US_C000, US_C010,
-                    US_C011, US_C012,
-            ]" \
-            --input_bundle_dpath=$DVC_DATA_DPATH/Drop6 \
-            --output_bundle_dpath=$DVC_DATA_DPATH/Drop6-MedianSummer10GSD \
-            --true_site_dpath=$DVC_DATA_DPATH/annotations/drop6_hard_v1/site_models \
-            --true_region_dpath=$DVC_DATA_DPATH/annotations/drop6_hard_v1/region_models \
-            --spatial_tile_size=256 \
-            --merge_method=median \
-            --remove_seasons=spring,fall,winter \
-            --tmux_workers=2 \
-            --time_window=1y \
-            --combine_workers=4 \
-            --resolution=10GSD \
-            --backend=tmux \
-            --run=1
-
-        # Drop 6
-        export CUDA_VISIBLE_DEVICES="0,1"
-        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-        DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
-        BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6-MedianSummer10GSD
-        python -m watch.cli.prepare_teamfeats \
-            --base_fpath "$BUNDLE_DPATH"/imganns-*[0-9].kwcoco.zip \
-            --expt_dvc_dpath="$DVC_EXPT_DPATH" \
-            --with_landcover=1 \
-            --with_invariants2=1 \
-            --with_materials=0 \
-            --with_depth=0 \
-            --with_cold=0 \
-            --skip_existing=1 \
-            --assets_dname=teamfeats \
-            --gres=0, --tmux_workers=1 --backend=tmux --run=1
-
-        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-        python -m watch.cli.prepare_splits \
-            --base_fpath=$DVC_DATA_DPATH/Drop6-MedianSummer10GSD/combo_imganns*_L*.kwcoco.zip \
-            --constructive_mode=True \
-            --suffix=L \
-            --backend=tmux --workers=6 \
-            --run=1
-
-        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-        python -m watch.cli.prepare_splits \
-            --base_fpath=$DVC_DATA_DPATH/Drop6-MedianSummer10GSD/combo_imganns*_I2L*.kwcoco.zip \
-            --constructive_mode=True \
-            --suffix=I2L \
-            --backend=tmux --tmux_workers=6 \
-            --run=1
-
-        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-        python -m watch.cli.prepare_splits \
-            --base_fpath=$DVC_DATA_DPATH/Drop6-MedianSummer10GSD/imganns-*.kwcoco.zip \
-            --constructive_mode=True \
-            --suffix=rawbands \
-            --backend=tmux --tmux_workers=6 \
-            --run=1
-
-        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-        DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
-        TRUE_SITE_DPATH=$DVC_DATA_DPATH/annotations/drop6_hard_v1/site_models
-        OUTPUT_BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2
-        geowatch reproject \
-            --src $DVC_DATA_DPATH/Drop6-MedianSummer10GSD/data_vali_L_split6.kwcoco.zip \
-            --dst $DVC_DATA_DPATH/Drop6-MedianSummer10GSD/data_vali_L_split6.kwcoco.zip \
-            --status_to_catname="positive_excluded: positive" \
-            --site_models=$TRUE_SITE_DPATH
-        geowatch reproject \
-            --src $DVC_DATA_DPATH/Drop6-MedianSummer10GSD/data_train_L_split6.kwcoco.zip \
-            --dst $DVC_DATA_DPATH/Drop6-MedianSummer10GSD/data_train_L_split6.kwcoco.zip \
-            --status_to_catname="positive_excluded: positive" \
-            --site_models=$TRUE_SITE_DPATH
-
         DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-        python ~/code/watch/dev/poc/prepare_time_combined_dataset.py \
+        python watch.cli.queue_cli.prepare_time_combined_dataset.py \
             --regions="[
                     # T&E Regions
                     AE_R001, BH_R001, BR_R001, BR_R002, BR_R004, BR_R005, CH_R001,
