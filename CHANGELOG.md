@@ -15,6 +15,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * The `fusion.predict` script can now output predictions in cog or png format
 * Added transient labels to heuristics
 * Add `rescale_nans` param to MultimodalTransformer.
+* Add `cooldown` argument to coco align script to specify time between tries.
 
 ### Changed
 
@@ -27,6 +28,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Now using scriptconfig in fusion.predict
 * Reworked how submatrices behave in mlops, added submatrices1, submatrices2. Concept might need refinement.
 * Update site / region schemas
+
 
 ### Fixed
 * safer no longer uses `temp_file` on windows
