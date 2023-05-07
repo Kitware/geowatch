@@ -268,7 +268,7 @@ class CocoAlignGeotiffConfig(scfg.DataConfig):
             commands before stopping.
             '''), alias=['tries'])
 
-    cooldown = scfg.Value(10, help='seconds between tries after a failed attempt'),
+    cooldown = scfg.Value(10, help='seconds between tries after a failed attempt')
 
     # TODO: change this name to just align-method or something
     image_timeout = scfg.Value('8hours', help=ub.paragraph(
@@ -491,7 +491,8 @@ def main(cmdline=True, **kw):
         >>> dst = (dpath / 'align_bundle2').delete().ensuredir()
         >>> # Create a dummy region file to crop to.
         >>> first_img = coco_dset.images().take([0]).coco_images[0]
-        >>> from osgeo import gdal
+        >>> from watch.utils import util_gdal
+        >>> gdal = util_gdal.import_gdal()
         >>> first_fpath = first_img.primary_image_filepath()
         >>> geo_poly = kwimage.Polygon.coerce(gdal.Info(first_fpath, format='json')['wgs84Extent'])
         >>> region_shape = kwimage.Polygon.random(n=8, convex=False, rng=3)

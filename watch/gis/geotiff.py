@@ -207,7 +207,8 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         tf = info['wgs84_to_wld']
     """
     from watch.utils import util_gdal
-    from osgeo import gdal
+    gdal = util_gdal.import_gdal()
+    # from osgeo import gdal
     from osgeo import osr
     import affine
     import kwimage
@@ -823,7 +824,8 @@ def geotiff_filepath_info(gpath, fast=True):
             # the original naming convention
             #
             # this opens the image to check for that case as a fallback
-            from osgeo import gdal
+            from watch.utils import util_gdal
+            gdal = util_gdal.import_gdal()
             info = gdal.Info(gpath, format='json')
             if len(info['bands']) == 3:
                 # TODO sometimes colorInterpretation is stripped, but it's still RGB
