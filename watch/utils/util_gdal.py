@@ -1159,9 +1159,19 @@ class GdalDataset(ub.NiceRepr):
         self._str_mode = _str_mode
 
     @classmethod
-    def open(cls, path, mode='r', virtual_retries=3):
+    def open(cls, path, mode='r', virtual_retries=3, cooldown=0.1):
         """
-        Create a new dataset
+        Create a new dataset in read or write mode.
+
+        Args:
+            path (str | PathLike): the path or URI to open
+            mode (str): either 'r' for read only or 'w+' for update mode.
+            virtual_retries (int): number of times to attempt to open the
+                dataset when the URI points to a non-local resource
+            cooldown (float): seconds between retry attempts
+
+        Returns:
+            GdalDataset
         """
         gdal = import_gdal()
         _path = os.fspath(path)
@@ -1193,7 +1203,6 @@ class GdalDataset(ub.NiceRepr):
         except Exception:
             import time
             if _path.startswith(GDAL_VIRTUAL_FILESYSTEM_PREFIX):
-                wait_time = 0.1
                 for _ in range(virtual_retries):
                     try:
                         __ref = gdal.Open(_path, mode)
@@ -1201,7 +1210,7 @@ class GdalDataset(ub.NiceRepr):
                             msg = gdal.GetLastErrorMsg()
                             raise RuntimeError(msg + f' for {_path}')
                     except Exception:
-                        time.sleep(wait_time)
+                        time.sleep(cooldown)
                     else:
                         break
             if __ref is None:
@@ -1291,7 +1300,7 @@ class GdalDataset(ub.NiceRepr):
 
     def info(self):
         """
-        Information similar to gdalinfo
+        Information similar to gdalinfo (in json format)
         """
         # https://gdal.org/api/python/osgeo.gdal.html#osgeo.gdal.AsyncReader
         # osgeo.gdal.InfoOptions(options=None, format='text', deserialize=True,
@@ -1324,7 +1333,6 @@ class GdalDataset(ub.NiceRepr):
         References:
             https://gdal.org/user/raster_data_model.html
         """
-
         domain_to_metadata = {}
         for domain in self.GetMetadataDomainList():
             domain_to_metadata[domain] = self.GetMetadata(domain)

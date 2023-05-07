@@ -56,19 +56,6 @@ Notes:
         --geo_preprop=False \
         --include_sensors=WV \
         --keep img
-
-
-TODO:
-    - [ ] Add method for extracting "negative ROIs" that are nearby
-        "positive ROIs".
-
-    - [X] Diagnose and Fix PROJ errors:
-
-        ```
-        ERROR 1: PROJ: proj_create: unrecognized format / unknown name
-        ERROR 1: PROJ: proj_create_from_database: Cannot find proj.db
-        ```
-    - [ ] Rename file to coco_geoalign.py
 """
 import os
 import scriptconfig as scfg
@@ -96,6 +83,13 @@ class AssetExtractConfig(scfg.DataConfig):
             img": only add new ROIs and only new images within those
             ROIs (good for rerunning failed jobs)
             '''))
+
+    corruption_checks = scfg.Value(False, help=ub.paragraph(
+        '''
+        Check for image cache corruption after a "cache hit" to make sure we
+        can read the image and it isn't corrupted. If it is, delete it and
+        reprocess.
+        '''))
 
     include_channels = scfg.Value(None, help=ub.paragraph(
             '''
@@ -255,11 +249,19 @@ class CocoAlignGeotiffConfig(ExtractConfig):
     __command__ = 'align'
     __alias__ = ['coco_align', 'coco_align_geotiff']
 
-    src = scfg.Value('in.geojson.json', help='input dataset to chip')
+    src = scfg.Value('in.geojson.json', help='input dataset to chip', group='inputs')
     dst = scfg.Value(None, help=ub.paragraph(
             '''
             bundle directory or kwcoco json file for the output
-            '''))
+            '''), group='outputs')
+
+    regions = scfg.Value('annots', help=ub.paragraph(
+            '''
+            Strategy for extracting regions, if annots, uses the convex
+            hulls of clustered annotations. Can also be a path to a
+            geojson file to use pre-defined regions.
+            '''), group='inputs')
+    site_summary = scfg.Value(False, help='Crop to site summaries instead')
 
     context_factor = scfg.Value(1.0, help=ub.paragraph(
             '''
@@ -276,14 +278,6 @@ class CocoAlignGeotiffConfig(ExtractConfig):
             '''
             if True, ensure that the regions are convex
             '''))
-
-    regions = scfg.Value('annots', help=ub.paragraph(
-            '''
-            Strategy for extracting regions, if annots, uses the convex
-            hulls of clustered annotations. Can also be a path to a
-            geojson file to use pre-defined regions.
-            '''))
-    site_summary = scfg.Value(False, help='Crop to site summaries instead')
 
     geo_preprop = scfg.Value('auto', help='force if we check geo properties or not')
 
@@ -308,38 +302,6 @@ def main(cmdline=True, **kw):
     """
     Main function for coco_align.
     See :class:``CocoAlignGeotiffConfig` for details
-
-    Ignore:
-        from watch.cli.coco_align import *  # NOQA
-        import kwcoco
-        cmdline = False
-        src = ub.expandpath('~/data/dvc-repos/smart_watch_dvc/drop1/data.kwcoco.json')
-        dst = ub.expandpath('~/data/dvc-repos/smart_watch_dvc/Drop1-Aligned-L1/_test/test.kwcoco.json')
-        regions = ub.expandpath('~/data/dvc-repos/smart_watch_dvc/drop1/region_models/LT_R001.geojson')
-        regions = ub.expandpath('~/data/dvc-repos/smart_watch_dvc/drop1/all_regions.geojson')
-        kw = {
-            'src': src,
-            'dst': dst,
-            'regions': regions,
-            'keep': 'none',
-            'exclude_sensors': ['WV'],
-        }
-
-    Ignore:
-        from watch.cli.coco_align import *  # NOQA
-        import watch
-        dvc_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
-        base_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json'
-        src = base_fpath
-        dst = dvc_dpath / 'Cropped-Drop3-TA1-2022-03-10/data.kwcoco.json'
-        sites = dvc_dpath / 'annotations/site_models/*.geojson'
-        cmdline = 0
-        kw = {
-            'src': src,
-            'dst': dst,
-            'regions': sites,
-            'keep': 'none',
-        }
 
     CommandLine:
         xdoctest -m watch.cli.coco_align main:0
@@ -446,24 +408,24 @@ def main(cmdline=True, **kw):
         >>> assert(all(info['meter_per_pxl'] == 60.0))
 
     Example:
-        >>> # xdoctest: +REQUIRES(--slow)
+        >>> # xdoctest: +REQUIRES(env:SLOW_DOCTEST)
         >>> from watch.cli.coco_align import *  # NOQA
         >>> from watch.demo.smart_kwcoco_demodata import demo_kwcoco_with_heatmaps
+        >>> from watch.utils import util_gdal
         >>> import kwimage
+        >>> import geojson
+        >>> import json
         >>> coco_dset = demo_kwcoco_with_heatmaps(num_videos=2, num_frames=2)
         >>> dpath = ub.Path.appdir('watch/test/coco_align2').ensuredir()
         >>> dst = (dpath / 'align_bundle2').delete().ensuredir()
         >>> # Create a dummy region file to crop to.
         >>> first_img = coco_dset.images().take([0]).coco_images[0]
-        >>> from watch.utils import util_gdal
-        >>> gdal = util_gdal.import_gdal()
         >>> first_fpath = first_img.primary_image_filepath()
-        >>> geo_poly = kwimage.Polygon.coerce(gdal.Info(first_fpath, format='json')['wgs84Extent'])
+        >>> ds = util_gdal.GdalDataset.open(first_fpath)
+        >>> geo_poly = kwimage.Polygon.coerce(ds.info()['wgs84Extent'])
         >>> region_shape = kwimage.Polygon.random(n=8, convex=False, rng=3)
         >>> geo_transform = kwimage.Affine.fit(region_shape.bounding_box().corners(), geo_poly.bounding_box().corners())
         >>> region_poly = region_shape.warp(geo_transform)
-        >>> import geojson
-        >>> import json
         >>> region_feature = geojson.Feature(
         >>>     properties={
         >>>         "type": "region",
@@ -690,7 +652,7 @@ def main(cmdline=True, **kw):
         lazy_commands = []
 
     extract_kwargs = ub.udict(config) & ExtractConfig.__default__.keys()
-    extract_kwargs['tries'] = config['warp_tries']
+    extract_config = ExtractConfig(**extract_kwargs)
 
     for image_overlaps in ub.ProgIter(to_extract, desc='extract ROI videos', verbose=3):
         video_name = image_overlaps['video_name']
@@ -699,15 +661,14 @@ def main(cmdline=True, **kw):
         sub_bundle_dpath = ub.Path(extract_dpath) / video_name
         print('sub_bundle_dpath = {!r}'.format(sub_bundle_dpath))
 
-        extract_kwargs = ExtractConfig(**extract_kwargs)
         new_dset = cube.extract_overlaps(
-            image_overlaps, extract_dpath, new_dset=new_dset, **extract_kwargs
+            image_overlaps, extract_dpath, new_dset=new_dset,
+            extract_config=extract_config,
         )
         if config['hack_lazy']:
             lazy_commands.extend(new_dset)
 
     if config['hack_lazy']:
-
         # Execute the gdal jobs in a single super queue
         import cmd_queue
         # queue = cmd_queue.Queue.create('serial')
@@ -734,7 +695,6 @@ def main(cmdline=True, **kw):
                 # with_textual=False
                 with_textual='auto'
             )
-
         raise Exception('hack_lazy always fails')
 
     kwcoco_extensions.reorder_video_frames(new_dset)
@@ -1105,7 +1065,7 @@ class SimpleDataCube:
 
     @profile
     def extract_overlaps(cube, image_overlaps, extract_dpath, new_dset=None,
-                         **extract_kwargs):
+                         extract_config=None):
         """
         Given a region of interest, extract an aligned temporal sequence
         of data to a specified directory.
@@ -1121,43 +1081,40 @@ class SimpleDataCube:
                 if specified, add extracted images and annotations to this
                 dataset, otherwise create a new dataset.
 
-            **kwargs:
-                see the config
+            extract_config (ExtractConfig):
+                configuration for how to perform the extract task.
 
         Returns:
             kwcoco.CocoDataset: the given or new dataset that was modified
 
         Example:
-            >>> # xdoctest: +REQUIRES(--slow)
+            >>> # xdoctest: +REQUIRES(env:SLOW_DOCTEST)
             >>> from watch.cli.coco_align import *  # NOQA
+            >>> import kwcoco
             >>> cube, region_df = SimpleDataCube.demo(with_region=True)
             >>> extract_dpath = ub.Path.appdir('watch/test/coco_align/demo_extract_overlaps').ensuredir()
             >>> rpc_align_method = 'orthorectify'
             >>> new_dset = kwcoco.CocoDataset()
-            >>> visualize = True
-            >>> img_workers = 32
             >>> to_extract = cube.query_image_overlaps(region_df)
             >>> image_overlaps = to_extract[0]
+            >>> extract_config = ExtractConfig(img_workers=32, visualize=True)
             >>> cube.extract_overlaps(image_overlaps, extract_dpath,
-            >>>                       new_dset=new_dset, visualize=visualize,
-            >>>                       img_workers=img_workers)
+            >>>                       new_dset=new_dset, extract_config=extract_config)
 
         Example:
-            >>> # xdoctest: +REQUIRES(--slow)
+            >>> # xdoctest: +REQUIRES(env:SLOW_DOCTEST)
             >>> from watch.cli.coco_align import *  # NOQA
+            >>> import kwcoco
             >>> cube, region_df = SimpleDataCube.demo(with_region=True, extra=True)
             >>> extract_dpath = ub.Path.appdir('watch/test/coco_align/demo_extract_overlaps2').ensuredir()
             >>> rpc_align_method = 'orthorectify'
-            >>> visualize = True
-            >>> img_workers = 0
             >>> to_extract = cube.query_image_overlaps(region_df)
             >>> new_dset = kwcoco.CocoDataset()
             >>> image_overlaps = to_extract[1]
+            >>> extract_config = ExtractConfig(img_workers=0, visualize=True)
             >>> cube.extract_overlaps(image_overlaps, extract_dpath,
-            >>>                       new_dset=new_dset, visualize=visualize,
-            >>>                       img_workers=img_workers)
-
-            xdev.profile_now(SimpleDataCube.demo)
+            >>>                       new_dset=new_dset,
+            >>>                       extract_config=extract_config)
         """
         from kwcoco.util.util_json import ensure_json_serializable
         import geopandas as gpd
@@ -1168,7 +1125,7 @@ class SimpleDataCube:
         import kwimage
         import pandas as pd
         coco_dset = cube.coco_dset
-        extract_config = ExtractConfig(**extract_kwargs)
+        assert extract_config is not None
 
         datetime_to_gids = image_overlaps['datetime_to_gids']
         space_str = image_overlaps['space_str']
@@ -1375,7 +1332,7 @@ class SimpleDataCube:
                     start_aid=start_aid,
                     local_epsg=local_epsg,
                     other_imgs=other_imgs,
-                    **img_config)
+                    img_config=img_config)
                 job.request_idx = request_idx
                 start_gid = start_gid + 1
                 start_aid = start_aid + len(anns)
@@ -1392,9 +1349,7 @@ class SimpleDataCube:
             lazy_commands = []
 
         from concurrent.futures import TimeoutError
-        for job in image_jobs.as_completed(desc='collect extract jobs',
-                                           progkw=dict(freq=1)):
-
+        for job in image_jobs.as_completed(desc='collect extract jobs'):
             try:
                 new_img, new_anns = job.result(timeout=image_timeout)
             except SkipImage:
@@ -1540,14 +1495,15 @@ def _handle_multiple_images_per_date(coco_dset, gids, local_epsg,
                                      prog, cube, space_region_crs84,
                                      extract_dpath, video_name, iso_time,
                                      space_str, space_region_local):
+    """
+    We got multiple images for the same timestamp.  Im not sure if this is
+    necessary but thig logic attempts to sort them such that the "best" image
+    to use is first.  Ideally gdalwarp would take care of this but I'm not sure
+    it does.
+    """
     import geopandas as gpd
-    import pandas as pd  # NOQA
     from shapely import geometry
     from watch.utils import util_gis
-    # We got multiple images for the same timestamp.  Im not sure
-    # if this is necessary but thig logic attempts to sort them
-    # such that the "best" image to use is first.  Ideally gdalwarp
-    # would take care of this but I'm not sure it does.
     conflict_imges = coco_dset.images(gids)
     sensors = list(conflict_imges.lookup('sensor_coarse', None))
 
@@ -1648,7 +1604,7 @@ def extract_image_job(img,
                       start_aid,
                       local_epsg=None,
                       other_imgs=None,
-                      **kwargs):
+                      img_config=None):
     """
     Threaded worker function for :func:`SimpleDataCube.extract_overlaps`.
 
@@ -1676,10 +1632,7 @@ def extract_image_job(img,
     osr.GetPROJSearchPaths()
     from kwcoco.coco_image import CocoImage
 
-    img_config = ImageExtractConfig(**kwargs)
-
-    rpc_align_method = img_config.rpc_align_method
-    verbose = img_config.verbose
+    assert img_config is not None
 
     if img_config.image_timeout is not None:
         img_config.image_timeout = util_time.coerce_timedelta(img_config.image_timeout).total_seconds()
@@ -1730,8 +1683,8 @@ def extract_image_job(img,
             if obj['geotiff_metadata']['is_rpc']:
                 is_rpc = True
 
-    if is_rpc and rpc_align_method != 'affine_warp':
-        align_method = rpc_align_method
+    if is_rpc and img_config.rpc_align_method != 'affine_warp':
+        align_method = img_config.rpc_align_method
     else:
         align_method = 'affine_warp'
 
@@ -1743,6 +1696,7 @@ def extract_image_job(img,
     # images instead
     asset_jobs = ub.JobPool(mode='thread', max_workers=img_config.aux_workers)
 
+    verbose = img_config.verbose
     aux_verbose = (verbose > 3) or (verbose > 1 and (img_config.aux_workers == 0))
     asset_config = AssetExtractConfig(
         **(ub.udict(img_config) & set(AssetExtractConfig.__default__.keys()))
@@ -1755,7 +1709,7 @@ def extract_image_job(img,
             dst_dpath, space_region, space_box, align_method,
             is_multi_image,
             local_epsg=local_epsg,
-            **asset_config,
+            asset_config=asset_config,
         )
         job_list.append(job)
 
@@ -1991,12 +1945,14 @@ def _aligncrop(obj_group,
                align_method,
                is_multi_image,
                local_epsg=None,
-               **kwargs):
+               asset_config=None):
     import watch
     import kwcoco
     from watch.utils import util_gdal
+    from os.path import join
 
-    asset_config = AssetExtractConfig(**kwargs)
+    assert asset_config is not None
+    # asset_config = AssetExtractConfig(**kwargs)
     verbose = asset_config.verbose
 
     # NOTE: https://github.com/dwtkns/gdal-cheat-sheet
@@ -2032,8 +1988,7 @@ def _aligncrop(obj_group,
     input_gnames = [obj.get('file_name', None) for obj in obj_group]
     assert all(n is not None for n in input_gnames)
 
-    # Cant use Path because it strips http:// to http:/
-    from os.path import join
+    # Must use join over pathlib because Path strips http:// to http:/
     input_gpaths = [join(bundle_dpath, n) for n in input_gnames]
 
     dst = {
@@ -2048,11 +2003,10 @@ def _aligncrop(obj_group,
     needs_recompute = not (already_exists and asset_config.keep in {'img', 'roi-img'})
 
     if not needs_recompute:
-        DOUBLE_CHECK = 0
-        if DOUBLE_CHECK:
+        if asset_config.corruption_checks:
             # Sometimes the data will exist, but it's bad data. Check for this.
             try:
-                ref = util_gdal.GdalOpen(dst_gpath, mode='r')
+                ref = util_gdal.GdalDataset.open(dst_gpath, mode='r')
                 ref
             except RuntimeError:
                 # Data is likely corrupted
@@ -2108,9 +2062,6 @@ def _aligncrop(obj_group,
     # Uncomment to suppress warnings for debug purposes
     #
     # error_logfile = '/dev/null'
-
-    # TODO: add a timeout argument to the gdal calls and pass down the asset
-    # timeout.
 
     # Note: these methods take care of retries and checking that the
     # data is valid.
@@ -2284,7 +2235,6 @@ class SkipImage(Exception):
     ...
 
 
-__config__ = CocoAlignGeotiffConfig
 __config__ = CocoAlignGeotiffConfig
 
 
