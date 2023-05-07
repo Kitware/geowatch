@@ -93,6 +93,7 @@ class AssetExtractConfig(scfg.DataConfig):
     exclude_channels = None
     force_nodata = None
     tries = 2
+    cooldown = 10  # seconds
     asset_timeout = None
     force_min_gsd  =  None
     hack_lazy = False
@@ -110,6 +111,7 @@ class ImageExtractConfig(scfg.DataConfig):
     exclude_channels = None
     force_nodata = None
     tries = 2
+    cooldown = 10  # seconds
     image_timeout = None
     asset_timeout = None
     force_min_gsd  =  None
@@ -136,6 +138,7 @@ class ExtractConfig(scfg.DataConfig):
     include_channels = None
     exclude_channels = None
     tries = 2
+    cooldown = 10  # seconds
     image_timeout = None
     asset_timeout = None
     force_nodata = None
@@ -258,11 +261,14 @@ class CocoAlignGeotiffConfig(scfg.DataConfig):
             propogated
             '''))
     max_frames = scfg.Value(None, help=None)
+
     warp_tries = scfg.Value(2, help=ub.paragraph(
             '''
             The maximum number of times to retry failed gdal warp
             commands before stopping.
-            '''))
+            '''), alias=['tries'])
+
+    cooldown = scfg.Value(10, help='seconds between tries after a failed attempt'),
 
     # TODO: change this name to just align-method or something
     image_timeout = scfg.Value('8hours', help=ub.paragraph(
@@ -804,7 +810,7 @@ def main(cmdline=True, **kw):
     return rerooted_dataset
 
 
-class SimpleDataCube(object):
+class SimpleDataCube:
     """
     Given a CocoDataset containing geotiffs, provide a simple API to extract a
     region in some coordinate space.
@@ -2099,7 +2105,7 @@ def _aligncrop(obj_group,
     needs_recompute = not (already_exists and asset_config.keep in {'img', 'roi-img'})
 
     if not needs_recompute:
-        DOUBLE_CHECK = 1
+        DOUBLE_CHECK = 0
         if DOUBLE_CHECK:
             # Sometimes the data will exist, but it's bad data. Check for this.
             try:
@@ -2194,14 +2200,19 @@ def _aligncrop(obj_group,
             # what GDAL computes at the time of warping
             force_spatial_res = asset_config.force_min_gsd
 
+    cooldown = asset_config.cooldown
+    gdal_verbose = 0 if verbose < 2 else verbose
+
     if len(input_gpaths) > 1:
         in_fpaths = input_gpaths
         commands = util_gdal.gdal_multi_warp(
             in_fpaths, out_fpath, space_box=space_box,
             local_epsg=local_epsg, rpcs=rpcs,
-            nodata=nodata, tries=asset_config.tries,
+            nodata=nodata,
+            tries=asset_config.tries,
+            cooldown=cooldown,
             error_logfile=error_logfile,
-            verbose=0 if verbose < 2 else verbose,
+            verbose=gdal_verbose,
             force_spatial_res=force_spatial_res,
             eager=not asset_config.hack_lazy,
         )
@@ -2212,8 +2223,9 @@ def _aligncrop(obj_group,
             space_box=space_box, local_epsg=local_epsg,
             rpcs=rpcs, nodata=nodata,
             tries=asset_config.tries,
+            cooldown=cooldown,
             error_logfile=error_logfile,
-            verbose=0 if verbose < 2 else verbose,
+            verbose=gdal_verbose,
             force_spatial_res=force_spatial_res,
             eager=not asset_config.hack_lazy,
         )

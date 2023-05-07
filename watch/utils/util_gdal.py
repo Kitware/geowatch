@@ -291,7 +291,8 @@ class GDalCommandBuilder:
 
 
 def gdal_single_translate(in_fpath, out_fpath, pixel_box=None, blocksize=256,
-                          compress='DEFLATE', tries=1, verbose=0, eager=True):
+                          compress='DEFLATE', tries=1, cooldown=1, verbose=0,
+                          eager=True):
     """
     Crops geotiffs using pixels
 
@@ -307,6 +308,8 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box=None, blocksize=256,
         compress (str): gdal compression
 
         verbose (int): verbosity level
+
+        cooldown (int): number of seconds to wait (i.e. "cool-down") between tries
 
         eager (bool):
             if True, executes the command, if False returns a list of all the
@@ -394,7 +397,8 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box=None, blocksize=256,
 
     if eager:
         _execute_gdal_command_with_checks(
-            gdal_translate_command, tmp_fpath, tries=tries, verbose=verbose)
+            gdal_translate_command, tmp_fpath, tries=tries, cooldown=cooldown,
+            verbose=verbose)
         os.rename(tmp_fpath, out_fpath)
     else:
         commands = [
@@ -421,6 +425,7 @@ def gdal_single_warp(in_fpath,
                      verbose=0,
                      force_spatial_res=None,
                      eager=True,
+                     cooldown=1,
                      use_tempfile=True):
     r"""
     Wrapper around gdalwarp
@@ -469,6 +474,8 @@ def gdal_single_warp(in_fpath,
             if True, executes the command, if False returns a list of all the
             bash commands that would be executed, suitable for use in a command
             queue.
+
+        cooldown (int): number of seconds to wait (i.e. "cool-down") between tries
 
     Returns:
         None | List[str]:
@@ -672,7 +679,8 @@ def gdal_single_warp(in_fpath,
     # Execute the command with checks to ensure gdal doesnt fail
     if eager:
         _execute_gdal_command_with_checks(
-            gdal_warp_command, dst_fpath, tries=tries, verbose=verbose)
+            gdal_warp_command, dst_fpath, tries=tries, verbose=verbose,
+            cooldown=cooldown)
         if use_tempfile:
             os.rename(tmp_out_fpath, out_fpath)
     else:
@@ -684,8 +692,8 @@ def gdal_single_warp(in_fpath,
         return commands
 
 
-def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, blocksize=256,
-                    compress='DEFLATE', error_logfile=None,
+def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, cooldown=1,
+                    blocksize=256, compress='DEFLATE', error_logfile=None,
                     _intermediate_vrt=False, verbose=0,
                     return_intermediate=False, force_spatial_res=None,
                     eager=True, **kwargs):
@@ -805,6 +813,7 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, blocksize=256,
     single_warp_kwargs['compress'] = compress
     single_warp_kwargs['blocksize'] = blocksize
     single_warp_kwargs['tries'] = tries
+    single_warp_kwargs['cooldown'] = cooldown
     single_warp_kwargs['nodata'] = nodata
     single_warp_kwargs['verbose'] = verbose
     single_warp_kwargs['error_logfile'] = error_logfile
@@ -876,7 +885,8 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, blocksize=256,
 
     if eager:
         _execute_gdal_command_with_checks(
-            gdal_merge_cmd, tmp_out_fpath, tries=tries, verbose=verbose)
+            gdal_merge_cmd, tmp_out_fpath, tries=tries, cooldown=cooldown,
+            verbose=verbose)
     else:
         commands.append(gdal_merge_cmd)
 
@@ -885,7 +895,8 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, blocksize=256,
     tmp_out_fpath2 = ub.augpath(out_fpath, prefix='.tmpcog.')
     _cmd = gdal_single_translate(tmp_out_fpath, tmp_out_fpath2,
                                  compress=compress, blocksize=blocksize,
-                                 verbose=verbose, eager=eager)
+                                 verbose=verbose, eager=eager, tries=tries,
+                                 cooldown=cooldown)
     if eager:
         ub.Path(tmp_out_fpath).delete()
         os.rename(tmp_out_fpath2, out_fpath)
@@ -898,8 +909,9 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, blocksize=256,
         return commands
 
 
-def _execute_gdal_command_with_checks(command, out_fpath, tries=1, shell=False,
-                                      check_after=True, verbose=0):
+def _execute_gdal_command_with_checks(command, out_fpath, tries=1, cooldown=1,
+                                      shell=False, check_after=True,
+                                      verbose=0):
     """
     Given a gdal command and the expected file that it should produce
     try to execute a few times and check that it produced a valid result.
@@ -920,7 +932,7 @@ def _execute_gdal_command_with_checks(command, out_fpath, tries=1, shell=False,
         logger = DummyLogger()
         got = retry.api.retry_call(
             _execute_command,
-            tries=tries, delay=1, exceptions=(
+            tries=tries, delay=cooldown, exceptions=(
                 subprocess.CalledProcessError, FileNotFoundError,
                 RuntimeError),
             logger=logger)
