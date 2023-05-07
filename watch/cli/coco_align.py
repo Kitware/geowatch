@@ -2018,7 +2018,7 @@ def _aligncrop(obj_group,
                 ref = None
 
     if not needs_recompute:
-        if verbose:
+        if verbose > 2:
             print('cache hit dst = {!r}'.format(dst))
         return dst
 
