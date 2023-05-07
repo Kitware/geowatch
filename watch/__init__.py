@@ -51,7 +51,7 @@ def _import_troublesome_module(modname):
     if modname == 'gdal':
         from osgeo import gdal as module
         gdal = module
-        if getattr(gdal, '_UserHasSpecifiedIfUsingExceptions', lambda: False)():
+        if not getattr(gdal, '_UserHasSpecifiedIfUsingExceptions', lambda: False)():
             gdal.UseExceptions()
     elif modname == 'pyproj':
         import pyproj as module

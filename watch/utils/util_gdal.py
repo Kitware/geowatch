@@ -62,12 +62,20 @@ GDAL_VIRTUAL_FILESYSTEM_PREFIX = '/vsi'
 # ]
 
 
-# @functools.cache
+@functools.cache
 def import_gdal():
     from osgeo import gdal
-    if getattr(gdal, '_UserHasSpecifiedIfUsingExceptions', lambda: False)():
+    if not getattr(gdal, '_UserHasSpecifiedIfUsingExceptions', lambda: False)():
         gdal.UseExceptions()
     return gdal
+
+
+@functools.cache
+def import_osr():
+    from osgeo import osr
+    if not getattr(osr, '_UserHasSpecifiedIfUsingExceptions', lambda: False)():
+        osr.UseExceptions()
+    return osr
 
 
 class DummyLogger:
@@ -83,8 +91,7 @@ def _demo_geoimg_with_nodata():
 
     """
     import numpy as np
-    from osgeo import osr
-    # gdal.UseExceptions()
+    osr = import_osr()
 
     # Make a dummy geotiff
     imdata = kwimage.grab_test_image('airport')
