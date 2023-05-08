@@ -334,9 +334,9 @@ def main(cmdline=True, **kw):
         >>> #
         >>> # Create arguments to the script
         >>> dpath = ub.Path.appdir('watch/test/coco_align').ensuredir()
-        >>> dst = ub.ensuredir((dpath, 'align_bundle1'))
-        >>> ub.delete(dst)
-        >>> dst = ub.ensuredir(dst)
+        >>> dst = (dpath / 'align_bundle1').ensuredir()
+        >>> dst.delete()
+        >>> dst.ensuredir()
         >>> kw = {
         >>>     'src': coco_dset,
         >>>     'dst': dst,

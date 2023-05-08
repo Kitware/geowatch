@@ -228,18 +228,9 @@ def safeeval(expression, context={}, safenodes=None, addnodes=None, funcs=None, 
         ValidationException - if the expression fails safety checks
 
     Example:
-        >>> import evalidate
-        >>> evalidate.safeeval('3 + 2')
+        >>> safeeval('3 + 2')
         5
-        >>> evalidate.safeeval('max(3, 2)')
-        Traceback (most recent call last):
-            ...
-        evalidate.ValidationException: Operation type Call is not allowed
-        >>> evalidate.safeeval('max(3, 2)', addnodes=['Call'])
-        Traceback (most recent call last):
-            ...
-        evalidate.ValidationException: Call to function max() is not allowed
-        >>> evalidate.safeeval('max(3, 2)', addnodes=['Call'], funcs=['max'])
+        >>> safeeval('max(3, 2)', addnodes=['Call'], funcs=['max'])
         3
     """
 

@@ -25,7 +25,7 @@ python -m watch.cli.prepare_ta2_dataset \
     --requester_pays=False \
     --fields_workers=8 \
     --convert_workers=8 \
-    --align_workers=2 \
+    --align_workers=4 \
     --align_aux_workers=0 \
     --ignore_duplicates=1 \
     --separate_region_queues=1 \
@@ -39,7 +39,7 @@ python -m watch.cli.prepare_ta2_dataset \
     --force_nodata=-9999 \
     --hack_lazy=True \
     --backend=tmux \
-    --tmux_workers=10 \
+    --tmux_workers=4 \
     --run=1
 
 # ~/code/watch/dev/poc/prepare_time_combined_dataset.py

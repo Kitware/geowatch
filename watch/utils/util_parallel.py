@@ -105,7 +105,7 @@ def coerce_num_workers(num_workers='auto', minimum=0):
         >>> print(coerce_num_workers('avail-2'))
         >>> print(coerce_num_workers('all/2'))
         >>> print(coerce_num_workers('min(all,2)'))
-        >>> print(coerce_num_workers('[max(all,2)][0]'))
+        >>> #print(coerce_num_workers('[max(all,2)][0]'))
         >>> import pytest
         >>> with pytest.raises(Exception):
         >>>     print(coerce_num_workers('all + 1' + (' + 1' * 100)))

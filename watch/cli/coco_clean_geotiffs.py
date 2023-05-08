@@ -124,7 +124,7 @@ class CleanGeotiffConfig(scfg.DataConfig):
         to check it again.
         '''))
 
-    export_bad_fpath = scfg.Value(False, help='if True, export paths to bad files to this newline separated file, also works in dry mode')
+    export_bad_fpath = scfg.Value(None, help='if True, export paths to bad files to this newline separated file, also works in dry mode')
 
     dry = scfg.Value(False, help='if True, only do a dry run. Report issues but do not fix them')
 
