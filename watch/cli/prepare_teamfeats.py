@@ -393,6 +393,7 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
             fr'''
             python -m watch.tasks.cold.predict \
                 --coco_fpath="{base_fpath}" \
+                --out_dpath="{base_fpath.parent}" \
                 --mod_coco_fpath="{task['output_fpath']}" \
                 --sensors='L8' \
                 --adj_cloud=False \
@@ -404,7 +405,7 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
                 --year_highbound=None \
                 --coefs=cv,rmse,a0,a1,b1,c1 \
                 --coefs_bands=0,1,2,3,4,5 \
-                --timestamp=True \
+                --timestamp=False \
                 --combine=False \
                 --resolution=30GSD \
                 --workermode="{config.cold_workermode}" \
