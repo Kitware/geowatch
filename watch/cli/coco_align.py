@@ -556,6 +556,9 @@ def main(cmdline=True, **kw):
                     # This is a region model
                     df = type_to_subdf['region']
             parts.append(df)
+
+        if not len(parts):
+            raise ValueError('No regions to crop to were found')
         region_df = pd.concat(parts)
         print(f'Loaded {len(region_df)} regions to crop')
 
