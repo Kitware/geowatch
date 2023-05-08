@@ -131,9 +131,8 @@ CommandLine:
     EXPT_DVC_DPATH=$(geowatch_dvc --tags=phase2_expt --hardware="auto")
     python -m watch.tasks.cold.predict \
         --coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly-KR_R001.kwcoco.json" \
-        --combined_coco_fpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imgonly-KR_R001.kwcoco.zip" \
-        --out_dpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/_pycold_combine_V2" \
-        --mod_coco_fpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold-V2.kwcoco.zip" \
+        --out_dpath="$DATA_DVC_DPATH/Drop6/_pycold_combine_V2" \
+        --mod_coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly_KR_R001_cold-V2.kwcoco.zip" \
         --sensors='L8' \
         --adj_cloud=False \
         --method='COLD' \
