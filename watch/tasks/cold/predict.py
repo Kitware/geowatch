@@ -87,7 +87,7 @@ CommandLine:
         --smart=True --skip_aggressive=True
 
     ####################
-    ### FULL REGION TEST
+    ### FULL REGION TEST-V1
     ####################
 
     DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="auto")
@@ -95,8 +95,38 @@ CommandLine:
     python -m watch.tasks.cold.predict \
         --coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly-KR_R001.kwcoco.json" \
         --combined_coco_fpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imgonly-KR_R001.kwcoco.zip" \
-        --out_dpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/_pycold_combine" \
-        --mod_coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly_KR_R001_cold.kwcoco.zip" \
+        --out_dpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/_pycold_combine_V1" \
+        --mod_coco_fpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold-V1.kwcoco.zip" \
+        --sensors='L8' \
+        --adj_cloud=False \
+        --method='COLD' \
+        --prob=0.99 \
+        --conse=6 \
+        --cm_interval=60 \
+        --year_lowbound=None \
+        --year_highbound=None \
+        --coefs=cv,rmse,a0,a1,b1,c1 \
+        --coefs_bands=0,1,2,3,4,5 \
+        --timestamp=False \
+        --combine=True \
+        --resolution='10GSD' \
+        --workermode='serial' \
+        --workers=0
+
+    kwcoco stats "$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold-V1.kwcoco.zip
+    geowatch stats "$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold-V1.kwcoco.zip
+
+    ####################
+    ### FULL REGION TEST-V1
+    ####################
+
+    DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="auto")
+    EXPT_DVC_DPATH=$(geowatch_dvc --tags=phase2_expt --hardware="auto")
+    python -m watch.tasks.cold.predict \
+        --coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly-KR_R001.kwcoco.json" \
+        --combined_coco_fpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imgonly-KR_R001.kwcoco.zip" \
+        --out_dpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/_pycold_combine_V2" \
+        --mod_coco_fpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold-V2.kwcoco.zip" \
         --sensors='L8' \
         --adj_cloud=False \
         --method='COLD' \
@@ -160,10 +190,7 @@ CommandLine:
         --resolution='10GSD' \
         --workermode='serial' \
         --workers=0
-
-    kwcoco stats "$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold.kwcoco.zip
-    geowatch stats "$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold.kwcoco.zip
-
+        
     # Fix path problem because we wrote a different directory
     # TODO: fix this script so the output always uses absolute paths?
     # or at least doesn't write invalid data that needs fixing?
