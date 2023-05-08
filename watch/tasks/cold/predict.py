@@ -190,7 +190,7 @@ CommandLine:
         --resolution='10GSD' \
         --workermode='serial' \
         --workers=0
-        
+
     # Fix path problem because we wrote a different directory
     # TODO: fix this script so the output always uses absolute paths?
     # or at least doesn't write invalid data that needs fixing?
