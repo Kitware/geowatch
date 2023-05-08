@@ -86,9 +86,9 @@ CommandLine:
         --exclude_sensors="S2" \
         --smart=True --skip_aggressive=True
 
-    ####################
+    #######################
     ### FULL REGION TEST-V1
-    ####################
+    #######################
 
     DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="auto")
     EXPT_DVC_DPATH=$(geowatch_dvc --tags=phase2_expt --hardware="auto")
@@ -115,10 +115,16 @@ CommandLine:
 
     kwcoco stats "$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold-V1.kwcoco.zip
     geowatch stats "$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold-V1.kwcoco.zip
+    kwcoco validate "$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold-V1.kwcoco.zip
 
-    ####################
-    ### FULL REGION TEST-V1
-    ####################
+    smartwatch visualize \
+        "$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold-V1.kwcoco.zip \
+        --channels="L8:(red|green|blue,red_COLD_a1|green_COLD_a1|blue_COLD_a1,red_COLD_cv|green_COLD_cv|blue_COLD_cv,red_COLD_rmse|green_COLD_rmse|blue_COLD_rmse)" \
+        --smart=True
+
+    #######################
+    ### FULL REGION TEST V2
+    #######################
 
     DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="auto")
     EXPT_DVC_DPATH=$(geowatch_dvc --tags=phase2_expt --hardware="auto")
@@ -137,72 +143,19 @@ CommandLine:
         --year_highbound=None \
         --coefs=cv,rmse,a0,a1,b1,c1 \
         --coefs_bands=0,1,2,3,4,5 \
-        --timestamp=True \
-        --combine=True \
-        --resolution='10GSD' \
-        --workermode='serial' \
-        --workers=0
-
-    kwcoco stats "$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold.kwcoco.zip
-    geowatch stats "$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold.kwcoco.zip
-
-    # Fix path problem because we wrote a different directory
-    # TODO: fix this script so the output always uses absolute paths?
-    # or at least doesn't write invalid data that needs fixing?
-    DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="auto")
-    kwcoco reroot \
-        --src="$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold.kwcoco.zip \
-        --dst="$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold_fixed.kwcoco.zip \
-        --absolute=True
-
-        --old_prefix="KR_R001" --new_prefix="../KR_R001"
-
-    DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="auto")
-    kwcoco validate "$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold_fixed.kwcoco.zip
-
-    smartwatch visualize \
-        "$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold.kwcoco.zip \
-        --channels="L8:(red|green|blue,red_COLD_a1|green_COLD_a1|blue_COLD_a1,red_COLD_cv|green_COLD_cv|blue_COLD_cv,red_COLD_rmse|green_COLD_rmse|blue_COLD_rmse)" \
-        --smart=True
-
-    ####################
-    ### FULL REGION TEST V2
-    ####################
-
-    DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="auto")
-    EXPT_DVC_DPATH=$(smartwatch_dvc --tags=phase2_expt --hardware="auto")
-    python -m watch.tasks.cold.predict \
-        --coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly-KR_R001.kwcoco.json" \
-        --combined_coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly-KR_R001.kwcoco.json" \
-        --out_dpath="$DATA_DVC_DPATH/Drop6/_pycold_combine" \
-        --sensors='L8' \
-        --adj_cloud=False \
-        --method='COLD' \
-        --prob=0.99 \
-        --conse=6 \
-        --cm_interval=60 \
-        --year_lowbound=None \
-        --year_highbound=None \
-        --coefs=cv,rmse,a0,a1,b1,c1 \
-        --coefs_bands=0,1,2,3,4,5 \
         --timestamp=False \
         --combine=False \
         --resolution='10GSD' \
         --workermode='serial' \
         --workers=0
 
-    # Fix path problem because we wrote a different directory
-    # TODO: fix this script so the output always uses absolute paths?
-    # or at least doesn't write invalid data that needs fixing?
-    DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="auto")
-    kwcoco reroot \
-        --src="$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold.kwcoco.zip \
-        --dst="$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold_fixed.kwcoco.zip \
-        --old_prefix="KR_R001" --new_prefix="../KR_R001"
+    kwcoco stats "$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold-V2.kwcoco.zip"
+    geowatch stats "$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold-V2.kwcoco.zip"
+    kwcoco validate "$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold-V2.kwcoco.zip"
 
     DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="auto")
     smartwatch visualize \
-        "$DATA_DVC_DPATH"/Drop6/imgonly_KR_R001_cold.kwcoco.zip \
+        "$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold-V2.kwcoco.zip" \
         --channels="L8:(red|green|blue,red_COLD_a1|green_COLD_a1|blue_COLD_a1,red_COLD_cv|green_COLD_cv|blue_COLD_cv,red_COLD_rmse|green_COLD_rmse|blue_COLD_rmse)" \
         --exclude_sensors=WV,PD \
         --smart=True
