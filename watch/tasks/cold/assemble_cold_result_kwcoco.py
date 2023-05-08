@@ -26,7 +26,6 @@ import kwimage
 import scriptconfig as scfg
 import ubelt as ub
 import logging
-import shutil
 import gc
 try:
     from xdev import profile
@@ -312,7 +311,7 @@ def assemble_main(cmdline=1, **kwargs):
             for band_name in band_names:
                 for coef in coef_names:
                     band = BAND_INFO[band_name]
-                    new_fpath = out_path / f'{image_name}_{band}_{method}_{coef}.tif'                    
+                    new_fpath = out_path / f'{image_name}_{band}_{method}_{coef}.tif'
                     if new_fpath.exists():
                         channels = kwcoco.ChannelSpec.coerce(f'{band}_{method}_{coef}')
                         print('exist', new_fpath)
