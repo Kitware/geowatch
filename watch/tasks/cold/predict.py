@@ -173,17 +173,15 @@ CommandLine:
             "$BUNDLE_DPATH"/imganns-*KR_R*.kwcoco.zip \
             "$BUNDLE_DPATH"/imganns-*NZ_R*.kwcoco.zip \
             "$BUNDLE_DPATH"/imganns-*US_R*.kwcoco.zip \
-        --expt_dpath="$DVC_EXPT_DPATH" \
         --with_cold=1 \
         --with_landcover=0 \
         --with_materials=0 \
         --with_invariants=0 \
         --with_depth=0 \
-        --do_splits=0 \
         --skip_existing=1 \
         --cold_workers=8 \
         --cold_workermode=thread \
-        --workers=2 \
+        --tmux_workers=2 \
         --backend=tmux --run=1
 """
 import scriptconfig as scfg
