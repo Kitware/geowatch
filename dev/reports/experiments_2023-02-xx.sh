@@ -1912,8 +1912,8 @@ python -m watch.mlops.schedule_evaluation --params="
         bas_pxl.time_sampling:
             - soft4
         bas_poly.thresh:
-            - 0.1
-            - 0.275
+            #- 0.1
+            #- 0.275
             - 0.3
             - 0.325
             - 0.35

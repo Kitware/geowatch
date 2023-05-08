@@ -299,7 +299,7 @@ class GDalCommandBuilder:
 
 def gdal_single_translate(in_fpath, out_fpath, pixel_box=None, blocksize=256,
                           compress='DEFLATE', tries=1, cooldown=1, verbose=0,
-                          eager=True):
+                          eager=True, gdal_cachemax=None, num_threads=None):
     """
     Crops geotiffs using pixels
 
@@ -389,10 +389,13 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box=None, blocksize=256,
     builder.set_cog_options(compress=compress, blocksize=blocksize)
     # Use the new COG output driver
     # Perf options
-    if 1:
+    if gdal_cachemax is not None:
         # TODO: these probably should be environment variables?
-        builder.options['--config']['GDAL_CACHEMAX'] = '15%'
-        builder.options['-co']['NUM_THREADS'] = 'ALL_CPUS'
+        # '1500'  # '15%'
+        builder.options['--config']['GDAL_CACHEMAX'] = str(gdal_cachemax)
+
+    if num_threads is not None:
+        builder.options['-co']['NUM_THREADS'] = str(num_threads)  # 'ALL_CPUS'
 
     if pixel_box is not None:
         xoff, yoff, xsize, ysize = pixel_box.to_xywh().data[0]
@@ -433,7 +436,10 @@ def gdal_single_warp(in_fpath,
                      force_spatial_res=None,
                      eager=True,
                      cooldown=1,
-                     use_tempfile=True):
+                     use_tempfile=True,
+                     gdal_cachemax=None,
+                     num_threads=None,
+                     warp_memory=None):
     r"""
     Wrapper around gdalwarp
 
@@ -668,10 +674,12 @@ def gdal_single_warp(in_fpath,
     # else:
     # GDAL_CACHEMAX is in megabytes
     # https://gdal.org/programs/gdalwarp.html#cmdoption-gdalwarp-wm
-    warp_memory = '1500'
-    builder['-wm'] = str(warp_memory)
-    builder.options['-co']['NUM_THREADS'] = '2'
-    builder.options['--config']['GDAL_CACHEMAX'] = '1500'
+    if warp_memory is not None:
+        builder['-wm'] = str(warp_memory)
+    if num_threads is not None:
+        builder.options['-co']['NUM_THREADS'] = str(num_threads)
+    if gdal_cachemax is not None:
+        builder.options['--config']['GDAL_CACHEMAX'] = str(gdal_cachemax)
 
     builder.append(in_fpath)
     if use_tempfile:
@@ -703,7 +711,8 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, cooldown=1,
                     blocksize=256, compress='DEFLATE', error_logfile=None,
                     _intermediate_vrt=False, verbose=0,
                     return_intermediate=False, force_spatial_res=None,
-                    eager=True, **kwargs):
+                    eager=True, gdal_cachemax=None, num_threads=None,
+                    warp_memory=None, **kwargs):
     """
     See gdal_single_warp() for args
 
@@ -826,6 +835,9 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, cooldown=1,
     single_warp_kwargs['error_logfile'] = error_logfile
     single_warp_kwargs['force_spatial_res'] = force_spatial_res
     single_warp_kwargs['eager'] = eager
+    single_warp_kwargs['gdal_cachemax'] = gdal_cachemax
+    single_warp_kwargs['warp_memory'] = warp_memory
+    single_warp_kwargs['num_threads'] = num_threads
     # Delay the actual execution of the partial warps until merge is called.
 
     commands = []
@@ -876,8 +888,10 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, cooldown=1,
         warped_gpaths = warped_gpaths[::-1]
 
     builder = GDalCommandBuilder('gdal_merge.py')
-    builder.options['-co']['NUM_THREADS'] = '2'
-    builder.options['--config']['GDAL_CACHEMAX'] = '1500'
+    if num_threads is not None:
+        builder.options['-co']['NUM_THREADS'] = str(num_threads)
+    if gdal_cachemax is not None:
+        builder.options['--config']['GDAL_CACHEMAX'] = str(gdal_cachemax)
     # builder.set_cog_options()
     if error_logfile is not None:
         builder.options['--config']['CPL_LOG'] = error_logfile
@@ -903,7 +917,9 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, cooldown=1,
     _cmd = gdal_single_translate(tmp_out_fpath, tmp_out_fpath2,
                                  compress=compress, blocksize=blocksize,
                                  verbose=verbose, eager=eager, tries=tries,
-                                 cooldown=cooldown)
+                                 cooldown=cooldown,
+                                 gdal_cachemax=gdal_cachemax,
+                                 num_threads=num_threads)
     if eager:
         ub.Path(tmp_out_fpath).delete()
         os.rename(tmp_out_fpath2, out_fpath)

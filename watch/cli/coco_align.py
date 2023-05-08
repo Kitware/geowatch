@@ -1349,7 +1349,7 @@ class SimpleDataCube:
             lazy_commands = []
 
         from concurrent.futures import TimeoutError
-        for job in image_jobs.as_completed(desc='collect extract jobs'):
+        for job in image_jobs.as_completed(desc='collect extract jobs', progkw={'clearline': False}):
             try:
                 new_img, new_anns = job.result(timeout=image_timeout)
             except SkipImage:
@@ -2097,32 +2097,27 @@ def _aligncrop(obj_group,
     cooldown = asset_config.cooldown
     gdal_verbose = 0 if verbose < 2 else verbose
 
+    gdalkw = dict(
+        space_box=space_box,
+        local_epsg=local_epsg,
+        rpcs=rpcs, nodata=nodata,
+        tries=asset_config.tries,
+        cooldown=cooldown,
+        error_logfile=error_logfile,
+        verbose=gdal_verbose,
+        force_spatial_res=force_spatial_res,
+        eager=not asset_config.hack_lazy,
+        warp_memory='1500',
+        gdal_cachemax='1500',
+        num_threads='2',
+    )
+
     if len(input_gpaths) > 1:
         in_fpaths = input_gpaths
-        commands = util_gdal.gdal_multi_warp(
-            in_fpaths, out_fpath, space_box=space_box,
-            local_epsg=local_epsg, rpcs=rpcs,
-            nodata=nodata,
-            tries=asset_config.tries,
-            cooldown=cooldown,
-            error_logfile=error_logfile,
-            verbose=gdal_verbose,
-            force_spatial_res=force_spatial_res,
-            eager=not asset_config.hack_lazy,
-        )
+        commands = util_gdal.gdal_multi_warp(in_fpaths, out_fpath, **gdalkw)
     else:
         in_fpath = input_gpaths[0]
-        commands = util_gdal.gdal_single_warp(
-            in_fpath, out_fpath,
-            space_box=space_box, local_epsg=local_epsg,
-            rpcs=rpcs, nodata=nodata,
-            tries=asset_config.tries,
-            cooldown=cooldown,
-            error_logfile=error_logfile,
-            verbose=gdal_verbose,
-            force_spatial_res=force_spatial_res,
-            eager=not asset_config.hack_lazy,
-        )
+        commands = util_gdal.gdal_single_warp(in_fpath, out_fpath, **gdalkw)
     if asset_config.hack_lazy:
         # The lazy hack means we are just building the commands
         dst['commands'] = commands
