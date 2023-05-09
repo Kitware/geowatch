@@ -710,8 +710,8 @@ class SV_DepthFilter(ProcessNode):
     """
 
     Example:
-        >>> from watch.mlops.smart_pipeline import *  # NOQA
-        >>> self = node = SV_DepthFilter(root_dpath='/ROOT/DPATH/')
+        >>> from watch.mlops import smart_pipeline
+        >>> self = node = smart_pipeline.SV_DepthFilter(root_dpath='/ROOT/DPATH/')
         >>> node.configure({
         >>>     'input_kwcoco': 'foo.kwcoco',
         >>>     'input_region': 'region.geojson',
@@ -719,6 +719,19 @@ class SV_DepthFilter(ProcessNode):
         >>>     #'output_sites_dpath': 'I_WANT_OUT_SITES_HERE',
         >>>     'output_region_fpath': 'I_WANT_OUT_REGIONS_HERE',
         >>>     'output_site_manifest_fpath': 'I_WANT_SITE_MANIFESTS_HERE',
+        >>> })
+        >>> print('self.template_out_paths = {}'.format(ub.urepr(self.template_out_paths, nl=1)))
+        >>> print('self.final_out_paths = {}'.format(ub.urepr(self.final_out_paths, nl=1)))
+        >>> print(node.command())
+
+    Example:
+        >>> from watch.mlops import smart_pipeline
+        >>> self = node = smart_pipeline.SV_DepthFilter(node_dpath='/MY/OUPUT/DIR/')
+        >>> node.configure({
+        >>>     'input_kwcoco': 'foo.kwcoco',
+        >>>     'input_region': 'region.geojson',
+        >>>     'input_sites': 'sites/*.geojson',
+        >>>     'model_fpath': 'models/depth_pcd/basicModel2.h5',
         >>> })
         >>> print('self.template_out_paths = {}'.format(ub.urepr(self.template_out_paths, nl=1)))
         >>> print('self.final_out_paths = {}'.format(ub.urepr(self.final_out_paths, nl=1)))
@@ -734,9 +747,9 @@ class SV_DepthFilter(ProcessNode):
         'input_sites',
     }
     out_paths = {
-        'output_region_fpath': 'out_region.geojson',
-        'output_sites_dpath': 'out_sites',
-        'output_site_manifest_fpath': 'out_site_manifest.json',
+        'output_region_fpath': 'sv_depth_out_region.geojson',
+        'output_sites_dpath': 'sv_depth_out_sites',
+        'output_site_manifest_fpath': 'sv_depth_out_site_manifest.json',
     }
 
     algo_params = {
