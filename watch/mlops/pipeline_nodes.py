@@ -1298,6 +1298,17 @@ class ProcessNode(Node):
         # return all(self.out_paths.map_values(lambda p: p.exists()).values())
         return all(ub.Path(p).expand().exists() for p in self.final_out_paths.values())
 
+    @memoize_configured_property
+    @profile
+    def outputs_exist(self) -> bool:
+        """
+        Alias for does_exist
+
+        Check if all of the output paths that would be written by this node
+        already exists.
+        """
+        return self.does_exist
+
     def _raw_command(self):
         command = self.command
         if not isinstance(command, str):

@@ -82,27 +82,38 @@ python -m watch.cli.prepare_ta2_dataset \
     --convert_workers=8 \
     --align_workers=26 \
     --cache=0 \
+    --force_nodata=-9999 \
     --ignore_duplicates=1 \
     --target_gsd=10 \
     --visualize=False \
     --max_products_per_region=10 \
     --backend=serial --run=1
-    #--hack_lazy=dry \
 
-geowatch visualize "$DEMO_DPATH/Aligned-$DATASET_SUFFIX/data.kwcoco.json" --smart
-
-#BAS_MODEL_FPATH=$DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Continue_15GSD_BGR_V004/Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584.pt.pt
+# Note: Depending on the size of the region / number of available images /
+# number of workers, this command can take a LOT of memory. This example is
+# fairly tame, but if your system has low memory you may need to dial down some
+# parameters.
 
 BAS_MODEL_FPATH=$DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
 
-#cd "$DVC_EXPT_DPATH"
-#dvc pull -r aws models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt.dvc
-geowatch model_stats "$BAS_MODEL_FPATH"
+PREDICTION_DPATH=$DEMO_DPATH/Aligned-$DATASET_SUFFIX
+
+inspect_stuff(){
+    geowatch stats "$DEMO_DPATH/Aligned-$DATASET_SUFFIX/data.kwcoco.json"
+
+    geowatch visualize "$DEMO_DPATH/Aligned-$DATASET_SUFFIX/data.kwcoco.json" --smart
+
+    #BAS_MODEL_FPATH=$DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Continue_15GSD_BGR_V004/Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584.pt.pt
+    #cd "$DVC_EXPT_DPATH"
+    #dvc pull -r aws models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt.dvc
+    geowatch model_stats "$BAS_MODEL_FPATH"
+}
+
 
 python -m geowatch.tasks.fusion.predict \
     --test_dataset="$DEMO_DPATH/Aligned-$DATASET_SUFFIX/data.kwcoco.json" \
     --package_fpath="$BAS_MODEL_FPATH" \
-    --pred_dataset="$DEMO_DPATH/Aligned-$DATASET_SUFFIX/data_heatmaps.kwcoco.json" \
+    --pred_dataset="$PREDICTION_DPATH/data_heatmaps.kwcoco.json" \
     --quality_threshold=0 \
     --use_cloudmask=False \
     --fixed_resolution=10GSD \
@@ -115,7 +126,41 @@ python -m geowatch.tasks.fusion.predict \
 #    #--use_cloudmask=False \
 #    #--force_bad_frames=True
 
-geowatch visualize "$DEMO_DPATH/Aligned-$DATASET_SUFFIX/data_heatmaps.kwcoco.json" --smart
+geowatch visualize "$PREDICTION_DPATH/data_heatmaps.kwcoco.json" \
+    --channels="red|green|blue,salient" --smart
+
+
+# Convert Heatmaps to Polygons
+python -m watch.cli.run_tracker \
+    --in_file "$PREDICTION_DPATH/data_heatmaps.kwcoco.json" \
+    --default_track_fn saliency_heatmaps \
+    --track_kwargs '{
+        "agg_fn": "probs",
+        "thresh": 0.4,
+        "time_thresh": 0.8,
+        "inner_window_size": "1y",
+        "inner_agg_fn": "mean",
+        "norm_ord": "inf",
+        "resolution": "10GSD",
+        "moving_window_size": null,
+        "poly_merge_method": "v2",
+        "polygon_simplify_tolerance": 1,
+        "min_area_square_meters": 7200,
+        "max_area_square_meters": 8000000
+    }' \
+    --clear_annots=True \
+    --site_summary 'None' \
+    --boundary_region "$DVC_DATA_DPATH"/annotations/drop6/region_models \
+    --out_site_summaries_fpath "$PREDICTION_DPATH/site_summaries_manifest.json" \
+    --out_site_summaries_dir "$PREDICTION_DPATH/site_summaries" \
+    --out_sites_fpath "$PREDICTION_DPATH/sites_manifest.json" \
+    --out_sites_dir "$PREDICTION_DPATH/sites" \
+    --out_kwcoco "$PREDICTION_DPATH/poly.kwcoco.zip"
+
+geowatch visualize "$PREDICTION_DPATH/poly.kwcoco.zip" \
+    --viz_dpath="$PREDICTION_DPATH"/_viz_polys \
+    --draw_labels=False \
+    --channels="red|green|blue,salient" --smart
 
 #### Crop big images to the geojson regions
 ##AWS_DEFAULT_PROFILE=iarpa AWS_REQUEST_PAYER='requester' python -m watch.cli.coco_align \

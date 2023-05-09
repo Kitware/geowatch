@@ -54,6 +54,9 @@ try:
 except ImportError:
     profile = ub.identity
 
+# import xdev
+# xdev.make_warnings_print_tracebacks()
+
 
 class AggregateLoader(DataConfig):
     """
@@ -1387,8 +1390,11 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         hashids_v1 = pd.Series([None] * len(agg.index), index=agg.index.index)
         # hashids_v0 = pd.Series([None] * len(agg.index), index=agg.index.index)
         hashid_to_params = {}
+        try:
+            list(effective_params.groupby(param_cols, dropna=False))
+        except Exception:
+            effective_params = effective_params.applymap(lambda x: str(x) if isinstance(x, list) else x)
         for param_vals, group in effective_params.groupby(param_cols, dropna=False):
-
             # Further subdivide the group so each row only computes its hash
             # with the parameters that were included in its row
             for param_flags, subgroup in is_param_included.loc[group.index].groupby(param_cols, dropna=False):

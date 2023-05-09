@@ -2,7 +2,7 @@
 """
 
 SeeAlso:
-    ~/code/watch/dev/poc/prepare_time_combined_dataset.py
+    ~/code/watch/watch/cli/queue_cli/prepare_time_combined_dataset.py
 
 
 CommandLine:

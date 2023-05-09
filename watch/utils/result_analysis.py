@@ -827,9 +827,12 @@ class ResultAnalysis(ub.NiceRepr):
                 equal_var=False,
                 alternative=alternative,
             )
-            ttest_ind_result = scipy.stats.ttest_ind(
-                metric_vals1, metric_vals2, **ind_kw
-            )
+            with warnings.catch_warnings():
+                warnings.filterwarnings('ignore', 'Degrees of freedom', category=RuntimeWarning)
+                warnings.filterwarnings('ignore', 'invalid value', category=RuntimeWarning)
+                ttest_ind_result = scipy.stats.ttest_ind(
+                    metric_vals1, metric_vals2, **ind_kw
+                )
 
             if 0:
                 from benchmarker.benchmarker import stats_dict

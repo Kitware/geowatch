@@ -295,9 +295,11 @@ def main(cmdline=1, **kwargs):
     keep_site_fpaths = site_to_site_fpath.subdict(accept_sites)
     output_sites_dpath = ub.Path(config.output_sites_dpath)
     output_sites_dpath.ensuredir()
+    out_site_fpaths = []
     for old_fpath in keep_site_fpaths.values():
         new_fpath = output_sites_dpath / old_fpath.name
         old_fpath.copy(new_fpath, overwrite=True)
+        out_site_fpaths.append(new_fpath)
 
     new_region_model = geomodels.RegionModel.from_features(
         [region_model.header] + list(new_summaries))
@@ -309,7 +311,7 @@ def main(cmdline=1, **kwargs):
     proc_context.stop()
 
     if config.output_site_manifest_fpath is not None:
-        filter_output['files'] = [os.fspath(output_region_fpath)]
+        filter_output['files'] = [os.fspath(p) for p in out_site_fpaths]
         print(f'Write filtered site result to {config.output_site_manifest_fpath}')
         with safer.open(config.output_site_manifest_fpath, 'w', temp_file=not ub.WIN32) as file:
             json.dump(filter_output, file, indent=4)

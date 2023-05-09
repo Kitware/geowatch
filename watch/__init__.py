@@ -4,6 +4,8 @@ The GEOWATCH module
 Useful environs:
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
     DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+    DATA_DVC_DPAVH=$DVC_DATA_DPATH
+    EXPT_DVC_DPATH=$DVC_EXPT_DPATH
 """
 import os
 import sys
@@ -11,7 +13,7 @@ import ubelt as ub
 import warnings
 
 
-__version__ = '0.6.4'
+__version__ = '0.6.5'
 
 
 # ~/code/watch/dev/maintain/generate_authors.py
@@ -48,7 +50,9 @@ def _import_troublesome_module(modname):
     """
     if modname == 'gdal':
         from osgeo import gdal as module
-        module.UseExceptions()
+        gdal = module
+        if not getattr(gdal, '_UserHasSpecifiedIfUsingExceptions', lambda: False)():
+            gdal.UseExceptions()
     elif modname == 'pyproj':
         import pyproj as module
         from pyproj import CRS  # NOQA

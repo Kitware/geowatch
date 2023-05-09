@@ -18,7 +18,7 @@ class CleanGeotiffConfig(scfg.DataConfig):
         # It is a good idea to do a dry run first to check for issues
         # This can be done at a smaller scale for speed.
         DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
-        smartwatch clean_geotiffs \
+        geowatch clean_geotiffs \
             --src "$DVC_DATA_DPATH/Drop4-BAS/data.kwcoco.json" \
             --channels="red|green|blue|nir|swir16|swir22" \
             --prefilter_channels="red" \
@@ -29,7 +29,7 @@ class CleanGeotiffConfig(scfg.DataConfig):
             --dry=True
 
         # Then execute a real run at full scale - optionally with a probe scale
-        smartwatch clean_geotiffs \
+        geowatch clean_geotiffs \
             --src "$DVC_DATA_DPATH/Drop4-BAS/data_vali.kwcoco.json" \
             --channels="red|green|blue|nir|swir16|swir22" \
             --prefilter_channels="red" \
@@ -42,23 +42,23 @@ class CleanGeotiffConfig(scfg.DataConfig):
 
     Ignore:
 
-        smartwatch clean_geotiffs \
+        geowatch clean_geotiffs \
             --src=data.kwcoco.zip --dry=True --workers=8  \
             --probe_scale=0.25 --prefilter_channels=pan --channels=pan
 
-        smartwatch clean_geotiffs \
+        geowatch clean_geotiffs \
             --dry=False --workers=2  \
             --probe_scale=0.0625 --prefilter_channels="pan" \
             --channels="pan" \
             --src=data.kwcoco.zip
 
-        smartwatch clean_geotiffs \
+        geowatch clean_geotiffs \
             --dry=False --workers=avail  \
             --probe_scale=0.0625 --prefilter_channels="red" \
             --channels="red|green|blue|nir|swir16|swir22" \
             --src=data.kwcoco.zip
 
-        smartwatch clean_geotiffs \
+        geowatch clean_geotiffs \
             --dry=False --workers=avail  \
             --probe_scale=0.25 --prefilter_channels="swir22" \
             --channels="swir16|swir22" \
@@ -69,9 +69,10 @@ class CleanGeotiffConfig(scfg.DataConfig):
 
     workers = scfg.Value(0, type=str, help='number of workers')
 
-    channels = scfg.Value('red|green|blue|nir|swir16|swir22', help=ub.paragraph(
+    channels = scfg.Value('*', help=ub.paragraph(
         '''
-        The channels to apply nodata fixes to.
+        The channels to apply nodata fixes to. A value of * means all channels
+        except the excluded ones.
         '''))
 
     exclude_channels = scfg.Value('quality|cloudmask', help=ub.paragraph(
@@ -122,6 +123,8 @@ class CleanGeotiffConfig(scfg.DataConfig):
         if True, write a file next to every file that was fixed so we dont need
         to check it again.
         '''))
+
+    export_bad_fpath = scfg.Value(None, help='if True, export paths to bad files to this newline separated file, also works in dry mode')
 
     dry = scfg.Value(False, help='if True, only do a dry run. Report issues but do not fix them')
 
@@ -184,7 +187,7 @@ def main(cmdline=1, **kwargs):
     from watch.utils import util_parallel
     import kwcoco
 
-    config = CleanGeotiffConfig.cli(cmdline=cmdline, data=kwargs)
+    config = CleanGeotiffConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
     import rich
     rich.print('config = {}'.format(ub.urepr(config, nl=1)))
 
@@ -225,6 +228,14 @@ def main(cmdline=1, **kwargs):
     print('Grabbing coco images')
     coco_imgs = coco_dset.images().coco_images
     print('About to start looping')
+
+    if config.export_bad_fpath is not None:
+        export_fpath = ub.Path(config.export_bad_fpath)
+        with open(export_fpath, 'w'):
+            ...
+        export_file = open(export_fpath, 'a')
+    else:
+        export_file = None
 
     from watch.utils import util_progress
     mprog = util_progress.ProgressManager(backend='progiter')
@@ -302,6 +313,8 @@ def main(cmdline=1, **kwargs):
         if not config['dry']:
             correct_nodata_value = config['nodata_value']
             for asset_summary in mprog.new(needs_fix, desc='Cleaning identified issues'):
+                if export_file is not None:
+                    export_file.write(asset_summary['fpath'] + '\n')
                 fpath = ub.Path(asset_summary['fpath'])
                 fix_geotiff_ondisk(asset_summary,
                                    correct_nodata_value=correct_nodata_value)
@@ -318,8 +331,13 @@ def main(cmdline=1, **kwargs):
                     fix_fpath.write_text(json.dumps(fixes))
         else:
             for asset_summary in mprog.new(needs_fix, desc='Dry run: identifying issues'):
+                if export_file is not None:
+                    export_file.write(asset_summary['fpath'] + '\n')
                 print(asset_summary['fpath'])
                 ...
+
+    if export_file is not None:
+        export_file.close()
 
     # if 0:
     #     import xdev
@@ -356,7 +374,9 @@ def probe_image_issues(coco_img, channels=None, prefilter_channels=None, scale=N
 
         channels : the channels to check
 
-        prefilter_channels : the channels to check first for efficiency
+        prefilter_channels :
+            the channels to check first for efficiency. If they do not exist,
+            then the all channels are checked.
 
         possible_nodata_values (set[int]):
             the values that may be nodata if known

@@ -990,8 +990,15 @@ def heatmaps_to_polys(heatmaps, bounds, agg_fn, thresh, morph_kernel,
 
     if isinstance(inner_window_size, str):
         # TODO: generalize if needed
-        assert inner_agg_fn == 'mean'
         assert heatmap_dates is not None
+
+        if inner_agg_fn == 'mean':
+            inner_ord = 1
+        elif inner_agg_fn == 'max':
+            inner_ord = float('inf')
+        else:
+            raise NotImplementedError(inner_agg_fn)
+
         # Do inner aggregation before outer aggregation
         from watch.utils import util_time
         import kwarray
@@ -1001,7 +1008,7 @@ def heatmaps_to_polys(heatmaps, bounds, agg_fn, thresh, morph_kernel,
         unique_ids, groupxs = kwarray.group_indices(bucket_ids)
         new_heatmaps = []
         for idxs in groupxs:
-            inner = _norm(heatmaps[idxs], norm_ord=1)
+            inner = _norm(heatmaps[idxs], norm_ord=inner_ord)
             new_heatmaps.append(inner)
         new_heatmaps = np.array(new_heatmaps)
         heatmaps = new_heatmaps

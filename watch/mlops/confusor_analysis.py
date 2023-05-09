@@ -52,6 +52,23 @@ def main(cmdline=1, **kwargs):
         xdoctest -m /home/joncrall/code/watch/watch/mlops/confusor_analysis.py main
         HAS_DVC=1 xdoctest -m watch.mlops.confusor_analysis main:0
 
+    Ignore:
+        from ubelt import Path
+        kwargs = {
+        'detections_fpath' : '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_toothbrush_split6_landcover_MeanYear10GSD-V2/_custom/eval_links/KR_R002_sv_poly_eval_id_e865e066/KR_R002/overall/bas/detections_tau=0.2_rho=0.5_min_area=0.csv',
+        'proposals_fpath'  : '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_toothbrush_split6_landcover_MeanYear10GSD-V2/_custom/eval_links/KR_R002_sv_poly_eval_id_e865e066/KR_R002/overall/bas/proposals_tau=0.2_rho=0.5_min_area=0.csv',
+        'src_kwcoco'       :
+            '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_toothbrush_split6_landcover_MeanYear10GSD-V2/_custom/eval_links/KR_R002_sv_poly_eval_id_e865e066/.pred/sv_dino_filter/sv_dino_filter_id_32928a74/.pred/sv_dino_boxes/sv_dino_boxes_id_8de62349/.pred/sv_crop/sv_crop_id_64ea2fe6/.pred/bas_poly/bas_poly_id_efa920a0//.pred/bas_pxl/bas_pxl_id_fe488803//pred.kwcoco.zip',
+            'dst_kwcoco'       : '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_toothbrush_split6_landcover_MeanYear10GSD-V2/_custom/eval_links/KR_R002_sv_poly_eval_id_e865e066/analysis/confusion_analysis/bas_confusion.kwcoco.zip',
+            'pred_sites'       : '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_toothbrush_split6_landcover_MeanYear10GSD-V2/_custom/eval_links/KR_R002_sv_poly_eval_id_e865e066/.pred/sv_dino_filter/sv_dino_filter_id_32928a74/out_sites',
+            'bas_metric_dpath' : Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_toothbrush_split6_landcover_MeanYear10GSD-V2/_custom/eval_links/KR_R002_sv_poly_eval_id_e865e066/KR_R002/overall/bas'),
+            'region_id'        : 'KR_R002',
+            'true_site_dpath'  : Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/annotations/drop6/site_models'),
+            'true_region_dpath': Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/annotations/drop6/region_models'),
+            'performer_id'     : 'kit',
+            'out_dpath'        : Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_toothbrush_split6_landcover_MeanYear10GSD-V2/_custom/eval_links/KR_R002_sv_poly_eval_id_e865e066/analysis/confusion_analysis'),
+            }
+
     Example:
         >>> # xdoctest: +REQUIRES(env:HAS_DVC)
         >>> from watch.mlops.confusor_analysis import *  # NOQA
@@ -108,6 +125,11 @@ def main(cmdline=1, **kwargs):
 
     assign1 = pd.read_csv(config.detections_fpath)
     assign2 = pd.read_csv(config.proposals_fpath)
+
+    rich.print(assign1)
+    rich.print(assign2)
+    rich.print(f'{len(assign1)=}')
+    rich.print(f'{len(assign2)=}')
 
     needs_recompute = any('_seq_' in m or m.startswith('seq_') for m in assign2['site model'] if m)
     assert not needs_recompute
@@ -196,47 +218,49 @@ def main(cmdline=1, **kwargs):
     # pred_sites_fpath = poly_pred_dpath / 'sites_manifest.json'
     # assert pred_sites_fpath.exists()
     # pred_site_fpaths = list(util_gis.coerce_geojson_paths(pred_sites_fpath))
-
-    rm_files = list(true_region_dpath.glob(region_id + '*.geojson'))
-
-    gt_files = list(true_site_dpath.glob(region_id + '*.geojson'))
-    sm_files = pred_site_fpaths
-    true_site_infos = list(util_gis.coerce_geojson_datas(gt_files, format='json'))
-    pred_site_infos = list(util_gis.coerce_geojson_datas(sm_files, format='json'))
-    orig_region_infos = list(util_gis.coerce_geojson_datas(rm_files, format='json'))
-    assert len(orig_region_infos) == 1
-
-    # Ensure all site data has misc-info
-    # Ensure all data cast to site models
     from watch.geoannots.geomodels import SiteModel, SiteModelCollection, RegionModel
     import json
 
-    true_region_model = RegionModel(orig_region_infos[0]['data'])
+    rm_files = list(true_region_dpath.glob(region_id + '*.geojson'))
+    gt_files = list(true_site_dpath.glob(region_id + '*.geojson'))
+    sm_files = pred_site_fpaths
 
-    for info in it.chain(pred_site_infos, true_site_infos):
-        info['data'] = SiteModel(**info['data'])
-        info['data'].header['properties'].setdefault('misc_info', {})
+    true_sites = SiteModelCollection(list(SiteModel.coerce_multiple(gt_files)))
+    pred_sites = SiteModelCollection(list(SiteModel.coerce_multiple(sm_files)))
 
-    id_to_true_data = {ub.Path(d['fpath']).stem: d for d in true_site_infos}
-    id_to_pred_data = {ub.Path(d['fpath']).stem: d for d in pred_site_infos}
+    orig_regions = list(RegionModel.coerce_multiple(rm_files))
+    if len(orig_regions) != 1:
+        raise AssertionError(f'Got {orig_regions=}')
+
+    # Ensure all site data has misc-info
+    # Ensure all data cast to site models
+
+    true_region_model = orig_regions[0]
+
+    for site in it.chain(pred_sites, true_sites):
+        site.header['properties'].setdefault('misc_info', {})
+
+    id_to_true_site = {s.site_id: s for s in true_sites}
+    id_to_pred_site = {s.site_id: s for s in pred_sites}
 
     # Add confusion metadata to predicted and truth models
     # https://gis.stackexchange.com/questions/346518/opening-geojson-style-properties-in-qgis
     for row in true_confusion_rows:
-        info = id_to_true_data[row['true_site_id']]
-        info['data'].header['properties']['misc_info']['confusion'] = row
+        site = id_to_true_site[row['true_site_id']]
+        site.header['properties']['misc_info']['confusion'] = row
     for row in pred_confusion_rows:
-        info = id_to_pred_data[row['pred_site_id']]
-        info['data'].header['properties']['misc_info']['confusion'] = row
-
-    pred_sites = SiteModelCollection([d['data'] for d in pred_site_infos])
-    true_sites = SiteModelCollection([d['data'] for d in true_site_infos])
+        site = id_to_pred_site[row['pred_site_id']]
+        site.header['properties']['misc_info']['confusion'] = row
 
     VALIDATE = 1
     if VALIDATE:
         all_models = SiteModelCollection(pred_sites + true_sites)
         all_models.fixup()
-        all_models.validate(workers=8)
+        all_models.validate(workers=0)
+        # for sm in all_models:
+        #     assert sm.header['geometry']['type'] == 'Polygon'
+        #     sm.validate()
+        # ...
 
     pred_region_model = pred_sites.as_region_model(region=true_region_model.header)
     pred_df = pred_region_model.pandas_summaries()
@@ -255,13 +279,13 @@ def main(cmdline=1, **kwargs):
 
     hard_negative_sites = []
     for site_id in cand_df['site_id']:
-        pred_site = id_to_pred_data[site_id]['data']
+        pred_site = id_to_pred_site[site_id]
         misc = pred_site.header['properties']['misc_info']
         if misc['confusion']['type'] in 'sm_completely_wrong':
             hard_negative_sites.append(pred_site.deepcopy())
 
     orig_site_num = int(true_df['site_id'].max().split('_')[-1])
-    base_site_num = max(900, orig_site_num)
+    base_site_num = max(700, orig_site_num)
     for num, hard_neg in enumerate(hard_negative_sites, start=base_site_num):
         header_prop = hard_neg.header['properties']
         header_prop['site_id'] = region_id + f'_{num:04d}'
@@ -318,13 +342,13 @@ def main(cmdline=1, **kwargs):
     cfsn_dpath = config.out_dpath / 'confusion_sites'
     true_cfsn_dpath = (cfsn_dpath / 'true').ensuredir()
     pred_cfsn_dpath = (cfsn_dpath / 'pred').ensuredir()
-    for pred_site_id, pred_site in id_to_pred_data.items():
+    for pred_site_id, pred_site in id_to_pred_site.items():
         fpath = pred_cfsn_dpath / (pred_site_id + '.geojson')
-        text = json.dumps(pred_site['data'], indent='    ')
+        text = json.dumps(pred_site, indent='    ')
         fpath.write_text(text)
-    for true_site_id, true_site in id_to_true_data.items():
+    for true_site_id, true_site in id_to_true_site.items():
         fpath = true_cfsn_dpath / (true_site_id + '.geojson')
-        text = json.dumps(true_site['data'], indent='    ')
+        text = json.dumps(true_site, indent='    ')
         fpath.write_text(text)
 
     # Need to build site summaries from site models.
@@ -345,7 +369,7 @@ def main(cmdline=1, **kwargs):
         )
         reproject_annotations.main(cmdline=0, **common_kwargs)
 
-        if 0:
+        if 1:
             # Project confusion site models onto kwcoco for visualization
             import kwcoco
             from watch.cli import reproject_annotations
@@ -353,16 +377,10 @@ def main(cmdline=1, **kwargs):
             dst_dset = src_dset.copy()
             dst_dset.fpath = config.dst_kwcoco
             dst_dset.clear_annotations()
-            true_site_infos2 = list(util_gis.coerce_geojson_datas(
-                id_to_true_data.values(), format='dataframe', allow_raw=True))
-            pred_site_infos2 = list(util_gis.coerce_geojson_datas(
-                id_to_pred_data.values(), format='dataframe', allow_raw=True))
+            true_site_infos2 = [s.pandas() for s in id_to_true_site.values()]
+            pred_site_infos2 = [s.pandas() for s in id_to_pred_site.values()]
 
-            for info in pred_site_infos2:
-                site_df = info['data']
-
-            for info in true_site_infos2:
-                site_df = info['data']
+            for site_df in true_site_infos2:
                 reproject_annotations.validate_site_dataframe(site_df)
 
             dst_dset.clear_annotations()
@@ -400,7 +418,7 @@ def main(cmdline=1, **kwargs):
             print(f'repr3={repr3}')
 
             set(dst_dset.annots().lookup('role', None))
-            set([x['role'] for x in dst_dset.annots().lookup('misc_info', None)])
+            set([x.get('role', None) for x in dst_dset.annots().lookup('misc_info', None)])
             # dst_dset.annots().take([0, 1, 2])
             viz_dpath = cfsn_dpath
             summary_visualization(dst_dset, viz_dpath)
@@ -496,12 +514,16 @@ def summary_visualization(dst_dset, viz_dpath):
                 track_dets = all_dets.take(groupx)
                 misc_info = track_dets.data['misc_info'][0]
                 row = misc_info.copy()
-                # row['role'] = role
+                row['role'] = role
+                row['confusion_color'] = row['confusion']['color']
                 # assert row['role'] == role
                 sh_poly = unary_union([p.to_shapely() for p in track_dets.data['segmentations']])
                 kw_poly = kwimage.MultiPolygon.from_shapely(sh_poly)
                 row['poly'] = kw_poly
                 track_summaries.append(row)
+
+            role_to_summary = ub.udict(ub.group_items(track_summaries, key=lambda x: x.get('role', None)))
+            print(ub.udict(role_to_summary).map_values(len))
 
             # canvas = kwplot.make_heatmask(util_kwimage.exactly_1channel(mean_heatmap), cmap='magma')[:, :, 0:3]
 
@@ -537,19 +559,16 @@ def summary_visualization(dst_dset, viz_dpath):
                 },
             }
 
-            role_to_summary = ub.udict(ub.group_items(track_summaries, key=lambda x: x['role']))
-            print(ub.udict(role_to_summary).map_values(len))
-
             alpha = 0.6
 
-            for row in ub.ProgIter(role_to_summary['true_confusion']):
+            for row in ub.ProgIter(role_to_summary.get('true_confusion', [])):
                 for k1, v1 in canvases.items():
                     v1['true'] = row['poly'].draw_on(v1['true'], fill=False, edgecolor=row['confusion_color'], alpha=alpha)
                     v1['cfsn'] = row['poly'].draw_on(v1['cfsn'], fill=False, edgecolor=row['confusion_color'], alpha=alpha)
                 # row['poly'].draw_on(canvas_true, fill=False, edgecolor=row['confusion_color'])
                 # row['poly'].draw_on(canvas_cfsn, fill=False, edgecolor=row['confusion_color'])
 
-            for row in ub.ProgIter(role_to_summary['pred_confusion']):
+            for row in ub.ProgIter(role_to_summary.get('pred_confusion', [])):
                 for k1, v1 in canvases.items():
                     v1['pred'] = row['poly'].draw_on(v1['pred'], fill=False, edgecolor=row['confusion_color'], alpha=alpha)
                     v1['cfsn'] = row['poly'].draw_on(v1['cfsn'], fill=False, edgecolor=row['confusion_color'], alpha=alpha)

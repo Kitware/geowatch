@@ -440,8 +440,15 @@ class SiteModel(_Model):
                 geom = MultiPolygon([geom])
             feat['geometry'] = geom.__geo_interface__
 
+    def fix_sensor_names(self):
+        for feat in self.observations():
+            prop = feat['properties']
+            if prop.get('sensor_name') == 'WorldView 1':
+                prop['sensor_name'] = 'WorldView'
+
     def fixup(self):
         self.clamp_scores()
+        self.fix_sensor_names()
         # self.fix_geom()
 
     def clamp_scores(self):

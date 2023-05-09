@@ -199,6 +199,10 @@ class MultimodalTransformerConfig(scfg.DataConfig):
         '''
         operation used to combine multiple modes from the same timestep
         '''))
+    rescale_nans = scfg.Value(None, help=ub.paragraph(
+        '''
+        Method used to rescale nan input values. Can be perframe or None.
+        '''))
 
 
 class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
@@ -387,6 +391,14 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         MODAL_AGREEMENT_CHANS = self.hparams.stream_channels
         print(f'MODAL_AGREEMENT_CHANS={MODAL_AGREEMENT_CHANS}')
         print(f'self.hparams.tokenizer={self.hparams.tokenizer}')
+
+        self.rescale_nan_method = self.hparams.rescale_nans
+        if self.rescale_nan_method == 'perframe':
+            ...
+        elif self.rescale_nan_method is None:
+            ...
+        else:
+            raise KeyError(f'Unknown: {self.rescale_nan_method}')
 
         self.tokenizer = self.hparams.tokenizer
         self.sensor_channel_tokenizers = RobustModuleDict()
@@ -1485,7 +1497,24 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
         # After input normalization happens, replace nans with zeros
         # which is effectively imputing the dataset mean
-        mode_val = mode_val.nan_to_num_()
+
+        try:
+            rescale_nan_method = self.rescale_nan_method
+        except AttributeError:
+            rescale_nan_method = None
+
+        if rescale_nan_method is None:
+            mode_val = mode_val.nan_to_num_()
+        elif rescale_nan_method == 'perframe':
+            # Do a dropout-like rescaling to the nan input values.
+            num_nan = mode_val.isnan()
+            num_total = mode_val.numel()
+            p = min((num_nan / num_total), 1 - 1e-5)
+            mode_val = mode_val.nan_to_num_()
+            rescale_factor = 1 / (1 - p)
+            mode_val *= rescale_factor
+        else:
+            raise AssertionError
 
         # Lookup the "tokenizing" network for this type of input
         sensor_chan_tokenizer = self.sensor_channel_tokenizers[sensor][chan_code]

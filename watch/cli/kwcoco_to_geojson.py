@@ -176,6 +176,8 @@ class KWCocoToGeoJSONConfig(scfg.DataConfig):
             '''
             Clears all annotations before running tracking, so it starts
             from a clean slate.
+            TODO: perhaps name to something that takes the value overwrite or
+            append?
             '''), group='behavior')
     append_mode = scfg.Value(False, isflag=True, help=ub.paragraph(
             '''

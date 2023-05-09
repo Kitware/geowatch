@@ -17,6 +17,9 @@ try:
 except Exception:
     profile = ub.identity
 
+import xdev
+xdev.make_warnings_print_tracebacks()
+
 
 @profile
 def geotiff_metadata(gpath, elevation='gtop30', strict=False,
@@ -206,11 +209,11 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
 
         tf = info['wgs84_to_wld']
     """
-    from watch.utils import util_gdal
-    from osgeo import gdal
-    from osgeo import osr
     import affine
     import kwimage
+    from watch.utils import util_gdal
+    gdal = util_gdal.import_gdal()
+    osr = util_gdal.import_osr()
 
     info = {}
     ref = util_gdal.GdalDataset.coerce(gpath_or_ref)
@@ -528,8 +531,9 @@ def make_crs_info_object(osr_crs):
         osr_crs (osr.SpatialReference): an osr object from gdal
 
     Example:
-        >>> from osgeo import osr
         >>> from watch.gis.geotiff import *  # NOQA
+        >>> from watch.utils import util_gdal
+        >>> osr = util_gdal.import_osr()
         >>> osr_crs = osr.SpatialReference()
         >>> osr_crs.ImportFromEPSG(4326)
         >>> crs_info = make_crs_info_object(osr_crs)
@@ -572,7 +576,8 @@ def axis_mapping_int_to_text(axis_mapping_int):
         * OAMS_CUSTOM means that the data axis are customly defined with
             SetDataAxisToSRSAxisMapping
     """
-    from osgeo import osr
+    from watch.utils import util_gdal
+    osr = util_gdal.import_osr()
     if axis_mapping_int == osr.OAMS_TRADITIONAL_GIS_ORDER:
         axis_mapping = 'OAMS_TRADITIONAL_GIS_ORDER'
     elif axis_mapping_int == osr.OAMS_AUTHORITY_COMPLIANT:
@@ -823,7 +828,8 @@ def geotiff_filepath_info(gpath, fast=True):
             # the original naming convention
             #
             # this opens the image to check for that case as a fallback
-            from osgeo import gdal
+            from watch.utils import util_gdal
+            gdal = util_gdal.import_gdal()
             info = gdal.Info(gpath, format='json')
             if len(info['bands']) == 3:
                 # TODO sometimes colorInterpretation is stripped, but it's still RGB

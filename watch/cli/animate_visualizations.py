@@ -105,6 +105,9 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
     prog = pman.progiter(desc='submit video jobs')
     prog.begin()
 
+    with_gif = 'auto'
+    with_mp4 = True
+
     for type_ in types:
         for video_dpath in video_dpaths:
             prog.set_extra('type_={!r} video_dpath={!r}'.format(type_, video_dpath))
@@ -151,17 +154,23 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
                 for chan_dpath in channel_dpaths:
                     frame_fpaths = sorted(chan_dpath.glob('*'))
                     if len(frame_fpaths):
-                        if len(frame_fpaths) < 300:
+                        with_gif_resolved = with_gif
+                        if with_gif == 'auto':
+                            with_gif_resolved = len(frame_fpaths) < 300
+
+                        if with_gif_resolved:
                             gif_fname = '{}{}_{}.gif'.format(video_name, type_, chan_dpath.name)
                             gif_fpath = video_dpath / gif_fname
                             pool.submit(
                                 gifify.ffmpeg_animate_frames, frame_fpaths, gif_fpath,
                                 in_framerate=frames_per_second, verbose=verbose_worker)
-                        ani_fname = '{}{}_{}.mp4'.format(video_name, type_, chan_dpath.name)
-                        ani_fpath = video_dpath / ani_fname
-                        pool.submit(
-                            gifify.ffmpeg_animate_frames, frame_fpaths, ani_fpath,
-                            in_framerate=frames_per_second, verbose=verbose_worker)
+
+                        if with_mp4:
+                            ani_fname = '{}{}_{}.mp4'.format(video_name, type_, chan_dpath.name)
+                            ani_fpath = video_dpath / ani_fname
+                            pool.submit(
+                                gifify.ffmpeg_animate_frames, frame_fpaths, ani_fpath,
+                                in_framerate=frames_per_second, verbose=verbose_worker)
     prog.end()
 
     failed = []

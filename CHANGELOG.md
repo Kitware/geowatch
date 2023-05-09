@@ -14,6 +14,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Added `request_rlimit_nofile` to KWCocoVideoDataModule for easier ulimit configuration
 * The `fusion.predict` script can now output predictions in cog or png format
 * Added transient labels to heuristics
+* Add `rescale_nans` param to MultimodalTransformer.
+* Add `cooldown` argument to coco align script to specify time between tries.
 
 ### Changed
 
@@ -27,9 +29,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Reworked how submatrices behave in mlops, added submatrices1, submatrices2. Concept might need refinement.
 * Update site / region schemas
 
+
 ### Fixed
 * safer no longer uses `temp_file` on windows
 * Erroneous assertion errors in reproject and kwcoco-to-geotiffs
+* Issue where DINO_SV would write region models to the out-site-manifest, now correctly points at site models.
+* Bug in coco-align where nodata values were not properly set on data that moved through gdal-merge.
 
 
 ## Version 0.5.6 - Target 2023-04-30

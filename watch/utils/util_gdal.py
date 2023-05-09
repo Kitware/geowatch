@@ -22,6 +22,7 @@ import kwimage
 import os
 import ubelt as ub
 import subprocess
+import functools
 import retry
 
 
@@ -61,6 +62,22 @@ GDAL_VIRTUAL_FILESYSTEM_PREFIX = '/vsi'
 # ]
 
 
+@functools.cache
+def import_gdal():
+    from osgeo import gdal
+    if not getattr(gdal, '_UserHasSpecifiedIfUsingExceptions', lambda: False)():
+        gdal.UseExceptions()
+    return gdal
+
+
+@functools.cache
+def import_osr():
+    from osgeo import osr
+    if not getattr(osr, '_UserHasSpecifiedIfUsingExceptions', lambda: False)():
+        osr.UseExceptions()
+    return osr
+
+
 class DummyLogger:
     def warning(self, msg, *args):
         print(msg % args)
@@ -74,8 +91,7 @@ def _demo_geoimg_with_nodata():
 
     """
     import numpy as np
-    from osgeo import osr
-    # gdal.UseExceptions()
+    osr = import_osr()
 
     # Make a dummy geotiff
     imdata = kwimage.grab_test_image('airport')
@@ -282,7 +298,8 @@ class GDalCommandBuilder:
 
 
 def gdal_single_translate(in_fpath, out_fpath, pixel_box=None, blocksize=256,
-                          compress='DEFLATE', tries=1, verbose=0, eager=True):
+                          compress='DEFLATE', tries=1, cooldown=1, verbose=0,
+                          eager=True, gdal_cachemax=None, num_threads=None):
     """
     Crops geotiffs using pixels
 
@@ -298,6 +315,8 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box=None, blocksize=256,
         compress (str): gdal compression
 
         verbose (int): verbosity level
+
+        cooldown (int): number of seconds to wait (i.e. "cool-down") between tries
 
         eager (bool):
             if True, executes the command, if False returns a list of all the
@@ -370,10 +389,13 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box=None, blocksize=256,
     builder.set_cog_options(compress=compress, blocksize=blocksize)
     # Use the new COG output driver
     # Perf options
-    if 1:
+    if gdal_cachemax is not None:
         # TODO: these probably should be environment variables?
-        builder.options['--config']['GDAL_CACHEMAX'] = '15%'
-        builder.options['-co']['NUM_THREADS'] = 'ALL_CPUS'
+        # '1500'  # '15%'
+        builder.options['--config']['GDAL_CACHEMAX'] = str(gdal_cachemax)
+
+    if num_threads is not None:
+        builder.options['-co']['NUM_THREADS'] = str(num_threads)  # 'ALL_CPUS'
 
     if pixel_box is not None:
         xoff, yoff, xsize, ysize = pixel_box.to_xywh().data[0]
@@ -385,7 +407,8 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box=None, blocksize=256,
 
     if eager:
         _execute_gdal_command_with_checks(
-            gdal_translate_command, tmp_fpath, tries=tries, verbose=verbose)
+            gdal_translate_command, tmp_fpath, tries=tries, cooldown=cooldown,
+            verbose=verbose)
         os.rename(tmp_fpath, out_fpath)
     else:
         commands = [
@@ -411,7 +434,12 @@ def gdal_single_warp(in_fpath,
                      tries=1,
                      verbose=0,
                      force_spatial_res=None,
-                     eager=True):
+                     eager=True,
+                     cooldown=1,
+                     use_tempfile=True,
+                     gdal_cachemax=None,
+                     num_threads=None,
+                     warp_memory=None):
     r"""
     Wrapper around gdalwarp
 
@@ -459,6 +487,8 @@ def gdal_single_warp(in_fpath,
             if True, executes the command, if False returns a list of all the
             bash commands that would be executed, suitable for use in a command
             queue.
+
+        cooldown (int): number of seconds to wait (i.e. "cool-down") between tries
 
     Returns:
         None | List[str]:
@@ -578,8 +608,13 @@ def gdal_single_warp(in_fpath,
                                 overviews='AUTO')
 
     if space_box is not None:
+
         # Data is from geo-pandas so this should be traditional order
-        lonmin, latmin, lonmax, latmax = space_box.data[0]
+        ltrb = space_box.to_ltrb()
+        if isinstance(ltrb, kwimage.Box):
+            lonmin, latmin, lonmax, latmax = ltrb.data
+        else:
+            lonmin, latmin, lonmax, latmax = ltrb.data[0]
         ymin, xmin, ymax, xmax = latmin, lonmin, latmax, lonmax
 
         # Coordinate Reference System of the "te" crop coordinates
@@ -639,36 +674,50 @@ def gdal_single_warp(in_fpath,
     # else:
     # GDAL_CACHEMAX is in megabytes
     # https://gdal.org/programs/gdalwarp.html#cmdoption-gdalwarp-wm
-    warp_memory = '1500'
-    builder['-wm'] = str(warp_memory)
-    builder.options['-co']['NUM_THREADS'] = '2'
-    builder.options['--config']['GDAL_CACHEMAX'] = '1500'
+    if warp_memory is not None:
+        builder['-wm'] = str(warp_memory)
+    if num_threads is not None:
+        builder.options['-co']['NUM_THREADS'] = str(num_threads)
+    if gdal_cachemax is not None:
+        builder.options['--config']['GDAL_CACHEMAX'] = str(gdal_cachemax)
 
     builder.append(in_fpath)
-    builder.append(tmp_out_fpath)
+    if use_tempfile:
+        dst_fpath = tmp_out_fpath
+        builder.append(tmp_out_fpath)
+    else:
+        dst_fpath = out_fpath
+        builder.append(out_fpath)
 
     gdal_warp_command = builder.finalize()
 
     # Execute the command with checks to ensure gdal doesnt fail
     if eager:
         _execute_gdal_command_with_checks(
-            gdal_warp_command, tmp_out_fpath, tries=tries, verbose=verbose)
-        os.rename(tmp_out_fpath, out_fpath)
+            gdal_warp_command, dst_fpath, tries=tries, verbose=verbose,
+            cooldown=cooldown)
+        if use_tempfile:
+            os.rename(tmp_out_fpath, out_fpath)
     else:
-        commands = [
-            gdal_warp_command,
-            f'mv "{tmp_out_fpath}" "{out_fpath}"',
-        ]
+        commands = [gdal_warp_command]
+        if use_tempfile:
+            commands += [
+                f'mv "{tmp_out_fpath}" "{out_fpath}"'
+            ]
         return commands
 
 
-def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, blocksize=256,
-                    compress='DEFLATE', error_logfile=None,
+def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, cooldown=1,
+                    blocksize=256, compress='DEFLATE', error_logfile=None,
                     _intermediate_vrt=False, verbose=0,
                     return_intermediate=False, force_spatial_res=None,
-                    eager=True, **kwargs):
+                    eager=True, gdal_cachemax=None, num_threads=None,
+                    warp_memory=None, **kwargs):
     """
     See gdal_single_warp() for args
+
+    NOTE: it is important to set the nodata argument for gdalmerge [SO187522]_
+    if you want to preserver them.
 
     Example:
         >>> # xdoctest: +REQUIRES(--slow)
@@ -733,6 +782,9 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, blocksize=256,
             Nothing if executing the command. If eager=False, returns the
             commands that would have been executed.
 
+    References:
+        .. [SO187522] https://gis.stackexchange.com/questions/187522/keep-nodata-values-when-using-gdal-merge
+
     Ignore:
         import os
         import kwimage
@@ -777,11 +829,15 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, blocksize=256,
     single_warp_kwargs['compress'] = compress
     single_warp_kwargs['blocksize'] = blocksize
     single_warp_kwargs['tries'] = tries
+    single_warp_kwargs['cooldown'] = cooldown
     single_warp_kwargs['nodata'] = nodata
     single_warp_kwargs['verbose'] = verbose
     single_warp_kwargs['error_logfile'] = error_logfile
     single_warp_kwargs['force_spatial_res'] = force_spatial_res
     single_warp_kwargs['eager'] = eager
+    single_warp_kwargs['gdal_cachemax'] = gdal_cachemax
+    single_warp_kwargs['warp_memory'] = warp_memory
+    single_warp_kwargs['num_threads'] = num_threads
     # Delay the actual execution of the partial warps until merge is called.
 
     commands = []
@@ -832,13 +888,17 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, blocksize=256,
         warped_gpaths = warped_gpaths[::-1]
 
     builder = GDalCommandBuilder('gdal_merge.py')
-    builder.options['-co']['NUM_THREADS'] = '2'
-    builder.options['--config']['GDAL_CACHEMAX'] = '1500'
+    if num_threads is not None:
+        builder.options['-co']['NUM_THREADS'] = str(num_threads)
+    if gdal_cachemax is not None:
+        builder.options['--config']['GDAL_CACHEMAX'] = str(gdal_cachemax)
     # builder.set_cog_options()
     if error_logfile is not None:
         builder.options['--config']['CPL_LOG'] = error_logfile
     if nodata is not None:
         builder['-n'] = str(nodata)
+        builder['-a_nodata'] = str(nodata)
+        builder['-init'] = str(nodata)
     builder['-o'] = tmp_out_fpath
     builder.extend(warped_gpaths)
 
@@ -846,7 +906,8 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, blocksize=256,
 
     if eager:
         _execute_gdal_command_with_checks(
-            gdal_merge_cmd, tmp_out_fpath, tries=tries, verbose=verbose)
+            gdal_merge_cmd, tmp_out_fpath, tries=tries, cooldown=cooldown,
+            verbose=verbose)
     else:
         commands.append(gdal_merge_cmd)
 
@@ -855,7 +916,10 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, blocksize=256,
     tmp_out_fpath2 = ub.augpath(out_fpath, prefix='.tmpcog.')
     _cmd = gdal_single_translate(tmp_out_fpath, tmp_out_fpath2,
                                  compress=compress, blocksize=blocksize,
-                                 verbose=verbose, eager=eager)
+                                 verbose=verbose, eager=eager, tries=tries,
+                                 cooldown=cooldown,
+                                 gdal_cachemax=gdal_cachemax,
+                                 num_threads=num_threads)
     if eager:
         ub.Path(tmp_out_fpath).delete()
         os.rename(tmp_out_fpath2, out_fpath)
@@ -868,8 +932,9 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, blocksize=256,
         return commands
 
 
-def _execute_gdal_command_with_checks(command, out_fpath, tries=1, shell=False,
-                                      check_after=True, verbose=0):
+def _execute_gdal_command_with_checks(command, out_fpath, tries=1, cooldown=1,
+                                      shell=False, check_after=True,
+                                      verbose=0):
     """
     Given a gdal command and the expected file that it should produce
     try to execute a few times and check that it produced a valid result.
@@ -890,7 +955,7 @@ def _execute_gdal_command_with_checks(command, out_fpath, tries=1, shell=False,
         logger = DummyLogger()
         got = retry.api.retry_call(
             _execute_command,
-            tries=tries, delay=1, exceptions=(
+            tries=tries, delay=cooldown, exceptions=(
                 subprocess.CalledProcessError, FileNotFoundError,
                 RuntimeError),
             logger=logger)
@@ -931,7 +996,7 @@ def list_gdal_drivers():
         >>> print('drivers = {}'.format(ub.urepr(drivers, nl=1)))
         >>> assert ('GTiff', 'GeoTIFF', ['tif', 'tiff']) in drivers
     """
-    from osgeo import gdal
+    gdal = import_gdal()
     result = []
     for idx in range(gdal.GetDriverCount()):
         driver = gdal.GetDriver(idx)
@@ -1110,11 +1175,21 @@ class GdalDataset(ub.NiceRepr):
         self._str_mode = _str_mode
 
     @classmethod
-    def open(cls, path, mode='r', virtual_retries=3):
+    def open(cls, path, mode='r', virtual_retries=3, cooldown=0.1):
         """
-        Create a new dataset
+        Create a new dataset in read or write mode.
+
+        Args:
+            path (str | PathLike): the path or URI to open
+            mode (str): either 'r' for read only or 'w+' for update mode.
+            virtual_retries (int): number of times to attempt to open the
+                dataset when the URI points to a non-local resource
+            cooldown (float): seconds between retry attempts
+
+        Returns:
+            GdalDataset
         """
-        from osgeo import gdal
+        gdal = import_gdal()
         _path = os.fspath(path)
 
         if isinstance(mode, str):
@@ -1144,7 +1219,6 @@ class GdalDataset(ub.NiceRepr):
         except Exception:
             import time
             if _path.startswith(GDAL_VIRTUAL_FILESYSTEM_PREFIX):
-                wait_time = 0.1
                 for _ in range(virtual_retries):
                     try:
                         __ref = gdal.Open(_path, mode)
@@ -1152,7 +1226,7 @@ class GdalDataset(ub.NiceRepr):
                             msg = gdal.GetLastErrorMsg()
                             raise RuntimeError(msg + f' for {_path}')
                     except Exception:
-                        time.sleep(wait_time)
+                        time.sleep(cooldown)
                     else:
                         break
             if __ref is None:
@@ -1165,7 +1239,7 @@ class GdalDataset(ub.NiceRepr):
         """
         Ensures the underlying object is a gdal dataset.
         """
-        from osgeo import gdal
+        gdal = import_gdal()
         import pathlib
         if mode is None:
             mode = gdal.GA_ReadOnly
@@ -1242,7 +1316,7 @@ class GdalDataset(ub.NiceRepr):
 
     def info(self):
         """
-        Information similar to gdalinfo
+        Information similar to gdalinfo (in json format)
         """
         # https://gdal.org/api/python/osgeo.gdal.html#osgeo.gdal.AsyncReader
         # osgeo.gdal.InfoOptions(options=None, format='text', deserialize=True,
@@ -1252,7 +1326,7 @@ class GdalDataset(ub.NiceRepr):
         #                showRAT=True, showColorTable=True, listMDD=False,
         #                showFileList=True, allMetadata=False,
         #                extraMDDomains=None, wktFormat=None)
-        from osgeo import gdal
+        gdal = import_gdal()
         info = gdal.Info(self, format='json', allMetadata=True, listMDD=True)
         # info = gdal.Info(self)
         # info = gdal.Info(self, allMetadata=True, listMDD=True)
@@ -1275,7 +1349,6 @@ class GdalDataset(ub.NiceRepr):
         References:
             https://gdal.org/user/raster_data_model.html
         """
-
         domain_to_metadata = {}
         for domain in self.GetMetadataDomainList():
             domain_to_metadata[domain] = self.GetMetadata(domain)

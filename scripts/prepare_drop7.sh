@@ -27,17 +27,19 @@ python -m watch.cli.prepare_ta2_dataset \
     --convert_workers=8 \
     --align_workers=4 \
     --align_aux_workers=0 \
-    --backend=tmux \
-    --tmux_workers=10 \
     --ignore_duplicates=1 \
     --separate_region_queues=1 \
     --separate_align_jobs=1 \
     --visualize=0 \
     --target_gsd=10 \
-    --cache=1 \
+    --cache=0 \
     --verbose=100 \
     --skip_existing=1 \
     --force_min_gsd=2.0 \
+    --force_nodata=-9999 \
+    --hack_lazy=True \
+    --backend=tmux \
+    --tmux_workers=4 \
     --run=1
 
 # ~/code/watch/dev/poc/prepare_time_combined_dataset.py
@@ -60,15 +62,98 @@ python ~/code/watch/dev/poc/prepare_time_combined_dataset.py \
     --run=1
 
 
-    #--regions="[
-    #        # T&E Regions
-    #        AE_R001, BH_R001, BR_R001, BR_R002, BR_R004, BR_R005, CH_R001,
-    #        KR_R001,
-    #        KR_R002, LT_R001, NZ_R001, US_R001, US_R004, US_R005,
-    #        US_R006, US_R007,
-    #        # # iMerit Regions
-    #        AE_C001,
-    #        AE_C002,
-    #        AE_C003, PE_C001, QA_C001, SA_C005, US_C000, US_C010,
-    #        US_C011, US_C012,
-    #]" \
+
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
+geowatch clean_geotiffs \
+    --src "$DVC_DATA_DPATH/Aligned-Drop7/data.kwcoco.json" \
+    --channels="*" \
+    --prefilter_channels="red" \
+    --min_region_size=256 \
+    --nodata_value=-9999 \
+    --workers="min(2,avail)" \
+    --probe_scale=None \
+    --use_fix_stamps=True \
+    --dry=True \
+    --export_bad_fpath=bad_files.txt
+
+
+#--regions="[
+#        # T&E Regions
+#        AE_R001, BH_R001, BR_R001, BR_R002, BR_R004, BR_R005, CH_R001,
+#        KR_R001,
+#        KR_R002, LT_R001, NZ_R001, US_R001, US_R004, US_R005,
+#        US_R006, US_R007,
+#        # # iMerit Regions
+#        AE_C001,
+#        AE_C002,
+#        AE_C003, PE_C001, QA_C001, SA_C005, US_C000, US_C010,
+#        US_C011, US_C012,
+#]" \
+
+
+# Drop 6
+export CUDA_VISIBLE_DEVICES="0"
+DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
+BUNDLE_DPATH=$DVC_DATA_DPATH/Drop7-MedianSummer10GSD
+python -m watch.cli.prepare_teamfeats \
+    --base_fpath "$BUNDLE_DPATH"/imganns-*[0-9].kwcoco.zip \
+    --expt_dvc_dpath="$DVC_EXPT_DPATH" \
+    --with_landcover=1 \
+    --with_invariants2=1 \
+    --with_materials=0 \
+    --with_depth=0 \
+    --with_cold=0 \
+    --skip_existing=1 \
+    --assets_dname=teamfeats \
+    --gres=0, --tmux_workers=4 --backend=tmux --run=1
+
+
+DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
+python -m watch.cli.prepare_splits \
+    --base_fpath="$DVC_DATA_DPATH"/Drop7-MedianSummer10GSD/combo_imganns*-*_[RC]*_I2L*.kwcoco.zip \
+    --constructive_mode=True \
+    --suffix=I2L \
+    --backend=tmux --tmux_workers=6 \
+    --run=1
+
+
+HDD_DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
+SSD_DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="ssd")
+
+rsync -avprPR "$HDD_DVC_DATA_DPATH"/./Drop7-MedianSummer10GSD "$SSD_DVC_DATA_DPATH"
+
+
+geowatch visualize data.kwcoco.json --smart
+
+fixup="
+coco_images = dset.images().coco_images
+from watch.utils import util_gdal
+
+coco_img = dset.coco_image(408)
+
+for asset in coco_img.assets:
+    fpath = ub.Path(coco_img.bundle_dpath) / asset['file_name']
+    bak_fpath = fpath.augment(prefix='_backup_')
+    fpath.move(bak_fpath)
+    print(fpath)
+
+
+problematic_paths = []
+for img in coco_images:
+    for asset in img.assets:
+        if isinstance(asset['parent_file_name'], list) and len(asset['parent_file_name']) > 2:
+            print(len(asset['parent_file_name']))
+            problematic_paths.append(ub.Path(img.bundle_dpath) / asset['file_name'])
+
+for p in ub.ProgIter(problematic_paths):
+    p.delete()
+
+        #fpath = ub.Path(img.bundle_dpath) / asset['file_name']
+        #print(fpath)
+        #ptr = util_gdal.GdalOpen(fpath, mode='r')
+        #info = ptr.info()
+        #print(info['bands'])
+        #...
+
+"

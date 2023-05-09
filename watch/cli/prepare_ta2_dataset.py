@@ -475,7 +475,7 @@ def main(cmdline=False, **kwargs):
             stage='catalog',
         )
 
-        uncropped_kwcoco_fpath = uncropped_dpath / f'data_{s3_name}.kwcoco.json'
+        uncropped_kwcoco_fpath = uncropped_dpath / f'data_{s3_name}.kwcoco.zip'
         uncropped_kwcoco_fpath = uncropped_kwcoco_fpath.shrinkuser(home='$HOME')
 
         convert_options = []
@@ -505,7 +505,7 @@ def main(cmdline=False, **kwargs):
             stage='uncropped_kwcoco',
         )
 
-        uncropped_fielded_kwcoco_fpath = uncropped_dpath / f'data_{s3_name}_fielded.kwcoco.json'
+        uncropped_fielded_kwcoco_fpath = uncropped_dpath / f'data_{s3_name}_fielded.kwcoco.zip'
         uncropped_fielded_kwcoco_fpath = uncropped_fielded_kwcoco_fpath.shrinkuser(home='$HOME')
 
         add_fields_job = pipeline.submit(command=ub.codeblock(
@@ -545,8 +545,8 @@ def main(cmdline=False, **kwargs):
         for info in uncropped_fielded_jobs:
             toalign_info = info.copy()
             name = toalign_info['name'] = info['name']
-            toalign_info['aligned_imgonly_fpath'] = aligned_kwcoco_bundle / f'imgonly-{name}.kwcoco.json'
-            toalign_info['aligned_imganns_fpath'] = aligned_kwcoco_bundle / f'imganns-{name}.kwcoco.json'
+            toalign_info['aligned_imgonly_fpath'] = aligned_kwcoco_bundle / f'imgonly-{name}.kwcoco.zip'
+            toalign_info['aligned_imganns_fpath'] = aligned_kwcoco_bundle / f'imganns-{name}.kwcoco.zip'
             # TODO: take only the corresponding set of site models here.
             toalign_info['site_globstr'] = final_site_globstr
             toalign_info['region_globstr'] = info['region_globstr']
@@ -556,7 +556,7 @@ def main(cmdline=False, **kwargs):
         uncropped_coco_paths = [d['uncropped_fielded_fpath'] for d in uncropped_fielded_jobs]
         union_depends_jobs = [d['job'] for d in uncropped_fielded_jobs]
         union_suffix = ub.hash_data([p.name for p in uncropped_coco_paths])[0:8]
-        uncropped_final_kwcoco_fpath = uncropped_dpath / f'data_{union_suffix}.kwcoco.json'
+        uncropped_final_kwcoco_fpath = uncropped_dpath / f'data_{union_suffix}.kwcoco.zip'
         uncropped_final_kwcoco_fpath = uncropped_final_kwcoco_fpath.shrinkuser(home='$HOME')
         uncropped_multi_src_part = ' '.join(['"{}"'.format(p) for p in uncropped_coco_paths])
         union_job = pipeline.submit(command=ub.codeblock(
@@ -580,8 +580,8 @@ def main(cmdline=False, **kwargs):
         alignment_input_jobs = [{
             'name': f'align-{union_suffix}',
             'uncropped_fielded_fpath': uncropped_final_kwcoco_fpath,
-            'aligned_imgonly_fpath': aligned_kwcoco_bundle / 'imgonly.kwcoco.json',
-            'aligned_imganns_fpath': aligned_kwcoco_bundle / 'imganns.kwcoco.json',
+            'aligned_imgonly_fpath': aligned_kwcoco_bundle / 'imgonly.kwcoco.zip',
+            'aligned_imganns_fpath': aligned_kwcoco_bundle / 'imganns.kwcoco.zip',
             'region_globstr': final_region_globstr,
             'site_globstr': final_site_globstr,
             'job': uncropped_final_jobs,
@@ -797,7 +797,7 @@ def main(cmdline=False, **kwargs):
     # TODO: Can start the DVC add of the region subdirectories here
     ub.codeblock(
         '''
-        7z a splits.zip data*.kwcoco.json
+        7z a splits.zip data*.kwcoco.zip
 
         ls */WV
         ls */L8
@@ -821,7 +821,7 @@ def main(cmdline=False, **kwargs):
     #     '''
     #     DVC_DPATH=$(geowatch_dvc)
     #     python -m watch.cli.prepare_splits \
-    #         --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
+    #         --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.zip \
     #         --run=1 --serial=True
     #     '''))
 
@@ -843,7 +843,7 @@ def main(cmdline=False, **kwargs):
     DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
     python -m watch.cli.prepare_teamfeats \
-        --base_fpath=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
+        --base_fpath=$KWCOCO_BUNDLE_DPATH/data.kwcoco.zip \
         --gres=0, \
         --with_depth=0 \
         --with_landcover=0 \
@@ -866,9 +866,9 @@ def main(cmdline=False, **kwargs):
 # uncropped_dpath=$dvc_dpath/$uncropped_bundle_name
 # uncropped_query_dpath=$uncropped_dpath/_query/items
 # uncropped_ingress_dpath=$uncropped_dpath/ingress
-# uncropped_kwcoco_fpath=$uncropped_dpath/data.kwcoco.json
+# uncropped_kwcoco_fpath=$uncropped_dpath/data.kwcoco.zip
 # aligned_kwcoco_bundle=$dvc_dpath/$aligned_bundle_name
-# aligned_kwcoco_fpath=$aligned_kwcoco_bundle/data.kwcoco.json
+# aligned_kwcoco_fpath=$aligned_kwcoco_bundle/data.kwcoco.zip
 # uncropped_query_fpath=$uncropped_query_dpath/$query_basename
 # uncropped_catalog_fpath=$uncropped_ingress_dpath/catalog.json
 
