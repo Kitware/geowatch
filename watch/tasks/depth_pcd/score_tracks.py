@@ -66,6 +66,7 @@ def score_tracks(poly_coco_dset, img_coco_dset, thresh, model_fpath):
     import ndsampler
     import pandas as pd
     from tqdm import tqdm
+    from collections import Counter
 
     print('loading site validation model')
     proto_fpath = TPL_DPATH / 'deeplab2/max_deeplab_s_backbone_os16.textproto'
@@ -83,34 +84,75 @@ def score_tracks(poly_coco_dset, img_coco_dset, thresh, model_fpath):
 
     sampler = ndsampler.CocoSampler(dset)
 
-    # FIXME: pandas is slow, we likely want to use an alternative impl
-    imgs = pd.DataFrame(poly_coco_dset.dataset["images"])
-    if "timestamp" not in imgs.columns:
-        imgs["timestamp"] = imgs["id"]
+    # # FIXME: pandas is slow, we likely want to use an alternative impl
+    # imgs = pd.DataFrame(poly_coco_dset.dataset["images"])
+    # if "timestamp" not in imgs.columns:
+    #     imgs["timestamp"] = imgs["id"]
+    # annots = pd.DataFrame(poly_coco_dset.dataset["annotations"])
+    # annots = annots[[
+    #     "id", "image_id", "track_id",
+    # ]].join(
+    #     imgs[["timestamp"]],
+    #     on="image_id",
+    # )
+    # if annots.shape[0] == 0:
+    #     print("Nothing to filter")
+    #     return poly_coco_dset
+    # tannots = annots.groupby('track_id', axis=0)
+    # trackid_to_group = dict(list(tannots))
 
-    annots = pd.DataFrame(poly_coco_dset.dataset["annotations"])
+    all_videos = dset.videos()
+    all_annots = dset.annots()
 
-    if annots.shape[0] == 0:
+    if len(all_annots) == 0:
         print("Nothing to filter")
         return poly_coco_dset
 
-    annots = annots[[
-        "id", "image_id", "track_id",
-    ]].join(
-        imgs[["timestamp"]],
-        on="image_id",
-    )
+    vidid_to_name = all_videos.lookup('name', keepid=True)
+    # vidname_to_id = ub.udict(vidid_to_name).invert()
+    annot_video_ids = all_annots.images.lookup('video_id')
+    annot_timestamp = all_annots.images.lookup('timestamp')
+    annot_video_names = list(ub.take(vidid_to_name, annot_video_ids))
+    annot_image_ids = all_annots.lookup('image_id')
+    annot_track_ids = all_annots.lookup('track_id')
+
+    annot_df = pd.DataFrame({
+        'video_id': np.array(annot_video_ids),
+        'timestamp': np.array(annot_timestamp),
+        'video_name': np.array(annot_video_names),
+        'image_id': np.array(annot_image_ids),
+        'track_id': np.array(annot_track_ids),
+        'id': np.array(all_annots.ids),
+    })
+    # Group by track and video name.
+    trackid_to_group = dict(list(annot_df.groupby(['track_id'])))
 
     track_ids_to_drop = []
     ann_ids_to_drop = []
 
-    regions = []
-    tannots = annots.groupby('track_id', axis=0)
-    tq = tqdm(total=len(tannots))
-    for track_id, track_group in tannots:
+    tq = tqdm(total=len(trackid_to_group))
+    # for track_id, track_group in trackid_to_group.items():
+    for track_id, orig_track_group in trackid_to_group.items():
 
-        first_annot_id = track_group["id"].tolist()[0]
-        first_image_id = track_group["image_id"].tolist()[0]
+        # Does the track appear in more than one video?
+        video_names = orig_track_group['video_name'].unique()
+        if len(video_names) > 1:
+            if track_id not in video_names:
+                raise AssertionError(
+                    'track-ids expected to correspond with video names '
+                    'in site-cropped datasets')
+            # take the "main" video for this track
+            track_group = orig_track_group[orig_track_group['video_name'] == track_id]
+        else:
+            track_group = orig_track_group
+
+        track_group = track_group.sort_values('timestamp')
+
+        video_id = track_group["video_id"].iloc[0]
+        video_name = track_group["video_name"].iloc[0]
+        image_ids = track_group["image_id"].tolist()
+        first_annot_id = track_group["id"].iloc[0]
+        first_image_id = image_ids[0]
         first_coco_img = poly_coco_dset.coco_image(first_image_id)
         first_annot = poly_coco_dset.anns[first_annot_id]
         imgspace_annot_box = kwimage.Box.coerce(first_annot['bbox'], format='xywh')
@@ -122,7 +164,6 @@ def score_tracks(poly_coco_dset, img_coco_dset, thresh, model_fpath):
             # videospace region down. Looks like quantization errors may happen
             # here not sure how I deal with in the dataloader, it probably needs to
             # be fixed there too.
-
             res = '2GSD'
             scale_res_from_vidspace = ref_coco_img._scalefactor_for_resolution(space='video', resolution=res)
 
@@ -153,31 +194,23 @@ def score_tracks(poly_coco_dset, img_coco_dset, thresh, model_fpath):
         else:
             vidspace_slice = vidspace_annot_box.to_slice()
 
-        # find in second video
-        videoName = first_coco_img.video['name']
-        vidid = -1
-        for v in sampler.dset.index.videos.values():
-            if v['name'] == videoName:
-                vidid = v['id']
-        if vidid == -1:
-            tq.update(1)
-            continue
         target = {
-            'vidid': vidid,
+            'vidid': video_id,
+            'gids': image_ids,
             'channels': 'blue|green|red',
             'allow_augment': False,
             'space_slice': vidspace_slice,
             'use_native_scale': True,
         }
-        data = sampler.load_sample(target, with_annots=False)
-
+        import xdev
+        with xdev.embed_on_exception_context:
+            data = sampler.load_sample(target, with_annots=False)
         ims = data['im']
 
         good_ims = []
         for i in ims:
             im = np.stack([ii[..., 0] for ii in i], axis=-1) / (4096 * 2)
-            im[im < 0] = 0
-            im[im > 1] = 1
+            im = im.clip(0, 1)
             im = (im * 255).astype(np.uint8)
             if im.shape[-1] == 3:
                 im = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
@@ -198,7 +231,7 @@ def score_tracks(poly_coco_dset, img_coco_dset, thresh, model_fpath):
                 ims.append(np.stack([first, 0.5 * first + 0.5 * last, last], axis=-1).astype(np.float32))
 
         score = np.mean(model.predict(np.array(ims), batch_size=1, verbose=False)[8])
-        tq.set_description(f'{videoName}-{track_id} score {score:3.2f}')
+        tq.set_description(f'{video_name}-{track_id} score {score:3.2f}')
         tq.update(1)
         if 0:
 
@@ -222,12 +255,9 @@ def score_tracks(poly_coco_dset, img_coco_dset, thresh, model_fpath):
 
         if score < thresh:  # or coco_dset.index.videos[ks[0]]['name'] == 'AE_R001':
             track_ids_to_drop.append(track_id)
-            ann_ids_to_drop.extend(track_group["id"].tolist())
-            regions.append(videoName)
+            ann_ids_to_drop.extend(orig_track_group["id"].tolist())
 
-    print(f"Dropping {len(ann_ids_to_drop)} annotations from {len(track_ids_to_drop)} tracks.")
-    from collections import Counter
-    print(Counter(regions))
+    print(f"Dropping {len(ann_ids_to_drop)} / {len(all_annots)} annotations from {len(track_ids_to_drop)} / {len(trackid_to_group)} tracks.")
     if len(ann_ids_to_drop) > 0:
         poly_coco_dset.remove_annotations(ann_ids_to_drop)
 
@@ -554,7 +584,18 @@ Example in MLOPs:
         --devices="0," --tmux_workers=1 \
         --backend=tmux --queue_name "_mlops_test_depth_pcd" \
         --pipeline=bas_depth_vali --skip_existing=1 \
-        --run=0
+        --run=1
+
+
+python -m watch.tasks.depth_pcd.score_tracks \
+    --model_fpath="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/depth_pcd/basicModel2.h5" \
+    --threshold="0.4" \
+    --input_sites="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_test_depth_pcd/pred/flat/bas_poly/bas_poly_id_622da3d9/sites_manifest.json" \
+    --input_region="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_test_depth_pcd/pred/flat/bas_poly/bas_poly_id_622da3d9/site_summaries_manifest.json" \
+    --input_kwcoco="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_test_depth_pcd/pred/flat/sv_crop/sv_crop_id_b1c8ddac/sv_crop.kwcoco.zip" \
+    --output_region_fpath="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_test_depth_pcd/pred/flat/sv_depth_filter/sv_depth_filter_id_8747be46/sv_depth_out_region.geojson" \
+    --output_sites_dpath="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_test_depth_pcd/pred/flat/sv_depth_filter/sv_depth_filter_id_8747be46/sv_depth_out_sites" \
+    --output_site_manifest_fpath="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_test_depth_pcd/pred/flat/sv_depth_filter/sv_depth_filter_id_8747be46/sv_depth_out_site_manifest.json"
 
 '''
 if __name__ == '__main__':
