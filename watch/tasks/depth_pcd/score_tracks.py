@@ -66,7 +66,6 @@ def score_tracks(poly_coco_dset, img_coco_dset, thresh, model_fpath):
     import ndsampler
     import pandas as pd
     from tqdm import tqdm
-    from collections import Counter
 
     print('loading site validation model')
     proto_fpath = TPL_DPATH / 'deeplab2/max_deeplab_s_backbone_os16.textproto'
@@ -83,23 +82,6 @@ def score_tracks(poly_coco_dset, img_coco_dset, thresh, model_fpath):
     dset = img_coco_dset.subset(to_keep)
 
     sampler = ndsampler.CocoSampler(dset)
-
-    # # FIXME: pandas is slow, we likely want to use an alternative impl
-    # imgs = pd.DataFrame(poly_coco_dset.dataset["images"])
-    # if "timestamp" not in imgs.columns:
-    #     imgs["timestamp"] = imgs["id"]
-    # annots = pd.DataFrame(poly_coco_dset.dataset["annotations"])
-    # annots = annots[[
-    #     "id", "image_id", "track_id",
-    # ]].join(
-    #     imgs[["timestamp"]],
-    #     on="image_id",
-    # )
-    # if annots.shape[0] == 0:
-    #     print("Nothing to filter")
-    #     return poly_coco_dset
-    # tannots = annots.groupby('track_id', axis=0)
-    # trackid_to_group = dict(list(tannots))
 
     all_videos = dset.videos()
     all_annots = dset.annots()
@@ -125,22 +107,25 @@ def score_tracks(poly_coco_dset, img_coco_dset, thresh, model_fpath):
         'id': np.array(all_annots.ids),
     })
     # Group by track and video name.
-    trackid_to_group = dict(list(annot_df.groupby(['track_id'])))
+    trackid_to_group = dict(list(annot_df.groupby('track_id')))
 
     track_ids_to_drop = []
     ann_ids_to_drop = []
 
     tq = tqdm(total=len(trackid_to_group))
-    # for track_id, track_group in trackid_to_group.items():
+
     for track_id, orig_track_group in trackid_to_group.items():
 
         # Does the track appear in more than one video?
         video_names = orig_track_group['video_name'].unique()
         if len(video_names) > 1:
             if track_id not in video_names:
-                raise AssertionError(
-                    'track-ids expected to correspond with video names '
+                import warnings
+                msg = (
+                    f'track-id {track_id} expected to correspond with video names '
                     'in site-cropped datasets')
+                warnings.warn(msg)
+                continue
             # take the "main" video for this track
             track_group = orig_track_group[orig_track_group['video_name'] == track_id]
         else:
@@ -157,42 +142,39 @@ def score_tracks(poly_coco_dset, img_coco_dset, thresh, model_fpath):
         first_annot = poly_coco_dset.anns[first_annot_id]
         imgspace_annot_box = kwimage.Box.coerce(first_annot['bbox'], format='xywh')
         vidspace_annot_box = imgspace_annot_box.warp(first_coco_img.warp_vid_from_img)
-        ref_coco_img = first_coco_img  # dset.coco_image(dset.dataset['images'][0]['id'])
+        ref_coco_img = first_coco_img
 
-        if 1:
-            # Because we want a higher resolution, we need to scale the requested
-            # videospace region down. Looks like quantization errors may happen
-            # here not sure how I deal with in the dataloader, it probably needs to
-            # be fixed there too.
-            res = '2GSD'
-            scale_res_from_vidspace = ref_coco_img._scalefactor_for_resolution(space='video', resolution=res)
+        # Because we want a higher resolution, we need to scale the requested
+        # videospace region down. Looks like quantization errors may happen
+        # here not sure how I deal with in the dataloader, it probably needs to
+        # be fixed there too.
+        res = '2GSD'
+        scale_res_from_vidspace = ref_coco_img._scalefactor_for_resolution(space='video', resolution=res)
 
-            # cxy = vidspace_annot_box.to_cxywh().data[0:2]
-            # warp_res_from_vidspace = kwimage.Affine.coerce(scale=scale_res_from_vidspace, about=cxy)
-            warp_res_from_vidspace = kwimage.Affine.scale(scale_res_from_vidspace)
+        # cxy = vidspace_annot_box.to_cxywh().data[0:2]
+        # warp_res_from_vidspace = kwimage.Affine.coerce(scale=scale_res_from_vidspace, about=cxy)
+        warp_res_from_vidspace = kwimage.Affine.scale(scale_res_from_vidspace)
 
-            # Convert the video space annotation into requested resolution "window space"
-            winspace_annot_box = vidspace_annot_box.warp(warp_res_from_vidspace)
+        # Convert the video space annotation into requested resolution "window space"
+        winspace_annot_box = vidspace_annot_box.warp(warp_res_from_vidspace)
 
-            # Convert to center xy/with/height format
-            winspace_annot_box = winspace_annot_box.toformat('cxywh')
+        # Convert to center xy/with/height format
+        winspace_annot_box = winspace_annot_box.toformat('cxywh')
 
-            # Force the box to be a specific size at our window resolution
-            # THIS IS THE BUG
-            # winspace_target_box = winspace_annot_box.resize(*force_dsize)
+        # Force the box to be a specific size at our window resolution
+        # THIS IS THE BUG
+        # winspace_target_box = winspace_annot_box.resize(*force_dsize)
 
-            # Workaround
-            winspace_target_box = winspace_annot_box.copy()
-            #            size = max(winspace_target_box.data[2], winspace_target_box.data[3])
-            winspace_target_box.data[2:4] = (224, 224)
+        # Workaround
+        winspace_target_box = winspace_annot_box.copy()
+        #            size = max(winspace_target_box.data[2], winspace_target_box.data[3])
+        winspace_target_box.data[2:4] = (224, 224)
 
-            # Convert the box back to videospace
-            vidspace_target_box = winspace_target_box.warp(warp_res_from_vidspace.inv())
+        # Convert the box back to videospace
+        vidspace_target_box = winspace_target_box.warp(warp_res_from_vidspace.inv())
 
-            # Get the slice for video space
-            vidspace_slice = vidspace_target_box.quantize().to_slice()
-        else:
-            vidspace_slice = vidspace_annot_box.to_slice()
+        # Get the slice for video space
+        vidspace_slice = vidspace_target_box.quantize().to_slice()
 
         target = {
             'vidid': video_id,
@@ -202,9 +184,7 @@ def score_tracks(poly_coco_dset, img_coco_dset, thresh, model_fpath):
             'space_slice': vidspace_slice,
             'use_native_scale': True,
         }
-        import xdev
-        with xdev.embed_on_exception_context:
-            data = sampler.load_sample(target, with_annots=False)
+        data = sampler.load_sample(target, with_annots=False)
         ims = data['im']
 
         good_ims = []
@@ -529,9 +509,9 @@ Example in MLOPs:
                 - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
             bas_pxl.test_dataset:
                 - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R001_I2LS.kwcoco.zip
-                # - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R002_I2LS.kwcoco.zip
+                - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R002_I2LS.kwcoco.zip
                 # - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-BR_R002_I2LS.kwcoco.zip
-                # - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-CH_R001_I2LS.kwcoco.zip
+                - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-CH_R001_I2LS.kwcoco.zip
                 # - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-NZ_R001_I2LS.kwcoco.zip
                 # - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-AE_R001_I2LS.kwcoco.zip
             bas_pxl.chip_overlap: 0.3
@@ -555,7 +535,7 @@ Example in MLOPs:
             bas_pxl.enabled: 1
             bas_pxl_eval.enabled: 0
             bas_poly.enabled: 1
-            bas_poly_eval.enabled: 0
+            bas_poly_eval.enabled: 1
             bas_poly_viz.enabled: 0
             sv_crop.enabled: 1
             sv_crop.minimum_size: "256x256@2GSD"
