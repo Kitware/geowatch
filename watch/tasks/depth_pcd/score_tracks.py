@@ -28,7 +28,7 @@ class ScoreTracksConfig(scfg.DataConfig):
             threshold to filter polygons, very sensitive
             '''), group='track scoring')
 
-    model_fpath = scfg.Value(None, help='Path to the depthPCD site validation model')
+    model_fpath = scfg.Value(None, help='Path to the depth_pcd site validation model')
 
     region_id = scfg.Value(None, help=ub.paragraph(
         '''
@@ -72,7 +72,7 @@ class ScoreTracksConfig(scfg.DataConfig):
 
 
 def score_tracks(poly_coco_dset, img_coco_dset, thresh, model_fpath):
-    from watch.tasks.depthPCD.model import getModel, normalize, TPL_DPATH
+    from watch.tasks.depth_pcd.model import getModel, normalize, TPL_DPATH
 
     import numpy as np
     import cv2
@@ -255,7 +255,7 @@ def main(**kwargs):
 
     # Import this first
     print('Importing tensorflow stuff (can take a sec)')
-    from watch.tasks.depthPCD.model import getModel, normalize, TPL_DPATH  # NOQA
+    from watch.tasks.depth_pcd.model import getModel, normalize, TPL_DPATH  # NOQA
 
     from watch.cli.kwcoco_to_geojson import convert_kwcoco_to_iarpa, create_region_header
     from watch.utils import process_context
@@ -266,7 +266,7 @@ def main(**kwargs):
     if args.model_fpath is None:
         print('warning: the path to the model was not explicitly specified, '
               'attempting to automatically infer it')
-        cand_model_path = ub.Path(os.environ.get('DVC_EXPT_DPATH', '')) / 'models/depthPCD/basicModel2.h5'
+        cand_model_path = ub.Path(os.environ.get('DVC_EXPT_DPATH', '')) / 'models/depth_pcd/basicModel2.h5'
         if cand_model_path.exists():
             args.model_fpath = cand_model_path
         else:
@@ -299,7 +299,7 @@ def main(**kwargs):
     # output_region_fpath = ub.Path(args.output_region_fpath)
 
     proc_context = process_context.ProcessContext(
-        name='watch.tasks.depthPCD.score_tracks', type='process',
+        name='watch.tasks.depth_pcd.score_tracks', type='process',
         config=jsonified_config,
         track_emissions=False,
     )
@@ -417,7 +417,7 @@ def main(**kwargs):
 r'''
 Ignore:
 
-    python -m watch.tasks.depthPCD.score_tracks /media/barcelona/Drop6/bas_baseline/polyb.kwcoco.zip
+    python -m watch.tasks.depth_pcd.score_tracks /media/barcelona/Drop6/bas_baseline/polyb.kwcoco.zip
             --images /media/barcelona/Drop6/valT.kwcoco.zip
             --out_site_summaries_fpath "/media/barcelona/Drop6/tronexperiments/debug/site_summaries_manifest.json"
             --out_site_summaries_dir "/media/barcelona/Drop6/tronexperiments/debug/site_summaries"
@@ -492,12 +492,12 @@ Example:
         --merge_fpath "$DVC_EXPT_DPATH/_test_dzyne_sv/eval_before/poly_eval_before.json"
 
     # Run the Site Validation Filter
-    python -m watch.tasks.depthPCD.score_tracks \
+    python -m watch.tasks.depth_pcd.score_tracks \
         --input_kwcoco $DVC_DATA_DPATH/Drop6/imgonly-KR_R002.kwcoco.json \
         --poly_kwcoco $DVC_EXPT_DPATH/_test_dzyne_sv/poly.kwcoco.zip \
         --input_region "$DVC_EXPT_DPATH/_test_dzyne_sv/site_summaries_manifest.json" \
         --input_sites "$DVC_EXPT_DPATH/_test_dzyne_sv/sites_manifest.json" \
-        --model_fpath $DVC_EXPT_DPATH/models/depthPCD/basicModel2.h5 \
+        --model_fpath $DVC_EXPT_DPATH/models/depth_pcd/basicModel2.h5 \
         --out_site_summaries_fpath "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_site_summaries_manifest.json" \
         --out_site_summaries_dir "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_site_summaries" \
         --out_sites_fpath  "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_sites_manifest.json" \
