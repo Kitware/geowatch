@@ -195,3 +195,73 @@ geowatch visualize "$PREDICTION_DPATH/poly.kwcoco.zip" \
 ###    /vsicurl/https:/sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/52/S/DG/2021/7/S2A_52SDG_20210731_0_L2A/B08.tif \
 ###    /home/joncrall/remote/Ooo/data/dvc-repos/smart_data_dvc-ssd/Tutorial5-Demo/Aligned-Tutorial5-Demo/KR_R001/S2/affine_warp/crop_20210731T020000Z_N37.643680E128.649453_N37.683356E128.734073_S2_0/.tmpwarp.crop_20210731T020000Z_N37.643680E128.649453_N37.683356E128.734073_S2_0_nir.tif
 
+
+
+__notes__="
+
+Downloading The Model (and Prebuilt Demo Dataset)
+
+The following is instructions for downloading the model and optionally the
+pre-constructed kwcoco dataset (which is an alternative from constructing it
+from STAC yourself via prepare_ta2_dataset).
+
+We host it on two locations: data.kitware.com and via IPFS.
+
+
+Download from data.kitware.com (via Girder)
+-------------------------------------------
+
+Both data and the model are available at this URL:
+https://data.kitware.com/#user/598a19658d777f7d33e9c18b/folder/645a7cde58fefcae81a9f72b
+
+
+Programatically:
+
+
+.. code:: bash
+
+    pip install girder-client
+    girder-client --api-url https://data.kitware.com/api/v1 download --parent-type folder 645a7cde58fefcae81a9f72b tutorial5-data
+    unzip tutorial5-data/Aligned-Tutorial5-Demo.zip -d tutorial5-data
+
+    # The demo dataset
+    ls tutorial5-data/Aligned-Tutorial5-Demo
+
+    # The model
+    ls tutorial5-data/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
+
+
+Download from IPFS
+------------------
+
+# Both data and model are available at this URL
+https://ipfs.io/ipfs/bafybeiflbygurj5efyf5j7yevcw6cw3ebvgrc3hiau7e7rncwb4u562vca
+
+Relevant IPFS CIDS:
+
+* bafybeiflbygurj5efyf5j7yevcw6cw3ebvgrc3hiau7e7rncwb4u562vca - tutorial-5-data
+* bafybeicsgpwom66kyp7nhuqy7zv4aaxo3x3ilfptuckh3ahi7xr6nal7jy - tutorial-5-data/Aligned-Tutorial5-Demo/
+* bafybeiegbappwipoelo532fh3wtrircuhmk4poyuqjzudulme742xnc5hi - Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
+* bafybeiamg3pqo2q3xefxlvstqeixxvf4wiazpjqleznwhgmwhhdfthebxq - Aligned-Tutorial5-Demo.zip  # The data but as an zipped archive
+
+
+.. code:: bash
+
+    # The model only:
+    curl -LJO https://ipfs.io/ipfs/bafybeicydgguvhts4ejcnyausvw6sff453htpxp5tktcigdyy6hdkuovgy/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
+
+    # The pre-built kwcoco dataset (downloading a directory seems to require wget)
+    wget -r https://ipfs.io/ipfs/bafybeiflbygurj5efyf5j7yevcw6cw3ebvgrc3hiau7e7rncwb4u562vca/Aligned-Tutorial5-Demo
+
+
+.. code:: bash
+
+    # OR if you have ipfs / kubo installed
+    ipfs get --progress bafybeiflbygurj5efyf5j7yevcw6cw3ebvgrc3hiau7e7rncwb4u562vca
+
+    # OR use the standalone ipget binary
+    # https://github.com/ipfs/ipget
+    # https://dist.ipfs.tech/#ipget
+    ipget --progress bafybeiflbygurj5efyf5j7yevcw6cw3ebvgrc3hiau7e7rncwb4u562vca
+
+"

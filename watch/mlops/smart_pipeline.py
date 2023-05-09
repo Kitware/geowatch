@@ -706,6 +706,59 @@ class SV_Cropping(Cropping):
     }
 
 
+class SV_DepthFilter(ProcessNode):
+    """
+
+    Example:
+        >>> from watch.mlops.smart_pipeline import *  # NOQA
+        >>> self = node = SV_DepthFilter(root_dpath='/ROOT/DPATH/')
+        >>> node.configure({
+        >>>     'input_kwcoco': 'foo.kwcoco',
+        >>>     'input_region': 'region.geojson',
+        >>>     'input_sites': 'input_sites',
+        >>>     #'output_sites_dpath': 'I_WANT_OUT_SITES_HERE',
+        >>>     'output_region_fpath': 'I_WANT_OUT_REGIONS_HERE',
+        >>>     'output_site_manifest_fpath': 'I_WANT_SITE_MANIFESTS_HERE',
+        >>> })
+        >>> print('self.template_out_paths = {}'.format(ub.urepr(self.template_out_paths, nl=1)))
+        >>> print('self.final_out_paths = {}'.format(ub.urepr(self.final_out_paths, nl=1)))
+        >>> print(node.command())
+    """
+    name = 'sv_depth_filter'
+    executable = 'python -m watch.tasks.depthPCD.score_tracks'
+    group_dname = PREDICT_NAME
+
+    in_paths = {
+        'input_kwcoco',
+        'input_region',
+        'input_sites',
+    }
+    out_paths = {
+        'output_region_fpath': 'out_region.geojson',
+        'output_sites_dpath': 'out_sites',
+        'output_site_manifest_fpath': 'out_site_manifest.json',
+    }
+
+    algo_params = {
+        'threshold': 0.4,
+    }
+
+    @profile
+    def command(self):
+        # Not sure why final-config doesn't have everything
+        config = (ub.udict(self.final_config) | self.final_algo_config) | self.final_perf_config
+        config_argstr = self._make_argstr(config)
+        command = ub.codeblock(
+            r'''
+            {executable} \
+                {config_argstr}
+            ''').format(
+                executable=self.executable,
+                config_argstr=config_argstr,
+            )
+        return command
+
+
 class DinoBoxDetector(ProcessNode):
     """
     Used for both site cropping and validation-cropping
@@ -781,13 +834,13 @@ class DinoBoxDetector(ProcessNode):
 # from watch.tasks.dino_detector import building_validator  # NOQA
 # ub.udict(building_validator.BuildingValidatorConfig.__default__)
 
-class DinoBuildingFilter(ProcessNode):
+class SV_DinoFilter(ProcessNode):
     """
     Used for both site cropping and validation-cropping
 
     Example:
         >>> from watch.mlops.smart_pipeline import *  # NOQA
-        >>> self = node = DinoBuildingFilter(root_dpath='/ROOT/DPATH/')
+        >>> self = node = SV_DinoFilter(root_dpath='/ROOT/DPATH/')
         >>> node.configure({
         >>>     'input_kwcoco': 'foo.kwcoco',
         >>>     'input_region': 'region.geojson',
@@ -954,7 +1007,7 @@ def make_smart_pipeline_nodes(with_bas=True, building_validation=False,
         nodes['sv_dino_boxes'] = DinoBoxDetector()
         nodes['sv_crop'].outputs['crop_dst_fpath'].connect(nodes['sv_dino_boxes'].inputs['coco_fpath'])
 
-        nodes['sv_dino_filter'] = DinoBuildingFilter()
+        nodes['sv_dino_filter'] = SV_DinoFilter()
         nodes['sv_dino_boxes'].outputs['out_coco_fpath'].connect(nodes['sv_dino_filter'].inputs['input_kwcoco'])
         bas_output_region.connect(nodes['sv_dino_filter'].inputs['input_region'])
         bas_output_sites.connect(nodes['sv_dino_filter'].inputs['input_sites'])

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+"""
+PCD = parallel change detection
+"""
 import geojson
 import json
 import os
@@ -8,14 +11,16 @@ import scriptconfig as scfg
 
 class ScoreTracksConfig(scfg.DataConfig):
     """
-    Score and Convert KWCOCO to IARPA GeoJSON
+    Filter tracks based on the depth detector.
     """
-    in_file = scfg.Value(None, required=True, help='Input KWCOCO to convert',
-                         position=1)
+    input_kwcoco = scfg.Value(None, required=True,
+                              help='kwcoco file with the images to use',
+                              position=1, alias=['in_file'])
 
-    images_kwcoco = scfg.Value(None, required=True, help=ub.paragraph(
+    poly_kwcoco = scfg.Value(None, required=True, help=ub.paragraph(
         '''
-            kwcoco file with images where to score polygons.
+            optional: kwcoco file with polygons (alternative to input region /
+            sites)
             '''), group='track scoring')
 
     threshold = scfg.Value(0.4, help=ub.paragraph(
@@ -30,6 +35,9 @@ class ScoreTracksConfig(scfg.DataConfig):
             ID for region that sites belong to. If None, try to infer
             from kwcoco file.
             '''), group='convenience')
+
+    input_region = scfg.Value(None, help='The coercable input region model')
+    input_sites = scfg.Value(None, help='The coercable input site models')
 
     out_kwcoco = scfg.Value(None, help=ub.paragraph(
         '''
@@ -63,7 +71,7 @@ class ScoreTracksConfig(scfg.DataConfig):
         '''), group='behavior')
 
 
-def score_tracks(coco_dset, imCoco_dset, thresh, model_fpath):
+def score_tracks(poly_coco_dset, img_coco_dset, thresh, model_fpath):
     from watch.tasks.depthPCD.model import getModel, normalize, TPL_DPATH
 
     import numpy as np
@@ -81,24 +89,24 @@ def score_tracks(coco_dset, imCoco_dset, thresh, model_fpath):
     # model.load_weights('/media/hdd2/antonio/models/urbanTCDs-use.h5', by_name=True, skip_mismatch=True)
 
     to_keep = []
-    for coco_img in imCoco_dset.images().coco_images:
+    for coco_img in img_coco_dset.images().coco_images:
         if coco_img['sensor_coarse'] == 'WV' and 'red' in coco_img.channels:
             to_keep.append(coco_img['id'])
 
-    dset = imCoco_dset.subset(to_keep)
+    dset = img_coco_dset.subset(to_keep)
 
     sampler = ndsampler.CocoSampler(dset)
 
     # FIXME: pandas is slow, we likely want to use an alternative impl
-    imgs = pd.DataFrame(coco_dset.dataset["images"])
+    imgs = pd.DataFrame(poly_coco_dset.dataset["images"])
     if "timestamp" not in imgs.columns:
         imgs["timestamp"] = imgs["id"]
 
-    annots = pd.DataFrame(coco_dset.dataset["annotations"])
+    annots = pd.DataFrame(poly_coco_dset.dataset["annotations"])
 
     if annots.shape[0] == 0:
         print("Nothing to filter")
-        return coco_dset
+        return poly_coco_dset
 
     annots = annots[[
         "id", "image_id", "track_id", "score"
@@ -117,8 +125,8 @@ def score_tracks(coco_dset, imCoco_dset, thresh, model_fpath):
 
         first_annot_id = track_group["id"].tolist()[0]
         first_image_id = track_group["image_id"].tolist()[0]
-        first_coco_img = coco_dset.coco_image(first_image_id)
-        first_annot = coco_dset.anns[first_annot_id]
+        first_coco_img = poly_coco_dset.coco_image(first_image_id)
+        first_annot = poly_coco_dset.anns[first_annot_id]
         imgspace_annot_box = kwimage.Box.coerce(first_annot['bbox'], format='xywh')
         vidspace_annot_box = imgspace_annot_box.warp(first_coco_img.warp_vid_from_img)
         ref_coco_img = first_coco_img  # dset.coco_image(dset.dataset['images'][0]['id'])
@@ -235,9 +243,9 @@ def score_tracks(coco_dset, imCoco_dset, thresh, model_fpath):
     from collections import Counter
     print(Counter(regions))
     if len(ann_ids_to_drop) > 0:
-        coco_dset.remove_annotations(ann_ids_to_drop)
+        poly_coco_dset.remove_annotations(ann_ids_to_drop)
 
-    return coco_dset
+    return poly_coco_dset, track_ids_to_drop
 
 
 def main(**kwargs):
@@ -246,7 +254,7 @@ def main(**kwargs):
     rich.print('args = {}'.format(ub.urepr(args, nl=1)))
 
     # Import this first
-    print('Importing tensorflow stuff (can take a while)')
+    print('Importing tensorflow stuff (can take a sec)')
     from watch.tasks.depthPCD.model import getModel, normalize, TPL_DPATH  # NOQA
 
     from watch.cli.kwcoco_to_geojson import convert_kwcoco_to_iarpa, create_region_header
@@ -270,8 +278,6 @@ def main(**kwargs):
     if not model_fpath.exists():
         raise IOError(f'Specified {model_fpath=} does not exist')
 
-    coco_dset = kwcoco.CocoDataset.coerce(args.in_file)
-
     tracking_output = {
         'type': 'tracking_result',
         'info': [],
@@ -286,6 +292,12 @@ def main(**kwargs):
 
     info = tracking_output['info']
 
+    from watch.geoannots import geomodels
+    from watch.utils import util_gis
+    region_model = geomodels.RegionModel.coerce(args.input_region)
+    input_site_fpaths = util_gis.coerce_geojson_paths(args.input_sites)
+    # output_region_fpath = ub.Path(args.output_region_fpath)
+
     proc_context = process_context.ProcessContext(
         name='watch.tasks.depthPCD.score_tracks', type='process',
         config=jsonified_config,
@@ -294,8 +306,28 @@ def main(**kwargs):
     proc_context.start()
     info.append(proc_context.obj)
 
-    images = kwcoco.CocoDataset.coerce(args.images_kwcoco)
-    coco_dset = score_tracks(coco_dset, images, args.threshold, model_fpath)
+    img_coco_dset = kwcoco.CocoDataset.coerce(args.input_kwcoco)
+
+    if args.poly_kwcoco is not None:
+        poly_coco_dset = kwcoco.CocoDataset.coerce(args.poly_kwcoco)
+    else:
+        from watch.cli import reproject_annotations
+        img_coco_dset = reproject_annotations.main(
+            cmdline=0, src=img_coco_dset,
+            dst='return',
+            region_models=args.input_region,
+            status_to_catname={'system_confirmed': 'positive'},
+            role='pred_poly',
+            validate_checks=False,
+            clear_existing=False,
+        )
+        poly_coco_dset = poly_coco_dset
+
+    coco_dset, track_ids_to_drop = score_tracks(poly_coco_dset, img_coco_dset, args.threshold, model_fpath)
+
+    # TODO:
+    # just return the list of tracks that failed the filter. Remove those sites
+    # and then just pass the rest through.
 
     proc_context.stop()
     out_kwcoco = args.out_kwcoco
@@ -461,8 +493,10 @@ Example:
 
     # Run the Site Validation Filter
     python -m watch.tasks.depthPCD.score_tracks \
-        --in_file $DVC_EXPT_DPATH/_test_dzyne_sv/poly.kwcoco.zip \
-        --images_kwcoco $DVC_DATA_DPATH/Drop6/imgonly-KR_R002.kwcoco.json \
+        --input_kwcoco $DVC_DATA_DPATH/Drop6/imgonly-KR_R002.kwcoco.json \
+        --poly_kwcoco $DVC_EXPT_DPATH/_test_dzyne_sv/poly.kwcoco.zip \
+        --input_region "$DVC_EXPT_DPATH/_test_dzyne_sv/site_summaries_manifest.json" \
+        --input_sites "$DVC_EXPT_DPATH/_test_dzyne_sv/sites_manifest.json" \
         --model_fpath $DVC_EXPT_DPATH/models/depthPCD/basicModel2.h5 \
         --out_site_summaries_fpath "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_site_summaries_manifest.json" \
         --out_site_summaries_dir "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_site_summaries" \

@@ -1897,13 +1897,17 @@ DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch.mlops.schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
-            - $DVC_EXPT_DPATH/model_candidates/namek_split1_shortlist_v4_top.yaml
+            #- $DVC_EXPT_DPATH/model_candidates/namek_split1_shortlist_v4_top.yaml
+            - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_MultiModal_Resume/Drop6_MultiModal_Resume_epoch2_step96.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_MultiModal_Resume/Drop6_MultiModal_Resume_epoch3_step128.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop6-NoWinterMedian10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_invar_split6_V56/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_invar_split6_V56_epoch268_step7801.pt
         bas_pxl.test_dataset:
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R002_I2LS.kwcoco.zip
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-CH_R001_I2LS.kwcoco.zip
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-NZ_R001_I2LS.kwcoco.zip
         bas_pxl.chip_overlap: 0.3
         bas_pxl.chip_dims:
+            - auto
             - [196,196]
         bas_pxl.time_span:
             - auto
@@ -1913,7 +1917,8 @@ python -m watch.mlops.schedule_evaluation --params="
             - soft4
         bas_poly.thresh:
             #- 0.1
-            #- 0.275
+            #- 0.2
+            - 0.275
             - 0.3
             - 0.325
             - 0.35
