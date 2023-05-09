@@ -143,7 +143,7 @@ def main(cmdline=1, **kwargs):
         from watch.utils.partial_format import fsubtemplate
         coco_fpath = fsubtemplate('$NODE_DPATH/pred_boxes.kwcoco.zip')
         from watch.utils.util_path import coerce_patterned_paths
-        site_summary = ub.Path(fsubtemplate('$NODE_DPATH/.pred/valicrop/*/.pred/bas_poly/*/site_summaries_manifest.json'))
+        site_summary = ub.Path(fsubtemplate('$NODE_DPATH/.pred/sv_crop/*/.pred/bas_poly/*/site_summaries_manifest.json'))
         site_summary = coerce_patterned_paths(site_summary)[0]
 
         output_region_fpath = ub.Path(fsubtemplate('$NODE_DPATH/filtered_site_summaries.geojson'))
@@ -457,11 +457,11 @@ Ignore:
             bas_poly.enabled: 1
             bas_poly_eval.enabled: 1
             bas_poly_viz.enabled: 0
-            valicrop.enabled: 1
-            valicrop.minimum_size: "256x256@2GSD"
-            valicrop.num_start_frames: 3
-            valicrop.num_end_frames: 3
-            valicrop.context_factor: 1.5
+            sv_crop.enabled: 1
+            sv_crop.minimum_size: "256x256@2GSD"
+            sv_crop.num_start_frames: 3
+            sv_crop.num_end_frames: 3
+            sv_crop.context_factor: 1.5
             sv_dino_boxes.enabled: 1
             sv_dino_boxes.package_fpath: $DVC_EXPT_DPATH/models/kitware/xview_dino.pt
             sv_dino_boxes.window_dims:
@@ -498,17 +498,17 @@ Ignore:
                 - 0.5
         submatrices:
             - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R001.kwcoco.zip
-              valicrop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-KR_R001.kwcoco.json
+              sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-KR_R001.kwcoco.json
             - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R002.kwcoco.zip
-              valicrop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-KR_R002.kwcoco.json
+              sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-KR_R002.kwcoco.json
             - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-BR_R002.kwcoco.zip
-              valicrop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-BR_R002.kwcoco.json
+              sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-BR_R002.kwcoco.json
             - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-CH_R001.kwcoco.zip
-              valicrop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-CH_R001.kwcoco.json
+              sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-CH_R001.kwcoco.json
             - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-NZ_R001.kwcoco.zip
-              valicrop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-NZ_R001.kwcoco.json
+              sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-NZ_R001.kwcoco.json
             - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/imganns-AE_R001.kwcoco.zip
-              valicrop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-AE_R001.kwcoco.json
+              sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-AE_R001.kwcoco.json
         " \
         --root_dpath="$DVC_EXPT_DPATH/_mlops_eval10_baseline" \
         --devices="0," --tmux_workers=8 \
@@ -543,7 +543,7 @@ gwmlops aggregate \
 
 geowatch align \
     --src "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop6/imgonly-KR_R001.kwcoco.json" \
-    --dst "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/valicrop/valicrop_id_2e8c8dc3/valicrop.kwcoco.zip" \
+    --dst "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/sv_crop/valicrop_id_2e8c8dc3/sv_crop.kwcoco.zip" \
     --regions="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/bas_poly/bas_poly_id_dc32b2a6/site_summaries_manifest.json" \
     --site_summary=True \
     --verbose="1" \
@@ -564,14 +564,14 @@ geowatch align \
     --force_min_gsd="2" \
     --convexify_regions="True"
 
-geowatch visualize /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/valicrop/valicrop_id_2e8c8dc3/valicrop.kwcoco.zip --smart
+geowatch visualize /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/sv_crop/valicrop_id_2e8c8dc3/sv_crop.kwcoco.zip --smart
 
-python ~/code/watch/dev/wip/grid_sitevali_crops.py /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/valicrop/valicrop_id_2e8c8dc3/_viz_*
+python ~/code/watch/dev/wip/grid_sitevali_crops.py /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/sv_crop/valicrop_id_2e8c8dc3/_viz_*
 
 
 python -m watch.tasks.dino_detector.predict \
     --package_fpath="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/kitware/xview_dino.pt" \
-    --coco_fpath="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/valicrop/valicrop_id_2e8c8dc3/valicrop.kwcoco.zip" \
+    --coco_fpath="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/sv_crop/valicrop_id_2e8c8dc3/sv_crop.kwcoco.zip" \
     --out_coco_fpath="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/buildings/buildings_id_61b8c2c7/pred_boxes.kwcoco.zip" \
     --device="0" \
     --data_workers="2" \
@@ -595,7 +595,7 @@ DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 geowatch reproject \
         --src "$NODE_DPATH/pred_boxes.kwcoco.zip" \
         --dst "$NODE_DPATH/pred_boxes_with_polys.kwcoco.zip" \
-        --region_models "$NODE_DPATH/.pred/valicrop/*/.pred/bas_poly/*/site_summaries_manifest.json" \
+        --region_models "$NODE_DPATH/.pred/sv_crop/*/.pred/bas_poly/*/site_summaries_manifest.json" \
         --status_to_catname="{system_confirmed: positive}" \
         --role=pred_poly \
         --validate_checks=False \
@@ -623,7 +623,7 @@ python ~/code/watch/dev/wip/grid_sitevali_crops.py \
 
 python -m watch.tasks.dino_detector.building_validator \
     --input_kwcoco "$NODE_DPATH/pred_boxes.kwcoco.zip" \
-    --input_region $NODE_DPATH/.pred/valicrop/*/.pred/bas_poly/*/site_summaries_manifest.json \
+    --input_region $NODE_DPATH/.pred/sv_crop/*/.pred/bas_poly/*/site_summaries_manifest.json \
     --output_region_fpath "$NODE_DPATH/filtered_summaries.json" \
     --box_isect_threshold 0.1 \
     --box_score_threshold 0.1 \

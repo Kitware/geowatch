@@ -5,6 +5,9 @@ This also contains metadata about what data the models expect to run on.
 
 Production code exists here:
     https://gitlab.kitware.com/smart/watch/-/blob/dev/eval3-integration/scripts/run_bas_fusion_eval3_for_baseline.py
+
+SeeAlso:
+    ~/code/watch/watch/mlops/smart_global_helper.py
 """
 
 

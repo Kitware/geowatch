@@ -708,6 +708,7 @@ class SV_Cropping(Cropping):
 
 class SV_DepthFilter(ProcessNode):
     """
+    Node for DZYNEs high res depth-based parallel change detector
 
     Example:
         >>> from watch.mlops import smart_pipeline
@@ -984,7 +985,8 @@ def sc_nodes():
 
 
 def make_smart_pipeline_nodes(with_bas=True, building_validation=False,
-                              site_crops=True, with_sc=True):
+                              depth_validation=True, site_crops=True,
+                              with_sc=True):
     nodes = {}
 
     sc_input_region = None
@@ -1011,29 +1013,40 @@ def make_smart_pipeline_nodes(with_bas=True, building_validation=False,
         true_regions = nodes['bas_poly_eval'].inputs['true_region_dpath']
         true_sites = nodes['bas_poly_eval'].inputs['true_site_dpath']
 
-    if building_validation:
-        nodes['sv_crop'] = SV_Cropping()
+    with_sv = building_validation or depth_validation
 
+    if with_sv:
+        nodes['sv_crop'] = SV_Cropping()
         if bas_input_kwcoco is not None:
             bas_output_region.connect(nodes['sv_crop'].inputs['regions'])
             bas_input_kwcoco.connect(nodes['sv_crop'].inputs['crop_src_fpath'])
+        sv_output_kwcoco = nodes['sv_crop'].outputs['crop_dst_fpath']
+        sv_region = bas_output_region
+        sv_sites = bas_output_sites
 
-        nodes['sv_dino_boxes'] = DinoBoxDetector()
-        nodes['sv_crop'].outputs['crop_dst_fpath'].connect(nodes['sv_dino_boxes'].inputs['coco_fpath'])
+        if building_validation:
+            nodes['sv_dino_boxes'] = DinoBoxDetector()
+            nodes['sv_dino_filter'] = SV_DinoFilter()
+            sv_output_kwcoco.connect(nodes['sv_dino_boxes'].inputs['coco_fpath'])
+            nodes['sv_dino_boxes'].outputs['out_coco_fpath'].connect(nodes['sv_dino_filter'].inputs['input_kwcoco'])
+            sv_region.connect(nodes['sv_dino_filter'].inputs['input_region'])
+            sv_sites.connect(nodes['sv_dino_filter'].inputs['input_sites'])
+            sv_region = nodes['sv_dino_filter'].outputs['output_region_fpath']
+            sv_sites = nodes['sv_dino_filter'].outputs['output_sites_dpath']
 
-        nodes['sv_dino_filter'] = SV_DinoFilter()
-        nodes['sv_dino_boxes'].outputs['out_coco_fpath'].connect(nodes['sv_dino_filter'].inputs['input_kwcoco'])
-        bas_output_region.connect(nodes['sv_dino_filter'].inputs['input_region'])
-        bas_output_sites.connect(nodes['sv_dino_filter'].inputs['input_sites'])
-
-        # If we have a validation step, use those as inputs to SC instead
-        sv_output_region = nodes['sv_dino_filter'].outputs['output_region_fpath']
-        sv_output_sites = nodes['sv_dino_filter'].outputs['output_sites_dpath']
+        if depth_validation:
+            nodes['sv_depth_filter'] = SV_DepthFilter()
+            sv_output_kwcoco.connect(nodes['sv_depth_filter'].inputs['input_kwcoco'])
+            sv_region.connect(nodes['sv_depth_filter'].inputs['input_region'])
+            sv_sites.connect(nodes['sv_depth_filter'].inputs['input_sites'])
+            sv_region = nodes['sv_depth_filter'].outputs['output_region_fpath']
+            sv_sites = nodes['sv_depth_filter'].outputs['output_sites_dpath']
 
         # Add an evaluation step after bas validation
         nodes['sv_poly_eval'] = PolygonEvaluation(name='sv_poly_eval')
-        sv_output_sites.connect(nodes['sv_poly_eval'].inputs['sites_fpath'])
-        sc_input_region = sv_output_region
+        sv_sites.connect(nodes['sv_poly_eval'].inputs['sites_fpath'])
+        # If we have a validation step, use those as inputs to SC
+        sc_input_region = sv_region
 
         if true_regions is not None:
             true_regions.connect(nodes['sv_poly_eval'].inputs['true_region_dpath'])
@@ -1072,7 +1085,7 @@ def make_smart_pipeline(name):
 
     Example:
         >>> from watch.mlops.smart_pipeline import *  # NOQA
-        >>> dag = make_smart_pipeline('bas_building_vali')
+        >>> dag = make_smart_pipeline('bas_depth_vali')
         >>> dag.print_graphs()
     """
     from watch.mlops.pipeline_nodes import PipelineDAG
@@ -1086,6 +1099,9 @@ def make_smart_pipeline(name):
         'bas_building_vali': partial(make_smart_pipeline_nodes, with_bas=True,
                                      building_validation=True,
                                      site_crops=False, with_sc=False),
+        'bas_depth_vali': partial(make_smart_pipeline_nodes, with_bas=True,
+                                  depth_validation=True,
+                                  site_crops=False, with_sc=False),
     }
     make_nodes = node_makers[name]
     nodes = make_nodes()
