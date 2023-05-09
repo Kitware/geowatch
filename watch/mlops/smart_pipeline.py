@@ -725,7 +725,7 @@ class SV_DepthFilter(ProcessNode):
         >>> print(node.command())
     """
     name = 'sv_depth_filter'
-    executable = 'python -m watch.tasks.depthPCD.score_tracks'
+    executable = 'python -m watch.tasks.depth_pcd.score_tracks'
     group_dname = PREDICT_NAME
 
     in_paths = {
@@ -741,6 +741,7 @@ class SV_DepthFilter(ProcessNode):
 
     algo_params = {
         'threshold': 0.4,
+        'model_fpath': None,
     }
 
     @profile
