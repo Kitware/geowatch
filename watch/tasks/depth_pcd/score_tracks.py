@@ -2,7 +2,7 @@
 """
 PCD = parallel change detection
 """
-import geojson
+# import geojson
 import json
 import os
 import ubelt as ub
@@ -13,62 +13,48 @@ class ScoreTracksConfig(scfg.DataConfig):
     """
     Filter tracks based on the depth detector.
     """
-    input_kwcoco = scfg.Value(None, required=True,
-                              help='kwcoco file with the images to use',
-                              position=1, alias=['in_file'])
-
-    poly_kwcoco = scfg.Value(None, required=True, help=ub.paragraph(
+    input_kwcoco = scfg.Value(None, required=True, help=ub.paragraph(
         '''
-            optional: kwcoco file with polygons (alternative to input region /
-            sites)
-            '''), group='track scoring')
+        The input kwcoco file with the high-resolution images to use for the
+        depth filter. This does not to cover all sites, any site this does not
+        cover will be automatically accepted.
+        '''), position=1, alias=['in_file'], group='inputs')
+
+    input_region = scfg.Value(None, help='The coercable input region model', group='inputs')
+    input_sites = scfg.Value(None, help='The coercable input site models', group='inputs')
+
+    model_fpath = scfg.Value(None, help='Path to the depth_pcd site validation model', group='inputs')
+
+    # poly_kwcoco = scfg.Value(None, help=ub.paragraph(
+    #     '''
+    #     optional: kwcoco file with polygons (
+    #     alternative to input region / sites)
+    #     '''), group='track scoring')
 
     threshold = scfg.Value(0.4, help=ub.paragraph(
         '''
             threshold to filter polygons, very sensitive
             '''), group='track scoring')
 
-    model_fpath = scfg.Value(None, help='Path to the depth_pcd site validation model')
-
-    region_id = scfg.Value(None, help=ub.paragraph(
-        '''
-            ID for region that sites belong to. If None, try to infer
-            from kwcoco file.
-            '''), group='convenience')
-
-    input_region = scfg.Value(None, help='The coercable input region model')
-    input_sites = scfg.Value(None, help='The coercable input site models')
-
     out_kwcoco = scfg.Value(None, help=ub.paragraph(
         '''
             The file path to write the "tracked" kwcoco file to.
-            '''))
+            '''), group='outputs')
 
-    out_sites_dir = scfg.Value(None, help=ub.paragraph(
+    output_region_fpath = scfg.Value(None, help=ub.paragraph(
+        '''
+        The output for the region with filtered site summaries
+        '''), group='outputs')
+
+    output_sites_dpath = scfg.Value(None, help=ub.paragraph(
         '''
         The directory where site model geojson files will be written.
-        '''))
+        '''), alias=['out_sites_dir'], group='outputs')
 
-    out_site_summaries_dir = scfg.Value(None, help=ub.paragraph(
-        '''
-        The directory path where site summary geojson files will be written.
-        '''))
-
-    out_sites_fpath = scfg.Value(None, help=ub.paragraph(
+    output_site_manifest_fpath = scfg.Value(None, help=ub.paragraph(
         '''
         The file path where a manifest of all site models will be written.
-        '''))
-
-    out_site_summaries_fpath = scfg.Value(None, help=ub.paragraph(
-        '''
-        The file path where a manifest of all site summary geojson files will
-        be written.
-        '''))
-
-    append_mode = scfg.Value(False, isflag=True, help=ub.paragraph(
-        '''
-        Append sites to existing region GeoJSON.
-        '''), group='behavior')
+        '''), alias=['out_sites_fpath'], group='outputs')
 
 
 def score_tracks(poly_coco_dset, img_coco_dset, thresh, model_fpath):
@@ -109,7 +95,7 @@ def score_tracks(poly_coco_dset, img_coco_dset, thresh, model_fpath):
         return poly_coco_dset
 
     annots = annots[[
-        "id", "image_id", "track_id", "score"
+        "id", "image_id", "track_id",
     ]].join(
         imgs[["timestamp"]],
         on="image_id",
@@ -183,7 +169,7 @@ def score_tracks(poly_coco_dset, img_coco_dset, thresh, model_fpath):
             'space_slice': vidspace_slice,
             'use_native_scale': True,
         }
-        data = sampler.load_sample(target, with_annots=False, visible_thres=1.0)
+        data = sampler.load_sample(target, with_annots=False)
 
         ims = data['im']
 
@@ -212,7 +198,7 @@ def score_tracks(poly_coco_dset, img_coco_dset, thresh, model_fpath):
                 ims.append(np.stack([first, 0.5 * first + 0.5 * last, last], axis=-1).astype(np.float32))
 
         score = np.mean(model.predict(np.array(ims), batch_size=1, verbose=False)[8])
-        tq.set_description('%s-%d score %3.2f' % (videoName, track_id, score))
+        tq.set_description(f'{videoName}-{track_id} score {score:3.2f}')
         tq.update(1)
         if 0:
 
@@ -257,11 +243,13 @@ def main(**kwargs):
     print('Importing tensorflow stuff (can take a sec)')
     from watch.tasks.depth_pcd.model import getModel, normalize, TPL_DPATH  # NOQA
 
-    from watch.cli.kwcoco_to_geojson import convert_kwcoco_to_iarpa, create_region_header
-    from watch.utils import process_context
-
     import kwcoco
+    import safer
     from kwcoco.util import util_json
+    # from watch.cli.kwcoco_to_geojson import convert_kwcoco_to_iarpa, create_region_header
+    from watch.geoannots import geomodels
+    from watch.utils import process_context
+    from watch.utils import util_gis
 
     if args.model_fpath is None:
         print('warning: the path to the model was not explicitly specified, '
@@ -278,11 +266,6 @@ def main(**kwargs):
     if not model_fpath.exists():
         raise IOError(f'Specified {model_fpath=} does not exist')
 
-    tracking_output = {
-        'type': 'tracking_result',
-        'info': [],
-        'files': [],
-    }
     # Args will be serailized in kwcoco, so make sure it can be coerced to json
     jsonified_config = util_json.ensure_json_serializable(args.asdict())
     walker = ub.IndexableWalker(jsonified_config)
@@ -290,12 +273,15 @@ def main(**kwargs):
         bad_data = problem['data']
         walker[problem['loc']] = str(bad_data)
 
-    info = tracking_output['info']
-
-    from watch.geoannots import geomodels
-    from watch.utils import util_gis
     region_model = geomodels.RegionModel.coerce(args.input_region)
     input_site_fpaths = util_gis.coerce_geojson_paths(args.input_sites)
+    site_to_site_fpath = ub.udict({
+        p.stem: p for p in input_site_fpaths
+    })
+    site_id_to_summary = {}
+    for summary in region_model.site_summaries():
+        assert summary.site_id not in site_id_to_summary
+        site_id_to_summary[summary.site_id] = summary
     # output_region_fpath = ub.Path(args.output_region_fpath)
 
     proc_context = process_context.ProcessContext(
@@ -304,13 +290,14 @@ def main(**kwargs):
         track_emissions=False,
     )
     proc_context.start()
-    info.append(proc_context.obj)
 
     img_coco_dset = kwcoco.CocoDataset.coerce(args.input_kwcoco)
 
-    if args.poly_kwcoco is not None:
-        poly_coco_dset = kwcoco.CocoDataset.coerce(args.poly_kwcoco)
-    else:
+    # if args.poly_kwcoco is not None:
+    #     poly_coco_dset = kwcoco.CocoDataset.coerce(args.poly_kwcoco)
+    # else:
+    if 1:
+        # Project the site polygons onto the kwcoco dataset.
         from watch.cli import reproject_annotations
         img_coco_dset = reproject_annotations.main(
             cmdline=0, src=img_coco_dset,
@@ -321,13 +308,41 @@ def main(**kwargs):
             validate_checks=False,
             clear_existing=False,
         )
-        poly_coco_dset = poly_coco_dset
+        poly_coco_dset = img_coco_dset
 
     coco_dset, track_ids_to_drop = score_tracks(poly_coco_dset, img_coco_dset, args.threshold, model_fpath)
 
-    # TODO:
-    # just return the list of tracks that failed the filter. Remove those sites
-    # and then just pass the rest through.
+    # We are assuming track-ids correspond to site names here.
+    assert set(site_id_to_summary).issuperset(track_ids_to_drop)
+
+    keep_summaries = ub.udict(site_id_to_summary) - track_ids_to_drop
+    keep_site_fpaths = ub.udict(site_to_site_fpath) - track_ids_to_drop
+
+    sites_with_paths = set(keep_summaries)
+    sites_with_summary = set(keep_site_fpaths)
+    if sites_with_paths != sites_with_summary:
+        print('sites_with_paths = {}'.format(ub.urepr(sites_with_paths, nl=1)))
+        print('sites_with_summary = {}'.format(ub.urepr(sites_with_summary, nl=1)))
+        raise AssertionError(
+            f'sites with paths {len(sites_with_paths)} are not the same as '
+            f'sites with summaries {len(sites_with_summary)}')
+
+    # Copy the filtered site models over to the output directory
+    output_sites_dpath = ub.Path(args.output_sites_dpath)
+    output_sites_dpath.ensuredir()
+    out_site_fpaths = []
+    for old_fpath in keep_site_fpaths.values():
+        new_fpath = output_sites_dpath / old_fpath.name
+        old_fpath.copy(new_fpath, overwrite=True)
+        out_site_fpaths.append(new_fpath)
+
+    new_region_model = geomodels.RegionModel.from_features(
+        [region_model.header] + list(keep_summaries.values()))
+
+    output_region_fpath = ub.Path(args.output_region_fpath)
+    output_region_fpath.parent.ensuredir()
+    with safer.open(output_region_fpath, 'w', temp_file=not ub.WIN32) as file:
+        json.dump(new_region_model, file, indent=4)
 
     proc_context.stop()
     out_kwcoco = args.out_kwcoco
@@ -341,88 +356,28 @@ def main(**kwargs):
         print(f'write to coco_dset.fpath={coco_dset.fpath}')
         coco_dset.dump(out_kwcoco, indent=2)
 
-        # Convert kwcoco to sites
-    import safer
-    verbose = 1
-
-    if args.out_sites_dir is not None:
-
-        sites_dir = ub.Path(args.out_sites_dir).ensuredir()
-        # Also do this in BAS mode
-        sites = convert_kwcoco_to_iarpa(coco_dset,
-                                        default_region_id=args.region_id,
-                                        as_summary=False)
-        print(f'{len(sites)=}')
-        # write sites to disk
-        site_fpaths = []
-        for site in ub.ProgIter(sites, desc='writing sites', verbose=verbose):
-            site_props = site['features'][0]['properties']
-            assert site_props['type'] == 'site'
-            site_fpath = sites_dir / (site_props['site_id'] + '.geojson')
-            site_fpaths.append(os.fspath(site_fpath))
-
-            with safer.open(site_fpath, 'w', temp_file=not ub.WIN32) as f:
-                geojson.dump(site, f, indent=2)
-
-    if args.out_sites_fpath is not None:
-        site_tracking_output = tracking_output.copy()
-        site_tracking_output['files'] = site_fpaths
-        out_sites_fpath = ub.Path(args.out_sites_fpath)
-        print(f'Write tracked site result to {out_sites_fpath}')
-        with safer.open(out_sites_fpath, 'w', temp_file=not ub.WIN32) as file:
-            json.dump(site_tracking_output, file, indent='    ')
-
-    # Convert kwcoco to sites summaries
-    if args.out_site_summaries_dir is not None:
-        sites = convert_kwcoco_to_iarpa(coco_dset,
-                                        default_region_id=args.region_id,
-                                        as_summary=True)
-        print(f'{len(sites)=}')
-        site_summary_dir = ub.Path(args.out_site_summaries_dir).ensuredir()
-        # write sites to region models on disk
-        groups = ub.group_items(sites, lambda site: site['properties'].pop('region_id'))
-
-        site_summary_fpaths = []
-        for region_id, site_summaries in groups.items():
-
-            region_fpath = site_summary_dir / (region_id + '.geojson')
-            if args.append_mode and region_fpath.is_file():
-                with open(region_fpath, 'r') as f:
-                    region = geojson.load(f)
-                if verbose:
-                    print(f'writing to existing region {region_fpath}')
-            else:
-                region = geojson.FeatureCollection(
-                    [create_region_header(region_id, site_summaries)])
-                if verbose:
-                    print(f'writing to new region {region_fpath}')
-            for site_summary in site_summaries:
-                assert site_summary['properties']['type'] == 'site_summary'
-                region['features'].append(site_summary)
-
-            site_summary_fpaths.append(os.fspath(region_fpath))
-            with safer.open(region_fpath, 'w', temp_file=not ub.WIN32) as f:
-                geojson.dump(region, f, indent=2)
-
-    if args.out_site_summaries_fpath is not None:
-        site_summary_tracking_output = tracking_output.copy()
-        site_summary_tracking_output['files'] = site_summary_fpaths
-        out_site_summaries_fpath = ub.Path(args.out_site_summaries_fpath)
-        out_site_summaries_fpath.parent.ensuredir()
-        print(f'Write tracked site summary result to {out_site_summaries_fpath}')
-        with safer.open(out_site_summaries_fpath, 'w', temp_file=not ub.WIN32) as file:
-            json.dump(site_summary_tracking_output, file, indent='    ')
+    if args.output_site_manifest_fpath is not None:
+        filter_output = {
+            'type': 'tracking_result',
+            'info': [],
+            'files': [],
+        }
+        filter_output['info'].append(proc_context.obj)
+        filter_output['files'] = [os.fspath(p) for p in out_site_fpaths]
+        print(f'Write filtered site result to {args.output_site_manifest_fpath}')
+        with safer.open(args.output_site_manifest_fpath, 'w', temp_file=not ub.WIN32) as file:
+            json.dump(filter_output, file, indent=4)
 
 
 r'''
 Ignore:
 
-    python -m watch.tasks.depth_pcd.score_tracks /media/barcelona/Drop6/bas_baseline/polyb.kwcoco.zip
-            --images /media/barcelona/Drop6/valT.kwcoco.zip
-            --out_site_summaries_fpath "/media/barcelona/Drop6/tronexperiments/debug/site_summaries_manifest.json"
-            --out_site_summaries_dir "/media/barcelona/Drop6/tronexperiments/debug/site_summaries"
-            --out_sites_fpath "/media/barcelona/Drop6/tronexperiments/debug/sites_manifest.json"
-            --out_sites_dir "/media/barcelona/Drop6/tronexperiments/debug/sites"
+    python -m watch.tasks.depth_pcd.score_tracks \
+            --poly_kwcoco /media/barcelona/Drop6/bas_baseline/polyb.kwcoco.zip
+            --input_kwcoco /media/barcelona/Drop6/valT.kwcoco.zip
+            --output_region_fpath "/media/barcelona/Drop6/tronexperiments/debug/filtered_region.json"
+            --output_site_manifest_fpath "/media/barcelona/Drop6/tronexperiments/debug/sites_manifest.json"
+            --output_sites_dpath "/media/barcelona/Drop6/tronexperiments/debug/sites"
             --out_kwcoco "some file with filtered poly if you need"
             --threshold 0.3 (default)
 
@@ -458,18 +413,18 @@ Example:
         --in_file "$DVC_EXPT_DPATH/_test_dzyne_sv/pred_heatmaps.kwcoco.zip" \
         --default_track_fn saliency_heatmaps \
         --track_kwargs '{
-            \"agg_fn\": \"probs\",
-            \"thresh\": 0.4,
-            \"time_thresh\": 0.8,
-            \"inner_window_size\": \"1y\",
-            \"inner_agg_fn\": \"mean\",
-            \"norm_ord\": \"inf\",
-            \"resolution\": \"10GSD\",
-            \"moving_window_size\": null,
-            \"poly_merge_method\": \"v2\",
-            \"polygon_simplify_tolerance\": 1,
-            \"min_area_square_meters\": 7200,
-            \"max_area_square_meters\": 8000000
+            "agg_fn": "probs",
+            "thresh": 0.4,
+            "time_thresh": 0.8,
+            "inner_window_size": "1y",
+            "inner_agg_fn": "mean",
+            "norm_ord": "inf",
+            "resolution": "10GSD",
+            "moving_window_size": null,
+            "poly_merge_method": "v2",
+            "polygon_simplify_tolerance": 1,
+            "min_area_square_meters": 7200,
+            "max_area_square_meters": 8000000
         }' \
         --clear_annots=True \
         --site_summary 'None' \
@@ -494,16 +449,16 @@ Example:
     # Run the Site Validation Filter
     python -m watch.tasks.depth_pcd.score_tracks \
         --input_kwcoco $DVC_DATA_DPATH/Drop6/imgonly-KR_R002.kwcoco.json \
-        --poly_kwcoco $DVC_EXPT_DPATH/_test_dzyne_sv/poly.kwcoco.zip \
         --input_region "$DVC_EXPT_DPATH/_test_dzyne_sv/site_summaries_manifest.json" \
         --input_sites "$DVC_EXPT_DPATH/_test_dzyne_sv/sites_manifest.json" \
         --model_fpath $DVC_EXPT_DPATH/models/depth_pcd/basicModel2.h5 \
-        --out_site_summaries_fpath "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_site_summaries_manifest.json" \
-        --out_site_summaries_dir "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_site_summaries" \
-        --out_sites_fpath  "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_sites_manifest.json" \
-        --out_sites_dir  "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_sites" \
+        --output_region_fpath "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_site_summaries.json" \
+        --output_site_manifest_fpath  "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_sites_manifest.json" \
+        --output_sites_dpath  "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_sites" \
         --out_kwcoco "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_poly.kwcoco.zip" \
         --threshold 0.4
+
+    # --poly_kwcoco $DVC_EXPT_DPATH/_test_dzyne_sv/poly.kwcoco.zip \
 
     # Score the Filtered Predictions
     python -m watch.cli.run_metrics_framework \

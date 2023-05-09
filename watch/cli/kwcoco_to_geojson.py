@@ -95,7 +95,7 @@ class KWCocoToGeoJSONConfig(scfg.DataConfig):
     # in_file : scfg.Value[help='Input KWCOCO to convert', position=1]
 
     in_file = scfg.Value(None, required=True, help='Input KWCOCO to convert',
-                         position=1)
+                         position=1, alias=['input_kwcoco'])
 
     out_kwcoco = scfg.Value(None, help=ub.paragraph(
             '''
@@ -105,7 +105,7 @@ class KWCocoToGeoJSONConfig(scfg.DataConfig):
     out_sites_dir = scfg.Value(None, help=ub.paragraph(
         '''
         The directory where site model geojson files will be written.
-        '''))
+        '''), alias=['output_sites_dpath'])
 
     out_site_summaries_dir = scfg.Value(None, help=ub.paragraph(
         '''
@@ -115,7 +115,7 @@ class KWCocoToGeoJSONConfig(scfg.DataConfig):
     out_sites_fpath = scfg.Value(None, help=ub.paragraph(
         '''
         The file path where a manifest of all site models will be written.
-        '''))
+        '''), alias=['output_site_manifest_fpath'])
 
     out_site_summaries_fpath = scfg.Value(None, help=ub.paragraph(
         '''
