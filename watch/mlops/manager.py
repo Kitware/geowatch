@@ -166,9 +166,11 @@ def main(cmdline=True, **kwargs):
 
     if config['expt_dvc_dpath'] == 'auto':
         from watch import heuristics
-        config['expt_dvc_dpath'] = heuristics.auto_expt_dvc()
+        expt_dvc_dpath = heuristics.auto_expt_dvc()
+        config['expt_dvc_dpath'] = expt_dvc_dpath
 
     expt_dvc_dpath = config['expt_dvc_dpath']
+    print('expt_dvc_dpath = {}'.format(ub.urepr(expt_dvc_dpath, nl=1)))
 
     manager = DVCExptManager(
         expt_dvc_dpath, dvc_remote=dvc_remote, dataset_codes=dataset_codes,
