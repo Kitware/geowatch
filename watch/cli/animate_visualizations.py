@@ -108,6 +108,8 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
     with_gif = 'auto'
     with_mp4 = True
 
+    outputs = []
+
     for type_ in types:
         for video_dpath in video_dpaths:
             prog.set_extra('type_={!r} video_dpath={!r}'.format(type_, video_dpath))
@@ -137,12 +139,20 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
                                     gifify.ffmpeg_animate_frames, frame_fpaths,
                                     gif_fpath, in_framerate=frames_per_second,
                                     verbose=verbose_worker)
+                                outputs.append({
+                                    'fpath': gif_fpath,
+                                    'type': 'gif',
+                                })
                             ani_fname = '{}{}_{}.mp4'.format(track_name, type_, chan_dpath.name)
                             ani_fpath = track_subdpath / ani_fname
                             pool.submit(
                                 gifify.ffmpeg_animate_frames, frame_fpaths,
                                 ani_fpath, in_framerate=frames_per_second,
                                 verbose=verbose_worker)
+                            outputs.append({
+                                'fpath': ani_fpath,
+                                'type': 'mp4',
+                            })
 
             else:
                 type_dpath = video_dpath / type_
@@ -164,6 +174,10 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
                             pool.submit(
                                 gifify.ffmpeg_animate_frames, frame_fpaths, gif_fpath,
                                 in_framerate=frames_per_second, verbose=verbose_worker)
+                            outputs.append({
+                                'fpath': gif_fpath,
+                                'type': 'gif',
+                            })
 
                         if with_mp4:
                             ani_fname = '{}{}_{}.mp4'.format(video_name, type_, chan_dpath.name)
@@ -171,6 +185,10 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
                             pool.submit(
                                 gifify.ffmpeg_animate_frames, frame_fpaths, ani_fpath,
                                 in_framerate=frames_per_second, verbose=verbose_worker)
+                            outputs.append({
+                                'fpath': ani_fpath,
+                                'type': 'mp4',
+                            })
     prog.end()
 
     failed = []
@@ -193,6 +211,7 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
     # The animation jobs can do something weird to the tty, so we should try
     # and fix it.
     ub.cmd('stty sane')
+    return outputs
 
 
 if __name__ == '__main__':
