@@ -9,13 +9,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Added
 
 * SAM - segment anything features
-* DZYNE site validation: depthPCD task
+* DZYNE site validation: `depth_pcd` task
 * fusion.predict can now output pngs
 * Added `request_rlimit_nofile` to KWCocoVideoDataModule for easier ulimit configuration
 * The `fusion.predict` script can now output predictions in cog or png format
 * Added transient labels to heuristics
 * Add `rescale_nans` param to MultimodalTransformer.
 * Add `cooldown` argument to coco align script to specify time between tries.
+* Integrated `depth_pcd` into MLOps under the `sv_depth_filter` node.
 
 ### Changed
 
@@ -33,7 +34,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Fixed
 * safer no longer uses `temp_file` on windows
 * Erroneous assertion errors in reproject and kwcoco-to-geotiffs
-* Issue where DINO_SV would write region models to the out-site-manifest, now correctly points at site models.
+* Issue where `DINO_SV` would write region models to the out-site-manifest, now correctly points at site models.
 * Bug in coco-align where nodata values were not properly set on data that moved through gdal-merge.
 
 

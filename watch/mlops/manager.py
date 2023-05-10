@@ -34,11 +34,13 @@ Example:
     python -m watch.mlops.manager "push packages" --dataset_codes Drop6-MeanYear10GSD --yes
     python -m watch.mlops.manager "push packages" --dataset_codes Drop6-MeanYear10GSD-V2 --yes
     python -m watch.mlops.manager "push packages" --dataset_codes Drop6-MedianSummer10GSD --yes
+    python -m watch.mlops.manager "push packages" --dataset_codes Drop6-NoWinterMedian10GSD --yes
 
     python -m watch.mlops.manager "status" --dataset_codes Drop6-MeanYear10GSD-V2
     python -m watch.mlops.manager "pull packages" --dataset_codes Drop6-MeanYear10GSD --yes
     python -m watch.mlops.manager "pull packages" --dataset_codes Drop6-MeanYear10GSD-V2 --yes
     python -m watch.mlops.manager "pull packages" --dataset_codes Drop6-MedianSummer10GSD --yes
+    python -m watch.mlops.manager "pull packages" --dataset_codes Drop6-NoWinterMedian10GSD --yes
 
     python -m watch.mlops.manager "pull packages" --dataset_codes Drop6-MeanYear10GSD-V2 --yes
 
@@ -166,9 +168,11 @@ def main(cmdline=True, **kwargs):
 
     if config['expt_dvc_dpath'] == 'auto':
         from watch import heuristics
-        config['expt_dvc_dpath'] = heuristics.auto_expt_dvc()
+        expt_dvc_dpath = heuristics.auto_expt_dvc()
+        config['expt_dvc_dpath'] = expt_dvc_dpath
 
     expt_dvc_dpath = config['expt_dvc_dpath']
+    print('expt_dvc_dpath = {}'.format(ub.urepr(expt_dvc_dpath, nl=1)))
 
     manager = DVCExptManager(
         expt_dvc_dpath, dvc_remote=dvc_remote, dataset_codes=dataset_codes,

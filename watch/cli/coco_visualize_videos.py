@@ -574,7 +574,7 @@ def main(cmdline=True, **kwargs):
             else:
                 channels = channels + ',stack'
 
-        animate_visualizations.animate_visualizations(
+        outputs = animate_visualizations.animate_visualizations(
             viz_dpath=viz_dpath,
             channels=channels,
             video_names=video_names,
@@ -584,6 +584,15 @@ def main(cmdline=True, **kwargs):
             zoom_to_tracks=config['zoom_to_tracks'],
             **animate_config,
         )
+        # Links for summaries
+        type_to_anis = ub.group_items(outputs, lambda x: x['type'])
+        for ani_type, items in type_to_anis.items():
+            summary_fpath = (viz_dpath / ('_' + ani_type)).ensuredir()
+            for item in items:
+                fpath = ub.Path(item['fpath'])
+                dst = summary_fpath / fpath.name
+                ub.symlink(fpath, dst)
+
         # Terminal fixup
         import sys
         if sys.stdout.isatty():

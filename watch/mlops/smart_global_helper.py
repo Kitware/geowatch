@@ -521,6 +521,27 @@ class SmartGlobalHelper:
                 'bas_poly.norm_ord': float('inf'),
                 'bas_poly.poly_merge_method': 'v2',
                 'task': 'BAS',
+            },
+
+            {
+                'delivery': 'Eval11',
+                'bas_pxl.package_fpath': 'models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt',
+                'bas_pxl.chip_dims': '[196, 196]',
+                'bas_pxl.time_sampling': 'soft4',
+                'bas_pxl.tta_fliprot': 3,
+                'bas_pxl.tta_time': 3,
+                'bas_poly.thresh': 0.425,
+                'bas_poly.time_thresh': 0.8,
+                'bas_poly.inner_window_size': '1y',
+                'bas_poly.inner_agg_fn': 'mean',
+                'bas_poly.agg_fn': 'probs',
+                'bas_poly.moving_window_size': 'None',
+                'bas_poly.polygon_simplify_tolerance': 1,
+                'bas_poly.norm_ord': float('inf'),
+                'bas_poly.poly_merge_method': 'v2',
+                'bas_poly.min_area_square_meters': 7200.0,
+                'bas_poly.max_area_square_meters': 8000000.0,
+                'task': 'BAS',
             }
         ]
 

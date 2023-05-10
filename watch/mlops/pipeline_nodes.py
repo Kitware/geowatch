@@ -853,6 +853,8 @@ class ProcessNode(Node):
                  #node_dname=None,
                  root_dpath=None,
                  config=None,
+                 node_dpath=None,  # overwrites configured node dapth
+                 group_dpath=None,  # overwrites configured node dapth
                  _overwrite_node_dpath=None,  # overwrites the configured node dpath
                  _overwrite_group_dpath=None,  # overwrites the configured group dpath
                  _no_outarg=False,
@@ -860,6 +862,14 @@ class ProcessNode(Node):
         if aliases:
             if 'command' in aliases:
                 executable = aliases['command']
+
+        if node_dpath is not None:
+            _overwrite_node_dpath = node_dpath
+        if group_dpath is not None:
+            _overwrite_group_dpath = group_dpath
+
+        del node_dpath
+        del group_dpath
         del aliases
 
         if name is None and executable is not None:

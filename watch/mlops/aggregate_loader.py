@@ -381,6 +381,11 @@ def load_result_resolved(node_dpath):
         node_process_name = 'watch.tasks.dino_detector.building_validator'
         fpath = node_dpath / 'out_site_manifest.json'
         flat_resolved = _generalized_process_flat_resolved(fpath, node_process_name, node_type)
+
+    elif node_type in {'sv_depth_filter'}:
+        node_process_name = 'watch.tasks.depth_pcd.score_tracks'
+        fpath = node_dpath / 'sv_depth_out_site_manifest.json'
+        flat_resolved = _generalized_process_flat_resolved(fpath, node_process_name, node_type)
     else:
         raise NotImplementedError(node_type)
 

@@ -8,7 +8,7 @@ if 1:
     try:
         PARENT_DPATH = ub.Path(__file__).parent
     except NameError:
-        from watch.tasks import depthPCD as parent_package
+        from watch.tasks import depth_pcd as parent_package
         PARENT_DPATH = ub.Path(parent_package.__file__).parent
 
     TPL_DPATH = PARENT_DPATH / 'tpl'
@@ -37,8 +37,8 @@ if 1:
     import cv2
     import numpy as np
     # import sys
-    # sys.path.append('watch/tasks/depthPCD')
-    # sys.path.append('watch/tasks/depthPCD/deeplab2')
+    # sys.path.append('watch/tasks/depth_pcd')
+    # sys.path.append('watch/tasks/depth_pcd/deeplab2')
 
 
 img_size = 400
@@ -58,7 +58,7 @@ def normalize(im, q=5, r=128):
     return im
 
 
-def getModel(proto='watch/tasks/depthPCD/deeplab2/max_deeplab_s_backbone_os16.textproto'):
+def getModel(proto='watch/tasks/depth_pcd/deeplab2/max_deeplab_s_backbone_os16.textproto'):
     options = config_pb2.ExperimentOptions()
 
     with tf.io.gfile.GFile(proto) as f:

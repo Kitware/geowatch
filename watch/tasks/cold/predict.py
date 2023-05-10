@@ -165,14 +165,24 @@ CommandLine:
     ########################
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 
+    "$BUNDLE_DPATH"/imganns-*BR_[RC]*.kwcoco.zip \
+    "$BUNDLE_DPATH"/imganns-*KR_[RC]*.kwcoco.zip \
+    "$BUNDLE_DPATH"/imganns-*NZ_[RC]*.kwcoco.zip \
+    "$BUNDLE_DPATH"/imganns-*US_[RC]*.kwcoco.zip \
+
     echo "$DVC_DATA_DPATH"
     BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6
     python -m watch.cli.prepare_teamfeats \
         --base_fpath \
-            "$BUNDLE_DPATH"/imganns-*BR_R*.kwcoco.zip \
-            "$BUNDLE_DPATH"/imganns-*KR_R*.kwcoco.zip \
-            "$BUNDLE_DPATH"/imganns-*NZ_R*.kwcoco.zip \
-            "$BUNDLE_DPATH"/imganns-*US_R*.kwcoco.zip \
+            "$BUNDLE_DPATH"/imganns-*AE_[RC]*.kwcoco.zip \
+            "$BUNDLE_DPATH"/imganns-*BH_[RC]*.kwcoco.zip \
+            "$BUNDLE_DPATH"/imganns-*CH_[RC]*.kwcoco.zip \
+            "$BUNDLE_DPATH"/imganns-*LT_[RC]*.kwcoco.zip \
+            "$BUNDLE_DPATH"/imganns-*NZ_[RC]*.kwcoco.zip \
+            "$BUNDLE_DPATH"/imganns-*PE_[RC]*.kwcoco.zip \
+            "$BUNDLE_DPATH"/imganns-*QA_[RC]*.kwcoco.zip \
+            "$BUNDLE_DPATH"/imganns-*SA_[RC]*.kwcoco.zip \
+            "$BUNDLE_DPATH"/imganns-*US_C*.kwcoco.zip \
         --with_cold=1 \
         --with_landcover=0 \
         --with_materials=0 \
@@ -182,7 +192,7 @@ CommandLine:
         --cold_workers=8 \
         --cold_workermode=thread \
         --tmux_workers=2 \
-        --backend=tmux --run=1
+        --backend=tmux --run=0
 """
 import scriptconfig as scfg
 import ubelt as ub
