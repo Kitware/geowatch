@@ -1901,6 +1901,7 @@ python -m watch.mlops.schedule_evaluation --params="
             - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_MultiModal_Resume/Drop6_MultiModal_Resume_epoch2_step96.pt
             - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_MultiModal_Resume/Drop6_MultiModal_Resume_epoch3_step128.pt
             - $DVC_EXPT_DPATH/models/fusion/Drop6-NoWinterMedian10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_invar_split6_V56/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_invar_split6_V56_epoch268_step7801.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop6-NoWinterMedian10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_invar_split6_V56/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_invar_split6_V56_epoch359_step10440.pt
         bas_pxl.test_dataset:
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R002_I2LS.kwcoco.zip
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-CH_R001_I2LS.kwcoco.zip

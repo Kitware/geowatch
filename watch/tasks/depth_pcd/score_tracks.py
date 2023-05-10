@@ -57,7 +57,7 @@ class ScoreTracksConfig(scfg.DataConfig):
         '''), alias=['out_sites_fpath'], group='outputs')
 
 
-def score_tracks(poly_coco_dset, img_coco_dset, thresh, model_fpath):
+def score_tracks(poly_coco_dset, img_coco_dset, threshold, model_fpath):
     from watch.tasks.depth_pcd.model import getModel, normalize, TPL_DPATH
 
     import numpy as np
@@ -167,7 +167,6 @@ def score_tracks(poly_coco_dset, img_coco_dset, thresh, model_fpath):
 
         # Workaround
         winspace_target_box = winspace_annot_box.copy()
-        #            size = max(winspace_target_box.data[2], winspace_target_box.data[3])
         winspace_target_box.data[2:4] = (224, 224)
 
         # Convert the box back to videospace
@@ -233,7 +232,7 @@ def score_tracks(poly_coco_dset, img_coco_dset, thresh, model_fpath):
 
         #        ks = list(coco_dset.index.videos.keys())
 
-        if score < thresh:  # or coco_dset.index.videos[ks[0]]['name'] == 'AE_R001':
+        if score < threshold:  # or coco_dset.index.videos[ks[0]]['name'] == 'AE_R001':
             track_ids_to_drop.append(track_id)
             ann_ids_to_drop.extend(orig_track_group["id"].tolist())
 
@@ -508,17 +507,24 @@ Example in MLOPs:
             bas_pxl.package_fpath:
                 - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
             bas_pxl.test_dataset:
-                - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R001_I2LS.kwcoco.zip
+                # - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R001_I2LS.kwcoco.zip
                 - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R002_I2LS.kwcoco.zip
                 # - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-BR_R002_I2LS.kwcoco.zip
                 - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-CH_R001_I2LS.kwcoco.zip
-                # - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-NZ_R001_I2LS.kwcoco.zip
+                - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-NZ_R001_I2LS.kwcoco.zip
                 # - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-AE_R001_I2LS.kwcoco.zip
             bas_pxl.chip_overlap: 0.3
             bas_pxl.chip_dims: auto
             bas_pxl.time_span: auto
             bas_pxl.time_sampling: soft4
-            bas_poly.thresh: 0.425
+            bas_poly.thresh:
+                - 0.30
+                - 0.35
+                - 0.375
+                - 0.39
+                - 0.40
+                - 0.41
+                - 0.425
             bas_poly.inner_window_size: 1y
             bas_poly.inner_agg_fn: mean
             bas_poly.norm_ord: inf
@@ -545,7 +551,16 @@ Example in MLOPs:
             sv_depth_filter.enabled: 1
             sv_depth_filter.model_fpath: $DVC_EXPT_DPATH/models/depth_pcd/basicModel2.h5
             sv_depth_filter.threshold:
-                - 0.4
+                # - 0.22
+                - 0.25
+                # - 0.27
+                # - 0.29
+                - 0.3
+                # - 0.31
+                # - 0.33
+                # - 0.35
+                # - 0.37
+                # - 0.4
         submatrices:
             - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R001_I2LS.kwcoco.zip
               sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-KR_R001.kwcoco.json
@@ -561,7 +576,7 @@ Example in MLOPs:
               sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-AE_R001.kwcoco.json
         " \
         --root_dpath="$DVC_EXPT_DPATH/_mlops_test_depth_pcd" \
-        --devices="0," --tmux_workers=1 \
+        --devices="0,1" --tmux_workers=8 \
         --backend=tmux --queue_name "_mlops_test_depth_pcd" \
         --pipeline=bas_depth_vali --skip_existing=1 \
         --run=1

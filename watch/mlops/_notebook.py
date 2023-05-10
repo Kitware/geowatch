@@ -12,9 +12,11 @@ def _debug_roi_issue():
     from watch.mlops.aggregate import AggregateLoader
     expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
     loader = AggregateLoader(
-        pipeline='bas_building_vali',
+        pipeline='bas_depth_vali',
+        # pipeline='bas_building_vali',
         target=[
-            expt_dvc_dpath / '_toothbrush_split6_landcover_MeanYear10GSD-V2',
+            expt_dvc_dpath / '_mlops_test_depth_pcd',
+            # expt_dvc_dpath / '_toothbrush_split6_landcover_MeanYear10GSD-V2',
         ])
     eval_type_to_aggregator = loader.coerce_aggregators()
     pxl_agg = eval_type_to_aggregator['bas_pxl_eval']
@@ -31,7 +33,7 @@ def _debug_roi_issue():
     # rois = 'KR_R001,KR_R002,CH_R001,NZ_R001,BR_R002'.split(',')
     # rois = 'KR_R001,KR_R002,CH_R001,NZ_R001,BR_R002,AE_R001'.split(',')
     rois = 'KR_R002,CH_R001,NZ_R001'.split(',')
-    # rois = ['KR_R002']
+    rois = ['KR_R002']
     # agg.build_macro_tables(rois)
 
     flags = agg.table['params.sv_crop.crop_src_fpath'].isnull()
