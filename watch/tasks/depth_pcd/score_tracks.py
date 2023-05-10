@@ -580,18 +580,6 @@ Example in MLOPs:
         --backend=tmux --queue_name "_mlops_test_depth_pcd" \
         --pipeline=bas_depth_vali --skip_existing=1 \
         --run=1
-
-
-python -m watch.tasks.depth_pcd.score_tracks \
-    --model_fpath="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/depth_pcd/basicModel2.h5" \
-    --threshold="0.4" \
-    --input_sites="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_test_depth_pcd/pred/flat/bas_poly/bas_poly_id_622da3d9/sites_manifest.json" \
-    --input_region="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_test_depth_pcd/pred/flat/bas_poly/bas_poly_id_622da3d9/site_summaries_manifest.json" \
-    --input_kwcoco="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_test_depth_pcd/pred/flat/sv_crop/sv_crop_id_b1c8ddac/sv_crop.kwcoco.zip" \
-    --output_region_fpath="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_test_depth_pcd/pred/flat/sv_depth_filter/sv_depth_filter_id_8747be46/sv_depth_out_region.geojson" \
-    --output_sites_dpath="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_test_depth_pcd/pred/flat/sv_depth_filter/sv_depth_filter_id_8747be46/sv_depth_out_sites" \
-    --output_site_manifest_fpath="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_test_depth_pcd/pred/flat/sv_depth_filter/sv_depth_filter_id_8747be46/sv_depth_out_site_manifest.json"
-
 '''
 if __name__ == '__main__':
     main()
