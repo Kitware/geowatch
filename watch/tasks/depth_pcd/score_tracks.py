@@ -518,8 +518,8 @@ Example in MLOPs:
             bas_pxl.time_span: auto
             bas_pxl.time_sampling: soft4
             bas_poly.thresh:
-                - 0.30
-                - 0.35
+                # - 0.30
+                # - 0.35
                 - 0.375
                 - 0.39
                 - 0.40
@@ -530,6 +530,7 @@ Example in MLOPs:
             bas_poly.norm_ord: inf
             bas_poly.polygon_simplify_tolerance: 1
             bas_poly.agg_fn: probs
+            bas_poly.time_thresh: 0.8
             bas_poly.resolution: 10GSD
             bas_poly.moving_window_size: null
             bas_poly.poly_merge_method: 'v2'
@@ -552,12 +553,12 @@ Example in MLOPs:
             sv_depth_filter.model_fpath: $DVC_EXPT_DPATH/models/depth_pcd/basicModel2.h5
             sv_depth_filter.threshold:
                 # - 0.22
-                - 0.25
-                # - 0.27
+                # - 0.25
+                - 0.27
                 # - 0.29
                 - 0.3
                 # - 0.31
-                # - 0.33
+                - 0.33
                 # - 0.35
                 # - 0.37
                 # - 0.4
@@ -576,7 +577,7 @@ Example in MLOPs:
               sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-AE_R001.kwcoco.json
         " \
         --root_dpath="$DVC_EXPT_DPATH/_mlops_test_depth_pcd" \
-        --devices="0,1" --tmux_workers=8 \
+        --devices="0,1" --tmux_workers=4 \
         --backend=tmux --queue_name "_mlops_test_depth_pcd" \
         --pipeline=bas_depth_vali --skip_existing=1 \
         --run=1

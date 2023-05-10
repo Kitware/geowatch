@@ -80,7 +80,7 @@ def _debug_roi_issue():
     ax.plot(*zip(*pts1), 'rx', label='before SV')
     ax.plot(*zip(*pts2), 'bo', label='after SV')
     ax.legend()
-    ax.set_xlabel('bas_tp')
+    ax.set_xlabel('bas_tpr')
     ax.set_ylabel('bas_f1')
     # ax.set_ylabel('bas_fp')
     ax.set_title(f'Effect of SV: {rois}')

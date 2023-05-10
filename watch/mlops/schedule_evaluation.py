@@ -6,7 +6,6 @@ TODO:
     - [ ] Allow the output of tracking to feed into activity classification
 
 
-
 Example:
 
     # Dummy inputs, just for demonstration
@@ -362,14 +361,6 @@ def schedule_evaluation(cmdline=False, **kwargs):
         displayable = relevant.applymap(pandas_preformat)
         rich.print(displayable.to_string())
 
-    # if config['print_queue']:
-    #     queue.print_graph()
-
-    # if config['print_commands']:
-    #     queue.print_commands(
-    #         with_status=0, with_rich=0, with_locks=0,
-    #         exclude_tags=['boilerplate'])
-
     for job in queue.jobs:
         # TODO: should be able to set this as a queue param.
         job.log = False
@@ -388,17 +379,6 @@ def schedule_evaluation(cmdline=False, **kwargs):
     if not config.run:
         driver_fpath = queue.write()
         print('Wrote script: to run execute:\n{}'.format(driver_fpath))
-
-    # # RUN
-    # if config['run']:
-    #     # ub.cmd('bash ' + str(driver_fpath), verbose=3, check=True)
-    #     queue.run(
-    #         block=True,
-    #         # not in cmd_queue 0.1.2?
-    #         # check_other_sessions=config['check_other_sessions']
-    #         with_textual=False,  # needed for backend=tmux
-    #     )
-    # else:
 
     return dag, queue
 
@@ -437,7 +417,6 @@ Ignore:
     watch.cli.run_tracker.__config__.__default__
 
     list(watch.tasks.fusion.predict.make_predict_config().__dict__.keys())
-
 
     from watch.tasks.tracking.from_heatmap import NewTrackFunction
     from watch.tasks.tracking.from_heatmap import TimeAggregatedBAS

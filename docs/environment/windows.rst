@@ -210,8 +210,18 @@ Install geowatch and GDAL:
 
 You will also want to install ffmpeg:
 
+.. code:: bash
+
     sudo apt update -y
     sudo apt install ffmpeg -y
+
+
+It also may be necessary to install the following packages:
+
+.. code:: bash
+
+    sudo apt install libxcb-icccm4, libxcb-image0, libxcb-keysyms1, libxcb-render-util0, libxcb-xkb1, libxkbcommon-x11-0 -y
+
 
 You can download the shell version of the tutorial:
 
