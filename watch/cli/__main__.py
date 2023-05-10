@@ -104,7 +104,7 @@ def main(cmdline=True, **kw):
         Version: {watch.__version__}
         ''')
 
-    FUN = os.getenv('FUN', '1') and not os.getenv('NOFUN', '')
+    FUN = os.getenv('FUN', '') and not os.getenv('NOFUN', '')
     if FUN:
         description = fun_header + '\n' + boring_description
     else:
