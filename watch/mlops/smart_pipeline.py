@@ -706,9 +706,63 @@ class SV_Cropping(Cropping):
     }
 
 
+class SV_DepthPredict(ProcessNode):
+    """
+    Node for DZYNEs high res depth-based parallel change detector.
+
+    This takes in a kwcoco file with images, and geojson annotations, projects
+    those annotations onto the videos, scores each video / track, and then
+    writes a modified kwcoco file.
+
+    Example:
+        >>> from watch.mlops import smart_pipeline
+        >>> self = node = smart_pipeline.SV_DepthPredict(root_dpath='/ROOT/DPATH/')
+        >>> node.configure({
+        >>>     'input_kwcoco': 'foo.kwcoco',
+        >>>     'input_region': 'region.geojson',
+        >>>     'input_sites': 'input_sites',
+        >>>     'model_fpath': 'models/depth_pcd/basicModel2.h5',
+        >>> })
+        >>> print(node.command())
+    """
+    name = 'sv_depth_score'
+    executable = 'python -m watch.tasks.depth_pcd.score_tracks'
+    group_dname = PREDICT_NAME
+
+    in_paths = {
+        'input_kwcoco',
+        'input_region',
+        'input_sites',
+    }
+    out_paths = {
+        'out_kwcoco': 'pred_depth_scores.kwcoco.zip',
+    }
+
+    algo_params = {
+        'model_fpath': None,
+    }
+
+    @profile
+    def command(self):
+        config = (ub.udict(self.final_config) | self.final_algo_config) | self.final_perf_config
+        config_argstr = self._make_argstr(config)
+        command = ub.codeblock(
+            r'''
+            {executable} \
+                {config_argstr}
+            ''').format(
+                executable=self.executable,
+                config_argstr=config_argstr,
+            )
+        return command
+
+
 class SV_DepthFilter(ProcessNode):
     """
-    Node for DZYNEs high res depth-based parallel change detector
+    Node for DZYNEs high res depth-based parallel change detector.
+
+    Takes in a scored kwcoco file from SV_DepthPredict and geojson annotations
+    and then filters the annotations based on the scores in the kwcoco file.
 
     Example:
         >>> from watch.mlops import smart_pipeline
@@ -732,14 +786,13 @@ class SV_DepthFilter(ProcessNode):
         >>>     'input_kwcoco': 'foo.kwcoco',
         >>>     'input_region': 'region.geojson',
         >>>     'input_sites': 'sites/*.geojson',
-        >>>     'model_fpath': 'models/depth_pcd/basicModel2.h5',
         >>> })
         >>> print('self.template_out_paths = {}'.format(ub.urepr(self.template_out_paths, nl=1)))
         >>> print('self.final_out_paths = {}'.format(ub.urepr(self.final_out_paths, nl=1)))
         >>> print(node.command())
     """
     name = 'sv_depth_filter'
-    executable = 'python -m watch.tasks.depth_pcd.score_tracks'
+    executable = 'python -m watch.tasks.depth_pcd.filter_tracks'
     group_dname = PREDICT_NAME
 
     in_paths = {
@@ -755,7 +808,6 @@ class SV_DepthFilter(ProcessNode):
 
     algo_params = {
         'threshold': 0.4,
-        'model_fpath': None,
     }
 
     @profile
@@ -1045,10 +1097,18 @@ def make_smart_pipeline_nodes(with_bas=True, building_validation=False,
             sv_sites = nodes['sv_dino_filter'].outputs['output_sites_dpath']
 
         if depth_validation:
+            nodes['sv_depth_score'] = SV_DepthPredict()
             nodes['sv_depth_filter'] = SV_DepthFilter()
-            sv_output_kwcoco.connect(nodes['sv_depth_filter'].inputs['input_kwcoco'])
+
+            sv_output_kwcoco.connect(nodes['sv_depth_score'].inputs['input_kwcoco'])
+            sv_region.connect(nodes['sv_depth_score'].inputs['input_region'])
+            sv_sites.connect(nodes['sv_depth_score'].inputs['input_sites'])
+            scored_kwcoco = nodes['sv_depth_score'].outputs['out_kwcoco']
+
+            scored_kwcoco.connect(nodes['sv_depth_filter'].inputs['input_kwcoco'])
             sv_region.connect(nodes['sv_depth_filter'].inputs['input_region'])
             sv_sites.connect(nodes['sv_depth_filter'].inputs['input_sites'])
+
             sv_region = nodes['sv_depth_filter'].outputs['output_region_fpath']
             sv_sites = nodes['sv_depth_filter'].outputs['output_sites_dpath']
 
