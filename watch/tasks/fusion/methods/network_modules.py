@@ -17,7 +17,6 @@ import einops
 import numpy as np
 import netharn as nh
 from torch import nn
-from typing import Optional
 
 
 def drop_path(x, drop_prob: float = 0., training: bool = False):
@@ -556,22 +555,22 @@ def _class_weights_from_freq(total_freq, mode='median-idf'):
     return weights
 
 
-def coerce_criterion(loss_code, weights, ohem_ratio: Optional[float]=None):
+def coerce_criterion(loss_code, weights, ohem_ratio):
     """
     Helps build a loss function and returns information about the shapes needed
     by the specific loss.
 
     Args:
-        loss_code (str): The code that corresponds to loss function call. 
+        loss_code (str): The code that corresponds to loss function call.
             One of ['cce', 'focal', 'dicefocal'].
-        weights (torch.Tensor): Per class weights. 
+        weights (torch.Tensor): Per class weights.
             Note: Only used for 'cce' and 'focal' losses.
-        ohem_ratio (float): Ratio of hard examples to sample to compute loss. 
+        ohem_ratio (float): Ratio of hard examples to sample to compute loss.
             Note: Does not apply to cce loss.
-    
+
     Raises:
-        KeyError: if loss_code is not recognized
-        
+        KeyError: if loss_code is not recognized.
+
     Returns:
         torch.nn.modules.loss._Loss: The loss function.
     """
