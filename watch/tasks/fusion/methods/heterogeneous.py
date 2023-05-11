@@ -339,6 +339,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         tokenizer: str = "simple_conv",  # TODO: replace control string with a module, possibly a subclass
         decoder: str = "upsample",  # TODO: replace control string with a module, possibly a subclass
         ohem_ratio: Optional[float] = None,
+        focal_gamma: Optional[float] = 2.0,
     ):
         """
         Args:
@@ -693,7 +694,8 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             if global_weight > 0:
                 self.criterions[head_name] = coerce_criterion(prop['loss'],
                                                               prop['weights'],
-                                                              ohem_ratio=ohem_ratio)
+                                                              ohem_ratio=ohem_ratio,
+                                                              focal_gamma=focal_gamma)
 
                 if self.hparams.decoder == "upsample":
                     self.heads[head_name] = nn.Sequential(

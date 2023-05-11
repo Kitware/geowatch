@@ -64,6 +64,7 @@ class UNetBaseline(pl.LightningModule, WatchModuleMixins):
         class_loss: str = "focal",  # TODO: replace control string with a module, possibly a subclass
         saliency_loss: str = "focal",  # TODO: replace control string with a module, possibly a subclass
         ohem_ratio: Optional[float] = None,
+        focal_gamma: Optional[float] = 2.0,
     ):
         """
         Args:
@@ -220,7 +221,8 @@ class UNetBaseline(pl.LightningModule, WatchModuleMixins):
             if global_weight > 0:
                 self.criterions[head_name] = coerce_criterion(prop['loss'],
                                                               prop['weights'],
-                                                              ohem_ratio=ohem_ratio)
+                                                              ohem_ratio=ohem_ratio,
+                                                              focal_gamma=focal_gamma)
                 self.heads[head_name] = unet_blur.UNet(token_dim, prop["channels"])
 
         FBetaScore = torchmetrics.FBetaScore

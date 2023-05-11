@@ -206,8 +206,13 @@ class MultimodalTransformerConfig(scfg.DataConfig):
     ohem_ratio = scfg.Value(None, type=float, help=ub.paragraph(
             '''
             Ratio of hard examples to sample when computing loss. If None,
-            then do not use OHEM.'''
-    ))
+            then do not use OHEM.
+            '''))
+    focal_gamma = scfg.Value(2.0, type=float, help=ub.paragraph(
+            '''
+            Special parameter of focal loss. Can be applied to Focal and
+            DiceFocal losses. Default: 2.0
+            '''))
 
 
 class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
@@ -598,7 +603,8 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             if global_weight > 0:
                 self.criterions[head_name] = coerce_criterion(prop['loss'],
                                                               prop['weights'],
-                                                              ohem_ratio=_config.ohem_ratio)
+                                                              ohem_ratio=_config.ohem_ratio,
+                                                              focal_gamma=_config.focal_gamma)
                 if self.hparams.decoder == 'mlp':
                     self.heads[head_name] = nh.layers.MultiLayerPerceptronNd(
                         dim=0,

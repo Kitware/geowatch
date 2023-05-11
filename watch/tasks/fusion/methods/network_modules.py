@@ -555,7 +555,7 @@ def _class_weights_from_freq(total_freq, mode='median-idf'):
     return weights
 
 
-def coerce_criterion(loss_code, weights, ohem_ratio):
+def coerce_criterion(loss_code, weights, ohem_ratio, focal_gamma):
     """
     Helps build a loss function and returns information about the shapes needed
     by the specific loss.
@@ -566,7 +566,8 @@ def coerce_criterion(loss_code, weights, ohem_ratio):
         weights (torch.Tensor): Per class weights.
             Note: Only used for 'cce' and 'focal' losses.
         ohem_ratio (float): Ratio of hard examples to sample to compute loss.
-            Note: Does not apply to cce loss.
+            Note: Only applies to focal losses.
+        focal_gamma (float): Focal loss gamma parameter.
 
     Raises:
         KeyError: if loss_code is not recognized.
@@ -588,7 +589,8 @@ def coerce_criterion(loss_code, weights, ohem_ratio):
             reduction='none',
             to_onehot_y=False,
             weight=weights,
-            ohem_ratio=ohem_ratio)
+            ohem_ratio=ohem_ratio,
+            gamma=focal_gamma)
 
         target_encoding = 'onehot'
         logit_shape = 'b c h w t'
@@ -603,7 +605,8 @@ def coerce_criterion(loss_code, weights, ohem_ratio):
             sigmoid=True,
             to_onehot_y=False,
             reduction='none',
-            ohem_ratio_focal=ohem_ratio)
+            ohem_ratio_focal=ohem_ratio,
+            gamma=focal_gamma)
         target_encoding = 'onehot'
         logit_shape = 'b c h w t'
         target_shape = 'b c h w t'
