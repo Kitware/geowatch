@@ -203,6 +203,11 @@ class MultimodalTransformerConfig(scfg.DataConfig):
         '''
         Method used to rescale nan input values. Can be perframe or None.
         '''))
+    ohem_ratio = scfg.Value(None, type=float, help=ub.paragraph(
+            '''
+            Ratio of hard examples to sample when computing loss. If None, 
+            then do not use OHEM.'''
+    ))
 
 
 class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
@@ -591,7 +596,9 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             head_name = prop['name']
             global_weight = self.global_head_weights[head_name]
             if global_weight > 0:
-                self.criterions[head_name] = coerce_criterion(prop['loss'], prop['weights'])
+                self.criterions[head_name] = coerce_criterion(prop['loss'],
+                                                              prop['weights'],
+                                                              ohem_ratio=_config.ohem_ratio)
                 if self.hparams.decoder == 'mlp':
                     self.heads[head_name] = nh.layers.MultiLayerPerceptronNd(
                         dim=0,
