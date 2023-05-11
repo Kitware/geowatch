@@ -718,9 +718,9 @@ class SV_DepthPredict(ProcessNode):
         >>> from watch.mlops import smart_pipeline
         >>> self = node = smart_pipeline.SV_DepthPredict(root_dpath='/ROOT/DPATH/')
         >>> node.configure({
-        >>>     'input_kwcoco': 'foo.kwcoco',
-        >>>     'input_region': 'region.geojson',
-        >>>     'input_sites': 'input_sites',
+        >>>     'input_kwcoco': 'my_highres.kwcoco.zip',
+        >>>     'input_region': 'myregion.geojson',
+        >>>     'input_sites': 'myinput_sites',
         >>>     'model_fpath': 'models/depth_pcd/basicModel2.h5',
         >>> })
         >>> print(node.command())
@@ -766,6 +766,16 @@ class SV_DepthFilter(ProcessNode):
 
     Example:
         >>> from watch.mlops import smart_pipeline
+        >>> self = node = smart_pipeline.SV_DepthFilter(node_dpath='/MY/OUPUT/DIR/')
+        >>> node.configure({
+        >>>     'input_kwcoco': 'myscored.kwcoco.zip',
+        >>>     'input_region': 'myregion.geojson',
+        >>>     'input_sites': 'mysites/*.geojson',
+        >>> })
+        >>> print(node.command())
+
+    Example:
+        >>> from watch.mlops import smart_pipeline
         >>> self = node = smart_pipeline.SV_DepthFilter(root_dpath='/ROOT/DPATH/')
         >>> node.configure({
         >>>     'input_kwcoco': 'foo.kwcoco',
@@ -774,18 +784,6 @@ class SV_DepthFilter(ProcessNode):
         >>>     #'output_sites_dpath': 'I_WANT_OUT_SITES_HERE',
         >>>     'output_region_fpath': 'I_WANT_OUT_REGIONS_HERE',
         >>>     'output_site_manifest_fpath': 'I_WANT_SITE_MANIFESTS_HERE',
-        >>> })
-        >>> print('self.template_out_paths = {}'.format(ub.urepr(self.template_out_paths, nl=1)))
-        >>> print('self.final_out_paths = {}'.format(ub.urepr(self.final_out_paths, nl=1)))
-        >>> print(node.command())
-
-    Example:
-        >>> from watch.mlops import smart_pipeline
-        >>> self = node = smart_pipeline.SV_DepthFilter(node_dpath='/MY/OUPUT/DIR/')
-        >>> node.configure({
-        >>>     'input_kwcoco': 'foo.kwcoco',
-        >>>     'input_region': 'region.geojson',
-        >>>     'input_sites': 'sites/*.geojson',
         >>> })
         >>> print('self.template_out_paths = {}'.format(ub.urepr(self.template_out_paths, nl=1)))
         >>> print('self.final_out_paths = {}'.format(ub.urepr(self.final_out_paths, nl=1)))
