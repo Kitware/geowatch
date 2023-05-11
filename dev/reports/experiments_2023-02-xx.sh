@@ -1897,7 +1897,7 @@ DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch.mlops.schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
-            #- $DVC_EXPT_DPATH/model_candidates/namek_split1_shortlist_v4_top.yaml
+            - $DVC_EXPT_DPATH/model_candidates/namek_split1_shortlist_v4_top.yaml
             - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_MultiModal_Resume/Drop6_MultiModal_Resume_epoch2_step96.pt
             - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_MultiModal_Resume/Drop6_MultiModal_Resume_epoch3_step128.pt
             - $DVC_EXPT_DPATH/models/fusion/Drop6-NoWinterMedian10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_invar_split6_V56/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_invar_split6_V56_epoch268_step7801.pt
@@ -1925,10 +1925,14 @@ python -m watch.mlops.schedule_evaluation --params="
             - 0.35
             - 0.375
             - 0.4
+            - 0.45
             - 0.5
+            - 0.6
         bas_poly.time_thresh:
             - 0.8
+            - 0.6
             - 0.5
+            #- 0.4
         bas_poly.inner_window_size:
             - 1y
             #- null
@@ -1986,9 +1990,9 @@ geowatch aggregate \
         print_models: True
     " \
     --resource_report=0 \
-    --plot_params=0 \
+    --plot_params=1 \
     --export_tables=0 \
-    --io_workers=0 \
+    --io_workers=10 \
     --output_dpath="$DVC_EXPT_DPATH/_namek_preeval12/aggregate" \
     --rois=KR_R002,CH_R001,NZ_R001
     #--rois="KR_R002,"

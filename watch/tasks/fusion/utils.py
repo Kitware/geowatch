@@ -1,7 +1,6 @@
 from torch import nn
 import torch
 import os
-import numpy as np
 import math
 import ubelt as ub
 import kwimage
@@ -22,6 +21,22 @@ def millify(n):
                          int(math.floor(0 if n == 0 else math.log10(abs(n)) / 3))))
 
     return '{:.2f}{}'.format(n / 10**(3 * millidx), millnames[millidx])
+
+
+def _map_location(storage, location):
+    """
+    Helper when calling `torch.load` to keep the data on the CPU
+
+    Args:
+        storage (torch.Storage) : the initial deserialization of the
+            storage of the data read by `torch.load`, residing on the CPU.
+        location (str): tag identifiying the location the data being read
+            by `torch.load` was originally saved from.
+
+    Returns:
+        torch.Storage : the storage
+    """
+    return storage
 
 
 def load_model_from_package(package_path):
@@ -78,7 +93,7 @@ def load_model_from_package(package_path):
     arch_name = package_header['arch_name']
     module_name = package_header['module_name']
 
-    model = imp.load_pickle(module_name, arch_name)
+    model = imp.load_pickle(module_name, arch_name, map_location=_map_location)
 
     if 0:
         imp.file_structure()['package_header']
@@ -260,10 +275,7 @@ def ordinal_position_encoding(num_items, feat_size, method='sin', device='cpu'):
 
     Example:
         >>> # Use 5 feature dimensions to encode 3 timesteps
-        >>> import sys, ubelt
-        >>> sys.path.append(ubelt.expandpath('~/code/watch'))
         >>> from watch.tasks.fusion.utils import *  # NOQA
-        >>> from watch.tasks.fusion.utils import _memo_legend
         >>> num_timesteps = num_items = 3
         >>> feat_size = 5
         >>> encoding = ordinal_position_encoding(num_items, feat_size)
@@ -358,74 +370,6 @@ class SinePositionalEncoding(nn.Module):
         return x
 
 
-def add_auxiliary(dset, gid, fname, channels, aux_height, aux_width, warp_aux_to_img=None, extra_info=None):
-    """
-    Snippet for adding an auxiliary image
-
-    Args:
-        dset (CocoDataset)
-        gid (int): image id to add auxiliary data to
-        channels (str): name of the new auxiliary channels
-        fname (str): path to save the new auxiliary channels (absolute or
-            relative to dset.bundle_dpath)
-        data (ndarray): actual auxiliary data
-        warp_aux_to_img (kwimage.Affine): spatial relationship between
-            auxiliary channel and the base image. If unspecified
-            it is assumed that a simple scaling will suffice.
-
-    Ignore:
-        import kwcoco
-        dset = kwcoco.CocoDataset.demo('shapes8')
-        gid = 1
-        data = np.random.rand(32, 55, 5)
-        fname = 'myaux1.png'
-        channels = 'hidden_logits'
-        warp_aux_to_img = None
-        add_auxiliary(dset, gid, fname, channels, data, warp_aux_to_img)
-
-    """
-    # from os.path import join
-    import kwimage
-    # fpath = join(dset.bundle_dpath, fname)
-    # aux_height, aux_width = data.shape[0:2]
-    img = dset.index.imgs[gid]
-
-    if warp_aux_to_img is None:
-        # Assume we can just scale up the auxiliary data to match the image
-        # space unless the user says otherwise
-        warp_aux_to_img = kwimage.Affine.scale((
-            img['width'] / aux_width, img['height'] / aux_height))
-
-    # Make the aux info dict
-    aux = {
-        'file_name': fname,
-        'height': aux_height,
-        'width': aux_width,
-        'channels': channels,
-        'warp_aux_to_img': kwimage.Affine.coerce(warp_aux_to_img).concise(),
-    }
-
-    if extra_info is not None:
-        assert isinstance(extra_info, dict)
-        aux = ub.dict_union(extra_info, aux)
-
-    # Save the data to disk
-    # kwimage.imwrite(fpath, data)
-
-    auxiliary = img.setdefault('auxiliary', [])
-    auxiliary.append(aux)
-    dset._invalidate_hashid()
-
-
-def confusion_image(pred, target):
-    canvas = np.zeros_like(pred)
-    np.putmask(canvas, (target == 0) & (pred == 0), 0)  # true-neg
-    np.putmask(canvas, (target == 1) & (pred == 1), 1)  # true-pos
-    np.putmask(canvas, (target == 1) & (pred == 0), 2)  # false-neg
-    np.putmask(canvas, (target == 0) & (pred == 1), 3)  # false-pos
-    return canvas
-
-
 def model_json(model, max_depth=float('inf'), depth=0):
     """
     import torchvision
@@ -466,6 +410,8 @@ def category_tree_ensure_color(classes):
     TODO:
         - [ ] Add to CategoryTree
         - [ ] TODO: better function
+        - [ ] Consolidate with ~/code/watch/watch/tasks/fusion/utils :: category_tree_ensure_color
+        - [ ] Consolidate with ~/code/watch/watch/utils/kwcoco_extensions :: category_category_colors
 
     Example:
         >>> import kwcoco
