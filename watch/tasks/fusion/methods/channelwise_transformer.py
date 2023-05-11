@@ -205,7 +205,7 @@ class MultimodalTransformerConfig(scfg.DataConfig):
         '''))
     ohem_ratio = scfg.Value(None, type=float, help=ub.paragraph(
             '''
-            Ratio of hard examples to sample when computing loss. If None, 
+            Ratio of hard examples to sample when computing loss. If None,
             then do not use OHEM.'''
     ))
 
