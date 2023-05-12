@@ -1645,9 +1645,11 @@ def inspect_node(subagg, id, row, group_agg, agg_group_dpath):
         if len(confusion_fpaths) == 0:
             from watch.mlops import confusor_analysis
             src_kwcoco = list((node_dpath / '.pred/bas_poly/').glob('*/poly.kwcoco.zip'))[0]
+            pred_sites_dpath = list((node_dpath / '.pred/bas_poly/').glob('*/sites'))[0]
             confusor_config = confusor_analysis.ConfusorAnalysisConfig(
                 bas_metric_dpath=(node_dpath / region_id / 'overall' / 'bas'),
                 src_kwcoco=src_kwcoco,
+                pred_sites=pred_sites_dpath,
                 region_id=region_id,
                 out_dpath=agg_group_dpath,
                 true_site_dpath=true_site_dpath,
