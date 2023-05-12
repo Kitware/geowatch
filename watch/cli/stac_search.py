@@ -458,7 +458,7 @@ def main(cmdline=True, **kwargs):
                     for item in area_features:
                         the_file.write(json.dumps(item) + '\n')
     else:
-        id_query(searcher, logger, dest_path, temp_dir, args)
+        raise NotImplementedError(f'only area is implemented. Got {args.mode=}')
 
     if args.s3_dest is not None:
         logger.info('Saving output to S3')
@@ -555,61 +555,6 @@ def area_query(region_fpath, search_json, searcher, temp_dir, config, logger, ve
             logger.warning(f'Total results for region: {total_results}')
 
     return area_features
-
-
-def id_query(searcher, logger, dest_path, temp_dir, args):
-    # FIXME
-    raise NotImplementedError('This doesnt have the right stac endpoints setup for it.')
-    # DEPRECATE FOR ITEMS IN STAC_BUILDER (which maybe moves somewhere else?)
-    DEFAULT_STAC_CONFIG = {
-        #"Landsat 8": {
-        #    "provider": "https://api.smart-stac.com",
-        #    "collections": ["landsat-c2l1"],
-        #    "headers": {
-        #        "x-api-key": smart_stac_api_key
-        #    },
-        #    "query": {}
-        #},
-        "Landsat 8": {
-            "provider": "https://landsatlook.usgs.gov/stac-server/",
-            "collections": ["landsat-c2l1"],
-            "headers": {},
-            "query": {}
-        },
-        "Sentinel-2": {
-            "provider": "https://earth-search.aws.element84.com/v0",
-            "collections": ["sentinel-s2-l1c"],
-            "query": {},
-            "headers": {}
-        }
-    }
-
-    stac_config = DEFAULT_STAC_CONFIG
-    if args.site_file.startswith('s3://'):
-        s_file_loc = util_s3.get_file_from_s3(args.site_file, temp_dir)
-    else:
-        s_file_loc = args.site_file
-
-    logger.info('Opening site file')
-    with open(s_file_loc, 'r') as s_file:
-        site = json.loads(s_file.read())
-
-    features = site['features']
-
-    for f in features:
-        props = f['properties']
-        if props['type'] == 'observation':
-            sensor = props['sensor_name']
-            if sensor.lower() != "worldview":
-                params = stac_config[sensor]
-                searcher.by_id(
-                    params['provider'],
-                    params['collections'],
-                    props['source'],
-                    dest_path,
-                    params['query'],
-                    params['headers']
-                )
 
 
 if __name__ == '__main__':

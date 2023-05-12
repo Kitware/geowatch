@@ -1991,9 +1991,9 @@ geowatch aggregate \
     --plot_params=0 \
     --export_tables=0 \
     --io_workers=10 \
-    --inspect=fcfdpnldzxzv \
     --output_dpath="$DVC_EXPT_DPATH/_namek_preeval12/aggregate" \
     --rois=KR_R002,CH_R001,NZ_R001
+    #--inspect=fcfdpnldzxzv \
     #--rois="KR_R002,"
     #
     #--inspect=kdvkheujolhb \

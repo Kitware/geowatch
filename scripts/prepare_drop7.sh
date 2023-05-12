@@ -37,7 +37,7 @@ python -m watch.cli.prepare_ta2_dataset \
     --skip_existing=1 \
     --force_min_gsd=2.0 \
     --force_nodata=-9999 \
-    --hack_lazy=True \
+    --hack_lazy=False \
     --backend=tmux \
     --tmux_workers=4 \
     --run=1

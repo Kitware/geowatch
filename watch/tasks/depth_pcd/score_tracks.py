@@ -520,19 +520,19 @@ Example in MLOPs:
             bas_poly.thresh:
                 # - 0.30
                 # - 0.35
-                - 0.39
-                - 0.40
-                - 0.41
-                - 0.42
-                # - 0.425
+                # - 0.39
+                # - 0.40
+                # - 0.41
+                # - 0.42
+                - 0.425
             bas_poly.inner_window_size: 1y
             bas_poly.inner_agg_fn: mean
             bas_poly.norm_ord: inf
             bas_poly.polygon_simplify_tolerance: 1
             bas_poly.agg_fn: probs
             bas_poly.time_thresh:
-                - 0.5
-                - 0.65
+                # - 0.5
+                # - 0.65
                 - 0.8
             bas_poly.resolution: 10GSD
             bas_poly.moving_window_size: null
@@ -556,16 +556,16 @@ Example in MLOPs:
             sv_depth_filter.model_fpath: $DVC_EXPT_DPATH/models/depth_pcd/basicModel2.h5
             sv_depth_filter.threshold:
                 - 0.20
-                # - 0.22
+                - 0.22
                 - 0.25
                 - 0.27
                 - 0.29
                 - 0.3
                 - 0.31
                 - 0.33
-                # - 0.35
-                # - 0.37
-                # - 0.4
+                - 0.35
+                - 0.37
+                - 0.4
         submatrices:
             - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R001_I2LS.kwcoco.zip
               sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-KR_R001.kwcoco.json
@@ -602,7 +602,7 @@ geowatch aggregate \
     " \
     --resource_report=0 \
     --plot_params="
-        enabled: True
+        enabled: False
         compare_sv_hack: True
         stats_ranking: 0
         min_variations: 1
@@ -610,7 +610,9 @@ geowatch aggregate \
     --export_tables=0 \
     --io_workers=10 \
     --output_dpath="$DVC_EXPT_DPATH/_mlops_test_depth_pcd/aggregate" \
-    --rois=KR_R002,CH_R001,NZ_R001,KR_R001,BR_R002
+    --rois=KR_R002,
+
+    CH_R001,NZ_R001,KR_R001,BR_R002
 '''
 if __name__ == '__main__':
     main()
