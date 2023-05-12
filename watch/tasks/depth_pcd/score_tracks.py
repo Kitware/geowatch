@@ -552,6 +552,19 @@ Example in MLOPs:
             sv_crop.num_start_frames: 10
             sv_crop.num_end_frames: 10
             sv_crop.context_factor: 1.5
+
+            sv_dino_boxes.enabled: 1
+            sv_dino_boxes.package_fpath: $DVC_EXPT_DPATH/models/kitware/xview_dino.pt
+            sv_dino_boxes.window_dims: 256
+            sv_dino_boxes.window_overlap: 0.5
+            sv_dino_boxes.fixed_resolution: 3GSD
+
+            sv_dino_filter.enabled: 1
+            sv_dino_filter.end_min_score: 0.15
+            sv_dino_filter.start_max_score: 1.0
+            sv_dino_filter.box_score_threshold: 0.01
+            sv_dino_filter.box_isect_threshold: 0.1
+
             sv_depth_filter.enabled: 0
             sv_depth_filter.model_fpath: $DVC_EXPT_DPATH/models/depth_pcd/basicModel2.h5
             sv_depth_filter.threshold:
@@ -583,8 +596,11 @@ Example in MLOPs:
         --root_dpath="$DVC_EXPT_DPATH/_mlops_test_depth_pcd" \
         --devices="0,1" --tmux_workers=2 \
         --backend=tmux --queue_name "_mlops_test_depth_pcd" \
-        --pipeline=bas_depth_vali --skip_existing=1 \
+        --pipeline=bas_building_vali \
+        --skip_existing=1 \
         --run=1
+
+        --pipeline=bas_depth_vali \
 
 
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
@@ -593,7 +609,7 @@ geowatch aggregate \
     --target \
         "$DVC_EXPT_DPATH/_mlops_test_depth_pcd" \
     --stdout_report="
-        top_k: 10
+        top_k: 3
         per_group: 2
         macro_analysis: 0
         analyze: 0
@@ -601,6 +617,10 @@ geowatch aggregate \
         print_models: True
     " \
     --resource_report=0 \
+    --query='
+        `params.bas_poly.thresh` == 0.425 and
+        `params.bas_pxl.package_fpath`.str.contains("V47_epoch47_")
+    ' \
     --plot_params="
         enabled: False
         compare_sv_hack: True
@@ -610,7 +630,9 @@ geowatch aggregate \
     --export_tables=0 \
     --io_workers=10 \
     --output_dpath="$DVC_EXPT_DPATH/_mlops_test_depth_pcd/aggregate" \
-    --rois=KR_R002,
+    --rois=KR_R002,CH_R001,NZ_R001
+
+    # --rois=KR_R002,
 
     CH_R001,NZ_R001,KR_R001,BR_R002
 '''

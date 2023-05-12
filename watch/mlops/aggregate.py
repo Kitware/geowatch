@@ -135,10 +135,14 @@ class AggregateEvluationConfig(AggregateLoader):
 
     inspect = Value(None, help='param hashid to look at')
 
+    query = Value(None, help='a pandas query to restrict the rows of the table we consider')
+
     def __post_init__(self):
         super().__post_init__()
         from watch.utils.util_yaml import Yaml
         self.plot_params = Yaml.coerce(self.plot_params)
+        if self.query is not None:
+            self.query = ub.paragraph(self.query)
         if isinstance(self.plot_params, int):
             self.plot_params = {
                 'enabled': bool(self.plot_params)
@@ -187,6 +191,15 @@ def main(cmdline=True, **kwargs):
 
     rois = config.rois
     # rois = {'KR_R001', 'KR_R002', 'BR_R002'}
+
+    if config.query:
+        print('Running query')
+        new_eval_type_to_aggregator = {}
+        for key, agg in eval_type_to_aggregator.items():
+            new_agg = agg.filterto(query=config.query)
+            new_eval_type_to_aggregator[key] = new_agg
+            rich.print(f'Query {key} filtered to {len(new_agg)}/{len(agg)} rows')
+        eval_type_to_aggregator = new_eval_type_to_aggregator
 
     for type, agg in eval_type_to_aggregator.items():
         print(f'agg={agg}')
@@ -1350,7 +1363,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             key = macro_keys[-1]
         return key
 
-    def filterto(agg, models=None, param_hashids=None, index=None):
+    def filterto(agg, models=None, param_hashids=None, index=None, query=None):
         import numpy as np
         import kwarray
         final_flags = 1
@@ -1370,10 +1383,26 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             flags = kwarray.isect_flags(agg.index.index, index)
             final_flags = np.logical_and(final_flags, flags)
 
+        if query is not None:
+            import pandas as pd
+            if isinstance(final_flags, int):
+                table_so_far = agg.table
+            else:
+                table_so_far = agg.table[final_flags]
+            if len(table_so_far) > 0:
+                try:
+                    new_table = table_so_far.query(query)
+                except pd.errors.UndefinedVariableError as ex:
+                    print(f'warning: ex={ex}')
+                else:
+                    flags = kwarray.isect_flags(agg.index.index, new_table.index)
+                    final_flags = np.logical_and(final_flags, flags)
+
         if isinstance(final_flags, int):
             new_agg = agg
         else:
             new_agg = agg.compress(final_flags)
+
         return new_agg
 
     def compress(agg, flags):

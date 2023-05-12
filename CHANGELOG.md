@@ -17,6 +17,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Add `rescale_nans` param to MultimodalTransformer.
 * Add `cooldown` argument to coco align script to specify time between tries.
 * Integrated `depth_pcd` into MLOps under the `sv_depth_filter` node.
+* Added pandas query language to mlops aggregate
 
 ### Changed
 

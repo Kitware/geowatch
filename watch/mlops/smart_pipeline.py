@@ -773,6 +773,9 @@ class SV_DepthFilter(ProcessNode):
             )
         return command
 
+# from watch.tasks.dino_detector import predict as dino_predict
+# ub.udict(dino_predict.BuildingDetectorConfig.__default__)
+
 
 class DinoBoxDetector(ProcessNode):
     """
@@ -805,15 +808,17 @@ class DinoBoxDetector(ProcessNode):
 
     in_paths = {
         'coco_fpath',
-        'package_fpath',
     }
     out_paths = {
         'out_coco_fpath': 'pred_boxes.kwcoco.zip'
     }
 
     algo_params = {
-        'fixed_resolution': "2GSD",
+        'fixed_resolution': "3GSD",
+        'window_dims': 256,
+        'window_overlap': 0.5,
         'batch_size': 1,
+        'package_fpath': None
     }
 
     # The best setting of this depends on if the data is remote or not.  When
@@ -836,7 +841,8 @@ class DinoBoxDetector(ProcessNode):
         fmtkw = {}
         # Not sure why final-config doesn't have everything
         config = (ub.udict(self.final_config) | self.final_algo_config) | self.final_perf_config
-        assert config['package_fpath']  is not None
+        if config['package_fpath'] is None:
+            raise ValueError(f'{self.__class__.__name__} / {self.name} requires package_fpath as path to a model')
         fmtkw['config_argstr'] = self._make_argstr(config)
         command = ub.codeblock(
             r'''
