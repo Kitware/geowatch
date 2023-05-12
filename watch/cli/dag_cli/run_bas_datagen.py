@@ -7,8 +7,8 @@ import os
 import subprocess
 import json
 
-from watch.cli.baseline_framework_ingress import baseline_framework_ingress, load_input_stac_items  # noqa: 501
-from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress  # noqa: 501
+from watch.cli.baseline_framework_ingress import baseline_framework_ingress, load_input_stac_items
+from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress
 from watch.cli.ta1_stac_to_kwcoco import ta1_stac_to_kwcoco
 from watch.cli import coco_add_watch_fields
 from watch.utils.util_framework import download_region
