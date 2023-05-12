@@ -16,7 +16,7 @@ from watch.tasks.fusion.methods.network_modules import RobustModuleDict
 from watch.tasks.fusion.methods.watch_module_mixins import WatchModuleMixins
 from watch.tasks.fusion.architectures import unet_blur
 
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 try:
     import xdev
@@ -63,6 +63,8 @@ class UNetBaseline(pl.LightningModule, WatchModuleMixins):
         change_loss: str = "cce",  # TODO: replace control string with a module, possibly a subclass
         class_loss: str = "focal",  # TODO: replace control string with a module, possibly a subclass
         saliency_loss: str = "focal",  # TODO: replace control string with a module, possibly a subclass
+        ohem_ratio: Optional[float] = None,
+        focal_gamma: Optional[float] = 2.0,
     ):
         """
         Args:
@@ -217,7 +219,10 @@ class UNetBaseline(pl.LightningModule, WatchModuleMixins):
             head_name = prop['name']
             global_weight = self.global_head_weights[head_name]
             if global_weight > 0:
-                self.criterions[head_name] = coerce_criterion(prop['loss'], prop['weights'])
+                self.criterions[head_name] = coerce_criterion(prop['loss'],
+                                                              prop['weights'],
+                                                              ohem_ratio=ohem_ratio,
+                                                              focal_gamma=focal_gamma)
                 self.heads[head_name] = unet_blur.UNet(token_dim, prop["channels"])
 
         FBetaScore = torchmetrics.FBetaScore

@@ -555,34 +555,48 @@ def _class_weights_from_freq(total_freq, mode='median-idf'):
     return weights
 
 
-def coerce_criterion(loss_code, weights):
+def coerce_criterion(loss_code, weights, ohem_ratio, focal_gamma):
     """
     Helps build a loss function and returns information about the shapes needed
     by the specific loss.
+
+    Args:
+        loss_code (str): The code that corresponds to loss function call.
+            One of ['cce', 'focal', 'dicefocal'].
+        weights (torch.Tensor): Per class weights.
+            Note: Only used for 'cce' and 'focal' losses.
+        ohem_ratio (float): Ratio of hard examples to sample to compute loss.
+            Note: Only applies to focal losses.
+        focal_gamma (float): Focal loss gamma parameter.
+
+    Raises:
+        KeyError: if loss_code is not recognized.
+
+    Returns:
+        torch.nn.modules.loss._Loss: The loss function.
     """
     # import monai
-    import ubelt as ub
-    from watch.utils.util_codes import parse_delimited_argstr
-    loss_classcode = loss_code.split('-')[0]
-    parsed = parse_delimited_argstr(loss_code)
-    losskw = ub.udict(parsed) & {"gamma"}
-    # print(f'losskw={losskw}')
-    if loss_classcode == 'cce':
+    if loss_code == 'cce':
         criterion = torch.nn.CrossEntropyLoss(
             weight=weights, reduction='none')
         target_encoding = 'index'
         logit_shape = '(b t h w) c'
         target_shape = '(b t h w)'
-    elif loss_classcode == 'focal':
+    elif loss_code == 'focal':
         from watch.utils.ext_monai import FocalLoss
         # from monai.losses import FocalLoss
         criterion = FocalLoss(
-            reduction='none', to_onehot_y=False, weight=weights, **losskw)
+            reduction='none',
+            to_onehot_y=False,
+            weight=weights,
+            ohem_ratio=ohem_ratio,
+            gamma=focal_gamma)
+
         target_encoding = 'onehot'
         logit_shape = 'b c h w t'
         target_shape = 'b c h w t'
 
-    elif loss_classcode == 'dicefocal':
+    elif loss_code == 'dicefocal':
         # TODO: can we apply weights here?
         from watch.utils.ext_monai import DiceFocalLoss
         # from monai.losses import DiceFocalLoss
@@ -590,7 +604,9 @@ def coerce_criterion(loss_code, weights):
             # weight=torch.FloatTensor([self.negative_change_weight, self.positive_change_weight]),
             sigmoid=True,
             to_onehot_y=False,
-            reduction='none', **losskw)
+            reduction='none',
+            ohem_ratio_focal=ohem_ratio,
+            gamma=focal_gamma)
         target_encoding = 'onehot'
         logit_shape = 'b c h w t'
         target_shape = 'b c h w t'

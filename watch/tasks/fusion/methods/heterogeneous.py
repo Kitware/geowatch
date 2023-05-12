@@ -6,7 +6,7 @@ import einops
 from einops.layers.torch import Rearrange
 from torchvision import models as tv_models
 from torchvision.models import feature_extraction
-from typing import Union
+from typing import Union, Optional
 import numpy as np
 
 import kwcoco
@@ -338,6 +338,8 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         saliency_loss: str = "focal",  # TODO: replace control string with a module, possibly a subclass
         tokenizer: str = "simple_conv",  # TODO: replace control string with a module, possibly a subclass
         decoder: str = "upsample",  # TODO: replace control string with a module, possibly a subclass
+        ohem_ratio: Optional[float] = None,
+        focal_gamma: Optional[float] = 2.0,
     ):
         """
         Args:
@@ -690,7 +692,10 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             head_name = prop['name']
             global_weight = self.global_head_weights[head_name]
             if global_weight > 0:
-                self.criterions[head_name] = coerce_criterion(prop['loss'], prop['weights'])
+                self.criterions[head_name] = coerce_criterion(prop['loss'],
+                                                              prop['weights'],
+                                                              ohem_ratio=ohem_ratio,
+                                                              focal_gamma=focal_gamma)
 
                 if self.hparams.decoder == "upsample":
                     self.heads[head_name] = nn.Sequential(
