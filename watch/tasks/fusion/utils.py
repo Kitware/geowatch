@@ -412,6 +412,8 @@ def category_tree_ensure_color(classes):
         - [ ] TODO: better function
         - [ ] Consolidate with ~/code/watch/watch/tasks/fusion/utils :: category_tree_ensure_color
         - [ ] Consolidate with ~/code/watch/watch/utils/kwcoco_extensions :: category_category_colors
+        - [ ] Consolidate with ~/code/watch/watch/heuristics.py :: ensure_heuristic_category_tree_colors
+        - [ ] Consolidate with ~/code/watch/watch/heuristics.py :: ensure_heuristic_coco_colors
 
     Example:
         >>> import kwcoco

@@ -552,7 +552,7 @@ Example in MLOPs:
             sv_crop.num_start_frames: 10
             sv_crop.num_end_frames: 10
             sv_crop.context_factor: 1.5
-            sv_depth_filter.enabled: 1
+            sv_depth_filter.enabled: 0
             sv_depth_filter.model_fpath: $DVC_EXPT_DPATH/models/depth_pcd/basicModel2.h5
             sv_depth_filter.threshold:
                 - 0.20
@@ -601,11 +601,16 @@ geowatch aggregate \
         print_models: True
     " \
     --resource_report=0 \
-    --plot_params=0 \
+    --plot_params="
+        enabled: True
+        compare_sv_hack: True
+        stats_ranking: 0
+        min_variations: 1
+    " \
     --export_tables=0 \
     --io_workers=10 \
     --output_dpath="$DVC_EXPT_DPATH/_mlops_test_depth_pcd/aggregate" \
-    --rois=KR_R002,CH_R001,NZ_R001
+    --rois=KR_R002,CH_R001,NZ_R001,KR_R001,BR_R002
 '''
 if __name__ == '__main__':
     main()

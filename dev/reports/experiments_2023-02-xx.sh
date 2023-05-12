@@ -1,8 +1,6 @@
 __doc__="
 SeeAlso:
     ~/code/watch/dev/poc/prepare_time_combined_dataset.py
-
-
 "
 
 
@@ -1990,9 +1988,10 @@ geowatch aggregate \
         print_models: True
     " \
     --resource_report=0 \
-    --plot_params=1 \
+    --plot_params=0 \
     --export_tables=0 \
     --io_workers=10 \
+    --inspect=kdvkheujolhb \
     --output_dpath="$DVC_EXPT_DPATH/_namek_preeval12/aggregate" \
     --rois=KR_R002,CH_R001,NZ_R001
     #--rois="KR_R002,"
