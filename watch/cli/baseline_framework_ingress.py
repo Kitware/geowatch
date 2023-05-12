@@ -1,86 +1,150 @@
-import argparse
 import sys
-import json
 import os
-import tempfile
-import subprocess
-from urllib.parse import urlparse
-from datetime import datetime
-import traceback
-
-import requests
-import pystac
+import scriptconfig as scfg
 import ubelt as ub
 
 
 SENTINEL_PLATFORMS = {'sentinel-2b', 'sentinel-2a'}
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description=ub.paragraph(
+class BaselineFrameworkIngressConfig(scfg.DataConfig):
+    """
+    Ingress data from T&E baseline framework input file. The output will be stored as a json catalog
+    """
+    input_path = scfg.Value(None, type=str, position=1, required=True, help=ub.paragraph(
             '''
-            Ingress data from T&E baseline framework input file.
-
-            The output will be stored as a json catalog
+            Path to input T&E Baseline Framework JSON
             '''))
+    outdir = scfg.Value(None, type=str, required=True, short_alias=['o'], help=ub.paragraph(
+            '''
+            Output directory for ingressed assets an output STAC Catalog
+            '''))
+    aws_profile = scfg.Value(None, type=str, help=ub.paragraph(
+            '''
+            AWS Profile to use for AWS S3 CLI commands
+            '''))
+    dryrun = scfg.Value(False, isflag=True, short_alias=['d'], help='Run AWS CLI commands with --dryrun flag')
+    show_progress = scfg.Value(False, isflag=True, short_alias=['s'], help='Show progress for AWS CLI commands')
+    requester_pays = scfg.Value(False, isflag=True, short_alias=['r'], help=ub.paragraph(
+            '''
+            Run AWS CLI commands with `--requestor_payer requester` flag
+            '''))
+    jobs = scfg.Value(1, type=str, short_alias=['j'], help='Number of jobs to run in parallel')
+    virtual = scfg.Value(False, isflag=True, help=ub.paragraph(
+            '''
+            Replace asset hrefs with GDAL Virtual File System links
+            '''))
+    catalog_fpath = scfg.Value(None, type=str, help=ub.paragraph(
+            '''
+            Name of the ouptut catalog.
+            Defaults to <outdir>/catalog.json
+            '''))
+    relative = scfg.Value(False, isflag=True, help='if true use relative paths')
 
-    parser.add_argument('input_path',
-                        type=str,
-                        help='Path to input T&E Baseline Framework JSON')
-    parser.add_argument('-o', '--outdir',
-                        type=str,
-                        required=True,
-                        help='Output directory for ingressed assets an output '
-                             'STAC Catalog')
-    parser.add_argument('--aws_profile',
-                        required=False,
-                        type=str,
-                        help='AWS Profile to use for AWS S3 CLI commands')
-    parser.add_argument('-d', '--dryrun',
-                        action='store_true',
-                        default=False,
-                        help='Run AWS CLI commands with --dryrun flag')
-    parser.add_argument('-s', '--show-progress',
-                        action='store_true',
-                        default=False,
-                        help='Show progress for AWS CLI commands')
-    parser.add_argument('-r', '--requester_pays',
-                        action='store_true',
-                        default=False,
-                        help='Run AWS CLI commands with '
-                             '`--requestor_payer requester` flag')
-    parser.add_argument('-j', '--jobs',
-                        type=str,
-                        default=1,
-                        required=False,
-                        help='Number of jobs to run in parallel')
-    parser.add_argument('--virtual',
-                        action='store_true',
-                        default=False,
-                        help='Replace asset hrefs with GDAL Virtual File '
-                             'System links')
-    parser.add_argument('--catalog_fpath',
-                        type=str,
-                        default=None,
-                        required=False,
-                        help='Name of the ouptut catalog. Defaults to <outdir>/catalog.json')
-
-    parser.add_argument('--relative', default=False,
-                        action='store_true', help='if true use relative paths')
-
-    ns = parser.parse_args()
-    ingress_kwargs = vars(ns)
-    baseline_framework_ingress(**ingress_kwargs)
-    return 0
+    def __post_init__(self):
+        # super().__post_init__()
+        if self.catalog_fpath is None and self.outdir is not None:
+            self.catalog_fpath = os.path.join(self.outdir, 'catalog.json')
 
 
-def _default_asset_selector(asset_name, asset):
-    return True
+def main():
+    config = BaselineFrameworkIngressConfig.cli(strict=True)
+    import rich
+    rich.print(ub.urepr(config))
+    baseline_framework_ingress(**config)
 
 
-def _default_item_selector(stac_item):
-    return True
+def baseline_framework_ingress(input_path,
+                               outdir,
+                               catalog_fpath=None,
+                               aws_profile=None,
+                               dryrun=False,
+                               show_progress=False,
+                               requester_pays=False,
+                               relative=False,
+                               jobs=1,
+                               virtual=False):
+
+    from watch.utils import util_parallel
+    from watch.utils import util_progress
+    import rich
+    import pystac
+    import traceback
+    workers = util_parallel.coerce_num_workers(jobs)
+    print(f'Runing baseline_framework_ingress with workers={workers}')
+
+    os.makedirs(outdir, exist_ok=True)
+
+    if relative:
+        catalog_type = pystac.CatalogType.RELATIVE_PUBLISHED
+    else:
+        catalog_type = pystac.CatalogType.ABSOLUTE_PUBLISHED
+
+    if catalog_fpath is None:
+        catalog_fpath = os.path.join(outdir, 'catalog.json')
+    catalog = pystac.Catalog('Baseline Framework ingress catalog',
+                             'STAC catalog of SMART search results',
+                             href=catalog_fpath, catalog_type=catalog_type)
+
+    catalog.set_root(catalog)
+
+    if relative:
+        catalog.make_all_asset_hrefs_relative()
+
+    if aws_profile is not None:
+        aws_base_command = ['aws', 's3', '--profile', aws_profile, 'cp']
+    else:
+        aws_base_command = ['aws', 's3', 'cp']
+
+    if dryrun:
+        aws_base_command.append('--dryrun')
+
+    if not show_progress:
+        aws_base_command.append('--no-progress')
+
+    if requester_pays:
+        aws_base_command.extend(['--request-payer', 'requester'])
+
+    input_stac_items = load_input_stac_items(input_path, aws_base_command)
+
+    print(f'Loaded {len(input_stac_items)} stac items')
+
+    ingress_kw = {
+        'outdir': outdir,
+        'aws_base_command': aws_base_command,
+        'dryrun': dryrun,
+        'relative': relative,
+        'virtual': virtual,
+    }
+
+    pool = ub.JobPool(mode='thread' if workers > 1 else 'serial',
+                      max_workers=workers)
+    pman = util_progress.ProgressManager(backend='progiter')
+    with pman, pool:
+        """
+        DEVELOPER NOTE:
+            There is something that can cause a lockup here. To reproduce
+            first ensure that the outdir is cleared, so no caching happens.
+            The failure seems to happen when the mode is process. Using thread
+            or serial seems fine.
+        """
+        for feature in pman.progiter(input_stac_items, desc='submit ingress jobs'):
+            pool.submit(ingress_item, feature, **ingress_kw)
+
+        for job in pman.progiter(pool.as_completed(), total=len(pool), desc='ingress items'):
+            try:
+                mapped_item = job.result()
+            except Exception:
+                rich.print("[yellow]WARNING: Exception occurred (printed below), dropping item!")
+                traceback.print_exception(*sys.exc_info())
+                continue
+            else:
+                # print(mapped_item.to_dict())
+                catalog.add_item(mapped_item)
+    print('Finished downloads, saving catalog')
+    catalog.save(catalog_type=catalog_type)
+    print('wrote catalog_fpath = {!r}'.format(catalog_fpath))
+    return catalog
 
 
 def ingress_item(feature,
@@ -88,8 +152,13 @@ def ingress_item(feature,
                  aws_base_command,
                  dryrun,
                  relative=False,
-                 asset_selector=_default_asset_selector,
                  virtual=False):
+    """
+    FIXME: Something is this is not concurrent-safe
+    """
+    import subprocess
+    from urllib.parse import urlparse
+    import pystac
     # Adding a reference back to the original STAC
     # item if not already present
     self_link = None
@@ -144,12 +213,6 @@ def ingress_item(feature,
                     new_assets['productmetadata'] = new_asset
         except KeyError:
             pass
-
-        # Only download assets that pass the `asset_selector` filter.
-        # Note that the sentinel MTD_TL.xml that may be downloaded
-        # above will not have to pass through this filter
-        if not asset_selector(asset_name, asset):
-            continue
 
         local_asset_href = os.path.abspath(asset_outpath)
         if relative:
@@ -237,8 +300,12 @@ def ingress_item(feature,
 
 def read_input_stac_items(path):
     """
-    Read the stac input format from a file on disk
+    Read the stac input format from a file on disk.
+
+    This also handles jsonl files as well as a a fallback for whitespace
+    separated data.
     """
+    import json
     try:
         with open(path, 'r') as f:
             input_json = json.load(f)
@@ -275,6 +342,8 @@ def load_input_stac_items(input_path, aws_base_command):
     """
     Load the stac input format from a file on disk or AWS
     """
+    import subprocess
+    import tempfile
     if input_path.startswith('s3'):
         with tempfile.NamedTemporaryFile() as temporary_file:
             subprocess.run(
@@ -288,82 +357,9 @@ def load_input_stac_items(input_path, aws_base_command):
     return input_stac_items
 
 
-def baseline_framework_ingress(input_path,
-                               outdir,
-                               catalog_fpath=None,
-                               aws_profile=None,
-                               dryrun=False,
-                               show_progress=False,
-                               requester_pays=False,
-                               relative=False,
-                               jobs=1,
-                               item_selector=_default_item_selector,
-                               asset_selector=_default_asset_selector,
-                               virtual=False):
-
-    from watch.utils import util_parallel
-    workers = util_parallel.coerce_num_workers(jobs)
-    print(f'Runing baseline_framework_ingress with workers={workers}')
-
-    os.makedirs(outdir, exist_ok=True)
-
-    if relative:
-        catalog_type = pystac.CatalogType.RELATIVE_PUBLISHED
-    else:
-        catalog_type = pystac.CatalogType.ABSOLUTE_PUBLISHED
-
-    if catalog_fpath is None:
-        catalog_fpath = os.path.join(outdir, 'catalog.json')
-    catalog = pystac.Catalog('Baseline Framework ingress catalog',
-                             'STAC catalog of SMART search results',
-                             href=catalog_fpath, catalog_type=catalog_type)
-
-    catalog.set_root(catalog)
-
-    if relative:
-        catalog.make_all_asset_hrefs_relative()
-
-    if aws_profile is not None:
-        aws_base_command = ['aws', 's3', '--profile', aws_profile, 'cp']
-    else:
-        aws_base_command = ['aws', 's3', 'cp']
-
-    if dryrun:
-        aws_base_command.append('--dryrun')
-
-    if not show_progress:
-        aws_base_command.append('--no-progress')
-
-    if requester_pays:
-        aws_base_command.extend(['--request-payer', 'requester'])
-
-    input_stac_items = load_input_stac_items(input_path, aws_base_command)
-
-    pool = ub.JobPool(mode='process' if workers > 1 else 'serial',
-                          max_workers=workers)
-
-    for feature in input_stac_items:
-        if item_selector(feature):
-            pool.submit(ingress_item, feature, outdir, aws_base_command,
-                        dryrun, relative, asset_selector, virtual)
-
-    for job in pool.as_completed(desc='ingress items'):
-        try:
-            mapped_item = job.result()
-        except Exception:
-            print("Exception occurred (printed below), dropping item!")
-            traceback.print_exception(*sys.exc_info())
-            continue
-        else:
-            # print(mapped_item.to_dict())
-            catalog.add_item(mapped_item)
-
-    catalog.save(catalog_type=catalog_type)
-    print('wrote catalog_fpath = {!r}'.format(catalog_fpath))
-    return catalog
-
-
 def download_file(href, outpath, aws_base_command, dryrun):
+    import subprocess
+    from urllib.parse import urlparse
     # TODO: better handling of possible download failure?
     scheme, *_ = urlparse(href)
     verbose = 0
@@ -385,8 +381,8 @@ def download_file(href, outpath, aws_base_command, dryrun):
 
 
 def download_http_file(url, outpath):
+    import requests
     response = requests.get(url)
-
     with open(outpath, 'wb') as outf:
         for chunk in response.iter_content(chunk_size=128):
             outf.write(chunk)
@@ -397,16 +393,19 @@ def download_mtd_msil1c(product_id,
                         outdir,
                         aws_base_command,
                         dryrun):
+    from datetime import datetime as datetime_cls
+    import subprocess
+    from urllib.parse import urlparse
     # The metadata of the product, which tile is part of, are available in
     # parallel folder (productInfo.json contains the name of the product).
     # This can be found in products/[year]/[month]/[day]/[product name].
     # (https://roda.sentinel-hub.com/sentinel-s2-l1c/readme.html)
     try:
-        dt = datetime.strptime(product_id.split('_')[2], '%Y%m%dT%H%M%S')
+        dt = datetime_cls.strptime(product_id.split('_')[2], '%Y%m%dT%H%M%S')
     except ValueError:
         # Support for older format product ID format, e.g.:
         # "S2A_OPER_PRD_MSIL1C_PDMC_20160413T135705_R065_V20160412T102058_20160412T102058"
-        dt = datetime.strptime(product_id.split('_')[7][1:], '%Y%m%dT%H%M%S')
+        dt = datetime_cls.strptime(product_id.split('_')[7][1:], '%Y%m%dT%H%M%S')
 
     scheme, netloc, path, *_ = urlparse(metadata_href)
     index = path.find('tiles')
@@ -436,4 +435,4 @@ def download_mtd_msil1c(product_id,
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    main()
