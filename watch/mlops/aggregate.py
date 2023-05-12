@@ -1686,6 +1686,7 @@ def aggregate_param_cols(df, aggregator=None, hash_cols=None, allow_nonuniform=F
 
     TODO:
         - [ ] optimize this
+        - [ ] Rectify with ~/code/watch/watch/utils/util_pandas.py :: aggregate_columns
     """
     import pandas as pd
     import numpy as np

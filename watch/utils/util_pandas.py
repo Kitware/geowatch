@@ -401,6 +401,40 @@ def aggregate_columns(df, aggregator=None, fallback='const',
         >>> assert len(subagg) == 0
         >>> subagg = aggregate_columns(df[['cats3']], aggregator_, fallback='drop')
         >>> assert len(subagg) == 0
+
+    Example:
+        >>> from watch.utils.util_pandas import *  # NOQA
+        >>> import numpy as np
+        >>> num_rows = 10
+        >>> columns = {
+        >>>     'dates': ['2101-01-01', '1970-01-01', '2000-01-01'],
+        >>>     'lists': [['a'], ['a', 'b'], []],
+        >>>     'nums':  [1, 2, 3],
+        >>> }
+        >>> df = pd.DataFrame(columns)
+        >>> aggregator = ub.udict({
+        >>>     'dates': 'min-max',
+        >>>     'lists': 'hash',
+        >>>     'nums':  'mean',
+        >>> })
+        >>> row = aggregate_columns(df, aggregator)
+        >>> print('row = {}'.format(ub.urepr(row.to_dict(), nl=1)))
+
+    Example:
+        >>> from watch.utils.util_pandas import *  # NOQA
+        >>> import numpy as np
+        >>> num_rows = 10
+        >>> columns = {
+        >>>     'items': [['a'], ['bcd', 'ef'], [], ['3', '234', '2343']],
+        >>> }
+        >>> df = pd.DataFrame(columns)
+        >>> row = aggregate_columns(df, 'last', fallback='const')
+        >>> columns = {
+        >>>     'items': ['a', 'c', 'c', 'd'],
+        >>>     'items2': [['a'], ['bcd', 'ef'], [], ['3', '234', '2343']],
+        >>> }
+        >>> df = pd.DataFrame(columns)
+        >>> row = aggregate_columns(df, 'unique')
     """
     import pandas as pd
     # import numpy as np
@@ -409,6 +443,10 @@ def aggregate_columns(df, aggregator=None, fallback='const',
 
     if aggregator is None:
         aggregator = {}
+    if isinstance(aggregator, str):
+        # If given as a string apply the aggreagatr to all columns
+        aggregator = {c: aggregator for c in df.columns}
+
     aggregator = ub.udict(aggregator)
 
     # Handle columns that can be aggregated
@@ -443,7 +481,12 @@ def aggregate_columns(df, aggregator=None, fallback='const',
                     continue
                 else:
                     agg_op = SpecialAggregators.special_lut.get(agg_op_norm, agg_op)
-            part = toagg.aggregate(agg_op)
+
+            # Using apply instead of pandas aggregate because we are allowed to
+            # return a list result and have that be a single cell.
+            part = toagg.apply(agg_op, result_type='reduce')
+            # old: part = toagg.aggregate(agg_op)
+
             aggregated.append(part)
         if len(aggregated):
             agg_parts = pd.concat(aggregated)
@@ -467,7 +510,7 @@ def _handle_const(toagg, nonconst_policy):
         elif nonconst_policy == 'hash':
             nonconst_data = toagg[nonconst_cols]
             const_part = toagg.iloc[0:1].drop(nonconst_cols, axis=1).iloc[0]
-            nonconst_part = nonconst_data.aggregate(SpecialAggregators.hash)
+            nonconst_part = nonconst_data.apply(SpecialAggregators.hash, result_type='reduce')
             part = pd.concat([const_part, nonconst_part])
             return part
         else:
@@ -484,12 +527,19 @@ class SpecialAggregators:
     def hash12(x):
         return ub.hash_data(x.values.tolist())[0:12]
 
+    def unique(x):
+        try:
+            return list(ub.unique(x))
+        except Exception:
+            return list(ub.unique(x, key=ub.hash_data))
+
     def min_max(x):
-        ret = {
-            'min': x.min(),
-            'max': x.max(),
-        }
-        return ret
+        return (x.min(), x.max())
+        # ret = {
+        #     'min': x.min(),
+        #     'max': x.max(),
+        # }
+        # return ret
 
     @staticmethod
     def normalize_special_key(k):
@@ -501,6 +551,7 @@ class SpecialAggregators:
         'min_max': min_max,
         'stats': kwarray.stats_dict,
         'hist': ub.dict_hist,
+        'unique': unique,
         'histogram': ub.dict_hist,
         'first': lambda x: x.iloc[0],
         'last': lambda x: x.iloc[-1],

@@ -138,7 +138,6 @@ CommandLine:
 import json
 import tempfile
 import pystac_client
-from shapely.geometry import shape as geom_shape
 from watch.utils import util_logging
 from watch.utils import util_s3
 import kwarray
@@ -207,6 +206,199 @@ class StacSearchConfig(scfg.DataConfig):
         'sensors': scfg.Value("L2", help='(only used if search_json is "auto")'),
         'api_key': scfg.Value('env:SMART_STAC_API_KEY', help='The API key or where to get it (only used if search_json is "auto")'),
     }
+
+
+def main(cmdline=True, **kwargs):
+    r"""
+    Execute the stac search and write the input file
+
+    Example:
+        >>> # xdoctest: +REQUIRES(env:SLOW_DOCTEST)
+        >>> # xdoctest: +REQUIRES(--network)
+        >>> from watch.cli.stac_search import *  # NOQA
+        >>> from watch.demo import demo_region
+        >>> from watch.stac import stac_search_builder
+        >>> from watch.utils import util_gis
+        >>> import ubelt as ub
+        >>> dpath = ub.Path.appdir('watch/tests/test-stac-search').ensuredir()
+        >>> search_fpath = dpath / 'stac_search.json'
+        >>> region_fpath = demo_region.demo_khq_region_fpath()
+        >>> region = util_gis.load_geojson(region_fpath)
+        >>> result_fpath = dpath / 'demo.input'
+        >>> start_date = region['start_date'].iloc[0]
+        >>> end_date = region['end_date'].iloc[0]
+        >>> stac_search_builder.main(
+        >>>     cmdline=0,
+        >>>     start_date=start_date,
+        >>>     end_date=end_date,
+        >>>     cloud_cover=10,
+        >>>     out_fpath=search_fpath,
+        >>> )
+        >>> kwargs = {
+        >>>     'region_file': str(region_fpath),
+        >>>     'search_json': str(search_fpath),
+        >>>     'mode': 'area',
+        >>>     'verbose': 2,
+        >>>     'outfile': str(result_fpath),
+        >>> }
+        >>> result_fpath.delete()
+        >>> cmdline = 0
+        >>> main(cmdline=cmdline, **kwargs)
+        >>> # results are in the
+        >>> from watch.cli.baseline_framework_ingress import read_input_stac_items
+        >>> items = read_input_stac_items(result_fpath)
+        >>> len(items)
+        >>> for item in items:
+        >>>     print(item['properties']['eo:cloud_cover'])
+        >>>     print(item['properties']['datetime'])
+    """
+    config = StacSearchConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
+    import rich
+    from watch.utils import util_gis
+    from watch.utils import slugify_ext
+    from watch.utils import util_progress
+    from watch.utils import util_parallel
+    from watch.utils import util_pandas
+    from watch.utils import util_time
+    import pandas as pd
+    import rich.markup
+    rich.print('config = {}'.format(ub.urepr(config, nl=1)))
+    args = config.namespace
+
+    logger = util_logging.get_logger(verbose=args.verbose)
+    searcher = StacSearcher(logger)
+
+    dest_path = ub.Path(args.outfile)
+    outdir = dest_path.parent
+
+    temp_dir = ub.Path(tempfile.mkdtemp(prefix='stac_search'))
+    logger.info(f'Created temp folder: {temp_dir}')
+    if str(outdir) == '':
+        dest_path = temp_dir / args.outfile
+    else:
+        outdir.ensuredir()
+
+    ub.Path(dest_path).parent.ensuredir()
+
+    if config['append_mode']:
+        # Ensure we are not appending to an existing file
+        dest_path.delete()
+
+    if args.mode == 'area':
+        if config['region_globstr'] is not None:
+            region_file_fpaths = util_gis.coerce_geojson_paths(config['region_globstr'])
+            assert args.mode == 'area'
+        else:
+            if not hasattr(args, 'region_file'):
+                raise ValueError('Missing region file')
+            region_file_fpaths = [args.region_file]
+
+        print('region_file_fpaths = {}'.format(slugify_ext.smart_truncate(
+            ub.urepr(region_file_fpaths, nl=1), max_length=1000)))
+
+        if not hasattr(args, 'search_json'):
+            raise ValueError('Missing stac search parameters')
+        search_json = args.search_json
+
+        overall_status = {
+            'regions_with_results': 0,
+            'regions_without_results': 0,
+            'regions_with_errors': 0,
+            'total_regions': len(region_file_fpaths),
+        }
+
+        query_workers = util_parallel.coerce_num_workers(config['query_workers'])
+        print(f'query_workers={query_workers}')
+
+        result_summary_rows = []
+
+        def aggregate_datetime(values):
+            dts = [util_time.coerce_datetime(v) for v in values]
+            min_dt = min(dts)
+            max_dt = max(dts)
+            min_str = min_dt.date().isoformat()
+            max_str = max_dt.date().isoformat()
+            return f'{min_str} - {max_str}'
+
+        property_aggregators = {
+            'platform': 'unique',
+            'constellation': 'unique',
+            'mission': 'hist',
+            # 'gsd': 'min-max',
+            # 'eo:cloudcover': 'min-max',
+            'datetime': aggregate_datetime,
+            # 'quality_info:filled_percentage': 'min-max',
+            # 'proj:shape': 'drop',
+            # 'proj:epsg': 'hist'
+        }
+
+        pool = ub.JobPool(mode='thread', max_workers=query_workers)
+        pman = util_progress.ProgressManager(backend='rich' if query_workers > 0 else 'progiter')
+        with pman:
+            for region_fpath in pman.progiter(region_file_fpaths, desc='submit query jobs'):
+                job = pool.submit(area_query, region_fpath, search_json,
+                                  searcher, temp_dir, config, logger,
+                                  verbose=(query_workers == 0))
+                job.region_name = ub.Path(region_fpath).name.split('.')[0]
+
+            with open(dest_path, 'a') as the_file:
+                for job in pman.progiter(pool.as_completed(),
+                                         total=len(region_file_fpaths),
+                                         desc='collect query jobs', verbose=3):
+                    try:
+                        area_results = job.result()
+                    except Exception:
+                        overall_status['regions_with_errors'] += 1
+                        area_results = []
+                        if not args.allow_failure:
+                            raise
+
+                    had_results = False
+                    for result in area_results:
+                        querykw = result['querykw']
+                        features = result['features']
+                        if len(features):
+                            had_results = True
+                        for item in features:
+                            the_file.write(json.dumps(item) + '\n')
+
+                        proprows = [
+                            ub.udict(f['properties']) & property_aggregators.keys()
+                            for f in result['features']
+                        ]
+                        propdf = pd.DataFrame(proprows)
+                        aggrow = util_pandas.aggregate_columns(
+                            propdf, property_aggregators, nonconst_policy='drop')
+                        row = {
+                            'q_region': job.region_name,
+                            'q_time': f'{querykw["start"]} - {querykw["end"]}',
+                            'q_collections': ','.join(querykw['collections']),
+                            'num_results': len(features),
+                            **aggrow,
+                        }
+                        result_summary_rows.append(row)
+
+                    if had_results:
+                        overall_status['regions_with_results'] += 1
+                    else:
+                        overall_status['regions_without_results'] += 1
+
+                    summary_df = pd.DataFrame(result_summary_rows)
+                    rich.print(rich.markup.escape(summary_df.to_string()))
+                    pman.update_info('overall_status = {}'.format(ub.urepr(overall_status, nl=2)))
+
+        summary_df = pd.DataFrame(result_summary_rows)
+        rich.print(rich.markup.escape(summary_df.to_string()))
+    else:
+        raise NotImplementedError(f'only area is implemented. Got {args.mode=}')
+
+    if args.s3_dest is not None:
+        logger.info('Saving output to S3')
+        util_s3.send_file_to_s3(dest_path, args.s3_dest)
+    else:
+        logger.info('--s3_dest parameter not present; skipping S3 output')
+
+    logger.info('Search complete')
 
 
 class StacSearcher:
@@ -329,146 +521,6 @@ class StacSearcher:
         self.logger.info(f'Saved STAC result to: {outfile}')
 
 
-def main(cmdline=True, **kwargs):
-    r"""
-    Execute the stac search and write the input file
-
-    Example:
-        >>> # xdoctest: +REQUIRES(env:SLOW_DOCTEST)
-        >>> # xdoctest: +REQUIRES(--network)
-        >>> from watch.cli.stac_search import *  # NOQA
-        >>> from watch.demo import demo_region
-        >>> from watch.stac import stac_search_builder
-        >>> from watch.utils import util_gis
-        >>> import ubelt as ub
-        >>> dpath = ub.Path.appdir('watch/tests/test-stac-search').ensuredir()
-        >>> search_fpath = dpath / 'stac_search.json'
-        >>> region_fpath = demo_region.demo_khq_region_fpath()
-        >>> region = util_gis.load_geojson(region_fpath)
-        >>> result_fpath = dpath / 'demo.input'
-        >>> start_date = region['start_date'].iloc[0]
-        >>> end_date = region['end_date'].iloc[0]
-        >>> stac_search_builder.main(
-        >>>     cmdline=0,
-        >>>     start_date=start_date,
-        >>>     end_date=end_date,
-        >>>     cloud_cover=10,
-        >>>     out_fpath=search_fpath,
-        >>> )
-        >>> kwargs = {
-        >>>     'region_file': str(region_fpath),
-        >>>     'search_json': str(search_fpath),
-        >>>     'mode': 'area',
-        >>>     'verbose': 2,
-        >>>     'outfile': str(result_fpath),
-        >>> }
-        >>> result_fpath.delete()
-        >>> cmdline = 0
-        >>> main(cmdline=cmdline, **kwargs)
-        >>> # results are in the
-        >>> from watch.cli.baseline_framework_ingress import read_input_stac_items
-        >>> items = read_input_stac_items(result_fpath)
-        >>> len(items)
-        >>> for item in items:
-        >>>     print(item['properties']['eo:cloud_cover'])
-        >>>     print(item['properties']['datetime'])
-    """
-    config = StacSearchConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
-    import rich
-    rich.print('config = {}'.format(ub.urepr(config, nl=1)))
-    args = config.namespace
-
-    logger = util_logging.get_logger(verbose=args.verbose)
-    searcher = StacSearcher(logger)
-
-    dest_path = ub.Path(args.outfile)
-    outdir = dest_path.parent
-
-    temp_dir = ub.Path(tempfile.mkdtemp(prefix='stac_search'))
-    logger.info(f'Created temp folder: {temp_dir}')
-    if str(outdir) == '':
-        dest_path = temp_dir / args.outfile
-    else:
-        outdir.ensuredir()
-
-    ub.Path(dest_path).parent.ensuredir()
-
-    if config['append_mode']:
-        # Ensure we are not appending to an existing file
-        dest_path.delete()
-
-    if args.mode == 'area':
-        if config['region_globstr'] is not None:
-            from watch.utils import util_gis
-            region_file_fpaths = util_gis.coerce_geojson_paths(config['region_globstr'])
-            assert args.mode == 'area'
-        else:
-            if not hasattr(args, 'region_file'):
-                raise ValueError('Missing region file')
-            region_file_fpaths = [args.region_file]
-        from watch.utils import slugify_ext
-
-        print('region_file_fpaths = {}'.format(slugify_ext.smart_truncate(
-            ub.urepr(region_file_fpaths, nl=1), max_length=1000)))
-
-        if not hasattr(args, 'search_json'):
-            raise ValueError('Missing stac search parameters')
-        search_json = args.search_json
-
-        overall_status = {
-            'regions_with_results': 0,
-            'regions_without_results': 0,
-            'regions_with_errors': 0,
-            'total_regions': len(region_file_fpaths),
-        }
-
-        from watch.utils import util_progress
-        from watch.utils import util_parallel
-        query_workers = util_parallel.coerce_num_workers(config['query_workers'])
-        print(f'query_workers={query_workers}')
-        pool = ub.JobPool(mode='thread', max_workers=query_workers)
-
-        pman = util_progress.ProgressManager(
-            backend='rich' if query_workers > 0 else 'progiter')
-        with pman:
-            for region_fpath in pman(region_file_fpaths, desc='submit query jobs'):
-                pool.submit(area_query, region_fpath, search_json, searcher,
-                            temp_dir, config, logger,
-                            verbose=(query_workers == 0))
-
-            with open(dest_path, 'a') as the_file:
-                for job in pman(pool.as_completed(),
-                                total=len(region_file_fpaths),
-                                desc='collect query jobs', verbose=3):
-                    try:
-                        area_features = job.result()
-                    except Exception:
-                        overall_status['regions_without_results'] += 1
-                        overall_status['regions_with_errors'] += 1
-                        if not args.allow_failure:
-                            raise
-                    else:
-                        if len(area_features):
-                            overall_status['regions_with_results'] += 1
-                        else:
-                            overall_status['regions_without_results'] += 1
-
-                    pman.update_info('overall_status = {}'.format(ub.urepr(overall_status, nl=2)))
-
-                    for item in area_features:
-                        the_file.write(json.dumps(item) + '\n')
-    else:
-        raise NotImplementedError(f'only area is implemented. Got {args.mode=}')
-
-    if args.s3_dest is not None:
-        logger.info('Saving output to S3')
-        util_s3.send_file_to_s3(dest_path, args.s3_dest)
-    else:
-        logger.info('--s3_dest parameter not present; skipping S3 output')
-
-    logger.info('Search complete')
-
-
 def _auto_search_params_from_region(r_file_loc, config):
     from watch.utils import util_gis
     from watch.utils import util_time
@@ -493,6 +545,8 @@ def _auto_search_params_from_region(r_file_loc, config):
 
 
 def area_query(region_fpath, search_json, searcher, temp_dir, config, logger, verbose=1):
+    from watch.geoannots import geomodels
+    from shapely.geometry import shape as geom_shape
     if verbose:
         logger.info(f'Query region file: {region_fpath}')
 
@@ -509,32 +563,21 @@ def area_query(region_fpath, search_json, searcher, temp_dir, config, logger, ve
         try:
             search_params = json.loads(search_json)
         except (json.decoder.JSONDecodeError, TypeError):
-            with open(search_json) as f:
+            with open(search_json, 'r') as f:
                 search_params = json.load(f)
 
-    with open(r_file_loc, 'r') as r_file:
-        region = json.loads(r_file.read())
+    region = geomodels.RegionModel.coerce(r_file_loc)
+    region.validate()
 
-    regions = [
-        f for f in region['features'] if (
-            f['properties']['type'].lower() == 'region')
-    ]
-    if len(regions) != 1:
-        raise AssertionError(
-            f'Region file {r_file_loc!r} should have exactly 1 feature with '
-            f'type "region", but we found {len(regions)}')
-
-    max_products_per_region = config['max_products_per_region']
-    # assume only 1 region per region model file
-    geom = geom_shape(regions[0]['geometry'])
+    geom = geom_shape(region.header['geometry'])
 
     searches = search_params['stac_search']
     if verbose:
         logger.info(f'Performing {len(searches)} geometry stac searches')
 
-    area_features = []
+    area_results = []
     for s in search_params['stac_search']:
-        features = searcher.by_geometry(
+        querykw = dict(
             provider=s['endpoint'],
             geom=geom,
             collections=s['collections'],
@@ -542,19 +585,23 @@ def area_query(region_fpath, search_json, searcher, temp_dir, config, logger, ve
             end=s['end_date'],
             query=s.get('query', {}),
             headers=s.get('headers', {}),
-            max_products_per_region=max_products_per_region,
-            verbose=verbose,
+            max_products_per_region=config['max_products_per_region'],
         )
-        area_features.extend(features)
+        features = searcher.by_geometry(verbose=verbose, **querykw)
+        result = {
+            'querykw': querykw,
+            'features': features,
+        }
+        area_results.append(result)
 
     if verbose:
-        total_results = len(area_features)
+        total_results = sum(len(r['features']) for r in area_results)
         if total_results:
             logger.info(f'Total results for region: {total_results}')
         else:
             logger.warning(f'Total results for region: {total_results}')
 
-    return area_features
+    return area_results
 
 
 if __name__ == '__main__':

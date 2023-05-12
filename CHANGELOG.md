@@ -29,6 +29,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Now using scriptconfig in fusion.predict
 * Reworked how submatrices behave in mlops, added submatrices1, submatrices2. Concept might need refinement.
 * Update site / region schemas
+* More debugging output in `stac_search`
 
 
 ### Fixed
@@ -36,6 +37,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Erroneous assertion errors in reproject and kwcoco-to-geotiffs
 * Issue where `DINO_SV` would write region models to the out-site-manifest, now correctly points at site models.
 * Bug in coco-align where nodata values were not properly set on data that moved through gdal-merge.
+* Fixed minor issue in `stac_search` where regions with no results might get features from previous results.
 
 
 ## Version 0.5.6 - Target 2023-04-30
