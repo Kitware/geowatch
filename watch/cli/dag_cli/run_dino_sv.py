@@ -13,7 +13,7 @@ import subprocess
 
 import scriptconfig as scfg
 import ubelt as ub
-from watch.mlops.smart_pipeline import DinoBoxDetector, DinoBuildingFilter
+from watch.mlops.smart_pipeline import DinoBoxDetector, SV_DinoFilter
 
 from glob import glob
 
@@ -53,7 +53,7 @@ class DinoSVConfig(scfg.DataConfig):
     dino_filter_config = scfg.Value(None, type=str, help=ub.paragraph(
             '''
             Raw json/yaml or a path to a json/yaml file that specifies the
-            config for DinoBuildingFilter.
+            config for SV_DinoFilter.
             '''))
 
 
@@ -217,7 +217,7 @@ def run_dino_sv(config):
 
         ub.cmd(dino_box_detector.command(), check=True, verbose=3, system=True)
 
-        # 3.3 Run DinoBuildingFilter
+        # 3.3 Run SV_DinoFilter
         print("* Running Dino Building Filter *")
 
         default_dino_filter_config = ub.udict({})
@@ -228,7 +228,7 @@ def run_dino_sv(config):
                                               '{}.geojson'.format(region_id))
         output_region_model = os.path.join(region_models_outdir,
                                            '{}.geojson'.format(region_id))
-        dino_building_filter = DinoBuildingFilter(root_dpath='/tmp/ingress')
+        dino_building_filter = SV_DinoFilter(root_dpath='/tmp/ingress')
         dino_building_filter.configure({
             'input_kwcoco': dino_boxes_kwcoco_path,
             'input_region': input_region_model_bas,
