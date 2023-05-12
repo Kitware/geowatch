@@ -231,8 +231,16 @@ def main(cmdline=True, **kwargs):
     # automated_analysis(eval_type_to_aggregator, config)
 
     if config.inspect:
-        import xdev
-        xdev.embed()
+        agg = eval_type_to_aggregator['bas_pxl_eval']
+        for type, agg in eval_type_to_aggregator.items():
+            if len(agg):
+                subagg = agg.filterto(param_hashids=config.inspect if ub.iterable(config.inspect) else [config.inspect])
+                if len(subagg):
+                    subagg.make_summary_analysis(config)
+                    # from watch.mlops import confusor_analysis
+                    # for region_id, group in subagg.index.groupby('region_id'):
+                    #     group_agg = subagg.filterto(index=group.index)
+                    #     # confusor_analysis.main(cmdline=0, )
 
 
 @profile
@@ -795,60 +803,6 @@ def automated_analysis(eval_type_to_aggregator, config):
     if agg0 is not None:
         ...
         # agg0.analyze()
-
-
-def make_summary_analysis(agg1, config, dpath=None):
-    from watch.utils import util_pandas
-    if dpath is None:
-        output_dpath = ub.Path(config['root_dpath'] / 'aggregate')
-    else:
-        output_dpath = dpath
-    agg_group_dpath = output_dpath / ('agg_summary_params2_v3')
-    agg_group_dpath = agg_group_dpath.ensuredir()
-
-    # Given these set of A/B values, visualize each region
-    for region_id, group in agg1.index.groupby('region_id'):
-        group_agg = agg1.filterto(index=group.index)
-        for id, row in group_agg.index.iterrows():
-            eval_fpath = group_agg.fpaths[id]
-            param_hashid = row['param_hashid']
-            region_id = row['region_id']
-            dname = f'{region_id}_{param_hashid}'
-            link_dpath = agg_group_dpath / dname
-            real_dpath = eval_fpath.parent
-            ub.symlink(real_path=real_dpath, link_path=link_dpath)
-            import kwimage
-            from kwcoco.metrics.drawing import concice_si_display
-            region_viz_fpaths = list((eval_fpath.parent / 'region_viz_overall').glob('*_detailed.png'))
-            assert len(region_viz_fpaths) == 1
-            region_viz_fpath = region_viz_fpaths[0]
-            viz_img = kwimage.imread(region_viz_fpath)
-            scores_of_interest = util_pandas.pandas_shorten_columns(agg1.metrics).loc[id, ['bas_tp', 'bas_fp', 'bas_fn', 'bas_f1']]
-            scores_of_interest = ub.udict(scores_of_interest.to_dict())
-            text = ub.urepr(scores_of_interest.map_values(concice_si_display), nobr=1, si=1, compact=1)
-            new_img = kwimage.draw_header_text(viz_img, param_hashid + '\n' + text)
-            kwimage.imwrite(agg_group_dpath / f'summary_{region_id}_{param_hashid}.jpg', new_img)
-
-    for region_id, group in list(agg1.index.groupby('region_id')):
-        group_agg = agg1.filterto(index=group.index)
-        for id, row in list(group_agg.index.iterrows()):
-            param_hashid = row['param_hashid']
-            region_id = row['region_id']
-            eval_fpath = group_agg.fpaths[id]
-            confusion_fpaths = list((eval_fpath.parent / 'bas_summary_viz').glob('confusion_*.jpg'))
-            if len(confusion_fpaths) == 0:
-                from watch.mlops import confusion_visualization
-                confusion_visualization.bas_poly_eval_confusion_analysis(eval_fpath)
-            confusion_fpaths = list((eval_fpath.parent / 'bas_summary_viz').glob('confusion_*.jpg'))
-            assert len(confusion_fpaths) == 1
-            confusion_fpath = confusion_fpaths[0]
-            im = kwimage.imread(confusion_fpath)
-            scores_of_interest = util_pandas.pandas_shorten_columns(agg1.metrics).loc[id, ['bas_tp', 'bas_fp', 'bas_fn', 'bas_f1']]
-            scores_of_interest = ub.udict(scores_of_interest.to_dict())
-            text = ub.urepr(scores_of_interest.map_values(concice_si_display), nobr=1, si=1, compact=1)
-            model_name = group_agg.effective_params[group_agg.model_cols[0]].loc[id]
-            im = kwimage.draw_header_text(im, param_hashid + ' - ' + model_name + '\n' + text)
-            kwimage.imwrite(agg_group_dpath / f'confusion_{region_id}_{param_hashid}.jpg', im)
 
 
 def fix_duplicate_param_hashids(agg0):
@@ -1637,6 +1591,84 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             agg.macro_key_to_regions[macro_key] = regions_of_interest
             agg.region_to_tables[macro_key] = macro_table
             return macro_table
+
+    def make_summary_analysis(subagg, config):
+        output_dpath = ub.Path(config['output_dpath']) / 'aggregate'
+        agg_group_dpath = output_dpath / ('agg_summary_params2_v3')
+        agg_group_dpath = agg_group_dpath.ensuredir()
+
+        import rich
+        rich.print(f'agg_group_dpath: [link={agg_group_dpath}]{agg_group_dpath}[/link]')
+
+        # Given these set of A/B values, visualize each region
+        for region_id, group in ub.ProgIter(list(subagg.index.groupby('region_id')), desc='Inspect Region'):
+            group_agg = subagg.filterto(index=group.index)
+            for id, row in group_agg.index.iterrows():
+                ...
+                inspect_node(subagg, id, row, group_agg, agg_group_dpath)
+
+        rich.print(f'agg_group_dpath: [link={agg_group_dpath}]{agg_group_dpath}[/link]')
+
+
+def inspect_node(subagg, id, row, group_agg, agg_group_dpath):
+    from watch.utils import util_pandas
+    # eval_fpath = group_agg.fpaths[id]
+    eval_fpath = ub.Path(group_agg.table['fpath'].loc[id])
+    param_hashid = row['param_hashid']
+    region_id = row['region_id']
+    dname = f'{region_id}_{param_hashid}'
+    link_dpath = agg_group_dpath / dname
+    real_dpath = eval_fpath.parent
+    node_dpath = real_dpath
+    ub.symlink(real_path=node_dpath, link_path=link_dpath)
+    import kwimage
+    from kwcoco.metrics.drawing import concice_si_display
+    if 'poly_eval' in row['node']:
+        region_viz_fpaths = list((node_dpath / 'region_viz_overall').glob('*_detailed.png'))
+        assert len(region_viz_fpaths) == 1
+        region_viz_fpath = region_viz_fpaths[0]
+        viz_img = kwimage.imread(region_viz_fpath)
+        scores_of_interest = util_pandas.pandas_shorten_columns(subagg.metrics).loc[id, ['bas_tp', 'bas_fp', 'bas_fn', 'bas_f1']]
+        scores_of_interest = ub.udict(scores_of_interest.to_dict())
+        text = ub.urepr(scores_of_interest.map_values(concice_si_display), nobr=1, si=1, compact=1)
+        new_img = kwimage.draw_header_text(viz_img, param_hashid + '\n' + text)
+        kwimage.imwrite(agg_group_dpath / f'summary_{region_id}_{param_hashid}.jpg', new_img)
+
+        # FIXME
+        import watch
+        data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        # expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+        true_region_dpath = data_dvc_dpath / 'annotations/drop6/region_models'
+        true_site_dpath = data_dvc_dpath / 'annotations/drop6/site_models'
+
+        confusion_fpaths = list((eval_fpath.parent / 'bas_summary_viz').glob('confusion_*.jpg'))
+        if len(confusion_fpaths) == 0:
+            from watch.mlops import confusor_analysis
+            src_kwcoco = list((node_dpath / '.pred/bas_poly/').glob('*/poly.kwcoco.zip'))[0]
+            confusor_config = confusor_analysis.ConfusorAnalysisConfig(
+                bas_metric_dpath=(node_dpath / region_id / 'overall' / 'bas'),
+                src_kwcoco=src_kwcoco,
+                region_id=region_id,
+                out_dpath=agg_group_dpath,
+                true_site_dpath=true_site_dpath,
+                true_region_dpath=true_region_dpath,
+            )
+            # rich.print(ub.urepr(confusor_config))
+            # cmdline = 0
+            # kwargs = confusor_config
+            confusor_analysis.main(cmdline=0, **confusor_config)
+
+        confusion_fpaths = list((eval_fpath.parent / 'bas_summary_viz').glob('confusion_*.jpg'))
+        if len(confusion_fpaths):
+            assert len(confusion_fpaths) == 1
+            confusion_fpath = confusion_fpaths[0]
+            im = kwimage.imread(confusion_fpath)
+            scores_of_interest = util_pandas.pandas_shorten_columns(subagg.metrics).loc[id, ['bas_tp', 'bas_fp', 'bas_fn', 'bas_f1']]
+            scores_of_interest = ub.udict(scores_of_interest.to_dict())
+            text = ub.urepr(scores_of_interest.map_values(concice_si_display), nobr=1, si=1, compact=1)
+            model_name = group_agg.effective_params[group_agg.model_cols[0]].loc[id]
+            im = kwimage.draw_header_text(im, param_hashid + ' - ' + model_name + '\n' + text)
+            kwimage.imwrite(agg_group_dpath / f'confusion_{region_id}_{param_hashid}.jpg', im)
 
 
 @profile
