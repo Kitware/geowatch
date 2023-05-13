@@ -45,7 +45,7 @@ class StacToCocoConfig(scfg.DataConfig):
 
     verbose = scfg.Value(1, help='verbosity')
 
-    jobs = scfg.Value(1, type=str, short_alias=['j'], help='Number of jobs to run in parallel')
+    jobs = scfg.Value(0, type=str, short_alias=['j'], help='Number of jobs to run in parallel (Use zero, dont parallelize this)')
 
 
 def main(cmdline=True, **kwargs):
@@ -440,6 +440,7 @@ def make_coco_aux_from_stac_asset(asset_name,
     img.update({
         'file_name': file_name,
         'channels': channels,
+        'roles': roles,
     })
     if populate_watch_fields:
         raise NotImplementedError('REMOVED: use coco_add_watch_feilds '
@@ -518,13 +519,13 @@ def _stac_item_to_kwcoco_image(stac_item,
 
 @profile
 def stac_to_kwcoco(input_stac_catalog,
-                       outpath,
-                       assume_relative=False,
-                       populate_watch_fields=False,
-                       jobs=1,
-                       from_collated=False,
-                       ignore_duplicates=False,
-                       verbose=1):
+                   outpath,
+                   assume_relative=False,
+                   populate_watch_fields=False,
+                   jobs=0,
+                   from_collated=False,
+                   ignore_duplicates=False,
+                   verbose=1):
 
     if populate_watch_fields:
         raise NotImplementedError('REMOVED: use coco_add_watch_feilds '
@@ -532,7 +533,6 @@ def stac_to_kwcoco(input_stac_catalog,
 
     from watch.utils import util_parallel
     import pystac
-    import json
     import kwcoco
     jobs = util_parallel.coerce_num_workers(jobs)
 
@@ -548,6 +548,14 @@ def stac_to_kwcoco(input_stac_catalog,
 
     if jobs == 1:
         jobs = 0
+    if not populate_watch_fields and jobs > 0:
+        import warnings
+        warnings.warn(ub.paragraph(
+            '''
+            When populate_watch_fields is False there is usually no benefit to
+            having jobs > 0, it often makes the process go (a lot) slower.
+            '''))
+
     executor = ub.JobPool(mode='process', max_workers=jobs)
 
     all_items = [stac_item for stac_item in catalog.get_all_items()]

@@ -299,7 +299,8 @@ class GDalCommandBuilder:
 
 def gdal_single_translate(in_fpath, out_fpath, pixel_box=None, blocksize=256,
                           compress='DEFLATE', tries=1, cooldown=1, verbose=0,
-                          eager=True, gdal_cachemax=None, num_threads=None):
+                          eager=True, gdal_cachemax=None, num_threads=None,
+                          use_tempfile=True):
     """
     Crops geotiffs using pixels
 
@@ -383,6 +384,9 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box=None, blocksize=256,
         print(ub.cmd('gdalinfo ' + str(pxl_out_fpath))['out'])
     """
     tmp_fpath = ub.Path(ub.augpath(out_fpath, prefix='.tmptrans.'))
+
+    if not use_tempfile:
+        raise NotImplementedError
 
     builder = GDalCommandBuilder('gdal_translate')
     # builder['--debug'] = 'off'
@@ -712,7 +716,7 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, cooldown=1,
                     _intermediate_vrt=False, verbose=0,
                     return_intermediate=False, force_spatial_res=None,
                     eager=True, gdal_cachemax=None, num_threads=None,
-                    warp_memory=None, **kwargs):
+                    warp_memory=None, use_tempfile=True, **kwargs):
     """
     See gdal_single_warp() for args
 
@@ -838,7 +842,11 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, cooldown=1,
     single_warp_kwargs['gdal_cachemax'] = gdal_cachemax
     single_warp_kwargs['warp_memory'] = warp_memory
     single_warp_kwargs['num_threads'] = num_threads
+    single_warp_kwargs['use_tempfile'] = False
     # Delay the actual execution of the partial warps until merge is called.
+
+    if not use_tempfile:
+        raise NotImplementedError
 
     commands = []
 
@@ -848,7 +856,7 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, cooldown=1,
         # pull down all of the data and cache it on disk
         single_warp_kwargs['as_vrt'] = True
 
-    USE_REAL_TEMPFILES = eager
+    USE_REAL_TEMPFILES = eager and not ub.WIN32
     if USE_REAL_TEMPFILES:
         import tempfile
         tempfiles = []  # hold references
@@ -921,11 +929,15 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, cooldown=1,
                                  gdal_cachemax=gdal_cachemax,
                                  num_threads=num_threads)
     if eager:
+        # Remove temporary files
         ub.Path(tmp_out_fpath).delete()
+        for p in warped_gpaths:
+            p.delete()
         os.rename(tmp_out_fpath2, out_fpath)
     else:
         commands.extend(_cmd)
         commands.append(f'rm "{tmp_out_fpath}"')
+        commands.append('rm ' + ' '.join([f'"{p}"' for p in warped_gpaths]))
         commands.append(f'mv "{tmp_out_fpath2}" "{out_fpath}"')
 
     if not eager:

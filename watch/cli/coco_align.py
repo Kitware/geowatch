@@ -103,6 +103,11 @@ class AssetExtractConfig(scfg.DataConfig):
             Ideally this is not needed and all source geotiffs properly
             specify nodata.
 
+            NOTE: For quality bands WE DO NOT RESPECT THIS. This may change in
+            the future to have a more sane way of dealing with it. But hacking it
+            to zero for now. If this is specified we force it to zero.
+            If this is None, we DO use that for the quality bands.
+
             NOTE: We currently must specify this to handle gdal-merge
             correctly. Perhasp in the future we may be able to introspect, but
             for now specify it.
@@ -676,7 +681,10 @@ def main(cmdline=True, **kw):
         import cmd_queue
         # queue = cmd_queue.Queue.create('serial')
         queue = cmd_queue.Queue.create(
-            'tmux', size=config.img_workers, name='hack_lazy_' + video_name,
+            'tmux',
+            # size=config.img_workers,
+            size=1,
+            name='hack_lazy_' + video_name,
             environ={
                 k: v for k, v in os.environ.items()
                 if k.startswith('GDAL_') or
@@ -690,13 +698,14 @@ def main(cmdline=True, **kw):
                 prev = queue.submit(command, depends=prev)
                 prev.logs = False
 
+        queue.write()
         queue.print_commands()
 
         print(f'{len(queue.jobs)=}')
         if config['hack_lazy'] != 'dry':
             queue.run(
-                # with_textual=False
-                with_textual='auto'
+                with_textual=False
+                # with_textual='auto'
             )
         raise Exception('hack_lazy always fails')
 
@@ -1261,7 +1270,7 @@ class SimpleDataCube:
             datetime_ = datetimes[request_idx]
 
             if extract_config.max_frames is not None:
-                if frame_count > extract_config.max_frames:
+                if frame_count >= extract_config.max_frames:
                     break
                 frame_count += 1
 
@@ -1997,6 +2006,9 @@ def _aligncrop(obj_group,
     dst = {
         'file_name': os.fspath(dst_gpath),
     }
+    roles = list(ub.flatten([o.get('roles', []) for o in obj_group]))
+    if len(roles):
+        dst['roles'] = roles
     if first_obj.get('channels', None):
         dst['channels'] = first_obj['channels']
     if first_obj.get('num_bands', None):
@@ -2049,6 +2061,10 @@ def _aligncrop(obj_group,
         input_gpaths = list(ub.oset(input_gpaths))
 
     nodata = asset_config.force_nodata
+    if nodata is not None:
+        # HACK: quality bands are UInt16 so they can't have a negative nodata
+        if first_obj['channels'] in {'quality', 'cloudmask'}:
+            nodata = 256  # this is the ACC-1 hacked fill value.
 
     # When trying to get a gdalmerge to take multiple inputs I got a Attempt to
     # create 0x0 dataset is illegal,sizes must be larger than zero.  This new
@@ -2069,28 +2085,40 @@ def _aligncrop(obj_group,
     # Note: these methods take care of retries and checking that the
     # data is valid.
     force_spatial_res = None
+    # print('\n')
+    # print(f'asset_config.force_min_gsd={asset_config.force_min_gsd}')
+    # print(first_obj['approx_meter_gsd'])
+    # print('obj_group = {}'.format(ub.urepr(obj_group, nl=-1)))
     if asset_config.force_min_gsd is not None:
-        if 'approx_meter_gsd' in first_obj:
-            approx_meter_gsd = first_obj['approx_meter_gsd']
-        else:
-            if 'geotiff_metadata' in first_obj:
-                warnings.warn(ub.paragraph(
-                    '''
-                    Prepopulation should have set the approx_meter_gsd property
-                    when geotiff_metadata was populated. As of 0.3.9 we should
-                    not be hitting this case. There may be something wrong.
-                    '''))
-                info = first_obj['geotiff_metadata']
+        obj_approx_gsds = []
+        for obj in obj_group:
+            if 'approx_meter_gsd' in obj:
+                approx_meter_gsd = obj['approx_meter_gsd']
             else:
-                warnings.warn(ub.paragraph(
-                    '''
-                    Popluating geotiff approx_meter_gsd should have already been
-                    done.  To ensure pre-population use the '--geo_preprop=True'
-                    argument.
-                    '''))
-                info = watch.gis.geotiff.geotiff_crs_info(input_gpaths[0])
-            approx_meter_gsd = info.get('approx_meter_gsd', None)
+                if 'geotiff_metadata' in obj:
+                    warnings.warn(ub.paragraph(
+                        '''
+                        Prepopulation should have set the approx_meter_gsd property
+                        when geotiff_metadata was populated. As of 0.3.9 we should
+                        not be hitting this case. There may be something wrong.
+                        '''))
+                    info = obj['geotiff_metadata']
+                else:
+                    warnings.warn(ub.paragraph(
+                        '''
+                        Popluating geotiff approx_meter_gsd should have already been
+                        done.  To ensure pre-population use the '--geo_preprop=True'
+                        argument.
+                        '''))
+                    info = watch.gis.geotiff.geotiff_crs_info(input_gpaths[0])
+                approx_meter_gsd = info.get('approx_meter_gsd', None)
+            if approx_meter_gsd is not None:
+                obj_approx_gsds.append(approx_meter_gsd)
 
+        if len(obj_approx_gsds) == 0:
+            approx_meter_gsd = None
+        else:
+            approx_meter_gsd = min(obj_approx_gsds)
         if approx_meter_gsd is not None and approx_meter_gsd < asset_config.force_min_gsd:
             # Only setting if needed to avoid needless warping if the
             # 'approximate_meter_gsd' value is slightly different from

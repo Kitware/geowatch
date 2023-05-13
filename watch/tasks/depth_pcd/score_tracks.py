@@ -565,20 +565,20 @@ Example in MLOPs:
             sv_dino_filter.box_score_threshold: 0.01
             sv_dino_filter.box_isect_threshold: 0.1
 
-            sv_depth_filter.enabled: 0
-            sv_depth_filter.model_fpath: $DVC_EXPT_DPATH/models/depth_pcd/basicModel2.h5
-            sv_depth_filter.threshold:
-                - 0.20
-                - 0.22
-                - 0.25
-                - 0.27
-                - 0.29
-                - 0.3
-                - 0.31
-                - 0.33
-                - 0.35
-                - 0.37
-                - 0.4
+            # sv_depth_filter.enabled: 0
+            # sv_depth_filter.model_fpath: $DVC_EXPT_DPATH/models/depth_pcd/basicModel2.h5
+            # sv_depth_filter.threshold:
+            #     - 0.20
+            #     - 0.22
+            #     - 0.25
+            #     - 0.27
+            #     - 0.29
+            #     - 0.3
+            #     - 0.31
+            #     - 0.33
+            #     - 0.35
+            #     - 0.37
+            #     - 0.4
         submatrices:
             - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R001_I2LS.kwcoco.zip
               sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-KR_R001.kwcoco.json
@@ -609,7 +609,7 @@ geowatch aggregate \
     --target \
         "$DVC_EXPT_DPATH/_mlops_test_depth_pcd" \
     --stdout_report="
-        top_k: 3
+        top_k: 100
         per_group: 2
         macro_analysis: 0
         analyze: 0

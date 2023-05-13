@@ -991,7 +991,7 @@ def sc_nodes():
 
 
 def make_smart_pipeline_nodes(with_bas=True, building_validation=False,
-                              depth_validation=True, site_crops=True,
+                              depth_validation=False, site_crops=True,
                               with_sc=True):
     nodes = {}
 

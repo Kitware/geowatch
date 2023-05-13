@@ -51,7 +51,7 @@ Example:
         --region_globstr="$REGION_FPATH" \
         --site_globstr="$SITE_GLOBSTR" \
         --fields_workers=8 \
-        --convert_workers=8 \
+        --convert_workers=0 \
         --align_workers=26 \
         --cache=0 \
         --ignore_duplicates=1 \
@@ -99,7 +99,7 @@ class PrepareTA2Config(CMDQueueConfig):
         'max_regions': None,
 
         'query_workers': scfg.Value('0', help='workers for STAC search'),
-        'convert_workers': scfg.Value('min(avail,8)', help='workers for stac-to-kwcoco script'),
+        'convert_workers': scfg.Value('0', help='workers for stac-to-kwcoco script. Keep this set to zero!'),
         'fields_workers': scfg.Value('min(avail,max(all/2,8))', help='workers for add-watch-fields script'),
 
         'align_workers': scfg.Value(0, help='primary workers for align script', group='align'),

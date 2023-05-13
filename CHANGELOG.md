@@ -36,6 +36,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 
 ### Fixed
+* bug in coco-align where minimum resolution trigger would not be hit if there
+  were multiple assets for an item and they were at different resolutions (e.g.
+  for quality bands)
 * safer no longer uses `temp_file` on windows
 * Erroneous assertion errors in reproject and kwcoco-to-geotiffs
 * Issue where `DINO_SV` would write region models to the out-site-manifest, now correctly points at site models.
