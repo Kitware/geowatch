@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
 """
-TODO:
-    - [ ] Rename to stac_to_kwcoco
-
 SeeAlso:
     ~/code/watch/watch/cli/stac_search.py
 """
@@ -434,6 +431,12 @@ def make_coco_aux_from_stac_asset(asset_name,
     else:
         file_name = asset_href
 
+    roles = asset_dict.get('roles', [])
+    assert isinstance(roles, list)
+    if channels == 'quality':
+        if 'quality' not in roles:
+            roles.append('quality')
+
     img.update({
         'file_name': file_name,
         'channels': channels,
@@ -478,8 +481,7 @@ def _stac_item_to_kwcoco_image(stac_item,
         'name': stac_item.id,
         'file_name': None,
     }
-    auxiliary = []
-
+    assets = []
     for asset_name, asset_dict in stac_item_dict.get('assets', {}).items():
         aux = make_coco_aux_from_stac_asset(
             asset_name,
@@ -492,17 +494,17 @@ def _stac_item_to_kwcoco_image(stac_item,
             verbose=verbose,
         )
         if aux is not None:
-            auxiliary.append(aux)
+            assets.append(aux)
 
-    if len(auxiliary) == 0:
+    if len(assets) == 0:
         print("* Warning * Empty auxiliary assets for "
               "STAC Item '{}', skipping!".format(stac_item.id))
         return None
 
-    if len(auxiliary) == 0:
+    if len(assets) == 0:
         img['failed'] = stac_item
 
-    img['auxiliary'] = auxiliary
+    img['auxiliary'] = assets
     img['stac_properties'] = stac_item_dict['properties']
     date = stac_item_dict['properties']['datetime']
     date = util_time.coerce_datetime(date).isoformat()
@@ -611,11 +613,8 @@ def stac_to_kwcoco(input_stac_catalog,
                         '''))
                     raise
 
-    with open(outpath, 'w') as f:
-        json.dump(output_dset.dataset, f, indent=2)
-
+    output_dset.dump(indent=2)
     print('Wrote: {}'.format(outpath))
-
     return output_dset
 
 

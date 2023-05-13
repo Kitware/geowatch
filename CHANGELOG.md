@@ -21,6 +21,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+* STAC roles are now preserved in kwcoco conversion.
 * Renamed `ta1_stac_to_kwcoco` to `stac_to_kwcoco`.
 * Tweaked dependencies for windows
 * The kwcoco video dataset now respects the weight attribute in annotations.
