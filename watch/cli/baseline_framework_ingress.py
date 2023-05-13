@@ -119,14 +119,19 @@ def baseline_framework_ingress(input_path,
 
     pool = ub.JobPool(mode='thread' if workers > 1 else 'serial',
                       max_workers=workers)
-    pman = util_progress.ProgressManager(backend='progiter')
-    with pman, pool:
+    pman = util_progress.ProgressManager(backend='rich')
+    with pman:
         """
         DEVELOPER NOTE:
             There is something that can cause a lockup here. To reproduce
             first ensure that the outdir is cleared, so no caching happens.
             The failure seems to happen when the mode is process. Using thread
             or serial seems fine.
+
+            Update: the issue seems to happen if you use the pool.__enter__
+            method before pman. Using it after seems ok with progiter, but not
+            rich. Removing the __enter__ does not help the rich case, and now
+            switching back to progiter, the lockup is happening again...
         """
         for feature in pman.progiter(input_stac_items, desc='submit ingress jobs'):
             pool.submit(ingress_item, feature, **ingress_kw)
