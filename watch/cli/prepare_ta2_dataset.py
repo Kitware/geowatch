@@ -488,14 +488,14 @@ def main(cmdline=False, **kwargs):
         convert_job = pipeline.submit(
             command=ub.codeblock(
                 rf'''
-                {job_environ_str}python -m watch.cli.ta1_stac_to_kwcoco \
+                {job_environ_str}python -m watch.cli.stac_to_kwcoco \
                     "{uncropped_catalog_fpath}" \
                     --outpath="{uncropped_kwcoco_fpath}" \
                     {convert_options_str} \
                     --jobs "{config['convert_workers']}"
                 '''),
             depends=[ingress_job],
-            name=f'ta1_stac_to_kwcoco-{s3_name}',
+            name=f'stac_to_kwcoco-{s3_name}',
             in_paths={
                 'uncropped_catalog_fpath': uncropped_catalog_fpath,
             },

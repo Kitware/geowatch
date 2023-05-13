@@ -53,7 +53,7 @@ class StacToCocoConfig(scfg.DataConfig):
 
 def main(cmdline=True, **kwargs):
     config = StacToCocoConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
-    ta1_stac_to_kwcoco(**config)
+    stac_to_kwcoco(**config)
     return 0
 
 
@@ -143,8 +143,8 @@ def _determine_channels_collated(asset_name, asset_dict, platform):
 
 def _determine_s2_channels(asset_name, asset_dict):
     """
-        >>> from watch.cli.ta1_stac_to_kwcoco import *  # NOQA
-        >>> from watch.cli.ta1_stac_to_kwcoco import _determine_s2_channels
+        >>> from watch.cli.stac_to_kwcoco import *  # NOQA
+        >>> from watch.cli.stac_to_kwcoco import _determine_s2_channels
         >>> test_hrefs = [
         >>>     '/vsis3/smart-data-accenture/ta-1/ta1-s2-acc/15/T/TF/2020/9/21/S2A_14TQL_20200921_0_L1C_ACC/S2A_14TQL_20200921_0_L1C_ACC_QA.tif',
         >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/14/T/QK/2020/8/9/LC08_L1TP_028032_20200809_20200917_02_T1_ACC/LC08_L1TP_028032_20200809_20200917_02_T1_ACC_cloud_mask.tif',
@@ -217,8 +217,8 @@ def _determine_s2_channels(asset_name, asset_dict):
 def _determine_l8_channels(asset_name, asset_dict):
     """
     Example:
-        >>> from watch.cli.ta1_stac_to_kwcoco import *  # NOQA
-        >>> from watch.cli.ta1_stac_to_kwcoco import _determine_l8_channels
+        >>> from watch.cli.stac_to_kwcoco import *  # NOQA
+        >>> from watch.cli.stac_to_kwcoco import _determine_l8_channels
         >>> test_hrefs = [
         >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/52/S/EG/2017/12/2/LC08_L1TP_114034_20171202_20200902_02_T1_ACC/LC08_L1TP_114034_20171202_20200902_02_T1_ACC_QA.tif',
         >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/52/S/EG/2017/12/2/LC08_L1TP_114034_20171202_20200902_02_T1_ACC/LC08_L1TP_114034_20171202_20200902_02_T1_ACC_TCI.tif',
@@ -515,7 +515,7 @@ def _stac_item_to_kwcoco_image(stac_item,
 
 
 @profile
-def ta1_stac_to_kwcoco(input_stac_catalog,
+def stac_to_kwcoco(input_stac_catalog,
                        outpath,
                        assume_relative=False,
                        populate_watch_fields=False,

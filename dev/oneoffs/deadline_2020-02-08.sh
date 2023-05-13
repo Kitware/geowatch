@@ -46,7 +46,7 @@ python -m watch.cli.baseline_framework_ingress \
     --outdir "$UNCROPPED_INGRESS_DPATH" \
     "$UNCROPPED_QUERY_FPATH"
 
-python -m watch.cli.ta1_stac_to_kwcoco \
+python -m watch.cli.stac_to_kwcoco \
     "$UNCROPPED_CATALOG_FPATH" \
     --outpath="$UNCROPPED_KWCOCO_FPATH" \
     --populate-watch-fields \

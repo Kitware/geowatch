@@ -167,7 +167,7 @@ stac_search - Step 1 in "prepare_ta2_dataset". How we search stac to find images
 
 baseline_framework_ingress - Step 2 in "prepare_ta2_dataset". Creates a catalog from results of a STAC query.
 
-ta1_stac_to_kwcoco - Step 3 in "prepare_ta2_datset". Very useful. The main stac to kwcoco conversion. Given a stac catalog makes a kwcoco file that references the virtual gdal images. Might need a rename.
+stac_to_kwcoco - Step 3 in "prepare_ta2_datset". Very useful. The main stac to kwcoco conversion. Given a stac catalog makes a kwcoco file that references the virtual gdal images. Might need a rename.
 
 coco_add_watch_fields - Step 3 in "prepare_ta2_dataset. Helper to add special fields (e.g. geodata) to an existing kwcoco file from geotiff metata.
 

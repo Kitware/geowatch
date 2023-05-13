@@ -220,7 +220,7 @@ def check_processed_regions():
     #     'ta1-30m-acc-1'
     # ]
     from watch.utils import util_progress
-    from watch.cli.ta1_stac_to_kwcoco import summarize_stac_item
+    from watch.cli.stac_to_kwcoco import summarize_stac_item
 
     peryear_rows = []
     peritem_rows = []
