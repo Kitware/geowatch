@@ -513,3 +513,25 @@ QA_SPECS += QA_BitSpecTable({
         { 'bit_number': 7, 'qa_name': 'water', 'qa_description': 'water'},
     ]
 })
+
+
+def demo():
+    import sys
+    fpath = sys.argv[1]
+    from watch.tasks.fusion.datamodules.qa_bands import QA_SPECS
+    table = QA_SPECS.find_table('ACC-1', 'WV')
+    import kwimage
+    quality_im = kwimage.imread(fpath)
+    drawings = table.draw_labels(quality_im)
+    qa_canvas = drawings['qa_canvas']
+    legend = drawings['legend']
+    canvas = kwimage.stack_images([qa_canvas, legend], axis=1)
+
+
+
+if __name__ == '__main__':
+    """
+    CommandLine:
+        python ~/code/watch/watch/tasks/fusion/datamodules/qa_bands.py /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/Aligned-Drop7-DEBUG/US_R007/WV/affine_warp/crop_20150401T160000Z_N34.190052W083.941277_N34.327136W083.776956_WV_0/crop_20150401T160000Z_N34.190052W083.941277_N34.327136W083.776956_WV_0_quality.tif
+    """
+    demo()
