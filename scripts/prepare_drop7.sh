@@ -2,11 +2,11 @@
 
 source "$HOME"/code/watch/secrets/secrets
 
-DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
+DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
 SENSORS=TA1-S2-L8-WV-PD-ACC-3
 DATASET_SUFFIX=Drop7
-REGION_GLOBSTR="$DATA_DVC_DPATH/annotations/drop6_hard_v1/region_models/*_R0*.geojson"
-SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/drop6_hard_v1/site_models/*_R0*.geojson"
+REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop6_hard_v1/region_models/*_R0*.geojson"
+SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop6_hard_v1/site_models/*_R0*.geojson"
 
 export GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR
 
@@ -18,7 +18,7 @@ python -m watch.cli.prepare_ta2_dataset \
     --sensors="$SENSORS" \
     --api_key=env:SMART_STAC_API_KEY \
     --collated True \
-    --dvc_dpath="$DATA_DVC_DPATH" \
+    --dvc_dpath="$DVC_DATA_DPATH" \
     --aws_profile=iarpa \
     --region_globstr="$REGION_GLOBSTR" \
     --site_globstr="$SITE_GLOBSTR" \

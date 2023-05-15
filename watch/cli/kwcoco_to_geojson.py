@@ -213,9 +213,6 @@ def _ensure_multi(poly):
     Returns:
         shapely.geometry.MultiPolygon
     """
-    # ) -> shapely.geometry.MultiPolygon:
-    #     poly: Union[shapely.geometry.Polygon, shapely.geometry.MultiPolygon]
-    # ) -> shapely.geometry.MultiPolygon:
     import shapely
     if isinstance(poly, shapely.geometry.MultiPolygon):
         return poly
@@ -235,8 +232,18 @@ def _normalize_date(date_str):
     return dateutil.parser.parse(date_str).date().isoformat()
 
 
+def _join_props(parts):
+    # T&E requires a comma and a space
+    return ', '.join(parts)
+
+
+def _split_props(parts):
+    # Handle comma only and comma space cases
+    return [p.strip() for p in parts.split(',')]
+
+
 # For MultiPolygon observations. Could be ', '?
-sep = ','
+# sep = ','
 
 
 @profile
@@ -345,16 +352,16 @@ def coco_create_observation(coco_dset, anns, with_properties=True):
         for key in ['current_phase', 'is_occluded', 'is_site_boundary']:
             value = []
             for prop, geom in zip(properties_list[key], geometry_list):
-                value.append(sep.join(map(str, [prop] * _len(geom))))
-            properties[key] = sep.join(value)
+                value.append(_join_props([str(prop)] * _len(geom)))
+            properties[key] = _join_props(value)
 
         # HACK
         # We are not being scored on multipolygons in SC right now!
         # https://smartgitlab.com/TE/metrics-and-test-framework/-/issues/24
         #
         # When safe, merge class labels for multipolygons so they'll be scored.
-        if 1:
-            phase = properties['current_phase'].split(sep)
+        if 0:
+            phase = _split_props(properties['current_phase'])
             if len(phase) > 1 and len(set(phase)) == 1:
                 properties['current_phase'] = phase[0]
 
@@ -417,14 +424,13 @@ def coco_track_to_site(coco_dset, trackid, region_id, site_idx=None,
     annots = coco_dset.annots(track_id=trackid)
     gids, anns = annots.gids, annots.objs
 
-    features = [
-        coco_create_observation(coco_dset, _anns, with_properties=(not as_summary))
-        for gid, _anns in ub.group_items(anns, gids).items()
-    ]
-    for i in range(len(features)):
-        features[i]['properties'].setdefault('misc_info', {})
-        features[i]['properties']['misc_info']['trackid'] = trackid
-        # features[i]['properties']
+    features = []
+    for gid, _anns in ub.group_items(anns, gids).items():
+        feat = coco_create_observation(coco_dset, _anns, with_properties=(not as_summary))
+        features.append(feat)
+    # for i in range(len(features)):
+    #     features[i]['properties'].setdefault('misc_info', {})
+    #     features[i]['properties']['misc_info']['trackid'] = trackid
 
     # HACK to passthrough site_summary IDs
     import watch
@@ -438,10 +444,12 @@ def coco_track_to_site(coco_dset, trackid, region_id, site_idx=None,
         region_id = '_'.join(site_id.split('_')[:2])
 
     if as_summary:
-        return coco_create_site_header(coco_dset, region_id, site_id, trackid, gids, features, as_summary)
+        site = coco_create_site_header(coco_dset, region_id, site_id, trackid, gids, features, as_summary)
     else:
         site_header = coco_create_site_header(coco_dset, region_id, site_id, trackid, gids, features, as_summary)
-        return geojson.FeatureCollection([site_header] + features)
+        site = geojson.FeatureCollection([site_header] + features)
+
+    return site
 
 
 def predict_phase_changes(site_id, features):
@@ -482,7 +490,7 @@ def predict_phase_changes(site_id, features):
         feature_properties,
         key=lambda prop: dateutil.parser.parse(prop['observation_date']))
 
-    feature_phases = [prop['current_phase'].split(sep) for prop in feature_properties]
+    feature_phases = [_split_props(prop['current_phase']) for prop in feature_properties]
 
     def transition_date_from(phase):
         for props, phases in zip(reversed(feature_properties), reversed(feature_phases)):

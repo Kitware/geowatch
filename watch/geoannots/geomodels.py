@@ -367,10 +367,11 @@ class SiteModel(_Model):
     def info(self):
         header = self.header
         prop = '<no site header>' if header is None else header['properties']
-        info = {
-            'num_observations': len(list(self.observations())),
-            'properties': prop,
-        }
+        info = {}
+        info['num_observations'] = len(list(self.observations()))
+        if header is not None:
+            info['header_geom_type'] = header['geometry']['type']
+        info['properties'] = prop
         return info
 
     def load_schema(self, strict=True):
@@ -542,6 +543,16 @@ class SiteModel(_Model):
         if len(errors):
             print('errors = {}'.format(ub.urepr(errors, nl=1)))
             raise AssertionError
+
+    def _validate_parts(self):
+        import jsonschema
+        schema = ub.udict(self.load_schema(strict=False))
+        schema - {'properties', 'required', 'title', 'type'}
+        obs_schema = schema | (schema[chr(36) + 'defs']['observation_feature'])
+        site_schema = schema | (schema[chr(36) + 'defs']['site_feature'])
+        jsonschema.validate(self.header, site_schema)
+        for obs_feature in self.body_features():
+            jsonschema.validate(obs_feature, obs_schema)
 
 
 class _Feature(ub.NiceRepr, geojson.Feature):
