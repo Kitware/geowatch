@@ -856,7 +856,7 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, cooldown=1,
         # pull down all of the data and cache it on disk
         single_warp_kwargs['as_vrt'] = True
 
-    USE_REAL_TEMPFILES = eager and not ub.WIN32
+    USE_REAL_TEMPFILES = False and (eager and not ub.WIN32)
     if USE_REAL_TEMPFILES:
         import tempfile
         tempfiles = []  # hold references
@@ -932,7 +932,7 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, cooldown=1,
         # Remove temporary files
         ub.Path(tmp_out_fpath).delete()
         for p in warped_gpaths:
-            p.delete()
+            ub.Path(p).delete()
         os.rename(tmp_out_fpath2, out_fpath)
     else:
         commands.extend(_cmd)
