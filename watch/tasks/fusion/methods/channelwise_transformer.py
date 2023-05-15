@@ -1507,12 +1507,14 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             mode_val = mode_val.nan_to_num_()
         elif rescale_nan_method == 'perframe':
             # Do a dropout-like rescaling to the nan input values.
-            num_nan = mode_val.isnan()
-            num_total = mode_val.numel()
-            p = min((num_nan / num_total), 1 - 1e-5)
-            mode_val = mode_val.nan_to_num_()
-            rescale_factor = 1 / (1 - p)
-            mode_val *= rescale_factor
+            with torch.no_grad():
+                num_nan = mode_val.isnan().sum()
+                num_total = mode_val.numel()
+                # dont rescale by more than half.
+                p = min((num_nan / num_total), 0.5)
+                mode_val = mode_val.nan_to_num_()
+                rescale_factor = 1 / (1 - p)
+                mode_val *= rescale_factor
         else:
             raise AssertionError
 
