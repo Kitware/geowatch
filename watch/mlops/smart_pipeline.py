@@ -782,16 +782,20 @@ class DinoBoxDetector(ProcessNode):
     Used for both site cropping and validation-cropping
 
     Example:
+        >>> from watch.mlops.smart_pipeline import *  # NOQA
         >>> node = DinoBoxDetector(root_dpath='/root/dpath/')
         >>> node.configure({
         >>>     'coco_fpath': 'foo.kwcoco',
         >>>     'package_fpath': 'model.pt',
+        >>>     'data_workers': 2,
         >>> })
         >>> print(node.command())
         >>> algo_id1 = node.algo_id
         >>> print(f'node.algo_id={node.algo_id}')
         >>> print(f'node.process_id={node.process_id}')
         >>> node.configure({
+        >>>     'coco_fpath': 'foo.kwcoco',
+        >>>     'package_fpath': 'model.pt',
         >>>     'data_workers': 10,
         >>> })
         >>> algo_id2 = node.algo_id
