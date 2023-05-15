@@ -103,7 +103,7 @@ class ManagerConfig(scfg.DataConfig):
         A command that specifies an action and an optional target.
         Can be "pull packages", "push packages", "status", "list", or several
         other options. This interface may be reworked in the future.
-        ''', position=1))
+        '''), position=1)
 
     dvc_remote = scfg.Value('aws', help='dvc remote to sync to/from')
 
