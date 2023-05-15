@@ -422,7 +422,9 @@ def coco_track_to_site(coco_dset, trackid, region_id, site_idx=None,
         for gid, _anns in ub.group_items(anns, gids).items()
     ]
     for i in range(len(features)):
-        features[i]['properties']['trackid'] = trackid
+        features[i]['properties'].setdefault('misc_info', {})
+        features[i]['properties']['misc_info']['trackid'] = trackid
+        # features[i]['properties']
 
     # HACK to passthrough site_summary IDs
     import watch
