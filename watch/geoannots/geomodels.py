@@ -456,6 +456,93 @@ class SiteModel(_Model):
             fprop = feat['properties']
             fprop['score'] = float(max(min(1, fprop['score']), 0))
 
+    def _manual_validation(self):
+        """
+        Hard coded checks. The jsonschema is pretty bad at identifing where
+        errors are, so these are some hard coded checks that hit some simple
+        errors we have seen before.
+        """
+        features = self.features
+        if len(features) < 2:
+            raise AssertionError('should have at least two features')
+
+        type_to_expected_fields = {
+            'feature': {
+                'required': {'type', 'properties', 'geometry'},
+                'optional': set(),
+            },
+            'site': {
+                'required': {
+                    'type', 'site_id', 'region_id', 'version', 'mgrs', 'model_content',
+                    'start_date', 'end_date', 'status', 'originator'},
+                'optional': {
+                    'misc_info', 'validated', 'score',
+                    'predicted_phase_transition_date',
+                    'predicted_phase_transition'
+                }
+            },
+            'observation': {
+                'required': {
+                    'type', 'observation_date', 'source', 'sensor_name',
+                    'current_phase', 'is_occluded', 'is_site_boundary'
+                },
+                'optional': {
+                    'misc_info', 'score',
+                }
+            }
+        }
+
+        type_to_expected_geoms = {
+            'site': {'Polygon'},
+            'observation': {'Polygon', 'MultiPolygon'},
+        }
+
+        def check_expected_fields(have, type):
+            expected = type_to_expected_fields[type]
+            missing = expected['required'] - have
+            extra = have - (expected['required'] | expected['optional'])
+            if extra:
+                yield {
+                    'msg': f'Extra fields: {extra}'
+                }
+            if missing:
+                yield {
+                    'msg': f'Missing fields: {missing}'
+                }
+            return errors
+
+        def check_expected_geom(geom, type):
+            allowed_types = type_to_expected_geoms[type]
+            if geom.geom_type not in allowed_types:
+                yield {
+                    'msg': f'{type} must be in {allowed_types}: got {geom.geom_type}'
+                }
+
+        from shapely.geometry import shape
+        errors = []
+        for feat in features:
+            have = set(feat.keys())
+            errors += list(check_expected_fields(have, type='feature'))
+            geom = shape(feat['geometry'])
+            props = feat['properties']
+            proptype = props['type']
+            if proptype == 'site':
+                have = set(props.keys())
+                errors += list(check_expected_fields(have, type='site'))
+                errors += list(check_expected_geom(geom, type='site'))
+            elif proptype == 'observation':
+                have = set(props.keys())
+                errors += list(check_expected_fields(have, type='observation'))
+                errors += list(check_expected_geom(geom, type='observation'))
+            else:
+                errors += {
+                    'msg': f'Unknown site type: {proptype}',
+                }
+
+        if len(errors):
+            print('errors = {}'.format(ub.urepr(errors, nl=1)))
+            raise AssertionError
+
 
 class _Feature(ub.NiceRepr, geojson.Feature):
     type = 'Feature'

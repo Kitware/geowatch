@@ -1217,7 +1217,6 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
         HACK_TO_FIX_HARDNEGS = 1
         if HACK_TO_FIX_HARDNEGS:
             if len(site_polygons) != len(site_catnames):
-
                 if site_catnames != ['negative']:
                     import warnings
                     warnings.warn(
