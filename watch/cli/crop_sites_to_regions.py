@@ -119,7 +119,7 @@ def main(cmdline=False, **kwargs):
 
         # Not sure why this insists on bytes. I dont think it was before
         with safer.open(new_region_fpath, temp_file=not ub.WIN32, mode='w') as file:
-            cropped_region_json = cropped_region.to_json(na='drop', indent=2)
+            cropped_region_json = cropped_region.to_json(na='drop', indent=2, drop_id=True)
             file.write(cropped_region_json)
         print(f'Wrote cropped site summaries to {new_region_fpath}')
 
@@ -149,7 +149,7 @@ def main(cmdline=False, **kwargs):
 
                 with safer.open(new_site_fpath, temp_file=not ub.WIN32, mode='w') as file:
                     cropped_site_json = cropped_site.to_json(
-                        na='drop', indent=2)
+                        na='drop', indent=2, drop_id=True)
                     file.write(cropped_site_json)
                     # cropped_site.to_file(file, driver='GeoJSON')
         print(f'Wrote {num_valid} / {total} valid cropped sites in {new_site_dpath}')
