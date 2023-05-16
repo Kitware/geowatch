@@ -682,8 +682,8 @@ def main(cmdline=True, **kw):
         # queue = cmd_queue.Queue.create('serial')
         queue = cmd_queue.Queue.create(
             'tmux',
-            # size=config.img_workers,
-            size=1,
+            size=config.img_workers,
+            # size=1,
             name='hack_lazy_' + video_name,
             environ={
                 k: v for k, v in os.environ.items()

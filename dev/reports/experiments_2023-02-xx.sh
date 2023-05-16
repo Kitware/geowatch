@@ -1949,7 +1949,7 @@ python -m watch.mlops.schedule_evaluation --params="
             - inf
         bas_poly.moving_window_size:
             - null
-            - 1
+            #- 1
             #- 2
         bas_poly.poly_merge_method:
             - 'v2'
