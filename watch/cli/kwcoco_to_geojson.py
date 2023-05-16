@@ -61,8 +61,10 @@ if not os.environ.get('_ARGCOMPLETE', ''):
     }
 
     _trackfn_details_docs = ' --- '.join([
-        k + ': ' + ', '.join([field.name for field in v.__dataclass_fields__.values()])
-        if hasattr(v, '__dataclass_fields__') else
+        # k + ': ' + ', '.join([field.name for field in v.__dataclass_fields__.values()])
+        # if hasattr(v, '__dataclass_fields__') else
+        k + ': ' + ', '.join([k for k, v in v.__default__.items()])
+        if hasattr(v, '__default__') else
         k + ':?'
         for k, v in _KNOWN_TRACK_FUNCS.items()
     ])

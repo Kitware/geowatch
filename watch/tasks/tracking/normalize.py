@@ -545,14 +545,8 @@ def dedupe_dates(coco_dset):
         >>> assert coco_dset_fixed.n_images < coco_dset_with_dups.n_images
     '''
     from watch.utils import util_time
-    sensor_priority = {
-        'WorldView': 6,
-        'WorldView 1': 5,
-        'Planet': 4,
-        'Sentinel-2': 3,
-        'Landsat 8': 2,
-        'Landsat 7': 1
-    }
+    from watch import heuristics
+    sensor_priority = heuristics.SENSOR_TRACK_PRIORITY
     for trackid in coco_dset.index.trackid_to_aids.keys():
         annots = coco_dset.annots(track_id=trackid)
         dates = [util_time.coerce_datetime(d).date() for d in annots.images.lookup('date_captured')]
@@ -694,7 +688,10 @@ def normalize(
 
     tracker: TrackFunction = track_fn(**track_kwargs, viz_out_dir=viz_out_dir)
     print('track_kwargs = {}'.format(ub.urepr(track_kwargs, nl=1)))
-    print('{} {}'.format(tracker.__class__.__name__, ub.urepr(tracker.__dict__, nl=1)))
+    # print('{} {}'.format(tracker.__class__.__name__, ub.urepr(tracker.__dict__, nl=1)))
+    import rich
+    rich.print(ub.urepr(tracker))
+    # print('{} {}'.format(tracker.__class__.__name__, ub.urepr(tracker.__dict__, nl=1)))
     out_dset = tracker.apply_per_video(coco_dset)
 
     if DEBUG_JSON_SERIALIZABLE:

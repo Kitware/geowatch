@@ -977,3 +977,12 @@ TE_SENSOR_NAMES = {
     'WV1': 'WorldView',
     'PD': 'Planet',
 }
+
+SENSOR_TRACK_PRIORITY = {
+    'WorldView': 6,
+    'WorldView 1': 5,
+    'Planet': 4,
+    'Sentinel-2': 3,
+    'Landsat 8': 2,
+    'Landsat 7': 1
+}

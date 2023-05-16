@@ -7,8 +7,10 @@ SeeAlso:
 import ubelt as ub
 import itertools
 import math
-from typing import Tuple, Union, Optional, Literal
-from dataclasses import dataclass
+from typing import Optional
+from typing import Tuple
+from typing import Literal
+# from dataclasses import dataclass
 import scriptconfig as scfg
 
 from watch.heuristics import SITE_SUMMARY_CNAME, CNAMES_DCT
@@ -396,9 +398,7 @@ def _add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
     else:
         for tid, grp in tracks.groupby('track_idx', axis=0):
             score_chan = kwcoco.ChannelSpec('|'.join(key))
-            import xdev
-            with xdev.embed_on_exception_context:
-                this_score = grp[(score_chan.spec, -1)]
+            this_score = grp[(score_chan.spec, -1)]
             scores_dct = {k: grp[(k, -1)] for k in score_chan.unique()}
             scores_dct = [dict(zip(scores_dct, t))
                           for t in zip(*scores_dct.values())]
@@ -481,42 +481,6 @@ def site_validation(sub_dset, thresh=0.25, span_steps=15):
         sub_dset.remove_annotations(ann_ids_to_drop)
 
     return sub_dset
-
-
-class _GidPolyConfig(scfg.DataConfig):
-    key = 'salient'
-    agg_fn = 'probs'
-    thresh = 0.0
-    morph_kernel = 3
-    thresh_hysteresis = None
-    norm_ord = 1
-    moving_window_size = None
-    inner_window_size = None
-    inner_agg_fn = 'mean'
-    resolution = None
-    use_boundaries = False
-    poly_merge_method = None
-
-
-class TimeAggregatedPolysConfig(_GidPolyConfig):
-    """
-    This is an intermediate config that we will use to transition between the
-    current dataclass configuration and a new scriptconfig based one.
-    """
-    bg_key = None
-    time_thresh = 1
-    response_thresh = None
-    min_area_square_meters = None
-    max_area_square_meters = None
-    max_area_behavior = 'drop'
-    polygon_simplify_tolerance = None
-
-    def __post_init__(self):
-        if self.norm_ord in {'inf', None}:
-            self.norm_ord = float('inf')
-        key, bg_key = _validate_keys(self.key, self.bg_key)
-        self.key = key
-        self.bg_key = bg_key
 
 
 @profile
@@ -1002,8 +966,7 @@ def heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=None, config=None):
 
     prog = ub.ProgIter(total=n_steps, desc='process-step')
     with prog:
-        polys_final = _process_1_step(h_init, _agg_fn, config.thresh, config.morph_kernel,
-                                      config.norm_ord, config.thresh_hysteresis, track_bounds)
+        polys_final = _process_1_step(h_init, _agg_fn, track_bounds, config)
         prog.step()
 
         if n_steps > 1:
@@ -1012,8 +975,7 @@ def heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=None, config=None):
             for i in range(n_steps - 1):
                 prog.step()
                 h1 = heatmaps[(i + 1) * final_size:(i + 2) * final_size]
-                p1 = _process_1_step(h1, _agg_fn, config.thresh, config.morph_kernel, config.norm_ord,
-                                     config.thresh_hysteresis, track_bounds)
+                p1 = _process_1_step(h1, _agg_fn, track_bounds, config)
                 p1 = convert_to_shapely(p1)
                 polys_final = _merge_polys(polys_final, p1,
                                            poly_merge_method=config.poly_merge_method)
@@ -1022,8 +984,7 @@ def heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=None, config=None):
     return polys_final
 
 
-def _process_1_step(heatmaps, _agg_fn, thresh, morph_kernel, norm_ord,
-                    thresh_hysteresis, track_bounds):
+def _process_1_step(heatmaps, _agg_fn, track_bounds, config):
     # FIXME: no dynamic globals.
     global viz_n_window
     global VIZ_DPATH
@@ -1031,9 +992,9 @@ def _process_1_step(heatmaps, _agg_fn, thresh, morph_kernel, norm_ord,
         VIZ_DPATH = (VIZ_DPATH / f'heatmaps_{viz_n_window}').mkdir(exist_ok=True)
 
     aggregated = _agg_fn(heatmaps,
-                         thresh=thresh,
-                         morph_kernel=morph_kernel,
-                         norm_ord=norm_ord)
+                         thresh=config.thresh,
+                         morph_kernel=config.morph_kernel,
+                         norm_ord=config.norm_ord)
 
     if VIZ_DPATH is not None:
         VIZ_DPATH = VIZ_DPATH.parent
@@ -1041,9 +1002,9 @@ def _process_1_step(heatmaps, _agg_fn, thresh, morph_kernel, norm_ord,
 
     polygons = list(
         mask_to_polygons(aggregated,
-                         thresh,
-                         thresh_hysteresis=thresh_hysteresis,
-                         bounds=track_bounds))
+                         thresh=config.thresh,
+                         bounds=track_bounds,
+                         thresh_hysteresis=config.thresh_hysteresis))
     return polygons
 
 
@@ -1157,119 +1118,6 @@ def _gids_polys(sub_dset, **kwargs):
 #     ../../cli/kwcoco_to_geojson.py and will be called by ./normalize.py
 
 
-__devnote__ = """
-
-See Also kwcoco_to_geojson.KWCocoToGeoJSONConfig comment
-
-TODO:
-    it may make sense to change this into a scriptconfig.DataConfig in
-    order to provide richer introspection to tools that want to know
-    what parameters are available.
-
-The following are the common and differing settings between BAS / SC
-
-I include some candidate scfg logic that I may implement
-
-
-AUTOGEN:
-
-    # This will port the dataconf to scriptconfig
-
-    import sys, ubelt
-    from watch.tasks.tracking.from_heatmap import *  # NOQA
-    from watch.tasks.tracking.from_heatmap import _norm, _add_tracks_to_dset, _merge_polys, _gids_polys, _resolve_deprecated_args, _resolve_arg_values
-
-    items = [TimeAggregatedBAS, TimeAggregatedSC, TimeAggregatedSV]
-
-    common_keys = ub.udict.intersection(*[d.__dataclass_fields__ for d in items])
-    common_kv = {}
-    differ_vals = []
-    for k, v in common_keys.items():
-        common_vals = all(v.default == d.__dataclass_fields__[k].default for d in items)
-        if common_vals:
-            common_kv[k] = v
-        else:
-            differ_vals.append(k)
-
-    import scriptconfig as scfg
-    sc_common = {}
-    for k, v in common_kv.items():
-        sc_common[k] = scfg.Value(v.default)
-
-    class CommonTrackerConfig(scfg.DataConfig):
-        __default__ = sc_common
-
-    print(z.port_to_dataconf())
-
-    for d in items:
-        new_name = d.__name__ + 'Config'
-        new_default = {}
-        for k, v in d.__dataclass_fields__.items():
-            if k not in sc_common:
-                new_default[k] = scfg.Value(v.default)
-        class NewConfig(scfg.DataConfig):
-            __default__ = new_default
-        print(NewConfig().port_to_dataconf().replace('NewConfig', new_name).replace('scfg.DataConfig', 'CommonTrackerConfig'))
-
-
-COMMON:
-
-import scriptconfig as scfg
-
-class CommonTrackerConfig(scfg.DataConfig):
-    viz_out_dir                = scfg.Value(None, help=None)
-    morph_kernel               = scfg.Value(3, help=None)
-    response_thresh            = scfg.Value(None, help=None)
-    norm_ord                   = scfg.Value(1, help=None)
-    agg_fn                     = scfg.Value('probs', help=None)
-    thresh_hysteresis          = scfg.Value(None, help=None)
-    moving_window_size         = scfg.Value(None, help=None)
-    min_area_sqkm              = scfg.Value(None, help=None)
-    max_area_sqkm              = scfg.Value(None, help=None)
-    min_area_square_meters     = scfg.Value(None, help=None)
-    max_area_square_meters     = scfg.Value(None, help=None)
-    max_area_behavior          = scfg.Value('drop', help=None)
-    polygon_simplify_tolerance = scfg.Value(None, help=None)
-    resolution                 = scfg.Value(None, help=None)
-
-    def __post_init__(self):
-        _resolve_deprecated_args(self)
-        _resolve_arg_values(self)
-
-class TimeAggregatedBASConfig(CommonTrackerConfig):
-    thresh                     = scfg.Value(0.2, help=None)
-    time_thresh                = scfg.Value(1, help=None)
-    key                        = scfg.Value('salient', help=None)
-    inner_window_size          = scfg.Value(None, help=None)
-    inner_agg_fn               = scfg.Value(None, help=None)
-    use_boundaries             = scfg.Value(False, help=None)
-    site_validation            = scfg.Value(False, help=None)
-    site_validation_span_steps = scfg.Value(120, help=None)
-    site_validation_thresh     = scfg.Value(0.1, help=None)
-    poly_merge_method          = scfg.Value('v1', help=None)
-
-class TimeAggregatedSCConfig(CommonTrackerConfig):
-    thresh                     = scfg.Value(0.01, help=None)
-    time_thresh                = scfg.Value(None, help=None)
-    key                        = scfg.Value(('Site Preparation', 'Active Construction', 'Post Construction'), help=None)
-    bg_key                     = scfg.Value(('No Activity',), help=None)
-    boundaries_as              = scfg.Value('bounds', help=None)
-    inner_window_size          = scfg.Value(None, help=None)
-    inner_agg_fn               = scfg.Value(None, help=None)
-    site_validation            = scfg.Value(False, help=None)
-    site_validation_span_steps = scfg.Value(120, help=None)
-    site_validation_thresh     = scfg.Value(0.1, help=None)
-
-class TimeAggregatedSVConfig(CommonTrackerConfig):
-    thresh        = scfg.Value(0.1, help=None)
-    time_thresh   = scfg.Value(None, help=None)
-    key           = scfg.Value('salient', help=None)
-    boundaries_as = scfg.Value('polys', help=None)
-    span_steps    = scfg.Value(120, help=None)
-
-"""
-
-
 def _resolve_deprecated_args(self):
     """
     Ignore:
@@ -1290,7 +1138,7 @@ def _resolve_deprecated_args(self):
         ub.schedule_deprecation(
             'watch', 'min_area_sqkm', 'tracking param',
             migration='use min_area_square_meters instead',
-            deprecate='now')
+            deprecate='now', error='now')
 
         if self.min_area_square_meters is not None:
             raise ValueError('Cannot specify min_area_sqkm and min_area_square_meters')
@@ -1302,7 +1150,7 @@ def _resolve_deprecated_args(self):
         ub.schedule_deprecation(
             'watch', 'max_area_sqkm', 'tracking param',
             migration='use max_area_square_meters instead',
-            deprecate='now')
+            deprecate='now', error='now')
 
         if self.max_area_square_meters is not None:
             raise ValueError('Cannot specify min_area_sqkm and max_area_square_meters')
@@ -1316,48 +1164,73 @@ def _resolve_arg_values(self):
         self.norm_ord = float('inf')
 
 
-@dataclass
-class TimeAggregatedBAS(NewTrackFunction):
-    '''
-    Wrapper for BAS that looks for change heatmaps.
-    '''
-    thresh: float = 0.2
-    morph_kernel: int = 3
-    time_thresh: Optional[float] = 1
-    response_thresh: Optional[float] = None
-    key: str = 'salient'
-    norm_ord: Optional[Union[int, str, float]] = 1
-    agg_fn: str = 'probs'
-    thresh_hysteresis: Optional[float] = None
-    moving_window_size: Optional[int] = None
+class _GidPolyConfig(scfg.DataConfig):
+    key = 'salient'
+    agg_fn = 'probs'
+    thresh = 0.0
+    morph_kernel = 3
+    thresh_hysteresis = None
+    norm_ord = 1
+    moving_window_size = None
+    inner_window_size = None
+    inner_agg_fn = 'mean'
+    resolution = None
+    use_boundaries = False
+    poly_merge_method = 'v1'
+    viz_out_dir = None
 
+
+class TimeAggregatedPolysConfig(_GidPolyConfig):
+    """
+    This is an intermediate config that we will use to transition between the
+    current dataclass configuration and a new scriptconfig based one.
+    """
+    bg_key = None
+    time_thresh = 1
+    response_thresh = None
+    min_area_square_meters = None
+    max_area_square_meters = None
+    max_area_behavior = 'drop'
+    polygon_simplify_tolerance = None
+
+    def __post_init__(self):
+        super().__post_init__()
+        if self.norm_ord in {'inf', None}:
+            self.norm_ord = float('inf')
+        key, bg_key = _validate_keys(self.key, self.bg_key)
+        self.key = key
+        self.bg_key = bg_key
+
+
+class CommonTrackFn(NewTrackFunction, TimeAggregatedPolysConfig):
     min_area_sqkm: Optional[float] = None  # was 0.072  # 80px@30GSD  # deprecate
     max_area_sqkm: Optional[float] = None  # was 2.25  # deprecate
 
-    min_area_square_meters: Optional[float] = None  # was 7_200
-    max_area_square_meters: Optional[float] = None  # was 2_250_000
+    def __post_init__(self):
+        super().__post_init__()
+        _resolve_deprecated_args(self)
+        _resolve_arg_values(self)
 
-    max_area_behavior: str = 'drop'
-    polygon_simplify_tolerance: Union[None, float] = None
-    resolution: Optional[str] = None
 
-    inner_window_size : Optional[str] = None
-    inner_agg_fn : Optional[str] = None
-
-    use_boundaries: bool = False
+class TrackFnWithSV(CommonTrackFn):
     site_validation: bool = False
     site_validation_span_steps: int = 120
     site_validation_thresh: float = 0.1
 
-    poly_merge_method: str = 'v1'
 
-    def __post_init__(self):
-        _resolve_deprecated_args(self)
-        _resolve_arg_values(self)
+class TimeAggregatedBAS(TrackFnWithSV):
+    '''
+    Wrapper for BAS that looks for change heatmaps.
+    '''
+    thresh: float = 0.2
+    key: str = 'salient'
+    agg_fn: str = 'probs'
 
     def create_tracks(self, sub_dset):
-        aggkw = ub.udict(self.__dict__) & TimeAggregatedPolysConfig.__default__.keys()
-        tracks = time_aggregated_polys(sub_dset, **aggkw)
+        import xdev
+        with xdev.embed_on_exception_context:
+            aggkw = ub.udict(self) & TimeAggregatedPolysConfig.__default__.keys()
+            tracks = time_aggregated_polys(sub_dset, **aggkw)
         return tracks
 
     def add_tracks_to_dset(self, sub_dset, tracks):
@@ -1371,8 +1244,7 @@ class TimeAggregatedBAS(NewTrackFunction):
         return sub_dset
 
 
-@dataclass
-class TimeAggregatedSC(NewTrackFunction):
+class TimeAggregatedSC(TrackFnWithSV):
     '''
     Wrapper for Site Characterization that looks for phase heatmaps.
 
@@ -1382,37 +1254,9 @@ class TimeAggregatedSC(NewTrackFunction):
         This is a valid choice of `track_fn` in ../../cli/kwcoco_to_geojson.py
     '''
     thresh: float = 0.01
-    morph_kernel: int = 3
-    time_thresh: Optional[float] = None
-    response_thresh: Optional[float] = None
     key: Tuple[str] = tuple(CNAMES_DCT['positive']['scored'])
     bg_key: Tuple[str] = tuple(CNAMES_DCT['negative']['scored'])
     boundaries_as: Literal['bounds', 'polys', 'none'] = 'bounds'
-    norm_ord: Optional[Union[int, str, float]] = 1
-    agg_fn: str = 'probs'
-    thresh_hysteresis: Optional[float] = None
-    moving_window_size: Optional[int] = None
-
-    min_area_sqkm: Optional[float] = None  # deprecate
-    max_area_sqkm: Optional[float] = None  # deprecate
-
-    min_area_square_meters: Optional[float] = None
-    max_area_square_meters: Optional[float] = None
-
-    max_area_behavior: str = 'drop'
-    polygon_simplify_tolerance: Union[None, float] = None
-    resolution: Optional[str] = None
-
-    inner_window_size: Optional[str] = None
-    inner_agg_fn: Optional[str] = None
-
-    site_validation: bool = False
-    site_validation_span_steps: int = 120
-    site_validation_thresh: float = 0.1
-
-    def __post_init__(self):
-        _resolve_deprecated_args(self)
-        _resolve_arg_values(self)
 
     def create_tracks(self, sub_dset):
         '''
@@ -1441,7 +1285,7 @@ class TimeAggregatedSC(NewTrackFunction):
                 kwimage.MultiPolygon.from_shapely)
 
         else:
-            aggkw = ub.udict(self.__dict__) & TimeAggregatedPolysConfig.__default__.keys()
+            aggkw = ub.udict(self) & TimeAggregatedPolysConfig.__default__.keys()
             aggkw['use_boundaries'] = aggkw.get('boundaries_as', 'none') != 'none'
             tracks = time_aggregated_polys(sub_dset, **aggkw)
         return tracks
@@ -1461,8 +1305,12 @@ class TimeAggregatedSC(NewTrackFunction):
             # DataFrame. Related to invalid geometry column?
             # tracks = tracks.rename(columns=col_map)
             tracks.rename(columns=col_map, inplace=True)
-        sub_dset = _add_tracks_to_dset(sub_dset, tracks, self.thresh, self.key,
-                                       self.bg_key, **kwargs)
+
+        thresh = self.thresh
+        key = self.key
+        bg_key = self.bg_key
+        sub_dset = _add_tracks_to_dset(sub_dset, tracks=tracks, thresh=thresh,
+                                       key=key, bg_key=bg_key, **kwargs)
         if self.site_validation:
             sub_dset = site_validation(
                 sub_dset,
@@ -1473,8 +1321,7 @@ class TimeAggregatedSC(NewTrackFunction):
         return sub_dset
 
 
-@dataclass
-class TimeAggregatedSV(NewTrackFunction):
+class TimeAggregatedSV(CommonTrackFn):
     '''
     Wrapper for Site Validation that looks for phase heatmaps.
 
@@ -1483,34 +1330,10 @@ class TimeAggregatedSV(NewTrackFunction):
     Note:
         This is a valid choice of `track_fn` in ../../cli/kwcoco_to_geojson.py
     '''
-    thresh: float = 0.01
-    morph_kernel: int = 3
-    time_thresh: Optional[float] = None
-    response_thresh: Optional[float] = None
-    key: str = 'salient'
-    # key: Tuple[str] = tuple(CNAMES_DCT['positive']['scored'])
-    # bg_key: Tuple[str] = tuple(CNAMES_DCT['negative']['scored'])
-    boundaries_as: Literal['bounds', 'polys', 'none'] = 'polys'
-    norm_ord: Optional[Union[int, str]] = 1
-    agg_fn: str = 'probs'
-    thresh_hysteresis: Optional[float] = None
-    moving_window_size: Optional[int] = None
-
-    min_area_sqkm: Optional[float] = None  # deprecate
-    max_area_sqkm: Optional[float] = None  # deprecate
-
-    min_area_square_meters: Optional[float] = None
-    max_area_square_meters: Optional[float] = None
-
-    max_area_behavior: str = 'drop'
-    polygon_simplify_tolerance: Union[None, float] = None
-    resolution: Optional[str] = None
-
-    span_steps: int = 120
     thresh: float = 0.1
-
-    def __post_init__(self):
-        _resolve_deprecated_args(self)
+    key: str = 'salient'
+    boundaries_as: Literal['bounds', 'polys', 'none'] = 'polys'
+    span_steps: int = 120
 
     def create_tracks(self, sub_dset):
         '''
@@ -1539,9 +1362,6 @@ class TimeAggregatedSV(NewTrackFunction):
 
         else:
             raise NotImplementedError
-            # aggkw = ub.compatible(self.__dict__, time_aggregated_polys)
-            # aggkw['use_boundaries'] = aggkw.get('boundaries_as', 'none') != 'none'
-            # tracks = time_aggregated_polys(sub_dset, **aggkw)
         return tracks
 
     def add_tracks_to_dset(self, sub_dset, tracks, **kwargs):

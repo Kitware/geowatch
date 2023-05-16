@@ -1,5 +1,5 @@
-from dataclasses import dataclass
 from watch.tasks.tracking.utils import TrackFunction
+import scriptconfig as scfg
 
 
 class MonoTrack(TrackFunction):
@@ -22,8 +22,7 @@ def as_shapely_polys(annots):
                annots.detections.data['segmentations'].to_polygon_list())
 
 
-@dataclass
-class OverlapTrack(TrackFunction):
+class OverlapTrack(scfg.DataConfig, TrackFunction):
     '''
     Put polygons in the same track if their areas overlap.
     '''
