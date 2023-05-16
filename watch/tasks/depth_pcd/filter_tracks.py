@@ -7,7 +7,7 @@ import scriptconfig as scfg
 class FilterTracksConfig(scfg.DataConfig):
     input_kwcoco = scfg.Value(None, required=True, help=ub.paragraph(
         '''
-        The input kwcoco file with the scores. 
+        The input kwcoco file with the scores.
         This does not to cover all sites, any site this does not
         cover will be automatically accepted.
         '''), position=1, alias=['in_file'], group='inputs')
