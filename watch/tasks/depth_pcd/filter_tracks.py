@@ -48,8 +48,24 @@ def main(**kwargs):
     from watch.geoannots import geomodels
     from watch.utils import util_gis
     import pandas as pd
-    track_ids_to_drop = []
+    from kwcoco.util import util_json
+    from watch.utils import process_context
 
+    # Args will be serailized in kwcoco, so make sure it can be coerced to json
+    jsonified_config = util_json.ensure_json_serializable(args.asdict())
+    walker = ub.IndexableWalker(jsonified_config)
+    for problem in util_json.find_json_unserializable(jsonified_config):
+        bad_data = problem['data']
+        walker[problem['loc']] = str(bad_data)
+
+    proc_context = process_context.ProcessContext(
+        name='watch.tasks.depth_pcd.filter_tracks', type='process',
+        config=jsonified_config,
+        track_emissions=False,
+    )
+    proc_context.start()
+
+    track_ids_to_drop = []
     coco_dset = kwcoco.CocoDataset.coerce(args.input_kwcoco)
     tracks = pd.DataFrame(coco_dset.dataset['tracks'])
     tracks = tracks[tracks['src'] == 'sv_depth_pcd'].values.tolist()
@@ -106,7 +122,7 @@ def main(**kwargs):
 
     if args.output_site_manifest_fpath is not None:
         filter_output = {'type': 'tracking_result', 'info': [], 'files': [os.fspath(p) for p in out_site_fpaths]}
-        # filter_output['info'].append(proc_context.obj)
+        filter_output['info'].append(proc_context.obj)
         print(f'Write filtered site result to {args.output_site_manifest_fpath}')
         with safer.open(args.output_site_manifest_fpath, 'w', temp_file=not ub.WIN32) as file:
             json.dump(filter_output, file, indent=4)
