@@ -526,7 +526,9 @@ def demo():
     qa_canvas = drawings['qa_canvas']
     legend = drawings['legend']
     canvas = kwimage.stack_images([qa_canvas, legend], axis=1)
-
+    import kwplot
+    kwplot.autompl()
+    kwplot.imshow(canvas)
 
 
 if __name__ == '__main__':
