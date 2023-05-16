@@ -10,7 +10,6 @@ import math
 from typing import Optional
 from typing import Tuple
 from typing import Literal
-# from dataclasses import dataclass
 import scriptconfig as scfg
 
 from watch.heuristics import SITE_SUMMARY_CNAME, CNAMES_DCT
@@ -26,8 +25,6 @@ try:
     from xdev import profile
 except Exception:
     profile = ub.identity
-
-VIZ_DPATH = None
 
 #
 # --- aggregation functions for heatmaps ---
@@ -138,7 +135,7 @@ def _norm(heatmaps, norm_ord):
 # give all these the same signature so they can be swapped out
 
 
-def binary(heatmaps, norm_ord, morph_kernel, thresh):
+def binary(heatmaps, norm_ord, morph_kernel, thresh, viz_dpath=None):
     import kwimage
     probs = _norm(heatmaps, norm_ord)
 
@@ -147,7 +144,7 @@ def binary(heatmaps, norm_ord, morph_kernel, thresh):
     return hard_probs.astype("float")
 
 
-def rescaled_binary(heatmaps, norm_ord, morph_kernel, thresh, upper_quantile=0.999):
+def rescaled_binary(heatmaps, norm_ord, morph_kernel, thresh, upper_quantile=0.999, viz_dpath=None):
     import kwimage
     import kwarray
     import numpy as np
@@ -159,28 +156,22 @@ def rescaled_binary(heatmaps, norm_ord, morph_kernel, thresh, upper_quantile=0.9
     return hard_probs.astype("float")
 
 
-def probs(heatmaps, norm_ord, morph_kernel, thresh):
+def probs(heatmaps, norm_ord, morph_kernel, thresh, viz_dpath=None):
     import kwimage
-    import numpy as np
     probs = _norm(heatmaps, norm_ord)
 
     hard_probs = kwimage.morphology(probs > thresh, 'dilate', morph_kernel)
     modulated_probs = probs * hard_probs
 
-    if VIZ_DPATH is not None:
-        kwimage.imwrite(VIZ_DPATH / '0.png', (probs * 255).astype(np.uint8))
-        kwimage.imwrite(VIZ_DPATH / '0.tiff', probs)
-
-        # here, the png is the truth
-        kwimage.imwrite(VIZ_DPATH / '1.png', (hard_probs * 255).astype(np.uint8))
-
-        kwimage.imwrite(VIZ_DPATH / '2.png', (modulated_probs * 255).astype(np.uint8))
-        kwimage.imwrite(VIZ_DPATH / '2.tiff', modulated_probs)
+    if viz_dpath is not None:
+        kwimage.imwrite(viz_dpath / '0.png', kwimage.ensure_uint255(probs))
+        kwimage.imwrite(viz_dpath / '1.png', kwimage.ensure_uint255(hard_probs))
+        kwimage.imwrite(viz_dpath / '2.png', kwimage.ensure_uint255(modulated_probs))
 
     return modulated_probs
 
 
-def rescaled_probs(heatmaps, norm_ord, morph_kernel, thresh, upper_quantile=0.999):
+def rescaled_probs(heatmaps, norm_ord, morph_kernel, thresh, upper_quantile=0.999, viz_dpath=None):
     import kwimage
     import kwarray
     import numpy as np
@@ -193,7 +184,7 @@ def rescaled_probs(heatmaps, norm_ord, morph_kernel, thresh, upper_quantile=0.99
     return modulated_probs
 
 
-def mean_normalized(heatmaps, norm_ord=1, morph_kernel=1, thresh=None):
+def mean_normalized(heatmaps, norm_ord=1, morph_kernel=1, thresh=None, viz_dpath=None):
     '''
     Normalize average_heatmap by applying a scaling based on max(heatmaps) and
     max(average_heatmap)
@@ -216,7 +207,7 @@ def mean_normalized(heatmaps, norm_ord=1, morph_kernel=1, thresh=None):
     return average
 
 
-def frequency_weighted_mean(heatmaps, thresh, norm_ord=0, morph_kernel=3):
+def frequency_weighted_mean(heatmaps, thresh, norm_ord=0, morph_kernel=3, viz_dpath=None):
     '''
     Convert a list of heatmaps to an aggregated score, averaging is computed
     based on samples for every pixel
@@ -890,7 +881,6 @@ def _process(track, _heatmaps, image_dates, gids, config):
         # yield (gids, poly)
     else:
         poly = unary_union([p.to_shapely() for p in track_polys])
-
         if poly.is_valid and not poly.is_empty:
             yield (track['gid'], kwimage.MultiPolygon.from_shapely(poly))
 
@@ -916,12 +906,6 @@ def heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=None, config=None):
         return [kwimage.Polygon.from_shapely(p) for p in shapely_polys]
 
     _agg_fn = AGG_FN_REGISTRY[config.agg_fn]
-
-    if isinstance(config.inner_window_size, float) and math.isnan(config.inner_window_size):
-        config.inner_window_size = None
-
-    if isinstance(config.moving_window_size, float) and math.isnan(config.moving_window_size):
-        config.moving_window_size = None
 
     if isinstance(config.inner_window_size, str):
         # TODO: generalize if needed
@@ -967,16 +951,17 @@ def heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=None, config=None):
 
     prog = ub.ProgIter(total=n_steps, desc='process-step')
     with prog:
-        polys_final = _process_1_step(h_init, _agg_fn, track_bounds, config)
+        step = 0
+        polys_final = _process_1_step(h_init, _agg_fn, track_bounds, step, config)
         prog.step()
 
         if n_steps > 1:
             polys_final = convert_to_shapely(polys_final)
 
-            for i in range(n_steps - 1):
+            for step in range(1, n_steps):
                 prog.step()
-                h1 = heatmaps[(i + 1) * final_size:(i + 2) * final_size]
-                p1 = _process_1_step(h1, _agg_fn, track_bounds, config)
+                h1 = heatmaps[step * final_size:(step + 1) * final_size]
+                p1 = _process_1_step(h1, _agg_fn, track_bounds, step, config)
                 p1 = convert_to_shapely(p1)
                 polys_final = _merge_polys(polys_final, p1,
                                            poly_merge_method=config.poly_merge_method)
@@ -985,22 +970,18 @@ def heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=None, config=None):
     return polys_final
 
 
-def _process_1_step(heatmaps, _agg_fn, track_bounds, config):
+def _process_1_step(heatmaps, _agg_fn, track_bounds, step, config):
     # FIXME: no dynamic globals.
-    global viz_n_window
-    global VIZ_DPATH
-    if VIZ_DPATH is not None:
-        VIZ_DPATH = (VIZ_DPATH / f'heatmaps_{viz_n_window}').mkdir(exist_ok=True)
+    if config.viz_out_dir is not None:
+        viz_dpath = (config.viz_out_dir / f'heatmaps_{step}').ensuredir()
+    else:
+        viz_dpath = None
 
     aggregated = _agg_fn(heatmaps,
                          thresh=config.thresh,
                          morph_kernel=config.morph_kernel,
-                         norm_ord=config.norm_ord)
-
-    if VIZ_DPATH is not None:
-        VIZ_DPATH = VIZ_DPATH.parent
-        viz_n_window += 1
-
+                         norm_ord=config.norm_ord,
+                         viz_dpath=viz_dpath)
     polygons = list(
         mask_to_polygons(aggregated,
                          thresh=config.thresh,
@@ -1199,6 +1180,12 @@ class TimeAggregatedPolysConfig(_GidPolyConfig):
         if self.norm_ord in {'inf', None}:
             self.norm_ord = float('inf')
         # self.key, self.bg_key = _validate_keys(self.key, self.bg_key)
+
+        if isinstance(self.inner_window_size, float) and math.isnan(self.inner_window_size):
+            self.inner_window_size = None
+
+        if isinstance(self.moving_window_size, float) and math.isnan(self.moving_window_size):
+            self.moving_window_size = None
 
 
 class CommonTrackFn(NewTrackFunction, TimeAggregatedPolysConfig):

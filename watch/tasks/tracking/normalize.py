@@ -649,12 +649,8 @@ def normalize(
         from watch.utils.util_json import debug_json_unserializable
 
     if viz_out_dir is not None:
-        try:
-            viz_out_dir = ub.Path(viz_out_dir)
-        except TypeError:
-            viz_out_dir = ub.Path('_assets/tracking_visualization')
-            print(f'setting default {viz_out_dir=}')
-        viz_out_dir.mkdir(parents=True, exist_ok=True)
+        viz_out_dir = ub.Path(viz_out_dir)
+        viz_out_dir.ensuredir()
 
     def _normalize_annots(coco_dset):
         print(f'coco_dset.n_anns={coco_dset.n_annots}')
@@ -686,7 +682,10 @@ def normalize(
     if DEBUG_JSON_SERIALIZABLE:
         debug_json_unserializable(coco_dset.dataset, 'Before apply_per_video: ')
 
-    tracker: TrackFunction = track_fn(**track_kwargs, viz_out_dir=viz_out_dir)
+    if viz_out_dir is not None:
+        track_kwargs['viz_out_dir'] = viz_out_dir
+
+    tracker: TrackFunction = track_fn(**track_kwargs)
     print('track_kwargs = {}'.format(ub.urepr(track_kwargs, nl=1)))
     # print('{} {}'.format(tracker.__class__.__name__, ub.urepr(tracker.__dict__, nl=1)))
     import rich
@@ -745,18 +744,17 @@ def normalize(
     if DEBUG_JSON_SERIALIZABLE:
         debug_json_unserializable(out_dset.dataset, 'Output of normalize: ')
 
-    if viz_out_dir is not None:
-        # visualize predicted sites with true sites
-
-        # TODO think more about key handling
-        from watch.tasks.tracking.visualize import visualize_videos
-        from watch.tasks.tracking.utils import _validate_keys
-        from dataclasses import asdict
-        fg, bg = _validate_keys(
-            asdict(tracker).get('key', None),
-            asdict(tracker).get('bg_key', None))
-        keys = '|'.join([*fg, *bg])
-        visualize_videos(out_dset, viz_out_dir / 'gif', keys, gt_dset)
+    # if viz_out_dir is not None:
+    #     # visualize predicted sites with true sites
+    #     # TODO think more about key handling
+    #     from watch.tasks.tracking.visualize import visualize_videos
+    #     from watch.tasks.tracking.utils import _validate_keys
+    #     # from dataclasses import asdict
+    #     fg, bg = _validate_keys(
+    #         dict(tracker).get('key', None),
+    #         dict(tracker).get('bg_key', None))
+    #     keys = '|'.join([*fg, *bg])
+    #     visualize_videos(out_dset, viz_out_dir / 'gif', keys, gt_dset)
 
     return out_dset
 

@@ -240,18 +240,11 @@ class NoOpTrackFunction(TrackFunction):
         return sub_dset
 
 
-# @dataclass
 class NewTrackFunction(TrackFunction):
     '''
     Specialization of TrackFunction to create polygons that do not yet exist
     in coco_dset, and add them as new annotations
     '''
-    # viz_out_dir: Optional[ub.Path] = None
-    # def __post_init__(self):
-    #     global VIZ_DPATH
-    #     VIZ_DPATH = self.viz_out_dir
-    #     # HACK
-
     def __call__(self, sub_dset):
         print('Create tracks')
         tracks = self.create_tracks(sub_dset)
