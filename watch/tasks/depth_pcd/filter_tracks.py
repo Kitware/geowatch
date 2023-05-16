@@ -11,11 +11,14 @@ class FilterTracksConfig(scfg.DataConfig):
         This does not to cover all sites, any site this does not
         cover will be automatically accepted.
         '''), position=1, alias=['in_file'], group='inputs')
+
     threshold = scfg.Value(0.4, help=ub.paragraph(
         '''
             threshold to filter polygons, very sensitive
             '''), group='track scoring')
+
     input_region = scfg.Value(None, help='The coercable input region model', group='inputs')
+
     input_sites = scfg.Value(None, help='The coercable input site models', group='inputs')
 
     output_region_fpath = scfg.Value(None, help=ub.paragraph(
@@ -42,9 +45,7 @@ def main(**kwargs):
 
     import kwcoco
     import safer
-    from kwcoco.util import util_json
     from watch.geoannots import geomodels
-    from watch.utils import process_context
     from watch.utils import util_gis
     import pandas as pd
     track_ids_to_drop = []

@@ -2,8 +2,7 @@
 """
 PCD = parallel change detection
 """
-# import geojson
-import json
+
 import os
 import ubelt as ub
 import scriptconfig as scfg
@@ -233,12 +232,8 @@ def main(**kwargs):
     from watch.tasks.depth_pcd.model import getModel, normalize, TPL_DPATH  # NOQA
 
     import kwcoco
-    import safer
     from kwcoco.util import util_json
-    # from watch.cli.kwcoco_to_geojson import convert_kwcoco_to_iarpa, create_region_header
-    from watch.geoannots import geomodels
     from watch.utils import process_context
-    from watch.utils import util_gis
 
     if args.model_fpath is None:
         print('warning: the path to the model was not explicitly specified, '
