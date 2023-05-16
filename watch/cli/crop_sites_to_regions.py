@@ -10,7 +10,7 @@ class CropSitesToRegionsConfig(scfg.DataConfig):
     Crops site models to the bounds of a region model.
 
     TODO:
-        - [ ] Rename this to TrimSiteModels?
+        - [ ] Rename this to ClipSitesToRegions?
 
     Example:
         DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
@@ -19,47 +19,60 @@ class CropSitesToRegionsConfig(scfg.DataConfig):
             --region_models "$DVC_DPATH/annotations/region_models/KR_R002.geojson" \
             --new_site_dpath ./cropped_sites
     """
-    __default__ = {
-        'site_models': scfg.Value(None, help=ub.paragraph(
-            '''
-            Geospatial geojson "site" annotation files. Either a path to a
-            file, or a directory.
-            ''')),
+    site_models = scfg.Value(None, help=ub.paragraph(
+        '''
+        Geospatial geojson "site" annotation files. Either a path to a
+        file, or a directory.
+        '''))
 
-        'region_models': scfg.Value(None, help=ub.paragraph(
-            '''
-            A single geojson "region" file to crop to.
-            ''')),
+    region_models = scfg.Value(None, help=ub.paragraph(
+        '''
+        A single geojson "region" file to crop to.
+        '''))
 
-        'new_site_dpath': scfg.Value(None, help=ub.paragraph(
-            '''
-            Destination directory for new site models.
-            Note: names of files must be unique.
-            ''')),
+    new_site_dpath = scfg.Value(None, help=ub.paragraph(
+        '''
+        Destination directory for new site models.
+        Note: names of files must be unique.
+        '''))
 
-        'new_region_dpath': scfg.Value(None, help=ub.paragraph(
-            '''
-            Destination directory for new site models.
-            Note: names of files must be unique.
-            ''')),
+    new_region_dpath = scfg.Value(None, help=ub.paragraph(
+        '''
+        Destination directory for new site models.
+        Note: names of files must be unique.
+        '''))
 
-        'io_workers': scfg.Value(0, help=ub.paragraph(
-            '''
-            IO workers to load sites in the background while others are
-            cropping.
-            ''')),
-        'force_multipolygon': scfg.Value(True, help=ub.paragraph(
-            '''
-            For output site observations the output geometry type will
-            be set to MultiPolygon.  As per the T&E specification
-            ''')),
-    }
+    io_workers = scfg.Value(0, help=ub.paragraph(
+        '''
+        IO workers to load sites in the background while others are
+        cropping.
+        '''))
+    force_multipolygon = scfg.Value(True, help=ub.paragraph(
+        '''
+        For output site observations the output geometry type will
+        be set to MultiPolygon.  As per the T&E specification
+        '''))
 
 
 USE_LISTS = 0  # turn on for eager debugging
 
 
 def main(cmdline=False, **kwargs):
+    """
+    Example:
+        from watch.geoannots import geomodels
+        region, sites = geomodels.RegionModel.random(with_sites=True)
+
+    Ignore:
+        import kwplot
+        kwplot.plt.ion()
+        kwplot.figure(doclf=True, fnum=1)
+        ax = kwplot.plt.gca()
+        df = region.pandas()
+        ax = df.plot(edgecolor='black', facecolor=(0.1, 0.8, 0.1, 0.5), ax=ax)
+
+        ...
+    """
     from watch.utils import util_gis
     from shapely.geometry import MultiPolygon
     import geopandas as gpd

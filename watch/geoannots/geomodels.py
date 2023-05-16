@@ -174,6 +174,17 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
     def end_date(self):
         return util_time.coerce_datetime(self.header['properties']['end_date'])
 
+    @property
+    def geometry(self):
+        """
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> RegionModel.random().geometry
+            >>> SiteModel.random().geometry
+        """
+        from shapely import geometry
+        return geometry.shape(self.header['geometry'])
+
     def load_schema(self, strict=True):
         raise NotImplementedError('abstract')
 
@@ -322,7 +333,7 @@ class RegionModel(_Model):
         Args:
             with_sites (bool):
                 also returns site models if True
-            **kwargs : passed to :func:`demo_truth.random_region_model`
+            **kwargs : passed to :func:`watch.demo.metrics_demo.demo_truth.random_region_model`
 
         Returns:
             RegionModel | Tuple[RegionModel, SiteModelCollection]
@@ -417,10 +428,56 @@ class SiteModel(_Model):
         return gdf
 
     @classmethod
-    def random(cls, rng=None, **kwargs):
+    def random(cls, rng=None, region=None, site_poly=None, **kwargs):
         """
+        Args:
+            rng (int | str | RandomState | None) :
+                seed or random number generator
+
+            region (RegionModel | None):
+                if specified generate a new site in this region model.
+                (This will overwrite some of the kwargs).
+
+            site_poly (kwimage.Polygon | shapely.geometry.Polygon | None):
+                if specified, this polygon is used as the geometry for new site
+                models. Note: all site models will get this geometry, so
+                typically this is only used when num_sites=1.
+
+            **kwargs :
+                passed to :func:`watch.demo.metrics_demo.demo_truth.random_region_model`.
+
+        Returns:
+            SiteModel
+
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> region1 = RegionModel.random(with_sites=False, rng=0)
+            >>> region2, sites2 = RegionModel.random(with_sites=True, rng=0)
+            >>> assert region1 == region2, 'rngs should be the same'
+
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> region = RegionModel.random(with_sites=False, rng=0)
+            >>> site = SiteModel.random(region=region)
+            >>> assert region.region_id == site.region_id
+
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> import kwimage
+            >>> region = RegionModel.random(with_sites=False, rng=0)
+            >>> # Test specification of the site geometry.
+            >>> site_poly = kwimage.Polygon.coerce(region.geometry)
+            >>> site = SiteModel.random(region=region, site_poly=site_poly)
+            >>> assert abs(region.geometry.area - site.geometry.area) < 1e-7
+            >>> site = SiteModel.random(region=region, site_poly=site_poly.scale(10))
+            >>> assert abs(region.geometry.area - site.geometry.area) > 1e-7
         """
         from watch.demo.metrics_demo import demo_truth
+        kwargs.setdefault('with_renderables', False)
+        kwargs['site_poly'] = site_poly
+        if region is not None:
+            kwargs['region_poly'] = region.header.geometry
+            kwargs['region_id'] = region.region_id
         _, sites, _ = demo_truth.random_region_model(num_sites=1, rng=rng, **kwargs)
         return cls(**sites[0])
 
