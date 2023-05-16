@@ -483,55 +483,44 @@ def site_validation(sub_dset, thresh=0.25, span_steps=15):
     return sub_dset
 
 
-class TimeAggregatedPolysConfig(scfg.DataConfig):
+class _GidPolyConfig(scfg.DataConfig):
+    key = 'salient'
+    agg_fn = 'probs'
+    thresh = 0.0
+    morph_kernel = 3
+    thresh_hysteresis = None
+    norm_ord = 1
+    moving_window_size = None
+    inner_window_size = None
+    inner_agg_fn = 'mean'
+    resolution = None
+    use_boundaries = False
+    poly_merge_method = None
+
+
+class TimeAggregatedPolysConfig(_GidPolyConfig):
     """
     This is an intermediate config that we will use to transition between the
     current dataclass configuration and a new scriptconfig based one.
     """
-    thresh = 0.0
-    morph_kernel = 3
-    key = 'salient'
     bg_key = None
     time_thresh = 1
     response_thresh = None
-    use_boundaries = False
-    norm_ord = 1
-    agg_fn = 'probs'
-    moving_window_size = None
     min_area_square_meters = None
     max_area_square_meters = None
     max_area_behavior = 'drop'
-    thresh_hysteresis = None
     polygon_simplify_tolerance = None
-    resolution = None
-    inner_window_size = None
-    inner_agg_fn = None
-    poly_merge_method = None
+
+    def __post_init__(self):
+        if self.norm_ord in {'inf', None}:
+            self.norm_ord = float('inf')
+        key, bg_key = _validate_keys(self.key, self.bg_key)
+        self.key = key
+        self.bg_key = bg_key
 
 
 @profile
-def time_aggregated_polys(
-        sub_dset,
-        thresh,
-        morph_kernel=3,
-        key='salient',
-        bg_key=None,
-        time_thresh=1,
-        response_thresh=None,
-        use_boundaries=False,
-        norm_ord=1,
-        agg_fn='probs',
-        moving_window_size=None,  # 150
-        min_area_square_meters=None,
-        max_area_square_meters=None,
-        max_area_behavior='drop',
-        thresh_hysteresis=None,
-        polygon_simplify_tolerance=None,
-        resolution=None,
-        inner_window_size=None,
-        inner_agg_fn=None,
-        poly_merge_method=None,
-        ):
+def time_aggregated_polys(sub_dset, **kwargs):
     '''
     Track function.
 
@@ -540,6 +529,8 @@ def time_aggregated_polys(
 
     Args:
         sub_dset (kwcoco.CocoDataset): a kwcoco dataset with exactly 1 video
+
+        **kwargs: see TimeAggregatedPolysConfig
 
         key (String | List[String]): foreground key(s).
 
@@ -583,13 +574,13 @@ def time_aggregated_polys(
         >>> thresh = 0.01
         >>> min_area_square_meters = None
         >>> orig_track = time_aggregated_polys(
-        >>>                 sub_dset, thresh, min_area_square_meters=min_area_square_meters, time_thresh=None)
+        >>>                 sub_dset, thresh=thresh, min_area_square_meters=min_area_square_meters, time_thresh=None)
         >>> # Test robustness to frames that are missing heatmaps
         >>> skip_gids = [1,3]
         >>> for gid in skip_gids:
         >>>      sub_dset.imgs[gid]['auxiliary'].pop()
         >>> inter_track = time_aggregated_polys(
-        >>>                 sub_dset, thresh, min_area_square_meters=min_area_square_meters, time_thresh=None)
+        >>>                 sub_dset, thresh=thresh, min_area_square_meters=min_area_square_meters, time_thresh=None)
         >>> assert inter_track.iloc[0][('fg', -1)] == 0
         >>> assert inter_track.iloc[1][('fg', -1)] > 0
     '''
@@ -599,9 +590,9 @@ def time_aggregated_polys(
     import kwimage
     import geopandas as gpd
     import numpy as np
+    config = TimeAggregatedPolysConfig(**kwargs)
 
-    key, bg_key = _validate_keys(key, bg_key)
-    _all_keys = set(key + bg_key)
+    _all_keys = set(config.key + config.bg_key)
     has_requested_chans_list = []
 
     coco_videos = sub_dset.videos()
@@ -619,7 +610,7 @@ def time_aggregated_polys(
 
     scale_vid_from_trk = None
     tracking_gsd = None
-    if len(video_gids) and (resolution is not None):
+    if len(video_gids) and (config.resolution is not None):
         # Determine resolution information for videospace (what we will return
         # in) and tracking space (what we will build heatmaps in)
         first_gid = video_gids[0]
@@ -630,7 +621,7 @@ def time_aggregated_polys(
 
         # (w, h)
         scale_trk_from_vid = first_coco_img._scalefactor_for_resolution(
-            space='video', resolution=resolution)
+            space='video', resolution=config.resolution)
         scale_trk_from_vid = np.array(scale_trk_from_vid)
 
         # Determinethe pixel size of tracking space
@@ -660,56 +651,43 @@ def time_aggregated_polys(
 
     if not any(has_requested_chans_list):
         raise KeyError(f'no imgs in dset {sub_dset.tag} '
-                       f'have keys {key} or {bg_key}.')
+                       f'have keys {config.key} or {config.bg_key}.')
     if not all(has_requested_chans_list):
         n_total = len(has_requested_chans_list)
         n_have = sum(has_requested_chans_list)
         n_missing = (n_total - n_have)
         print(f'warning: {n_missing} / {n_total} imgs in dset {sub_dset.tag} '
-              f'with video {video_name} have no keys {key} or {bg_key}. '
+              f'with video {video_name} have no keys {config.key} or {config.bg_key}. '
               'Interpolating...')
-
-    if norm_ord in {'inf', None}:
-        norm_ord = np.inf
 
     #
     # --- main logic ---
     #
 
     # polys are in "tracking-space", i.e. video-space up to a scale factor.
-    gids_polys = _gids_polys(sub_dset,
-                             key=key,
-                             agg_fn=agg_fn,
-                             thresh=thresh,
-                             morph_kernel=morph_kernel,
-                             thresh_hysteresis=thresh_hysteresis,
-                             norm_ord=norm_ord,
-                             moving_window_size=moving_window_size,
-                             inner_window_size=inner_window_size,
-                             inner_agg_fn=inner_agg_fn,
-                             resolution=resolution,
-                             bounds=use_boundaries,
-                             poly_merge_method=poly_merge_method)
+    gid_poly_config = _GidPolyConfig(**ub.udict(config).subdict(_GidPolyConfig.__default__.keys()))
+    gids_polys = _gids_polys(sub_dset, **gid_poly_config)
+
     orig_gid_polys = list(gids_polys)  # 26% of runtime
     gids_polys = orig_gid_polys
 
     print('time aggregation: number of polygons: ', len(gids_polys))
 
     # size and response filters should operate on each vidpoly separately.
-    if max_area_square_meters:
-        max_area_sqpx = max_area_square_meters / (tracking_gsd ** 2)
+    if config.max_area_square_meters:
+        max_area_sqpx = config.max_area_square_meters / (tracking_gsd ** 2)
         n_orig = len(gids_polys)
-        if max_area_behavior == 'drop':
+        if config.max_area_behavior == 'drop':
             gids_polys = [(t, p) for t, p in gids_polys
                           if p.to_shapely().area < max_area_sqpx]
             print('filter large: remaining polygons: '
                   f'{len(gids_polys)} / {n_orig}')
-        elif max_area_behavior == 'grid':
+        elif config.max_area_behavior == 'grid':
             # edits tracks instead of removing them
             raise NotImplementedError
 
-    if min_area_square_meters:
-        min_area_sqpx = min_area_square_meters / (tracking_gsd ** 2)
+    if config.min_area_square_meters:
+        min_area_sqpx = config.min_area_square_meters / (tracking_gsd ** 2)
         n_orig = len(gids_polys)
         gids_polys = [(t, p) for t, p in gids_polys
                       if p.to_shapely().area > min_area_sqpx]
@@ -728,8 +706,8 @@ def time_aggregated_polys(
 
     _TRACKS = gpd.GeoDataFrame(dict(gid=gids, poly=polys), geometry='poly')
 
-    if polygon_simplify_tolerance is not None:
-        _TRACKS['poly'] = _TRACKS['poly'].simplify(tolerance=polygon_simplify_tolerance)
+    if config.polygon_simplify_tolerance is not None:
+        _TRACKS['poly'] = _TRACKS['poly'].simplify(tolerance=config.polygon_simplify_tolerance)
 
     # _TRACKS['track_idx'] = range(len(_TRACKS))
     _TRACKS = _TRACKS.reset_index().rename(columns={'index': 'track_idx'})
@@ -741,18 +719,19 @@ def time_aggregated_polys(
 
     # awk, find better way of bookkeeping and indexing into scores needed
     thrs = {-1}
-    if response_thresh:
+    if config.response_thresh:
         thrs.add(-1)
-    if time_thresh:
-        thrs.add(time_thresh * thresh)
+    if config.time_thresh:
+        thrs.add(config.time_thresh * config.thresh)
     thrs = list(thrs)
 
-    ks = {'fg': key, 'bg': bg_key}
+    ks = {'fg': config.key, 'bg': config.bg_key}
 
     # TODO dask gives different results on polys that overlap nodata area, need
     # to debug this. (6% of polygons in KR_R001, so not a huge difference)
     # _TRACKS = gpd_compute_scores(_TRACKS, sub_dset, thrs, ks, USE_DASK=True, resolution=resolution)
-    _TRACKS = gpd_compute_scores(_TRACKS, sub_dset, thrs, ks, USE_DASK=False, resolution=resolution)
+    _TRACKS = gpd_compute_scores(_TRACKS, sub_dset, thrs, ks, USE_DASK=False,
+                                 resolution=config.resolution)
 
     if _TRACKS.empty:
         return _TRACKS
@@ -761,17 +740,17 @@ def time_aggregated_polys(
     _TRACKS = gpd_sort_by_gid(_TRACKS.reset_index(), sorted_gids)
 
     # response_thresh = 0.9
-    if response_thresh:
+    if config.response_thresh:
 
         n_orig = gpd_len(_TRACKS)
-        rsp_filter = ResponsePolygonFilter(_TRACKS, key, response_thresh)
+        rsp_filter = ResponsePolygonFilter(_TRACKS, config.key, config.response_thresh)
         _TRACKS = rsp_filter(_TRACKS)
         print('filter based on per-polygon response: remaining tracks '
               f'{gpd_len(_TRACKS)} / {n_orig}')
 
     # TimePolygonFilter edits tracks instead of removing them
-    if time_thresh:  # as a fraction of thresh
-        time_filter = TimePolygonFilter(time_thresh * thresh)
+    if config.time_thresh:  # as a fraction of thresh
+        time_filter = TimePolygonFilter(config.time_thresh * config.thresh)
         n_orig = gpd_len(_TRACKS)
         _TRACKS = time_filter(_TRACKS)  # 7% of runtime? could be next line
         print('filter based on time overlap: remaining tracks '
@@ -912,9 +891,7 @@ def _merge_polys(p1, p2, poly_merge_method=None):
     return merged_polys
 
 
-def _process(track, _heatmaps, image_dates, agg_fn, gids, thresh, morph_kernel,
-             thresh_hysteresis, norm_ord, moving_window_size,
-             inner_window_size, inner_agg_fn, poly_merge_method):
+def _process(track, _heatmaps, image_dates, gids, config):
     from shapely.ops import unary_union
     import kwimage
     import numpy as np
@@ -935,14 +912,10 @@ def _process(track, _heatmaps, image_dates, agg_fn, gids, thresh, morph_kernel,
 
     # this is another hot spot, heatmaps_to_polys -> mask_to_polygons ->
     # rasterize. Figure out how to vectorize over bounds.
-    track_polys = heatmaps_to_polys(_heatmaps_in_track, track_bounds,
-                                    agg_fn, thresh, morph_kernel,
-                                    thresh_hysteresis, norm_ord,
-                                    moving_window_size,
-                                    inner_window_size=inner_window_size,
-                                    inner_agg_fn=inner_agg_fn,
-                                    heatmap_dates=heatmap_dates,
-                                    poly_merge_method=poly_merge_method,)
+    track_polys = heatmaps_to_polys(
+        _heatmaps_in_track, track_bounds, heatmap_dates=heatmap_dates,
+        config=config,
+    )
     if track is None:
         # BUG: The polygons retunred from heatmap-to-polys might not be
         # corresponding to the gids in this case.
@@ -961,10 +934,7 @@ viz_n_window = 0  # FIXME, no dynamic globals
 
 
 @profile
-def heatmaps_to_polys(heatmaps, bounds, agg_fn, thresh, morph_kernel,
-                      thresh_hysteresis, norm_ord, moving_window_size,
-                      inner_window_size=None, inner_agg_fn=None,
-                      heatmap_dates=None, poly_merge_method=None):
+def heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=None, config=None):
     '''
     Use parameters: agg_fn, thresh, morph_kernel, thresh_hysteresis, norm_ord
     '''
@@ -980,29 +950,29 @@ def heatmaps_to_polys(heatmaps, bounds, agg_fn, thresh, morph_kernel,
         import kwimage
         return [kwimage.Polygon.from_shapely(p) for p in shapely_polys]
 
-    _agg_fn = AGG_FN_REGISTRY[agg_fn]
+    _agg_fn = AGG_FN_REGISTRY[config.agg_fn]
 
-    if isinstance(inner_window_size, float) and math.isnan(inner_window_size):
-        inner_window_size = None
+    if isinstance(config.inner_window_size, float) and math.isnan(config.inner_window_size):
+        config.inner_window_size = None
 
-    if isinstance(moving_window_size, float) and math.isnan(moving_window_size):
-        moving_window_size = None
+    if isinstance(config.moving_window_size, float) and math.isnan(config.moving_window_size):
+        config.moving_window_size = None
 
-    if isinstance(inner_window_size, str):
+    if isinstance(config.inner_window_size, str):
         # TODO: generalize if needed
         assert heatmap_dates is not None
 
-        if inner_agg_fn == 'mean':
+        if config.inner_agg_fn == 'mean':
             inner_ord = 1
-        elif inner_agg_fn == 'max':
+        elif config.inner_agg_fn == 'max':
             inner_ord = float('inf')
         else:
-            raise NotImplementedError(inner_agg_fn)
+            raise NotImplementedError(config.inner_agg_fn)
 
         # Do inner aggregation before outer aggregation
         from watch.utils import util_time
         import kwarray
-        delta = util_time.coerce_timedelta(inner_window_size).total_seconds()
+        delta = util_time.coerce_timedelta(config.inner_window_size).total_seconds()
         image_unixtimes = np.array([d.timestamp() for d in heatmap_dates])
         bucket_ids = (image_unixtimes // delta).astype(int)
         unique_ids, groupxs = kwarray.group_indices(bucket_ids)
@@ -1013,15 +983,15 @@ def heatmaps_to_polys(heatmaps, bounds, agg_fn, thresh, morph_kernel,
         new_heatmaps = np.array(new_heatmaps)
         heatmaps = new_heatmaps
     else:
-        if inner_window_size is not None:
+        if config.inner_window_size is not None:
             raise NotImplementedError(
                 'only temporal deltas for inner agg window for now')
 
     # calculate number of moving-window steps, based on window_size and number
     # of heatmaps
-    if moving_window_size is not None:
+    if config.moving_window_size is not None:
         total_n = len(heatmaps)
-        final_size = int(total_n // np.ceil((total_n / moving_window_size)))
+        final_size = int(total_n // np.ceil((total_n / config.moving_window_size)))
         n_steps = total_n // final_size
     else:
         final_size = len(heatmaps)
@@ -1032,8 +1002,8 @@ def heatmaps_to_polys(heatmaps, bounds, agg_fn, thresh, morph_kernel,
 
     prog = ub.ProgIter(total=n_steps, desc='process-step')
     with prog:
-        polys_final = _process_1_step(h_init, _agg_fn, thresh, morph_kernel,
-                                      norm_ord, thresh_hysteresis, bounds)
+        polys_final = _process_1_step(h_init, _agg_fn, config.thresh, config.morph_kernel,
+                                      config.norm_ord, config.thresh_hysteresis, track_bounds)
         prog.step()
 
         if n_steps > 1:
@@ -1042,18 +1012,18 @@ def heatmaps_to_polys(heatmaps, bounds, agg_fn, thresh, morph_kernel,
             for i in range(n_steps - 1):
                 prog.step()
                 h1 = heatmaps[(i + 1) * final_size:(i + 2) * final_size]
-                p1 = _process_1_step(h1, _agg_fn, thresh, morph_kernel, norm_ord,
-                                     thresh_hysteresis, bounds)
+                p1 = _process_1_step(h1, _agg_fn, config.thresh, config.morph_kernel, config.norm_ord,
+                                     config.thresh_hysteresis, track_bounds)
                 p1 = convert_to_shapely(p1)
                 polys_final = _merge_polys(polys_final, p1,
-                                           poly_merge_method=poly_merge_method)
+                                           poly_merge_method=config.poly_merge_method)
 
             polys_final = convert_to_kwimage_poly(polys_final)
     return polys_final
 
 
 def _process_1_step(heatmaps, _agg_fn, thresh, morph_kernel, norm_ord,
-                    thresh_hysteresis, bounds):
+                    thresh_hysteresis, track_bounds):
     # FIXME: no dynamic globals.
     global viz_n_window
     global VIZ_DPATH
@@ -1073,24 +1043,11 @@ def _process_1_step(heatmaps, _agg_fn, thresh, morph_kernel, norm_ord,
         mask_to_polygons(aggregated,
                          thresh,
                          thresh_hysteresis=thresh_hysteresis,
-                         bounds=bounds))
+                         bounds=track_bounds))
     return polygons
 
 
-def _gids_polys(
-        sub_dset,
-        key,
-        agg_fn,
-        thresh,
-        morph_kernel,
-        thresh_hysteresis,
-        norm_ord,
-        resolution=None,
-        moving_window_size=None,  # 150
-        inner_window_size=None,
-        inner_agg_fn='mean',
-        bounds=False,
-        poly_merge_method=None):
+def _gids_polys(sub_dset, **kwargs):
     """
     Example:
         >>> from watch.tasks.tracking.from_heatmap import *  # NOQA
@@ -1106,28 +1063,28 @@ def _gids_polys(
         >>> norm_ord = 1
         >>> resolution = None
         >>> moving_window_size = None
-        >>> bounds = None
         >>> inner_window_size = '1year'
         >>> results = list(_gids_polys(
         >>>     sub_dset,
-        >>>     key,
-        >>>     agg_fn,
-        >>>     thresh,
-        >>>     morph_kernel,
-        >>>     thresh_hysteresis,
-        >>>     norm_ord,
+        >>>     key=key,
+        >>>     agg_fn=agg_fn,
+        >>>     thresh=thresh,
+        >>>     morph_kernel=morph_kernel,
+        >>>     thresh_hysteresis=thresh_hysteresis,
+        >>>     norm_ord=norm_ord,
         >>>     resolution=resolution,
         >>>     moving_window_size=moving_window_size,
-        >>>     bounds=bounds,
+        >>>     use_boundaries=None,
         >>> ))
 
     Returns:
         Iterable[int | kwimage.Polygon | kwimage.MultiPolygon]
-
     """
     from watch.utils import util_time
     import numpy as np
-    if bounds:  # for SC
+    config = _GidPolyConfig(**kwargs)
+
+    if config.use_boundaries:  # for SC
         raw_boundary_tracks = pop_tracks(sub_dset, [SITE_SUMMARY_CNAME])
         assert len(raw_boundary_tracks) > 0, 'need valid site boundaries!'
         gids = raw_boundary_tracks['gid'].unique()
@@ -1148,7 +1105,7 @@ def _gids_polys(
                    for d in images.lookup('date_captured')]
     # image_years = [d.year for d in image_dates]
 
-    key = '|'.join(key)
+    key = '|'.join(config.key)
     coco_images = sub_dset.images(gids).coco_images
 
     load_workers = 0  # TODO: configure
@@ -1156,7 +1113,7 @@ def _gids_polys(
 
     with load_jobs:
         for coco_img in ub.ProgIter(coco_images, desc='submit heatmap jobs'):
-            delayed = coco_img.imdelay(channels=key, space='video', resolution=resolution)
+            delayed = coco_img.imdelay(channels=key, space='video', resolution=config.resolution)
             load_jobs.submit(delayed.finalize)
 
         _heatmaps = []
@@ -1185,10 +1142,7 @@ def _gids_polys(
     with proc_jobs:
 
         for _, track in ub.ProgIter(boundary_tracks, desc='submit proc jobs'):
-            proc_jobs.submit(_process, track, _heatmaps, image_dates, agg_fn, gids,
-                             thresh, morph_kernel, thresh_hysteresis, norm_ord,
-                             moving_window_size, inner_window_size, inner_agg_fn,
-                             poly_merge_method)
+            proc_jobs.submit(_process, track, _heatmaps, image_dates, gids, config)
 
         result_gen = itertools.chain.from_iterable(
             j.result() for j in ub.ProgIter(proc_jobs.jobs, desc='collect proc jobs'))
@@ -1402,7 +1356,7 @@ class TimeAggregatedBAS(NewTrackFunction):
         _resolve_arg_values(self)
 
     def create_tracks(self, sub_dset):
-        aggkw = ub.compatible(self.__dict__, time_aggregated_polys)
+        aggkw = ub.udict(self.__dict__) & TimeAggregatedPolysConfig.__default__.keys()
         tracks = time_aggregated_polys(sub_dset, **aggkw)
         return tracks
 
@@ -1487,7 +1441,7 @@ class TimeAggregatedSC(NewTrackFunction):
                 kwimage.MultiPolygon.from_shapely)
 
         else:
-            aggkw = ub.compatible(self.__dict__, time_aggregated_polys)
+            aggkw = ub.udict(self.__dict__) & TimeAggregatedPolysConfig.__default__.keys()
             aggkw['use_boundaries'] = aggkw.get('boundaries_as', 'none') != 'none'
             tracks = time_aggregated_polys(sub_dset, **aggkw)
         return tracks

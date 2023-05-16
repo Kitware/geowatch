@@ -350,6 +350,25 @@ class RegionModel(_Model):
     def region_id(self):
         return self.header['properties']['region_id']
 
+    def _validate_parts(self):
+        """
+        Runs jsonschema validation checks on each part of the feature
+        collection independently to better localize where the errors are.
+
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> self = RegionModel.random(rng=0)
+        """
+        import jsonschema
+        schema = ub.udict(self.load_schema(strict=False))
+        schema - {'properties', 'required', 'title', 'type'}
+        defs = schema[chr(36) + 'defs']
+        body_schema = schema | (defs['site_summary_feature'])
+        header_schema = schema | (defs['region_feature'])
+        jsonschema.validate(self.header, header_schema)
+        for obs_feature in self.body_features():
+            jsonschema.validate(obs_feature, body_schema)
+
 
 class SiteModel(_Model):
     """
@@ -545,14 +564,19 @@ class SiteModel(_Model):
             raise AssertionError
 
     def _validate_parts(self):
+        """
+        Runs jsonschema validation checks on each part of the feature
+        collection independently to better localize where the errors are.
+        """
         import jsonschema
         schema = ub.udict(self.load_schema(strict=False))
         schema - {'properties', 'required', 'title', 'type'}
-        obs_schema = schema | (schema[chr(36) + 'defs']['observation_feature'])
-        site_schema = schema | (schema[chr(36) + 'defs']['site_feature'])
-        jsonschema.validate(self.header, site_schema)
+        defs = schema[chr(36) + 'defs']
+        body_schema = schema | (defs['observation_feature'])
+        header_schema = schema | (defs['site_feature'])
+        jsonschema.validate(self.header, header_schema)
         for obs_feature in self.body_features():
-            jsonschema.validate(obs_feature, obs_schema)
+            jsonschema.validate(obs_feature, body_schema)
 
 
 class _Feature(ub.NiceRepr, geojson.Feature):
