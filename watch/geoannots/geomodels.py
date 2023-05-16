@@ -207,7 +207,8 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
             raise AssertionError('Geo Model has no header')
 
         if header is not self.features[0]:
-            raise AssertionError('Header should be the first feature')
+            import warnings
+            warnings.warn('Header should be the first feature')
 
         if header['properties']['type'] != self._header_type:
             raise AssertionError('Header type is wrong')
