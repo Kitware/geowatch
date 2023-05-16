@@ -555,6 +555,7 @@ def time_aggregated_polys(sub_dset, **kwargs):
     import geopandas as gpd
     import numpy as np
     config = TimeAggregatedPolysConfig(**kwargs)
+    config.key, config.bg_key = _validate_keys(config.key, config.bg_key)
 
     _all_keys = set(config.key + config.bg_key)
     has_requested_chans_list = []
@@ -1197,9 +1198,7 @@ class TimeAggregatedPolysConfig(_GidPolyConfig):
         super().__post_init__()
         if self.norm_ord in {'inf', None}:
             self.norm_ord = float('inf')
-        key, bg_key = _validate_keys(self.key, self.bg_key)
-        self.key = key
-        self.bg_key = bg_key
+        # self.key, self.bg_key = _validate_keys(self.key, self.bg_key)
 
 
 class CommonTrackFn(NewTrackFunction, TimeAggregatedPolysConfig):
@@ -1227,10 +1226,8 @@ class TimeAggregatedBAS(TrackFnWithSV):
     agg_fn: str = 'probs'
 
     def create_tracks(self, sub_dset):
-        import xdev
-        with xdev.embed_on_exception_context:
-            aggkw = ub.udict(self) & TimeAggregatedPolysConfig.__default__.keys()
-            tracks = time_aggregated_polys(sub_dset, **aggkw)
+        aggkw = ub.udict(self) & TimeAggregatedPolysConfig.__default__.keys()
+        tracks = time_aggregated_polys(sub_dset, **aggkw)
         return tracks
 
     def add_tracks_to_dset(self, sub_dset, tracks):
@@ -1257,6 +1254,7 @@ class TimeAggregatedSC(TrackFnWithSV):
     key: Tuple[str] = tuple(CNAMES_DCT['positive']['scored'])
     bg_key: Tuple[str] = tuple(CNAMES_DCT['negative']['scored'])
     boundaries_as: Literal['bounds', 'polys', 'none'] = 'bounds'
+    time_thresh = None
 
     def create_tracks(self, sub_dset):
         '''

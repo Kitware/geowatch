@@ -1011,6 +1011,8 @@ def main(argv=None, **kwargs):
         >>> sc_coco_dset = kwcoco.CocoDataset(sc_coco_fpath)
         >>> bas_trackids = bas_coco_dset.annots().lookup('track_id', None)
         >>> sc_trackids = sc_coco_dset.annots().lookup('track_id', None)
+        >>> print('bas_trackids = {}'.format(ub.urepr(bas_trackids, nl=1)))
+        >>> print('sc_trackids = {}'.format(ub.urepr(sc_trackids, nl=1)))
         >>> assert len(bas_trackids) and None not in bas_trackids
         >>> assert len(sc_trackids) and None not in sc_trackids
         >>> summaries = list(util_gis.coerce_geojson_datas(bas_fpath, format='dataframe'))
