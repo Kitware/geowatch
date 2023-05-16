@@ -37,9 +37,9 @@ python -m watch.cli.prepare_ta2_dataset \
     --skip_existing=0 \
     --force_min_gsd=2.0 \
     --force_nodata=-9999 \
-    --hack_lazy=False \
+    --hack_lazy=True \
     --backend=tmux \
-    --tmux_workers=4 \
+    --tmux_workers=8 \
     --run=1
 
 # ~/code/watch/dev/poc/prepare_time_combined_dataset.py
