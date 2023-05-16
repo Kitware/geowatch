@@ -1170,8 +1170,19 @@ class TimeAggregatedPolysConfig(_GidPolyConfig):
     bg_key = None
     time_thresh = 1
     response_thresh = None
-    min_area_square_meters = None
-    max_area_square_meters = None
+
+    min_area_square_meters = scfg.Value(None, help=ub.paragraph(
+        '''
+        If specified, any site with an area less than this threshold is
+        removed.
+        '''))
+
+    max_area_square_meters = scfg.Value(None, help=ub.paragraph(
+        '''
+        If specified, any site with an area greater than this threshold is
+        removed.
+        '''))
+
     max_area_behavior = 'drop'
     polygon_simplify_tolerance = None
 

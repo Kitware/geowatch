@@ -5,7 +5,47 @@ import warnings
 import ubelt as ub
 
 
-class CropSitesToRegionsConfig(scfg.DataConfig):
+class SiteFilterConfig(scfg.DataConfig):
+
+    min_area_square_meters = scfg.Value(None, help=ub.paragraph(
+        '''
+        If specified, any site with an area less than this threshold is
+        removed.
+        '''))
+
+    max_area_square_meters = scfg.Value(None, help=ub.paragraph(
+        '''
+        If specified, any site with an area greater than this threshold is
+        removed.
+        '''))
+
+    apply_clip_to = scfg.Value('polygon', help=ub.paragraph(
+        '''
+        The type of geometry that clipping is applied to.
+        If "none", then this is not applied.
+        If "all", then all polygons are clipped (which could cause multipolygons)
+        If "polygon", then only apply clipping if it does not create a
+        multipolygon.
+        '''))
+
+    apply_bounds_filter_to = scfg.Value('multipolygon', help=ub.paragraph(
+        '''
+        The type of geometry that the bounds filter is applied to.
+        If "none", then this is not applied.
+        If "all", then all polygons are have the bounds filter applied.
+        If "multipolygon", only polygons clipped into multiple parts will have
+        this applied.
+        '''))
+
+    in_bounds_thresh = scfg.Value(0.6, help=ub.paragraph(
+        '''
+        For polygons the bounds filter is applied to, this is the fraction of
+        the site geometry that must be in bounds to keep it otherwise it is
+        removed.
+        '''))
+
+
+class CropSitesToRegionsConfig(SiteFilterConfig):
     r"""
     Crops site models to the bounds of a region model.
 
@@ -47,6 +87,7 @@ class CropSitesToRegionsConfig(scfg.DataConfig):
         IO workers to load sites in the background while others are
         cropping.
         '''))
+
     force_multipolygon = scfg.Value(True, help=ub.paragraph(
         '''
         For output site observations the output geometry type will
@@ -59,6 +100,11 @@ USE_LISTS = 0  # turn on for eager debugging
 
 def main(cmdline=False, **kwargs):
     """
+
+    CommandLine:
+        xdoctest -m watch.cli.crop_sites_to_regions main:0
+        xdoctest -m watch.cli.crop_sites_to_regions main:1
+
     Example:
         >>> from watch.geoannots import geomodels
         >>> import kwimage
@@ -75,6 +121,7 @@ def main(cmdline=False, **kwargs):
         >>> sites = {}
         >>> for key, poly in geoms.items():
         >>>     sites[key] = geomodels.SiteModel.random(region=region, site_poly=poly)
+        >>>     region.add_site_summary(sites[key].as_summary())
         >>> # Write demo data to disk
         >>> dpath = ub.Path.appdir('watch/tests/cli/crop_sites_to_regions/doctest0')
         >>> dpath.delete().ensuredir()
@@ -100,22 +147,24 @@ def main(cmdline=False, **kwargs):
         >>> # xdoctest: +REQUIRES(module:kwplot)
         >>> import kwplot
         >>> kwplot.plt.ion()
-        >>> kwplot.figure(doclf=True, fnum=1, pnum=(1, 2, 1))
-        >>> ax = kwplot.plt.gca()
-        >>> df = region.pandas()
+        >>> ax = kwplot.figure(doclf=True, fnum=2, pnum=(2, 2, 1), title='Sites Before Clip').gca()
+        >>> df = region.pandas_region()
         >>> ax = df.plot(edgecolor='black', facecolor=(0.1, 0.8, 0.1, 0.5), ax=ax)
         >>> for site in sites.values():
         >>>     df = site.pandas()
         >>>     ax = df.plot(edgecolor='black', facecolor=(0.1, 0.1, 0.8, 0.5), ax=ax)
-        >>> ax.set_title('Before Clip')
-        >>> kwplot.figure(fnum=1, pnum=(1, 2, 2))
-        >>> ax = kwplot.plt.gca()
-        >>> df = new_region.pandas()
+        >>> ax = kwplot.figure(fnum=2, pnum=(2, 2, 2), title='Sites After Clip').gca()
+        >>> df = new_region.pandas_region()
         >>> ax = df.plot(edgecolor='black', facecolor=(0.1, 0.8, 0.1, 0.5), ax=ax)
         >>> for site in new_sites:
         >>>     df = site.pandas()
         >>>     ax = df.plot(edgecolor='black', facecolor=(0.1, 0.1, 0.8, 0.5), ax=ax)
-        >>> ax.set_title('After Clip')
+        >>> ax = kwplot.figure(fnum=2, pnum=(2, 2, 3), title='Region Before Clip').gca()
+        >>> df = region.pandas()
+        >>> ax = df.plot(edgecolor='black', facecolor=(0.1, 0.8, 0.1, 0.5), ax=ax)
+        >>> ax = kwplot.figure(fnum=2, pnum=(2, 2, 4), title='Region After Clip').gca()
+        >>> df = new_region.pandas()
+        >>> ax = df.plot(edgecolor='black', facecolor=(0.1, 0.8, 0.1, 0.5), ax=ax)
 
     Example:
         >>> # Convex clipping case
@@ -141,11 +190,10 @@ def main(cmdline=False, **kwargs):
         >>> geoms['fully_oob'] = region_poly.translate((width * 2, 0))
         >>> geoms['tiny_oob'] = kwimage.Polygon.circle(xy=(-.20, .27), r=0.1)
         >>> geoms['sliver'] = p3
-        >>> # xdoctest: +REQUIRES(--show)
-        >>> # xdoctest: +REQUIRES(module:kwplot)
         >>> sites = {}
         >>> for key, poly in geoms.items():
         >>>     sites[key] = geomodels.SiteModel.random(region=region, site_poly=poly)
+        >>>     region.add_site_summary(sites[key].as_summary())
         >>> # Write demo data to disk
         >>> dpath = ub.Path.appdir('watch/tests/cli/crop_sites_to_regions/doctest0')
         >>> dpath.delete().ensuredir()
@@ -161,32 +209,37 @@ def main(cmdline=False, **kwargs):
         >>>     'region_models': region_dpath,
         >>>     'new_site_dpath': dpath / 'new_site_models',
         >>>     'new_region_dpath': dpath / 'new_region_models',
+        >>>     'min_area_square_meters': 5e8,
         >>> }
         >>> from watch.cli import crop_sites_to_regions
         >>> cmdline = 0
         >>> crop_sites_to_regions.main(cmdline=cmdline, **kwargs)
         >>> new_region = geomodels.RegionModel.coerce(dpath / 'new_region_models')
         >>> new_sites = list(geomodels.SiteModel.coerce_multiple(dpath / 'new_site_models'))
+        >>> assert len(new_sites) == 2
+        >>> assert len(sites) == 6
         >>> # xdoctest: +REQUIRES(--show)
         >>> # xdoctest: +REQUIRES(module:kwplot)
         >>> import kwplot
         >>> kwplot.plt.ion()
-        >>> kwplot.figure(doclf=True, fnum=2, pnum=(1, 2, 1))
-        >>> ax = kwplot.plt.gca()
-        >>> df = region.pandas()
+        >>> ax = kwplot.figure(doclf=True, fnum=2, pnum=(2, 2, 1), title='Observations Before Clip').gca()
+        >>> df = region.pandas_region()
         >>> ax = df.plot(edgecolor='black', facecolor=(0.1, 0.8, 0.1, 0.5), ax=ax)
         >>> for site in sites.values():
-        >>>     df = site.pandas()
+        >>>     df = site.pandas_observations()
         >>>     ax = df.plot(edgecolor='black', facecolor=(0.1, 0.1, 0.8, 0.5), ax=ax)
-        >>> ax.set_title('Before Clip')
-        >>> kwplot.figure(fnum=2, pnum=(1, 2, 2))
-        >>> ax = kwplot.plt.gca()
-        >>> df = new_region.pandas()
+        >>> ax = kwplot.figure(fnum=2, pnum=(2, 2, 2), title='Observations After Clip').gca()
+        >>> df = new_region.pandas_region()
         >>> ax = df.plot(edgecolor='black', facecolor=(0.1, 0.8, 0.1, 0.5), ax=ax)
         >>> for site in new_sites:
-        >>>     df = site.pandas()
+        >>>     df = site.pandas_observations()
         >>>     ax = df.plot(edgecolor='black', facecolor=(0.1, 0.1, 0.8, 0.5), ax=ax)
-        >>> ax.set_title('After Clip')
+        >>> ax = kwplot.figure(fnum=2, pnum=(2, 2, 3), title='Site Summary Before Clip').gca()
+        >>> df = region.pandas()
+        >>> ax = df.plot(edgecolor='black', facecolor=(0.1, 0.8, 0.1, 0.5), ax=ax)
+        >>> ax = kwplot.figure(fnum=2, pnum=(2, 2, 4), title='Site Summary After Clip').gca()
+        >>> df = new_region.pandas()
+        >>> ax = df.plot(edgecolor='black', facecolor=(0.1, 0.8, 0.1, 0.5), ax=ax)
     """
     from watch.utils import util_gis
     from shapely.geometry import MultiPolygon
@@ -229,8 +282,10 @@ def main(cmdline=False, **kwargs):
     if USE_LISTS:
         sites = list(sites)
 
-    cropped_region, cropped_sites = crop_sites_to_region(
-        region_gdf_crs84, sites)
+    filter_config = SiteFilterConfig(**(ub.udict(config) & SiteFilterConfig.__default__))
+
+    cropped_region, cropped_sites = filter_sites(
+        region_gdf_crs84, sites, filter_config)
 
     if USE_LISTS:
         cropped_sites = ub.ProgIter(
@@ -283,7 +338,7 @@ def main(cmdline=False, **kwargs):
         print(f'Wrote {num_valid} / {total} valid cropped sites in {new_site_dpath}')
 
 
-def crop_sites_to_region(region_gdf_crs84, sites):
+def filter_sites(region_gdf_crs84, sites, filter_config=None):
     """
     Args:
         region_gdf_crs84 (GeoDataFrame):
@@ -294,8 +349,11 @@ def crop_sites_to_region(region_gdf_crs84, sites):
             List of the loaded geo data frames with a 'data' key
             and the file path in the 'fpath' key.
 
+        filter_config (SiteFilterConfig | None):
+            modifies filter behavior.
+
     Returns:
-        Tuple[GeoDataFrame, List[Dict]]:
+        Tuple[GeoDataFrame, Iterable[Dict]]:
             Region model with cropped site summaries and a list of site info
             dictionaries containing the new cropped data field.
 
@@ -337,7 +395,7 @@ def crop_sites_to_region(region_gdf_crs84, sites):
         >>> sites = [
         >>>     demo_site('DemoRegion_0001', site_poly1),
         >>> ]
-        >>> cropped_region, cropped_sites = crop_sites_to_region(region_gdf_crs84, sites)
+        >>> cropped_region, cropped_sites = filter_sites(region_gdf_crs84, sites)
         >>> cropped_sites = list(cropped_sites)
         >>> assert len(cropped_sites) == len(sites)
         >>> assert len(cropped_region) == 2
@@ -392,7 +450,7 @@ def crop_sites_to_region(region_gdf_crs84, sites):
         >>>     demo_site('DemoRegion_0004', site_poly4),
         >>>     demo_site('DemoRegion_0005', site_poly5),
         >>> ]
-        >>> cropped_region, cropped_sites = crop_sites_to_region(region_gdf_crs84, sites)
+        >>> cropped_region, cropped_sites = filter_sites(region_gdf_crs84, sites)
         >>> cropped_sites = list(cropped_sites)
         >>> assert len(cropped_sites) == len(sites)
         >>> assert len(cropped_sites[0]['data']) == len(sites[0]['data'])
@@ -403,6 +461,9 @@ def crop_sites_to_region(region_gdf_crs84, sites):
     from watch.utils import util_gis
     import pandas as pd
     output_crs = region_gdf_crs84.crs
+
+    if filter_config is None:
+        filter_config = SiteFilterConfig()
 
     _row_type = region_gdf_crs84['type']
     region_rows_crs84 = region_gdf_crs84[_row_type == 'region']
@@ -435,30 +496,36 @@ def crop_sites_to_region(region_gdf_crs84, sites):
     assert crop_geom_utm.is_valid
 
     # Crop the site summaries within the region file
-    valid_site_summaries = crop_gdf_in_utm(
-        site_summary_rows, crop_geom_utm, utm_epsg, output_crs)
+    main_type = 'site_summary'
+    valid_site_summaries = filter_gdf_in_utm(
+        site_summary_rows, crop_geom_utm, utm_epsg, output_crs, main_type,
+        filter_config)
 
     cropped_region = pd.concat([region_rows_crs84, valid_site_summaries])
 
     # Crop the site models to the region geometry
-    cropped_sites = _cropper_gen(sites, crop_geom_utm, utm_epsg, output_crs)
+    cropped_sites = _cropper_gen(sites, crop_geom_utm, utm_epsg, output_crs,
+                                 filter_config)
 
     return cropped_region, cropped_sites
 
 
-def _cropper_gen(sites, crop_geom_utm, utm_epsg, output_crs):
+def _cropper_gen(sites, crop_geom_utm, utm_epsg, output_crs, filter_config):
     import geopandas as gpd
+    main_type = 'site'
     for site_info in sites:
         site_gdf_crs84: gpd.GeoDataFrame = site_info['data']
-        valid_site_gdf_crs84 = crop_gdf_in_utm(
-            site_gdf_crs84, crop_geom_utm, utm_epsg, output_crs)
+        valid_site_gdf_crs84 = filter_gdf_in_utm(
+            site_gdf_crs84, crop_geom_utm, utm_epsg, output_crs,
+            main_type, filter_config)
 
         new_site_info: dict = site_info.copy()
         new_site_info['data'] = valid_site_gdf_crs84
         yield new_site_info
 
 
-def crop_gdf_in_utm(gdf, crop_geom_utm, utm_epsg, output_crs):
+def filter_gdf_in_utm(gdf, crop_geom_utm, utm_epsg, output_crs, main_type=None,
+                      filter_config=None):
     """
     Crop geometry in a geopandas data frame to specified bounds in UTM space.
     Filter out any rows where the cropped geometry is null or invalid.
@@ -476,41 +543,107 @@ def crop_gdf_in_utm(gdf, crop_geom_utm, utm_epsg, output_crs):
         output_crs (pyproj.crs.crs.CRS):
             The output CRS to wrap back into (should be CRS84)
 
+        main_type (str):
+            "site_summary" for region models, and "site" for site models.
+
+        filter_config (SiteFilterConfig | None):
+            modifies filter behavior.
+
     Returns:
         GeoDataFrame
     """
+    import pandas as pd
+    assert filter_config is not None
     gdf_utm = gdf.to_crs(utm_epsg)
 
     # Attempt to fix any polygon that became invalid after UTM projection
     invalid_proj = ~gdf_utm.geometry.is_valid
     if invalid_proj.any():
-        gdf_utm.geometry[invalid_proj] = gdf_utm.geometry[invalid_proj].buffer(0)
+        # gdf_utm.geometry[invalid_proj] = gdf_utm.geometry[invalid_proj].buffer(0)
+        gdf_utm.geometry[invalid_proj] = gdf_utm.geometry[invalid_proj].make_valid()
     invalid_proj = ~gdf_utm.geometry.is_valid
     assert not invalid_proj.any()
+
+    if main_type is not None:
+        is_main = gdf_utm['type'] == main_type
+        main_gdf = gdf_utm[is_main]
+        other_gdf = gdf_utm[~is_main]
+    else:
+        main_gdf = gdf_utm
+        other_gdf = gdf_utm.iloc[0:0]
+
+    if main_type == 'site':
+        assert len(main_gdf) == 1, 'should only have one main polygon for a site'
 
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore', 'invalid value', RuntimeWarning)
         warnings.filterwarnings('ignore', 'Self-intersection', RuntimeWarning)
-        isect = gdf_utm.intersection(crop_geom_utm)
+        main_isect = main_gdf.intersection(crop_geom_utm)
+        other_isect = other_gdf.intersection(crop_geom_utm)
 
-    # TODO: figure out how to parameterize strategy
-    STRAT = 1
-    if STRAT == 0:
-        # Simple clip everything (which might make polygons into multipolygons)
-        flags = isect.area > 0
-        valid_isect = isect[flags]
-        valid_gdf_utm = gdf_utm[flags]
-        valid_gdf_utm = valid_gdf_utm.assign(geometry=valid_isect)
-    elif STRAT == 1:
-        in_bounds_thresh = 0.6
-        # Determine the fraction of each polygon that is in bounds.
-        # Don't split up the polygon.
-        frac_in_bounds = isect.area / gdf_utm.area
-        print(f'frac_in_bounds={frac_in_bounds}')
-        flags = frac_in_bounds > in_bounds_thresh
-        valid_gdf_utm = gdf_utm[flags]
+    # First remove everything completely outside of the bounds
+    main_is_empty = main_isect.is_empty
+    main_isect = main_isect[~main_is_empty]
+    main_gdf = main_gdf[~main_is_empty]
+
+    if filter_config.apply_clip_to == 'none':
+        do_clip_flags = main_isect.is_empty & False
+    elif filter_config.apply_clip_to == 'all':
+        do_clip_flags = main_isect.is_empty | False
+    elif filter_config.apply_clip_to == 'polygon':
+        do_clip_flags = (main_isect.type == 'Polygon')
     else:
         raise KeyError
+    do_clip_locs = do_clip_flags[do_clip_flags].index
+
+    # Clip the chosen geometry to the bounds
+    if len(do_clip_locs):
+        main_gdf.loc[do_clip_locs, 'geometry'] = main_isect.loc[do_clip_locs]
+
+    if filter_config.apply_bounds_filter_to == 'none':
+        do_filter_flags = main_isect.is_empty | False
+    elif filter_config.apply_bounds_filter_to == 'all':
+        do_filter_flags = main_isect.is_empty | False
+    elif filter_config.apply_bounds_filter_to == 'multipolygon':
+        do_filter_flags = (main_isect.type == 'MultiPolygon')
+    else:
+        raise KeyError
+    do_filter_locs = do_filter_flags[do_filter_flags].index
+
+    # Remove chosen polygons that have a low intersection with the region
+    if len(do_filter_locs):
+        in_bounds_thresh = filter_config.in_bounds_thresh
+        main_to_filter = main_gdf.loc[do_filter_flags]
+        isect_to_filter = main_isect.loc[do_filter_flags]
+        frac_in_bounds = isect_to_filter.area / main_to_filter.area
+        flags = frac_in_bounds <= in_bounds_thresh
+        remove_locs = flags[flags].index
+        main_gdf = main_gdf.drop(remove_locs, axis=0)
+
+    if filter_config.min_area_square_meters is not None:
+        keep_flags = main_gdf.geometry.area >= filter_config.min_area_square_meters
+        main_gdf = main_gdf[keep_flags]
+
+    if filter_config.max_area_square_meters is not None:
+        keep_flags = main_gdf.geometry.area <= filter_config.max_area_square_meters
+        main_gdf = main_gdf[keep_flags]
+
+    if len(other_gdf) > 0:
+        # Specialized logic for site models where there will only be
+        # one row in main_gdf
+        assert main_type == 'site'
+        if len(main_gdf) == 0:
+            # If we filtered the site, then we should filter all observations
+            other_gdf = other_gdf.drop(other_gdf.index, axis=0)
+        else:
+            # Otherwise we we either clip everything or do nothing.
+            if len(do_clip_locs):
+                other_gdf = other_gdf.assign(geometry=other_isect)
+            # always remove empty ones.
+            other_gdf = other_gdf[~other_isect.is_empty]
+        valid_gdf_utm = pd.concat([main_gdf, other_gdf], axis=0)
+    else:
+        valid_gdf_utm = main_gdf
 
     # Project back to the output CRS
     valid_gdf_crs84 = valid_gdf_utm.to_crs(output_crs)

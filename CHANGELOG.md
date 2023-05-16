@@ -22,6 +22,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+* The crop-sites-to-regions script no longer clips polygons if they would become multipolygons.
+* The crop-sites-to-regions script can now filter regions by min area.
 * Fixed issue in crop-sites-to-regions where it would output an unexpected "id" field.
 * STAC roles are now preserved in kwcoco conversion.
 * Renamed `ta1_stac_to_kwcoco` to `stac_to_kwcoco`.

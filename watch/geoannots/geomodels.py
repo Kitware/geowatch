@@ -357,6 +357,36 @@ class RegionModel(_Model):
         else:
             return region
 
+    def add_site_summary(self, summary):
+        """
+        Add a site summary to the region.
+
+        Args:
+            summary (SiteSummary | SiteModel):
+                a site summary or site model. If given as a site model
+                it is converted to a site summary and then added.
+
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> region = RegionModel.random(num_sites=False)
+            >>> site1 = SiteModel.random(region=region)
+            >>> site2 = SiteModel.random(region=region)
+            >>> site3 = SiteModel.random(region=region)
+            >>> summary = site2.as_summary()
+            >>> region.add_site_summary(site1)
+            >>> region.add_site_summary(summary)
+            >>> region.add_site_summary(dict(site3.as_summary()))
+            >>> import pytest
+            >>> with pytest.raises(TypeError):
+            ...     region.add_site_summary(dict(site3))
+            >>> assert len(list(region.site_summaries())) == 3
+        """
+        if isinstance(summary, SiteModel):
+            summary = summary.as_summary()
+        if summary['type'] != 'Feature' or summary['properties']['type'] != 'site_summary':
+            raise TypeError('Input was not a site summary or coercable type')
+        self['features'].append(summary)
+
     @property
     def region_id(self):
         return self.header['properties']['region_id']
