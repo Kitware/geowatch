@@ -591,7 +591,6 @@ def random_site_model(region_id, site_id, region_corners, observables,
         sampled_unit_geoms = [None] * len(sampled_observables)
         tf_region_from_unit = None
 
-
     observations = []
     for unit_geom, observable, phase in zip(
         sampled_unit_geoms, sampled_observables, sampled_phases
