@@ -60,18 +60,133 @@ USE_LISTS = 0  # turn on for eager debugging
 def main(cmdline=False, **kwargs):
     """
     Example:
-        from watch.geoannots import geomodels
-        region, sites = geomodels.RegionModel.random(with_sites=True)
+        >>> from watch.geoannots import geomodels
+        >>> import kwimage
+        >>> region = geomodels.RegionModel.random(num_sites=0)
+        >>> # Create several clipping cases
+        >>> region_poly = kwimage.Polygon.coerce(region.geometry)
+        >>> width = region_poly.to_box().width
+        >>> height = region_poly.to_box().height
+        >>> geoms = {}
+        >>> geoms['in_bounds'] = region_poly.scale(0.1, about='centroid')
+        >>> geoms['half_oob'] = region_poly.translate((width / 2, 0)).scale(0.5, about='centroid')
+        >>> geoms['some_oob'] = region_poly.translate((-width / 2, -height / 2)).scale(0.5, about='centroid').translate(width / 4, height / 4)
+        >>> geoms['fully_oob'] = region_poly.translate((width * 2, 0))
+        >>> sites = {}
+        >>> for key, poly in geoms.items():
+        >>>     sites[key] = geomodels.SiteModel.random(region=region, site_poly=poly)
+        >>> # Write demo data to disk
+        >>> dpath = ub.Path.appdir('watch/tests/cli/crop_sites_to_regions/doctest0')
+        >>> dpath.delete().ensuredir()
+        >>> region_dpath = (dpath / 'region_models').ensuredir()
+        >>> site_dpath = (dpath / 'site_models').ensuredir()
+        >>> region_fpath = region_dpath / 'region.geojson'
+        >>> region_fpath.write_text(region.dumps())
+        >>> for k, site in sites.items():
+        >>>     site_fpath = site_dpath / f'{k}.geojson'
+        >>>     site_fpath.write_text(site.dumps())
+        >>> kwargs = {
+        >>>     'site_models': site_dpath,
+        >>>     'region_models': region_dpath,
+        >>>     'new_site_dpath': dpath / 'new_site_models',
+        >>>     'new_region_dpath': dpath / 'new_region_models',
+        >>> }
+        >>> from watch.cli import crop_sites_to_regions
+        >>> cmdline = 0
+        >>> crop_sites_to_regions.main(cmdline=cmdline, **kwargs)
+        >>> new_region = geomodels.RegionModel.coerce(dpath / 'new_region_models')
+        >>> new_sites = list(geomodels.SiteModel.coerce_multiple(dpath / 'new_site_models'))
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> # xdoctest: +REQUIRES(module:kwplot)
+        >>> import kwplot
+        >>> kwplot.plt.ion()
+        >>> kwplot.figure(doclf=True, fnum=1, pnum=(1, 2, 1))
+        >>> ax = kwplot.plt.gca()
+        >>> df = region.pandas()
+        >>> ax = df.plot(edgecolor='black', facecolor=(0.1, 0.8, 0.1, 0.5), ax=ax)
+        >>> for site in sites.values():
+        >>>     df = site.pandas()
+        >>>     ax = df.plot(edgecolor='black', facecolor=(0.1, 0.1, 0.8, 0.5), ax=ax)
+        >>> ax.set_title('Before Clip')
+        >>> kwplot.figure(fnum=1, pnum=(1, 2, 2))
+        >>> ax = kwplot.plt.gca()
+        >>> df = new_region.pandas()
+        >>> ax = df.plot(edgecolor='black', facecolor=(0.1, 0.8, 0.1, 0.5), ax=ax)
+        >>> for site in new_sites:
+        >>>     df = site.pandas()
+        >>>     ax = df.plot(edgecolor='black', facecolor=(0.1, 0.1, 0.8, 0.5), ax=ax)
+        >>> ax.set_title('After Clip')
 
-    Ignore:
-        import kwplot
-        kwplot.plt.ion()
-        kwplot.figure(doclf=True, fnum=1)
-        ax = kwplot.plt.gca()
-        df = region.pandas()
-        ax = df.plot(edgecolor='black', facecolor=(0.1, 0.8, 0.1, 0.5), ax=ax)
-
-        ...
+    Example:
+        >>> # Convex clipping case
+        >>> from watch.geoannots import geomodels
+        >>> import kwimage
+        >>> star = kwimage.Polygon.star()
+        >>> p1 = kwimage.Polygon.circle(xy=(0, 0), r=1)
+        >>> p2 = kwimage.Polygon.circle(xy=(0.2, 0), r=1)
+        >>> p3 = p1.difference(p2).translate(0.3)
+        >>> box = kwimage.Box.coerce([-1, .3, 5, 5], format='xywh').to_polygon()
+        >>> p3 = p3.difference(box)
+        >>> box = kwimage.Box.coerce([-.1, -1, 10, 10], format='xywh').to_polygon()
+        >>> p3 = p3.difference(box)
+        >>> p3 = p3.difference(kwimage.Polygon.circle(xy=(-.6, -.2), r=0.15))
+        >>> region = geomodels.RegionModel.random(region_poly=star, num_sites=0, rng=21)
+        >>> region_poly = kwimage.Polygon.coerce(region.geometry)
+        >>> width = region_poly.to_box().width
+        >>> height = region_poly.to_box().height
+        >>> geoms = {}
+        >>> geoms['in_bounds'] = region_poly.scale(0.1, about='centroid')
+        >>> geoms['half_oob'] = region_poly.translate((width / 2, 0))
+        >>> geoms['some_oob'] = region_poly.translate((width / 2, height / 2)).scale(0.5, about='centroid').translate(-width / 3, -height / 3)
+        >>> geoms['fully_oob'] = region_poly.translate((width * 2, 0))
+        >>> geoms['tiny_oob'] = kwimage.Polygon.circle(xy=(-.20, .27), r=0.1)
+        >>> geoms['sliver'] = p3
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> # xdoctest: +REQUIRES(module:kwplot)
+        >>> sites = {}
+        >>> for key, poly in geoms.items():
+        >>>     sites[key] = geomodels.SiteModel.random(region=region, site_poly=poly)
+        >>> # Write demo data to disk
+        >>> dpath = ub.Path.appdir('watch/tests/cli/crop_sites_to_regions/doctest0')
+        >>> dpath.delete().ensuredir()
+        >>> region_dpath = (dpath / 'region_models').ensuredir()
+        >>> site_dpath = (dpath / 'site_models').ensuredir()
+        >>> region_fpath = region_dpath / 'region.geojson'
+        >>> region_fpath.write_text(region.dumps())
+        >>> for k, site in sites.items():
+        >>>     site_fpath = site_dpath / f'{k}.geojson'
+        >>>     site_fpath.write_text(site.dumps())
+        >>> kwargs = {
+        >>>     'site_models': site_dpath,
+        >>>     'region_models': region_dpath,
+        >>>     'new_site_dpath': dpath / 'new_site_models',
+        >>>     'new_region_dpath': dpath / 'new_region_models',
+        >>> }
+        >>> from watch.cli import crop_sites_to_regions
+        >>> cmdline = 0
+        >>> crop_sites_to_regions.main(cmdline=cmdline, **kwargs)
+        >>> new_region = geomodels.RegionModel.coerce(dpath / 'new_region_models')
+        >>> new_sites = list(geomodels.SiteModel.coerce_multiple(dpath / 'new_site_models'))
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> # xdoctest: +REQUIRES(module:kwplot)
+        >>> import kwplot
+        >>> kwplot.plt.ion()
+        >>> kwplot.figure(doclf=True, fnum=2, pnum=(1, 2, 1))
+        >>> ax = kwplot.plt.gca()
+        >>> df = region.pandas()
+        >>> ax = df.plot(edgecolor='black', facecolor=(0.1, 0.8, 0.1, 0.5), ax=ax)
+        >>> for site in sites.values():
+        >>>     df = site.pandas()
+        >>>     ax = df.plot(edgecolor='black', facecolor=(0.1, 0.1, 0.8, 0.5), ax=ax)
+        >>> ax.set_title('Before Clip')
+        >>> kwplot.figure(fnum=2, pnum=(1, 2, 2))
+        >>> ax = kwplot.plt.gca()
+        >>> df = new_region.pandas()
+        >>> ax = df.plot(edgecolor='black', facecolor=(0.1, 0.8, 0.1, 0.5), ax=ax)
+        >>> for site in new_sites:
+        >>>     df = site.pandas()
+        >>>     ax = df.plot(edgecolor='black', facecolor=(0.1, 0.1, 0.8, 0.5), ax=ax)
+        >>> ax.set_title('After Clip')
     """
     from watch.utils import util_gis
     from shapely.geometry import MultiPolygon
@@ -377,11 +492,25 @@ def crop_gdf_in_utm(gdf, crop_geom_utm, utm_epsg, output_crs):
         warnings.filterwarnings('ignore', 'invalid value', RuntimeWarning)
         warnings.filterwarnings('ignore', 'Self-intersection', RuntimeWarning)
         isect = gdf_utm.intersection(crop_geom_utm)
-    flags = isect.area > 0
 
-    valid_isect = isect[flags]
-    valid_gdf_utm = gdf_utm[flags]
-    valid_gdf_utm = valid_gdf_utm.assign(geometry=valid_isect)
+    # TODO: figure out how to parameterize strategy
+    STRAT = 1
+    if STRAT == 0:
+        # Simple clip everything (which might make polygons into multipolygons)
+        flags = isect.area > 0
+        valid_isect = isect[flags]
+        valid_gdf_utm = gdf_utm[flags]
+        valid_gdf_utm = valid_gdf_utm.assign(geometry=valid_isect)
+    elif STRAT == 1:
+        in_bounds_thresh = 0.6
+        # Determine the fraction of each polygon that is in bounds.
+        # Don't split up the polygon.
+        frac_in_bounds = isect.area / gdf_utm.area
+        print(f'frac_in_bounds={frac_in_bounds}')
+        flags = frac_in_bounds > in_bounds_thresh
+        valid_gdf_utm = gdf_utm[flags]
+    else:
+        raise KeyError
 
     # Project back to the output CRS
     valid_gdf_crs84 = valid_gdf_utm.to_crs(output_crs)
