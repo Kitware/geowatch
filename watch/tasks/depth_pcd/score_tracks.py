@@ -20,9 +20,6 @@ class ScoreTracksConfig(scfg.DataConfig):
         cover will be automatically accepted.
         '''), position=1, alias=['in_file'], group='inputs')
 
-    input_region = scfg.Value(None, help='The coercable input region model', group='inputs')
-    input_sites = scfg.Value(None, help='The coercable input site models', group='inputs')
-
     model_fpath = scfg.Value(None, help='Path to the depth_pcd site validation model', group='inputs')
 
     # poly_kwcoco = scfg.Value(None, help=ub.paragraph(
@@ -31,33 +28,17 @@ class ScoreTracksConfig(scfg.DataConfig):
     #     alternative to input region / sites)
     #     '''), group='track scoring')
 
-    threshold = scfg.Value(0.4, help=ub.paragraph(
-        '''
-            threshold to filter polygons, very sensitive
-            '''), group='track scoring')
+    input_region = scfg.Value(None, help='The coercable input region model', group='inputs')
+    # input sites not needed
+    input_sites = scfg.Value(None, help='The coercable input site models', group='inputs')
 
     out_kwcoco = scfg.Value(None, help=ub.paragraph(
         '''
             The file path to write the "tracked" kwcoco file to.
             '''), group='outputs')
 
-    output_region_fpath = scfg.Value(None, help=ub.paragraph(
-        '''
-        The output for the region with filtered site summaries
-        '''), group='outputs')
 
-    output_sites_dpath = scfg.Value(None, help=ub.paragraph(
-        '''
-        The directory where site model geojson files will be written.
-        '''), alias=['out_sites_dir'], group='outputs')
-
-    output_site_manifest_fpath = scfg.Value(None, help=ub.paragraph(
-        '''
-        The file path where a manifest of all site models will be written.
-        '''), alias=['out_sites_fpath'], group='outputs')
-
-
-def score_tracks(poly_coco_dset, img_coco_dset, threshold, model_fpath):
+def score_tracks(img_coco_dset, model_fpath):
     from watch.tasks.depth_pcd.model import getModel, normalize, TPL_DPATH
 
     import numpy as np
@@ -88,7 +69,7 @@ def score_tracks(poly_coco_dset, img_coco_dset, threshold, model_fpath):
 
     if len(all_annots) == 0:
         print("Nothing to filter")
-        return poly_coco_dset
+        return img_coco_dset
 
     vidid_to_name = all_videos.lookup('name', keepid=True)
     # vidname_to_id = ub.udict(vidid_to_name).invert()
@@ -109,13 +90,19 @@ def score_tracks(poly_coco_dset, img_coco_dset, threshold, model_fpath):
     # Group by track and video name.
     trackid_to_group = dict(list(annot_df.groupby('track_id')))
 
-    track_ids_to_drop = []
-    ann_ids_to_drop = []
-
+    if 'tracks' not in img_coco_dset.dataset.keys():
+        img_coco_dset.dataset['tracks'] = []
+    tracks = img_coco_dset.dataset['tracks']
     tq = tqdm(total=len(trackid_to_group))
 
     for track_id, orig_track_group in trackid_to_group.items():
-
+        track_obj = {
+            'id': track_id,
+            'name': track_id,  # add a name for "future-proofing"
+            'score': float(1),
+            'src': 'sv_depth_pcd'
+        }
+        tracks.append(track_obj)
         # Does the track appear in more than one video?
         video_names = orig_track_group['video_name'].unique()
         if len(video_names) > 1:
@@ -138,8 +125,8 @@ def score_tracks(poly_coco_dset, img_coco_dset, threshold, model_fpath):
         image_ids = track_group["image_id"].tolist()
         first_annot_id = track_group["id"].iloc[0]
         first_image_id = image_ids[0]
-        first_coco_img = poly_coco_dset.coco_image(first_image_id)
-        first_annot = poly_coco_dset.anns[first_annot_id]
+        first_coco_img = img_coco_dset.coco_image(first_image_id)
+        first_annot = img_coco_dset.anns[first_annot_id]
         imgspace_annot_box = kwimage.Box.coerce(first_annot['bbox'], format='xywh')
         vidspace_annot_box = imgspace_annot_box.warp(first_coco_img.warp_vid_from_img)
         ref_coco_img = first_coco_img
@@ -210,7 +197,8 @@ def score_tracks(poly_coco_dset, img_coco_dset, threshold, model_fpath):
                 ims.append(np.stack([first, 0.5 * first + 0.5 * last, last], axis=-1).astype(np.float32))
 
         score = np.mean(model.predict(np.array(ims), batch_size=1, verbose=False)[8])
-        tq.set_description(f'{video_name}-{track_id} score {score:3.2f}')
+        tracks[-1]['score'] = float(score)
+        tq.set_description(f'{video_name} score {score:3.2f}')
         tq.update(1)
         if 0:
 
@@ -232,15 +220,7 @@ def score_tracks(poly_coco_dset, img_coco_dset, threshold, model_fpath):
 
         #        ks = list(coco_dset.index.videos.keys())
 
-        if score < threshold:  # or coco_dset.index.videos[ks[0]]['name'] == 'AE_R001':
-            track_ids_to_drop.append(track_id)
-            ann_ids_to_drop.extend(orig_track_group["id"].tolist())
-
-    print(f"Dropping {len(ann_ids_to_drop)} / {len(all_annots)} annotations from {len(track_ids_to_drop)} / {len(trackid_to_group)} tracks.")
-    if len(ann_ids_to_drop) > 0:
-        poly_coco_dset.remove_annotations(ann_ids_to_drop)
-
-    return poly_coco_dset, track_ids_to_drop
+    return img_coco_dset
 
 
 def main(**kwargs):
@@ -282,17 +262,6 @@ def main(**kwargs):
         bad_data = problem['data']
         walker[problem['loc']] = str(bad_data)
 
-    region_model = geomodels.RegionModel.coerce(args.input_region)
-    input_site_fpaths = util_gis.coerce_geojson_paths(args.input_sites)
-    site_to_site_fpath = ub.udict({
-        p.stem: p for p in input_site_fpaths
-    })
-    site_id_to_summary = {}
-    for summary in region_model.site_summaries():
-        assert summary.site_id not in site_id_to_summary
-        site_id_to_summary[summary.site_id] = summary
-    # output_region_fpath = ub.Path(args.output_region_fpath)
-
     proc_context = process_context.ProcessContext(
         name='watch.tasks.depth_pcd.score_tracks', type='process',
         config=jsonified_config,
@@ -317,41 +286,8 @@ def main(**kwargs):
             validate_checks=False,
             clear_existing=False,
         )
-        poly_coco_dset = img_coco_dset
 
-    coco_dset, track_ids_to_drop = score_tracks(poly_coco_dset, img_coco_dset, args.threshold, model_fpath)
-
-    # We are assuming track-ids correspond to site names here.
-    assert set(site_id_to_summary).issuperset(track_ids_to_drop)
-
-    keep_summaries = ub.udict(site_id_to_summary) - track_ids_to_drop
-    keep_site_fpaths = ub.udict(site_to_site_fpath) - track_ids_to_drop
-
-    sites_with_paths = set(keep_summaries)
-    sites_with_summary = set(keep_site_fpaths)
-    if sites_with_paths != sites_with_summary:
-        print('sites_with_paths = {}'.format(ub.urepr(sites_with_paths, nl=1)))
-        print('sites_with_summary = {}'.format(ub.urepr(sites_with_summary, nl=1)))
-        raise AssertionError(
-            f'sites with paths {len(sites_with_paths)} are not the same as '
-            f'sites with summaries {len(sites_with_summary)}')
-
-    # Copy the filtered site models over to the output directory
-    output_sites_dpath = ub.Path(args.output_sites_dpath)
-    output_sites_dpath.ensuredir()
-    out_site_fpaths = []
-    for old_fpath in keep_site_fpaths.values():
-        new_fpath = output_sites_dpath / old_fpath.name
-        old_fpath.copy(new_fpath, overwrite=True)
-        out_site_fpaths.append(new_fpath)
-
-    new_region_model = geomodels.RegionModel.from_features(
-        [region_model.header] + list(keep_summaries.values()))
-
-    output_region_fpath = ub.Path(args.output_region_fpath)
-    output_region_fpath.parent.ensuredir()
-    with safer.open(output_region_fpath, 'w', temp_file=not ub.WIN32) as file:
-        json.dump(new_region_model, file, indent=4)
+    coco_dset = score_tracks(img_coco_dset, model_fpath)
 
     proc_context.stop()
     out_kwcoco = args.out_kwcoco
@@ -364,18 +300,6 @@ def main(**kwargs):
         ub.Path(out_kwcoco).parent.ensuredir()
         print(f'write to coco_dset.fpath={coco_dset.fpath}')
         coco_dset.dump(out_kwcoco, indent=2)
-
-    if args.output_site_manifest_fpath is not None:
-        filter_output = {
-            'type': 'tracking_result',
-            'info': [],
-            'files': [],
-        }
-        filter_output['info'].append(proc_context.obj)
-        filter_output['files'] = [os.fspath(p) for p in out_site_fpaths]
-        print(f'Write filtered site result to {args.output_site_manifest_fpath}')
-        with safer.open(args.output_site_manifest_fpath, 'w', temp_file=not ub.WIN32) as file:
-            json.dump(filter_output, file, indent=4)
 
 
 r'''
