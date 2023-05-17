@@ -312,14 +312,18 @@ def run_bas_fusion_for_baseline(config):
                                               'cropped_site_models_bas')
     os.makedirs(cropped_site_models_outdir, exist_ok=True)
 
-    subprocess.run([
+    crop_cmd = [
         'python', '-m', 'watch.cli.crop_sites_to_regions',
         '--site_models', os.path.join(bas_site_models_outdir, '*.geojson'),
         '--region_models', os.path.join(region_models_outdir, '*.geojson'),
         '--new_site_dpath', cropped_site_models_outdir,
-        '--new_region_dpath', cropped_region_models_outdir,
-        '--min_area_square_meters', min_area_square_meters
-    ], check=True)
+        '--new_region_dpath', cropped_region_models_outdir]
+
+    if min_area_square_meters is not None:
+        crop_cmd.extend(['--min_area_square_meters',
+                         str(min_area_square_meters)])
+
+    subprocess.run(crop_cmd, check=True)
 
     # 6. (Optional) collate TA-2 output
     if ta2_s3_collation_bucket is not None:
