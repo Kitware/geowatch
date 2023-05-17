@@ -3045,7 +3045,7 @@ data:
     input_resolution      : 10.0GSD
     output_resolution     : 10.0GSD
     neg_to_pos_ratio       : 1.0
-    batch_size             : 4
+    batch_size             : 3
     normalize_perframe     : false
     normalize_peritem      : 'blue|green|red|nir|pan'
     max_epoch_length       : 10000
