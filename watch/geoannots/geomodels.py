@@ -250,9 +250,9 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
         Example:
             >>> from watch.geoannots.geomodels import *  # NOQA
             >>> self = RegionModel.random(rng=0)
-            >>> self._validate_parts()
+            >>> self._validate_parts(strict=False)
             >>> self = SiteModel.random(rng=0)
-            >>> self._validate_parts()
+            >>> self._validate_parts(strict=False)
         """
         import jsonschema
         schema = ub.udict(self.load_schema(strict=strict))

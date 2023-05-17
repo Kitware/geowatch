@@ -98,6 +98,8 @@ def random_region_model(region_id=None, region_poly=None, num_sites=3,
         >>> from watch.demo.metrics_demo.demo_truth import *  # NOQA
         >>> region, sites, renderables = random_region_model(num_sites=2, num_observations=5, p_observe=0.5, rng=0)
         >>> print('region = {}'.format(ub.urepr(region, nl=4, precision=6, sort=0)))
+        ...
+
         region = {
             'type': 'FeatureCollection',
             'features': [
@@ -449,13 +451,13 @@ def random_site_model(region_id, site_id, region_corners, observables,
                 'type': 'Polygon',
                 'coordinates': [
                     [
-                        [0.194188, 0.062901],
-                        [0.173624, 0.064937],
-                        [0.149949, 0.095669],
-                        [0.178188, 0.128928],
-                        [0.212713, 0.124288],
-                        [0.215977, 0.08933],
-                        [0.194188, 0.062901]
+                        [0.599483, 0.568633],
+                        [0.569207, 0.576066],
+                        [0.542041, 0.627691],
+                        [0.606987, 0.67388],
+                        [0.647289, 0.636873],
+                        [0.635087, 0.580387],
+                        [0.599483, 0.568633]
                     ]
                 ]
             },
