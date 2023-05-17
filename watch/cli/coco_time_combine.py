@@ -995,7 +995,7 @@ def filter_image_ids_by_season(coco_dset, image_ids, filtered_seasons, ignore_wi
         image_ids (List(int)): A list of image ids that belong in coco_dset.
         filtered_seasons (str | List(str) | None): Which seasons to not include in the
              returned image ids.
-        ignore_winter_torrid_zone (bool, optional): Do not filter images within the 
+        ignore_winter_torrid_zone (bool, optional): Do not filter images within the
             Torrid region when winter is one of the filtered seasons. Defaults to True.
 
     Raises:
@@ -1016,13 +1016,13 @@ def filter_image_ids_by_season(coco_dset, image_ids, filtered_seasons, ignore_wi
         >>> input_kwcoco_fpath = data_dvc_dpath / 'Drop6/imgonly-AE_C001.kwcoco.json'
         >>> coco_dset = kwcoco.CocoDataset(input_kwcoco_fpath)
         >>> image_ids = coco_dset.images().gids
-        >>> ignore_torrid_regions_gids = filter_image_ids_by_season(coco_dset, 
-        >>>                                image_ids, 
-        >>>                                filtered_seasons='winter', 
+        >>> ignore_torrid_regions_gids = filter_image_ids_by_season(coco_dset,
+        >>>                                image_ids,
+        >>>                                filtered_seasons='winter',
         >>>                                ignore_winter_torrid_zone=True)
-        >>> all_filtered_gids = filter_image_ids_by_season(coco_dset, 
-        >>>                       image_ids, 
-        >>>                       filtered_seasons='winter', 
+        >>> all_filtered_gids = filter_image_ids_by_season(coco_dset,
+        >>>                       image_ids,
+        >>>                       filtered_seasons='winter',
         >>>                       ignore_winter_torrid_zone=True)
         >>> assert len(all_filtered_gids) > len(ignore_torrid_regions_gids)
     """

@@ -45,16 +45,16 @@ python -m watch.cli.prepare_ta2_dataset \
 # ~/code/watch/dev/poc/prepare_time_combined_dataset.py
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
-python ~/code/watch/dev/poc/prepare_time_combined_dataset.py \
+python ~/code/watch/watch/cli/queue_cli/prepare_time_combined_dataset.py \
     --regions=all \
     --input_bundle_dpath="$DVC_DATA_DPATH"/Aligned-Drop7 \
-    --output_bundle_dpath="$DVC_DATA_DPATH"/Drop7-MedianSummer10GSD \
+    --output_bundle_dpath="$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD \
     --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop6_hard_v1/site_models \
     --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop6_hard_v1/region_models \
-    --spatial_tile_size=256 \
+    --spatial_tile_size=1024 \
     --merge_method=median \
-    --remove_seasons=spring,fall,winter \
-    --tmux_workers=2 \
+    --remove_seasons=winter \
+    --tmux_workers=4 \
     --time_window=1y \
     --combine_workers=4 \
     --resolution=10GSD \

@@ -69,6 +69,7 @@ import geopandas as gpd
 import geojson
 import jsonschema
 import copy
+import json
 from watch.utils import util_time
 from watch.utils import util_progress
 
@@ -93,12 +94,11 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
         return copy.deepcopy(self)
 
     def dumps(self, **kw):
-        import json
         return json.dumps(self, **kw)
 
     @classmethod
     def coerce_multiple(cls, data, allow_raw=False, workers=0, mode='thread',
-                        verbose=1, desc=None):
+                        verbose=1, desc=None, parse_float=None):
         """
         Load multiple geojson files
 
@@ -114,12 +114,12 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
         from watch.utils import util_gis
         infos = list(util_gis.coerce_geojson_datas(
             data, format='json', allow_raw=allow_raw, workers=workers,
-            mode=mode, verbose=verbose, desc=desc))
+            mode=mode, verbose=verbose, desc=desc, parse_float=parse_float))
         for info in infos:
             yield cls(**info['data'])
 
     @classmethod
-    def coerce(cls, data):
+    def coerce(cls, data, parse_float=None):
         import os
         if isinstance(data, cls):
             return data
@@ -134,7 +134,7 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
         elif isinstance(data, gpd.GeoDataFrame):
             return cls.from_dataframe(data)
         elif isinstance(data, (str, os.PathLike)):
-            got = list(cls.coerce_multiple(data))
+            got = list(cls.coerce_multiple(data, parse_float=parse_float))
             assert len(got) == 1
             return got[0]
         else:
@@ -218,8 +218,8 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
 
         feature_types = ub.dict_hist([
             f['properties']['type'] for f in self.features])
-        assert feature_types.pop(self._header_type, 0) == 1
-        assert set(feature_types).issubset({self._body_type})
+        assert feature_types.pop(self._header_type, 0) == 1, 'Missing header'
+        assert set(feature_types).issubset({self._body_type}), f'Unexpected feature types: {feature_types}'
 
         start_date = self.start_date
         end_date = self.end_date
@@ -227,41 +227,76 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
             if end_date < start_date:
                 raise AssertionError('bad date')
 
-    def _validate_schema(self, strict=True):
-        import rich
-
-        def print_validation_error_info(ex, depth=1):
-            if ex.parent is not None:
-                max_depth = print_validation_error_info(ex.parent, depth=depth + 1)
-            else:
-                max_depth = depth
-            rich.print(f'[yellow] error depth = {depth} / {max_depth}')
-            print('ex.__dict__ = {}'.format(ub.urepr(ex.__dict__, nl=3)))
-            return depth
-
+    def _validate_schema(self, strict=True, verbose=1):
         schema = self.load_schema(strict=strict)
         try:
             jsonschema.validate(self, schema)
         except jsonschema.ValidationError as e:
             ex = e
-            rich.print('[red] JSON VALIDATION ERROR')
-            print(f'self={self}')
-            print_validation_error_info(ex)
-            # ub.IndexableWalker(self)[ex.absolute_path]
-            # ub.IndexableWalker(schema)[ex.schema_path]
-            rich.print(ub.codeblock(
-                '''
-                [yellow] jsonschema validation notes:
-                    * depsite our efforts, information to debug the issue may not be shown, double check your schema and instance manually.
-                    * anyOf schemas may print the error, and not the part you intended to match.
-                    * oneOf schemas may not explicitly say that you matched both.
-                '''))
-            rich.print('[red] JSON VALIDATION ERROR')
+            if verbose:
+                print(f'self={self}')
+                _report_jsonschema_error(ex)
             raise
 
-    def validate(self, strict=True):
+    def validate(self, strict=True, verbose=1):
         self._validate_quick_checks()
-        self._validate_schema(strict=strict)
+        self._validate_schema(strict=strict, verbose=verbose)
+
+    def _validate_parts(self, strict=True):
+        """
+        Runs jsonschema validation checks on each part of the feature
+        collection independently to better localize where the errors are.
+
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> self = RegionModel.random(rng=0)
+            >>> self._validate_parts()
+            >>> self = SiteModel.random(rng=0)
+            >>> self._validate_parts()
+        """
+        import jsonschema
+        schema = ub.udict(self.load_schema(strict=strict))
+        schema - {'properties', 'required', 'title', 'type'}
+        defs = schema[chr(36) + 'defs']
+        header_schema = schema | (defs[self._header_type + '_feature'])
+        body_schema = schema | (defs[self._body_type + '_feature'])
+        try:
+            jsonschema.validate(self.header, header_schema)
+        except jsonschema.ValidationError as e:
+            _report_jsonschema_error(e)
+            raise
+        for obs_feature in self.body_features():
+            try:
+                jsonschema.validate(obs_feature, body_schema)
+            except jsonschema.ValidationError as e:
+                _report_jsonschema_error(e)
+                raise
+
+
+def _report_jsonschema_error(ex):
+    import rich
+
+    def print_validation_error_info(ex, depth=1):
+        if ex.parent is not None:
+            max_depth = print_validation_error_info(ex.parent, depth=depth + 1)
+        else:
+            max_depth = depth
+        rich.print(f'[yellow] error depth = {depth} / {max_depth}')
+        print('ex.__dict__ = {}'.format(ub.urepr(ex.__dict__, nl=3)))
+        return depth
+
+    rich.print('[red] JSON VALIDATION ERROR')
+    print_validation_error_info(ex)
+    # ub.IndexableWalker(self)[ex.absolute_path]
+    # ub.IndexableWalker(schema)[ex.schema_path]
+    rich.print(ub.codeblock(
+        '''
+        [yellow] jsonschema validation notes:
+            * depsite our efforts, information to debug the issue may not be shown, double check your schema and instance manually.
+            * anyOf schemas may print the error, and not the part you intended to match.
+            * oneOf schemas may not explicitly say that you matched both.
+        '''))
+    rich.print('[red] JSON VALIDATION ERROR')
 
 
 class RegionModel(_Model):
@@ -296,7 +331,7 @@ class RegionModel(_Model):
         yield from (SiteSummary(**f) for f in self.body_features())
 
     @classmethod
-    def coerce(cls, data):
+    def coerce(cls, data, parse_float=None):
         """
         Example:
             >>> from watch.geoannots.geomodels import *  # NOQA
@@ -308,7 +343,7 @@ class RegionModel(_Model):
             >>> region_models = list(RegionModel.coerce_multiple(fpath))
             >>> region_model = RegionModel.coerce(fpath)
         """
-        self = super().coerce(data)
+        self = super().coerce(data, parse_float=parse_float)
         assert self.header['properties']['type'] == 'region'
         return self
 
@@ -391,25 +426,6 @@ class RegionModel(_Model):
     @property
     def region_id(self):
         return self.header['properties']['region_id']
-
-    def _validate_parts(self):
-        """
-        Runs jsonschema validation checks on each part of the feature
-        collection independently to better localize where the errors are.
-
-        Example:
-            >>> from watch.geoannots.geomodels import *  # NOQA
-            >>> self = RegionModel.random(rng=0)
-        """
-        import jsonschema
-        schema = ub.udict(self.load_schema(strict=False))
-        schema - {'properties', 'required', 'title', 'type'}
-        defs = schema[chr(36) + 'defs']
-        body_schema = schema | (defs['site_summary_feature'])
-        header_schema = schema | (defs['region_feature'])
-        jsonschema.validate(self.header, header_schema)
-        for obs_feature in self.body_features():
-            jsonschema.validate(obs_feature, body_schema)
 
 
 class SiteModel(_Model):
@@ -651,21 +667,6 @@ class SiteModel(_Model):
             print('errors = {}'.format(ub.urepr(errors, nl=1)))
             raise AssertionError
 
-    def _validate_parts(self):
-        """
-        Runs jsonschema validation checks on each part of the feature
-        collection independently to better localize where the errors are.
-        """
-        import jsonschema
-        schema = ub.udict(self.load_schema(strict=False))
-        schema - {'properties', 'required', 'title', 'type'}
-        defs = schema[chr(36) + 'defs']
-        body_schema = schema | (defs['observation_feature'])
-        header_schema = schema | (defs['site_feature'])
-        jsonschema.validate(self.header, header_schema)
-        for obs_feature in self.body_features():
-            jsonschema.validate(obs_feature, body_schema)
-
 
 class _Feature(ub.NiceRepr, geojson.Feature):
     type = 'Feature'
@@ -778,7 +779,7 @@ class ModelCollection(list):
             for s in pman.progiter(self, desc='fixup'):
                 s.fixup()
 
-    def validate(self, mode='process', workers=0):
+    def validate(self, mode='process', workers=0, verbose=1):
         import rich
         # pman = util_progress.ProgressManager(backend='progiter')
         pman = util_progress.ProgressManager()
@@ -787,7 +788,7 @@ class ModelCollection(list):
             while True:
                 jobs = ub.JobPool(mode='process', max_workers=8 if tries == 0 else 0)
                 for s in pman.progiter(self, desc='submit validate models'):
-                    job = jobs.submit(s.validate)
+                    job = jobs.submit(s.validate, verbose=verbose)
                     job.s = s
                 try:
                     for job in pman.progiter(jobs.as_completed(), total=len(jobs), desc='collect validate models'):
