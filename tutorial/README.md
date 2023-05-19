@@ -1,6 +1,6 @@
 # Tutorials
 
-- Tutorial 1: RGB Network [<img src="https://img.shields.io/badge/jupyter-%23FA0F00.svg?style=for-the-badge&logo=jupyter&logoColor=white">](tutorial1_rgb_network.ipynb) [<img src="">](tutorial1_rgb_network.sh) [<img src="https://colab.research.google.com/assets/colab-badge.svg">](https://colab.research.google.com/drive/1zGgs47WglRf3lLpjS3vHUmgxIM4oziBH?usp=share_link)
+- Tutorial 1: RGB Network [<img src="https://img.shields.io/badge/jupyter-%23FA0F00.svg?style=for-the-badge&logo=jupyter&logoColor=white">](tutorial1_rgb_network.ipynb) [<img src="https://img.shields.io/badge/shell_script-%23121011.svg?style=for-the-badge&logo=gnu-bash&logoColor=white">](tutorial1_rgb_network.sh) [<img src="https://colab.research.google.com/assets/colab-badge.svg">](https://colab.research.google.com/drive/1zGgs47WglRf3lLpjS3vHUmgxIM4oziBH?usp=share_link)
 - Tutorial 2: MSI Network [<img src="https://img.shields.io/badge/shell_script-%23121011.svg?style=for-the-badge&logo=gnu-bash&logoColor=white">](tutorial2_msi_network.sh)
 - Tutorial 3: Feature Fusion [<img src="https://img.shields.io/badge/shell_script-%23121011.svg?style=for-the-badge&logo=gnu-bash&logoColor=white">](tutorial3_feature_fusion.sh)
 - Tutorial 4: Advanced Training [<img src="https://img.shields.io/badge/shell_script-%23121011.svg?style=for-the-badge&logo=gnu-bash&logoColor=white">](tutorial4_advanced_training.sh)
