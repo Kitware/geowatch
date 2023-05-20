@@ -570,8 +570,10 @@ def filter_gdf_in_utm(gdf, crop_geom_utm, utm_epsg, output_crs, main_type=None,
     # Attempt to fix any polygon that became invalid after UTM projection
     invalid_proj = ~gdf_utm.geometry.is_valid
     if invalid_proj.any():
-        # gdf_utm.geometry[invalid_proj] = gdf_utm.geometry[invalid_proj].buffer(0)
-        gdf_utm.geometry[invalid_proj] = gdf_utm.geometry[invalid_proj].make_valid()
+        gdf_utm.geometry[invalid_proj] = gdf_utm.geometry[invalid_proj].buffer(0)
+        # HACK: make_valid() here not supported until geopandas version 0.12.0 (strict has 0.10.2)
+        # TODO: Update requirements (requires environment rebuild)
+        # gdf_utm.geometry[invalid_proj] = gdf_utm.geometry[invalid_proj].make_valid()
     invalid_proj = ~gdf_utm.geometry.is_valid
     assert not invalid_proj.any()
 
