@@ -2023,64 +2023,6 @@ def _num_band_hueristic(num_bands):
     return channels
 
 
-def __WIP_add_auxiliary(coco_dset, gid, fname, channels, data, warp_aux_to_img=None):
-    """
-    Snippet for adding an auxiliary image
-
-    Args:
-        coco_dset (CocoDataset)
-        gid (int): image id to add auxiliary data to
-        channels (str): name of the new auxiliary channels
-        fname (str): path to save the new auxiliary channels (absolute or
-            relative to coco_dset.bundle_dpath)
-        data (ndarray): actual auxiliary data
-        warp_aux_to_img (kwimage.Affine): spatial relationship between
-            auxiliary channel and the base image. If unspecified
-            it is assumed that a simple scaling will suffice.
-
-    NOTE:
-        See CocoImage.add_auxiliary_item for a maintained implementation
-
-    Ignore:
-        import kwcoco
-        coco_dset = kwcoco.CocoDataset.demo('shapes8')
-        gid = 1
-        data = np.random.rand(32, 55, 5)
-        fname = 'myaux1.png'
-        channels = 'hidden_logits'
-        warp_aux_to_img = None
-        __WIP_add_auxiliary(coco_dset, gid, fname, channels, data, warp_aux_to_img)
-    """
-    from os.path import join
-    import kwimage
-    fpath = join(coco_dset.bundle_dpath, fname)
-    aux_height, aux_width = data.shape[0:2]
-    img = coco_dset.index.imgs[gid]
-
-    if warp_aux_to_img is None:
-        # Assume we can just scale up the auxiliary data to match the image
-        # space unless the user says otherwise
-        warp_aux_to_img = kwimage.Affine.scale((
-            img['width'] / aux_width, img['height'] / aux_height))
-
-    # Make the aux info dict
-    aux = {
-        'file_name': fname,
-        'height': aux_height,
-        'width': aux_width,
-        'channels': channels,
-        'warp_aux_to_img': warp_aux_to_img.concise(),
-    }
-
-    if 0:
-        # This function probably should not save the data to disk
-        kwimage.imwrite(fpath, data)
-
-    auxiliary = img.setdefault('auxiliary', [])
-    auxiliary.append(aux)
-    coco_dset._invalidate_hashid()
-
-
 @profile
 def _recompute_auxiliary_transforms(img):
     """
@@ -2736,20 +2678,20 @@ def covered_annot_geo_regions(coco_dset, merge=False):
     return cov_annot_gdf
 
 
-def flip_xy(poly):
-    """
-    TODO:
-        - [ ] This is unused in this file and thus should move to the dev
-        folder or somewhere else for to keep useful scratch work.
-    """
-    if hasattr(poly, 'reorder_axes'):
-        new_poly = poly.reorder_axes((1, 0))
-    else:
-        kw_poly = kwimage.Polygon.from_shapely(poly)
-        kw_poly.data['exterior'].data = kw_poly.data['exterior'].data[:, ::-1]
-        sh_poly_ = kw_poly.to_shapely()
-        new_poly = sh_poly_
-    return new_poly
+# def flip_xy(poly):
+#     """
+#     TODO:
+#         - [ ] This is unused in this file and thus should move to the dev
+#         folder or somewhere else for to keep useful scratch work.
+#     """
+#     if hasattr(poly, 'reorder_axes'):
+#         new_poly = poly.reorder_axes((1, 0))
+#     else:
+#         kw_poly = kwimage.Polygon.from_shapely(poly)
+#         kw_poly.data['exterior'].data = kw_poly.data['exterior'].data[:, ::-1]
+#         sh_poly_ = kw_poly.to_shapely()
+#         new_poly = sh_poly_
+#     return new_poly
 
 
 def category_category_colors(coco_dset):
@@ -2758,6 +2700,10 @@ def category_category_colors(coco_dset):
 
     TODO:
         - [ ] Add to CategoryTree
+        - [ ] Consolidate with ~/code/watch/watch/tasks/fusion/utils :: category_tree_ensure_color
+        - [ ] Consolidate with ~/code/watch/watch/utils/kwcoco_extensions :: category_category_colors
+        - [ ] Consolidate with ~/code/watch/watch/heuristics.py :: ensure_heuristic_category_tree_colors
+        - [ ] Consolidate with ~/code/watch/watch/heuristics.py :: ensure_heuristic_coco_colors
     """
     cats = coco_dset.dataset['categories']
     # backup_colors = iter(kwimage.Color.distinct(len(cats)))

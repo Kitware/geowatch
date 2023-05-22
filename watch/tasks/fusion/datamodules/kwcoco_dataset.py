@@ -2873,11 +2873,28 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             Build an intermediate summary to display in the progress bar
             """
             stat_lines = ['Current Estimated Dataset Statistics: ']
+            from watch.utils.slugify_ext import smart_truncate
             if with_intensity:
                 modality_input_stats, old_input_stats = current_input_stats()
-                input_stats2 = {sc: {k: v.ravel() for k, v in stats.items()}
-                                for sc, stats in old_input_stats.items()}
-                intensity_info_text = 'Spectra Stats: ' + ub.urepr(input_stats2, with_dtype=False, precision=4)
+                input_stats2 = {}
+                for mode, stats in old_input_stats.items():
+                    sensor, channels = mode
+                    sensorchan = kwcoco.SensorChanSpec.coerce(sensor + ':' + channels)
+                    key = sensorchan.concise().spec
+                    inner_stats = {}
+                    for statname, arr in stats.items():
+                        if statname == 'n':
+                            arr_str = ub.urepr(arr.ravel().tolist(), nl=0, precision=0)
+                        else:
+                            arr_str = ub.urepr(arr.ravel().tolist(), nl=0, precision=4)
+                        arr_str = smart_truncate(arr_str, max_length=120, trunc_loc=0.5, head='...~', tail='~...')
+                        inner_stats[statname] = arr_str
+                    if sensorchan.chans.numel() == 1:
+                        input_stats2[key] = ub.urepr(inner_stats, sv=1, nl=0)
+                    else:
+                        input_stats2[key] = ub.urepr(inner_stats, sv=1)
+                spectra_stats_text = ub.urepr(input_stats2, sv=1)
+                intensity_info_text = 'Spectra Stats: ' + spectra_stats_text
                 stat_lines.append(intensity_info_text)
             if with_class:
                 class_stats = ub.sorted_vals(ub.dzip(classes, total_freq), reverse=True)

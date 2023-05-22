@@ -753,6 +753,7 @@ def memoize_configured_property(fget):
     return property(fget_memoized)
 
 
+# Uncomment for debugging
 # memoize_configured_method = ub.identity
 # memoize_configured_property = property
 
@@ -931,7 +932,7 @@ class ProcessNode(Node):
         self._configured_cache.clear()  # Reset memoization caches
         if config is None:
             config = {}
-        config = _fixup_config(config)
+        config = _fixup_config_serializability(config)
         self.enabled = config.pop('enabled', enabled)
         self.config = ub.udict(config)
 
@@ -1409,7 +1410,7 @@ def _add_prefix(prefix, dict_):
     return {prefix + k: v for k, v in dict_.items()}
 
 
-def _fixup_config(config):
+def _fixup_config_serializability(config):
     # Do minor chanes to make the config json serializable.
     fixed_config = {}
     for k, v in config.items():

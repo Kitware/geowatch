@@ -1,11 +1,8 @@
-import collections
 import itertools
 import ubelt as ub
 import warnings
-from abc import abstractmethod
 from functools import lru_cache
 from typing import Iterable, Optional, Dict
-from dataclasses import dataclass
 
 try:
     from xdev import profile
@@ -27,15 +24,11 @@ def trackid_is_default(trackid):
         return False
 
 
-# Poly = Union[kwimage.Polygon, kwimage.MultiPolygon]
-
-
-class TrackFunction(collections.abc.Callable):
+class TrackFunction:
     '''
     Abstract class that all track functions should inherit from.
     '''
 
-    @abstractmethod
     def __call__(self, sub_dset):
         '''
         Ensure each annotation in coco_dset has a track_id.
@@ -247,19 +240,11 @@ class NoOpTrackFunction(TrackFunction):
         return sub_dset
 
 
-@dataclass
 class NewTrackFunction(TrackFunction):
     '''
     Specialization of TrackFunction to create polygons that do not yet exist
     in coco_dset, and add them as new annotations
     '''
-    viz_out_dir: Optional[ub.Path] = None
-
-    def __post_init__(self):
-        global VIZ_DPATH
-        VIZ_DPATH = self.viz_out_dir
-        # HACK
-
     def __call__(self, sub_dset):
         print('Create tracks')
         tracks = self.create_tracks(sub_dset)
@@ -269,7 +254,6 @@ class NewTrackFunction(TrackFunction):
               ub.urepr(sub_dset.basic_stats()))
         return sub_dset
 
-    @abstractmethod
     def create_tracks(self, sub_dset):
         """
         Args:
@@ -280,7 +264,6 @@ class NewTrackFunction(TrackFunction):
         """
         raise NotImplementedError('must be implemented by subclasses')
 
-    @abstractmethod
     def add_tracks_to_dset(self, sub_dset, tracks):
         """
         Args:

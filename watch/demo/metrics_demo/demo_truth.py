@@ -41,7 +41,7 @@ class SiteModelGenerator:
 def random_region_model(region_id=None, region_poly=None, num_sites=3,
                         num_observations=5, p_observe=0.5, p_transition=0.15,
                         start_time=None, end_time=None,
-                        with_renderables=True, rng=None):
+                        with_renderables=True, site_poly=None, rng=None):
     """
     Generate a random region model with random sites and observation support.
 
@@ -58,10 +58,10 @@ def random_region_model(region_id=None, region_poly=None, num_sites=3,
     change shape / size and their phase label.
 
     Args:
-        region_name (str | None): Name of the region.
+        region_id (str | None): Name of the region.
             If unspecified, a random one is created.
 
-        region_poly (kwimage.Polygon | None):
+        region_poly (kwimage.Polygon | shapely.geometry.Polygon | None):
             if specified use this crs84 region polygon, otherwise make a random
             one.
 
@@ -83,7 +83,12 @@ def random_region_model(region_id=None, region_poly=None, num_sites=3,
 
         end_time (Any): max time coercable
 
-        rng : seed or random number generator
+        site_poly (kwimage.Polygon | shapely.geometry.Polygon | None):
+            if specified, this polygon is used as the geometry for new site
+            models. Note: all site models will get this geometry, so
+            typically this is only used when num_sites=1.
+
+        rng (int | str | RandomState | None) : seed or random number generator
 
     Returns:
         Tuple[geojson.FeatureCollection, List[geojson.FeatureCollection], List | None]:
@@ -93,6 +98,8 @@ def random_region_model(region_id=None, region_poly=None, num_sites=3,
         >>> from watch.demo.metrics_demo.demo_truth import *  # NOQA
         >>> region, sites, renderables = random_region_model(num_sites=2, num_observations=5, p_observe=0.5, rng=0)
         >>> print('region = {}'.format(ub.urepr(region, nl=4, precision=6, sort=0)))
+        ...
+
         region = {
             'type': 'FeatureCollection',
             'features': [
@@ -172,6 +179,7 @@ def random_region_model(region_id=None, region_poly=None, num_sites=3,
     if region_poly is None:
         region_poly = demo_utils.random_geo_polygon(max_rt_area=10_000, rng=rng)
 
+    region_poly = kwimage.Polygon.coerce(region_poly)
     region_geom = region_poly.to_shapely()
 
     lon, lat = region_poly.centroid
@@ -225,7 +233,8 @@ def random_region_model(region_id=None, region_poly=None, num_sites=3,
         site_id = f"{region_id}_{site_num:04d}"
         sitesum, site = random_site_model(
             region_id, site_id, region_corners, observables,
-            p_observe=p_observe, p_transition=p_transition, rng=rng)
+            site_poly=site_poly, p_observe=p_observe,
+            p_transition=p_transition, rng=rng)
         site_summaries.append(sitesum)
         sites.append(site)
 
@@ -335,7 +344,8 @@ def random_observables(num_observations, start_time=None, end_time=None, rng=Non
 
 
 def random_site_model(region_id, site_id, region_corners, observables,
-                      p_observe=0.5, p_transition=0.15, rng=None):
+                      site_poly=None, p_observe=0.5, p_transition=0.15,
+                      rng=None):
     """
     Make a dummy sequence somewhere within a region's observed spacetime grid.
 
@@ -357,6 +367,9 @@ def random_site_model(region_id, site_id, region_corners, observables,
         p_transition (float):
             truth phase transition model. Currently just the probability
             the phase changes on any particular observation.
+
+        site_poly (kwimage.Polygon | shapely.geometry.Polygon | None):
+            if specified, force the site to have this geometry.
 
         rng : random state or seed
 
@@ -438,13 +451,13 @@ def random_site_model(region_id, site_id, region_corners, observables,
                 'type': 'Polygon',
                 'coordinates': [
                     [
-                        [0.194188, 0.062901],
-                        [0.173624, 0.064937],
-                        [0.149949, 0.095669],
-                        [0.178188, 0.128928],
-                        [0.212713, 0.124288],
-                        [0.215977, 0.08933],
-                        [0.194188, 0.062901]
+                        [0.599483, 0.568633],
+                        [0.569207, 0.576066],
+                        [0.542041, 0.627691],
+                        [0.606987, 0.67388],
+                        [0.647289, 0.636873],
+                        [0.635087, 0.580387],
+                        [0.599483, 0.568633]
                     ]
                 ]
             },
@@ -501,25 +514,6 @@ def random_site_model(region_id, site_id, region_corners, observables,
     """
     rng = kwarray.ensure_rng(rng)
 
-    ### Toydata generation parameters
-
-    # Factors about how the geometry evolves
-    max_scale_change = 1.05
-    scale_distri = TruncNormal(
-        1.0, 0.3, 1 / max_scale_change, max_scale_change, rng=rng
-    )
-
-    # Factors into initial size of geometry
-    max_scale_factor = 1 / 6
-    max_translate = 1 - max_scale_factor
-
-    # Generate a random site polygon in the unit 0-1 quadrent
-    # Scale it to ensure its takes at most max_scale_factor of the space
-    # And randomly translate within that space.
-    offset = rng.rand(2) * max_translate
-    site_unit_geom = kwimage.Polygon.random(rng=rng)
-    site_unit_geom = site_unit_geom.scale(max_scale_factor).translate(offset)
-
     # Take a subset of the dates we observed this annotation
     n_observables = len(observables)
     observe_flags = rng.rand(n_observables) <= p_observe
@@ -561,17 +555,43 @@ def random_site_model(region_id, site_id, region_corners, observables,
         }
     )
 
-    sampled_unit_geoms = []
-    curr_unit_geom = site_unit_geom.copy()
-    for _ in range(len(sampled_observables)):
-        # randomly evolve the geometry over time
-        scale = scale_distri.sample()
-        curr_unit_geom = curr_unit_geom.scale(scale, about='centroid')
-        sampled_unit_geoms.append(curr_unit_geom)
+    ### Toydata generation parameters
+    if site_poly is None:
+        # Factors about how the geometry evolves
+        max_scale_change = 1.05
+        scale_distri = TruncNormal(
+            1.0, 0.3, 1 / max_scale_change, max_scale_change, rng=rng
+        )
 
-    # Build transform from unit to region space
-    unit_corners = kwimage.Boxes([[0, 0, 1.0, 1.0]], "xywh").corners()
-    tf_region_from_unit = kwimage.Affine.fit(unit_corners, region_corners)
+        # Factors into initial size of geometry
+        max_scale_factor = 1 / 6
+        max_translate = 1 - max_scale_factor
+
+        # Generate a random site polygon in the unit 0-1 quadrent
+        # Scale it to ensure its takes at most max_scale_factor of the space
+        # And randomly translate within that space.
+        offset = rng.rand(2) * max_translate
+        site_unit_geom = kwimage.Polygon.random(rng=rng)
+        site_unit_geom = site_unit_geom.scale(max_scale_factor).translate(offset)
+        sampled_unit_geoms = []
+        curr_unit_geom = site_unit_geom.copy()
+        for _ in range(len(sampled_observables)):
+            # randomly evolve the geometry over time
+            scale = scale_distri.sample()
+            curr_unit_geom = curr_unit_geom.scale(scale, about='centroid')
+            sampled_unit_geoms.append(curr_unit_geom)
+        # Build transform from unit to region space
+        unit_corners = kwimage.Boxes([[0, 0, 1.0, 1.0]], "xywh").corners()
+        tf_region_from_unit = kwimage.Affine.fit(unit_corners, region_corners)
+
+        del offset, max_translate, max_scale_factor, max_scale_change
+        del unit_corners
+    else:
+        site_poly = kwimage.MultiPolygon.coerce(site_poly)
+        site_unit_geom = None
+        scale_distri = None
+        sampled_unit_geoms = [None] * len(sampled_observables)
+        tf_region_from_unit = None
 
     observations = []
     for unit_geom, observable, phase in zip(
@@ -579,7 +599,10 @@ def random_site_model(region_id, site_id, region_corners, observables,
     ):
         # Warp it into the region space
         datetime = observable["datetime"]
-        site_geom = unit_geom.warp(tf_region_from_unit)
+        if site_poly is None:
+            site_geom = unit_geom.warp(tf_region_from_unit)
+        else:
+            site_geom = site_poly
         observations.append(
             geojson.Feature(
                 geometry=site_geom.to_multi_polygon().to_geojson(),
@@ -591,9 +614,15 @@ def random_site_model(region_id, site_id, region_corners, observables,
                 },
             )
         )
-    summary_unit_geom = unary_union([g.to_shapely() for g in sampled_unit_geoms]).convex_hull
-    summary_unit_poly = kwimage.Polygon.coerce(summary_unit_geom)
-    summary_geom = summary_unit_poly.warp(tf_region_from_unit).to_shapely()
+
+    if site_poly is None:
+        summary_unit_geom = unary_union([g.to_shapely() for g in sampled_unit_geoms]).convex_hull
+        summary_unit_poly = kwimage.Polygon.coerce(summary_unit_geom)
+        summary_geom = summary_unit_poly.warp(tf_region_from_unit).to_shapely()
+    else:
+        summary_geom = unary_union(site_poly.to_shapely().geoms)
+        if summary_geom.geom_type == 'MultiPolygon':
+            summary_geom = summary_geom.convex_hull
 
     # Build site summary
     status = "positive_annotated"  # Could be more complex here

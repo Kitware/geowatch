@@ -133,13 +133,19 @@ class AggregateEvluationConfig(AggregateLoader):
 
     rois = Value('auto', help='Comma separated regions of interest')
 
+    inspect = Value(None, help='param hashid to look at')
+
+    query = Value(None, help='a pandas query to restrict the rows of the table we consider')
+
     def __post_init__(self):
         super().__post_init__()
         from watch.utils.util_yaml import Yaml
         self.plot_params = Yaml.coerce(self.plot_params)
-        if self.plot_params is True:
+        if self.query is not None:
+            self.query = ub.paragraph(self.query)
+        if isinstance(self.plot_params, int):
             self.plot_params = {
-                'enabled': True
+                'enabled': bool(self.plot_params)
             }
 
 
@@ -186,6 +192,15 @@ def main(cmdline=True, **kwargs):
     rois = config.rois
     # rois = {'KR_R001', 'KR_R002', 'BR_R002'}
 
+    if config.query:
+        print('Running query')
+        new_eval_type_to_aggregator = {}
+        for key, agg in eval_type_to_aggregator.items():
+            new_agg = agg.filterto(query=config.query)
+            new_eval_type_to_aggregator[key] = new_agg
+            rich.print(f'Query {key} filtered to {len(new_agg)}/{len(agg)} rows')
+        eval_type_to_aggregator = new_eval_type_to_aggregator
+
     for type, agg in eval_type_to_aggregator.items():
         print(f'agg={agg}')
 
@@ -222,11 +237,23 @@ def main(cmdline=True, **kwargs):
             if len(agg):
                 agg.report_resources()
 
-    if config.plot_params:
+    if config.plot_params['enabled']:
         for type, agg in eval_type_to_aggregator.items():
             if len(agg):
                 build_all_param_plots(agg, rois, config)
     # automated_analysis(eval_type_to_aggregator, config)
+
+    if config.inspect:
+        agg = eval_type_to_aggregator['bas_pxl_eval']
+        for type, agg in eval_type_to_aggregator.items():
+            if len(agg):
+                subagg = agg.filterto(param_hashids=config.inspect if ub.iterable(config.inspect) else [config.inspect])
+                if len(subagg):
+                    subagg.make_summary_analysis(config)
+                    # from watch.mlops import confusor_analysis
+                    # for region_id, group in subagg.index.groupby('region_id'):
+                    #     group_agg = subagg.filterto(index=group.index)
+                    #     # confusor_analysis.main(cmdline=0, )
 
 
 @profile
@@ -260,6 +287,8 @@ def build_all_param_plots(agg, rois, config):
             val_effective_bsize = val_bsize * val_accum
             agg.table.loc[:, prefix + '.effective_batch_size'] = val_effective_bsize
 
+    plot_config = ub.udict(config.plot_params) - {'enabled'}
+
     build_special_columns(agg)
     agg.build()
 
@@ -272,7 +301,7 @@ def build_all_param_plots(agg, rois, config):
     single_table = table = agg.table
     single_table = preprocess_table(table)
 
-    MARK_DELIVERED = 0
+    MARK_DELIVERED = plot_config.get('mark_delivered', False)
     if MARK_DELIVERED:
         SMART_HELPER.mark_delivery(single_table)
 
@@ -305,6 +334,7 @@ def build_all_param_plots(agg, rois, config):
     plotter.macro_table = macro_table
     plotter.single_table = single_table
     plotter.rois = rois
+    plotter.plot_config = plot_config
 
     vantage = plotter.vantage_points[0]
 
@@ -337,6 +367,83 @@ class ParamPlotter:
     # def plot_vantage(plotter, vantage):
     #     plotter.plot_vantage_overview(vantage)
     #     plotter.plot_vantage_params(vantage)
+
+    def _add_sv_hack_lines(plotter, ax, table, x, y):
+        import matplotlib as mpl
+
+        def add_arrows_to_lines(line_collection, position=None, direction='right', size=15, color=None):
+            """
+            add an arrow to a line.
+
+            line:       Line2D object
+            position:   x-position of the arrow. If None, mean of xdata is taken
+            direction:  'left' or 'right'
+            size:       size of the arrow in fontsize points
+            color:      if None, line color is taken.
+
+            References:
+                .. [SO34017866] https://stackoverflow.com/questions/34017866/arrow-on-a-line-plot-with-matplotlib
+            """
+            if color is None:
+                color = line_collection.get_color()
+
+            for segment in line_collection.get_segments():
+                xdata = segment[:, 0]
+                ydata = segment[:, 1]
+
+                if position is None:
+                    position = xdata.mean()
+                # find closest index
+                import numpy as np
+                start_ind = np.argmin(np.absolute(xdata - position))
+                start_ind = 0
+                if direction == 'right':
+                    end_ind = start_ind + 1
+                else:
+                    end_ind = start_ind - 1
+
+                line_collection.axes.annotate(
+                    '',
+                    xytext=(xdata[start_ind], ydata[start_ind]),
+                    xy=(xdata[end_ind], ydata[end_ind]),
+                    arrowprops=dict(arrowstyle="->", color=color),
+                    size=size, zorder=0,
+                )
+        # Hack to compare before/after SV
+        # import matplotlib as mpl
+        # ax = sns.scatterplot(data=single_table, x=x, y=y, hue='region_id', legend=False)
+        # sns.scatterplot(data=single_table, x=x_prev, y=y_prev, ax=ax, legend=False)
+        if 'sv_poly_eval' in x.split('.'):
+            print('SV HACK!!!')
+            x_prev = x.replace('sv_poly_eval', 'bas_poly_eval')
+            y_prev = y.replace('sv_poly_eval', 'bas_poly_eval')
+
+            # xy1 = table[[x_prev, y_prev]].values
+            # xy2 = table[[x, y]].values
+            # uv = xy2 - xy1
+            # ax.quiver(xy1.T[0], xy1.T[1], uv.T[0], uv.T[1])
+
+            segments = []
+            # patches = []
+            for x1, y1, x2, y2 in table[[x_prev, y_prev, x, y]].values:
+                segments.append([(x1, y1), (x2, y2)])
+                # patch = mpl.patches.FancyArrow(
+                #     x1, y1, x2 - x1, y2 - y1,
+                #     width=0.001, length_includes_head=True,
+                #     head_width=0.001,
+                #     head_length=0.001,
+                # )
+                # patches.append(patch)
+                ...
+            # collection = mpl.collections.PatchCollection(patches)
+            # ax.add_collection(collection)
+            line_collection = mpl.collections.LineCollection(segments, color='blue', alpha=0.5, linewidths=1)
+            ax.add_collection(line_collection)
+            add_arrows_to_lines(line_collection)
+            # pts1 = [s[0] for s in segments]
+            # pts2 = [s[1] for s in segments]
+            # ax.plot(*zip(*pts1), 'rx', label='before SV')
+            # ax.plot(*zip(*pts2), 'bo', label='after SV')
 
     def plot_vantage_overview(plotter, vantage):
         from watch.utils import util_kwplot
@@ -373,7 +480,11 @@ class ParamPlotter:
         )
 
         fig = kwplot.figure(fnum=2, doclf=True)
-        ax = sns.scatterplot(data=single_table, x=x, y=y, hue='region_id')
+        ax = sns.scatterplot(data=single_table, x=x, y=y, hue='region_id', legend=False)
+        if plotter.plot_config.get('compare_sv_hack', False):
+            # Hack to compare before/after SV
+            if 'sv_poly_eval' in x.split('.'):
+                plotter._add_sv_hack_lines(ax, single_table, x, y)
         if 'delivered_params' in single_table:
             val_to_color = SMART_HELPER.delivery_to_color
             if 0:
@@ -415,6 +526,10 @@ class ParamPlotter:
                 macro_region_id: kwimage.Color('kitware_darkgray').as01()
             }
             ax = sns.scatterplot(data=macro_table, x=x, y=y, hue='region_id', ax=ax, palette=palette)
+            if plotter.plot_config.get('compare_sv_hack', False):
+                # Hack to compare before/after SV
+                if 'sv_poly_eval' in x.split('.'):
+                    plotter._add_sv_hack_lines(ax, macro_table, x, y)
             if 'is_star' in macro_table:
                 scatterplot_highlight(
                     data=macro_table, x=x, y=y, highlight='is_star', ax=ax,
@@ -437,11 +552,14 @@ class ParamPlotter:
             # ax.set_xlim(1e-2, 0.7)
 
     def plot_vantage_params(plotter, vantage):
-        from watch.utils import util_kwplot
         import numpy as np
         import kwplot
-        from watch.utils.util_kwplot import scatterplot_highlight
+        import kwarray
         import pandas as pd
+        from kwcoco.metrics.drawing import concice_si_display
+        from watch.utils import util_pandas
+        from watch.utils import util_kwplot
+        from watch.utils.util_kwplot import scatterplot_highlight
 
         sns = kwplot.autosns()
         plt = kwplot.autoplt()  # NOQA
@@ -473,12 +591,11 @@ class ParamPlotter:
         from watch.mlops.smart_global_helper import SMART_HELPER
         blocklist = SMART_HELPER.VIZ_BLOCKLIST
 
-        from watch.utils import util_pandas
         resolved_params = util_pandas.DotDictDataFrame(macro_table).subframe('resolved_params', drop_prefix=False)
         valid_cols = resolved_params.columns.difference(blocklist)
         resolved_params = resolved_params[valid_cols]
 
-        DO_STAT_ANALYSIS = True
+        DO_STAT_ANALYSIS = plotter.plot_config.get('stats_ranking', False)
         if DO_STAT_ANALYSIS:
             ### Build param analysis
             from watch.utils import result_analysis
@@ -505,7 +622,24 @@ class ParamPlotter:
         if len(ranked_params):
             print('Warning: no ranked params')
 
-        from kwcoco.metrics.drawing import concice_si_display
+        def shrink_param_names(param_histogram):
+            text_len_thresh = 20
+            param_labels = [str(p) for p in param_histogram]
+            text_label_size = len(''.join(param_labels))
+            if text_label_size > text_len_thresh:
+                had_value_remap = True
+                # Param names are too long. need to map parameter names to codes.
+                param_valname_map = {}
+                prefixchar = param_name.split('.')[-1][0].upper()
+                for idx, value in enumerate(sorted(param_histogram.keys())):
+                    old_name = str(value)
+                    new_name = f'{prefixchar}{idx:02d}'
+                    param_valname_map[old_name] = new_name
+            else:
+                had_value_remap = False
+                param_valname_map = ub.dzip(param_labels, param_labels)
+            return param_valname_map, had_value_remap
+
         for rank, param_name in enumerate(ub.ProgIter(ranked_params, desc='plot param for ' + vantage['name'], verbose=3)):
 
             stats = param_name_to_stats.get(param_name, {})
@@ -529,38 +663,28 @@ class ParamPlotter:
 
             sub_macro_table = macro_table
 
-            # TODO: parameterize
-            MIN_VARIATIONS = 1
-            # min_variations = config.plot_params.get('min_variations', 1)
-            if MIN_VARIATIONS > 1:
-                ignore_params = [k for k, v in param_histogram.items() if v < MIN_VARIATIONS]
+            min_variations = plotter.plot_config.get('min_variations', 1)
+            if min_variations > 1:
+                ignore_params = [k for k, v in param_histogram.items() if v < min_variations]
                 param_histogram = ub.udict(param_histogram) - set(ignore_params)
-                import kwarray
                 row_is_ignored = kwarray.isect_flags(macro_table[param_name], ignore_params)
                 sub_macro_table = macro_table[~row_is_ignored]
-
                 if len(param_histogram) == 1:
                     print('Skip plot')
                     continue
                 ...
 
+            header_lines = [
+                f'BAS Results (n={len(sub_macro_table)})',
+                f'Macro Analysis over {ub.urepr(rois, sv=1, nl=0)}',
+            ]
+            if anova_rank_p is not None:
+                header_lines.append(f'Effect of {param_name}: anova_rank_p={concice_si_display(anova_rank_p)}')
+            header_text = '\n'.join(header_lines)
+
             param_dpath = (param_group_dpath / param_name).ensuredir().resolve()
 
-            text_len_thresh = 20
-            param_labels = [str(p) for p in param_histogram]
-            text_label_size = len(''.join(param_labels))
-            if text_label_size > text_len_thresh:
-                had_value_remap = True
-                # Param names are too long. need to map parameter names to codes.
-                param_valname_map = {}
-                prefixchar = param_name.split('.')[-1][0].upper()
-                for idx, value in enumerate(sorted(param_histogram.keys())):
-                    old_name = str(value)
-                    new_name = f'{prefixchar}{idx:02d}'
-                    param_valname_map[old_name] = new_name
-            else:
-                had_value_remap = False
-                param_valname_map = ub.dzip(param_labels, param_labels)
+            param_valname_map, had_value_remap = shrink_param_names(param_histogram)
 
             # Mapper for the scatterplot legend
             if had_value_remap:
@@ -587,18 +711,19 @@ class ParamPlotter:
             # SCATTER
             fig = kwplot.figure(fnum=4, doclf=True)
             ax = sns.scatterplot(data=sub_macro_table, x=x, y=y, hue=param_name, legend=True, **snskw)
-            if anova_rank_p is not None:
-                ax.set_title(f'BAS Results (n={len(sub_macro_table)})\n'
-                             f'Macro Analysis over {ub.urepr(rois, sv=1, nl=0)}\n'
-                             f'Effect of {param_name}: anova_rank_p={concice_si_display(anova_rank_p)}')
-            else:
-                ax.set_title(f'BAS Results (n={len(sub_macro_table)})\n'
-                             f'Macro Analysis over {ub.urepr(rois, sv=1, nl=0)}')
+            ax.set_title(header_text)
             if 'is_star' in sub_macro_table:
                 scatterplot_highlight(data=sub_macro_table, x=x, y=y, highlight='is_star', ax=ax, size=300)
+
+            if plotter.plot_config.get('compare_sv_hack', False):
+                # Hack to compare before/after SV
+                if 'sv_poly_eval' in x.split('.'):
+                    plotter._add_sv_hack_lines(ax, sub_macro_table, x, y)
+
             ax.set_xscale(xscale)
             ax.set_yscale(yscale)
             modifier.relabel(ax, ticks=False)
+
             vantage_fpath = vantage_dpath / f'{fname_prefix}_PLT01_scatter_legend.png'
             param_fpath = param_dpath / f'{param_metric2_prefix}_PLT01_scatter_legend.png'
             finalize_figure.finalize(fig, vantage_fpath)
@@ -631,9 +756,7 @@ class ParamPlotter:
                 fig = kwplot.figure(fnum=5, doclf=True)
                 ax = sns.boxplot(data=sub_macro_table, x=param_name, y=y, **snskw)
                 freq_mapper_box.relabel_xticks(ax)
-                if anova_rank_p is not None:
-                    ax.set_title(f'BAS Results (n={len(sub_macro_table)})\n'
-                                 f'Macro Analysis over {ub.urepr(rois, sv=1, nl=0)}')
+                ax.set_title(header_text)
                 modifier.relabel(ax, ticks=False)
                 modifier.relabel_xticks(ax)
                 finalize_figure.finalize(fig, param_fpath)
@@ -693,60 +816,6 @@ def automated_analysis(eval_type_to_aggregator, config):
     if agg0 is not None:
         ...
         # agg0.analyze()
-
-
-def make_summary_analysis(agg1, config, dpath=None):
-    from watch.utils import util_pandas
-    if dpath is None:
-        output_dpath = ub.Path(config['root_dpath'] / 'aggregate')
-    else:
-        output_dpath = dpath
-    agg_group_dpath = output_dpath / ('agg_summary_params2_v3')
-    agg_group_dpath = agg_group_dpath.ensuredir()
-
-    # Given these set of A/B values, visualize each region
-    for region_id, group in agg1.index.groupby('region_id'):
-        group_agg = agg1.filterto(index=group.index)
-        for id, row in group_agg.index.iterrows():
-            eval_fpath = group_agg.fpaths[id]
-            param_hashid = row['param_hashid']
-            region_id = row['region_id']
-            dname = f'{region_id}_{param_hashid}'
-            link_dpath = agg_group_dpath / dname
-            real_dpath = eval_fpath.parent
-            ub.symlink(real_path=real_dpath, link_path=link_dpath)
-            import kwimage
-            from kwcoco.metrics.drawing import concice_si_display
-            region_viz_fpaths = list((eval_fpath.parent / 'region_viz_overall').glob('*_detailed.png'))
-            assert len(region_viz_fpaths) == 1
-            region_viz_fpath = region_viz_fpaths[0]
-            viz_img = kwimage.imread(region_viz_fpath)
-            scores_of_interest = util_pandas.pandas_shorten_columns(agg1.metrics).loc[id, ['bas_tp', 'bas_fp', 'bas_fn', 'bas_f1']]
-            scores_of_interest = ub.udict(scores_of_interest.to_dict())
-            text = ub.urepr(scores_of_interest.map_values(concice_si_display), nobr=1, si=1, compact=1)
-            new_img = kwimage.draw_header_text(viz_img, param_hashid + '\n' + text)
-            kwimage.imwrite(agg_group_dpath / f'summary_{region_id}_{param_hashid}.jpg', new_img)
-
-    for region_id, group in list(agg1.index.groupby('region_id')):
-        group_agg = agg1.filterto(index=group.index)
-        for id, row in list(group_agg.index.iterrows()):
-            param_hashid = row['param_hashid']
-            region_id = row['region_id']
-            eval_fpath = group_agg.fpaths[id]
-            confusion_fpaths = list((eval_fpath.parent / 'bas_summary_viz').glob('confusion_*.jpg'))
-            if len(confusion_fpaths) == 0:
-                from watch.mlops import confusion_visualization
-                confusion_visualization.bas_poly_eval_confusion_analysis(eval_fpath)
-            confusion_fpaths = list((eval_fpath.parent / 'bas_summary_viz').glob('confusion_*.jpg'))
-            assert len(confusion_fpaths) == 1
-            confusion_fpath = confusion_fpaths[0]
-            im = kwimage.imread(confusion_fpath)
-            scores_of_interest = util_pandas.pandas_shorten_columns(agg1.metrics).loc[id, ['bas_tp', 'bas_fp', 'bas_fn', 'bas_f1']]
-            scores_of_interest = ub.udict(scores_of_interest.to_dict())
-            text = ub.urepr(scores_of_interest.map_values(concice_si_display), nobr=1, si=1, compact=1)
-            model_name = group_agg.effective_params[group_agg.model_cols[0]].loc[id]
-            im = kwimage.draw_header_text(im, param_hashid + ' - ' + model_name + '\n' + text)
-            kwimage.imwrite(agg_group_dpath / f'confusion_{region_id}_{param_hashid}.jpg', im)
 
 
 def fix_duplicate_param_hashids(agg0):
@@ -1294,7 +1363,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             key = macro_keys[-1]
         return key
 
-    def filterto(agg, models=None, param_hashids=None, index=None):
+    def filterto(agg, models=None, param_hashids=None, index=None, query=None):
         import numpy as np
         import kwarray
         final_flags = 1
@@ -1314,10 +1383,26 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             flags = kwarray.isect_flags(agg.index.index, index)
             final_flags = np.logical_and(final_flags, flags)
 
+        if query is not None:
+            import pandas as pd
+            if isinstance(final_flags, int):
+                table_so_far = agg.table
+            else:
+                table_so_far = agg.table[final_flags]
+            if len(table_so_far) > 0:
+                try:
+                    new_table = table_so_far.query(query)
+                except pd.errors.UndefinedVariableError as ex:
+                    print(f'warning: ex={ex}')
+                else:
+                    flags = kwarray.isect_flags(agg.index.index, new_table.index)
+                    final_flags = np.logical_and(final_flags, flags)
+
         if isinstance(final_flags, int):
             new_agg = agg
         else:
             new_agg = agg.compress(final_flags)
+
         return new_agg
 
     def compress(agg, flags):
@@ -1536,6 +1621,86 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             agg.region_to_tables[macro_key] = macro_table
             return macro_table
 
+    def make_summary_analysis(subagg, config):
+        output_dpath = ub.Path(config['output_dpath']) / 'aggregate'
+        agg_group_dpath = output_dpath / ('agg_summary_params2_v3')
+        agg_group_dpath = agg_group_dpath.ensuredir()
+
+        import rich
+        rich.print(f'agg_group_dpath: [link={agg_group_dpath}]{agg_group_dpath}[/link]')
+
+        # Given these set of A/B values, visualize each region
+        for region_id, group in ub.ProgIter(list(subagg.index.groupby('region_id')), desc='Inspect Region'):
+            group_agg = subagg.filterto(index=group.index)
+            for id, row in group_agg.index.iterrows():
+                ...
+                inspect_node(subagg, id, row, group_agg, agg_group_dpath)
+
+        rich.print(f'agg_group_dpath: [link={agg_group_dpath}]{agg_group_dpath}[/link]')
+
+
+def inspect_node(subagg, id, row, group_agg, agg_group_dpath):
+    from watch.utils import util_pandas
+    # eval_fpath = group_agg.fpaths[id]
+    eval_fpath = ub.Path(group_agg.table['fpath'].loc[id])
+    param_hashid = row['param_hashid']
+    region_id = row['region_id']
+    dname = f'{region_id}_{param_hashid}'
+    link_dpath = agg_group_dpath / dname
+    real_dpath = eval_fpath.parent
+    node_dpath = real_dpath
+    ub.symlink(real_path=node_dpath, link_path=link_dpath)
+    import kwimage
+    from kwcoco.metrics.drawing import concice_si_display
+    if 'poly_eval' in row['node']:
+        region_viz_fpaths = list((node_dpath / 'region_viz_overall').glob('*_detailed.png'))
+        assert len(region_viz_fpaths) == 1
+        region_viz_fpath = region_viz_fpaths[0]
+        viz_img = kwimage.imread(region_viz_fpath)
+        scores_of_interest = util_pandas.pandas_shorten_columns(subagg.metrics).loc[id, ['bas_tp', 'bas_fp', 'bas_fn', 'bas_f1']]
+        scores_of_interest = ub.udict(scores_of_interest.to_dict())
+        text = ub.urepr(scores_of_interest.map_values(concice_si_display), nobr=1, si=1, compact=1)
+        new_img = kwimage.draw_header_text(viz_img, param_hashid + '\n' + text)
+        kwimage.imwrite(agg_group_dpath / f'summary_{region_id}_{param_hashid}.jpg', new_img)
+
+        # FIXME
+        import watch
+        data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        # expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+        true_region_dpath = data_dvc_dpath / 'annotations/drop6/region_models'
+        true_site_dpath = data_dvc_dpath / 'annotations/drop6/site_models'
+
+        confusion_fpaths = list((eval_fpath.parent / 'bas_summary_viz').glob('confusion_*.jpg'))
+        if len(confusion_fpaths) == 0:
+            from watch.mlops import confusor_analysis
+            src_kwcoco = list((node_dpath / '.pred/bas_poly/').glob('*/poly.kwcoco.zip'))[0]
+            pred_sites_dpath = list((node_dpath / '.pred/bas_poly/').glob('*/sites'))[0]
+            confusor_config = confusor_analysis.ConfusorAnalysisConfig(
+                bas_metric_dpath=(node_dpath / region_id / 'overall' / 'bas'),
+                src_kwcoco=src_kwcoco,
+                pred_sites=pred_sites_dpath,
+                region_id=region_id,
+                out_dpath=agg_group_dpath,
+                true_site_dpath=true_site_dpath,
+                true_region_dpath=true_region_dpath,
+            )
+            # rich.print(ub.urepr(confusor_config))
+            # cmdline = 0
+            # kwargs = confusor_config
+            confusor_analysis.main(cmdline=0, **confusor_config)
+
+        confusion_fpaths = list((eval_fpath.parent / 'bas_summary_viz').glob('confusion_*.jpg'))
+        if len(confusion_fpaths):
+            assert len(confusion_fpaths) == 1
+            confusion_fpath = confusion_fpaths[0]
+            im = kwimage.imread(confusion_fpath)
+            scores_of_interest = util_pandas.pandas_shorten_columns(subagg.metrics).loc[id, ['bas_tp', 'bas_fp', 'bas_fn', 'bas_f1']]
+            scores_of_interest = ub.udict(scores_of_interest.to_dict())
+            text = ub.urepr(scores_of_interest.map_values(concice_si_display), nobr=1, si=1, compact=1)
+            model_name = group_agg.effective_params[group_agg.model_cols[0]].loc[id]
+            im = kwimage.draw_header_text(im, param_hashid + ' - ' + model_name + '\n' + text)
+            kwimage.imwrite(agg_group_dpath / f'confusion_{region_id}_{param_hashid}.jpg', im)
+
 
 @profile
 def aggregate_param_cols(df, aggregator=None, hash_cols=None, allow_nonuniform=False):
@@ -1550,6 +1715,7 @@ def aggregate_param_cols(df, aggregator=None, hash_cols=None, allow_nonuniform=F
 
     TODO:
         - [ ] optimize this
+        - [ ] Rectify with ~/code/watch/watch/utils/util_pandas.py :: aggregate_columns
     """
     import pandas as pd
     import numpy as np

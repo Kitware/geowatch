@@ -649,7 +649,7 @@ def check_latlons(lat, lon):
 
 
 def coerce_geojson_datas(arg, format='dataframe', allow_raw=False, workers=0,
-                         mode='thread', verbose=1, desc=None):
+                         mode='thread', verbose=1, desc=None, parse_float=None):
     """
     Attempts to resolve an argument into multiple geojson datas.
 
@@ -855,7 +855,8 @@ def coerce_geojson_datas(arg, format='dataframe', allow_raw=False, workers=0,
     geojson_fpaths = list(ub.unique(geojson_fpaths))
     data_gen = load_geojson_datas(
         geojson_fpaths, workers=workers, mode=mode, desc=desc,
-        format=format, verbose=verbose, yield_after_submit=True)
+        format=format, verbose=verbose, yield_after_submit=True,
+        parse_float=parse_float)
 
     # Start the background workers
     next(data_gen)
@@ -990,14 +991,15 @@ def _coerce_raw_geojson(item, format):
     return was_raw, item
 
 
-def _load_json_from_path(path):
+def _load_json_from_path(path, parse_float=None):
     with open(path, 'r') as file:
-        return json.load(file)
+        return json.load(file, parse_float=parse_float)
 
 
 def load_geojson_datas(geojson_fpaths, format='dataframe', workers=0,
                        mode='thread', verbose=1, desc=None,
-                       yield_after_submit=False):
+                       yield_after_submit=False,
+                       parse_float=None):
     """
     Generator that loads sites (and the path they loaded from) in parallel
 
@@ -1054,10 +1056,12 @@ def load_geojson_datas(geojson_fpaths, format='dataframe', workers=0,
         'verbose': (workers > 0) and verbose
     }
 
+    kwargs = {}
     if format == 'dataframe':
         loader = util_gis.load_geojson
     elif format == 'json':
         loader = _load_json_from_path
+        kwargs['parse_float'] = parse_float
     else:
         raise KeyError(format)
 
@@ -1065,7 +1069,7 @@ def load_geojson_datas(geojson_fpaths, format='dataframe', workers=0,
     with pman:
 
         for fpath in pman.progiter(geojson_fpaths, **submit_progkw):
-            job = jobs.submit(loader, fpath)
+            job = jobs.submit(loader, fpath, **kwargs)
             job.fpath = fpath
 
         if yield_after_submit:

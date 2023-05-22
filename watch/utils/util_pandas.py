@@ -1,7 +1,9 @@
 import ubelt as ub
 import os
+import math
 import pandas as pd
 import pygtrie
+import kwarray
 from watch.utils import slugify_ext
 from watch.utils.util_stringalgo import shortest_unique_suffixes
 
@@ -294,3 +296,274 @@ def pandas_add_prefix(data, prefix):
     return data.add_prefix(prefix)
     # mapper = {c: prefix + c for c in data.columns}
     # return data.rename(mapper, axis=1)
+
+
+def aggregate_columns(df, aggregator=None, fallback='const',
+                      nonconst_policy='error'):
+    """
+    Aggregates parameter columns based on per-column strategies / functions
+    specified in ``aggregator``.
+
+    Args:
+        hash_cols (None | List[str]):
+            columns whos values should be hashed together.
+
+        aggregator (Dict[str, str | callable]):
+            a dictionary mapping column names to a callable function that
+            should be used to aggregate them. There a special string codes that
+            we accept as well.
+            Special functions are: hist, hash, min-max, const,
+
+        fallback (str | callable):
+            Aggregator function for any column without an explicit aggregator.
+            Defaults to "const", which passes one value from the columns
+            through if they are constant. If they are not constant, the
+            nonconst-policy is triggered.
+
+        nonconst_policy (str):
+            Behavior when the aggregator is "const", but the input is
+            non-constant. The policies are:
+                * 'error' - error if unhandled non-uniform columns exist
+                * 'drop' - remove unhandled non-uniform columns
+
+    Returns:
+        pd.Series
+
+    TODO:
+        - [ ] optimize this
+
+    CommandLine:
+        xdoctest -m watch.utils.util_pandas aggregate_columns
+
+    Example:
+        >>> from watch.utils.util_pandas import *  # NOQA
+        >>> import numpy as np
+        >>> num_rows = 10
+        >>> columns = {
+        >>>     'nums1': np.random.rand(num_rows),
+        >>>     'nums2': np.random.rand(num_rows),
+        >>>     'nums3': (np.random.rand(num_rows) * 10).astype(int),
+        >>>     'nums4': (np.random.rand(num_rows) * 10).astype(int),
+        >>>     'cats1': np.random.randint(0, 3, num_rows),
+        >>>     'cats2': np.random.randint(0, 3, num_rows),
+        >>>     'cats3': np.random.randint(0, 3, num_rows),
+        >>>     'const1': ['a'] * num_rows,
+        >>>     'strs1': [np.random.choice(list('abc')) for _ in range(num_rows)],
+        >>> }
+        >>> df = pd.DataFrame(columns)
+        >>> aggregator = ub.udict({
+        >>>     'nums1': 'mean',
+        >>>     'nums2': 'max',
+        >>>     'nums3': 'min-max',
+        >>>     'nums4': 'stats',
+        >>>     'cats1': 'histogram',
+        >>>     'cats3': 'first',
+        >>>     'cats2': 'hash12',
+        >>>     'strs1': 'hash12',
+        >>> })
+        >>> #
+        >>> # Test that the const fallback works
+        >>> row = aggregate_columns(df, aggregator, fallback='const')
+        >>> print('row = {}'.format(ub.urepr(row.to_dict(), nl=1)))
+        >>> assert row['const1'] == 'a'
+        >>> row = aggregate_columns(df.iloc[0:1], aggregator, fallback='const')
+        >>> assert row['const1'] == 'a'
+        >>> #
+        >>> # Test that the drop fallback workds
+        >>> row = aggregate_columns(df, aggregator, fallback='drop')
+        >>> print('row = {}'.format(ub.urepr(row.to_dict(), nl=1)))
+        >>> assert 'const1' not in row
+        >>> row = aggregate_columns(df.iloc[0:1], aggregator, fallback='drop')
+        >>> assert 'const1' not in row
+        >>> #
+        >>> # Test that non-constant policy triggers
+        >>> aggregator_ = aggregator - {'cats3'}
+        >>> import pytest
+        >>> with pytest.raises(NonConstantError):
+        >>>     row = aggregate_columns(df, aggregator_, nonconst_policy='error')
+        >>> row = aggregate_columns(df, aggregator_, nonconst_policy='drop')
+        >>> assert 'cats3' not in row
+        >>> row = aggregate_columns(df, aggregator_, nonconst_policy='hash')
+        >>> assert 'cats3' in row
+        >>> #
+        >>> # Test an empty dataframe returns an empty series
+        >>> row = aggregate_columns(df.iloc[0:0], aggregator)
+        >>> assert len(row) == 0
+        >>> #
+        >>> # Test single column cases work fine.
+        >>> for col in df.columns:
+        ...     subdf = df[[col]]
+        ...     subagg = aggregate_columns(subdf, aggregator, fallback='const')
+        ...     assert len(subagg) == 1
+        >>> #
+        >>> # Test single column drop case works
+        >>> subagg = aggregate_columns(df[['cats3']], aggregator_, fallback='const', nonconst_policy='drop')
+        >>> assert len(subagg) == 0
+        >>> subagg = aggregate_columns(df[['cats3']], aggregator_, fallback='drop')
+        >>> assert len(subagg) == 0
+
+    Example:
+        >>> from watch.utils.util_pandas import *  # NOQA
+        >>> import numpy as np
+        >>> num_rows = 10
+        >>> columns = {
+        >>>     'dates': ['2101-01-01', '1970-01-01', '2000-01-01'],
+        >>>     'lists': [['a'], ['a', 'b'], []],
+        >>>     'nums':  [1, 2, 3],
+        >>> }
+        >>> df = pd.DataFrame(columns)
+        >>> aggregator = ub.udict({
+        >>>     'dates': 'min-max',
+        >>>     'lists': 'hash',
+        >>>     'nums':  'mean',
+        >>> })
+        >>> row = aggregate_columns(df, aggregator)
+        >>> print('row = {}'.format(ub.urepr(row.to_dict(), nl=1)))
+
+    Example:
+        >>> from watch.utils.util_pandas import *  # NOQA
+        >>> import numpy as np
+        >>> num_rows = 10
+        >>> columns = {
+        >>>     'items': [['a'], ['bcd', 'ef'], [], ['3', '234', '2343']],
+        >>> }
+        >>> df = pd.DataFrame(columns)
+        >>> row = aggregate_columns(df, 'last', fallback='const')
+        >>> columns = {
+        >>>     'items': ['a', 'c', 'c', 'd'],
+        >>>     'items2': [['a'], ['bcd', 'ef'], [], ['3', '234', '2343']],
+        >>> }
+        >>> df = pd.DataFrame(columns)
+        >>> row = aggregate_columns(df, 'unique')
+    """
+    import pandas as pd
+    # import numpy as np
+    if len(df) == 0:
+        return pd.Series(dtype=object)
+
+    if aggregator is None:
+        aggregator = {}
+    if isinstance(aggregator, str):
+        # If given as a string apply the aggreagatr to all columns
+        aggregator = {c: aggregator for c in df.columns}
+
+    aggregator = ub.udict(aggregator)
+
+    # Handle columns that can be aggregated
+    aggregated = []
+    handled_keys = df.columns.intersection(aggregator.keys())
+    unhandled_keys = df.columns.difference(handled_keys)
+
+    if len(df) == 1 and fallback == 'const':
+        agg_row = df.iloc[0]
+        return agg_row
+    elif len(df) == 1 and fallback == 'drop':
+        agg_row = df.iloc[0][handled_keys]
+        return agg_row
+    else:
+        aggregator = aggregator & handled_keys
+        op_to_cols = ub.group_items(aggregator.keys(), aggregator.values())
+        if len(unhandled_keys):
+            op_to_cols[fallback] = unhandled_keys
+
+        # Handle all columns with the same aggregator in a single call.
+        for agg_op, cols in op_to_cols.items():
+            toagg = df[cols]
+            # toagg = toagg.select_dtypes(include=np.number)
+            if isinstance(agg_op, str):
+                agg_op_norm = SpecialAggregators.normalize_special_key(agg_op)
+                if agg_op_norm == 'drop':
+                    continue
+                elif agg_op_norm == 'const':
+                    # Special case where we will skip aggregation
+                    part = _handle_const(toagg, nonconst_policy)
+                    aggregated.append(part)
+                    continue
+                else:
+                    agg_op = SpecialAggregators.special_lut.get(agg_op_norm, agg_op)
+
+            # Using apply instead of pandas aggregate because we are allowed to
+            # return a list result and have that be a single cell.
+            part = toagg.apply(agg_op, result_type='reduce')
+            # old: part = toagg.aggregate(agg_op)
+
+            aggregated.append(part)
+        if len(aggregated):
+            agg_parts = pd.concat(aggregated)
+            agg_row = agg_parts
+        else:
+            agg_row = pd.Series(dtype=object)
+    return agg_row
+
+
+def _handle_const(toagg, nonconst_policy):
+    # Check which of the columns are actually constant
+    is_const_cols = {
+        k: ub.allsame(vs, eq=nan_eq)
+        for k, vs in toagg.T.iterrows()}
+    nonconst_cols = [k for k, v in is_const_cols.items() if not v]
+    if nonconst_cols:
+        if nonconst_policy == 'drop':
+            toagg = toagg.iloc[0:1].drop(nonconst_cols, axis=1)
+        elif nonconst_policy == 'error':
+            raise NonConstantError(f'Values are non-constant in columns: {nonconst_cols}')
+        elif nonconst_policy == 'hash':
+            nonconst_data = toagg[nonconst_cols]
+            const_part = toagg.iloc[0:1].drop(nonconst_cols, axis=1).iloc[0]
+            nonconst_part = nonconst_data.apply(SpecialAggregators.hash, result_type='reduce')
+            part = pd.concat([const_part, nonconst_part])
+            return part
+        else:
+            raise KeyError(nonconst_policy)
+    part = toagg.iloc[0]
+    return part
+
+
+class SpecialAggregators:
+
+    def hash(x):
+        return ub.hash_data(x.values.tolist())
+
+    def hash12(x):
+        return ub.hash_data(x.values.tolist())[0:12]
+
+    def unique(x):
+        try:
+            return list(ub.unique(x))
+        except Exception:
+            return list(ub.unique(x, key=ub.hash_data))
+
+    def min_max(x):
+        return (x.min(), x.max())
+        # ret = {
+        #     'min': x.min(),
+        #     'max': x.max(),
+        # }
+        # return ret
+
+    @staticmethod
+    def normalize_special_key(k):
+        return k.replace('-', '_')
+
+    special_lut = {
+        'hash': hash,
+        'hash12': hash12,
+        'min_max': min_max,
+        'stats': kwarray.stats_dict,
+        'hist': ub.dict_hist,
+        'unique': unique,
+        'histogram': ub.dict_hist,
+        'first': lambda x: x.iloc[0],
+        'last': lambda x: x.iloc[-1],
+    }
+
+
+class NonConstantError(ValueError):
+    ...
+
+
+def nan_eq(a, b):
+    if isinstance(a, float) and isinstance(b, float) and math.isnan(a) and math.isnan(b):
+        return True
+    else:
+        return a == b

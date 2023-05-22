@@ -36,7 +36,7 @@ def main(cmdline=False, **kwargs):
         main(cmdline=False, **kwargs)
 
     """
-    config = TorchModelStatsConfig.cli(cmdline=cmdline, data=kwargs)
+    config = TorchModelStatsConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
     import watch
     import rich
     rich.print('config = {}'.format(ub.urepr(config, nl=1)))
@@ -46,7 +46,7 @@ def main(cmdline=False, **kwargs):
         package_paths = [package_paths]
 
     try:
-        dvc_dpath = watch.find_smart_dvc_dpath()
+        dvc_dpath = watch.find_dvc_dpath()
     except Exception:
         dvc_dpath = None
 

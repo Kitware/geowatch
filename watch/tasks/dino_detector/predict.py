@@ -205,7 +205,7 @@ def main(cmdline=1, **kwargs):
         s == 'WV' for s in images.lookup('sensor_coarse')])
     out_dset = out_dset.subset(wv_images)
 
-    pred_dpath = ub.Path(out_dset.fpath).parent
+    pred_dpath = ub.Path(out_dset.fpath).parent.absolute()
     rich.print(f'Pred Dpath: [link={pred_dpath}]{pred_dpath}[/link]')
     out_dset.fpath = out_fpath
     out_dset.dump(out_dset.fpath, indent='    ')

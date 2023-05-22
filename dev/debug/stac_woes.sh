@@ -22,7 +22,7 @@ python -m watch.cli.baseline_framework_ingress \
         "/media/joncrall/raid/home/joncrall/data/dvc-repos/smart_watch_dvc/Uncropped-Drop4-2022-07-18-c10-L2-S2-L8/_query/items/US_C011.input"
 
 
-AWS_DEFAULT_PROFILE=iarpa AWS_REQUEST_PAYER='requester' python -m watch.cli.ta1_stac_to_kwcoco \
+AWS_DEFAULT_PROFILE=iarpa AWS_REQUEST_PAYER='requester' python -m watch.cli.stac_to_kwcoco \
         "/media/joncrall/raid/home/joncrall/data/dvc-repos/smart_watch_dvc/Uncropped-Drop4-2022-07-18-c10-L2-S2-L8/ingress/catalog_US_C011.json" \
         --outpath="/media/joncrall/raid/home/joncrall/data/dvc-repos/smart_watch_dvc/Uncropped-Drop4-2022-07-18-c10-L2-S2-L8/data_US_C011.kwcoco.json" \
         --ignore_duplicates \
@@ -282,7 +282,7 @@ python -m watch.cli.baseline_framework_ingress \
     --catalog_fpath "./catalog_mwe.json" \
     "mwe.input"
 
-AWS_DEFAULT_PROFILE=iarpa python -m watch.cli.ta1_stac_to_kwcoco \
+AWS_DEFAULT_PROFILE=iarpa python -m watch.cli.stac_to_kwcoco \
     "./catalog_mwe.json" \
     --outpath="./mwe.kwcoco.json" \
     --from-collated --ignore_duplicates \

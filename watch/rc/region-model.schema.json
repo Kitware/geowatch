@@ -67,7 +67,7 @@
       "type": "object",
       "properties": {
         "type": {"const": "region"},
-        "region_id": {"type": "string", "pattern": "^[A-Z]{2}_([RS]\\d{3}|C[0-7]\\d{2})$"},
+        "region_id": {"type": "string", "pattern": "^[A-Z]{2}_([RST]\\d{3}|C[0-7]\\d{2})$"},
         "version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
         "mgrs": {"$ref":"#/$defs/mgrsstring"},
         "model_content": {"enum": ["empty", "annotation", "proposed"]},
@@ -89,7 +89,7 @@
       "type": "object",
       "properties": {
         "type": {"const": "site_summary"},
-        "site_id": {"type": "string", "pattern": "^[A-Z]{2}_([RS]\\d{3}|C[0-7]\\d{2})_\\d{4}$"},
+        "site_id": {"type": "string", "pattern": "^[A-Z]{2}_([RST]\\d{3}|C[0-7]\\d{2})_\\d{4}$"},
         "version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
         "mgrs": {"$ref":"#/$defs/mgrsstring"},
         "status": {"enum": ["system_proposed", "system_confirmed", "system_rejected", "positive_annotated", "positive_partial", "positive_annotated_static", "positive_partial_static", "positive_pending", "positive_excluded", "negative", "ignore", "transient_positive", "transient_pending", "transient_negative", "transient_excluded", "transient_ignore"]},

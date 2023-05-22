@@ -45,6 +45,7 @@ def load_site_model_schema(strict=True):
         # from kwcoco.util.jsonschema_elements import ANYOF
         from kwcoco.util.jsonschema_elements import NULL
         any_identifier = STRING(pattern='^[A-Za-z_][A-Za-z0-9_-]*$')
+        any_sensor = STRING(pattern=r'^[A-Za-z_][A-Za-z0-9\s_-]*$')
         walker = ub.IndexableWalker(data)
         if 0:
             # Identify the paths to the schema element we are going to modify
@@ -72,7 +73,7 @@ def load_site_model_schema(strict=True):
         walker[['$defs', 'site_properties', 'properties', 'site_id']] = any_identifier  # previous: {'type': 'string', 'pattern': '^[A-Z]{2}_([RS]\\d{3}|C[0-7]\\d{2}|[RC][Xx]{3})_\\d{4}$'}
         walker[['$defs', 'site_properties', 'properties', 'region_id']] = any_identifier  # previous: {'oneOf': [{'type': 'null'}, {'type': 'string', 'pattern': '^[A-Z]{2}_([RS]\\d{3}|C[0-7]\\d{2}|[RC][Xx]{3})$'}]}
         walker[['$defs', 'site_properties', 'properties', 'originator']] = any_identifier  # previous: {'enum': ['te', 'pmo', 'acc', 'ast', 'ast', 'bla', 'iai', 'kit', 'str', 'iMERIT']}
-        walker[['$defs', 'observation_properties', 'properties', 'sensor_name']] = ONEOF(NULL, any_identifier)  # previous: {'oneOf': [{'type': 'null'}, {'type': 'string', 'pattern': '^((Landsat 8|Sentinel-2|WorldView|Planet), )*(Landsat 8|Sentinel-2|WorldView|Planet)$'}]}
+        walker[['$defs', 'observation_properties', 'properties', 'sensor_name']] = ONEOF(NULL, any_sensor)  # previous: {'oneOf': [{'type': 'null'}, {'type': 'string', 'pattern': '^((Landsat 8|Sentinel-2|WorldView|Planet), )*(Landsat 8|Sentinel-2|WorldView|Planet)$'}]}
 
         # walker[['definitions', 'associated_site_properties', 'properties',
         #         'region_id']] = any_identifier

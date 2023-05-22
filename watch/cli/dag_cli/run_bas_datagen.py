@@ -7,9 +7,9 @@ import os
 import subprocess
 import json
 
-from watch.cli.baseline_framework_ingress import baseline_framework_ingress, load_input_stac_items  # noqa: 501
-from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress  # noqa: 501
-from watch.cli.ta1_stac_to_kwcoco import ta1_stac_to_kwcoco
+from watch.cli.baseline_framework_ingress import baseline_framework_ingress, load_input_stac_items
+from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress
+from watch.cli.stac_to_kwcoco import stac_to_kwcoco
 from watch.cli import coco_add_watch_fields
 from watch.utils.util_framework import download_region
 import ubelt as ub
@@ -151,7 +151,7 @@ def build_combined_kwcoco(input_path,
     print("* Converting STAC to KWCOCO *")
     ta1_kwcoco_path_for_sc = os.path.join(combined_working_dir,
                                           'combined_ingress_kwcoco.json')
-    ta1_stac_to_kwcoco(combined_ingress_catalog,
+    stac_to_kwcoco(combined_ingress_catalog,
                        ta1_kwcoco_path_for_sc,
                        assume_relative=False,
                        populate_watch_fields=True,
@@ -216,7 +216,7 @@ def run_stac_to_cropped_kwcoco(input_path,
     # 3. Convert ingressed STAC catalog to KWCOCO
     print("* Converting STAC to KWCOCO *")
     ta1_kwcoco_path = os.path.join(ingress_dir, 'ingress_kwcoco.json')
-    ta1_stac_to_kwcoco(ingress_catalog,
+    stac_to_kwcoco(ingress_catalog,
                        ta1_kwcoco_path,
                        assume_relative=False,
                        populate_watch_fields=False,

@@ -98,11 +98,21 @@ class ManagerConfig(scfg.DataConfig):
     __command__ = 'manager'
     __alias__ = ['mlops_manager']
 
-    command = scfg.Value(None, nargs='*', help='if specified, will overload other options', position=1)
+    command = scfg.Value(None, nargs='*', help=ub.paragraph(
+        '''
+        A command that specifies an action and an optional target.
+        Can be "pull packages", "push packages", "status", "list", or several
+        other options. This interface may be reworked in the future.
+        '''), position=1)
 
     dvc_remote = scfg.Value('aws', help='dvc remote to sync to/from')
 
-    expt_dvc_dpath = scfg.Value('auto', help='path to the experiment dvc dpath')
+    expt_dvc_dpath = scfg.Value('auto', help=ub.paragraph(
+        '''
+        path to the experiment dvc dpath. If unspecified, this will use the
+        default dvc path tagged with "phase2_expt". See ``geowatch dvc list``
+        to see current registered paths.
+        '''))
 
     model_pattern = scfg.Value('*', help='if specified restrict to models matching this name pattern')
 
@@ -124,7 +134,11 @@ class ManagerConfig(scfg.DataConfig):
         NOTE: THIS SPECIFIC FORMAT IS IN HIGH FLUX. DOCS MAY BE OUTDATED
         '''))
 
-    yes = scfg.Value(False, isflag=True, help='if True, run in non-interactive mode and answer yes to all interactive questions')
+    yes = scfg.Value(False, isflag=True, help=ub.paragraph(
+        '''
+        if True, run in non-interactive mode and answer yes to all interactive
+        questions.
+        '''))
 
 
 def main(cmdline=True, **kwargs):

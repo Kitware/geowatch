@@ -667,6 +667,10 @@ def ensure_heuristic_category_tree_colors(classes, force=False):
     TODO:
         - [ ] Move this non-heuristic functionality to
             :func:`kwcoco.CategoryTree.ensure_colors`
+        - [ ] Consolidate with ~/code/watch/watch/tasks/fusion/utils :: category_tree_ensure_color
+        - [ ] Consolidate with ~/code/watch/watch/utils/kwcoco_extensions :: category_category_colors
+        - [ ] Consolidate with ~/code/watch/watch/heuristics.py :: ensure_heuristic_category_tree_colors
+        - [ ] Consolidate with ~/code/watch/watch/heuristics.py :: ensure_heuristic_coco_colors
 
     Example:
         >>> from watch.heuristics import *  # NOQA
@@ -972,4 +976,13 @@ TE_SENSOR_NAMES = {
     'L8': 'Landsat 8',
     'WV1': 'WorldView',
     'PD': 'Planet',
+}
+
+SENSOR_TRACK_PRIORITY = {
+    'WorldView': 6,
+    'WorldView 1': 5,
+    'Planet': 4,
+    'Sentinel-2': 3,
+    'Landsat 8': 2,
+    'Landsat 7': 1
 }

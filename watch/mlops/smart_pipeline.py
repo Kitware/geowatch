@@ -773,22 +773,29 @@ class SV_DepthFilter(ProcessNode):
             )
         return command
 
+# from watch.tasks.dino_detector import predict as dino_predict
+# ub.udict(dino_predict.BuildingDetectorConfig.__default__)
+
 
 class DinoBoxDetector(ProcessNode):
     """
     Used for both site cropping and validation-cropping
 
     Example:
+        >>> from watch.mlops.smart_pipeline import *  # NOQA
         >>> node = DinoBoxDetector(root_dpath='/root/dpath/')
         >>> node.configure({
         >>>     'coco_fpath': 'foo.kwcoco',
         >>>     'package_fpath': 'model.pt',
+        >>>     'data_workers': 2,
         >>> })
         >>> print(node.command())
         >>> algo_id1 = node.algo_id
         >>> print(f'node.algo_id={node.algo_id}')
         >>> print(f'node.process_id={node.process_id}')
         >>> node.configure({
+        >>>     'coco_fpath': 'foo.kwcoco',
+        >>>     'package_fpath': 'model.pt',
         >>>     'data_workers': 10,
         >>> })
         >>> algo_id2 = node.algo_id
@@ -805,15 +812,17 @@ class DinoBoxDetector(ProcessNode):
 
     in_paths = {
         'coco_fpath',
-        'package_fpath',
     }
     out_paths = {
         'out_coco_fpath': 'pred_boxes.kwcoco.zip'
     }
 
     algo_params = {
-        'fixed_resolution': "2GSD",
+        'fixed_resolution': "3GSD",
+        'window_dims': 256,
+        'window_overlap': 0.5,
         'batch_size': 1,
+        'package_fpath': None
     }
 
     # The best setting of this depends on if the data is remote or not.  When
@@ -836,7 +845,8 @@ class DinoBoxDetector(ProcessNode):
         fmtkw = {}
         # Not sure why final-config doesn't have everything
         config = (ub.udict(self.final_config) | self.final_algo_config) | self.final_perf_config
-        assert config['package_fpath']  is not None
+        if config['package_fpath'] is None:
+            raise ValueError(f'{self.__class__.__name__} / {self.name} requires package_fpath as path to a model')
         fmtkw['config_argstr'] = self._make_argstr(config)
         command = ub.codeblock(
             r'''
@@ -985,7 +995,7 @@ def sc_nodes():
 
 
 def make_smart_pipeline_nodes(with_bas=True, building_validation=False,
-                              depth_validation=True, site_crops=True,
+                              depth_validation=False, site_crops=True,
                               with_sc=True):
     nodes = {}
 

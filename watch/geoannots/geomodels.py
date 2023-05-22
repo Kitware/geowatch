@@ -69,6 +69,7 @@ import geopandas as gpd
 import geojson
 import jsonschema
 import copy
+import json
 from watch.utils import util_time
 from watch.utils import util_progress
 
@@ -93,12 +94,11 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
         return copy.deepcopy(self)
 
     def dumps(self, **kw):
-        import json
         return json.dumps(self, **kw)
 
     @classmethod
     def coerce_multiple(cls, data, allow_raw=False, workers=0, mode='thread',
-                        verbose=1, desc=None):
+                        verbose=1, desc=None, parse_float=None):
         """
         Load multiple geojson files
 
@@ -114,12 +114,12 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
         from watch.utils import util_gis
         infos = list(util_gis.coerce_geojson_datas(
             data, format='json', allow_raw=allow_raw, workers=workers,
-            mode=mode, verbose=verbose, desc=desc))
+            mode=mode, verbose=verbose, desc=desc, parse_float=parse_float))
         for info in infos:
             yield cls(**info['data'])
 
     @classmethod
-    def coerce(cls, data):
+    def coerce(cls, data, parse_float=None):
         import os
         if isinstance(data, cls):
             return data
@@ -134,7 +134,7 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
         elif isinstance(data, gpd.GeoDataFrame):
             return cls.from_dataframe(data)
         elif isinstance(data, (str, os.PathLike)):
-            got = list(cls.coerce_multiple(data))
+            got = list(cls.coerce_multiple(data, parse_float=parse_float))
             assert len(got) == 1
             return got[0]
         else:
@@ -174,6 +174,17 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
     def end_date(self):
         return util_time.coerce_datetime(self.header['properties']['end_date'])
 
+    @property
+    def geometry(self):
+        """
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> RegionModel.random().geometry
+            >>> SiteModel.random().geometry
+        """
+        from shapely import geometry
+        return geometry.shape(self.header['geometry'])
+
     def load_schema(self, strict=True):
         raise NotImplementedError('abstract')
 
@@ -196,7 +207,8 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
             raise AssertionError('Geo Model has no header')
 
         if header is not self.features[0]:
-            raise AssertionError('Header should be the first feature')
+            import warnings
+            warnings.warn('Header should be the first feature')
 
         if header['properties']['type'] != self._header_type:
             raise AssertionError('Header type is wrong')
@@ -206,8 +218,8 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
 
         feature_types = ub.dict_hist([
             f['properties']['type'] for f in self.features])
-        assert feature_types.pop(self._header_type, 0) == 1
-        assert set(feature_types).issubset({self._body_type})
+        assert feature_types.pop(self._header_type, 0) == 1, 'Missing header'
+        assert set(feature_types).issubset({self._body_type}), f'Unexpected feature types: {feature_types}'
 
         start_date = self.start_date
         end_date = self.end_date
@@ -215,41 +227,76 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
             if end_date < start_date:
                 raise AssertionError('bad date')
 
-    def _validate_schema(self, strict=True):
-        import rich
-
-        def print_validation_error_info(ex, depth=1):
-            if ex.parent is not None:
-                max_depth = print_validation_error_info(ex.parent, depth=depth + 1)
-            else:
-                max_depth = depth
-            rich.print(f'[yellow] error depth = {depth} / {max_depth}')
-            print('ex.__dict__ = {}'.format(ub.urepr(ex.__dict__, nl=3)))
-            return depth
-
+    def _validate_schema(self, strict=True, verbose=1):
         schema = self.load_schema(strict=strict)
         try:
             jsonschema.validate(self, schema)
         except jsonschema.ValidationError as e:
             ex = e
-            rich.print('[red] JSON VALIDATION ERROR')
-            print(f'self={self}')
-            print_validation_error_info(ex)
-            # ub.IndexableWalker(self)[ex.absolute_path]
-            # ub.IndexableWalker(schema)[ex.schema_path]
-            rich.print(ub.codeblock(
-                '''
-                [yellow] jsonschema validation notes:
-                    * depsite our efforts, information to debug the issue may not be shown, double check your schema and instance manually.
-                    * anyOf schemas may print the error, and not the part you intended to match.
-                    * oneOf schemas may not explicitly say that you matched both.
-                '''))
-            rich.print('[red] JSON VALIDATION ERROR')
+            if verbose:
+                print(f'self={self}')
+                _report_jsonschema_error(ex)
             raise
 
-    def validate(self, strict=True):
+    def validate(self, strict=True, verbose=1):
         self._validate_quick_checks()
-        self._validate_schema(strict=strict)
+        self._validate_schema(strict=strict, verbose=verbose)
+
+    def _validate_parts(self, strict=True):
+        """
+        Runs jsonschema validation checks on each part of the feature
+        collection independently to better localize where the errors are.
+
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> self = RegionModel.random(rng=0)
+            >>> self._validate_parts(strict=False)
+            >>> self = SiteModel.random(rng=0)
+            >>> self._validate_parts(strict=False)
+        """
+        import jsonschema
+        schema = ub.udict(self.load_schema(strict=strict))
+        schema - {'properties', 'required', 'title', 'type'}
+        defs = schema[chr(36) + 'defs']
+        header_schema = schema | (defs[self._header_type + '_feature'])
+        body_schema = schema | (defs[self._body_type + '_feature'])
+        try:
+            jsonschema.validate(self.header, header_schema)
+        except jsonschema.ValidationError as e:
+            _report_jsonschema_error(e)
+            raise
+        for obs_feature in self.body_features():
+            try:
+                jsonschema.validate(obs_feature, body_schema)
+            except jsonschema.ValidationError as e:
+                _report_jsonschema_error(e)
+                raise
+
+
+def _report_jsonschema_error(ex):
+    import rich
+
+    def print_validation_error_info(ex, depth=1):
+        if ex.parent is not None:
+            max_depth = print_validation_error_info(ex.parent, depth=depth + 1)
+        else:
+            max_depth = depth
+        rich.print(f'[yellow] error depth = {depth} / {max_depth}')
+        print('ex.__dict__ = {}'.format(ub.urepr(ex.__dict__, nl=3)))
+        return depth
+
+    rich.print('[red] JSON VALIDATION ERROR')
+    print_validation_error_info(ex)
+    # ub.IndexableWalker(self)[ex.absolute_path]
+    # ub.IndexableWalker(schema)[ex.schema_path]
+    rich.print(ub.codeblock(
+        '''
+        [yellow] jsonschema validation notes:
+            * depsite our efforts, information to debug the issue may not be shown, double check your schema and instance manually.
+            * anyOf schemas may print the error, and not the part you intended to match.
+            * oneOf schemas may not explicitly say that you matched both.
+        '''))
+    rich.print('[red] JSON VALIDATION ERROR')
 
 
 class RegionModel(_Model):
@@ -284,7 +331,7 @@ class RegionModel(_Model):
         yield from (SiteSummary(**f) for f in self.body_features())
 
     @classmethod
-    def coerce(cls, data):
+    def coerce(cls, data, parse_float=None):
         """
         Example:
             >>> from watch.geoannots.geomodels import *  # NOQA
@@ -296,7 +343,7 @@ class RegionModel(_Model):
             >>> region_models = list(RegionModel.coerce_multiple(fpath))
             >>> region_model = RegionModel.coerce(fpath)
         """
-        self = super().coerce(data)
+        self = super().coerce(data, parse_float=parse_float)
         assert self.header['properties']['type'] == 'region'
         return self
 
@@ -322,7 +369,7 @@ class RegionModel(_Model):
         Args:
             with_sites (bool):
                 also returns site models if True
-            **kwargs : passed to :func:`demo_truth.random_region_model`
+            **kwargs : passed to :func:`watch.demo.metrics_demo.demo_truth.random_region_model`
 
         Returns:
             RegionModel | Tuple[RegionModel, SiteModelCollection]
@@ -346,6 +393,36 @@ class RegionModel(_Model):
         else:
             return region
 
+    def add_site_summary(self, summary):
+        """
+        Add a site summary to the region.
+
+        Args:
+            summary (SiteSummary | SiteModel):
+                a site summary or site model. If given as a site model
+                it is converted to a site summary and then added.
+
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> region = RegionModel.random(num_sites=False)
+            >>> site1 = SiteModel.random(region=region)
+            >>> site2 = SiteModel.random(region=region)
+            >>> site3 = SiteModel.random(region=region)
+            >>> summary = site2.as_summary()
+            >>> region.add_site_summary(site1)
+            >>> region.add_site_summary(summary)
+            >>> region.add_site_summary(dict(site3.as_summary()))
+            >>> import pytest
+            >>> with pytest.raises(TypeError):
+            ...     region.add_site_summary(dict(site3))
+            >>> assert len(list(region.site_summaries())) == 3
+        """
+        if isinstance(summary, SiteModel):
+            summary = summary.as_summary()
+        if summary['type'] != 'Feature' or summary['properties']['type'] != 'site_summary':
+            raise TypeError('Input was not a site summary or coercable type')
+        self['features'].append(summary)
+
     @property
     def region_id(self):
         return self.header['properties']['region_id']
@@ -367,10 +444,11 @@ class SiteModel(_Model):
     def info(self):
         header = self.header
         prop = '<no site header>' if header is None else header['properties']
-        info = {
-            'num_observations': len(list(self.observations())),
-            'properties': prop,
-        }
+        info = {}
+        info['num_observations'] = len(list(self.observations()))
+        if header is not None:
+            info['header_geom_type'] = header['geometry']['type']
+        info['properties'] = prop
         return info
 
     def load_schema(self, strict=True):
@@ -397,10 +475,56 @@ class SiteModel(_Model):
         return gdf
 
     @classmethod
-    def random(cls, rng=None, **kwargs):
+    def random(cls, rng=None, region=None, site_poly=None, **kwargs):
         """
+        Args:
+            rng (int | str | RandomState | None) :
+                seed or random number generator
+
+            region (RegionModel | None):
+                if specified generate a new site in this region model.
+                (This will overwrite some of the kwargs).
+
+            site_poly (kwimage.Polygon | shapely.geometry.Polygon | None):
+                if specified, this polygon is used as the geometry for new site
+                models. Note: all site models will get this geometry, so
+                typically this is only used when num_sites=1.
+
+            **kwargs :
+                passed to :func:`watch.demo.metrics_demo.demo_truth.random_region_model`.
+
+        Returns:
+            SiteModel
+
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> region1 = RegionModel.random(with_sites=False, rng=0)
+            >>> region2, sites2 = RegionModel.random(with_sites=True, rng=0)
+            >>> assert region1 == region2, 'rngs should be the same'
+
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> region = RegionModel.random(with_sites=False, rng=0)
+            >>> site = SiteModel.random(region=region)
+            >>> assert region.region_id == site.region_id
+
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> import kwimage
+            >>> region = RegionModel.random(with_sites=False, rng=0)
+            >>> # Test specification of the site geometry.
+            >>> site_poly = kwimage.Polygon.coerce(region.geometry)
+            >>> site = SiteModel.random(region=region, site_poly=site_poly)
+            >>> assert abs(region.geometry.area - site.geometry.area) < 1e-7
+            >>> site = SiteModel.random(region=region, site_poly=site_poly.scale(10))
+            >>> assert abs(region.geometry.area - site.geometry.area) > 1e-7
         """
         from watch.demo.metrics_demo import demo_truth
+        kwargs.setdefault('with_renderables', False)
+        kwargs['site_poly'] = site_poly
+        if region is not None:
+            kwargs['region_poly'] = region.header.geometry
+            kwargs['region_id'] = region.region_id
         _, sites, _ = demo_truth.random_region_model(num_sites=1, rng=rng, **kwargs)
         return cls(**sites[0])
 
@@ -455,6 +579,93 @@ class SiteModel(_Model):
         for feat in self.features:
             fprop = feat['properties']
             fprop['score'] = float(max(min(1, fprop['score']), 0))
+
+    def _manual_validation(self):
+        """
+        Hard coded checks. The jsonschema is pretty bad at identifing where
+        errors are, so these are some hard coded checks that hit some simple
+        errors we have seen before.
+        """
+        features = self.features
+        if len(features) < 2:
+            raise AssertionError('should have at least two features')
+
+        type_to_expected_fields = {
+            'feature': {
+                'required': {'type', 'properties', 'geometry'},
+                'optional': set(),
+            },
+            'site': {
+                'required': {
+                    'type', 'site_id', 'region_id', 'version', 'mgrs', 'model_content',
+                    'start_date', 'end_date', 'status', 'originator'},
+                'optional': {
+                    'misc_info', 'validated', 'score',
+                    'predicted_phase_transition_date',
+                    'predicted_phase_transition'
+                }
+            },
+            'observation': {
+                'required': {
+                    'type', 'observation_date', 'source', 'sensor_name',
+                    'current_phase', 'is_occluded', 'is_site_boundary'
+                },
+                'optional': {
+                    'misc_info', 'score',
+                }
+            }
+        }
+
+        type_to_expected_geoms = {
+            'site': {'Polygon'},
+            'observation': {'Polygon', 'MultiPolygon'},
+        }
+
+        def check_expected_fields(have, type):
+            expected = type_to_expected_fields[type]
+            missing = expected['required'] - have
+            extra = have - (expected['required'] | expected['optional'])
+            if extra:
+                yield {
+                    'msg': f'Extra fields: {extra}'
+                }
+            if missing:
+                yield {
+                    'msg': f'Missing fields: {missing}'
+                }
+            return errors
+
+        def check_expected_geom(geom, type):
+            allowed_types = type_to_expected_geoms[type]
+            if geom.geom_type not in allowed_types:
+                yield {
+                    'msg': f'{type} must be in {allowed_types}: got {geom.geom_type}'
+                }
+
+        from shapely.geometry import shape
+        errors = []
+        for feat in features:
+            have = set(feat.keys())
+            errors += list(check_expected_fields(have, type='feature'))
+            geom = shape(feat['geometry'])
+            props = feat['properties']
+            proptype = props['type']
+            if proptype == 'site':
+                have = set(props.keys())
+                errors += list(check_expected_fields(have, type='site'))
+                errors += list(check_expected_geom(geom, type='site'))
+            elif proptype == 'observation':
+                have = set(props.keys())
+                errors += list(check_expected_fields(have, type='observation'))
+                errors += list(check_expected_geom(geom, type='observation'))
+            else:
+                errors += {
+                    'msg': f'Unknown site type: {proptype}',
+                }
+
+        if len(errors):
+            print('errors = {}'.format(ub.urepr(errors, nl=1)))
+            raise AssertionError
 
 
 class _Feature(ub.NiceRepr, geojson.Feature):
@@ -568,7 +779,7 @@ class ModelCollection(list):
             for s in pman.progiter(self, desc='fixup'):
                 s.fixup()
 
-    def validate(self, mode='process', workers=0):
+    def validate(self, mode='process', workers=0, verbose=1):
         import rich
         # pman = util_progress.ProgressManager(backend='progiter')
         pman = util_progress.ProgressManager()
@@ -577,7 +788,7 @@ class ModelCollection(list):
             while True:
                 jobs = ub.JobPool(mode='process', max_workers=8 if tries == 0 else 0)
                 for s in pman.progiter(self, desc='submit validate models'):
-                    job = jobs.submit(s.validate)
+                    job = jobs.submit(s.validate, verbose=verbose)
                     job.s = s
                 try:
                     for job in pman.progiter(jobs.as_completed(), total=len(jobs), desc='collect validate models'):

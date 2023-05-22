@@ -17,9 +17,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Add `rescale_nans` param to MultimodalTransformer.
 * Add `cooldown` argument to coco align script to specify time between tries.
 * Integrated `depth_pcd` into MLOps under the `sv_depth_filter` node.
+* Added pandas query language to mlops aggregate
+* Added `dvc` as an alias of `find_dvc` in geowatch CLI.
 
 ### Changed
 
+* The crop-sites-to-regions script no longer clips polygons if they would become multipolygons.
+* The crop-sites-to-regions script can now filter regions by min area.
+* Fixed issue in crop-sites-to-regions where it would output an unexpected "id" field.
+* STAC roles are now preserved in kwcoco conversion.
+* Renamed `ta1_stac_to_kwcoco` to `stac_to_kwcoco`.
 * Tweaked dependencies for windows
 * The kwcoco video dataset now respects the weight attribute in annotations.
 * Reorganized docs
@@ -29,13 +36,18 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Now using scriptconfig in fusion.predict
 * Reworked how submatrices behave in mlops, added submatrices1, submatrices2. Concept might need refinement.
 * Update site / region schemas
+* More debugging output in `stac_search`
 
 
 ### Fixed
+* bug in coco-align where minimum resolution trigger would not be hit if there
+  were multiple assets for an item and they were at different resolutions (e.g.
+  for quality bands)
 * safer no longer uses `temp_file` on windows
 * Erroneous assertion errors in reproject and kwcoco-to-geotiffs
 * Issue where `DINO_SV` would write region models to the out-site-manifest, now correctly points at site models.
 * Bug in coco-align where nodata values were not properly set on data that moved through gdal-merge.
+* Fixed minor issue in `stac_search` where regions with no results might get features from previous results.
 
 
 ## Version 0.5.6 - Target 2023-04-30

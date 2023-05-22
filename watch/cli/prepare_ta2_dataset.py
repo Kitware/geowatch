@@ -51,7 +51,7 @@ Example:
         --region_globstr="$REGION_FPATH" \
         --site_globstr="$SITE_GLOBSTR" \
         --fields_workers=8 \
-        --convert_workers=8 \
+        --convert_workers=0 \
         --align_workers=26 \
         --cache=0 \
         --ignore_duplicates=1 \
@@ -99,7 +99,7 @@ class PrepareTA2Config(CMDQueueConfig):
         'max_regions': None,
 
         'query_workers': scfg.Value('0', help='workers for STAC search'),
-        'convert_workers': scfg.Value('min(avail,8)', help='workers for stac-to-kwcoco script'),
+        'convert_workers': scfg.Value('0', help='workers for stac-to-kwcoco script. Keep this set to zero!'),
         'fields_workers': scfg.Value('min(avail,max(all/2,8))', help='workers for add-watch-fields script'),
 
         'align_workers': scfg.Value(0, help='primary workers for align script', group='align'),
@@ -488,14 +488,14 @@ def main(cmdline=False, **kwargs):
         convert_job = pipeline.submit(
             command=ub.codeblock(
                 rf'''
-                {job_environ_str}python -m watch.cli.ta1_stac_to_kwcoco \
+                {job_environ_str}python -m watch.cli.stac_to_kwcoco \
                     "{uncropped_catalog_fpath}" \
                     --outpath="{uncropped_kwcoco_fpath}" \
                     {convert_options_str} \
                     --jobs "{config['convert_workers']}"
                 '''),
             depends=[ingress_job],
-            name=f'ta1_stac_to_kwcoco-{s3_name}',
+            name=f'stac_to_kwcoco-{s3_name}',
             in_paths={
                 'uncropped_catalog_fpath': uncropped_catalog_fpath,
             },

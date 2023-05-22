@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
 """
-TODO:
-    - [ ] Rename to stac_to_kwcoco
-
 SeeAlso:
     ~/code/watch/watch/cli/stac_search.py
 """
@@ -48,12 +45,12 @@ class StacToCocoConfig(scfg.DataConfig):
 
     verbose = scfg.Value(1, help='verbosity')
 
-    jobs = scfg.Value(1, type=str, short_alias=['j'], help='Number of jobs to run in parallel')
+    jobs = scfg.Value(0, type=str, short_alias=['j'], help='Number of jobs to run in parallel (Use zero, dont parallelize this)')
 
 
 def main(cmdline=True, **kwargs):
     config = StacToCocoConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
-    ta1_stac_to_kwcoco(**config)
+    stac_to_kwcoco(**config)
     return 0
 
 
@@ -143,8 +140,8 @@ def _determine_channels_collated(asset_name, asset_dict, platform):
 
 def _determine_s2_channels(asset_name, asset_dict):
     """
-        >>> from watch.cli.ta1_stac_to_kwcoco import *  # NOQA
-        >>> from watch.cli.ta1_stac_to_kwcoco import _determine_s2_channels
+        >>> from watch.cli.stac_to_kwcoco import *  # NOQA
+        >>> from watch.cli.stac_to_kwcoco import _determine_s2_channels
         >>> test_hrefs = [
         >>>     '/vsis3/smart-data-accenture/ta-1/ta1-s2-acc/15/T/TF/2020/9/21/S2A_14TQL_20200921_0_L1C_ACC/S2A_14TQL_20200921_0_L1C_ACC_QA.tif',
         >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/14/T/QK/2020/8/9/LC08_L1TP_028032_20200809_20200917_02_T1_ACC/LC08_L1TP_028032_20200809_20200917_02_T1_ACC_cloud_mask.tif',
@@ -217,8 +214,8 @@ def _determine_s2_channels(asset_name, asset_dict):
 def _determine_l8_channels(asset_name, asset_dict):
     """
     Example:
-        >>> from watch.cli.ta1_stac_to_kwcoco import *  # NOQA
-        >>> from watch.cli.ta1_stac_to_kwcoco import _determine_l8_channels
+        >>> from watch.cli.stac_to_kwcoco import *  # NOQA
+        >>> from watch.cli.stac_to_kwcoco import _determine_l8_channels
         >>> test_hrefs = [
         >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/52/S/EG/2017/12/2/LC08_L1TP_114034_20171202_20200902_02_T1_ACC/LC08_L1TP_114034_20171202_20200902_02_T1_ACC_QA.tif',
         >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/52/S/EG/2017/12/2/LC08_L1TP_114034_20171202_20200902_02_T1_ACC/LC08_L1TP_114034_20171202_20200902_02_T1_ACC_TCI.tif',
@@ -434,9 +431,16 @@ def make_coco_aux_from_stac_asset(asset_name,
     else:
         file_name = asset_href
 
+    roles = asset_dict.get('roles', [])
+    assert isinstance(roles, list)
+    if channels == 'quality':
+        if 'quality' not in roles:
+            roles.append('quality')
+
     img.update({
         'file_name': file_name,
         'channels': channels,
+        'roles': roles,
     })
     if populate_watch_fields:
         raise NotImplementedError('REMOVED: use coco_add_watch_feilds '
@@ -478,8 +482,7 @@ def _stac_item_to_kwcoco_image(stac_item,
         'name': stac_item.id,
         'file_name': None,
     }
-    auxiliary = []
-
+    assets = []
     for asset_name, asset_dict in stac_item_dict.get('assets', {}).items():
         aux = make_coco_aux_from_stac_asset(
             asset_name,
@@ -492,17 +495,17 @@ def _stac_item_to_kwcoco_image(stac_item,
             verbose=verbose,
         )
         if aux is not None:
-            auxiliary.append(aux)
+            assets.append(aux)
 
-    if len(auxiliary) == 0:
+    if len(assets) == 0:
         print("* Warning * Empty auxiliary assets for "
               "STAC Item '{}', skipping!".format(stac_item.id))
         return None
 
-    if len(auxiliary) == 0:
+    if len(assets) == 0:
         img['failed'] = stac_item
 
-    img['auxiliary'] = auxiliary
+    img['auxiliary'] = assets
     img['stac_properties'] = stac_item_dict['properties']
     date = stac_item_dict['properties']['datetime']
     date = util_time.coerce_datetime(date).isoformat()
@@ -515,14 +518,14 @@ def _stac_item_to_kwcoco_image(stac_item,
 
 
 @profile
-def ta1_stac_to_kwcoco(input_stac_catalog,
-                       outpath,
-                       assume_relative=False,
-                       populate_watch_fields=False,
-                       jobs=1,
-                       from_collated=False,
-                       ignore_duplicates=False,
-                       verbose=1):
+def stac_to_kwcoco(input_stac_catalog,
+                   outpath,
+                   assume_relative=False,
+                   populate_watch_fields=False,
+                   jobs=0,
+                   from_collated=False,
+                   ignore_duplicates=False,
+                   verbose=1):
 
     if populate_watch_fields:
         raise NotImplementedError('REMOVED: use coco_add_watch_feilds '
@@ -530,7 +533,6 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
 
     from watch.utils import util_parallel
     import pystac
-    import json
     import kwcoco
     jobs = util_parallel.coerce_num_workers(jobs)
 
@@ -546,6 +548,14 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
 
     if jobs == 1:
         jobs = 0
+    if not populate_watch_fields and jobs > 0:
+        import warnings
+        warnings.warn(ub.paragraph(
+            '''
+            When populate_watch_fields is False there is usually no benefit to
+            having jobs > 0, it often makes the process go (a lot) slower.
+            '''))
+
     executor = ub.JobPool(mode='process', max_workers=jobs)
 
     all_items = [stac_item for stac_item in catalog.get_all_items()]
@@ -611,11 +621,8 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
                         '''))
                     raise
 
-    with open(outpath, 'w') as f:
-        json.dump(output_dset.dataset, f, indent=2)
-
+    output_dset.dump(indent=2)
     print('Wrote: {}'.format(outpath))
-
     return output_dset
 
 
