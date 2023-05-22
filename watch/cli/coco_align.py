@@ -113,6 +113,14 @@ class AssetExtractConfig(scfg.DataConfig):
             for now specify it.
             '''))
 
+    unsigned_nodata = scfg.Value(256, help=ub.paragraph(
+        '''
+        The nodata value for unsigned UInt16 quality bitmasks. This can be
+        different from the cannonical Int16 data bands. The default value
+        corresponds to Accenture-2 standards where 256 is the "fill value".
+        This is only used if ``force_nodata`` is specified.
+        '''))
+
     tries = scfg.Value(2, help=ub.paragraph(
             '''
             The maximum number of times to retry failed gdal warp
@@ -1820,6 +1828,9 @@ def extract_image_job(img,
     new_coco_img._video = {}
     kwcoco_extensions._populate_valid_region(new_coco_img)
 
+    # TODO: deprecate annotation handling in this tool to simplify it.
+    # Force the user to always reproject annotations after a coco-align step.
+
     # HANDLE ANNOTATIONS
     # Note: this is more generally handled by the project annotation script.
     # We can add an option to ignore annotations here.
@@ -2064,7 +2075,7 @@ def _aligncrop(obj_group,
     if nodata is not None:
         # HACK: quality bands are UInt16 so they can't have a negative nodata
         if first_obj['channels'] in {'quality', 'cloudmask'}:
-            nodata = 256  # this is the ACC-1 hacked fill value.
+            nodata = asset_config.unsigned_nodata
 
     # When trying to get a gdalmerge to take multiple inputs I got a Attempt to
     # create 0x0 dataset is illegal,sizes must be larger than zero.  This new
