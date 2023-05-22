@@ -1891,6 +1891,9 @@ python -c "if 1:
     dvc.pull(resolved_fpaths, remote='aws')
 "
 
+
+
+
 # SITE VISIT 2022-04 SPLIT 1 Analysis
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
@@ -1898,28 +1901,38 @@ python -m watch.mlops.schedule_evaluation --params="
     matrix:
         bas_pxl.package_fpath:
             #- $DVC_EXPT_DPATH/model_candidates/namek_split1_shortlist_v4_top.yaml
-            - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_MultiModal_Resume/Drop6_MultiModal_Resume_epoch2_step96.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_MultiModal_Resume/Drop6_MultiModal_Resume_epoch3_step128.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop6-NoWinterMedian10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_invar_split6_V56/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_invar_split6_V56_epoch268_step7801.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop6-NoWinterMedian10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_invar_split6_V56/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_invar_split6_V56_epoch359_step10440.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_sam_landcover_split6_V57/Drop6_TCombo1Year_BAS_10GSD_V2_sam_landcover_split6_V57_epoch78_step5056.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_sam_landcover_split6_V53/Drop6_TCombo1Year_BAS_10GSD_V2_sam_landcover_split6_V53_epoch0_step0.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_sam_landcover_split6_V57/Drop6_TCombo1Year_BAS_10GSD_V2_sam_landcover_split6_V57_epoch46_step3008.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_sam_landcover_split6_V57/Drop6_TCombo1Year_BAS_10GSD_V2_sam_landcover_split6_V57_epoch30_step1984.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_sam_landcover_split6_V57/Drop6_TCombo1Year_BAS_10GSD_V2_sam_landcover_split6_V57_epoch10_step704.pt
-
+            #- $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_MultiModal_Resume/Drop6_MultiModal_Resume_epoch2_step96.pt
+            #- $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_MultiModal_Resume/Drop6_MultiModal_Resume_epoch3_step128.pt
+            #- $DVC_EXPT_DPATH/models/fusion/Drop6-NoWinterMedian10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_invar_split6_V56/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_invar_split6_V56_epoch268_step7801.pt
+            #- $DVC_EXPT_DPATH/models/fusion/Drop6-NoWinterMedian10GSD/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_invar_split6_V56/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_invar_split6_V56_epoch359_step10440.pt
+            #- $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_sam_landcover_split6_V57/Drop6_TCombo1Year_BAS_10GSD_V2_sam_landcover_split6_V57_epoch78_step5056.pt
+            #- $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_sam_landcover_split6_V53/Drop6_TCombo1Year_BAS_10GSD_V2_sam_landcover_split6_V53_epoch0_step0.pt
+            #- $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_sam_landcover_split6_V57/Drop6_TCombo1Year_BAS_10GSD_V2_sam_landcover_split6_V57_epoch46_step3008.pt
+            #- $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_sam_landcover_split6_V57/Drop6_TCombo1Year_BAS_10GSD_V2_sam_landcover_split6_V57_epoch30_step1984.pt
+            #- $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_sam_landcover_split6_V57/Drop6_TCombo1Year_BAS_10GSD_V2_sam_landcover_split6_V57_epoch10_step704.pt
+            #- $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_invariants_landcover_split6_V58/Drop6_TCombo1Year_BAS_10GSD_V2_invariants_landcover_split6_V58_epoch0_step0.pt
+            #- $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_invariants_landcover_split6_V58/Drop6_TCombo1Year_BAS_10GSD_V2_invariants_landcover_split6_V58_epoch218_step11607.pt
+            #- $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_invariants_landcover_split6_V58/Drop6_TCombo1Year_BAS_10GSD_V2_invariants_landcover_split6_V58_epoch10_step440.pt
+            #- $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_invariants_landcover_split6_V59/Drop6_TCombo1Year_BAS_10GSD_V2_invariants_landcover_split6_V59_epoch146_step7791.pt
+            #- $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_invariants_landcover_split6_V58/Drop6_TCombo1Year_BAS_10GSD_V2_invariants_landcover_split6_V58_epoch0_step10.pt
+            #- $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_invariants_landcover_split6_V59/Drop6_TCombo1Year_BAS_10GSD_V2_invariants_landcover_split6_V59_epoch0_step0.pt
+            #- $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_sam_landcover_split6_V57/Drop6_TCombo1Year_BAS_10GSD_V2_sam_landcover_split6_V57_epoch85_step5504.pt
+            #- $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_invariants_landcover_split6_V58/Drop6_TCombo1Year_BAS_10GSD_V2_invariants_landcover_split6_V58_epoch11_step457.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_invariants_landcover_split6_V58/Drop6_TCombo1Year_BAS_10GSD_V2_invariants_landcover_split6_V58_epoch278_step14787.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_invariants_landcover_split6_V59/Drop6_TCombo1Year_BAS_10GSD_V2_invariants_landcover_split6_V59_epoch57_step16124.pt
         bas_pxl.test_dataset:
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R002_I2LS.kwcoco.zip
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-CH_R001_I2LS.kwcoco.zip
             - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-NZ_R001_I2LS.kwcoco.zip
         bas_pxl.chip_overlap: 0.3
         bas_pxl.chip_dims:
-            #- auto
+            - auto
             - [196,196]
         bas_pxl.time_span:
             - auto
         bas_pxl.input_space_scale:
             - 10GSD
+            - 5GSD
         bas_pxl.time_sampling:
             - soft4
         bas_poly.thresh:
@@ -1930,12 +1943,18 @@ python -m watch.mlops.schedule_evaluation --params="
             - 0.325
             - 0.35
             - 0.375
+            - 0.39
             - 0.4
+            - 0.41
+            - 0.42
+            - 0.425
+            - 0.430
             - 0.45
             - 0.5
             - 0.6
         bas_poly.time_thresh:
             - 0.8
+            - 0.7
             - 0.6
             - 0.5
             #- 0.4
@@ -1975,6 +1994,10 @@ python -m watch.mlops.schedule_evaluation --params="
           bas_pxl.window_space_scale: 10GSD
           bas_pxl.output_space_scale: 10GSD
           bas_poly.resolution: 10GSD
+        - bas_pxl.input_space_scale: 5GSD
+          bas_pxl.window_space_scale: 5GSD
+          bas_pxl.output_space_scale: 5GSD
+          bas_poly.resolution: 5GSD
     " \
     --root_dpath="$DVC_EXPT_DPATH/_namek_preeval12" \
     --devices="0,1" --tmux_workers=6 \
@@ -1982,9 +2005,11 @@ python -m watch.mlops.schedule_evaluation --params="
     --pipeline=bas --skip_existing=1 \
     --run=1
 
+
+
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 geowatch aggregate \
-    --pipeline=bas_building_vali \
+    --pipeline=bas \
     --target \
         "$DVC_EXPT_DPATH/_namek_preeval12" \
     --stdout_report="
@@ -2000,8 +2025,10 @@ geowatch aggregate \
     --export_tables=0 \
     --io_workers=10 \
     --output_dpath="$DVC_EXPT_DPATH/_namek_preeval12/aggregate" \
-    --rois=KR_R002,CH_R001,NZ_R001
+    --rois=KR_R002,NZ_R001
+    #--rois=KR_R002,CH_R001,NZ_R001
     #--inspect=fcfdpnldzxzv \
     #--rois="KR_R002,"
     #
     #--inspect=kdvkheujolhb \
+    #--pipeline=bas_building_vali \
