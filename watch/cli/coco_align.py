@@ -2017,7 +2017,7 @@ def _aligncrop(obj_group,
     dst = {
         'file_name': os.fspath(dst_gpath),
     }
-    roles = list(ub.flatten([o.get('roles', []) for o in obj_group]))
+    roles = list(ub.oset(ub.flatten([o.get('roles', []) for o in obj_group])))
     if len(roles):
         dst['roles'] = roles
     if first_obj.get('channels', None):
