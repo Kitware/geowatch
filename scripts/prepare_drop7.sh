@@ -42,11 +42,13 @@ python -m watch.cli.prepare_ta2_dataset \
     --tmux_workers=8 \
     --run=1
 
+
+#python ~/code/watch-smartflow-dags/reproduce_mlops.py imgonly-US_R006.kwcoco.zip
 # ~/code/watch/dev/poc/prepare_time_combined_dataset.py
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
 python ~/code/watch/watch/cli/queue_cli/prepare_time_combined_dataset.py \
-    --regions=all \
+    --regions=all_tne \
     --input_bundle_dpath="$DVC_DATA_DPATH"/Aligned-Drop7 \
     --output_bundle_dpath="$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD \
     --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop6_hard_v1/site_models \
@@ -59,7 +61,7 @@ python ~/code/watch/watch/cli/queue_cli/prepare_time_combined_dataset.py \
     --combine_workers=4 \
     --resolution=10GSD \
     --backend=tmux \
-    --run=1
+    --run=0
 
 
 

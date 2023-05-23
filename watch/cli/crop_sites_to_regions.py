@@ -250,6 +250,17 @@ def main(cmdline=False, **kwargs):
                                           strict=True)
     print('config = {}'.format(ub.urepr(dict(config), nl=1)))
 
+    # TODO: integrate process context
+    # from kwcoco.util.util_json import ensure_json_serializable
+    # from watch.utils import process_context
+    # proc_context = process_context.ProcessContext(
+    #     name='crop_sites_to_regions',
+    #     type='process',
+    #     config=ensure_json_serializable(dict(config))
+    # )
+    # proc_context.start()
+    # process_info = proc_context.obj
+
     new_site_dpath = config['new_site_dpath']
     assert new_site_dpath is not None, 'must specify new_site_dpath'
     new_site_dpath = ub.Path(new_site_dpath)
