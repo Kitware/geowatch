@@ -19,17 +19,15 @@ class ScoreTracksConfig(scfg.DataConfig):
         cover will be automatically accepted.
         '''), position=1, alias=['in_file'], group='inputs')
 
-    model_fpath = scfg.Value(None, help='Path to the depth_pcd site validation model', group='inputs')
+    model_fpath = scfg.Value(None, help=ub.paragraph(
+        '''
+        Path to the depth_pcd site validation model
+        '''), group='inputs')
 
-    # poly_kwcoco = scfg.Value(None, help=ub.paragraph(
-    #     '''
-    #     optional: kwcoco file with polygons (
-    #     alternative to input region / sites)
-    #     '''), group='track scoring')
-
-    input_region = scfg.Value(None, help='The coercable input region model', group='inputs')
-    # input sites not needed
-    input_sites = scfg.Value(None, help='The coercable input site models', group='inputs')
+    input_region = scfg.Value(None, help=ub.paragraph(
+        '''
+        The coercable input region model with site summaries
+        '''), group='inputs')
 
     out_kwcoco = scfg.Value(None, help=ub.paragraph(
         '''
@@ -46,6 +44,7 @@ def score_tracks(img_coco_dset, model_fpath):
     import ndsampler
     import pandas as pd
     from tqdm import tqdm
+    import warnings
 
     print('loading site validation model')
     proto_fpath = TPL_DPATH / 'deeplab2/max_deeplab_s_backbone_os16.textproto'
@@ -106,7 +105,6 @@ def score_tracks(img_coco_dset, model_fpath):
         video_names = orig_track_group['video_name'].unique()
         if len(video_names) > 1:
             if track_id not in video_names:
-                import warnings
                 msg = (
                     f'track-id {track_id} expected to correspond with video names '
                     'in site-cropped datasets')
@@ -266,21 +264,17 @@ def main(**kwargs):
 
     img_coco_dset = kwcoco.CocoDataset.coerce(args.input_kwcoco)
 
-    # if args.poly_kwcoco is not None:
-    #     poly_coco_dset = kwcoco.CocoDataset.coerce(args.poly_kwcoco)
-    # else:
-    if 1:
-        # Project the site polygons onto the kwcoco dataset.
-        from watch.cli import reproject_annotations
-        img_coco_dset = reproject_annotations.main(
-            cmdline=0, src=img_coco_dset,
-            dst='return',
-            region_models=args.input_region,
-            status_to_catname={'system_confirmed': 'positive'},
-            role='pred_poly',
-            validate_checks=False,
-            clear_existing=False,
-        )
+    # Project the site polygons onto the kwcoco dataset.
+    from watch.cli import reproject_annotations
+    img_coco_dset = reproject_annotations.main(
+        cmdline=0, src=img_coco_dset,
+        dst='return',
+        region_models=args.input_region,
+        status_to_catname={'system_confirmed': 'positive'},
+        role='pred_poly',
+        validate_checks=False,
+        clear_existing=False,
+    )
 
     coco_dset = score_tracks(img_coco_dset, model_fpath)
 
@@ -298,18 +292,6 @@ def main(**kwargs):
 
 
 r'''
-Ignore:
-
-    python -m watch.tasks.depth_pcd.score_tracks \
-            --poly_kwcoco /media/barcelona/Drop6/bas_baseline/polyb.kwcoco.zip
-            --input_kwcoco /media/barcelona/Drop6/valT.kwcoco.zip
-            --output_region_fpath "/media/barcelona/Drop6/tronexperiments/debug/filtered_region.json"
-            --output_site_manifest_fpath "/media/barcelona/Drop6/tronexperiments/debug/sites_manifest.json"
-            --output_sites_dpath "/media/barcelona/Drop6/tronexperiments/debug/sites"
-            --out_kwcoco "some file with filtered poly if you need"
-            --threshold 0.3 (default)
-
-
 Example:
 
     ### Run BAS and then run SV on top of it.
@@ -380,13 +362,13 @@ Example:
         --input_region "$DVC_EXPT_DPATH/_test_dzyne_sv/site_summaries_manifest.json" \
         --input_sites "$DVC_EXPT_DPATH/_test_dzyne_sv/sites_manifest.json" \
         --model_fpath $DVC_EXPT_DPATH/models/depth_pcd/basicModel2.h5 \
+        --out_kwcoco "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_poly.kwcoco.zip" \
+
+
+        --output_sites_dpath  "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_sites" \
         --output_region_fpath "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_site_summaries.json" \
         --output_site_manifest_fpath  "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_sites_manifest.json" \
-        --output_sites_dpath  "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_sites" \
-        --out_kwcoco "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_poly.kwcoco.zip" \
         --threshold 0.4
-
-    # --poly_kwcoco $DVC_EXPT_DPATH/_test_dzyne_sv/poly.kwcoco.zip \
 
     # Score the Filtered Predictions
     python -m watch.cli.run_metrics_framework \
