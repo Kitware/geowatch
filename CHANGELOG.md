@@ -48,6 +48,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Issue where `DINO_SV` would write region models to the out-site-manifest, now correctly points at site models.
 * Bug in coco-align where nodata values were not properly set on data that moved through gdal-merge.
 * Fixed minor issue in `stac_search` where regions with no results might get features from previous results.
+* Fixed issue where incorrect fields were expected / used in the site / region models 
 
 
 ## Version 0.5.6 - Target 2023-04-30
