@@ -189,6 +189,12 @@ def download_region(input_region_path,
             if props['type'] == 'region':
                 props['comments'] = props.get('comments', '')
 
+    # Remove 'validated' property from 'region' feature
+    for feature in out_region_data.get('features', ()):
+        props = feature['properties']
+        if props['type'] == 'region' and 'validated' in props:
+            del props['validated']
+
     with open(output_region_path, 'w') as f:
         print(json.dumps(out_region_data, indent=2), file=f)
 
