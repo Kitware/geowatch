@@ -27,6 +27,7 @@ import scriptconfig as scfg
 import ubelt as ub
 import logging
 import gc
+import shutil
 try:
     from xdev import profile
 except ImportError:
@@ -295,104 +296,102 @@ def assemble_main(cmdline=1, **kwargs):
                 # sorting, or nest files to keep folder sizes small
 
     # Remove tmp files
-    # shutil.rmtree(tmp_path)
+    shutil.rmtree(tmp_path)
 
-    logger.info('Starting adding new asset to kwcoco json')
-    if combine:
-        output_coco_dset = combined_coco_dset
-        for image_id in output_coco_dset.images():
-            combined_coco_image: kwcoco.CocoImage = output_coco_dset.coco_image(image_id)
-            coco_image: kwcoco.CocoImage = coco_dset.coco_image(image_id)
-            image_name = coco_image.img['name']
+    # logger.info('Starting adding new asset to kwcoco json')
+    # if combine:
+    #     output_coco_dset = combined_coco_dset
+    #     for image_id in output_coco_dset.images():
+    #         combined_coco_image: kwcoco.CocoImage = output_coco_dset.coco_image(image_id)
+    #         coco_image: kwcoco.CocoImage = coco_dset.coco_image(image_id)
+    #         image_name = coco_image.img['name']
 
-            asset_w = vid_w
-            asset_h = vid_h
+    #         asset_w = vid_w
+    #         asset_h = vid_h
 
-            for band_name in band_names:
-                for coef in coef_names:
-                    band = BAND_INFO[band_name]
-                    new_fpath = out_path / f'{image_name}_{band}_{method}_{coef}.tif'
-                    if new_fpath.exists():
-                        channels = kwcoco.ChannelSpec.coerce(f'{band}_{method}_{coef}')
-                        print('exist', new_fpath)
-                        # COLD output was wrote based on transform information of
-                        # coco_dset, so it aligned to a scaled video space.
-                        warp_img_from_vid = combined_coco_image.warp_img_from_vid
+    #         for band_name in band_names:
+    #             for coef in coef_names:
+    #                 band = BAND_INFO[band_name]
+    #                 new_fpath = out_path / f'{image_name}_{band}_{method}_{coef}.tif'
+    #                 if new_fpath.exists():
+    #                     channels = kwcoco.ChannelSpec.coerce(f'{band}_{method}_{coef}')
+    #                     # COLD output was wrote based on transform information of
+    #                     # coco_dset, so it aligned to a scaled video space.
+    #                     warp_img_from_vid = combined_coco_image.warp_img_from_vid
 
-                        if resolution is None:
-                            scale_asset_from_vid = (1., 1.)
-                        else:
-                            scale_asset_from_vid = combined_coco_image._scalefactor_for_resolution(
-                                space='video', resolution=resolution)
-                        warp_asset_from_vid = kwimage.Affine.scale(scale_asset_from_vid)
-                        warp_vid_from_asset = warp_asset_from_vid.inv()
-                        warp_img_from_asset = warp_img_from_vid @ warp_vid_from_asset
+    #                     if resolution is None:
+    #                         scale_asset_from_vid = (1., 1.)
+    #                     else:
+    #                         scale_asset_from_vid = combined_coco_image._scalefactor_for_resolution(
+    #                             space='video', resolution=resolution)
+    #                     warp_asset_from_vid = kwimage.Affine.scale(scale_asset_from_vid)
+    #                     warp_vid_from_asset = warp_asset_from_vid.inv()
+    #                     warp_img_from_asset = warp_img_from_vid @ warp_vid_from_asset
 
-                        # Use the CocoImage helper which will augment the coco dictionary with
-                        # your information.
-                        combined_coco_image.add_asset(
-                            file_name=new_fpath,
-                            channels=channels,
-                            width=asset_w,
-                            height=asset_h,
-                            warp_aux_to_img=warp_img_from_asset)
-                        print(f'Added to the asset {new_fpath}')
-                        logger.info(f'Added to the asset {new_fpath}')
-    else:
-        output_coco_dset = coco_dset
-        for image_id in output_coco_dset.images():
-            # Create a CocoImage object for each image.
-            coco_image: kwcoco.CocoImage = output_coco_dset.coco_image(image_id)
-            image_name = coco_image.img['name']
+    #                     # Use the CocoImage helper which will augment the coco dictionary with
+    #                     # your information.
+    #                     combined_coco_image.add_asset(
+    #                         file_name=new_fpath,
+    #                         channels=channels,
+    #                         width=asset_w,
+    #                         height=asset_h,
+    #                         warp_aux_to_img=warp_img_from_asset)
+    #                     print(f'Added to the asset {new_fpath}')
+    #                     logger.info(f'Added to the asset {new_fpath}')
+    # else:
+    #     output_coco_dset = coco_dset
+    #     for image_id in output_coco_dset.images():
+    #         # Create a CocoImage object for each image.
+    #         coco_image: kwcoco.CocoImage = output_coco_dset.coco_image(image_id)
+    #         image_name = coco_image.img['name']
 
-            asset_w = vid_w
-            asset_h = vid_h
+    #         asset_w = vid_w
+    #         asset_h = vid_h
 
-            for band_name in band_names:
-                for coef in coef_names:
-                    band = BAND_INFO[band_name]
-                    new_fpath = out_path / f'{image_name}_{band}_{method}_{coef}.tif'
-                    if new_fpath.exists():
-                        channels = kwcoco.ChannelSpec.coerce(f'{band}_{method}_{coef}')
+    #         for band_name in band_names:
+    #             for coef in coef_names:
+    #                 band = BAND_INFO[band_name]
+    #                 new_fpath = out_path / f'{image_name}_{band}_{method}_{coef}.tif'
+    #                 if new_fpath.exists():
+    #                     channels = kwcoco.ChannelSpec.coerce(f'{band}_{method}_{coef}')
 
-                        # COLD output was wrote based on transform information of
-                        # coco_dset, so it aligned to a scaled video space.
-                        warp_img_from_vid = coco_image.warp_img_from_vid
+    #                     # COLD output was wrote based on transform information of
+    #                     # coco_dset, so it aligned to a scaled video space.
+    #                     warp_img_from_vid = coco_image.warp_img_from_vid
 
-                        if resolution is None:
-                            scale_asset_from_vid = (1., 1.)
-                        else:
-                            scale_asset_from_vid = coco_image._scalefactor_for_resolution(
-                                space='video', resolution=resolution)
-                        warp_asset_from_vid = kwimage.Affine.scale(scale_asset_from_vid)
-                        warp_vid_from_asset = warp_asset_from_vid.inv()
-                        warp_img_from_asset = warp_img_from_vid @ warp_vid_from_asset
+    #                     if resolution is None:
+    #                         scale_asset_from_vid = (1., 1.)
+    #                     else:
+    #                         scale_asset_from_vid = coco_image._scalefactor_for_resolution(
+    #                             space='video', resolution=resolution)
+    #                     warp_asset_from_vid = kwimage.Affine.scale(scale_asset_from_vid)
+    #                     warp_vid_from_asset = warp_asset_from_vid.inv()
+    #                     warp_img_from_asset = warp_img_from_vid @ warp_vid_from_asset
 
-                        # Use the CocoImage helper which will augment the coco dictionary with
-                        # your information.
-                        print(new_fpath)
-                        coco_image.add_asset(os.fspath(new_fpath),
-                                                channels=channels, width=asset_w,
-                                                height=asset_h,
-                                                warp_aux_to_img=warp_img_from_asset)
+    #                     # Use the CocoImage helper which will augment the coco dictionary with
+    #                     # your information.
+    #                     coco_image.add_asset(os.fspath(new_fpath),
+    #                                             channels=channels, width=asset_w,
+    #                                             height=asset_h,
+    #                                             warp_aux_to_img=warp_img_from_asset)
 
-                        logger.info(f'Added to the asset {new_fpath}')
+    #                     logger.info(f'Added to the asset {new_fpath}')
 
-    if proc_context is not None:
-        context_info = proc_context.stop()
-        output_coco_dset.dataset['info'].append(context_info)
+    # if proc_context is not None:
+    #     context_info = proc_context.stop()
+    #     output_coco_dset.dataset['info'].append(context_info)
 
-    # Write a modified kwcoco.json file
-    logger.info(f'Writing kwcoco file to: {mod_coco_fpath}')
-    if combine:
-        combined_coco_dset.fpath = mod_coco_fpath
-        combined_coco_dset._ensure_json_serializable()
-        combined_coco_dset.dump()
-    else:
-        coco_dset.fpath = mod_coco_fpath
-        coco_dset._ensure_json_serializable()
-        coco_dset.dump()
-    logger.info(f'Finished writing kwcoco file to: {mod_coco_fpath}')
+    # # Write a modified kwcoco.json file
+    # logger.info(f'Writing kwcoco file to: {mod_coco_fpath}')
+    # if combine:
+    #     combined_coco_dset.fpath = mod_coco_fpath
+    #     combined_coco_dset._ensure_json_serializable()
+    #     combined_coco_dset.dump()
+    # else:
+    #     coco_dset.fpath = mod_coco_fpath
+    #     coco_dset._ensure_json_serializable()
+    #     coco_dset.dump()
+    # logger.info(f'Finished writing kwcoco file to: {mod_coco_fpath}')
 
     gc.collect()
 

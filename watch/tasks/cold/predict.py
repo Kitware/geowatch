@@ -146,8 +146,8 @@ CommandLine:
         --timestamp=False \
         --combine=False \
         --resolution='10GSD' \
-        --workermode='serial' \
-        --workers=0
+        --workermode='process' \
+        --workers=8
 
     kwcoco stats "$DATA_DVC_DPATH/Drop6/imgonly_KR_R001_cold-V2.kwcoco.zip"
     geowatch stats "$DATA_DVC_DPATH/Drop6/imgonly_KR_R001_cold-V2.kwcoco.zip"
@@ -420,7 +420,7 @@ def cold_predict_main(cmdline=1, **kwargs):
 
         # remove stacked image
         main_prog.set_postfix('Cleanup')
-        shutil.rmtree(tile_kwargs['stack_path'])
+        # shutil.rmtree(tile_kwargs['stack_path'])
         main_prog.step()
 
 
