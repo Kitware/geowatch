@@ -199,6 +199,7 @@ import ubelt as ub
 import json
 import logging
 import shutil
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -252,28 +253,29 @@ def cold_predict_main(cmdline=1, **kwargs):
     Ignore:
         python -m watch.tasks.cold.predict --help
         TEST_COLD=1 xdoctest -m watch.tasks.cold.predict cold_predict_main
-
+        
      Example:
         >>> # xdoctest: +REQUIRES(env:TEST_COLD)
         >>> from watch.tasks.cold.predict import cold_predict_main
         >>> from watch.tasks.cold.predict import *
         >>> kwargs= dict(
-        >>>   coco_fpath = ub.Path('/home/jws18003/data/dvc-repos/smart_data_dvc/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/imgonly-KR_R001.kwcoco.json'),
-        >>>   out_dpath = ub.Path.appdir('/gpfs/scratchfs1/zhz18039/jws18003/kwcoco'),
-        >>>   sensors = 'L8, S2',
-        >>>   adj_cloud = False,
-        >>>   method = 'COLD',
-        >>>   prob = 0.99,
-        >>>   conse = 6,
-        >>>   cm_interval = 60,
-        >>>   year_lowbound = None,
-        >>>   year_highbound = None,
-        >>>   coefs = 'a0', 'cv',
-        >>>   coefs_bands = '0, 1, 2, 3, 4, 5',
-        >>>   timestamp = True,
-        >>>   workermode = 'process',
-        >>>   mod_coco_fpath = ub.Path('/home/jws18003/data/dvc-repos/smart_data_dvc/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/KR_R001/imgonly-KR_R001.kwcoco.modified.json'),
-        >>> )
+        >>>    coco_fpath = ub.Path('/gpfs/scratchfs1/zhz18039/jws18003/new-repos/smart_data_dvc2/Drop6/imgonly-KR_R001.kwcoco.json'),
+        >>>    out_dpath = ub.Path.appdir('/gpfs/scratchfs1/zhz18039/jws18003/new-repos/smart_data_dvc2/Drop6/_pycold_combine_V2'),
+        >>>    sensors = 'L8,S2',
+        >>>    adj_cloud = False,
+        >>>    method = 'COLD',
+        >>>    prob = 0.99,
+        >>>    conse = 6,
+        >>>    cm_interval = 60,
+        >>>    year_lowbound = None,
+        >>>    year_highbound = None,
+        >>>    coefs = 'cv,rmse,a0,a1,b1,c1',
+        >>>    coefs_bands = '0,1,2,3,4,5',
+        >>>    timestamp = False,
+        >>>    combine = False,
+        >>>    workermode = 'process',
+        >>>    mod_coco_fpath = ub.Path('/home/jws18003/data/dvc-repos/smart_data_dvc/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/KR_R001/imgonly-KR_R001.kwcoco.modified.json'),
+        >>>    )
         >>> cmdline=0
         >>> cold_predict_main(cmdline, **kwargs)
     """
@@ -307,8 +309,8 @@ def cold_predict_main(cmdline=1, **kwargs):
     sensors = config['sensors']
     adj_cloud = config['adj_cloud']
     method = config['method']
-    workers = util_parallel.coerce_num_workers(config['workers'])
-
+    workers = util_parallel.coerce_num_workers(config['workers'])    
+    
     use_subprogress = workers == 0 or config['workermode'] != 'process'
 
     proc_context.start()
@@ -322,41 +324,56 @@ def cold_predict_main(cmdline=1, **kwargs):
         # 1 / 4 Prepare Step
         # ============
         main_prog.set_postfix('Step 1: Prepare')
-        meta_fpath = prepare_kwcoco.prepare_kwcoco_main(
-            cmdline=0, coco_fpath=coco_fpath, out_dpath=out_dpath, sensors=sensors,
-            adj_cloud=adj_cloud, method=method, workers=workers,
-            resolution=config.resolution,
-        )
-        with open(meta_fpath, 'r') as meta:
-            metadata = json.load(meta)
+        
+        metadata = read_json_metadata(out_dpath)
+        print(metadata)
+        if metadata == None:
+            meta_fpath = prepare_kwcoco.prepare_kwcoco_main(
+                cmdline=0, coco_fpath=coco_fpath, out_dpath=out_dpath, sensors=sensors,
+                adj_cloud=adj_cloud, method=method, workers=workers,
+                resolution=config.resolution,
+            )
+            with open(meta_fpath, 'r') as meta:
+                metadata = json.load(meta)
+        else:
+            logger.info('Skipping step 1 because the stacked image already exists...')
+        # with open(meta_fpath, 'r') as meta:
+        #     metadata = json.load(meta)
+
         main_prog.step()
 
         # =========
         # 2 / 4 Tile Step
         # =========
         main_prog.set_postfix('Step 2: Process')
-        logger.info('Starting COLD tile-processing...')
-        tile_kwargs = tile_processing_kwcoco.TileProcessingKwcocoConfig().to_dict()
-        tile_kwargs['stack_path'] = out_dpath / 'stacked' / metadata['region_id']
-        tile_kwargs['reccg_path'] = out_dpath / 'reccg' / metadata['region_id']
-        tile_kwargs['meta_fpath'] = meta_fpath
-        tile_kwargs['method'] = method
-        tile_kwargs['prob'] = config['prob']
-        tile_kwargs['conse'] = config['conse']
-        tile_kwargs['cm_interval'] = config['cm_interval']
-        if use_subprogress:
-            tile_kwargs['pman'] = pman
+        
+        tile_log_fpath = out_dpath / 'reccg' / metadata['region_id'] / 'log.json'
+        print(tile_log_fpath)
+        if not os.path.exists(tile_log_fpath):                            
+            logger.info('Starting COLD tile-processing...')
+            tile_kwargs = tile_processing_kwcoco.TileProcessingKwcocoConfig().to_dict()
+            tile_kwargs['stack_path'] = out_dpath / 'stacked' / metadata['region_id']
+            tile_kwargs['reccg_path'] = out_dpath / 'reccg' / metadata['region_id']
+            # tile_kwargs['meta_fpath'] = meta_fpath
+            tile_kwargs['method'] = method
+            tile_kwargs['prob'] = config['prob']
+            tile_kwargs['conse'] = config['conse']
+            tile_kwargs['cm_interval'] = config['cm_interval']
+            if use_subprogress:
+                tile_kwargs['pman'] = pman
 
-        jobs = ub.JobPool(mode=config['workermode'], max_workers=workers)
-        with jobs:
-            for i in pman.progiter(range(workers + 1), desc='submit process jobs', transient=True):
-                tile_kwargs['rank'] = i
-                tile_kwargs['n_cores'] = max(workers, 1)
-                jobs.submit(tile_processing_kwcoco.tile_process_main, cmdline=0, **tile_kwargs)
+            jobs = ub.JobPool(mode=config['workermode'], max_workers=workers)
+            with jobs:
+                for i in pman.progiter(range(workers + 1), desc='submit process jobs', transient=True):
+                    tile_kwargs['rank'] = i
+                    tile_kwargs['n_cores'] = max(workers, 1)
+                    jobs.submit(tile_processing_kwcoco.tile_process_main, cmdline=0, **tile_kwargs)
 
-            tile_iter = pman.progiter(jobs.as_completed(), desc='Collect process jobs', total=len(jobs))
-            for job in tile_iter:
-                job.result()
+                tile_iter = pman.progiter(jobs.as_completed(), desc='Collect process jobs', total=len(jobs))
+                for job in tile_iter:
+                    job.result()
+        else:
+            logger.info('Skipping step 2 because COLD processing already finished...')
         main_prog.step()
 
         # ===========
@@ -367,7 +384,7 @@ def cold_predict_main(cmdline=1, **kwargs):
         export_kwargs = export_cold_result_kwcoco.ExportColdKwcocoConfig().to_dict()
         export_kwargs['stack_path'] = tile_kwargs['stack_path']
         export_kwargs['reccg_path'] = tile_kwargs['reccg_path']
-        export_kwargs['meta_fpath'] = meta_fpath
+        # export_kwargs['meta_fpath'] = meta_fpath
         export_kwargs['combined_coco_fpath'] = config['combined_coco_fpath']
         export_kwargs['year_lowbound'] = config['year_lowbound']
         export_kwargs['year_highbound'] = config['year_highbound']
@@ -418,11 +435,24 @@ def cold_predict_main(cmdline=1, **kwargs):
             cmdline=0, proc_context=proc_context, **assemble_kwargs)
         main_prog.step()
 
+        # To keep meta data, this script won't clean up stack_path
         # remove stacked image
-        main_prog.set_postfix('Cleanup')
+        # main_prog.set_postfix('Cleanup')
         # shutil.rmtree(tile_kwargs['stack_path'])
-        main_prog.step()
-
+        # main_prog.step()
+        
+@profile
+def read_json_metadata(folder_path):
+    stacked_path = folder_path / 'stacked'
+    for root, dirs, files in os.walk(stacked_path):
+        for file in files:
+            if file.endswith(".json"):
+                json_path = os.path.join(root, file)
+                
+                with open(json_path, "r") as f:                    
+                    metadata = json.load(f)
+                    return metadata
+    return None
 
 if __name__ == '__main__':
     cold_predict_main()
