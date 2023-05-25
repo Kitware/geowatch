@@ -13,19 +13,25 @@ from watch.tasks.rutgers_material_seg_v2.matseg.models import build_model
 from watch.tasks.rutgers_material_seg_v2.matseg.utils.utils_image import ImageStitcher_v2
 from watch.tasks.rutgers_material_seg_v2.matseg.utils.utils_dataset import MATERIAL_TO_MATID
 from watch.tasks.rutgers_material_seg_v2.matseg.utils.utils_mat_tran_mask import compute_material_transition_mask
-from watch.tasks.rutgers_material_seg_v2.matseg.utils.utils_misc import load_cfg_file, generate_image_slice_object
+from watch.tasks.rutgers_material_seg_v2.matseg.utils.utils_misc import load_cfg_file, generate_image_slice_object, create_hash_str
 
 from watch.tasks.rutgers_material_seg_v2.mtm.dataset.inference_dataset import InferenceDataset
 from watch.tasks.rutgers_material_seg_v2.mtm.utils.coco_stitcher import CocoStitchingManager, BlockingJobQueue
 
 
-def make_material_predictions(eval_loader, model, output_coco_dset, n_workers=4, generate_mtm=True):
+def make_material_predictions(eval_loader,
+                              model,
+                              output_coco_dset,
+                              hash_name,
+                              n_workers=4,
+                              generate_mtm=True):
     """Generate and save material predictions to kwcoco file.
 
     Args:
         eval_loader (torch.utils.data.DataLoader): Dataset loader with region images to evaluate.
         model (torch.nn.Module): Material segmentation model.
         output_coco_dset (kwcoco.CocoDataset): The dataset where material predictions will be saved.
+        hash_name (str): The hash name of the experiment.
         n_workers (int, optional): Number of threads to grab data. Defaults to 4.
         generate_mtm (bool, optional): Whether to generate material transition masks. Defaults to True.
 
@@ -88,16 +94,16 @@ def make_material_predictions(eval_loader, model, output_coco_dset, n_workers=4,
     writer_queue = BlockingJobQueue(max_workers=n_workers)
     if generate_mtm:
         mtm_stitcher = CocoStitchingManager(output_coco_dset,
-                                            'mtm',
-                                            'mtm',
+                                            short_code=f'mtm_{hash_name}',
+                                            chan_code='mtm',
                                             stiching_space='video',
                                             writer_queue=writer_queue,
                                             expected_minmax=(0, 1))
     else:
         mtm_stitcher = None
     mat_pred_stitcher = CocoStitchingManager(output_coco_dset,
-                                             'materials',
-                                             'materials',
+                                             short_code=f'materials_{hash_name}',
+                                             chan_code='materials',
                                              stiching_space='video',
                                              writer_queue=writer_queue,
                                              expected_minmax=(0, 1))
@@ -113,7 +119,10 @@ def make_material_predictions(eval_loader, model, output_coco_dset, n_workers=4,
         h, w = region_mtm.shape
         gid = int(image_id)
         if mtm_stitcher:
-            mtm_stitcher.accumulate_image(gid, space_slice=None, data=region_mtm, asset_dsize=(w, h))
+            mtm_stitcher.accumulate_image(gid,
+                                          space_slice=None,
+                                          data=region_mtm,
+                                          asset_dsize=(w, h))
             mtm_stitcher.submit_finalize_image(gid)
         mat_pred_stitcher.accumulate_image(gid,
                                            space_slice=None,
@@ -128,21 +137,28 @@ def make_material_predictions(eval_loader, model, output_coco_dset, n_workers=4,
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('input_kwcoco_fpath',
+    parser.add_argument('kwcoco_fpath',
                         type=str,
                         help='Path to kwcoco file that we use to add our \
                         features to.')
     parser.add_argument('model_fpath',
                         type=str,
                         help='Path to material segmentation model that is \
-                        used to generate material predictions as well as the material \
-                        transition mask.')
-    parser.add_argument('--config_fpath', type=str, default=None, help='Path to the \
-                        model`s configuration file.')
-    parser.add_argument('--output_kwcoco_fpath', type=str, default=None, help='Path to \
-                         output kwcoco file.')
-    parser.add_argument('--n_workers', type=int, default=None, help='Number of parallel\
-                        jobs to do data loading.')
+                        used to generate material predictions as well as the material transition \
+                        mask.')
+    parser.add_argument('--config_fpath',
+                        type=str,
+                        default=None,
+                        help='Path to the model`s configuration file.')
+    parser.add_argument('--output_kwcoco_fpath',
+                        type=str,
+                        default=None,
+                        help='Path to output kwcoco file.')
+    parser.add_argument('--n_workers',
+                        type=int,
+                        default=None,
+                        help='Number of parallel jobs to \
+                        do data loading.')
     args = parser.parse_args()
 
     # Load configuration file.
@@ -197,12 +213,15 @@ def main():
                         checkpoint_path=args.model_fpath)
 
     # Create a new kwcoco file to store predictions
-    og_kwcoco_dset = kwcoco.CocoDataset(args.input_kwcoco_fpath)
+    og_kwcoco_dset = kwcoco.CocoDataset(args.kwcoco_fpath)
     output_coco_dset = og_kwcoco_dset.copy()
     video_ids = list(output_coco_dset.videos())
 
     ## Release old dataset from memory.
     del og_kwcoco_dset
+
+    ## Generate hash name for generation run.
+    hash_name = create_hash_str(method_name='sha256', **vars(args))[:10]
 
     # Make predictions on the dataset video by video.
     # This is done to save on memory usage and can be made into parallel process.
@@ -210,7 +229,7 @@ def main():
         # Create a dataset.
         dataset = InferenceDataset(video_id,
                                    channels=cfg.dataset.channels,
-                                   kwcoco_path=args.input_kwcoco_fpath,
+                                   kwcoco_path=args.kwcoco_fpath,
                                    crop_params=crop_params)
 
         # Create a loader for this video.
@@ -221,13 +240,16 @@ def main():
             num_workers=cfg.n_workers,
         )
 
-        # Creaet material predictions.
-        output_coco_dset = make_material_predictions(loader, model, output_coco_dset)
+        # Create material predictions.
+        output_coco_dset = make_material_predictions(loader, model, output_coco_dset, hash_name)
 
+    # Generate where to save new kwcoco file.
     if args.output_kwcoco_fpath is None:
-        save_path = args.input_kwcoco_fpath.replace('.kwcoco.zip', '_mat_preds.kwcoco.zip')
+        save_path = args.kwcoco_fpath.replace('.kwcoco.zip', '_mat_preds.kwcoco.zip')
     else:
         save_path = args.output_kwcoco_fpath
+
+    # Save kwcoco file with material features.
     print(f'Saving predictions to: \n {save_path}')
     output_coco_dset.dump(save_path)
 

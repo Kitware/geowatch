@@ -331,3 +331,26 @@ def populate_old_config(cfg):
             setattr(cfg, attr_name, default_value)
 
     return cfg
+
+
+def create_hash_str(method_name='sha256', **kwargs):
+
+    hashed_str = ''
+    for name, value in kwargs.items():
+        if isinstance(value, str):
+            pass
+        if isinstance(value, list):
+            kwargs[name] = '_'.join(value)
+        else:
+            kwargs[name] = str(value)
+
+        hashed_str += kwargs[name]
+
+    if method_name == 'sha256':
+        sha = hashlib.sha256()
+        sha.update(hashed_str.encode())
+        output_str = sha.hexdigest()
+    else:
+        raise NotImplementedError(f'Not method "{method_name}" for hashing.')
+
+    return output_str
