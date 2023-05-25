@@ -1,0 +1,6 @@
+name: lb_materials
+channels: RGB_NIR
+sensors: S2
+
+kwargs:
+  sample_positives: True

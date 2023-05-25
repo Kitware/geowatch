@@ -1,0 +1,29 @@
+defaults:
+  - dataset: lb_ms_materials
+  - model: basic
+  - _self_
+
+# Where to save experiments
+hydra:
+  run:
+    dir: /SSD1TB/purri/model_predictions/matseg_exps/${now:%Y-%m-%d}/${now:%H-%M-%S}
+
+crop_height: 160
+crop_width: 160
+crop_stride: 40
+strategy: "auto"  # [auto, ddp_find_unused_parameters_false]
+resize_factor: 1
+n_epochs: 50
+batch_size: 64
+batch_size_lr_scaling: 0.0625  # (1/16) lr * s /B = *lr, how the learning rate should be scaled based on batch_size increase
+n_workers: 11
+save_topk_models: 1
+ignore_index: 0
+profiler: "simple"
+limit_train_batches: null
+limit_val_batches: null
+test_model: True
+
+# Material label params
+refresh_labels: False
+lb_project_id: clcmvwgad0io608zl9whk386u

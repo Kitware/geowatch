@@ -1,0 +1,12 @@
+architecture: unetplusplus  # [unet, unetplusplus, deeplabv3plus, manet]
+encoder: timm-resnest50d  # https://github.com/qubvel/segmentation_models.pytorch#architectures
+loss_mode: cross_entropy  # [cross_entropy, cross_entropy_ohem]
+optimizer_mode: adamw  # [adam, adamw, sgd]
+pretrain: imagenet  # imagenet
+class_weight_mode: sqrt # [equal, prop, sqrt]
+lr: 1e-4
+wd: 1e-6
+ohem_ratio: 0.75
+lr_scheduler_mode: step  # [reduce_lr_on_plateau, step]
+
+kwargs:
