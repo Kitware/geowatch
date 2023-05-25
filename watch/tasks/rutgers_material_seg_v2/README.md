@@ -4,7 +4,6 @@
 
 - `pip install pycm`
 
-
 ## How to generate the material predictions:
 
 ```python
@@ -18,5 +17,6 @@ python ./watch/tasks/rutgers_material_seg_v2/mtm/attach_features.py /data4/datas
 ```
 
 ## Most up to date model and config file:
+
 Model path: `$EXPT_DVC_DPATH/smart_expt_dvc/models/rutgers/mat_seg_12_14_22/model-epoch=04-valid_f1_score=0.964.ckpt`  <br/>
 Config path: `$EXPT_DVC_DPATH/smart_expt_dvc/models/rutgers/mat_seg_12_14_22/config.yaml`

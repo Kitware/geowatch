@@ -62,11 +62,11 @@ def get_loss_funtion(loss_mode, class_weights, ignore_index=-100, ohem_ratio=0.7
 
     Args:
         loss_mode (str): The loss function to use.
-        class_weights (torch.Tensor(float)): The weight factor for each class. 
+        class_weights (torch.Tensor(float)): The weight factor for each class.
             If None, all classes are equally weighted.
         ignore_index (int, optional): The class index to ignore. Defaults to -100.
-        ohem_ratio (float, optional): The percentage [0,1] of values to keep for 
-            computing the loss. As defined by original paper: 
+        ohem_ratio (float, optional): The percentage [0,1] of values to keep for
+            computing the loss. As defined by original paper:
             https://arxiv.org/pdf/1604.03540.pdf. Defaults to 0.75.
 
     Raises:

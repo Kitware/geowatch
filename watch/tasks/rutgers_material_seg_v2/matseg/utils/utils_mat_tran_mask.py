@@ -97,8 +97,8 @@ def compute_material_transition_mask(mode,
         _type_: _description_
         _type_: _description_
     """
-    natural_mat_ids = [1, 2, 4, 5]
-    unnatural_mat_ids = [3, 6, 7, 8]
+    # natural_mat_ids = [1, 2, 4, 5]
+    # unnatural_mat_ids = [3, 6, 7, 8]
 
     if mode == 'hard_class_1':
         # Average X first and final frame confidences.

@@ -56,9 +56,9 @@ def get_crop_slices(height, width, crop_height, crop_width, step=None, mode='exa
     Args:
         height (int): The height of the image to be cropped (y-axis).
         width (int): The width of the image to be cropped (x-axis).
-        crop_height (int): The size of the crop height. Note: For certain modes, 
+        crop_height (int): The size of the crop height. Note: For certain modes,
             e.g. mode = 'under', crop height must be less than original image height.
-        crop_width (int): The size of the crop width. Note: For certain modes, 
+        crop_width (int): The size of the crop width. Note: For certain modes,
             e.g. mode = 'under', crop width must be less than original image width.
         step (int): Distance in pixels to move crop window, defauls to size of the crop along that direction, i.e. no overlap.
         mode (str, optional): Method for how to handle edge cases. Defaults to 'exact'.
@@ -232,7 +232,7 @@ def create_gif(image_list,
         image_list (list[numpy array]): A list of images in numpy format of type uint8.
         save_path (str): Path to save gif file.
         fps (float, optional): Frames per second. Defaults to 1.
-        image_text (list[str], optional): A list of text to add to each frame of the gif. 
+        image_text (list[str], optional): A list of text to add to each frame of the gif.
             Must be the same length as image_list.
     """
 
@@ -262,11 +262,7 @@ def create_gif(image_list,
             image_2.putalpha(1)
 
             # Overlay images
-            try:
-                image_comb = Image.alpha_composite(image_1, image_2)
-            except:
-                breakpoint()
-                pass
+            image_comb = Image.alpha_composite(image_1, image_2)
             images_comb.append(image_comb)
 
         img, *imgs = [img for img in images_comb]
@@ -287,7 +283,7 @@ def create_gif(image_list,
                 try:
                     font = ImageFont.truetype("/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf",
                                               fontsize)
-                except:
+                except:  # NOQA
                     print('Cannot find font at: /usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf')
                     font = ImageFont.load_default()
 

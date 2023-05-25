@@ -167,7 +167,7 @@ def load_S2_image(image_dir, channels, crop_slice=None, backend='gdal'):
 
         try:
             frame = np.stack(channel_images, axis=0)
-        except:
+        except:  # NOQA
             hh, ww = channel_images[0].shape
             new_channel_images = []
             for ci in channel_images:
@@ -232,7 +232,7 @@ def scale_image(image, scale_mode='direct'):
         scale_mode (str, optional): Parameter to determine how to scale image. Defaults to 'direct'.
 
     Returns:
-        TODO: 
+        TODO:
     """
 
     def __direct_scale(image):
@@ -535,11 +535,7 @@ class ImageStitcher_v2:
                 if image.max() < 1:
                     image = image * 255
                 image = image.astype('uint8')
-            try:
-                Image.fromarray(image).save(save_path)
-            except:
-                breakpoint()
-                pass
+            Image.fromarray(image).save(save_path)
         elif self.save_backend == 'gdal':
             # kwimage.imwrite(save_path, image, backend='gdal')
             driver = gdal.GetDriverByName("GTiff")
@@ -609,8 +605,8 @@ def add_buffer_to_image(image,
         buffer_mode (str, optional): Method mode for determining how to fill buffered regions. Defaults to 'constant'.
         constant_value (int, optional): For constant method, what value to assign to default canvas value. Defaults to 0.
     Raises:
-        NotImplementedError: No method to handle images with number of dimensions other than 2 or 3. 
-        NotImplementedError: No method to handle images with number of dimensions other than 2 or 3. 
+        NotImplementedError: No method to handle images with number of dimensions other than 2 or 3.
+        NotImplementedError: No method to handle images with number of dimensions other than 2 or 3.
     Returns:
         np.array: A numpy array of shape [desired_height, desired_width].
     """

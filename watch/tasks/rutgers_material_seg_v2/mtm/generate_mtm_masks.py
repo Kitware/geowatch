@@ -1,6 +1,6 @@
 """
-Script used to analyze the material transition matrix (MTM) masks both qualitatively (by showing 
-material predictions and RGB scenes) and quanitatively (by computing metrics between the MTM and 
+Script used to analyze the material transition matrix (MTM) masks both qualitatively (by showing
+material predictions and RGB scenes) and quanitatively (by computing metrics between the MTM and
 BAS change masks).
 """
 
@@ -21,7 +21,6 @@ from collections import defaultdict
 from sklearn.metrics import precision_recall_fscore_support
 
 from watch.tasks.rutgers_material_seg_v2.matseg.models import build_model
-from watch.tasks.rutgers_material_seg_v2.matseg.datasets.bas_dataset import BAS_Dataset
 from watch.tasks.rutgers_material_seg_v2.matseg.utils.utils_image import ImageStitcher_v2
 from watch.tasks.rutgers_material_seg_v2.matseg.utils.utils_mat_tran_mask import compute_material_transition_mask
 from watch.tasks.rutgers_material_seg_v2.matseg.utils.utils_dataset import MATERIAL_TO_MATID, colorize_material_mask, load_region_bas_annos

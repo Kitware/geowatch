@@ -39,7 +39,7 @@ def colorize_material_mask(mat_pred):
     """Convert material prediction image to an RGB mask corresponding to material colors.
 
     Args:
-        mat_pred (np.array): An int numpy array of shape [height, width] containing values 
+        mat_pred (np.array): An int numpy array of shape [height, width] containing values
             corresponding to material classes.
 
     Returns:
@@ -82,10 +82,10 @@ def paste_annotations_onto_mask(annos, mat_to_num, height, width, simplified_tax
 
     Args:
         annos (??): An object containing annotations.
-        mat_to_num (Dict[str, int]): A dictionary mapping material names to material ids. 
+        mat_to_num (Dict[str, int]): A dictionary mapping material names to material ids.
         height (int): The height of the canvas to paste the annotations onto.
         width (int): The width of the canvas to paste the annotations onto.
-        simplified_taxonomy (bool, optional): Group some of the material together. 
+        simplified_taxonomy (bool, optional): Group some of the material together.
             Defaults to False.
 
     Returns:
@@ -105,21 +105,19 @@ def paste_annotations_onto_mask(annos, mat_to_num, height, width, simplified_tax
     return canvas
 
 
-
-
 def get_lb_anno_mask(label, simplified_taxonomy=True):
     """From a labelbox label, get the annotation mask.
 
     Args:
         label (_type_): A LabelBox annotation object.
-        simplified_taxonomy (bool, optional): Convert some material values to others. 
+        simplified_taxonomy (bool, optional): Convert some material values to others.
             Defaults to True.
 
     Raises:
         FileExistsError: Raises if the image directory cannot be found.
 
     Returns:
-        list: A list of dictionaries containing the following keys: label, mat_mask, image_dir, 
+        list: A list of dictionaries containing the following keys: label, mat_mask, image_dir,
             region_name.
         np.array: An array of shape n_materials containing the number of pixels found per material.
     """
@@ -178,8 +176,6 @@ def get_lb_anno_mask(label, simplified_taxonomy=True):
     }
 
     return mat_label_info, mat_dict
-
-
 
 
 def load_region_bas_annos(drop_version=4, gsd=10):

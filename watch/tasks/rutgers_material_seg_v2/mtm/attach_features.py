@@ -24,7 +24,7 @@ def make_material_predictions(eval_loader, model, output_coco_dset, n_workers=4,
 
     Args:
         eval_loader (torch.utils.data.DataLoader): Dataset loader with region images to evaluate.
-        model (torch.nn.Module): Material segmentation model. 
+        model (torch.nn.Module): Material segmentation model.
         output_coco_dset (kwcoco.CocoDataset): The dataset where material predictions will be saved.
         n_workers (int, optional): Number of threads to grab data. Defaults to 4.
         generate_mtm (bool, optional): Whether to generate material transition masks. Defaults to True.
@@ -170,7 +170,7 @@ def main():
     # Load a model.
     if cfg.model.kwargs is None:
         cfg.model.kwargs = {}
-    
+
     if hasattr(cfg.model, 'lr_scheduler_mode'):
         cfg.model.kwargs['lr_scheduler_mode'] = None
 

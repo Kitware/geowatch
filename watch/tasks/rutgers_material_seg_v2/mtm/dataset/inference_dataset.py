@@ -12,8 +12,8 @@ from torch.utils.data import Dataset
 from watch.tasks.rutgers_material_seg_v2.matseg.utils.utils_image import add_buffer_to_image
 from watch.tasks.rutgers_material_seg_v2.matseg.utils.utils_misc import get_crop_slices, get_repo_paths, generate_image_slice_object
 
-def create_hash_str(method_name='sha256', **kwargs):
 
+def create_hash_str(method_name='sha256', **kwargs):
     hashed_str = ''
     for name, value in kwargs.items():
         if isinstance(value, str):

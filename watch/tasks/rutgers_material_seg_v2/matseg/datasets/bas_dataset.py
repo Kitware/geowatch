@@ -197,7 +197,7 @@ class BAS_Dataset(Dataset):
                     examples.append(example)
 
         if len(examples) == 0:
-            raise ValueError(f'No examples could be generated!')
+            raise ValueError('No examples could be generated!')
 
         return examples
 

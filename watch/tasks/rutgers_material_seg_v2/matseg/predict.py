@@ -23,7 +23,7 @@ from watch.tasks.rutgers_material_seg_v2.matseg.datasets.bas_dataset import BAS_
 from watch.tasks.rutgers_material_seg_v2.matseg.utils.utils_image import ImageStitcher, ImageStitcher_v2
 from watch.tasks.rutgers_material_seg_v2.matseg.utils.utils_mat_tran_mask import compute_material_transition_mask
 from watch.tasks.rutgers_material_seg_v2.matseg.utils.utils_misc import load_cfg_file, generate_image_slice_object, create_conf_matrix_pred_image
-from watch.tasks.rutgers_material_seg_v2.matseg.utils.utils_dataset import get_labelbox_material_labels, MATERIAL_TO_MATID, colorize_material_mask, MATID_TO_MATERIAL
+from watch.tasks.rutgers_material_seg_v2.matseg.utils.utils_dataset import get_labelbox_material_labels, MATERIAL_TO_MATID, colorize_material_mask
 
 
 def compute_metrics(pred_change, gt_change):
@@ -101,26 +101,22 @@ def generate_material_predictions_v2(model, eval_loader, exp_dir, mat_labels, re
         region_predictions, reigon_q_masks = {}, {}
         for image_name, mat_conf in stitched_predictions.items():
             # region_name = '_'.join(image_name.split('_')[:2])
-            try:
-                region_name = img_name_to_region[image_name]
-                if region_name not in region_predictions.keys():
-                    region_predictions[region_name] = {'0': [], '1': []}
-                    reigon_q_masks[region_name] = {'0': [], '1': []}
-                first_last = image_name.split('_')[2]
+            region_name = img_name_to_region[image_name]
+            if region_name not in region_predictions.keys():
+                region_predictions[region_name] = {'0': [], '1': []}
+                reigon_q_masks[region_name] = {'0': [], '1': []}
+            first_last = image_name.split('_')[2]
 
-                mat_pred = mat_conf.argmax(axis=0)
-                region_predictions[region_name][first_last].append(mat_conf)
+            mat_pred = mat_conf.argmax(axis=0)
+            region_predictions[region_name][first_last].append(mat_conf)
 
-                # Save MAT-RGB version of prediction.
-                mat_pred_save_dir = os.path.join(stitcher_save_dir, region_name, 'pred', first_last)
-                os.makedirs(mat_pred_save_dir, exist_ok=True)
-                mat_pred_save_path = os.path.join(mat_pred_save_dir, image_name + '.png')
-                rgb_pred = colorize_material_mask(mat_pred)
-                Image.fromarray(rgb_pred).save(mat_pred_save_path)
-                print(mat_pred_save_path)
-            except:
-                breakpoint()
-                pass
+            # Save MAT-RGB version of prediction.
+            mat_pred_save_dir = os.path.join(stitcher_save_dir, region_name, 'pred', first_last)
+            os.makedirs(mat_pred_save_dir, exist_ok=True)
+            mat_pred_save_path = os.path.join(mat_pred_save_dir, image_name + '.png')
+            rgb_pred = colorize_material_mask(mat_pred)
+            Image.fromarray(rgb_pred).save(mat_pred_save_path)
+            print(mat_pred_save_path)
 
 
 def generate_material_predictions(model, eval_loader, exp_dir, mat_labels, resize_factor=1):
@@ -197,12 +193,8 @@ def generate_material_predictions(model, eval_loader, exp_dir, mat_labels, resiz
                     region_name = label['region_name']
 
             # Save RGB image.
-            try:
-                region_save_dir = os.path.join(os.path.split(save_path)[0], region_name)
-                os.makedirs(region_save_dir, exist_ok=True)
-            except:
-                breakpoint()
-                pass
+            region_save_dir = os.path.join(os.path.split(save_path)[0], region_name)
+            os.makedirs(region_save_dir, exist_ok=True)
 
             img_name = os.path.split(save_path)[1][:-4]
 
@@ -536,9 +528,8 @@ def predict():
         '--mat_change',
         default=False,
         action='store_true',
-        help=
-        'If flag is true, then the model will generate a MTM and get scored on overlap to BAS labels.'
-    )
+        help='If flag is true, then the model will generate a MTM and get scored on \
+              overlap to BAS labels.')
     parser.add_argument('--fist_last_images', type=int, default=5)
     parser.add_argument('--mat_trans_mask_mode', type=str, default='hard_class_2')
     parser.add_argument(
@@ -596,7 +587,6 @@ def predict():
                                  num_workers=cfg.n_workers)
 
         n_channels = eval_dataset.n_channels
-        to_rgb_func = eval_dataset.to_RGB
 
     if args.mat_change:
         # Load bas dataset.
@@ -610,7 +600,6 @@ def predict():
                                 shuffle=False,
                                 num_workers=cfg.n_workers)
         n_channels = bas_dataset.n_channels
-        to_rgb_func = None
 
     # Create model.
     if cfg.model.kwargs is None:
