@@ -271,7 +271,7 @@ class SimpleDVC(ub.NiceRepr):
             dvc_root, rel_paths = self._resolve_root_and_relative_paths(missing_data)
 
             def _find_sidecar(rel_path):
-                first_cand = dvc_root / rel_path.augment(stem=rel_path.name, ext='.dvc')
+                first_cand = dvc_root / ub.Path(rel_path).augment(stem=rel_path.name, ext='.dvc')
                 if first_cand.exists():
                     return first_cand
                 rel_parts = rel_path.parts

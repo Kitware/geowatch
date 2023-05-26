@@ -43,6 +43,187 @@ python -m watch.cli.prepare_ta2_dataset \
     --run=1
 
 
+
+ls_array(){
+    __doc__='
+    Read the results of a glob pattern into an array
+
+    Args:
+        arr_name
+        glob_pattern
+
+    Example:
+        arr_name="myarray"
+        glob_pattern="*"
+        pass
+        bash_array_repr "${array[@]}"
+        mkdir -p $HOME/tmp/tests/test_ls_arr
+        cd $HOME/tmp/tests/test_ls_arr
+        touch "$HOME/tmp/tests/test_ls_arr/path ological files"
+        touch "$HOME/tmp/tests/test_ls_arr/are so fun"
+        touch "$HOME/tmp/tests/test_ls_arr/foo"
+        touch "$HOME/tmp/tests/test_ls_arr/bar"
+        touch "$HOME/tmp/tests/test_ls_arr/baz"
+        touch "$HOME/tmp/tests/test_ls_arr/biz"
+        touch "$HOME/tmp/tests/test_ls_arr/fake_newline\n in fils? YES!"
+        python -c "import ubelt; ubelt.Path(\"$HOME/tmp/tests/test_ls_arr/Real newline \n in fname\").expand().touch()"
+        python -c "import ubelt; ubelt.Path(\"$HOME/tmp/tests/test_ls_arr/Realnewline\ninfname\").expand().touch()"
+
+        arr_name="myarray"
+        glob_pattern="*"
+        ls_array "$arr_name" "$glob_pattern"
+        bash_array_repr "${array[@]}"
+
+    References:
+        .. [1] https://stackoverflow.com/a/18887210/887074
+        .. [2] https://stackoverflow.com/questions/14564746/in-bash-how-to-get-the-current-status-of-set-x
+
+    TODO:
+        get the echo of shopt off
+    '
+    local arr_name="$1"
+    local glob_pattern="$2"
+
+    local toggle_nullglob=""
+    local toggle_noglob=""
+    # Can check the "$-" variable to see what current settings are i.e. set -x, set -e
+    # Can check "set -o" to get currentenabled options
+    # Can check "shopt" to get current enabled options
+
+    if shopt nullglob; then
+        # Check if null glob is enabled, if it is, this will be true
+        toggle_nullglob=0
+    else
+        toggle_nullglob=1
+    fi
+    # Check for -f to see if noglob is enabled
+    if [[ -n "${-//[^f]/}" ]]; then
+        toggle_noglob=1
+    else
+        toggle_noglob=0
+    fi
+
+    if [[ "$toggle_nullglob" == "1" ]]; then
+        # Enable nullglob if it was off
+        shopt -s nullglob
+    fi
+    if [[ "$toggle_noglob" == "1" ]]; then
+        # Enable nullglob if it was off
+        shopt -s nullglob
+    fi
+
+    # The f corresponds to if noglob was set
+
+    # shellcheck disable=SC2206
+    array=($glob_pattern)
+
+    if [[ "$toggle_noglob" == "1" ]]; then
+        # need to reenable noglob
+        set -o noglob  # enable noglob
+    fi
+    if [[ "$toggle_nullglob" == "1" ]]; then
+        # Disable nullglob if it was off to make sure it doesn't interfere with anything later
+        shopt -u nullglob
+    fi
+    # Copy the array into the dynamically named variable
+    readarray -t "$arr_name" < <(printf '%s\n' "${array[@]}")
+}
+
+
+move_kwcoco_paths(){
+    __doc__="
+    "
+
+    python -c "if 1:
+
+    import ubelt as ub
+    bundle_dpath = ub.Path('.').absolute()
+    all_paths = list(bundle_dpath.glob('*_[R]*'))
+    region_dpaths = []
+    for p in all_paths:
+        if p.is_dir() and str(p.name)[2] == '_':
+            region_dpaths.append(p)
+
+    import cmd_queue
+    queue = cmd_queue.Queue.create('tmux', size=16)
+
+    for dpath in region_dpaths:
+        region_id = dpath.name
+        fname = f'imgonly-{region_id}.kwcoco.zip'
+        fpath = bundle_dpath / fname
+        if fpath.exists():
+            queue.submit(f'kwcoco move {fpath} {dpath}')
+        fname = f'imganns-{region_id}.kwcoco.zip'
+        fpath = bundle_dpath / fname
+        if fpath.exists():
+            queue.submit(f'kwcoco move {fpath} {dpath}')
+
+    queue.run()
+    "
+    #kwcoco move imgonly-AE_R001.kwcoco.zip ./AE_R001
+}
+
+
+redo_add_raw_data(){
+    # Not sure I like adding each date as its own DVC file. Lets try doing it
+    # by sensor again.
+    __doc__="
+    "
+}
+
+
+dvc_add_raw_imgdata(){
+    #DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
+    #cd $DVC_DATA_DPATH/Aligned-Drop7
+    #
+    python -c "if 1:
+    import watch
+    dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='hdd')
+    bundle_dpath = dvc_data_dpath / 'Aligned-Drop7'
+    tne_dpaths = list(bundle_dpath.glob('[A-Z][A-Z]_R0*'))
+
+    # Try using DVC at the image level instead?
+    img_dpaths = []
+    for dpath in tne_dpaths:
+        candidates = list(dpath.glob('*/affine_warp/*'))
+        for cand in candidates:
+            if cand.is_dir():
+                img_dpaths.append(cand)
+
+    from watch.utils import simple_dvc
+    dvc = simple_dvc.SimpleDVC.coerce(bundle_dpath)
+    dvc.add(img_dpaths)
+    dvc.git_commitpush(message='Add images for {bundle_dpath.name}')
+    dvc.push(img_dpaths, remote='aws')
+    "
+    #declare -a ROI_DPATHS=()
+    #ROI_DPATHS+=TNE_REGIONS
+    #dvc add -- */PD */WV */S2 && dvc push -r aws -R . && git commit -am "Add Drop7 Raw Images Images" && git push  &&
+}
+
+
+dvc_add_(){
+    #DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
+    #cd $DVC_DATA_DPATH/Aligned-Drop7
+    #
+    python -c "if 1:
+    import watch
+    bundle_name = 'Drop7-MedianNoWinter10GSD'
+    dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='hdd')
+    bundle_dpath = dvc_data_dpath / bundle_name
+    tne_dpaths = list(bundle_dpath.glob('raw_bands/[A-Z][A-Z]_R0*'))
+    from watch.utils import simple_dvc
+    dvc = simple_dvc.SimpleDVC.coerce(bundle_dpath)
+    dvc.add(tne_dpaths)
+    dvc.git_commitpush(message='Add raw bands for {bundle_dpath.name}')
+    dvc.push(tne_dpaths, remote='aws')
+    "
+    #declare -a ROI_DPATHS=()
+    #ROI_DPATHS+=TNE_REGIONS
+    #dvc add -- */PD */WV */S2 && dvc push -r aws -R . && git commit -am "Add Drop7 Raw Images Images" && git push  &&
+}
+
+
 #python ~/code/watch-smartflow-dags/reproduce_mlops.py imgonly-US_R006.kwcoco.zip
 # ~/code/watch/dev/poc/prepare_time_combined_dataset.py
 
@@ -61,7 +242,7 @@ python ~/code/watch/watch/cli/queue_cli/prepare_time_combined_dataset.py \
     --combine_workers=4 \
     --resolution=10GSD \
     --backend=tmux \
-    --run=0
+    --run=1
 
 
 
@@ -102,12 +283,13 @@ python -m watch.cli.prepare_teamfeats \
     --expt_dvc_dpath="$DVC_EXPT_DPATH" \
     --with_landcover=1 \
     --with_invariants2=1 \
+    --with_sam=1 \
     --with_materials=0 \
     --with_depth=0 \
     --with_cold=0 \
     --skip_existing=1 \
     --assets_dname=teamfeats \
-    --gres=0, --tmux_workers=4 --backend=tmux --run=1
+    --gres=0, --tmux_workers=8 --backend=tmux --run=1
 
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
