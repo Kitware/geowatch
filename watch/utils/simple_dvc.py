@@ -282,6 +282,7 @@ class SimpleDVC(ub.NiceRepr):
                     cand_dvc = cand_dat.augment(stem=cand_dat.name, ext='.dvc')
                     if cand_dvc.exists():
                         return cand_dvc
+                raise IOError(f'Could not find sidecar for: {rel_path=} in {dvc_root=}')
 
             to_pull = [_find_sidecar(rel_path) for rel_path in rel_paths]
             missing_sidecar = [dvc_fpath for dvc_fpath in to_pull if not dvc_fpath.exists()]
