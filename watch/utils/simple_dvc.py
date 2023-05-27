@@ -130,7 +130,12 @@ class SimpleDVC(ub.NiceRepr):
         if not has_autostage:
             raise NotImplementedError('Need autostage to complete the git commit')
 
-    def remove(self, op, path, verbose=0):
+    def remove(self, path, verbose=0):
+        """
+        Args:
+            path (str | PathLike | Iterable[str | PathLike]):
+                a single or multiple paths to add
+        """
         self._dvc_path_op('remove', path, verbose)
 
     def _dvc_path_op(self, op, path, verbose=0):
