@@ -169,6 +169,26 @@ redo_add_raw_data(){
     # by sensor again.
     __doc__="
     "
+    python -c "if 1:
+    import watch
+    dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='hdd')
+    bundle_dpath = dvc_data_dpath / 'Aligned-Drop7'
+    tne_dpaths = list(bundle_dpath.glob('[A-Z][A-Z]_R0*'))
+
+    # Try using DVC at the image level instead?
+    old_dvc_paths = []
+    for dpath in tne_dpaths:
+        if dpath.name != 'BR_R005':
+            old_dvc_paths += list(dpath.glob('*/affine_warp/*.dvc'))
+
+    from watch.utils import simple_dvc
+    dvc = simple_dvc.SimpleDVC.coerce(bundle_dpath)
+    dvc.remove(old_dvc_paths)
+
+    dvc.add(img_dpaths)
+    dvc.git_commitpush(message='Add images for {bundle_dpath.name}')
+    dvc.push(img_dpaths, remote='aws')
+    "
 }
 
 
@@ -289,7 +309,7 @@ python -m watch.cli.prepare_teamfeats \
     --with_cold=0 \
     --skip_existing=1 \
     --assets_dname=teamfeats \
-    --gres=0, --tmux_workers=8 --backend=tmux --run=1
+    --gres=0, --tmux_workers=8 --backend=tmux --run=0
 
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")

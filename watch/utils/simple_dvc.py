@@ -125,6 +125,20 @@ class SimpleDVC(ub.NiceRepr):
             path (str | PathLike | Iterable[str | PathLike]):
                 a single or multiple paths to add
         """
+        dvc_root, rel_paths = self._dvc_path_op('add', path, verbose)
+        has_autostage = ub.cmd('dvc config core.autostage', cwd=dvc_root, check=True)['out'].strip() == 'true'
+        if not has_autostage:
+            raise NotImplementedError('Need autostage to complete the git commit')
+
+    def remove(self, op, path, verbose=0):
+        self._dvc_path_op('remove', path, verbose)
+
+    def _dvc_path_op(self, op, path, verbose=0):
+        """
+        Args:
+            path (str | PathLike | Iterable[str | PathLike]):
+                a single or multiple paths to add
+        """
         from dvc import main as dvc_main
         paths = list(map(ub.Path, _ensure_iterable(path)))
         if len(paths) == 0:
@@ -132,16 +146,13 @@ class SimpleDVC(ub.NiceRepr):
             return
         dvc_root, rel_paths = self._resolve_root_and_relative_paths(paths)
         with util_path.ChDir(dvc_root):
-            dvc_command = ['add'] + rel_paths
+            dvc_command = [op] + rel_paths
             extra_args = self._verbose_extra_args(verbose)
             dvc_command = dvc_command + extra_args
             ret = dvc_main.main(dvc_command)
         if ret != 0:
-            raise Exception('Failed to add files')
-
-        has_autostage = ub.cmd('dvc config core.autostage', cwd=dvc_root, check=True)['out'].strip() == 'true'
-        if not has_autostage:
-            raise NotImplementedError('Need autostage to complete the git commit')
+            raise Exception(f'Failed to {op} files')
+        return dvc_root, rel_paths
 
     def check_ignore(self, path, details=0, verbose=0):
         from dvc import main as dvc_main
@@ -282,7 +293,7 @@ class SimpleDVC(ub.NiceRepr):
                     cand_dvc = cand_dat.augment(stem=cand_dat.name, ext='.dvc')
                     if cand_dvc.exists():
                         return cand_dvc
-                raise IOError(f'Could not find sidecar for: {rel_path=} in {dvc_root=}')
+                raise IOError(f'Could not find sidecar for: {rel_path=} in {dvc_root=}. Wrong path, or need to git pull?')
 
             to_pull = [_find_sidecar(rel_path) for rel_path in rel_paths]
             missing_sidecar = [dvc_fpath for dvc_fpath in to_pull if not dvc_fpath.exists()]
