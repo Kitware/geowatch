@@ -43,7 +43,7 @@ def rgb_from_kwcoco_frame(frame):
     import torch
     # import numpy as np
     modes = frame['modes']
-
+    chw = None
     if 'red|green|blue' in modes:
         chw = modes['red|green|blue']
         is_nan = torch.isnan(chw)
@@ -60,7 +60,7 @@ def rgb_from_kwcoco_frame(frame):
             pan_is_nan = torch.isnan(pan_chw)
             pan_nan_frac = pan_is_nan.sum() / pan_is_nan.numel()
             # print(f'pan_nan_frac={pan_nan_frac}')
-            if rgb_nan_frac > pan_nan_frac:
+            if chw is None or rgb_nan_frac > pan_nan_frac:
                 pan_hwc = pan_chw.permute(1, 2, 0).cpu().numpy()
                 pan_hwc = kwimage.atleast_3channels(pan_hwc)
                 chw = torch.Tensor(pan_hwc).permute(2, 0, 1)

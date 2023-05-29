@@ -163,6 +163,15 @@ move_kwcoco_paths(){
     #kwcoco move imgonly-AE_R001.kwcoco.zip ./AE_R001
 }
 
+add_coco_files(){
+    ls -- */*.kwcoco.zip
+    dvc add -- */*.kwcoco.zip
+    git commit -am "Add Drop7 TnE Region annotations"
+    git push
+    dvc push -r aws -- */*.kwcoco.zip.dvc
+
+}
+
 
 redo_add_raw_data(){
     # Not sure I like adding each date as its own DVC file. Lets try doing it
@@ -185,9 +194,14 @@ redo_add_raw_data(){
     dvc = simple_dvc.SimpleDVC.coerce(bundle_dpath)
     dvc.remove(old_dvc_paths)
 
-    dvc.add(img_dpaths)
+    new_dpaths = []
+    for dpath in tne_dpaths:
+        if dpath.name != 'BR_R005':
+            new_dpaths += [d for d in dpath.glob('*') if d.is_dir() and d.name in {'L8', 'WV1', 'WV', 'S2', 'PD'}]
+
+    dvc.add(new_dpaths)
     dvc.git_commitpush(message='Add images for {bundle_dpath.name}')
-    dvc.push(img_dpaths, remote='aws')
+    dvc.push(new_dpaths, remote='aws')
     "
 }
 
@@ -294,7 +308,7 @@ python ~/code/watch/watch/cli/queue_cli/prepare_time_combined_dataset.py \
 #]" \
 
 
-export CUDA_VISIBLE_DEVICES="0"
+export CUDA_VISIBLE_DEVICES="1"
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 BUNDLE_DPATH=$DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD
@@ -329,6 +343,7 @@ rsync -avprPR "$HDD_DVC_DATA_DPATH"/./Drop7-MedianNoWinter10GSD "$SSD_DVC_DATA_D
 
 geowatch visualize data.kwcoco.json --smart
 
+
 fixup="
 coco_images = dset.images().coco_images
 from watch.utils import util_gdal
@@ -360,3 +375,28 @@ for p in ub.ProgIter(problematic_paths):
         #...
 
 "
+
+
+# COLD FEATURES
+DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
+BUNDLE_DPATH=$DVC_DATA_DPATH/Aligned-Drop7
+python -m watch.cli.prepare_teamfeats \
+    --base_fpath "$BUNDLE_DPATH"/*/imganns-*[0-9].kwcoco.zip \
+    --expt_dvc_dpath="$DVC_EXPT_DPATH" \
+    --with_landcover=0 \
+    --with_invariants2=0 \
+    --with_sam=0 \
+    --with_materials=0 \
+    --with_depth=0 \
+    --with_cold=1 \
+    --skip_existing=1 \
+    --assets_dname=teamfeats \
+    --gres=0, --tmux_workers=8 --backend=tmux --run=1
+
+
+python -m watch.tasks.sam.predict --input_kwcoco /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/Drop7-MedianNoWinter10GSD/imganns-US_R007.kwcoco.zip \
+    --output_kwcoco /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/Drop7-MedianNoWinter10GSD/imganns-US_R007_sam.kwcoco.zip \
+    --weights_fpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/sam/sam_vit_h_4b8939.pth \
+    --window_overlap=0.3 --data_workers=2 --io_workers 0 --assets_dname=teamfeats
+
