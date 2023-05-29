@@ -396,7 +396,7 @@ def assemble_main(cmdline=1, **kwargs):
             coco_dset._ensure_json_serializable()
             coco_dset.dump()
         logger.info(f'Finished writing kwcoco file to: {mod_coco_fpath}')
-    
+
     else:
         if proc_context is not None:
             context_info = proc_context.stop()
@@ -460,14 +460,15 @@ def get_gdal_transform(coco_dset, sensor_name, resolution=None):
     new_geotrans = tuple(warp_wld_from_asset.to_gdal())
     return new_geotrans, proj
 
+
 @profile
 def read_json_metadata(stacked_path):
     for root, dirs, files in os.walk(stacked_path):
         for file in files:
             if file.endswith(".json"):
                 json_path = os.path.join(root, file)
-                
-                with open(json_path, "r") as f:                    
+
+                with open(json_path, "r") as f:
                     metadata = json.load(f)
                     return metadata
 

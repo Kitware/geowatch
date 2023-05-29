@@ -65,8 +65,6 @@ import ubelt as ub
 import os
 import json
 import logging
-import shutil
-from osgeo import gdal
 import kwcoco
 import kwimage
 import pandas as pd
@@ -138,8 +136,6 @@ def cold_writing_kwcoco_main(cmdline=1, **kwargs):
     rich.print('config = {}'.format(ub.urepr(config, nl=1)))
 
     from watch.utils import process_context
-    from watch.utils import util_parallel
-    from watch.utils import util_progress
     from watch.utils import util_json
     resolved_config = config.to_dict()
     resolved_config = util_json.ensure_json_serializable(resolved_config)
@@ -161,18 +157,18 @@ def cold_writing_kwcoco_main(cmdline=1, **kwargs):
         if combine:
             raise ValueError('Must specify combined_coco_fpath if combine is True')
         combined_coco_fpath = None
-        
+
     if config['out_dpath'] is None:
         config['out_dpath'] = coco_fpath.parent
-    
-    mod_coco_fpath = ub.Path(config['mod_coco_fpath'])    
+
+    mod_coco_fpath = ub.Path(config['mod_coco_fpath'])
     out_dpath = ub.Path(config['out_dpath']).ensuredir()
-    method = config['method']    
+    method = config['method']
     resolution = config['resolution']
     metadata = read_json_metadata(out_dpath)
     region_id = metadata['region_id']
     cold_feat_path = out_dpath / 'reccg' / region_id / 'cold_feature'
-        
+
     coef_names = ['cv', 'rmse', 'a0', 'a1', 'b1', 'a2', 'b2', 'a3', 'b3', 'c1']
     band_names = [0, 1, 2, 3, 4, 5]
 
@@ -181,20 +177,20 @@ def cold_writing_kwcoco_main(cmdline=1, **kwargs):
                  2: 'red',
                  3: 'nir',
                  4: 'swir16',
-                 5: 'swir22'}    
+                 5: 'swir22'}
 
     proc_context.start()
     proc_context.add_disk_info(out_dpath)
-    
+
     logger.info('Starting adding new asset to kwcoco json')
-    
+
     asset_w = metadata['video_w']
     asset_h = metadata['video_h']
-    
+
     if combine:
         combined_coco_dset = kwcoco.CocoDataset(combined_coco_fpath)
         coco_dset = kwcoco.CocoDataset(coco_fpath)
-        
+
         for image_id in combined_coco_dset.images():
             combined_coco_image: kwcoco.CocoImage = combined_coco_dset.coco_image(image_id)
             coco_image: kwcoco.CocoImage = coco_dset.coco_image(image_id)
@@ -230,7 +226,7 @@ def cold_writing_kwcoco_main(cmdline=1, **kwargs):
                         # logger.info(f'Added to the asset {cold_feat_fpath}')
     else:
         coco_dset = kwcoco.CocoDataset(coco_fpath)
-        
+
         # Get ordinal day list
         block_folder = out_dpath / 'stacked' / region_id / 'block_x1_y1'
 
@@ -248,10 +244,10 @@ def cold_writing_kwcoco_main(cmdline=1, **kwargs):
             img_name = meta_config['image_name']
             img_dates.append(ordinal_date)
             img_names.append(img_name)
-            
+
         img_dates = sorted(img_dates)
         img_names = sorted(img_names)
-        
+
         # Get only the first ordinal date of each year
         first_ordinal_dates = []
         first_img_names = []
@@ -263,8 +259,8 @@ def cold_writing_kwcoco_main(cmdline=1, **kwargs):
                 first_img_names.append(img_name)
                 last_year = year
 
-        img_names = first_img_names        
-        
+        img_names = first_img_names
+
         for image_id in coco_dset.images():
             # Create a CocoImage object for each image.
             coco_image: kwcoco.CocoImage = coco_dset.coco_image(image_id)
@@ -302,7 +298,7 @@ def cold_writing_kwcoco_main(cmdline=1, **kwargs):
     if proc_context is not None:
         context_info = proc_context.stop()
         coco_dset.dataset['info'].append(context_info)
-        
+
     # Write a modified kwcoco.json file
     logger.info(f'Writing kwcoco file to: {mod_coco_fpath}')
     if combine:
@@ -315,16 +311,17 @@ def cold_writing_kwcoco_main(cmdline=1, **kwargs):
         coco_dset.dump()
     logger.info(f'Finished writing kwcoco file to: {mod_coco_fpath}')
 
+
 def read_json_metadata(folder_path):
     stacked_path = folder_path / 'stacked'
     for root, dirs, files in os.walk(stacked_path):
         for file in files:
             if file.endswith(".json"):
                 json_path = os.path.join(root, file)
-                
-                with open(json_path, "r") as f:                    
+
+                with open(json_path, "r") as f:
                     metadata = json.load(f)
                     return metadata
-                
+
 if __name__ == '__main__':
     cold_writing_kwcoco_main()

@@ -447,11 +447,12 @@ def read_json_metadata(stacked_path):
         for file in files:
             if file.endswith(".json"):
                 json_path = os.path.join(root, file)
-                
-                with open(json_path, "r") as f:                    
+
+                with open(json_path, "r") as f:
                     metadata = json.load(f)
                     return metadata
-                
+
+
 @profile
 def is_finished_cold_blockfinished(reccg_path, nblocks):
     """

@@ -113,12 +113,12 @@ CommandLine:
         --resolution='10GSD' \
         --workermode='process' \
         --workers=8
-    
+
     ##################################### NOTE #####################################
     #  If write_kwcoco=Ture is used in 'predict.py', then skip 'writing_kwcoco.py' #
     #  Otherwise, run 'writing_kwcoco.py'                                          #
     ################################################################################
-    
+
     python -m watch.tasks.cold.writing_kwcoco \
         --coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly-KR_R001.kwcoco.json" \
         --combined_coco_fpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imgonly-KR_R001.kwcoco.zip" \
@@ -130,7 +130,7 @@ CommandLine:
         --resolution='10GSD' \
         --workermode='serial' \
         --workers=0
-        
+
     kwcoco stats "$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold-V1.kwcoco.zip
     geowatch stats "$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold-V1.kwcoco.zip
     kwcoco validate "$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold-V1.kwcoco.zip
@@ -167,12 +167,12 @@ CommandLine:
         --resolution='10GSD' \
         --workermode='serial' \
         --workers=0
-    
+
     ##################################### NOTE #####################################
     #  If write_kwcoco=Ture is used in 'predict.py', then skip 'writing_kwcoco.py' #
     #  Otherwise, run 'writing_kwcoco.py'                                          #
     ################################################################################
-    
+
     python -m watch.tasks.cold.writing_kwcoco \
         --coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly-KR_R001.kwcoco.json" \
         --out_dpath="$DATA_DVC_DPATH//Drop6/_pycold_combine_V2" \
@@ -183,7 +183,7 @@ CommandLine:
         --resolution='10GSD' \
         --workermode='serial' \
         --workers=0
-        
+
     kwcoco stats "$DATA_DVC_DPATH/Drop6/imgonly_KR_R001_cold-V2.kwcoco.zip"
     geowatch stats "$DATA_DVC_DPATH/Drop6/imgonly_KR_R001_cold-V2.kwcoco.zip"
     kwcoco validate "$DATA_DVC_DPATH/Drop6/imgonly_KR_R001_cold-V2.kwcoco.zip"
@@ -233,7 +233,6 @@ import scriptconfig as scfg
 import ubelt as ub
 import json
 import logging
-import shutil
 import os
 
 logger = logging.getLogger(__name__)
@@ -288,7 +287,7 @@ def cold_predict_main(cmdline=1, **kwargs):
     Ignore:
         python -m watch.tasks.cold.predict --help
         TEST_COLD=1 xdoctest -m watch.tasks.cold.predict cold_predict_main
-        
+
      Example:
         >>> # xdoctest: +REQUIRES(env:TEST_COLD)
         >>> from watch.tasks.cold.predict import cold_predict_main
@@ -346,8 +345,8 @@ def cold_predict_main(cmdline=1, **kwargs):
     sensors = config['sensors']
     adj_cloud = config['adj_cloud']
     method = config['method']
-    workers = util_parallel.coerce_num_workers(config['workers'])    
-    
+    workers = util_parallel.coerce_num_workers(config['workers'])
+
     use_subprogress = workers == 0 or config['workermode'] != 'process'
 
     proc_context.start()
@@ -361,9 +360,9 @@ def cold_predict_main(cmdline=1, **kwargs):
         # 1 / 4 Prepare Step
         # ============
         main_prog.set_postfix('Step 1: Prepare')
-        
+
         metadata = read_json_metadata(out_dpath)
-        if metadata == None:
+        if metadata is None:
             prepare_kwcoco.prepare_kwcoco_main(
                 cmdline=0, coco_fpath=coco_fpath, out_dpath=out_dpath, sensors=sensors,
                 adj_cloud=adj_cloud, method=method, workers=workers,
@@ -389,12 +388,12 @@ def cold_predict_main(cmdline=1, **kwargs):
         tile_kwargs['cm_interval'] = config['cm_interval']
         if use_subprogress:
             tile_kwargs['pman'] = pman
-            
-        tile_log_fpath = out_dpath / 'reccg' / metadata['region_id'] / 'log.json'            
-            
+
+        tile_log_fpath = out_dpath / 'reccg' / metadata['region_id'] / 'log.json'
+
         if os.path.exists(tile_log_fpath):
             logger.info('Skipping step 2 because COLD processing already finished...')
-        else:     
+        else:
             jobs = ub.JobPool(mode=config['workermode'], max_workers=workers)
             with jobs:
                 for i in pman.progiter(range(workers + 1), desc='submit process jobs', transient=True):
@@ -470,7 +469,8 @@ def cold_predict_main(cmdline=1, **kwargs):
         # main_prog.set_postfix('Cleanup')
         # shutil.rmtree(tile_kwargs['stack_path'])
         # main_prog.step()
-        
+
+
 @profile
 def read_json_metadata(folder_path):
     stacked_path = folder_path / 'stacked'
@@ -478,8 +478,8 @@ def read_json_metadata(folder_path):
         for file in files:
             if file.endswith(".json"):
                 json_path = os.path.join(root, file)
-                
-                with open(json_path, "r") as f:                    
+
+                with open(json_path, "r") as f:
                     metadata = json.load(f)
                     return metadata
     return None
