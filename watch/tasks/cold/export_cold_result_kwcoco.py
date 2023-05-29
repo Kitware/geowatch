@@ -77,8 +77,7 @@ class ExportColdKwcocoConfig(scfg.DataConfig):
 
 @profile
 def export_cold_main(cmdline=1, **kwargs):
-    """_summary_
-
+    """
     Args:
         cmdline (int, optional): _description_. Defaults to 1.
 

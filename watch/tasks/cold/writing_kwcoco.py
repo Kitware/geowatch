@@ -286,12 +286,12 @@ def cold_writing_kwcoco_main(cmdline=1, **kwargs):
                             warp_vid_from_asset = warp_asset_from_vid.inv()
                             warp_img_from_asset = warp_img_from_vid @ warp_vid_from_asset
 
-                            # Use the CocoImage helper which will augment the coco dictionary with
-                            # your information.
+                            # Use the CocoImage helper which will augment the
+                            # coco dictionary with your information.
                             coco_image.add_asset(os.fspath(cold_feat_fpath),
-                                                    channels=channels, width=asset_w,
-                                                    height=asset_h,
-                                                    warp_aux_to_img=warp_img_from_asset)
+                                                 channels=channels,
+                                                 width=asset_w, height=asset_h,
+                                                 warp_aux_to_img=warp_img_from_asset)
 
                             logger.info(f'Added to the asset {cold_feat_fpath}')
 

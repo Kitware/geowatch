@@ -31,16 +31,8 @@ CommandLine:
         --dst "$DATA_DVC_DPATH/Drop6-SMALL/imgonly-KR_R001.kwcoco.json" \
         --select_images '(.sensor_coarse == "L8")'
 
-    codeblock()
-    {
-        __doc__='
-        helper for python -c
-        '
-        echo "$1" | python -c "import sys; from textwrap import dedent; print(dedent(sys.stdin.read()).strip('\n'))"
-    }
-
     # Pull out a small selection of images just so we can test.
-    python -c "$(codeblock "
+    python -c "if 1:
         import ubelt as ub
         import kwcoco
         dset = kwcoco.CocoDataset('$DATA_DVC_DPATH/Drop6-SMALL/imgonly-KR_R001.kwcoco.json')
@@ -52,7 +44,7 @@ CommandLine:
         sub = dset.subset(chosen)
         sub.fpath = dset.fpath
         sub.dump()
-        ")"
+    "
 
     DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="auto")
     EXPT_DVC_DPATH=$(geowatch_dvc --tags=phase2_expt --hardware="auto")
@@ -115,7 +107,7 @@ CommandLine:
         --workers=8
 
     ##################################### NOTE #####################################
-    #  If write_kwcoco=Ture is used in 'predict.py', then skip 'writing_kwcoco.py' #
+    #  If write_kwcoco=True is used in 'predict.py', then skip 'writing_kwcoco.py' #
     #  Otherwise, run 'writing_kwcoco.py'                                          #
     ################################################################################
 
@@ -253,12 +245,24 @@ class ColdPredictConfig(scfg.DataConfig):
         '''
         a path to a file to input kwcoco file (to predict on)
         '''))
+
+    mod_coco_fpath = scfg.Value(None, help=ub.paragraph(
+        '''
+        The modified output kwcoco file, which is a copy of the input
+        kwcoco file enriched with COLD features.
+        '''
+    ), alias=['output_kwcoco'])
+
     combined_coco_fpath = scfg.Value(None, help=ub.paragraph(
         '''
         a path to a file to combined input kwcoco file (to merge with)
         '''))
-    mod_coco_fpath = scfg.Value(None, help='file path for modified output coco json')
-    out_dpath = scfg.Value(None, help='output directory for the output. If unspecified uses the output kwcoco bundle')
+
+    out_dpath = scfg.Value(None, help=ub.paragraph(
+        '''
+        output directory for the output. If unspecified uses the input kwcoco bundle
+        '''))
+
     write_kwcoco = scfg.Value(False, help='writing kwcoco file based on COLD feature, Default is False')
     sensors = scfg.Value('L8', type=str, help='sensor type, default is "L8"')
     adj_cloud = scfg.Value(False, help='How to treat QA band, default is False: ignoring adj. cloud class')
