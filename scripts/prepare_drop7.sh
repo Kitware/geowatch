@@ -5,8 +5,8 @@ source "$HOME"/code/watch/secrets/secrets
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
 SENSORS=TA1-S2-L8-WV-PD-ACC-3
 DATASET_SUFFIX=Drop7
-REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop6_hard_v1/region_models/*_[R]0*.geojson"
-SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop6_hard_v1/site_models/*_[R]0*.geojson"
+REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop6_hard_v1/region_models/*_[C]0*.geojson"
+SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop6_hard_v1/site_models/*_[C]0*.geojson"
 
 export GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR
 
