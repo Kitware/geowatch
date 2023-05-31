@@ -78,111 +78,52 @@ CommandLine:
         --exclude_sensors="S2" \
         --smart=True --skip_aggressive=True
 
-    #######################
-    ### FULL REGION TEST-V1
-    #######################
+    #######################################################################
+    ### FULL REGION TEST: COLD FEATURES WITH HIGH TEMPORAL RESOLUTION (HTR)
+    #######################################################################
 
     DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="auto")
     EXPT_DVC_DPATH=$(geowatch_dvc --tags=phase2_expt --hardware="auto")
     python -m watch.tasks.cold.predict \
         --coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly-KR_R001.kwcoco.json" \
-        --combined_coco_fpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imgonly-KR_R001.kwcoco.zip" \
-        --out_dpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/_pycold_combine_V1" \
-        --mod_coco_fpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold-V1.kwcoco.zip" \
-        --write_kwcoco=False \
+        --out_dpath="$DATA_DVC_DPATH/Drop6/_pycold_HTR" \
+        --mod_coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly_KR_R001_cold-HTR.kwcoco.zip" \
         --sensors='L8' \
-        --adj_cloud=False \
-        --method='COLD' \
-        --prob=0.99 \
-        --conse=6 \
-        --cm_interval=60 \
-        --year_lowbound=None \
-        --year_highbound=None \
         --coefs=cv,rmse,a0,a1,b1,c1 \
         --coefs_bands=0,1,2,3,4,5 \
-        --timestamp=False \
-        --combine=True \
+        --combine=False \
         --resolution='10GSD' \
         --workermode='process' \
         --workers=8
 
-    ##################################### NOTE #####################################
-    #  If write_kwcoco=True is used in 'predict.py', then skip 'writing_kwcoco.py' #
-    #  Otherwise, run 'writing_kwcoco.py'                                          #
-    ################################################################################
-
-    python -m watch.tasks.cold.writing_kwcoco \
-        --coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly-KR_R001.kwcoco.json" \
-        --combined_coco_fpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imgonly-KR_R001.kwcoco.zip" \
-        --out_dpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/_pycold_combine_V1" \
-        --mod_coco_fpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold-V1.kwcoco.zip" \
-        --method='COLD' \
-        --timestamp=False \
-        --combine=True \
-        --resolution='10GSD' \
-        --workermode='serial' \
-        --workers=0
-
-    kwcoco stats "$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold-V1.kwcoco.zip
-    geowatch stats "$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold-V1.kwcoco.zip
-    kwcoco validate "$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold-V1.kwcoco.zip
+    kwcoco stats "$DATA_DVC_DPATH"/Drop6/imgonly_KR_R001_cold-HTR.kwcoco.zip
+    geowatch stats "$DATA_DVC_DPATH"/Drop6/imgonly_KR_R001_cold-HTR.kwcoco.zip
+    kwcoco validate "$DATA_DVC_DPATH"/Drop6/imgonly_KR_R001_cold-HTR.kwcoco.zip
 
     smartwatch visualize \
-        "$DATA_DVC_DPATH"/Drop6-MeanYear10GSD-V2/imgonly_KR_R001_cold-V1.kwcoco.zip \
+        "$DATA_DVC_DPATH"/Drop6/imgonly_KR_R001_cold-V1.kwcoco.zip \
         --channels="L8:(red|green|blue,red_COLD_a1|green_COLD_a1|blue_COLD_a1,red_COLD_cv|green_COLD_cv|blue_COLD_cv,red_COLD_rmse|green_COLD_rmse|blue_COLD_rmse)" \
         --exclude_sensors=WV,PD,S2 \
         --smart=True
 
-    #######################
-    ### FULL REGION TEST V2
-    #######################
+    ######################################################################
+    ### FULL REGION TEST: TRANSFER COLD FEATURE FROM RAW TO COMBINED INPUT
+    ######################################################################
 
     DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="auto")
     EXPT_DVC_DPATH=$(geowatch_dvc --tags=phase2_expt --hardware="auto")
-    python -m watch.tasks.cold.predict \
-        --coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly-KR_R001.kwcoco.json" \
-        --out_dpath="$DATA_DVC_DPATH/Drop6/_pycold_combine_V2" \
-        --mod_coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly_KR_R001_cold-V2.kwcoco.zip" \
-        --write_kwcoco=False \
-        --sensors='L8' \
-        --adj_cloud=False \
-        --method='COLD' \
-        --prob=0.99 \
-        --conse=6 \
-        --cm_interval=60 \
-        --year_lowbound=None \
-        --year_highbound=None \
-        --coefs=cv,rmse,a0,a1,b1,c1 \
-        --coefs_bands=0,1,2,3,4,5 \
-        --timestamp=False \
-        --combine=False \
-        --resolution='10GSD' \
-        --workermode='serial' \
-        --workers=0
+    python -m watch.tasks.cold.transfer_features \
+        --coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly_KR_R001_cold-HTR.kwcoco.zip" \
+        --combine_fpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imgonly-KR_R001.kwcoco.zip" \
+        --new_coco_fpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R001_uconn_cold.kwcoco.zip"
 
-    ##################################### NOTE #####################################
-    #  If write_kwcoco=Ture is used in 'predict.py', then skip 'writing_kwcoco.py' #
-    #  Otherwise, run 'writing_kwcoco.py'                                          #
-    ################################################################################
-
-    python -m watch.tasks.cold.writing_kwcoco \
-        --coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly-KR_R001.kwcoco.json" \
-        --out_dpath="$DATA_DVC_DPATH//Drop6/_pycold_combine_V2" \
-        --mod_coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly_KR_R001_cold-V2.kwcoco.zip" \
-        --method='COLD' \
-        --timestamp=False \
-        --combine=False \
-        --resolution='10GSD' \
-        --workermode='serial' \
-        --workers=0
-
-    kwcoco stats "$DATA_DVC_DPATH/Drop6/imgonly_KR_R001_cold-V2.kwcoco.zip"
-    geowatch stats "$DATA_DVC_DPATH/Drop6/imgonly_KR_R001_cold-V2.kwcoco.zip"
-    kwcoco validate "$DATA_DVC_DPATH/Drop6/imgonly_KR_R001_cold-V2.kwcoco.zip"
+    kwcoco stats "$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R001_uconn_cold.kwcoco.zip"
+    geowatch stats "$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R001_uconn_cold.kwcoco.zip"
+    kwcoco validate "$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R001_uconn_cold.kwcoco.zip"
 
     DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="auto")
     smartwatch visualize \
-        "$DATA_DVC_DPATH/Drop6/imgonly_KR_R001_cold-V2.kwcoco.zip" \
+        "$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R001_uconn_cold.kwcoco.zip" \
         --channels="L8:(red|green|blue,red_COLD_a1|green_COLD_a1|blue_COLD_a1,red_COLD_cv|green_COLD_cv|blue_COLD_cv,red_COLD_rmse|green_COLD_rmse|blue_COLD_rmse)" \
         --exclude_sensors=WV,PD,S2 \
         --smart=True
@@ -263,19 +204,19 @@ class ColdPredictConfig(scfg.DataConfig):
         output directory for the output. If unspecified uses the input kwcoco bundle
         '''))
 
-    write_kwcoco = scfg.Value(False, help='writing kwcoco file based on COLD feature, Default is False')
+    write_kwcoco = scfg.Value(True, help='writing kwcoco file based on COLD feature, Default is True')
     sensors = scfg.Value('L8', type=str, help='sensor type, default is "L8"')
     adj_cloud = scfg.Value(False, help='How to treat QA band, default is False: ignoring adj. cloud class')
     method = scfg.Value('COLD', choices=['COLD', 'HybridCOLD', 'OBCOLD'], help='type of cold algorithms')
-    prob = scfg.Value(None, help='change probability of chi-distribution, e.g., 0.99')
-    conse = scfg.Value(None, help='consecutive observation to confirm change, e.g., 6')
-    cm_interval = scfg.Value(None, help='CM output inverval, e.g., 60')
+    prob = scfg.Value(0.99, help='change probability of chi-distribution, e.g., 0.99')
+    conse = scfg.Value(6, help='consecutive observation to confirm change, e.g., 6')
+    cm_interval = scfg.Value(60, help='CM output inverval, e.g., 60')
     year_lowbound = scfg.Value(None, help='min year for saving geotiff, e.g., 2017')
     year_highbound = scfg.Value(None, help='max year for saving geotiff, e.g., 2022')
     coefs = scfg.Value(None, type=str, help="list of COLD coefficients for saving geotiff, e.g., a0,c1,a1,b1,a2,b2,a3,b3,cv,rmse")
     coefs_bands = scfg.Value(None, type=str, help='indicate the ba_nds for output coefs_bands, e.g., 0,1,2,3,4,5')
     timestamp = scfg.Value(False, help='True: exporting cold result by timestamp, False: exporting cold result by year, Default is False')
-    combine = scfg.Value(True, help='for temporal combined mode, Default is True')
+    combine = scfg.Value(False, help='for temporal combined mode, Default is False')
     track_emissions = scfg.Value(True, help='if True use codecarbon for emission tracking')
     resolution = scfg.Value('30GSD', help='if specified then data is processed at this resolution')
     workers = scfg.Value(16, help='total number of workers')
