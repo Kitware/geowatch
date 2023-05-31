@@ -52,7 +52,6 @@ Notes:
         --workers=10 \
         --aux_workers=2 \
         --context_factor=1 \
-        --visualize=False \
         --geo_preprop=False \
         --include_sensors=WV \
         --keep img
@@ -215,8 +214,8 @@ class ExtractConfig(ImageExtractConfig):
 
     visualize = scfg.Value(False, isflag=1, help=ub.paragraph(
             '''
-            if True, normalize and draw image / annotation sequences
-            when extracting.
+            DEPRECATED: simply call visualize on the subdata kwcoco files as
+            they are written. If set to true an error will be raised.
             '''))
 
     img_workers = scfg.Value(0, type=str, help=ub.paragraph(
@@ -360,11 +359,54 @@ def main(cmdline=True, **kw):
         >>>     'minimum_size': '8000x8000 @ 1GSD',
         >>>     #'image_timeout': '1 microsecond',
         >>>     #'asset_timeout': '1 microsecond',
-        >>>     'visualize': True,
         >>>     'hack_lazy': 0,
         >>> }
         >>> cmdline = False
         >>> new_dset = main(cmdline, **kw)
+
+    Example:
+        >>> # Test timeout
+        >>> from watch.cli.coco_align import *  # NOQA
+        >>> from watch.demo.landsat_demodata import grab_landsat_product
+        >>> from watch.gis.geotiff import geotiff_metadata
+        >>> # Create a dead simple coco dataset with one image
+        >>> import dateutil.parser
+        >>> import kwcoco
+        >>> import kwimage
+        >>> coco_dset = kwcoco.CocoDataset()
+        >>> ls_prod = grab_landsat_product()
+        >>> fpath = ls_prod['bands'][0]
+        >>> meta = geotiff_metadata(fpath)
+        >>> # We need a date captured ATM in a specific format
+        >>> dt = dateutil.parser.parse(
+        >>>     meta['filename_meta']['acquisition_date'])
+        >>> date_captured = dt.strftime('%Y/%m/%d')
+        >>> gid = coco_dset.add_image(file_name=fpath, date_captured=date_captured)
+        >>> dummy_poly = kwimage.Polygon.from_geojson(meta['geos_corners'])
+        >>> dummy_poly = dummy_poly.scale(0.03, about='center')
+        >>> sseg_geos = dummy_poly.to_geojson()
+        >>> from watch.geoannots import geomodels
+        >>> region = geomodels.RegionModel.random(region_poly=dummy_poly, start_time=dt.isoformat())
+        >>> # Create arguments to the script
+        >>> dpath = ub.Path.appdir('watch/test/coco_align').ensuredir()
+        >>> dst = (dpath / 'align_bundle_timeout').ensuredir()
+        >>> dst.delete()
+        >>> dst.ensuredir()
+        >>> region_fpath = dpath / 'region_model.geojson'
+        >>> region_fpath.write_text(region.dumps())
+        >>> kw = {
+        >>>     'src': coco_dset,
+        >>>     'dst': dst,
+        >>>     'regions': region_fpath,
+        >>>     'workers': 2,
+        >>>     'aux_workers': 2,
+        >>>     'convexify_regions': True,
+        >>>     'asset_timeout': '0.00001 seconds',
+        >>>     'hack_lazy': 0,
+        >>> }
+        >>> cmdline = False
+        >>> new_dset = main(cmdline, **kw)
+        >>> assert len(new_dset.images()) == 0
 
     Example:
         >>> # Confirm expected behavior of `force_min_gsd` keyword argument
@@ -458,7 +500,6 @@ def main(cmdline=True, **kw):
         >>>     'regions': region_fpath,
         >>>     'workers': 0,
         >>>     'aux_workers': 0,
-        >>>     'visualize': 1,
         >>>     'debug_valid_regions': True,
         >>>     'target_gsd': 0.7,
         >>> }
@@ -490,6 +531,9 @@ def main(cmdline=True, **kw):
     config = CocoAlignGeotiffConfig.cli(data=kw, cmdline=cmdline, strict=True)
     import rich
     rich.print(ub.urepr(config))
+
+    if config.visualize:
+        raise Exception('The visualize option was deprecated and will be removed')
 
     from kwcoco.util.util_json import ensure_json_serializable
     from watch.utils import util_gis
@@ -1117,7 +1161,7 @@ class SimpleDataCube:
             >>> new_dset = kwcoco.CocoDataset()
             >>> to_extract = cube.query_image_overlaps(region_df)
             >>> image_overlaps = to_extract[0]
-            >>> extract_config = ExtractConfig(img_workers=32, visualize=True)
+            >>> extract_config = ExtractConfig(img_workers=32)
             >>> cube.extract_overlaps(image_overlaps, extract_dpath,
             >>>                       new_dset=new_dset, extract_config=extract_config)
 
@@ -1131,7 +1175,7 @@ class SimpleDataCube:
             >>> to_extract = cube.query_image_overlaps(region_df)
             >>> new_dset = kwcoco.CocoDataset()
             >>> image_overlaps = to_extract[1]
-            >>> extract_config = ExtractConfig(img_workers=0, visualize=True)
+            >>> extract_config = ExtractConfig(img_workers=0)
             >>> cube.extract_overlaps(image_overlaps, extract_dpath,
             >>>                       new_dset=new_dset,
             >>>                       extract_config=extract_config)
@@ -1144,6 +1188,8 @@ class SimpleDataCube:
         import kwcoco
         import kwimage
         import pandas as pd
+        import subprocess
+        from concurrent.futures import TimeoutError
         coco_dset = cube.coco_dset
         assert extract_config is not None
 
@@ -1368,8 +1414,13 @@ class SimpleDataCube:
         if extract_config.hack_lazy:
             lazy_commands = []
 
-        from concurrent.futures import TimeoutError
-        for job in image_jobs.as_completed(desc='collect extract jobs', progkw={'clearline': False}):
+        # image_jobs.as_completed(desc='collect extract jobs', progkw={'clearline': False}, timeout=image_timeout)
+        img_iter = image_jobs.as_completed(timeout=image_timeout)
+        img_prog = ub.ProgIter(
+            img_iter, desc='collect extract jobs', total=len(image_jobs),
+            clearline=False)
+
+        for job in img_prog:
             try:
                 new_img, new_anns = job.result(timeout=image_timeout)
             except SkipImage:
@@ -1378,7 +1429,13 @@ class SimpleDataCube:
                 # failed image.
                 unrequested_datetimes
                 continue
+            except subprocess.TimeoutExpired:
+                print('\n\nAn image job subprocess timed out!\n\n')
+                continue
             except TimeoutError:
+                # FIXME: If we ever hit this timeout it it is likely that the
+                # job itself is still running and thus the thread pool executor
+                # will never allow the python interpreter to exit!
                 print('\n\nAn image job timed out!\n\n')
                 continue
 
@@ -1465,33 +1522,7 @@ class SimpleDataCube:
         #     raise AssertionError('unserializable = {}'.format(ub.urepr(unserializable, nl=1)))
 
         if extract_config.visualize:
-            from watch.cli.coco_visualize_videos import _write_ann_visualizations2
-            new_video = new_dset.index.videos[new_vidid]
-            local_max_frame = len(sub_new_gids)
-            valid_vidspace_region = new_video.get('valid_region', None)
-            for frame_idx, new_gid in enumerate(ub.ProgIter(sub_new_gids, desc='visualizing')):
-                new_img = new_dset.imgs[new_gid]
-                new_anns = new_dset.annots(gid=new_gid).objs
-                viz_dpath = ub.Path(sub_bundle_dpath) / '_viz'
-                # Use false color for special groups
-                request_grouped_bands = [
-                    'red|green|blue',
-                    'nir|swir16|swir22',
-                ]
-                if isinstance(extract_config.visualize, str):
-                    channels_ = extract_config.visualize
-                else:
-                    channels_ = None
-                _write_ann_visualizations2(
-                    coco_dset=new_dset, img=new_img, anns=new_anns,
-                    channels=channels_,
-                    sub_dpath=viz_dpath, space='video',
-                    request_grouped_bands=request_grouped_bands,
-                    local_frame_index=frame_idx,
-                    local_max_frame=local_max_frame,
-                    valid_vidspace_region=valid_vidspace_region,
-                    # verbose=3
-                )
+            raise Exception('The visualize option was deprecated and will be removed')
 
         if extract_config.write_subsets:
             print('Writing data subset')
@@ -1828,86 +1859,89 @@ def extract_image_job(img,
     new_coco_img._video = {}
     kwcoco_extensions._populate_valid_region(new_coco_img)
 
-    # TODO: deprecate annotation handling in this tool to simplify it.
-    # Force the user to always reproject annotations after a coco-align step.
-
-    # HANDLE ANNOTATIONS
-    # Note: this is more generally handled by the project annotation script.
-    # We can add an option to ignore annotations here.
-    """
-    It would probably be better to warp pixel coordinates using the
-    same transform found by gdalwarp, but I'm not sure how to do
-    that. Thus we transform the geocoordinates to the new extracted
-    img coords instead. Hopefully gdalwarp preserves metadata
-    enough to do this.
-    """
+    # TODO: deprecate and remove annotation handling in this tool to simplify
+    # it.  Force the user to always reproject annotations after a coco-align
+    # step.
     new_anns = []
-    geo_poly_list = []
-    for ann in anns:
-        # FIXME: there might be an issue in subsequent usage here.
-        # Q: WHAT FORMAT ARE THESE COORDINATES IN?
-        # A: I'm fairly sure these coordinates are all Traditional-WGS84-Lon-Lat
-        # We convert them to authority compliant WGS84 (lat-lon)
-        # Hack to support real and orig drop0 geojson
-        # FIXME: simply use crs84
-        geo = _fix_geojson_poly(ann['segmentation_geos'])
-        geo_poly = kwimage.structs.MultiPolygon.from_geojson(geo).swap_axes()
-        geo_poly_list.append(geo_poly)
-    geo_polys = kwimage.SegmentationList(geo_poly_list)
 
-    if align_method == 'orthorectify':
-        # Is the affine mapping in the destination image good
-        # enough after the image has been orthorectified?
-        pxl_polys = geo_polys.warp(new_img['wgs84_to_wld']).warp(new_img['wld_to_pxl'])
-    elif align_method == 'pixel_crop':
-        raise NotImplementedError('fixme')
-        yoff, xoff = new_img['transform']['st_offset']
-        orig_pxl_poly_list = []
+    HANDLE_ANNOTATIONS = 0
+    if HANDLE_ANNOTATIONS:
+        # HANDLE ANNOTATIONS
+        # Note: this is more generally handled by the project annotation script.
+        # We can add an option to ignore annotations here.
+        """
+        It would probably be better to warp pixel coordinates using the
+        same transform found by gdalwarp, but I'm not sure how to do
+        that. Thus we transform the geocoordinates to the new extracted
+        img coords instead. Hopefully gdalwarp preserves metadata
+        enough to do this.
+        """
+        geo_poly_list = []
         for ann in anns:
-            old_poly = kwimage.Polygon.from_coco(ann['segmentation'])
-            orig_pxl_poly_list.append(old_poly)
-        orig_pxl_polys = kwimage.MultiPolygon(orig_pxl_poly_list)
-        pxl_polys = orig_pxl_polys.translate((-xoff, -yoff))
-    elif align_method == 'affine_warp':
-        # Warp Auth-WGS84 to whatever the image world space is,
-        # and then from there to pixel space.
-        pxl_polys = geo_polys.warp(
-            new_img['wgs84_to_wld']
-        ).warp(new_img['wld_to_pxl'])
-    else:
-        raise KeyError(align_method)
+            # FIXME: there might be an issue in subsequent usage here.
+            # Q: WHAT FORMAT ARE THESE COORDINATES IN?
+            # A: I'm fairly sure these coordinates are all Traditional-WGS84-Lon-Lat
+            # We convert them to authority compliant WGS84 (lat-lon)
+            # Hack to support real and orig drop0 geojson
+            # FIXME: simply use crs84
+            geo = _fix_geojson_poly(ann['segmentation_geos'])
+            geo_poly = kwimage.structs.MultiPolygon.from_geojson(geo).swap_axes()
+            geo_poly_list.append(geo_poly)
+        geo_polys = kwimage.SegmentationList(geo_poly_list)
 
-    def _test_inbounds(pxl_multi_poly):
-        is_any = False
-        is_all = True
-        for pxl_poly in pxl_multi_poly.data:
-            xs, ys = pxl_poly.data['exterior'].data.T
-            flags_x1 = xs < 0
-            flags_y1 = ys < 0
-            flags_x2 = xs >= new_img['width']
-            flags_y2 = ys >= new_img['height']
-            flags = flags_x1 | flags_x2 | flags_y1 | flags_y2
-            n_oob = flags.sum()
-            is_any &= (n_oob > 0)
-            is_all &= (n_oob == len(flags))
-        return is_any, is_all
+        if align_method == 'orthorectify':
+            # Is the affine mapping in the destination image good
+            # enough after the image has been orthorectified?
+            pxl_polys = geo_polys.warp(new_img['wgs84_to_wld']).warp(new_img['wld_to_pxl'])
+        elif align_method == 'pixel_crop':
+            raise NotImplementedError('fixme')
+            yoff, xoff = new_img['transform']['st_offset']
+            orig_pxl_poly_list = []
+            for ann in anns:
+                old_poly = kwimage.Polygon.from_coco(ann['segmentation'])
+                orig_pxl_poly_list.append(old_poly)
+            orig_pxl_polys = kwimage.MultiPolygon(orig_pxl_poly_list)
+            pxl_polys = orig_pxl_polys.translate((-xoff, -yoff))
+        elif align_method == 'affine_warp':
+            # Warp Auth-WGS84 to whatever the image world space is,
+            # and then from there to pixel space.
+            pxl_polys = geo_polys.warp(
+                new_img['wgs84_to_wld']
+            ).warp(new_img['wld_to_pxl'])
+        else:
+            raise KeyError(align_method)
 
-    flags = [not _test_inbounds(p)[1] for p in pxl_polys]
+        def _test_inbounds(pxl_multi_poly):
+            is_any = False
+            is_all = True
+            for pxl_poly in pxl_multi_poly.data:
+                xs, ys = pxl_poly.data['exterior'].data.T
+                flags_x1 = xs < 0
+                flags_y1 = ys < 0
+                flags_x2 = xs >= new_img['width']
+                flags_y2 = ys >= new_img['height']
+                flags = flags_x1 | flags_x2 | flags_y1 | flags_y2
+                n_oob = flags.sum()
+                is_any &= (n_oob > 0)
+                is_all &= (n_oob == len(flags))
+            return is_any, is_all
 
-    valid_anns = [ann.copy() for ann in ub.compress(anns, flags)]
-    valid_pxl_polys = list(ub.compress(pxl_polys, flags))
+        flags = [not _test_inbounds(p)[1] for p in pxl_polys]
 
-    new_aid = start_aid
-    for ann, pxl_poly in zip(valid_anns, valid_pxl_polys):
-        ann.pop('image_id', None)
-        ann['segmentation'] = pxl_poly.to_coco(style='new')
-        pxl_box = pxl_poly.bounding_box().quantize().to_xywh()
-        xywh = list(pxl_box.to_coco())[0]
-        ann['bbox'] = xywh
-        ann['image_id'] = new_gid
-        ann['id'] = new_aid
-        new_aid = new_aid + 1
-        new_anns.append(ann)
+        valid_anns = [ann.copy() for ann in ub.compress(anns, flags)]
+        valid_pxl_polys = list(ub.compress(pxl_polys, flags))
+
+        new_aid = start_aid
+        for ann, pxl_poly in zip(valid_anns, valid_pxl_polys):
+            ann.pop('image_id', None)
+            ann['segmentation'] = pxl_poly.to_coco(style='new')
+            pxl_box = pxl_poly.bounding_box().quantize().to_xywh()
+            xywh = list(pxl_box.to_coco())[0]
+            ann['bbox'] = xywh
+            ann['image_id'] = new_gid
+            ann['id'] = new_aid
+            new_aid = new_aid + 1
+            new_anns.append(ann)
 
     if DEBUG:
         print(f'Finished extract img job: {new_gid}')
@@ -2152,6 +2186,7 @@ def _aligncrop(obj_group,
         warp_memory='1500',
         gdal_cachemax='1500',
         num_threads='2',
+        timeout=asset_config.asset_timeout,
     )
 
     if len(input_gpaths) > 1:
