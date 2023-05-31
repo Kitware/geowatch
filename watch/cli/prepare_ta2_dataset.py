@@ -736,7 +736,7 @@ def main(cmdline=False, **kwargs):
         aligned_fpaths = [d['aligned_imganns_fpath'] for d in alignment_jobs]
         union_depends_jobs = [d['job'] for d in alignment_jobs]
         # union_suffix = ub.hash_data([p.name for p in aligned_fpaths])[0:8]
-        aligned_final_fpath = (aligned_kwcoco_bundle / 'data.kwcoco.json').shrinkuser(home='$HOME')
+        aligned_final_fpath = (aligned_kwcoco_bundle / 'data.kwcoco.zip').shrinkuser(home='$HOME')
         aligned_multi_src_part = ' '.join(['"{}"'.format(p) for p in aligned_fpaths])
         # cache_prefix = f'[[ -f {aligned_final_fpath} ]] || ' if stages.nodes['final_union']['cache'] else ''
         union_job = pipeline.submit(command=ub.codeblock(

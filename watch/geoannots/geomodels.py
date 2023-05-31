@@ -227,7 +227,7 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
             if end_date < start_date:
                 raise AssertionError('bad date')
 
-    def _validate_schema(self, strict=True, verbose=1):
+    def _validate_schema(self, strict=True, verbose=1, parts=True):
         schema = self.load_schema(strict=strict)
         try:
             jsonschema.validate(self, schema)
@@ -236,11 +236,26 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
             if verbose:
                 print(f'self={self}')
                 _report_jsonschema_error(ex)
+            if parts:
+                self._validate_parts(strict=strict)
             raise
 
-    def validate(self, strict=True, verbose=1):
+    def validate(self, strict=True, verbose=1, parts=True):
+        """
+        Args:
+            strict (bool):
+                if False, SMART-specific fields have their restrictions
+                loosened. Defaults to True.
+
+            verbose (bool):
+                if True prints out extra information on an errors
+
+            parts (bool):
+                if True, attempts to determine what part of the data is causing
+                the error.
+        """
         self._validate_quick_checks()
-        self._validate_schema(strict=strict, verbose=verbose)
+        self._validate_schema(strict=strict, verbose=verbose, parts=parts)
 
     def _validate_parts(self, strict=True):
         """
@@ -322,7 +337,8 @@ class RegionModel(_Model):
         }
         return info
 
-    def load_schema(self, strict=True):
+    @classmethod
+    def load_schema(cls, strict=True):
         import watch
         schema = watch.rc.registry.load_region_model_schema(strict=strict)
         return schema
@@ -451,7 +467,8 @@ class SiteModel(_Model):
         info['properties'] = prop
         return info
 
-    def load_schema(self, strict=True):
+    @classmethod
+    def load_schema(cls, strict=True):
         import watch
         schema = watch.rc.registry.load_site_model_schema(strict=strict)
         return schema
@@ -529,14 +546,19 @@ class SiteModel(_Model):
         return cls(**sites[0])
 
     def as_summary(self):
+        """
+        Modify and return this site header feature as a site-summary body
+        feature for a region model.
+
+        Returns:
+            SiteSummary
+        """
         header = self.header
         if header is None:
-            ...
+            raise IndexError('Site model has no header')
         else:
-            summary = header.copy()
-            summary['properties'] = summary['properties'].copy()
-            assert summary['properties']['type'] == 'site'
-            summary['properties']['type'] = 'site_summary'
+            header = SiteHeader(**header)
+            summary = header.as_summary()
             return SiteSummary(**summary)
 
     @property
@@ -669,7 +691,21 @@ class SiteModel(_Model):
 
 
 class _Feature(ub.NiceRepr, geojson.Feature):
+    """
+    Example:
+        >>> # Test the class variables for subclasses are defined correctly
+        >>> assert RegionHeader._feat_type == 'region'
+        >>> assert SiteSummary._feat_type == 'site_summary'
+        >>> assert SiteHeader._feat_type == 'site'
+        >>> assert Observation._feat_type == 'observation'
+        >>> assert RegionHeader._model_cls is RegionModel
+        >>> assert SiteSummary._model_cls is RegionModel
+        >>> assert SiteHeader._model_cls is SiteModel
+        >>> assert Observation._model_cls is SiteModel
+    """
     type = 'Feature'
+    _model_cls = NotImplemented
+    _feat_type = NotImplemented
 
     def __nice__(self):
         return ub.urepr(self.info(), nl=2)
@@ -680,15 +716,53 @@ class _Feature(ub.NiceRepr, geojson.Feature):
         }
         return info
 
+    @classmethod
+    def load_schema(cls, strict=True):
+        """
+        Return the sub-schema for the approprite header / body feature
+        based on the declaration of _model_cls and _feat_type
+        """
+        assert cls._model_cls is not NotImplemented
+        assert cls._feat_type is not NotImplemented
+        region_schema = cls._model_cls.load_schema(strict=strict)
+        schema = ub.udict(region_schema)
+        schema - {'properties', 'required', 'title', 'type'}
+        defs = schema[chr(36) + 'defs']
+        feat_schema = schema | (defs[cls._feat_type + '_feature'])
+        return feat_schema
 
-class Observation(_Feature):
-    ...
+    def validate(self, strict=True):
+        """
+        Validate this sub-schema
+        """
+        feat_schema = self.load_schema(strict=strict)
+        try:
+            jsonschema.validate(self, feat_schema)
+        except jsonschema.ValidationError as e:
+            _report_jsonschema_error(e)
+            raise
 
 
-class _SiteOrSummary(_Feature):
+class _SiteOrSummaryMixin:
     """
     Site summaries and site headers are nearly the same
     """
+    # Data for conversion between site / site-summaries
+    _cache_keys = {
+        'site_summary': 'annotation_cache',
+        'site': 'misc_info',
+    }
+    # Record non-common properties between the two similar schemas
+    _only_properties = {
+        'site_summary': [
+            'comments'
+        ],
+        'site': [
+            'predicted_phase_transition_date',
+            'predicted_phase_transition',
+            'region_id',
+        ]
+    }
 
     @property
     def start_date(self):
@@ -702,19 +776,86 @@ class _SiteOrSummary(_Feature):
     def site_id(self):
         return self['properties']['site_id']
 
+    def _convert(self, new_cls):
+        """
+        Common logic for converting site <-> site_summary
 
-class SiteSummary(_SiteOrSummary):
-    ...
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> site = SiteModel.random()
+            >>> site.validate(strict=False)
+            >>> region = RegionModel.random()
+            >>> region.validate(strict=False)
+            >>> site1 = SiteHeader(**site.header)
+            >>> site1.validate(strict=False)
+            >>> summary1 = SiteSummary(**ub.peek(region.body_features()))
+            >>> summary1.validate(strict=False)
+            >>> summary2 = site1.as_summary()
+            >>> summary2.validate(strict=False)
+            >>> import pytest
+            >>> with pytest.raises(Exception):
+            >>>     site2 = summary1.as_site()
+            >>> summary1['properties']['annotation_cache']['region_id'] = region.region_id
+            >>> site2 = summary1.as_site()
+            >>> site2.validate(strict=False)
+            >>> # Check the round-trip conversion
+            >>> summary3 = site2.as_summary()
+            >>> site3 = summary2.as_site()
+            >>> assert summary3 == summary1 and summary3 is not summary1
+            >>> assert site3 == site1 and site3 is not site1
+            >>> # Revalidate everything to ensure no memory issues happened
+            >>> summary3.validate(strict=0)
+            >>> summary2.validate(strict=0)
+            >>> summary1.validate(strict=0)
+            >>> site3.validate(strict=0)
+            >>> site2.validate(strict=0)
+            >>> site1.validate(strict=0)
+            >>> site.validate(strict=0)
+            >>> region.validate(strict=0)
+        """
+        old_type = self._feat_type
+        new_type = new_cls._feat_type
+        old_cache_key = self._cache_keys[old_type]
+        old_only_props = self._only_properties[old_type]
+        new_cache_key  = self._cache_keys[new_type]
+        new_only_props  = self._only_properties[new_type]
 
+        feat = self.copy()
+        props = feat['properties'].copy()
+        feat['properties'] = props
+        assert props['type'] == old_type
+        props['type'] = new_type
+        if old_cache_key in props:
+            props[new_cache_key] = props.pop(old_cache_key)
+        cache = props.get(new_cache_key, {})
+        for key in new_only_props:
+            if key in cache:
+                props[key] = cache.pop(key)
+        for key in old_only_props:
+            if key in props:
+                cache[key] = props.pop(key)
+        if cache:
+            props[new_cache_key] = cache
 
-class SiteHeader(_SiteOrSummary):
-    ...
+        if old_type == 'site_summary':
+            if 'region_id' not in props:
+                raise Exception(ub.paragraph(
+                    '''
+                    Cannot convert a site-summary to a site header when the
+                    region-id is unknown. As a workaround you can set the
+                    .properties.annotation_cache.region_id
+                    '''))
+
+        new = new_cls(**feat)
+        return new
 
 
 class RegionHeader(_Feature):
     """
-    A helper wrapper for the region model header features
+    The region header feature of a region model.
     """
+    _model_cls = RegionModel
+    _feat_type = RegionModel._header_type
 
     @classmethod
     def coerce(cls, data):
@@ -738,9 +879,55 @@ class RegionHeader(_Feature):
         raise TypeError(data)
 
 
+class SiteSummary(_Feature, _SiteOrSummaryMixin):
+    """
+    The site-summary body feature of a region model.
+    """
+    _model_cls = RegionModel
+    _feat_type = RegionModel._body_type
+
+    def as_site(self):
+        """
+        Modify and return this site summary feature as a site header feature
+        for a site model.
+
+        Returns:
+            SiteHeader
+        """
+        new_cls = SiteHeader
+        return self._convert(new_cls)
+
+
+class SiteHeader(_Feature, _SiteOrSummaryMixin):
+    """
+    The site header feature of a site model.
+    """
+    _model_cls = SiteModel
+    _feat_type = SiteModel._header_type
+
+    def as_summary(self):
+        """
+        Modify and return this site header feature as a site-summary body
+        feature for a region model.
+
+        Returns:
+            SiteSummary
+        """
+        new_cls = SiteSummary
+        return self._convert(new_cls)
+
+
+class Observation(_Feature):
+    """
+    The observation body feature of a site model.
+    """
+    _model_cls = SiteModel
+    _feat_type = SiteModel._body_type
+
+
 # def _site_header_from_observations(observations, mgrs_code, site_id, status, summary_geom=None):
 #     """
-#     Consolodate site observations into a site summary
+#     Consolodate site observations into a site header
 #     """
 #     if summary_geom is None:
 #         summary_geom = unary_union(
@@ -780,6 +967,9 @@ class ModelCollection(list):
                 s.fixup()
 
     def validate(self, mode='process', workers=0, verbose=1):
+        """
+        Validate multiple models in parallel
+        """
         import rich
         # pman = util_progress.ProgressManager(backend='progiter')
         pman = util_progress.ProgressManager()

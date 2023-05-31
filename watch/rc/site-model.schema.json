@@ -79,7 +79,8 @@
       },
       "required": [
         "type", "observation_date", "source", "sensor_name", "current_phase", "is_occluded", "is_site_boundary"
-      ]
+      ],
+      "unevaluatedProperties": false
     },
     "site_properties": {
       "type": "object",
@@ -101,6 +102,7 @@
         "misc_info": {"type": "object"}
       },
       "required": ["type", "site_id", "region_id", "version", "mgrs", "model_content", "start_date", "end_date", "status", "originator"],
+      "unevaluatedProperties": false,
       "allOf": [
         {
           "if": {"properties": {"model_content": {"const": "annotation"}}},

@@ -68,13 +68,18 @@ def main(cmdline=1, **kwargs):
 
     if config.regions == 'all':
         all_regions = [p.name.split('.')[0] for p in (ub.Path(config.true_region_dpath)).ls()]
+        chosen_regions = all_regions
+    if config.regions == 'all_tne':
+        all_regions = [p.name.split('.')[0] for p in (ub.Path(config.true_region_dpath)).ls()]
+        tne_regions = [r for r in all_regions if r.split('_')[1].startswith('R')]
+        chosen_regions = tne_regions
     else:
         from watch.utils.util_yaml import Yaml
-        all_regions = Yaml.coerce(config.regions)
+        chosen_regions = Yaml.coerce(config.regions)
 
     from watch.mlops.pipeline_nodes import ProcessNode
 
-    rich.print('all_regions = {}'.format(ub.urepr(all_regions, nl=1)))
+    rich.print('chosen_regions = {}'.format(ub.urepr(chosen_regions, nl=1)))
 
     # time_duration = '1year'
     # time_duration = '3months'
@@ -102,7 +107,7 @@ def main(cmdline=1, **kwargs):
             job = queue.submit(node.final_command(), depends=depends, name=name)
         return job
 
-    for region in all_regions:
+    for region in chosen_regions:
 
         fmtdict = dict(
             # DVC_DATA_DPATH=dvc_data_dpath,
@@ -123,7 +128,7 @@ def main(cmdline=1, **kwargs):
         code = subtemplate(ub.codeblock(
             r'''
             python -m watch.cli.coco_time_combine \
-                --kwcoco_fpath="$INPUT_BUNDLE_DPATH/imgonly-${REGION}.kwcoco.json" \
+                --kwcoco_fpath="$INPUT_BUNDLE_DPATH/imgonly-${REGION}.kwcoco.zip" \
                 --output_kwcoco_fpath="$OUTPUT_BUNDLE_DPATH/imgonly-${REGION}.kwcoco.zip" \
                 --channels="$CHANNELS" \
                 --resolution="$resolution" \
