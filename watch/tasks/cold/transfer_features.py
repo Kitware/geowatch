@@ -8,13 +8,11 @@ CommandLine:
     python -m watch.tasks.cold.transfer_features \
         --coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly_KR_R001_cold-HTR.kwcoco.zip" \
         --combine_fpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imgonly-KR_R001.kwcoco.zip" \
-        --new_coco_fpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R001_uconn_cold.kwcoco.zip" 
-        
-"""
+        --new_coco_fpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R001_uconn_cold.kwcoco.zip"
 
+"""
 import ubelt as ub
 import kwcoco
-import watch
 import kwimage
 from os.path import join
 from watch.utils import util_time
@@ -46,6 +44,7 @@ class TransferCocoConfig(scfg.DataConfig):
     workers = scfg.Value(8, help='total number of workers')
     workermode = scfg.Value('process', help='Can be process, serial, or thread')
 
+
 @profile
 def transfer_features_main(cmdline=1, **kwargs):
     """
@@ -70,26 +69,36 @@ def transfer_features_main(cmdline=1, **kwargs):
         >>> cold_writing_kwcoco_main(cmdline, **kwargs)
     """
     #NOTE: This script doesn't consider timestamp = True
-    
+
     config = TransferCocoConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
-    
+
     import rich
     rich.print('config = {}'.format(ub.urepr(config, nl=1)))
 
-    from watch.utils import process_context
-    from watch.utils import util_json
-    resolved_config = config.to_dict()
-    resolved_config = util_json.ensure_json_serializable(resolved_config)
-
-    proc_context = process_context.ProcessContext(
-        name='watch.tasks.cold.transfer_features',
-        type='process',
-        config=resolved_config,
-        track_emissions=config['track_emissions'],
-    )
+    # from watch.utils import process_context
+    # from watch.utils import util_json
+    # resolved_config = config.to_dict()
+    # resolved_config = util_json.ensure_json_serializable(resolved_config)
+    # proc_context = process_context.ProcessContext(
+    #     name='watch.tasks.cold.transfer_features',
+    #     type='process',
+    #     config=resolved_config,
+    #     track_emissions=config['track_emissions'],
+    # )
 
     # Assign variables
-    default_channels = ['blue_COLD_cv','green_COLD_cv','red_COLD_cv','nir_COLD_cv', 'swir16_COLD_cv', 'swir22_COLD_cv', 'blue_COLD_a0', 'green_COLD_a0', 'red_COLD_a0', 'nir_COLD_a0', 'swir16_COLD_a0', 'swir22_COLD_a0', 'blue_COLD_a1', 'green_COLD_a1', 'red_COLD_a1', 'nir_COLD_a1', 'swir16_COLD_a1','swir22_COLD_a1','blue_COLD_b1','green_COLD_b1','red_COLD_b1','nir_COLD_b1','swir16_COLD_b1','swir22_COLD_b1','blue_COLD_c1','green_COLD_c1','red_COLD_c1','nir_COLD_c1','swir16_COLD_c1','swir22_COLD_c1','blue_COLD_rmse','green_COLD_rmse','red_COLD_rmse','nir_COLD_rmse','swir16_COLD_rmse','swir22_COLD_rmse']
+    default_channels = [
+        'blue_COLD_cv', 'green_COLD_cv', 'red_COLD_cv', 'nir_COLD_cv',
+        'swir16_COLD_cv', 'swir22_COLD_cv', 'blue_COLD_a0', 'green_COLD_a0',
+        'red_COLD_a0', 'nir_COLD_a0', 'swir16_COLD_a0', 'swir22_COLD_a0',
+        'blue_COLD_a1', 'green_COLD_a1', 'red_COLD_a1', 'nir_COLD_a1',
+        'swir16_COLD_a1', 'swir22_COLD_a1', 'blue_COLD_b1', 'green_COLD_b1',
+        'red_COLD_b1', 'nir_COLD_b1', 'swir16_COLD_b1', 'swir22_COLD_b1',
+        'blue_COLD_c1', 'green_COLD_c1', 'red_COLD_c1', 'nir_COLD_c1',
+        'swir16_COLD_c1', 'swir22_COLD_c1', 'blue_COLD_rmse',
+        'green_COLD_rmse', 'red_COLD_rmse', 'nir_COLD_rmse',
+        'swir16_COLD_rmse', 'swir22_COLD_rmse'
+    ]
 
     coco_fpath = ub.Path(config['coco_fpath'])
     combine_fpath = ub.Path(config['combine_fpath'])
@@ -97,7 +106,7 @@ def transfer_features_main(cmdline=1, **kwargs):
 
     if config['channels_to_transfer'] is None:
         channels_to_transfer = default_channels
-    else:        
+    else:
         channels_to_transfer = config['channels_to_transfer']
         channels_to_transfer = list(channels_to_transfer)
 
@@ -115,15 +124,15 @@ def transfer_features_main(cmdline=1, **kwargs):
         dst_video = dst.index.name_to_video[vidname]
         # Look at each sequence of images
         all_src_images = src.images(video_id=src_video['id'])
-        dst_images = dst.images(video_id=dst_video['id'])                
-        
+        dst_images = dst.images(video_id=dst_video['id'])
+
         # Filter out the source images missing the channels we want to transfer
         keep_flags = [
             coco_img.channels.intersection(channels_to_transfer)
             for coco_img in all_src_images.coco_images
         ]
         src_images = all_src_images.compress(keep_flags)
-        
+
         # Group images by sensor, so we only transfer between similar sensors
         src_sensors = src_images.lookup('sensor_coarse')
         dst_sensors = dst_images.lookup('sensor_coarse')
@@ -148,7 +157,7 @@ def transfer_features_main(cmdline=1, **kwargs):
             # keyframes are the images with COLD features and the target sequence
             # are the images we are transfering onto.
             target_times = dst_timestamps
-            
+
             key_infos = [{'time': d, 'applies': 'future'} for d in src_timestamps]
             from watch.cli.reproject_annotations import keyframe_interpolate
             assigned_indexes = keyframe_interpolate(target_times, key_infos)
@@ -163,7 +172,6 @@ def transfer_features_main(cmdline=1, **kwargs):
                         'dst_image_id': dst_image_ids[min(dst_idxs)],
                         'video_name': vidname,
                     })
-
 
     # Now we have all assignments
     vidname_to_assignments = ub.group_items(assignments, lambda x: x['video_name'])
@@ -198,7 +206,7 @@ def transfer_features_main(cmdline=1, **kwargs):
             assets_to_transfer = []
             for asset in src_coco_img.iter_asset_objs():
                 asset_channels = kwcoco.FusedChannelSpec.coerce(asset['channels'])
-                if asset_channels.intersection(channels_to_transfer):                
+                if asset_channels.intersection(channels_to_transfer):
                     assets_to_transfer.append(asset)
             for asset in assets_to_transfer:
                 new_asset = asset.copy()
@@ -215,6 +223,6 @@ def transfer_features_main(cmdline=1, **kwargs):
     dst.fpath = new_coco_fpath
     dst._ensure_json_serializable()
     dst.dump()
-    
+
 if __name__ == '__main__':
     transfer_features_main()
