@@ -41,6 +41,8 @@ class TransferCocoConfig(scfg.DataConfig):
     new_coco_fpath = scfg.Value(None, help='file path for modified output coco json')
     channels_to_transfer = scfg.Value(None, help='COLD channels for transfer')
 
+    io_workers = scfg.Value(0, help='number of workers for copy-asset jobs')
+
     copy_assets = scfg.Value(False, help='if True copy the assests to the new bundle directory')
 
 
@@ -399,7 +401,7 @@ def transfer_features_main(cmdline=1, **kwargs):
 
     if copy_tasks:
         from watch.utils import copy_manager
-        copyman = copy_manager.CopyManager()
+        copyman = copy_manager.CopyManager(workers=config.io_workers)
         for task in copy_tasks:
             copyman.submit(src=task['src'], dst=task['dst'])
         copyman.run()
