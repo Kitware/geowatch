@@ -1503,6 +1503,7 @@ def varied_value_counts(longform, min_variations=0, default=ub.NoParam, dropna=F
 
 
 if 1:
+    # Note: Code is duplicated in util_pandas
     # Fix pandas groupby so it uses the new behavior with a list of len 1
     import wrapt
 

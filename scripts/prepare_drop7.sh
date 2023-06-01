@@ -138,7 +138,7 @@ move_kwcoco_paths(){
 
     import ubelt as ub
     bundle_dpath = ub.Path('.').absolute()
-    all_paths = list(bundle_dpath.glob('*_[R]*'))
+    all_paths = list(bundle_dpath.glob('*_[C]*'))
     region_dpaths = []
     for p in all_paths:
         if p.is_dir() and str(p.name)[2] == '_':
@@ -148,15 +148,19 @@ move_kwcoco_paths(){
     queue = cmd_queue.Queue.create('tmux', size=16)
 
     for dpath in region_dpaths:
+        print(ub.urepr(dpath.ls()))
+
+    for dpath in region_dpaths:
         region_id = dpath.name
-        fname = f'imgonly-{region_id}.kwcoco.zip'
-        fpath = bundle_dpath / fname
-        if fpath.exists():
-            queue.submit(f'kwcoco move {fpath} {dpath}')
-        fname = f'imganns-{region_id}.kwcoco.zip'
-        fpath = bundle_dpath / fname
-        if fpath.exists():
-            queue.submit(f'kwcoco move {fpath} {dpath}')
+        fnames = [
+            f'imgonly-{region_id}.kwcoco.zip',
+            f'imganns-{region_id}.kwcoco.zip',
+        ]
+        for fname in fnames:
+            old_fpath = bundle_dpath / fname
+            new_fpath = dpath / fname
+            if old_fpath.exists() and not new_fpath.exists():
+                queue.submit(f'kwcoco move {old_fpath} {new_fpath}')
 
     queue.run()
     "
@@ -375,7 +379,6 @@ for p in ub.ProgIter(problematic_paths):
         #info = ptr.info()
         #print(info['bands'])
         #...
-
 "
 
 
