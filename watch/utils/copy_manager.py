@@ -16,7 +16,6 @@ class CopyManager:
     Helper to execute multiple copy operations on a local filesystem.
 
     Args:
-
         workers (int): number of parallel workers to use
 
         mode (str): thread, process, or serial
@@ -58,21 +57,33 @@ class CopyManager:
         return self._pool.__exit__(a, b, c)
 
     def submit(self, src, dst):
+        """
+        Args:
+            src (str | PathLike): source file or directory
+            dst (str | PathLike): destination file or directory
+        """
         task = {'src': src, 'dst': dst}
         if self.eager:
             self._pool.submit(_copy_worker, **task)
         else:
             self._unsubmitted.append(task)
 
-    def run(self):
+    def run(self, desc=None, verbose=1):
+        """
+        Args:
+            desc (str | None): description for progress bars
+            verbsoe (int): verbosity level
+        """
         from watch.utils import util_progress
         pman = util_progress.ProgressManager()
         with pman:
-            for task in pman.progiter(self._unsubmitted, desc='submit copy jobs'):
+            for task in self._unsubmitted:
                 self._pool.submit(_copy_worker, **task)
             self._unsubmitted.clear()
             job_iter = self._pool.as_completed()
-            prog = pman.progiter(job_iter, desc='collect copy jobs', total=len(self._pool))
+            desc = desc or 'copying'
+            prog = pman.progiter(
+                job_iter, desc=desc, total=len(self._pool), verbose=verbose)
             for job in prog:
                 job.result()
 

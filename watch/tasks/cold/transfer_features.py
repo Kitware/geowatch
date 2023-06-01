@@ -399,18 +399,23 @@ def transfer_features_main(cmdline=1, **kwargs):
         new_asset['file_name'] = new_fname
         dst_coco_img.add_asset(**new_asset)
 
+    print(f'Found {len(copy_tasks)} assets to copy')
+
+    rich.print(f'Dest Bundle: [link={dst.bundle_dpath}]{dst.bundle_dpath}[/link]')
     if copy_tasks:
         from watch.utils import copy_manager
         copyman = copy_manager.CopyManager(workers=config.io_workers)
         for task in copy_tasks:
             copyman.submit(src=task['src'], dst=task['dst'])
-        copyman.run()
+        copyman.run(desc='Copy Assets')
 
     obj = proc_context.stop()
     dst.dataset['info'].append(obj)
 
+    print('Writing new coco file')
     dst._ensure_json_serializable()
     dst.dump()
+    print(f'Wrote transfered features to: {dst.fpath}')
 
 if __name__ == '__main__':
     transfer_features_main()
