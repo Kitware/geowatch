@@ -402,10 +402,11 @@ def coco_sensorchan_gsd_stats(coco_dset):
 
     gsd_table = pd.DataFrame(longform_rows)
     from watch.utils import util_pandas
-    groupers = gsd_table.columns.intersection(['sensor', 'channels'])
+    groupers = list(gsd_table.columns.intersection(['sensor', 'channels']))
     if len(groupers) == 0:
         sensorchan_gsd_stats = gsd_table
     else:
+        print(f'groupers={groupers}')
         groups = util_pandas.pandas_fixed_groupby(gsd_table, groupers)
         sensorchan_gsd_stats = groups.describe()
     return sensorchan_gsd_stats
