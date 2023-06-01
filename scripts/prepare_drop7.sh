@@ -175,6 +175,27 @@ add_coco_files(){
     git commit -am "Add Drop7 TnE Region annotations"
     git push
     dvc push -r aws -- */*.kwcoco.zip.dvc
+}
+
+
+remove_empty_kwcoco_files(){
+    python -c "if 1:
+
+    import ubelt as ub
+    bundle_dpath = ub.Path('.').absolute()
+    all_paths = list(bundle_dpath.glob('imganns*zip'))
+    region_dpaths = []
+    dsets = list(kwcoco.CocoDataset.coerce_multiple(all_paths, workers=8))
+
+    bad_fpaths = []
+    for dset in dsets:
+        if dset.n_images == 0:
+            bad_fpaths += [dset.fpath]
+
+    for f in bad_fpaths:
+        ub.Path(f).delete()
+
+    "
 
 }
 
@@ -188,7 +209,8 @@ redo_add_raw_data(){
     import watch
     dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='hdd')
     bundle_dpath = dvc_data_dpath / 'Aligned-Drop7'
-    tne_dpaths = list(bundle_dpath.glob('[A-Z][A-Z]_R0*'))
+    #tne_dpaths = list(bundle_dpath.glob('[A-Z][A-Z]_R0*'))
+    tne_dpaths = list(bundle_dpath.glob('[A-Z][A-Z]_C0*'))
 
     # Try using DVC at the image level instead?
     old_dvc_paths = []
@@ -220,21 +242,18 @@ dvc_add_raw_imgdata(){
     import watch
     dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='hdd')
     bundle_dpath = dvc_data_dpath / 'Aligned-Drop7'
-    tne_dpaths = list(bundle_dpath.glob('[A-Z][A-Z]_R0*'))
+    #tne_dpaths = list(bundle_dpath.glob('[A-Z][A-Z]_R0*'))
+    tne_dpaths = list(bundle_dpath.glob('[A-Z][A-Z]_C0*'))
 
-    # Try using DVC at the image level instead?
-    img_dpaths = []
+    new_dpaths = []
     for dpath in tne_dpaths:
-        candidates = list(dpath.glob('*/affine_warp/*'))
-        for cand in candidates:
-            if cand.is_dir():
-                img_dpaths.append(cand)
+        new_dpaths += [d for d in dpath.glob('*') if d.is_dir() and d.name in {'L8', 'WV1', 'WV', 'S2', 'PD'}]
 
     from watch.utils import simple_dvc
     dvc = simple_dvc.SimpleDVC.coerce(bundle_dpath)
-    dvc.add(img_dpaths)
+    dvc.add(new_dpaths)
     dvc.git_commitpush(message='Add images for {bundle_dpath.name}')
-    dvc.push(img_dpaths, remote='aws')
+    dvc.push(new_dpaths, remote='aws')
     "
     #declare -a ROI_DPATHS=()
     #ROI_DPATHS+=TNE_REGIONS
