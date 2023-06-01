@@ -300,7 +300,7 @@ class GDalCommandBuilder:
 def gdal_single_translate(in_fpath, out_fpath, pixel_box=None, blocksize=256,
                           compress='DEFLATE', tries=1, cooldown=1, verbose=0,
                           eager=True, gdal_cachemax=None, num_threads=None,
-                          use_tempfile=True):
+                          use_tempfile=True, timeout=None):
     """
     Crops geotiffs using pixels
 
@@ -323,6 +323,9 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box=None, blocksize=256,
             if True, executes the command, if False returns a list of all the
             bash commands that would be executed, suitable for use in a command
             queue.
+
+        timeout (None | float):
+            number of seconds allowed to run gdal before giving up
 
     CommandLine:
         xdoctest -m watch.utils.util_gdal gdal_single_translate
@@ -412,7 +415,7 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box=None, blocksize=256,
     if eager:
         _execute_gdal_command_with_checks(
             gdal_translate_command, tmp_fpath, tries=tries, cooldown=cooldown,
-            verbose=verbose)
+            verbose=verbose, timeout=timeout)
         os.rename(tmp_fpath, out_fpath)
     else:
         commands = [
@@ -420,6 +423,48 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box=None, blocksize=256,
             f'mv "{tmp_fpath}" "{out_fpath}"',
         ]
         return commands
+
+
+class _ShrinkingTimeout:
+    """
+    Helper to track timeouts over multiple sequential calls to subprocess such
+    that the value shrinks based on how much time has already passed. The
+    time shrinks down to a minimum value which is zero by default.
+
+    Example:
+        >>> from watch.utils.util_gdal import _ShrinkingTimeout
+        >>> self = _ShrinkingTimeout(3.5)
+        >>> assert self.remaining() >= 0
+        >>> assert _ShrinkingTimeout(-3).remaining() == 0
+        >>> new1 = _ShrinkingTimeout.coerce(self)
+        >>> assert self is new1
+        >>> new2 = _ShrinkingTimeout.coerce(3.5)
+        >>> assert self is not new2
+        >>> new3 = _ShrinkingTimeout.coerce(None)
+        >>> assert new3.remaining() is None
+    """
+    def __init__(self, value, minimum=0.0):
+        import time
+        self._start_time = time.monotonic()
+        self._minimum = minimum
+        self.value = value
+
+    def remaining(self):
+        """
+        Return the remaining timeout
+        """
+        if self.value is None:
+            return None
+        import time
+        elapsed = time.monotonic() - self._start_time
+        return max(self.value - elapsed, self._minimum)
+
+    @classmethod
+    def coerce(cls, value):
+        if isinstance(value, _ShrinkingTimeout):
+            return value
+        else:
+            return cls(value)
 
 
 def gdal_single_warp(in_fpath,
@@ -439,6 +484,7 @@ def gdal_single_warp(in_fpath,
                      verbose=0,
                      force_spatial_res=None,
                      eager=True,
+                     timeout=None,
                      cooldown=1,
                      use_tempfile=True,
                      gdal_cachemax=None,
@@ -493,6 +539,9 @@ def gdal_single_warp(in_fpath,
             queue.
 
         cooldown (int): number of seconds to wait (i.e. "cool-down") between tries
+
+        timeout (None | float):
+            number of seconds allowed to run gdal before giving up
 
     Returns:
         None | List[str]:
@@ -591,6 +640,7 @@ def gdal_single_warp(in_fpath,
 
     """
     tmp_out_fpath = ub.augpath(out_fpath, prefix='.tmpwarp.')
+    timeout = _ShrinkingTimeout.coerce(timeout)
 
     # Coordinate Reference System of the "target" destination image
     # t_srs = target spatial reference for output image
@@ -699,7 +749,7 @@ def gdal_single_warp(in_fpath,
     if eager:
         _execute_gdal_command_with_checks(
             gdal_warp_command, dst_fpath, tries=tries, verbose=verbose,
-            cooldown=cooldown)
+            cooldown=cooldown, timeout=timeout)
         if use_tempfile:
             os.rename(tmp_out_fpath, out_fpath)
     else:
@@ -711,12 +761,15 @@ def gdal_single_warp(in_fpath,
         return commands
 
 
-def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, cooldown=1,
+def gdal_multi_warp(in_fpaths, out_fpath,
+                    space_box=None, local_epsg=4326, box_epsg=4326,
+                    nodata=None, tries=1, cooldown=1,
                     blocksize=256, compress='DEFLATE', error_logfile=None,
                     _intermediate_vrt=False, verbose=0,
                     return_intermediate=False, force_spatial_res=None,
                     eager=True, gdal_cachemax=None, num_threads=None,
-                    warp_memory=None, use_tempfile=True, **kwargs):
+                    warp_memory=None, use_tempfile=True,
+                    timeout=None, **kwargs):
     """
     See gdal_single_warp() for args
 
@@ -727,6 +780,7 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, cooldown=1,
         >>> # xdoctest: +REQUIRES(--slow)
         >>> # Uses data from the data cube with extra=1
         >>> from watch.utils.util_gdal import *  # NOQA
+        >>> from watch.cli.coco_align import SimpleDataCube
         >>> import ubelt as ub
         >>> cube, region_df = SimpleDataCube.demo(with_region=True, extra=True)
         >>> local_epsg = 32635
@@ -740,6 +794,33 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, cooldown=1,
         >>> rpcs = None
         >>> gdal_multi_warp(in_fpaths, out_fpath=out_fpath, space_box=space_box,
         >>>                 local_epsg=local_epsg, rpcs=rpcs, verbose=3)
+
+    Example:
+        >>> from watch.utils.util_gdal import *  # NOQA
+        >>> from watch.utils.util_gdal import _demo_geoimg_with_nodata
+        >>> from watch.utils import util_gis
+        >>> from watch.gis import geotiff
+        >>> in_fpath = ub.Path(_demo_geoimg_with_nodata())
+        >>> info = geotiff.geotiff_crs_info(in_fpath)
+        >>> gdf = util_gis.crs_geojson_to_gdf(info['geos_corners'])
+        >>> gdf = gdf.to_crs(4326) # not really wgs84, this is crs84
+        >>> crs84_poly = kwimage.Polygon.coerce(gdf['geometry'].iloc[0])
+        >>> crs84_epsg = gdf.crs.to_epsg()
+        >>> crs84_space_box = crs84_poly.scale(0.5, about='center').to_boxes()
+        >>> crs84_out_fpath = ub.augpath(in_fpath, prefix='_crs84_crop_2_')
+        >>> in_fpaths = [in_fpath, in_fpath, in_fpath]
+        >>> # Test that timeouts work
+        >>> import pytest
+        >>> with pytest.raises(subprocess.TimeoutExpired):
+        ...     gdal_multi_warp(in_fpaths, crs84_out_fpath, local_epsg=crs84_epsg, space_box=crs84_space_box, timeout=0)
+
+        # Dev case:
+        # The first part should work, but later parts should fail
+        if 0:
+            with ub.Timer() as timer:
+                gdal_multi_warp(in_fpaths, crs84_out_fpath, local_epsg=crs84_epsg, space_box=crs84_space_box, verbose=3)
+            print(f'timer.elapsed={timer.elapsed}')
+            gdal_multi_warp(in_fpaths, crs84_out_fpath, local_epsg=crs84_epsg, space_box=crs84_space_box, timeout=timer.elapsed * 0.6, verbose=3)
 
     Ignore:
         >>> # xdoctest: +REQUIRES(--slow)
@@ -828,8 +909,12 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, cooldown=1,
     # Write to a temporary file and then rename the file to the final
     # Destination so ctrl+c doesn't break everything
     tmp_out_fpath = ub.augpath(out_fpath, prefix='.tmpmerge.')
+    timeout = _ShrinkingTimeout.coerce(timeout)
 
     single_warp_kwargs = kwargs.copy()
+    single_warp_kwargs['space_box'] = space_box
+    single_warp_kwargs['local_epsg'] = local_epsg
+    single_warp_kwargs['box_epsg'] = box_epsg
     single_warp_kwargs['compress'] = compress
     single_warp_kwargs['blocksize'] = blocksize
     single_warp_kwargs['tries'] = tries
@@ -843,6 +928,7 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, cooldown=1,
     single_warp_kwargs['warp_memory'] = warp_memory
     single_warp_kwargs['num_threads'] = num_threads
     single_warp_kwargs['use_tempfile'] = False
+    single_warp_kwargs['timeout'] = timeout
     # Delay the actual execution of the partial warps until merge is called.
 
     if not use_tempfile:
@@ -877,18 +963,18 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, cooldown=1,
 
     if nodata is not None:
         # FIXME: might not be necessary
-        from watch.utils import util_raster
-        valid_polygons = []
-        if 0:
-            for part_out_fpath in warped_gpaths:
-                sh_poly = util_raster.mask(part_out_fpath,
-                                           tolerance=10,
-                                           default_nodata=nodata)
-                valid_polygons.append(sh_poly)
-            valid_areas = [p.area for p in valid_polygons]
-            # Determine order by valid data
-            warped_gpaths = list(
-                ub.sorted_vals(ub.dzip(warped_gpaths, valid_areas)).keys())
+        # from watch.utils import util_raster
+        # valid_polygons = []
+        # if 0:
+        #     for part_out_fpath in warped_gpaths:
+        #         sh_poly = util_raster.mask(part_out_fpath,
+        #                                    tolerance=10,
+        #                                    default_nodata=nodata)
+        #         valid_polygons.append(sh_poly)
+        #     valid_areas = [p.area for p in valid_polygons]
+        #     # Determine order by valid data
+        #     warped_gpaths = list(
+        #         ub.sorted_vals(ub.dzip(warped_gpaths, valid_areas)).keys())
         warped_gpaths = warped_gpaths[::-1]
     else:
         # Last image is copied over earlier ones, but we expect first image to
@@ -915,7 +1001,7 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, cooldown=1,
     if eager:
         _execute_gdal_command_with_checks(
             gdal_merge_cmd, tmp_out_fpath, tries=tries, cooldown=cooldown,
-            verbose=verbose)
+            verbose=verbose, timeout=timeout)
     else:
         commands.append(gdal_merge_cmd)
 
@@ -927,7 +1013,7 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, cooldown=1,
                                  verbose=verbose, eager=eager, tries=tries,
                                  cooldown=cooldown,
                                  gdal_cachemax=gdal_cachemax,
-                                 num_threads=num_threads)
+                                 num_threads=num_threads, timeout=timeout)
     if eager:
         # Remove temporary files
         ub.Path(tmp_out_fpath).delete()
@@ -946,14 +1032,16 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, cooldown=1,
 
 def _execute_gdal_command_with_checks(command, out_fpath, tries=1, cooldown=1,
                                       shell=False, check_after=True,
-                                      verbose=0):
+                                      verbose=0, timeout=None):
     """
     Given a gdal command and the expected file that it should produce
     try to execute a few times and check that it produced a valid result.
     """
+    timeout = _ShrinkingTimeout.coerce(timeout)
 
     def _execute_command():
-        cmd_info = ub.cmd(command, check=True, verbose=verbose, shell=shell)
+        cmd_info = ub.cmd(command, check=True, verbose=verbose, shell=shell,
+                          timeout=timeout.remaining())
         if not ub.Path(out_fpath).exists():
             raise FileNotFoundError(f'Error: gdal did not write {out_fpath}')
         if check_after:

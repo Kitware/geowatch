@@ -4,6 +4,7 @@ import math
 import pandas as pd
 import pygtrie
 import kwarray
+import wrapt
 from watch.utils import slugify_ext
 from watch.utils.util_stringalgo import shortest_unique_suffixes
 
@@ -567,3 +568,64 @@ def nan_eq(a, b):
         return True
     else:
         return a == b
+
+
+# Fix pandas groupby so it uses the new behavior with a list of len 1
+
+class GroupbyFutureWrapper(wrapt.ObjectProxy):
+    """
+    Wraps a groupby object to get the new behavior sooner.
+    """
+
+    def __iter__(self):
+        keys = self.keys
+        if isinstance(keys, list) and len(keys) == 1:
+            # Handle this special case to avoid a warning
+            for key, group in self.grouper.get_iterator(self._selected_obj, axis=self.axis):
+                yield (key,), group
+        else:
+            # Otherwise use the parent impl
+            yield from self.__wrapped__.__iter__()
+
+
+def _fix_groupby(groups):
+    keys = groups.keys
+    if isinstance(keys, list) and len(keys) == 1:
+        return GroupbyFutureWrapper(groups)
+    else:
+        return groups
+
+
+def pandas_fixed_groupby(df, by=None, **kwargs):
+    """
+    Fixed groupby behavior so length-one arguments are handled correctly
+
+    Args:
+        df (DataFrame):
+        ** kwargs: groupby kwargs
+
+    Example:
+        >>> from watch.utils.util_pandas import *  # NOQA
+        >>> df = pd.DataFrame({
+        >>>     'Animal': ['Falcon', 'Falcon', 'Parrot', 'Parrot'],
+        >>>     'Color': ['Blue', 'Blue', 'Blue', 'Yellow'],
+        >>>     'Max Speed': [380., 370., 24., 26.]
+        >>>     })
+        >>> # Old behavior
+        >>> old1 = dict(list(df.groupby(['Animal', 'Color'])))
+        >>> old2 = dict(list(df.groupby(['Animal'])))
+        >>> old3 = dict(list(df.groupby('Animal')))
+        >>> new1 = dict(list(pandas_fixed_groupby(df, ['Animal', 'Color'])))
+        >>> new2 = dict(list(pandas_fixed_groupby(df, ['Animal'])))
+        >>> new3 = dict(list(pandas_fixed_groupby(df, 'Animal')))
+        >>> assert sorted(new1.keys())[0] == ('Falcon', 'Blue')
+        >>> assert sorted(old1.keys())[0] == ('Falcon', 'Blue')
+        >>> assert sorted(new3.keys())[0] == 'Falcon'
+        >>> assert sorted(old3.keys())[0] == 'Falcon'
+        >>> # This is the case that is fixed.
+        >>> assert sorted(new2.keys())[0] == ('Falcon',)
+        >>> assert sorted(old2.keys())[0] == 'Falcon'
+    """
+    groups = df.groupby(by=by, **kwargs)
+    fixed_groups = _fix_groupby(groups)
+    return fixed_groups

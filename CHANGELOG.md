@@ -4,6 +4,21 @@ This changelog follows the specifications detailed in: [Keep a Changelog](https:
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
 
+## Version 0.7.0 - Target 2023-06-xx
+
+
+### Changed
+* MLOPs Nodes can now specify input paths as dictionaries if default input configs are known.
+
+
+### Fixed
+* Added timeout to gdal subprocess commands to prevent hanging 
+
+
+### Changed
+* coco-align no longer handles annotations
+
+
 ## Version 0.6.8 - Target 2023-05-22
 
 ### Added

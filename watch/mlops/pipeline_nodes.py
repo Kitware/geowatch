@@ -936,6 +936,13 @@ class ProcessNode(Node):
         self.enabled = config.pop('enabled', enabled)
         self.config = ub.udict(config)
 
+        if isinstance(self.in_paths, dict):
+            # In the case where the in paths is a dictionary, we can
+            # prepopulate some of the config options.
+            non_specified = ub.udict(self.in_paths) - self.config
+            for key in non_specified:
+                self.inputs[key].final_value = non_specified[key]
+
         # self.algo_params = set(self.config) - non_algo_keys
         in_path_keys = self.config & set(self.in_paths)
         for key in in_path_keys:

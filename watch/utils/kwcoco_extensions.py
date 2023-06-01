@@ -2108,12 +2108,16 @@ def coco_channel_stats(coco_dset):
     CS = kwcoco.ChannelSpec
     FS = kwcoco.FusedChannelSpec
     osets = [CS.coerce(c).fuse().to_oset() for c in chan_hist]
-    common_channels = FS.coerce(list(ub.oset.intersection(*osets))).concise()
-    all_channels = FS.coerce(list(ub.oset.union(*osets))).concise()
-
-    all_sensorchan = kwcoco.SensorChanSpec.late_fuse(*[
-        kwcoco.SensorChanSpec.coerce(s)
-        for s in sensorchan_hist2.keys()]).concise()
+    if len(osets) == 0:
+        common_channels = FS.coerce([])
+        all_channels = FS.coerce([])
+        all_sensorchan = kwcoco.SensorChanSpec.coerce('')
+    else:
+        common_channels = FS.coerce(list(ub.oset.intersection(*osets))).concise()
+        all_channels = FS.coerce(list(ub.oset.union(*osets))).concise()
+        all_sensorchan = kwcoco.SensorChanSpec.late_fuse(*[
+            kwcoco.SensorChanSpec.coerce(s)
+            for s in sensorchan_hist2.keys()]).concise()
 
     info = {
         'chan_hist': chan_hist,
