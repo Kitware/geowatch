@@ -42,7 +42,7 @@
     "mgrsstring": {
       "description": "MGRS string, specified at the 100km grid square",
       "type": "string",
-      "pattern": "^\\d{2}[A-Z]{3}$"
+      "pattern": "^\\(d{2}[A-Z]{3})|([A-Z]{3})$"
     },
     "transient_annotation_cache": {
       "description": "dictionary required in a transient annotation",

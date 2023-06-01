@@ -165,8 +165,6 @@ def random_region_model(region_id=None, region_poly=None, num_sites=3,
                 },
             ],
         }
-
-
     """
     rng = kwarray.ensure_rng(rng)
 
