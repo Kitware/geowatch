@@ -6,6 +6,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Version 0.7.0 - Target 2023-06-xx
 
+
+### Changed
+* MLOPs Nodes can now specify input paths as dictionaries if default input configs are known.
+
+
 ### Fixed
 * Added timeout to gdal subprocess commands to prevent hanging 
 
