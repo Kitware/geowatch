@@ -51,7 +51,7 @@
     "mgrsstring": {
       "description": "MGRS string, specified at the 100km grid square",
       "type": "string",
-      "pattern": "^\\(d{2}[A-Z]{3})|([A-Z]{3})$"
+      "pattern": "^(\\d{2}[A-Z]{3})|([A-Z]{3})$"
     },
     "boolchain": {
       "description": "Comma-delimited list of true/false strings",
