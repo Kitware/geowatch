@@ -78,5 +78,7 @@ class CopyManager:
 
 
 def _copy_worker(src, dst):
+    src = ub.Path(src)
+    dst = ub.Path(dst)
     dst.parent.ensuredir()
     src.copy(dst)

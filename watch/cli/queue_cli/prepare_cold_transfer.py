@@ -1,5 +1,19 @@
 """
 Handle the batch transfer of COLD features to time averaged data
+
+Ignore:
+
+    DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
+    python ~/code/watch/watch/cli/queue_cli/prepare_cold_transfer.py \
+        --src_kwcocos "$DVC_DATA_DPATH/Aligned-Drop7/*/*cold.kwcoco.zip" \
+        --dst_kwcocos "$DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/*_I2L.kwcoco.zip"
+
+
+    python -m watch.tasks.cold.transfer_features \
+        --copy_assets="True" \
+        --coco_fpath="/home/joncrall/remote/Ooo/data/dvc-repos/smart_data_dvc/Aligned-Drop7/KR_R001/imganns-KR_R001_cold.kwcoco.zip" \
+        --combine_fpath="/home/joncrall/remote/Ooo/data/dvc-repos/smart_data_dvc/Drop7-MedianNoWinter10GSD/combo_imganns-KR_R001_I2L.kwcoco.zip" \
+        --new_coco_fpath="/home/joncrall/remote/Ooo/data/dvc-repos/smart_data_dvc/Drop7-MedianNoWinter10GSD/combo_imganns-KR_R001_I2LC.kwcoco.zip"
 """
 #!/usr/bin/env python3
 import scriptconfig as scfg
@@ -8,6 +22,9 @@ from cmd_queue.cli_boilerplate import CMDQueueConfig
 
 
 class PrepareColdTransferConfig(CMDQueueConfig):
+    """
+    Run watch.tasks.cold.transfer_features on multiple regions in a cmd-queue
+    """
     src_kwcocos = scfg.Value(None, help='input pattern for cold kwcoco files')
     dst_kwcocos = scfg.Value(None, help='pattern for cold files to transfer onto. Note this is *not* the output')
     new_suffix = scfg.Value('C', help='the suffix feature char code to append at the end of the coco name. Defaults to C for COLD')
@@ -98,7 +115,8 @@ def main(cmdline=1, **kwargs):
                 'new_coco_fpath': new_fpath,
             },
             config={
-                'copy_assets': True
+                'copy_assets': True,
+                'io_workers': 4,
             }
         )
         submit_job_step(node, name=f'transfer-cold-{region_id}')
@@ -110,6 +128,6 @@ if __name__ == '__main__':
 
     CommandLine:
         python ~/code/watch/watch/cli/queue_cli/prepare_cold_transfer.py
-        python -m prepare_cold_transfer
+        python -m watch.cli.queue_cli.prepare_cold_transfer
     """
     main()
