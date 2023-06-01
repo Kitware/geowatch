@@ -6,14 +6,8 @@ Ignore:
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
     python ~/code/watch/watch/cli/queue_cli/prepare_cold_transfer.py \
         --src_kwcocos "$DVC_DATA_DPATH/Aligned-Drop7/*/*cold.kwcoco.zip" \
-        --dst_kwcocos "$DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/*_I2L.kwcoco.zip"
-
-
-    python -m watch.tasks.cold.transfer_features \
-        --copy_assets="True" \
-        --coco_fpath="/home/joncrall/remote/Ooo/data/dvc-repos/smart_data_dvc/Aligned-Drop7/KR_R001/imganns-KR_R001_cold.kwcoco.zip" \
-        --combine_fpath="/home/joncrall/remote/Ooo/data/dvc-repos/smart_data_dvc/Drop7-MedianNoWinter10GSD/combo_imganns-KR_R001_I2L.kwcoco.zip" \
-        --new_coco_fpath="/home/joncrall/remote/Ooo/data/dvc-repos/smart_data_dvc/Drop7-MedianNoWinter10GSD/combo_imganns-KR_R001_I2LC.kwcoco.zip"
+        --dst_kwcocos "$DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/*_I2LS.kwcoco.zip" \
+        --run=1
 """
 #!/usr/bin/env python3
 import scriptconfig as scfg

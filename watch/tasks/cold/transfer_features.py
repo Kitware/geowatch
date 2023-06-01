@@ -406,7 +406,8 @@ def transfer_features_main(cmdline=1, **kwargs):
         from watch.utils import copy_manager
         copyman = copy_manager.CopyManager(workers=config.io_workers)
         for task in copy_tasks:
-            copyman.submit(src=task['src'], dst=task['dst'])
+            copyman.submit(src=task['src'], dst=task['dst'],
+                           overwrite=True)
         copyman.run(desc='Copy Assets')
 
     obj = proc_context.stop()

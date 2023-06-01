@@ -33,12 +33,24 @@ class CopyManager:
         >>> src_fpaths = [src_dpath / 'file{}.txt'.format(i) for i in range(10)]
         >>> for fpath in src_fpaths:
         >>>     fpath.touch()
-        >>> copyman = copy_manager.CopyManager(workers)
+        >>> copyman = copy_manager.CopyManager(workers=0)
         >>> for fpath in src_fpaths:
         >>>     dst = fpath.augment(dpath=dst_dpath)
         >>>     copyman.submit(fpath, dst)
         >>> copyman.run()
         >>> assert len(dst_dpath.ls()) == len(src_dpath.ls())
+        >>> copyman = copy_manager.CopyManager(workers=0)
+        >>> for fpath in src_fpaths:
+        >>>     dst = fpath.augment(dpath=dst_dpath)
+        >>>     copyman.submit(fpath, dst)
+        >>> import pytest
+        >>> with pytest.raises(FileExistsError):
+        >>>     copyman.run()
+        >>> copyman = copy_manager.CopyManager(workers=0)
+        >>> for fpath in src_fpaths:
+        >>>     dst = fpath.augment(dpath=dst_dpath)
+        >>>     copyman.submit(fpath, dst, skip_existing=True)
+        >>> copyman.run()
     """
 
     def __init__(self, workers=0, mode='thread', eager=False):
@@ -56,13 +68,19 @@ class CopyManager:
     def __exit__(self, a=None, b=None, c=None):
         return self._pool.__exit__(a, b, c)
 
-    def submit(self, src, dst):
+    def submit(self, src, dst, overwrite=False, skip_existing=False):
         """
         Args:
             src (str | PathLike): source file or directory
+
             dst (str | PathLike): destination file or directory
+
+            overwrite (bool):
+                if True will overwrite the file if it exists, otherwise it will
+                error unless skip_existing is True.
         """
-        task = {'src': src, 'dst': dst}
+        task = {'src': src, 'dst': dst, 'overwrite': overwrite,
+                'skip_existing': skip_existing}
         if self.eager:
             self._pool.submit(_copy_worker, **task)
         else:
@@ -88,8 +106,9 @@ class CopyManager:
                 job.result()
 
 
-def _copy_worker(src, dst):
+def _copy_worker(src, dst, overwrite, skip_existing):
     src = ub.Path(src)
     dst = ub.Path(dst)
-    dst.parent.ensuredir()
-    src.copy(dst)
+    if not skip_existing or not dst.exists():
+        dst.parent.ensuredir()
+        src.copy(dst, overwrite=overwrite)
