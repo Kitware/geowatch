@@ -161,6 +161,8 @@ move_kwcoco_paths(){
     queue.run()
     "
     #kwcoco move imgonly-AE_R001.kwcoco.zip ./AE_R001
+    kwcoco move imganns-AE_C001.kwcoco.zip ./AE_R001
+
 }
 
 add_coco_files(){
@@ -382,7 +384,7 @@ DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 BUNDLE_DPATH=$DVC_DATA_DPATH/Aligned-Drop7
 python -m watch.cli.prepare_teamfeats \
-    --base_fpath "$BUNDLE_DPATH"/imganns-*[0-9].kwcoco.zip \
+    --base_fpath "$BUNDLE_DPATH"/*/imganns-AE*[0-9].kwcoco.zip \
     --expt_dvc_dpath="$DVC_EXPT_DPATH" \
     --with_landcover=0 \
     --with_invariants2=0 \
@@ -393,8 +395,8 @@ python -m watch.cli.prepare_teamfeats \
     --skip_existing=1 \
     --assets_dname=teamfeats \
     --gres=0, \
-    --cold_workermode=serial \
-    --cold_workers=0 \
+    --cold_workermode=process \
+    --cold_workers=8 \
     --tmux_workers=16 \
     --backend=tmux --run=0
 

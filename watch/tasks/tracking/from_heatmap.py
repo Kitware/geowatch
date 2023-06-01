@@ -1147,19 +1147,87 @@ def _resolve_arg_values(self):
 
 
 class _GidPolyConfig(scfg.DataConfig):
-    key = 'salient'
-    agg_fn = 'probs'
-    thresh = 0.0
-    morph_kernel = 3
-    thresh_hysteresis = None
-    norm_ord = 1
-    moving_window_size = None
-    inner_window_size = None
-    inner_agg_fn = 'mean'
-    resolution = None
-    use_boundaries = False
-    poly_merge_method = 'v1'
-    viz_out_dir = None
+    key = scfg.Value('salient', help=ub.paragraph(
+        '''
+        One or more channels to use as positive class for binary heatmap
+        polygon extraction and scoring.
+        '''))
+
+    agg_fn = scfg.Value('probs', help=ub.paragraph(
+        '''
+        The aggregation method to preprocess heatmaps.
+        See ``AGG_FN_REGISTRY`` for available options.
+        '''))
+
+    thresh = scfg.Value(0.0, help=ub.paragraph(
+        '''
+        The threshold for polygon extraction from heatmaps.
+        E.g. this threshold binarizes the heatmaps.
+        '''))
+
+    morph_kernel = scfg.Value(3, help=ub.paragraph(
+        '''
+        Morphology kernel for preprocessing the heatmaps with dilation.
+        '''))
+
+    thresh_hysteresis = scfg.Value(None, help=ub.paragraph(
+        '''
+        I dont remember. Help wanted to document this
+        '''))
+
+    # TODO: rename to outer_agg_fn
+    norm_ord = scfg.Value(1, help=ub.paragraph(
+        '''
+        The generalized mean order used to average heatmaps over the
+        "moving_window_size". A value of 1 is the normal mean. A value of inf
+        is the max function. Note: this is effectively an outer_agg_fn.
+        '''))
+
+    # TODO: rename to outer_window_size
+    moving_window_size = scfg.Value(None, help=ub.paragraph(
+        '''
+        The outer moving window size. The number of consecutive inner window
+        results to aggregate together. If None, then all inner window results
+        are combined into a single final heatmap.
+        '''), alias=['outer_window_size'])
+
+    inner_window_size = scfg.Value(None, help=ub.paragraph(
+        '''
+        The inner moving window time range (e.g. 1y).  The bucket size (in
+        time) of time-consecutive heatmaps to combine using an inner moving
+        window. If None, then no inner windowing is used.
+        '''))
+
+    inner_agg_fn = scfg.Value('mean', help=ub.paragraph(
+        '''
+        The method used for aggregating heatmaps scores over the inner window.
+        Note, this roughtly corresponds to norm_ord, which is like the
+        outer_agg_fn.
+        '''))
+
+    resolution = scfg.Value(None, help=ub.paragraph(
+        '''
+        The resolution for loading and processing the heatmaps at. E.g. 10GSD.
+        '''))
+
+    use_boundaries = scfg.Value(False, help=ub.paragraph(
+        '''
+        If False, then extracted polygons are used as new site boundaries.  If
+        True, then we keep existing annotation boundaries unchanged and only
+        used the heatmaps to update scores of the existing boundary polyons.
+        '''))
+
+    poly_merge_method = scfg.Value('v1', help=ub.paragraph(
+        '''
+        Method for handling overlaping polygons across multiple timesteps.
+        Currently can be "v1" or "v2". There isn't much difference.
+        We should find a better way of handling this.
+        '''))
+
+    viz_out_dir = scfg.Value(None, help=ub.paragraph(
+        '''
+        Directory to output intermediate visualizations
+        '''))
 
 
 class TimeAggregatedPolysConfig(_GidPolyConfig):
@@ -1167,9 +1235,23 @@ class TimeAggregatedPolysConfig(_GidPolyConfig):
     This is an intermediate config that we will use to transition between the
     current dataclass configuration and a new scriptconfig based one.
     """
-    bg_key = None
-    time_thresh = 1
-    response_thresh = None
+    bg_key = scfg.Value(None, help=ub.paragraph(
+        '''
+        Zero or more channels to use as the negative class for polygon scoring.
+        '''))
+
+    time_thresh = scfg.Value(1, help=ub.paragraph(
+        '''
+        Multiplier on the regular threshold used to determine the temporal
+        extent of the polygon over time. All polygons must have an aggregate
+        score over ``thresh * time_thresh``.  Typically set this a bit less
+        than 1. (e.g. 0.8).
+        '''))
+
+    response_thresh = scfg.Value(None, help=ub.paragraph(
+        '''
+        I dont remember what this does. Help wanted with documenting.
+        '''))
 
     min_area_square_meters = scfg.Value(None, help=ub.paragraph(
         '''
@@ -1183,8 +1265,16 @@ class TimeAggregatedPolysConfig(_GidPolyConfig):
         removed.
         '''))
 
-    max_area_behavior = 'drop'
-    polygon_simplify_tolerance = None
+    max_area_behavior = scfg.Value('drop', help=ub.paragraph(
+        '''
+        How to handle polygons that are over the max area threshold.
+        '''))
+
+    polygon_simplify_tolerance = scfg.Value(None, help=ub.paragraph(
+        '''
+        The pixel size (at the specified heatmap resolution) to use for polygon
+        simplification.
+        '''))
 
     def __post_init__(self):
         super().__post_init__()
