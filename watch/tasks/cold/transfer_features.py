@@ -40,9 +40,9 @@ class TransferCocoConfig(scfg.DataConfig):
     new_coco_fpath = scfg.Value(None, help='file path for modified output coco json')
     channels_to_transfer = scfg.Value(None, help='COLD channels for transfer')
     # sensors = scfg.Value(None, help='type of sensors')
-    track_emissions = scfg.Value(True, help='if True use codecarbon for emission tracking')
-    workers = scfg.Value(8, help='total number of workers')
-    workermode = scfg.Value('process', help='Can be process, serial, or thread')
+    # track_emissions = scfg.Value(True, help='if True use codecarbon for emission tracking')
+    # workers = scfg.Value(8, help='total number of workers')
+    # workermode = scfg.Value('process', help='Can be process, serial, or thread')
 
 
 @profile
@@ -63,7 +63,7 @@ def transfer_features_main(cmdline=1, **kwargs):
         >>>   coco_fpath = ub.Path('/gpfs/scratchfs1/zhz18039/jws18003/new-repos/smart_data_dvc2/Drop6/imgonly_KR_R001_cold-V2.kwcoco.zip'),
         >>>   combine_fpath = ub.Path('/gpfs/scratchfs1/zhz18039/jws18003/new-repos/smart_data_dvc2/Drop6-MeanYear10GSD-V2/imgonly-KR_R001.kwcoco.zip'),
         >>>   new_coco_fpath = ub.Path('/gpfs/scratchfs1/zhz18039/jws18003/new-repos/smart_data_dvc2/Drop6-MeanYear10GSD-V2/imganns-KR_R001_uconn_cold_test.kwcoco.zip'),
-        >>>   workermode = 'process',
+        >>>   #workermode = 'process',
         >>> )
         >>> cmdline=0
         >>> cold_writing_kwcoco_main(cmdline, **kwargs)
