@@ -11,6 +11,7 @@ CommandLine:
         --new_coco_fpath="$DATA_DVC_DPATH/Drop6-MeanYear10GSD-V2/imganns-KR_R001_uconn_cold.kwcoco.zip"
 
 """
+import os
 import ubelt as ub
 import kwcoco
 import kwimage
@@ -39,10 +40,157 @@ class TransferCocoConfig(scfg.DataConfig):
         '''))
     new_coco_fpath = scfg.Value(None, help='file path for modified output coco json')
     channels_to_transfer = scfg.Value(None, help='COLD channels for transfer')
-    # sensors = scfg.Value(None, help='type of sensors')
-    # track_emissions = scfg.Value(True, help='if True use codecarbon for emission tracking')
-    # workers = scfg.Value(8, help='total number of workers')
-    # workermode = scfg.Value('process', help='Can be process, serial, or thread')
+
+    copy_assets = scfg.Value(False, help='if True copy the assests to the new bundle directory')
+
+
+def _update_coco_fpath(self, new_fpath):
+    # New method for more robustly updating the file path and bundle
+    # directory, still a WIP
+    if new_fpath is None:
+        # Bundle directory is clobbered, so we should make everything
+        # absolute
+        self.reroot(absolute=True)
+    else:
+        old_fpath = self.fpath
+        if old_fpath is not None:
+            old_fpath_ = ub.Path(old_fpath)
+            new_fpath_ = ub.Path(new_fpath)
+
+            same_bundle = (
+                (old_fpath_.parent == new_fpath_.parent) or
+                (old_fpath_.resolve() == new_fpath_.resolve())
+            )
+            if not same_bundle:
+                # The bundle directory has changed, so we need to reroot
+                new_root = new_fpath_.parent
+                self.reroot(new_root)
+
+        self._fpath = new_fpath
+        self._infer_dirs()
+
+
+def _make_new_asset_fname(src_asset, src_bundle_dpath, dst_bundle_dpath, copy_assets):
+    """
+    Find a new path for the transfered asset relative to the destination bundle.
+
+    Args:
+        src_asset (Dict): The asset dictionary we are transfering from src to dst
+        src_bundle_dpath (str | PathLike): source bundle
+        dst_bundle_dpath (str | PathLike): dest bundle
+        copy_assets (bool): if True, build a new fname to copy to if possible
+
+    Returns:
+        Tuple[str, Dict | None]:
+            the new fname and a dictionary containing the copy task
+            if we need to perform one.
+
+    TODO:
+        port to kwcoco proper and move most of these tests to a unit test
+
+    Example:
+        >>> from watch.tasks.cold.transfer_features import _make_new_asset_fname
+
+        >>> # Case: asset is absolute and inside src bundle
+        >>> src_asset = {'file_name': '/my/src/rel/img.tif'}
+        >>> src_bundle_dpath = '/my/src'
+        >>> dst_bundle_dpath = '/my/dst'
+        >>> print(_make_new_asset_fname(src_asset, src_bundle_dpath, dst_bundle_dpath, False))
+        >>> print(_make_new_asset_fname(src_asset, src_bundle_dpath, dst_bundle_dpath, True))
+        ('/my/src/rel/img.tif', None)
+        ('rel/img.tif', {'src': '/my/src/rel/img.tif', 'dst': '/my/dst/rel/img.tif'})
+
+        >>> # Case: asset is absolute and inside dst bundle
+        >>> src_asset = {'file_name': '/my/dst/rel/img.tif'}
+        >>> src_bundle_dpath = '/my/src'
+        >>> dst_bundle_dpath = '/my/dst'
+        >>> print(_make_new_asset_fname(src_asset, src_bundle_dpath, dst_bundle_dpath, False))
+        >>> print(_make_new_asset_fname(src_asset, src_bundle_dpath, dst_bundle_dpath, True))
+        ('rel/img.tif', None)
+        ('rel/img.tif', None)
+
+        >>> # Case: asset is absolute and inside neither bundle
+        >>> src_asset = {'file_name': '/abs/img.tif'}
+        >>> src_bundle_dpath = '/my/src'
+        >>> dst_bundle_dpath = '/my/dst'
+        >>> print(_make_new_asset_fname(src_asset, src_bundle_dpath, dst_bundle_dpath, False))
+        >>> print(_make_new_asset_fname(src_asset, src_bundle_dpath, dst_bundle_dpath, True))
+        ('/abs/img.tif', None)
+        ('/abs/img.tif', None)
+
+        >>> # Case: asset is relative and inside src bundle
+        >>> src_asset = {'file_name': 'rel/img.tif'}
+        >>> src_bundle_dpath = '/my/src'
+        >>> dst_bundle_dpath = '/my/dst'
+        >>> print(_make_new_asset_fname(src_asset, src_bundle_dpath, dst_bundle_dpath, False))
+        >>> print(_make_new_asset_fname(src_asset, src_bundle_dpath, dst_bundle_dpath, True))
+        ('/my/src/rel/img.tif', None)
+        ('rel/img.tif', {'src': '/my/src/rel/img.tif', 'dst': '/my/dst/rel/img.tif'})
+
+        >>> # Case: asset is relative and inside src bundle but with ..
+        >>> src_asset = {'file_name': '../src/rel/img.tif'}
+        >>> src_bundle_dpath = '/my/src'
+        >>> dst_bundle_dpath = '/my/dst'
+        >>> print(_make_new_asset_fname(src_asset, src_bundle_dpath, dst_bundle_dpath, False))
+        >>> print(_make_new_asset_fname(src_asset, src_bundle_dpath, dst_bundle_dpath, True))
+        ('/my/src/../src/rel/img.tif', None)
+        ('rel/img.tif', {'src': '/my/src/../src/rel/img.tif', 'dst': '/my/dst/rel/img.tif'})
+
+        >>> # Case: asset is relative and inside dst bundle
+        >>> src_asset = {'file_name': '../dst/img.tif'}
+        >>> src_bundle_dpath = '/my/src'
+        >>> dst_bundle_dpath = '/my/dst'
+        >>> print(_make_new_asset_fname(src_asset, src_bundle_dpath, dst_bundle_dpath, False))
+        >>> print(_make_new_asset_fname(src_asset, src_bundle_dpath, dst_bundle_dpath, True))
+        ('img.tif', None)
+        ('img.tif', None)
+
+        >>> # Case: asset is relative and inside neither bundle
+        >>> src_asset = {'file_name': '../neither/img.tif'}
+        >>> src_bundle_dpath = '/my/src'
+        >>> dst_bundle_dpath = '/my/dst'
+        >>> print(_make_new_asset_fname(src_asset, src_bundle_dpath, dst_bundle_dpath, False))
+        >>> print(_make_new_asset_fname(src_asset, src_bundle_dpath, dst_bundle_dpath, True))
+        ('/my/src/../neither/img.tif', None)
+        ('/my/neither/img.tif', None)
+    """
+    import warnings
+    old_asset_fpath = join(src_bundle_dpath, src_asset['file_name'])
+    dst_rel_old_asset_fpath = os.path.relpath(old_asset_fpath, dst_bundle_dpath)
+    old_points_outside_dst_bundle = ('..' in ub.Path(dst_rel_old_asset_fpath).parts)
+
+    copy_task = None
+
+    if copy_assets:
+        src_rel_old_asset_fpath = os.path.relpath(old_asset_fpath, src_bundle_dpath)
+        old_points_outside_src_bundle = ('..' in ub.Path(src_rel_old_asset_fpath).parts)
+        if not old_points_outside_dst_bundle:
+            warnings.warn('An asset to copy already points inside of the dst bundle, not copying')
+            new_fname = dst_rel_old_asset_fpath
+        elif old_points_outside_src_bundle:
+            # Dont want to deal with the corner case of figuring out a
+            # good internal-to-dst-bundle location for an asset that
+            # doesnt have a defined internal-to-src-bundle location.
+            warnings.warn('An asset to copy points outside of the src bundle, not copying')
+            new_fname = os.path.normpath(old_asset_fpath)
+        else:
+            # This case is safer to copy
+            new_fname = src_rel_old_asset_fpath
+            copy_task = {
+                'src': old_asset_fpath,
+                'dst': join(dst_bundle_dpath, new_fname),
+            }
+    else:
+        if old_points_outside_dst_bundle:
+            # The asset is outside the dst bundle, so we need to point at
+            # the absolute path to it.
+            new_fname = old_asset_fpath
+        else:
+            # Not copying, but safe to use relative paths because the asset
+            # is already inside the destination bundle.
+            new_fname = dst_rel_old_asset_fpath
+
+    return new_fname, copy_task
 
 
 @profile
@@ -57,8 +205,8 @@ def transfer_features_main(cmdline=1, **kwargs):
 
      Example:
         >>> # xdoctest: +REQUIRES(env:TEST_COLD)
-        >>> from watch.tasks.cold.writing_kwcoco import transfer_features_main
-        >>> from watch.tasks.cold.writing_kwcoco import *
+        >>> from watch.tasks.cold.transfer_features import transfer_features_main
+        >>> from watch.tasks.cold.transfer_features import *
         >>> kwargs= dict(
         >>>   coco_fpath = ub.Path('/gpfs/scratchfs1/zhz18039/jws18003/new-repos/smart_data_dvc2/Drop6/imgonly_KR_R001_cold-V2.kwcoco.zip'),
         >>>   combine_fpath = ub.Path('/gpfs/scratchfs1/zhz18039/jws18003/new-repos/smart_data_dvc2/Drop6-MeanYear10GSD-V2/imgonly-KR_R001.kwcoco.zip'),
@@ -66,25 +214,31 @@ def transfer_features_main(cmdline=1, **kwargs):
         >>>   #workermode = 'process',
         >>> )
         >>> cmdline=0
-        >>> cold_writing_kwcoco_main(cmdline, **kwargs)
+        >>> transfer_features_main(cmdline, **kwargs)
+
+    Ignore:
+        kwargs = {
+            'coco_fpath': ub.Path('/home/joncrall/remote/Ooo/data/dvc-repos/smart_data_dvc/Aligned-Drop7/BR_R001/imganns-BR_R001_cold.kwcoco.zip'),
+            'combine_fpath': ub.Path('/home/joncrall/remote/Ooo/data/dvc-repos/smart_data_dvc/Drop7-MedianNoWinter10GSD/combo_imganns-BR_R001_I2L.kwcoco.zip'),
+            'new_coco_fpath': ub.Path('/home/joncrall/remote/Ooo/data/dvc-repos/smart_data_dvc/Drop7-MedianNoWinter10GSD/combo_imganns-BR_R001_I2LC.kwcoco.zip')
+        }
     """
     #NOTE: This script doesn't consider timestamp = True
-
     config = TransferCocoConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
-
     import rich
     rich.print('config = {}'.format(ub.urepr(config, nl=1)))
 
-    # from watch.utils import process_context
-    # from watch.utils import util_json
-    # resolved_config = config.to_dict()
-    # resolved_config = util_json.ensure_json_serializable(resolved_config)
-    # proc_context = process_context.ProcessContext(
-    #     name='watch.tasks.cold.transfer_features',
-    #     type='process',
-    #     config=resolved_config,
-    #     track_emissions=config['track_emissions'],
-    # )
+    from watch.cli.reproject_annotations import keyframe_interpolate
+    from watch.utils import process_context
+    from watch.utils import util_json
+    resolved_config = config.to_dict()
+    resolved_config = util_json.ensure_json_serializable(resolved_config)
+    proc_context = process_context.ProcessContext(
+        name='watch.tasks.cold.transfer_features',
+        type='process',
+        config=resolved_config,
+    )
+    proc_context.start()
 
     # Assign variables
     default_channels = [
@@ -110,8 +264,12 @@ def transfer_features_main(cmdline=1, **kwargs):
         channels_to_transfer = config['channels_to_transfer']
         channels_to_transfer = list(channels_to_transfer)
 
+    print('Reading source kwcoco file')
     src = kwcoco.CocoDataset(coco_fpath)
+
+    print('Reading destination kwcoco file')
     dst = kwcoco.CocoDataset(combine_fpath)
+    _update_coco_fpath(dst, new_coco_fpath)
 
     src_video_names = src.videos().lookup('name')
 
@@ -128,7 +286,7 @@ def transfer_features_main(cmdline=1, **kwargs):
 
         # Filter out the source images missing the channels we want to transfer
         keep_flags = [
-            coco_img.channels.intersection(channels_to_transfer)
+            coco_img.channels.intersection(channels_to_transfer).numel() > 0
             for coco_img in all_src_images.coco_images
         ]
         src_images = all_src_images.compress(keep_flags)
@@ -159,7 +317,6 @@ def transfer_features_main(cmdline=1, **kwargs):
             target_times = dst_timestamps
 
             key_infos = [{'time': d, 'applies': 'future'} for d in src_timestamps]
-            from watch.cli.reproject_annotations import keyframe_interpolate
             assigned_indexes = keyframe_interpolate(target_times, key_infos)
             # The above function returns a list for each key-frame with the
             # assigned indexes but we are only going to assign it to one of them,
@@ -173,7 +330,10 @@ def transfer_features_main(cmdline=1, **kwargs):
                         'video_name': vidname,
                     })
 
-    # Now we have all assignments
+    print(f'Found {len(assignments)} image-to-image assignments to transfer')
+    assets_to_transfer = []
+
+    # Now we have image assignments, find the assets to transfer
     vidname_to_assignments = ub.group_items(assignments, lambda x: x['video_name'])
     for vidname, vid_assignments in vidname_to_assignments.items():
         src_video = src.index.name_to_video[vidname]
@@ -203,24 +363,50 @@ def transfer_features_main(cmdline=1, **kwargs):
             )
 
             # For each asset in the src, check if we want to transfer it.
-            assets_to_transfer = []
+            img_assets_to_transfer = []
             for asset in src_coco_img.iter_asset_objs():
                 asset_channels = kwcoco.FusedChannelSpec.coerce(asset['channels'])
                 if asset_channels.intersection(channels_to_transfer):
-                    assets_to_transfer.append(asset)
-            for asset in assets_to_transfer:
-                new_asset = asset.copy()
+                    img_assets_to_transfer.append(asset)
+
+            for old_asset in img_assets_to_transfer:
+                new_asset = old_asset.copy()
                 # Ensure the filename points to the correct place (just use the
                 # absolute path for simplicity for now)
-                new_asset['file_name'] = join(src.bundle_dpath, asset['file_name'])
+
                 # Handle the case where the transform is not identity
-                warp_srcimg_from_aux = kwimage.Affine.coerce(asset['warp_aux_to_img'])
+                warp_srcimg_from_aux = kwimage.Affine.coerce(old_asset['warp_aux_to_img'])
                 warp_dstimg_from_aux = warp_dstimg_from_srcimg @ warp_srcimg_from_aux
                 new_asset['warp_aux_to_img'] = warp_dstimg_from_aux.concise()
-                dst_coco_img.add_asset(**new_asset)
+                assets_to_transfer.append((dst_coco_img, old_asset, new_asset))
 
-    # new_coco_fpath = ub.Path('/gpfs/scratchfs1/zhz18039/jws18003/new-repos/smart_data_dvc2/Drop6-MeanYear10GSD-V2/imganns-KR_R001_uconn_cold_test.kwcoco.zip')
-    dst.fpath = new_coco_fpath
+    print(f'Found {len(assets_to_transfer)} assets to tranfer')
+
+    # Update the destination kwcoco file and prepare any copy jobs that need to
+    # be done.
+    src_bundle_dpath = src.bundle_dpath
+    dst_bundle_dpath = dst.bundle_dpath
+    copy_assets = config.copy_assets
+    copy_tasks = []
+    for dst_coco_img, src_asset, new_asset in assets_to_transfer:
+        new_fname, copy_task = _make_new_asset_fname(
+            src_asset, src_bundle_dpath, dst_bundle_dpath, copy_assets)
+        if copy_task:
+            copy_tasks.append(copy_task)
+
+        new_asset['file_name'] = new_fname
+        dst_coco_img.add_asset(**new_asset)
+
+    if copy_tasks:
+        from watch.utils import copy_manager
+        copyman = copy_manager.CopyManager()
+        for task in copy_tasks:
+            copyman.submit(src=task['src'], dst=task['dst'])
+        copyman.run()
+
+    obj = proc_context.stop()
+    dst.dataset['info'].append(obj)
+
     dst._ensure_json_serializable()
     dst.dump()
 
