@@ -428,6 +428,8 @@ dvc add Aligned-Drop7/LT_R001/combo_imganns-LT_R001_C.kwcoco.zip
 rm -rf Aligned-Drop7/*/reccg/*/cold_feature/tmp
 ls Aligned-Drop7/*/reccg/*/cold_feature
 dvc add Aligned-Drop7/*/reccg/*/cold_feature
+dvc add Aligned-Drop7/*/reccg/*/cold_feature
+dvc add Aligned-Drop7/BR_R002/combo_imganns-*_C.kwcoco.zip
 
 
 

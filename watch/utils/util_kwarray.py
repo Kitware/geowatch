@@ -5,6 +5,7 @@ import numpy as np
 import functools
 import math
 import ubelt as ub
+import warnings
 
 try:
     # The math variant only exists in Python 3+ but is faster for scalars
@@ -762,7 +763,9 @@ def combine_mean_stds(means, stds, nums=None, axis=None, keepdims=False,
         numer = numer_p1 + numer_p2
         denom = len(stds)
         # if denom == 0:
-        combo_std = np.sqrt(numer / denom)
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', 'invalid value encountered', category=RuntimeWarning)
+            combo_std = np.sqrt(numer / denom)
         # else:
         #     combo_std = np.full_like(numer, fill_value=np.nan)
     else:
@@ -775,7 +778,9 @@ def combine_mean_stds(means, stds, nums=None, axis=None, keepdims=False,
         numer = numer_p1 + numer_p2
         denom = combo_num - bessel
         # if denom == 0:
-        combo_std = np.sqrt(numer / denom)
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', 'invalid value encountered', category=RuntimeWarning)
+            combo_std = np.sqrt(numer / denom)
         # else:
         #     combo_std = np.full_like(numer, fill_value=np.nan)
 
