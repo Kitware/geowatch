@@ -421,8 +421,15 @@ python -m watch.cli.prepare_teamfeats \
     --cold_workers=8 \
     --tmux_workers=16 \
     --backend=tmux --run=0
-
     #--base_fpath "$BUNDLE_DPATH"/*/imganns-*[0-9].kwcoco.zip \
+
+dvc add Aligned-Drop7/LT_R001/combo_imganns-LT_R001_C.kwcoco.zip
+
+rm -rf Aligned-Drop7/*/reccg/*/cold_feature/tmp
+ls Aligned-Drop7/*/reccg/*/cold_feature
+dvc add Aligned-Drop7/*/reccg/*/cold_feature
+
+
 
 
 python -m watch.tasks.sam.predict --input_kwcoco /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/Drop7-MedianNoWinter10GSD/imganns-US_R007.kwcoco.zip \
