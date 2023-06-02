@@ -54,10 +54,13 @@ def main():
 
     nx.write_network_text(g)
 
+    new_modpath = repo_dpath / new_name
+    new_modpath.delete()
+
     for node, node_data in g.nodes(data=True):
         if node_data['type'] == 'file':
             relpath = node.relative_to(module_dpath)
-            new_fpath = repo_dpath / new_name / relpath
+            new_fpath = new_modpath / relpath
             new_fpath.parent.ensuredir()
             modname = ub.modpath_to_modname(node)
             if new_fpath.name == '__main__.py':
