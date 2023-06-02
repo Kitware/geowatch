@@ -59,8 +59,10 @@ def main(cmdline=False, **kwargs):
         row = torch_model_stats(package_fpath, stem_stats=stem_stats, dvc_dpath=dvc_dpath)
         model_stats = row.get('model_stats', None)
         fit_config = row.pop('fit_config', None)
+        config_cli_yaml = row.pop('config_cli_yaml', None)
         if config.hparams:
             rich.print('fit_config = {}'.format(ub.urepr(fit_config, nl=1)))
+            rich.print('config_cli_yaml = {}'.format(ub.urepr(config_cli_yaml, nl=2)))
         rich.print('model_stats = {}'.format(ub.urepr(model_stats, nl=2, sort=0, precision=2)))
         package_rows.append(row)
 
@@ -156,6 +158,11 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
         size_str = ub.urepr(mb_size, precision=2) + ' MB'
 
         # Add in some params about how this model was trained
+        if hasattr(raw_module, 'config_cli_yaml'):
+            config_cli_yaml = raw_module.config_cli_yaml
+        else:
+            config_cli_yaml = None
+
         if hasattr(raw_module, 'fit_config'):
             # Old non-cli modules
             fit_config = raw_module.fit_config
@@ -169,7 +176,10 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
         if 'train_dataset' in fit_config:
             train_dataset = ub.Path(fit_config['train_dataset'])
         else:
-            train_dataset = None
+            if config_cli_yaml is not None:
+                train_dataset = config_cli_yaml.get('data', {}).get('train_dataset', None)
+            else:
+                train_dataset = None
 
         if dvc_dpath is not None and train_dataset is not None:
             try:
@@ -243,6 +253,7 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
         'sensors': sorted(unique_sensors),
         'train_dataset': str(train_dataset),
         'fit_config': fit_config,
+        'config_cli_yaml': config_cli_yaml,
         'model_stats': model_stats,
         'prenorm_stats': prenorm_stats,
         'param_stats': param_stats_summary,
