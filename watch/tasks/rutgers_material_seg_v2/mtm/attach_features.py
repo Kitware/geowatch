@@ -204,7 +204,7 @@ def make_material_predictions(eval_loader,
         stiching_space='video',
         writer_queue=writer_queue,
         expected_minmax=(0, 1),
-         assets_dname='_assets'
+        assets_dname='_assets'
     )
 
     mat_feat_stitcher = CocoStitchingManager(
@@ -213,7 +213,7 @@ def make_material_predictions(eval_loader,
         chan_code='mat_feats',
         stiching_space='video',
         writer_queue=writer_queue,
-         assets_dname='_assets'
+        assets_dname='_assets'
     )
 
     save_image_names = list(stitched_predictions.keys())
