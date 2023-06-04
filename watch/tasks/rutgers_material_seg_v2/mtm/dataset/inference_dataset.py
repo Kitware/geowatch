@@ -65,9 +65,10 @@ class InferenceDataset(Dataset):
                  channels,
                  kwcoco_path,
                  crop_params,
-                 sensors=['S2', 'L8'],
+                 sensors=['S2', 'L8', 'WV'],
                  n_cache_workers=4,
-                 force_regenerate_cache=False):
+                 force_regenerate_cache=False,
+                 kwcoco_dset=None):
         self.sensors = sensors
         self.channels = channels
         self.video_id = video_id
@@ -77,8 +78,11 @@ class InferenceDataset(Dataset):
         # Get channel info.
         self.channel_code, self.n_channels = self.get_channel_code(channels)
 
-        print(f'Loading kwcoco file ... \n{os.path.split(kwcoco_path)[1]}')
-        self.coco_dset = kwcoco.CocoDataset(kwcoco_path)
+        if kwcoco_dset is not None:
+            self.coco_dset = kwcoco_dset
+        else:
+            print(f'Loading kwcoco file ... \n{os.path.split(kwcoco_path)[1]}')
+            self.coco_dset = kwcoco.CocoDataset(kwcoco_path)
 
         # Check if example file already exists.
         try:
@@ -86,7 +90,6 @@ class InferenceDataset(Dataset):
         except FileNotFoundError:
             cache_dir = os.path.join(os.getcwd(), 'material_inference_dataset_cache')
             os.makedirs(cache_dir, exist_ok=True)
-
         cache_name = create_hash_str(**{
             'channels': channels,
             'crop_params': crop_params,

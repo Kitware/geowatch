@@ -33,7 +33,7 @@ class MaterialSegmentationModel(pl.LightningModule):
         self.lr_scheduler_mode = lr_scheduler_mode
 
         self.model = self._build_model(**model_params)
-        optimizers = self.configure_optimizers()  # NOQA
+        optimizers = self.configure_optimizers()
         # self.optimizer, self.lr_scheduler = optimizers['optimizer'], optimizers['lr_scheduler']
         # self.optimizer, self.lr_scheduler = optimizers[0], optimizers[1]
 
@@ -81,11 +81,13 @@ class MaterialSegmentationModel(pl.LightningModule):
         output = {}
         enc_feats = self.model.encoder(images)
         output['enc_feats'] = enc_feats
+        decoder_output = self.model.decoder(*output['enc_feats'])
+        output['logits'] = self.model.segmentation_head(decoder_output)
         return output
 
     def training_step(self, batch, batch_idx):
         self.model = self.model.train()
-        target = batch['target']
+        images, target = batch['image'], batch['target']
 
         # self.optimizer.zero_grad()
         output = self.forward(batch)
@@ -110,7 +112,7 @@ class MaterialSegmentationModel(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         self.model = self.model.eval()
-        target = batch['target']
+        images, target = batch['image'], batch['target']
         output = self.forward(batch)
 
         # Compute loss.
@@ -245,22 +247,21 @@ class MaterialSegmentationModel(pl.LightningModule):
                 combined_cm += conf_matrix
             conf_matrix = ConfusionMatrix(matrix=conf_matrix, classes=list(range(self.n_classes)))
 
-            self.region_cms[region_name] = conf_matrix
             self.region_cm_metrics[region_name] = {
-                'f1': conf_matrix.F1,
-                'auc': conf_matrix.AUC,
-                'acc': conf_matrix.ACC,
-                'macro_f1': conf_matrix.F1_Macro,
-                'macro_acc': conf_matrix.ACC_Macro,
+                'f1': conf_matrix.F1,  # pylint: disable=no-member
+                'auc': conf_matrix.AUC,  # pylint: disable=no-member
+                'acc': conf_matrix.ACC,  # pylint: disable=no-member
+                'macro_f1': conf_matrix.F1_Macro,  # pylint: disable=no-member
+                'macro_acc': conf_matrix.ACC_Macro,  # pylint: disable=no-member
             }
 
         # Compute overall confusion matrix.
         combined_cm = ConfusionMatrix(matrix=combined_cm, classes=list(range(self.n_classes)))
         self.region_cms['overall'] = combined_cm
         self.region_cm_metrics['overall'] = {
-            'f1': combined_cm.F1,
-            'auc': combined_cm.AUC,
-            'acc': combined_cm.ACC,
-            'macro_f1': combined_cm.F1_Macro,
-            'macro_acc': combined_cm.ACC_Macro,
+            'f1': combined_cm.F1,  # pylint: disable=no-member
+            'auc': combined_cm.AUC,  # pylint: disable=no-member
+            'acc': combined_cm.ACC,  # pylint: disable=no-member
+            'macro_f1': combined_cm.F1_Macro,  # pylint: disable=no-member
+            'macro_acc': combined_cm.ACC_Macro,  # pylint: disable=no-member
         }
