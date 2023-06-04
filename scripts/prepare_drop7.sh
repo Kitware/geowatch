@@ -5,8 +5,8 @@ source "$HOME"/code/watch/secrets/secrets
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
 SENSORS=TA1-S2-L8-WV-PD-ACC-3
 DATASET_SUFFIX=Drop7
-REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop6_hard_v1/region_models/*_[C]0*.geojson"
-SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop6_hard_v1/site_models/*_[C]0*.geojson"
+REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop6_hard_v1/region_models/*.geojson"
+SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop6_hard_v1/site_models/*.geojson"
 
 export GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR
 
@@ -138,7 +138,7 @@ move_kwcoco_paths(){
 
     import ubelt as ub
     bundle_dpath = ub.Path('.').absolute()
-    all_paths = list(bundle_dpath.glob('*_[R]*'))
+    all_paths = list(bundle_dpath.glob('*_[C]*'))
     region_dpaths = []
     for p in all_paths:
         if p.is_dir() and str(p.name)[2] == '_':
@@ -148,19 +148,25 @@ move_kwcoco_paths(){
     queue = cmd_queue.Queue.create('tmux', size=16)
 
     for dpath in region_dpaths:
+        print(ub.urepr(dpath.ls()))
+
+    for dpath in region_dpaths:
         region_id = dpath.name
-        fname = f'imgonly-{region_id}.kwcoco.zip'
-        fpath = bundle_dpath / fname
-        if fpath.exists():
-            queue.submit(f'kwcoco move {fpath} {dpath}')
-        fname = f'imganns-{region_id}.kwcoco.zip'
-        fpath = bundle_dpath / fname
-        if fpath.exists():
-            queue.submit(f'kwcoco move {fpath} {dpath}')
+        fnames = [
+            f'imgonly-{region_id}.kwcoco.zip',
+            f'imganns-{region_id}.kwcoco.zip',
+        ]
+        for fname in fnames:
+            old_fpath = bundle_dpath / fname
+            new_fpath = dpath / fname
+            if old_fpath.exists() and not new_fpath.exists():
+                queue.submit(f'kwcoco move {old_fpath} {new_fpath}')
 
     queue.run()
     "
     #kwcoco move imgonly-AE_R001.kwcoco.zip ./AE_R001
+    kwcoco move imganns-AE_C001.kwcoco.zip ./AE_R001
+
 }
 
 add_coco_files(){
@@ -169,6 +175,27 @@ add_coco_files(){
     git commit -am "Add Drop7 TnE Region annotations"
     git push
     dvc push -r aws -- */*.kwcoco.zip.dvc
+}
+
+
+remove_empty_kwcoco_files(){
+    python -c "if 1:
+
+    import ubelt as ub
+    bundle_dpath = ub.Path('.').absolute()
+    all_paths = list(bundle_dpath.glob('imganns*zip'))
+    region_dpaths = []
+    dsets = list(kwcoco.CocoDataset.coerce_multiple(all_paths, workers=8))
+
+    bad_fpaths = []
+    for dset in dsets:
+        if dset.n_images == 0:
+            bad_fpaths += [dset.fpath]
+
+    for f in bad_fpaths:
+        ub.Path(f).delete()
+
+    "
 
 }
 
@@ -182,7 +209,8 @@ redo_add_raw_data(){
     import watch
     dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='hdd')
     bundle_dpath = dvc_data_dpath / 'Aligned-Drop7'
-    tne_dpaths = list(bundle_dpath.glob('[A-Z][A-Z]_R0*'))
+    #tne_dpaths = list(bundle_dpath.glob('[A-Z][A-Z]_R0*'))
+    tne_dpaths = list(bundle_dpath.glob('[A-Z][A-Z]_C0*'))
 
     # Try using DVC at the image level instead?
     old_dvc_paths = []
@@ -214,21 +242,18 @@ dvc_add_raw_imgdata(){
     import watch
     dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='hdd')
     bundle_dpath = dvc_data_dpath / 'Aligned-Drop7'
-    tne_dpaths = list(bundle_dpath.glob('[A-Z][A-Z]_R0*'))
+    #tne_dpaths = list(bundle_dpath.glob('[A-Z][A-Z]_R0*'))
+    tne_dpaths = list(bundle_dpath.glob('[A-Z][A-Z]_C0*'))
 
-    # Try using DVC at the image level instead?
-    img_dpaths = []
+    new_dpaths = []
     for dpath in tne_dpaths:
-        candidates = list(dpath.glob('*/affine_warp/*'))
-        for cand in candidates:
-            if cand.is_dir():
-                img_dpaths.append(cand)
+        new_dpaths += [d for d in dpath.glob('*') if d.is_dir() and d.name in {'L8', 'WV1', 'WV', 'S2', 'PD'}]
 
     from watch.utils import simple_dvc
     dvc = simple_dvc.SimpleDVC.coerce(bundle_dpath)
-    dvc.add(img_dpaths)
+    dvc.add(new_dpaths)
     dvc.git_commitpush(message='Add images for {bundle_dpath.name}')
-    dvc.push(img_dpaths, remote='aws')
+    dvc.push(new_dpaths, remote='aws')
     "
     #declare -a ROI_DPATHS=()
     #ROI_DPATHS+=TNE_REGIONS
@@ -373,7 +398,6 @@ for p in ub.ProgIter(problematic_paths):
         #info = ptr.info()
         #print(info['bands'])
         #...
-
 "
 
 
@@ -382,7 +406,7 @@ DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 BUNDLE_DPATH=$DVC_DATA_DPATH/Aligned-Drop7
 python -m watch.cli.prepare_teamfeats \
-    --base_fpath "$BUNDLE_DPATH"/*/imganns-*[0-9].kwcoco.zip \
+    --base_fpath "$BUNDLE_DPATH"/*/imganns-AE*[0-9].kwcoco.zip \
     --expt_dvc_dpath="$DVC_EXPT_DPATH" \
     --with_landcover=0 \
     --with_invariants2=0 \
@@ -392,7 +416,13 @@ python -m watch.cli.prepare_teamfeats \
     --with_cold=1 \
     --skip_existing=1 \
     --assets_dname=teamfeats \
-    --gres=0, --tmux_workers=8 --backend=tmux --run=1
+    --gres=0, \
+    --cold_workermode=process \
+    --cold_workers=8 \
+    --tmux_workers=16 \
+    --backend=tmux --run=0
+
+    #--base_fpath "$BUNDLE_DPATH"/*/imganns-*[0-9].kwcoco.zip \
 
 
 python -m watch.tasks.sam.predict --input_kwcoco /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/Drop7-MedianNoWinter10GSD/imganns-US_R007.kwcoco.zip \

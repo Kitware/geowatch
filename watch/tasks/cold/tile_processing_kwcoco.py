@@ -48,7 +48,6 @@ class TileProcessingKwcocoConfig(scfg.DataConfig):
     n_cores = scfg.Value(None, help='total cores assigned (parent context, not workers used by this process)')
     stack_path = scfg.Value(None, help='directory of stacked data')
     reccg_path = scfg.Value(None, help='directory where cold record will be saved')
-    meta_fpath = scfg.Value(None, help='json file created by prepare_kwcoco.py')
     method = scfg.Value('COLD', choices=['COLD', 'HybridCOLD', 'OBCOLD'], help='type of COLD algorithms, e.g., COLD, HybridCOLD, OBCOLD')
     b_c2 = scfg.Value(True, help='indicate if it is c2 or not')
     prob = scfg.Value(0.99, help='change probability of chi-distribution, e.g., 0.99')
@@ -82,7 +81,6 @@ def tile_process_main(cmdline=1, **kwargs):
     >>>    n_cores = 1,
     >>>    stack_path = ub.Path('/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/KR_R001'),
     >>>    reccg_path = ub.Path('/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/reccg/KR_R001'),
-    >>>    meta_fpath = '/gpfs/scratchfs1/zhz18039/jws18003/kwcoco/stacked/KR_R001/block_x10_y1/crop_20140115T020000Z_N37.643680E128.649453_N37.683356E128.734073_L8_0.json',
     >>>    method = 'COLD',
     >>>    b_c2 = True,
     >>>    prob = 0.99,
@@ -101,14 +99,13 @@ def tile_process_main(cmdline=1, **kwargs):
     n_cores = config_in['n_cores']
     stack_path = Path(config_in['stack_path'])
     reccg_path = Path(config_in['reccg_path'])
-    meta_fpath = Path(config_in['meta_fpath'])
     method = config_in['method']
     b_c2 = config_in['b_c2']
     prob = config_in['prob']
     conse = config_in['conse']
     cm_output_interval = config_in['cm_interval']
 
-    config = json.loads(meta_fpath.read_text())
+    config = read_json_metadata(stack_path)
     n_cols = config['padded_n_cols']
     n_rows = config['padded_n_rows']
     n_block_x = config['n_block_x']
@@ -444,6 +441,17 @@ def tile_process_main(cmdline=1, **kwargs):
 #     file.write("The program ends at {}\n".format(endpoint.strftime('%Y-%m-%d %H:%M:%S')))
 #     file.write("The program lasts for {:.2f}mins\n".format((endpoint - startpoint) / datetime_cls.timedelta(minutes=1)))
 #     file.close()
+@profile
+def read_json_metadata(stacked_path):
+    for root, dirs, files in os.walk(stacked_path):
+        for file in files:
+            if file.endswith(".json"):
+                json_path = os.path.join(root, file)
+
+                with open(json_path, "r") as f:
+                    metadata = json.load(f)
+                    return metadata
+
 
 @profile
 def is_finished_cold_blockfinished(reccg_path, nblocks):

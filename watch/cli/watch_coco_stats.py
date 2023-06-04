@@ -62,6 +62,8 @@ class WatchCocoStats(scfg.DataConfig):
         fpaths = config['src']
         rich.print('config = {}'.format(ub.urepr(config, nl=1, sort=0)))
 
+        import kwcoco
+
         if fpaths is None or len(fpaths) == 0:
             raise ValueError('no files to compute stats on')
 
@@ -71,7 +73,6 @@ class WatchCocoStats(scfg.DataConfig):
             fpaths = [fpaths]
 
         # TODO: tabulate stats when possible.
-        import kwcoco
         collatables = []
         video_sensor_rows = []
         all_sensors = set()
@@ -173,6 +174,7 @@ def coco_watch_stats(dset, with_video_info=False):
     from watch.utils import util_time
     from watch.utils import kwcoco_extensions
     import rich
+    import pandas as pd
     num_videos = len(dset.index.videos)
     rich.print('num_videos = {!r}'.format(num_videos))
     print('Per-video stats summary')
@@ -262,7 +264,6 @@ def coco_watch_stats(dset, with_video_info=False):
     loose_image_ids = sorted(all_image_ids - all_image_ids_with_video)
     rich.print('len(loose_image_ids) = {!r}'.format(len(loose_image_ids)))
 
-    import pandas as pd
     video_summary = pd.DataFrame(video_summary_rows)
     video_summary = video_summary.drop(video_summary.columns.intersection([
         'valid_region_geos', 'wld_crs_info', 'valid_region']), axis=1)
@@ -400,8 +401,14 @@ def coco_sensorchan_gsd_stats(coco_dset):
         longform_rows.extend(asset_rows)
 
     gsd_table = pd.DataFrame(longform_rows)
-    groups = gsd_table.groupby(['sensor', 'channels'])
-    sensorchan_gsd_stats = groups.describe()
+    from watch.utils import util_pandas
+    groupers = list(gsd_table.columns.intersection(['sensor', 'channels']))
+    if len(groupers) == 0:
+        sensorchan_gsd_stats = gsd_table
+    else:
+        print(f'groupers={groupers}')
+        groups = util_pandas.pandas_fixed_groupby(gsd_table, groupers)
+        sensorchan_gsd_stats = groups.describe()
     return sensorchan_gsd_stats
 
 

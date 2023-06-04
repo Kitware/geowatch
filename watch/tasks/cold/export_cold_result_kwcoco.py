@@ -77,8 +77,7 @@ class ExportColdKwcocoConfig(scfg.DataConfig):
 
 @profile
 def export_cold_main(cmdline=1, **kwargs):
-    """_summary_
-
+    """
     Args:
         cmdline (int, optional): _description_. Defaults to 1.
 
@@ -95,7 +94,6 @@ def export_cold_main(cmdline=1, **kwargs):
     >>>    n_cores = 1,
     >>>    stack_path = "/gpfs/scratchfs1/zhz18039/jws18003/new-repos/smart_data_dvc2/Drop6-MeanYear10GSD-V2/_pycold_combine2/stacked/KR_R001/",
     >>>    reccg_path = "/gpfs/scratchfs1/zhz18039/jws18003/new-repos/smart_data_dvc2/Drop6-MeanYear10GSD-V2/_pycold_combine2/reccg/KR_R001/",
-    >>>    meta_fpath = '/gpfs/scratchfs1/zhz18039/jws18003/new-repos/smart_data_dvc2/Drop6-MeanYear10GSD-V2/_pycold_combine2/stacked/KR_R001/block_x10_y1/crop_20140115T020000Z_N37.643680E128.649453_N37.683356E128.734073_L8_0.json',
     >>>    combined_coco_fpath = "/gpfs/scratchfs1/zhz18039/jws18003/new-repos/smart_data_dvc2/Drop6-MeanYear10GSD-V2/imgonly-KR_R001.kwcoco.zip",
     >>>    coefs = 'cv,rmse,a0,a1,b1,c1',
     >>>    year_lowbound = None,
@@ -113,7 +111,6 @@ def export_cold_main(cmdline=1, **kwargs):
     n_cores = config_in['n_cores']
     stack_path = ub.Path(config_in['stack_path'])
     reccg_path = ub.Path(config_in['reccg_path'])
-    meta_fpath = ub.Path(config_in['meta_fpath'])
     year_lowbound = config_in['year_lowbound']
     year_highbound = config_in['year_highbound']
     coefs = config_in['coefs']
@@ -141,7 +138,7 @@ def export_cold_main(cmdline=1, **kwargs):
     #     n_cores = config_in['n_cores']
 
     # define variables
-    config = json.loads(meta_fpath.read_text())
+    config = read_json_metadata(stack_path)
     n_cols = config['padded_n_cols']
     n_rows = config['padded_n_rows']
     n_block_x = config['n_block_x']
@@ -455,6 +452,17 @@ def extract_features(cold_plot, band, ordinal_day_list,
 
     return features
 
+
+@profile
+def read_json_metadata(stacked_path):
+    for root, dirs, files in os.walk(stacked_path):
+        for file in files:
+            if file.endswith(".json"):
+                json_path = os.path.join(root, file)
+
+                with open(json_path, "r") as f:
+                    metadata = json.load(f)
+                    return metadata
 
 if __name__ == '__main__':
     export_cold_main()
