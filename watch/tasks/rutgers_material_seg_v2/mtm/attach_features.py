@@ -74,9 +74,12 @@ class MaterialsPredictConfig(scfg.DataConfig):
                           help=ub.paragraph('''Number of background data loading workers
                             '''),
                           alias=['num_workers'])
-    # assets_dname = scfg.Value('_assets', required=False, help=ub.paragraph('''
-    #                         The name of the top-level directory to write new assets.
-    #                         '''))
+    assets_dname = scfg.Value('_assets', required=False, help=ub.paragraph('''
+                            The name of the top-level directory to write new assets.
+                            '''))
+    include_sensors = scfg.Value(None, required=False, help=ub.paragraph('''
+                            Comma separated list of sensors to include.
+                            '''))
 
 __config__ = MaterialsPredictConfig
 
@@ -88,16 +91,25 @@ def make_material_predictions(eval_loader,
                               n_workers=4,
                               generate_mtm=True,
                               feature_layer=1,
-                              n_feature_dims=16):
+                              n_feature_dims=16,
+                              asset_dname='_assets'):
     """Generate and save material predictions to kwcoco file.
 
     Args:
-        eval_loader (torch.utils.data.DataLoader): Dataset loader with region images to evaluate.
+        eval_loader (torch.utils.data.DataLoader): Dataset loader with region images to
+            evaluate.
         model (torch.nn.Module): Material segmentation model.
-        output_coco_dset (kwcoco.CocoDataset): The dataset where material predictions will be saved.
+        output_coco_dset (kwcoco.CocoDataset): The dataset where material predictions
+            will be saved.
         hash_name (str): The hash name of the experiment.
         n_workers (int, optional): Number of threads to grab data. Defaults to 4.
-        generate_mtm (bool, optional): Whether to generate material transition masks. Defaults to True.
+        generate_mtm (bool, optional): Whether to generate material transition masks.
+            Defaults to True.
+        feature_layer (int, optional): Which feature layer to use. Defaults to 1.
+        n_feature_dims (int, optional): Number of feature dimensions to use in the
+            current layer. Defaults to 16.
+        asset_dname (str, optional): The name of the top-level directory to write new
+            assets. Defaults to '_assets'.
 
     Returns:
         kwcoco.CocoDataset: Dataset with material predictions.
@@ -193,7 +205,7 @@ def make_material_predictions(eval_loader,
             stiching_space='video',
             writer_queue=writer_queue,
             expected_minmax=(0, 1),
-            assets_dname='_assets'
+            assets_dname=asset_dname
         )
     else:
         mtm_stitcher = None
@@ -204,7 +216,7 @@ def make_material_predictions(eval_loader,
         stiching_space='video',
         writer_queue=writer_queue,
         expected_minmax=(0, 1),
-        assets_dname='_assets'
+        assets_dname=asset_dname
     )
 
     mat_feat_stitcher = CocoStitchingManager(
@@ -213,7 +225,7 @@ def make_material_predictions(eval_loader,
         chan_code='mat_feats',
         stiching_space='video',
         writer_queue=writer_queue,
-        assets_dname='_assets'
+        assets_dname=asset_dname
     )
 
     save_image_names = list(stitched_predictions.keys())
@@ -359,7 +371,8 @@ def predict(cmdline=1, **kwargs):
                                    channels=cfg.dataset.channels,
                                    kwcoco_path=script_config['kwcoco_fpath'],
                                    crop_params=crop_params,
-                                   kwcoco_dset=output_coco_dset)
+                                   kwcoco_dset=output_coco_dset,
+                                   sensors=script_config['include_sensors'])
 
         # Create a loader for this video.
         loader = DataLoader(
@@ -375,7 +388,8 @@ def predict(cmdline=1, **kwargs):
                                                      output_coco_dset,
                                                      hash_name,
                                                      feature_layer=script_config['feature_layer'],
-                                                     n_feature_dims=script_config['n_feature_dims'])
+                                                     n_feature_dims=script_config['n_feature_dims'],
+                                                     asset_dname=script_config['assets_dname'])
 
     # Generate where to save new kwcoco file.
     if script_config['output_kwcoco_fpath'] is None:
