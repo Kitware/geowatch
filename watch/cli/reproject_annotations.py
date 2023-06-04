@@ -1275,7 +1275,7 @@ def keyframe_interpolate(image_times, key_infos):
     New method for keyframe interapolation.
 
     Given a set of image times and a set of key frames with information on how
-    they propogate, determine which images will be assigned which keyframes.
+    they propogate, determine which keyframes are assigned to which images.
 
     Not yet used for the SMART method, but could be in the future.
     The keyframe propogation behavior is also currently very simple and may be

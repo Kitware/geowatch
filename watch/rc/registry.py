@@ -1,15 +1,17 @@
 """
 A registry of resource files bundled with the watch package
 
-Schemas are taken from
-https://smartgitlab.com/TE/standards/-/snippets/18
+Schemas are from
+* https://smartgitlab.com/TE/aristeas/-/tree/main/src/aristeas/schemas
+* https://smartgitlab.com/TE/standards
+* https://smartgitlab.com/TE/standards/-/snippets/18
 
 Previous:
-https://smartgitlab.com/infrastructure/docs/-/tree/main/pages/schemas
-commit fe4343521d05e433d4ccfcf080d9bcf46c9d2e83
+* https://smartgitlab.com/infrastructure/docs/-/tree/main/pages/schemas
+* commit fe4343521d05e433d4ccfcf080d9bcf46c9d2e83
 
-Geoidgrid is taken from
-https://smartgitlab.com/TE/annotations/-/wikis/WorldView-Annotations#notes-on-the-egm96-geoidgrid-file
+Geoidgrid is from
+* https://smartgitlab.com/TE/annotations/-/wikis/WorldView-Annotations#notes-on-the-egm96-geoidgrid-file
 
 SeeAlso:
     ../geoannots/geomodels.py

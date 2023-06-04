@@ -140,19 +140,19 @@ class DataRegistry:
         """
         # Hard coded fallback candidate DVC paths
         hardcoded_paths = [
-            {'name': 'namek', 'hardware': 'hdd', 'tags': 'phase1', 'path': ub.Path('/media/joncrall/raid/home/joncrall/data/dvc-repos/smart_watch_dvc')},
-            {'name': 'ooo', 'hardware': 'hdd', 'tags': 'phase1', 'path': ub.Path('/media/joncrall/raid/dvc-repos/smart_watch_dvc')},
-            {'name': 'rutgers', 'hardware': None, 'tags': 'phase1', 'path': ub.Path('/media/native/data/data/smart_watch_dvc')},
-            {'name': 'uky', 'hardware': None, 'tags': 'phase1', 'path': ub.Path('/localdisk0/SCRATCH/watch/ben/smart_watch_dvc')},
-            {'name': 'purri', 'hardware': None, 'tags': 'phase1', 'path': ub.Path('/data4/datasets/smart_watch_dvc')},
-            {'name': 'crall-ssd', 'hardware': 'ssd', 'tags': 'phase1_data', 'path': ub.Path('~/data/dvc-repos/smart_watch_dvc-ssd').expand()},
-            {'name': 'crall-hdd', 'hardware': 'hdd', 'tags': 'phase1_data', 'path': ub.Path('~/data/dvc-repos/smart_watch_dvc-hdd').expand()},
-            {'name': 'phase1_standard', 'hardware': None, 'tags': 'phase1_data', 'path': ub.Path('~/data/dvc-repos/smart_watch_dvc').expand()},
+            # {'name': 'namek', 'hardware': 'hdd', 'tags': 'phase1', 'path': ub.Path('/media/joncrall/raid/home/joncrall/data/dvc-repos/smart_watch_dvc')},
+            # {'name': 'ooo', 'hardware': 'hdd', 'tags': 'phase1', 'path': ub.Path('/media/joncrall/raid/dvc-repos/smart_watch_dvc')},
+            # {'name': 'rutgers', 'hardware': None, 'tags': 'phase1', 'path': ub.Path('/media/native/data/data/smart_watch_dvc')},
+            # {'name': 'uky', 'hardware': None, 'tags': 'phase1', 'path': ub.Path('/localdisk0/SCRATCH/watch/ben/smart_watch_dvc')},
+            # {'name': 'purri', 'hardware': None, 'tags': 'phase1', 'path': ub.Path('/data4/datasets/smart_watch_dvc')},
+            # {'name': 'crall-ssd', 'hardware': 'ssd', 'tags': 'phase1_data', 'path': ub.Path('~/data/dvc-repos/smart_watch_dvc-ssd').expand()},
+            # {'name': 'crall-hdd', 'hardware': 'hdd', 'tags': 'phase1_data', 'path': ub.Path('~/data/dvc-repos/smart_watch_dvc-hdd').expand()},
+            # {'name': 'phase1_standard', 'hardware': None, 'tags': 'phase1_data', 'path': ub.Path('~/data/dvc-repos/smart_watch_dvc').expand()},
 
-            {'name': 'drop4_data_hdd', 'hardware': 'hdd', 'tags': 'phase2_data', 'path': ub.Path('~/data/dvc-repos/smart_data_dvc').expand()},
-            {'name': 'drop4_expt_hdd', 'hardware': 'hdd', 'tags': 'phase2_expt', 'path': ub.Path('~/data/dvc-repos/smart_expt_dvc').expand()},
-            {'name': 'drop4_data_ssd', 'hardware': 'ssd', 'tags': 'phase2_data', 'path': ub.Path('~/data/dvc-repos/smart_data_dvc-ssd').expand()},
-            {'name': 'drop4_expt_ssd', 'hardware': 'ssd', 'tags': 'phase2_expt', 'path': ub.Path('~/data/dvc-repos/smart_expt_dvc-ssd').expand()},
+            {'name': 'hack_data_hdd', 'hardware': 'hdd', 'tags': 'phase2_data', 'path': ub.Path('~/data/dvc-repos/smart_data_dvc').expand()},
+            {'name': 'hack_expt_hdd', 'hardware': 'hdd', 'tags': 'phase2_expt', 'path': ub.Path('~/data/dvc-repos/smart_expt_dvc').expand()},
+            {'name': 'hack_data_ssd', 'hardware': 'ssd', 'tags': 'phase2_data', 'path': ub.Path('~/data/dvc-repos/smart_data_dvc-ssd').expand()},
+            {'name': 'hack_expt_ssd', 'hardware': 'ssd', 'tags': 'phase2_expt', 'path': ub.Path('~/data/dvc-repos/smart_expt_dvc-ssd').expand()},
         ]
 
         # registry_rows = [row for row in hardcoded_paths if row['path'].exists()]
@@ -226,11 +226,11 @@ class DataRegistry:
             # directory and the localmachine $HOME is symlinked to via
             # $HOME/remote/$HOSTNAME) then use that version of the paths so its
             # easier to work across multiple machines.
+            import platform
+            host = platform.node()
             for row in results:
                 path = ub.Path(row['path'])
-                if path.exists():
-                    import platform
-                    host = platform.node()
+                if path.exists() and f'remote/{host}' not in str(path):
                     remote_base = ub.Path(f'~/remote/{host}').expand()
                     remote_alt = path.shrinkuser(home=remote_base)
                     if remote_alt.exists():

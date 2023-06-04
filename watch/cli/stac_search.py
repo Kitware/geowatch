@@ -567,7 +567,7 @@ def area_query(region_fpath, search_json, searcher, temp_dir, config, logger, ve
                 search_params = json.load(f)
 
     region = geomodels.RegionModel.coerce(r_file_loc)
-    region.validate(strict=False)
+    # region.validate(strict=False)
     # region._()
 
     geom = geom_shape(region.header['geometry'])

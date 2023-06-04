@@ -83,7 +83,8 @@ def run_pseudolive_consolidate(config):
                            local_current_dir,
                            local_consolidated_dir,
                            config.iou_threshold,
-                           performer_suffix=config.performer_suffix)
+                           performer_suffix=config.performer_suffix,
+                           just_deconflict=config.just_deconflict)
 
     subprocess.run([*aws_base_command, '--recursive',
                     local_consolidated_dir, config.outbucket],
