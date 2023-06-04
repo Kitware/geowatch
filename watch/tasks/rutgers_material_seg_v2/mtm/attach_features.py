@@ -2,7 +2,7 @@ r"""
 Prediction script for Rutgers material features which include intermediate material
 features, material transition masks, and material predictions.
 
-Given a checkout of the model weights, model config file and IARPA data, the following 
+Given a checkout of the model weights, model config file and IARPA data, the following
 demo computes and visualizes a subset of the features.
 
 CommandLine:
@@ -23,7 +23,7 @@ CommandLine:
 
     RUTGERS_MATERIAL_MODEL_FPATH="$RUTGERS_MATERIAL_MODEL_FPATH"
     RUTGERS_MATERIAL_MODEL_CONFIG_FPATH="$RUTGERS_MATERIAL_MODEL_CONFIG_FPATH"
-    
+
     INPUT_DATASET_FPATH="$INPUT_DATASET_FPATH"
     OUTPUT_DATASET_FPATH="$OUTPUT_DATASET_FPATH"
     "
@@ -54,10 +54,10 @@ import scriptconfig as scfg
 class MaterialsPredictConfig(scfg.DataConfig):
     kwcoco_fpath = scfg.Value(None, required=True, help=ub.paragraph('''
                             KWCOCO file to add material predictions to.
-                            '''))               
+                            '''))
     model_fpath = scfg.Value(None, required=True, help=ub.paragraph('''
                             Path to material segmentation model that is
-                            used to generate material predictions as well 
+                            used to generate material predictions as well
                             as the material transition mask.'''))
     config_fpath = scfg.Value(None, required=False, help=ub.paragraph('''
                             Path to the model`s configuration file.'''))
@@ -80,6 +80,7 @@ class MaterialsPredictConfig(scfg.DataConfig):
 
 __config__ = MaterialsPredictConfig
 
+
 def make_material_predictions(eval_loader,
                               model,
                               output_coco_dset,
@@ -92,7 +93,7 @@ def make_material_predictions(eval_loader,
 
     Args:
         eval_loader (torch.utils.data.DataLoader): Dataset loader with region images to evaluate.
-        model (torch.nn.Module): Material segmentation model. 
+        model (torch.nn.Module): Material segmentation model.
         output_coco_dset (kwcoco.CocoDataset): The dataset where material predictions will be saved.
         hash_name (str): The hash name of the experiment.
         n_workers (int, optional): Number of threads to grab data. Defaults to 4.
@@ -192,7 +193,7 @@ def make_material_predictions(eval_loader,
             stiching_space='video',
             writer_queue=writer_queue,
             expected_minmax=(0, 1),
-            assets_dname='_assets',
+            assets_dname='_assets'
         )
     else:
         mtm_stitcher = None
@@ -203,7 +204,7 @@ def make_material_predictions(eval_loader,
         stiching_space='video',
         writer_queue=writer_queue,
         expected_minmax=(0, 1),
-         assets_dname='_assets',
+         assets_dname='_assets'
     )
 
     mat_feat_stitcher = CocoStitchingManager(
@@ -282,7 +283,7 @@ def predict(cmdline=1, **kwargs):
     from watch.tasks.rutgers_material_seg_v2.matseg.utils.utils_dataset import MATERIAL_TO_MATID
     from watch.tasks.rutgers_material_seg_v2.matseg.utils.utils_misc import load_cfg_file, generate_image_slice_object, create_hash_str
     from watch.tasks.rutgers_material_seg_v2.mtm.dataset.inference_dataset import InferenceDataset
-    
+
     # Get config.
     script_config = MaterialsPredictConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
 

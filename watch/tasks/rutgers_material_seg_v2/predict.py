@@ -1,5 +1,5 @@
 """
-Currently just an alias for mtm/attach_features. 
+Currently just an alias for mtm/attach_features.
 """
 import sys
 from watch.tasks.rutgers_material_seg_v2.mtm.attach_features import predict as main

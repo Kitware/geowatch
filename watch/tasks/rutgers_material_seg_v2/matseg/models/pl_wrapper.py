@@ -33,7 +33,7 @@ class MaterialSegmentationModel(pl.LightningModule):
         self.lr_scheduler_mode = lr_scheduler_mode
 
         self.model = self._build_model(**model_params)
-        optimizers = self.configure_optimizers()
+        optimizers = self.configure_optimizers()  # NOQA
         # self.optimizer, self.lr_scheduler = optimizers['optimizer'], optimizers['lr_scheduler']
         # self.optimizer, self.lr_scheduler = optimizers[0], optimizers[1]
 
@@ -87,7 +87,7 @@ class MaterialSegmentationModel(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         self.model = self.model.train()
-        images, target = batch['image'], batch['target']
+        target = batch['target']
 
         # self.optimizer.zero_grad()
         output = self.forward(batch)
@@ -112,7 +112,7 @@ class MaterialSegmentationModel(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         self.model = self.model.eval()
-        images, target = batch['image'], batch['target']
+        target = batch['target']
         output = self.forward(batch)
 
         # Compute loss.

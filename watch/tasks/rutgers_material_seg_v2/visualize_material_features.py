@@ -36,7 +36,7 @@ def rgbize_features(features):
     """_summary_
 
     Args:
-        features (_type_): A 
+        features (_type_): A
 
     Returns:
         np.ndarray: _description_
