@@ -59,12 +59,7 @@ CommandLine:
     python -m watch.cli.prepare_teamfeats \
         --base_fpath=$KWCOCO_BUNDLE_DPATH/imganns-*[0-9].kwcoco.zip \
         --expt_dvc_dpath="$DVC_EXPT_DPATH" \
-        --with_depth=0 \
-        --with_landcover=0 \
-        --with_invariants=0 \
         --with_materials=1 \
-        --invariant_pca=0 \
-        --invariant_segmentation=0 \
         --skip_existing=1 --run=1 \
         --gres=0, --tmux_workers=1 --backend=tmux --run=1
 """

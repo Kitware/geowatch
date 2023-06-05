@@ -3,19 +3,23 @@ Basline Example:
 
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
     DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+    MAE_MODEL_FPATH="$DVC_EXPT_DPATH/models/wu/wu_mae_2023_04_21/Drop6-epoch=01-val_loss=0.20.ckpt"
+    KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD
 
-    python -m watch.tasks.mae.predict \
+    python -m watch.utils.simple_dvc request "$MAE_MODEL_FPATH"
+
+    python -m watch.tasks.mae.predictV3 \
         --device="cuda:0"\
-        --mae_ckpt_path="/storage1/fs1/jacobsn/Active/user_s.sastry/smart_watch/new_models/checkpoints/Drop6-epoch=01-val_loss=0.20.ckpt"\
-        --input_kwcoco="$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/data_train_I2L_split6.kwcoco.zip"\
-        --output_kwcoco="$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/mae_v1_train_split6.kwcoco.zip"\
+        --mae_ckpt_path="$MAE_MODEL_FPATH"\
+        --input_kwcoco="$KWCOCO_BUNDLE_DPATH/imganns-KR_R001.kwcoco.zip"\
+        --output_kwcoco="$KWCOCO_BUNDLE_DPATH/imganns-KR_R001-testmae.kwcoco.zip"\
         --window_space_scale=1.0 \
         --workers=8 \
         --io_workers=8
 
     # After your model predicts the outputs, you should be able to use the
     # smartwatch visualize tool to inspect your features.
-    python -m watch visualize $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/mae_v1_train_split6.kwcoco.zip \
+    python -m watch visualize "$KWCOCO_BUNDLE_DPATH/imganns-KR_R001-testmae.kwcoco.zip" \
         --channels "red|green|blue,mae.8:11,mae.14:17" --stack=only --workers=avail --animate=True \
         --draw_anns=False
 
