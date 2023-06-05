@@ -291,8 +291,12 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
     data_workers = util_parallel.coerce_num_workers(config['data_workers'])
 
     model_fpaths = {
-        'rutgers_materials': expt_dvc_dpath / 'models/rutgers/rutgers_peri_materials_v3/experiments_epoch_18_loss_59.014100193977356_valmF1_0.18694573888313187_valChangeF1_0.0_time_2022-02-01-01:53:20.pth',
+        # 'rutgers_materials': expt_dvc_dpath / 'models/rutgers/rutgers_peri_materials_v3/experiments_epoch_18_loss_59.014100193977356_valmF1_0.18694573888313187_valChangeF1_0.0_time_2022-02-01-01:53:20.pth',
         # 'rutgers_materials': dvc_dpath / 'models/rutgers/experiments_epoch_62_loss_0.09470022770735186_valmIoU_0.5901660531463717_time_2021101T16277.pth',
+        'rutgers_materials_model_v4': expt_dvc_dpath / 'models/rutgers/ru_model_05_25_2023.ckpt',
+        'rutgers_materials_config_v4': expt_dvc_dpath / 'models/rutgers/ru_config_05_25_2023.yaml',
+
+
         # 'dzyne_landcover': expt_dvc_dpath / 'models/landcover/visnav_remap_s2_subset.pt',
         'dzyne_landcover': expt_dvc_dpath / 'models/landcover/sentinel2.pt',
 
@@ -325,7 +329,10 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
     name_suffix = '_' + ub.hash_data(base_fpath)[0:8]
 
     outputs = {
-        'rutgers_materials': aligned_bundle_dpath / (subset_name + '_rutgers_material_seg_v3' + config['kwcoco_ext']),
+        # 'rutgers_materials': aligned_bundle_dpath / (subset_name + '_rutgers_material_seg_v3' + config['kwcoco_ext']),
+
+        'rutgers_materials_v4': aligned_bundle_dpath / (subset_name + '_rutgers_material_seg_v4' + config['kwcoco_ext']),
+
         'dzyne_landcover': aligned_bundle_dpath / (subset_name + '_dzyne_landcover' + config['kwcoco_ext']),
         'dzyne_depth': aligned_bundle_dpath / (subset_name + '_dzyne_depth' + config['kwcoco_ext']),
         'uky_invariants': aligned_bundle_dpath / (subset_name + '_uky_invariants' + config['kwcoco_ext']),
@@ -472,25 +479,21 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
         )
         task_jobs.append(job)
 
-    # Run materials while landcover is running
     key = 'with_materials'
     if config[key]:
-        simple_dvc.SimpleDVC().request(model_fpaths['rutgers_materials'])
-
+        simple_dvc.SimpleDVC().request(model_fpaths['rutgers_materials_model_v4'])
         task = {}
-        task['output_fpath'] = outputs['rutgers_materials']
+        task['output_fpath'] = outputs['rutgers_materials_v4']
         task['gpus'] = 1
         task['command'] = ub.codeblock(
             fr'''
-            python -m watch.tasks.rutgers_material_seg.predict \
-                --test_dataset="{base_fpath}" \
-                --checkpoint_fpath="{model_fpaths['rutgers_materials']}" \
-                --pred_dataset="{task['output_fpath']}" \
-                --default_config_key=iarpa \
-                --num_workers="{data_workers}" \
-                --export_raw_features=1 \
-                --batch_size=32 --gpus "0" \
-                --compress=DEFLATE --blocksize=128 --skip_existing=True
+            python -m watch.tasks.rutgers_material_seg_v2.predict \
+                --kwcoco_fpath="{base_fpath}" \
+                --model_fpath="{model_fpaths['rutgers_materials_model_v4']}" \
+                --config_fpath="{model_fpaths['rutgers_materials_config_v4']}" \
+                --output_kwcoco_fpath="{task['output_fpath']}" \
+                --assets_dname="{config.assets_dname}" \
+                --workers="{data_workers}"
             ''')
         combo_code_parts.append(codes[key])
         job = pipeline.submit(

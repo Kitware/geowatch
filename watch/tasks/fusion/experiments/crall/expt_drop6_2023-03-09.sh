@@ -3727,7 +3727,7 @@ initializer:
 
 
 # On toothbrush scratch (split6 with COLD+Invariants+landcover)
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=1
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
@@ -3821,4 +3821,4 @@ torch_globals:
 
 initializer:
     init: noop
-"
+" --ckpt_path /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-MedianNoWinter10GSD/runs/Drop7-MedianNoWinter10GSD_landcover_invar_cold_sam_scratch_split6_V60/lightning_logs/version_0/checkpoints/epoch=93-step=4042.ckpt

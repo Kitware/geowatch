@@ -43,11 +43,30 @@ CommandLine:
     geowatch stats $OUTPUT_DATASET_FPATH
 
     geowatch visualize $OUTPUT_DATASET_FPATH \
-        --animate=True --channels="red|green|blue,mat_feats.0:3,mat_feats.3:6" \
+        --animate=True --channels="red|green|blue,mtm,materials.0:3,mat_feats.0:3,mat_feats.3:6" \
         --skip_missing=True --workers=4 --draw_anns=False --smart=True
 
     python -m watch.tasks.rutgers_material_seg_v2.visualize_material_features \
         $OUTPUT_DATASET_FPATH ./mat_visualize_test/
+
+
+CommandLine:
+
+    # For batch computation
+    DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+    DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+    KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD
+    python -m watch.cli.prepare_teamfeats \
+        --base_fpath=$KWCOCO_BUNDLE_DPATH/imganns-*[0-9].kwcoco.zip \
+        --expt_dvc_dpath="$DVC_EXPT_DPATH" \
+        --with_depth=0 \
+        --with_landcover=0 \
+        --with_invariants=0 \
+        --with_materials=1 \
+        --invariant_pca=0 \
+        --invariant_segmentation=0 \
+        --skip_existing=1 --run=1 \
+        --gres=0, --tmux_workers=1 --backend=tmux --run=1
 """
 import torch
 import ubelt as ub
