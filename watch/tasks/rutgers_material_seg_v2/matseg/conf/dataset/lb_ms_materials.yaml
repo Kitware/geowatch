@@ -1,0 +1,9 @@
+name: lb_ms_materials
+channels: RGB_NIR
+sensors: S2, L8
+
+kwargs:
+  sample_positives: True
+  dset_version: drop4
+  temporal_window: 5
+  image_transforms: False
