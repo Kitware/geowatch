@@ -12,7 +12,7 @@ CommandLine:
 
     KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD
     RUTGERS_MATERIAL_MODEL_FPATH="$DVC_EXPT_DPATH/models/rutgers/ru_model_05_25_2023.ckpt"
-    RUTGERS_MATERIAL_MODEL_CONFIG_FPATH="$DVC_EXPT_DPATH/models/rutgers/ru_model_05_25_2023.yaml"
+    RUTGERS_MATERIAL_MODEL_CONFIG_FPATH="$DVC_EXPT_DPATH/models/rutgers/ru_config_05_25_2023.yaml"
 
     INPUT_DATASET_FPATH=$KWCOCO_BUNDLE_DPATH/imganns-KR_R001.kwcoco.zip
     OUTPUT_DATASET_FPATH=$KWCOCO_BUNDLE_DPATH/imganns-KR_R001_rutgers_test.kwcoco.zip
@@ -28,21 +28,25 @@ CommandLine:
     OUTPUT_DATASET_FPATH="$OUTPUT_DATASET_FPATH"
     "
 
+    cat "$RUTGERS_MATERIAL_MODEL_CONFIG_FPATH"
+    python -m watch.utils.simple_dvc request $RUTGERS_MATERIAL_MODEL_FPATH
+    kwcoco stats "$INPUT_DATASET_FPATH"
+
     export CUDA_VISIBLE_DEVICES="1"
     python -m watch.tasks.rutgers_material_seg_v2.predict \
         --kwcoco_fpath="$INPUT_DATASET_FPATH" \
-        --model_fpath="$RUTGERS_MATERIAL_MODEL_FPATH"
+        --model_fpath="$RUTGERS_MATERIAL_MODEL_FPATH" \
         --config_fpath="$RUTGERS_MATERIAL_MODEL_CONFIG_FPATH" \
         --output_kwcoco_fpath="$OUTPUT_DATASET_FPATH" \
         --num_workers=4
 
-    smartwatch stats $OUTPUT_DATASET_FPATH
+    geowatch stats $OUTPUT_DATASET_FPATH
 
-    smartwatch visualize $OUTPUT_DATASET_FPATH \
+    geowatch visualize $OUTPUT_DATASET_FPATH \
         --animate=True --channels="red|green|blue,mat_feats.0:3,mat_feats.3:6" \
         --skip_missing=True --workers=4 --draw_anns=False --smart=True
 
-    python -m watch.tasks.rutgers_material_seg_v2.visualize_material_features.py \
+    python -m watch.tasks.rutgers_material_seg_v2.visualize_material_features \
         $OUTPUT_DATASET_FPATH ./mat_visualize_test/
 """
 import torch
@@ -77,7 +81,7 @@ class MaterialsPredictConfig(scfg.DataConfig):
     assets_dname = scfg.Value('_assets', required=False, help=ub.paragraph('''
                             The name of the top-level directory to write new assets.
                             '''))
-    include_sensors = scfg.Value(None, required=False, help=ub.paragraph('''
+    include_sensors = scfg.Value(['S2', 'L8', 'WV'], required=False, help=ub.paragraph('''
                             Comma separated list of sensors to include.
                             '''))
 
@@ -212,7 +216,7 @@ def make_material_predictions(eval_loader,
     mat_pred_stitcher = CocoStitchingManager(
         output_coco_dset,
         short_code=f'materials_{hash_name}',
-        chan_code='materials',
+        chan_code='materials.0:9',
         stiching_space='video',
         writer_queue=writer_queue,
         expected_minmax=(0, 1),
@@ -222,7 +226,7 @@ def make_material_predictions(eval_loader,
     mat_feat_stitcher = CocoStitchingManager(
         output_coco_dset,
         short_code=f'mat_feats_{hash_name}',
-        chan_code='mat_feats',
+        chan_code=f'mat_feats.0:{n_feature_dims}',
         stiching_space='video',
         writer_queue=writer_queue,
         assets_dname=asset_dname

@@ -1,0 +1,4 @@
+# Dependencies for watch.tasks.rutgers_material_seg_v2
+
+segmentation_models_pytorch>=0.3.0
+pycm>=3.6

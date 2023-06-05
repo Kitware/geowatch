@@ -403,7 +403,7 @@ import scriptconfig as scfg  # NOQA
 
 class SimpleDVC_CLI(scfg.ModalCLI):
     """
-    A DVC CLI That uses our simplified (and more permissive interface)
+    A DVC CLI That uses our simplified (and more permissive) interface
     """
 
     class Add(scfg.DataConfig):
