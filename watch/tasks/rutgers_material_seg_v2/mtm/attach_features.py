@@ -10,8 +10,8 @@ CommandLine:
     DVC_EXPT_DPATH=$(geowatch_dvc --tags=phase2_expt --hardware=auto)
     DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware=auto)
 
-    KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/Drop6
-    RUTGERS_MATERIAL_MODEL_FPATH="$DVC_EXPT_DPATH/models/rutgers/ru_model_05_25_2023.ckpt
+    KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD
+    RUTGERS_MATERIAL_MODEL_FPATH="$DVC_EXPT_DPATH/models/rutgers/ru_model_05_25_2023.ckpt"
     RUTGERS_MATERIAL_MODEL_CONFIG_FPATH="$DVC_EXPT_DPATH/models/rutgers/ru_model_05_25_2023.yaml"
 
     INPUT_DATASET_FPATH=$KWCOCO_BUNDLE_DPATH/imganns-KR_R001.kwcoco.zip
