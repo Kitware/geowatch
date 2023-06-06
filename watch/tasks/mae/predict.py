@@ -1,6 +1,5 @@
 """
-Basline Example:
-
+Baseline Example:
 
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
     DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
@@ -10,12 +9,13 @@ Basline Example:
     python -m watch.utils.simple_dvc request "$MAE_MODEL_FPATH"
 
     python -m watch.tasks.mae.predict \
-        --device="cuda:0"\
-        --mae_ckpt_path="$MAE_MODEL_FPATH"\
+        --device="cuda:0" \
+        --mae_ckpt_path="$MAE_MODEL_FPATH" \
         --input_kwcoco="$KWCOCO_BUNDLE_DPATH/imganns-KR_R001.kwcoco.zip"\
-        --output_kwcoco="$KWCOCO_BUNDLE_DPATH/imganns-KR_R001-testmae.kwcoco.zip"\
+        --output_kwcoco="$KWCOCO_BUNDLE_DPATH/imganns-KR_R001-testmae2.kwcoco.zip" \
         --window_space_scale=1.0 \
         --workers=8 \
+        --assets_dname=teamfeats2 \
         --io_workers=8
 
     # After your model predicts the outputs, you should be able to use the
@@ -37,7 +37,6 @@ Basline Example:
         --skip_existing=1 \
         --assets_dname=teamfeats \
         --gres=0,1 --tmux_workers=8 --backend=tmux --run=1
-
 """
 import ubelt as ub
 from watch.utils import util_kwimage  # NOQA
@@ -56,6 +55,49 @@ from einops import rearrange
 from einops.layers.torch import Rearrange
 import numpy as np
 from watch.tasks.fusion.predict import CocoStitchingManager
+
+
+class MAEPredictConfig(scfg.DataConfig):
+    """
+    Configuration for WashU MAE models
+    """
+    device = scfg.Value('cuda:0', type=str)
+    mae_ckpt_path = scfg.Value(None, type=str)
+    batch_size = scfg.Value(1, type=int)
+    workers = scfg.Value(4, help=ub.paragraph(
+            '''
+            number of background data loading workers
+            '''), alias=['num_workers'])
+    io_workers = scfg.Value(8, help=ub.paragraph(
+            '''
+            number of background data writing workers
+            '''), alias=['write_workers'])
+
+    window_resolution = scfg.Value(1.0, help='The window GSD to build the grid at', alias=['window_space_scale'])
+
+    sensor = scfg.Value(['S2', 'L8'], nargs='+')
+    bands = scfg.Value(['shared'], type=str, help=ub.paragraph(
+            '''
+            Choose bands on which to train. Can specify 'all' for all
+            bands from given sensor, or 'share' to use common bands when
+            using both S2 and L8 sensors
+            '''), nargs='+')
+    patch_overlap = scfg.Value(0.25, type=float)
+    input_kwcoco = scfg.Value(None, type=str, required=True, help=ub.paragraph(
+            '''
+            Path to kwcoco dataset with images to generate feature for
+            '''))
+    output_kwcoco = scfg.Value(None, type=str, required=True, help=ub.paragraph(
+            '''
+            Path to write an output kwcoco file. Output file will be a
+            copy of input_kwcoco with addition feature fields generated
+            by predict.py rerooted to point to the original data.
+            '''))
+
+    assets_dname = scfg.Value('_assets', help=ub.paragraph(
+        '''
+        The name of the top-level directory to write new assets.
+        '''))
 
 
 class WatchDataset(Dataset):
@@ -238,49 +280,6 @@ class WatchDataset(Dataset):
         target['_input_gsd'] = resolved_input_scale['gsd']
         target['_native_video_gsd'] = resolved_input_scale['data_gsd']
         return target
-
-
-class MAEPredictConfig(scfg.DataConfig):
-    """
-    Configuration for WashU MAE models
-    """
-    device = scfg.Value('cuda:0', type=str)
-    mae_ckpt_path = scfg.Value(None, type=str)
-    batch_size = scfg.Value(1, type=int)
-    workers = scfg.Value(4, help=ub.paragraph(
-            '''
-            number of background data loading workers
-            '''), alias=['num_workers'])
-    io_workers = scfg.Value(8, help=ub.paragraph(
-            '''
-            number of background data writing workers
-            '''), alias=['write_workers'])
-
-    window_resolution = scfg.Value(1.0, help='The window GSD to build the grid at', alias=['window_space_scale'])
-
-    sensor = scfg.Value(['S2', 'L8'], nargs='+')
-    bands = scfg.Value(['shared'], type=str, help=ub.paragraph(
-            '''
-            Choose bands on which to train. Can specify 'all' for all
-            bands from given sensor, or 'share' to use common bands when
-            using both S2 and L8 sensors
-            '''), nargs='+')
-    patch_overlap = scfg.Value(0.25, type=float)
-    input_kwcoco = scfg.Value(None, type=str, required=True, help=ub.paragraph(
-            '''
-            Path to kwcoco dataset with images to generate feature for
-            '''))
-    output_kwcoco = scfg.Value(None, type=str, required=True, help=ub.paragraph(
-            '''
-            Path to write an output kwcoco file. Output file will be a
-            copy of input_kwcoco with addition feature fields generated
-            by predict.py rerooted to point to the original data.
-            '''))
-
-    assets_dname = scfg.Value('_assets', help=ub.paragraph(
-        '''
-        The name of the top-level directory to write new assets.
-        '''))
 
 
 def pair(t):
@@ -490,7 +489,7 @@ def sigmoid(a):
 class Predict():
     def __init__(self, args):
 
-        self.device = args.device
+        self.device = torch.device(args.device)
         self.data_path = args.input_kwcoco
         self.dataset = WatchDataset(self.data_path, sensor=args.sensor, bands=args.bands,
                                     segmentation=False, patch_size=128, mask_patch_size=16, num_images=4,
@@ -533,18 +532,19 @@ class Predict():
 
         self.stitch_manager = CocoStitchingManager(
             result_dataset=self.output_dset,
-            short_code=args.assets_dname,
+            short_code='mae',
             chan_code=self.save_channels,
             stiching_space='video',
             prob_compress=self.imwrite_kw['compress'],
             quantize=True,
+            assets_dname=args.assets_dname,
         )
 
         from watch.utils import process_context
         self.proc_context = process_context.ProcessContext(
-            args=sys.argv,
             type='process',
             name='watch.tasks.mae.predict',
+            config=args,
         )
 
     def __call__(self):
@@ -643,6 +643,8 @@ class Predict():
 
 def main():
     args = MAEPredictConfig.cli()
+    import rich
+    rich.print('config = ' + ub.urepr(args))
     predict = Predict(args)
     predict()
 
@@ -652,59 +654,8 @@ if __name__ == '__main__':
     SeeAlso:
         ../../cli/prepare_teamfeats.py
 
-        # Team Features on Drop3
-        DVC_DPATH=$(geowatch_dvc)
-        KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10
-        python -m watch.cli.prepare_teamfeats \
-            --base_fpath=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
-            --with_depth=0 \
-            --with_landcover=0 \
-            --with_materials=0  \
-            --with_invariants=1 \
-            --do_splits=0 \
-            --gres=0 --backend=serial --run=1
-
     CommandLine:
         python -m watch.tasks.template.predict --help
-
-        DVC_DPATH=$(geowatch_dvc)
-        PRETEXT_PATH=$DVC_DPATH/models/uky/uky_invariants_2022_02_11/TA1_pretext_model/pretext_package.pt
-        SSEG_PATH=$DVC_DPATH/models/uky/uky_invariants_2022_02_11/TA1_segmentation_model/segmentation_package.pt
-        PCA_FPATH=$DVC_DPATH/models/uky/uky_invariants_2022_02_11/TA1_pretext_model/pca_projection_matrix.pt
-        KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15
-        python -m watch.tasks.invariants.predict \
-            --pretext_package_path "$PRETEXT_PATH" \
-            --segmentation_package_path "$SSEG_PATH" \
-            --pca_projection_path "$PCA_FPATH" \
-            --input_kwcoco $KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
-            --workers=avail \
-            --do_pca 0 \
-            --patch_overlap=0.3 \
-            --output_kwcoco $KWCOCO_BUNDLE_DPATH/uky_invariants.kwcoco.json \
-            --tasks before_after pretext
-
-        python -m watch stats $KWCOCO_BUNDLE_DPATH/uky_invariants.kwcoco.json
-
-        python -m watch visualize $KWCOCO_BUNDLE_DPATH/uky_invariants/invariants_nowv_vali.kwcoco.json \
-            --channels "invariants.7,invariants.6,invariants.5" --animate=True \
-            --select_images '.sensor_coarse != "WV"' --draw_anns=False
-
-    Ignore:
-        ### Command 1 / 2 - watch-teamfeat-job-0
-        python -m watch.tasks.invariants.predict \
-            --input_kwcoco "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data_kr1br2.kwcoco.json" \
-            --output_kwcoco "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data_kr1br2_uky_invariants.kwcoco.json" \
-            --pretext_package_path "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/uky/uky_invariants_2022_03_21/pretext_model/pretext_package.pt" \
-            --pca_projection_path  "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/uky/uky_invariants_2022_03_21/pretext_model/pretext_pca_104.pt" \
-            --do_pca 0 \
-            --patch_overlap=0.0 \
-            --workers="2" \
-            --io_workers 0 \
-            --tasks before_after pretext
-
-        cd /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
-        kwcoco subset --src=data.kwcoco.json --dst=AE_R001.kwcoco.json --select_videos='.name == "AE_R001"'
-        kwcoco subset --src=data.kwcoco.json --dst=NZ_R001.kwcoco.json --select_videos='.name == "NZ_R001"'
 
         python -m watch.tasks.mae.predict \
         --device="cuda:0"\
@@ -718,7 +669,5 @@ if __name__ == '__main__':
         python -m watch visualize $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/mae_v1_train_split6.kwcoco.zip \
         --channels "red|green|blue,mae.8:11,mae.14:17" --stack=only --workers=avail --animate=True \
         --draw_anns=False
-
-
     """
     main()
