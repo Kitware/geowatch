@@ -45,7 +45,6 @@ import scriptconfig as scfg
 import albumentations as A
 import kwcoco
 import ndsampler
-import sys
 import torch
 import torch.nn as nn
 from pytorch_lightning import LightningModule
