@@ -543,7 +543,7 @@ class Predict():
         self.proc_context = process_context.ProcessContext(
             type='process',
             name='watch.tasks.mae.predict',
-            config=args,
+            config=dict(args),
         )
 
     def __call__(self):
