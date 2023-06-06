@@ -3,11 +3,14 @@ Contributing New Models to the WATCH Project
 
 This document describes the required steps to share your model and model 
 configuration files within the WATCH team. This guide assumes that you
-already have a model and the associated files ready to be shared. 
+already have a model and the associated files ready to be shared.
 
-NOTE: PyTorch models with hyperparameters are typically are saved as `.pt` 
+Remember: **NEVER COMMIT LARGE FILES DIRECTLY TO GIT!** Git works well for small files. For large files we use DVC.
+
+NOTE: PyTorch models with hyperparameters are typically are saved as ``.pt`` 
 files whereas models files only containing weights are typically saved as 
-`.ckpt` files.
+``.ckpt`` files.
+
 
 NOTE: Check out `docs/environment/getting_started_dvc.rst <https://gitlab.kitware.com/smart/watch/-/blob/main/docs/environment/getting_started_dvc.rst>`_ for more information
 regarding how DVC works.
@@ -18,7 +21,7 @@ Assumptions:
 
 * The `smart_expt_dvc <https://gitlab.kitware.com/smart/smart_expt_dvc>`_ has been locally cloned.
 
-* You have copied your model and associated files to the `smart_expt_dvc` repository.
+* You have copied your model and associated files to the ``smart_expt_dvc`` repository.
 
 
 Steps to sharing your model:
