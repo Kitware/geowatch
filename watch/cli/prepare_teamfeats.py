@@ -153,6 +153,7 @@ class TeamFeaturePipelineConfig(CMDQueueConfig):
 
     with_landcover = scfg.Value(False, help='Include DZYNE landcover features', nargs=None, group='team feature enablers')
     with_materials = scfg.Value(False, help='Include Rutgers material features', nargs=None, group='team feature enablers')
+    with_mae = scfg.Value(False, help='Include WU MAE features', nargs=None, group='team feature enablers')
     with_invariants = scfg.Value(False, help='Include UKY invariant features', nargs=None, group='team feature enablers')
     with_invariants2 = scfg.Value(False, help='Include UKY invariant features', nargs=None, group='team feature enablers')
     with_depth = scfg.Value(False, help='Include DZYNE WorldView depth features', nargs=None, group='team feature enablers')
@@ -296,6 +297,8 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
         'rutgers_materials_model_v4': expt_dvc_dpath / 'models/rutgers/ru_model_05_25_2023.ckpt',
         'rutgers_materials_config_v4': expt_dvc_dpath / 'models/rutgers/ru_config_05_25_2023.yaml',
 
+        'wu_mae_v1': expt_dvc_dpath / 'models/wu/wu_mae_2023_04_21/Drop6-epoch=01-val_loss=0.20.ckpt',
+
 
         # 'dzyne_landcover': expt_dvc_dpath / 'models/landcover/visnav_remap_s2_subset.pt',
         'dzyne_landcover': expt_dvc_dpath / 'models/landcover/sentinel2.pt',
@@ -332,6 +335,7 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
         # 'rutgers_materials': aligned_bundle_dpath / (subset_name + '_rutgers_material_seg_v3' + config['kwcoco_ext']),
 
         'rutgers_materials_v4': aligned_bundle_dpath / (subset_name + '_rutgers_material_seg_v4' + config['kwcoco_ext']),
+        'wu_mae': aligned_bundle_dpath / (subset_name + '_wu_mae' + config['kwcoco_ext']),
 
         'dzyne_landcover': aligned_bundle_dpath / (subset_name + '_dzyne_landcover' + config['kwcoco_ext']),
         'dzyne_depth': aligned_bundle_dpath / (subset_name + '_dzyne_depth' + config['kwcoco_ext']),
@@ -349,6 +353,7 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
         'with_landcover': 'L',
         'with_depth': 'D',
         'with_materials': 'M',
+        'with_mae': 'E',
         'with_invariants': 'I',
         'with_invariants2': 'I2',
         'with_cold': 'C',
@@ -498,6 +503,32 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
         combo_code_parts.append(codes[key])
         job = pipeline.submit(
             name='materials' + name_suffix,
+            command=task['command'],
+            in_paths=[base_fpath],
+            out_paths={
+                'output_fpath': task['output_fpath']
+            },
+        )
+        task_jobs.append(job)
+
+    key = 'with_mae'
+    if config[key]:
+        simple_dvc.SimpleDVC().request(model_fpaths['wu_mae_v1'])
+        task = {}
+        task['output_fpath'] = outputs['wu_mae']
+        task['gpus'] = 1
+        task['command'] = ub.codeblock(
+            fr'''
+            python -m watch.tasks.mae.predict \
+                --input_kwcoco="{base_fpath}" \
+                --mae_ckpt_path="{model_fpaths['wu_mae_v1']}" \
+                --output_kwcoco="{task['output_fpath']}" \
+                --assets_dname="{config.assets_dname}" \
+                --workers="{data_workers}"
+            ''')
+        combo_code_parts.append(codes[key])
+        job = pipeline.submit(
+            name='mae' + name_suffix,
             command=task['command'],
             in_paths=[base_fpath],
             out_paths={

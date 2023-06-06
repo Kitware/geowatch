@@ -344,11 +344,32 @@ python -m watch.cli.prepare_teamfeats \
     --with_invariants2=1 \
     --with_sam=1 \
     --with_materials=1 \
+    --with_mae=1 \
     --with_depth=0 \
     --with_cold=0 \
     --skip_existing=1 \
     --assets_dname=teamfeats \
     --gres=0, --tmux_workers=8 --backend=tmux --run=0
+
+
+export CUDA_VISIBLE_DEVICES="1"
+DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
+BUNDLE_DPATH=$DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD
+python -m watch.cli.prepare_teamfeats \
+    --base_fpath "$BUNDLE_DPATH"/imganns-*[0-9].kwcoco.zip \
+    --expt_dvc_dpath="$DVC_EXPT_DPATH" \
+    --with_landcover=0 \
+    --with_invariants2=0 \
+    --with_sam=0 \
+    --with_materials=0 \
+    --with_mae=1 \
+    --with_depth=0 \
+    --with_cold=0 \
+    --skip_existing=1 \
+    --assets_dname=teamfeats \
+    --gres=0, --tmux_workers=8 --backend=tmux --run=0
+
 
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")

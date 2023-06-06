@@ -8,6 +8,9 @@ Basline Example:
 
     python -m watch.utils.simple_dvc request "$MAE_MODEL_FPATH"
 
+    # NOTE: different predict files correspond to different models
+    # TODO: make the model size a parameter (or better yet inferred)
+
     python -m watch.tasks.mae.predictV3 \
         --device="cuda:0"\
         --mae_ckpt_path="$MAE_MODEL_FPATH"\
@@ -25,11 +28,10 @@ Basline Example:
 
 """
 import ubelt as ub
-from watch.utils import util_kwimage  # NOQA
-from watch.utils import util_parallel
 import scriptconfig as scfg
 import albumentations as A
 import kwcoco
+import kwimage
 import ndsampler
 import sys
 import torch
@@ -40,6 +42,7 @@ from torch.utils.data import DataLoader, Dataset
 from einops import rearrange
 from einops.layers.torch import Rearrange
 import numpy as np
+from watch.utils import util_parallel
 from watch.tasks.fusion.predict import CocoStitchingManager
 
 
@@ -188,7 +191,7 @@ class WatchDataset(Dataset):
         else:
             images = torch.tensor(images).permute(0, 3, 1, 2)
 
-        vidspace_box = util_kwimage.Box.from_slice(tr['space_slice'])
+        vidspace_box = kwimage.Box.from_slice(tr['space_slice'])
 
         scale_outspace_from_vidspace = tr['scale'] / 4  # Add it back
         outspace_box = vidspace_box.scale(scale_outspace_from_vidspace).quantize().astype(np.int32)
@@ -197,7 +200,7 @@ class WatchDataset(Dataset):
         img_obj1 : dict = self.coco_dset.index.imgs[im1_id]
         video_obj = self.coco_dset.index.videos[img_obj1['video_id']]
 
-        full_stitch_vidspace_box = util_kwimage.Box.coerce([0, 0, video_obj['width'], video_obj['height']], format='xywh')
+        full_stitch_vidspace_box = kwimage.Box.coerce([0, 0, video_obj['width'], video_obj['height']], format='xywh')
         full_stitch_outspace_box = full_stitch_vidspace_box.scale(scale_outspace_from_vidspace).quantize().astype(np.int32)
 
         item['full_stitch_outspace_ltrb'] = torch.from_numpy(full_stitch_outspace_box.data)
@@ -573,8 +576,8 @@ class Predict():
 
                 gid1, gid2, gid3, gid4 = target['gids']
 
-                sample_outspace_ltrb = util_kwimage.Box.coerce(item['sample_outspace_ltrb'].numpy(), format='ltrb')
-                full_stitch_outspace_box = util_kwimage.Box.coerce(item['full_stitch_outspace_ltrb'].numpy(), format='ltrb')
+                sample_outspace_ltrb = kwimage.Box.coerce(item['sample_outspace_ltrb'].numpy(), format='ltrb')
+                full_stitch_outspace_box = kwimage.Box.coerce(item['full_stitch_outspace_ltrb'].numpy(), format='ltrb')
                 scale_outspace_from_vid = item['scale_outspace_from_vid'].numpy()[0]
                 outspace_slice = sample_outspace_ltrb.to_slice()
                 outspace_dsize = full_stitch_outspace_box.dsize

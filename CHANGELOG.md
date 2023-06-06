@@ -8,6 +8,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 * Add transfer-feature script to COLD task to port features to time-averaged data
+* Add MAE features to prepare teamfeats
+* Add material features to prepare teamfeats
 
 ### Fixed
 * Added timeout to gdal subprocess commands to prevent hanging 
