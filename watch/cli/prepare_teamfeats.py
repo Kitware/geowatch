@@ -26,7 +26,7 @@ Example:
     >>> #
     >>>     'with_landcover': 1,
     >>>     'with_materials': 1,
-    >>>     'with_invariants': 1,
+    >>>     'with_invariants2': 1,
     >>> #
     >>>     'run': 0,
     >>>     #'check': False,
@@ -56,7 +56,6 @@ Ignore:
         --with_invariants2=0 \
         --with_landcover=0 \
         --with_materials=0 \
-        --with_invariants=0 \
         --with_depth=0 \
         --with_cold=1 \
         --skip_existing=1 \
@@ -73,7 +72,6 @@ Ignore:
         --with_invariants2=1 \
         --with_landcover=0 \
         --with_materials=0 \
-        --with_invariants=0 \
         --with_depth=0 \
         --with_cold=0 \
         --skip_existing=1 \
@@ -147,67 +145,55 @@ class TeamFeaturePipelineConfig(CMDQueueConfig):
             found. If "auto" uses the
             ``watch.find_dvc_dpath(tags='phase2_expt')`` mechanism to
             infer the location.
-            '''), nargs=None, group='inputs')
+            '''), group='inputs')
 
-    gres = scfg.Value('auto', help='comma separated list of gpus or auto', nargs=None, group='cmd-queue')
+    gres = scfg.Value('auto', help='comma separated list of gpus or auto', group='cmd-queue')
 
-    with_landcover = scfg.Value(False, help='Include DZYNE landcover features', nargs=None, group='team feature enablers')
-    with_materials = scfg.Value(False, help='Include Rutgers material features', nargs=None, group='team feature enablers')
-    with_mae = scfg.Value(False, help='Include WU MAE features', nargs=None, group='team feature enablers')
-    with_invariants = scfg.Value(False, help='Include UKY invariant features', nargs=None, group='team feature enablers')
-    with_invariants2 = scfg.Value(False, help='Include UKY invariant features', nargs=None, group='team feature enablers')
-    with_depth = scfg.Value(False, help='Include DZYNE WorldView depth features', nargs=None, group='team feature enablers')
-    with_cold = scfg.Value(False, help='Include COLD features', nargs=None)
-    with_sam = scfg.Value(False, help='Include SAM features', nargs=None)
+    with_landcover = scfg.Value(False, help='Include DZYNE landcover features', group='team feature enablers')
+    with_materials = scfg.Value(False, help='Include Rutgers material features', group='team feature enablers')
+    with_mae = scfg.Value(False, help='Include WU MAE features', group='team feature enablers')
+    with_invariants2 = scfg.Value(False, help='Include UKY invariant features', group='team feature enablers')
+    with_depth = scfg.Value(False, help='Include DZYNE WorldView depth features', group='team feature enablers')
+    with_cold = scfg.Value(False, help='Include COLD features')
+    with_sam = scfg.Value(False, help='Include SAM features')
 
     invariant_segmentation = scfg.Value(False, help=ub.paragraph(
             '''
             Enable/Disable segmentation part of invariants
-            '''), nargs=None, group='invariants options')
-    invariant_pca = scfg.Value(0, help='Enable/Disable invariant PCA', nargs=None, group='invariants options')
-    invariant_resolution = scfg.Value('10GSD', help='GSD for invariants', nargs=None, group='invariants options')
+            '''), group='invariants options')
+    invariant_pca = scfg.Value(0, help='Enable/Disable invariant PCA', group='invariants options')
+    invariant_resolution = scfg.Value('10GSD', help='GSD for invariants', group='invariants options')
 
     virtualenv_cmd = scfg.Value(None, type=str, help=ub.paragraph(
             '''
             Command to start the appropriate virtual environment if your
             bashrc does not start it by default.
-            '''), nargs=None)
+            '''))
 
-    skip_existing = scfg.Value(True, help='if True skip completed results', nargs=None, group='common options')
+    skip_existing = scfg.Value(True, help='if True skip completed results', group='common options')
 
-    data_workers = scfg.Value(2, help='dataloader workers for each proc', nargs=None, group='common options')
+    data_workers = scfg.Value(2, help='dataloader workers for each proc', group='common options')
 
     kwcoco_ext = scfg.Value('.kwcoco.zip', help=ub.paragraph(
             '''
             use .kwcoco.json or .kwcoco.zip for outputs
-            '''), nargs=None, group='common options')
+            '''), group='common options')
 
     assets_dname = scfg.Value('_teamfeats', help=ub.paragraph(
         '''
         The name of the top-level directory to write new assets.
         '''), group='common options')
 
-    check = scfg.Value(True, help='if True check files exist where we can', nargs=None, group='common options')
+    check = scfg.Value(True, help='if True check files exist where we can', group='common options')
 
-    cold_workers = scfg.Value(4, help='workers for pycold', nargs=None, group='cold options')
-    cold_workermode = scfg.Value('process', help='workers mode for pycold', nargs=None, group='cold options')
+    cold_workers = scfg.Value(4, help='workers for pycold', group='cold options')
+    cold_workermode = scfg.Value('process', help='workers mode for pycold', group='cold options')
 
     depth_workers = scfg.Value(2, help=ub.paragraph(
             '''
             workers for depth only. On systems with < 32GB RAM might
             need to set to 0
-            '''), nargs=None, group='depth options')
-
-    # keep_sessions = scfg.Value(False, help='if True does not close tmux sessions', nargs=None)
-
-    # workers = scfg.Value('auto', help=ub.paragraph(
-    #         '''
-    #         Maximum number of parallel jobs, 0 is no-nonsense serial
-    #         mode.
-    #         '''), nargs=None)
-    # run = scfg.Value(0, help='if True execute the pipeline', nargs=None)
-    # serial = scfg.Value(False, help='if True use serial mode', nargs=None)
-    # backend = scfg.Value('tmux', help=None, nargs=None)
+            '''), group='depth options')
 
 
 def prep_feats(cmdline=True, **kwargs):
@@ -244,17 +230,24 @@ def prep_feats(cmdline=True, **kwargs):
     else:
         expt_dvc_dpath = ub.Path(config['expt_dvc_dpath'])
 
-    from watch.mlops.old import pipeline_v1
-    pipeline = pipeline_v1.Pipeline()
+    # from watch.mlops.old import pipeline_v1
+    # pipeline = pipeline_v1.Pipeline()
 
     blocklist = [
         '_dzyne_landcover',
         '_uky_invariants',
+        '_rutgers_material_seg_v4',
     ]
 
     base_fpath_pat = config['base_fpath']
-    for base_fpath in util_path.coerce_patterned_paths(base_fpath_pat):
+    base_fpath_list = list(util_path.coerce_patterned_paths(
+        base_fpath_pat, globfallback=True))
 
+    from watch.mlops.pipeline_nodes import Pipeline
+
+    dag_nodes = []
+
+    for base_fpath in base_fpath_list:
         # Hack to prevent doubling up.
         # Should really just choose a better naming scheme so we don't have
         # to break user expectations about glob
@@ -268,14 +261,23 @@ def prep_feats(cmdline=True, **kwargs):
                     'Specified kwcoco file: {base_fpath!r=} does not exist and check=True')
         aligned_bundle_dpath = base_fpath.parent
 
-        _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath,
-                                 aligned_bundle_dpath, config)
+        nodes = _make_teamfeat_nodes(base_fpath, expt_dvc_dpath,
+                                     aligned_bundle_dpath, config)
+        dag_nodes.extend(nodes)
+
+    dag = Pipeline(dag_nodes)
+    dag.configure(cache=True)
 
     queue = config.create_queue(gres=gres)
+    dag.submit_jobs(
+        queue=queue,
+        skip_existing=config['skip_existing'],
+        enable_links=False,
+        write_invocations=False,
+        write_configs=False,
+    )
 
-    pipeline._populate_explicit_dependency_queue(queue)
-    # pipeline._populate_implicit_dependency_queue(queue, skip_existing=config['skip_existing'])
-
+    # pipeline._populate_explicit_dependency_queue(queue)
     config.run_queue(queue)
 
     """
@@ -286,7 +288,8 @@ def prep_feats(cmdline=True, **kwargs):
     return queue
 
 
-def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundle_dpath, config):
+def _make_teamfeat_nodes(base_fpath, expt_dvc_dpath, aligned_bundle_dpath, config):
+    from watch.mlops.pipeline_nodes import ProcessNode
     from watch.utils import util_parallel
     from watch.utils import simple_dvc
     data_workers = util_parallel.coerce_num_workers(config['data_workers'])
@@ -354,93 +357,83 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
         'with_depth': 'D',
         'with_materials': 'M',
         'with_mae': 'E',
-        'with_invariants': 'I',
         'with_invariants2': 'I2',
         'with_cold': 'C',
         'with_sam': 'S',
     }
 
     # tmux queue is still limited. The order of submission matters.
-    task_jobs = []
+    feature_nodes = []
 
     combo_code_parts = []
     key = 'with_landcover'
     if config[key]:
         simple_dvc.SimpleDVC().request(model_fpaths['dzyne_landcover'])
-
-        # Landcover is fairly fast to run, do it first
-        task = {}
-        task['output_fpath'] = outputs['dzyne_landcover']
-        task['gpus'] = 1
-        task['command'] = ub.codeblock(
-            fr'''
-            python -m watch.tasks.landcover.predict \
-                --dataset="{base_fpath}" \
-                --deployed="{model_fpaths['dzyne_landcover']}" \
-                --output="{task['output_fpath']}" \
-                --num_workers="{data_workers}" \
-                --with_hidden=32 \
-                --select_images='.sensor_coarse == "S2"' \
-                --assets_dname="{config.assets_dname}" \
-                --device=0
-            ''')
-        combo_code_parts.append(codes[key])
-        job = pipeline.submit(
-            name='landcover' + name_suffix,
-            command=task['command'],
-            in_paths=[base_fpath],
-            out_paths={
-                'output_fpath': task['output_fpath']
+        # Landcover is fairly fast to run
+        node = ProcessNode(
+            name=key + name_suffix,
+            executable='python -m watch.tasks.landcover.predict',
+            in_paths={
+                'dataset': base_fpath,
+                'deployed': model_fpaths['dzyne_landcover'],
             },
+            out_paths={
+                'output': outputs['dzyne_landcover']
+            },
+            algo_params={
+                'with_hidden': 32,
+                'select_images': '.sensor_coarse == "S2"',
+                'assets_dname': config.assets_dname,
+            },
+            perf_params={
+                'device': 0,
+                'num_workers': data_workers,
+            },
+            node_dpath='.',
         )
-        task_jobs.append(job)
+        feature_nodes.append(node)
+        combo_code_parts.append(codes[key])
 
     key = 'with_cold'
     if config[key]:
-        # Landcover is fairly fast to run, do it first
-        task = {}
-        task['output_fpath'] = outputs['cold']
-        task['gpus'] = 0
-        task['command'] = ub.codeblock(
-            fr'''
-            python -m watch.tasks.cold.predict \
-                --coco_fpath="{base_fpath}" \
-                --out_dpath="{base_fpath.parent}" \
-                --mod_coco_fpath="{task['output_fpath']}" \
-                --sensors='L8' \
-                --adj_cloud=False \
-                --method='COLD' \
-                --prob=0.99 \
-                --conse=6 \
-                --cm_interval=60 \
-                --year_lowbound=None \
-                --year_highbound=None \
-                --coefs=cv,rmse,a0,a1,b1,c1 \
-                --coefs_bands=0,1,2,3,4,5 \
-                --timestamp=False \
-                --combine=False \
-                --resolution=30GSD \
-                --workermode="{config.cold_workermode}" \
-                --workers="{config.cold_workers}"
-            ''')
-        # --coefs=cv,a0,a1,b1,c1,rmse \
-        combo_code_parts.append(codes[key])
-        job = pipeline.submit(
-            name='cold' + name_suffix,
-            command=task['command'],
-            in_paths=[base_fpath],
-            out_paths={
-                'output_fpath': task['output_fpath']
+        node = ProcessNode(
+            name=key + name_suffix,
+            executable='python -m watch.tasks.cold.predict',
+            in_paths={
+                'coco_fpath': base_fpath,
             },
+            out_paths={
+                'mod_coco_fpath': outputs['cold'],
+                'out_dpath': base_fpath.parent,
+            },
+            algo_params={
+                'sensors': 'L8',
+                'adj_cloud': False,
+                'method': 'COLD',
+                'prob': 0.99,
+                'conse': 6,
+                'cm_interval': 60,
+                'year_lowbound': None,
+                'year_highbound': None,
+                'coefs': 'cv,rmse,a0,a1,b1,c1',
+                'coefs_bands': '0,1,2,3,4,5',
+                'timestamp': False,
+                'combine': False,
+                'resolution': '30GSD',
+            },
+            perf_params={
+                'workermode': config.cold_workermode,
+                'workers': config.cold_workers,
+            },
+            node_dpath='.',
         )
-        task_jobs.append(job)
+        feature_nodes.append(node)
+        combo_code_parts.append(codes[key])
 
     key = 'with_depth'
     if config[key]:
         simple_dvc.SimpleDVC().request(model_fpaths['dzyne_depth'])
 
-        # Landcover is fairly fast to run, do it first
-        task = {}
         # Only need 1 worker to minimize lag between images, task is GPU bound
         depth_data_workers = config['depth_workers']
         if depth_data_workers == 'auto':
@@ -459,250 +452,196 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
             print('total_gb = {!r}'.format(total_gb))
             print('avail_gb = {!r}'.format(avail_gb))
 
-        # depth_data_workers = min(2, data_workers)
         depth_window_size = 1440
-        task['output_fpath'] = outputs['dzyne_depth']
-        task['gpus'] = 1
-        task['command'] = ub.codeblock(
-            fr'''
-            python -m watch.tasks.depth.predict \
-                --dataset="{base_fpath}" \
-                --output="{task['output_fpath']}" \
-                --deployed="{model_fpaths['dzyne_depth']}" \
-                --data_workers={depth_data_workers} \
-                --window_size={depth_window_size} \
-                --skip_existing=1
-            ''')
-        combo_code_parts.append(codes[key])
-        job = pipeline.submit(
-            name='depth' + name_suffix,
-            command=task['command'],
-            in_paths=[base_fpath],
-            out_paths={
-                'output_fpath': task['output_fpath']
+        node = ProcessNode(
+            name=key + name_suffix,
+            executable='python -m watch.tasks.depth.predict',
+            in_paths={
+                'dataset': base_fpath,
+                'deployed': model_fpaths['dzyne_depth'],
             },
+            out_paths={
+                'output': outputs['dzyne_depth'],
+            },
+            algo_params={
+                'window_size': depth_window_size,
+            },
+            perf_params={
+                'skip_existing': 1,
+                'data_workers': depth_data_workers,
+                'workers': config.cold_workers,
+            },
+            node_dpath='.',
         )
-        task_jobs.append(job)
+        feature_nodes.append(node)
+        combo_code_parts.append(codes[key])
 
     key = 'with_materials'
     if config[key]:
         simple_dvc.SimpleDVC().request(model_fpaths['rutgers_materials_model_v4'])
-        task = {}
-        task['output_fpath'] = outputs['rutgers_materials_v4']
-        task['gpus'] = 1
-        task['command'] = ub.codeblock(
-            fr'''
-            python -m watch.tasks.rutgers_material_seg_v2.predict \
-                --kwcoco_fpath="{base_fpath}" \
-                --model_fpath="{model_fpaths['rutgers_materials_model_v4']}" \
-                --config_fpath="{model_fpaths['rutgers_materials_config_v4']}" \
-                --output_kwcoco_fpath="{task['output_fpath']}" \
-                --assets_dname="{config.assets_dname}" \
-                --workers="{data_workers}"
-            ''')
-        combo_code_parts.append(codes[key])
-        job = pipeline.submit(
-            name='materials' + name_suffix,
-            command=task['command'],
-            in_paths=[base_fpath],
-            out_paths={
-                'output_fpath': task['output_fpath']
+        node = ProcessNode(
+            name=key + name_suffix,
+            executable='python -m watch.tasks.rutgers_material_seg_v2.predict',
+            in_paths={
+                'kwcoco_fpath': base_fpath,
+                'model_fpath': model_fpaths['rutgers_materials_model_v4'],
+                'config_fpath': model_fpaths['rutgers_materials_config_v4'],
             },
+            out_paths={
+                'output_kwcoco_fpath': outputs['rutgers_materials_v4'],
+            },
+            algo_params={
+            },
+            perf_params={
+                'workers': data_workers,
+            },
+            node_dpath='.',
         )
-        task_jobs.append(job)
+        feature_nodes.append(node)
+        combo_code_parts.append(codes[key])
 
     key = 'with_mae'
     if config[key]:
         simple_dvc.SimpleDVC().request(model_fpaths['wu_mae_v1'])
-        task = {}
-        task['output_fpath'] = outputs['wu_mae']
-        task['gpus'] = 1
-        task['command'] = ub.codeblock(
-            fr'''
-            python -m watch.tasks.mae.predict \
-                --input_kwcoco="{base_fpath}" \
-                --mae_ckpt_path="{model_fpaths['wu_mae_v1']}" \
-                --output_kwcoco="{task['output_fpath']}" \
-                --assets_dname="{config.assets_dname}" \
-                --workers="{data_workers}"
-            ''')
-        combo_code_parts.append(codes[key])
-        job = pipeline.submit(
-            name='mae' + name_suffix,
-            command=task['command'],
-            in_paths=[base_fpath],
-            out_paths={
-                'output_fpath': task['output_fpath']
+        node = ProcessNode(
+            name=key + name_suffix,
+            executable=ub.codeblock(
+                '''
+                python -m watch.tasks.mae.predict
+                '''),
+            in_paths={
+                'input_kwcoco': base_fpath,
+                'mae_ckpt_path': model_fpaths['wu_mae_v1'],
             },
-        )
-        task_jobs.append(job)
-
-    # When landcover finishes run invariants
-    # Note: Does not run on a 1080, needs 18GB in this form
-    key = 'with_invariants'
-    if config[key]:
-        raise Exception('Use with_invariants2 instead')
-        task = {}
-        simple_dvc.SimpleDVC().request(model_fpaths['uky_pretext'])
-
-        if config['invariant_segmentation']:
-            # segmentation_parts = [
-            #     rf'''
-            #     --segmentation_package_path "{model_fpaths['uky_segmentation']}"
-            #     '''
-            # ]
-            raise NotImplementedError()
-
-        if not model_fpaths['uky_pretext'].exists():
-            print('Warning: UKY pretext model does not exist')
-
-        # all_tasks = 'before_after segmentation pretext'
-        task['output_fpath'] = outputs['uky_invariants']
-        task['gpus'] = 1
-        task['command'] = ub.codeblock(
-            fr'''
-            python -m watch.tasks.invariants.predict \
-                --input_kwcoco "{base_fpath}" \
-                --output_kwcoco "{task['output_fpath']}" \
-                --pretext_package_path "{model_fpaths['uky_pretext']}" \
-                --pca_projection_path  "{model_fpaths['uky_pca']}" \
-                --input_space_scale=10GSD \
-                --window_space_scale=10GSD \
-                --patch_size=256 \
-                --do_pca {config['invariant_pca']} \
-                --window_overlap=0.33333 \
-                --workers="{data_workers}" \
-                --io_workers 2 \
-                --tasks before_after pretext
-            ''')
-        combo_code_parts.append(codes[key])
-        job = pipeline.submit(
-            name='invariants' + name_suffix,
-            command=task['command'],
-            in_paths=[base_fpath],
             out_paths={
-                'output_fpath': task['output_fpath']
+                'output_kwcoco': outputs['wu_mae'],
             },
+            algo_params={
+                'assets_dname': config.assets_dname,
+            },
+            perf_params={
+                'workers': data_workers,
+            },
+            node_dpath='.',
         )
-        task_jobs.append(job)
+        feature_nodes.append(node)
+        combo_code_parts.append(codes[key])
 
     key = 'with_invariants2'
     if config[key]:
         simple_dvc.SimpleDVC().request(model_fpaths['uky_pretext2'])
-        task = {}
         if not model_fpaths['uky_pretext2'].exists():
             print('Warning: UKY pretext model does not exist')
+
+        # task['gpus'] = 1
         # all_tasks = 'before_after segmentation pretext'
-        task['output_fpath'] = outputs['uky_invariants']
-        task['gpus'] = 1
-        # --input_kwcoco=$DVC_DATA_DPATH/Drop4-BAS/data_train.kwcoco.json \
-        # --output_kwcoco=$DVC_DATA_DPATH/Drop4-BAS/data_train_invar13.kwcoco.json \
-        # --pretext_package=$DVC_EXPT_DPATH/models/uky/uky_invariants_2022_12_17/TA1_pretext_model/pretext_package.pt \
-        task['command'] = ub.codeblock(
-            fr'''
-            python -m watch.tasks.invariants.predict \
-                --input_kwcoco "{base_fpath}" \
-                --output_kwcoco "{task['output_fpath']}" \
-                --pretext_package_path "{model_fpaths['uky_pretext2']}" \
-                --pca_projection_path  "{model_fpaths['uky_pca']}" \
-                --input_resolution={config['invariant_resolution']} \
-                --window_resolution={config['invariant_resolution']} \
-                --patch_size=256 \
-                --do_pca {config['invariant_pca']} \
-                --patch_overlap=0.3 \
-                --workers="{data_workers}" \
-                --io_workers 0 \
-                --assets_dname="{config.assets_dname}" \
-                --tasks before_after pretext
-            ''')
-        combo_code_parts.append(codes[key])
-        job = pipeline.submit(
-            name='invariants2' + name_suffix,
-            command=task['command'],
-            in_paths=[base_fpath],
-            out_paths={
-                'output_fpath': task['output_fpath']
+        node = ProcessNode(
+            name=key + name_suffix,
+            executable=ub.codeblock(
+                '''
+                python -m watch.tasks.invariants.predict
+                '''),
+            in_paths={
+                'input_kwcoco': base_fpath,
+                'pretext_package_path': model_fpaths['uky_pretext2'],
+                'pca_projection_path': model_fpaths['uky_pca'],
             },
+            out_paths={
+                'output_kwcoco': outputs['uky_invariants'],
+            },
+            algo_params={
+                'assets_dname': config.assets_dname,
+                'input_resolution': config['invariant_resolution'],
+                'window_resolution': config['invariant_resolution'],
+                'patch_size': 256,
+                'patch_overlap': 0.3,
+                'do_pca': config['invariant_pca'],
+                'tasks': 'before_after pretext',
+            },
+            perf_params={
+                'workers': data_workers,
+                'io_workers': 0,
+            },
+            node_dpath='.',
         )
-        task_jobs.append(job)
+        feature_nodes.append(node)
+        combo_code_parts.append(codes[key])
 
     key = 'with_sam'
     if config[key]:
         simple_dvc.SimpleDVC().request(model_fpaths['sam'])
-        task = {}
         if not model_fpaths['sam'].exists():
             print('Warning: SAM model does not exist')
-        task['output_fpath'] = outputs['sam']
-        task['gpus'] = 1
-        task['command'] = ub.codeblock(
-            fr'''
-            python -m watch.tasks.sam.predict \
-                --input_kwcoco "{base_fpath}" \
-                --output_kwcoco "{task['output_fpath']}" \
-                --weights_fpath "{model_fpaths['sam']}" \
-                --window_overlap=0.3 \
-                --data_workers="{data_workers}" \
-                --io_workers 0 \
-                --assets_dname="{config.assets_dname}"
-            ''')
-        combo_code_parts.append(codes[key])
-        job = pipeline.submit(
-            name='sam' + name_suffix,
-            command=task['command'],
-            in_paths=[base_fpath],
-            out_paths={
-                'output_fpath': task['output_fpath']
+        node = ProcessNode(
+            name=key + name_suffix,
+            executable=ub.codeblock(
+                '''
+                python -m watch.tasks.sam.predict
+                '''),
+            in_paths={
+                'input_kwcoco': base_fpath,
+                'weights_fpath': model_fpaths['sam'],
             },
+            out_paths={
+                'output_kwcoco': outputs['sam'],
+            },
+            algo_params={
+                'assets_dname': config.assets_dname,
+                'window_overlap': 0.3,
+            },
+            perf_params={
+                'data_workers': data_workers,
+                'io_workers': 0,
+            },
+            node_dpath='.',
         )
-        task_jobs.append(job)
+        feature_nodes.append(node)
+        combo_code_parts.append(codes[key])
 
-    # for task in tasks:
-    #     # if config['skip_existing']:
-    #     #     if not task['output_fpath'].exists():
-    #     #         # command = f"[[ -f '{task['output_fpath']}' ]] || " + task['command']
-    #     #         command = f"test -f '{task['output_fpath']}' || " + task['command']
-    #     #         job = queue.submit(command, gpus=task['gpus'])
-    #     #         task_jobs.append(job)
-    #     # else:
-    #     #     job = queue.submit(task['command'])
-    #     #     task_jobs.append(job)
+    # Determine what all of the output paths will be
+    feature_paths = []
+    feature_output_nodes = []
+    for node in feature_nodes:
+        node_features = []
+        for output in node.outputs.values():
+            if output.name == 'out_dpath':
+                # hack to skip a non-feature output for COLD
+                continue
+            node_features.append(str(output.final_value))
+            feature_output_nodes.append(output)
+        assert len(node_features) == 1, (
+            'code assumes each node should have 1 feature output')
+        feature_paths.extend(node_features)
 
     # Finalize features by combining them all into combo.kwcoco.json
-    # tocombine = [str(base_fpath)] + [str(task['output_fpath']) for task in tasks]
-
-    feature_paths = [str(job.out_paths['output_fpath']) for job in task_jobs]
     tocombine = [str(base_fpath)] + feature_paths
     combo_code = ''.join(sorted(combo_code_parts))
 
     base_combo_fpath = aligned_bundle_dpath / (f'combo_{subset_name}_{combo_code}' + config['kwcoco_ext'])
 
-    # Note: sync tells the queue that everything after this
-    # depends on everything before this
-    # queue.sync()
+    for node in feature_nodes:
+        node.configure(cache=False)
 
-    if config.skip_existing:
-        request_jobs = []
-        for job in task_jobs:
-            if not all(p.exists() for p in job.out_paths.values()):
-                request_jobs.append(job)
-    else:
-        request_jobs = task_jobs
-
-    src_lines = ' \\\n        '.join(tocombine)
-    command = '\n'.join([
-        'python -m watch.cli.coco_combine_features \\',
-        f'    --src {src_lines} \\',
-        f'    --dst {base_combo_fpath}'
-    ])
-    pipeline.submit(
+    combine_node = ProcessNode(
         name='combine_features' + name_suffix,
-        command=command,
-        in_paths=feature_paths,
-        out_paths={
-            'combo_fpath': base_combo_fpath,
+        executable='python -m watch.cli.coco_combine_features',
+        in_paths={
+            'src': tocombine,
         },
-        depends=request_jobs
+        out_paths={
+            'dst': base_combo_fpath,
+        },
     )
+
+    # TODO: it would be nice if the mlops DAG allowed us to simply specify the
+    # process level dependencies and assume we take care of the i/o level
+    # dependencies.
+    for output in feature_output_nodes:
+        output.connect(combine_node.inputs['src'])
+    combine_node.configure(cache=False)
+
+    nodes = [combine_node] + feature_nodes
+    return nodes
 
 
 main = prep_feats
@@ -737,7 +676,7 @@ if __name__ == '__main__':
         DVC_DPATH=$(geowatch_dvc)
         python -m watch.cli.prepare_teamfeats \
             --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
-            --gres=0,1 --with_depth=0 --with_materials=False  --with_invariants=False \
+            --gres=0,1 --with_depth=0 --with_materials=False  \
             --run=0
 
         ###
@@ -750,26 +689,9 @@ if __name__ == '__main__':
             --gres=0,1 \
             --with_depth=1 \
             --with_landcover=1 \
-            --with_invariants=1 \
             --with_materials=1 \
             --depth_workers=auto \
             --skip_existing=0 --run=0
-
-        ###
-        DVC_DPATH=$(geowatch_dvc)
-        DATASET_CODE=Aligned-Drop3-TA1-2022-03-10
-        KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
-        python -m watch.cli.prepare_teamfeats \
-            --base_fpath=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
-            --gres=0,1 \
-            --with_depth=0 \
-            --with_landcover=1 \
-            --with_invariants=1 \
-            --with_materials=1 \
-            --depth_workers=auto \
-            --invariant_pca=0 \
-            --invariant_segmentation=0 \
-            --skip_existing=1 --run=0
 
         # Simple demo
         python -m watch.cli.prepare_teamfeats \
@@ -777,7 +699,6 @@ if __name__ == '__main__':
             --gres=0,1 \
             --with_depth=0 \
             --with_landcover=1 \
-            --with_invariants=0 \
             --with_materials=1 \
             --skip_existing=0 \
             --backend=tmux \

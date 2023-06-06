@@ -20,7 +20,6 @@ Ignore:
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
     python -m watch.cli.prepare_splits \
         --base_fpath=$DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns*_I2LSC*.kwcoco.zip \
-        --constructive_mode=True \
         --suffix=I2LSC \
         --backend=tmux --tmux_workers=6 \
         --run=1

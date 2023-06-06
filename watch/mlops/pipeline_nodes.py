@@ -242,6 +242,9 @@ class Pipeline:
             for node in self.node_dict.values():
                 node.root_dpath = root_dpath
                 node._configured_cache.clear()  # hack, make more elegant
+        else:
+            for node in self.node_dict.values():
+                node._configured_cache.clear()  # hack, make more elegant
 
         if config is not None:
             self.config = config
@@ -527,7 +530,7 @@ class Node(ub.NiceRepr):
         Handles connection rules between this node and another one.
 
         TODO: cleanup, these rules are too complex and confusing.
-        There is a reasonable subset here. Restrict to that.
+        There is a reasonable subset here; find and restrict to that.
         """
         # TODO: CLEANUP
         # print(f'Connect {type(self).__name__} {self.name} to '
@@ -578,6 +581,8 @@ class Node(ub.NiceRepr):
     def connect(self, *others, param_mapping=None, src_map=None, dst_map=None):
         """
         Connect the outputs of ``self`` to the inputs of ``others``.
+
+        Conceptually, this creates an edge between the two nodes.
         """
         # Connect these two nodes and return the original.
         if param_mapping is None:
@@ -615,12 +620,15 @@ class IONode(Node):
             preds = list(self.pred)
             if preds:
                 if len(preds) != 1:
-                    raise AssertionError(ub.paragraph(
-                        f'''
-                        Expected len(preds) == 1, but got {len(preds)}
-                        {preds}
-                        '''))
-                value = preds[0].final_value
+                    # Handle Multi-Inputs
+                    value = [p.final_value for p in preds]
+                    # raise AssertionError(ub.paragraph(
+                    #     f'''
+                    #     Expected len(preds) == 1, but got {len(preds)}
+                    #     {preds}
+                    #     '''))
+                else:
+                    value = preds[0].final_value
         return value
 
     @final_value.setter
@@ -821,9 +829,6 @@ class ProcessNode(Node):
     # A path that will specified directly after the DAG root dpath.
     group_dname : Optional[str] = None
 
-    # A path relative to a prefix used to construct an output directory.
-    #node_dname : Optional[str] = None
-
     resources : Collection = None
 
     executable : Optional[str] = None
@@ -851,7 +856,6 @@ class ProcessNode(Node):
                  in_paths=None,
                  out_paths=None,
                  group_dname=None,
-                 #node_dname=None,
                  root_dpath=None,
                  config=None,
                  node_dpath=None,  # overwrites configured node dapth
@@ -892,10 +896,6 @@ class ProcessNode(Node):
         super().__init__(args['name'])
 
         self._configured_cache = {}
-
-        # if self.node_dname is None:
-        #     self.node_dname = '.'
-        # self.node_dname = ub.Path(self.node_dname)
 
         if self.group_dname is None:
             self.group_dname = '.'
@@ -1010,6 +1010,7 @@ class ProcessNode(Node):
             # add the extra args
             final_config.update(self.final_out_paths)
         final_config.update(self.final_perf_config)
+        final_config.update(self.final_algo_config)
         return final_config
 
     def _depends_config(self):
@@ -1157,26 +1158,20 @@ class ProcessNode(Node):
     @profile
     def predecessor_process_nodes(self):
         """
-        Predecessor process nodes
+        Process nodes that this one depends on.
         """
-        nodes = [
-            pred.parent
-            for k, v in self.inputs.items()
-            for pred in v.pred
-        ]
+        nodes = [pred.parent for k, v in self.inputs.items()
+                 for pred in v.pred]
         return nodes
 
     @memoize_configured_method
     @profile
     def successor_process_nodes(self):
         """
-        Predecessor process nodes
+        Process nodes that depend on this one.
         """
-        nodes = [
-            succ.parent
-            for k, v in self.outputs.items()
-            for succ in v.succ
-        ]
+        nodes = [succ.parent for k, v in self.outputs.items()
+                 for succ in v.succ]
         return nodes
 
     @memoize_configured_method
@@ -1247,7 +1242,21 @@ class ProcessNode(Node):
     @staticmethod
     @profile
     def _make_argstr(config):
-        parts = [f'    --{k}="{v}" \\' for k, v in config.items()]
+        # parts = [f'    --{k}="{v}" \\' for k, v in config.items()]
+        parts = []
+        import shlex
+        for k, v in config.items():
+            if isinstance(v, list):
+                # Handle variable-args params
+                quoted_varargs = [shlex.quote(str(x)) for x in v]
+                preped_varargs = ['        ' + x + ' \\' for x in quoted_varargs]
+                parts.append(f'    --{k} \\')
+                parts.extend(preped_varargs)
+            else:
+                import shlex
+                vstr = shlex.quote(str(v))
+                parts.append(f'    --{k}={vstr} \\')
+
         return '\n'.join(parts).lstrip().rstrip('\\')
 
     @cached_property

@@ -283,9 +283,41 @@ dvc_add_(){
 }
 
 
+# COLD FEATURES on Raw Data
+DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
+BUNDLE_DPATH=$DVC_DATA_DPATH/Aligned-Drop7
+python -m watch.cli.prepare_teamfeats \
+    --base_fpath "$BUNDLE_DPATH"/*/imganns-AE*[0-9].kwcoco.zip \
+    --expt_dvc_dpath="$DVC_EXPT_DPATH" \
+    --with_landcover=0 \
+    --with_invariants2=0 \
+    --with_sam=0 \
+    --with_materials=0 \
+    --with_depth=0 \
+    --with_cold=1 \
+    --skip_existing=1 \
+    --assets_dname=teamfeats \
+    --gres=0, \
+    --cold_workermode=process \
+    --cold_workers=8 \
+    --tmux_workers=16 \
+    --backend=tmux --run=0
+    #--base_fpath "$BUNDLE_DPATH"/*/imganns-*[0-9].kwcoco.zip \
+
+dvc add Aligned-Drop7/LT_R001/combo_imganns-LT_R001_C.kwcoco.zip
+
+rm -rf Aligned-Drop7/*/reccg/*/cold_feature/tmp
+ls Aligned-Drop7/*/reccg/*/cold_feature
+dvc add Aligned-Drop7/*/reccg/*/cold_feature
+dvc add Aligned-Drop7/*/reccg/*/cold_feature
+dvc add Aligned-Drop7/*/combo_imganns-*_C.kwcoco.zip
+
+
+
+
 #python ~/code/watch-smartflow-dags/reproduce_mlops.py imgonly-US_R006.kwcoco.zip
 # ~/code/watch/dev/poc/prepare_time_combined_dataset.py
-
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
 python ~/code/watch/watch/cli/queue_cli/prepare_time_combined_dataset.py \
     --regions=all_tne \
@@ -305,34 +337,7 @@ python ~/code/watch/watch/cli/queue_cli/prepare_time_combined_dataset.py \
 
 
 
-#DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
-#geowatch clean_geotiffs \
-#    --src "$DVC_DATA_DPATH/Aligned-Drop7/data.kwcoco.json" \
-#    --channels="*" \
-#    --prefilter_channels="red" \
-#    --min_region_size=256 \
-#    --nodata_value=-9999 \
-#    --workers="min(2,avail)" \
-#    --probe_scale=None \
-#    --use_fix_stamps=True \
-#    --dry=True \
-#    --export_bad_fpath=bad_files.txt
-
-
-#--regions="[
-#        # T&E Regions
-#        AE_R001, BH_R001, BR_R001, BR_R002, BR_R004, BR_R005, CH_R001,
-#        KR_R001,
-#        KR_R002, LT_R001, NZ_R001, US_R001, US_R004, US_R005,
-#        US_R006, US_R007,
-#        # # iMerit Regions
-#        AE_C001,
-#        AE_C002,
-#        AE_C003, PE_C001, QA_C001, SA_C005, US_C000, US_C010,
-#        US_C011, US_C012,
-#]" \
-
-
+# Compute all feature except COLD
 export CUDA_VISIBLE_DEVICES="1"
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
@@ -349,36 +354,39 @@ python -m watch.cli.prepare_teamfeats \
     --with_cold=0 \
     --skip_existing=1 \
     --assets_dname=teamfeats \
-    --gres=0, --tmux_workers=8 --backend=tmux --run=0
+    --gres=0, --tmux_workers=8 --backend=tmux --run=1
 
 
-export CUDA_VISIBLE_DEVICES="1"
-DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
-DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
-BUNDLE_DPATH=$DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD
-python -m watch.cli.prepare_teamfeats \
-    --base_fpath "$BUNDLE_DPATH"/imganns-*[0-9].kwcoco.zip \
-    --expt_dvc_dpath="$DVC_EXPT_DPATH" \
-    --with_landcover=0 \
-    --with_invariants2=0 \
-    --with_sam=0 \
-    --with_materials=0 \
-    --with_mae=1 \
-    --with_depth=0 \
-    --with_cold=0 \
-    --skip_existing=1 \
-    --assets_dname=teamfeats \
-    --gres=0, --tmux_workers=8 --backend=tmux --run=0
+
+# Transfer the COLD features from the raw data
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
+python ~/code/watch/watch/cli/queue_cli/prepare_cold_transfer.py \
+    --src_kwcocos "$DVC_DATA_DPATH/Aligned-Drop7/*/*cold.kwcoco.zip" \
+    --dst_kwcocos "$DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/*_EI2LMS.kwcoco.zip" \
+    --run=0
+
+
+redo_cold_transfer(){
+    # If we already transfered COLD from another dataset, but need to push them
+    # onto a new version, do it like this:
+    DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
+    python ~/code/watch/watch/cli/queue_cli/prepare_cold_transfer.py \
+        --src_kwcocos "$DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/*_I2LSC.kwcoco.zip" \
+        --dst_kwcocos "$DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/*_EI2LMS.kwcoco.zip" \
+        --run=1
+}
 
 
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
 python -m watch.cli.prepare_splits \
-    --base_fpath="$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD/combo_imganns*-*_[RC]*_I2L*.kwcoco.zip \
-    --constructive_mode=True \
-    --suffix=I2L \
+    --base_fpath="$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD/combo_imganns*-*_[RC]*_EI2LMSC.kwcoco.zip \
+    --suffix=EI2LMSC \
     --backend=tmux --tmux_workers=6 \
     --run=1
+
+
+dvc add combo*_EI2LMSC.kwcoco.zip data_*_EI2LMSC_*.kwcoco.zip data.kwcoco.zip
 
 
 HDD_DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
@@ -387,6 +395,7 @@ SSD_DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="ssd")
 rsync -avprPR "$HDD_DVC_DATA_DPATH"/./Drop7-MedianNoWinter10GSD "$SSD_DVC_DATA_DPATH"
 
 
+kwcoco validate data.kwcoco.json
 geowatch visualize data.kwcoco.json --smart
 
 
@@ -420,43 +429,3 @@ for p in ub.ProgIter(problematic_paths):
         #print(info['bands'])
         #...
 "
-
-
-# COLD FEATURES
-DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
-DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
-BUNDLE_DPATH=$DVC_DATA_DPATH/Aligned-Drop7
-python -m watch.cli.prepare_teamfeats \
-    --base_fpath "$BUNDLE_DPATH"/*/imganns-AE*[0-9].kwcoco.zip \
-    --expt_dvc_dpath="$DVC_EXPT_DPATH" \
-    --with_landcover=0 \
-    --with_invariants2=0 \
-    --with_sam=0 \
-    --with_materials=0 \
-    --with_depth=0 \
-    --with_cold=1 \
-    --skip_existing=1 \
-    --assets_dname=teamfeats \
-    --gres=0, \
-    --cold_workermode=process \
-    --cold_workers=8 \
-    --tmux_workers=16 \
-    --backend=tmux --run=0
-    #--base_fpath "$BUNDLE_DPATH"/*/imganns-*[0-9].kwcoco.zip \
-
-dvc add Aligned-Drop7/LT_R001/combo_imganns-LT_R001_C.kwcoco.zip
-
-rm -rf Aligned-Drop7/*/reccg/*/cold_feature/tmp
-ls Aligned-Drop7/*/reccg/*/cold_feature
-dvc add Aligned-Drop7/*/reccg/*/cold_feature
-dvc add Aligned-Drop7/*/reccg/*/cold_feature
-dvc add Aligned-Drop7/*/combo_imganns-*_C.kwcoco.zip
-
-
-
-
-python -m watch.tasks.sam.predict --input_kwcoco /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/Drop7-MedianNoWinter10GSD/imganns-US_R007.kwcoco.zip \
-    --output_kwcoco /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/Drop7-MedianNoWinter10GSD/imganns-US_R007_sam.kwcoco.zip \
-    --weights_fpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/sam/sam_vit_h_4b8939.pth \
-    --window_overlap=0.3 --data_workers=2 --io_workers 0 --assets_dname=teamfeats
-

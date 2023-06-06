@@ -67,7 +67,7 @@ def tree(path):
             yield join(r, d)
 
 
-def coerce_patterned_paths(data, expected_extension=None):
+def coerce_patterned_paths(data, expected_extension=None, globfallback=False):
     """
     Coerce input to a list of paths.
 
@@ -75,6 +75,11 @@ def coerce_patterned_paths(data, expected_extension=None):
         data (str | List[str]):
             a glob pattern or list of glob patterns or a yaml list of glob
             patterns
+
+        globfallback (bool):
+            TODO: need a better name for this. The idea is that if an input
+            doesn't contain a wildcard, but does not exist (i.e.  glob wont
+            match it, then return that input back as-is)
 
     Returns:
         List[ubelt.Path]: Multiple paths that match the query
@@ -161,8 +166,19 @@ def coerce_patterned_paths(data, expected_extension=None):
             globpats = [join(data_, '*' + e) for e in exts]
         else:
             globpats = [data_]
+
         for globpat in globpats:
-            paths.extend(list(glob.glob(os.fspath(globpat), recursive=True)))
+            # If the input has glob wildcards allow zero outputs
+            globpat = os.fspath(globpat)
+            globresults = list(glob.glob(globpat, recursive=True))
+            if len(globresults) == 0:
+                wildcard_hack = globfallback
+                if wildcard_hack:
+                    # But if there are no wildcards then return the path-asis
+                    if '*' not in globpat and '?' not in globpat:
+                        paths.append(globpat)
+            else:
+                paths.extend(globresults)
     paths = [ub.Path(p) for p in paths]
     return paths
 

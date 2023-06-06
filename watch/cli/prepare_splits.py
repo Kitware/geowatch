@@ -54,7 +54,7 @@ class PrepareSplitsConfig(scfg.DataConfig):
         'with_textual': scfg.Value('auto', help='setting for cmd-queue monitoring'),
         'other_session_handler': scfg.Value('ask', help='for tmux backend only. How to handle conflicting sessions. Can be ask, kill, or ignore, or auto'),
 
-        'constructive_mode': scfg.Value(False, help='if True use the new constructive mode'),
+        'constructive_mode': scfg.Value(True, help='if True use the new constructive mode'),
 
         'verbose': scfg.Value(1, help=''),
         'workers': scfg.Value(2, help='', alias=['tmux_workers']),
