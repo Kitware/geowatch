@@ -9,14 +9,14 @@ NOTE: PyTorch models with hyperparameters are typically are saved as `.pt`
 files whereas models files only containing weights are typically saved as 
 `.ckpt` files.
 
-NOTE: Check out [https://gitlab.kitware.com/smart/watch/-/blob/main/docs/environment/getting_started_dvc.rst](`docs/environment/getting_started_dvc.rst`) for more information
+NOTE: Check out `docs/environment/getting_started_dvc.rst <https://gitlab.kitware.com/smart/watch/-/blob/main/docs/environment/getting_started_dvc.rst>`_ for more information
 regarding how DVC works.
 
 
 Assumptions:
 ------------
 
-* The [https://gitlab.kitware.com/smart/smart_expt_dvc](smart_expt_dvc) has been locally cloned.
+* The `smart_expt_dvc <https://gitlab.kitware.com/smart/smart_expt_dvc>`_ has been locally cloned.
 
 * You have copied your model and associated files to the `smart_expt_dvc` repository.
 
