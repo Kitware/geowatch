@@ -24,27 +24,27 @@ Assumptions:
 Steps to sharing your model:
 ----------------------------
 
-1. Create a new branch for your model. For example, `<feature_name>_MM_DD_YYYY`. Using `git switch -c <feature_name>_MM_DD_YYYY` will create a new branch and switch to it.
+1. Create a new branch for your model. For example, ``<feature_name>_MM_DD_YYYY``. Using ``git switch -c <feature_name>_MM_DD_YYYY`` will create a new branch and switch to it.
 
-2. Track model and associated files using `dvc add <file>`. This will create a `<file>.dvc` file and move the `<file>` to the DVC cache.
+2. Track model and associated files using ``dvc add <file>``. This will create a ``<file>.dvc`` file and move the ``<file>`` to the DVC cache.
 
-3. Track the newly created `<file>.dvc` file(s) using `git add <file>.dvc`.
+3. Track the newly created ``<file>.dvc`` file(s) using ``git add <file>.dvc``.
 
-4. Commit the changes using `git commit -m "<commit messaage>"`. E.g. `git commit -m "Add <model_name> model and associated files."`.
+4. Commit the changes using ``git commit -m "<commit messaage>"``. E.g. ``git commit -m "Add <model_name> model and associated files."``.
 
-5. Push the changes to the remote repository using `git push`. E.g. `git push -u origin <feature_name>_MM_DD_YYYY`.
+5. Push the changes to the remote repository using ``git push``. E.g. ``git push -u origin <feature_name>_MM_DD_YYYY``.
 
-6. Create a merge request to merge your branch into the `main` branch.
+6. Create a merge request to merge your branch into the ``main`` branch.
 
 
 Whats going on behind the scenes:
 ---------------------------------
 When you begin tracking files via DVC (step 2), your local DVC cache has a reference to that file. 
-You can `dvc push <file> -r <remote>` to upload the file itself to a remote. However, at this point
+You can ``dvc push <file> -r <remote>`` to upload the file itself to a remote. However, at this point
 other people have no way of getting access to the file you just uploaded. You need to provide them
-with the small `<file>.dvc`, which is what they will use to query the DVC remote for that actual file.
-With our current default config that will automatically `git add <file>.dvc` for you, but if you 
-didn't set that up, then you would need to do that. Then you git commit to add the small `<file>.dvc`
-to the git repo, and git push so other people can git pull and get that small `.dvc` file. Now that 
-other people have the `.dvc` file, they have enough information to retreive the actual data. They 
-`dvc pull <file>.dvc` to do this. 
+with the small ``<file>.dvc``, which is what they will use to query the DVC remote for that actual file.
+With our current default config that will automatically ``git add <file>.dvc`` for you, but if you 
+didn't set that up, then you would need to do that. Then you git commit to add the small ``<file>.dvc``
+to the git repo, and git push so other people can git pull and get that small ``.dvc`` file. Now that 
+other people have the ``.dvc`` file, they have enough information to retreive the actual data. They 
+``dvc pull <file>.dvc`` to do this. 
