@@ -61,6 +61,7 @@ CommandLine:
         --expt_dvc_dpath="$DVC_EXPT_DPATH" \
         --with_materials=1 \
         --skip_existing=1 --run=1 \
+        --assets_dname=teamfeats
         --gres=0, --tmux_workers=1 --backend=tmux --run=1
 """
 import torch
@@ -218,7 +219,7 @@ def make_material_predictions(eval_loader,
     if generate_mtm:
         mtm_stitcher = CocoStitchingManager(
             output_coco_dset,
-            short_code=f'mtm_{hash_name}',
+            short_code=f'materials/mtm_{hash_name}',
             chan_code='mtm',
             stiching_space='video',
             writer_queue=writer_queue,
@@ -229,7 +230,7 @@ def make_material_predictions(eval_loader,
         mtm_stitcher = None
     mat_pred_stitcher = CocoStitchingManager(
         output_coco_dset,
-        short_code=f'materials_{hash_name}',
+        short_code=f'materials/materials_{hash_name}',
         chan_code='materials.0:9',
         stiching_space='video',
         writer_queue=writer_queue,
@@ -239,7 +240,7 @@ def make_material_predictions(eval_loader,
 
     mat_feat_stitcher = CocoStitchingManager(
         output_coco_dset,
-        short_code=f'mat_feats_{hash_name}',
+        short_code=f'materials/mat_feats_{hash_name}',
         chan_code=f'mat_feats.0:{n_feature_dims}',
         stiching_space='video',
         writer_queue=writer_queue,
