@@ -8,6 +8,21 @@ Ignore:
         --src_kwcocos "$DVC_DATA_DPATH/Aligned-Drop7/*/*cold.kwcoco.zip" \
         --dst_kwcocos "$DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/*_I2LS.kwcoco.zip" \
         --run=1
+
+
+    geowatch stats combo_imganns-KR_R001_I2LSC.kwcoco.zip
+
+    geowatch visualize \
+        combo_imganns-KR_R001_I2LSC.kwcoco.zip \
+        --smart=True \
+        --channels="(red|green|blue,pan,red_COLD_a1|green_COLD_a1|blue_COLD_a1,red_COLD_cv|green_COLD_cv|blue_COLD_cv,red_COLD_rmse|green_COLD_rmse|blue_COLD_rmse,sam.0:3,landcover_hidden.0:3,invariants.0:3)"
+
+    DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
+    python -m watch.cli.prepare_splits \
+        --base_fpath=$DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns*_I2LSC*.kwcoco.zip \
+        --suffix=I2LSC \
+        --backend=tmux --tmux_workers=6 \
+        --run=1
 """
 #!/usr/bin/env python3
 import scriptconfig as scfg

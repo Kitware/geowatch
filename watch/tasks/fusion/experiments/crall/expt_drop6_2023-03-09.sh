@@ -3322,3 +3322,503 @@ torch_globals:
 initializer:
     init: $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
 "
+
+
+
+
+
+
+#/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-MedianNoWinter10GSD/runs/Drop7-MedianNoWinter10GSD_landcover_invar_cold_split6_V60/lightning_logs/
+
+
+
+# On toothbrush (split6 with COLD+Invariants+landcover)
+export CUDA_VISIBLE_DEVICES=1
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
+echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop7-MedianNoWinter10GSD
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_I2LSC_split6.kwcoco.zip
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_I2LSC_split6.kwcoco.zip
+CHANNELS="(L8,S2):(blue|green|red|nir),(WV):(blue|green|red),(WV,WV1):pan,(S2):(water|forest|field|impervious|barren|landcover_hidden.0:32,invariants:16),(L8):(blue_COLD_cv|green_COLD_cv|red_COLD_cv|nir_COLD_cv|swir16_COLD_cv|swir22_COLD_cv|blue_COLD_a0|green_COLD_a0|red_COLD_a0|nir_COLD_a0|swir16_COLD_a0|swir22_COLD_a0|blue_COLD_a1|green_COLD_a1|red_COLD_a1|nir_COLD_a1|swir16_COLD_a1|swir22_COLD_a1|blue_COLD_b1|green_COLD_b1|red_COLD_b1|nir_COLD_b1|swir16_COLD_b1|swir22_COLD_b1|blue_COLD_c1|green_COLD_c1|red_COLD_c1|nir_COLD_c1|swir16_COLD_c1|swir22_COLD_c1|blue_COLD_rmse|green_COLD_rmse|red_COLD_rmse|nir_COLD_rmse|swir16_COLD_rmse|swir22_COLD_rmse)"
+EXPERIMENT_NAME=Drop7-MedianNoWinter10GSD_landcover_invar_cold_split6_V60
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+TARGET_LR=3e-4
+WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
+echo "WEIGHT_DECAY = $WEIGHT_DECAY"
+MAX_STEPS=80000
+WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+data:
+    select_videos          : $SELECT_VIDEOS
+    num_workers            : 5
+    train_dataset          : $TRAIN_FPATH
+    vali_dataset           : $VALI_FPATH
+    window_dims            : '196,196'
+    time_steps             : 11
+    time_sampling          : uniform-soft5-soft4-contiguous
+    time_kernel            : '(-3y,-2.5y,-2y,-1.5y,-1y,0,1y,1.5y,2y,2.5y,3y)'
+    window_resolution     : 10.0GSD
+    input_resolution      : 10.0GSD
+    output_resolution     : 10.0GSD
+    neg_to_pos_ratio       : 1.0
+    batch_size             : 2
+    normalize_perframe     : false
+    normalize_peritem      : 'blue|green|red|nir|pan'
+    max_epoch_length       : 1000000
+    channels               : '$CHANNELS'
+    min_spacetime_weight   : 0.6
+    temporal_dropout       : 0.5
+    mask_low_quality       : False
+    mask_samecolor_method  : None
+    observable_threshold   : 0.0
+    quality_threshold      : 0.0
+    weight_dilate          : 10
+    use_centered_positives : True
+    use_grid_positives     : True
+    use_grid_negatives     : 'cleared'
+    normalize_inputs       : 1024
+    balance_areas          : True
+model:
+    class_path: MultimodalTransformer
+    init_args:
+        #saliency_weights       : '1:1'
+        #class_weights          : auto
+        tokenizer              : linconv
+        arch_name              : smt_it_stm_p16
+        decoder                : mlp
+        positive_change_weight : 1
+        negative_change_weight : 0.01
+        stream_channels        : 16
+        class_loss             : 'dicefocal'
+        saliency_loss          : 'focal'
+        saliency_head_hidden   : 6
+        change_head_hidden     : 6
+        class_head_hidden      : 6
+        global_change_weight   : 0.00
+        global_class_weight    : 0.50
+        global_saliency_weight : 1.00
+        multimodal_reduce      : learned_linear
+optimizer:
+    class_path: torch.optim.AdamW
+    init_args:
+        lr           : $TARGET_LR
+        weight_decay : $WEIGHT_DECAY
+lr_scheduler:
+  class_path: torch.optim.lr_scheduler.OneCycleLR
+  init_args:
+    max_lr: $TARGET_LR
+    total_steps: $MAX_STEPS
+    anneal_strategy: cos
+    pct_start: 0.05
+trainer:
+    accumulate_grad_batches: 48
+    default_root_dir     : $DEFAULT_ROOT_DIR
+    accelerator          : gpu
+    devices              : 0,
+    limit_val_batches    : 256
+    limit_train_batches  : 2048
+    num_sanity_val_steps : 0
+    max_epochs           : 360
+
+torch_globals:
+    float32_matmul_precision: auto
+
+initializer:
+    init: $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
+"
+
+
+# On namek - no teamfeat
+export CUDA_VISIBLE_DEVICES=1
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
+echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop7-MedianNoWinter10GSD
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_I2LSC_split6.kwcoco.zip
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_I2LSC_split6.kwcoco.zip
+CHANNELS="(L8,S2):(blue|green|red|nir),(WV):(blue|green|red),(WV,WV1):pan"
+EXPERIMENT_NAME=Drop7-MedianNoWinter10GSD_bgr_split6_V61
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+TARGET_LR=3e-4
+WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
+echo "WEIGHT_DECAY = $WEIGHT_DECAY"
+MAX_STEPS=80000
+WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+data:
+    select_videos          : $SELECT_VIDEOS
+    num_workers            : 5
+    train_dataset          : $TRAIN_FPATH
+    vali_dataset           : $VALI_FPATH
+    window_dims            : '196,196'
+    time_steps             : 11
+    time_sampling          : uniform-soft5-soft4-contiguous
+    time_kernel            : '(-3y,-2.5y,-2y,-1.5y,-1y,0,1y,1.5y,2y,2.5y,3y)'
+    window_resolution     : 10.0GSD
+    input_resolution      : 10.0GSD
+    output_resolution     : 10.0GSD
+    neg_to_pos_ratio       : 1.0
+    batch_size             : 2
+    normalize_perframe     : false
+    normalize_peritem      : 'blue|green|red|nir|pan'
+    max_epoch_length       : 1000000
+    channels               : '$CHANNELS'
+    min_spacetime_weight   : 0.6
+    temporal_dropout       : 0.5
+    mask_low_quality       : False
+    mask_samecolor_method  : None
+    observable_threshold   : 0.0
+    quality_threshold      : 0.0
+    weight_dilate          : 10
+    use_centered_positives : True
+    use_grid_positives     : True
+    use_grid_negatives     : 'cleared'
+    normalize_inputs       : 1024
+    balance_areas          : True
+model:
+    class_path: MultimodalTransformer
+    init_args:
+        #saliency_weights       : '1:1'
+        #class_weights          : auto
+        tokenizer              : linconv
+        arch_name              : smt_it_stm_p16
+        decoder                : mlp
+        positive_change_weight : 1
+        negative_change_weight : 0.01
+        stream_channels        : 16
+        class_loss             : 'dicefocal'
+        saliency_loss          : 'focal'
+        saliency_head_hidden   : 6
+        change_head_hidden     : 6
+        class_head_hidden      : 6
+        global_change_weight   : 0.00
+        global_class_weight    : 0.50
+        global_saliency_weight : 1.00
+        multimodal_reduce      : learned_linear
+optimizer:
+    class_path: torch.optim.AdamW
+    init_args:
+        lr           : $TARGET_LR
+        weight_decay : $WEIGHT_DECAY
+lr_scheduler:
+  class_path: torch.optim.lr_scheduler.OneCycleLR
+  init_args:
+    max_lr: $TARGET_LR
+    total_steps: $MAX_STEPS
+    anneal_strategy: cos
+    pct_start: 0.05
+trainer:
+    accumulate_grad_batches: 48
+    default_root_dir     : $DEFAULT_ROOT_DIR
+    accelerator          : gpu
+    devices              : 0,
+    limit_val_batches    : 256
+    limit_train_batches  : 2048
+    num_sanity_val_steps : 0
+    max_epochs           : 360
+
+torch_globals:
+    float32_matmul_precision: auto
+
+initializer:
+    init: $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
+"
+
+
+# On yardrat - COLD-only
+export CUDA_VISIBLE_DEVICES=1
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
+echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop7-MedianNoWinter10GSD
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_I2LSC_split6.kwcoco.zip
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_I2LSC_split6.kwcoco.zip
+CHANNELS="(L8,S2):(blue|green|red|nir),(WV):(blue|green|red),(WV,WV1):pan,(L8):(blue_COLD_cv|green_COLD_cv|red_COLD_cv|nir_COLD_cv|swir16_COLD_cv|swir22_COLD_cv|blue_COLD_a0|green_COLD_a0|red_COLD_a0|nir_COLD_a0|swir16_COLD_a0|swir22_COLD_a0|blue_COLD_a1|green_COLD_a1|red_COLD_a1|nir_COLD_a1|swir16_COLD_a1|swir22_COLD_a1|blue_COLD_b1|green_COLD_b1|red_COLD_b1|nir_COLD_b1|swir16_COLD_b1|swir22_COLD_b1|blue_COLD_c1|green_COLD_c1|red_COLD_c1|nir_COLD_c1|swir16_COLD_c1|swir22_COLD_c1|blue_COLD_rmse|green_COLD_rmse|red_COLD_rmse|nir_COLD_rmse|swir16_COLD_rmse|swir22_COLD_rmse)"
+EXPERIMENT_NAME=Drop7-MedianNoWinter10GSD_bgr_cold_split6_V62
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+TARGET_LR=3e-4
+WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
+echo "WEIGHT_DECAY = $WEIGHT_DECAY"
+MAX_STEPS=80000
+WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+data:
+    select_videos          : $SELECT_VIDEOS
+    num_workers            : 5
+    train_dataset          : $TRAIN_FPATH
+    vali_dataset           : $VALI_FPATH
+    window_dims            : '196,196'
+    time_steps             : 11
+    time_sampling          : uniform-soft5-soft4-contiguous
+    time_kernel            : '(-3y,-2.5y,-2y,-1.5y,-1y,0,1y,1.5y,2y,2.5y,3y)'
+    window_resolution     : 10.0GSD
+    input_resolution      : 10.0GSD
+    output_resolution     : 10.0GSD
+    neg_to_pos_ratio       : 1.0
+    batch_size             : 2
+    normalize_perframe     : false
+    normalize_peritem      : 'blue|green|red|nir|pan'
+    max_epoch_length       : 1000000
+    channels               : '$CHANNELS'
+    min_spacetime_weight   : 0.6
+    temporal_dropout       : 0.5
+    mask_low_quality       : False
+    mask_samecolor_method  : None
+    observable_threshold   : 0.0
+    quality_threshold      : 0.0
+    weight_dilate          : 10
+    use_centered_positives : True
+    use_grid_positives     : True
+    use_grid_negatives     : 'cleared'
+    normalize_inputs       : 1024
+    balance_areas          : True
+model:
+    class_path: MultimodalTransformer
+    init_args:
+        #saliency_weights       : '1:1'
+        #class_weights          : auto
+        tokenizer              : linconv
+        arch_name              : smt_it_stm_p16
+        decoder                : mlp
+        positive_change_weight : 1
+        negative_change_weight : 0.01
+        stream_channels        : 16
+        class_loss             : 'dicefocal'
+        saliency_loss          : 'focal'
+        saliency_head_hidden   : 6
+        change_head_hidden     : 6
+        class_head_hidden      : 6
+        global_change_weight   : 0.00
+        global_class_weight    : 0.50
+        global_saliency_weight : 1.00
+        multimodal_reduce      : learned_linear
+optimizer:
+    class_path: torch.optim.AdamW
+    init_args:
+        lr           : $TARGET_LR
+        weight_decay : $WEIGHT_DECAY
+lr_scheduler:
+  class_path: torch.optim.lr_scheduler.OneCycleLR
+  init_args:
+    max_lr: $TARGET_LR
+    total_steps: $MAX_STEPS
+    anneal_strategy: cos
+    pct_start: 0.05
+trainer:
+    accumulate_grad_batches: 48
+    default_root_dir     : $DEFAULT_ROOT_DIR
+    accelerator          : gpu
+    devices              : 0,
+    limit_val_batches    : 256
+    limit_train_batches  : 2048
+    num_sanity_val_steps : 0
+    max_epochs           : 360
+
+torch_globals:
+    float32_matmul_precision: auto
+
+initializer:
+    init: $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
+"
+
+
+# On ooo - no teamfeat
+export CUDA_VISIBLE_DEVICES=1
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
+echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop7-MedianNoWinter10GSD
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_I2LSC_split6.kwcoco.zip
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_I2LSC_split6.kwcoco.zip
+CHANNELS="(L8,S2):(blue|green|red|nir),(WV):(blue|green|red),(WV,WV1):pan"
+EXPERIMENT_NAME=Drop7-MedianNoWinter10GSD_bgr_split6_V63
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+TARGET_LR=3e-4
+WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
+echo "WEIGHT_DECAY = $WEIGHT_DECAY"
+MAX_STEPS=80000
+WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+data:
+    select_videos          : $SELECT_VIDEOS
+    num_workers            : 5
+    train_dataset          : $TRAIN_FPATH
+    vali_dataset           : $VALI_FPATH
+    window_dims            : '196,196'
+    time_steps             : 11
+    time_sampling          : uniform-soft5-soft4-contiguous
+    time_kernel            : '(-3y,-2.5y,-2y,-1.5y,-1y,0,1y,1.5y,2y,2.5y,3y)'
+    window_resolution     : 10.0GSD
+    input_resolution      : 10.0GSD
+    output_resolution     : 10.0GSD
+    neg_to_pos_ratio       : 1.0
+    batch_size             : 2
+    normalize_perframe     : false
+    normalize_peritem      : 'blue|green|red|nir|pan'
+    max_epoch_length       : 1000000
+    channels               : '$CHANNELS'
+    min_spacetime_weight   : 0.6
+    temporal_dropout       : 0.5
+    mask_low_quality       : False
+    mask_samecolor_method  : None
+    observable_threshold   : 0.0
+    quality_threshold      : 0.0
+    weight_dilate          : 10
+    use_centered_positives : True
+    use_grid_positives     : True
+    use_grid_negatives     : 'cleared'
+    normalize_inputs       : 1024
+    balance_areas          : True
+model:
+    class_path: MultimodalTransformer
+    init_args:
+        #saliency_weights       : '1:1'
+        #class_weights          : auto
+        tokenizer              : linconv
+        arch_name              : smt_it_stm_p16
+        decoder                : mlp
+        positive_change_weight : 1
+        negative_change_weight : 0.01
+        stream_channels        : 16
+        class_loss             : 'dicefocal'
+        saliency_loss          : 'focal'
+        saliency_head_hidden   : 6
+        change_head_hidden     : 6
+        class_head_hidden      : 6
+        global_change_weight   : 0.00
+        global_class_weight    : 0.50
+        global_saliency_weight : 1.00
+        multimodal_reduce      : learned_linear
+optimizer:
+    class_path: torch.optim.AdamW
+    init_args:
+        lr           : $TARGET_LR
+        weight_decay : $WEIGHT_DECAY
+lr_scheduler:
+  class_path: torch.optim.lr_scheduler.OneCycleLR
+  init_args:
+    max_lr: $TARGET_LR
+    total_steps: $MAX_STEPS
+    anneal_strategy: cos
+    pct_start: 0.05
+trainer:
+    accumulate_grad_batches: 48
+    default_root_dir     : $DEFAULT_ROOT_DIR
+    accelerator          : gpu
+    devices              : 0,
+    limit_val_batches    : 256
+    limit_train_batches  : 2048
+    num_sanity_val_steps : 0
+    max_epochs           : 360
+
+torch_globals:
+    float32_matmul_precision: auto
+
+initializer:
+    init: $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
+"
+
+
+
+
+# On toothbrush scratch (split6 with COLD+Invariants+landcover)
+export CUDA_VISIBLE_DEVICES=1
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
+echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop7-MedianNoWinter10GSD
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_I2LSC_split6.kwcoco.zip
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_I2LSC_split6.kwcoco.zip
+CHANNELS="(L8,S2):(blue|green|red|nir),(WV):(blue|green|red),(WV,WV1):pan,(S2):(water|forest|field|impervious|barren|landcover_hidden.0:32,invariants:16),(L8):(blue_COLD_cv|green_COLD_cv|red_COLD_cv|nir_COLD_cv|swir16_COLD_cv|swir22_COLD_cv|blue_COLD_a0|green_COLD_a0|red_COLD_a0|nir_COLD_a0|swir16_COLD_a0|swir22_COLD_a0|blue_COLD_a1|green_COLD_a1|red_COLD_a1|nir_COLD_a1|swir16_COLD_a1|swir22_COLD_a1|blue_COLD_b1|green_COLD_b1|red_COLD_b1|nir_COLD_b1|swir16_COLD_b1|swir22_COLD_b1|blue_COLD_c1|green_COLD_c1|red_COLD_c1|nir_COLD_c1|swir16_COLD_c1|swir22_COLD_c1|blue_COLD_rmse|green_COLD_rmse|red_COLD_rmse|nir_COLD_rmse|swir16_COLD_rmse|swir22_COLD_rmse),(L8,S2,WV,WV1):(sam.0:64)"
+EXPERIMENT_NAME=Drop7-MedianNoWinter10GSD_landcover_invar_cold_sam_scratch_split6_V60
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+TARGET_LR=3e-4
+WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
+echo "WEIGHT_DECAY = $WEIGHT_DECAY"
+MAX_STEPS=80000
+WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+data:
+    select_videos          : $SELECT_VIDEOS
+    num_workers            : 5
+    train_dataset          : $TRAIN_FPATH
+    vali_dataset           : $VALI_FPATH
+    window_dims            : '164,164'
+    time_steps             : 11
+    time_sampling          : uniform-soft5-soft4-contiguous
+    time_kernel            : '(-3y,-2.5y,-2y,-1.5y,-1y,0,1y,1.5y,2y,2.5y,3y)'
+    window_resolution     : 10.0GSD
+    input_resolution      : 10.0GSD
+    output_resolution     : 10.0GSD
+    neg_to_pos_ratio       : 1.0
+    batch_size             : 2
+    normalize_perframe     : false
+    normalize_peritem      : 'blue|green|red|nir|pan'
+    max_epoch_length       : 1000000
+    channels               : '$CHANNELS'
+    min_spacetime_weight   : 0.6
+    temporal_dropout       : 0.5
+    mask_low_quality       : False
+    mask_samecolor_method  : None
+    observable_threshold   : 0.0
+    quality_threshold      : 0.0
+    weight_dilate          : 10
+    use_centered_positives : True
+    use_grid_positives     : True
+    use_grid_negatives     : 'cleared'
+    normalize_inputs       : 1024
+    balance_areas          : True
+model:
+    class_path: MultimodalTransformer
+    init_args:
+        #saliency_weights       : '1:1'
+        #class_weights          : auto
+        tokenizer              : linconv
+        arch_name              : smt_it_stm_p16
+        decoder                : mlp
+        positive_change_weight : 1
+        negative_change_weight : 0.01
+        stream_channels        : 16
+        class_loss             : 'dicefocal'
+        saliency_loss          : 'focal'
+        saliency_head_hidden   : 6
+        change_head_hidden     : 6
+        class_head_hidden      : 6
+        global_change_weight   : 0.00
+        global_class_weight    : 0.50
+        global_saliency_weight : 1.00
+        multimodal_reduce      : learned_linear
+optimizer:
+    class_path: torch.optim.AdamW
+    init_args:
+        lr           : $TARGET_LR
+        weight_decay : $WEIGHT_DECAY
+lr_scheduler:
+  class_path: torch.optim.lr_scheduler.OneCycleLR
+  init_args:
+    max_lr: $TARGET_LR
+    total_steps: $MAX_STEPS
+    anneal_strategy: cos
+    pct_start: 0.05
+trainer:
+    accumulate_grad_batches: 48
+    default_root_dir     : $DEFAULT_ROOT_DIR
+    accelerator          : gpu
+    devices              : 0,
+    limit_val_batches    : 256
+    limit_train_batches  : 2048
+    num_sanity_val_steps : 0
+    max_epochs           : 360
+
+torch_globals:
+    float32_matmul_precision: auto
+
+initializer:
+    init: noop
+" --ckpt_path /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-MedianNoWinter10GSD/runs/Drop7-MedianNoWinter10GSD_landcover_invar_cold_sam_scratch_split6_V60/lightning_logs/version_2/checkpoints/epoch=148-step=6407.ckpt

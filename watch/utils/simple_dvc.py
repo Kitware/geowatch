@@ -1,9 +1,6 @@
+#!/usr/bin/env python3
 """
 A simplified Python DVC API
-
-TODO:
-    - [ ] Replace "jobs" with "workers" to keep variables consistent across the
-          project? Or keep "jobs" because that's what DVC uses?
 """
 import ubelt as ub
 import os
@@ -130,7 +127,7 @@ class SimpleDVC(ub.NiceRepr):
         if not has_autostage:
             raise NotImplementedError('Need autostage to complete the git commit')
 
-    def remove(self, path, verbose=0):
+    def pathsremove(self, path, verbose=0):
         """
         Args:
             path (str | PathLike | Iterable[str | PathLike]):
@@ -332,8 +329,6 @@ class SimpleDVC(ub.NiceRepr):
             if tracker_fpath is not None:
                 raise NotImplementedError
 
-    # @classmethod
-    # def find_dvc_tracking_fpath(cls, path):
     @classmethod
     def find_file_tracker(cls, path):
         assert not path.name.endswith('.dvc')
@@ -399,3 +394,52 @@ class SimpleDVC(ub.NiceRepr):
 
 def _ensure_iterable(inputs):
     return inputs if ub.iterable(inputs) else [inputs]
+
+
+####
+# SimpleDVC CLI Stuff (should move to a new file)
+import scriptconfig as scfg  # NOQA
+
+
+class SimpleDVC_CLI(scfg.ModalCLI):
+    """
+    A DVC CLI That uses our simplified (and more permissive) interface
+    """
+
+    class Add(scfg.DataConfig):
+        """
+        SubCLI for adding data to DVC
+        """
+        __command__ = 'add'
+
+        paths = scfg.Value([], nargs='+', position=1, help='Input files / directories to add')
+
+        @classmethod
+        def main(cls, cmdline=1, **kwargs):
+            config = cls.cli(cmdline=cmdline, data=kwargs, strict=True)
+            dvc = SimpleDVC()
+            dvc.add(config.paths)
+
+    class Request(scfg.DataConfig):
+        """
+        SubCLI for pulling data from DVC
+        """
+        __command__ = 'request'
+
+        paths = scfg.Value([], nargs='+', position=1, help='Data to attempt to pull')
+        remote = scfg.Value(None, short_alias=['r'], help='remote to pull from if needed')
+
+        @classmethod
+        def main(cls, cmdline=1, **kwargs):
+            config = cls.cli(cmdline=cmdline, data=kwargs, strict=True)
+            dvc = SimpleDVC()
+            dvc.request(config.paths)
+
+
+if __name__ == '__main__':
+    """
+
+    CommandLine:
+        python -m watch.utils.simple_dvc request --help
+    """
+    SimpleDVC_CLI.main()

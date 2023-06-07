@@ -139,7 +139,7 @@ lxml>=4.2.4     ; python_version < '3.8'  and python_version >= '3.7'     # Pyth
 
 tempenv>=0.2.0
 pystac_client>=0.5.1
-scriptconfig>=0.7.8
+scriptconfig>=0.7.9
 pygtrie>=2.3.3
 # protobuf>=3.15.8
 networkx>=2.8.0
@@ -154,7 +154,7 @@ lark_cython >= 0.0.12
 
 # Imaging
 distinctipy>=1.2.1
-kwimage>=0.9.18
+kwimage>=0.9.19
 kwcoco>=0.6.2
 delayed_image>=0.2.7
 albumentations==1.0.0  # pinned for invariants model

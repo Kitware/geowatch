@@ -11,7 +11,12 @@ effort to test that all core components of the system are working.
 
 This walks through the entire process of fit -> predict -> evaluate to
 train a fusion model on RGB data.
+
+RunMe:
+    export ACCELERATOR=gpu
+    source ~/code/watch/tutorial/tutorial1_rgb_network.sh
 """
+export ACCELERATOR="${ACCELERATOR:-cpu}"
 
 
 # For those windows folks:
@@ -176,8 +181,9 @@ optimizer:
     weight_decay: $WEIGHT_DECAY
 trainer:
   default_root_dir     : $DEFAULT_ROOT_DIR
-  accelerator          : cpu
+  accelerator          : $ACCELERATOR
   devices              : 1
+  #devices              : 0,
   max_steps: $MAX_STEPS
   num_sanity_val_steps: 0
   limit_val_batches    : 2
@@ -344,3 +350,19 @@ The next tutorial lives in tutorial2_msi_network.sh and will use a different
 variant of kwcoco generated data that more closely matches the watch problem by
 simulating different sensors with different channels.
 '
+
+
+LAST_TRAIN_DIR=$(python -c "
+import pathlib
+logs_dpath = pathlib.Path('$DEFAULT_ROOT_DIR/lightning_logs')
+print(sorted(logs_dpath.glob('*/monitor/train'))[-1])
+")
+echo "LAST_TRAIN_DIR = $LAST_TRAIN_DIR"
+
+
+python -c "if 1:
+    import rich
+    rich.print('''Training    : [link=$LAST_TRAIN_DIR]'$LAST_TRAIN_DIR'[/link]''')
+    rich.print('''Predictions : [link=$DEFAULT_ROOT_DIR]'$DEFAULT_ROOT_DIR/predictions'[/link]''')
+    rich.print('''Evaluation  : [link=$DEFAULT_ROOT_DIR/predictions/eval]'$DEFAULT_ROOT_DIR/predictions/eval'[/link]''')
+"

@@ -3,29 +3,35 @@ Basline Example:
 
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
     DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+    MAE_MODEL_FPATH="$DVC_EXPT_DPATH/models/wu/wu_mae_2023_04_21/Drop6-epoch=01-val_loss=0.20.ckpt"
+    KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD
 
-    python -m watch.tasks.mae.predict \
+    python -m watch.utils.simple_dvc request "$MAE_MODEL_FPATH"
+
+    # NOTE: different predict files correspond to different models
+    # TODO: make the model size a parameter (or better yet inferred)
+
+    python -m watch.tasks.mae.predictV3 \
         --device="cuda:0"\
-        --mae_ckpt_path="/storage1/fs1/jacobsn/Active/user_s.sastry/smart_watch/new_models/checkpoints/Drop6-epoch=01-val_loss=0.20.ckpt"\
-        --input_kwcoco="$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/data_train_I2L_split6.kwcoco.zip"\
-        --output_kwcoco="$DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/mae_v1_train_split6.kwcoco.zip"\
+        --mae_ckpt_path="$MAE_MODEL_FPATH"\
+        --input_kwcoco="$KWCOCO_BUNDLE_DPATH/imganns-KR_R001.kwcoco.zip"\
+        --output_kwcoco="$KWCOCO_BUNDLE_DPATH/imganns-KR_R001-testmae.kwcoco.zip"\
         --window_space_scale=1.0 \
         --workers=8 \
         --io_workers=8
 
     # After your model predicts the outputs, you should be able to use the
     # smartwatch visualize tool to inspect your features.
-    python -m watch visualize $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/mae_v1_train_split6.kwcoco.zip \
+    python -m watch visualize "$KWCOCO_BUNDLE_DPATH/imganns-KR_R001-testmae.kwcoco.zip" \
         --channels "red|green|blue,mae.8:11,mae.14:17" --stack=only --workers=avail --animate=True \
         --draw_anns=False
 
 """
 import ubelt as ub
-from watch.utils import util_kwimage  # NOQA
-from watch.utils import util_parallel
 import scriptconfig as scfg
 import albumentations as A
 import kwcoco
+import kwimage
 import ndsampler
 import sys
 import torch
@@ -36,6 +42,7 @@ from torch.utils.data import DataLoader, Dataset
 from einops import rearrange
 from einops.layers.torch import Rearrange
 import numpy as np
+from watch.utils import util_parallel
 from watch.tasks.fusion.predict import CocoStitchingManager
 
 
@@ -184,7 +191,7 @@ class WatchDataset(Dataset):
         else:
             images = torch.tensor(images).permute(0, 3, 1, 2)
 
-        vidspace_box = util_kwimage.Box.from_slice(tr['space_slice'])
+        vidspace_box = kwimage.Box.from_slice(tr['space_slice'])
 
         scale_outspace_from_vidspace = tr['scale'] / 4  # Add it back
         outspace_box = vidspace_box.scale(scale_outspace_from_vidspace).quantize().astype(np.int32)
@@ -193,7 +200,7 @@ class WatchDataset(Dataset):
         img_obj1 : dict = self.coco_dset.index.imgs[im1_id]
         video_obj = self.coco_dset.index.videos[img_obj1['video_id']]
 
-        full_stitch_vidspace_box = util_kwimage.Box.coerce([0, 0, video_obj['width'], video_obj['height']], format='xywh')
+        full_stitch_vidspace_box = kwimage.Box.coerce([0, 0, video_obj['width'], video_obj['height']], format='xywh')
         full_stitch_outspace_box = full_stitch_vidspace_box.scale(scale_outspace_from_vidspace).quantize().astype(np.int32)
 
         item['full_stitch_outspace_ltrb'] = torch.from_numpy(full_stitch_outspace_box.data)
@@ -569,8 +576,8 @@ class Predict():
 
                 gid1, gid2, gid3, gid4 = target['gids']
 
-                sample_outspace_ltrb = util_kwimage.Box.coerce(item['sample_outspace_ltrb'].numpy(), format='ltrb')
-                full_stitch_outspace_box = util_kwimage.Box.coerce(item['full_stitch_outspace_ltrb'].numpy(), format='ltrb')
+                sample_outspace_ltrb = kwimage.Box.coerce(item['sample_outspace_ltrb'].numpy(), format='ltrb')
+                full_stitch_outspace_box = kwimage.Box.coerce(item['full_stitch_outspace_ltrb'].numpy(), format='ltrb')
                 scale_outspace_from_vid = item['scale_outspace_from_vid'].numpy()[0]
                 outspace_slice = sample_outspace_ltrb.to_slice()
                 outspace_dsize = full_stitch_outspace_box.dsize

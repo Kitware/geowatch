@@ -132,7 +132,6 @@ class InferenceDataset(Dataset):
 
         for vid in video_ids:
             video_image_ids = self.coco_dset.index.vidid_to_gids[vid]
-
             # Filter image ids by sensor.
             filtered_image_ids = []
             for image_id in video_image_ids:

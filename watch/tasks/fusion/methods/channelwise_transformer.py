@@ -97,7 +97,6 @@ except Exception:
 available_encoders = list(transformer.encoder_configs.keys()) + ['deit', "perceiver", 'vit']
 
 
-@scfg.dataconf
 class MultimodalTransformerConfig(scfg.DataConfig):
     """
     Arguments accepted by the MultimodalTransformer

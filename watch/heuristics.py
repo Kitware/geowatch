@@ -137,7 +137,10 @@ HUERISTIC_STATUS_DATA = [
         'status': 'positive_excluded',
         'color': 'gray',
         # This is positive, but is not "big" enough
-        'kwcoco_catname': 'ignore',
+        # Setting this to "positive" by default, because it is ignored at
+        # evaluation time.
+        # 'kwcoco_catname': 'ignore',
+        'kwcoco_catname': 'positive',
         'positive_match_confusion': 'gt_false_pos',
     },
     {
@@ -206,50 +209,6 @@ PHASE_STATUS_TO_KWCOCO_CATNAME = {
     row['name']: row['kwcoco_catname'] for row in HUERISTIC_STATUS_DATA
     if 'kwcoco_catname' in row
 }
-
-# TODO: delete if the above longform table works well.
-# "Positive Match Confusion" is the label the truth is given when it has some
-# match in our set of positive predictions.  Denote what type of confusion a
-# truth status incurs when it is matched.
-# PHASE_STATUS_TO_MATCHED_CONFUSION = {
-#     'seen'                      : 'gt_seen',
-#     'train'                     : 'gt_seen',
-
-#     'ignore'                    : 'gt_ignore',
-
-#     'negative'                  : 'gt_false_pos',
-#     'negative_unbounded'        : 'gt_false_pos',
-
-#     'positive_excluded'         : 'gt_false_pos',
-
-#     'positive_annotated'        : 'gt_true_pos',
-#     'positive_annotated_static' : 'gt_true_pos',
-#     'positive_partial'          : 'gt_true_pos',
-#     'positive_pending'          : 'gt_true_pos',
-
-#     'positive_unbounded'        : 'gt_positive_unbounded',
-
-# }
-
-# Mapping of annotation status to the kwcoco category name
-# Used in project annotations
-# PHASE_STATUS_TO_KWCOCO_CATNAME = {
-#     'seen'                     : None,
-#     'train'                    : None,
-
-#     'ignore'                    : 'ignore',
-
-#     'negative'                  : 'negative',
-#     'negative_unbounded'        : 'negative',
-
-#     'positive_annotated'        : None,  # This must have a category already do not map
-#     'positive_annotated_static' : None,  # This must have a category already do not map
-#     'positive_excluded'         : 'ignore',  # This is positive, but is not "big" enough
-#     'positive_partial'          : 'positive',  # Does not have phase labels
-#     'positive_pending'          : 'positive',  # Does not have phase labels
-
-#     'positive_unbounded'        : 'positive',  # Start or end date might not be defined
-# }
 
 IARPA_STATUS_TO_INFO = {row['status']: row for row in HUERISTIC_STATUS_DATA}
 

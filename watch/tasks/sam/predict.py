@@ -343,7 +343,11 @@ def main(cmdline=1, **kwargs):
         >>> dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> weights_fpath = dvc_expt_dpath / 'models/sam/sam_vit_h_4b8939.pth'
         >>> input_kwcoco = dvc_data_dpath / 'Drop6-MeanYear10GSD-V2/imgonly-KR_R001.kwcoco.zip'
-        >>> kwargs = dict(weights_fpath=weights_fpath, input_kwcoco=input_kwcoco, output_kwcoco=(dvc_data_dpath / 'Drop6-MeanYear10GSD-V2/_test.kwcoco.zip'))
+        >>> kwargs = dict(
+        >>>     weights_fpath=weights_fpath,
+        >>>     input_kwcoco=input_kwcoco,
+        >>>     output_kwcoco=(dvc_data_dpath / 'Drop6-MeanYear10GSD-V2/_test.kwcoco.zip')
+        >>> )
         >>> cmdline = 0
         >>> main(cmdline, **kwargs)
 

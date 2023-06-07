@@ -253,7 +253,7 @@ class ProcessContext:
         try:
             import pint
         except Exception as ex:
-            print('ex = {!r}'.format(ex))
+            print('Error stopping emissions tracker: ex = {!r}'.format(ex))
         else:
             reg = pint.UnitRegistry()
             if co2_kg is None:
@@ -267,6 +267,9 @@ class ProcessContext:
     def add_device_info(self, device):
         """
         Add information about a torch device that was used in this process.
+
+        Args:
+            device (torch.device): torch device to add info about
         """
         import torch
         try:
@@ -288,7 +291,7 @@ class ProcessContext:
             except Exception:
                 pass
         except Exception as ex:
-            print('ex = {!r}'.format(ex))
+            print('Error adding device info: ex = {!r}'.format(ex))
             device_info = str(ex)
         self.properties['device_info'] = device_info
 
