@@ -175,28 +175,19 @@ def download_region(input_region_path,
         raise NotImplementedError("Don't know how to pull down region file "
                                   "with URI scheme: '{}'".format(scheme))
 
+    from watch.geoannots import geomodels
+
+    region = geomodels.RegionModel.coerce(out_region_data)
+    region.fixup()
+
     if strip_nonregions:
-        out_region_data['features'] =\
-            [feature
-             for feature in out_region_data.get('features', ())
-             if ('properties' in feature
-                 and feature['properties'].get('type') == 'region')]
+        region.strip_body_features()
 
     if ensure_comments:
-        # Ensure the region feature has a "comments" field
-        for feature in out_region_data.get('features', ()):
-            props = feature['properties']
-            if props['type'] == 'region':
-                props['comments'] = props.get('comments', '')
-
-    # Remove 'validated' property from 'region' feature
-    for feature in out_region_data.get('features', ()):
-        props = feature['properties']
-        if props['type'] == 'region' and 'validated' in props:
-            del props['validated']
+        region.ensure_comments()
 
     with open(output_region_path, 'w') as f:
-        print(json.dumps(out_region_data, indent=2), file=f)
+        print(region.dumps(indent=2), file=f)
 
     return output_region_path
 

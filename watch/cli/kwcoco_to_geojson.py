@@ -78,17 +78,6 @@ except Exception:
     profile = ub.identity
 
 
-_VALID_SITE_OBSERVATION_FIELDS = {"type",
-                                  "observation_date",
-                                  "source",
-                                  "sensor_name",
-                                  "current_phase",
-                                  "score",
-                                  "misc_info",
-                                  "is_occluded",
-                                  "is_site_boundary"}
-
-
 class KWCocoToGeoJSONConfig(scfg.DataConfig):
     """
     Convert KWCOCO to IARPA GeoJSON
@@ -340,20 +329,6 @@ def coco_create_observation(coco_dset, anns, with_properties=True):
             },
             **image_properties_dct[ann['image_id']]
         }
-
-        # T&E site schema no longer allows extraneous keys to be
-        # included in region / site models; removing all unsupported
-        # keys (could consider putting in 'misc_info' rather than
-        # deleting)
-        to_remove = set()
-        for k in props.keys():
-            if k not in _VALID_SITE_OBSERVATION_FIELDS:
-                to_remove.add(k)
-
-        for k in to_remove:
-            del props[k]
-
-        return props
 
     def combined_properties(properties_list, geometry_list):
         # list of dicts -> dict of lists for easy indexing
