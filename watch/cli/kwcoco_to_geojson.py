@@ -319,7 +319,7 @@ def coco_create_observation(coco_dset, anns, with_properties=True):
 
         current_phase = coco_dset.cats[ann['category_id']]['name']
 
-        props = {
+        return {
             'type': 'observation',
             'current_phase': current_phase,
             'is_site_boundary': True,  # HACK
