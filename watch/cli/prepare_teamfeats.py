@@ -29,7 +29,7 @@ Example:
     >>>     'with_invariants2': 1,
     >>> #
     >>>     'run': 0,
-    >>>     #'check': False,
+    >>>     'check': False,
     >>>     'skip_existing': False,
     >>>     'backend': 'serial',
     >>> }
@@ -255,7 +255,7 @@ def prep_feats(cmdline=True, **kwargs):
             print(f'blocked base_fpath={base_fpath}')
             continue
 
-        if config['check']:
+        if config.check:
             if not base_fpath.exists():
                 raise FileNotFoundError(
                     'Specified kwcoco file: {base_fpath!r=} does not exist and check=True')
@@ -368,7 +368,8 @@ def _make_teamfeat_nodes(base_fpath, expt_dvc_dpath, aligned_bundle_dpath, confi
     combo_code_parts = []
     key = 'with_landcover'
     if config[key]:
-        simple_dvc.SimpleDVC().request(model_fpaths['dzyne_landcover'])
+        if config.check:
+            simple_dvc.SimpleDVC().request(model_fpaths['dzyne_landcover'])
         # Landcover is fairly fast to run
         node = ProcessNode(
             name=key + name_suffix,
@@ -432,7 +433,8 @@ def _make_teamfeat_nodes(base_fpath, expt_dvc_dpath, aligned_bundle_dpath, confi
 
     key = 'with_depth'
     if config[key]:
-        simple_dvc.SimpleDVC().request(model_fpaths['dzyne_depth'])
+        if config.check:
+            simple_dvc.SimpleDVC().request(model_fpaths['dzyne_depth'])
 
         # Only need 1 worker to minimize lag between images, task is GPU bound
         depth_data_workers = config['depth_workers']
@@ -478,7 +480,8 @@ def _make_teamfeat_nodes(base_fpath, expt_dvc_dpath, aligned_bundle_dpath, confi
 
     key = 'with_materials'
     if config[key]:
-        simple_dvc.SimpleDVC().request(model_fpaths['rutgers_materials_model_v4'])
+        if config.check:
+            simple_dvc.SimpleDVC().request(model_fpaths['rutgers_materials_model_v4'])
         node = ProcessNode(
             name=key + name_suffix,
             executable='python -m watch.tasks.rutgers_material_seg_v2.predict',
@@ -502,7 +505,8 @@ def _make_teamfeat_nodes(base_fpath, expt_dvc_dpath, aligned_bundle_dpath, confi
 
     key = 'with_mae'
     if config[key]:
-        simple_dvc.SimpleDVC().request(model_fpaths['wu_mae_v1'])
+        if config.check:
+            simple_dvc.SimpleDVC().request(model_fpaths['wu_mae_v1'])
         node = ProcessNode(
             name=key + name_suffix,
             executable=ub.codeblock(
@@ -529,7 +533,8 @@ def _make_teamfeat_nodes(base_fpath, expt_dvc_dpath, aligned_bundle_dpath, confi
 
     key = 'with_invariants2'
     if config[key]:
-        simple_dvc.SimpleDVC().request(model_fpaths['uky_pretext2'])
+        if config.check:
+            simple_dvc.SimpleDVC().request(model_fpaths['uky_pretext2'])
         if not model_fpaths['uky_pretext2'].exists():
             print('Warning: UKY pretext model does not exist')
 
@@ -569,7 +574,8 @@ def _make_teamfeat_nodes(base_fpath, expt_dvc_dpath, aligned_bundle_dpath, confi
 
     key = 'with_sam'
     if config[key]:
-        simple_dvc.SimpleDVC().request(model_fpaths['sam'])
+        if config.check:
+            simple_dvc.SimpleDVC().request(model_fpaths['sam'])
         if not model_fpaths['sam'].exists():
             print('Warning: SAM model does not exist')
         node = ProcessNode(

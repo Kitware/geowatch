@@ -461,7 +461,7 @@ class BAS_HeatmapPrediction(HeatmapPrediction):
         >>>     'test_dataset': 'bar.json',
         >>> })
         >>> command = node.command()
-        >>> assert 'tta_time="2"' in command
+        >>> assert 'tta_time=2' in command
         >>> print(command)
     """
     name = 'bas_pxl'

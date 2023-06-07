@@ -399,6 +399,12 @@ kwcoco validate data.kwcoco.json
 geowatch visualize data.kwcoco.json --smart
 
 
+geowatch stats data_vali_EI2LMSC_split6.kwcoco.zip
+geowatch visualize data_vali_EI2LMSC_split6.kwcoco.zip \
+    --channels "red|green|blue,pan,sam.0:3,mae.0:3,landcover_hidden.0:3,invariants.0:3,mtm,materials.0:3,mat_feats.0:3,red_COLD_cv|green_COLD_cv|blue_COLD_cv" \
+    --smart
+
+
 fixup="
 coco_images = dset.images().coco_images
 from watch.utils import util_gdal

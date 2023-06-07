@@ -10,6 +10,7 @@ Example:
     >>> config = {
     >>>     'base_fpath': './bundle/data.kwcoco.json',
     >>>     'virtualenv_cmd': 'conda activate watch',
+    >>>     'constructive_mode': False,
     >>>     'run': 0,
     >>>     'cache': False,
     >>>     'backend': 'serial',

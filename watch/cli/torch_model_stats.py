@@ -115,6 +115,7 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
     # print('state_keys = {}'.format(ub.urepr(state_keys, nl=1)))
 
     unique_sensors = set()
+    config_cli_yaml = None
     train_dataset = None
     prenorm_stats = None
     fit_config = {}
