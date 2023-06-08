@@ -74,6 +74,10 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
     workers = util_parallel.coerce_num_workers(workers)
     viz_dpath = ub.Path(viz_dpath)
 
+    ffmpeg_exe = ub.find_exe('ffmpeg')
+    if ffmpeg_exe is None:
+        raise Exception('Cannot find ffmpeg, which is required to run animation')
+
     if video_names is None:
         video_dpaths = [p for p in viz_dpath.glob('*') if p.is_dir()]
     else:
