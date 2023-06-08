@@ -460,19 +460,10 @@ Example in MLOPs:
             sv_dino_filter.box_score_threshold: 0.01
             sv_dino_filter.box_isect_threshold: 0.1
 
-            # sv_depth_filter.enabled: 0
-            # sv_depth_filter.model_fpath: $DVC_EXPT_DPATH/models/depth_pcd/basicModel2.h5
-            # sv_depth_filter.threshold:
-            #     - 0.20
-            #     - 0.22
-            #     - 0.25
-            #     - 0.27
-            #     - 0.29
-            #     - 0.3
-            #     - 0.31
-            #     - 0.33
-            #     - 0.35
-            #     - 0.37
+            sv_depth_score.enabled: 1
+            sv_depth_score.model_fpath: $DVC_EXPT_DPATH/models/depth_pcd/basicModel2.h5
+            sv_depth_filter.threshold:
+                - 0.20
             #     - 0.4
         submatrices:
             - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R001_I2LS.kwcoco.zip
@@ -488,12 +479,12 @@ Example in MLOPs:
             - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-AE_R001_I2LS.kwcoco.zip
               sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-AE_R001.kwcoco.json
         " \
-        --root_dpath="$DVC_EXPT_DPATH/_mlops_test_depth_pcd" \
-        --devices="0,1" --tmux_workers=2 \
-        --backend=tmux --queue_name "_mlops_test_depth_pcd" \
-        --pipeline=bas_building_vali \
+        --root_dpath="$DVC_EXPT_DPATH/_mlops_test_depth_pcd2" \
+        --devices="0," --tmux_workers=2 \
+        --backend=serial --queue_name "_mlops_test_depth_pcd2" \
+        --pipeline=bas_building_and_depth_vali \
         --skip_existing=1 \
-        --run=1
+        --run=0
 
         --pipeline=bas_depth_vali \
 

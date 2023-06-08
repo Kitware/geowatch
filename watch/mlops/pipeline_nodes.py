@@ -877,8 +877,13 @@ class ProcessNode(Node):
         del group_dpath
         del aliases
 
-        if name is None and executable is not None:
-            name = 'unnamed_process_node_' + str(id(self))  # ub.hash_data(executable)[0:8]
+        # if name is None and executable is None:
+        #     name = f'unnamed_process_node_{id(self)}'
+        if name is None :
+            # Not sure exactly what's going on here, (i.e. why our smart nodes
+            # are getting created without a name)
+            if executable is not None or self.__class__.__name__ == 'ProcessNode':
+                name = 'unnamed_process_node_' + str(id(self))  # ub.hash_data(executable)[0:8]
 
         args = locals()
         fallbacks = {
@@ -1304,12 +1309,59 @@ class ProcessNode(Node):
         return command
 
     @profile
-    def test_is_computed_command(step):
-        if not step.final_out_paths:
+    def test_is_computed_command(self):
+        r"""
+        Generate a bash command that will test if all output paths exist
+
+        Example:
+            >>> from watch.mlops.pipeline_nodes import *  # NOQA
+            >>> self = ProcessNode(out_paths={
+            >>>     'foo': 'foo.txt',
+            >>>     'bar': 'bar.txt',
+            >>>     'baz': 'baz.txt',
+            >>>     'biz': 'biz.txt',
+            >>> }, node_dpath='.')
+            >>> test_cmd = self.test_is_computed_command()
+            >>> print(test_cmd)
+            test -e foo.txt \
+                 -e bar.txt -a \
+                 -e baz.txt -a \
+                 -e biz.txt -a
+            >>> self = ProcessNode(out_paths={
+            >>>     'foo': 'foo.txt',
+            >>>     'bar': 'bar.txt',
+            >>> }, node_dpath='.')
+            >>> test_cmd = self.test_is_computed_command()
+            >>> print(test_cmd)
+            test -e foo.txt \
+                 -e bar.txt -a
+            >>> self = ProcessNode(out_paths={
+            >>>     'foo': 'foo.txt',
+            >>> }, node_dpath='.')
+            >>> test_cmd = self.test_is_computed_command()
+            >>> print(test_cmd)
+            test -e foo.txt
+            >>> self = ProcessNode(out_paths={}, node_dpath='.')
+            >>> test_cmd = self.test_is_computed_command()
+            >>> print(test_cmd)
+            None
+        """
+        if not self.final_out_paths:
             return None
-        test_expr = ' -a '.join(
-            [f'-e "{p}"' for p in step.final_out_paths.values()])
+        import shlex
+        quoted_paths = [shlex.quote(str(p))
+                        for p in self.final_out_paths.values()]
+        # Make the command look nicer
+        tmp_paths = [f'-e {p}' for p in quoted_paths]
+        tmp_paths = tmp_paths[0:1] + [p + ' -a' for p in tmp_paths[1:]]
+        *tmp_first, tmp_last = tmp_paths
+        tmp_paths = [p + ' \\' for p in tmp_first] + [tmp_last]
+        test_expr = '\n     '.join(tmp_paths)
         test_cmd = 'test ' +  test_expr
+
+        # test_expr = ' -a '.join(
+        #     [f'-e "{p}"' for p in self.final_out_paths.values()])
+        # test_cmd = 'test ' +  test_expr
         return test_cmd
 
     @memoize_configured_property
@@ -1361,7 +1413,7 @@ class ProcessNode(Node):
             if test_cmd is None:
                 return base_command
             else:
-                return test_cmd + ' || ' + base_command
+                return test_cmd + ' || \\\n' + base_command
         else:
             return base_command
 

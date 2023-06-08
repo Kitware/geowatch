@@ -1170,6 +1170,11 @@ def make_smart_pipeline(name):
         'bas_depth_vali': partial(make_smart_pipeline_nodes, with_bas=True,
                                   depth_validation=True,
                                   site_crops=False, with_sc=False),
+
+        'bas_building_and_depth_vali': partial(make_smart_pipeline_nodes, with_bas=True,
+                                               building_validation=True,
+                                               depth_validation=True,
+                                               site_crops=False, with_sc=False),
     }
     make_nodes = node_makers[name]
     nodes = make_nodes()
