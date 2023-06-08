@@ -1002,6 +1002,8 @@ def assign_sites_to_images(coco_dset,
                                                          status_to_color,
                                                          want_viz,
                                                          status_to_catname=status_to_catname)
+            if site_anns is None:
+                continue
             propogated_annotations.extend(site_anns)
             if want_viz:
                 drawable_region_sites.append(drawable_summary)
@@ -1065,6 +1067,9 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
     if status == 'pending':
         # hack for QFabric
         status = 'positive_pending'
+
+    if status == 'system_rejected':
+        return None, None
 
     if not np.all(flags):
         import warnings

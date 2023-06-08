@@ -732,7 +732,6 @@ class SV_DepthPredict(ProcessNode):
     in_paths = {
         'input_kwcoco',
         'input_region',
-        'input_sites',
     }
     out_paths = {
         'out_kwcoco': 'pred_depth_scores.kwcoco.zip',
@@ -1100,7 +1099,7 @@ def make_smart_pipeline_nodes(with_bas=True, building_validation=False,
 
             sv_output_kwcoco.connect(nodes['sv_depth_score'].inputs['input_kwcoco'])
             sv_region.connect(nodes['sv_depth_score'].inputs['input_region'])
-            sv_sites.connect(nodes['sv_depth_score'].inputs['input_sites'])
+            # sv_sites.connect(nodes['sv_depth_score'].inputs['input_sites'])
             scored_kwcoco = nodes['sv_depth_score'].outputs['out_kwcoco']
 
             scored_kwcoco.connect(nodes['sv_depth_filter'].inputs['input_kwcoco'])
