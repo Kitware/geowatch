@@ -605,14 +605,19 @@ def main(cmdline=True, **kw):
                     # This is a region model
                     df = type_to_subdf['site_summary']
                     df['region_id'] = type_to_subdf['region']['region_id'].iloc[0]
+                # Don't extract system rejected regions
+                df = df[df['status'] != 'system_rejected']
             else:
                 if 'site' in type_to_subdf:
                     # This is a site model
                     df = type_to_subdf['site']
+                    df = df[df['status'] != 'system_rejected']
                 elif 'region' in type_to_subdf:
                     # This is a region model
                     df = type_to_subdf['region']
-            parts.append(df)
+
+            if len(df):
+                parts.append(df)
 
         if not len(parts):
             raise ValueError('No regions to crop to were found')
