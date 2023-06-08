@@ -409,21 +409,16 @@ Example in MLOPs:
                 - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
             bas_pxl.test_dataset:
                 - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R001_I2LS.kwcoco.zip
-                - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R002_I2LS.kwcoco.zip
-                - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-BR_R002_I2LS.kwcoco.zip
-                - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-CH_R001_I2LS.kwcoco.zip
-                - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-NZ_R001_I2LS.kwcoco.zip
+                # - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R002_I2LS.kwcoco.zip
+                # - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-BR_R002_I2LS.kwcoco.zip
+                # - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-CH_R001_I2LS.kwcoco.zip
+                # - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-NZ_R001_I2LS.kwcoco.zip
                 # - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-AE_R001_I2LS.kwcoco.zip
             bas_pxl.chip_overlap: 0.3
             bas_pxl.chip_dims: auto
             bas_pxl.time_span: auto
             bas_pxl.time_sampling: soft4
             bas_poly.thresh:
-                # - 0.30
-                # - 0.35
-                # - 0.39
-                # - 0.40
-                # - 0.41
                 # - 0.42
                 - 0.425
             bas_poly.inner_window_size: 1y
@@ -432,7 +427,6 @@ Example in MLOPs:
             bas_poly.polygon_simplify_tolerance: 1
             bas_poly.agg_fn: probs
             bas_poly.time_thresh:
-                # - 0.5
                 # - 0.65
                 - 0.8
             bas_poly.resolution: 10GSD

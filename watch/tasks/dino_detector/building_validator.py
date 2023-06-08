@@ -144,6 +144,7 @@ def main(cmdline=1, **kwargs):
         coco_fpath = fsubtemplate('$NODE_DPATH/pred_boxes.kwcoco.zip')
         from watch.utils.util_path import coerce_patterned_paths
         site_summary = ub.Path(fsubtemplate('$NODE_DPATH/.pred/sv_crop/*/.pred/bas_poly/*/site_summaries_manifest.json'))
+        site_summary = ub.Path(fsubtemplate('$NODE_DPATH/.pred/valicrop/*/.pred/bas_poly/*/site_summaries_manifest.json'))
         site_summary = coerce_patterned_paths(site_summary)[0]
 
         output_region_fpath = ub.Path(fsubtemplate('$NODE_DPATH/filtered_site_summaries.geojson'))
@@ -151,6 +152,7 @@ def main(cmdline=1, **kwargs):
         kwargs = {
             'input_kwcoco': coco_fpath,
             'input_region': site_summary,
+            'input_sites': (site_summary.parent / 'sites'),
             'output_region_fpath': output_region_fpath,
         }
         cmdline = 0
@@ -209,7 +211,7 @@ def main(cmdline=1, **kwargs):
     input_site_fpaths = util_gis.coerce_geojson_paths(config.input_sites)
     # set(input_coco.annots().lookup('track_id', None))
 
-    site_id_to_summary = {}
+    site_id_to_summary = ub.udict()
     for summary in region_model.site_summaries():
         assert summary.site_id not in site_id_to_summary
         site_id_to_summary[summary.site_id] = summary
@@ -275,31 +277,55 @@ def main(cmdline=1, **kwargs):
 
     accept_sites = [s for s, f in site_to_accept.items() if f]
     print(f'Filter to {len(accept_sites)} / {len(site_id_to_summary)} sites')
-    new_summaries = ub.udict(site_id_to_summary).subdict(accept_sites).values()
+    new_summaries = list(site_id_to_summary.subdict(accept_sites).values())
+
+    MARK_INSTEAD_OF_REMOVE = 1
+    if MARK_INSTEAD_OF_REMOVE:
+        # Change the status of sites to "system_rejected" instead of droping
+        # them
+        reject_sites = [s for s, f in site_to_accept.items() if not f]
+        reject_summaries = list(site_id_to_summary.subdict(reject_sites).values())
+        for sitesum in reject_summaries:
+            sitesum['properties']['status'] = 'system_rejected'
+        new_summaries.extend(reject_summaries)
 
     site_to_site_fpath = ub.udict({
         p.stem: p for p in input_site_fpaths
     })
 
-    # assert set(site_to_site_fpath) == set(site_id_to_summary)
-    sites_with_paths = set(site_to_site_fpath)
-    sites_with_summary = set(site_id_to_summary)
-    if sites_with_paths != sites_with_summary:
-        print('sites_with_paths = {}'.format(ub.urepr(sites_with_paths, nl=1)))
-        print('sites_with_summary = {}'.format(ub.urepr(sites_with_summary, nl=1)))
-        raise AssertionError(
-            f'sites with paths {len(sites_with_paths)} are not the same as '
-            f'sites with summaries {len(sites_with_summary)}')
+    if __debug__:
+        # Check that the site paths correspond with the input site summary.
+        # If they don't the following logic will produce unexpected results.
+        sites_with_paths = set(site_to_site_fpath)
+        sites_with_summary = set(site_id_to_summary)
+        if sites_with_paths != sites_with_summary:
+            print('sites_with_paths = {}'.format(ub.urepr(sites_with_paths, nl=1)))
+            print('sites_with_summary = {}'.format(ub.urepr(sites_with_summary, nl=1)))
+            raise AssertionError(
+                f'sites with paths {len(sites_with_paths)} are not the same as '
+                f'sites with summaries {len(sites_with_summary)}')
 
     # Copy the filtered site models over to the output directory
-    keep_site_fpaths = site_to_site_fpath.subdict(accept_sites)
     output_sites_dpath = ub.Path(config.output_sites_dpath)
     output_sites_dpath.ensuredir()
+
+    keep_site_fpaths = site_to_site_fpath.subdict(accept_sites)
     out_site_fpaths = []
+    # Copy accepted sites without any modification
     for old_fpath in keep_site_fpaths.values():
         new_fpath = output_sites_dpath / old_fpath.name
         old_fpath.copy(new_fpath, overwrite=True)
         out_site_fpaths.append(new_fpath)
+
+    if MARK_INSTEAD_OF_REMOVE:
+        reject_site_fpaths = site_to_site_fpath.subdict(reject_sites)
+        # Copy the rejected sites as well, but modify their status
+        for old_fpath in reject_site_fpaths.values():
+            new_fpath = output_sites_dpath / old_fpath.name
+            old_site = geomodels.SiteModel.coerce(old_fpath)
+            old_site.header['properties']['status'] = 'system_rejected'
+            new_fpath.write_text(old_site.dumps())
+            out_site_fpaths.append(new_fpath)
 
     new_region_model = geomodels.RegionModel.from_features(
         [region_model.header] + list(new_summaries))
