@@ -158,7 +158,18 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
     sv_dir = pathlib.Path(ingress_dir) / "dyzne_parallel_site_vali"
     sv_dir.mkdir(exists_ok=True)
 
-    site_vali_kwcoco_path = sv_dir / "poly_depth_scored.kwcoco.zip"
+    scored_kwcoco_fpath = sv_dir / "poly_depth_scored.kwcoco.zip"
+
+    # TODO: The input / output site and region paths should be specified as
+    # parameters passed to us by the DAG.
+    input_kwcoco_fpath = sv_dir / "poly.kwcoco.zip"
+    input_sites_dpath = ingress_dir / 'site_models_bas'
+    input_region_fpath = local_region_path  # is this right?
+
+    output_site_manifest_fpath = sv_dir / "filtered_sites_manifest.json"
+    output_sites_dpath = sv_dir / "depth_filtered_sites"
+    output_region_dpath = sv_dir / "depth_filtered_regions"
+    output_region_fpath = output_region_dpath / f'{region_id}.geojson'
 
     score_tracks.main(
         cmdline=0,
@@ -166,7 +177,7 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
         # Should be the SV-cropped kwcoco file that contains start and ending
         # high resolution images where videos correspond to proposed sites for
         # this region.
-        input_kwcoco=sv_dir / "poly.kwcoco.zip",
+        input_kwcoco=input_kwcoco_fpath,
 
         # Should be the region models containing the current site summaries
         # from the previous step.
@@ -176,7 +187,7 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
 
         # This is a kwcoco file used internally in this step where scores
         # are assigned to each track. The next step will use this.
-        out_kwcoco=site_vali_kwcoco_path,
+        out_kwcoco=scored_kwcoco_fpath,
     )
     filter_tracks.main(
         cmdline=0,
@@ -184,32 +195,32 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
 
         # The kwcoco file contining depth scores that this step will use to
         # filter the input sites / site summaries.
-        input_kwcoco=sv_dir / "poly_depth_scored.kwcoco.zip",
+        input_kwcoco=scored_kwcoco_fpath,
 
         # Should be the region models containing the current site summaries
         # from the previous step.
-        input_region=local_region_path,
+        input_region=input_region_fpath,
 
         # Should be the folder containing all of the sites corresponding to the
         # sites in the input_region
-        input_sites=ingress_dir / 'site_models_bas',
+        input_sites=input_sites_dpath,
 
         # The output region model to be used by the next step
-        output_region_fpath=f'dyzne_parallel_site_vali_region_models/{region_id}.geojson',
+        output_region_fpath=output_region_fpath,
 
         # The output directory of corresponding site models that should be used by the next step
-        output_sites_dpath=sv_dir / "filtered_site",
+        output_sites_dpath=output_sites_dpath,
 
         # A single file that registers all of the sites writen to the output
         # site directory.
-        output_site_manifest_fpath=sv_dir / "filtered_sites_manifest.json",
+        output_site_manifest_fpath=output_site_manifest_fpath,
     )
 
     # 4. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)
     print("* Egressing KWCOCO dataset and associated STAC item *")
-    baseline_framework_kwcoco_egress(site_vali_kwcoco_path,
+    baseline_framework_kwcoco_egress(scored_kwcoco_fpath,
                                      local_region_path,
                                      output_path,
                                      outbucket,
