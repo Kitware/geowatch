@@ -220,8 +220,8 @@ def score_tracks(img_coco_dset, model_fpath):
     return img_coco_dset
 
 
-def main(**kwargs):
-    args = ScoreTracksConfig.cli(cmdline=True, data=kwargs, strict=True)
+def main(cmdline=True, **kwargs):
+    args = ScoreTracksConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
     import rich
     rich.print('args = {}'.format(ub.urepr(args, nl=1)))
 

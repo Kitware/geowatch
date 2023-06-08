@@ -14,8 +14,6 @@ class DzyneParallelSiteValiConfig(scfg.DataConfig):
 
     python ~/code/watch/watch/cli/dag_cli/run_dzyne_parallel_site_vali.py
     """
-    __fuzzy_hyphens__ = True
-
     input_path = scfg.Value(None, type=str, position=1, required=True, help=ub.paragraph(
             '''
             Path to input T&E Baseline Framework JSON
@@ -137,6 +135,8 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
 
     # # 2. Download and prune region file
     print("* Downloading and pruning region file *")
+
+    # CHECKME: Is this the region model with site summaries from the tracker?
     local_region_path = '/tmp/region.json'
 
     download_region(
@@ -152,22 +152,57 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
 
     # 3. Run the Site Validation Filter
     print("* Running the Site Validation Filter *")
-    from watch.tasks import depthPCD
+    from watch.tasks.depth_pcd import score_tracks
+    from watch.tasks.depth_pcd import filter_tracks
 
     sv_dir = pathlib.Path(ingress_dir) / "dyzne_parallel_site_vali"
     sv_dir.mkdir(exists_ok=True)
-    site_vali_kwcoco_path = sv_dir / "filtered_poly.kwcoco.zip"
 
-    depthPCD.score_tracks(
-        in_file=sv_dir / "poly.kwcoco.zip",
-        images_kwcoco=ingress_dir / region_id / "subdata.kwcoco.json",
+    site_vali_kwcoco_path = sv_dir / "poly_depth_scored.kwcoco.zip"
+
+    score_tracks.main(
+        cmdline=0,
+
+        # Should be the SV-cropped kwcoco file that contains start and ending
+        # high resolution images where videos correspond to proposed sites for
+        # this region.
+        input_kwcoco=sv_dir / "poly.kwcoco.zip",
+
+        # Should be the region models containing the current site summaries
+        # from the previous step.
+        input_region=local_region_path,
+
         model_fpath=config.depth_model_fpath,
-        out_site_summaries_fpath=sv_dir / "filtered_site_summaries_manifest.json",
-        out_site_summaries_dir=sv_dir / "filtered_site_summaries",
-        out_sites_fpath=sv_dir / "filtered_sites_manifest.json",
-        out_sites_dir=sv_dir / "filtered_site",
+
+        # This is a kwcoco file used internally in this step where scores
+        # are assigned to each track. The next step will use this.
         out_kwcoco=site_vali_kwcoco_path,
+    )
+    filter_tracks.main(
+        cmdline=0,
         threshold=0.4,
+
+        # The kwcoco file contining depth scores that this step will use to
+        # filter the input sites / site summaries.
+        input_kwcoco=sv_dir / "poly_depth_scored.kwcoco.zip",
+
+        # Should be the region models containing the current site summaries
+        # from the previous step.
+        input_region=local_region_path,
+
+        # Should be the folder containing all of the sites corresponding to the
+        # sites in the input_region
+        input_sites=ingress_dir / 'site_models_bas',
+
+        # The output region model to be used by the next step
+        output_region_fpath=f'dyzne_parallel_site_vali_region_models/{region_id}.geojson',
+
+        # The output directory of corresponding site models that should be used by the next step
+        output_sites_dpath=sv_dir / "filtered_site",
+
+        # A single file that registers all of the sites writen to the output
+        # site directory.
+        output_site_manifest_fpath=sv_dir / "filtered_sites_manifest.json",
     )
 
     # 4. Egress (envelop KWCOCO dataset in a STAC item and egress;
