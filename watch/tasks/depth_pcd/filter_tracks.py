@@ -81,7 +81,7 @@ def main(**kwargs):
     site_to_site_fpath = ub.udict({
         p.stem: p for p in input_site_fpaths
     })
-    site_id_to_summary = {}
+    site_id_to_summary = ub.udict()
     for summary in region_model.site_summaries():
         assert summary.site_id not in site_id_to_summary
         site_id_to_summary[summary.site_id] = summary
