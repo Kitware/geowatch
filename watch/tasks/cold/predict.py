@@ -85,10 +85,10 @@ CommandLine:
     DATA_DVC_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="auto")
     EXPT_DVC_DPATH=$(geowatch_dvc --tags=phase2_expt --hardware="auto")
     python -m watch.tasks.cold.predict \
-        --coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly-KR_R001.kwcoco.json" \
-        --out_dpath="$DATA_DVC_DPATH/Drop6/_pycold_HTR" \
-        --mod_coco_fpath="$DATA_DVC_DPATH/Drop6/imgonly_KR_R001_cold-HTR.kwcoco.zip" \
-        --sensors='L8' \
+        --coco_fpath="$DATA_DVC_DPATH/Aligned-Drop7/KR_R001/imgonly-KR_R001.kwcoco.zip" \
+        --out_dpath="$DATA_DVC_DPATH/Aligned-Drop7/_pycold_L8S2_HTR" \
+        --mod_coco_fpath="$DATA_DVC_DPATH/Aligned-Drop7/KR_R001/imgonly_KR_R001_cold-L8S2-HTR.kwcoco.zip" \
+        --sensors='L8,S2' \
         --coefs=cv,rmse,a0,a1,b1,c1 \
         --coefs_bands=0,1,2,3,4,5 \
         --combine=False \
@@ -100,10 +100,10 @@ CommandLine:
     geowatch stats "$DATA_DVC_DPATH"/Drop6/imgonly_KR_R001_cold-HTR.kwcoco.zip
     kwcoco validate "$DATA_DVC_DPATH"/Drop6/imgonly_KR_R001_cold-HTR.kwcoco.zip
 
-    smartwatch visualize \
+    geowatch visualize \
         "$DATA_DVC_DPATH"/Drop6/imgonly_KR_R001_cold-V1.kwcoco.zip \
-        --channels="L8:(red|green|blue,red_COLD_a1|green_COLD_a1|blue_COLD_a1,red_COLD_cv|green_COLD_cv|blue_COLD_cv,red_COLD_rmse|green_COLD_rmse|blue_COLD_rmse)" \
-        --exclude_sensors=WV,PD,S2 \
+        --channels="(L8,S2):(red|green|blue,red_COLD_a1|green_COLD_a1|blue_COLD_a1,red_COLD_cv|green_COLD_cv|blue_COLD_cv,red_COLD_rmse|green_COLD_rmse|blue_COLD_rmse)" \
+        --exclude_sensors=WV,PD \
         --smart=True
 
     ######################################################################

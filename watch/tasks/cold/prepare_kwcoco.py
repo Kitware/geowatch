@@ -336,8 +336,8 @@ def stack_kwcoco(coco_fpath, out_dir, sensors, adj_cloud, method, pman=None,
     all_images = dset.images(list(ub.flatten(dset.videos().images)))
 
     # For now, it supports only L8
-    flags = [s in {'L8'} for s in all_images.lookup('sensor_coarse')]
-    # flags = [s in sensors for s in all_images.lookup('sensor_coarse')]
+    # flags = [s in {'L8'} for s in all_images.lookup('sensor_coarse')]
+    flags = [s in sensors for s in all_images.lookup('sensor_coarse')]
     all_images = all_images.compress(flags)
 
     if len(all_images) == 0:
