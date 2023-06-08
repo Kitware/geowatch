@@ -115,7 +115,7 @@ def coerce_time_kernel(pattern):
     elif ub.iterable(pattern):
         kernel_deltas = pattern
     else:
-        print(f'error: pattern={pattern}')
+        print(f'SINGLE-coerce error: pattern={pattern}')
         raise TypeError(type(pattern))
     parsed = [coerce_timedelta(d) for d in kernel_deltas]
     kernel = np.array([v.total_seconds() for v in parsed])
@@ -159,6 +159,18 @@ def coerce_multi_time_kernel(pattern):
             np.array([-1.,  0.,  1.], dtype=np.float64),
             np.array([0.], dtype=np.float64),
         ]
+
+    Example:
+        >>> from watch.tasks.fusion.datamodules.temporal_sampling.utils import *  # NOQA
+        >>> import ubelt as ub
+        >>> pattern = ('-3y', '-2.5y', '-2y', '-1.5y', '-1y', 0, '1y', '1.5y', '2y', '2.5y', '3y')
+        >>> multi_kernel = coerce_multi_time_kernel(pattern)
+        >>> print('multi_kernel = {}'.format(ub.urepr(multi_kernel, nl=2)))
+
+        >>> # FIXME: Bug ambigous case
+        >>> pattern = ('-3y', '-2.5y', '-2y', '-1.5y', '-1y', '0', '1y', '1.5y', '2y', '2.5y', '3y')
+        >>> multi_kernel = coerce_multi_time_kernel(pattern)
+        >>> print('multi_kernel = {}'.format(ub.urepr(multi_kernel, nl=2)))
     """
     if pattern is None:
         return [None]
@@ -185,6 +197,6 @@ def coerce_multi_time_kernel(pattern):
                     ...
 
     else:
-        print(f'error: pattern={pattern}')
+        print(f'MULTI-coerce error: pattern={pattern}')
         raise TypeError(type(pattern))
     return multi_kernel

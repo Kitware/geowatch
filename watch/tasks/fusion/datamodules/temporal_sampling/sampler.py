@@ -120,6 +120,21 @@ Example:
     >>> import kwplot
     >>> kwplot.autosns()
     >>> self.show_summary(3)
+
+Example:
+    >>> # xdoctest: +SKIP
+    >>> # TODO: fix the time kernel
+    >>> # Test under / over sample with time kernels
+    >>> from watch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
+    >>> import watch
+    >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, num_frames=16, image_size=(8, 8))
+    >>> vidid = dset.dataset['videos'][0]['id']
+    >>> self = TimeWindowSampler.from_coco_video(
+    >>>     dset, vidid,
+    >>>     time_window=4,
+    >>>     affinity_type='uniform', update_rule='', time_kernel='-1y,0,1y',
+    >>> )
+    >>> self.sample()
 """
 import kwarray
 import numpy as np
