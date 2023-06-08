@@ -8,7 +8,6 @@ SeeAlso:
 """
 import json
 import os
-import shutil
 import subprocess
 
 import scriptconfig as scfg
