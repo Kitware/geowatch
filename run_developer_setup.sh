@@ -112,6 +112,7 @@ Environment configuration:
 WATCH_STRICT=$WATCH_STRICT
 WITH_MMCV=$WITH_MMCV
 WITH_DVC=$WITH_DVC
+WITH_AWS=$WITH_AWS
 WITH_TENSORFLOW=$WITH_TENSORFLOW
 WITH_APT_ENSURE=$WITH_APT_ENSURE
 "
@@ -141,6 +142,11 @@ python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/linting.txt
 
 # Install the geowatch module in development mode
 python -m pip install --prefer-binary -e ".$EXTRAS"
+
+# Post geowatch install requirements
+if [[ "$WITH_AWS" == "1" ]]; then
+    python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/ass.txt
+fi
 
 if [[ "$WITH_MMCV" == "1" ]]; then
     python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/mmcv.txt

@@ -71,51 +71,13 @@ python -m pip install --prefer-binary pip setuptools wheel build -U
 echo "
 Pip install watch itself
 "
-if [ "$BUILD_STRICT" -eq 1 ]; then
-    echo "BUILDING STRICT VARIANT"
-    pip install --prefer-binary -e /root/code/watch[runtime-strict,development-strict,optional-strict,headless-strict]
-else
-    echo "BUILDING LOOSE VARIANT"
-    pip install --prefer-binary -e /root/code/watch[development,optional,headless]
-    # python -m pip install dvc[all]>=2.13.0
-    # pip install awscli
-fi
-
-EOF
-
-
-# Finalize more fickle dependencies
-RUN --mount=type=cache,target=/root/.cache <<EOF
-#!/bin/bash
-#source $HOME/activate
-
-cd /root/code/watch
-if [ "$BUILD_STRICT" -eq 1 ]; then
-    echo "FINALIZE STRICT VARIANT DEPS"
-    sed 's/>=/==/g' requirements/gdal.txt > requirements/gdal-strict.txt
-    pip install -r requirements/gdal-strict.txt
-else
-    echo "FINALIZE LOOSE VARIANT DEPS"
-    pip install -r requirements/gdal.txt
-fi
+WATCH_STRICT=$BUILD_STRICT WITH_MMCV=1 WITH_DVC=1 WITH_TENSORFLOW=1 WITH_AWS=1 WITH_APT_ENSURE=0 bash run_developer_setup.sh
 
 EOF
 
 
 #### Copy over the rest of the repo structure
 COPY .git          /root/code/watch/.git
-
-
-# Install other useful tools
-RUN --mount=type=cache,target=/root/.cache <<EOF
-#!/bin/bash
-#source $HOME/activate
-
-# python -m pip install dvc[all]>=2.13.0
-# pip install scikit-image>=0.18.1
-pip install awscli
-
-EOF
 
 
 # Run simple tests
