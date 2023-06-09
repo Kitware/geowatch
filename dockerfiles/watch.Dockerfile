@@ -62,6 +62,9 @@ python --version
 pip --version
 pwd
 ls -altr
+cd /root/code/watch
+pwd
+ls -altr
 
 echo "Run GEOWATCH developer setup:"
 WATCH_STRICT=$BUILD_STRICT WITH_MMCV=1 WITH_DVC=1 WITH_TENSORFLOW=1 WITH_AWS=1 WITH_APT_ENSURE=0 bash run_developer_setup.sh
@@ -107,9 +110,8 @@ echo "
     [ ! -d $HOME/tmp/watch-img-staging/watch] || git clone --origin=host-$HOSTNAME $HOME/code/watch/.git $HOME/tmp/watch-img-staging/watch
     cd $HOME/tmp/watch-img-staging/watch
     git remote add origin git@gitlab.kitware.com:smart/watch.git || true
-    git pull
-
     cd $HOME/tmp/watch-img-staging/watch
+    git pull
 
     DOCKER_BUILDKIT=1 docker build --progress=plain \
         -t "watch:311-strict" \
