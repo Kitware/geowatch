@@ -3821,4 +3821,4 @@ torch_globals:
 
 initializer:
     init: noop
-" --ckpt_path /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-MedianNoWinter10GSD/runs/Drop7-MedianNoWinter10GSD_landcover_invar_cold_sam_scratch_split6_V60/lightning_logs/version_2/checkpoints/epoch=148-step=6407.ckpt
+" --ckpt_path /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-MedianNoWinter10GSD/runs/Drop7-MedianNoWinter10GSD_landcover_invar_cold_sam_scratch_split6_V60/lightning_logs/version_3/checkpoints/epoch=194-step=8385.ckpt
