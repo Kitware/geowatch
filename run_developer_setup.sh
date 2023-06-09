@@ -188,13 +188,15 @@ fix_opencv_conflicts(){
     if [[ "$HAS_OPENCV_HEADLESS_RETCODE" == "0" ]]; then
         if [[ "$HAS_OPENCV_RETCODE" == "0" ]]; then
             python -m pip uninstall opencv-python opencv-python-headless -y
-            python -m pip install opencv-python-headless
+            #python -m pip install opencv-python-headless
+            python -m pip install -r "$REQUIREMENTS_DPATH"/headless.txt
         fi
     else
         if [[ "$HAS_OPENCV_RETCODE" == "0" ]]; then
             python -m pip uninstall opencv-python -y
         fi
-        python -m pip install opencv-python-headless
+        #python -m pip install opencv-python-headless
+        python -m pip install -r "$REQUIREMENTS_DPATH"/headless.txt
     fi
 }
 
