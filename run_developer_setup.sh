@@ -146,7 +146,7 @@ python -m pip install --prefer-binary -e ".$EXTRAS"
 
 # Post geowatch install requirements
 if [[ "$WITH_AWS" == "1" ]]; then
-    python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/ass.txt
+    python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/aws.txt
 fi
 
 if [[ "$WITH_MMCV" == "1" ]]; then
