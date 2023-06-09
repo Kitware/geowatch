@@ -54,9 +54,7 @@ RUN --mount=type=cache,target=/root/.cache <<EOF
 #!/bin/bash
 #source $HOME/activate
 
-echo "
-Preparing to pip install watch
-"
+echo "Preparing to pip install watch"
 
 which python
 which pip
@@ -65,14 +63,7 @@ pip --version
 pwd
 ls -altr
 
-echo "
-Pip install latest Python build tools:
-"
-python -m pip install --prefer-binary pip setuptools wheel build -U
-
-echo "
-Pip install watch itself
-"
+echo "Run GEOWATCH developer setup:"
 WATCH_STRICT=$BUILD_STRICT WITH_MMCV=1 WITH_DVC=1 WITH_TENSORFLOW=1 WITH_AWS=1 WITH_APT_ENSURE=0 bash run_developer_setup.sh
 
 EOF
@@ -113,9 +104,10 @@ echo "
     cd $HOME/code/watch
 
     mkdir -p $HOME/tmp/watch-img-staging
-    git clone --origin=host-$HOSTNAME $HOME/code/watch/.git $HOME/tmp/watch-img-staging/watch
+    [ ! -d $HOME/tmp/watch-img-staging/watch] || git clone --origin=host-$HOSTNAME $HOME/code/watch/.git $HOME/tmp/watch-img-staging/watch
     cd $HOME/tmp/watch-img-staging/watch
-    git remote add origin git@gitlab.kitware.com:smart/watch.git
+    git remote add origin git@gitlab.kitware.com:smart/watch.git || true
+    git pull
 
     cd $HOME/tmp/watch-img-staging/watch
 
