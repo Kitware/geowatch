@@ -37,7 +37,7 @@ RUN mkdir -p /root/code
 COPY setup.py               /root/code/watch/
 COPY pyproject.toml         /root/code/watch/
 COPY run_developer_setup.sh /root/code/watch/
-COPY dev/make_strict_req.sh /root/code/watch/dev
+COPY dev/make_strict_req.sh /root/code/watch/dev/make_strict_req.sh
 COPY requirements           /root/code/watch/requirements
 COPY watch                  /root/code/watch/watch
 
