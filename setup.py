@@ -204,12 +204,14 @@ EXTRAS_REQUIRES = {
     'optional': parse_requirements('requirements/optional.txt'),
     'dvc': parse_requirements('requirements/dvc.txt'),
     'tensorflow': parse_requirements('requirements/tensorflow.txt'),
+    'linting': parse_requirements('requirements/linting.txt'),
     # Really annoying that this is the best we can do
     # The user *must* choose either headless or graphics
     # to get a complete working install.
     'headless': parse_requirements('requirements/headless.txt'),
     'graphics': parse_requirements('requirements/graphics.txt'),
     'all-strict': parse_requirements('requirements.txt', versions='strict'),
+    'linting-strict': parse_requirements('requirements/linting.txt', versions='strict'),
     'runtime-strict': parse_requirements('requirements/runtime.txt', versions='strict'),
     'development-strict': parse_requirements('requirements/development.txt', versions='strict'),
     'tests-strict': parse_requirements('requirements/tests.txt', versions='strict'),

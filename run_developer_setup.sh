@@ -135,16 +135,32 @@ else
     EXTRAS="[all,headless,dvc]"
 fi
 
+# Small python script to compute the extras tag for the pip install
+EXTRAS=$(python -c "if 1:
+    strict = $WATCH_STRICT
+    extras = []
+    suffix = '-strict' if strict else ''
+    if strict:
+        extras.append('runtime' + suffix)
+    extras.append('development' + suffix)
+    extras.append('tests' + suffix)
+    extras.append('optional' + suffix)
+    extras.append('headless' + suffix)
+    extras.append('linting' + suffix)
+    if $WITH_DVC:
+        extras.append('dvc' + suffix)
+    print('[' + ','.join(extras) + ']')
+    ")
+
 python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/python_build_tools.txt
-
-python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/gdal.txt
-
-python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/linting.txt
 
 # Install the geowatch module in development mode
 python -m pip install --prefer-binary -e ".$EXTRAS"
 
 # Post geowatch install requirements
+
+python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/gdal.txt
+
 if [[ "$WITH_AWS" == "1" ]]; then
     python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/aws.txt
 fi
