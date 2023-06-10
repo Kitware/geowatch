@@ -137,7 +137,7 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
 
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
-    ingress_dir = '/tmp/ingress'
+    ingress_dir = ub.Path('/tmp/ingress')
     ingress_kwcoco_path = baseline_framework_kwcoco_ingress(
         input_path,
         ingress_dir,
@@ -182,11 +182,11 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
     filter_config = (default_filter_config
                      | Yaml.coerce(config.depth_filter_config or {}))
 
-    # 3.3 Run DinoBuildingFilter
-    print("* Running Dino Building Filter *")
+    # 3.3 Run DZYNE depth_pcd
+    print("* Running DZYNE depth_pcd *")
 
-    sv_dir = pathlib.Path(ingress_dir) / "dyzne_parallel_site_vali"
-    sv_dir.mkdir(exists_ok=True)
+    sv_dir = ingress_dir / "dyzne_parallel_site_vali"
+    sv_dir.ensuredir()
 
     scored_kwcoco_fpath = sv_dir / "poly_depth_scored.kwcoco.zip"
 
