@@ -314,8 +314,12 @@ def run_bas_fusion_for_baseline(config):
         '--new_site_dpath', cropped_site_models_outdir,
         '--new_region_dpath', cropped_region_models_outdir,
         '--min_area_square_meters', str(min_area_square_meters)
+<<<<<<< HEAD
     ]
     ub.cmd(crop_cmd, check=True, verbose=3)
+=======
+    ], check=True, verbose=3)
+>>>>>>> d6e50df4 (Patch int error)
 
     # 6. (Optional) collate TA-2 output
     if ta2_s3_collation_bucket is not None:
