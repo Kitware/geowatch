@@ -26,7 +26,7 @@ class DzyneParallelSiteValiConfig(scfg.DataConfig):
 
     output_path = scfg.Value(None, type=str, position=3, required=True, help='S3 path for output JSON')
 
-    depth_model_fpath = scfg.Value("/models/depthPCD/basicModel2.h5", type=str, position=4, required=True, help='path to depth model weights')
+    # depth_model_fpath = scfg.Value("/models/depthPCD/basicModel2.h5", type=str, position=4, required=True, help='path to depth model weights')
 
     aws_profile = scfg.Value(None, type=str, help=ub.paragraph(
             '''
@@ -38,6 +38,18 @@ class DzyneParallelSiteValiConfig(scfg.DataConfig):
     outbucket = scfg.Value(None, type=str, required=True, short_alias=['o'], help=ub.paragraph(
             '''
             S3 Output directory for STAC item / asset egress
+            '''))
+
+    depth_score_config = scfg.Value(None, type=str, help=ub.paragraph(
+            '''
+            Raw json/yaml or a path to a json/yaml file that specifies the
+            config for depth scorer.
+            '''))
+
+    depth_filter_config = scfg.Value(None, type=str, help=ub.paragraph(
+            '''
+            Raw json/yaml or a path to a json/yaml file that specifies the
+            config for the depth filter.
             '''))
 
 
@@ -154,6 +166,24 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
     print("* Running the Site Validation Filter *")
     from watch.tasks.depth_pcd import score_tracks
     from watch.tasks.depth_pcd import filter_tracks
+    from watch.utils.util_yaml import Yaml
+
+    default_score_config = ub.udict({
+        'model_fpath': None,
+    })
+    score_config = (default_score_config
+                    | Yaml.coerce(config.depth_score_config or {}))
+    if score_config.get('model_fpath', None) is None:
+        raise ValueError('Requires model_fpath')
+
+    default_filter_config = ub.udict({
+        'threshold': 0.4,
+    })
+    filter_config = (default_filter_config
+                     | Yaml.coerce(config.depth_filter_config or {}))
+
+    # 3.3 Run DinoBuildingFilter
+    print("* Running Dino Building Filter *")
 
     sv_dir = pathlib.Path(ingress_dir) / "dyzne_parallel_site_vali"
     sv_dir.mkdir(exists_ok=True)
@@ -174,6 +204,8 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
     score_tracks.main(
         cmdline=0,
 
+        **score_config,
+
         # Should be the SV-cropped kwcoco file that contains start and ending
         # high resolution images where videos correspond to proposed sites for
         # this region.
@@ -183,15 +215,14 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
         # from the previous step.
         input_region=local_region_path,
 
-        model_fpath=config.depth_model_fpath,
-
         # This is a kwcoco file used internally in this step where scores
         # are assigned to each track. The next step will use this.
         out_kwcoco=scored_kwcoco_fpath,
     )
     filter_tracks.main(
         cmdline=0,
-        threshold=0.4,
+
+        **filter_config,
 
         # The kwcoco file contining depth scores that this step will use to
         # filter the input sites / site summaries.
