@@ -190,8 +190,9 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
     # TODO: The input / output site and region paths should be specified as
     # parameters passed to us by the DAG.
     input_kwcoco_fpath = ingress_dir / "cropped_kwcoco_for_sv.json"
-    input_sites_dpath = ingress_dir / 'site_models_bas'
-    input_region_fpath = local_region_path  # is this right?
+    input_sites_dpath = ingress_dir / 'cropped_site_models_bas'
+    input_region_fpath = ingress_dir / f'cropped_region_models_bas/{region_id}.geojson'
+    # input_region_fpath = local_region_path  # is this right?
 
     scored_kwcoco_fpath = sv_dir / "poly_depth_scored.kwcoco.zip"
 

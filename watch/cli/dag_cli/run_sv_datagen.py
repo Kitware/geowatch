@@ -85,7 +85,7 @@ def run_generate_sv_cropped_kwcoco(input_path,
 
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
-    ingress_dir = '/tmp/ingress'
+    ingress_dir = ub.Path('/tmp/ingress')
     _ = baseline_framework_kwcoco_ingress(
         input_path,
         ingress_dir,
@@ -116,16 +116,12 @@ def run_generate_sv_cropped_kwcoco(input_path,
         raise RuntimeError("Couldn't parse 'region_id' from input region file")
 
     # Paths to inputs generated in previous pipeline steps
-    bas_region_path = os.path.join(ingress_dir,
-                                   'cropped_region_models_bas',
-                                   '{}.geojson'.format(region_id))
-    ta1_sc_kwcoco_path = os.path.join(ingress_dir,
-                                      'kwcoco_for_sc.json')
+    bas_region_path = ingress_dir / f'cropped_region_models_bas/{region_id}.geojson'
+    ta1_sc_kwcoco_path = ingress_dir /  'kwcoco_for_sc.json'
 
     # 4. Crop ingress KWCOCO dataset to region for SV
     print("* Cropping KWCOCO dataset to region for SV*")
-    ta1_sv_cropped_kwcoco_path = os.path.join(ingress_dir,
-                                              'cropped_kwcoco_for_sv.json')
+    ta1_sv_cropped_kwcoco_path = ingress_dir / 'cropped_kwcoco_for_sv.json'
 
     sv_cropping_config = Yaml.coerce(sv_cropping_config or {})
 
