@@ -5,7 +5,6 @@ import scriptconfig as scfg
 import subprocess
 import ubelt as ub
 from glob import glob
-import pathlib
 
 
 class DzyneParallelSiteValiConfig(scfg.DataConfig):
@@ -188,13 +187,13 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
     sv_dir = ingress_dir / "dyzne_parallel_site_vali"
     sv_dir.ensuredir()
 
-    scored_kwcoco_fpath = sv_dir / "poly_depth_scored.kwcoco.zip"
-
     # TODO: The input / output site and region paths should be specified as
     # parameters passed to us by the DAG.
-    input_kwcoco_fpath = sv_dir / "poly.kwcoco.zip"
+    input_kwcoco_fpath = ingress_dir / "cropped_kwcoco_for_sv.json"
     input_sites_dpath = ingress_dir / 'site_models_bas'
     input_region_fpath = local_region_path  # is this right?
+
+    scored_kwcoco_fpath = sv_dir / "poly_depth_scored.kwcoco.zip"
 
     output_site_manifest_fpath = sv_dir / "filtered_sites_manifest.json"
     output_sites_dpath = sv_dir / "depth_filtered_sites"
