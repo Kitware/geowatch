@@ -84,9 +84,8 @@ def main(cmdline=True, **kwargs):
         >>> # drop1-S2-L8-aligned-old deprecated
         >>> from watch.cli.coco_combine_features import *  # NOQA
         >>> import os
-        >>> from watch.utils.util_path import coercepath
         >>> _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
-        >>> dvc_dpath = coercepath(os.environ.get('DVC_DPATH', _default))
+        >>> dvc_dpath = ub.Path(os.environ.get('DVC_DPATH', _default))
         >>> fpath1 = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
         >>> #fpath1 = dvc_dpath / 'drop1-S2-L8-aligned-old/data.kwcoco.json'
         >>> fpath2 = dvc_dpath / 'drop1-S2-L8-aligned-old/uky_invariants.kwcoco.json'

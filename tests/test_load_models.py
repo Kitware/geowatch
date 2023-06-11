@@ -1,12 +1,11 @@
 import ubelt as ub
 import os
-from watch.utils import util_path
 
 
 def tryget_dvc_dpath():
     _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
     dvc_dpath = os.environ.get('DVC_DPATH', _default)
-    dvc_dpath = util_path.coercepath(dvc_dpath)
+    dvc_dpath = ub.Path(dvc_dpath)
     if not dvc_dpath.exists():
         import pytest
         pytest.skip('this test depends on data in DVC_DPATH')

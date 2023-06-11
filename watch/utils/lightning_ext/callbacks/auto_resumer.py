@@ -3,7 +3,7 @@ https://github.com/Lightning-AI/lightning/issues/10894
 """
 
 import pytorch_lightning as pl
-from watch.utils import util_path
+import ubelt as ub
 from packaging.version import parse as Version
 from typing import Optional  # NOQA
 
@@ -38,7 +38,7 @@ class AutoResumer(pl.callbacks.Callback):
         >>> trainer_orig = pl.Trainer(default_root_dir=default_root_dir, callbacks=[AutoResumer(), StateLogger()], max_epochs=2, accelerator='cpu', devices=1)
         >>> model = LightningToyNet2d()
         >>> trainer_orig.fit(model)
-        >>> assert len(list((util_path.coercepath(trainer_orig.logger.log_dir) / 'checkpoints').glob('*'))) > 0
+        >>> assert len(list((ub.Path(trainer_orig.logger.log_dir) / 'checkpoints').glob('*'))) > 0
         >>> # See contents written
         >>> print(ub.urepr(list(util_path.tree(default_root_dir)), sort=0))
         >>> #
@@ -50,16 +50,16 @@ class AutoResumer(pl.callbacks.Callback):
         >>> trainer_resume1.fit(model)
         >>> print(ub.urepr(list(util_path.tree(default_root_dir)), sort=0))
         >>> # max_epochs should prevent auto-resume from doing anything
-        >>> assert len(list((util_path.coercepath(trainer_resume1.logger.log_dir) / 'checkpoints').glob('*'))) == 0
+        >>> assert len(list((ub.Path(trainer_resume1.logger.log_dir) / 'checkpoints').glob('*'))) == 0
         >>> #
         >>> # CHECK 2:
         >>> # Increasing max epochs will let it train for longer
         >>> trainer_resume2 = pl.Trainer(default_root_dir=default_root_dir, callbacks=[AutoResumer(), StateLogger()], max_epochs=3, accelerator='cpu', devices=1)
         >>> model = LightningToyNet2d()
         >>> trainer_resume2.fit(model)
-        >>> print(ub.urepr(list(util_path.tree(util_path.coercepath(default_root_dir))), sort=0))
+        >>> print(ub.urepr(list(util_path.tree(ub.Path(default_root_dir))), sort=0))
         >>> # max_epochs should prevent auto-resume from doing anything
-        >>> assert len(list((util_path.coercepath(trainer_resume2.logger.log_dir) / 'checkpoints').glob('*'))) > 0
+        >>> assert len(list((ub.Path(trainer_resume2.logger.log_dir) / 'checkpoints').glob('*'))) > 0
     """
 
     def __init__(self):
@@ -121,6 +121,6 @@ class AutoResumer(pl.callbacks.Callback):
         """
         Return a list of existing checkpoints in some Trainer root directory
         """
-        train_dpath = util_path.coercepath(train_dpath)
+        train_dpath = ub.Path(train_dpath)
         candidates = sorted(train_dpath.glob('*/*/checkpoints/*.ckpt'))
         return candidates
