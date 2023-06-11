@@ -161,6 +161,10 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
     # Determine the region_id in the region file.
     region_id = determine_region_id(local_region_path)
 
+    ####
+    # Print info about what version of the code we are running on
+    ub.cmd('git log -n 1', verbose=3, cwd='/root/code/watch')
+
     # 3. Run the Site Validation Filter
     print("* Running the Site Validation Filter *")
     from watch.tasks.depth_pcd import score_tracks
