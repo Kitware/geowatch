@@ -54,7 +54,7 @@ class DzyneParallelSiteValiConfig(scfg.DataConfig):
 
 def main():
     config = DzyneParallelSiteValiConfig.cli(strict=True)
-    print('config = {}'.format(ub.urepr(dict(config), nl=1, align=':')))
+    print('config = {}'.format(ub.urepr(config, nl=1, align=':')))
     run_dzyne_parallel_site_vali_for_baseline(config)
 
 
@@ -217,7 +217,7 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
 
         # Should be the region models containing the current site summaries
         # from the previous step.
-        input_region=local_region_path,
+        input_region=input_region_fpath,
 
         # This is a kwcoco file used internally in this step where scores
         # are assigned to each track. The next step will use this.
