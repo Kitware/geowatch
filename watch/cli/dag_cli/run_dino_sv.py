@@ -171,10 +171,13 @@ def run_dino_sv(config):
 
     # 3.1. Check that we have at least one "video" (BAS identified
     # site) to run over; if not skip SV fusion and KWCOCO to GeoJSON
-    with open(ingress_kwcoco_path) as f:
-        ingress_kwcoco_data = json.load(f)
-
-    num_videos = len(ingress_kwcoco_data.get('videos', ()))
+    import kwcoco
+    ingress_coco_dset = kwcoco.CocoDataset(ingress_kwcoco_path)
+    num_videos = ingress_coco_dset.n_videos
+    # Note: cant open with json here because kwcoco will save compressed files
+    # with open(ingress_kwcoco_path) as f:
+    #     ingress_kwcoco_data = json.load(f)
+    # num_videos = len(ingress_kwcoco_data.get('videos', ()))
     print(f'num_videos={num_videos}')
 
     if num_videos > 0:
