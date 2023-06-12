@@ -145,7 +145,7 @@ def run_dino_sv(config):
 
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
-    ingress_dir = '/tmp/ingress'
+    ingress_dir = ub.Path('/tmp/ingress')
     ingress_kwcoco_path = baseline_framework_kwcoco_ingress(
         input_path,
         ingress_dir,
@@ -166,29 +166,34 @@ def run_dino_sv(config):
     # Determine the region_id in the region file.
     region_id = determine_region_id(local_region_path)
 
-    dino_boxes_kwcoco_path = os.path.join(
-        ingress_dir, 'dino_boxes_kwcoco.json')
+    dino_boxes_kwcoco_path = ingress_dir / 'dino_boxes_kwcoco.json'
 
-    cropped_region_models_bas = os.path.join(ingress_dir,
-                                             'cropped_region_models_bas')
-    cropped_site_models_bas = os.path.join(ingress_dir,
-                                           'cropped_site_models_bas')
+    # FIXME: these are hard coded to point at the output of DZYNE depth
+    # site validation, the path to the region / sites directories should be
+    # parameters passed to us from the DAG (so we can shift the order in
+    # which operations are applied at the DAG level)
+    input_region_dpath = ingress_dir / 'dyzne_parallel_site_vali_region_models'
+    input_sites_dpath = ingress_dir / 'filtered_site'
+    input_region_fpath = input_region_dpath / f'{region_id}.geojson'
 
-    site_models_outdir = os.path.join(ingress_dir, 'sv_out_site_models')
-    os.makedirs(site_models_outdir, exist_ok=True)
-    region_models_outdir = os.path.join(ingress_dir, 'sv_out_region_models')
-    os.makedirs(region_models_outdir, exist_ok=True)
+    # FIXME: these output directories for region / site models should be passed
+    # to us from the DAG
+    output_sites_dpath = ingress_dir / 'sv_out_site_models'
+    output_region_dpath = ingress_dir / 'sv_out_region_models'
+    output_site_manifest_dpath = ingress_dir / 'tracking_manifests_sv'
+    output_region_fpath = output_region_dpath / f'{region_id}.geojson'
+    output_site_manifest_fpath = output_site_manifest_dpath / 'site_models_manifest.json'
 
-    site_models_manifest_outdir = os.path.join(
-        ingress_dir, 'tracking_manifests_sv')
-    os.makedirs(site_models_manifest_outdir, exist_ok=True)
-    site_models_manifest_outpath = os.path.join(
-        site_models_manifest_outdir, 'site_models_manifest.json')
+    output_sites_dpath.ensuredir()
+    output_region_dpath.ensuredir()
+    output_site_manifest_dpath.ensuredir()
+
     # Copy input region model into region_models outdir to be updated
     # (rather than generated from tracking, which may not have the
     # same bounds as the original)
-    shutil.copy(local_region_path, os.path.join(
-        region_models_outdir, '{}.geojson'.format(region_id)))
+    # CHECKME: Is this necessary? I don't think it is, because it will get
+    # overwritten in the DINO filter, so I'm commenting it out.
+    # local_region_path.copy(output_region_fpath)
 
     # 3.1. Check that we have at least one "video" (BAS identified
     # site) to run over; if not skip SV fusion and KWCOCO to GeoJSON
@@ -224,18 +229,15 @@ def run_dino_sv(config):
         dino_filter_config = (default_dino_filter_config
                               | Yaml.coerce(dino_filter_config or {}))
 
-        input_region_model_bas = os.path.join(cropped_region_models_bas,
-                                              '{}.geojson'.format(region_id))
-        output_region_model = os.path.join(region_models_outdir,
-                                           '{}.geojson'.format(region_id))
         dino_building_filter = SV_DinoFilter(root_dpath='/tmp/ingress')
+
         dino_building_filter.configure({
             'input_kwcoco': dino_boxes_kwcoco_path,
-            'input_region': input_region_model_bas,
-            'input_sites': cropped_site_models_bas,
-            'output_region_fpath': output_region_model,
-            'output_sites_dpath': site_models_outdir,
-            'output_site_manifest_fpath': site_models_manifest_outpath,
+            'input_region': input_region_fpath,
+            'input_sites': input_sites_dpath,
+            'output_region_fpath': output_region_fpath,
+            'output_sites_dpath': output_sites_dpath,
+            'output_site_manifest_fpath': output_site_manifest_fpath,
             })
 
         ub.cmd(dino_building_filter.command(), check=True, verbose=3, system=True)
@@ -244,8 +246,8 @@ def run_dino_sv(config):
     if ta2_s3_collation_bucket is not None:
         print("* Collating TA-2 output")
         _ta2_collate_output(aws_base_command,
-                            region_models_outdir,
-                            site_models_outdir,
+                            output_region_dpath,
+                            output_sites_dpath,
                             ta2_s3_collation_bucket)
 
     # 5. Egress (envelop KWCOCO dataset in a STAC item and egress;
