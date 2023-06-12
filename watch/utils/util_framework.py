@@ -210,3 +210,203 @@ def determine_region_id(region_fpath):
                 region_id = props.get('region_id', props.get('region_model_id'))
                 break
     return region_id
+
+
+class AWS_S3_Command:
+    """
+    Helper to build and execute AWS S3 bash commands
+
+    References:
+        https://docs.aws.amazon.com/cli/latest/reference/s3/
+
+    Example:
+        >>> from watch.utils.util_framework import *  # NOQA
+        >>> self = AWS_S3_Command('ls', 's3://foo/bar')
+        >>> self.update(profile='myprofile')
+        >>> print(self.finalize())
+        ['aws', 's3', '--profile', 'myprofile', 'ls', 's3://foo/bar']
+        >>> self = AWS_S3_Command('cp', 's3://foo/bar', '/foo/bar', quiet=True, no_progress=True, color='auto')
+        >>> print(self.finalize())
+        ['aws', 's3', '--quiet', '--no-progress', '--color', 'auto', 'cp', 's3://foo/bar', '/foo/bar']
+
+    Example:
+        >>> # Reuse the same command object with different positional args
+        >>> aws_cmd = AWS_S3_Command('cp')
+        >>> aws_cmd.update(
+        >>>     profile='myprof',
+        >>>     only_show_errors=True
+        >>> )
+        >>> aws_cmd.args = ['s3://data1', '/local/data1']
+        >>> print(aws_cmd.finalize())
+        ['aws', 's3', '--only-show-errors', '--profile', 'myprof', 'cp', 's3://data1', '/local/data1']
+        >>> # Set the `args` attribute to get a new command while keeping
+        >>> # existing options.
+        >>> aws_cmd.update(recursive=True)
+        >>> aws_cmd.args = ['s3://data2', '/local/data2']
+        >>> print(aws_cmd.finalize())
+        ['aws', 's3', '--only-show-errors', '--recursive', '--profile', 'myprof', 'cp', 's3://data2', '/local/data2']
+
+    Example:
+        >>> # There is no need to specify the entire command. If you want
+        >>> # to simply build a command prefix, then that works too.
+        >>> aws_cmd = AWS_S3_Command('cp', profile='myprof', aws_storage_class='foobar')
+        >>> print(aws_cmd.finalize())
+        ['aws', 's3', '--profile', 'myprof', '--aws-storage-class', 'foobar', 'cp']
+    """
+
+    # Register known options for known commands
+    cmd_known_flags = {}
+    cmd_known_keyvals = {}
+
+    cmd_known_flags['ls'] = [
+        'recursive',
+        'human-readable',
+        'summarize',
+        'debug',
+        'no-verify-ssl',
+        'no-paginate',
+        'no-sign-request',
+    ]
+
+    cmd_known_keyvals['ls'] = [
+        'endpoint-url',
+        'page-size',
+        'request-payer',
+        'output',
+        'query',
+        'profile',
+        'region',
+        'version',
+        'color',
+        'ca-bundle',
+        'cli-read-timeout',
+        'cli-connect-timeout',
+    ]
+
+    cmd_known_flags['cp'] = [
+        'dryrun',
+        'quiet',
+        'follow-symlinks',
+        'no-follow-symlinks',
+        'no-guess-mime-type',
+        'only-show-errors',
+        'no-progress',
+        'ignore-glacier-warnings',
+        'force-glacier-transfer',
+        'recursive',
+        'debug',
+        'no-verify-ssl',
+        'no-paginate',
+    ]
+
+    cmd_known_keyvals['cp'] = [
+        'include',
+        'exclude',
+        'acl',
+        'sse',
+        'sse-c',
+        'sse-c-key',
+        'sse-kms-key-id',
+        'sse-c-copy-source',
+        'sse-c-copy-source-key',
+        'storage-class',
+        'grants',
+        'website-redirect',
+        'content-type',
+        'cache-control',
+        'content-disposition',
+        'content-encoding',
+        'content-language',
+        'expires',
+        'source-region',
+        'page-size',
+        'request-payer',
+        'metadata',
+        'metadata-directive',
+        'expected-size',
+        'endpoint-url',
+        'output',
+        'query',
+        'profile',
+        'region',
+        'version',
+        'color',
+        'no-sign-request',
+        'ca-bundle',
+        'cli-read-timeout',
+        'cli-connect-timeout',
+    ]
+
+    def __init__(self, command, *args, **options):
+        """
+        Args:
+            command (str):
+                can be: cp, ls, mv, rm, sync
+
+            *args: positional arguments
+
+            **options: key value options (e.g. profile)
+        """
+        self.command = command
+        self.args = args
+
+        self._known_flags = self.cmd_known_flags.get(self.command, [])
+        self._known_keyvals = self.cmd_known_keyvals.get(self.command, [])
+        self._known_flags = self._known_flags + [k.replace('-', '_') for k in self._known_flags]
+        self._known_keyvals = self._known_keyvals + [k.replace('-', '_') for k in self._known_keyvals]
+
+        # Key / value CLI arguments
+        self._keyval_options = {}
+        self._flag_options = {}
+
+        self.update(options)
+
+    def update(self, arg=None, /, **options):
+        """
+        Update key / value options.
+
+        This function is aware of what options need to be flags versus key/values
+
+        So quiet=True will result in `--quiet`, quiet=False will have include no option.
+        Likewise profile=foo will result in `--profile foo` and profile=None will include no option.
+        """
+        if arg is not None:
+            import ubelt as ub
+            options = ub.udict(arg) | options
+
+        for k, v in options.items():
+            if k in self._known_flags:
+                self._flag_options[k] = v
+            elif k in self._known_keyvals:
+                self._keyval_options[k] = v
+            else:
+                # Fallback to key/value
+                self._keyval_options[k] = v
+
+    def finalize(self):
+        """
+        Returns:
+            List[str]: commands suitable for passing to POpen
+        """
+        parts = ['aws', 's3']
+        for k, v in self._flag_options.items():
+            if v:
+                parts.extend(['--' + k.replace('_', '-')])
+        for k, v in self._keyval_options.items():
+            if v is not None:
+                parts.extend(['--' + k.replace('_', '-'), v])
+        parts.append(self.command)
+        parts.extend(self.args)
+        return parts
+
+    def run(self, verbose=3, check=True, shell=False):
+        """
+        Execute the S3 command
+
+        Returns:
+            Dict : ubelt cmd info dict
+        """
+        import ubelt as ub
+        final_command = self.finalize()
+        run_info = ub.cmd(final_command, verbose=3, check=check, shell=shell)
+        return run_info

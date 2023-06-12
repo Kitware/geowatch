@@ -12,6 +12,7 @@ import scriptconfig as scfg
 import shutil
 import subprocess
 import ubelt as ub
+from os.path import join
 from glob import glob
 
 
@@ -21,7 +22,6 @@ class BasFusionConfig(scfg.DataConfig):
 
     python ~/code/watch/watch/cli/dag_cli/run_bas_fusion.py
     """
-    __fuzzy_hyphens__ = True
 
     input_path = scfg.Value(None, type=str, position=1, required=True, help=ub.paragraph(
             '''
@@ -77,33 +77,6 @@ def main():
     run_bas_fusion_for_baseline(config)
 
 
-def _upload_region(aws_base_command,
-                   local_region_dir,
-                   local_input_region_path,
-                   destination_region_s3):
-    with open(local_input_region_path) as f:
-        region = json.load(f)
-
-    region_id = None
-    for feature in region.get('features', ()):
-        props = feature['properties']
-        if props['type'] == 'region':
-            region_id = props.get('region_model_id', props.get('region_id'))
-            break
-
-    if region_id is not None:
-        updated_region_path = os.path.join(local_region_dir,
-                                           '{}.geojson'.format(region_id))
-
-        print("** Uploading updated region file")
-        subprocess.run([*aws_base_command,
-                        updated_region_path, destination_region_s3],
-                       check=True)
-    else:
-        print("** Error: Couldn't parse region_id from region file, "
-              "not uploading")
-
-
 def _ta2_collate_output(aws_base_command,
                         local_region_dir,
                         local_sites_dir,
@@ -113,7 +86,7 @@ def _ta2_collate_output(aws_base_command,
         base, ext = os.path.splitext(os.path.basename(local_path))
         return "{}_{}{}".format(base, performer_suffix, ext)
 
-    for region in glob(os.path.join(local_region_dir, '*.geojson')):
+    for region in glob(join(local_region_dir, '*.geojson')):
         region_s3_outpath = '/'.join((destination_s3_bucket,
                                       'region_models',
                                       _get_suffixed_basename(region)))
@@ -121,7 +94,7 @@ def _ta2_collate_output(aws_base_command,
                         region,
                         region_s3_outpath], check=True)
 
-    for site in glob(os.path.join(local_sites_dir, '*.geojson')):
+    for site in glob(join(local_sites_dir, '*.geojson')):
         site_s3_outpath = '/'.join((destination_s3_bucket,
                                     'site_models',
                                     _get_suffixed_basename(site)))
@@ -137,6 +110,7 @@ def run_bas_fusion_for_baseline(config):
     from watch.utils.util_framework import download_region, determine_region_id
     from watch.tasks.fusion.predict import predict
     from watch.utils.util_yaml import Yaml
+    from watch.utils.util_framework import AWS_S3_Command
 
     input_path = config.input_path
     input_region_path = config.input_region_path
@@ -147,13 +121,12 @@ def run_bas_fusion_for_baseline(config):
     previous_bas_outbucket = config.previous_bas_outbucket
     ta2_s3_collation_bucket = config.ta2_s3_collation_bucket
 
-    if aws_profile is not None:
-        aws_base_command = ['aws', 's3', '--profile', aws_profile, 'cp']
-    else:
-        aws_base_command = ['aws', 's3', 'cp']
-
-    if dryrun:
-        aws_base_command.append('--dryrun')
+    aws_cp = AWS_S3_Command('cp')
+    aws_cp.update(
+        profile=aws_profile,
+        dryrun=dryrun,
+    )
+    aws_base_command = aws_cp.finalize()
 
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")

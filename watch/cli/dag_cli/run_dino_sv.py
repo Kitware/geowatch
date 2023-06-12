@@ -62,33 +62,6 @@ def main():
     run_dino_sv(config)
 
 
-def _upload_region(aws_base_command,
-                   local_region_dir,
-                   local_input_region_path,
-                   destination_region_s3):
-    with open(local_input_region_path) as f:
-        region = json.load(f)
-
-    region_id = None
-    for feature in region.get('features', ()):
-        props = feature['properties']
-        if props['type'] == 'region':
-            region_id = props.get('region_model_id', props.get('region_id'))
-            break
-
-    if region_id is not None:
-        updated_region_path = os.path.join(local_region_dir,
-                                           '{}.geojson'.format(region_id))
-
-        print("** Uploading updated region file")
-        subprocess.run([*aws_base_command,
-                        updated_region_path, destination_region_s3],
-                       check=True)
-    else:
-        print("** Error: Couldn't parse region_id from region file, "
-              "not uploading")
-
-
 def _ta2_collate_output(aws_base_command,
                         local_region_dir,
                         local_sites_dir,

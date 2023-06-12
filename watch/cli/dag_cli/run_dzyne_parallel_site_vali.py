@@ -58,59 +58,6 @@ def main():
     run_dzyne_parallel_site_vali_for_baseline(config)
 
 
-def _upload_region(aws_base_command,
-                   local_region_dir,
-                   local_input_region_path,
-                   destination_region_s3):
-    with open(local_input_region_path) as f:
-        region = json.load(f)
-
-    region_id = None
-    for feature in region.get('features', ()):
-        props = feature['properties']
-        if props['type'] == 'region':
-            region_id = props.get('region_model_id', props.get('region_id'))
-            break
-
-    if region_id is not None:
-        updated_region_path = os.path.join(local_region_dir,
-                                           '{}.geojson'.format(region_id))
-
-        print("** Uploading updated region file")
-        subprocess.run([*aws_base_command,
-                        updated_region_path, destination_region_s3],
-                       check=True)
-    else:
-        print("** Error: Couldn't parse region_id from region file, "
-              "not uploading")
-
-
-def _ta2_collate_output(aws_base_command,
-                        local_region_dir,
-                        local_sites_dir,
-                        destination_s3_bucket,
-                        performer_suffix='KIT'):
-    def _get_suffixed_basename(local_path):
-        base, ext = os.path.splitext(os.path.basename(local_path))
-        return "{}_{}{}".format(base, performer_suffix, ext)
-
-    for region in glob(os.path.join(local_region_dir, '*.geojson')):
-        region_s3_outpath = '/'.join((destination_s3_bucket,
-                                      'region_models',
-                                      _get_suffixed_basename(region)))
-        subprocess.run([*aws_base_command,
-                        region,
-                        region_s3_outpath], check=True)
-
-    for site in glob(os.path.join(local_sites_dir, '*.geojson')):
-        site_s3_outpath = '/'.join((destination_s3_bucket,
-                                    'site_models',
-                                    _get_suffixed_basename(site)))
-        subprocess.run([*aws_base_command,
-                        site,
-                        site_s3_outpath], check=True)
-
-
 def run_dzyne_parallel_site_vali_for_baseline(config):
     from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress
     from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress
@@ -125,14 +72,6 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
     outbucket = config.outbucket
     aws_profile = config.aws_profile
     dryrun = config.dryrun
-
-    if aws_profile is not None:
-        aws_base_command = ['aws', 's3', '--profile', aws_profile, 'cp']
-    else:
-        aws_base_command = ['aws', 's3', 'cp']
-
-    if dryrun:
-        aws_base_command.append('--dryrun')
 
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")

@@ -3,7 +3,7 @@ import sys
 import json
 import os
 import tempfile
-import subprocess
+from os.path import join, dirname, basename
 
 
 def main():
@@ -41,19 +41,16 @@ def baseline_framework_kwcoco_ingress(input_path,
                                       aws_profile=None,
                                       dryrun=False,
                                       show_progress=False):
+
+    from watch.utils.util_framework import AWS_S3_Command
     os.makedirs(outdir, exist_ok=True)
 
-    if aws_profile is not None:
-        aws_base_command =\
-            ['aws', 's3', '--profile', aws_profile, 'cp']
-    else:
-        aws_base_command = ['aws', 's3', 'cp']
-
-    if dryrun:
-        aws_base_command.append('--dryrun')
-
-    if not show_progress:
-        aws_base_command.append('--only-show-errors')
+    aws_cp = AWS_S3_Command('cp')
+    aws_cp.update(
+        profile=aws_profile,
+        dryrun=dryrun,
+        only_show_errors=not show_progress,
+    )
 
     def _load_input(path):
         try:
@@ -68,10 +65,8 @@ def baseline_framework_kwcoco_ingress(input_path,
 
     if input_path.startswith('s3'):
         with tempfile.NamedTemporaryFile() as temporary_file:
-            subprocess.run(
-                [*aws_base_command, input_path, temporary_file.name],
-                check=True)
-
+            aws_cp.args = [input_path, temporary_file.name]
+            aws_cp.run()
             input_stac_items = _load_input(temporary_file.name)
     else:
         input_stac_items = _load_input(input_path)
@@ -90,13 +85,14 @@ def baseline_framework_kwcoco_ingress(input_path,
 
     # Assumes that all the necessary KWCOCO dataset assets are in the
     # same directory as the KWCOCO dataset itself
-    kwcoco_dataset_dir = os.path.dirname(kwcoco_dataset_href)
-    subprocess.run([*aws_base_command, '--recursive',
-                    kwcoco_dataset_dir, outdir],
-                   check=True)
+    kwcoco_dataset_dir = dirname(kwcoco_dataset_href)
+
+    aws_cp.update(recursive=True)
+    aws_cp.args = [kwcoco_dataset_dir, outdir]
+    aws_cp.run()
 
     # Returns local path to retreived KWCOCO dataset
-    return os.path.join(outdir, os.path.basename(kwcoco_dataset_href))
+    return join(outdir, basename(kwcoco_dataset_href))
 
 
 if __name__ == "__main__":
