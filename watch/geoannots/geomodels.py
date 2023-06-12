@@ -205,6 +205,14 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
                 yield feat
 
     def strip_body_features(self):
+        """
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> self = RegionModel.random()
+            >>> assert len(list(self.body_features())) > 0
+            >>> self.strip_body_features()
+            >>> assert len(list(self.body_features())) == 0
+        """
         self['features'] = [self.header]
 
     @property
