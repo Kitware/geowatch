@@ -37,8 +37,8 @@ class FilterTracksConfig(scfg.DataConfig):
         '''), alias=['out_sites_fpath'], group='outputs')
 
 
-def main(**kwargs):
-    config = FilterTracksConfig.cli(cmdline=True, data=kwargs, strict=True)
+def main(cmdline=1, **kwargs):
+    config = FilterTracksConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
     import rich
 
     rich.print('config = {}'.format(ub.urepr(config, nl=1)))
