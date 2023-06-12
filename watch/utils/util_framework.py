@@ -15,11 +15,12 @@ class CacheItemOutputS3Wrapper:
         self.item_map = item_map
         self.outbucket = outbucket
 
-        if aws_profile is not None:
-            self.aws_base_command = [
-                'aws', 's3', '--profile', aws_profile, 'cp', '--no-progress']
-        else:
-            self.aws_base_command = ['aws', 's3', 'cp', '--no-progress']
+        aws_cp = AWS_S3_Command('cp')
+        aws_cp.update(
+            profile=aws_profile,
+            no_progress=True,
+        )
+        self.aws_base_command = aws_cp.finalize()
 
     def __call__(self, stac_item, *args, **kwargs):
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -149,22 +150,16 @@ def download_region(input_region_path,
                     aws_profile=None,
                     strip_nonregions=False,
                     ensure_comments=False):
-    if aws_profile is not None:
-        aws_base_command =\
-            ['aws', 's3', '--profile', aws_profile, 'cp']
-    else:
-        aws_base_command = ['aws', 's3', 'cp']
-
     scheme, *_ = urlparse(input_region_path)
     if scheme == 's3':
+        aws_cp = AWS_S3_Command('cp')
+        aws_cp.update(
+            profile=aws_profile
+        )
         with tempfile.NamedTemporaryFile() as temporary_file:
-            command = [*aws_base_command,
-                       input_region_path,
-                       temporary_file.name]
 
-            print("Running: {}".format(' '.join(command)))
-            # TODO: Manually check return code / output
-            subprocess.run(command, check=True)
+            aws_cp.args = [input_region_path, temporary_file.name]
+            aws_cp.run()
 
             with open(temporary_file.name) as f:
                 out_region_data = json.load(f)
