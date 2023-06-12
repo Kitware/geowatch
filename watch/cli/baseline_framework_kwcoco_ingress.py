@@ -87,11 +87,9 @@ def baseline_framework_kwcoco_ingress(input_path,
     # same directory as the KWCOCO dataset itself
     kwcoco_dataset_dir = dirname(kwcoco_dataset_href)
 
-    HACK_OFF = 0
-    if not HACK_OFF:
-        aws_cp.update(recursive=True)
-        aws_cp.args = [kwcoco_dataset_dir, outdir]
-        aws_cp.run()
+    aws_cp.update(recursive=True)
+    aws_cp.args = [kwcoco_dataset_dir, outdir]
+    aws_cp.run()
 
     # Returns local path to retreived KWCOCO dataset
     return join(outdir, basename(kwcoco_dataset_href))

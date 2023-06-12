@@ -93,6 +93,7 @@ def run_dino_sv(config):
     from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress
     from watch.utils.util_framework import download_region, determine_region_id
     from watch.utils.util_yaml import Yaml
+    from watch.utils.util_framework import AWS_S3_Command
 
     input_path = config.input_path
     input_region_path = config.input_region_path
@@ -106,14 +107,12 @@ def run_dino_sv(config):
     dino_detect_config = config.dino_detect_config
     dino_filter_config = config.dino_filter_config
 
-    if aws_profile is not None:
-        aws_base_command =\
-            ['aws', 's3', '--profile', aws_profile, 'cp']
-    else:
-        aws_base_command = ['aws', 's3', 'cp']
-
-    if dryrun:
-        aws_base_command.append('--dryrun')
+    aws_cp = AWS_S3_Command('cp')
+    aws_cp.update(
+        profile=aws_profile,
+        dryrun=dryrun,
+    )
+    aws_base_command = aws_cp.finalize()
 
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
@@ -123,6 +122,8 @@ def run_dino_sv(config):
         ingress_dir,
         aws_profile,
         dryrun)
+
+    print(f'ingress_kwcoco_path={ingress_kwcoco_path}')
 
     # # 2. Download and prune region file
     print("* Downloading and pruning region file *")
@@ -137,6 +138,7 @@ def run_dino_sv(config):
 
     # Determine the region_id in the region file.
     region_id = determine_region_id(local_region_path)
+    print(f'region_id={region_id}')
 
     dino_boxes_kwcoco_path = ingress_dir / 'dino_boxes_kwcoco.json'
 
@@ -172,7 +174,10 @@ def run_dino_sv(config):
     with open(ingress_kwcoco_path) as f:
         ingress_kwcoco_data = json.load(f)
 
-    if len(ingress_kwcoco_data.get('videos', ())) > 0:
+    num_videos = len(ingress_kwcoco_data.get('videos', ()))
+    print(f'num_videos={num_videos}')
+
+    if num_videos > 0:
         # 3.2 Run DinoBoxDetector
         print("* Running Dino Detect *")
 
