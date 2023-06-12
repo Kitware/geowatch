@@ -144,8 +144,8 @@ def run_dino_sv(config):
     # site validation, the path to the region / sites directories should be
     # parameters passed to us from the DAG (so we can shift the order in
     # which operations are applied at the DAG level)
-    input_region_dpath = ingress_dir / 'dyzne_parallel_site_vali_region_models'
-    input_sites_dpath = ingress_dir / 'filtered_site'
+    input_region_dpath = ingress_dir / 'depth_filtered_regions'
+    input_sites_dpath = ingress_dir / 'depth_filtered_sites'
     input_region_fpath = input_region_dpath / f'{region_id}.geojson'
 
     # FIXME: these output directories for region / site models should be passed

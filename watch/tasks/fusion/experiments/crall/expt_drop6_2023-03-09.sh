@@ -3826,7 +3826,7 @@ initializer:
 " --ckpt_path /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-MedianNoWinter10GSD/runs/Drop7-MedianNoWinter10GSD_landcover_invar_cold_sam_scratch_split6_V60/lightning_logs/version_3/checkpoints/epoch=194-step=8385.ckpt
 
 
-# On toothbrush scratch (split6 with COLD+Invariants+landcover)
+# On toothbrush scratch (split6 with COLD+Invariants+landcover+materials+mae)
 export CUDA_VISIBLE_DEVICES=1
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
@@ -3834,12 +3834,12 @@ echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop7-MedianNoWinter10GSD
 KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
-TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_I2LSC_split6.kwcoco.zip
-VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_I2LSC_split6.kwcoco.zip
-CHANNELS="(L8,S2):(blue|green|red|nir),(WV):(blue|green|red),(WV,WV1):pan,(S2):(water|forest|field|impervious|barren|landcover_hidden.0:32,invariants:16),(L8):(blue_COLD_cv|green_COLD_cv|red_COLD_cv|nir_COLD_cv|swir16_COLD_cv|swir22_COLD_cv|blue_COLD_a0|green_COLD_a0|red_COLD_a0|nir_COLD_a0|swir16_COLD_a0|swir22_COLD_a0|blue_COLD_a1|green_COLD_a1|red_COLD_a1|nir_COLD_a1|swir16_COLD_a1|swir22_COLD_a1|blue_COLD_b1|green_COLD_b1|red_COLD_b1|nir_COLD_b1|swir16_COLD_b1|swir22_COLD_b1|blue_COLD_c1|green_COLD_c1|red_COLD_c1|nir_COLD_c1|swir16_COLD_c1|swir22_COLD_c1|blue_COLD_rmse|green_COLD_rmse|red_COLD_rmse|nir_COLD_rmse|swir16_COLD_rmse|swir22_COLD_rmse),(L8,S2,WV,WV1):(sam.0:64)"
-EXPERIMENT_NAME=Drop7-MedianNoWinter10GSD_landcover_invar_cold_sam_scratch_split6_V64
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_EI2LMSC_split6.kwcoco.zip
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_EI2LMSC_split6.kwcoco.zip
+CHANNELS="(L8,S2):(blue|green|red|nir),(WV):(blue|green|red),(WV,WV1):pan,(S2):(water|forest|field|impervious|barren|landcover_hidden.0:32,invariants:16),(L8):(blue_COLD_cv|green_COLD_cv|red_COLD_cv|nir_COLD_cv|swir16_COLD_cv|swir22_COLD_cv|blue_COLD_a0|green_COLD_a0|red_COLD_a0|nir_COLD_a0|swir16_COLD_a0|swir22_COLD_a0|blue_COLD_a1|green_COLD_a1|red_COLD_a1|nir_COLD_a1|swir16_COLD_a1|swir22_COLD_a1|blue_COLD_b1|green_COLD_b1|red_COLD_b1|nir_COLD_b1|swir16_COLD_b1|swir22_COLD_b1|blue_COLD_c1|green_COLD_c1|red_COLD_c1|nir_COLD_c1|swir16_COLD_c1|swir22_COLD_c1|blue_COLD_rmse|green_COLD_rmse|red_COLD_rmse|nir_COLD_rmse|swir16_COLD_rmse|swir22_COLD_rmse),(L8,S2,WV,WV1):(sam.0:64),(L8,S2,WV):(mat_feats.0:16|materials.0:9|mtm),(S2):(mae.0:16)"
+EXPERIMENT_NAME=Drop7-MedianNoWinter10GSD_landcover_invar_cold_sam_mat_mae_scratch_split6_V64
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-TARGET_LR=3e-4
+TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
 echo "WEIGHT_DECAY = $WEIGHT_DECAY"
 MAX_STEPS=80000
@@ -3857,7 +3857,7 @@ data:
     input_resolution      : 10.0GSD
     output_resolution     : 10.0GSD
     neg_to_pos_ratio       : 1.0
-    batch_size             : 2
+    batch_size             : 1
     normalize_perframe     : false
     normalize_peritem      : 'blue|green|red|nir|pan'
     max_epoch_length       : 1000000
@@ -3907,20 +3907,18 @@ lr_scheduler:
     anneal_strategy: cos
     pct_start: 0.05
 trainer:
-    accumulate_grad_batches: 48
+    accumulate_grad_batches: 32
     default_root_dir     : $DEFAULT_ROOT_DIR
     accelerator          : gpu
     devices              : 0,
     limit_val_batches    : 256
     limit_train_batches  : 2048
     num_sanity_val_steps : 0
-    max_epochs           : 360
-    # TODO:
-    #max_steps            : $MAX_STEPS
+    max_steps            : $MAX_STEPS
 
 torch_globals:
     float32_matmul_precision: auto
 
 initializer:
     init: noop
-" --ckpt_path /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-MedianNoWinter10GSD/runs/Drop7-MedianNoWinter10GSD_landcover_invar_cold_sam_scratch_split6_V60/lightning_logs/version_3/checkpoints/epoch=194-step=8385.ckpt
+"
