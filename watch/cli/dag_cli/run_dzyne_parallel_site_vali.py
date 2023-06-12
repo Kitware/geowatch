@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
-import json
-import os
 import scriptconfig as scfg
-import subprocess
 import ubelt as ub
-from glob import glob
 
 
 class DzyneParallelSiteValiConfig(scfg.DataConfig):
@@ -101,6 +97,7 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
     region_id = determine_region_id(local_region_path)
 
     ####
+    # DEBUGGING:
     # Print info about what version of the code we are running on
     ub.cmd('git log -n 1', verbose=3, cwd='/root/code/watch')
 
@@ -198,8 +195,8 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
                                      local_region_path,
                                      output_path,
                                      outbucket,
-                                     aws_profile=None,
-                                     dryrun=False,
+                                     aws_profile=aws_profile,
+                                     dryrun=dryrun,
                                      newline=False)
 
 

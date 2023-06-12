@@ -255,6 +255,8 @@ class AWS_S3_Command:
     """
 
     # Register known options for known commands
+    # TODO: multi values
+
     cmd_known_flags = {}
     cmd_known_keyvals = {}
 
@@ -272,6 +274,61 @@ class AWS_S3_Command:
         'endpoint-url',
         'page-size',
         'request-payer',
+        'output',
+        'query',
+        'profile',
+        'region',
+        'version',
+        'color',
+        'ca-bundle',
+        'cli-read-timeout',
+        'cli-connect-timeout',
+    ]
+
+    cmd_known_flags['sync'] = [
+        'dryrun',
+        'quiet',
+        'follow-symlinks',
+        'no-follow-symlinks',
+        'no-guess-mime-type',
+        'only-show-errors',
+        'no-progress',
+        'ignore-glacier-warnings',
+        'force-glacier-transfer',
+        'size-only',
+        'exact-timestamps',
+        'delete',
+        'debug',
+        'no-verify-ssl',
+        'no-paginate',
+        'no-sign-request',
+    ]
+
+    cmd_known_keyvals['sync'] = [
+        'include',
+        'exclude',
+        'acl',
+        'sse',
+        'sse-c',
+        'sse-c-key',
+        'sse-kms-key-id',
+        'sse-c-copy-source',
+        'sse-c-copy-source-key',
+        'storage-class',
+        'grants',
+        'website-redirect',
+        'content-type',
+        'cache-control',
+        'content-disposition',
+        'content-encoding',
+        'content-language',
+        'expires',
+        'source-region',
+        'page-size',
+        'request-payer',
+        'metadata',
+        'metadata-directive',
+        'endpoint-url',
         'output',
         'query',
         'profile',

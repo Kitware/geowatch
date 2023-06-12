@@ -3,10 +3,7 @@ import sys
 import json
 import os
 import tempfile
-import subprocess
-
-from os.path import join, dirname
-
+from os.path import join, dirname, basename
 from shapely.geometry import shape
 
 
@@ -109,11 +106,9 @@ def baseline_framework_kwcoco_egress(kwcoco_dataset_path,
         only_show_errors=not show_progress,
     )
 
-    item_id, _ = os.path.splitext(os.path.basename(kwcoco_dataset_path))
-    self_s3_outpath = join(
-        outbucket, item_id, '{}.json'.format(item_id))
-    kwcoco_s3_outpath = join(
-        outbucket, os.path.basename(kwcoco_dataset_path))
+    item_id, _ = os.path.splitext(basename(kwcoco_dataset_path))
+    self_s3_outpath = join(outbucket, item_id, '{}.json'.format(item_id))
+    kwcoco_s3_outpath = join(outbucket, basename(kwcoco_dataset_path))
     output_stac_item = _kwcoco_to_stac_item(item_id,
                                             kwcoco_dataset_path,
                                             region_path,
