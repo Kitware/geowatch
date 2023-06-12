@@ -46,6 +46,8 @@ Example:
 
     python -m watch.mlops.manager "pull packages" --dataset_codes Drop6-MeanYear10GSD-V2 --yes
 
+    python -m watch.mlops.manager "list packages" --dataset_codes Drop7-MedianNoWinter10GSD --yes
+
     # On training machine
     python -m watch.mlops.manager "push packages" --dataset_codes Drop6
     python -m watch.mlops.manager "push packages" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"

@@ -210,7 +210,7 @@ def run_dino_sv(config):
             'output_region_fpath': output_region_fpath,
             'output_sites_dpath': output_sites_dpath,
             'output_site_manifest_fpath': output_site_manifest_fpath,
-            })
+        })
 
         ub.cmd(dino_building_filter.command(), check=True, verbose=3, system=True)
 
