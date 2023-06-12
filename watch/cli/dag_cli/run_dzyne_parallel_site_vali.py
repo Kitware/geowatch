@@ -85,13 +85,15 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
     # CHECKME: Is this the region model with site summaries from the tracker?
     local_region_path = '/tmp/region.json'
 
-    download_region(
-        input_region_path=input_region_path,
-        output_region_path=local_region_path,
-        aws_profile=aws_profile,
-        strip_nonregions=True,
-        ensure_comments=True,
-    )
+    HACK_OFF = 1
+    if not HACK_OFF:
+        download_region(
+            input_region_path=input_region_path,
+            output_region_path=local_region_path,
+            aws_profile=aws_profile,
+            strip_nonregions=True,
+            ensure_comments=True,
+        )
 
     # Determine the region_id in the region file.
     region_id = determine_region_id(local_region_path)
