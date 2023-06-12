@@ -144,6 +144,7 @@ def main(cmdline=1, **kwargs):
     output_region_fpath = ub.Path(config.output_region_fpath)
     output_region_fpath.parent.ensuredir()
 
+    print(f'Write filtered region model to: {output_region_fpath}')
     with safer.open(output_region_fpath, 'w', temp_file=not ub.WIN32) as file:
         json.dump(new_region_model, file, indent=4)
 
