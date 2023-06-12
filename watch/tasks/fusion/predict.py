@@ -15,7 +15,6 @@ import kwarray
 import kwcoco
 from watch.tasks.fusion import datamodules
 from watch.tasks.fusion import utils
-from watch.utils import util_path
 from watch.utils import util_parallel
 from watch.tasks.fusion.datamodules import data_utils
 from watch.tasks.fusion.coco_stitcher import CocoStitchingManager
@@ -228,6 +227,7 @@ def make_old_predict_config(cmdline=False, **kwargs):
     overloadable_datamodule_keys = [
         'channels',
         'normalize_peritem',
+        'normalize_perframe',
         'chip_size',
         'chip_dims',
         'time_steps',
