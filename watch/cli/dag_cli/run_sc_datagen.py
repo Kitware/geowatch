@@ -153,18 +153,7 @@ def run_generate_sc_cropped_kwcoco(input_path,
                     '--asset_timeout', '10minutes',
                     ], check=True)
 
-    # 5. "Clean" dataset
-    # print("* Cleaning cropped KWCOCO dataset *")
-    # subprocess.run(['python', '-m', 'watch.cli.coco_clean_geotiffs',
-    #                 '--src', ta1_sc_cropped_kwcoco_path,
-    #                 '--channels', "red|green|blue",
-    #                 '--prefilter_channels', "red",
-    #                 '--min_region_size', '256',
-    #                 '--nodata_value', '-9999',
-    #                 '--workers', '1' if force_one_job_for_cropping else str(jobs),  # noqa: 501
-    #                 ], check=True)
-
-    # 6. Egress (envelop KWCOCO dataset in a STAC item and egress;
+    # 5. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)
     print("* Egressing KWCOCO dataset and associated STAC item *")

@@ -320,27 +320,7 @@ def run_stac_to_cropped_kwcoco(input_path,
                     '--aux_workers', str(include_channels.count('|') + 1),
                     '--rpc_align_method', 'affine_warp'], check=True)
 
-    # 5. "Clean" dataset
-    # Ensure that only data bands are used here (i.e. not quality)
-    subprocess.run(['python', '-m', 'watch.cli.coco_clean_geotiffs',
-                    '--src', ta1_cropped_kwcoco_path,
-                    '--channels', 'coastal|blue|green|red|B05|B06|B07|nir|B8A|B09|cirrus|swir16|swir22',
-                    '--prefilter_channels', "red",
-                    '--min_region_size', '256',
-                    '--nodata_value', '-9999',
-                    '--workers', str(jobs),  # noqa: 501
-                    ], check=True)
-
-    subprocess.run(['python', '-m', 'watch.cli.coco_clean_geotiffs',
-                    '--src', ta1_cropped_kwcoco_path,
-                    '--channels', "pan",
-                    '--prefilter_channels', "pan",
-                    '--min_region_size', '256',
-                    '--nodata_value', '-9999',
-                    '--workers', str(jobs),  # noqa: 501
-                    ], check=True)
-
-    # 6. Do the time_combine for BAS
+    # 5. Do the time_combine for BAS
     from watch.utils.util_yaml import Yaml
     default_time_combine_config = ub.udict(
         time_window='1y',

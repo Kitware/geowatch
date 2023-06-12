@@ -73,6 +73,16 @@ import json
 from watch.utils import util_time
 from watch.utils import util_progress
 
+_VALID_SITE_OBSERVATION_FIELDS = {"type",
+                                  "observation_date",
+                                  "source",
+                                  "sensor_name",
+                                  "current_phase",
+                                  "score",
+                                  "misc_info",
+                                  "is_occluded",
+                                  "is_site_boundary"}
+
 
 class _Model(ub.NiceRepr, geojson.FeatureCollection):
     type = 'FeatureCollection'
@@ -193,6 +203,9 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
             prop = feat['properties']
             if prop['type'] == self._body_type:
                 yield feat
+
+    def strip_body_features(self):
+        self['features'] = [self.header()]
 
     @property
     def header(self):
@@ -443,6 +456,20 @@ class RegionModel(_Model):
     def region_id(self):
         return self.header['properties']['region_id']
 
+    def fixup(self):
+        self.remove_invalid_properties()
+
+    def remove_invalid_properties(self):
+        props = self.header['properties']
+
+        if 'validated' in props:
+            del props['validated']
+
+    def ensure_comments(self):
+        props = self.header['properties']
+
+        props['comments'] = props.get('comments', '')
+
 
 class SiteModel(_Model):
     """
@@ -601,6 +628,23 @@ class SiteModel(_Model):
         for feat in self.features:
             fprop = feat['properties']
             fprop['score'] = float(max(min(1, fprop['score']), 0))
+
+    def remove_invalid_properties(self):
+        # T&E site schema no longer allows extraneous keys to be
+        # included in region / site models; removing all unsupported
+        # keys (could consider putting in 'misc_info' rather than
+        # deleting, though not clear if 'misc_info' will be supported
+        # in the future)
+        for obs in self.observations:
+            oprop = obs['properties']
+
+            to_remove = set()
+            for k in oprop.keys():
+                if k not in _VALID_SITE_OBSERVATION_FIELDS:
+                    to_remove.add(k)
+
+            for k in to_remove:
+                del oprop[k]
 
     def _manual_validation(self):
         """
