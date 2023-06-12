@@ -205,7 +205,7 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
                 yield feat
 
     def strip_body_features(self):
-        self['features'] = [self.header()]
+        self['features'] = [self.header]
 
     @property
     def header(self):
