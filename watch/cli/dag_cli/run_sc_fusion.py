@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import traceback
+from os.path import join
 
 import scriptconfig as scfg
 import ubelt as ub
@@ -72,33 +73,6 @@ def main():
     run_sc_fusion_for_baseline(config)
 
 
-def _upload_region(aws_base_command,
-                   local_region_dir,
-                   local_input_region_path,
-                   destination_region_s3):
-    with open(local_input_region_path) as f:
-        region = json.load(f)
-
-    region_id = None
-    for feature in region.get('features', ()):
-        props = feature['properties']
-        if props['type'] == 'region':
-            region_id = props.get('region_model_id', props.get('region_id'))
-            break
-
-    if region_id is not None:
-        updated_region_path = os.path.join(local_region_dir,
-                                           '{}.geojson'.format(region_id))
-
-        print("** Uploading updated region file")
-        subprocess.run([*aws_base_command,
-                        updated_region_path, destination_region_s3],
-                       check=True)
-    else:
-        print("** Error: Couldn't parse region_id from region file, "
-              "not uploading")
-
-
 def _ta2_collate_output(aws_base_command,
                         local_region_dir,
                         local_sites_dir,
@@ -108,7 +82,7 @@ def _ta2_collate_output(aws_base_command,
         base, ext = os.path.splitext(os.path.basename(local_path))
         return "{}_{}{}".format(base, performer_suffix, ext)
 
-    for region in glob(os.path.join(local_region_dir, '*.geojson')):
+    for region in glob(join(local_region_dir, '*.geojson')):
         region_s3_outpath = '/'.join((destination_s3_bucket,
                                       'region_models',
                                       _get_suffixed_basename(region)))
@@ -116,7 +90,7 @@ def _ta2_collate_output(aws_base_command,
                         region,
                         region_s3_outpath], check=True)
 
-    for site in glob(os.path.join(local_sites_dir, '*.geojson')):
+    for site in glob(join(local_sites_dir, '*.geojson')):
         site_s3_outpath = '/'.join((destination_s3_bucket,
                                     'site_models',
                                     _get_suffixed_basename(site)))
@@ -132,6 +106,7 @@ def run_sc_fusion_for_baseline(config):
     from watch.tasks.fusion.datamodules.temporal_sampling import TimeSampleError
     from watch.utils.util_framework import download_region, determine_region_id
     from watch.utils.util_yaml import Yaml
+    from watch.utils.util_framework import AWS_S3_Command
 
     input_path = config.input_path
     input_region_path = config.input_region_path
@@ -143,14 +118,12 @@ def run_sc_fusion_for_baseline(config):
     dryrun = config.dryrun
     ta2_s3_collation_bucket = config.ta2_s3_collation_bucket
 
-    if aws_profile is not None:
-        aws_base_command =\
-            ['aws', 's3', '--profile', aws_profile, 'cp']
-    else:
-        aws_base_command = ['aws', 's3', 'cp']
-
-    if dryrun:
-        aws_base_command.append('--dryrun')
+    aws_cp = AWS_S3_Command('cp')
+    aws_cp.update(
+        profile=aws_profile,
+        dryrun=dryrun,
+    )
+    aws_base_command = aws_cp.finalize()
 
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
@@ -175,27 +148,23 @@ def run_sc_fusion_for_baseline(config):
     # Determine the region_id in the region file.
     region_id = determine_region_id(local_region_path)
 
-    sc_fusion_kwcoco_path = os.path.join(
-        ingress_dir, 'sc_fusion_kwcoco.json')
+    sc_fusion_kwcoco_path = join(ingress_dir, 'sc_fusion_kwcoco.json')
 
-    cropped_region_models_bas = os.path.join(ingress_dir,
-                                             'cropped_region_models_bas')
+    cropped_region_models_bas = join(ingress_dir, 'cropped_region_models_bas')
 
-    site_models_outdir = os.path.join(ingress_dir, 'sc_out_site_models')
+    site_models_outdir = join(ingress_dir, 'sc_out_site_models')
     os.makedirs(site_models_outdir, exist_ok=True)
-    region_models_outdir = os.path.join(ingress_dir, 'sc_out_region_models')
+    region_models_outdir = join(ingress_dir, 'sc_out_region_models')
     os.makedirs(region_models_outdir, exist_ok=True)
 
-    site_models_manifest_outdir = os.path.join(
-        ingress_dir, 'tracking_manifests_sc')
+    site_models_manifest_outdir = join(ingress_dir, 'tracking_manifests_sc')
     os.makedirs(site_models_manifest_outdir, exist_ok=True)
-    site_models_manifest_outpath = os.path.join(
+    site_models_manifest_outpath = join(
         site_models_manifest_outdir, 'site_models_manifest.json')
     # Copy input region model into region_models outdir to be updated
     # (rather than generated from tracking, which may not have the
     # same bounds as the original)
-    shutil.copy(local_region_path, os.path.join(
-        region_models_outdir, '{}.geojson'.format(region_id)))
+    shutil.copy(local_region_path, join(region_models_outdir, f'{region_id}.geojson'))
 
     # 3.1. Check that we have at least one "video" (BAS identified
     # site) to run over; if not skip SC fusion and KWCOCO to GeoJSON
@@ -267,33 +236,29 @@ def run_sc_fusion_for_baseline(config):
 
             tracked_sc_kwcoco_path = '_tracked'.join(
                 os.path.splitext(sc_fusion_kwcoco_path))
-            subprocess.run(['python', '-m', 'watch.cli.run_tracker',
-                            sc_fusion_kwcoco_path,
-                            '--out_site_summaries_dir', region_models_outdir,
-                            '--out_sites_dir', site_models_outdir,
-                            '--out_sites_fpath', site_models_manifest_outpath,
-                            '--out_kwcoco', tracked_sc_kwcoco_path,
-                            '--default_track_fn', sc_track_fn,
-                            '--site_summary',
-                            os.path.join(cropped_region_models_bas,
-                                         '*.geojson'),
-                            '--append_mode', 'True',
-                            '--track_kwargs', json.dumps(sc_track_kwargs)],
-                           check=True)
+            subprocess.run([
+                'python', '-m', 'watch.cli.run_tracker',
+                '--input_kwcoco', sc_fusion_kwcoco_path,
+                '--out_site_summaries_dir', region_models_outdir,
+                '--out_sites_dir', site_models_outdir,
+                '--out_sites_fpath', site_models_manifest_outpath,
+                '--out_kwcoco', tracked_sc_kwcoco_path,
+                '--default_track_fn', sc_track_fn,
+                '--site_summary', join(cropped_region_models_bas, '*.geojson'),
+                '--append_mode', 'True',
+                '--track_kwargs', json.dumps(sc_track_kwargs)],
+                check=True)
 
-    cropped_site_models_outdir = os.path.join(ingress_dir,
+    cropped_site_models_outdir = join(ingress_dir,
                                               'cropped_site_models')
     os.makedirs(cropped_site_models_outdir, exist_ok=True)
-    cropped_region_models_outdir = os.path.join(ingress_dir,
+    cropped_region_models_outdir = join(ingress_dir,
                                                 'cropped_region_models')
     os.makedirs(cropped_region_models_outdir, exist_ok=True)
 
     subprocess.run(['python', '-m', 'watch.cli.crop_sites_to_regions',
-                    '--site_models',
-                    os.path.join(site_models_outdir, '*.geojson'),
-                    '--region_models',
-                    os.path.join(region_models_outdir,
-                                 '{}.geojson'.format(region_id)),
+                    '--site_models', join(site_models_outdir, '*.geojson'),
+                    '--region_models', join(region_models_outdir, f'{region_id}.geojson'),
                     '--new_site_dpath', cropped_site_models_outdir,
                     '--new_region_dpath', cropped_region_models_outdir],
                    check=True)
