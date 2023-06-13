@@ -150,6 +150,11 @@ def run_dino_sv(config):
     input_sites_dpath = ingress_dir / 'depth_filtered_sites'
     input_region_fpath = input_region_dpath / f'{region_id}.geojson'
 
+    # NOTE; we want to be using the output of SV crop, not necesarilly the the
+    # dzyne output referenced by ingress_kwcoco_path
+    # input_kwcoco_fpath = ingress_kwcoco_path
+    input_kwcoco_fpath = ingress_dir / "cropped_kwcoco_for_sv.json"
+
     # FIXME: these output directories for region / site models should be passed
     # to us from the DAG
     output_sites_dpath = ingress_dir / 'sv_out_site_models'
@@ -172,10 +177,11 @@ def run_dino_sv(config):
     # 3.1. Check that we have at least one "video" (BAS identified
     # site) to run over; if not skip SV fusion and KWCOCO to GeoJSON
     import kwcoco
-    ingress_coco_dset = kwcoco.CocoDataset(ingress_kwcoco_path)
-    num_videos = ingress_coco_dset.n_videos
+    input_coco_dset = kwcoco.CocoDataset(input_kwcoco_fpath)
+    print('input_coco_dset = {}'.format(ub.urepr(input_coco_dset, nl=1)))
+    num_videos = input_coco_dset.n_videos
     # Note: cant open with json here because kwcoco will save compressed files
-    # with open(ingress_kwcoco_path) as f:
+    # with open(input_kwcoco_fpath) as f:
     #     ingress_kwcoco_data = json.load(f)
     # num_videos = len(ingress_kwcoco_data.get('videos', ()))
     print(f'num_videos={num_videos}')
@@ -185,7 +191,7 @@ def run_dino_sv(config):
         print("* Running Dino Detect *")
 
         default_dino_detect_config = ub.udict({
-            'coco_fpath': ingress_kwcoco_path,
+            'coco_fpath': input_kwcoco_fpath,
             'package_fpath': None,
             'batch_size': 1,
             'device': 0})
