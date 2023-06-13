@@ -165,18 +165,6 @@ echo '
 # docker login
 # docker pull docker/dockerfile:1.3.0-labs
 
-#### 3.10
-
-cd $HOME/code/watch
-DOCKER_BUILDKIT=1 docker build --progress=plain \
-    -t pyenv:310 \
-    --build-arg PYTHON_VERSION=3.10.5 \
-    -f ./dockerfiles/pyenv.Dockerfile .
-
-docker run --runtime=nvidia -it pyenv:310 bash  
-
-#### 3.11
-
 cd $HOME/code/watch
 DOCKER_BUILDKIT=1 docker build --progress=plain \
     -t pyenv:311 \

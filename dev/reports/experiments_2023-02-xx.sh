@@ -2207,12 +2207,19 @@ python -m watch.mlops.aggregate \
     --target "
         - $DVC_EXPT_DPATH/_toothbrush_drop7_nowinter
     " \
+    --output_dpath="$DVC_EXPT_DPATH/_toothbrush_drop7_nowinter/aggregate" \
     --resource_report=0 \
-    --plot_params=0 \
+    --plot_params="
+        enabled: 1
+        compare_sv_hack: True
+        stats_ranking: 0
+        min_variations: 1
+    " \
     --stdout_report="
-        top_k: 3
+        top_k: 10
         per_group: 1
-        macro_analysis: 1
+        macro_analysis: 0
         analyze: 0
-        reference_region: final
+        print_models: True
+        reference_region: KR_R002
     "

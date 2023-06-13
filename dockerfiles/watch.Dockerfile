@@ -96,7 +96,7 @@ RUN <<EOF
 echo "
 
     # SeeAlso:
-    # ~/code/watch-smartflow-dags/submit_system.sh
+    # ~/code/watch-smartflow-dags/prepare_system.sh
 
     # docker login
     # docker pull docker/dockerfile:1.3.0-labs
@@ -104,15 +104,16 @@ echo "
     #### You need to build the pyenv image first:
     # ./pyenv.Dockerfile
 
+    # An invocation for basic end-to-end building is:
+
+    # Build the pyenv image
     cd $HOME/code/watch
+    DOCKER_BUILDKIT=1 docker build --progress=plain \
+        -t pyenv:311 \
+        --build-arg PYTHON_VERSION=3.11.2 \
+        -f ./dockerfiles/pyenv.Dockerfile .
 
-    mkdir -p $HOME/tmp/watch-img-staging
-    [ ! -d $HOME/tmp/watch-img-staging/watch] || git clone --origin=host-$HOSTNAME $HOME/code/watch/.git $HOME/tmp/watch-img-staging/watch
-    cd $HOME/tmp/watch-img-staging/watch
-    git remote add origin git@gitlab.kitware.com:smart/watch.git || true
-    cd $HOME/tmp/watch-img-staging/watch
-    git pull
-
+    # Build the watch image
     DOCKER_BUILDKIT=1 docker build --progress=plain \
         -t "watch:311-strict" \
         --build-arg BUILD_STRICT=1 \
@@ -122,13 +123,6 @@ echo "
     docker run \
         --volume "$HOME/code/watch":/host-watch:ro \
         --runtime=nvidia -it watch:311-strict bash
-
-    git remote add dockerhost /host-watch/.git
-
-       # Push the container to smartgitlab
-    IMAGE_NAME=watch:311-strict
-    docker tag $IMAGE_NAME registry.smartgitlab.com/kitware/$IMAGE_NAME
-    docker push registry.smartgitlab.com/kitware/$IMAGE_NAME
 
    # Will need to bake in a model
    # For futher instructions see: 
