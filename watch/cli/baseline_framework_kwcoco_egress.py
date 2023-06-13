@@ -106,7 +106,7 @@ def baseline_framework_kwcoco_egress(kwcoco_dataset_path,
         only_show_errors=not show_progress,
     )
 
-    item_id, _ = os.path.splitext(basename(kwcoco_dataset_path))
+    item_id = basename(kwcoco_dataset_path).split('.')[0]
     self_s3_outpath = join(outbucket, item_id, '{}.json'.format(item_id))
     kwcoco_s3_outpath = join(outbucket, basename(kwcoco_dataset_path))
     output_stac_item = _kwcoco_to_stac_item(item_id,

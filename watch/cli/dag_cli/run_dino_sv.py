@@ -167,6 +167,9 @@ def run_dino_sv(config):
     output_region_dpath.ensuredir()
     output_site_manifest_dpath.ensuredir()
 
+    ingress_dir_paths = list(ingress_dir.glob('*'))
+    print('ingress_dir_paths = {}'.format(ub.urepr(ingress_dir_paths, nl=1)))
+
     # Copy input region model into region_models outdir to be updated
     # (rather than generated from tracking, which may not have the
     # same bounds as the original)
