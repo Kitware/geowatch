@@ -3907,7 +3907,7 @@ lr_scheduler:
     anneal_strategy: cos
     pct_start: 0.05
 trainer:
-    accumulate_grad_batches: 32
+    accumulate_grad_batches: 24
     default_root_dir     : $DEFAULT_ROOT_DIR
     accelerator          : gpu
     devices              : 0,
@@ -3921,4 +3921,4 @@ torch_globals:
 
 initializer:
     init: noop
-"
+" --ckpt_path /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-MedianNoWinter10GSD/runs/Drop7-MedianNoWinter10GSD_landcover_invar_cold_sam_mat_mae_scratch_split6_V64/lightning_logs/version_1/checkpoints/epoch=1-step=172-v1.ckpt
