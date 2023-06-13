@@ -134,7 +134,7 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
     input_region_fpath = ingress_dir / f'cropped_region_models_bas/{region_id}.geojson'
     # input_region_fpath = local_region_path  # is this right?
 
-    scored_kwcoco_fpath = sv_dir / "poly_depth_scored.kwcoco.zip"
+    scored_kwcoco_fpath = ingress_dir / "poly_depth_scored.kwcoco.zip"
 
     output_site_manifest_fpath = sv_dir / "filtered_sites_manifest.json"
     output_sites_dpath = sv_dir / "depth_filtered_sites"

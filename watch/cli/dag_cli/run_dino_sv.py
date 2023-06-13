@@ -6,7 +6,6 @@ See Old Version:
 SeeAlso:
     ~/code/watch-smartflow-dags/KIT_TA2_PREEVAL10_PYENV.py
 """
-import json
 import os
 import subprocess
 
