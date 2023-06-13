@@ -2199,3 +2199,20 @@ python -m watch.mlops.schedule_evaluation --params="
     --backend=tmux --queue_name "_toothbrush_drop7_nowinter" \
     --pipeline=bas --skip_existing=1 \
     --run=1
+
+
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+python -m watch.mlops.aggregate \
+    --pipeline=bas \
+    --target "
+        - $DVC_EXPT_DPATH/_toothbrush_drop7_nowinter
+    " \
+    --resource_report=0 \
+    --plot_params=0 \
+    --stdout_report="
+        top_k: 3
+        per_group: 1
+        macro_analysis: 1
+        analyze: 0
+        reference_region: final
+    "

@@ -146,6 +146,11 @@ _ACCENTURE_PHASE2_TA1_PRODUCTS = {
         }
     },
 
+    'ta1-10m-tsmoothed-acc-3': {
+        'endpoint': "https://api.smart-stac.com",
+        'collections': ['ta1-10m-tsmoothed-acc-3'],
+    }
+
 }
 
 
@@ -416,6 +421,9 @@ CONVINIENCE_SENSOR_GROUPS = {
     ],
     'TA1-L8-ACC': [
         'ta1-ls-acc',
+    ],
+    'TA1-10M-TSMOOTH-ACC-3': [
+        'ta1-10m-tsmoothed-acc-3',
     ],
 }
 
