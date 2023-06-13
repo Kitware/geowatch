@@ -298,6 +298,29 @@ def run_sc_fusion_for_baseline(config):
                     '--new_region_dpath', cropped_region_models_outdir],
                    check=True)
 
+    # Validate and fix all outputs
+    from watch.geoannots import geomodels
+    from watch.utils import util_gis
+
+    # cropped_site_models_outdir = ub.Path("$HOME/tmp/sc-temp/sites").expand()
+    # cropped_region_models_outdir = ub.Path("$HOME/tmp/sc-temp/regions").expand()
+    region_infos = list(util_gis.coerce_geojson_datas(cropped_region_models_outdir, format='json'))
+    site_infos = list(util_gis.coerce_geojson_datas(cropped_site_models_outdir, format='json'))
+
+    for region_info in region_infos:
+        fpath = region_info['fpath']
+        region = geomodels.RegionModel(**region_info['data'])
+        region.fixup()
+        fpath.write_text(region.dumps(indent='    '))
+        region.validate()
+
+    for site_info in site_infos:
+        fpath = site_info['fpath']
+        site = geomodels.SiteModel(**site_info['data'])
+        site.fixup()
+        fpath.write_text(site.dumps(indent='    '))
+        site.validate()
+
     # 5. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)

@@ -169,13 +169,6 @@ def run_dino_sv(config):
     ingress_dir_paths = list(ingress_dir.glob('*'))
     print('ingress_dir_paths = {}'.format(ub.urepr(ingress_dir_paths, nl=1)))
 
-    # Copy input region model into region_models outdir to be updated
-    # (rather than generated from tracking, which may not have the
-    # same bounds as the original)
-    # CHECKME: Is this necessary? I don't think it is, because it will get
-    # overwritten in the DINO filter, so I'm commenting it out.
-    # local_region_path.copy(output_region_fpath)
-
     # 3.1. Check that we have at least one "video" (BAS identified
     # site) to run over; if not skip SV fusion and KWCOCO to GeoJSON
     import kwcoco
@@ -188,7 +181,16 @@ def run_dino_sv(config):
     # num_videos = len(ingress_kwcoco_data.get('videos', ()))
     print(f'num_videos={num_videos}')
 
-    if num_videos > 0:
+    if num_videos == 0:
+        # Copy input region model into region_models outdir to be updated
+        # (rather than generated from tracking, which may not have the
+        # same bounds as the original)
+
+        # Not sure if the above case is the right comment, but leaving this
+        # here to guarentee the region with site summaries is passed forward
+        # TODO: the dino code should just be robust to this.
+        input_region_fpath.copy(output_region_fpath)
+    else:
         # 3.2 Run DinoBoxDetector
         print("* Running Dino Detect *")
 

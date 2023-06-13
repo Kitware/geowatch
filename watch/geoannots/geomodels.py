@@ -110,7 +110,7 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
     def coerce_multiple(cls, data, allow_raw=False, workers=0, mode='thread',
                         verbose=1, desc=None, parse_float=None):
         """
-        Load multiple geojson files
+        Load multiple geojson files.
 
         Args:
             arg (str | PathLike | List[str | PathLike]):
@@ -126,7 +126,12 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
             data, format='json', allow_raw=allow_raw, workers=workers,
             mode=mode, verbose=verbose, desc=desc, parse_float=parse_float))
         for info in infos:
-            yield cls(**info['data'])
+            item = cls(**info['data'])
+            # Can we enrich each item with the path it was read from without
+            # breaking dumps?
+            # if 'fpath' in info:
+            #     item.fpath = info['fpath']
+            yield item
 
     @classmethod
     def coerce(cls, data, parse_float=None):
