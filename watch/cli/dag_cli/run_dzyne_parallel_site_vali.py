@@ -124,9 +124,6 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
     # 3.3 Run DZYNE depth_pcd
     print("* Running DZYNE depth_pcd *")
 
-    sv_dir = ingress_dir / "dyzne_parallel_site_vali"
-    sv_dir.ensuredir()
-
     # TODO: The input / output site and region paths should be specified as
     # parameters passed to us by the DAG.
     input_kwcoco_fpath = ingress_dir / "cropped_kwcoco_for_sv.json"
@@ -136,9 +133,9 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
 
     scored_kwcoco_fpath = ingress_dir / "poly_depth_scored.kwcoco.zip"
 
-    output_site_manifest_fpath = sv_dir / "filtered_sites_manifest.json"
-    output_sites_dpath = sv_dir / "depth_filtered_sites"
-    output_region_dpath = sv_dir / "depth_filtered_regions"
+    output_site_manifest_fpath = ingress_dir / "depth_filtered_sites_manifest.json"
+    output_sites_dpath = ingress_dir / "depth_filtered_sites"
+    output_region_dpath = ingress_dir / "depth_filtered_regions"
     output_region_fpath = output_region_dpath / f'{region_id}.geojson'
 
     score_tracks.main(
