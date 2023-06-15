@@ -72,7 +72,8 @@ Testing
 
    3. Continuous Integration - CI Server
 
-Filesystems  
+
+Filesystems
 ~~~~~~~~~~~
 
     1. User-agnostic or relative paths - Dont hard code your paths. Use things
@@ -89,11 +90,11 @@ Filesystems
 
 
 
-Misc 
+Misc
 ----
 
 1. Statically parsable declarative configurations are useful, this is why I
    like scriptconfig over argparse. I would like to add jsonargparse
-   integration as the mechanism of handling nested configurations, so it 
+   integration as the mechanism of handling nested configurations, so it
    should be compatible with jsonargparse powered things like LightningCLI in
    the future.

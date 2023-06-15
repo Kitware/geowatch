@@ -1,7 +1,6 @@
 import argparse
 import sys
 import json
-import os
 import tempfile
 from os.path import join, dirname, basename
 from shapely.geometry import shape

@@ -451,7 +451,7 @@ class AWS_S3_Command:
         parts.extend(self.args)
         return parts
 
-    def run(self, verbose=3, check=True, shell=False):
+    def run(self, check=True, shell=False, capture=False, verbose=3):
         """
         Execute the S3 command
 
@@ -460,5 +460,8 @@ class AWS_S3_Command:
         """
         import ubelt as ub
         final_command = self.finalize()
-        run_info = ub.cmd(final_command, verbose=3, check=check, shell=shell)
+        run_info = ub.cmd(final_command, verbose=verbose, shell=shell,
+                          capture=capture)
+        if check:
+            run_info.check_returncode()
         return run_info

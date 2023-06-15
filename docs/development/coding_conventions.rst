@@ -1,5 +1,5 @@
 Coding Conventions in the GEOWATCH REPO
-====================================
+=======================================
 
 This document is an effort to list concepts and patterns that you will see if
 you work in this repo that may cause confusion unless you have this prior
