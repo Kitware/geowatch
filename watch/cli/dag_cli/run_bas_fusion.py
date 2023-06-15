@@ -10,7 +10,6 @@ import json
 import os
 import scriptconfig as scfg
 import shutil
-import subprocess
 import ubelt as ub
 from os.path import join
 from glob import glob
@@ -90,17 +89,15 @@ def _ta2_collate_output(aws_base_command,
         region_s3_outpath = '/'.join((destination_s3_bucket,
                                       'region_models',
                                       _get_suffixed_basename(region)))
-        subprocess.run([*aws_base_command,
-                        region,
-                        region_s3_outpath], check=True)
+        ub.cmd([*aws_base_command, region, region_s3_outpath], check=True,
+               verbose=3, capture=False)
 
     for site in glob(join(local_sites_dir, '*.geojson')):
         site_s3_outpath = '/'.join((destination_s3_bucket,
                                     'site_models',
                                     _get_suffixed_basename(site)))
-        subprocess.run([*aws_base_command,
-                        site,
-                        site_s3_outpath], check=True)
+        ub.cmd([*aws_base_command, site, site_s3_outpath], check=True,
+               verbose=3, capture=False)
 
 
 def run_bas_fusion_for_baseline(config):
@@ -289,6 +286,24 @@ def run_bas_fusion_for_baseline(config):
         '--min_area_square_meters', str(min_area_square_meters)
     ]
     ub.cmd(crop_cmd, check=True, verbose=3)
+
+    # Validate and fix all outputs
+    from watch.geoannots import geomodels
+    from watch.utils import util_gis
+    region_infos = list(util_gis.coerce_geojson_datas(cropped_region_models_outdir, format='json'))
+    site_infos = list(util_gis.coerce_geojson_datas(cropped_site_models_outdir, format='json'))
+    for region_info in region_infos:
+        fpath = region_info['fpath']
+        region = geomodels.RegionModel(**region_info['data'])
+        region.fixup()
+        fpath.write_text(region.dumps(indent='    '))
+        region.validate()
+    for site_info in site_infos:
+        fpath = site_info['fpath']
+        site = geomodels.SiteModel(**site_info['data'])
+        site.fixup()
+        fpath.write_text(site.dumps(indent='    '))
+        site.validate()
 
     # 6. (Optional) collate TA-2 output
     if ta2_s3_collation_bucket is not None:

@@ -471,6 +471,24 @@ class RegionModel(_Model):
 
     def fixup(self):
         self.remove_invalid_properties()
+        self.ensure_isodates()
+
+    def ensure_isodates():
+        """
+        Ensure that dates are provided as dates and not datetimes
+
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> region = RegionModel.random()
+            >>> region.header['properties']['start_date'] = '1970-01-01T000000'
+            >>> region.ensure_isodates()
+            >>> assert region.header['properties']['start_date'] == '1970-01-01'
+        """
+        date_keys = ['start_date', 'end_date']
+        for feat in region['features']:
+            props = feat['properties']
+            for key in date_keys:
+                props[key] = util_time.coerce_datetime(props[key]).date().isoformat()
 
     def remove_invalid_properties(self):
         props = self.header['properties']
@@ -635,7 +653,34 @@ class SiteModel(_Model):
     def fixup(self):
         self.clamp_scores()
         self.fix_sensor_names()
+        self.ensure_isodates()
         # self.fix_geom()
+
+    def ensure_isodates(self):
+        """
+        Ensure that dates are provided as dates and not datetimes
+
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> site = SiteModel.random()
+            >>> # Set props as datetimes
+            >>> site.header['properties']['start_date'] = '1970-01-01T000000'
+            >>> site.features[1]['properties']['observation_date'] = '1970-01-01T000000'
+            >>> site.ensure_isodates()
+            >>> # The fixup ensure dates
+            >>> assert site.features[1]['properties']['observation_date'] == '1970-01-01'
+            >>> assert site.header['properties']['start_date'] == '1970-01-01'
+        """
+        date_keys = ['start_date', 'end_date']
+        feat = self.header
+        props = feat['properties']
+        for key in date_keys:
+            props[key] = util_time.coerce_datetime(props[key]).date().isoformat()
+        date_keys = ['observation_date']
+        for feat in self.body_features():
+            props = feat['properties']
+            for key in date_keys:
+                props[key] = util_time.coerce_datetime(props[key]).date().isoformat()
 
     def clamp_scores(self):
         for feat in self.features:
