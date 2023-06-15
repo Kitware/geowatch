@@ -15,7 +15,7 @@ import warnings
 
 from contextlib import ExitStack
 from dataclasses import dataclass
-from tempenv import TemporaryEnvironment
+# from tempenv import TemporaryEnvironment
 from typing import Union
 # import pyproj
 
@@ -36,7 +36,8 @@ def _ensure_open(
     if not isinstance(raster, rasterio.DatasetReader) or raster.closed:
         # workaround for
         # https://rasterio.readthedocs.io/en/latest/faq.html#why-can-t-rasterio-find-proj-db-rasterio-from-pypi-versions-1-2-0
-        with TemporaryEnvironment({'PROJ_LIB': None, 'PROJ_DEBUG': '3'}):
+        # with TemporaryEnvironment({'PROJ_LIB': None, 'PROJ_DEBUG': '3'}):
+        if 1:
             return rasterio.open(raster)
     else:
         return raster
@@ -156,7 +157,10 @@ def mask(raster: Union[rasterio.DatasetReader, str],
             'ignore', category=rasterio.errors.NotGeoreferencedWarning)
         # workaround for
         # https://rasterio.readthedocs.io/en/latest/faq.html#why-can-t-rasterio-find-proj-db-rasterio-from-pypi-versions-1-2-0
-        with TemporaryEnvironment({'PROJ_LIB': None, 'PROJ_DEBUG': '3'}):
+
+        # Do we need the temporary env anymore?
+        # with TemporaryEnvironment({'PROJ_LIB': None, 'PROJ_DEBUG': '3'}):
+        if True:
 
             img = _ensure_open(raster)
             img_height = img.height
