@@ -473,7 +473,7 @@ class RegionModel(_Model):
         self.remove_invalid_properties()
         self.ensure_isodates()
 
-    def ensure_isodates():
+    def ensure_isodates(self):
         """
         Ensure that dates are provided as dates and not datetimes
 
@@ -485,7 +485,7 @@ class RegionModel(_Model):
             >>> assert region.header['properties']['start_date'] == '1970-01-01'
         """
         date_keys = ['start_date', 'end_date']
-        for feat in region['features']:
+        for feat in self['features']:
             props = feat['properties']
             for key in date_keys:
                 props[key] = util_time.coerce_datetime(props[key]).date().isoformat()
