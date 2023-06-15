@@ -6,6 +6,11 @@ Useful environs:
     DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
     DATA_DVC_DPATH=$DVC_DATA_DPATH
     EXPT_DVC_DPATH=$DVC_EXPT_DPATH
+
+    To get the above make sure you have run:
+    geowatch_dvc add my_phase2_data_repo --path=<path-to-your-phase2-data-dvc-repo> --hardware=hdd --priority=100 --tags=phase2_data
+    geowatch_dvc add my_phase2_expt_repo --path=<path-to-your-phase2-expt-dvc-repo> --hardware=hdd --priority=100 --tags=phase2_expt
+
 """
 import os
 import sys

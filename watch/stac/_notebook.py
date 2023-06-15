@@ -201,10 +201,12 @@ def check_processed_regions():
         # 'ta1-wv-acc-2',
         # 'ta1-pd-acc-2',
 
-        'ta1-s2-acc-3',
-        'ta1-ls-acc-3',
-        'ta1-wv-acc-3',
-        'ta1-pd-acc-3',
+        'ta1-10m-tsmoothed-acc-3',
+
+        # 'ta1-s2-acc-3',
+        # 'ta1-ls-acc-3',
+        # 'ta1-wv-acc-3',
+        # 'ta1-pd-acc-3',
 
         'ta1-10m-acc-3',
 

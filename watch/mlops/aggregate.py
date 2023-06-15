@@ -135,7 +135,7 @@ class AggregateEvluationConfig(AggregateLoader):
 
     inspect = Value(None, help='param hashid to look at')
 
-    query = Value(None, help='a pandas query to restrict the rows of the table we consider')
+    query = Value(None, type=str, help='a pandas query to restrict the rows of the table we consider')
 
     def __post_init__(self):
         super().__post_init__()

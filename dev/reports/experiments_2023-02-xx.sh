@@ -2124,16 +2124,10 @@ python -m watch.mlops.schedule_evaluation --params="
         bas_pxl.package_fpath:
             - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
             - /home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgr_split6_V61/Drop7-MedianNoWinter10GSD_bgr_split6_V61_epoch359_step15480.pt
-            - /home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_cold_sam_scratch_split6_V60/Drop7-MedianNoWinter10GSD_landcover_invar_cold_sam_scratch_split6_V60_epoch194_step8385.pt
-            - /home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_cold_sam_scratch_split6_V60/Drop7-MedianNoWinter10GSD_landcover_invar_cold_sam_scratch_split6_V60_epoch195_step8406.pt
-            - /home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_cold_sam_scratch_split6_V60/Drop7-MedianNoWinter10GSD_landcover_invar_cold_sam_scratch_split6_V60_epoch94_step4069.pt
             - /home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_cold_sam_scratch_split6_V60/Drop7-MedianNoWinter10GSD_landcover_invar_cold_sam_scratch_split6_V60_epoch301_step12986.pt
             - /home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_cold_sam_scratch_split6_V60/Drop7-MedianNoWinter10GSD_landcover_invar_cold_sam_scratch_split6_V60_epoch148_step6407.pt
             - /home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgr_split6_V63/Drop7-MedianNoWinter10GSD_bgr_split6_V63_epoch359_step15480.pt
-            - /home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgr_split6_V63/Drop7-MedianNoWinter10GSD_bgr_split6_V63_epoch0_step0.pt
-            - /home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_cold_split6_V60/Drop7-MedianNoWinter10GSD_landcover_invar_cold_split6_V60_epoch164_step7095.pt
             - /home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_cold_split6_V60/Drop7-MedianNoWinter10GSD_landcover_invar_cold_split6_V60_epoch12_step559.pt
-            - /home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_cold_split6_V60/Drop7-MedianNoWinter10GSD_landcover_invar_cold_split6_V60_epoch15_step688.pt
             - /home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_cold_split6_V60/Drop7-MedianNoWinter10GSD_landcover_invar_cold_split6_V60_epoch163_step7052.pt
             - /home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgr_cold_split6_V62/Drop7-MedianNoWinter10GSD_bgr_cold_split6_V62_epoch359_step15480.pt
 
@@ -2141,6 +2135,9 @@ python -m watch.mlops.schedule_evaluation --params="
             - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-KR_R002_EI2LMSC.kwcoco.zip
             - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-CH_R001_EI2LMSC.kwcoco.zip
             - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-NZ_R001_EI2LMSC.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-BR_R002_EI2LMSC.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-KR_R001_EI2LMSC.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-AE_R001_EI2LMSC.kwcoco.zip
         bas_pxl.chip_overlap: 0.3
         bas_pxl.chip_dims:
             - auto
@@ -2159,7 +2156,7 @@ python -m watch.mlops.schedule_evaluation --params="
             - 0.6
         bas_poly.time_thresh:
             - 0.8
-            - 0.6
+            #- 0.6
             - 0.5
         bas_poly.inner_window_size:
             - 1y
@@ -2222,4 +2219,144 @@ python -m watch.mlops.aggregate \
         analyze: 0
         print_models: True
         reference_region: KR_R002
-    "
+    " \
+    --rois="KR_R002,"
+
+
+# Pull out baseline tables
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+python -m watch.mlops.aggregate \
+    --pipeline=bas \
+    --target "
+        - $DVC_EXPT_DPATH/_toothbrush_drop7_nowinter
+    " \
+    --output_dpath="$DVC_EXPT_DPATH/_toothbrush_drop7_nowinter/aggregate" \
+    --resource_report=0 \
+    --eval_nodes="
+        - bas_poly_eval
+    " \
+    --plot_params="
+        enabled: 0
+    " \
+    --stdout_report="
+        top_k: 5
+        per_group: 1
+        macro_analysis: 0
+        analyze: 0
+        print_models: False
+        reference_region: final
+    " \
+    --rois="KR_R002,NZ_R001,CH_R001" \
+    --query='
+        (df["params.bas_poly.thresh"] == 0.425) &
+        (df["params.bas_poly.time_thresh"] == 0.8) &
+        (df["params.bas_pxl.chip_dims"].apply(str).str.contains("196")) &
+        (df["params.bas_pxl.package_fpath"].str.contains("Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026"))
+    '
+
+#`params.bas_poly.thresh` == 0.425 and
+#`params.bas_poly.time_thresh` == 0.8 and
+#`params.bas_pxl.chip_dims`.apply(`str`).str.contains("196") and
+#`params.bas_pxl.package_fpath`.str.contains("Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026")
+
+
+# Eval11 Baseline on Drop7-MedianNoWinter10GSD
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=ssd)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+python -m watch.mlops.schedule_evaluation --params="
+    matrix:
+        bas_pxl.package_fpath:
+            - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
+        bas_pxl.test_dataset:
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-KR_R002_EI2LMSC.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-CH_R001_EI2LMSC.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-NZ_R001_EI2LMSC.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-BR_R002_EI2LMSC.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-KR_R001_EI2LMSC.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-AE_R001_EI2LMSC.kwcoco.zip
+        bas_pxl.chip_overlap: 0.3
+        bas_pxl.chip_dims:
+            - [196,196]
+        bas_pxl.time_span:
+            - auto
+        bas_pxl.input_space_scale:
+            - 10GSD
+        bas_pxl.time_sampling:
+            - soft4
+        bas_poly.thresh:
+            - 0.4
+            - 0.425
+            - 0.45
+        bas_poly.time_thresh:
+            - 0.8
+        bas_poly.inner_window_size:
+            - 1y
+        bas_poly.inner_agg_fn:
+            - max
+        bas_poly.norm_ord:
+            - inf
+        bas_poly.moving_window_size:
+            - null
+        bas_poly.poly_merge_method:
+            - 'v2'
+        bas_poly.polygon_simplify_tolerance:
+            - 1
+        bas_poly.agg_fn:
+            - probs
+        bas_poly.min_area_square_meters:
+            - 7200
+        bas_poly.max_area_square_meters:
+            - 8000000
+        bas_poly.boundary_region: $DVC_DATA_DPATH/annotations/drop6/region_models
+        bas_poly_eval.true_site_dpath: $DVC_DATA_DPATH/annotations/drop6/site_models
+        bas_poly_eval.true_region_dpath: $DVC_DATA_DPATH/annotations/drop6/region_models
+        bas_pxl.enabled: 1
+        bas_pxl_eval.enabled: 1
+        bas_poly.enabled: 1
+        bas_poly_eval.enabled: 1
+        bas_poly_viz.enabled: 0
+
+    submatrices:
+        - bas_pxl.input_space_scale: 10GSD
+          bas_pxl.window_space_scale: 10GSD
+          bas_pxl.output_space_scale: 10GSD
+          bas_poly.resolution: 10GSD
+    " \
+    --root_dpath="$DVC_EXPT_DPATH/_drop7_nowinter_baseline" \
+    --devices="0,1" --tmux_workers=6 \
+    --backend=tmux --queue_name "_drop7_nowinter_baseline" \
+    --pipeline=bas --skip_existing=1 \
+    --run=1
+
+
+# Pull out baseline tables
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+python -m watch.mlops.aggregate \
+    --pipeline=bas \
+    --target "
+        - $DVC_EXPT_DPATH/_drop7_nowinter_baseline
+    " \
+    --output_dpath="$DVC_EXPT_DPATH/_drop7_nowinter_baseline/aggregate" \
+    --resource_report=0 \
+    --eval_nodes="
+        - bas_poly_eval
+    " \
+    --plot_params="
+        enabled: 0
+    " \
+    --stdout_report="
+        top_k: 5
+        per_group: 1
+        macro_analysis: 0
+        analyze: 0
+        print_models: False
+        reference_region: final
+    " \
+    --rois="auto"
+
+    --query='
+        (df["params.bas_poly.thresh"] == 0.425) &
+        (df["params.bas_poly.time_thresh"] == 0.8) &
+        (df["params.bas_pxl.chip_dims"].apply(str).str.contains("196")) &
+        (df["params.bas_pxl.package_fpath"].str.contains("Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026"))
+    '
