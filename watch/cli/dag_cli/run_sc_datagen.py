@@ -59,26 +59,15 @@ def main():
 
 
 def run_generate_sc_cropped_kwcoco(config):
-
-    input_path = config.input_path
-    input_region_path = config.input_region_path
-    output_path = config.output_path
-    outbucket = config.outbucket
-    aws_profile = config.aws_profile
-    dryrun = config.dryrun
-    # newline = config.newline
-    jobs = config.jobs
-    dont_recompute = config.dont_recompute
-
     from watch.utils.util_framework import AWS_S3_Command
     from watch.utils.util_yaml import Yaml
     from watch.utils import util_framework
-    if dont_recompute:
-        aws_ls = AWS_S3_Command('ls', profile=aws_profile)
+    if config.dont_recompute:
+        aws_ls = AWS_S3_Command('ls', profile=config.aws_profile)
         aws_ls_command = aws_ls.finalize()
 
         try:
-            ub.cmd([*aws_ls_command, output_path], check=True, verbose=3, capture=False)
+            ub.cmd([*aws_ls_command, config.output_path], check=True, verbose=3, capture=False)
         except subprocess.CalledProcessError:
             # Continue processing
             pass
@@ -92,16 +81,16 @@ def run_generate_sc_cropped_kwcoco(config):
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
     _ = baseline_framework_kwcoco_ingress(
-        input_path,
-        ingress_dir,
-        aws_profile,
-        dryrun)
+        input_path=config.input_path,
+        outdir=ingress_dir,
+        aws_profile=config.aws_profile,
+        dryrun=config.dryrun)
 
     # 2. Download and prune region file
     print("* Downloading and pruning region file *")
-    local_region_path = download_region(input_region_path,
+    local_region_path = download_region(config.input_region_path,
                                         local_region_path,
-                                        aws_profile=aws_profile,
+                                        aws_profile=config.aws_profile,
                                         strip_nonregions=True)
 
     # Parse region_id from original region file
@@ -131,7 +120,7 @@ def run_generate_sc_cropped_kwcoco(config):
         target_gsd: 2
         context_factor: 1.5
         force_min_gsd: 4
-        img_workers: {str(jobs)}
+        img_workers: {str(config.jobs)}
         aux_workers: 2
         rpc_align_method: affine_warp
         image_timeout: 20minutes
@@ -139,8 +128,8 @@ def run_generate_sc_cropped_kwcoco(config):
         verbose: 1
         ''')))
     align_config = align_config_default | Yaml.coerce(config.sc_align_config)
-    if align_config.aux_workers == 'auto':
-        align_config.aux_workers = align_config.include_channels.count('|') + 1
+    if align_config['aux_workers'] == 'auto':
+        align_config['aux_workers'] = align_config['include_channels'].count('|') + 1
 
     # 4. Crop ingress KWCOCO dataset to region for SC
     print("* Cropping KWCOCO dataset to region for SC*")
@@ -168,10 +157,10 @@ def run_generate_sc_cropped_kwcoco(config):
     print("* Egressing KWCOCO dataset and associated STAC item *")
     baseline_framework_kwcoco_egress(ta1_sc_cropped_kwcoco_path,
                                      local_region_path,
-                                     output_path,
-                                     outbucket,
-                                     aws_profile=None,
-                                     dryrun=False,
+                                     config.output_path,
+                                     config.outbucket,
+                                     aws_profile=config.aws_profile,
+                                     dryrun=config.dryrun,
                                      newline=False)
 
 
