@@ -65,6 +65,8 @@ class BASDatasetConfig(scfg.DataConfig):
             Output as simple newline separated STAC items
             '''))
 
+    jobs = scfg.Value(1, type=int, short_alias=['j'], help='Number of jobs to run in parallel')
+
     dont_recompute = scfg.Value(False, isflag=True, help=ub.paragraph(
             '''
             Will not recompute if output_path already exists
