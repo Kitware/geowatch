@@ -207,7 +207,7 @@ def run_stac_to_cropped_kwcoco(config):
         time_window: '1y'
         channels: 'coastal|blue|green|red|B05|B06|B07|nir|B8A|B09|cirrus|swir16|swir22|pan'
         resolution: '10GSD'
-        img_workers: 'avail'
+        workers: 'avail'
         start_time: '1970-01-01'
         merge_method: 'mean'
         assets_dname: 'raw_bands'
