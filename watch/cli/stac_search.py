@@ -332,6 +332,10 @@ def main(cmdline=True, **kwargs):
             # 'proj:epsg': 'hist'
         }
 
+        if len(region_file_fpaths) == 1:
+            # Force serial if there is just one
+            query_workers = 0
+
         pool = ub.JobPool(mode='thread', max_workers=query_workers)
         pman = util_progress.ProgressManager(backend='rich' if query_workers > 0 else 'progiter')
         with pman:

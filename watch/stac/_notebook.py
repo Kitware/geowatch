@@ -395,39 +395,9 @@ def check_processed_regions():
     # print('region_to_results = {}'.format(ub.urepr(region_to_results, nl=1)))
 
 
-# def check_single_endpoint():
-#     endpoint = "https://api.smart-stac.com"
-#     collection = "ta1-10m-tsmoothed-acc-3"
-#     # item_search = catalog.search(collections=[collection])
-
-#     # provider = _ACCENTURE_PHASE2_TA1_PRODUCTS['ta1-pd-acc']['endpoint']
-#     import pystac_client
-#     import os
-#     import ubelt as ub
-
-#     provider = "https://api.smart-stac.com"
-#     headers = {
-#         'x-api-key': os.environ['SMART_STAC_API_KEY']
-#     }
-#     provider = "https://api.smart-stac.com"
-#     catalog = pystac_client.Client.open(provider, headers=headers)
-
-#     collections = list(catalog.get_collections())
-#     for c in collections:
-#         if c.id == 'ta1-10m-tsmoothed-acc-3':
-#             break
-#     first_item = ub.peek(c.get_items())
-#     print(f'first_item={first_item}')
-#     print(f'first_item.assets={first_item.assets}')
-#     asset = ub.peek(first_item.assets.values())
-#     print(asset.to_dict())
-
-#     print(ub.urepr(list(catalog.get_collections())))
-
-
 def _devcheck_providers_exist():
     """
-    develoepr logic to test to see if providers are working
+    developer logic to test to see if providers are working
 
     """
     # from watch.stac.stac_search_builder import _ACCENTURE_PHASE2_TA1_PRODUCTS
@@ -465,3 +435,41 @@ def _devcheck_providers_exist():
     item_search = catalog.search(collections=["ta1-pd-acc"])
     item_search = catalog.search(collections=["ta1-pd-ara"])
     item_search = catalog.search(collections=["ta1-pd-str"])
+
+
+def check_single_colletion():
+    """
+    source $HOME/code/watch/secrets/secrets
+    COLLECTION=ta1-10m-tsmoothed-acc-3
+    xdoctest -m watch.stac._notebook check_single_endpoint
+    """
+    import os
+    import pystac_client
+    import os
+    import ubelt as ub
+    collection = os.environ.get('COLLECTION', "ta1-10m-tsmoothed-acc-3")
+    # item_search = catalog.search(collections=[collection])
+
+    provider = "https://api.smart-stac.com"
+    headers = {
+        'x-api-key': os.environ['SMART_STAC_API_KEY']
+    }
+    catalog = pystac_client.Client.open(provider, headers=headers)
+
+    item_search = catalog.search(collections=[collection])
+
+    item_iter = iter(item_search.items())
+    # View cloud cover
+    first_item = next(item_iter)
+    first_item_dict = first_item.to_dict()
+    import rich
+    rich.print('first_item_dict = {}'.format(ub.urepr(first_item_dict, nl=-1)))
+
+    print(f'first_item={first_item}')
+    print(f'first_item.assets={first_item.assets}')
+    asset = ub.peek(first_item.assets.values())
+    print(asset.to_dict())
+
+    print(ub.urepr(list(catalog.get_collections())))
+
+
