@@ -249,7 +249,7 @@ class SimpleDVC(ub.NiceRepr):
         extra_args = self._remote_extra_args(remote, recursive, jobs, verbose)
         with util_path.ChDir(dvc_root):
             dvc_command = ['push'] + extra_args + [str(p) for p in rel_paths]
-            dvc_main.main(dvc_command)
+            dvc_main(dvc_command)
 
     def pull(self, path, remote=None, recursive=False, jobs=None, verbose=0):
         dvc_main = _import_dvc_main()
@@ -262,7 +262,7 @@ class SimpleDVC(ub.NiceRepr):
         extra_args = self._remote_extra_args(remote, recursive, jobs, verbose)
         with util_path.ChDir(dvc_root):
             dvc_command = ['pull'] + extra_args + [str(p) for p in rel_paths]
-            dvc_main.main(dvc_command)
+            dvc_main(dvc_command)
 
     def request(self, path, remote=None):
         """
@@ -317,7 +317,7 @@ class SimpleDVC(ub.NiceRepr):
         dvc_root, rel_paths = self._resolve_root_and_relative_paths(paths)
         with util_path.ChDir(dvc_root):
             dvc_command = ['unprotect'] + rel_paths
-            dvc_main.main(dvc_command)
+            dvc_main(dvc_command)
 
     def is_tracked(self, path):
         path = ub.Path(path)
