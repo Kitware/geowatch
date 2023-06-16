@@ -616,7 +616,6 @@ class ExperimentState(ub.NiceRepr):
             if info is None:
                 print('ERROR (no filepath info) row = {}'.format(ub.urepr(row, nl=1)))
                 print(f'error: fname={fname}')
-                raise Exception
                 continue
 
             row.update(info)

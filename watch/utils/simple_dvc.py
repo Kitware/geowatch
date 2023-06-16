@@ -141,7 +141,7 @@ class SimpleDVC(ub.NiceRepr):
             path (str | PathLike | Iterable[str | PathLike]):
                 a single or multiple paths to add
         """
-        from dvc import main as dvc_main
+        dvc_main = _import_dvc_main()
         paths = list(map(ub.Path, _ensure_iterable(path)))
         if len(paths) == 0:
             print('No paths to add')
@@ -151,13 +151,13 @@ class SimpleDVC(ub.NiceRepr):
             dvc_command = [op] + rel_paths
             extra_args = self._verbose_extra_args(verbose)
             dvc_command = dvc_command + extra_args
-            ret = dvc_main.main(dvc_command)
+            ret = dvc_main(dvc_command)
         if ret != 0:
             raise Exception(f'Failed to {op} files')
         return dvc_root, rel_paths
 
     def check_ignore(self, path, details=0, verbose=0):
-        from dvc import main as dvc_main
+        dvc_main = _import_dvc_main()
         paths = list(map(ub.Path, _ensure_iterable(path)))
         if len(paths) == 0:
             print('No paths to add')
@@ -169,7 +169,7 @@ class SimpleDVC(ub.NiceRepr):
                 dvc_command += ['--details']
             extra_args = self._verbose_extra_args(verbose)
             dvc_command = dvc_command + extra_args
-            ret = dvc_main.main(dvc_command)
+            ret = dvc_main(dvc_command)
         if ret != 0:
             raise Exception('Failed check-ignore')
 
@@ -239,7 +239,7 @@ class SimpleDVC(ub.NiceRepr):
 
             jobs (int): number of parallel workers
         """
-        from dvc import main as dvc_main
+        dvc_main = _import_dvc_main()
         paths = list(map(ub.Path, _ensure_iterable(path)))
         if len(paths) == 0:
             print('No paths to push')
@@ -252,7 +252,7 @@ class SimpleDVC(ub.NiceRepr):
             dvc_main.main(dvc_command)
 
     def pull(self, path, remote=None, recursive=False, jobs=None, verbose=0):
-        from dvc import main as dvc_main
+        dvc_main = _import_dvc_main()
         paths = list(map(ub.Path, _ensure_iterable(path)))
         if len(paths) == 0:
             print('No paths to pull')
@@ -309,7 +309,7 @@ class SimpleDVC(ub.NiceRepr):
                 self.pull(to_pull, remote=remote)
 
     def unprotect(self, path):
-        from dvc import main as dvc_main
+        dvc_main = _import_dvc_main()
         paths = list(map(ub.Path, _ensure_iterable(path)))
         if len(paths) == 0:
             print('No paths to unprotect')
@@ -435,6 +435,13 @@ class SimpleDVC_CLI(scfg.ModalCLI):
             dvc = SimpleDVC()
             dvc.request(config.paths)
 
+
+def _import_dvc_main():
+    try:
+        from dvc.main import dvc_main
+    except ModuleNotFoundError:
+        from dvc.cli import main as dvc_main
+    return dvc_main
 
 if __name__ == '__main__':
     """
