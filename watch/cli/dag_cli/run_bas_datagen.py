@@ -80,25 +80,27 @@ class BASDatasetConfig(scfg.DataConfig):
             Outbucket for previous interval BAS DatasetGen
             '''))
 
-    bas_align_config = scfg.Value(None, help=ub.paragraph(
+    bas_align_config = scfg.Value(None, type=str, help=ub.paragraph(
         '''
         The configuration for the coco-align step
         '''))
 
-    time_combine_config = scfg.Value(None, help=ub.paragraph(
+    time_combine_config = scfg.Value(None, type=str, help=ub.paragraph(
         '''
         If specified, perform time combine on BAS dataset. The special key
         enabled will disable the computation.
         '''), alias=['time_combine'])
 
     def __post_init__(self):
-        if self.time_combine_config in {False, None}:
+        if self.time_combine_config in {False, None, 'False', 'None'}:
             self.time_combine_config = {'enabled': False}
-        elif self.time_combine_config is True:
+        elif self.time_combine_config in {True, 'True'}:
             self.time_combine_config = {'enabled': True}
 
 
 def main():
+    import sys
+    print(f'sys.argv={sys.argv}')
     config = BASDatasetConfig.cli(strict=True)
     print('config = {}'.format(ub.urepr(dict(config), nl=1, align=':')))
     run_stac_to_cropped_kwcoco(config)
