@@ -570,6 +570,9 @@ def area_query(region_fpath, search_json, searcher, temp_dir, config, logger, ve
             with open(search_json, 'r') as f:
                 search_params = json.load(f)
 
+    if verbose:
+        logger.info(f'Query with params: {ub.urepr(search_params)}')
+
     region = geomodels.RegionModel.coerce(r_file_loc)
     # region.validate(strict=False)
     # region._()

@@ -471,5 +471,3 @@ def check_single_colletion():
     print(asset.to_dict())
 
     print(ub.urepr(list(catalog.get_collections())))
-
-
