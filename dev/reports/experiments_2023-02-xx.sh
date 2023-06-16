@@ -2117,6 +2117,9 @@ python -m watch.mlops.schedule_evaluation --params="
 
 
 
+python -m watch.mlops.manager "push packages" --dataset_codes Drop7-MedianNoWinter10GSD --yes
+python -m watch.mlops.manager "pull packages" --dataset_codes Drop7-MedianNoWinter10GSD --yes
+
 # New model eval over Drop7
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=ssd)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
@@ -2146,16 +2149,27 @@ python -m watch.mlops.schedule_evaluation --params="
             - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65_epoch7_step322.pt
 
 
- create mode 100644 models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65_epoch115_stepNone.pt.dvc
- create mode 100644 models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65_epoch173_stepNone.pt.dvc
- create mode 100644 models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65_epoch182_stepNone.pt.dvc
- create mode 100644 models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65_epoch2_stepNone.pt.dvc
- create mode 100644 models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65_epoch3_stepNone.pt.dvc
- create mode 100644 models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65_epoch4_stepNone.pt.dvc
- create mode 100644 models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65_epoch53_stepNone.pt.dvc
- create mode 100644 models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65_epoch5_stepNone.pt.dvc
- create mode 100644 models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65_epoch6_stepNone.pt.dvc
- create mode 100644 models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65_epoch80_stepNone.pt.dvc
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65_epoch115_stepNone.pt.dvc
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65_epoch173_stepNone.pt.dvc
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65_epoch182_stepNone.pt.dvc
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65_epoch2_stepNone.pt.dvc
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65_epoch3_stepNone.pt.dvc
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65_epoch4_stepNone.pt.dvc
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65_epoch53_stepNone.pt.dvc
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65_epoch5_stepNone.pt.dvc
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65_epoch6_stepNone.pt.dvc
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65_epoch80_stepNone.pt.dvc
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V68/Drop7-MedianNoWinter10GSD_bgrn_split6_V68_epoch11_stepNone.pt.dvc
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V68/Drop7-MedianNoWinter10GSD_bgrn_split6_V68_epoch12_stepNone.pt.dvc
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V68/Drop7-MedianNoWinter10GSD_bgrn_split6_V68_epoch25_stepNone.pt.dvc
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V68/Drop7-MedianNoWinter10GSD_bgrn_split6_V68_epoch30_stepNone.pt.dvc
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V68/Drop7-MedianNoWinter10GSD_bgrn_split6_V68_epoch34_stepNone.pt.dvc
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V68/Drop7-MedianNoWinter10GSD_bgrn_split6_V68_epoch4_stepNone.pt.dvc
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V68/Drop7-MedianNoWinter10GSD_bgrn_split6_V68_epoch6_stepNone.pt.dvc
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V68/Drop7-MedianNoWinter10GSD_bgrn_split6_V68_epoch7_stepNone.pt.dvc
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V68/Drop7-MedianNoWinter10GSD_bgrn_split6_V68_epoch8_stepNone.pt.dvc
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V68/Drop7-MedianNoWinter10GSD_bgrn_split6_V68_epoch9_stepNone.pt.dvc
+
 
 
         bas_pxl.test_dataset:

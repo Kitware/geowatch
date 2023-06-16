@@ -178,6 +178,9 @@ def run_stac_to_cropped_kwcoco(config):
     from watch.utils.util_framework import AWS_S3_Command
     from watch.utils import util_framework
     from watch.utils.util_yaml import Yaml
+    from kwcoco import ChannelSpec
+    from watch.cli import coco_align
+    from watch.cli import coco_time_combine
     aws_ls = AWS_S3_Command('ls', profile=config.aws_profile)
     aws_cp = AWS_S3_Command('cp', profile=config.aws_profile)
     aws_base_command = aws_cp.finalize()
@@ -217,8 +220,9 @@ def run_stac_to_cropped_kwcoco(config):
 
     if time_combine_config['channels'] == 'auto':
         # Default time combine channels to the align channels minus quality.
-        from kwcoco import ChannelSpec
         time_combine_config['channels'] = ChannelSpec.coerce(align_config['include_channels']) - {'quality'}
+
+    time_combine_enabled = time_combine_config.pop('enabled', True)
 
     target_gsd = align_config['target_gsd']
 
@@ -250,6 +254,16 @@ def run_stac_to_cropped_kwcoco(config):
     align_config['src'] = ta1_bas_kwcoco_path
     align_config['dst'] = ta1_cropped_kwcoco_path
     align_config['regions'] = local_region_path
+    # Validate config before running stuff
+    align_config = coco_align.CocoAlignGeotiffConfig(**align_config)
+
+    if time_combine_enabled:
+        preproc_kwcoco_fpath = ub.Path(ta1_cropped_kwcoco_path).augment(
+            stemsuffix='_timecombined', ext='.kwcoco.zip', multidot=True)
+        time_combine_config['input_kwcoco_fpath'] = ta1_cropped_kwcoco_path
+        time_combine_config['output_kwcoco_fpath'] = preproc_kwcoco_fpath
+        # Validate config before running stuff
+        time_combine_config = coco_time_combine.TimeCombineConfig(**time_combine_config)
 
     # 1. Ingress data
     print("* Running baseline framework ingress *")
@@ -337,7 +351,6 @@ def run_stac_to_cropped_kwcoco(config):
     EXEC_MODE = 'cmd'
     # Not sure if one is more stable than the other
     if EXEC_MODE == 'import':
-        from watch.cli import coco_align
         coco_align.main(cmdline=False, **align_config)
     elif EXEC_MODE == 'cmd':
         align_arglist = util_framework._make_arglist(align_config)
@@ -347,25 +360,21 @@ def run_stac_to_cropped_kwcoco(config):
         raise KeyError(EXEC_MODE)
 
     # 5. Do the time_combine for BAS
-    if time_combine_config.pop('enabled', True):
-        from watch.cli import coco_time_combine
-        preproc_kwcoco_fpath = ub.Path(ta1_cropped_kwcoco_path).augment(
-            stemsuffix='_timecombined', ext='.kwcoco.zip', multidot=True)
+    if time_combine_enabled:
         coco_time_combine.main(
             cmdline=0,
-            input_kwcoco_fpath=ta1_cropped_kwcoco_path,
-            output_kwcoco_fpath=preproc_kwcoco_fpath,
             **time_combine_config
         )
-        ta1_cropped_kwcoco_path = os.fspath(preproc_kwcoco_fpath)
-
         # Add watch fields
         print("* Adding watch fields to time combined data *")
         coco_add_watch_fields.main(cmdline=False,
-                                   src=ta1_cropped_kwcoco_path,
-                                   dst=ta1_cropped_kwcoco_path,
+                                   src=preproc_kwcoco_fpath,
+                                   dst=preproc_kwcoco_fpath,
                                    target_gsd=target_gsd,
                                    workers=config.jobs)
+        final_interval_bas_kwcoco_path = preproc_kwcoco_fpath
+    else:
+        final_interval_bas_kwcoco_path = ta1_cropped_kwcoco_path
 
     # 6.1. Combine previous interval time-combined data for BAS
     if config.previous_outbucket is not None:
@@ -385,7 +394,7 @@ def run_stac_to_cropped_kwcoco(config):
         from watch.cli.concat_kwcoco_videos import concat_kwcoco_datasets
         if previous_timecombined_kwcoco_path.is_file():
             concat_kwcoco_datasets(
-                (previous_timecombined_kwcoco_path, ta1_cropped_kwcoco_path),
+                (previous_timecombined_kwcoco_path, final_interval_bas_kwcoco_path),
                 combined_timecombined_kwcoco_path)
             # Copy saliency assets from previous bas fusion
             shutil.copytree(
@@ -395,10 +404,10 @@ def run_stac_to_cropped_kwcoco(config):
         else:
             # Copy current bas_fusion_kwcoco_path to combined path as
             # this is the first interval
-            shutil.copy(ta1_cropped_kwcoco_path,
+            shutil.copy(final_interval_bas_kwcoco_path,
                         combined_timecombined_kwcoco_path)
     else:
-        combined_timecombined_kwcoco_path = ta1_cropped_kwcoco_path
+        combined_timecombined_kwcoco_path = final_interval_bas_kwcoco_path
 
     # 7. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to

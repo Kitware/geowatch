@@ -681,7 +681,7 @@ def iarpa_bas_color_legend():
     """
     Ignore:
         import kwplot
-        from watch.cli.run_metrics_framework import *  # NOQA
+        from watch.tasks.metrics.merge_iarpa_metrics import *  # NOQA
         img = iarpa_bas_color_legend()
         kwplot.autompl()
         kwplot.imshow(img)
