@@ -35,12 +35,17 @@ def load_site_model_schema(strict=True):
         >>> import rich
         >>> rich.print('data = {}'.format(ub.urepr(data1, nl=-2)))
         >>> rich.print('data = {}'.format(ub.urepr(data2, nl=-2)))
+        >>> import jsonschema
+        >>> cls = jsonschema.validators.validator_for(data1)
+        >>> cls.check_schema(data1)
+        >>> cls = jsonschema.validators.validator_for(data2)
+        >>> cls.check_schema(data2)
     """
-    # with importlib_resources.path('watch.rc', name) as path:
-    #     print('path = {!r}'.format(path))
-    # list(importlib_resources.contents('watch.rc'))
-    file = importlib_resources.open_text('watch.rc', 'site-model.schema.json')
-    data = json.load(file)
+    rc_dpath = importlib_resources.files('watch.rc')
+    schema_fpath = rc_dpath / 'site-model.schema.json'
+    data = json.loads(schema_fpath.read_text())
+    # file = importlib_resources.open_text('watch.rc', 'site-model.schema.json')
+    # data = json.load(file)
     if not strict:
         from kwcoco.util.jsonschema_elements import STRING
         from kwcoco.util.jsonschema_elements import ONEOF
@@ -108,6 +113,12 @@ def load_region_model_schema(strict=True):
             if True we make a few changes the schema to be more permissive
             towards things like region names and originator.
 
+    Returns:
+        Dict: the schema
+
+    CommandLine:
+        xdoctest -m watch.rc.registry load_region_model_schema
+
     Example:
         >>> from watch.rc.registry import *  # NOQA
         >>> data1 = load_region_model_schema(strict=True)
@@ -115,10 +126,18 @@ def load_region_model_schema(strict=True):
         >>> import rich
         >>> rich.print('data = {}'.format(ub.urepr(data1, nl=-2)))
         >>> rich.print('data = {}'.format(ub.urepr(data2, nl=-2)))
+        >>> import jsonschema
+        >>> cls = jsonschema.validators.validator_for(data1)
+        >>> cls.check_schema(data1)
+        >>> cls = jsonschema.validators.validator_for(data2)
+        >>> cls.check_schema(data2)
     """
-    file = importlib_resources.open_text('watch.rc',
-                                         'region-model.schema.json')
-    data = json.load(file)
+    rc_dpath = importlib_resources.files('watch.rc')
+    schema_fpath = rc_dpath / 'region-model.schema.json'
+    data = json.loads(schema_fpath.read_text())
+    # file = importlib_resources.open_text('watch.rc',
+    #                                      'region-model.schema.json')
+    # data = json.load(file)
     if not strict:
         from kwcoco.util.jsonschema_elements import STRING
 

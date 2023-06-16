@@ -85,6 +85,12 @@ _VALID_SITE_OBSERVATION_FIELDS = {"type",
 
 
 class _Model(ub.NiceRepr, geojson.FeatureCollection):
+    """
+    A base class for :class:`RegionModel` and :class:`SiteModel`.
+
+    Note that because this extends :class:`geojson.FeatureCollection`, this is
+    a dictionary.
+    """
     type = 'FeatureCollection'
     _header_type = NotImplemented
     _body_type = NotImplemented
@@ -120,6 +126,47 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
 
         Yields:
             Self
+
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> import ubelt as ub
+            >>> #
+            >>> ### Setup demo data
+            >>> dpath = ub.Path.appdir('watch/tests/geoannots/coerce_multiple')
+            >>> dpath.delete().ensuredir()
+            >>> regions, sites = [], []
+            >>> for i in range(3):
+            >>>     rm, sms = RegionModel.random(with_sites=True, rng=i)
+            >>>     regions.append(rm)
+            >>>     sites.extend(sms)
+            >>> region_dpath = (dpath / 'region_models').ensuredir()
+            >>> site_dpath = (dpath / 'site_models').ensuredir()
+            >>> for region in regions:
+            >>>     region_fpath = region_dpath / f'{region.region_id}.geojson'
+            >>>     region_fpath.write_text(region.dumps())
+            >>> for site in sites:
+            >>>     site_fpath = site_dpath / f'{site.site_id}.geojson'
+            >>>     site_fpath.write_text(site.dumps())
+            >>> #
+            >>> # Test coercing from a directory
+            >>> regions2 = list(RegionModel.coerce_multiple(region_dpath))
+            >>> sites2 = list(SiteModel.coerce_multiple(site_dpath))
+            >>> assert len(regions2) == len(regions)
+            >>> assert len(sites2) == len(sites)
+            >>> #
+            >>> # Test coercing from a glob pattern
+            >>> regions3 = list(RegionModel.coerce_multiple(region_dpath / (regions[0].region_id + '*')))
+            >>> sites3 = list(SiteModel.coerce_multiple(site_dpath / ('*.geojson')))
+            >>> assert len(regions3) == 1
+            >>> assert len(sites3) == len(sites)
+            >>> #
+            >>> # Test coercing from existing data
+            >>> # Broken
+            >>> # regions4 = list(RegionModel.coerce_multiple(regions))
+            >>> # sites4 = list(SiteModel.coerce_multiple(sites))
+            >>> # assert len(regions4) == len(regions)
+            >>> # assert len(sites4) == len(sites)
+
         """
         from watch.utils import util_gis
         infos = list(util_gis.coerce_geojson_datas(
@@ -135,6 +182,9 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
 
     @classmethod
     def coerce(cls, data, parse_float=None):
+        """
+        Coerce a :class:`RegionModel` or :class:`SiteModel` from some input.
+        """
         import os
         if isinstance(data, cls):
             return data
@@ -268,6 +318,9 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
 
     def validate(self, strict=True, verbose=1, parts=True):
         """
+        Validates that the model conforms to its schema and does a decent job
+        of localizing where errors are.
+
         Args:
             strict (bool):
                 if False, SMART-specific fields have their restrictions
@@ -313,6 +366,31 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
                 _report_jsonschema_error(e)
                 raise
 
+    def _update_cache_key(self):
+        """
+        Ensure we are using the up to date schema cache.
+
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> self = RegionModel.random(rng=0)
+            >>> feat = list(self.site_summaries())[0]
+            >>> self._update_cache_key()
+            >>> assert 'annotation_cache' not in feat['properties']
+            >>> feat['properties']['annotation_cache'] = {'foo': 'bar'}
+            >>> self._update_cache_key()
+            >>> # An old cache key, updates the new one.
+            >>> assert 'cache' in feat['properties']
+            >>> assert feat['properties']['cache']['foo'] == 'bar'
+            >>> # But it wont overwrite.
+            >>> feat['properties']['annotation_cache'] = {'foo': 'baz'}
+            >>> self._update_cache_key()
+            >>> assert 'cache' in feat['properties']
+            >>> assert feat['properties']['cache']['foo'] == 'bar'
+        """
+        for feat in self['features']:
+            prop = feat['properties']
+            _update_propery_cache(prop)
+
 
 def _report_jsonschema_error(ex):
     import rich
@@ -349,7 +427,6 @@ class RegionModel(_Model):
         >>> self = RegionModel.random()
         >>> print(self)
         >>> self.validate(strict=False)
-
     """
     _header_type = 'region'
     _body_type = 'site_summary'
@@ -470,6 +547,7 @@ class RegionModel(_Model):
         return self.header['properties']['region_id']
 
     def fixup(self):
+        self._update_cache_key()
         self.remove_invalid_properties()
         self.ensure_isodates()
 
@@ -651,6 +729,7 @@ class SiteModel(_Model):
                 prop['sensor_name'] = 'WorldView'
 
     def fixup(self):
+        self._update_cache_key()
         self.clamp_scores()
         self.fix_sensor_names()
         self.ensure_isodates()
@@ -849,6 +928,7 @@ class _SiteOrSummaryMixin:
     """
     Site summaries and site headers are nearly the same
     """
+
     # Data for conversion between site / site-summaries
     _cache_keys = {
         'site_summary': 'annotation_cache',
@@ -878,6 +958,13 @@ class _SiteOrSummaryMixin:
     def site_id(self):
         return self['properties']['site_id']
 
+    def _update_cache_key(self):
+        """
+        Ensure we are using the up to date schema cache.
+        """
+        prop = self['properties']
+        _update_propery_cache(prop)
+
     def _convert(self, new_cls):
         """
         Common logic for converting site <-> site_summary
@@ -903,8 +990,12 @@ class _SiteOrSummaryMixin:
             >>> # Check the round-trip conversion
             >>> summary3 = site2.as_summary()
             >>> site3 = summary2.as_site()
-            >>> assert summary3 == summary1 and summary3 is not summary1
-            >>> assert site3 == site1 and site3 is not site1
+            >>> summary1_ = SiteSummary(**summary1.copy())
+            >>> summary1_._update_cache_key()
+            >>> site1_ = SiteHeader(**site1.copy())
+            >>> site1_._update_cache_key()
+            >>> assert summary3 == summary1_ and summary3 is not summary1
+            >>> assert site3 == site1_ and site3 is not site1
             >>> # Revalidate everything to ensure no memory issues happened
             >>> summary3.validate(strict=0)
             >>> summary2.validate(strict=0)
@@ -924,6 +1015,13 @@ class _SiteOrSummaryMixin:
 
         feat = self.copy()
         props = feat['properties'].copy()
+
+        if 1:
+            # Use new scheme
+            _update_propery_cache(props)
+            old_cache_key = 'cache'
+            new_cache_key = 'cache'
+
         feat['properties'] = props
         assert props['type'] == old_type
         props['type'] = new_type
@@ -1136,3 +1234,15 @@ class SiteModelCollection(ModelCollection):
         region_features = [region_header] + site_summaries
         region_model = RegionModel(features=region_features)
         return region_model
+
+
+def _update_propery_cache(prop):
+    """
+    Move to the new cache schema
+    """
+    if 'annotation_cache' in prop or 'misc_info' in prop:
+        cache = prop.get('cache', {})
+        cache = ub.udict.union(prop.pop('annotation_cache', {}), cache)
+        cache = ub.udict.union(prop.pop('misc_info', {}), cache)
+        if cache:
+            prop['cache'] = cache

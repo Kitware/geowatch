@@ -103,9 +103,6 @@ def run_dino_sv(config):
     aws_profile = config.aws_profile
     dryrun = config.dryrun
 
-    dino_detect_config = config.dino_detect_config
-    dino_filter_config = config.dino_filter_config
-
     aws_cp = AWS_S3_Command('cp')
     aws_cp.update(
         profile=aws_profile,
@@ -200,7 +197,7 @@ def run_dino_sv(config):
             'batch_size': 1,
             'device': 0})
         dino_detect_config = (default_dino_detect_config
-                              | Yaml.coerce(dino_detect_config or {}))
+                              | Yaml.coerce(config.dino_detect_config or {}))
 
         if dino_detect_config.get('package_fpath', None) is None:
             raise ValueError('Requires package_fpath')
@@ -217,7 +214,7 @@ def run_dino_sv(config):
 
         default_dino_filter_config = ub.udict({})
         dino_filter_config = (default_dino_filter_config
-                              | Yaml.coerce(dino_filter_config or {}))
+                              | Yaml.coerce(config.dino_filter_config or {}))
 
         dino_building_filter = SV_DinoFilter(root_dpath='/tmp/ingress')
 
