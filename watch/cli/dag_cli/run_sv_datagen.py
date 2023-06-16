@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 import subprocess
-import json
-
-from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress  # noqa: 501
-from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress  # noqa: 501
+from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress
+from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress
 from watch.utils.util_framework import download_region
 import ubelt as ub
 import scriptconfig as scfg
@@ -42,7 +40,6 @@ class SVDatasetConfig(scfg.DataConfig):
             '''
             Will not recompute if output_path already exists
             '''))
-    force_one_job_for_cropping = scfg.Value(False, isflag=True, help='Force jobs=1 for cropping')
     sv_cropping_config = scfg.Value(None, type=str, help=ub.paragraph(
             '''
             Raw json/yaml or a path to a json/yaml file that specifies the
@@ -65,7 +62,6 @@ def run_generate_sv_cropped_kwcoco(input_path,
                                    newline=False,
                                    jobs=1,
                                    dont_recompute=False,
-                                   force_one_job_for_cropping=False,
                                    sv_cropping_config=None):
 
     from watch.utils.util_framework import AWS_S3_Command
@@ -115,7 +111,7 @@ def run_generate_sv_cropped_kwcoco(input_path,
 
     sv_cropping_config = Yaml.coerce(sv_cropping_config or {})
 
-    sv_cropping = SV_Cropping(root_dpath='/tmp/ingress')
+    sv_cropping = SV_Cropping(root_dpath=ingress_dir)
     sv_cropping.configure({
         'crop_src_fpath': ta1_sc_kwcoco_path,
         'regions': bas_region_path,
