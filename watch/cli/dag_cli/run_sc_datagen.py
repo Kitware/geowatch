@@ -8,7 +8,6 @@ import subprocess
 from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress
 from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress
 from watch.utils.util_framework import download_region
-from watch.utils.util_framework import determine_region_id
 import ubelt as ub
 import scriptconfig as scfg
 
@@ -65,7 +64,6 @@ def run_generate_sc_cropped_kwcoco(config):
     if config.dont_recompute:
         aws_ls = AWS_S3_Command('ls', profile=config.aws_profile)
         aws_ls_command = aws_ls.finalize()
-
         try:
             ub.cmd([*aws_ls_command, config.output_path], check=True, verbose=3, capture=False)
         except subprocess.CalledProcessError:
@@ -94,7 +92,7 @@ def run_generate_sc_cropped_kwcoco(config):
                                         strip_nonregions=True)
 
     # Parse region_id from original region file
-    region_id = determine_region_id(local_region_path)
+    region_id = util_framework.determine_region_id(local_region_path)
     print(f'region_id={region_id}')
 
     if region_id is None:

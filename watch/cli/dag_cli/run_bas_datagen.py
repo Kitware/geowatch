@@ -101,8 +101,6 @@ class BASDatasetConfig(scfg.DataConfig):
 
 
 def main():
-    import sys
-    print(f'sys.argv={sys.argv}')
     config = BASDatasetConfig.cli(strict=True)
     print('config = {}'.format(ub.urepr(dict(config), nl=1, align=':')))
     run_stac_to_cropped_kwcoco(config)
@@ -226,8 +224,8 @@ def run_stac_to_cropped_kwcoco(config):
 
     if config.dont_recompute:
         try:
-            ub.cmd([*aws_ls_command, config.output_path], check=True, capture=False,
-                   verbose=3)
+            ub.cmd([*aws_ls_command, config.output_path],
+                   check=True, capture=False, verbose=3)
         except subprocess.CalledProcessError:
             # Continue processing
             pass

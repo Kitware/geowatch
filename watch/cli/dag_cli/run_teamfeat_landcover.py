@@ -5,13 +5,10 @@ See Old Version:
 SeeAlso:
     ~/code/watch-smartflow-dags/KIT_TA2_PREEVAL10_PYENV.py
 """
-import os
-import subprocess
 import ubelt as ub
 import scriptconfig as scfg
-
-from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress  # noqa: 501
-from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress  # noqa: 501
+from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress
+from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress
 
 
 class TeamFeatLandcoverConfig(scfg.DataConfig):
@@ -45,80 +42,59 @@ class TeamFeatLandcoverConfig(scfg.DataConfig):
             '''
             Output as simple newline separated STAC items
             '''))
-    jobs = scfg.Value(1, type=int, short_alias=['j'], help='Number of jobs to run in parallel')
 
 
 def main():
     config = TeamFeatLandcoverConfig.cli(strict=True)
     print('config = {}'.format(ub.urepr(dict(config), nl=1, align=':')))
-    run_landcover_for_baseline(**config)
+    run_landcover_for_baseline(config)
 
 
-def run_landcover_for_baseline(input_path,
-                               input_region_path,
-                               output_path,
-                               model_path,
-                               outbucket,
-                               aws_profile=None,
-                               dryrun=False,
-                               requester_pays=False,
-                               newline=False,
-                               jobs=1):
+def run_landcover_for_baseline(config):
     from watch.utils.util_framework import download_region
-    if aws_profile is not None:
-        aws_base_command =\
-            ['aws', 's3', '--profile', aws_profile, 'cp']
-    else:
-        aws_base_command = ['aws', 's3', 'cp']
-
-    if dryrun:
-        aws_base_command.append('--dryrun')
 
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
-    ingress_dir = '/tmp/ingress'
+    ingress_dir = ub.Path('/tmp/ingress')
     ingress_kwcoco_path = baseline_framework_kwcoco_ingress(
-        input_path,
+        config.input_path,
         ingress_dir,
-        aws_profile,
-        dryrun)
+        config.aws_profile,
+        config.dryrun)
 
     # 2. Download and prune region file
     print("* Downloading and pruning region file *")
     local_region_path = '/tmp/region.json'
     download_region(
-        input_region_path=input_region_path,
+        input_region_path=config.input_region_path,
         output_region_path=local_region_path,
-        aws_profile=aws_profile,
+        aws_profile=config.aws_profile,
         strip_nonregions=True,
     )
 
     # 2. Generate Landcover features
     print("* Generating landcover features *")
-    dzyne_landcover_features_kwcoco_path = os.path.join(
-        ingress_dir, 'dzyne_landcover_kwcoco.json')
+    dzyne_landcover_features_kwcoco_path = ingress_dir / 'dzyne_landcover_kwcoco.json'
 
-    subprocess.run(['python', '-m', 'watch.tasks.landcover.predict',
-                    '--dataset', ingress_kwcoco_path,
-                    '--deployed', model_path,
-                    '--output', dzyne_landcover_features_kwcoco_path,
-                    '--num_workers', '2',
-                    '--with_hidden', '32',
-                    '--select_images', '.sensor_coarse == "S2"',
-                    '--device', '0'],
-                   check=True)
+    ub.cmd([
+        'python', '-m', 'watch.tasks.landcover.predict',
+        '--dataset', ingress_kwcoco_path,
+        '--deployed', config.model_path,
+        '--output', dzyne_landcover_features_kwcoco_path,
+        '--num_workers', '2',
+        '--with_hidden', '32',
+        '--select_images', '.sensor_coarse == "S2"',
+        '--device', '0'
+    ], check=True, verbose=3, capture=False)
 
     # 3. Combining landcover features with input features to pass to BAS
     print("* Combining input features with computed landcover features *")
-    combo_features_kwcoco_path = os.path.join(
-        ingress_dir, 'features_combo_with_landcover_kwcoco.json')
-    subprocess.run(['python', '-m', 'watch.cli.coco_combine_features',
-                    '--src',
-                    ingress_kwcoco_path,
-                    dzyne_landcover_features_kwcoco_path,
-                    '--dst',
-                    combo_features_kwcoco_path],
-                   check=True)
+    combo_features_kwcoco_path = ingress_dir / 'features_combo_with_landcover_kwcoco.json'
+    ub.cmd([
+        'python', '-m', 'watch.cli.coco_combine_features',
+        '--src', ingress_kwcoco_path, dzyne_landcover_features_kwcoco_path,
+        '--dst', combo_features_kwcoco_path,
+    ], check=True, verbose=3, capture=False)
 
     # 4. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
@@ -126,8 +102,8 @@ def run_landcover_for_baseline(input_path,
     print("* Egressing KWCOCO dataset and associated STAC item *")
     baseline_framework_kwcoco_egress(combo_features_kwcoco_path,
                                      local_region_path,
-                                     output_path,
-                                     outbucket,
+                                     config.output_path,
+                                     config.outbucket,
                                      aws_profile=None,
                                      dryrun=False,
                                      newline=False)
