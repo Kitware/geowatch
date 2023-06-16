@@ -445,7 +445,6 @@ def check_single_colletion():
     """
     import os
     import pystac_client
-    import os
     import ubelt as ub
     collection = os.environ.get('COLLECTION', "ta1-10m-tsmoothed-acc-3")
     # item_search = catalog.search(collections=[collection])
@@ -482,10 +481,11 @@ def check_single_colletion():
 
     search = catalog.search(
         collections=[collection],
-        datetime=daterange,
         intersects=geom,
         max_items=None,
-        query=query)
+        query=query,
+        datetime=daterange,
+    )
 
     items_gen = search.items()
     items = list(items_gen)
