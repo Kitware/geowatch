@@ -38,6 +38,8 @@ class SCDatasetConfig(scfg.DataConfig):
     newline = scfg.Value(False, isflag=True, short_alias=['n'], help=ub.paragraph(
             '''
             Output as simple newline separated STAC items
+
+            UNUSED.
             '''))
     jobs = scfg.Value(1, type=int, short_alias=['j'], help='Number of jobs to run in parallel')
     dont_recompute = scfg.Value(False, isflag=True, help=ub.paragraph(
@@ -56,17 +58,17 @@ def main():
     run_generate_sc_cropped_kwcoco(**config, config=config)
 
 
-def run_generate_sc_cropped_kwcoco(input_path,
-                                   input_region_path,
-                                   output_path,
-                                   outbucket,
-                                   aws_profile=None,
-                                   dryrun=False,
-                                   newline=False,
-                                   jobs=1,
-                                   dont_recompute=False,
-                                   sc_align_config=None,
-                                   config=None):
+def run_generate_sc_cropped_kwcoco(config):
+
+    input_path = config.input_path
+    input_region_path = config.input_region_path
+    output_path = config.output_path
+    outbucket = config.outbucket
+    aws_profile = config.aws_profile
+    dryrun = config.dryrun
+    # newline = config.newline
+    jobs = config.jobs
+    dont_recompute = config.dont_recompute
 
     from watch.utils.util_framework import AWS_S3_Command
     from watch.utils.util_yaml import Yaml

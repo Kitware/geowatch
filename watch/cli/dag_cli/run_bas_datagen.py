@@ -101,7 +101,7 @@ class BASDatasetConfig(scfg.DataConfig):
 def main():
     config = BASDatasetConfig.cli(strict=True)
     print('config = {}'.format(ub.urepr(dict(config), nl=1, align=':')))
-    run_stac_to_cropped_kwcoco(**config, config=config)
+    run_stac_to_cropped_kwcoco(config)
 
 
 def build_combined_kwcoco(input_path,
@@ -172,29 +172,12 @@ def build_combined_kwcoco(input_path,
     return ta1_kwcoco_path_for_sc
 
 
-def run_stac_to_cropped_kwcoco(input_path,
-                               input_region_path,
-                               output_path,
-                               outbucket,
-                               from_collated=False,
-                               aws_profile=None,
-                               dryrun=False,
-                               requester_pays=False,
-                               newline=False,
-                               jobs=1,
-                               virtual=False,
-                               dont_recompute=False,
-                               previous_input_path=None,
-                               previous_outbucket=None,
-                               time_combine_config=False,
-                               bas_align_config=None,
-                               config=None):
-
+def run_stac_to_cropped_kwcoco(config):
     from watch.utils.util_framework import AWS_S3_Command
     from watch.utils import util_framework
     from watch.utils.util_yaml import Yaml
-    aws_ls = AWS_S3_Command('ls', profile=aws_profile)
-    aws_cp = AWS_S3_Command('cp', profile=aws_profile)
+    aws_ls = AWS_S3_Command('ls', profile=config.aws_profile)
+    aws_cp = AWS_S3_Command('cp', profile=config.aws_profile)
     aws_base_command = aws_cp.finalize()
     aws_ls_command = aws_ls.finalize()
 
@@ -208,7 +191,7 @@ def run_stac_to_cropped_kwcoco(input_path,
         target_gsd: 10GSD
         context_factor: 1
         force_min_gsd: 10
-        img_workers: {str(jobs)}
+        img_workers: {str(config.jobs)}
         aux_workers: auto
         rpc_align_method: affine_warp
         ''')))
@@ -237,9 +220,9 @@ def run_stac_to_cropped_kwcoco(input_path,
 
     target_gsd = align_config['target_gsd']
 
-    if dont_recompute:
+    if config.dont_recompute:
         try:
-            ub.cmd([*aws_ls_command, output_path], check=True, capture=False,
+            ub.cmd([*aws_ls_command, config.output_path], check=True, capture=False,
                    verbose=3)
         except subprocess.CalledProcessError:
             # Continue processing
@@ -269,20 +252,20 @@ def run_stac_to_cropped_kwcoco(input_path,
     # 1. Ingress data
     print("* Running baseline framework ingress *")
     ingress_catalog = baseline_framework_ingress(
-        input_path,
+        config.input_path,
         ingress_dir,
-        aws_profile=aws_profile,
-        dryrun=dryrun,
-        requester_pays=requester_pays,
+        aws_profile=config.aws_profile,
+        dryrun=config.dryrun,
+        requester_pays=config.requester_pays,
         relative=False,
-        jobs=jobs,
-        virtual=virtual)
+        jobs=config.jobs,
+        virtual=config.virtual)
 
     # 2. Download and prune region file
     print("* Downloading and pruning region file *")
-    local_region_path = download_region(input_region_path,
+    local_region_path = download_region(config.input_region_path,
                                         local_region_path,
-                                        aws_profile=aws_profile,
+                                        aws_profile=config.aws_profile,
                                         strip_nonregions=True)
 
     # 3. Convert ingressed STAC catalog to KWCOCO
@@ -291,8 +274,8 @@ def run_stac_to_cropped_kwcoco(input_path,
                        ta1_kwcoco_path,
                        assume_relative=False,
                        populate_watch_fields=False,
-                       jobs=jobs,
-                       from_collated=from_collated,
+                       jobs=config.jobs,
+                       from_collated=config.from_collated,
                        ignore_duplicates=True)
     # Add watch fields
     print("* Adding watch fields *")
@@ -300,7 +283,7 @@ def run_stac_to_cropped_kwcoco(input_path,
                                src=ta1_kwcoco_path,
                                inplace=True,
                                target_gsd=target_gsd,
-                               workers=jobs)
+                               workers=config.jobs)
 
     # 3a. Filter KWCOCO dataset by sensors used for BAS
     print("* Filtering KWCOCO dataset for BAS")
@@ -315,17 +298,17 @@ def run_stac_to_cropped_kwcoco(input_path,
 
     # 3.1. Combine previous interval `kwcoco_for_sc.json` if provided
     # such that SC has full time range of data to work with
-    if previous_input_path is not None:
+    if config.previous_input_path is not None:
         combined_kwcoco_path = build_combined_kwcoco(
-            input_path,
-            previous_input_path,
-            aws_profile,
+            config.input_path,
+            config.previous_input_path,
+            config.aws_profile,
             ta1_cropped_dir,
-            dryrun=dryrun,
-            requester_pays=requester_pays,
-            jobs=jobs,
-            virtual=virtual,
-            from_collated=from_collated)
+            dryrun=config.dryrun,
+            requester_pays=config.requester_pays,
+            jobs=config.jobs,
+            virtual=config.virtual,
+            from_collated=config.from_collated)
 
         if combined_kwcoco_path is None:
             ta1_kwcoco_path_for_sc = ta1_kwcoco_path
@@ -380,17 +363,17 @@ def run_stac_to_cropped_kwcoco(input_path,
                                    src=ta1_cropped_kwcoco_path,
                                    dst=ta1_cropped_kwcoco_path,
                                    target_gsd=target_gsd,
-                                   workers=jobs)
+                                   workers=config.jobs)
 
     # 6.1. Combine previous interval time-combined data for BAS
-    if previous_outbucket is not None:
+    if config.previous_outbucket is not None:
         print('* Combining previous interval time combined kwcoco with'
               'current *')
         combined_timecombined_kwcoco_path = ta1_cropped_dir / 'combined_timecombined_kwcoco.json'
 
         previous_ingress_dir = ub.Path('/tmp/ingress_previous')
         ub.cmd([*aws_base_command, '--recursive',
-                previous_outbucket, previous_ingress_dir],
+                config.previous_outbucket, previous_ingress_dir],
                check=True, verbose=3, capture=False)
 
         previous_timecombined_kwcoco_path = previous_ingress_dir / 'combined_timecombined_kwcoco.json'
@@ -421,11 +404,11 @@ def run_stac_to_cropped_kwcoco(input_path,
     print("* Egressing KWCOCO dataset and associated STAC item *")
     baseline_framework_kwcoco_egress(combined_timecombined_kwcoco_path,
                                      local_region_path,
-                                     output_path,
-                                     outbucket,
-                                     aws_profile=None,
-                                     dryrun=False,
-                                     newline=False)
+                                     config.output_path,
+                                     config.outbucket,
+                                     aws_profile=config.aws_profile,
+                                     dryrun=config.dryrun,
+                                     newline=config.newline)
 
 
 if __name__ == "__main__":
