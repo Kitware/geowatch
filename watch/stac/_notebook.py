@@ -470,4 +470,24 @@ def check_single_colletion():
     asset = ub.peek(first_item.assets.values())
     print(asset.to_dict())
 
-    print(ub.urepr(list(catalog.get_collections())))
+    import watch
+    from watch.geoannots import geomodels
+    dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+    base = ((dvc_data_dpath / 'annotations') / 'drop6')
+    region_fpath = base / 'region_models/NZ_R001.geojson'
+    region = geomodels.RegionModel.coerce(region_fpath)
+    geom = region.geometry
+    query = {}
+    daterange = ('2010-01-01', '2020-01-01')
+
+    search = catalog.search(
+        collections=[collection],
+        datetime=daterange,
+        intersects=geom,
+        max_items=None,
+        query=query)
+
+    items_gen = search.items()
+    items = list(items_gen)
+    num_found = len(items)
+    print(f'num_found={num_found}')
