@@ -213,14 +213,14 @@ def run_stac_to_cropped_kwcoco(config):
         ''')))
 
     align_config = align_config_default | Yaml.coerce(config.bas_align_config)
-    if align_config.aux_workers == 'auto':
-        align_config.aux_workers = align_config.include_channels.count('|') + 1
+    if align_config['aux_workers'] == 'auto':
+        align_config['aux_workers'] = align_config['include_channels'].count('|') + 1
     time_combine_config = time_combine_config_default | Yaml.coerce(config.time_combine_config)
 
-    if time_combine_config.channels == 'auto':
+    if time_combine_config['channels'] == 'auto':
         # Default time combine channels to the align channels minus quality.
         from kwcoco import ChannelSpec
-        time_combine_config.channels = ChannelSpec.coerce(align_config.include_channels) - {'quality'}
+        time_combine_config['channels'] = ChannelSpec.coerce(align_config['include_channels']) - {'quality'}
 
     target_gsd = align_config['target_gsd']
 
