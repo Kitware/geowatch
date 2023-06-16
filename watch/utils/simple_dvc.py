@@ -440,7 +440,7 @@ def _import_dvc_main():
     try:
         from dvc import main as dvc_main_mod
         dvc_main = dvc_main_mod.main
-    except ModuleNotFoundError:
+    except (ImportError, ModuleNotFoundError):
         from dvc.cli import main as dvc_main
     return dvc_main
 
