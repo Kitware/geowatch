@@ -33,11 +33,6 @@ class DinoSVConfig(scfg.DataConfig):
             '''
             S3 Output directory for STAC item / asset egress
             '''))
-    ta2_s3_collation_bucket = scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            S3 Location for collated TA-2 output (bucket name should
-            include up to eval name)
-            '''))
     dino_detect_config = scfg.Value(None, type=str, help=ub.paragraph(
             '''
             Raw json/yaml or a path to a json/yaml file that specifies the
@@ -69,7 +64,6 @@ def run_dino_sv(config):
     output_path = config.output_path
 
     outbucket = config.outbucket
-    ta2_s3_collation_bucket = config.ta2_s3_collation_bucket
     aws_profile = config.aws_profile
     dryrun = config.dryrun
 
@@ -205,14 +199,6 @@ def run_dino_sv(config):
         region_dpath=output_region_fpath.parent,
         site_dpath=output_sites_dpath,
     )
-
-    # 4. (Optional) collate TA-2 output
-    if ta2_s3_collation_bucket is not None:
-        print("* Collating TA-2 output")
-        util_framework.ta2_collate_output(aws_base_command,
-                                          output_region_dpath,
-                                          output_sites_dpath,
-                                          ta2_s3_collation_bucket)
 
     # 5. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to

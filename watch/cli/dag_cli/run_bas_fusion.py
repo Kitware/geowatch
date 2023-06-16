@@ -270,6 +270,8 @@ def run_bas_fusion_for_baseline(config):
 
     # 6. (Optional) collate TA-2 output
     if ta2_s3_collation_bucket is not None:
+        # only used if we are going to submit our BAS predictions as the final
+        # ones?
         print("* Collating TA-2 output")
         util_framework.ta2_collate_output(aws_base_command,
                                           cropped_region_models_outdir,

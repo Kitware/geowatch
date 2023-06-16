@@ -469,6 +469,10 @@ class AWS_S3_Command:
 
 def ta2_collate_output(aws_base_command, local_region_dir, local_sites_dir,
                        destination_s3_bucket, performer_suffix='KIT'):
+    """
+    I think this is for putting the final system regions / sites into the place
+    that T&E wants them.
+    """
     from glob import glob
     from os.path import join
     import ubelt as ub

@@ -78,20 +78,10 @@ def run_sc_fusion_for_baseline(config):
     from watch.utils.util_framework import AWS_S3_Command
     from watch.utils import util_framework
 
-    input_path = config.input_path
-    input_region_path = config.input_region_path
-    output_path = config.output_path
-
-    outbucket = config.outbucket
-    sc_track_fn = config.sc_track_fn
-    aws_profile = config.aws_profile
-    dryrun = config.dryrun
-    ta2_s3_collation_bucket = config.ta2_s3_collation_bucket
-
     aws_cp = AWS_S3_Command('cp')
     aws_cp.update(
-        profile=aws_profile,
-        dryrun=dryrun,
+        profile=config.aws_profile,
+        dryrun=config.dryrun,
     )
     aws_base_command = aws_cp.finalize()
 
@@ -99,19 +89,19 @@ def run_sc_fusion_for_baseline(config):
     print("* Running baseline framework kwcoco ingress *")
     ingress_dir = '/tmp/ingress'
     ingress_kwcoco_path = baseline_framework_kwcoco_ingress(
-        input_path,
+        config.input_path,
         ingress_dir,
-        aws_profile,
-        dryrun)
+        config.aws_profile,
+        config.dryrun)
 
     # # 2. Download and prune region file
     print("* Downloading and pruning region file *")
     local_region_path = '/tmp/region.json'
 
     download_region(
-        input_region_path=input_region_path,
+        input_region_path=config.input_region_path,
         output_region_path=local_region_path,
-        aws_profile=aws_profile,
+        aws_profile=config.aws_profile,
         strip_nonregions=True,
     )
 
@@ -214,7 +204,7 @@ def run_sc_fusion_for_baseline(config):
                 '--out_sites_dir', site_models_outdir,
                 '--out_sites_fpath', site_models_manifest_outpath,
                 '--out_kwcoco', tracked_sc_kwcoco_path,
-                '--default_track_fn', sc_track_fn,
+                '--default_track_fn', config.sc_track_fn,
                 '--site_summary', cropped_region_models_bas / '*.geojson',
                 '--append_mode', 'True',
                 '--track_kwargs', json.dumps(sc_track_kwargs)],
@@ -225,14 +215,16 @@ def run_sc_fusion_for_baseline(config):
     cropped_region_models_outdir = ingress_dir / 'cropped_region_models'
     os.makedirs(cropped_region_models_outdir, exist_ok=True)
 
-    ub.cmd(['python', '-m', 'watch.cli.crop_sites_to_regions',
-            '--site_models', site_models_outdir / '*.geojson',
-            '--region_models', region_models_outdir / f'{region_id}.geojson',
-            '--new_site_dpath', cropped_site_models_outdir,
-            '--new_region_dpath', cropped_region_models_outdir],
-           check=True, verbose=3, capture=False)
+    ub.cmd([
+        'python', '-m', 'watch.cli.crop_sites_to_regions',
+        '--site_models', site_models_outdir / '*.geojson',
+        '--region_models', region_models_outdir / f'{region_id}.geojson',
+        '--new_site_dpath', cropped_site_models_outdir,
+        '--new_region_dpath', cropped_region_models_outdir
+    ], check=True, verbose=3, capture=False)
 
     # Validate and fix all outputs
+    print('Fixup and validate outputs')
     util_framework.fixup_and_validate_site_and_region_models(
         region_dpath=cropped_region_models_outdir,
         site_dpath=cropped_site_models_outdir,
@@ -244,19 +236,19 @@ def run_sc_fusion_for_baseline(config):
     print("* Egressing KWCOCO dataset and associated STAC item *")
     baseline_framework_kwcoco_egress(sc_fusion_kwcoco_path,
                                      local_region_path,
-                                     output_path,
-                                     outbucket,
-                                     aws_profile=None,
+                                     config.output_path,
+                                     config.outbucket,
+                                     aws_profile=config.aws_profile,
                                      dryrun=False,
                                      newline=False)
 
     # 6. (Optional) collate TA-2 output
-    if ta2_s3_collation_bucket is not None:
+    if config.ta2_s3_collation_bucket is not None:
         print("* Collating TA-2 output")
         util_framework.ta2_collate_output(aws_base_command,
                                           cropped_region_models_outdir,
                                           cropped_site_models_outdir,
-                                          ta2_s3_collation_bucket)
+                                          config.ta2_s3_collation_bucket)
 
 
 if __name__ == "__main__":
