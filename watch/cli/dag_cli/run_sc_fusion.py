@@ -87,7 +87,7 @@ def run_sc_fusion_for_baseline(config):
 
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
-    ingress_dir = '/tmp/ingress'
+    ingress_dir = ub.Path('/tmp/ingress')
     ingress_kwcoco_path = baseline_framework_kwcoco_ingress(
         config.input_path,
         ingress_dir,
@@ -108,10 +108,7 @@ def run_sc_fusion_for_baseline(config):
     # Determine the region_id in the region file.
     region_id = determine_region_id(local_region_path)
 
-    ingress_dir = ub.Path(ingress_dir)
-
     sc_fusion_kwcoco_path = ingress_dir / 'sc_fusion_kwcoco.json'
-
     cropped_region_models_bas = ingress_dir / 'cropped_region_models_bas'
 
     site_models_outdir = ingress_dir / 'sc_out_site_models'
