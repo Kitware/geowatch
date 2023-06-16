@@ -438,7 +438,7 @@ class SimpleDVC_CLI(scfg.ModalCLI):
 
 def _import_dvc_main():
     try:
-        from dvc.main import dvc_main
+        from dvc import main as dvc_main
     except ModuleNotFoundError:
         from dvc.cli import main as dvc_main
     return dvc_main

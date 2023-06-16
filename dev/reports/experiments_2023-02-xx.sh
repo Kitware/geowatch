@@ -2145,6 +2145,19 @@ python -m watch.mlops.schedule_evaluation --params="
             ####
             - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65_epoch7_step322.pt
 
+
+ create mode 100644 models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65_epoch115_stepNone.pt.dvc
+ create mode 100644 models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65_epoch173_stepNone.pt.dvc
+ create mode 100644 models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65_epoch182_stepNone.pt.dvc
+ create mode 100644 models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65_epoch2_stepNone.pt.dvc
+ create mode 100644 models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65_epoch3_stepNone.pt.dvc
+ create mode 100644 models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65_epoch4_stepNone.pt.dvc
+ create mode 100644 models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65_epoch53_stepNone.pt.dvc
+ create mode 100644 models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65_epoch5_stepNone.pt.dvc
+ create mode 100644 models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65_epoch6_stepNone.pt.dvc
+ create mode 100644 models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65/Drop7-MedianNoWinter10GSD_landcover_invar_scratch_split6_V65_epoch80_stepNone.pt.dvc
+
+
         bas_pxl.test_dataset:
             - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-KR_R002_EI2LMSC.kwcoco.zip
             - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-CH_R001_EI2LMSC.kwcoco.zip
