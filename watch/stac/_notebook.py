@@ -395,6 +395,36 @@ def check_processed_regions():
     # print('region_to_results = {}'.format(ub.urepr(region_to_results, nl=1)))
 
 
+# def check_single_endpoint():
+#     endpoint = "https://api.smart-stac.com"
+#     collection = "ta1-10m-tsmoothed-acc-3"
+#     # item_search = catalog.search(collections=[collection])
+
+#     # provider = _ACCENTURE_PHASE2_TA1_PRODUCTS['ta1-pd-acc']['endpoint']
+#     import pystac_client
+#     import os
+#     import ubelt as ub
+
+#     provider = "https://api.smart-stac.com"
+#     headers = {
+#         'x-api-key': os.environ['SMART_STAC_API_KEY']
+#     }
+#     provider = "https://api.smart-stac.com"
+#     catalog = pystac_client.Client.open(provider, headers=headers)
+
+#     collections = list(catalog.get_collections())
+#     for c in collections:
+#         if c.id == 'ta1-10m-tsmoothed-acc-3':
+#             break
+#     first_item = ub.peek(c.get_items())
+#     print(f'first_item={first_item}')
+#     print(f'first_item.assets={first_item.assets}')
+#     asset = ub.peek(first_item.assets.values())
+#     print(asset.to_dict())
+
+#     print(ub.urepr(list(catalog.get_collections())))
+
+
 def _devcheck_providers_exist():
     """
     develoepr logic to test to see if providers are working
@@ -435,4 +465,3 @@ def _devcheck_providers_exist():
     item_search = catalog.search(collections=["ta1-pd-acc"])
     item_search = catalog.search(collections=["ta1-pd-ara"])
     item_search = catalog.search(collections=["ta1-pd-str"])
-    print(f'item_search={item_search}')

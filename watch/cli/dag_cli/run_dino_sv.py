@@ -6,14 +6,9 @@ See Old Version:
 SeeAlso:
     ~/code/watch-smartflow-dags/KIT_TA2_PREEVAL10_PYENV.py
 """
-import os
-import subprocess
-
 import scriptconfig as scfg
 import ubelt as ub
 from watch.mlops.smart_pipeline import DinoBoxDetector, SV_DinoFilter
-
-from glob import glob
 
 
 class DinoSVConfig(scfg.DataConfig):
@@ -61,38 +56,13 @@ def main():
     run_dino_sv(config)
 
 
-def _ta2_collate_output(aws_base_command,
-                        local_region_dir,
-                        local_sites_dir,
-                        destination_s3_bucket,
-                        performer_suffix='KIT'):
-    def _get_suffixed_basename(local_path):
-        base, ext = os.path.splitext(os.path.basename(local_path))
-        return "{}_{}{}".format(base, performer_suffix, ext)
-
-    for region in glob(os.path.join(local_region_dir, '*.geojson')):
-        region_s3_outpath = '/'.join((destination_s3_bucket,
-                                      'region_models',
-                                      _get_suffixed_basename(region)))
-        subprocess.run([*aws_base_command,
-                        region,
-                        region_s3_outpath], check=True)
-
-    for site in glob(os.path.join(local_sites_dir, '*.geojson')):
-        site_s3_outpath = '/'.join((destination_s3_bucket,
-                                    'site_models',
-                                    _get_suffixed_basename(site)))
-        subprocess.run([*aws_base_command,
-                        site,
-                        site_s3_outpath], check=True)
-
-
 def run_dino_sv(config):
     from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress
     from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress
     from watch.utils.util_framework import download_region, determine_region_id
     from watch.utils.util_yaml import Yaml
     from watch.utils.util_framework import AWS_S3_Command
+    from watch.utils import util_framework
 
     input_path = config.input_path
     input_region_path = config.input_region_path
@@ -225,17 +195,24 @@ def run_dino_sv(config):
             'output_region_fpath': output_region_fpath,
             'output_sites_dpath': output_sites_dpath,
             'output_site_manifest_fpath': output_site_manifest_fpath,
+            **dino_filter_config,
         })
 
         ub.cmd(dino_building_filter.command(), check=True, verbose=3, system=True)
 
+    # Validate and fix all outputs
+    util_framework.fixup_and_validate_site_and_region_models(
+        region_dpath=output_region_fpath.parent,
+        site_dpath=output_sites_dpath,
+    )
+
     # 4. (Optional) collate TA-2 output
     if ta2_s3_collation_bucket is not None:
         print("* Collating TA-2 output")
-        _ta2_collate_output(aws_base_command,
-                            output_region_dpath,
-                            output_sites_dpath,
-                            ta2_s3_collation_bucket)
+        util_framework.ta2_collate_output(aws_base_command,
+                                          output_region_dpath,
+                                          output_sites_dpath,
+                                          ta2_s3_collation_bucket)
 
     # 5. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to

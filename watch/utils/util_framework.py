@@ -465,3 +465,65 @@ class AWS_S3_Command:
         if check:
             run_info.check_returncode()
         return run_info
+
+
+def ta2_collate_output(aws_base_command, local_region_dir, local_sites_dir,
+                       destination_s3_bucket, performer_suffix='KIT'):
+    from glob import glob
+    from os.path import join
+    import ubelt as ub
+    def _get_suffixed_basename(local_path):
+        base, ext = os.path.splitext(os.path.basename(local_path))
+        return "{}_{}{}".format(base, performer_suffix, ext)
+
+    for region in glob(join(local_region_dir, '*.geojson')):
+        region_s3_outpath = '/'.join((destination_s3_bucket,
+                                      'region_models',
+                                      _get_suffixed_basename(region)))
+        ub.cmd([*aws_base_command, region, region_s3_outpath], check=True,
+               verbose=3, capture=False)
+
+    for site in glob(join(local_sites_dir, '*.geojson')):
+        site_s3_outpath = '/'.join((destination_s3_bucket,
+                                    'site_models',
+                                    _get_suffixed_basename(site)))
+        ub.cmd([*aws_base_command, site, site_s3_outpath], check=True,
+               verbose=3, capture=False)
+
+
+def fixup_and_validate_site_and_region_models(region_dpath, site_dpath):
+    """
+    Read, fix, and validate all site and region models.
+    """
+    # Validate and fix all outputs
+    from watch.geoannots import geomodels
+    from watch.utils import util_gis
+    region_infos = list(util_gis.coerce_geojson_datas(region_dpath, format='json'))
+    site_infos = list(util_gis.coerce_geojson_datas(site_dpath, format='json'))
+    for region_info in region_infos:
+        fpath = region_info['fpath']
+        region = geomodels.RegionModel(**region_info['data'])
+        region.fixup()
+        fpath.write_text(region.dumps(indent='    '))
+        region.validate()
+    for site_info in site_infos:
+        fpath = site_info['fpath']
+        site = geomodels.SiteModel(**site_info['data'])
+        site.fixup()
+        fpath.write_text(site.dumps(indent='    '))
+        site.validate()
+
+
+def _make_arglist(config) -> list:
+    """
+    Helper to make the invocation
+    """
+    # Make argstring
+    arglist = []
+    for k, v in config.items():
+        arglist.append('--' + str(k))
+        if isinstance(v, list):
+            arglist.extend(list(map(str, v)))
+        else:
+            arglist.append(str(v))
+    return arglist

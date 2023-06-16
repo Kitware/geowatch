@@ -11,8 +11,6 @@ import os
 import scriptconfig as scfg
 import shutil
 import ubelt as ub
-from os.path import join
-from glob import glob
 
 
 class BasFusionConfig(scfg.DataConfig):
@@ -76,30 +74,6 @@ def main():
     run_bas_fusion_for_baseline(config)
 
 
-def _ta2_collate_output(aws_base_command,
-                        local_region_dir,
-                        local_sites_dir,
-                        destination_s3_bucket,
-                        performer_suffix='KIT'):
-    def _get_suffixed_basename(local_path):
-        base, ext = os.path.splitext(os.path.basename(local_path))
-        return "{}_{}{}".format(base, performer_suffix, ext)
-
-    for region in glob(join(local_region_dir, '*.geojson')):
-        region_s3_outpath = '/'.join((destination_s3_bucket,
-                                      'region_models',
-                                      _get_suffixed_basename(region)))
-        ub.cmd([*aws_base_command, region, region_s3_outpath], check=True,
-               verbose=3, capture=False)
-
-    for site in glob(join(local_sites_dir, '*.geojson')):
-        site_s3_outpath = '/'.join((destination_s3_bucket,
-                                    'site_models',
-                                    _get_suffixed_basename(site)))
-        ub.cmd([*aws_base_command, site, site_s3_outpath], check=True,
-               verbose=3, capture=False)
-
-
 def run_bas_fusion_for_baseline(config):
     from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress
     from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress
@@ -108,6 +82,7 @@ def run_bas_fusion_for_baseline(config):
     from watch.tasks.fusion.predict import predict
     from watch.utils.util_yaml import Yaml
     from watch.utils.util_framework import AWS_S3_Command
+    from watch.utils import util_framework
 
     input_path = config.input_path
     input_region_path = config.input_region_path
@@ -266,7 +241,7 @@ def run_bas_fusion_for_baseline(config):
         '--default_track_fn', 'saliency_heatmaps',
         '--append_mode', 'True',
         # TODO:
-        # use boundary_region here
+        # use boundary_region here?
         '--track_kwargs', json.dumps(bas_tracking_config)],
         check=True, verbose=3)
 
@@ -288,30 +263,18 @@ def run_bas_fusion_for_baseline(config):
     ub.cmd(crop_cmd, check=True, verbose=3)
 
     # Validate and fix all outputs
-    from watch.geoannots import geomodels
-    from watch.utils import util_gis
-    region_infos = list(util_gis.coerce_geojson_datas(cropped_region_models_outdir, format='json'))
-    site_infos = list(util_gis.coerce_geojson_datas(cropped_site_models_outdir, format='json'))
-    for region_info in region_infos:
-        fpath = region_info['fpath']
-        region = geomodels.RegionModel(**region_info['data'])
-        region.fixup()
-        fpath.write_text(region.dumps(indent='    '))
-        region.validate()
-    for site_info in site_infos:
-        fpath = site_info['fpath']
-        site = geomodels.SiteModel(**site_info['data'])
-        site.fixup()
-        fpath.write_text(site.dumps(indent='    '))
-        site.validate()
+    util_framework.fixup_and_validate_site_and_region_models(
+        region_dpath=cropped_region_models_outdir,
+        site_dpath=cropped_site_models_outdir,
+    )
 
     # 6. (Optional) collate TA-2 output
     if ta2_s3_collation_bucket is not None:
         print("* Collating TA-2 output")
-        _ta2_collate_output(aws_base_command,
-                            cropped_region_models_outdir,
-                            cropped_site_models_outdir,
-                            ta2_s3_collation_bucket)
+        util_framework.ta2_collate_output(aws_base_command,
+                                          cropped_region_models_outdir,
+                                          cropped_site_models_outdir,
+                                          ta2_s3_collation_bucket)
 
     # 6. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to

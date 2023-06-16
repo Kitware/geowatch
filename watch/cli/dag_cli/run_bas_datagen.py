@@ -94,7 +94,7 @@ class BASDatasetConfig(scfg.DataConfig):
     def __post_init__(self):
         if self.time_combine_config in {False, None}:
             self.time_combine_config = {'enabled': False}
-        elif self.time_combine_config True:
+        elif self.time_combine_config is True:
             self.time_combine_config = {'enabled': True}
 
 
@@ -115,8 +115,8 @@ def build_combined_kwcoco(input_path,
                           from_collated=False):
 
     from watch.utils.util_framework import AWS_S3_Command
-    aws_ls = AWS_S3_Command('ls', profile=profile)
-    aws_cp = AWS_S3_Command('cp', profile=profile)
+    aws_ls = AWS_S3_Command('ls', profile=aws_profile)
+    aws_cp = AWS_S3_Command('cp', profile=aws_profile)
     aws_cp_command = aws_cp.finalize()
     aws_ls_command = aws_ls.finalize()
 
@@ -146,7 +146,7 @@ def build_combined_kwcoco(input_path,
         print('\n'.join((json.dumps(item)
                          for item in input_stac_items)), file=f)
 
-    combined_working_dir = '/tmp/combined'
+    combined_working_dir = ub.Path('/tmp/combined')
     os.makedirs(combined_working_dir, exist_ok=True)
     combined_ingress_catalog = baseline_framework_ingress(
         combined_stac_items_path,
@@ -160,15 +160,14 @@ def build_combined_kwcoco(input_path,
 
     # 3. Convert ingressed STAC catalog to KWCOCO
     print("* Converting STAC to KWCOCO *")
-    ta1_kwcoco_path_for_sc = os.path.join(combined_working_dir,
-                                          'combined_ingress_kwcoco.json')
+    ta1_kwcoco_path_for_sc = combined_working_dir / 'combined_ingress_kwcoco.json'
     stac_to_kwcoco(combined_ingress_catalog,
-                       ta1_kwcoco_path_for_sc,
-                       assume_relative=False,
-                       populate_watch_fields=True,
-                       jobs=jobs,
-                       from_collated=from_collated,
-                       ignore_duplicates=True)
+                   ta1_kwcoco_path_for_sc,
+                   assume_relative=False,
+                   populate_watch_fields=True,
+                   jobs=jobs,
+                   from_collated=from_collated,
+                   ignore_duplicates=True)
 
     return ta1_kwcoco_path_for_sc
 
@@ -192,10 +191,11 @@ def run_stac_to_cropped_kwcoco(input_path,
                                config=None):
 
     from watch.utils.util_framework import AWS_S3_Command
+    from watch.utils import util_framework
     from watch.utils.util_yaml import Yaml
-    aws_ls = AWS_S3_Command('ls', profile=profile)
-    aws_cp = AWS_S3_Command('cp', profile=profile)
-    aws_cp_command = aws_cp.finalize()
+    aws_ls = AWS_S3_Command('ls', profile=aws_profile)
+    aws_cp = AWS_S3_Command('cp', profile=aws_profile)
+    aws_base_command = aws_cp.finalize()
     aws_ls_command = aws_ls.finalize()
 
     align_config_default = ub.udict(Yaml.coerce(ub.codeblock(
@@ -205,10 +205,10 @@ def run_stac_to_cropped_kwcoco(input_path,
         geo_preprop: auto
         keep: null
         convexify_regions: True
-        target_gsd: {target_gsd}
+        target_gsd: 10GSD
         context_factor: 1
         force_min_gsd: 10
-        img_workers: {str(jobs}}
+        img_workers: {str(jobs)}
         aux_workers: auto
         rpc_align_method: affine_warp
         ''')))
@@ -229,6 +229,11 @@ def run_stac_to_cropped_kwcoco(input_path,
     if align_config.aux_workers == 'auto':
         align_config.aux_workers = align_config.include_channels.count('|') + 1
     time_combine_config = time_combine_config_default | Yaml.coerce(config.time_combine_config)
+
+    if time_combine_config.channels == 'auto':
+        # Default time combine channels to the align channels minus quality.
+        from kwcoco import ChannelSpec
+        time_combine_config.channels = ChannelSpec.coerce(align_config.include_channels) - {'quality'}
 
     target_gsd = align_config['target_gsd']
 
@@ -293,20 +298,20 @@ def run_stac_to_cropped_kwcoco(input_path,
     print("* Adding watch fields *")
     coco_add_watch_fields.main(cmdline=False,
                                src=ta1_kwcoco_path,
-                               dst=ta1_kwcoco_path,
+                               inplace=True,
                                target_gsd=target_gsd,
                                workers=jobs)
 
     # 3a. Filter KWCOCO dataset by sensors used for BAS
     print("* Filtering KWCOCO dataset for BAS")
-    ub.cmd(['kwcoco', 'subset',
-            '--src', ta1_kwcoco_path,
-            '--dst', ta1_bas_kwcoco_path,
-            '--absolute', 'False',
-            # '--select_images',
-            # '.sensor_coarse == "L8" or .sensor_coarse == "S2"'
-           ],
-           check=True, verbose=3, capture=False)
+    ub.cmd([
+        'kwcoco', 'subset',
+        '--src', ta1_kwcoco_path,
+        '--dst', ta1_bas_kwcoco_path,
+        '--absolute', 'False',
+        # '--select_images',
+        # '.sensor_coarse == "L8" or .sensor_coarse == "S2"'
+    ], check=True, verbose=3, capture=False)
 
     # 3.1. Combine previous interval `kwcoco_for_sc.json` if provided
     # such that SC has full time range of data to work with
@@ -350,15 +355,14 @@ def run_stac_to_cropped_kwcoco(input_path,
         from watch.cli import coco_align
         coco_align.main(cmdline=False, **align_config)
     elif EXEC_MODE == 'cmd':
-        align_arglist = _make_arglist(align_config)
+        align_arglist = util_framework._make_arglist(align_config)
         ub.cmd(['python', '-m', 'watch.cli.coco_align'] + align_arglist,
                check=True, capture=False, verbose=3)
     else:
         raise KeyError(EXEC_MODE)
 
     # 5. Do the time_combine for BAS
-
-    if time_combine_config.pop('enabled': True):
+    if time_combine_config.pop('enabled', True):
         from watch.cli import coco_time_combine
         preproc_kwcoco_fpath = ub.Path(ta1_cropped_kwcoco_path).augment(
             stemsuffix='_timecombined', ext='.kwcoco.zip', multidot=True)
@@ -422,21 +426,6 @@ def run_stac_to_cropped_kwcoco(input_path,
                                      aws_profile=None,
                                      dryrun=False,
                                      newline=False)
-
-
-def _make_arglist(config) -> list:
-    """
-    Helper to make the invocation
-    """
-    # Make argstring
-    arglist = []
-    for k, v in self.items():
-        arglist.append('--' + str(k)):
-        if isinstance(v, list):
-            arglist.extend(list(map(str, v)))
-        else:
-            arglist.append(str(v))
-    return arglist
 
 
 if __name__ == "__main__":

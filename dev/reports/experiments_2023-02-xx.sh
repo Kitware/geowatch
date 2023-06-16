@@ -2138,6 +2138,8 @@ python -m watch.mlops.schedule_evaluation --params="
             - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-BR_R002_EI2LMSC.kwcoco.zip
             - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-KR_R001_EI2LMSC.kwcoco.zip
             - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-AE_R001_EI2LMSC.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-PE_R001_EI2LMSC.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-BR_R004_EI2LMSC.kwcoco.zip
         bas_pxl.chip_overlap: 0.3
         bas_pxl.chip_dims:
             - auto
@@ -2246,7 +2248,7 @@ python -m watch.mlops.aggregate \
         print_models: False
         reference_region: final
     " \
-    --rois="KR_R002,NZ_R001,CH_R001" \
+    --rois="auto" \
     --query='
         (df["params.bas_poly.thresh"] == 0.425) &
         (df["params.bas_poly.time_thresh"] == 0.8) &

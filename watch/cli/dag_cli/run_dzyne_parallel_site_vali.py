@@ -184,6 +184,13 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
         output_site_manifest_fpath=output_site_manifest_fpath,
     )
 
+    # Validate and fix all outputs
+    from watch.utils import util_framework
+    util_framework.fixup_and_validate_site_and_region_models(
+        region_dpath=output_region_fpath.parent,
+        site_dpath=output_sites_dpath,
+    )
+
     # 4. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)

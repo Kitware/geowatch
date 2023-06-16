@@ -5,10 +5,8 @@ See Old Script:
 """
 import os
 import subprocess
-import json
-
-from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress  # noqa: 501
-from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress  # noqa: 501
+from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress
+from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress
 from watch.utils.util_framework import download_region
 from watch.utils.util_framework import determine_region_id
 import ubelt as ub
@@ -71,8 +69,10 @@ def run_generate_sc_cropped_kwcoco(input_path,
                                    config=None):
 
     from watch.utils.util_framework import AWS_S3_Command
+    from watch.utils.util_yaml import Yaml
+    from watch.utils import util_framework
     if dont_recompute:
-        aws_ls = AWS_S3_Command('ls', profile=profile)
+        aws_ls = AWS_S3_Command('ls', profile=aws_profile)
         aws_ls_command = aws_ls.finalize()
 
         try:
@@ -106,7 +106,6 @@ def run_generate_sc_cropped_kwcoco(input_path,
     region_id = determine_region_id(local_region_path)
     print(f'region_id={region_id}')
 
-
     if region_id is None:
         raise RuntimeError("Couldn't parse 'region_id' from input region file")
 
@@ -130,7 +129,7 @@ def run_generate_sc_cropped_kwcoco(input_path,
         target_gsd: 2
         context_factor: 1.5
         force_min_gsd: 4
-        img_workers: {str(jobs}}
+        img_workers: {str(jobs)}
         aux_workers: 2
         rpc_align_method: affine_warp
         image_timeout: 20minutes
@@ -140,7 +139,6 @@ def run_generate_sc_cropped_kwcoco(input_path,
     align_config = align_config_default | Yaml.coerce(config.sc_align_config)
     if align_config.aux_workers == 'auto':
         align_config.aux_workers = align_config.include_channels.count('|') + 1
-    target_gsd = align_config['target_gsd']
 
     # 4. Crop ingress KWCOCO dataset to region for SC
     print("* Cropping KWCOCO dataset to region for SC*")
@@ -156,33 +154,11 @@ def run_generate_sc_cropped_kwcoco(input_path,
         from watch.cli import coco_align
         coco_align.main(cmdline=False, **align_config)
     elif EXEC_MODE == 'cmd':
-        align_arglist = _make_arglist(align_config)
+        align_arglist = util_framework._make_arglist(align_config)
         ub.cmd(['python', '-m', 'watch.cli.coco_align'] + align_arglist,
                check=True, capture=False, verbose=3)
     else:
         raise KeyError(EXEC_MODE)
-    # # Crops to BAS generated site_summaries
-    # ub.cmd(['python', '-m', 'watch.cli.coco_align',
-    #         '--visualize', 'False',
-    #         '--src', ta1_sc_kwcoco_path,
-    #         '--dst', ta1_sc_cropped_kwcoco_path,
-    #         '--regions', input_region_path,
-    #         '--force_nodata', '-9999',
-    #         '--include_channels', include_channels,
-    #         '--site_summary', 'True',
-    #         '--geo_preprop', 'auto',
-    #         '--keep', 'none',
-    #         '--convexify_regions', 'True',
-    #         '--target_gsd', '4',  # TODO: Expose as cli parameter
-    #         '--context_factor', '1.5',  # TODO: Expose as cli parameter
-    #         '--workers', '1' if force_one_job_for_cropping else str(jobs),  # noqa: 501
-    #         '--aux_workers', '2',  # str(include_channels.count('|') + 1),  # noqa: 501
-    #         '--rpc_align_method', 'affine_warp',  # Maybe needs to change to "orthorectified"  # noqa
-    #         '--force_min_gsd', '8',
-    #         '--verbose', '4',
-    #         '--image_timeout', '20minutes',
-    #         '--asset_timeout', '10minutes',
-    #        ], check=True, verbose=3, capture=False)
 
     # 5. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
