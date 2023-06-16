@@ -53,14 +53,15 @@ class SCDatasetConfig(scfg.DataConfig):
 
 def main():
     config = SCDatasetConfig.cli(strict=True)
-    print('config = {}'.format(ub.urepr(dict(config), nl=1, align=':')))
-    run_generate_sc_cropped_kwcoco(**config, config=config)
+    print('config = {}'.format(ub.urepr(config, nl=1, align=':')))
+    run_generate_sc_cropped_kwcoco(config)
 
 
 def run_generate_sc_cropped_kwcoco(config):
     from watch.utils.util_framework import AWS_S3_Command
     from watch.utils.util_yaml import Yaml
     from watch.utils import util_framework
+    from watch.cli import coco_align
     if config.dont_recompute:
         aws_ls = AWS_S3_Command('ls', profile=config.aws_profile)
         aws_ls_command = aws_ls.finalize()
@@ -136,11 +137,13 @@ def run_generate_sc_cropped_kwcoco(config):
     align_config['src'] = ta1_sc_kwcoco_path
     align_config['dst'] = ta1_sc_cropped_kwcoco_path
     align_config['regions'] = input_region_path
+    # Validate align config before running anything
+    align_config = coco_align.CocoAlignGeotiffConfig(**align_config)
+    print('align_config = {}'.format(ub.urepr(align_config, nl=1)))
 
     EXEC_MODE = 'cmd'
     # Not sure if one is more stable than the other
     if EXEC_MODE == 'import':
-        from watch.cli import coco_align
         coco_align.main(cmdline=False, **align_config)
     elif EXEC_MODE == 'cmd':
         align_arglist = util_framework._make_arglist(align_config)
