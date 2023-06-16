@@ -102,7 +102,7 @@ class BASDatasetConfig(scfg.DataConfig):
 
 def main():
     config = BASDatasetConfig.cli(strict=True)
-    print('config = {}'.format(ub.urepr(dict(config), nl=1, align=':')))
+    print('config = {}'.format(ub.urepr(config, nl=1, align=':')))
     run_stac_to_cropped_kwcoco(config)
 
 
@@ -256,6 +256,7 @@ def run_stac_to_cropped_kwcoco(config):
     align_config['regions'] = local_region_path
     # Validate config before running stuff
     align_config = coco_align.CocoAlignGeotiffConfig(**align_config)
+    print('align_config = {}'.format(ub.urepr(align_config, nl=1)))
 
     if time_combine_enabled:
         preproc_kwcoco_fpath = ub.Path(ta1_cropped_kwcoco_path).augment(
@@ -264,6 +265,7 @@ def run_stac_to_cropped_kwcoco(config):
         time_combine_config['output_kwcoco_fpath'] = preproc_kwcoco_fpath
         # Validate config before running stuff
         time_combine_config = coco_time_combine.TimeCombineConfig(**time_combine_config)
+        print('time_combine_config = {}'.format(ub.urepr(time_combine_config, nl=1)))
 
     # 1. Ingress data
     print("* Running baseline framework ingress *")
