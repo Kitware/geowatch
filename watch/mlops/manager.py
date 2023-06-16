@@ -451,6 +451,7 @@ class ExperimentState(ub.NiceRepr):
         }
 
         self.versioned_templates = {
+            # 'pkg_fpath'            : 'packages/{expt}/{pkgprefix}epoch{epoch}_step{step}.pt',  # by default packages dont know what task they have (because they may have multiple)
             'pkg_fpath'            : 'packages/{expt}/{pkgprefix}epoch{epoch}_step{step}.pt',  # by default packages dont know what task they have (because they may have multiple)
         }
 
@@ -707,7 +708,7 @@ class ExperimentState(ub.NiceRepr):
         if DEDUP:
             if len(staging_df) > 0:
                 chosen = []
-                for _, group in staging_df.groupby(['expt', 'epoch', 'step']):
+                for _, group in staging_df.groupby(['expt', 'epoch', 'step'], dropna=False):
                     if len(group) > 1:
                         group = group.sort_values('ckpt_ver').iloc[0:1]
                     chosen.append(group)
