@@ -766,7 +766,7 @@ class ExperimentState(ub.NiceRepr):
             by = [t['name'] for t in priority]
             ascending = [t['ascending'] for t in priority]
             deduped = []
-            for k, g in staging_df.groupby(['expt', 'lightning_version', 'epoch', 'step']):
+            for k, g in staging_df.groupby(['expt', 'lightning_version', 'epoch', 'step'], dropna=False):
                 if len(g) == 1:
                     deduped.append(g)
                 else:
