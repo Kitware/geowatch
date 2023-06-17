@@ -1383,18 +1383,37 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             flags = kwarray.isect_flags(agg.index.index, index)
             final_flags = np.logical_and(final_flags, flags)
 
+        def our_hacky_query(df, query):
+            try:
+                from pandas.core.computation.ops import UndefinedVariableError
+            except Exception:
+                from pandas.errors import UndefinedVariableError
+
+            new_table = None
+            if 'df[' in query:
+                # HACK for more expressive queries
+                try:
+                    flags = eval(query)
+                except Exception as ex:
+                    print(f'warning, eval query unsuccessful: ex={ex}')
+                else:
+                    new_table = df[flags]
+            else:
+                try:
+                    new_table = df.query(query)
+                except UndefinedVariableError as ex:
+                    print(f'warning, failed to query: ex={ex}')
+            return new_table
+
         if query is not None:
-            import pandas as pd
             if isinstance(final_flags, int):
                 table_so_far = agg.table
             else:
                 table_so_far = agg.table[final_flags]
             if len(table_so_far) > 0:
-                try:
-                    new_table = table_so_far.query(query)
-                except pd.errors.UndefinedVariableError as ex:
-                    print(f'warning: ex={ex}')
-                else:
+                df = table_so_far
+                new_table = our_hacky_query(df, query)
+                if new_table is not None:
                     flags = kwarray.isect_flags(agg.index.index, new_table.index)
                     final_flags = np.logical_and(final_flags, flags)
 
