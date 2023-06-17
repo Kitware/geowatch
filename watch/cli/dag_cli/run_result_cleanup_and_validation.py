@@ -105,3 +105,11 @@ def main():
                                           output_region_dpath,
                                           output_site_dpath,
                                           config.ta2_s3_collation_bucket)
+
+
+if __name__ == '__main__':
+    """
+    CommandLine:
+        python ~/code/watch/watch/cli/dag_cli/run_result_cleanup_and_validation.py
+    """
+    main()
