@@ -750,11 +750,12 @@ class SiteModel(_Model):
             >>> assert site.features[1]['properties']['observation_date'] == '1970-01-01'
             >>> assert site.header['properties']['start_date'] == '1970-01-01'
         """
-        date_keys = ['start_date', 'end_date']
+        date_keys = ['start_date', 'end_date', 'predicted_phase_transition_date']
         feat = self.header
         props = feat['properties']
         for key in date_keys:
             props[key] = util_time.coerce_datetime(props[key]).date().isoformat()
+
         date_keys = ['observation_date']
         for feat in self.body_features():
             props = feat['properties']
