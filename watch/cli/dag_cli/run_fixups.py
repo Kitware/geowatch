@@ -28,6 +28,7 @@ class FixupConfig(scfg.DataConfig):
             AWS Profile to use for AWS S3 CLI commands
             '''))
 
+    dryrun = scfg.Value(False, isflag=True, short_alias=['d'], help='Run AWS CLI commands with --dryrun flag')
     outbucket = scfg.Value(None, type=str, required=True, short_alias=['o'], help=ub.paragraph(
             '''
             S3 Output directory for STAC item / asset egress
@@ -99,7 +100,8 @@ def main():
     # 6. (Optional) collate TA-2 output
     if config.ta2_s3_collation_bucket is not None:
         print("* Collating TA-2 output")
-        aws_cp = AWS_S3_Command('cp', profile=config.aws_profile)
+        aws_cp = AWS_S3_Command('cp', profile=config.aws_profile,
+                                dryrun=config.dryrun)
         aws_base_command = aws_cp.finalize()
         util_framework.ta2_collate_output(aws_base_command,
                                           output_region_dpath,
