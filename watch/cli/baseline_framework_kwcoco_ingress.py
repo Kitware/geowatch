@@ -40,17 +40,14 @@ def baseline_framework_kwcoco_ingress(input_path,
                                       outdir,
                                       aws_profile=None,
                                       dryrun=False,
-                                      show_progress=False):
+                                      show_progress=False,
+                                      specific_paths=None):
 
     from watch.utils.util_framework import AWS_S3_Command
     os.makedirs(outdir, exist_ok=True)
 
-    aws_cp = AWS_S3_Command('cp')
-    aws_cp.update(
-        profile=aws_profile,
-        dryrun=dryrun,
-        only_show_errors=not show_progress,
-    )
+    aws_cp = AWS_S3_Command('cp', profile=aws_profile, dryrun=dryrun,
+                            only_show_errors=not show_progress)
 
     def _load_input(path):
         try:
@@ -87,9 +84,17 @@ def baseline_framework_kwcoco_ingress(input_path,
     # same directory as the KWCOCO dataset itself
     kwcoco_dataset_dir = dirname(kwcoco_dataset_href)
 
-    aws_cp.update(recursive=True)
-    aws_cp.args = [kwcoco_dataset_dir, outdir]
-    aws_cp.run()
+    if specific_paths is not None:
+        # HACK for quicker downloads
+        print('Warning: specific paths is on, the user needs to be very careful about knowning which paths exist')
+        for p in specific_paths:
+            aws_cp.update(recursive=True)
+            aws_cp.args = [join(kwcoco_dataset_dir, p), join(outdir, p)]
+            aws_cp.run()
+    else:
+        aws_cp.update(recursive=True)
+        aws_cp.args = [kwcoco_dataset_dir, outdir]
+        aws_cp.run()
 
     # Returns local path to retreived KWCOCO dataset
     return join(outdir, basename(kwcoco_dataset_href))

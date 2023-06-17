@@ -53,7 +53,14 @@ def main():
         config.input_path,
         ingress_dir,
         config.aws_profile,
-        config.dryrun)
+        config.dryrun,
+        # Hack for only downloading a subset of the data
+        # TODO: better ingress/egress
+        specific_paths=[
+            'cropped_region_models',
+            'cropped_site_models',
+        ]
+    )
 
     # # 2. Download and prune region file
     print("* Downloading and pruning region file *")
@@ -66,7 +73,8 @@ def main():
         strip_nonregions=True,
     )
 
-    dummy_kwcoco_path = ingress_dir / 'sc_fusion_kwcoco.json'
+    dummy_kwcoco_path = ingress_dir / 'dummy.kwcoco.json'
+    dummy_kwcoco_path.touch()
 
     input_region_dpath = ingress_dir / 'cropped_region_models'
     input_site_dpath = ingress_dir / 'cropped_site_models'
