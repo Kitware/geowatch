@@ -566,7 +566,8 @@ class RegionModel(_Model):
         for feat in self['features']:
             props = feat['properties']
             for key in date_keys:
-                props[key] = util_time.coerce_datetime(props[key]).date().isoformat()
+                if key in props:
+                    props[key] = util_time.coerce_datetime(props[key]).date().isoformat()
 
     def remove_invalid_properties(self):
         props = self.header['properties']
@@ -754,13 +755,15 @@ class SiteModel(_Model):
         feat = self.header
         props = feat['properties']
         for key in date_keys:
-            props[key] = util_time.coerce_datetime(props[key]).date().isoformat()
+            if key in props:
+                props[key] = util_time.coerce_datetime(props[key]).date().isoformat()
 
         date_keys = ['observation_date']
         for feat in self.body_features():
             props = feat['properties']
             for key in date_keys:
-                props[key] = util_time.coerce_datetime(props[key]).date().isoformat()
+                if key in props:
+                    props[key] = util_time.coerce_datetime(props[key]).date().isoformat()
 
     def clamp_scores(self):
         for feat in self.features:
