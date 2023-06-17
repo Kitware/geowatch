@@ -2,7 +2,7 @@ import scriptconfig as scfg
 import ubelt as ub
 
 
-class ResultCleanupAndValidation(scfg.DataConfig):
+class FixupConfig(scfg.DataConfig):
     """
     Given the final results of the system, run our validation scripts and any
     final cleanups that need to happen before submitting to T&E validation.
@@ -35,7 +35,7 @@ class ResultCleanupAndValidation(scfg.DataConfig):
 
 
 def main():
-    config = ResultCleanupAndValidation.cli(strict=True)
+    config = FixupConfig.cli(strict=True)
     print('config = {}'.format(ub.urepr(dict(config), nl=1, align=':')))
 
     from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress
@@ -110,6 +110,6 @@ def main():
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/watch/cli/dag_cli/run_result_cleanup_and_validation.py
+        python ~/code/watch/watch/cli/dag_cli/run_fixups.py
     """
     main()
