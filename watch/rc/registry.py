@@ -161,17 +161,22 @@ def load_region_model_schema(strict=True):
             print('Suggestions: ')
             print('\n'.join(suggestions))
 
-        walker[['$defs', 'site_summary_properties', 'properties', 'site_id']] = any_identifier  # previous: {'type': 'string', 'pattern': '^[A-Z]{2}_([RS]\\d{3}|C[0-7]\\d{2})_\\d{4}$'}
+        # walker[['$defs', 'site_summary_properties', 'properties', 'site_id']] = any_identifier  # previous: {'type': 'string', 'pattern': '^[A-Z]{2}_([RS]\\d{3}|C[0-7]\\d{2})_\\d{4}$'}
+        # walker[['$defs', 'site_summary_properties', 'properties', 'originator']] = any_identifier  # previous: {'enum': ['te', 'pmo', 'acc', 'ast', 'ast', 'bla', 'iai', 'kit', 'str', 'iMERIT']}
+        # walker[['$defs', 'region_properties', 'properties', 'region_id']] = any_identifier  # previous: {'type': 'string', 'pattern': '^[A-Z]{2}_([RS]\\d{3}|C[0-7]\\d{2})$'}
+        # walker[['$defs', 'region_properties', 'properties', 'originator']] = any_identifier  # previous: {'enum': ['te', 'pmo', 'acc', 'ara', 'ast', 'bla', 'iai', 'kit', 'str', 'iMERIT']}
+        # walker[['$defs', 'proposed_originator', 'then', 'properties', 'originator']] = any_identifier  # previous: {'enum': ['acc', 'ara', 'ast', 'bla', 'iai', 'kit', 'str']}
+        # walker[['$defs', 'annotation_originator', 'then', 'properties', 'originator']] = any_identifier  # previous: {'enum': ['te', 'iMERIT', 'pmo']}
+
+        # New schema
+        walker[['$defs', 'site_summary_properties', 'allOf', 4, 'else', 'properties', 'site_id']] = any_identifier  # previous: {'type': 'string', 'pattern': '^[A-Z]{2}_([RS]\\d{3}|C[0-7]\\d{2})_\\d{4}$'}
+        walker[['$defs', 'site_summary_properties', 'allOf', 4, 'then', 'properties', 'site_id']] = any_identifier  # previous: {'type': 'string', 'pattern': '^[A-Z]{2}_(T\\d{3})_\\d{4}$'}
+        walker[['$defs', 'site_summary_properties', 'properties', 'site_id']] = any_identifier  # previous: {'type': 'string', 'pattern': '^[A-Z]{2}_([RST]\\d{3}|C[0-7]\\d{2})_\\d{4}$'}
         walker[['$defs', 'site_summary_properties', 'properties', 'originator']] = any_identifier  # previous: {'enum': ['te', 'pmo', 'acc', 'ast', 'ast', 'bla', 'iai', 'kit', 'str', 'iMERIT']}
-        walker[['$defs', 'region_properties', 'properties', 'region_id']] = any_identifier  # previous: {'type': 'string', 'pattern': '^[A-Z]{2}_([RS]\\d{3}|C[0-7]\\d{2})$'}
+        walker[['$defs', 'region_properties', 'properties', 'region_id']] = any_identifier  # previous: {'type': 'string', 'pattern': '^[A-Z]{2}_([RST]\\d{3}|C[0-7]\\d{2})$'}
         walker[['$defs', 'region_properties', 'properties', 'originator']] = any_identifier  # previous: {'enum': ['te', 'pmo', 'acc', 'ara', 'ast', 'bla', 'iai', 'kit', 'str', 'iMERIT']}
         walker[['$defs', 'proposed_originator', 'then', 'properties', 'originator']] = any_identifier  # previous: {'enum': ['acc', 'ara', 'ast', 'bla', 'iai', 'kit', 'str']}
         walker[['$defs', 'annotation_originator', 'then', 'properties', 'originator']] = any_identifier  # previous: {'enum': ['te', 'iMERIT', 'pmo']}
-
-        # walker[['definitions', 'region_properties', 'properties', 'region_id']] = any_identifier
-        # walker[['definitions', 'region_properties', 'properties', 'originator']] = any_identifier
-        # walker[['definitions', 'site_summary_properties', 'properties', 'site_id']] = any_identifier
-        # walker[['definitions', 'site_summary_properties', 'properties', 'originator']] = any_identifier
 
     return data
 

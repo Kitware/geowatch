@@ -996,6 +996,7 @@ def checkpoint_filepath_info(fname):
         parse.parse('{prefix}foo={bar}', 'afoao=3')
 
     Example:
+        >>> # xdoctest: +SKIP
         >>> from watch.mlops.old.expt_state import *  # NOQA
         >>> fnames = [
         >>>     'epoch1_step10.foo',
