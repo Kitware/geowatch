@@ -15,7 +15,6 @@ import kwarray
 import kwcoco
 from watch.tasks.fusion import datamodules
 from watch.tasks.fusion import utils
-from watch.utils import util_path
 from watch.utils import util_parallel
 from watch.tasks.fusion.datamodules import data_utils
 from watch.tasks.fusion.coco_stitcher import CocoStitchingManager
@@ -228,6 +227,7 @@ def make_old_predict_config(cmdline=False, **kwargs):
     overloadable_datamodule_keys = [
         'channels',
         'normalize_peritem',
+        'normalize_perframe',
         'chip_size',
         'chip_dims',
         'time_steps',
@@ -832,7 +832,7 @@ def predict(cmdline=False, **kwargs):
     # Set the filepath for the prediction coco file
     # (modifies the bundle_dpath)
     # if config['pred_dataset'] is None:
-    #     pred_dpath = util_path.coercepath(config['pred_dpath'])
+    #     pred_dpath = ub.Path(config['pred_dpath'])
     #     result_dataset.fpath = str(pred_dpath / 'pred.kwcoco.json')
     # else:
     if not config['pred_dataset']:
@@ -840,7 +840,7 @@ def predict(cmdline=False, **kwargs):
             f'Must specify path to the output (predicted) kwcoco file. '
             f'Got {config["pred_dataset"]=}')
     result_dataset.fpath = str(ub.Path(config['pred_dataset']).expand())
-    result_fpath = util_path.coercepath(result_dataset.fpath)
+    result_fpath = ub.Path(result_dataset.fpath)
 
     from watch.utils.lightning_ext import util_device
     print('devices = {!r}'.format(config['devices']))

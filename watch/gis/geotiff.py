@@ -12,16 +12,7 @@ from os.path import basename, isfile
 from dateutil.parser import isoparse
 from watch import exceptions
 
-try:
-    from xdev import profile
-except Exception:
-    profile = ub.identity
 
-import xdev
-xdev.make_warnings_print_tracebacks()
-
-
-@profile
 def geotiff_metadata(gpath, elevation='gtop30', strict=False,
                      supress_warnings=False):
     """
@@ -163,7 +154,6 @@ def geotiff_header_info(gpath_or_ref):
     return img_info
 
 
-@profile
 def geotiff_crs_info(gpath_or_ref, force_affine=False,
                      elevation='gtop30', verbose=0):
     """
@@ -627,7 +617,6 @@ class InvalidFormat(Exception):
     pass
 
 
-@profile
 def geotiff_filepath_info(gpath, fast=True):
     """
     Attempt to parse information out of a path to a geotiff file.
@@ -854,7 +843,6 @@ def _parser_lut(pattern):
     return parse.Parser(pattern)
 
 
-@profile
 def parse_sentinel2_product_id(parts):
     """
     Try to parse the Sentinel-2 pre-2016 and post-2016 safedir formats.
@@ -1049,7 +1037,6 @@ def parse_sentinel2_product_id(parts):
         return meta
 
 
-@profile
 def parse_landsat_product_id(product_id):
     """
     Extract information from a landsat produt id

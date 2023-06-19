@@ -35,14 +35,18 @@ Example:
     python -m watch.mlops.manager "push packages" --dataset_codes Drop6-MeanYear10GSD-V2 --yes
     python -m watch.mlops.manager "push packages" --dataset_codes Drop6-MedianSummer10GSD --yes
     python -m watch.mlops.manager "push packages" --dataset_codes Drop6-NoWinterMedian10GSD --yes
+    python -m watch.mlops.manager "push packages" --dataset_codes Drop7-MedianNoWinter10GSD --yes
 
     python -m watch.mlops.manager "status" --dataset_codes Drop6-MeanYear10GSD-V2
     python -m watch.mlops.manager "pull packages" --dataset_codes Drop6-MeanYear10GSD --yes
     python -m watch.mlops.manager "pull packages" --dataset_codes Drop6-MeanYear10GSD-V2 --yes
     python -m watch.mlops.manager "pull packages" --dataset_codes Drop6-MedianSummer10GSD --yes
     python -m watch.mlops.manager "pull packages" --dataset_codes Drop6-NoWinterMedian10GSD --yes
+    python -m watch.mlops.manager "pull packages" --dataset_codes Drop7-MedianNoWinter10GSD --yes
 
     python -m watch.mlops.manager "pull packages" --dataset_codes Drop6-MeanYear10GSD-V2 --yes
+
+    python -m watch.mlops.manager "list packages" --dataset_codes Drop7-MedianNoWinter10GSD --yes
 
     # On training machine
     python -m watch.mlops.manager "push packages" --dataset_codes Drop6
@@ -447,6 +451,7 @@ class ExperimentState(ub.NiceRepr):
         }
 
         self.versioned_templates = {
+            # 'pkg_fpath'            : 'packages/{expt}/{pkgprefix}epoch{epoch}_step{step}.pt',  # by default packages dont know what task they have (because they may have multiple)
             'pkg_fpath'            : 'packages/{expt}/{pkgprefix}epoch{epoch}_step{step}.pt',  # by default packages dont know what task they have (because they may have multiple)
         }
 
@@ -605,6 +610,10 @@ class ExperimentState(ub.NiceRepr):
 
             # Hack: making name assumptions
             info = checkpoint_filepath_info(fname)
+            if ub.Path(fname).name.split('.')[0] == 'last':
+                # Ignore the "last" checkpoint
+                continue
+
             if info is None:
                 print('ERROR (no filepath info) row = {}'.format(ub.urepr(row, nl=1)))
                 print(f'error: fname={fname}')
@@ -699,7 +708,7 @@ class ExperimentState(ub.NiceRepr):
         if DEDUP:
             if len(staging_df) > 0:
                 chosen = []
-                for _, group in staging_df.groupby(['expt', 'epoch', 'step']):
+                for _, group in staging_df.groupby(['expt', 'epoch', 'step'], dropna=False):
                     if len(group) > 1:
                         group = group.sort_values('ckpt_ver').iloc[0:1]
                     chosen.append(group)
@@ -757,7 +766,7 @@ class ExperimentState(ub.NiceRepr):
             by = [t['name'] for t in priority]
             ascending = [t['ascending'] for t in priority]
             deduped = []
-            for k, g in staging_df.groupby(['expt', 'lightning_version', 'epoch', 'step']):
+            for k, g in staging_df.groupby(['expt', 'lightning_version', 'epoch', 'step'], dropna=False):
                 if len(g) == 1:
                     deduped.append(g)
                 else:
@@ -951,31 +960,42 @@ def checkpoint_filepath_info(fname):
         parse.parse('{prefix}foo={bar}', 'foo=3')
         parse.parse('{prefix}foo={bar}', 'afoao=3')
 
+    CommandLine:
+        xdoctest -m watch.mlops.manager checkpoint_filepath_info
+
     Example:
-        >>> from watch.mlops.old.expt_state import *  # NOQA
+        >>> from watch.mlops.manager import *  # NOQA
         >>> fnames = [
         >>>     'epoch1_step10.foo',
-        >>>     'epoch=1-step=10.foo',
-        >>>     'epoch=1-step=10-v2.foo',
-        >>>     'epoch=1-step=10',
-        >>>     'epoch=1-step=10-v2',
-        >>>     'junkepoch=1-step=10.foo',
-        >>>     'junk/epoch=1-step=10-v2.foo',
-        >>>     'junk-epoch=1-step=10',
-        >>>     'junk_epoch=1-step=10-v2',
+        >>>     'epoch=2-step=10.foo',
+        >>>     'epoch=3-step=10-v2.foo',
+        >>>     'epoch=4-step=10',
+        >>>     'epoch=5-step=10-v2',
+        >>>     'junkepoch=6-step=10.foo',
+        >>>     'junk/epoch=7-step=10-v2.foo',
+        >>>     'junk-epoch=8-step=10',
+        >>>     'junk_epoch=9-step=10-v2',
+        >>>     'epoch10_val_loss.925.ckpt.ckpt',
+        >>>     'epoch11_val_loss1.925.ckpt',
+        >>>     'epoch=12_val_loss=1.925.ckpt',
+        >>>     'epoch=25-val_loss=1.995.ckpt',
         >>> ]
         >>> for fname in fnames:
         >>>     info = checkpoint_filepath_info(fname)
         >>>     print(f'info={info}')
         info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v0'}
-        info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v0'}
-        info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v2'}
-        info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v0'}
-        info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v2'}
-        info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v0'}
-        info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v2'}
-        info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v0'}
-        info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v2'}
+        info={'epoch': 2, 'step': 10, 'ckpt_ver': 'v0'}
+        info={'epoch': 3, 'step': 10, 'ckpt_ver': 'v2'}
+        info={'epoch': 4, 'step': 10, 'ckpt_ver': 'v0'}
+        info={'epoch': 5, 'step': 10, 'ckpt_ver': 'v2'}
+        info={'epoch': 6, 'step': 10, 'ckpt_ver': 'v0'}
+        info={'epoch': 7, 'step': 10, 'ckpt_ver': 'v2'}
+        info={'epoch': 8, 'step': 10, 'ckpt_ver': 'v0'}
+        info={'epoch': 9, 'step': 10, 'ckpt_ver': 'v2'}
+        info={'epoch': 10, 'val_loss': 0.925, 'ckpt_ver': 'v0', 'step': None}
+        info={'epoch': 11, 'val_loss': 1.925, 'ckpt_ver': 'v0', 'step': None}
+        info={'epoch': 12, 'val_loss': 1.925, 'ckpt_ver': 'v0', 'step': None}
+        info={'epoch': 25, 'val_loss': 1.995, 'ckpt_ver': 'v0', 'step': None}
     """
     import parse
     # We assume it must have this
@@ -988,6 +1008,15 @@ def checkpoint_filepath_info(fname):
         parse.Parser('epoch={epoch:d}-step={step:d}'),
         parse.Parser('epoch{epoch:d}_step{step:d}.{ext}'),
         parse.Parser('epoch{epoch:d}_step{step:d}'),
+        parse.Parser('epoch{epoch:d}_val_loss{val_loss:f}'),
+        parse.Parser('epoch{epoch:d}_val_loss{val_loss:f}.{ext}'),
+        parse.Parser('epoch{epoch:d}_val_loss{val_loss:f}.{ext1}.{ext}'),
+        parse.Parser('epoch={epoch:d}_val_loss={val_loss:f}'),
+        parse.Parser('epoch={epoch:d}_val_loss={val_loss:f}.{ext}'),
+        parse.Parser('epoch={epoch:d}_val_loss={val_loss:f}.{ext1}.{ext}'),
+        parse.Parser('epoch={epoch:d}-val_loss={val_loss:f}'),
+        parse.Parser('epoch={epoch:d}-val_loss={val_loss:f}.{ext}'),
+        parse.Parser('epoch={epoch:d}-val_loss={val_loss:f}.{ext1}.{ext}'),
     ]
     # results = parser.parse(str(path))
     info = None
@@ -999,6 +1028,8 @@ def checkpoint_filepath_info(fname):
         info = result.named
         if 'ckpt_ver' not in info:
             info['ckpt_ver'] = 'v0'
+        if 'step' not in info:
+            info['step'] = None
         info = ub.dict_diff(info, {'ext', 'prefix'})
     return info
 

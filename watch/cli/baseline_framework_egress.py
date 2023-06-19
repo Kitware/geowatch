@@ -7,6 +7,7 @@ import subprocess
 
 import pystac
 
+from os.path import join
 from watch.stac.util_stac import parallel_map_items
 
 
@@ -67,15 +68,15 @@ def egress_item(stac_item, outbucket, aws_base_command):
         raise TypeError("Expecting 'stac_item' to be either a dictionary "
                         "or pystac.Item")
 
-    stac_item_outpath = os.path.join(
+    stac_item_outpath = join(
         outbucket, "{}.json".format(stac_item.id))
 
-    assets_outdir = os.path.join(outbucket, stac_item.id)
+    assets_outdir = join(outbucket, stac_item.id)
 
     for asset_name, asset in stac_item_dict.get('assets', {}).items():
         asset_basename = os.path.basename(asset['href'])
 
-        asset_outpath = os.path.join(assets_outdir, asset_basename)
+        asset_outpath = join(assets_outdir, asset_basename)
 
         command = [*aws_base_command, asset['href'], asset_outpath]
 
@@ -142,20 +143,16 @@ def baseline_framework_egress(stac_catalog,
     else:
         catalog = stac_catalog.full_copy()
 
-    if aws_profile is not None:
-        aws_base_command =\
-            ['aws', 's3', '--profile', aws_profile, 'cp']
-    else:
-        aws_base_command = ['aws', 's3', 'cp']
+    from watch.utils.util_framework import AWS_S3_Command
 
-    if dryrun:
-        aws_base_command.append('--dryrun')
-
-    if not show_progress:
-        aws_base_command.append('--no-progress')
-
-    if aws_storage_class is not None:
-        aws_base_command.extend(['--storage-class', aws_storage_class])
+    aws_cp = AWS_S3_Command('cp')
+    aws_cp.update(
+        profile=aws_profile,
+        dryrun=dryrun,
+        no_progress=not show_progress,
+        aws_storage_class=aws_storage_class,
+    )
+    aws_base_command = aws_cp.finalize()
 
     output_catalog = parallel_map_items(
         catalog,

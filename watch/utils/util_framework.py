@@ -15,11 +15,12 @@ class CacheItemOutputS3Wrapper:
         self.item_map = item_map
         self.outbucket = outbucket
 
-        if aws_profile is not None:
-            self.aws_base_command = [
-                'aws', 's3', '--profile', aws_profile, 'cp', '--no-progress']
-        else:
-            self.aws_base_command = ['aws', 's3', 'cp', '--no-progress']
+        aws_cp = AWS_S3_Command('cp')
+        aws_cp.update(
+            profile=aws_profile,
+            no_progress=True,
+        )
+        self.aws_base_command = aws_cp.finalize()
 
     def __call__(self, stac_item, *args, **kwargs):
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -149,22 +150,16 @@ def download_region(input_region_path,
                     aws_profile=None,
                     strip_nonregions=False,
                     ensure_comments=False):
-    if aws_profile is not None:
-        aws_base_command =\
-            ['aws', 's3', '--profile', aws_profile, 'cp']
-    else:
-        aws_base_command = ['aws', 's3', 'cp']
-
     scheme, *_ = urlparse(input_region_path)
     if scheme == 's3':
+        aws_cp = AWS_S3_Command('cp')
+        aws_cp.update(
+            profile=aws_profile
+        )
         with tempfile.NamedTemporaryFile() as temporary_file:
-            command = [*aws_base_command,
-                       input_region_path,
-                       temporary_file.name]
 
-            print("Running: {}".format(' '.join(command)))
-            # TODO: Manually check return code / output
-            subprocess.run(command, check=True)
+            aws_cp.args = [input_region_path, temporary_file.name]
+            aws_cp.run()
 
             with open(temporary_file.name) as f:
                 out_region_data = json.load(f)
@@ -210,3 +205,329 @@ def determine_region_id(region_fpath):
                 region_id = props.get('region_id', props.get('region_model_id'))
                 break
     return region_id
+
+
+class AWS_S3_Command:
+    """
+    Helper to build and execute AWS S3 bash commands
+
+    References:
+        https://docs.aws.amazon.com/cli/latest/reference/s3/
+
+    Example:
+        >>> from watch.utils.util_framework import *  # NOQA
+        >>> self = AWS_S3_Command('ls', 's3://foo/bar')
+        >>> self.update(profile='myprofile')
+        >>> print(self.finalize())
+        ['aws', 's3', '--profile', 'myprofile', 'ls', 's3://foo/bar']
+        >>> self = AWS_S3_Command('cp', 's3://foo/bar', '/foo/bar', quiet=True, no_progress=True, color='auto')
+        >>> print(self.finalize())
+        ['aws', 's3', '--quiet', '--no-progress', '--color', 'auto', 'cp', 's3://foo/bar', '/foo/bar']
+
+    Example:
+        >>> # Reuse the same command object with different positional args
+        >>> aws_cmd = AWS_S3_Command('cp')
+        >>> aws_cmd.update(
+        >>>     profile='myprof',
+        >>>     only_show_errors=True
+        >>> )
+        >>> aws_cmd.args = ['s3://data1', '/local/data1']
+        >>> print(aws_cmd.finalize())
+        ['aws', 's3', '--only-show-errors', '--profile', 'myprof', 'cp', 's3://data1', '/local/data1']
+        >>> # Set the `args` attribute to get a new command while keeping
+        >>> # existing options.
+        >>> aws_cmd.update(recursive=True)
+        >>> aws_cmd.args = ['s3://data2', '/local/data2']
+        >>> print(aws_cmd.finalize())
+        ['aws', 's3', '--only-show-errors', '--recursive', '--profile', 'myprof', 'cp', 's3://data2', '/local/data2']
+
+    Example:
+        >>> # There is no need to specify the entire command. If you want
+        >>> # to simply build a command prefix, then that works too.
+        >>> aws_cmd = AWS_S3_Command('cp', profile='myprof', aws_storage_class='foobar')
+        >>> print(aws_cmd.finalize())
+        ['aws', 's3', '--profile', 'myprof', '--aws-storage-class', 'foobar', 'cp']
+    """
+
+    # Register known options for known commands
+    # TODO: multi values
+
+    cmd_known_flags = {}
+    cmd_known_keyvals = {}
+
+    cmd_known_flags['ls'] = [
+        'recursive',
+        'human-readable',
+        'summarize',
+        'debug',
+        'no-verify-ssl',
+        'no-paginate',
+        'no-sign-request',
+    ]
+
+    cmd_known_keyvals['ls'] = [
+        'endpoint-url',
+        'page-size',
+        'request-payer',
+        'output',
+        'query',
+        'profile',
+        'region',
+        'version',
+        'color',
+        'ca-bundle',
+        'cli-read-timeout',
+        'cli-connect-timeout',
+    ]
+
+    cmd_known_flags['sync'] = [
+        'dryrun',
+        'quiet',
+        'follow-symlinks',
+        'no-follow-symlinks',
+        'no-guess-mime-type',
+        'only-show-errors',
+        'no-progress',
+        'ignore-glacier-warnings',
+        'force-glacier-transfer',
+        'size-only',
+        'exact-timestamps',
+        'delete',
+        'debug',
+        'no-verify-ssl',
+        'no-paginate',
+        'no-sign-request',
+    ]
+
+    cmd_known_keyvals['sync'] = [
+        'include',
+        'exclude',
+        'acl',
+        'sse',
+        'sse-c',
+        'sse-c-key',
+        'sse-kms-key-id',
+        'sse-c-copy-source',
+        'sse-c-copy-source-key',
+        'storage-class',
+        'grants',
+        'website-redirect',
+        'content-type',
+        'cache-control',
+        'content-disposition',
+        'content-encoding',
+        'content-language',
+        'expires',
+        'source-region',
+        'page-size',
+        'request-payer',
+        'metadata',
+        'metadata-directive',
+        'endpoint-url',
+        'output',
+        'query',
+        'profile',
+        'region',
+        'version',
+        'color',
+        'ca-bundle',
+        'cli-read-timeout',
+        'cli-connect-timeout',
+    ]
+
+    cmd_known_flags['cp'] = [
+        'dryrun',
+        'quiet',
+        'follow-symlinks',
+        'no-follow-symlinks',
+        'no-guess-mime-type',
+        'only-show-errors',
+        'no-progress',
+        'ignore-glacier-warnings',
+        'force-glacier-transfer',
+        'recursive',
+        'debug',
+        'no-verify-ssl',
+        'no-paginate',
+    ]
+
+    cmd_known_keyvals['cp'] = [
+        'include',
+        'exclude',
+        'acl',
+        'sse',
+        'sse-c',
+        'sse-c-key',
+        'sse-kms-key-id',
+        'sse-c-copy-source',
+        'sse-c-copy-source-key',
+        'storage-class',
+        'grants',
+        'website-redirect',
+        'content-type',
+        'cache-control',
+        'content-disposition',
+        'content-encoding',
+        'content-language',
+        'expires',
+        'source-region',
+        'page-size',
+        'request-payer',
+        'metadata',
+        'metadata-directive',
+        'expected-size',
+        'endpoint-url',
+        'output',
+        'query',
+        'profile',
+        'region',
+        'version',
+        'color',
+        'no-sign-request',
+        'ca-bundle',
+        'cli-read-timeout',
+        'cli-connect-timeout',
+    ]
+
+    def __init__(self, command, *args, **options):
+        """
+        Args:
+            command (str):
+                can be: cp, ls, mv, rm, sync
+
+            *args: positional arguments
+
+            **options: key value options (e.g. profile)
+        """
+        self.command = command
+        self.args = args
+
+        self._known_flags = self.cmd_known_flags.get(self.command, [])
+        self._known_keyvals = self.cmd_known_keyvals.get(self.command, [])
+        self._known_flags = self._known_flags + [k.replace('-', '_') for k in self._known_flags]
+        self._known_keyvals = self._known_keyvals + [k.replace('-', '_') for k in self._known_keyvals]
+
+        # Key / value CLI arguments
+        self._keyval_options = {}
+        self._flag_options = {}
+
+        self.update(options)
+
+    def update(self, arg=None, /, **options):
+        """
+        Update key / value options.
+
+        This function is aware of what options need to be flags versus key/values
+
+        So quiet=True will result in `--quiet`, quiet=False will have include no option.
+        Likewise profile=foo will result in `--profile foo` and profile=None will include no option.
+        """
+        if arg is not None:
+            import ubelt as ub
+            options = ub.udict(arg) | options
+
+        for k, v in options.items():
+            if k in self._known_flags:
+                self._flag_options[k] = v
+            elif k in self._known_keyvals:
+                self._keyval_options[k] = v
+            else:
+                # Fallback to key/value
+                self._keyval_options[k] = v
+
+    def finalize(self):
+        """
+        Returns:
+            List[str]: commands suitable for passing to POpen
+        """
+        parts = ['aws', 's3']
+        for k, v in self._flag_options.items():
+            if v:
+                parts.extend(['--' + k.replace('_', '-')])
+        for k, v in self._keyval_options.items():
+            if v is not None:
+                parts.extend(['--' + k.replace('_', '-'), v])
+        parts.append(self.command)
+        parts.extend(self.args)
+        return parts
+
+    def run(self, check=True, shell=False, capture=False, verbose=3):
+        """
+        Execute the S3 command
+
+        Returns:
+            Dict : ubelt cmd info dict
+        """
+        import ubelt as ub
+        final_command = self.finalize()
+        run_info = ub.cmd(final_command, verbose=verbose, shell=shell,
+                          capture=capture)
+        if check:
+            run_info.check_returncode()
+        return run_info
+
+
+def ta2_collate_output(aws_base_command, local_region_dir, local_sites_dir,
+                       destination_s3_bucket, performer_suffix='KIT'):
+    """
+    I think this is for putting the final system regions / sites into the place
+    that T&E wants them.
+    """
+    from glob import glob
+    from os.path import join
+    import ubelt as ub
+    def _get_suffixed_basename(local_path):
+        base, ext = os.path.splitext(os.path.basename(local_path))
+        return "{}_{}{}".format(base, performer_suffix, ext)
+
+    for region in glob(join(local_region_dir, '*.geojson')):
+        region_s3_outpath = '/'.join((destination_s3_bucket,
+                                      'region_models',
+                                      _get_suffixed_basename(region)))
+        ub.cmd([*aws_base_command, region, region_s3_outpath], check=True,
+               verbose=3, capture=False)
+
+    for site in glob(join(local_sites_dir, '*.geojson')):
+        site_s3_outpath = '/'.join((destination_s3_bucket,
+                                    'site_models',
+                                    _get_suffixed_basename(site)))
+        ub.cmd([*aws_base_command, site, site_s3_outpath], check=True,
+               verbose=3, capture=False)
+
+
+def fixup_and_validate_site_and_region_models(region_dpath, site_dpath):
+    """
+    Read, fix, and validate all site and region models.
+    """
+    # Validate and fix all outputs
+    from watch.geoannots import geomodels
+    from watch.utils import util_gis
+    region_infos = list(util_gis.coerce_geojson_datas(region_dpath, format='json'))
+    site_infos = list(util_gis.coerce_geojson_datas(site_dpath, format='json'))
+    for region_info in region_infos:
+        fpath = region_info['fpath']
+        region = geomodels.RegionModel(**region_info['data'])
+        region.fixup()
+        fpath.write_text(region.dumps(indent='    '))
+        region.validate()
+    for site_info in site_infos:
+        fpath = site_info['fpath']
+        site = geomodels.SiteModel(**site_info['data'])
+        site.fixup()
+        fpath.write_text(site.dumps(indent='    '))
+        site.validate()
+
+
+def _make_arglist(config) -> list:
+    """
+    Helper to make the invocation
+    """
+    # Make argstring
+    arglist = []
+    for k, v in config.items():
+        arglist.append('--' + str(k))
+        if isinstance(v, list):
+            arglist.extend(list(map(str, v)))
+        else:
+            arglist.append(str(v))
+    return arglist

@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
-import os
 import subprocess
-import json
-
-from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress  # noqa: 501
-from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress  # noqa: 501
+from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress
+from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress
 from watch.utils.util_framework import download_region
 import ubelt as ub
 import scriptconfig as scfg
@@ -43,7 +40,6 @@ class SVDatasetConfig(scfg.DataConfig):
             '''
             Will not recompute if output_path already exists
             '''))
-    force_one_job_for_cropping = scfg.Value(False, isflag=True, help='Force jobs=1 for cropping')
     sv_cropping_config = scfg.Value(None, type=str, help=ub.paragraph(
             '''
             Raw json/yaml or a path to a json/yaml file that specifies the
@@ -66,16 +62,15 @@ def run_generate_sv_cropped_kwcoco(input_path,
                                    newline=False,
                                    jobs=1,
                                    dont_recompute=False,
-                                   force_one_job_for_cropping=False,
                                    sv_cropping_config=None):
-    if dont_recompute:
-        if aws_profile is not None:
-            aws_ls_command = ['aws', 's3', '--profile', aws_profile, 'ls']
-        else:
-            aws_ls_command = ['aws', 's3', 'ls']
 
+    from watch.utils.util_framework import AWS_S3_Command
+    from watch.utils import util_framework
+    if dont_recompute:
+        aws_ls = AWS_S3_Command('ls', profile=aws_profile)
+        aws_ls_command = aws_ls.finalize()
         try:
-            subprocess.run([*aws_ls_command, output_path], check=True)
+            ub.cmd([*aws_ls_command, output_path], check=True, verbose=3, capture=False)
         except subprocess.CalledProcessError:
             # Continue processing
             pass
@@ -85,7 +80,7 @@ def run_generate_sv_cropped_kwcoco(input_path,
 
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
-    ingress_dir = '/tmp/ingress'
+    ingress_dir = ub.Path('/tmp/ingress')
     _ = baseline_framework_kwcoco_ingress(
         input_path,
         ingress_dir,
@@ -101,35 +96,22 @@ def run_generate_sv_cropped_kwcoco(input_path,
                                         strip_nonregions=True)
 
     # Parse region_id from original region file
-    with open(local_region_path) as f:
-        region = json.load(f)
-
-        region_id = None
-        for feature in region.get('features', ()):
-            props = feature['properties']
-            if props['type'] == 'region':
-                region_id = props.get('region_model_id',
-                                      props.get('region_id'))
-                break
+    region_id = util_framework.determine_region_id(local_region_path)
 
     if region_id is None:
         raise RuntimeError("Couldn't parse 'region_id' from input region file")
 
     # Paths to inputs generated in previous pipeline steps
-    bas_region_path = os.path.join(ingress_dir,
-                                   'cropped_region_models_bas',
-                                   '{}.geojson'.format(region_id))
-    ta1_sc_kwcoco_path = os.path.join(ingress_dir,
-                                      'kwcoco_for_sc.json')
+    bas_region_path = ingress_dir / f'cropped_region_models_bas/{region_id}.geojson'
+    ta1_sc_kwcoco_path = ingress_dir /  'kwcoco_for_sc.json'
 
     # 4. Crop ingress KWCOCO dataset to region for SV
     print("* Cropping KWCOCO dataset to region for SV*")
-    ta1_sv_cropped_kwcoco_path = os.path.join(ingress_dir,
-                                              'cropped_kwcoco_for_sv.json')
+    ta1_sv_cropped_kwcoco_path = ingress_dir / 'cropped_kwcoco_for_sv.json'
 
     sv_cropping_config = Yaml.coerce(sv_cropping_config or {})
 
-    sv_cropping = SV_Cropping(root_dpath='/tmp/ingress')
+    sv_cropping = SV_Cropping(root_dpath=ingress_dir)
     sv_cropping.configure({
         'crop_src_fpath': ta1_sc_kwcoco_path,
         'regions': bas_region_path,

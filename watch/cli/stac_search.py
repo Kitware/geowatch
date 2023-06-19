@@ -332,6 +332,10 @@ def main(cmdline=True, **kwargs):
             # 'proj:epsg': 'hist'
         }
 
+        if len(region_file_fpaths) == 1:
+            # Force serial if there is just one
+            query_workers = 0
+
         pool = ub.JobPool(mode='thread', max_workers=query_workers)
         pman = util_progress.ProgressManager(backend='rich' if query_workers > 0 else 'progiter')
         with pman:
@@ -565,6 +569,9 @@ def area_query(region_fpath, search_json, searcher, temp_dir, config, logger, ve
         except (json.decoder.JSONDecodeError, TypeError):
             with open(search_json, 'r') as f:
                 search_params = json.load(f)
+
+    if verbose:
+        logger.info(f'Query with params: {ub.urepr(search_params)}')
 
     region = geomodels.RegionModel.coerce(r_file_loc)
     # region.validate(strict=False)

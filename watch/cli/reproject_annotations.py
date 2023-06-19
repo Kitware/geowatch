@@ -501,6 +501,12 @@ def expand_site_models_with_site_summaries(sites, regions, validate_checks=True)
 
     if site_rows2:
         site_df2 = pd.concat(site_rows2).reset_index()
+        if 'site_id' not in site_df2.columns:
+            print(f'{len(site_df2)=}')
+            print(f'{site_df2.columns=}')
+            print('site_df2:')
+            print(site_df2)
+            raise Exception('site_id column is not in site_df2. See previous output for details')
         if len(set(site_df2['site_id'])) != len(site_df2):
             counts = site_df2['site_id'].value_counts()
             duplicates = counts[counts > 1]
@@ -1002,6 +1008,8 @@ def assign_sites_to_images(coco_dset,
                                                          status_to_color,
                                                          want_viz,
                                                          status_to_catname=status_to_catname)
+            if site_anns is None:
+                continue
             propogated_annotations.extend(site_anns)
             if want_viz:
                 drawable_region_sites.append(drawable_summary)
@@ -1065,6 +1073,9 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
     if status == 'pending':
         # hack for QFabric
         status = 'positive_pending'
+
+    if status == 'system_rejected':
+        return None, None
 
     if not np.all(flags):
         import warnings

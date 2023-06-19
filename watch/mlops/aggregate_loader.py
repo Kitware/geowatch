@@ -381,10 +381,16 @@ def load_result_resolved(node_dpath):
         node_process_name = 'watch.tasks.dino_detector.building_validator'
         fpath = node_dpath / 'out_site_manifest.json'
         flat_resolved = _generalized_process_flat_resolved(fpath, node_process_name, node_type)
-
-    elif node_type in {'sv_depth_filter'}:
+    # TODO: it would be nice if just declaring a node gave us this information.
+    elif node_type in {'sv_depth_score'}:
+        from watch.mlops import smart_pipeline
+        fpath = node_dpath / smart_pipeline.SV_DepthPredict.out_paths['out_kwcoco']
         node_process_name = 'watch.tasks.depth_pcd.score_tracks'
-        fpath = node_dpath / 'sv_depth_out_site_manifest.json'
+        flat_resolved = _generalized_process_flat_resolved(fpath, node_process_name, node_type)
+    elif node_type in {'sv_depth_filter'}:
+        from watch.mlops import smart_pipeline
+        fpath = node_dpath / smart_pipeline.SV_DepthFilter.out_paths['output_site_manifest_fpath']
+        node_process_name = 'watch.tasks.depth_pcd.filter_tracks'
         flat_resolved = _generalized_process_flat_resolved(fpath, node_process_name, node_type)
     else:
         raise NotImplementedError(node_type)

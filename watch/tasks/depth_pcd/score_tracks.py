@@ -2,8 +2,7 @@
 """
 PCD = parallel change detection
 """
-# import geojson
-import json
+
 import os
 import ubelt as ub
 import scriptconfig as scfg
@@ -20,44 +19,23 @@ class ScoreTracksConfig(scfg.DataConfig):
         cover will be automatically accepted.
         '''), position=1, alias=['in_file'], group='inputs')
 
-    input_region = scfg.Value(None, help='The coercable input region model', group='inputs')
-    input_sites = scfg.Value(None, help='The coercable input site models', group='inputs')
-
-    model_fpath = scfg.Value(None, help='Path to the depth_pcd site validation model', group='inputs')
-
-    # poly_kwcoco = scfg.Value(None, help=ub.paragraph(
-    #     '''
-    #     optional: kwcoco file with polygons (
-    #     alternative to input region / sites)
-    #     '''), group='track scoring')
-
-    threshold = scfg.Value(0.4, help=ub.paragraph(
+    model_fpath = scfg.Value(None, help=ub.paragraph(
         '''
-            threshold to filter polygons, very sensitive
-            '''), group='track scoring')
+        Path to the depth_pcd site validation model
+        '''), group='inputs')
+
+    input_region = scfg.Value(None, help=ub.paragraph(
+        '''
+        The coercable input region model with site summaries
+        '''), group='inputs')
 
     out_kwcoco = scfg.Value(None, help=ub.paragraph(
         '''
             The file path to write the "tracked" kwcoco file to.
             '''), group='outputs')
 
-    output_region_fpath = scfg.Value(None, help=ub.paragraph(
-        '''
-        The output for the region with filtered site summaries
-        '''), group='outputs')
 
-    output_sites_dpath = scfg.Value(None, help=ub.paragraph(
-        '''
-        The directory where site model geojson files will be written.
-        '''), alias=['out_sites_dir'], group='outputs')
-
-    output_site_manifest_fpath = scfg.Value(None, help=ub.paragraph(
-        '''
-        The file path where a manifest of all site models will be written.
-        '''), alias=['out_sites_fpath'], group='outputs')
-
-
-def score_tracks(poly_coco_dset, img_coco_dset, threshold, model_fpath):
+def score_tracks(img_coco_dset, model_fpath):
     from watch.tasks.depth_pcd.model import getModel, normalize, TPL_DPATH
 
     import numpy as np
@@ -66,6 +44,7 @@ def score_tracks(poly_coco_dset, img_coco_dset, threshold, model_fpath):
     import ndsampler
     import pandas as pd
     from tqdm import tqdm
+    import warnings
 
     print('loading site validation model')
     proto_fpath = TPL_DPATH / 'deeplab2/max_deeplab_s_backbone_os16.textproto'
@@ -88,7 +67,7 @@ def score_tracks(poly_coco_dset, img_coco_dset, threshold, model_fpath):
 
     if len(all_annots) == 0:
         print("Nothing to filter")
-        return poly_coco_dset
+        return img_coco_dset
 
     vidid_to_name = all_videos.lookup('name', keepid=True)
     # vidname_to_id = ub.udict(vidid_to_name).invert()
@@ -109,18 +88,23 @@ def score_tracks(poly_coco_dset, img_coco_dset, threshold, model_fpath):
     # Group by track and video name.
     trackid_to_group = dict(list(annot_df.groupby('track_id')))
 
-    track_ids_to_drop = []
-    ann_ids_to_drop = []
-
+    if 'tracks' not in img_coco_dset.dataset.keys():
+        img_coco_dset.dataset['tracks'] = []
+    tracks = img_coco_dset.dataset['tracks']
     tq = tqdm(total=len(trackid_to_group))
 
     for track_id, orig_track_group in trackid_to_group.items():
-
+        track_obj = {
+            'id': track_id,
+            'name': track_id,  # add a name for "future-proofing"
+            'score': float(1),
+            'src': 'sv_depth_pcd'
+        }
+        tracks.append(track_obj)
         # Does the track appear in more than one video?
         video_names = orig_track_group['video_name'].unique()
         if len(video_names) > 1:
             if track_id not in video_names:
-                import warnings
                 msg = (
                     f'track-id {track_id} expected to correspond with video names '
                     'in site-cropped datasets')
@@ -138,8 +122,8 @@ def score_tracks(poly_coco_dset, img_coco_dset, threshold, model_fpath):
         image_ids = track_group["image_id"].tolist()
         first_annot_id = track_group["id"].iloc[0]
         first_image_id = image_ids[0]
-        first_coco_img = poly_coco_dset.coco_image(first_image_id)
-        first_annot = poly_coco_dset.anns[first_annot_id]
+        first_coco_img = img_coco_dset.coco_image(first_image_id)
+        first_annot = img_coco_dset.anns[first_annot_id]
         imgspace_annot_box = kwimage.Box.coerce(first_annot['bbox'], format='xywh')
         vidspace_annot_box = imgspace_annot_box.warp(first_coco_img.warp_vid_from_img)
         ref_coco_img = first_coco_img
@@ -210,7 +194,8 @@ def score_tracks(poly_coco_dset, img_coco_dset, threshold, model_fpath):
                 ims.append(np.stack([first, 0.5 * first + 0.5 * last, last], axis=-1).astype(np.float32))
 
         score = np.mean(model.predict(np.array(ims), batch_size=1, verbose=False)[8])
-        tq.set_description(f'{video_name}-{track_id} score {score:3.2f}')
+        tracks[-1]['score'] = float(score)
+        tq.set_description(f'{video_name} score {score:3.2f}')
         tq.update(1)
         if 0:
 
@@ -232,19 +217,11 @@ def score_tracks(poly_coco_dset, img_coco_dset, threshold, model_fpath):
 
         #        ks = list(coco_dset.index.videos.keys())
 
-        if score < threshold:  # or coco_dset.index.videos[ks[0]]['name'] == 'AE_R001':
-            track_ids_to_drop.append(track_id)
-            ann_ids_to_drop.extend(orig_track_group["id"].tolist())
-
-    print(f"Dropping {len(ann_ids_to_drop)} / {len(all_annots)} annotations from {len(track_ids_to_drop)} / {len(trackid_to_group)} tracks.")
-    if len(ann_ids_to_drop) > 0:
-        poly_coco_dset.remove_annotations(ann_ids_to_drop)
-
-    return poly_coco_dset, track_ids_to_drop
+    return img_coco_dset
 
 
-def main(**kwargs):
-    args = ScoreTracksConfig.cli(cmdline=True, data=kwargs, strict=True)
+def main(cmdline=True, **kwargs):
+    args = ScoreTracksConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
     import rich
     rich.print('args = {}'.format(ub.urepr(args, nl=1)))
 
@@ -253,12 +230,8 @@ def main(**kwargs):
     from watch.tasks.depth_pcd.model import getModel, normalize, TPL_DPATH  # NOQA
 
     import kwcoco
-    import safer
     from kwcoco.util import util_json
-    # from watch.cli.kwcoco_to_geojson import convert_kwcoco_to_iarpa, create_region_header
-    from watch.geoannots import geomodels
     from watch.utils import process_context
-    from watch.utils import util_gis
 
     if args.model_fpath is None:
         print('warning: the path to the model was not explicitly specified, '
@@ -282,17 +255,6 @@ def main(**kwargs):
         bad_data = problem['data']
         walker[problem['loc']] = str(bad_data)
 
-    region_model = geomodels.RegionModel.coerce(args.input_region)
-    input_site_fpaths = util_gis.coerce_geojson_paths(args.input_sites)
-    site_to_site_fpath = ub.udict({
-        p.stem: p for p in input_site_fpaths
-    })
-    site_id_to_summary = {}
-    for summary in region_model.site_summaries():
-        assert summary.site_id not in site_id_to_summary
-        site_id_to_summary[summary.site_id] = summary
-    # output_region_fpath = ub.Path(args.output_region_fpath)
-
     proc_context = process_context.ProcessContext(
         name='watch.tasks.depth_pcd.score_tracks', type='process',
         config=jsonified_config,
@@ -302,56 +264,19 @@ def main(**kwargs):
 
     img_coco_dset = kwcoco.CocoDataset.coerce(args.input_kwcoco)
 
-    # if args.poly_kwcoco is not None:
-    #     poly_coco_dset = kwcoco.CocoDataset.coerce(args.poly_kwcoco)
-    # else:
-    if 1:
-        # Project the site polygons onto the kwcoco dataset.
-        from watch.cli import reproject_annotations
-        img_coco_dset = reproject_annotations.main(
-            cmdline=0, src=img_coco_dset,
-            dst='return',
-            region_models=args.input_region,
-            status_to_catname={'system_confirmed': 'positive'},
-            role='pred_poly',
-            validate_checks=False,
-            clear_existing=False,
-        )
-        poly_coco_dset = img_coco_dset
+    # Project the site polygons onto the kwcoco dataset.
+    from watch.cli import reproject_annotations
+    img_coco_dset = reproject_annotations.main(
+        cmdline=0, src=img_coco_dset,
+        dst='return',
+        region_models=args.input_region,
+        status_to_catname={'system_confirmed': 'positive'},
+        role='pred_poly',
+        validate_checks=False,
+        clear_existing=False,
+    )
 
-    coco_dset, track_ids_to_drop = score_tracks(poly_coco_dset, img_coco_dset, args.threshold, model_fpath)
-
-    # We are assuming track-ids correspond to site names here.
-    assert set(site_id_to_summary).issuperset(track_ids_to_drop)
-
-    keep_summaries = ub.udict(site_id_to_summary) - track_ids_to_drop
-    keep_site_fpaths = ub.udict(site_to_site_fpath) - track_ids_to_drop
-
-    sites_with_paths = set(keep_summaries)
-    sites_with_summary = set(keep_site_fpaths)
-    if sites_with_paths != sites_with_summary:
-        print('sites_with_paths = {}'.format(ub.urepr(sites_with_paths, nl=1)))
-        print('sites_with_summary = {}'.format(ub.urepr(sites_with_summary, nl=1)))
-        raise AssertionError(
-            f'sites with paths {len(sites_with_paths)} are not the same as '
-            f'sites with summaries {len(sites_with_summary)}')
-
-    # Copy the filtered site models over to the output directory
-    output_sites_dpath = ub.Path(args.output_sites_dpath)
-    output_sites_dpath.ensuredir()
-    out_site_fpaths = []
-    for old_fpath in keep_site_fpaths.values():
-        new_fpath = output_sites_dpath / old_fpath.name
-        old_fpath.copy(new_fpath, overwrite=True)
-        out_site_fpaths.append(new_fpath)
-
-    new_region_model = geomodels.RegionModel.from_features(
-        [region_model.header] + list(keep_summaries.values()))
-
-    output_region_fpath = ub.Path(args.output_region_fpath)
-    output_region_fpath.parent.ensuredir()
-    with safer.open(output_region_fpath, 'w', temp_file=not ub.WIN32) as file:
-        json.dump(new_region_model, file, indent=4)
+    coco_dset = score_tracks(img_coco_dset, model_fpath)
 
     proc_context.stop()
     out_kwcoco = args.out_kwcoco
@@ -365,32 +290,8 @@ def main(**kwargs):
         print(f'write to coco_dset.fpath={coco_dset.fpath}')
         coco_dset.dump(out_kwcoco, indent=2)
 
-    if args.output_site_manifest_fpath is not None:
-        filter_output = {
-            'type': 'tracking_result',
-            'info': [],
-            'files': [],
-        }
-        filter_output['info'].append(proc_context.obj)
-        filter_output['files'] = [os.fspath(p) for p in out_site_fpaths]
-        print(f'Write filtered site result to {args.output_site_manifest_fpath}')
-        with safer.open(args.output_site_manifest_fpath, 'w', temp_file=not ub.WIN32) as file:
-            json.dump(filter_output, file, indent=4)
-
 
 r'''
-Ignore:
-
-    python -m watch.tasks.depth_pcd.score_tracks \
-            --poly_kwcoco /media/barcelona/Drop6/bas_baseline/polyb.kwcoco.zip
-            --input_kwcoco /media/barcelona/Drop6/valT.kwcoco.zip
-            --output_region_fpath "/media/barcelona/Drop6/tronexperiments/debug/filtered_region.json"
-            --output_site_manifest_fpath "/media/barcelona/Drop6/tronexperiments/debug/sites_manifest.json"
-            --output_sites_dpath "/media/barcelona/Drop6/tronexperiments/debug/sites"
-            --out_kwcoco "some file with filtered poly if you need"
-            --threshold 0.3 (default)
-
-
 Example:
 
     ### Run BAS and then run SV on top of it.
@@ -461,13 +362,13 @@ Example:
         --input_region "$DVC_EXPT_DPATH/_test_dzyne_sv/site_summaries_manifest.json" \
         --input_sites "$DVC_EXPT_DPATH/_test_dzyne_sv/sites_manifest.json" \
         --model_fpath $DVC_EXPT_DPATH/models/depth_pcd/basicModel2.h5 \
+        --out_kwcoco "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_poly.kwcoco.zip" \
+
+
+        --output_sites_dpath  "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_sites" \
         --output_region_fpath "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_site_summaries.json" \
         --output_site_manifest_fpath  "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_sites_manifest.json" \
-        --output_sites_dpath  "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_sites" \
-        --out_kwcoco "$DVC_EXPT_DPATH/_test_dzyne_sv/filtered_poly.kwcoco.zip" \
         --threshold 0.4
-
-    # --poly_kwcoco $DVC_EXPT_DPATH/_test_dzyne_sv/poly.kwcoco.zip \
 
     # Score the Filtered Predictions
     python -m watch.cli.run_metrics_framework \
@@ -508,21 +409,16 @@ Example in MLOPs:
                 - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
             bas_pxl.test_dataset:
                 - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R001_I2LS.kwcoco.zip
-                - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R002_I2LS.kwcoco.zip
-                - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-BR_R002_I2LS.kwcoco.zip
-                - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-CH_R001_I2LS.kwcoco.zip
-                - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-NZ_R001_I2LS.kwcoco.zip
+                # - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R002_I2LS.kwcoco.zip
+                # - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-BR_R002_I2LS.kwcoco.zip
+                # - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-CH_R001_I2LS.kwcoco.zip
+                # - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-NZ_R001_I2LS.kwcoco.zip
                 # - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-AE_R001_I2LS.kwcoco.zip
             bas_pxl.chip_overlap: 0.3
             bas_pxl.chip_dims: auto
             bas_pxl.time_span: auto
             bas_pxl.time_sampling: soft4
             bas_poly.thresh:
-                # - 0.30
-                # - 0.35
-                # - 0.39
-                # - 0.40
-                # - 0.41
                 # - 0.42
                 - 0.425
             bas_poly.inner_window_size: 1y
@@ -531,7 +427,6 @@ Example in MLOPs:
             bas_poly.polygon_simplify_tolerance: 1
             bas_poly.agg_fn: probs
             bas_poly.time_thresh:
-                # - 0.5
                 # - 0.65
                 - 0.8
             bas_poly.resolution: 10GSD
@@ -565,19 +460,10 @@ Example in MLOPs:
             sv_dino_filter.box_score_threshold: 0.01
             sv_dino_filter.box_isect_threshold: 0.1
 
-            # sv_depth_filter.enabled: 0
-            # sv_depth_filter.model_fpath: $DVC_EXPT_DPATH/models/depth_pcd/basicModel2.h5
-            # sv_depth_filter.threshold:
-            #     - 0.20
-            #     - 0.22
-            #     - 0.25
-            #     - 0.27
-            #     - 0.29
-            #     - 0.3
-            #     - 0.31
-            #     - 0.33
-            #     - 0.35
-            #     - 0.37
+            sv_depth_score.enabled: 1
+            sv_depth_score.model_fpath: $DVC_EXPT_DPATH/models/depth_pcd/basicModel2.h5
+            sv_depth_filter.threshold:
+                - 0.20
             #     - 0.4
         submatrices:
             - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R001_I2LS.kwcoco.zip
@@ -593,12 +479,12 @@ Example in MLOPs:
             - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-AE_R001_I2LS.kwcoco.zip
               sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-AE_R001.kwcoco.json
         " \
-        --root_dpath="$DVC_EXPT_DPATH/_mlops_test_depth_pcd" \
-        --devices="0,1" --tmux_workers=2 \
-        --backend=tmux --queue_name "_mlops_test_depth_pcd" \
-        --pipeline=bas_building_vali \
+        --root_dpath="$DVC_EXPT_DPATH/_mlops_test_depth_pcd2" \
+        --devices="0," --tmux_workers=2 \
+        --backend=serial --queue_name "_mlops_test_depth_pcd2" \
+        --pipeline=bas_building_and_depth_vali \
         --skip_existing=1 \
-        --run=1
+        --run=0
 
         --pipeline=bas_depth_vali \
 

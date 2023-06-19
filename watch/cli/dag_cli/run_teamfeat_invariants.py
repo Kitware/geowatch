@@ -5,13 +5,10 @@ See Old Version:
 SeeAlso:
     ~/code/watch-smartflow-dags/KIT_TA2_PREEVAL10_PYENV.py
 """
-import os
-import subprocess
 import ubelt as ub
 import scriptconfig as scfg
-
-from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress  # noqa: 501
-from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress  # noqa: 501
+from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress
+from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress
 
 
 class TeamFeatInvariantsConfig(scfg.DataConfig):
@@ -42,82 +39,57 @@ class TeamFeatInvariantsConfig(scfg.DataConfig):
             S3 Output directory for STAC item / asset egress
             '''))
     do_pca = scfg.Value(False, isflag=True, help='Perform PCA on invariants')
-    requester_pays = scfg.Value(False, isflag=True, short_alias=['r'], help=ub.paragraph(
-            '''
-            Run AWS CLI commands with `--requestor_payer requester` flag
-            '''))
     newline = scfg.Value(False, isflag=True, short_alias=['n'], help=ub.paragraph(
             '''
             Output as simple newline separated STAC items
             '''))
-    jobs = scfg.Value(1, type=int, short_alias=['j'], help='Number of jobs to run in parallel')
 
 
 def main():
     config = TeamFeatInvariantsConfig.cli(strict=True)
     print('config = {}'.format(ub.urepr(dict(config), nl=1, align=':')))
-    run_uky_invariants_for_baseline(**config)
+    run_uky_invariants_for_baseline(config)
 
 
-def run_uky_invariants_for_baseline(input_path,
-                                    input_region_path,
-                                    output_path,
-                                    model_path,
-                                    pca_projection_path,
-                                    outbucket,
-                                    do_pca=False,
-                                    aws_profile=None,
-                                    dryrun=False,
-                                    requester_pays=False,
-                                    newline=False,
-                                    jobs=1):
+def run_uky_invariants_for_baseline(config):
     from watch.utils.util_framework import download_region
-    if aws_profile is not None:
-        aws_base_command =\
-            ['aws', 's3', '--profile', aws_profile, 'cp']
-    else:
-        aws_base_command = ['aws', 's3', 'cp']
-
-    if dryrun:
-        aws_base_command.append('--dryrun')
-
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
-    ingress_dir = '/tmp/ingress'
+    ingress_dir = ub.Path('/tmp/ingress')
     ingress_kwcoco_path = baseline_framework_kwcoco_ingress(
-        input_path,
+        config.input_path,
         ingress_dir,
-        aws_profile,
-        dryrun)
+        config.aws_profile,
+        config.dryrun)
 
     # 2. Download and prune region file
     print("* Downloading and pruning region file *")
-    local_region_path = '/tmp/region.json'
+    local_region_path = ub.Path('/tmp/region.json')
     download_region(
-        input_region_path=input_region_path,
+        input_region_path=config.input_region_path,
         output_region_path=local_region_path,
-        aws_profile=aws_profile,
+        aws_profile=config.aws_profile,
         strip_nonregions=True,
     )
 
     # 2. Generate Invariants
     print("* Generating UKY invariant features for L8 *")
-    sc_invariants_kwcoco_path = os.path.join(
-        ingress_dir, 'sc_invariants_kwcoco.json')
-    subprocess.run(['python', '-m', 'watch.tasks.invariants.predict',
-                    '--input_kwcoco', ingress_kwcoco_path,
-                    '--output_kwcoco', sc_invariants_kwcoco_path,
-                    '--pretext_package_path', model_path,
-                    '--pca_projection_path', pca_projection_path,
-                    '--input_space_scale', '30GSD',
-                    '--window_space_scale', '30GSD',
-                    '--patch_size', '256',
-                    '--do_pca', str(1 if do_pca else 0),
-                    '--patch_overlap', '0.3',
-                    '--num_workers', '2',
-                    '--write_workers', '0',
-                    '--tasks', 'before_after', 'pretext'],
-                   check=True)
+    sc_invariants_kwcoco_path = ingress_dir / 'sc_invariants_kwcoco.json'
+    ub.cmd([
+        'python', '-m', 'watch.tasks.invariants.predict',
+        '--input_kwcoco', ingress_kwcoco_path,
+        '--output_kwcoco', sc_invariants_kwcoco_path,
+        '--pretext_package_path', config.model_path,
+        '--pca_projection_path', config.pca_projection_path,
+        '--input_space_scale', '30GSD',
+        '--window_space_scale', '30GSD',
+        '--patch_size', '256',
+        '--do_pca', str(1 if config.do_pca else 0),
+        '--patch_overlap', '0.3',
+        '--num_workers', '2',
+        '--write_workers', '0',
+        '--tasks', 'before_after', 'pretext'
+    ], check=True, verbose=3, capture=False)
 
     # 3. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
@@ -125,8 +97,8 @@ def run_uky_invariants_for_baseline(input_path,
     print("* Egressing KWCOCO dataset and associated STAC item *")
     baseline_framework_kwcoco_egress(sc_invariants_kwcoco_path,
                                      local_region_path,
-                                     output_path,
-                                     outbucket,
+                                     config.output_path,
+                                     config.outbucket,
                                      aws_profile=None,
                                      dryrun=False,
                                      newline=False)

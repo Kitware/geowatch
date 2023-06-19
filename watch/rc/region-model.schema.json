@@ -42,7 +42,7 @@
     "mgrsstring": {
       "description": "MGRS string, specified at the 100km grid square",
       "type": "string",
-      "pattern": "^(\\d{2}[A-Z]{3})|([A-Z]{3})$"
+      "pattern": "^(((0[1-9]|[1-5]\\d|60)[CDEFGHJKLMNPQRSTUVWX][ABCDEFGHJKLMNPQRSTUVWXYZ][ABCDEFGHJKLMNPQRSTUV])|((A[JKLPQRSTUXYZ]|B[ABCFGHJKLPQR])[ABCDEFGHJKLMNPQRSTUVWXYZ])|((Y[RSTUXYZ]|Z[ABCFGHJ])[ABCDEFGHJKLMNP]))$"
     },
     "transient_annotation_cache": {
       "description": "dictionary required in a transient annotation",
@@ -67,7 +67,7 @@
       "type": "object",
       "properties": {
         "type": {"const": "region"},
-        "region_id": {"type": "string", "pattern": "^[A-Z]{2}_([RS]\\d{3}|C[0-7]\\d{2})$"},
+        "region_id": {"type": "string", "pattern": "^[A-Z]{2}_([RST]\\d{3}|C[0-7]\\d{2})$"},
         "version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
         "mgrs": {"$ref":"#/$defs/mgrsstring"},
         "model_content": {"enum": ["empty", "annotation", "proposed"]},
@@ -75,10 +75,16 @@
         "end_date": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/datestring"}]},
         "originator": {"enum": ["te", "pmo", "acc", "ara", "ast", "bla", "iai", "kit", "str", "iMERIT"]},
         "comments": {"type": ["string", "null"]},
-        "performer_cache": {"type": "object"}
+        "performer_cache": {"type": "object"},
+        "cache": {"type": "object"}
       },
       "required": [
         "type", "region_id", "version", "mgrs", "model_content", "start_date", "end_date", "originator"
+      ],
+      "oneOf": [
+        {"required": ["performer_cache"], "not": {"required": ["cache"]}},
+        {"required": ["cache"], "not": {"required": ["performer_cache"]}},
+        {"not": {"anyOf": [{"required": ["performer_cache"]}, {"required": ["cache"]}]}}
       ],
       "unevaluatedProperties": false,
       "allOf": [
@@ -90,7 +96,7 @@
       "type": "object",
       "properties": {
         "type": {"const": "site_summary"},
-        "site_id": {"type": "string", "pattern": "^[A-Z]{2}_([RS]\\d{3}|C[0-7]\\d{2})_\\d{4}$"},
+        "site_id": {"type": "string", "pattern": "^[A-Z]{2}_([RST]\\d{3}|C[0-7]\\d{2})_\\d{4}$"},
         "version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
         "mgrs": {"$ref":"#/$defs/mgrsstring"},
         "status": {"enum": ["system_proposed", "system_confirmed", "system_rejected", "positive_annotated", "positive_partial", "positive_annotated_static", "positive_partial_static", "positive_pending", "positive_excluded", "negative", "ignore", "transient_positive", "transient_pending", "transient_negative", "transient_excluded", "transient_ignore"]},
@@ -101,10 +107,16 @@
         "score": {"type": "number", "minimum": 0, "maximum": 1},
         "validated": {"enum": ["True", "False"]},
         "comments": {"type": ["string", "null"]},
-        "annotation_cache": {"type": "object"}
+        "annotation_cache": {"type": "object"},
+        "cache": {"type": "object"}
       },
       "required": [
         "type", "site_id", "version", "mgrs", "model_content", "start_date", "end_date", "status", "originator"
+      ],
+      "oneOf": [
+        {"required": ["annotation_cache"], "not": {"required": ["cache"]}},
+        {"required": ["cache"], "not": {"required": ["annotation_cache"]}},
+        {"not": {"anyOf": [{"required": ["annotation_cache"]}, {"required": ["cache"]}]}}
       ],
       "unevaluatedProperties": false,
       "allOf": [
@@ -120,10 +132,24 @@
         {
           "if": {"properties": {"model_content": {"const": "annotation"}, "status": {"enum": ["transient_positive", "transient_pending", "transient_negative", "transient_excluded", "transient_ignore"]}}},
           "then": {
+            "properties": { "site_id": {"type": "string", "pattern": "^[A-Z]{2}_(T\\d{3})_\\d{4}$"} },
+            "oneOf": [
+              {
+                "properties": {"cache": {"$ref": "#/$defs/transient_annotation_cache"}},
+                "required": ["cache"],
+                "not": {"required": ["annotation_cache"]}
+              },
+              {
+                "properties": {"annotation_cache": {"$ref": "#/$defs/transient_annotation_cache"}},
+                "required": ["annotation_cache"],
+                "not": {"required": ["cache"]}
+              }
+            ]
+          },
+          "else": {
             "properties": {
-              "annotation_cache": {"$ref": "#/$defs/transient_annotation_cache"}
-            },
-            "required": ["type", "site_id", "version", "mgrs", "model_content", "start_date", "end_date", "status", "originator", "annotation_cache"]
+              "site_id": {"type": "string", "pattern": "^[A-Z]{2}_([RS]\\d{3}|C[0-7]\\d{2})_\\d{4}$"}
+            }
           }
         }
       ]

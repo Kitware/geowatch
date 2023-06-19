@@ -22,6 +22,7 @@ kwarray
 kwimage
 kwplot
 kwcoco
+kwutil
 ndsampler
 )
 

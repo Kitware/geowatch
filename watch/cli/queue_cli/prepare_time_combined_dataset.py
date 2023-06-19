@@ -69,7 +69,7 @@ def main(cmdline=1, **kwargs):
     if config.regions == 'all':
         all_regions = [p.name.split('.')[0] for p in (ub.Path(config.true_region_dpath)).ls()]
         chosen_regions = all_regions
-    if config.regions == 'all_tne':
+    elif config.regions == 'all_tne':
         all_regions = [p.name.split('.')[0] for p in (ub.Path(config.true_region_dpath)).ls()]
         tne_regions = [r for r in all_regions if r.split('_')[1].startswith('R')]
         chosen_regions = tne_regions

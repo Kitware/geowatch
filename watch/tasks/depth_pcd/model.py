@@ -58,7 +58,7 @@ def normalize(im, q=5, r=128):
     return im
 
 
-def getModel(proto='watch/tasks/depth_pcd/deeplab2/max_deeplab_s_backbone_os16.textproto'):
+def getModel(proto=TPL_DPATH / 'deeplab2/max_deeplab_s_backbone_os16.textproto'):
     options = config_pb2.ExperimentOptions()
 
     with tf.io.gfile.GFile(proto) as f:

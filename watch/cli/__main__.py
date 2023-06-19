@@ -112,7 +112,13 @@ def main(cmdline=True, **kw):
 
     modal = ModalCLI(description)
 
-    modal.__class__.version = watch.__version__
+    # scriptconfig bug made this not work...
+    # modal.__class__.version = watch.__version__
+
+    def get_version(self):
+        import watch
+        return watch.__version__
+    modal.__class__.version = property(get_version)
 
     for cli_module in cli_modules:
 

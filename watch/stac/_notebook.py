@@ -201,10 +201,12 @@ def check_processed_regions():
         # 'ta1-wv-acc-2',
         # 'ta1-pd-acc-2',
 
-        'ta1-s2-acc-3',
-        'ta1-ls-acc-3',
-        'ta1-wv-acc-3',
-        'ta1-pd-acc-3',
+        'ta1-10m-tsmoothed-acc-3',
+
+        # 'ta1-s2-acc-3',
+        # 'ta1-ls-acc-3',
+        # 'ta1-wv-acc-3',
+        # 'ta1-pd-acc-3',
 
         'ta1-10m-acc-3',
 
@@ -395,7 +397,7 @@ def check_processed_regions():
 
 def _devcheck_providers_exist():
     """
-    develoepr logic to test to see if providers are working
+    developer logic to test to see if providers are working
 
     """
     # from watch.stac.stac_search_builder import _ACCENTURE_PHASE2_TA1_PRODUCTS
@@ -433,4 +435,59 @@ def _devcheck_providers_exist():
     item_search = catalog.search(collections=["ta1-pd-acc"])
     item_search = catalog.search(collections=["ta1-pd-ara"])
     item_search = catalog.search(collections=["ta1-pd-str"])
-    print(f'item_search={item_search}')
+
+
+def check_single_colletion():
+    """
+    source $HOME/code/watch/secrets/secrets
+    COLLECTION=ta1-10m-tsmoothed-acc-3
+    xdoctest -m watch.stac._notebook check_single_endpoint
+    """
+    import os
+    import pystac_client
+    import ubelt as ub
+    collection = os.environ.get('COLLECTION', "ta1-10m-tsmoothed-acc-3")
+    # item_search = catalog.search(collections=[collection])
+
+    provider = "https://api.smart-stac.com"
+    headers = {
+        'x-api-key': os.environ['SMART_STAC_API_KEY']
+    }
+    catalog = pystac_client.Client.open(provider, headers=headers)
+
+    item_search = catalog.search(collections=[collection])
+
+    item_iter = iter(item_search.items())
+    # View cloud cover
+    first_item = next(item_iter)
+    first_item_dict = first_item.to_dict()
+    import rich
+    rich.print('first_item_dict = {}'.format(ub.urepr(first_item_dict, nl=-1)))
+
+    print(f'first_item={first_item}')
+    print(f'first_item.assets={first_item.assets}')
+    asset = ub.peek(first_item.assets.values())
+    print(asset.to_dict())
+
+    import watch
+    from watch.geoannots import geomodels
+    dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+    base = ((dvc_data_dpath / 'annotations') / 'drop6')
+    region_fpath = base / 'region_models/NZ_R001.geojson'
+    region = geomodels.RegionModel.coerce(region_fpath)
+    geom = region.geometry
+    query = {}
+    daterange = ('2010-01-01', '2020-01-01')
+
+    search = catalog.search(
+        collections=[collection],
+        intersects=geom,
+        max_items=None,
+        query=query,
+        datetime=daterange,
+    )
+
+    items_gen = search.items()
+    items = list(items_gen)
+    num_found = len(items)
+    print(f'num_found={num_found}')

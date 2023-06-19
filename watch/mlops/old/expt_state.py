@@ -996,6 +996,7 @@ def checkpoint_filepath_info(fname):
         parse.parse('{prefix}foo={bar}', 'afoao=3')
 
     Example:
+        >>> # xdoctest: +SKIP
         >>> from watch.mlops.old.expt_state import *  # NOQA
         >>> fnames = [
         >>>     'epoch1_step10.foo',
@@ -1021,6 +1022,7 @@ def checkpoint_filepath_info(fname):
         info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v0'}
         info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v2'}
     """
+    raise Exception('new version in manager')
     # We assume it must have this
     suffix = ''.join(fname.partition('epoch')[1:])
     # Hack: making name assumptions

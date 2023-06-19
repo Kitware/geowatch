@@ -245,6 +245,10 @@ class GDalCommandBuilder:
         self._positional.extend(items)
 
     def finalize(self):
+        """
+        Returns:
+            str: the final bash command
+        """
         import pathlib
         import os
         parts = [self.command_name]

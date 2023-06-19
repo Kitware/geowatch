@@ -1,2 +1,2 @@
 # Conflicts with tensorboardX (required by lightning) due to protobuf
-tensorflow>2.11
+tensorflow>=2.12

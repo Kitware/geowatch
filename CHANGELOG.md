@@ -14,11 +14,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Fixed
 * Added timeout to gdal subprocess commands to prevent hanging 
 * Fixed `geowatch model_stats` not respecting the LightningCLI config
+* If the kwcoco file is in a read-only directory, cached hashids no longer raise an error.
 
 ### Changed
 * MLOPs Nodes can now specify input paths as dictionaries if default input configs are known.
 * `coco_align` no longer handles annotations
 * MLOps can now handle input nodes with multiple connections (variable length inputs)
+* DINO Filter now marks sites as `system_rejected` instead of removing them.
+* Depth Filter now marks sites as `system_rejected` instead of removing them.
 
 
 ## Version 0.6.8 - Target 2023-05-22

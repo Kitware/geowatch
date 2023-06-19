@@ -1,10 +1,8 @@
 import argparse
 import sys
 import json
-import os
 import tempfile
-import subprocess
-
+from os.path import join, dirname, basename
 from shapely.geometry import shape
 
 
@@ -98,23 +96,18 @@ def baseline_framework_kwcoco_egress(kwcoco_dataset_path,
                                      dryrun=False,
                                      newline=False,
                                      show_progress=False):
-    if aws_profile is not None:
-        aws_base_command =\
-            ['aws', 's3', '--profile', aws_profile, 'cp']
-    else:
-        aws_base_command = ['aws', 's3', 'cp']
 
-    if dryrun:
-        aws_base_command.append('--dryrun')
+    from watch.utils.util_framework import AWS_S3_Command
+    aws_cp = AWS_S3_Command('cp')
+    aws_cp.update(
+        profile=aws_profile,
+        dryrun=dryrun,
+        only_show_errors=not show_progress,
+    )
 
-    if not show_progress:
-        aws_base_command.append('--only-show-errors')
-
-    item_id, _ = os.path.splitext(os.path.basename(kwcoco_dataset_path))
-    self_s3_outpath = os.path.join(
-        outbucket, item_id, '{}.json'.format(item_id))
-    kwcoco_s3_outpath = os.path.join(
-        outbucket, os.path.basename(kwcoco_dataset_path))
+    item_id = basename(kwcoco_dataset_path).split('.')[0]
+    self_s3_outpath = join(outbucket, item_id, '{}.json'.format(item_id))
+    kwcoco_s3_outpath = join(outbucket, basename(kwcoco_dataset_path))
     output_stac_item = _kwcoco_to_stac_item(item_id,
                                             kwcoco_dataset_path,
                                             region_path,
@@ -125,15 +118,14 @@ def baseline_framework_kwcoco_egress(kwcoco_dataset_path,
         with open(temporary_file.name, 'w') as f:
             print(json.dumps(output_stac_item, indent=2), file=f)
 
-        subprocess.run([*aws_base_command,
-                        temporary_file.name, self_s3_outpath],
-                       check=True)
+        aws_cp.args = [temporary_file.name, self_s3_outpath]
+        aws_cp.run()
 
     # Recursive copy entire KWCOCO directory (assumed that all cropped
     # imagery referenced in KWCOCO dataset resides in this directory)
-    subprocess.run([*aws_base_command, '--recursive',
-                    os.path.dirname(kwcoco_dataset_path), outbucket],
-                   check=True)
+    aws_cp.update(recursive=True)
+    aws_cp.args = [dirname(kwcoco_dataset_path), outbucket]
+    aws_cp.run()
 
     # Only have the one KWCOCO dataset STAC item in this case
     output_stac_items = [output_stac_item]
@@ -152,9 +144,9 @@ def baseline_framework_kwcoco_egress(kwcoco_dataset_path,
             else:
                 print(json.dumps(te_output, indent=2), file=f)
 
-        command = [*aws_base_command, temporary_file.name, output_path]
-
-        subprocess.run(command, check=True)
+        aws_cp.update(recursive=False)
+        aws_cp.args = [temporary_file.name, output_path]
+        aws_cp.run()
 
     return te_output
 

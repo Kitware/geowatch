@@ -1,11 +1,6 @@
 #!/usr/bin/env python3
-import json
-import os
 import scriptconfig as scfg
-import subprocess
 import ubelt as ub
-from glob import glob
-import pathlib
 
 
 class DzyneParallelSiteValiConfig(scfg.DataConfig):
@@ -14,8 +9,6 @@ class DzyneParallelSiteValiConfig(scfg.DataConfig):
 
     python ~/code/watch/watch/cli/dag_cli/run_dzyne_parallel_site_vali.py
     """
-    __fuzzy_hyphens__ = True
-
     input_path = scfg.Value(None, type=str, position=1, required=True, help=ub.paragraph(
             '''
             Path to input T&E Baseline Framework JSON
@@ -28,7 +21,7 @@ class DzyneParallelSiteValiConfig(scfg.DataConfig):
 
     output_path = scfg.Value(None, type=str, position=3, required=True, help='S3 path for output JSON')
 
-    depth_model_fpath = scfg.Value("/models/depthPCD/basicModel2.h5", type=str, position=4, required=True, help='path to depth model weights')
+    # depth_model_fpath = scfg.Value("/models/depthPCD/basicModel2.h5", type=str, position=4, required=True, help='path to depth model weights')
 
     aws_profile = scfg.Value(None, type=str, help=ub.paragraph(
             '''
@@ -42,64 +35,23 @@ class DzyneParallelSiteValiConfig(scfg.DataConfig):
             S3 Output directory for STAC item / asset egress
             '''))
 
+    depth_score_config = scfg.Value(None, type=str, help=ub.paragraph(
+            '''
+            Raw json/yaml or a path to a json/yaml file that specifies the
+            config for depth scorer.
+            '''))
+
+    depth_filter_config = scfg.Value(None, type=str, help=ub.paragraph(
+            '''
+            Raw json/yaml or a path to a json/yaml file that specifies the
+            config for the depth filter.
+            '''))
+
 
 def main():
     config = DzyneParallelSiteValiConfig.cli(strict=True)
-    print('config = {}'.format(ub.urepr(dict(config), nl=1, align=':')))
+    print('config = {}'.format(ub.urepr(config, nl=1, align=':')))
     run_dzyne_parallel_site_vali_for_baseline(config)
-
-
-def _upload_region(aws_base_command,
-                   local_region_dir,
-                   local_input_region_path,
-                   destination_region_s3):
-    with open(local_input_region_path) as f:
-        region = json.load(f)
-
-    region_id = None
-    for feature in region.get('features', ()):
-        props = feature['properties']
-        if props['type'] == 'region':
-            region_id = props.get('region_model_id', props.get('region_id'))
-            break
-
-    if region_id is not None:
-        updated_region_path = os.path.join(local_region_dir,
-                                           '{}.geojson'.format(region_id))
-
-        print("** Uploading updated region file")
-        subprocess.run([*aws_base_command,
-                        updated_region_path, destination_region_s3],
-                       check=True)
-    else:
-        print("** Error: Couldn't parse region_id from region file, "
-              "not uploading")
-
-
-def _ta2_collate_output(aws_base_command,
-                        local_region_dir,
-                        local_sites_dir,
-                        destination_s3_bucket,
-                        performer_suffix='KIT'):
-    def _get_suffixed_basename(local_path):
-        base, ext = os.path.splitext(os.path.basename(local_path))
-        return "{}_{}{}".format(base, performer_suffix, ext)
-
-    for region in glob(os.path.join(local_region_dir, '*.geojson')):
-        region_s3_outpath = '/'.join((destination_s3_bucket,
-                                      'region_models',
-                                      _get_suffixed_basename(region)))
-        subprocess.run([*aws_base_command,
-                        region,
-                        region_s3_outpath], check=True)
-
-    for site in glob(os.path.join(local_sites_dir, '*.geojson')):
-        site_s3_outpath = '/'.join((destination_s3_bucket,
-                                    'site_models',
-                                    _get_suffixed_basename(site)))
-        subprocess.run([*aws_base_command,
-                        site,
-                        site_s3_outpath], check=True)
 
 
 def run_dzyne_parallel_site_vali_for_baseline(config):
@@ -117,17 +69,9 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
     aws_profile = config.aws_profile
     dryrun = config.dryrun
 
-    if aws_profile is not None:
-        aws_base_command = ['aws', 's3', '--profile', aws_profile, 'cp']
-    else:
-        aws_base_command = ['aws', 's3', 'cp']
-
-    if dryrun:
-        aws_base_command.append('--dryrun')
-
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
-    ingress_dir = '/tmp/ingress'
+    ingress_dir = ub.Path('/tmp/ingress')
     ingress_kwcoco_path = baseline_framework_kwcoco_ingress(
         input_path,
         ingress_dir,
@@ -137,6 +81,8 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
 
     # # 2. Download and prune region file
     print("* Downloading and pruning region file *")
+
+    # CHECKME: Is this the region model with site summaries from the tracker?
     local_region_path = '/tmp/region.json'
 
     download_region(
@@ -150,36 +96,111 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
     # Determine the region_id in the region file.
     region_id = determine_region_id(local_region_path)
 
+    ####
+    # DEBUGGING:
+    # Print info about what version of the code we are running on
+    ub.cmd('git log -n 1', verbose=3, cwd='/root/code/watch')
+
     # 3. Run the Site Validation Filter
     print("* Running the Site Validation Filter *")
-    from watch.tasks import depthPCD
+    from watch.tasks.depth_pcd import score_tracks
+    from watch.tasks.depth_pcd import filter_tracks
+    from watch.utils.util_yaml import Yaml
 
-    sv_dir = pathlib.Path(ingress_dir) / "dyzne_parallel_site_vali"
-    sv_dir.mkdir(exists_ok=True)
-    site_vali_kwcoco_path = sv_dir / "filtered_poly.kwcoco.zip"
+    default_score_config = ub.udict({
+        'model_fpath': None,
+    })
+    score_config = (default_score_config
+                    | Yaml.coerce(config.depth_score_config or {}))
+    if score_config.get('model_fpath', None) is None:
+        raise ValueError('Requires model_fpath')
 
-    depthPCD.score_tracks(
-        in_file=sv_dir / "poly.kwcoco.zip",
-        images_kwcoco=ingress_dir / region_id / "subdata.kwcoco.json",
-        model_fpath=config.depth_model_fpath,
-        out_site_summaries_fpath=sv_dir / "filtered_site_summaries_manifest.json",
-        out_site_summaries_dir=sv_dir / "filtered_site_summaries",
-        out_sites_fpath=sv_dir / "filtered_sites_manifest.json",
-        out_sites_dir=sv_dir / "filtered_site",
-        out_kwcoco=site_vali_kwcoco_path,
-        threshold=0.4,
+    default_filter_config = ub.udict({
+        'threshold': 0.4,
+    })
+    filter_config = (default_filter_config
+                     | Yaml.coerce(config.depth_filter_config or {}))
+
+    # 3.3 Run DZYNE depth_pcd
+    print("* Running DZYNE depth_pcd *")
+
+    # TODO: The input / output site and region paths should be specified as
+    # parameters passed to us by the DAG.
+    input_kwcoco_fpath = ingress_dir / "cropped_kwcoco_for_sv.json"
+    input_sites_dpath = ingress_dir / 'cropped_site_models_bas'
+    input_region_fpath = ingress_dir / f'cropped_region_models_bas/{region_id}.geojson'
+    # input_region_fpath = local_region_path  # is this right?
+
+    scored_kwcoco_fpath = ingress_dir / "poly_depth_scored.kwcoco.zip"
+
+    output_site_manifest_fpath = ingress_dir / "depth_filtered_sites_manifest.json"
+    output_sites_dpath = ingress_dir / "depth_filtered_sites"
+    output_region_dpath = ingress_dir / "depth_filtered_regions"
+    output_region_fpath = output_region_dpath / f'{region_id}.geojson'
+
+    score_tracks.main(
+        cmdline=0,
+
+        **score_config,
+
+        # Should be the SV-cropped kwcoco file that contains start and ending
+        # high resolution images where videos correspond to proposed sites for
+        # this region.
+        input_kwcoco=input_kwcoco_fpath,
+
+        # Should be the region models containing the current site summaries
+        # from the previous step.
+        input_region=input_region_fpath,
+
+        # This is a kwcoco file used internally in this step where scores
+        # are assigned to each track. The next step will use this.
+        out_kwcoco=scored_kwcoco_fpath,
+    )
+    filter_tracks.main(
+        cmdline=0,
+
+        **filter_config,
+
+        # The kwcoco file contining depth scores that this step will use to
+        # filter the input sites / site summaries.
+        input_kwcoco=scored_kwcoco_fpath,
+
+        # Should be the region models containing the current site summaries
+        # from the previous step.
+        input_region=input_region_fpath,
+
+        # Should be the folder containing all of the sites corresponding to the
+        # sites in the input_region
+        input_sites=input_sites_dpath,
+
+        # The output region model to be used by the next step
+        output_region_fpath=output_region_fpath,
+
+        # The output directory of corresponding site models that should be used by the next step
+        output_sites_dpath=output_sites_dpath,
+
+        # A single file that registers all of the sites writen to the output
+        # site directory.
+        output_site_manifest_fpath=output_site_manifest_fpath,
+    )
+
+    # Validate and fix all outputs
+    from watch.utils import util_framework
+    util_framework.fixup_and_validate_site_and_region_models(
+        region_dpath=output_region_fpath.parent,
+        site_dpath=output_sites_dpath,
     )
 
     # 4. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)
     print("* Egressing KWCOCO dataset and associated STAC item *")
-    baseline_framework_kwcoco_egress(site_vali_kwcoco_path,
+    baseline_framework_kwcoco_egress(scored_kwcoco_fpath,
                                      local_region_path,
                                      output_path,
                                      outbucket,
-                                     aws_profile=None,
-                                     dryrun=False,
+                                     aws_profile=aws_profile,
+                                     dryrun=dryrun,
                                      newline=False)
 
 

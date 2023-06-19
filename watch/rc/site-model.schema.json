@@ -51,7 +51,7 @@
     "mgrsstring": {
       "description": "MGRS string, specified at the 100km grid square",
       "type": "string",
-      "pattern": "^(\\d{2}[A-Z]{3})|([A-Z]{3})$"
+      "pattern": "^(((0[1-9]|[1-5]\\d|60)[CDEFGHJKLMNPQRSTUVWX][ABCDEFGHJKLMNPQRSTUVWXYZ][ABCDEFGHJKLMNPQRSTUV])|((A[JKLPQRSTUXYZ]|B[ABCFGHJKLPQR])[ABCDEFGHJKLMNPQRSTUVWXYZ])|((Y[RSTUXYZ]|Z[ABCFGHJ])[ABCDEFGHJKLMNP]))$"
     },
     "boolchain": {
       "description": "Comma-delimited list of true/false strings",
@@ -75,8 +75,14 @@
         "score": {"type": "number", "minimum": 0, "maximum": 1},
         "misc_info": {"type": "object"},
         "is_occluded": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/boolchain"}]},
-        "is_site_boundary": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/boolchain"}]}
+        "is_site_boundary": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/boolchain"}]},
+        "cache": {"type": "object"}
       },
+      "oneOf": [
+        {"required": ["misc_info"], "not": {"required": ["cache"]}},
+        {"required": ["cache"], "not": {"required": ["misc_info"]}},
+        {"not": {"anyOf": [{"required": ["misc_info"]}, {"required": ["cache"]}]}}
+      ],
       "required": [
         "type", "observation_date", "source", "sensor_name", "current_phase", "is_occluded", "is_site_boundary"
       ],
@@ -86,8 +92,8 @@
       "type": "object",
       "properties": {
         "type": {"const": "site"},
-        "site_id": {"type": "string", "pattern": "^[A-Z]{2}_([RS]\\d{3}|C[0-7]\\d{2}|[RC][Xx]{3})_\\d{4}$"},
-        "region_id": {"oneOf": [{"type": "null"}, {"type": "string", "pattern": "^[A-Z]{2}_([RS]\\d{3}|C[0-7]\\d{2}|[RC][Xx]{3})$"}]},
+        "site_id": {"type": "string", "pattern": "^[A-Z]{2}_([RST]\\d{3}|C[0-7]\\d{2}|[RC][Xx]{3})_\\d{4}$"},
+        "region_id": {"oneOf": [{"type": "null"}, {"type": "string", "pattern": "^[A-Z]{2}_([RST]\\d{3}|C[0-7]\\d{2}|[RC][Xx]{3})$"}]},
         "version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
         "mgrs": {"$ref":"#/$defs/mgrsstring"},
         "status": {"enum": ["system_proposed", "system_confirmed", "system_rejected", "positive_annotated", "positive_partial", "positive_annotated_static", "positive_partial_static", "positive_pending", "positive_excluded", "negative", "ignore", "transient_positive", "transient_pending", "transient_negative", "transient_excluded", "transient_ignore"]},
@@ -99,8 +105,14 @@
         "validated": {"enum": ["True", "False"]},
         "predicted_phase_transition": {"enum": ["Active Construction", "Post Construction"]},
         "predicted_phase_transition_date": {"$ref": "#/$defs/datestring"},
-        "misc_info": {"type": "object"}
+        "misc_info": {"type": "object"},
+        "cache": {"type": "object"}
       },
+      "oneOf": [
+        {"required": ["misc_info"], "not": {"required": ["cache"]}},
+        {"required": ["cache"], "not": {"required": ["misc_info"]}},
+        {"not": {"anyOf": [{"required": ["misc_info"]}, {"required": ["cache"]}]}}
+      ],
       "required": ["type", "site_id", "region_id", "version", "mgrs", "model_content", "start_date", "end_date", "status", "originator"],
       "unevaluatedProperties": false,
       "allOf": [
@@ -121,8 +133,8 @@
           "then": {"properties": {"site_id": {"type": "string", "pattern": "^[A-Z]{2}_[RC][Xx]{3}_\\d{4}$"}}}
         },
         {
-          "if": {"properties": {"region_id": {"type": "string", "pattern": "^[A-Z]{2}_([RS]\\d{3}|C[0-7]\\d{2})$"}}},
-          "then": {"properties": {"site_id": {"type": "string", "pattern": "^[A-Z]{2}_([RS]\\d{3}|C[0-7]\\d{2})_\\d{4}$"}}}
+          "if": {"properties": {"region_id": {"type": "string", "pattern": "^[A-Z]{2}_([RST]\\d{3}|C[0-7]\\d{2})$"}}},
+          "then": {"properties": {"site_id": {"type": "string", "pattern": "^[A-Z]{2}_([RST]\\d{3}|C[0-7]\\d{2})_\\d{4}$"}}}
         }
       ]
     },

@@ -260,7 +260,8 @@ def make_cli(config=None):
         # pl.callbacks.LearningRateMonitor(logging_interval='step', log_momentum=True),
 
         pl.callbacks.LearningRateMonitor(logging_interval='epoch', log_momentum=True),
-        # pl.callbacks.ModelCheckpoint(monitor='train_loss', mode='min', save_top_k=1),
+        # pl.callbacks.ModelCheckpoint(monitor='train_loss', mode='min', save_top_k=4),
+        # pl.callbacks.ModelCheckpoint(monitor='val_loss', mode='min', save_top_k=4),
 
         # leaving always on breaks when correspinding metric isnt
         # tracked because loss_weight==0

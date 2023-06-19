@@ -94,7 +94,9 @@ fi
 # User can overwrite this configuration
 WATCH_STRICT=${WATCH_STRICT:=0}
 WITH_MMCV=${WITH_MMCV:=$HAS_NVIDIA_SMI}
+WITH_TENSORFLOW=${WITH_TENSORFLOW:=1}
 WITH_DVC=${WITH_DVC:=1}
+WITH_AWS=${WITH_AWS:=0}
 WITH_APT_ENSURE=${WITH_APT_ENSURE:=$HAS_APT}
 
 echo "
@@ -111,6 +113,8 @@ Environment configuration:
 WATCH_STRICT=$WATCH_STRICT
 WITH_MMCV=$WITH_MMCV
 WITH_DVC=$WITH_DVC
+WITH_AWS=$WITH_AWS
+WITH_TENSORFLOW=$WITH_TENSORFLOW
 WITH_APT_ENSURE=$WITH_APT_ENSURE
 "
 
@@ -122,34 +126,51 @@ if [[ "$WITH_APT_ENSURE" == "1" ]]; then
 fi
 
 
-python -m pip install setuptools wheel build -U
-
-
 if [[ "$WATCH_STRICT" == "1" ]]; then
     ./dev/make_strict_req.sh
-
-    python -m pip install --prefer-binary -r requirements-strict/gdal.txt
-
-    python -m pip install --prefer-binary -r requirements-strict/linting.txt
-
-    # Install the geowatch module in development mode
-    python -m pip install --prefer-binary -e ".[all-strict,headless-strict,dvc-strict]"
-
-    if [[ "$WITH_MMCV" == "1" ]]; then
-        python -m pip install --prefer-binary -r requirements-strict/mmcv.txt
-    fi
+    REQUIREMENTS_DPATH=requirements
+    EXTRAS="[all-strict,headless-strict,dvc-strict]"
 else
+    REQUIREMENTS_DPATH=requirements-strict
+    EXTRAS="[all,headless,dvc]"
+fi
 
-    python -m pip install --prefer-binary -r requirements/gdal.txt
+# Small python script to compute the extras tag for the pip install
+EXTRAS=$(python -c "if 1:
+    strict = $WATCH_STRICT
+    extras = []
+    suffix = '-strict' if strict else ''
+    if strict:
+        extras.append('runtime' + suffix)
+    extras.append('development' + suffix)
+    extras.append('tests' + suffix)
+    extras.append('optional' + suffix)
+    extras.append('headless' + suffix)
+    extras.append('linting' + suffix)
+    if $WITH_DVC:
+        extras.append('dvc' + suffix)
+    print('[' + ','.join(extras) + ']')
+    ")
 
-    python -m pip install --prefer-binary -r requirements/linting.txt
+python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/python_build_tools.txt
 
-    # Install the geowatch module in development mode
-    python -m pip install --prefer-binary -e ".[all,headless,dvc]"
+# Install the geowatch module in development mode
+python -m pip install --prefer-binary -e ".$EXTRAS"
 
-    if [[ "$WITH_MMCV" == "1" ]]; then
-        python -m pip install --prefer-binary -r requirements/mmcv.txt
-    fi
+# Post geowatch install requirements
+
+python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/gdal.txt
+
+if [[ "$WITH_AWS" == "1" ]]; then
+    python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/aws.txt
+fi
+
+if [[ "$WITH_MMCV" == "1" ]]; then
+    python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/mmcv.txt
+fi
+
+if [[ "$WITH_TENSORFLOW" == "1" ]]; then
+    python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/tensorflow.txt
 fi
 
 fix_opencv_conflicts(){
@@ -167,13 +188,15 @@ fix_opencv_conflicts(){
     if [[ "$HAS_OPENCV_HEADLESS_RETCODE" == "0" ]]; then
         if [[ "$HAS_OPENCV_RETCODE" == "0" ]]; then
             python -m pip uninstall opencv-python opencv-python-headless -y
-            python -m pip install opencv-python-headless
+            #python -m pip install opencv-python-headless
+            python -m pip install -r "$REQUIREMENTS_DPATH"/headless.txt
         fi
     else
         if [[ "$HAS_OPENCV_RETCODE" == "0" ]]; then
             python -m pip uninstall opencv-python -y
         fi
-        python -m pip install opencv-python-headless
+        #python -m pip install opencv-python-headless
+        python -m pip install -r "$REQUIREMENTS_DPATH"/headless.txt
     fi
 }
 

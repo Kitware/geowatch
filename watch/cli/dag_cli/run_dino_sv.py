@@ -6,16 +6,9 @@ See Old Version:
 SeeAlso:
     ~/code/watch-smartflow-dags/KIT_TA2_PREEVAL10_PYENV.py
 """
-import json
-import os
-import shutil
-import subprocess
-
 import scriptconfig as scfg
 import ubelt as ub
 from watch.mlops.smart_pipeline import DinoBoxDetector, SV_DinoFilter
-
-from glob import glob
 
 
 class DinoSVConfig(scfg.DataConfig):
@@ -40,11 +33,6 @@ class DinoSVConfig(scfg.DataConfig):
             '''
             S3 Output directory for STAC item / asset egress
             '''))
-    ta2_s3_collation_bucket = scfg.Value(None, type=str, help=ub.paragraph(
-            '''
-            S3 Location for collated TA-2 output (bucket name should
-            include up to eval name)
-            '''))
     dino_detect_config = scfg.Value(None, type=str, help=ub.paragraph(
             '''
             Raw json/yaml or a path to a json/yaml file that specifies the
@@ -63,94 +51,31 @@ def main():
     run_dino_sv(config)
 
 
-def _upload_region(aws_base_command,
-                   local_region_dir,
-                   local_input_region_path,
-                   destination_region_s3):
-    with open(local_input_region_path) as f:
-        region = json.load(f)
-
-    region_id = None
-    for feature in region.get('features', ()):
-        props = feature['properties']
-        if props['type'] == 'region':
-            region_id = props.get('region_model_id', props.get('region_id'))
-            break
-
-    if region_id is not None:
-        updated_region_path = os.path.join(local_region_dir,
-                                           '{}.geojson'.format(region_id))
-
-        print("** Uploading updated region file")
-        subprocess.run([*aws_base_command,
-                        updated_region_path, destination_region_s3],
-                       check=True)
-    else:
-        print("** Error: Couldn't parse region_id from region file, "
-              "not uploading")
-
-
-def _ta2_collate_output(aws_base_command,
-                        local_region_dir,
-                        local_sites_dir,
-                        destination_s3_bucket,
-                        performer_suffix='KIT'):
-    def _get_suffixed_basename(local_path):
-        base, ext = os.path.splitext(os.path.basename(local_path))
-        return "{}_{}{}".format(base, performer_suffix, ext)
-
-    for region in glob(os.path.join(local_region_dir, '*.geojson')):
-        region_s3_outpath = '/'.join((destination_s3_bucket,
-                                      'region_models',
-                                      _get_suffixed_basename(region)))
-        subprocess.run([*aws_base_command,
-                        region,
-                        region_s3_outpath], check=True)
-
-    for site in glob(os.path.join(local_sites_dir, '*.geojson')):
-        site_s3_outpath = '/'.join((destination_s3_bucket,
-                                    'site_models',
-                                    _get_suffixed_basename(site)))
-        subprocess.run([*aws_base_command,
-                        site,
-                        site_s3_outpath], check=True)
-
-
 def run_dino_sv(config):
     from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress
     from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress
     from watch.utils.util_framework import download_region, determine_region_id
     from watch.utils.util_yaml import Yaml
+    from watch.utils import util_framework
 
     input_path = config.input_path
     input_region_path = config.input_region_path
     output_path = config.output_path
 
     outbucket = config.outbucket
-    ta2_s3_collation_bucket = config.ta2_s3_collation_bucket
     aws_profile = config.aws_profile
     dryrun = config.dryrun
 
-    dino_detect_config = config.dino_detect_config
-    dino_filter_config = config.dino_filter_config
-
-    if aws_profile is not None:
-        aws_base_command =\
-            ['aws', 's3', '--profile', aws_profile, 'cp']
-    else:
-        aws_base_command = ['aws', 's3', 'cp']
-
-    if dryrun:
-        aws_base_command.append('--dryrun')
-
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
-    ingress_dir = '/tmp/ingress'
+    ingress_dir = ub.Path('/tmp/ingress')
     ingress_kwcoco_path = baseline_framework_kwcoco_ingress(
         input_path,
         ingress_dir,
         aws_profile,
         dryrun)
+
+    print(f'ingress_kwcoco_path={ingress_kwcoco_path}')
 
     # # 2. Download and prune region file
     print("* Downloading and pruning region file *")
@@ -165,47 +90,70 @@ def run_dino_sv(config):
 
     # Determine the region_id in the region file.
     region_id = determine_region_id(local_region_path)
+    print(f'region_id={region_id}')
 
-    dino_boxes_kwcoco_path = os.path.join(
-        ingress_dir, 'dino_boxes_kwcoco.json')
+    dino_boxes_kwcoco_path = ingress_dir / 'dino_boxes_kwcoco.json'
 
-    cropped_region_models_bas = os.path.join(ingress_dir,
-                                             'cropped_region_models_bas')
-    cropped_site_models_bas = os.path.join(ingress_dir,
-                                           'cropped_site_models_bas')
+    # FIXME: these are hard coded to point at the output of DZYNE depth
+    # site validation, the path to the region / sites directories should be
+    # parameters passed to us from the DAG (so we can shift the order in
+    # which operations are applied at the DAG level)
+    input_region_dpath = ingress_dir / 'depth_filtered_regions'
+    input_sites_dpath = ingress_dir / 'depth_filtered_sites'
+    input_region_fpath = input_region_dpath / f'{region_id}.geojson'
 
-    site_models_outdir = os.path.join(ingress_dir, 'sv_out_site_models')
-    os.makedirs(site_models_outdir, exist_ok=True)
-    region_models_outdir = os.path.join(ingress_dir, 'sv_out_region_models')
-    os.makedirs(region_models_outdir, exist_ok=True)
+    # NOTE; we want to be using the output of SV crop, not necesarilly the the
+    # dzyne output referenced by ingress_kwcoco_path
+    # input_kwcoco_fpath = ingress_kwcoco_path
+    input_kwcoco_fpath = ingress_dir / "cropped_kwcoco_for_sv.json"
 
-    site_models_manifest_outdir = os.path.join(
-        ingress_dir, 'tracking_manifests_sv')
-    os.makedirs(site_models_manifest_outdir, exist_ok=True)
-    site_models_manifest_outpath = os.path.join(
-        site_models_manifest_outdir, 'site_models_manifest.json')
-    # Copy input region model into region_models outdir to be updated
-    # (rather than generated from tracking, which may not have the
-    # same bounds as the original)
-    shutil.copy(local_region_path, os.path.join(
-        region_models_outdir, '{}.geojson'.format(region_id)))
+    # FIXME: these output directories for region / site models should be passed
+    # to us from the DAG
+    output_sites_dpath = ingress_dir / 'sv_out_site_models'
+    output_region_dpath = ingress_dir / 'sv_out_region_models'
+    output_site_manifest_dpath = ingress_dir / 'tracking_manifests_sv'
+    output_region_fpath = output_region_dpath / f'{region_id}.geojson'
+    output_site_manifest_fpath = output_site_manifest_dpath / 'site_models_manifest.json'
+
+    output_sites_dpath.ensuredir()
+    output_region_dpath.ensuredir()
+    output_site_manifest_dpath.ensuredir()
+
+    ingress_dir_paths = list(ingress_dir.glob('*'))
+    print('ingress_dir_paths = {}'.format(ub.urepr(ingress_dir_paths, nl=1)))
 
     # 3.1. Check that we have at least one "video" (BAS identified
     # site) to run over; if not skip SV fusion and KWCOCO to GeoJSON
-    with open(ingress_kwcoco_path) as f:
-        ingress_kwcoco_data = json.load(f)
+    import kwcoco
+    input_coco_dset = kwcoco.CocoDataset(input_kwcoco_fpath)
+    print('input_coco_dset = {}'.format(ub.urepr(input_coco_dset, nl=1)))
+    num_videos = input_coco_dset.n_videos
+    # Note: cant open with json here because kwcoco will save compressed files
+    # with open(input_kwcoco_fpath) as f:
+    #     ingress_kwcoco_data = json.load(f)
+    # num_videos = len(ingress_kwcoco_data.get('videos', ()))
+    print(f'num_videos={num_videos}')
 
-    if len(ingress_kwcoco_data.get('videos', ())) > 0:
+    if num_videos == 0:
+        # Copy input region model into region_models outdir to be updated
+        # (rather than generated from tracking, which may not have the
+        # same bounds as the original)
+
+        # Not sure if the above case is the right comment, but leaving this
+        # here to guarentee the region with site summaries is passed forward
+        # TODO: the dino code should just be robust to this.
+        input_region_fpath.copy(output_region_fpath)
+    else:
         # 3.2 Run DinoBoxDetector
         print("* Running Dino Detect *")
 
         default_dino_detect_config = ub.udict({
-            'coco_fpath': ingress_kwcoco_path,
+            'coco_fpath': input_kwcoco_fpath,
             'package_fpath': None,
             'batch_size': 1,
             'device': 0})
         dino_detect_config = (default_dino_detect_config
-                              | Yaml.coerce(dino_detect_config or {}))
+                              | Yaml.coerce(config.dino_detect_config or {}))
 
         if dino_detect_config.get('package_fpath', None) is None:
             raise ValueError('Requires package_fpath')
@@ -222,31 +170,27 @@ def run_dino_sv(config):
 
         default_dino_filter_config = ub.udict({})
         dino_filter_config = (default_dino_filter_config
-                              | Yaml.coerce(dino_filter_config or {}))
+                              | Yaml.coerce(config.dino_filter_config or {}))
 
-        input_region_model_bas = os.path.join(cropped_region_models_bas,
-                                              '{}.geojson'.format(region_id))
-        output_region_model = os.path.join(region_models_outdir,
-                                           '{}.geojson'.format(region_id))
         dino_building_filter = SV_DinoFilter(root_dpath='/tmp/ingress')
+
         dino_building_filter.configure({
             'input_kwcoco': dino_boxes_kwcoco_path,
-            'input_region': input_region_model_bas,
-            'input_sites': cropped_site_models_bas,
-            'output_region_fpath': output_region_model,
-            'output_sites_dpath': site_models_outdir,
-            'output_site_manifest_fpath': site_models_manifest_outpath,
-            })
+            'input_region': input_region_fpath,
+            'input_sites': input_sites_dpath,
+            'output_region_fpath': output_region_fpath,
+            'output_sites_dpath': output_sites_dpath,
+            'output_site_manifest_fpath': output_site_manifest_fpath,
+            **dino_filter_config,
+        })
 
         ub.cmd(dino_building_filter.command(), check=True, verbose=3, system=True)
 
-    # 4. (Optional) collate TA-2 output
-    if ta2_s3_collation_bucket is not None:
-        print("* Collating TA-2 output")
-        _ta2_collate_output(aws_base_command,
-                            region_models_outdir,
-                            site_models_outdir,
-                            ta2_s3_collation_bucket)
+    # Validate and fix all outputs
+    util_framework.fixup_and_validate_site_and_region_models(
+        region_dpath=output_region_fpath.parent,
+        site_dpath=output_sites_dpath,
+    )
 
     # 5. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
