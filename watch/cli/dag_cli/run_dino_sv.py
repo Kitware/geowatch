@@ -56,7 +56,6 @@ def run_dino_sv(config):
     from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress
     from watch.utils.util_framework import download_region, determine_region_id
     from watch.utils.util_yaml import Yaml
-    from watch.utils.util_framework import AWS_S3_Command
     from watch.utils import util_framework
 
     input_path = config.input_path
@@ -66,13 +65,6 @@ def run_dino_sv(config):
     outbucket = config.outbucket
     aws_profile = config.aws_profile
     dryrun = config.dryrun
-
-    aws_cp = AWS_S3_Command('cp')
-    aws_cp.update(
-        profile=aws_profile,
-        dryrun=dryrun,
-    )
-    aws_base_command = aws_cp.finalize()
 
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
