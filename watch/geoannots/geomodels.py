@@ -307,14 +307,19 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
         schema = self.load_schema(strict=strict)
         try:
             jsonschema.validate(self, schema)
-        except jsonschema.ValidationError as e:
-            ex = e
+        except jsonschema.ValidationError as _full_ex:
+            full_ex = _full_ex
             if verbose:
                 print(f'self={self}')
-                _report_jsonschema_error(ex)
+                _report_jsonschema_error(full_ex)
             if parts:
-                self._validate_parts(strict=strict)
-            raise
+                try:
+                    self._validate_parts(strict=strict, verbose=verbose)
+                except Exception as _part_ex:
+                    part_ex = _part_ex
+                    part_ex.full_ex = full_ex
+                    raise part_ex
+            raise full_ex
 
     def validate(self, strict=True, verbose=1, parts=True):
         """
@@ -336,7 +341,7 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
         self._validate_quick_checks()
         self._validate_schema(strict=strict, verbose=verbose, parts=parts)
 
-    def _validate_parts(self, strict=True):
+    def _validate_parts(self, strict=True, verbose=1):
         """
         Runs jsonschema validation checks on each part of the feature
         collection independently to better localize where the errors are.
@@ -357,13 +362,15 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
         try:
             jsonschema.validate(self.header, header_schema)
         except jsonschema.ValidationError as e:
-            _report_jsonschema_error(e)
+            if verbose:
+                _report_jsonschema_error(e)
             raise
         for obs_feature in self.body_features():
             try:
                 jsonschema.validate(obs_feature, body_schema)
             except jsonschema.ValidationError as e:
-                _report_jsonschema_error(e)
+                if verbose:
+                    _report_jsonschema_error(e)
                 raise
 
     def _update_cache_key(self):
@@ -567,13 +574,26 @@ class RegionModel(_Model):
             props = feat['properties']
             for key in date_keys:
                 if key in props:
-                    props[key] = util_time.coerce_datetime(props[key]).date().isoformat()
+                    oldval = props[key]
+                    if oldval is not None:
+                        dt = util_time.coerce_datetime(oldval)
+                        try:
+                            newval = dt.date().isoformat()
+                        except Exception:
+                            print('ERROR: oldval = {}'.format(ub.urepr(oldval, nl=1)))
+                        props[key] = newval
 
     def remove_invalid_properties(self):
         props = self.header['properties']
+        bad_region_header_properties = ['validated', 'score', 'site_id', 'status', 'socre']
+        for key in bad_region_header_properties:
+            props.pop(key, None)
 
-        if 'validated' in props:
-            del props['validated']
+        bad_sitesum_features = ['region_id', 'validate', 'validated']
+        for sitesum in self.body_features():
+            siteprops = sitesum['properties']
+            for key in bad_sitesum_features:
+                siteprops.pop(key, None)
 
     def ensure_comments(self):
         props = self.header['properties']

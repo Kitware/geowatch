@@ -1,4 +1,4 @@
-"""
+r"""
 CommandLine:
     python ~/code/watch/dev/validate_annotation_schemas.py
 
@@ -14,10 +14,10 @@ Prereq:
     pip install jsonschema ubelt -U
 
 
-Also:
-
-    python -m watch.demo.metrics_demo.generate_demodata --reset
-    python ~/code/watch/dev/validate_annotation_schemas.py
+SeeAlso:
+    ~/code/watch/watch/geoannots/geomodels.py
+    ~/code/watch/watch/cli/validate_annotation_schemas.py
+    ~/code/watch/watch/cli/fix_region_models.py
 
 
 References:
@@ -30,9 +30,11 @@ Example:
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 
     python -m watch.cli.validate_annotation_schemas \
-        --site_model_dpath="$DVC_DATA_DPATH"/annotations/drop6/site_models \
-        --region_model_dpath="$DVC_DATA_DPATH"/annotations/drop6/region_models
+        --site_models="$DVC_DATA_DPATH"/annotations/drop6/site_models \
+        --region_models="$DVC_DATA_DPATH"/annotations/drop6/region_models
 
+    python -m watch.cli.validate_annotation_schemas \
+        --region_models="$DVC_DATA_DPATH"/annotations/drop6/region_models/AE_C001.geojson
 """
 
 import ubelt as ub
@@ -81,8 +83,8 @@ def validate_schemas(site_model_fpaths, region_model_fpaths):
     for region_model_fpath in prog:
         region_model = geomodels.RegionModel.coerce(region_model_fpath)
         try:
-            # region_model.validate(verbose=0)
-            region_model._validate_parts(strict=strict)
+            region_model.validate(verbose=0, strict=strict)
+            # region_model._validate_parts(strict=strict)
         except jsonschema.ValidationError as ex:
             error_info = {
                 'type': 'region_model_error',
@@ -105,8 +107,8 @@ def validate_schemas(site_model_fpaths, region_model_fpaths):
     for site_model_fpath in prog:
         site_model = geomodels.SiteModel.coerce(site_model_fpath)
         try:
-            # site_model.validate(verbose=0)
-            site_model._validate_parts(strict=strict)
+            site_model.validate(verbose=0, strict=strict)
+            # site_model._validate_parts(strict=strict)
         except jsonschema.ValidationError as ex:
             error_info = {
                 'type': 'site_model_error',
