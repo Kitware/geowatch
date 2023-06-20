@@ -132,10 +132,10 @@ fi
 
 if [[ "$WATCH_STRICT" == "1" ]]; then
     ./dev/make_strict_req.sh
-    REQUIREMENTS_DPATH=requirements
+    REQUIREMENTS_DPATH=requirements-strict
     EXTRAS="[all-strict,headless-strict,dvc-strict]"
 else
-    REQUIREMENTS_DPATH=requirements-strict
+    REQUIREMENTS_DPATH=requirements
     EXTRAS="[all,headless,dvc]"
 fi
 

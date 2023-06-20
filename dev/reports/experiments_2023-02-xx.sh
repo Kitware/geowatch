@@ -2320,26 +2320,34 @@ geowatch schedule --params="
         bas_pxl.package_fpath:
             - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
         bas_pxl.test_dataset:
-            - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R001_I2LS.kwcoco.zip
-            # - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R002_I2LS.kwcoco.zip
-            # - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-BR_R002_I2LS.kwcoco.zip
-            # - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-CH_R001_I2LS.kwcoco.zip
-            # - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-NZ_R001_I2LS.kwcoco.zip
-            # - $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-AE_R001_I2LS.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-KR_R002_EI2LMSC.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-CH_R001_EI2LMSC.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-NZ_R001_EI2LMSC.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-BR_R002_EI2LMSC.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-KR_R001_EI2LMSC.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-AE_R001_EI2LMSC.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-PE_R001_EI2LMSC.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-BR_R004_EI2LMSC.kwcoco.zip
         bas_pxl.chip_overlap: 0.3
         bas_pxl.chip_dims: auto
         bas_pxl.time_span: auto
         bas_pxl.time_sampling: soft4
         bas_poly.thresh:
-            # - 0.42
+            - 0.3
+            - 0.325
+            - 0.35
+            - 0.375
+            - 0.4
             - 0.425
+            - 0.45
+            - 0.5
+            - 0.6
         bas_poly.inner_window_size: 1y
         bas_poly.inner_agg_fn: mean
         bas_poly.norm_ord: inf
         bas_poly.polygon_simplify_tolerance: 1
         bas_poly.agg_fn: probs
         bas_poly.time_thresh:
-            # - 0.65
             - 0.8
         bas_poly.resolution: 10GSD
         bas_poly.moving_window_size: null
@@ -2355,9 +2363,9 @@ geowatch schedule --params="
         bas_poly_eval.enabled: 1
         bas_poly_viz.enabled: 0
         sv_crop.enabled: 1
-        sv_crop.minimum_size: "256x256@2GSD"
-        sv_crop.num_start_frames: 10
-        sv_crop.num_end_frames: 10
+        sv_crop.minimum_size: '256x256@2GSD'
+        sv_crop.num_start_frames: 3
+        sv_crop.num_end_frames: 3
         sv_crop.context_factor: 1.5
 
         sv_dino_boxes.enabled: 1
@@ -2373,10 +2381,19 @@ geowatch schedule --params="
         sv_dino_filter.box_isect_threshold: 0.1
 
         sv_depth_score.enabled: 1
-        sv_depth_score.model_fpath: $DVC_EXPT_DPATH/models/depth_pcd/basicModel2.h5
+        sv_depth_score.model_fpath:
+            - $DVC_EXPT_DPATH/models/depth_pcd/basicModel2.h5
+            - $DVC_EXPT_DPATH/models/depth_pcd/model3.h5
         sv_depth_filter.threshold:
+            - 0.5
+            - 0.10
+            - 0.15
             - 0.20
-        #     - 0.4
+            - 0.25
+            - 0.30
+            - 0.35
+            - 0.40
+            - 0.45
     submatrices:
         - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R001_I2LS.kwcoco.zip
           sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-KR_R001.kwcoco.json
@@ -2391,9 +2408,9 @@ geowatch schedule --params="
         - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-AE_R001_I2LS.kwcoco.zip
           sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-AE_R001.kwcoco.json
     " \
-    --root_dpath="$DVC_EXPT_DPATH/_mlops_test_depth_pcd2" \
+    --root_dpath="$DVC_EXPT_DPATH/_horologic_sv_sweep" \
     --devices="0," --tmux_workers=2 \
-    --backend=serial --queue_name "_mlops_test_depth_pcd2" \
-    --pipeline=bas_building_and_depth_vali \
+    --backend=serial --queue_name "_horologic_sv_sweep" \
+    --pipeline=bas \
     --skip_existing=1 \
     --run=0
