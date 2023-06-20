@@ -97,6 +97,8 @@ WITH_MMCV=${WITH_MMCV:=$HAS_NVIDIA_SMI}
 WITH_TENSORFLOW=${WITH_TENSORFLOW:=1}
 WITH_DVC=${WITH_DVC:=1}
 WITH_AWS=${WITH_AWS:=0}
+WITH_COLD=${WITH_COLD:=0}
+WITH_MATERIALS=${WITH_MATERIALS:=0}
 WITH_APT_ENSURE=${WITH_APT_ENSURE:=$HAS_APT}
 
 echo "
@@ -114,6 +116,8 @@ WATCH_STRICT=$WATCH_STRICT
 WITH_MMCV=$WITH_MMCV
 WITH_DVC=$WITH_DVC
 WITH_AWS=$WITH_AWS
+WITH_COLD=$WITH_COLD
+WITH_MATERIALS=$WITH_MATERIALS
 WITH_TENSORFLOW=$WITH_TENSORFLOW
 WITH_APT_ENSURE=$WITH_APT_ENSURE
 "
@@ -147,6 +151,10 @@ EXTRAS=$(python -c "if 1:
     extras.append('optional' + suffix)
     extras.append('headless' + suffix)
     extras.append('linting' + suffix)
+    if $WITH_COLD:
+        extras.append('cold' + suffix)
+    if $WITH_MATERIALS:
+        extras.append('materials' + suffix)
     if $WITH_DVC:
         extras.append('dvc' + suffix)
     print('[' + ','.join(extras) + ']')
