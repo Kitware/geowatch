@@ -393,7 +393,7 @@ class FigureFinalizer:
 
 
 def fix_matplotlib_dates(dates):
-    from watch.utils import util_time
+    from kwutil import util_time
     import matplotlib.dates as mdates
     new = []
     for d in dates:
@@ -405,7 +405,7 @@ def fix_matplotlib_dates(dates):
 
 
 def fix_matplotlib_timedeltas(deltas):
-    from watch.utils import util_time
+    from kwutil import util_time
     # import matplotlib.dates as mdates
     new = []
     for d in deltas:

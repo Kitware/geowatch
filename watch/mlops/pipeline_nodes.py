@@ -226,7 +226,7 @@ class Pipeline:
         default = {}
         for _, row in df[df['maybe_required']].iterrows():
             default[row['node'] + '.' + row['key']] = None
-        from watch.utils import util_yaml
+        from kwutil import util_yaml
         rich.print(util_yaml.Yaml.dumps(default))
 
     @profile

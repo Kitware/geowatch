@@ -973,7 +973,7 @@ class SimpleDataCube:
         """
         from kwcoco.util.util_json import ensure_json_serializable
         import geopandas as gpd
-        from watch.utils import util_time
+        from kwutil import util_time
         from watch.utils import util_gis
         import kwimage
 
@@ -1187,7 +1187,7 @@ class SimpleDataCube:
         """
         from kwcoco.util.util_json import ensure_json_serializable
         import geopandas as gpd
-        from watch.utils import util_time
+        from kwutil import util_time
         from watch.utils import util_gis
         from watch.utils import kwcoco_extensions
         import kwcoco
@@ -1682,7 +1682,7 @@ def extract_image_job(img,
     #     ```
     # When the cache is not computed and workers > 0
     from watch.utils import kwcoco_extensions
-    from watch.utils import util_time
+    from kwutil import util_time
     from osgeo import osr
     import kwimage
     osr.GetPROJSearchPaths()

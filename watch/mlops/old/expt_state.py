@@ -9,7 +9,7 @@ import parse
 import pandas as pd
 import ubelt as ub
 from watch.utils import util_pattern
-from watch.utils import util_path
+from kwutil import util_path
 from watch.mlops import repackager
 
 

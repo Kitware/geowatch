@@ -291,7 +291,7 @@ class Predictor(object):
         # Start background processes
         # Build a task queue for background write results workers
         from watch.utils import util_parallel
-        from watch.utils import util_progress
+        from kwutil import util_progress
         writer_queue = util_parallel.BlockingJobQueue(max_workers=self.io_workers)
         self.stitch_manager.writer_queue = writer_queue
 

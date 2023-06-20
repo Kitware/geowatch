@@ -3,10 +3,10 @@ import ubelt as ub
 import numpy as np
 import kwimage
 from watch.utils import util_kwimage
-from watch.utils.slugify_ext import smart_truncate
+from kwutil.slugify_ext import smart_truncate
 import warnings
 from watch.utils.lightning_ext import util_model
-from watch.utils import util_time
+from kwutil import util_time
 # import pytimeparse
 # import numbers
 # import datetime

@@ -405,7 +405,7 @@ def summary_visualization(dst_dset, out_dpath):
     resolution = '10GSD'
     viz_dpath = (out_dpath / 'bas_summary_viz').ensuredir()
 
-    from watch.utils import util_progress
+    from kwutil import util_progress
     from watch.utils import util_kwimage
     import kwarray
     import kwimage

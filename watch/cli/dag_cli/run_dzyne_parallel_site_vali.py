@@ -60,7 +60,7 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
     # from watch.cli.concat_kwcoco_videos import concat_kwcoco_datasets
     from watch.utils.util_framework import download_region, determine_region_id
     # from watch.tasks.fusion.predict import predict
-    # from watch.utils.util_yaml import Yaml
+    # from kwutil.util_yaml import Yaml
 
     input_path = config.input_path
     input_region_path = config.input_region_path
@@ -105,7 +105,7 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
     print("* Running the Site Validation Filter *")
     from watch.tasks.depth_pcd import score_tracks
     from watch.tasks.depth_pcd import filter_tracks
-    from watch.utils.util_yaml import Yaml
+    from kwutil.util_yaml import Yaml
 
     default_score_config = ub.udict({
         'model_fpath': None,

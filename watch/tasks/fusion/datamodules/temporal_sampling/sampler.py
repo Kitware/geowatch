@@ -926,7 +926,7 @@ class TimeWindowSampler(CommonSamplerMixin):
         rng = kwarray.ensure_rng(rng)
         # if idx is None:
         #     idx = self.num_frames // 2
-        from watch.utils.util_time import coerce_timedelta
+        from kwutil.util_time import coerce_timedelta
         td_kernel = None
 
         def _concise_td(delta):

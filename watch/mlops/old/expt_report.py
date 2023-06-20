@@ -674,7 +674,7 @@ def clean_loaded_data(big_rows, expt_dvc_dpath):
 
         ADD_CROPID_HACK = 1
         if ADD_CROPID_HACK:
-            from watch.utils import util_path
+            from kwutil import util_path
             # special handling for adding tracking / cropping
             # params to the activity row. We should figure out a
             # way of making this more general in the future.

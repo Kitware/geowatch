@@ -142,7 +142,7 @@ def main(cmdline=1, **kwargs):
         NODE_DPATH = '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_mlops_eval10_baseline/pred/flat/buildings/buildings_id_fd298dba'
         from watch.utils.partial_format import fsubtemplate
         coco_fpath = fsubtemplate('$NODE_DPATH/pred_boxes.kwcoco.zip')
-        from watch.utils.util_path import coerce_patterned_paths
+        from kwutil.util_path import coerce_patterned_paths
         site_summary = ub.Path(fsubtemplate('$NODE_DPATH/.pred/sv_crop/*/.pred/bas_poly/*/site_summaries_manifest.json'))
         site_summary = ub.Path(fsubtemplate('$NODE_DPATH/.pred/valicrop/*/.pred/bas_poly/*/site_summaries_manifest.json'))
         site_summary = coerce_patterned_paths(site_summary)[0]
@@ -177,7 +177,7 @@ def main(cmdline=1, **kwargs):
     from watch.utils import util_gis
     import kwcoco
     from watch.cli import reproject_annotations
-    from watch.utils import util_time
+    from kwutil import util_time
     from kwcoco.util import util_json
     from watch.utils import process_context
     import os

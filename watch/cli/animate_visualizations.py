@@ -101,7 +101,7 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
     # In general I don't like this, but this is not a system-critical part
     # so we can leave refactoring as a todo.
 
-    from watch.utils import util_progress
+    from kwutil import util_progress
     pman = util_progress.ProgressManager()
     pman.__enter__()
 

@@ -16,7 +16,7 @@ import ubelt as ub
 import kwcoco
 import kwimage
 from os.path import join
-from watch.utils import util_time
+from kwutil import util_time
 import scriptconfig as scfg
 
 try:
@@ -403,7 +403,7 @@ def transfer_features_main(cmdline=1, **kwargs):
 
     rich.print(f'Dest Bundle: [link={dst.bundle_dpath}]{dst.bundle_dpath}[/link]')
     if copy_tasks:
-        from watch.utils import copy_manager
+        from kwutil import copy_manager
         copyman = copy_manager.CopyManager(workers=config.io_workers)
         for task in copy_tasks:
             copyman.submit(src=task['src'], dst=task['dst'],

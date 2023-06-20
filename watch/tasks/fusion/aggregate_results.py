@@ -110,7 +110,7 @@ def debug_all_results():
     """
 
     import watch
-    from watch.utils import util_path
+    from kwutil import util_path
     import pandas as pd
     dvc_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
     ignore_cols = [
@@ -291,7 +291,7 @@ def load_pxl_eval(fpath, dvc_dpath=None):
     from kwcoco.coco_evaluator import CocoSingleResult
     from watch.utils import util_pattern
     # from watch.utils import result_analysis
-    # from watch.utils import util_time
+    # from kwutil import util_time
     measure_info = _load_json(fpath)
 
     meta = measure_info['meta']
@@ -478,7 +478,7 @@ def relevant_track_config(track_args):
 
 
 def parse_pred_params(pred_info, expt_dvc_dpath, path_hint=None):
-    from watch.utils import util_time
+    from kwutil import util_time
     pred_item = find_pred_item(pred_info)
 
     # NOTE: the place where measure are stored has changed to be inside
@@ -528,7 +528,7 @@ def parse_pred_params(pred_info, expt_dvc_dpath, path_hint=None):
 
 
 def parse_resource_item(item):
-    from watch.utils import util_time
+    from kwutil import util_time
     ureg = global_ureg()
     pred_prop = item['properties']
 
@@ -893,7 +893,7 @@ def global_ureg():
 def prepare_results(all_infos, coi_pattern, dvc_dpath=None):
     from kwcoco.coco_evaluator import CocoSingleResult
     from watch.utils import result_analysis
-    from watch.utils import util_time
+    from kwutil import util_time
     ureg = global_ureg()
 
     class_rows = []
@@ -1286,7 +1286,7 @@ def best_candidates(class_rows, mean_rows):
 
     all_model_candidates = sorted(all_model_candidates)
 
-    # from watch.utils import util_path
+    # from kwutil import util_path
     # for p in all_model_candidates:
     #     print(resolve_cross_machine_path(p, dvc_dpath))
     #     # print(util_path.resolve_directory_symlinks(resolve_cross_machine_path(p)))
@@ -1725,7 +1725,7 @@ def main(cmdline=False, **kwargs):
             dvc_dpath = remote_dpath
     """
     from watch.utils import result_analysis
-    from watch.utils import util_path
+    from kwutil import util_path
     from watch.utils import util_pattern
 
     config = AggregateResultsConfig(cmdline=cmdline, data=kwargs)

@@ -228,7 +228,7 @@ def main(cmdline=True, **kwargs):
     config = CocoVisualizeConfig.cli(data=kwargs, cmdline=cmdline and
                                      {'strict': True}, strict=True)
     from watch.utils import util_parallel
-    from watch.utils import util_resources
+    from kwutil import util_resources
     from watch.utils import kwcoco_extensions
     import kwcoco
     import kwarray
@@ -332,7 +332,7 @@ def main(cmdline=True, **kwargs):
         viz_dpath = bundle_dpath / '_viz_{}'.format(dset_idstr)
     rich.print('viz_dpath = {!r}'.format(viz_dpath))
 
-    from watch.utils import util_progress
+    from kwutil import util_progress
     pman = util_progress.ProgressManager()
     pman.__enter__()
 
@@ -545,7 +545,7 @@ def main(cmdline=True, **kwargs):
         # TODO: develop this idea more
         # Try to parse out an animation config
         import scriptconfig as scfg
-        from watch.utils import util_yaml
+        from kwutil import util_yaml
 
         @scfg.dataconf
         class AnimateConfig:

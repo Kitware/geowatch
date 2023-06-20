@@ -80,7 +80,7 @@ def run_bas_fusion_for_baseline(config):
     from watch.cli.concat_kwcoco_videos import concat_kwcoco_datasets
     from watch.utils.util_framework import download_region, determine_region_id
     from watch.tasks.fusion.predict import predict
-    from watch.utils.util_yaml import Yaml
+    from kwutil.util_yaml import Yaml
     from watch.utils.util_framework import AWS_S3_Command
     from watch.utils import util_framework
 

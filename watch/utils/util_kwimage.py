@@ -1608,7 +1608,7 @@ def find_low_overlap_covering_boxes_optimize(polygons, scale, min_box_dim, max_b
             #     ax.set_yscale('logit')
             # except Exception:
             #     ...
-            # from watch.utils.slugify_ext import smart_truncate
+            # from kwutil.slugify_ext import smart_truncate
             # from kwplot.mpl_make import render_figure_to_image
             # fig.suptitle(smart_truncate(str(optimizer).replace('\n', ''), max_length=64))
             # img = render_figure_to_image(fig)

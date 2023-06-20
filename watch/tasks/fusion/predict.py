@@ -874,7 +874,7 @@ def predict(cmdline=False, **kwargs):
     # Start background procs before we make threads
     batch_iter = iter(test_dataloader)
 
-    from watch.utils import util_progress
+    from kwutil import util_progress
     pman = util_progress.ProgressManager(backend='rich')
 
     # prog = ub.ProgIter(batch_iter, desc='fusion predict', verbose=1, freq=1)
@@ -1078,7 +1078,7 @@ def predict(cmdline=False, **kwargs):
                 print(msg)
                 import warnings
                 warnings.warn(msg)
-                from watch.utils import util_environ
+                from kwutil import util_environ
                 # import xdev
                 # xdev.embed()
                 if util_environ.envflag('WATCH_STRICT_PREDICT'):

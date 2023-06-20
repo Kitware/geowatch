@@ -31,7 +31,7 @@ class ReverseHashTable:
     """
 
     def __init__(self, type='global'):
-        from watch.utils.util_locks import Superlock
+        from kwutil.util_locks import Superlock
         self.rlut_dpath = ub.Path.appdir('watch/hash_rlut', type).ensuredir()
         self.shelf_fpath = self.rlut_dpath / 'hash_rlut.shelf'
         self.text_fpath = self.rlut_dpath / 'hash_rlut.txt'

@@ -209,7 +209,7 @@ def main(cmdline=False, **kwargs):
     import geopandas as gpd  # NOQA
     from watch.utils import util_gis
     from watch.utils import util_parallel
-    from watch.utils.util_yaml import Yaml
+    from kwutil.util_yaml import Yaml
     from watch import heuristics
     from watch.utils import kwcoco_extensions
     import kwcoco
@@ -248,7 +248,7 @@ def main(cmdline=False, **kwargs):
 
     # Read the external CRS84 annotations from the site models
 
-    from watch.utils.util_environ import envflag
+    from kwutil.util_environ import envflag
     HACK_HANDLE_DUPLICATE_SITE_ROWS = envflag('HACK_HANDLE_DUPLICATE_SITE_ROWS', default=True)
 
     site_model_infos = list(
@@ -362,7 +362,7 @@ def check_sitemodel_assumptions(sites):
     """
     For debugging and checking assumptions about site models
     """
-    from watch.utils import util_progress
+    from kwutil import util_progress
     pman = util_progress.ProgressManager()
     with pman:
         try:
@@ -386,8 +386,8 @@ def separate_region_model_types(regions):
 
     Split up each region model into its region info and site summary info
     """
-    from watch.utils import util_time
-    from watch.utils import util_progress
+    from kwutil import util_time
+    from kwutil import util_progress
     region_id_to_site_summaries = {}
     region_id_region_row = {}
     pman = util_progress.ProgressManager()
@@ -682,7 +682,7 @@ def make_pseudo_sitemodels(region_row, sitesummaries):
     import json
     import kwimage
     from watch.utils import util_gis
-    from watch.utils import util_time
+    from kwutil import util_time
     # observation_properties = [
     #     'type', 'observation_date', 'source', 'sensor_name',
     #     'current_phase', 'is_occluded', 'is_site_boundary', 'score',
@@ -785,7 +785,7 @@ def validate_site_dataframe(site_df):
     """
     Debugging tool to ensure our assumptions about site models are satisfied.
     """
-    from watch.utils import util_time
+    from kwutil import util_time
     import numpy as np
     dummy_start_date = '1970-01-01'  # hack, could be more robust here
     dummy_end_date = '2101-01-01'
@@ -958,7 +958,7 @@ def assign_sites_to_images(coco_dset,
             video_id = video['id']
             video_id_to_region_id[video_id] = region_id
 
-    from watch.utils.slugify_ext import smart_truncate
+    from kwutil.slugify_ext import smart_truncate
     print('Found Association: video_id_to_region_id = {}'.format(
         smart_truncate(
             ub.urepr(video_id_to_region_id, nl=1),
@@ -1036,7 +1036,7 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
     potential images in the assigned region.
     """
     from watch.utils import util_gis
-    from watch.utils import util_time
+    from kwutil import util_time
     from watch import heuristics
     import kwimage
     import numpy as np
@@ -1534,7 +1534,7 @@ def plot_image_and_site_times(coco_dset, region_image_dates, drawable_region_sit
     import kwimage
     import numpy as np
     from watch.utils import util_kwplot
-    from watch.utils import util_progress
+    from kwutil import util_progress
     hueristic_status_data = heuristics.HUERISTIC_STATUS_DATA
 
     status_to_color = {d['name']: kwimage.Color(d['color']).as01() for d in hueristic_status_data}

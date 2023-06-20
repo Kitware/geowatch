@@ -237,7 +237,7 @@ def main(cmdline=1, **kwargs):
     else:
         export_file = None
 
-    from watch.utils import util_progress
+    from kwutil import util_progress
     mprog = util_progress.ProgressManager(backend='progiter')
     # mprog = util_progress.ProgressManager(backend='rich')
     with mprog, jobs:

@@ -66,7 +66,7 @@ def baseline_framework_ingress(input_path,
                                virtual=False):
 
     from watch.utils import util_parallel
-    from watch.utils import util_progress
+    from kwutil import util_progress
     import rich
     import pystac
     import traceback

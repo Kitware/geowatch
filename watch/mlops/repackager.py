@@ -63,7 +63,7 @@ def repackage(checkpoint_fpath, force=False, dry=False):
         >>> checkpoint_fpath = ub.expandpath(
         ...     '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/checkpoint_DirectCD_smt_it_joint_p8_raw9common_v5_tune_from_onera_epoch=2-step=2147.ckpt')
     """
-    from watch.utils import util_path
+    from kwutil import util_path
     checkpoint_fpaths = util_path.coerce_patterned_paths(checkpoint_fpath)
     print('Begin repackage')
     print('checkpoint_fpaths = {}'.format(ub.urepr(checkpoint_fpaths, nl=1)))
@@ -86,7 +86,7 @@ def repackage(checkpoint_fpath, force=False, dry=False):
                     print('ERROR: Failed to package: {}'.format(ex))
         package_fpaths.append(os.fspath(package_fpath))
     print('package_fpaths = {}'.format(ub.urepr(package_fpaths, nl=1)))
-    from watch.utils import util_yaml
+    from kwutil import util_yaml
     package_fpaths_ = [ub.shrinkuser(p, home='$HOME') for p in package_fpaths]
     print(util_yaml.Yaml.dumps(package_fpaths_))
     return package_fpaths

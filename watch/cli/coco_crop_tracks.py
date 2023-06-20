@@ -364,7 +364,7 @@ def generate_crop_jobs(coco_dset, dst_bundle_dpath, channels=None, context_facto
         print(kw_warp_poly)
     """
     import shapely
-    from watch.utils import util_time
+    from kwutil import util_time
     import kwcoco
     from shapely.affinity import affine_transform
     import kwimage

@@ -114,7 +114,7 @@ def demo_khq_annots():
     import geopandas as gpd
     import ubelt as ub
     from watch.utils import util_gis
-    from watch.utils import util_time
+    from kwutil import util_time
 
     crs84 = util_gis._get_crs84()
 
@@ -329,7 +329,7 @@ def demo_smart_annots():
     import geopandas as gpd
     import ubelt as ub
     from watch.utils import util_gis
-    from watch.utils import util_time
+    from kwutil import util_time
 
     crs84 = util_gis._get_crs84()
 

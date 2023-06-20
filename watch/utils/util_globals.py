@@ -1,8 +1,8 @@
 """
 Utilities for handling global resources
 """
-from watch.utils.util_eval import restricted_eval, RestrictedSyntaxError  # NOQA
-from watch.utils.util_resources import request_nofile_limits, check_shm_limits  # NOQA
+from kwutil.util_eval import restricted_eval, RestrictedSyntaxError  # NOQA
+from kwutil.util_resources import request_nofile_limits, check_shm_limits  # NOQA
 from watch.utils.util_parallel import coerce_num_workers  # NOQA
 
 

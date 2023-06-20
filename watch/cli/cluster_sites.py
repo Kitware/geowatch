@@ -264,7 +264,7 @@ class RegionModel:
         return region
 
     def _update_internals(self):
-        from watch.utils import util_time
+        from kwutil import util_time
         import mgrs
         start_time = util_time.coerce_datetime(self.properties['start_date'])
         end_time = util_time.coerce_datetime(self.properties['end_date'])

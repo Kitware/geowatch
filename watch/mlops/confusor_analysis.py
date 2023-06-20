@@ -431,7 +431,7 @@ def summary_visualization(dst_dset, viz_dpath):
 
     resolution = '5GSD'
 
-    from watch.utils import util_progress
+    from kwutil import util_progress
     # from watch.utils import util_kwimage
     import kwarray
     import kwimage
@@ -470,7 +470,7 @@ def summary_visualization(dst_dset, viz_dpath):
                     delayed = coco_img.imdelay(chanels, resolution=resolution, nodata_method='float')
                     job = jobs.submit(delayed.finalize)
 
-                    from watch.utils import util_time
+                    from kwutil import util_time
                     time = util_time.coerce_datetime(coco_img['timestamp'])
                     job.time = time
                     job.coco_img = coco_img

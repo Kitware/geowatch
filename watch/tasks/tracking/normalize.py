@@ -212,7 +212,7 @@ def ensure_videos(coco_dset):
     loose_flags = [vidid is None for vidid in all_images.get('video_id', None)]
     loose_imgs = all_images.compress(loose_flags)
     if loose_imgs:
-        from watch.utils import util_time
+        from kwutil import util_time
         print(f'Warning: there are {len(loose_imgs)=} images without a video')
         # guess frame_index by date
         dt_guess = [(util_time.coerce_datetime(dc), gid)
@@ -544,7 +544,7 @@ def dedupe_dates(coco_dset):
         >>> coco_dset_fixed = dedupe_dates(coco_dset.copy())
         >>> assert coco_dset_fixed.n_images < coco_dset_with_dups.n_images
     '''
-    from watch.utils import util_time
+    from kwutil import util_time
     from watch import heuristics
     sensor_priority = heuristics.SENSOR_TRACK_PRIORITY
     for trackid in coco_dset.index.trackid_to_aids.keys():

@@ -8,7 +8,7 @@ def _dev_1darray_sample():
     import numpy as np
     import ubelt as ub
     # The idea is that we are given cluttered datetimes
-    from watch.utils.util_time import coerce_timedelta, coerce_datetime
+    from kwutil.util_time import coerce_timedelta, coerce_datetime
     from watch.tasks.fusion.datamodules.temporal_sampling.plots import plot_temporal_sample_indices
     # Generate a "clumpy" sample
 
@@ -113,7 +113,7 @@ def test_time_strategy():
 
     # from scipy.special import expit
     from watch.tasks.fusion.datamodules.temporal_sampling.utils import coerce_time_kernel
-    from watch.utils.util_time import coerce_timedelta
+    from kwutil.util_time import coerce_timedelta
     # import kwarray
     import numpy as np
     pattern = '-1y,-60d,-30d,-1d,0,1d,30d,60d,1y'
@@ -191,7 +191,7 @@ def _format_xaxis_as_timedelta(ax):
 
 
 def _visualize_temporal_sampling():
-    from watch.utils import util_time
+    from kwutil import util_time
     import numpy as np
     from watch.tasks.fusion.datamodules.temporal_sampling.utils import coerce_time_kernel
     import kwarray

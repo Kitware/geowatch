@@ -530,7 +530,7 @@ def extended_github_action_matrix(arg):
         >>> assert len(grid_items) == 20
     """
     import ruamel.yaml
-    from watch.utils.util_yaml import Yaml
+    from kwutil.util_yaml import Yaml
     import os
     if isinstance(arg, str):
         data = ruamel.yaml.safe_load(arg)

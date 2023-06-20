@@ -55,7 +55,7 @@ def run_dino_sv(config):
     from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress
     from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress
     from watch.utils.util_framework import download_region, determine_region_id
-    from watch.utils.util_yaml import Yaml
+    from kwutil.util_yaml import Yaml
     from watch.utils import util_framework
 
     input_path = config.input_path

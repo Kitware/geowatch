@@ -255,11 +255,11 @@ def main(cmdline=True, **kwargs):
     config = StacSearchConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
     import rich
     from watch.utils import util_gis
-    from watch.utils import slugify_ext
-    from watch.utils import util_progress
+    from kwutil import slugify_ext
+    from kwutil import util_progress
     from watch.utils import util_parallel
     from watch.utils import util_pandas
-    from watch.utils import util_time
+    from kwutil import util_time
     import pandas as pd
     import rich.markup
     rich.print('config = {}'.format(ub.urepr(config, nl=1)))
@@ -489,7 +489,7 @@ class StacSearcher:
         if max_products_per_region and max_products_per_region < len(features):
             # Filter to a max number of items per region for testing
             # Sample over time uniformly
-            from watch.utils import util_time
+            from kwutil import util_time
             from watch.tasks.fusion.datamodules import temporal_sampling
             datetimes = [util_time.coerce_datetime(item['properties']['datetime'])
                          for item in features]
@@ -527,7 +527,7 @@ class StacSearcher:
 
 def _auto_search_params_from_region(r_file_loc, config):
     from watch.utils import util_gis
-    from watch.utils import util_time
+    from kwutil import util_time
     from watch.stac.stac_search_builder import build_search_json
     region_df = util_gis.load_geojson(r_file_loc)
     region_row = region_df[region_df['type'] == 'region'].iloc[0]

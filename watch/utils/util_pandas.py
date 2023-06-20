@@ -5,7 +5,7 @@ import pandas as pd
 import pygtrie
 import kwarray
 import wrapt
-from watch.utils import slugify_ext
+from kwutil import slugify_ext
 from watch.utils.util_stringalgo import shortest_unique_suffixes
 
 

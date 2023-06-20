@@ -15,7 +15,7 @@ from watch.mlops import smart_result_parser
 
 def build_tables(root_dpath, pipeline, io_workers, eval_nodes):
     import pandas as pd
-    from watch.utils import util_progress
+    from kwutil import util_progress
     dag = smart_pipeline.make_smart_pipeline(pipeline)
     dag.print_graphs()
     dag.configure(config=None, root_dpath=root_dpath)

@@ -32,7 +32,7 @@ from shapely.ops import unary_union
 
 from watch.utils import kwcoco_extensions
 from watch.utils import process_context
-from watch.utils import util_progress
+from kwutil import util_progress
 from watch.utils import util_parallel
 from watch import heuristics
 

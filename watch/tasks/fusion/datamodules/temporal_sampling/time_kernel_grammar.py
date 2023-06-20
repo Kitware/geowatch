@@ -51,7 +51,7 @@ class MultiTimeKernelTransformer(Transformer):
     """
 
     def bare_kernel(self, items):
-        from watch.utils.util_time import coerce_timedelta
+        from kwutil.util_time import coerce_timedelta
         import numpy as np
         kernel = [coerce_timedelta(item.value).total_seconds() for item in items]
         kernel = np.array(kernel)

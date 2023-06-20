@@ -278,7 +278,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
     rich.print('ScheduleEvaluationConfig config = {}'.format(ub.urepr(config, nl=1, sv=1)))
     import watch
     from watch.mlops import smart_pipeline
-    from watch.utils import util_progress
+    from kwutil import util_progress
     import pandas as pd
     from watch.utils.util_param_grid import expand_param_grid
 
@@ -300,7 +300,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
     # Expand paramater search grid
     if config['params'] is not None:
-        from watch.utils.util_yaml import Yaml
+        from kwutil.util_yaml import Yaml
         param_arg = Yaml.coerce(config['params']) or {}
         # print('param_arg = {}'.format(ub.urepr(param_arg, nl=1)))
         all_param_grid = list(expand_param_grid(
@@ -351,7 +351,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
         longparams = pd.DataFrame(all_param_grid)
         varied = varied_values(longparams, min_variations=2, dropna=False)
         relevant = longparams[longparams.columns.intersection(varied)]
-        from watch.utils import slugify_ext
+        from kwutil import slugify_ext
 
         def pandas_preformat(item):
             if isinstance(item, str):

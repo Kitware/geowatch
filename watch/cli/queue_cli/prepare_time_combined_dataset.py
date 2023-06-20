@@ -74,7 +74,7 @@ def main(cmdline=1, **kwargs):
         tne_regions = [r for r in all_regions if r.split('_')[1].startswith('R')]
         chosen_regions = tne_regions
     else:
-        from watch.utils.util_yaml import Yaml
+        from kwutil.util_yaml import Yaml
         chosen_regions = Yaml.coerce(config.regions)
 
     from watch.mlops.pipeline_nodes import ProcessNode

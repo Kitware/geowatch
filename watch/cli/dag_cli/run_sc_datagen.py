@@ -59,7 +59,7 @@ def main():
 
 def run_generate_sc_cropped_kwcoco(config):
     from watch.utils.util_framework import AWS_S3_Command
-    from watch.utils.util_yaml import Yaml
+    from kwutil.util_yaml import Yaml
     from watch.utils import util_framework
     from watch.cli import coco_align
     if config.dont_recompute:

@@ -223,7 +223,7 @@ def check_processed_regions():
     #     'ta1-mixedgsd-acc-1',
     #     'ta1-30m-acc-1'
     # ]
-    from watch.utils import util_progress
+    from kwutil import util_progress
     from watch.cli.stac_to_kwcoco import summarize_stac_item
 
     peryear_rows = []

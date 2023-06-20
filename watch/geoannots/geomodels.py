@@ -70,8 +70,8 @@ import geojson
 import jsonschema
 import copy
 import json
-from watch.utils import util_time
-from watch.utils import util_progress
+from kwutil import util_time
+from kwutil import util_progress
 
 _VALID_SITE_OBSERVATION_FIELDS = {"type",
                                   "observation_date",

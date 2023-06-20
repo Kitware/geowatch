@@ -37,7 +37,7 @@ def main(cmdline=1, **kwargs):
     import pandas as pd
     import numpy as np
     from watch.utils import util_gis
-    from watch.utils import util_time
+    from kwutil import util_time
     import matplotlib.dates as mdates
 
     site_infos = list(util_gis.coerce_geojson_datas(config['site_models']))

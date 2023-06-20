@@ -233,7 +233,7 @@ class DenseFeaturePredictor:
     def run(self):
         import rich
         from torch.utils import data as torch_data
-        from watch.utils import util_progress
+        from kwutil import util_progress
         from kwcoco.util import util_json
         import torch
 

@@ -177,7 +177,7 @@ def build_combined_kwcoco(input_path,
 def run_stac_to_cropped_kwcoco(config):
     from watch.utils.util_framework import AWS_S3_Command
     from watch.utils import util_framework
-    from watch.utils.util_yaml import Yaml
+    from kwutil.util_yaml import Yaml
     from kwcoco import ChannelSpec
     from watch.cli import coco_align
     from watch.cli import coco_time_combine
