@@ -243,8 +243,8 @@ IARPA_CONFUSION_COLORS['gt_positive_unbounded'] = "darkviolet"
 IARPA_CONFUSION_COLORS['gt_ignore'] = "lightsalmon"
 IARPA_CONFUSION_COLORS['gt_seen'] = "gray"
 IARPA_CONFUSION_COLORS['sm_pos_match'] = "orange"
-IARPA_CONFUSION_COLORS['sm_partially_wrong'] = "aquamarine"
-IARPA_CONFUSION_COLORS['sm_completely_wrong'] = "magenta"
+IARPA_CONFUSION_COLORS['sm_partially_wrong'] = "magenta"
+IARPA_CONFUSION_COLORS['sm_completely_wrong'] = "aquamarine"
 
 
 def iarpa_assign_truth_confusion(truth_status, has_positive_match):
