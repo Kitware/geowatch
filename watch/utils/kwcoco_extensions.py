@@ -421,7 +421,7 @@ def coco_populate_geo_img_heuristics2(coco_img, overwrite=False,
         img['geotiff_metadata'] = primary_obj['geotiff_metadata']
 
     if 'date_captured' in img:
-        from watch.utils import util_time
+        from kwutil import util_time
         img['timestamp'] = util_time.coerce_datetime(img['date_captured']).timestamp()
 
     if 'geos_corners' in primary_obj:
@@ -1273,7 +1273,7 @@ def check_geo_transform_consistency(coco_dset):
 
     all_errors = {}
 
-    from watch.utils import util_progress
+    from kwutil import util_progress
     pman = util_progress.ProgressManager()
     with pman:
         # Create graphs with relationships between videos / images / assets
@@ -2852,7 +2852,7 @@ def reorder_video_frames(dset):
     """
     Reorder the image indexes in each video to ensure temporal ordering
     """
-    from watch.utils import util_time
+    from kwutil import util_time
     videos = dset.videos()
     info = []
     for video, images in zip(videos.objs, videos.images):

@@ -54,15 +54,15 @@ class Pipeline:
         >>> node_B3 = ProcessNode(name='node_B3', in_paths={'path3'}, out_paths={'path4': 'dst.txt'}, executable='node_B3')
         >>> node_C1 = ProcessNode(name='node_C1', in_paths={'src1', 'src2'}, out_paths={'dst1': 'dst.txt', 'dst2': 'dst.txt'}, executable='node_C1')
         >>> node_C2 = ProcessNode(name='node_C2', in_paths={'src1', 'src2'}, out_paths={'dst1': 'dst.txt', 'dst2': 'dst.txt'}, executable='node_C2')
-        >>> # You can connect outputs -> inputs directly
+        >>> # You can connect outputs -> inputs directly (RECOMMENDED)
         >>> node_A1.outputs['dst'].connect(node_A2.inputs['src'])
         >>> node_A2.outputs['dst'].connect(node_A3.inputs['src'])
-        >>> # You can connect nodes to nodes that share input/output names
+        >>> # You can connect nodes to nodes that share input/output names (NOT RECOMMENDED)
         >>> node_B1.connect(node_B2)
         >>> node_B2.connect(node_B3)
         >>> #
         >>> # You can connect nodes to nodes that dont share input/output names
-        >>> # If you specify the mapping
+        >>> # If you specify the mapping (NOT RECOMMENDED)
         >>> node_A3.connect(node_B1, src_map={'dst': 'path1'})
         >>> #
         >>> # You can connect inputs to other inputs, which effectively
@@ -226,7 +226,7 @@ class Pipeline:
         default = {}
         for _, row in df[df['maybe_required']].iterrows():
             default[row['node'] + '.' + row['key']] = None
-        from watch.utils import util_yaml
+        from kwutil import util_yaml
         rich.print(util_yaml.Yaml.dumps(default))
 
     @profile

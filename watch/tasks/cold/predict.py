@@ -36,7 +36,7 @@ CommandLine:
         import ubelt as ub
         import kwcoco
         dset = kwcoco.CocoDataset('$DATA_DVC_DPATH/Drop6-SMALL/imgonly-KR_R001.kwcoco.json')
-        from watch.utils import util_time
+        from kwutil import util_time
         images = dset.images()
         dates = list(map(util_time.coerce_datetime, images.lookup('date_captured')))
         flags = [d.year < 2017 for d in dates]
@@ -270,7 +270,7 @@ def cold_predict_main(cmdline=1, **kwargs):
 
     from watch.utils import process_context
     from watch.utils import util_parallel
-    from watch.utils import util_progress
+    from kwutil import util_progress
     from watch.utils import util_json
     resolved_config = config.to_dict()
     resolved_config = util_json.ensure_json_serializable(resolved_config)

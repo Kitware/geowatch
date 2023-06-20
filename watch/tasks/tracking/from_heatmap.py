@@ -919,7 +919,7 @@ def heatmaps_to_polys(heatmaps, track_bounds, heatmap_dates=None, config=None):
             raise NotImplementedError(config.inner_agg_fn)
 
         # Do inner aggregation before outer aggregation
-        from watch.utils import util_time
+        from kwutil import util_time
         import kwarray
         delta = util_time.coerce_timedelta(config.inner_window_size).total_seconds()
         image_unixtimes = np.array([d.timestamp() for d in heatmap_dates])
@@ -1023,7 +1023,7 @@ def _gids_polys(sub_dset, **kwargs):
     Returns:
         Iterable[int | kwimage.Polygon | kwimage.MultiPolygon]
     """
-    from watch.utils import util_time
+    from kwutil import util_time
     import numpy as np
     config = _GidPolyConfig(**kwargs)
 

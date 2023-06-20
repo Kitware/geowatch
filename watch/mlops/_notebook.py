@@ -235,7 +235,7 @@ def _sitevisit_2023_april_report():
 
     def experiment_timeline():
         import pandas  as pd
-        from watch.utils import util_time
+        from kwutil import util_time
         resources = agg.resources
         duration_cols = [k for k in resources.keys() if k.endswith('.duration')]
         start_time_cols = [k for k in agg.table.keys() if k.endswith('.start_timestamp')]
@@ -397,7 +397,7 @@ def _gather_namek_shortlist_results():
     chosen_indexes = table.loc[chosen_indexes, 'rank'].sort_values().index
 
     all_models_fpath = ub.Path('$HOME/code/watch/dev/reports/split1_all_models.yaml').expand()
-    from watch.utils.util_yaml import Yaml
+    from kwutil.util_yaml import Yaml
     known_models = Yaml.coerce(all_models_fpath)
 
     top_k = 40
@@ -608,7 +608,7 @@ def _namek_check_pipeline_status():
             row['bas_poly_eval.enabled'] = True
             submatrices.append(row)
 
-    from watch.utils import util_yaml
+    from kwutil import util_yaml
     submat_text = util_yaml.Yaml.dumps({'submatrices': submatrices})
     fpath = ub.Path('foo.yaml').absolute()
     fpath.write_text(submat_text)
@@ -693,7 +693,7 @@ def _gather_all_results():
 
 def resource_usage_report(agg):
     import pandas as pd
-    from watch.utils import util_time
+    from kwutil import util_time
     table = agg.table.copy()
     resources = agg.resources
 
@@ -887,7 +887,7 @@ def _namek_eval():
     poly_agg.resources['resources.bas_poly_eval.duration']
     poly_agg.resources['resources.bas_poly.duration']
 
-    from watch.utils import util_time
+    from kwutil import util_time
     unique_resources = {}
     unique_resources['bas_pxl'] = poly_agg.table.groupby('context.bas_pxl.uuid')
     unique_resources['bas_poly'] = poly_agg.table.groupby('context.bas_poly.uuid')

@@ -4,7 +4,7 @@ A simplified Python DVC API
 """
 import ubelt as ub
 import os
-from watch.utils import util_path
+from kwutil import util_path
 
 
 class SimpleDVC(ub.NiceRepr):
@@ -349,7 +349,7 @@ class SimpleDVC(ub.NiceRepr):
             dpath = dpath.parent
 
     def read_dvc_sidecar(self, sidecar_fpath):
-        from watch.utils import util_yaml
+        from kwutil import util_yaml
         sidecar_fpath = ub.Path(sidecar_fpath)
         data = util_yaml.Yaml.loads(sidecar_fpath.read_text())
         return data
@@ -361,7 +361,7 @@ class SimpleDVC(ub.NiceRepr):
         Args:
             sidecar_fpath (PathLike | str): path to the .dvc file
         """
-        from watch.utils import util_yaml
+        from kwutil import util_yaml
         sidecar_fpath = ub.Path(sidecar_fpath)
         data = util_yaml.Yaml.loads(sidecar_fpath.read_text())
         for item in data['outs']:

@@ -1,6 +1,30 @@
+r"""
+Helper to fix issues in truth region / site models, particularly issues seen in
+iMERIT data.
+
+SeeAlso:
+    ~/code/watch/watch/geoannots/geomodels.py
+    ~/code/watch/watch/cli/validate_annotation_schemas.py
+    ~/code/watch/watch/cli/fix_region_models.py
+
+    DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+    python -m watch.cli.fix_region_models \
+        --region_models="$DVC_DATA_DPATH"/annotations/drop6/region_models/AE_C001.geojson
+
+    python -m watch.cli.validate_annotation_schemas \
+        --region_models="$DVC_DATA_DPATH"/annotations/drop6/region_models/AE_C001.geojson
+"""
+#!/usr/bin/env python3
 import decimal
 import simplejson
 import json
+import scriptconfig as scfg
+import ubelt as ub
+
+
+class FixRegionModelsCLI(scfg.DataConfig):
+    # site_models = scfg.Value(None, nargs='+', help='coercable site models')
+    region_models = scfg.Value(None, nargs='+', help='coercable region models')
 
 
 class fakefloat(float):
@@ -27,11 +51,16 @@ def defaultencode(o):
     raise TypeError(repr(o) + " is not JSON serializable")
 
 
-def main():
+def main(cmdline=1, **kwargs):
     from watch.utils import util_gis
     from watch.geoannots import geomodels
-    dpath = '/media/joncrall/flash1/smart_data_dvc/submodules/annotations/region_models'
-    region_model_fpaths = util_gis.coerce_geojson_paths(dpath)
+
+    import rich
+    config = FixRegionModelsCLI.cli(cmdline=cmdline, data=kwargs, strict=True)
+    rich.print('config = ' + ub.urepr(config, nl=1))
+
+    # dpath = '/media/joncrall/flash1/smart_data_dvc/submodules/annotations/region_models'
+    region_model_fpaths = util_gis.coerce_geojson_paths(config.region_models)
     _iter = iter(region_model_fpaths)
     for fpath in _iter:
         if fpath.stem in {'AE_C002', 'AE_C003', 'BR_T001', 'BR_T002', 'PY_C001'}:
@@ -39,9 +68,12 @@ def main():
         region_model = geomodels.RegionModel.coerce(fpath, parse_float=decimal.Decimal)
         # region_model._validate_parts()
         try:
-            region_model.validate()
+            region_model.validate(verbose=0)
         except Exception:
+            print('Attempting a fix')
+            region_model.fixup()
             fix_region_model(region_model)
+            region_model.fixup()
             region_model.validate()
             if '_C' in fpath.stem:
                 # Try to minimize the diff by outputing in a similar style
@@ -102,9 +134,13 @@ def fix_region_model(region_model):
     (lon,), (lat,) = region_model.geometry.centroid.xy
     mgrs_code = mgrs.MGRS().toMGRS(lat, lon, MGRSPrecision=0)
 
-    import kwplot
     import ubelt as ub
-    kwplot.autompl()
+
+    DRAW_BAD_REGIONS = 0
+
+    if DRAW_BAD_REGIONS:
+        import kwplot
+        kwplot.autompl()
 
     def draw_bad_region(region_model, region_poly):
         fig = kwplot.figure(fnum=1)
@@ -130,7 +166,10 @@ def fix_region_model(region_model):
         region_poly = kwimage.MultiPolygon.from_shapely(region_geom)
         parts = list(region_geom.geoms)
         assert len(parts) == 1
-        draw_bad_region(region_model, region_poly)
+
+        if DRAW_BAD_REGIONS:
+            draw_bad_region(region_model, region_poly)
+
         poly = kwimage.Polygon.from_shapely(parts[0])
         print('Fix region header geom')
         region_model.header['geometry'] = poly.to_geojson()
@@ -145,6 +184,12 @@ def fix_region_model(region_model):
     for feat in region_model.features:
         props = feat['properties']
         props['mgrs'] = mgrs_code
+
+        if 'socre' in props:
+            old_score = props.pop('socre', None)
+            if old_score is not None:
+                if 'score' not in props or props['score'] is None:
+                    props['score'] = float(old_score)
 
         if 'score' in props:
             if isinstance(props['score'], str):
@@ -177,13 +222,14 @@ def fix_region_model(region_model):
             if feat['geometry']['type'] == 'MultiPolygon':
                 print('Fix site summary geom')
                 site_poly = kwimage.MultiPolygon.coerce(feat['geometry'])
-                draw_bad_site(region_model, feat, site_poly)
+                if DRAW_BAD_REGIONS:
+                    draw_bad_site(region_model, feat, site_poly)
                 parts = list(site_poly.to_shapely().geoms)
                 assert len(parts) == 1
                 poly = kwimage.Polygon.from_shapely(parts[0])
                 feat['geometry'] = poly.to_geojson()
-            if 'annotation_cache' not in props:
-                props['annotation_cache'] = {}
+            if 'cache' not in props:
+                props['cache'] = {}
 
             if feat['geometry']['type'] == 'Polygon':
                 for ring in feat['geometry']['coordinates']:
@@ -199,3 +245,12 @@ def fix_region_model(region_model):
                             if len(pt) != 2:
                                 raise Exception
     # region_model._validate_parts()
+
+if __name__ == '__main__':
+    """
+
+    CommandLine:
+        python ~/code/watch/watch/cli/fix_region_models.py
+        python -m watch.cli.fix_region_models
+    """
+    main()

@@ -69,7 +69,7 @@ def main(cmdline=1, **kwargs):
     rich.print('config = ' + ub.urepr(config, nl=1))
     import os
     import kwcoco
-    from watch.utils import util_path
+    from kwutil import util_path
     fpaths = util_path.coerce_patterned_paths(config.src)
 
     rich.print('Will read fpaths = {}'.format(ub.urepr(fpaths, nl=1)))

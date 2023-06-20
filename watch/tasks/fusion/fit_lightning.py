@@ -239,7 +239,7 @@ def make_cli(config=None):
                     k = '.'.join(list(map(str, p)))
                     config[k] = v
             return config
-        from watch.utils import util_yaml
+        from kwutil import util_yaml
         print('Passing string-based config:')
         print(ub.highlight_code(config, 'yaml'))
         nested = util_yaml.Yaml.loads(config, backend='pyyaml')
@@ -333,7 +333,7 @@ def main(config=None):
         # export stats
         from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
         from watch.tasks.fusion.fit_lightning import *  # NOQA
-        from watch.utils.util_yaml import Yaml
+        from kwutil.util_yaml import Yaml
         disable_lightning_hardware_warnings()
 
         def export_dataset_stats(cli):
@@ -349,7 +349,7 @@ def main(config=None):
                     'std': Yaml.InlineList(std),
                 }
                 rows.append(row)
-            from watch.utils import util_yaml
+            from kwutil import util_yaml
             import ruamel.yaml
             import io
             file = io.StringIO()

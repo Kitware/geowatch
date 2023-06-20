@@ -77,12 +77,12 @@ class AggregateLoader(DataConfig):
     eval_nodes = Value(None, help='eval nodes to look at')
 
     def __post_init__(self):
-        from watch.utils.util_yaml import Yaml
+        from kwutil.util_yaml import Yaml
         self.eval_nodes = Yaml.coerce(self.eval_nodes)
 
     @profile
     def coerce_aggregators(config):
-        from watch.utils import util_path
+        from kwutil import util_path
         from watch.mlops.aggregate_loader import build_tables
         import pandas as pd
         input_targets = util_path.coerce_patterned_paths(config.target)
@@ -139,7 +139,7 @@ class AggregateEvluationConfig(AggregateLoader):
 
     def __post_init__(self):
         super().__post_init__()
-        from watch.utils.util_yaml import Yaml
+        from kwutil.util_yaml import Yaml
         self.plot_params = Yaml.coerce(self.plot_params)
         if self.query is not None:
             self.query = ub.paragraph(self.query)
@@ -215,7 +215,7 @@ def main(cmdline=True, **kwargs):
                 agg.table.to_csv(csv_fpath, index_label=False)
 
     if config.stdout_report:
-        from watch.utils.util_yaml import Yaml
+        from kwutil.util_yaml import Yaml
         if config.stdout_report is not True:
             report_config = Yaml.coerce(config.stdout_report)
         else:
@@ -1167,7 +1167,7 @@ class AggregatorAnalysisMixin:
             # flags = ~np.array(['invariants' in chan for chan in chosen_table['resolved_params.bas_pxl_fit.channels']])
             # chosen_table = chosen_table[flags]
 
-            from watch.utils.util_yaml import Yaml
+            from kwutil.util_yaml import Yaml
             chosen_models = list(ub.oset(chosen_table[model_col].tolist()))
             shortlist_text = Yaml.dumps(chosen_models)
             print('Model shortlist (top of the list is a higher scoring model):')
@@ -1184,7 +1184,7 @@ class AggregatorAnalysisMixin:
 
     def resource_summary_table(agg):
         import pandas as pd
-        from watch.utils import util_time
+        from kwutil import util_time
         table = agg.table.copy()
         resources = agg.resources
 
@@ -1567,7 +1567,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             if rois == 'max' or rois == 'auto':
                 regions_of_interest = ub.argmax(agg.macro_compatible, key=len)
             else:
-                from watch.utils.util_yaml import Yaml
+                from kwutil.util_yaml import Yaml
                 regions_of_interest = Yaml.coerce(rois)
                 if isinstance(regions_of_interest, str):
                     regions_of_interest = [regions_of_interest]

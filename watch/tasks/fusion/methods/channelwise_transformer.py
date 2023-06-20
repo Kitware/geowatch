@@ -916,7 +916,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         import xdev
         import kwimage
         import pandas as pd
-        from watch.utils.slugify_ext import smart_truncate
+        from kwutil.slugify_ext import smart_truncate
         from kwplot.mpl_make import render_figure_to_image
 
         sns = kwplot.autosns()

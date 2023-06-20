@@ -5,7 +5,7 @@ import math
 import numpy as np
 import ubelt as ub
 from watch.utils import util_kwarray
-from watch.utils.util_time import coerce_timedelta
+from kwutil.util_time import coerce_timedelta
 from datetime import datetime as datetime_cls  # NOQA
 from .exceptions import TimeSampleError
 from .utils import guess_missing_unixtimes
@@ -577,7 +577,7 @@ def hard_time_sample_pattern(unixtimes, time_window, time_kernel=None, time_span
         >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
         >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
         >>> import watch
-        >>> from watch.utils import util_time
+        >>> from kwutil import util_time
         >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         >>> coco_fpath = data_dvc_dpath / 'Drop6/imgonly-KR_R001.kwcoco.json'
         >>> dset = kwcoco.CocoDataset(coco_fpath)

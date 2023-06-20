@@ -1152,8 +1152,15 @@ def make_smart_pipeline(name):
 
     Example:
         >>> from watch.mlops.smart_pipeline import *  # NOQA
+        >>> dag = make_smart_pipeline('sc')
+        >>> dag.print_graphs()
+        >>> dag.inspect_configurables()
+
+    Example:
+        >>> from watch.mlops.smart_pipeline import *  # NOQA
         >>> dag = make_smart_pipeline('bas_depth_vali')
         >>> dag.print_graphs()
+        >>> dag.inspect_configurables()
     """
     from watch.mlops.pipeline_nodes import PipelineDAG
     from functools import partial

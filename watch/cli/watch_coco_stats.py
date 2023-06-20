@@ -128,7 +128,7 @@ class WatchCocoStats(scfg.DataConfig):
         print('collatables = {}'.format(ub.urepr(collatables, nl=2, sort=0)))
         summary = pd.DataFrame(collatables)
 
-        from watch.utils import slugify_ext
+        from kwutil import slugify_ext
         col_name_map = {}
         for cname in summary.columns:
             new_cname = slugify_ext.smart_truncate(
@@ -171,7 +171,7 @@ def coco_watch_stats(dset, with_video_info=False):
         >>> stat_info = coco_watch_stats(dset)
     """
     from kwcoco.util import util_truncate
-    from watch.utils import util_time
+    from kwutil import util_time
     from watch.utils import kwcoco_extensions
     import rich
     import pandas as pd

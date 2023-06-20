@@ -1131,7 +1131,7 @@ def main(argv=None, **kwargs):
     from kwcoco.util import util_json
     from watch.utils import util_gis
     from watch.utils import process_context
-    from watch.utils.util_yaml import Yaml
+    from kwutil.util_yaml import Yaml
 
     coco_fpath = ub.Path(args.in_file)
 

@@ -211,6 +211,11 @@ Ignore:
     >>> canvas2 = self.draw_item(item2, max_channels=10, overlay_on_image=0, rescale=0, draw_weights=0, draw_truth=0)
     >>> kwplot.imshow(canvas1, fnum=3, pnum=(2, 1, 1), title='no norm (per-frame normalized for viz purposes only)')
     >>> kwplot.imshow(canvas2, fnum=3, pnum=(2, 1, 2), title='per-item normalization (across time)')
+
+Known Issues
+------------
+- [ ] FIXME: sensorchan codes should exclude non-specified sensors immediately before temporal sampling. Currently temporal sampling is given everything. E.g. (L8,S2):red|green|blue should not allow WV to be included in sampling.
+
 """
 import einops
 import kwarray
@@ -237,7 +242,7 @@ from watch.utils import util_bands
 from watch.utils import util_iter
 from watch.utils import util_kwarray
 from watch.utils import util_kwimage
-from watch.utils import util_time
+from kwutil import util_time
 from watch.tasks.fusion import utils
 from watch.tasks.fusion.datamodules import data_utils
 from watch.tasks.fusion.datamodules import spacetime_grid_builder
@@ -2873,7 +2878,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             Build an intermediate summary to display in the progress bar
             """
             stat_lines = ['Current Estimated Dataset Statistics: ']
-            from watch.utils.slugify_ext import smart_truncate
+            from kwutil.slugify_ext import smart_truncate
             if with_intensity:
                 modality_input_stats, old_input_stats = current_input_stats()
                 input_stats2 = {}
@@ -2943,8 +2948,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             if with_intensity:
                 update_intensity_estimates(item)
 
-        from watch.utils import util_progress
-        from watch.utils import util_environ
+        from kwutil import util_progress
+        from kwutil import util_environ
         pman = util_progress.ProgressManager()
 
         # Create timer to periodically summarize intermediate results while

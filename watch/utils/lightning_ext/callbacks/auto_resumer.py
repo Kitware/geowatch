@@ -18,7 +18,7 @@ class AutoResumer(pl.callbacks.Callback):
 
     Example:
         >>> from watch.utils.lightning_ext.callbacks.auto_resumer import AutoResumer
-        >>> from watch.utils import util_path
+        >>> from kwutil import util_path
         >>> from watch.utils.lightning_ext.demo import LightningToyNet2d
         >>> from watch.utils.lightning_ext.callbacks import StateLogger
         >>> import pytorch_lightning as pl

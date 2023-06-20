@@ -210,7 +210,7 @@ def prep_feats(cmdline=True, **kwargs):
     import rich
     rich.print('config = {}'.format(ub.urepr(config, nl=2)))
     from scriptconfig.smartcast import smartcast
-    from watch.utils import util_path
+    from kwutil import util_path
 
     # hack for cmd-queue, will be fixed soon
     config.slurm_options = config.slurm_options or {}

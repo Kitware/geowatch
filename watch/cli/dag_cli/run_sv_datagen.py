@@ -6,7 +6,7 @@ from watch.utils.util_framework import download_region
 import ubelt as ub
 import scriptconfig as scfg
 from watch.mlops.smart_pipeline import SV_Cropping
-from watch.utils.util_yaml import Yaml
+from kwutil.util_yaml import Yaml
 
 
 class SVDatasetConfig(scfg.DataConfig):

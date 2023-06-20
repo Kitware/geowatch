@@ -454,7 +454,7 @@ def _stac_item_to_kwcoco_image(stac_item,
                                from_collated=False,
                                populate_watch_fields=False,
                                verbose=0):
-    from watch.utils import util_time
+    from kwutil import util_time
     if populate_watch_fields:
         raise NotImplementedError('REMOVED: use coco_add_watch_feilds '
                                   'as a secondary step instead')

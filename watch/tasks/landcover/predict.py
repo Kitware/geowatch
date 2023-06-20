@@ -50,7 +50,7 @@ import kwcoco
 from torch.utils.data import DataLoader
 
 from watch.utils import util_parallel
-from watch.utils import util_progress
+from kwutil import util_progress
 from . import detector
 from .model_info import lookup_model_info
 from .utils import setup_logging

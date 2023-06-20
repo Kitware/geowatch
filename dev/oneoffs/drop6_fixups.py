@@ -64,7 +64,7 @@ HDD = HDD_Paths()
 
 
 def check_for_new_stuff():
-    # from watch.utils import util_time
+    # from kwutil import util_time
     # from datetime import datetime as datetime_cls
     # import xdev
     import watch
@@ -432,7 +432,7 @@ def dvc_add_new_regions(new_regions):
                     rich.print('[red] does not exist, need to add')
                     needs_add.append(sensor_zip_fpath_dst)
                 else:
-                    from watch.utils import util_yaml
+                    from kwutil import util_yaml
                     data = util_yaml.Yaml.loads(sidecar_fpath.read_text())
 
                     if SLOW_CHECK:
@@ -441,7 +441,7 @@ def dvc_add_new_regions(new_regions):
                         print(f'md5_tracker={md5_tracker}')
                         md5_got = ub.hash_file(sensor_zip_fpath_dst, hasher='md5')
                         print(f'md5_got={md5_got}')
-                        from watch.utils import util_yaml
+                        from kwutil import util_yaml
                         sidecar_fpath = ub.Path(sidecar_fpath)
                         if md5_got == md5_tracker:
                             rich.print('[green] all good')
@@ -528,7 +528,7 @@ def check_missing_image_against_dmj():
         print(first_img.video['name'])
         print(first_img.resolution(space='video'))
 
-    # from watch.utils import util_time
+    # from kwutil import util_time
     import watch
     drop6_geojson_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='hdd') / 'annotations/drop6'
 

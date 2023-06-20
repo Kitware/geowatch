@@ -1,7 +1,7 @@
 import os
 import kwcoco
 import ubelt as ub
-from watch.utils import util_path
+from kwutil import util_path
 
 
 def main(*src):
@@ -145,7 +145,7 @@ def resolve_directory_symlinks(path):
 
 
 def _cleanup_lightning_logs():
-    from watch.utils import util_path
+    from kwutil import util_path
     training_dpaths = util_path.coerce_patterned_paths('./**/lightning_logs/version_*')
 
     to_remove = []

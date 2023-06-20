@@ -109,7 +109,7 @@ def hack_in_timedata(coco_dset, dates=True, rng=None):
     Adds date_captured fields to demo toydata
     """
     from kwarray.distributions import Uniform
-    from watch.utils import util_time
+    from kwutil import util_time
     datekw = ub.udict({
         'start_time': '1970-01-01',
         'end_time': '2101-01-01',

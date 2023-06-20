@@ -126,7 +126,7 @@ def main(cmdline=1, **kwargs):
 
     coco_dset = torch_dataset.sampler.dset
 
-    from watch.utils import util_progress
+    from kwutil import util_progress
     from watch.utils import process_context
     proc = process_context.ProcessContext(
         name='box.predict',

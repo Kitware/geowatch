@@ -117,7 +117,7 @@ def coerce_num_workers(num_workers='auto', minimum=0):
     """
     import numpy as np
     import psutil
-    from watch.utils.util_eval import restricted_eval
+    from kwutil.util_eval import restricted_eval
 
     try:
         num_workers = int(num_workers)

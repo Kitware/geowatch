@@ -29,7 +29,7 @@ def main():
     sys.stdout.write('\n')
 
     print('demo progiter')
-    from watch.utils import util_progress
+    from kwutil import util_progress
     pman = util_progress.ProgressManager('progiter')
     with pman:
         for _ in pman.progiter(range(1000)):
@@ -37,7 +37,7 @@ def main():
             sys.stdout.flush()
             ...
 
-    from watch.utils import util_progress
+    from kwutil import util_progress
     pman = util_progress.ProgressManager('rich')
     with pman:
         for _ in pman.progiter(range(1000)):

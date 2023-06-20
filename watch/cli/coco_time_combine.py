@@ -463,11 +463,11 @@ def combine_kwcoco_channels_temporally(config):
     import kwarray
     import kwcoco
     import numpy as np
-    from watch.utils import util_progress
-    from watch.utils import util_time
+    from kwutil import util_progress
+    from kwutil import util_time
     from watch.utils import kwcoco_extensions
     from watch.utils import util_parallel
-    from watch.utils.util_yaml import Yaml
+    from kwutil.util_yaml import Yaml
     # Check inputs.
 
     space = 'video'
@@ -739,7 +739,7 @@ def merge_images(window_coco_images, merge_method, requested_chans, space,
     import kwcoco
     import numpy as np
     from watch.tasks.fusion.coco_stitcher import CocoStitchingManager
-    from watch.utils import util_time
+    from kwutil import util_time
 
     # Determine what channels are available in this image set
     available_chans_set = set(ub.flatten([g.channels.fuse().to_set() for g in window_coco_images]))
@@ -1026,7 +1026,7 @@ def filter_image_ids_by_season(coco_dset, image_ids, filtered_seasons, ignore_wi
         >>>                       ignore_winter_torrid_zone=True)
         >>> assert len(all_filtered_gids) > len(ignore_torrid_regions_gids)
     """
-    from watch.utils import util_time
+    from kwutil import util_time
     hemipshere_to_season_map = {
         'northern': {
             'spring': [3, 4, 5],

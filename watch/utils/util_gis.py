@@ -915,7 +915,7 @@ def coerce_geojson_paths(data, return_manifests=False):
         >>> assert len(info['manifest_fpaths']) == 1
         >>> assert len(info['geojson_fpaths']) == 2
     """
-    from watch.utils import util_path
+    from kwutil import util_path
     paths = util_path.coerce_patterned_paths(data, '.geojson')
     geojson_fpaths = []
     manifest_fpaths = []
@@ -1045,7 +1045,7 @@ def load_geojson_datas(geojson_fpaths, format='dataframe', workers=0,
         >>> assert isinstance(dct, dict)
     """
     from watch.utils import util_gis
-    from watch.utils import util_progress
+    from kwutil import util_progress
     # sites = []
     if desc is None:
         desc = 'load geojson datas'

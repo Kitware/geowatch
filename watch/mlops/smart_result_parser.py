@@ -19,7 +19,7 @@ import io
 import xdev
 import pandas as pd
 import re
-from watch.utils import util_time
+from kwutil import util_time
 from watch.utils import util_pattern
 
 
@@ -412,7 +412,7 @@ def _handle_process_item(item):
 def load_pxl_eval(fpath, expt_dvc_dpath=None, arg_prefix='', mode=0, with_param_types=True):
     from kwcoco.coco_evaluator import CocoSingleResult
     # from watch.utils import result_analysis
-    # from watch.utils import util_time
+    # from kwutil import util_time
     measure_info = _load_json(fpath)
 
     meta = measure_info['meta']

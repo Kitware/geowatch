@@ -102,7 +102,7 @@ def _submit_constructive_split_jobs(base_fpath, suffix, queue, depends=[]):
     """
     new method for splits to construct them from previouly partitioned files
     """
-    from watch.utils import util_path
+    from kwutil import util_path
     import shlex
     partitioned_fpaths = util_path.coerce_patterned_paths(base_fpath)
     print('partitioned_fpaths = {}'.format(ub.urepr(partitioned_fpaths, nl=1)))

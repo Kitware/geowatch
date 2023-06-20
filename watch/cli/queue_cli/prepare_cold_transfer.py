@@ -55,7 +55,7 @@ def main(cmdline=1, **kwargs):
         >>> main(cmdline=cmdline, **kwargs)
     """
     import rich
-    from watch.utils import util_path
+    from kwutil import util_path
     config = PrepareColdTransferConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
     rich.print('config = ' + ub.urepr(config, nl=1))
 

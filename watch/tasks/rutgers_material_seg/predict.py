@@ -702,7 +702,7 @@ def build_evaler(cmdline=False, **kwargs):
         torch.set_default_dtype(torch.float32)
 
     from watch.utils.lightning_ext import util_device
-    from watch.utils import util_resources
+    from kwutil import util_resources
     devices = util_device.coerce_devices(args.devices)
     num_workers = util_parallel.coerce_num_workers(args.num_workers)
     if len(devices) > 1:

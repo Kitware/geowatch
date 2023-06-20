@@ -241,7 +241,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.test_kwcoco = self.config['test_dataset']
 
         if ub.WIN32:
-            from watch.utils import util_windows
+            from kwutil import util_windows
             self.train_kwcoco = util_windows.fix_msys_path(self.train_kwcoco)
             self.vali_kwcoco = util_windows.fix_msys_path(self.vali_kwcoco)
             self.test_kwcoco = util_windows.fix_msys_path(self.test_kwcoco)

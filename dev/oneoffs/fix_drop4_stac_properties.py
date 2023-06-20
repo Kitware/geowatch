@@ -27,7 +27,7 @@ def main():
         'WV': 'ta1-wv-acc',
     }
 
-    from watch.utils import util_time
+    from kwutil import util_time
     import ubelt as ub
 
     _cache = {}

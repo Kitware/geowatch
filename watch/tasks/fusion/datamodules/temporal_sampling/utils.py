@@ -104,7 +104,7 @@ def coerce_time_kernel(pattern):
         >>>     coerce_time_kernel(3.14)
     """
     from watch.tasks.fusion.datamodules.temporal_sampling.time_kernel_grammar import parse_multi_time_kernel
-    from watch.utils.util_time import coerce_timedelta
+    from kwutil.util_time import coerce_timedelta
     if isinstance(pattern, str):
         if '(' in pattern:
             multi_kernel = parse_multi_time_kernel(pattern)
@@ -115,7 +115,7 @@ def coerce_time_kernel(pattern):
     elif ub.iterable(pattern):
         kernel_deltas = pattern
     else:
-        print(f'error: pattern={pattern}')
+        print(f'SINGLE-coerce error: pattern={pattern}')
         raise TypeError(type(pattern))
     parsed = [coerce_timedelta(d) for d in kernel_deltas]
     kernel = np.array([v.total_seconds() for v in parsed])
@@ -159,11 +159,23 @@ def coerce_multi_time_kernel(pattern):
             np.array([-1.,  0.,  1.], dtype=np.float64),
             np.array([0.], dtype=np.float64),
         ]
+
+    Example:
+        >>> from watch.tasks.fusion.datamodules.temporal_sampling.utils import *  # NOQA
+        >>> import ubelt as ub
+        >>> pattern = ('-3y', '-2.5y', '-2y', '-1.5y', '-1y', 0, '1y', '1.5y', '2y', '2.5y', '3y')
+        >>> multi_kernel = coerce_multi_time_kernel(pattern)
+        >>> print('multi_kernel = {}'.format(ub.urepr(multi_kernel, nl=2)))
+
+        >>> # FIXME: Bug ambigous case
+        >>> pattern = ('-3y', '-2.5y', '-2y', '-1.5y', '-1y', '0', '1y', '1.5y', '2y', '2.5y', '3y')
+        >>> multi_kernel = coerce_multi_time_kernel(pattern)
+        >>> print('multi_kernel = {}'.format(ub.urepr(multi_kernel, nl=2)))
     """
     if pattern is None:
         return [None]
     from watch.tasks.fusion.datamodules.temporal_sampling.time_kernel_grammar import parse_multi_time_kernel
-    from watch.utils.util_time import coerce_timedelta
+    from kwutil.util_time import coerce_timedelta
     if isinstance(pattern, str):
         multi_kernel = parse_multi_time_kernel(pattern)
     elif ub.iterable(pattern):
@@ -185,6 +197,6 @@ def coerce_multi_time_kernel(pattern):
                     ...
 
     else:
-        print(f'error: pattern={pattern}')
+        print(f'MULTI-coerce error: pattern={pattern}')
         raise TypeError(type(pattern))
     return multi_kernel

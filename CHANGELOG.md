@@ -4,7 +4,7 @@ This changelog follows the specifications detailed in: [Keep a Changelog](https:
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
 
-## Version 0.7.1 - Target 2023-06-xx
+## Version 0.7.2 - Target 2023-06-xx
 
 ### Added
 * Add transfer-feature script to COLD task to port features to time-averaged data
@@ -22,6 +22,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * MLOps can now handle input nodes with multiple connections (variable length inputs)
 * DINO Filter now marks sites as `system_rejected` instead of removing them.
 * Depth Filter now marks sites as `system_rejected` instead of removing them.
+* Large rework of the scripts in `watch.cli.dag_cli`.
+* Removed internal utils in favor of the new `kwutil` module.
 
 
 ## Version 0.6.8 - Target 2023-05-22

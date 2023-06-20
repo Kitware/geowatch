@@ -647,7 +647,7 @@ class ExperimentState(ub.NiceRepr):
             notypes = None
             with_attrs = 1
         """
-        from watch.utils import util_path
+        from kwutil import util_path
         keys = ['pkg_fpath']
         if types is not None:
             keys = types
@@ -808,7 +808,7 @@ class ExperimentState(ub.NiceRepr):
                 print(subdf.drop(ub.oset(todrop) & df.columns, axis=1).to_string())
 
         if ready_packages is not None:
-            from watch.utils import util_yaml
+            from kwutil import util_yaml
             print(util_yaml.Yaml.dumps({
                 'ready_packages': ready_packages,
             }))

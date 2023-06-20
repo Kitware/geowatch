@@ -75,7 +75,7 @@ class TensorboardPlotter(pl.callbacks.Callback):
         if hasattr(model, 'get_cfgstr'):
             model_cfgstr = model.get_cfgstr()
         else:
-            from watch.utils.slugify_ext import smart_truncate
+            from kwutil.slugify_ext import smart_truncate
             hparams = util_model.model_hparams(model)
             model_config = {
                 'type': str(model.__class__),
@@ -409,7 +409,7 @@ def redraw_cli(train_dpath):
         if 'name' in hparams:
             title = hparams['name']
         else:
-            from watch.utils.slugify_ext import smart_truncate
+            from kwutil.slugify_ext import smart_truncate
             model_config = {
                 # 'type': str(model.__class__),
                 'hp': smart_truncate(ub.urepr(hparams, compact=1, nl=0), max_length=8),

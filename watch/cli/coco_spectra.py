@@ -250,7 +250,7 @@ def main(cmdline=True, **kwargs):
     exclude_channels = None if exclude_channels is None else kwcoco.FusedChannelSpec.coerce(exclude_channels)
 
     jobs = ub.JobPool(mode=config['mode'], max_workers=workers, transient=True)
-    from watch.utils import util_progress
+    from kwutil import util_progress
     pman = util_progress.ProgressManager()
     with pman:
         for coco_img in pman.progiter(images.coco_images, desc='submit stats jobs'):
@@ -605,7 +605,7 @@ def ensure_intensity_stats(coco_img, recompute=False, include_channels=None, exc
                     except Exception:
                         ...
                     try:
-                        from watch.utils import util_time
+                        from kwutil import util_time
                         props['month'] = util_time.coerce_datetime(coco_img.img['date_captured']).month
                     except Exception:
                         ...
