@@ -17,7 +17,7 @@ def main():
     image_lists = ns['input']
 
     def resolve_imglist(imglist):
-        from watch.utils import util_path
+        from kwutil import util_path
         if len(imglist) == 1:
             v = imglist[0]
             # if os.path.isdir(v):
@@ -43,7 +43,7 @@ def main():
 def hackit():
     import watch
     import ubelt as ub
-    from watch.utils import util_path
+    from kwutil import util_path
     dvc_dpath = watch.find_smart_dvc_dpath(hardware='ssd')
     path1 = dvc_dpath / '_tmp/_viz__tmp_without_tta.kwcoco_4133893d/KR_R001/_anns/salient'
     path2 = dvc_dpath / '_tmp/_viz__tmp_with_tta.kwcoco_aab1bc51/KR_R001/_anns/salient'

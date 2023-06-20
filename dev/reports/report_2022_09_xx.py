@@ -161,7 +161,7 @@ def main():
     ]
 
     import rich as rich_mod
-    from watch.utils import util_yaml
+    from kwutil import util_yaml
     for groupid, shortlist in groupid_to_shortlist.items():
         test_dset, type = groupid
         if test_dset in dset_blocklist:

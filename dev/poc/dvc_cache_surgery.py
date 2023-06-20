@@ -33,7 +33,7 @@ class CachePurgeCLI(scfg.Config):
 
     @classmethod
     def main(cls, cmdline=False, **kwargs):
-        from watch.utils import util_progress
+        from kwutil import util_progress
         from watch.utils.simple_dvc import SimpleDVC
         config = cls(cmdline=cmdline, data=kwargs)
         dpath = ub.Path(config['dpath'])
@@ -97,7 +97,7 @@ class CacheCopyCLI(scfg.Config):
         """
         config = cls(cmdline=cmdline, data=kwargs)
 
-        from watch.utils import util_progress
+        from kwutil import util_progress
         from watch.utils.simple_dvc import SimpleDVC
         dpath = ub.Path(config['dpath'])
         dvc = SimpleDVC.coerce(dpath)
@@ -164,7 +164,7 @@ def find_cached_fpaths(dvc, dpath):
 
 
 # def move_dvc_cache(dvc):
-#     from watch.utils import util_progress
+#     from kwutil import util_progress
 
 #     def find_cached_fpaths():
 #         for fpath in dvc.find_sidecar_paths():

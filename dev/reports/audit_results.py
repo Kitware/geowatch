@@ -6,7 +6,7 @@ from watch.utils import kwcoco_extensions
 from watch.mlops import smart_result_parser
 from watch.cli import coco_intensity_histograms
 import rich
-from watch.utils import util_time
+from kwutil import util_time
 from watch.tasks.fusion.datamodules import kwcoco_datamodule
 import cmd_queue
 from watch.mlops import schedule_evaluation

@@ -8,7 +8,7 @@ class MakeRegionFromSiteModelConfig(scfg.DataConfig):
 
 def main():
     from watch.utils import util_gis
-    from watch.utils import util_time
+    from kwutil import util_time
     import copy
     config = MakeRegionFromSiteModelConfig.legacy()
     config['src']

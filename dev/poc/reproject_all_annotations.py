@@ -83,7 +83,7 @@ def main(cmdline=1, **kwargs):
             unused_fpaths.append(fpath)
 
     queue = config.create_queue()
-    from watch.utils import util_path
+    from kwutil import util_path
     for fpath in single_region_fpaths:
         region_id = heuristic_region_for_coco_fpath(fpath)
         region_fpath = (ub.Path(config.true_region_dpath) / (region_id + '.geojson'))

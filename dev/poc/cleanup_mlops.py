@@ -46,7 +46,7 @@ def cleanup_mlops():
     # site_dpaths = list((root_dpath / 'pred/flat').glob('*/*/sites'))
     # sitesumary_dpaths = list((root_dpath / 'pred/flat').glob('*/*/site_summaries'))
 
-    from watch.utils import util_progress
+    from kwutil import util_progress
     import xdev
     pman = util_progress.ProgressManager()
     with pman:

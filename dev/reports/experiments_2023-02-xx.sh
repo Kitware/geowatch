@@ -1205,7 +1205,7 @@ geowatch aggregate \
 
 #Prep models
 python -c "if 1:
-from watch.utils.util_yaml import Yaml
+from kwutil.util_yaml import Yaml
 from watch.utils import simple_dvc
 import watch
 import platform
@@ -1872,7 +1872,7 @@ geowatch aggregate \
 
 #Prep models
 python -c "if 1:
-    from watch.utils.util_yaml import Yaml
+    from kwutil.util_yaml import Yaml
     from watch.utils import simple_dvc
     import watch
     import platform

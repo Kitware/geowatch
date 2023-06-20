@@ -1,7 +1,7 @@
 
 def move_assets():
     import kwcoco
-    from watch.utils import util_path
+    from kwutil import util_path
     import ubelt as ub
 
     bundle_dpath = ub.Path('.')
