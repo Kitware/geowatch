@@ -188,7 +188,7 @@ def main(cmdline=1, **kwargs):
     True Confusion Spec
     -------------------
 
-    "misc_info":  {
+    "cache":  {
         "confusion": {
             "true_site_id": str,          # redundant site id information,
             "pred_site_ids": List[str],   # the matching predicted site ids,
@@ -200,7 +200,7 @@ def main(cmdline=1, **kwargs):
     Predicted Confusion Spec
     -------------------
 
-    "misc_info":  {
+    "cache":  {
         "confusion": {
             "pred_site_id": str,          # redundant site id information,
             "true_site_ids": List[str],   # the matching predicted site ids,
@@ -238,7 +238,7 @@ def main(cmdline=1, **kwargs):
     true_region_model = orig_regions[0]
 
     for site in it.chain(pred_sites, true_sites):
-        site.header['properties'].setdefault('misc_info', {})
+        site.header['properties'].setdefault('cache', {})
 
     id_to_true_site = {s.site_id: s for s in true_sites}
     id_to_pred_site = {s.site_id: s for s in pred_sites}
@@ -247,10 +247,10 @@ def main(cmdline=1, **kwargs):
     # https://gis.stackexchange.com/questions/346518/opening-geojson-style-properties-in-qgis
     for row in true_confusion_rows:
         site = id_to_true_site[row['true_site_id']]
-        site.header['properties']['misc_info']['confusion'] = row
+        site.header['properties']['cache']['confusion'] = row
     for row in pred_confusion_rows:
         site = id_to_pred_site[row['pred_site_id']]
-        site.header['properties']['misc_info']['confusion'] = row
+        site.header['properties']['cache']['confusion'] = row
 
     VALIDATE = 1
     if VALIDATE:
@@ -273,14 +273,14 @@ def main(cmdline=1, **kwargs):
 
     hard_positive_site_ids = []
     for true_site in true_sites:
-        misc = true_site.header['properties']['misc_info']
+        misc = true_site.header['properties']['cache']
         if misc['confusion']['type'] in 'gt_false_neg':
             hard_positive_site_ids.append(true_site.header['properties']['site_id'])
 
     hard_negative_sites = []
     for site_id in cand_df['site_id']:
         pred_site = id_to_pred_site[site_id]
-        misc = pred_site.header['properties']['misc_info']
+        misc = pred_site.header['properties']['cache']
         if misc['confusion']['type'] in 'sm_completely_wrong':
             hard_negative_sites.append(pred_site.deepcopy())
 
@@ -291,8 +291,8 @@ def main(cmdline=1, **kwargs):
         header_prop['site_id'] = region_id + f'_{num:04d}'
         header_prop['status'] = 'negative'
         header_prop['model_content'] = 'annotation'
-        header_prop['misc_info'].pop('confusion', None)
-        header_prop['misc_info']['kwcoco'] = {'weight': 1.5}
+        header_prop['cache'].pop('confusion', None)
+        header_prop['cache']['kwcoco'] = {'weight': 1.5}
         header_prop['comments'] = 'hard_negative'
         for obs in hard_neg.observations():
             props = obs['properties']
@@ -310,11 +310,11 @@ def main(cmdline=1, **kwargs):
     print('hard_positive_site_ids = {}'.format(ub.urepr(hard_positive_site_ids, nl=1)))
     new_true_props = [n.header['properties'] for n in new_true_sites] + [s['properties'] for s in new_region.site_summaries()]
     for prop in new_true_props:
-        if 'misc_info' not in prop:
-            prop['misc_info'] = {}
-        prop['misc_info'].pop('confusion', None)
+        if 'cache' not in prop:
+            prop['cache'] = {}
+        prop['cache'].pop('confusion', None)
         if prop['site_id'] in hard_positive_site_ids:
-            prop['misc_info']['kwcoco'] = {'weight': 2.0}
+            prop['cache']['kwcoco'] = {'weight': 2.0}
             if 'comments' not in prop or not prop['comments']:
                 prop['comments'] = 'hard_positive'
             else:
@@ -417,8 +417,9 @@ def main(cmdline=1, **kwargs):
             print(f'repr2={repr2}')
             print(f'repr3={repr3}')
 
-            set(dst_dset.annots().lookup('role', None))
-            set([x.get('role', None) for x in dst_dset.annots().lookup('misc_info', None)])
+            # set(dst_dset.annots().lookup('role', None))
+            # set([x.get('role', None) for x in dst_dset.annots().lookup('cache', None)])
+
             # dst_dset.annots().take([0, 1, 2])
             viz_dpath = cfsn_dpath
             summary_visualization(dst_dset, viz_dpath)
@@ -503,7 +504,7 @@ def summary_visualization(dst_dset, viz_dpath):
             all_dets.data['frame_index'] = np.array(all_annots.images.lookup('frame_index'))
             all_dets.data['track_id'] = np.array(all_annots.lookup('track_id'))
             all_dets.data['role'] = np.array(all_annots.lookup('role'))
-            all_dets.data['misc_info'] = np.array(all_annots.lookup('misc_info'))
+            all_dets.data['cache'] = np.array(all_annots.lookup('cache'))
 
             groupers = list(zip(all_dets.data['role'], all_dets.data['track_id']))
             unique_tids, groupxs = kwarray.group_indices(groupers)
@@ -512,8 +513,8 @@ def summary_visualization(dst_dset, viz_dpath):
             from shapely.ops import unary_union
             for (role, tid), groupx in zip(unique_tids, groupxs):
                 track_dets = all_dets.take(groupx)
-                misc_info = track_dets.data['misc_info'][0]
-                row = misc_info.copy()
+                cache = track_dets.data['cache'][0]
+                row = cache.copy()
                 row['role'] = role
                 row['confusion_color'] = row['confusion']['color']
                 # assert row['role'] == role

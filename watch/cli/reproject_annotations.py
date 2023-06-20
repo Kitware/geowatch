@@ -469,7 +469,7 @@ def expand_site_models_with_site_summaries(sites, regions, validate_checks=True)
     expected_keys = [
         'index', 'observation_date', 'source', 'sensor_name', 'type', 'current_phase', 'is_occluded',
         'is_site_boundary', 'region_id', 'site_id', 'version', 'status', 'mgrs', 'score', 'start_date', 'end_date',
-        'model_content', 'originator', 'validated', 'geometry', 'misc_info'
+        'model_content', 'originator', 'validated', 'geometry', 'cache'
     ]
 
     # Build site header info (1)
@@ -484,12 +484,12 @@ def expand_site_models_with_site_summaries(sites, regions, validate_checks=True)
         site_df1 = pd.concat(site_rows1).reset_index()
         assert len(set(site_df1['site_id'])) == len(site_df1), 'site ids must be unique'
         site_df1 = site_df1.set_index('site_id', drop=False, verify_integrity=True).drop('index', axis=1)
-        if 'misc_info' not in site_df1.columns:
-            site_df1['misc_info'] = None
+        if 'cache' not in site_df1.columns:
+            site_df1['cache'] = None
 
-        misc_info1 = site_df1['misc_info']
+        misc_info1 = site_df1['cache']
         misc_info1 = [{} if is_nonish(d) else ub.udict.difference(d, {'commit_hash'}) for d in misc_info1]
-        site_df1['misc_info'] = misc_info1
+        site_df1['cache'] = misc_info1
 
     else:
         site_df1 = pd.DataFrame([], columns=expected_keys)
@@ -517,11 +517,11 @@ def expand_site_models_with_site_summaries(sites, regions, validate_checks=True)
 
         site_df2 = site_df2.set_index('site_id', drop=False, verify_integrity=True).drop('index', axis=1)
 
-        if 'misc_info' not in site_df2.columns:
-            site_df2['misc_info'] = None
-        misc_info2 = site_df2['misc_info']
+        if 'cache' not in site_df2.columns:
+            site_df2['cache'] = None
+        misc_info2 = site_df2['cache']
         misc_info2 = [{} if is_nonish(d) else ub.udict.difference(d, {'commit_hash'}) for d in misc_info2]
-        site_df2['misc_info'] = misc_info2
+        site_df2['cache'] = misc_info2
     else:
         site_df2 = pd.DataFrame([], columns=expected_keys)
 
@@ -565,7 +565,7 @@ def expand_site_models_with_site_summaries(sites, regions, validate_checks=True)
         error1 = pandas_reorder_columns(error1, columns)
         error2 = pandas_reorder_columns(error2, columns)
         print('Disagree rows for site models headers')
-        # print(error1.drop(['type', 'region_id', 'misc_info'], axis=1))
+        # print(error1.drop(['type', 'region_id', 'cache'], axis=1))
         print(error1)
         print('Disagree rows for region models site summaries')
         print(error2)
@@ -686,11 +686,11 @@ def make_pseudo_sitemodels(region_row, sitesummaries):
     # observation_properties = [
     #     'type', 'observation_date', 'source', 'sensor_name',
     #     'current_phase', 'is_occluded', 'is_site_boundary', 'score',
-    #     'misc_info'
+    #     'cache'
     # ]
     site_properites = [
         'type', 'version', 'mgrs', 'status', 'model_content', 'start_date', 'end_date', 'originator', 'score',
-        'validated', 'misc_info', 'region_id', 'site_id'
+        'validated', 'cache', 'region_id', 'site_id'
     ]
     # Use region start/end date if the site does not have them
     region_start_date = util_time.coerce_datetime(region_row['start_date']) or util_time.coerce_datetime(DUMMY_START_DATE)
@@ -748,7 +748,7 @@ def make_pseudo_sitemodels(region_row, sitesummaries):
             # 'is_occluded': None,
             # 'is_site_boundary': None,
             'score': score,
-            # 'misc_info': None,
+            # 'cache': None,
         }
 
         psudo_site_features = [geojson.Feature(
@@ -1169,7 +1169,7 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
     # level in the annotation file. This is really the annotation state
     # interpolation problem.
 
-    header_misc_info = ub.udict(site_model.header['properties'].get('misc_info', None) or {})
+    header_misc_info = ub.udict(site_model.header['properties'].get('cache', None) or {})
 
     # Create annotations on each frame we are associated with
     site_anns = []
@@ -1184,7 +1184,7 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
 
         catname = obs_props['current_phase']
 
-        obs_misc_info = ub.udict(obs_props.get('misc_info', None) or {})
+        obs_misc_info = ub.udict(obs_props.get('cache', None) or {})
         misc_info = header_misc_info | obs_misc_info
         ann_extra = misc_info.pop('kwcoco', {})
 
@@ -1272,7 +1272,7 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
                 }
                 ann.update(ann_extra)
                 if misc_info:
-                    ann['misc_info'] = misc_info
+                    ann['cache'] = misc_info
                 site_anns.append(ann)
 
         if want_viz:

@@ -776,14 +776,18 @@ class SiteModel(_Model):
         props = feat['properties']
         for key in date_keys:
             if key in props:
-                props[key] = util_time.coerce_datetime(props[key]).date().isoformat()
+                old_val = props[key]
+                if old_val is not None:
+                    props[key] = util_time.coerce_datetime(old_val).date().isoformat()
 
         date_keys = ['observation_date']
         for feat in self.body_features():
             props = feat['properties']
             for key in date_keys:
                 if key in props:
-                    props[key] = util_time.coerce_datetime(props[key]).date().isoformat()
+                    old_val = props[key]
+                    if old_val is not None:
+                        props[key] = util_time.coerce_datetime(old_val).date().isoformat()
 
     def clamp_scores(self):
         for feat in self.features:

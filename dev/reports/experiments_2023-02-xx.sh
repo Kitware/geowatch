@@ -2313,8 +2313,17 @@ python -m watch.mlops.aggregate \
 #`params.bas_pxl.package_fpath`.str.contains("Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026")
 
 
+
+
+#### HOROLOGIC SV PARAM SWEEP ####
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+
+python -m watch.utils.simple_dvc request
+    "$DVC_EXPT_DPATH"/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt \
+    "$DVC_EXPT_DPATH"/models/depth_pcd/basicModel2.h5 \
+    "$DVC_EXPT_DPATH"/models/depth_pcd/model3.h5
+
 geowatch schedule --params="
     matrix:
         bas_pxl.package_fpath:
@@ -2395,22 +2404,42 @@ geowatch schedule --params="
             - 0.40
             - 0.45
     submatrices:
-        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R001_I2LS.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-KR_R001.kwcoco.json
-        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-KR_R002_I2LS.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-KR_R002.kwcoco.json
-        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-BR_R002_I2LS.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-BR_R002.kwcoco.json
-        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-CH_R001_I2LS.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-CH_R001.kwcoco.json
-        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-NZ_R001_I2LS.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-NZ_R001.kwcoco.json
-        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop6-MeanYear10GSD-V2/combo_imganns-AE_R001_I2LS.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop6/imgonly-AE_R001.kwcoco.json
+        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-KR_R001_EI2LMSC.kwcoco.zip
+          sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop7/KR_R001/imgonly-KR_R001.kwcoco.json
+        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-KR_R002_EI2LMSC.kwcoco.zip
+          sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop7/KR_R002/imgonly-KR_R002.kwcoco.json
+        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-AE_R001_EI2LMSC.kwcoco.zip
+          sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop7/AE_R001/imgonly-AE_R001.kwcoco.json
+        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-BR_R002_EI2LMSC.kwcoco.zip
+          sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop7/BR_R002/imgonly-BR_R002.kwcoco.json
+        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-CH_R001_EI2LMSC.kwcoco.zip
+          sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop7/CH_R001/imgonly-CH_R001.kwcoco.json
+        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-NZ_R001_EI2LMSC.kwcoco.zip
+          sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop7/NZ_R001/imgonly-NZ_R001.kwcoco.json
+        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-PE_R001_EI2LMSC.kwcoco.zip
+          sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop7/PE_R001/imgonly-PE_R001.kwcoco.json
+        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-BR_R004_EI2LMSC.kwcoco.zip
+          sv_crop.crop_src_fpath: $DVC_DATA_DPATH/Drop7/BR_R004/imgonly-BR_R004.kwcoco.json
     " \
     --root_dpath="$DVC_EXPT_DPATH/_horologic_sv_sweep" \
-    --devices="0," --tmux_workers=2 \
-    --backend=serial --queue_name "_horologic_sv_sweep" \
+    --devices="0,1,2,3" --tmux_workers=8 \
+    --backend=tmux --queue_name "_horologic_sv_sweep" \
     --pipeline=bas \
     --skip_existing=1 \
-    --run=0
+    --run=1
+
+### Helper to build SV crop dataset submatrix
+python -c "if 1:
+    import ubelt as ub
+    regions = ['KR_R001', 'KR_R002', 'AE_R001', 'BR_R002', 'CH_R001', 'NZ_R001', 'PE_R001', 'BR_R004']
+    feature_code = 'EI2LMSC'
+    dollar = chr(36)
+    dvc_var1 = dollar + 'DVC_DATA_DPATH'
+    dvc_var2 = dollar + 'DVC_DATA_DPATH'
+    for region_id in regions:
+        print(ub.codeblock(
+            f'''
+            - bas_pxl.test_dataset: {dvc_var1}/Drop7-MedianNoWinter10GSD/combo_imganns-{region_id}_{feature_code}.kwcoco.zip
+              sv_crop.crop_src_fpath: {dvc_var2}/Drop7/{region_id}/imgonly-{region_id}.kwcoco.json
+            '''))
+"
