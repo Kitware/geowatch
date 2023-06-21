@@ -433,6 +433,7 @@ def summary_visualization(dst_dset, viz_dpath):
     resolution = '5GSD'
 
     from kwutil import util_progress
+    from kwutil import util_time
     # from watch.utils import util_kwimage
     import kwarray
     import kwimage
@@ -471,7 +472,6 @@ def summary_visualization(dst_dset, viz_dpath):
                     delayed = coco_img.imdelay(chanels, resolution=resolution, nodata_method='float')
                     job = jobs.submit(delayed.finalize)
 
-                    from kwutil import util_time
                     time = util_time.coerce_datetime(coco_img['timestamp'])
                     job.time = time
                     job.coco_img = coco_img
@@ -484,14 +484,14 @@ def summary_visualization(dst_dset, viz_dpath):
                 job_loader = pman(jobs.as_completed(), total=len(jobs), desc='averaging heatmaps')
                 for job in job_loader:
                     im = job.result()
+                    sensor = job.coco_img['sensor_coarse']
 
-                    if oldest_time is None or oldest_time > job.time:
-                        if job.coco_img['sensor_coarse'] == 'S2':
+                    if sensor in {'S2', 'Sentinel-2'}:
+                        if oldest_time is None or oldest_time > job.time:
                             oldest_time = job.time
                             oldest_img = im
 
-                    if newest_time is None or newest_time < job.time:
-                        if job.coco_img['sensor_coarse'] == 'S2':
+                        if newest_time is None or newest_time < job.time:
                             newest_time = job.time
                             newest_img = im
 
@@ -527,7 +527,6 @@ def summary_visualization(dst_dset, viz_dpath):
             print(ub.udict(role_to_summary).map_values(len))
 
             # canvas = kwplot.make_heatmask(util_kwimage.exactly_1channel(mean_heatmap), cmap='magma')[:, :, 0:3]
-
             old_canvas = kwimage.normalize_intensity(oldest_img, axis=2)
             new_canvas = kwimage.normalize_intensity(newest_img, axis=2)
 
@@ -543,16 +542,16 @@ def summary_visualization(dst_dset, viz_dpath):
             # canvas_cfsn = canvas.copy()
 
             canvases = {
-                'new': {
-                    'true': new_canvas.copy(),
-                    'pred': new_canvas.copy(),
-                    'cfsn': new_canvas.copy(),
-                },
-                'old': {
-                    'true': old_canvas.copy(),
-                    'pred': old_canvas.copy(),
-                    'cfsn': old_canvas.copy(),
-                },
+                # 'new': {
+                #     'true': new_canvas.copy(),
+                #     'pred': new_canvas.copy(),
+                #     'cfsn': new_canvas.copy(),
+                # },
+                # 'old': {
+                #     'true': old_canvas.copy(),
+                #     'pred': old_canvas.copy(),
+                #     'cfsn': old_canvas.copy(),
+                # },
                 'avg': {
                     'true': canvas.copy(),
                     'pred': canvas.copy(),
@@ -581,14 +580,13 @@ def summary_visualization(dst_dset, viz_dpath):
                 v1['pred'] = kwimage.draw_header_text(v1['pred'], 'pred confusion')
                 v1['cfsn'] = kwimage.draw_header_text(v1['cfsn'], 'both')
 
-            row1 = kwimage.stack_images(list(canvases['avg'].values()), axis=1, pad=10)
-            row2 = kwimage.stack_images(list(canvases['old'].values()), axis=1, pad=10)
-            row3 = kwimage.stack_images(list(canvases['new'].values()), axis=1, pad=10)
-            row1 = kwimage.ensure_uint255(row1)
-            row2 = kwimage.ensure_uint255(row2)
-            row3 = kwimage.ensure_uint255(row3)
-
-            final_canvas = kwimage.stack_images([row1, row2, row3], axis=0, pad=5)
+            row_keys = ub.oset(['avg', 'old', 'new']) & set(canvases.keys())
+            rows = []
+            for rk in row_keys:
+                _row = kwimage.stack_images(list(canvases[rk].values()), axis=1, pad=10)
+                _row = kwimage.ensure_uint255(_row)
+                rows.append(_row)
+            final_canvas = kwimage.stack_images(rows, axis=0, pad=5)
 
             fpath = viz_dpath / f'confusion_{video["name"]}.jpg'
             kwimage.imwrite(fpath, final_canvas)
