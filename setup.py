@@ -197,40 +197,41 @@ except Exception:
 REQUIREMENTS = (
     parse_requirements('requirements/runtime.txt')
 )
+
+__autogen__ = """
+
+import ubelt as ub
+dpath =ub.Path('requirements')
+for p in dpath.ls():
+    print(f'{p.stem!r},')
+
+"""
+
+nameable_requirements = [
+    'aws',
+    'cold',
+    'development',
+    'dvc',
+    'gdal',
+    'linting',
+    'materials',
+    'mmcv',
+    'optional',
+    'python_build_tools',
+    'runtime',
+    'tensorflow',
+    'tests',
+
+    'graphics',
+    'headless',
+]
+
 EXTRAS_REQUIRES = {
     'all': parse_requirements('requirements.txt'),
-    'development': parse_requirements('requirements/development.txt'),
-    'tests': parse_requirements('requirements/tests.txt'),
-    'optional': parse_requirements('requirements/optional.txt'),
-    'dvc': parse_requirements('requirements/dvc.txt'),
-    'tensorflow': parse_requirements('requirements/tensorflow.txt'),
-    'linting': parse_requirements('requirements/linting.txt'),
-    'cold': parse_requirements('requirements/cold.txt', versions='loose'),
-    'materials': parse_requirements('requirements/materials.txt', versions='loose'),
-    # Really annoying that this is the best we can do
-    # The user *must* choose either headless or graphics
-    # to get a complete working install.
-    'headless': parse_requirements('requirements/headless.txt'),
-    'graphics': parse_requirements('requirements/graphics.txt'),
-    'all-strict': parse_requirements('requirements.txt', versions='strict'),
-    'linting-strict': parse_requirements('requirements/linting.txt', versions='strict'),
-    'runtime-strict': parse_requirements('requirements/runtime.txt', versions='strict'),
-    'development-strict': parse_requirements('requirements/development.txt', versions='strict'),
-    'tests-strict': parse_requirements('requirements/tests.txt', versions='strict'),
-    'optional-strict': parse_requirements('requirements/optional.txt', versions='strict'),
-    'dvc-strict': parse_requirements('requirements/dvc.txt', versions='strict'),
-    'tensorflow-strict': parse_requirements('requirements/tensorflow.txt', versions='strict'),
-    'cold-strict': parse_requirements('requirements/cold.txt', versions='strict'),
-    'materials-strict': parse_requirements('requirements/materials.txt', versions='strict'),
-    # Really annoying that this is the best we can do
-    # The user *must* choose either headless or graphics
-    # to get a complete working install.
-    'headless-strict': parse_requirements('requirements/headless.txt', versions='strict'),
-    'graphics-strict': parse_requirements('requirements/graphics.txt', versions='strict'),
 }
-# import ubelt as ub
-# print('EXTRAS_REQUIRES = {}'.format(ub.urepr(EXTRAS_REQUIRES, nl=2)))
-
+for key in nameable_requirements:
+    EXTRAS_REQUIRES[key] = parse_requirements(f'requirements/{key}.txt', versions='loose')
+    EXTRAS_REQUIRES[key] = parse_requirements(f'requirements/{key}.txt', versions='strict')
 
 NAME = 'geowatch'
 

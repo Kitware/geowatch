@@ -137,10 +137,8 @@ fi
 if [[ "$WATCH_STRICT" == "1" ]]; then
     ./dev/make_strict_req.sh
     REQUIREMENTS_DPATH=requirements-strict
-    EXTRAS="[all-strict,headless-strict,dvc-strict]"
 else
     REQUIREMENTS_DPATH=requirements
-    EXTRAS="[all,headless,dvc]"
 fi
 
 # Small python script to compute the extras tag for the pip install

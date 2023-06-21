@@ -34,6 +34,8 @@ class TeamFeatColdConfig(scfg.DataConfig):
 
 
 def main():
+    import os
+    os.environ['NO_COLOR'] = '1'
     config = TeamFeatColdConfig.cli(strict=True)
     print('config = {}'.format(ub.urepr(config, nl=0, align=':')))
     from watch.utils.util_framework import download_region
@@ -75,6 +77,7 @@ def main():
     # Quick and dirty, just the existing prepare teamfeat script to get the
     # cold invocation. This has a specific output pattern that we hard code
     # here.
+
     from watch.cli import prepare_teamfeats
     base_fpath = full_input_kwcoco_fpath
     prepare_teamfeats.main(
