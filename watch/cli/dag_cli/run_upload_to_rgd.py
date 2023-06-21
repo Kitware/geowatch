@@ -54,6 +54,10 @@ def main():
                         default=8,
                         required=False,
                         help="Number of jobs to run in parallel")
+    parser.add_argument("-x", "--expiration_time",
+                        type=int,
+                        required=False,
+                        help="Number of days to keep system run output in RGD")
 
     upload_to_rgd(**vars(parser.parse_args()))
 
@@ -66,7 +70,8 @@ def upload_to_rgd(input_site_models_s3,
                   aws_profile=None,
                   performer_shortcode='KIT',
                   jobs=8,
-                  rgd_endpoint_override=None):
+                  rgd_endpoint_override=None,
+                  expiration_time=None):
     # Ensure performer_shortcode is uppercase
     performer_shortcode = performer_shortcode.upper()
 
@@ -124,6 +129,10 @@ def upload_to_rgd(input_site_models_s3,
         post_model_data = {"performer": performer_shortcode,
                            "title": title,
                            "region": {"name": region_id}}
+
+        if expiration_time is not None:
+            post_model_data['expiration_time'] = expiration_time
+
         post_model_result = requests.post(
             post_model_url,
             json=post_model_data,
