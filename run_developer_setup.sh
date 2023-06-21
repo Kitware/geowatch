@@ -130,7 +130,7 @@ WITH_APT_ENSURE=$WITH_APT_ENSURE
 # Do everything
 
 if [[ "$WITH_APT_ENSURE" == "1" ]]; then
-    apt_ensure ffmpeg tmux jq tree p7zip-full rsync
+    apt_ensure ffmpeg tmux jq tree p7zip-full rsync libgsl-dev
 fi
 
 

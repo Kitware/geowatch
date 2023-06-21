@@ -16,7 +16,7 @@ RUN <<EOF
 #!/bin/bash
 apt update -q
 DEBIAN_FRONTEND=noninteractive apt install -q -y --no-install-recommends \
-        ffmpeg vim tmux jq tree p7zip-full rsync
+        ffmpeg vim tmux jq tree p7zip-full rsync libgsl-dev
 apt-get clean 
 rm -rf /var/lib/apt/lists/*
 EOF
