@@ -9,7 +9,7 @@ CommandLine:
 '
 if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
 	# Running as a script
-	set -euo pipefail
+	set -eo pipefail
 fi
 
 
