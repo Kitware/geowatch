@@ -19,3 +19,5 @@ sed 's/>=/==/g' requirements/linting.txt > requirements-strict/linting.txt
 sed 's/>=/==/g' requirements/dvc.txt > requirements-strict/dvc.txt
 sed 's/>=/==/g' requirements/tensorflow.txt > requirements-strict/tensorflow.txt
 sed 's/>=/==/g' requirements/python_build_tools.txt > requirements-strict/python_build_tools.txt
+sed 's/>=/==/g' requirements/materials.txt > requirements-strict/materials.txt
+sed 's/>=/==/g' requirements/cold.txt > requirements-strict/cold.txt

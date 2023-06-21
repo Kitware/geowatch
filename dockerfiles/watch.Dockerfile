@@ -9,6 +9,7 @@ ARG BASE_IMAGE=pyenv:311
 FROM $BASE_IMAGE
 
 ENV HOME=/root
+ENV PIP_ROOT_USER_ACTION=ignore
 
 ## Install Prerequisites 
 RUN <<EOF

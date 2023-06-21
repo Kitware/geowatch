@@ -205,6 +205,8 @@ EXTRAS_REQUIRES = {
     'dvc': parse_requirements('requirements/dvc.txt'),
     'tensorflow': parse_requirements('requirements/tensorflow.txt'),
     'linting': parse_requirements('requirements/linting.txt'),
+    'cold': parse_requirements('requirements/cold.txt', versions='loose'),
+    'materials': parse_requirements('requirements/materials.txt', versions='loose'),
     # Really annoying that this is the best we can do
     # The user *must* choose either headless or graphics
     # to get a complete working install.
@@ -218,6 +220,8 @@ EXTRAS_REQUIRES = {
     'optional-strict': parse_requirements('requirements/optional.txt', versions='strict'),
     'dvc-strict': parse_requirements('requirements/dvc.txt', versions='strict'),
     'tensorflow-strict': parse_requirements('requirements/tensorflow.txt', versions='strict'),
+    'cold-strict': parse_requirements('requirements/cold.txt', versions='strict'),
+    'materials-strict': parse_requirements('requirements/materials.txt', versions='strict'),
     # Really annoying that this is the best we can do
     # The user *must* choose either headless or graphics
     # to get a complete working install.

@@ -7,9 +7,13 @@ CommandLine:
     cd $HOME/code/watch
     ./run_developer_setup.sh
 '
+if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
+	# Running as a script
+	set -euo pipefail
+fi
 
 
-if [[ "$VIRTUAL_ENV" == "" ]]; then
+if [[ "$VIRTUAL_ENV" == "" && "$PIP_ROOT_USER_ACTION" != "ignore" ]]; then
     echo "NOT INSIDE OF A VIRTUALENV. This script may not run correctly"
 fi
 
