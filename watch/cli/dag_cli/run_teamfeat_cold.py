@@ -30,6 +30,8 @@ class TeamFeatColdConfig(scfg.DataConfig):
             Output as simple newline separated STAC items
             '''))
 
+    expt_dvc_dpath = scfg.Value('/root/data/smart_expt_dvc', help='location of the experiment DVC repo')
+
 
 def main():
     config = TeamFeatColdConfig.cli(strict=True)
@@ -78,6 +80,7 @@ def main():
     prepare_teamfeats.main(
         cmdline=0,
         with_cold=1,
+        expt_dvc_dpath=config.expt_dvc_dpath,
         base_fpath=full_input_kwcoco_fpath,
         cold_workers=4,
         cold_workermode='process',
