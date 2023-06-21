@@ -231,7 +231,7 @@ EXTRAS_REQUIRES = {
 }
 for key in nameable_requirements:
     EXTRAS_REQUIRES[key] = parse_requirements(f'requirements/{key}.txt', versions='loose')
-    EXTRAS_REQUIRES[key] = parse_requirements(f'requirements/{key}.txt', versions='strict')
+    EXTRAS_REQUIRES[key + '-strict'] = parse_requirements(f'requirements/{key}.txt', versions='strict')
 
 NAME = 'geowatch'
 
