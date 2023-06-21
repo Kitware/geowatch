@@ -58,8 +58,10 @@ def main():
     # NOTE:
     # For COLD we need to compute on the full non-time-combined data,
     # and then transfer the features to the time-combined data.
+    ingress_kwcoco_path = ub.Path(ingress_kwcoco_path)
 
-    full_input_kwcoco_fpath = ub.Path(ingress_kwcoco_path)
+    # TODO: input/output paths should come from the config
+    full_input_kwcoco_fpath = ingress_kwcoco_path.parent / 'cropped_kwcoco_for_bas.json'
     timecombined_input_kwcoco_fpath = ub.Path(full_input_kwcoco_fpath).augment(
         stemsuffix='_timecombined', ext='.kwcoco.zip', multidot=True)
 
@@ -105,7 +107,8 @@ def main():
         config={
             'copy_assets': True,
             'io_workers': 4,
-        }
+        },
+        node_dpath='.',
     )
     command = transfer_node.final_command()
     ub.cmd(command, capture=False, verbose=3, check=True)
