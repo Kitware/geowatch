@@ -21,3 +21,5 @@ sed 's/>=/==/g' requirements/tensorflow.txt > requirements-strict/tensorflow.txt
 sed 's/>=/==/g' requirements/python_build_tools.txt > requirements-strict/python_build_tools.txt
 sed 's/>=/==/g' requirements/materials.txt > requirements-strict/materials.txt
 sed 's/>=/==/g' requirements/cold.txt > requirements-strict/cold.txt
+sed 's/>=/==/g' requirements/headless.txt > requirements-strict/headless.txt
+sed 's/>=/==/g' requirements/graphics.txt > requirements-strict/graphics.txt
