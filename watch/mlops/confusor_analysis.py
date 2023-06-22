@@ -477,9 +477,9 @@ def summary_visualization(dst_dset, viz_dpath):
                     job.coco_img = coco_img
 
                 oldest_time = None
-                oldest_img = None
                 newest_time = None
-                newest_img = None
+                # oldest_img = None
+                # newest_img = None
 
                 job_loader = pman(jobs.as_completed(), total=len(jobs), desc='averaging heatmaps')
                 for job in job_loader:
@@ -489,11 +489,11 @@ def summary_visualization(dst_dset, viz_dpath):
                     if sensor in {'S2', 'Sentinel-2'}:
                         if oldest_time is None or oldest_time > job.time:
                             oldest_time = job.time
-                            oldest_img = im
+                            # oldest_img = im
 
                         if newest_time is None or newest_time < job.time:
                             newest_time = job.time
-                            newest_img = im
+                            # newest_img = im
 
                     im = kwimage.atleast_3channels(im)
                     running.update(im)
@@ -527,8 +527,8 @@ def summary_visualization(dst_dset, viz_dpath):
             print(ub.udict(role_to_summary).map_values(len))
 
             # canvas = kwplot.make_heatmask(util_kwimage.exactly_1channel(mean_heatmap), cmap='magma')[:, :, 0:3]
-            old_canvas = kwimage.normalize_intensity(oldest_img, axis=2)
-            new_canvas = kwimage.normalize_intensity(newest_img, axis=2)
+            # old_canvas = kwimage.normalize_intensity(oldest_img, axis=2)
+            # new_canvas = kwimage.normalize_intensity(newest_img, axis=2)
 
             current = running.current()
             mean_heatmap = current['mean']

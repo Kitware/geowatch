@@ -2406,21 +2406,21 @@ geowatch schedule --params="
             - 0.45
     submatrices:
         - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-KR_R001_EI2LMSC.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Drop7/KR_R001/imgonly-KR_R001.kwcoco.json
+          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/KR_R001/imgonly-KR_R001.kwcoco.zip
         - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-KR_R002_EI2LMSC.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Drop7/KR_R002/imgonly-KR_R002.kwcoco.json
+          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/KR_R002/imgonly-KR_R002.kwcoco.zip
         - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-AE_R001_EI2LMSC.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Drop7/AE_R001/imgonly-AE_R001.kwcoco.json
+          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/AE_R001/imgonly-AE_R001.kwcoco.zip
         - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-BR_R002_EI2LMSC.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Drop7/BR_R002/imgonly-BR_R002.kwcoco.json
+          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/BR_R002/imgonly-BR_R002.kwcoco.zip
         - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-CH_R001_EI2LMSC.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Drop7/CH_R001/imgonly-CH_R001.kwcoco.json
+          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/CH_R001/imgonly-CH_R001.kwcoco.zip
         - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-NZ_R001_EI2LMSC.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Drop7/NZ_R001/imgonly-NZ_R001.kwcoco.json
+          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/NZ_R001/imgonly-NZ_R001.kwcoco.zip
         - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-PE_R001_EI2LMSC.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Drop7/PE_R001/imgonly-PE_R001.kwcoco.json
+          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/PE_R001/imgonly-PE_R001.kwcoco.zip
         - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-BR_R004_EI2LMSC.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Drop7/BR_R004/imgonly-BR_R004.kwcoco.json
+          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/BR_R004/imgonly-BR_R004.kwcoco.zip
     " \
     --root_dpath="$DVC_EXPT_DPATH/_horologic_sv_sweep" \
     --devices="0,1,2,3" --tmux_workers=8 \
@@ -2467,9 +2467,9 @@ python -c "if 1:
     dvc_var1 = dollar + 'DVC_DATA_DPATH'
     dvc_var2 = dollar + 'DVC_HDD_DATA_DPATH'
     for region_id in regions:
-        print(ub.codeblock(
+        print(ub.indent(ub.codeblock(
             f'''
             - bas_pxl.test_dataset: {dvc_var1}/Drop7-MedianNoWinter10GSD/combo_imganns-{region_id}_{feature_code}.kwcoco.zip
-              sv_crop.crop_src_fpath: {dvc_var2}/Drop7/{region_id}/imgonly-{region_id}.kwcoco.json
-            '''))
+              sv_crop.crop_src_fpath: {dvc_var2}/Aligned-Drop7/{region_id}/imgonly-{region_id}.kwcoco.zip
+          '''), ' ' * 8))
 "
