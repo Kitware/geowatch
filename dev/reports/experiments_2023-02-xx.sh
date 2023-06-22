@@ -2429,6 +2429,35 @@ geowatch schedule --params="
     --skip_existing=1 \
     --run=1
 
+
+# Pull out baseline tables
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+python -m watch.mlops.aggregate \
+    --pipeline=bas \
+    --target "
+        - $DVC_EXPT_DPATH/_toothbrush_drop7_nowinter
+    " \
+    --output_dpath="$DVC_EXPT_DPATH/_toothbrush_drop7_nowinter/aggregate" \
+    --resource_report=0 \
+    --eval_nodes="
+        - bas_poly_eval
+        #- bas_pxl_eval
+    " \
+    --plot_params="
+        enabled: 0
+        stats_ranking: 0
+        min_variations: 1
+    " \
+    --stdout_report="
+        top_k: 10
+        per_group: 1
+        macro_analysis: 0
+        analyze: 0
+        print_models: True
+        reference_region: final
+    " \
+    --rois="KR_R002"
+
 ### Helper to build SV crop dataset submatrix
 python -c "if 1:
     import ubelt as ub

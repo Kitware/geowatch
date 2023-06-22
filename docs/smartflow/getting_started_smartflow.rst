@@ -36,10 +36,13 @@ To configure kubernetes to talk to the Kitware smartflow server run:
 
 .. code:: bash
 
-    export ENVIRONMENT_NAME=kitware-prod-v4
+    #export ENVIRONMENT_NAME=kitware-prod-v4
+
+    export ENVIRONMENT_NAME="kw-v3-0-0"
     export AWS_PROFILE="iarpa"
     export AWS_REGION=us-west-2
     export AWS_ACCOUNT_ID=$(aws sts --profile "$AWS_PROFILE" get-caller-identity --query "Account" --output text)
+
     echo "
     Verify this is your correct kitware-smart AWS Account ID
     AWS_ACCOUNT_ID = $AWS_ACCOUNT_ID

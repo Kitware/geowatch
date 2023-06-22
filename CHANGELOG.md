@@ -15,6 +15,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Added timeout to gdal subprocess commands to prevent hanging 
 * Fixed `geowatch model_stats` not respecting the LightningCLI config
 * If the kwcoco file is in a read-only directory, cached hashids no longer raise an error.
+* Fixed edge connections in mlops site characterization pipelines 
 
 ### Changed
 * MLOPs Nodes can now specify input paths as dictionaries if default input configs are known.

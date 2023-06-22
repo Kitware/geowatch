@@ -301,6 +301,18 @@ class SmartGlobalHelper:
                     'objective1': 'maximize',
                 },
             ]
+        elif eval_type == 'sc_poly_eval':
+            vantage_points = [
+                {
+                    'metric1': 'metrics.sc_poly_eval.sc_macro_f1',
+                    'metric2': 'metrics.sc_poly_eval.bas_faa_f1',
+
+                    'scale1': 'linear',
+                    'scale2': 'linear',
+
+                    'objective1': 'maximize',
+                },
+            ]
 
         return vantage_points
 
@@ -323,6 +335,10 @@ class SmartGlobalHelper:
                 'bas_faa_f1',
             ]
         elif agg.type == 'sc_poly_eval':
+            _display_metrics_suffixes = [
+                'macro_f1_siteprep',
+                'macro_f1_active',
+            ]
             _primary_metrics_suffixes = [
                 'sc_macro_f1', 'bas_faa_f1'
             ]

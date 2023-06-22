@@ -295,11 +295,11 @@ class Pipeline:
         from cmd_queue.util import util_networkx
         print('')
         print('Process Graph')
-        util_networkx.write_network_text(self.proc_graph, path=rich.print, end='')
+        util_networkx.write_network_text(self.proc_graph, path=rich.print, end='', vertical_chains=True)
 
         print('')
         print('IO Graph')
-        util_networkx.write_network_text(self.io_graph, path=rich.print, end='')
+        util_networkx.write_network_text(self.io_graph, path=rich.print, end='', vertical_chains=True)
 
     @profile
     def submit_jobs(self, queue=None, skip_existing=False, enable_links=True,
@@ -342,7 +342,9 @@ class Pipeline:
 
         for node_name in node_order:
             node = self.proc_graph.nodes[node_name]['node']
-
+            # print('-----')
+            # print(f'node_name={node_name}')
+            # print(f'node.enabled={node.enabled}')
             if not node.enabled:
                 node_status[node_name] = 'disabled'
                 node.will_exist = node.does_exist
