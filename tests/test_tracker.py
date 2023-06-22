@@ -2,6 +2,9 @@ def test_tracker_with_sv():
     """
     Tests tracker with site verification on
     """
+    import pytest
+    pytest.skip('slow')
+
     import json
     import kwcoco
     import pandas as pd

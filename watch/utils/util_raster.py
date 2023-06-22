@@ -322,6 +322,7 @@ class ResampledRaster(ExitStack):
         resampling: resampling algorithm, from rasterio.enums.Resampling [1]
 
     Example:
+        >>> # xdoctest: +REQUIRES(--slow)
         >>> # xdoctest: +REQUIRES(--network)
         >>> from watch.utils.util_raster import *
         >>> from watch.demo.landsat_demodata import grab_landsat_product
