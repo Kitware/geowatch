@@ -41,7 +41,7 @@ apt_ensure(){
     for PKG_NAME in "${ARGS[@]}"
     do
         #apt_ensure_single $EXE_NAME
-        RESULT=$(dpkg -l "$PKG_NAME" | grep "^ii *$PKG_NAME")
+        RESULT=$(dpkg -l "$PKG_NAME" | grep "^ii *$PKG_NAME" || true)
         if [ "$RESULT" == "" ]; then
             echo "Do not have PKG_NAME='$PKG_NAME'"
             # shellcheck disable=SC2268,SC2206
