@@ -72,6 +72,11 @@ def main():
     timecombined_output_kwcoco_fpath = ub.Path(timecombined_input_kwcoco_fpath).augment(
         stemsuffix='_cold', ext='.kwcoco.zip', multidot=True)
 
+    from watch.cli import watch_coco_stats
+    from kwcoco.cli import coco_stats
+    watch_coco_stats.main(cmdline=0, src=full_input_kwcoco_fpath)
+    coco_stats.main(cmdline=0, src=full_input_kwcoco_fpath)
+
     # TOOD: better passing of configs
 
     # Quick and dirty, just the existing prepare teamfeat script to get the
@@ -96,6 +101,12 @@ def main():
     base_combo_fpath = base_fpath.parent / (f'combo_{subset_name}_{combo_code}.kwcoco.zip')
     full_output_kwcoco_fpath = base_combo_fpath
 
+    watch_coco_stats.main(cmdline=0, src=full_output_kwcoco_fpath)
+    coco_stats.main(cmdline=0, src=full_output_kwcoco_fpath)
+
+    watch_coco_stats.main(cmdline=0, src=timecombined_input_kwcoco_fpath)
+    coco_stats.main(cmdline=0, src=timecombined_input_kwcoco_fpath)
+
     ###
     # Execute the transfer of COLD features to the time-combined dataset
     transfer_node = ProcessNode(
@@ -118,6 +129,9 @@ def main():
     )
     command = transfer_node.final_command()
     ub.cmd(command, capture=False, verbose=3, check=True)
+
+    watch_coco_stats.main(cmdline=0, src=timecombined_output_kwcoco_fpath)
+    coco_stats.main(cmdline=0, src=timecombined_output_kwcoco_fpath)
 
     # 3. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to

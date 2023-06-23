@@ -793,28 +793,6 @@ def checkpoint_filepath_info(fname):
         parse.parse('{prefix}foo={bar}', 'foo=3')
         parse.parse('{prefix}foo={bar}', 'afoao=3')
 
-    Example:
-        >>> fnames = [
-        >>>     'epoch=1-step=10.foo',
-        >>>     'epoch=1-step=10-v2.foo',
-        >>>     'epoch=1-step=10',
-        >>>     'epoch=1-step=10-v2',
-        >>>     'junkepoch=1-step=10.foo',
-        >>>     'junk/epoch=1-step=10-v2.foo',
-        >>>     'junk-epoch=1-step=10',
-        >>>     'junk_epoch=1-step=10-v2',
-        >>> ]
-        >>> for fname in fnames:
-        >>>     info = checkpoint_filepath_info(fname)
-        >>>     print(f'info={info}')
-        info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v0'}
-        info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v2'}
-        info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v0'}
-        info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v2'}
-        info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v0'}
-        info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v2'}
-        info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v0'}
-        info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v2'}
     """
     import parse
     # We assume it must have this
@@ -851,28 +829,6 @@ def my_nonstandard_merge(smaller, larger, smaller_keys, move_cols, mode=0):
         smaller_keys (List[str]): columns that specify a single row in
             `smaller` and groups of rows in `larger`
         move_cols (List[str]): the columns to move.
-
-    Example:
-        >>> from watch.mlops.old.expt_report import *  # NOQA
-        >>> smaller = pd.DataFrame([
-        >>>     {'k1': 1, 'k2': 1, 'm1': 2, 'm2': 2, 's': 2, 'u1': 9},
-        >>>     {'k1': 3, 'k2': 3, 'm1': 4, 'm2': 3, 's': 2, 'u2': 8},
-        >>>     {'k1': 5, 'k2': 5, 'm1': 6, 'm2': 5, 's': 2, 'u3': 7},
-        >>> ])
-        >>> larger = pd.DataFrame([
-        >>>     {'k1': 1, 'k2': 1, 'm1': np.nan, 'u2': 1, 's': 3},
-        >>>     {'k1': 1, 'k2': 1, 'm1': np.nan, 'u2': 2, 's': 3},
-        >>>     {'k1': 3, 'k2': 3, 'm1': np.nan, 'u2': 3, 's': 3},
-        >>>     {'k1': 3, 'k2': 3, 'm1': np.nan, 'u2': 4, 's': 3},
-        >>>     {'k1': 5, 'k2': 5, 'm1': np.nan, 'u2': 5, 's': 3},
-        >>>     {'k1': 5, 'k2': 5, 'm1': np.nan, 'u2': 6, 's': 3},
-        >>> ])
-        >>> smaller_keys = ['k1', 'k2']  # should be usable as an index
-        >>> move_cols = ['m1', 'm2']  # columns to move
-        >>> larger1 = my_nonstandard_merge(smaller, larger, smaller_keys, move_cols, mode=0)
-        >>> print(larger1)
-        >>> larger2 = my_nonstandard_merge(smaller, larger, smaller_keys, move_cols, mode=1)
-        >>> print(larger2)
 
     Ignore:
         import timerit

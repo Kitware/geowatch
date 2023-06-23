@@ -14,7 +14,7 @@ from os.path import basename, dirname, join
 try:
     from xdev import profile
 except Exception:
-    profile = ub.probile
+    profile = ub.identity
 
 
 class StacToCocoConfig(scfg.DataConfig):
