@@ -67,6 +67,9 @@ class WatchCocoStats(scfg.DataConfig):
         if fpaths is None or len(fpaths) == 0:
             raise ValueError('no files to compute stats on')
 
+        if isinstance(fpaths, os.PathLike):
+            fpaths = [fpaths]
+
         if isinstance(fpaths, str):
             if ',' in fpaths:
                 print('warning: might not handle this case well')
