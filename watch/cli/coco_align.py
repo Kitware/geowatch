@@ -366,6 +366,7 @@ def main(cmdline=True, **kw):
 
     Example:
         >>> # Test timeout
+        >>> # xdoctest: +REQUIRES(env:SLOW_DOCTESTS)
         >>> from watch.cli.coco_align import *  # NOQA
         >>> from watch.demo.landsat_demodata import grab_landsat_product
         >>> from watch.gis.geotiff import geotiff_metadata

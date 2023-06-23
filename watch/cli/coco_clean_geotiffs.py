@@ -138,6 +138,7 @@ def main(cmdline=1, **kwargs):
         xdoctest -m watch.cli.coco_clean_geotiffs main
 
     Example:
+        >>> # xdoctest: +REQUIRES(env:SLOW_DOCTESTS)
         >>> # Generate a dataset that has bad nodata values
         >>> from watch.cli.coco_clean_geotiffs import *  # NOQA
         >>> import kwimage

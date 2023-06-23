@@ -178,7 +178,8 @@ def run_stac_to_cropped_kwcoco(config):
     from watch.utils.util_framework import AWS_S3_Command
     from watch.utils import util_framework
     from kwutil.util_yaml import Yaml
-    from kwcoco import ChannelSpec
+    from delayed_image.channel_spec import ChannelSpec
+    # from kwcoco import ChannelSpec
     from watch.cli import coco_align
     from watch.cli import coco_time_combine
     aws_ls = AWS_S3_Command('ls', profile=config.aws_profile)
@@ -350,16 +351,16 @@ def run_stac_to_cropped_kwcoco(config):
     # 4. Crop ingress KWCOCO dataset to region for BAS
     print("* Cropping KWCOCO dataset to region for BAS*")
 
-    EXEC_MODE = 'cmd'
+    ALIGN_EXEC_MODE = 'cmd'
     # Not sure if one is more stable than the other
-    if EXEC_MODE == 'import':
+    if ALIGN_EXEC_MODE == 'import':
         coco_align.main(cmdline=False, **align_config)
-    elif EXEC_MODE == 'cmd':
+    elif ALIGN_EXEC_MODE == 'cmd':
         align_arglist = util_framework._make_arglist(align_config)
         ub.cmd(['python', '-m', 'watch.cli.coco_align'] + align_arglist,
                check=True, capture=False, verbose=3)
     else:
-        raise KeyError(EXEC_MODE)
+        raise KeyError(ALIGN_EXEC_MODE)
 
     # 5. Do the time_combine for BAS
     if time_combine_enabled:

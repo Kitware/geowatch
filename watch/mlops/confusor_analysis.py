@@ -188,7 +188,7 @@ def main(cmdline=1, **kwargs):
     True Confusion Spec
     -------------------
 
-    "misc_info":  {
+    "cache":  {
         "confusion": {
             "true_site_id": str,          # redundant site id information,
             "pred_site_ids": List[str],   # the matching predicted site ids,
@@ -200,7 +200,7 @@ def main(cmdline=1, **kwargs):
     Predicted Confusion Spec
     -------------------
 
-    "misc_info":  {
+    "cache":  {
         "confusion": {
             "pred_site_id": str,          # redundant site id information,
             "true_site_ids": List[str],   # the matching predicted site ids,
@@ -238,7 +238,7 @@ def main(cmdline=1, **kwargs):
     true_region_model = orig_regions[0]
 
     for site in it.chain(pred_sites, true_sites):
-        site.header['properties'].setdefault('misc_info', {})
+        site.header['properties'].setdefault('cache', {})
 
     id_to_true_site = {s.site_id: s for s in true_sites}
     id_to_pred_site = {s.site_id: s for s in pred_sites}
@@ -247,10 +247,10 @@ def main(cmdline=1, **kwargs):
     # https://gis.stackexchange.com/questions/346518/opening-geojson-style-properties-in-qgis
     for row in true_confusion_rows:
         site = id_to_true_site[row['true_site_id']]
-        site.header['properties']['misc_info']['confusion'] = row
+        site.header['properties']['cache']['confusion'] = row
     for row in pred_confusion_rows:
         site = id_to_pred_site[row['pred_site_id']]
-        site.header['properties']['misc_info']['confusion'] = row
+        site.header['properties']['cache']['confusion'] = row
 
     VALIDATE = 1
     if VALIDATE:
@@ -273,14 +273,14 @@ def main(cmdline=1, **kwargs):
 
     hard_positive_site_ids = []
     for true_site in true_sites:
-        misc = true_site.header['properties']['misc_info']
+        misc = true_site.header['properties']['cache']
         if misc['confusion']['type'] in 'gt_false_neg':
             hard_positive_site_ids.append(true_site.header['properties']['site_id'])
 
     hard_negative_sites = []
     for site_id in cand_df['site_id']:
         pred_site = id_to_pred_site[site_id]
-        misc = pred_site.header['properties']['misc_info']
+        misc = pred_site.header['properties']['cache']
         if misc['confusion']['type'] in 'sm_completely_wrong':
             hard_negative_sites.append(pred_site.deepcopy())
 
@@ -291,8 +291,8 @@ def main(cmdline=1, **kwargs):
         header_prop['site_id'] = region_id + f'_{num:04d}'
         header_prop['status'] = 'negative'
         header_prop['model_content'] = 'annotation'
-        header_prop['misc_info'].pop('confusion', None)
-        header_prop['misc_info']['kwcoco'] = {'weight': 1.5}
+        header_prop['cache'].pop('confusion', None)
+        header_prop['cache']['kwcoco'] = {'weight': 1.5}
         header_prop['comments'] = 'hard_negative'
         for obs in hard_neg.observations():
             props = obs['properties']
@@ -310,11 +310,11 @@ def main(cmdline=1, **kwargs):
     print('hard_positive_site_ids = {}'.format(ub.urepr(hard_positive_site_ids, nl=1)))
     new_true_props = [n.header['properties'] for n in new_true_sites] + [s['properties'] for s in new_region.site_summaries()]
     for prop in new_true_props:
-        if 'misc_info' not in prop:
-            prop['misc_info'] = {}
-        prop['misc_info'].pop('confusion', None)
+        if 'cache' not in prop:
+            prop['cache'] = {}
+        prop['cache'].pop('confusion', None)
         if prop['site_id'] in hard_positive_site_ids:
-            prop['misc_info']['kwcoco'] = {'weight': 2.0}
+            prop['cache']['kwcoco'] = {'weight': 2.0}
             if 'comments' not in prop or not prop['comments']:
                 prop['comments'] = 'hard_positive'
             else:
@@ -417,8 +417,9 @@ def main(cmdline=1, **kwargs):
             print(f'repr2={repr2}')
             print(f'repr3={repr3}')
 
-            set(dst_dset.annots().lookup('role', None))
-            set([x.get('role', None) for x in dst_dset.annots().lookup('misc_info', None)])
+            # set(dst_dset.annots().lookup('role', None))
+            # set([x.get('role', None) for x in dst_dset.annots().lookup('cache', None)])
+
             # dst_dset.annots().take([0, 1, 2])
             viz_dpath = cfsn_dpath
             summary_visualization(dst_dset, viz_dpath)
@@ -432,6 +433,7 @@ def summary_visualization(dst_dset, viz_dpath):
     resolution = '5GSD'
 
     from kwutil import util_progress
+    from kwutil import util_time
     # from watch.utils import util_kwimage
     import kwarray
     import kwimage
@@ -470,29 +472,28 @@ def summary_visualization(dst_dset, viz_dpath):
                     delayed = coco_img.imdelay(chanels, resolution=resolution, nodata_method='float')
                     job = jobs.submit(delayed.finalize)
 
-                    from kwutil import util_time
                     time = util_time.coerce_datetime(coco_img['timestamp'])
                     job.time = time
                     job.coco_img = coco_img
 
                 oldest_time = None
-                oldest_img = None
                 newest_time = None
-                newest_img = None
+                # oldest_img = None
+                # newest_img = None
 
                 job_loader = pman(jobs.as_completed(), total=len(jobs), desc='averaging heatmaps')
                 for job in job_loader:
                     im = job.result()
+                    sensor = job.coco_img['sensor_coarse']
 
-                    if oldest_time is None or oldest_time > job.time:
-                        if job.coco_img['sensor_coarse'] == 'S2':
+                    if sensor in {'S2', 'Sentinel-2'}:
+                        if oldest_time is None or oldest_time > job.time:
                             oldest_time = job.time
-                            oldest_img = im
+                            # oldest_img = im
 
-                    if newest_time is None or newest_time < job.time:
-                        if job.coco_img['sensor_coarse'] == 'S2':
+                        if newest_time is None or newest_time < job.time:
                             newest_time = job.time
-                            newest_img = im
+                            # newest_img = im
 
                     im = kwimage.atleast_3channels(im)
                     running.update(im)
@@ -503,7 +504,7 @@ def summary_visualization(dst_dset, viz_dpath):
             all_dets.data['frame_index'] = np.array(all_annots.images.lookup('frame_index'))
             all_dets.data['track_id'] = np.array(all_annots.lookup('track_id'))
             all_dets.data['role'] = np.array(all_annots.lookup('role'))
-            all_dets.data['misc_info'] = np.array(all_annots.lookup('misc_info'))
+            all_dets.data['cache'] = np.array(all_annots.lookup('cache'))
 
             groupers = list(zip(all_dets.data['role'], all_dets.data['track_id']))
             unique_tids, groupxs = kwarray.group_indices(groupers)
@@ -512,8 +513,8 @@ def summary_visualization(dst_dset, viz_dpath):
             from shapely.ops import unary_union
             for (role, tid), groupx in zip(unique_tids, groupxs):
                 track_dets = all_dets.take(groupx)
-                misc_info = track_dets.data['misc_info'][0]
-                row = misc_info.copy()
+                cache = track_dets.data['cache'][0]
+                row = cache.copy()
                 row['role'] = role
                 row['confusion_color'] = row['confusion']['color']
                 # assert row['role'] == role
@@ -526,9 +527,8 @@ def summary_visualization(dst_dset, viz_dpath):
             print(ub.udict(role_to_summary).map_values(len))
 
             # canvas = kwplot.make_heatmask(util_kwimage.exactly_1channel(mean_heatmap), cmap='magma')[:, :, 0:3]
-
-            old_canvas = kwimage.normalize_intensity(oldest_img, axis=2)
-            new_canvas = kwimage.normalize_intensity(newest_img, axis=2)
+            # old_canvas = kwimage.normalize_intensity(oldest_img, axis=2)
+            # new_canvas = kwimage.normalize_intensity(newest_img, axis=2)
 
             current = running.current()
             mean_heatmap = current['mean']
@@ -542,16 +542,16 @@ def summary_visualization(dst_dset, viz_dpath):
             # canvas_cfsn = canvas.copy()
 
             canvases = {
-                'new': {
-                    'true': new_canvas.copy(),
-                    'pred': new_canvas.copy(),
-                    'cfsn': new_canvas.copy(),
-                },
-                'old': {
-                    'true': old_canvas.copy(),
-                    'pred': old_canvas.copy(),
-                    'cfsn': old_canvas.copy(),
-                },
+                # 'new': {
+                #     'true': new_canvas.copy(),
+                #     'pred': new_canvas.copy(),
+                #     'cfsn': new_canvas.copy(),
+                # },
+                # 'old': {
+                #     'true': old_canvas.copy(),
+                #     'pred': old_canvas.copy(),
+                #     'cfsn': old_canvas.copy(),
+                # },
                 'avg': {
                     'true': canvas.copy(),
                     'pred': canvas.copy(),
@@ -580,14 +580,13 @@ def summary_visualization(dst_dset, viz_dpath):
                 v1['pred'] = kwimage.draw_header_text(v1['pred'], 'pred confusion')
                 v1['cfsn'] = kwimage.draw_header_text(v1['cfsn'], 'both')
 
-            row1 = kwimage.stack_images(list(canvases['avg'].values()), axis=1, pad=10)
-            row2 = kwimage.stack_images(list(canvases['old'].values()), axis=1, pad=10)
-            row3 = kwimage.stack_images(list(canvases['new'].values()), axis=1, pad=10)
-            row1 = kwimage.ensure_uint255(row1)
-            row2 = kwimage.ensure_uint255(row2)
-            row3 = kwimage.ensure_uint255(row3)
-
-            final_canvas = kwimage.stack_images([row1, row2, row3], axis=0, pad=5)
+            row_keys = ub.oset(['avg', 'old', 'new']) & set(canvases.keys())
+            rows = []
+            for rk in row_keys:
+                _row = kwimage.stack_images(list(canvases[rk].values()), axis=1, pad=10)
+                _row = kwimage.ensure_uint255(_row)
+                rows.append(_row)
+            final_canvas = kwimage.stack_images(rows, axis=0, pad=5)
 
             fpath = viz_dpath / f'confusion_{video["name"]}.jpg'
             kwimage.imwrite(fpath, final_canvas)

@@ -9,7 +9,18 @@ SeeAlso:
 
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
     python -m watch.cli.fix_region_models \
-        --region_models="$DVC_DATA_DPATH"/annotations/drop6/region_models/AE_C001.geojson
+        --region_models="$DVC_DATA_DPATH"/annotations/drop6/region_models/*.geojson
+
+    python -m watch.cli.fix_region_models \
+        --region_models "$DVC_DATA_DPATH"/submodules/annotations/region_models/*.geojson
+
+    python -m watch.cli.fix_region_models \
+        --region_models \
+            "$DVC_DATA_DPATH"/submodules/annotations/region_models/AE_C002.geojson \
+            "$DVC_DATA_DPATH"/submodules/annotations/region_models/AE_C003.geojson \
+            "$DVC_DATA_DPATH"/submodules/annotations/region_models/PY_C001.geojson \
+            "$DVC_DATA_DPATH"/submodules/annotations/region_models/BR_T001.geojson \
+            "$DVC_DATA_DPATH"/submodules/annotations/region_models/BR_T002.geojson
 
     python -m watch.cli.validate_annotation_schemas \
         --region_models="$DVC_DATA_DPATH"/annotations/drop6/region_models/AE_C001.geojson
@@ -63,8 +74,10 @@ def main(cmdline=1, **kwargs):
     region_model_fpaths = util_gis.coerce_geojson_paths(config.region_models)
     _iter = iter(region_model_fpaths)
     for fpath in _iter:
-        if fpath.stem in {'AE_C002', 'AE_C003', 'BR_T001', 'BR_T002', 'PY_C001'}:
-            continue
+        # if fpath.stem in {'AE_C002', 'AE_C003', 'BR_T001', 'BR_T002', 'PY_C001'}:
+        #     continue
+        # if fpath.stem in {'AE_C002', 'AE_C003', 'PY_C001'}:
+        #     continue
         region_model = geomodels.RegionModel.coerce(fpath, parse_float=decimal.Decimal)
         # region_model._validate_parts()
         try:
@@ -165,12 +178,18 @@ def fix_region_model(region_model):
         region_geom = region_model.geometry
         region_poly = kwimage.MultiPolygon.from_shapely(region_geom)
         parts = list(region_geom.geoms)
-        assert len(parts) == 1
+
+        if len(parts) == 0:
+            raise Exception
+        elif len(parts) > 1:
+            # HACK! Make a convex hull!
+            poly = region_poly.convex_hull
+        else:
+            poly = kwimage.Polygon.from_shapely(parts[0])
 
         if DRAW_BAD_REGIONS:
             draw_bad_region(region_model, region_poly)
 
-        poly = kwimage.Polygon.from_shapely(parts[0])
         print('Fix region header geom')
         region_model.header['geometry'] = poly.to_geojson()
 
@@ -181,6 +200,7 @@ def fix_region_model(region_model):
                     assert pt[2] == 0
                     pt[:] = pt[0:2]
 
+    very_bad_feats = []
     for feat in region_model.features:
         props = feat['properties']
         props['mgrs'] = mgrs_code
@@ -219,32 +239,38 @@ def fix_region_model(region_model):
             props['status'] = props['status'].strip().lower()
             if 'validated' in props:
                 props['validated'] = props['validated'].strip()
-            if feat['geometry']['type'] == 'MultiPolygon':
-                print('Fix site summary geom')
-                site_poly = kwimage.MultiPolygon.coerce(feat['geometry'])
-                if DRAW_BAD_REGIONS:
-                    draw_bad_site(region_model, feat, site_poly)
-                parts = list(site_poly.to_shapely().geoms)
-                assert len(parts) == 1
-                poly = kwimage.Polygon.from_shapely(parts[0])
-                feat['geometry'] = poly.to_geojson()
-            if 'cache' not in props:
-                props['cache'] = {}
+            if feat['geometry'] is None:
+                very_bad_feats.append(feat)
+            else:
+                if feat['geometry']['type'] == 'MultiPolygon':
+                    print('Fix site summary geom')
+                    site_poly = kwimage.MultiPolygon.coerce(feat['geometry'])
+                    if DRAW_BAD_REGIONS:
+                        draw_bad_site(region_model, feat, site_poly)
+                    parts = list(site_poly.to_shapely().geoms)
+                    assert len(parts) == 1
+                    poly = kwimage.Polygon.from_shapely(parts[0])
+                    feat['geometry'] = poly.to_geojson()
+                if 'cache' not in props:
+                    props['cache'] = {}
 
-            if feat['geometry']['type'] == 'Polygon':
-                for ring in feat['geometry']['coordinates']:
-                    for pt in ring:
-                        if len(pt) != 2:
-                            assert pt[2] == 0
-                            pt[:] = pt[0:2]
-
-            if feat['geometry']['type'] == 'MultiPolygon':
-                for poly in feat['geometry']['coordinates']:
-                    for ring in poly:
+                if feat['geometry']['type'] == 'Polygon':
+                    for ring in feat['geometry']['coordinates']:
                         for pt in ring:
                             if len(pt) != 2:
-                                raise Exception
+                                assert pt[2] == 0
+                                pt[:] = pt[0:2]
+
+                if feat['geometry']['type'] == 'MultiPolygon':
+                    for poly in feat['geometry']['coordinates']:
+                        for ring in poly:
+                            for pt in ring:
+                                if len(pt) != 2:
+                                    raise Exception
     # region_model._validate_parts()
+    for feat in very_bad_feats:
+        region_model['features'].remove(feat)
+
 
 if __name__ == '__main__':
     """

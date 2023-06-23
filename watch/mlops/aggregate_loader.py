@@ -372,6 +372,13 @@ def load_result_resolved(node_dpath):
             fpath = node_dpath / 'valicrop.kwcoco.zip'
         flat_resolved = _generalized_process_flat_resolved(fpath, node_process_name, node_type)
 
+    elif node_type in {'sc_crop'}:
+
+        # TODO: parse resolved params
+        node_process_name = 'coco_align'
+        fpath = node_dpath / 'sitecrop.kwcoco.zip'
+        flat_resolved = _generalized_process_flat_resolved(fpath, node_process_name, node_type)
+
     elif node_type in {'sv_dino_boxes'}:
         node_process_name = 'box.predict'
         fpath = node_dpath / 'pred_boxes.kwcoco.zip'
@@ -435,3 +442,17 @@ def out_node_matching_fpaths(out_node):
     mpat = util_pattern.Pattern.coerce(pat)
     fpaths = list(mpat.paths())
     return fpaths
+
+
+if 1:
+    import numpy as np
+    if np.bool_ is not bool:
+        # Hack for a ubelt issue
+        @ub.hash_data.register(np.bool_)
+        def _hashnp_bool(data):
+            from ubelt.util_hash import _int_to_bytes
+            # warnings.warn('Hashing ints is slow, numpy is preferred')
+            hashable = _int_to_bytes(bool(data))
+            # hashable = data.to_bytes(8, byteorder='big')
+            prefix = b'INT'
+            return prefix, hashable

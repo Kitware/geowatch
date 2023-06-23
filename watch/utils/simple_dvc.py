@@ -107,7 +107,10 @@ class SimpleDVC(ub.NiceRepr):
         #     print(f'ex={ex}')
         # Handle symlinks: https://dvc.org/doc/user-guide/troubleshooting#add-symlink
         # not sure if this is safe
-        dvc_root = self._ensure_root(paths).resolve()
+        dvc_root = self._ensure_root(paths)
+        if dvc_root is None:
+            raise Exception('unable to find a DVC root')
+        dvc_root = dvc_root.resolve()
         # Note: this could resolve the symlink to the dvc cache which we dont want
         # rel_paths = [os.fspath(p.resolve().relative_to(dvc_root)) for p in paths]
         # Fixed version?

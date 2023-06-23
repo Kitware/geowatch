@@ -234,4 +234,4 @@ absl_py>=1.4.0
 PyYAML>=6.0
 tqdm>=4.64.1
 
-cmd_queue >= 0.1.12
+cmd_queue >= 0.1.16

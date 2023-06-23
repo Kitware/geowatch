@@ -7,9 +7,13 @@ CommandLine:
     cd $HOME/code/watch
     ./run_developer_setup.sh
 '
+if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
+	# Running as a script
+	set -eo pipefail
+fi
 
 
-if [[ "$VIRTUAL_ENV" == "" ]]; then
+if [[ "$VIRTUAL_ENV" == "" && "$PIP_ROOT_USER_ACTION" != "ignore" ]]; then
     echo "NOT INSIDE OF A VIRTUALENV. This script may not run correctly"
 fi
 
@@ -94,9 +98,11 @@ fi
 # User can overwrite this configuration
 WATCH_STRICT=${WATCH_STRICT:=0}
 WITH_MMCV=${WITH_MMCV:=$HAS_NVIDIA_SMI}
-WITH_TENSORFLOW=${WITH_TENSORFLOW:=1}
-WITH_DVC=${WITH_DVC:=1}
+WITH_TENSORFLOW=${WITH_TENSORFLOW:=0}
+WITH_DVC=${WITH_DVC:=0}
 WITH_AWS=${WITH_AWS:=0}
+WITH_COLD=${WITH_COLD:=0}
+WITH_MATERIALS=${WITH_MATERIALS:=0}
 WITH_APT_ENSURE=${WITH_APT_ENSURE:=$HAS_APT}
 
 echo "
@@ -114,6 +120,8 @@ WATCH_STRICT=$WATCH_STRICT
 WITH_MMCV=$WITH_MMCV
 WITH_DVC=$WITH_DVC
 WITH_AWS=$WITH_AWS
+WITH_COLD=$WITH_COLD
+WITH_MATERIALS=$WITH_MATERIALS
 WITH_TENSORFLOW=$WITH_TENSORFLOW
 WITH_APT_ENSURE=$WITH_APT_ENSURE
 "
@@ -122,17 +130,15 @@ WITH_APT_ENSURE=$WITH_APT_ENSURE
 # Do everything
 
 if [[ "$WITH_APT_ENSURE" == "1" ]]; then
-    apt_ensure ffmpeg tmux jq tree p7zip-full rsync
+    apt_ensure ffmpeg tmux jq tree p7zip-full rsync libgsl-dev
 fi
 
 
 if [[ "$WATCH_STRICT" == "1" ]]; then
     ./dev/make_strict_req.sh
-    REQUIREMENTS_DPATH=requirements
-    EXTRAS="[all-strict,headless-strict,dvc-strict]"
-else
     REQUIREMENTS_DPATH=requirements-strict
-    EXTRAS="[all,headless,dvc]"
+else
+    REQUIREMENTS_DPATH=requirements
 fi
 
 # Small python script to compute the extras tag for the pip install
@@ -147,6 +153,11 @@ EXTRAS=$(python -c "if 1:
     extras.append('optional' + suffix)
     extras.append('headless' + suffix)
     extras.append('linting' + suffix)
+    if $WITH_COLD:
+        # extras.append('cold' + suffix)
+        ...
+    if $WITH_MATERIALS:
+        extras.append('materials' + suffix)
     if $WITH_DVC:
         extras.append('dvc' + suffix)
     print('[' + ','.join(extras) + ']')
@@ -160,6 +171,17 @@ python -m pip install --prefer-binary -e ".$EXTRAS"
 # Post geowatch install requirements
 
 python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/gdal.txt
+
+if [[ "$WITH_COLD" == "1" ]]; then
+    # HACK FOR COLD ISSUE
+    curl https://data.kitware.com/api/v1/file/6494e95df04fb36854429808/download -o pycold-0.1.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+    pip install astropy==5.2.2
+    #pip install astropy
+    #curl https://ipfs.io/ipfs/QmeXUmFML1BBU7jTRdvtaqbFTPBMNL9VGhvwEgrwx2wRew > pycold-311.whl
+    #curl ipfs.io/ipfs/QmeXUmFML1BBU7jTRdvtaqbFTPBMNL9VGhvwEgrwx2wRew -o pycold-311.whl
+    pip install pycold-0.1.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+    #python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/aws.txt
+fi
 
 if [[ "$WITH_AWS" == "1" ]]; then
     python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/aws.txt

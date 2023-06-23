@@ -1581,6 +1581,8 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         """
         if rois == 'auto':
             rois = [key for key in agg.macro_compatible.keys() if len(key) > 1]
+            if len(rois) == 0:
+                rois = [key for key in agg.macro_compatible.keys()]
         if isinstance(rois, list) and len(rois) and ub.iterable(rois[0]):
             # Asked for multiple groups of ROIS.
             for single_rois in rois:

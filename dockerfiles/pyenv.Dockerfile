@@ -10,13 +10,14 @@
 #
 # **************************************************
 
-FROM nvidia/cuda:11.4.3-cudnn8-devel-ubuntu20.04
+FROM docker.io/nvidia/cuda:11.4.3-cudnn8-devel-ubuntu20.04
 
 ARG PYTHON_VERSION=3.10.5
 ARG PYENV_VERSION=v2.3.13
 
 ENV HOME=/root
 ENV PYENV_ROOT=/root/.pyenv
+ENV PIP_ROOT_USER_ACTION=ignore
 
 ## Install Prerequisites 
 RUN <<EOF

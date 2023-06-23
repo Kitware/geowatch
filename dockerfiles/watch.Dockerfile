@@ -9,13 +9,14 @@ ARG BASE_IMAGE=pyenv:311
 FROM $BASE_IMAGE
 
 ENV HOME=/root
+ENV PIP_ROOT_USER_ACTION=ignore
 
 ## Install Prerequisites 
 RUN <<EOF
 #!/bin/bash
 apt update -q
 DEBIAN_FRONTEND=noninteractive apt install -q -y --no-install-recommends \
-        ffmpeg vim tmux jq tree p7zip-full rsync
+        ffmpeg vim tmux jq tree p7zip-full rsync libgsl-dev
 apt-get clean 
 rm -rf /var/lib/apt/lists/*
 EOF

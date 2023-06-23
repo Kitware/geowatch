@@ -94,6 +94,10 @@ be skipped, but it is usually a good idea to do this.
     gpg --verify awscli-exe-linux-x86_64.zip.sig awscli-exe-linux-x86_64.zip
 
 
+.. .. note: if you have jonc's xpgp tools you can edit the trust too
+.. .. python ~/local/scripts/xgpg.py edit_trust "FB5DB77FD5C118B80511ADA8A6310ACC4672475C" "ultimate"
+
+
 Now that we have verified the integrity, install the aws CLI tool to your local
 PATH.
 

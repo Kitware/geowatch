@@ -293,7 +293,9 @@ class PolygonEvaluation(ProcessNode):
 
         # Hack:
         if fmtkw['true_site_dpath'] is None:
-            raise Exception('You must specify true_site_dpath and true_region_dpath')
+
+            raise Exception(f'You must specify true_site_dpath and true_region_dpath fornode= {self.name}')
+
             dvc_dpath = _phase2_dvc_data_dpath()
             fmtkw['true_site_dpath'] = dvc_dpath / 'annotations/site_models'
             fmtkw['true_region_dpath'] = dvc_dpath / 'annotations/region_models'
@@ -583,6 +585,9 @@ class Cropping(ProcessNode):
         'context_factor': 1.5,
         'force_nodata': -9999,
         'rpc_align_method': 'orthorectify',
+        'convexify_regions': True,
+        'force_min_gsd': None,
+        'minimum_size': None,
     }
 
     # The best setting of this depends on if the data is remote or not.  When
@@ -592,7 +597,7 @@ class Cropping(ProcessNode):
         'verbose': 1,
         # 'workers': 8,
         # 'aux_workers': 16,
-        'workers': 32,
+        'img_workers': 32,
         'aux_workers': 4,
         'debug_valid_regions': False,
         'visualize': False,
@@ -621,12 +626,13 @@ class Cropping(ProcessNode):
         fmtkw.update(self.final_in_paths)
         fmtkw.update(self.final_out_paths)
 
+        # --regions="{regions}" \
+
         command = ub.codeblock(
             r'''
             python -m watch.cli.coco_align \
                 --src "{crop_src_fpath}" \
                 --dst "{crop_dst_fpath}" \
-                --regions="{regions}" \
                 --site_summary=True \
                 {crop_perf_argstr} \
                 {crop_algo_argstr}
@@ -1121,12 +1127,14 @@ def make_smart_pipeline_nodes(with_bas=True, building_validation=False,
 
     if site_crops:
         nodes['sc_crop'] = SC_Cropping()
+
         # If we predicted regions to go to SC, crop to those.
         if sc_input_region is not None:
             sc_input_region.connect(nodes['sc_crop'].inputs['regions'])
             # nodes['bas_pxl'].inputs['test_dataset'].connect(sc_input_kwcoco)
-            # If we are site cropping, then use its outputs as SC input
-            sc_input_kwcoco = nodes['sc_crop'].outputs['crop_dst_fpath']
+
+        # If we are site cropping, then use its outputs as SC input
+        sc_input_kwcoco = nodes['sc_crop'].outputs['crop_dst_fpath']
 
     if with_sc:
         nodes.update(sc_nodes())
@@ -1153,6 +1161,11 @@ def make_smart_pipeline(name):
     Example:
         >>> from watch.mlops.smart_pipeline import *  # NOQA
         >>> dag = make_smart_pipeline('sc')
+        >>> dag.print_graphs()
+        >>> dag.inspect_configurables()
+
+        >>> from watch.mlops.smart_pipeline import *  # NOQA
+        >>> dag = make_smart_pipeline('joint_bas_sc')
         >>> dag.print_graphs()
         >>> dag.inspect_configurables()
 
