@@ -7,6 +7,19 @@ CommandLine:
     cd $HOME/code/watch
     ./run_developer_setup.sh
 '
+
+
+# Script configuration
+WATCH_STRICT=${WATCH_STRICT:=0}
+WITH_MMCV=${WITH_MMCV:="auto"}
+WITH_TENSORFLOW=${WITH_TENSORFLOW:=0}
+WITH_DVC=${WITH_DVC:=0}
+WITH_AWS=${WITH_AWS:=0}
+WITH_COLD=${WITH_COLD:=0}
+WITH_MATERIALS=${WITH_MATERIALS:=0}
+WITH_APT_ENSURE=${WITH_APT_ENSURE:="auto"}
+
+
 if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
 	# Running as a script
 	set -eo pipefail
@@ -68,43 +81,6 @@ command_exists(){
     command -v "$COMMAND" &> /dev/null
 }
 
-###  ENSURE DEPENDENCIES ###
-
-# If on debian/ubuntu ensure the dependencies are installed
-if [[ "$WITH_APT_ENSURE" != "0" ]]; then
-    if command_exists apt; then
-        HAS_APT=1
-    else
-        HAS_APT=0
-        echo "
-        WARNING: Check and install of system packages is currently only supported
-        on Debian Linux. You will need to verify that ZLIB, GSL, OpenMP are
-        installed before running this script.
-        "
-    fi
-fi
-
-
-if [[ "$WITH_MMCV" != "0" ]]; then
-    if command_exists nvidia-smi; then
-        echo "nvidia-smi detected"
-        HAS_NVIDIA_SMI=1
-    else
-        echo "nvidia-smi not found"
-        HAS_NVIDIA_SMI=0
-    fi
-fi
-
-# User can overwrite this configuration
-WATCH_STRICT=${WATCH_STRICT:=0}
-WITH_MMCV=${WITH_MMCV:=$HAS_NVIDIA_SMI}
-WITH_TENSORFLOW=${WITH_TENSORFLOW:=0}
-WITH_DVC=${WITH_DVC:=0}
-WITH_AWS=${WITH_AWS:=0}
-WITH_COLD=${WITH_COLD:=0}
-WITH_MATERIALS=${WITH_MATERIALS:=0}
-WITH_APT_ENSURE=${WITH_APT_ENSURE:=$HAS_APT}
-
 echo "
 
 =======================================
@@ -126,9 +102,32 @@ WITH_TENSORFLOW=$WITH_TENSORFLOW
 WITH_APT_ENSURE=$WITH_APT_ENSURE
 "
 
+if [[ "$WITH_APT_ENSURE" == "auto" ]]; then
+    # If on debian/ubuntu ensure the dependencies are installed
+    if command_exists apt; then
+        WITH_APT_ENSURE=1
+    else
+        WITH_APT_ENSURE=0
+        echo "
+        WARNING: Check and install of system packages is currently only supported
+        on Debian Linux. You will need to verify that ZLIB, GSL, OpenMP are
+        installed before running this script.
+        "
+    fi
+fi
 
-# Do everything
+if [[ "$WITH_MMCV" == "auto" ]]; then
+    if command_exists nvidia-smi; then
+        echo "nvidia-smi detected"
+        WITH_MMCV=1
+    else
+        echo "nvidia-smi not found"
+        WITH_MMCV=0
+    fi
+fi
 
+
+###  ENSURE DEPENDENCIES ###
 if [[ "$WITH_APT_ENSURE" == "1" ]]; then
     apt_ensure ffmpeg tmux jq tree p7zip-full rsync libgsl-dev
 fi
