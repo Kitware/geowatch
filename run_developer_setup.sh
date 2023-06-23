@@ -154,7 +154,8 @@ EXTRAS=$(python -c "if 1:
     extras.append('headless' + suffix)
     extras.append('linting' + suffix)
     if $WITH_COLD:
-        extras.append('cold' + suffix)
+        # extras.append('cold' + suffix)
+        ...
     if $WITH_MATERIALS:
         extras.append('materials' + suffix)
     if $WITH_DVC:
@@ -170,6 +171,13 @@ python -m pip install --prefer-binary -e ".$EXTRAS"
 # Post geowatch install requirements
 
 python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/gdal.txt
+
+if [[ "$WITH_COLD" == "1" ]]; then
+    curl https://ipfs.io/ipfs/QmeXUmFML1BBU7jTRdvtaqbFTPBMNL9VGhvwEgrwx2wRew > pycold-311.whl
+    #curl ipfs.io/ipfs/QmeXUmFML1BBU7jTRdvtaqbFTPBMNL9VGhvwEgrwx2wRew -o pycold-311.whl
+    python install ./pycold-311.whl
+    #python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/aws.txt
+fi
 
 if [[ "$WITH_AWS" == "1" ]]; then
     python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/aws.txt
