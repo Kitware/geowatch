@@ -413,6 +413,7 @@ def coco_sensorchan_gsd_stats(coco_dset):
 
 
 __config__ = WatchCocoStats
+main = __config__.main
 
 if __name__ == '__main__':
     """
