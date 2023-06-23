@@ -8,11 +8,12 @@ Notes:
     A quick local test to see if the tensorboard dependencies are acting up.
 
     # Set this to the docker image you want to test.
-    IMAGE=watch:0.7.4-66a8c286-strict-pyenv3.11.2-20230623T125951-0400-from-a8150284
+    IMAGE=watch:0.7.4-95c6b4b2-strict-pyenv3.11.2-20230623T134259-0400-from-01080c26
 
     docker run -it $IMAGE python -c "if 1:
         import numpy as np
         import watch
+        import ubelt as ub
         from watch.tasks.depth_pcd.model import getModel
         model = getModel()
         expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')

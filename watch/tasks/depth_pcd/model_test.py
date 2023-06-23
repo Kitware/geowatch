@@ -3,6 +3,7 @@ Example:
     >>> # xdoctest: +REQUIRES(env:HAS_DVC)
     >>> import numpy as np
     >>> import watch
+    >>> import ubelt as ub
     >>> from watch.tasks.depth_pcd.model import getModel
     >>> model = getModel()
     >>> expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')

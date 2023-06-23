@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import ubelt as ub
 import scriptconfig as scfg
 from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress
@@ -137,7 +138,7 @@ def main():
         node_dpath='.',
     )
     command = transfer_node.final_command()
-    ub.cmd(command, capture=False, verbose=3, check=True)
+    ub.cmd(command, shell=True, capture=False, verbose=3, check=True)
 
     watch_coco_stats.main(cmdline=0, src=timecombined_output_kwcoco_fpath)
     coco_stats._CLI.main(cmdline=0, src=[timecombined_output_kwcoco_fpath])
