@@ -175,11 +175,11 @@ python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/gdal.txt
 if [[ "$WITH_COLD" == "1" ]]; then
     # HACK FOR COLD ISSUE
     curl https://data.kitware.com/api/v1/file/6494e95df04fb36854429808/download -o pycold-0.1.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-    pip install astropy==5.2.2
+    pip install "astropy==5.2.2"
     #pip install astropy
     #curl https://ipfs.io/ipfs/QmeXUmFML1BBU7jTRdvtaqbFTPBMNL9VGhvwEgrwx2wRew > pycold-311.whl
     #curl ipfs.io/ipfs/QmeXUmFML1BBU7jTRdvtaqbFTPBMNL9VGhvwEgrwx2wRew -o pycold-311.whl
-    pip install pycold-0.1.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+    pip install "pycold-0.1.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
     #python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/aws.txt
 fi
 
