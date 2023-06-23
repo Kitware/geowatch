@@ -1065,6 +1065,7 @@ def load_geojson_datas(geojson_fpaths, format='dataframe', workers=0,
         # Don't bother with a progress bar for submit jobs
         # if there are not too many of them.
         submit_progkw['verbose'] = 0
+        submit_progkw['enabled'] = False
 
     kwargs = {}
     if format == 'dataframe':
