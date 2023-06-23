@@ -81,7 +81,7 @@ def main():
     from watch.cli import watch_coco_stats
     from kwcoco.cli import coco_stats
     watch_coco_stats.main(cmdline=0, src=full_input_kwcoco_fpath)
-    coco_stats._CLI.main(cmdline=0, src=full_input_kwcoco_fpath)
+    coco_stats._CLI.main(cmdline=0, src=[full_input_kwcoco_fpath])
 
     # TOOD: better passing of configs
 
@@ -111,10 +111,10 @@ def main():
     print('ingress_dir_contents2 = {}'.format(ub.urepr(ingress_dir_contents2, nl=1)))
 
     watch_coco_stats.main(cmdline=0, src=full_output_kwcoco_fpath)
-    coco_stats._CLI.main(cmdline=0, src=full_output_kwcoco_fpath)
+    coco_stats._CLI.main(cmdline=0, src=[full_output_kwcoco_fpath])
 
     watch_coco_stats.main(cmdline=0, src=timecombined_input_kwcoco_fpath)
-    coco_stats._CLI.main(cmdline=0, src=timecombined_input_kwcoco_fpath)
+    coco_stats._CLI.main(cmdline=0, src=[timecombined_input_kwcoco_fpath])
 
     ###
     # Execute the transfer of COLD features to the time-combined dataset
@@ -140,7 +140,7 @@ def main():
     ub.cmd(command, capture=False, verbose=3, check=True)
 
     watch_coco_stats.main(cmdline=0, src=timecombined_output_kwcoco_fpath)
-    coco_stats._CLI.main(cmdline=0, src=timecombined_output_kwcoco_fpath)
+    coco_stats._CLI.main(cmdline=0, src=[timecombined_output_kwcoco_fpath])
 
     ingress_dir_contents3 = list(ingress_kwcoco_path.parent.ls())
     print('ingress_dir_contents3 = {}'.format(ub.urepr(ingress_dir_contents3, nl=1)))
