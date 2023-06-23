@@ -626,6 +626,10 @@ class Cropping(ProcessNode):
         fmtkw.update(self.final_in_paths)
         fmtkw.update(self.final_out_paths)
 
+        # NOTE: We are potentially double-specifying regions here at the
+        # moment, due to an unresolved design decision in the
+        # final_algo_config.
+
         command = ub.codeblock(
             r'''
             python -m watch.cli.coco_align \
@@ -650,6 +654,9 @@ class Cropping(ProcessNode):
 class SC_Cropping(Cropping):
     """
     Crop to each image of every site.
+
+    CommandLine:
+        xdoctest -m watch.mlops.smart_pipeline SC_Cropping
 
     Example:
         >>> from watch.mlops.smart_pipeline import *  # NOQA
@@ -684,6 +691,9 @@ class SC_Cropping(Cropping):
 class SV_Cropping(Cropping):
     """
     Crop to high res images as the start / end of a sequence
+
+    CommandLine:
+        xdoctest -m watch.mlops.smart_pipeline SV_Cropping
 
     Example:
         >>> from watch.mlops.smart_pipeline import *  # NOQA

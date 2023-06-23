@@ -1061,6 +1061,23 @@ class ProcessNode(Node):
             if not input_node.pred:
                 unconnected_inputs.append(input_node.name)
 
+        # OK... so previous design decisions have made things weird here.  The
+        # question is: are the input paths included in the final algo config?
+        # Currently the answer depends. If they are connected in as part of a
+        # pipeline (i.e. the input paths are the output of some other step)
+        # then they are not currently considered part of the algo config.
+        # However, if they are unconnected (but maybe explicitly specified by
+        # the user), then they are considered part of the algo config.  I'm not
+        # sure how to fix this yet. Conceptually, perhaps the "algorithm
+        # config", should not depend on the inputs, but I could see arguments
+        # both ways. There should probably be a "final_input_config" (or maybe
+        # just final_in_paths) that is separate from the "final_algo_config".
+        # ...
+        # ...
+        # ... so the next question is, does anything currently depend on the
+        # input paths being in the final algo config? If not we should
+        # probably remove it.
+
         unconnected_in_paths = ub.udict(self.final_in_paths) & unconnected_inputs
         final_algo_config = (self.config - self.non_algo_keys) | unconnected_in_paths
 
