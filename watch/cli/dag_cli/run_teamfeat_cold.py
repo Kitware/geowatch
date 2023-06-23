@@ -65,8 +65,10 @@ def main():
     ingress_kwcoco_path = ub.Path(ingress_kwcoco_path)
 
     print('ingress_kwcoco_path = {}'.format(ub.urepr(ingress_kwcoco_path, nl=1)))
-    ingress_kwcoco_contents = list(ingress_kwcoco_path.ls())
-    print('ingress_kwcoco_contents = {}'.format(ub.urepr(ingress_kwcoco_contents, nl=1)))
+    print(f'ingress_dir={ingress_dir}')
+    print(f'ingress_kwcoco_path.parent={ingress_kwcoco_path.parent}')
+    ingress_dir_contents1 = list(ingress_kwcoco_path.parent.ls())
+    print('ingress_dir_contents1 = {}'.format(ub.urepr(ingress_dir_contents1, nl=1)))
 
     # TODO: input/output paths should come from the config
     full_input_kwcoco_fpath = ingress_kwcoco_path.parent / 'cropped_kwcoco_for_bas.json'
@@ -105,8 +107,8 @@ def main():
     base_combo_fpath = base_fpath.parent / (f'combo_{subset_name}_{combo_code}.kwcoco.zip')
     full_output_kwcoco_fpath = base_combo_fpath
 
-    ingress_kwcoco_contents2 = list(ingress_kwcoco_path.ls())
-    print('ingress_kwcoco_contents2 = {}'.format(ub.urepr(ingress_kwcoco_contents2, nl=1)))
+    ingress_dir_contents2 = list(ingress_kwcoco_path.parent.ls())
+    print('ingress_dir_contents2 = {}'.format(ub.urepr(ingress_dir_contents2, nl=1)))
 
     watch_coco_stats.main(cmdline=0, src=full_output_kwcoco_fpath)
     coco_stats._CLI.main(cmdline=0, src=full_output_kwcoco_fpath)
@@ -140,8 +142,8 @@ def main():
     watch_coco_stats.main(cmdline=0, src=timecombined_output_kwcoco_fpath)
     coco_stats._CLI.main(cmdline=0, src=timecombined_output_kwcoco_fpath)
 
-    ingress_kwcoco_contents3 = list(ingress_kwcoco_path.ls())
-    print('ingress_kwcoco_contents3 = {}'.format(ub.urepr(ingress_kwcoco_contents3, nl=1)))
+    ingress_dir_contents3 = list(ingress_kwcoco_path.parent.ls())
+    print('ingress_dir_contents3 = {}'.format(ub.urepr(ingress_dir_contents3, nl=1)))
 
     # 3. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
