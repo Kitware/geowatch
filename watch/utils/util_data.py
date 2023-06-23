@@ -154,8 +154,8 @@ class DataRegistry:
             {'name': 'hack_data_ssd', 'hardware': 'ssd', 'tags': 'phase2_data', 'path': ub.Path('~/data/dvc-repos/smart_data_dvc-ssd').expand()},
             {'name': 'hack_expt_ssd', 'hardware': 'ssd', 'tags': 'phase2_expt', 'path': ub.Path('~/data/dvc-repos/smart_expt_dvc-ssd').expand()},
 
-            {'name': 'docker_expt', 'tags': 'phase2_expt', 'path': ub.Path('/root/data/smart_expt_dvc/').expand()},
-            {'name': 'docker_data', 'tags': 'phase2_data', 'path': ub.Path('/root/data/smart_data_dvc/').expand()},
+            {'name': 'hack_data2', 'tags': 'phase2_data', 'path': ub.Path('~/data/smart_data_dvc/').expand()},
+            {'name': 'hack_expt2', 'tags': 'phase2_expt', 'path': ub.Path('~/data/smart_expt_dvc/').expand()},
         ]
 
         # registry_rows = [row for row in hardcoded_paths if row['path'].exists()]
