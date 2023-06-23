@@ -2,6 +2,28 @@
 import scriptconfig as scfg
 import ubelt as ub
 
+"""
+Notes:
+
+    A quick local test to see if the tensorboard dependencies are acting up.
+
+    # Set this to the docker image you want to test.
+    IMAGE=watch:0.7.4-66a8c286-strict-pyenv3.11.2-20230623T125951-0400-from-a8150284
+
+    docker run -it $IMAGE python -c "if 1:
+        import numpy as np
+        import watch
+        from watch.tasks.depth_pcd.model import getModel
+        model = getModel()
+        expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+        model.load_weights(expt_dvc_dpath + '/models/depth_pcd/basicModel2.h5')
+        out = model.predict(np.zeros((1,400,400,3)))
+        shapes = [o.shape for o in out]
+        print('shapes = {}'.format(ub.urepr(shapes, nl=1)))
+    "
+
+"""
+
 
 class DzyneParallelSiteValiConfig(scfg.DataConfig):
     """
