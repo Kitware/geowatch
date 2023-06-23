@@ -54,18 +54,26 @@ class WatchCocoStats(scfg.DataConfig):
             >>> kw = dict(src=[dset1.fpath, dset2.fpath])
             >>> cmdline = 0
             >>> watch_coco_stats.__config__.main(cmdline=cmdline, **kw)
-        """
-        import pandas as pd
-        import rich
-        config = WatchCocoStats.cli(data=kw, cmdline=cmdline, strict=True)
 
-        fpaths = config['src']
+        Example:
+            >>> from watch.cli import watch_coco_stats
+            >>> import watch
+            >>> dset1 = watch.coerce_kwcoco('watch-msi', geodata=True, dates=True, heatmap=True)
+            >>> kw = dict(src=dset1.fpath)
+            >>> cmdline = 0
+            >>> watch_coco_stats.__config__.main(cmdline=cmdline, **kw)
+        """
+        config = WatchCocoStats.cli(data=kw, cmdline=cmdline, strict=True)
+        import rich
         rich.print('config = {}'.format(ub.urepr(config, nl=1, sort=0)))
 
+        import pandas as pd
         import kwcoco
+        import math
+        import os
+        from kwutil import slugify_ext
 
-        if fpaths is None or len(fpaths) == 0:
-            raise ValueError('no files to compute stats on')
+        fpaths = config['src']
 
         if isinstance(fpaths, os.PathLike):
             fpaths = [fpaths]
@@ -74,6 +82,9 @@ class WatchCocoStats(scfg.DataConfig):
             if ',' in fpaths:
                 print('warning: might not handle this case well')
             fpaths = [fpaths]
+
+        if fpaths is None or len(fpaths) == 0:
+            raise ValueError('no files to compute stats on')
 
         # TODO: tabulate stats when possible.
         collatables = []
@@ -110,7 +121,6 @@ class WatchCocoStats(scfg.DataConfig):
 
         print('\n--- Multi Dataset Stats --')
 
-        import math
         try:
             all_sensors = sorted(all_sensors)
         except TypeError:
@@ -131,7 +141,6 @@ class WatchCocoStats(scfg.DataConfig):
         print('collatables = {}'.format(ub.urepr(collatables, nl=2, sort=0)))
         summary = pd.DataFrame(collatables)
 
-        from kwutil import slugify_ext
         col_name_map = {}
         for cname in summary.columns:
             new_cname = slugify_ext.smart_truncate(
@@ -173,7 +182,7 @@ def coco_watch_stats(dset, with_video_info=False):
         >>> dset = watch.coerce_kwcoco('watch-msi-geodata-heatmap-dates')
         >>> stat_info = coco_watch_stats(dset)
     """
-    from kwcoco.util import util_truncate
+    from kwutil import slugify_ext
     from kwutil import util_time
     from watch.utils import kwcoco_extensions
     import rich
@@ -194,7 +203,7 @@ def coco_watch_stats(dset, with_video_info=False):
         video = dset.index.videos[vidid]
         video = ub.dict_diff(video, ['regions', 'properties'])
         # video_str = ub.urepr(video, nl=-1, sort=False)
-        # video_str = util_truncate.smart_truncate(
+        # video_str = slugify_ext.smart_truncate(
         #     video_str, max_length=512, trunc_loc=0.7)
         # print('video = {}'.format(video_str))
 
@@ -241,7 +250,7 @@ def coco_watch_stats(dset, with_video_info=False):
         video_info.pop('regions', None)
         video_info.pop('properties', None)
         vid_info_str = ub.urepr(video_info, nl=-1, sort=False)
-        vid_info_str = util_truncate.smart_truncate(
+        vid_info_str = slugify_ext.smart_truncate(
             vid_info_str, max_length=512, trunc_loc=0.6)
 
         if with_video_info:
@@ -363,6 +372,7 @@ def coco_sensorchan_gsd_stats(coco_dset):
     import math
     import numpy as np
     import kwimage
+    from watch.utils import util_pandas
     longform_rows = []
     for image_id in coco_dset.images():
         coco_img = coco_dset.coco_image(image_id)
@@ -404,7 +414,6 @@ def coco_sensorchan_gsd_stats(coco_dset):
         longform_rows.extend(asset_rows)
 
     gsd_table = pd.DataFrame(longform_rows)
-    from watch.utils import util_pandas
     groupers = list(gsd_table.columns.intersection(['sensor', 'channels']))
     if len(groupers) == 0:
         sensorchan_gsd_stats = gsd_table
