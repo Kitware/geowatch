@@ -626,13 +626,12 @@ class Cropping(ProcessNode):
         fmtkw.update(self.final_in_paths)
         fmtkw.update(self.final_out_paths)
 
-        # --regions="{regions}" \
-
         command = ub.codeblock(
             r'''
             python -m watch.cli.coco_align \
                 --src "{crop_src_fpath}" \
                 --dst "{crop_dst_fpath}" \
+                --regions="{regions}" \
                 --site_summary=True \
                 {crop_perf_argstr} \
                 {crop_algo_argstr}
@@ -653,8 +652,11 @@ class SC_Cropping(Cropping):
     Crop to each image of every site.
 
     Example:
+        >>> from watch.mlops.smart_pipeline import *  # NOQA
         >>> node = SC_Cropping()
-        >>> print(node.command())
+        >>> command = node.command()
+        >>> print(command)
+        >>> assert '--regions' in command
     """
     name = 'sc_crop'
     group_dname = 'crops'
@@ -684,8 +686,11 @@ class SV_Cropping(Cropping):
     Crop to high res images as the start / end of a sequence
 
     Example:
+        >>> from watch.mlops.smart_pipeline import *  # NOQA
         >>> node = SV_Cropping()
-        >>> print(node.command())
+        >>> command = node.command()
+        >>> print(command)
+        >>> assert '--regions' in command
     """
     name = 'sv_crop'
     # node_dname = 'sv_crop/{src_dset}/{regions_id}/{valicrop_algoid}/{sitecrop_id}'
