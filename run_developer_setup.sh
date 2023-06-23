@@ -187,7 +187,39 @@ if [[ "$WITH_AWS" == "1" ]]; then
 fi
 
 if [[ "$WITH_MMCV" == "1" ]]; then
-    python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/mmcv.txt
+
+    __mmcv_notes__="
+    The MMCV package is needed for DINO's deformable convolutions, and the
+    correct version is specific to both your torch and cuda versions.
+
+    The requirements/mmcv.txt only works for torch2.0 with cuda 118, so we have
+    special logic here to build the correct mmcv installation command.
+
+    To test to see if your mmcv is working try running:
+
+    .. code:: bash
+
+        python -c 'from mmcv.ops import multi_scale_deform_attn'
+
+    If there is no error, then it should be ok.
+    "
+
+    # Logic to determine the opencv install command.
+    MMCV_INSTALL_COMMAND=$(python -c "if 1:
+    from packaging.version import parse as Version
+    import pkg_resources
+    torch_version = Version(pkg_resources.get_distribution('torch').version)
+
+    if torch_version >= Version('2.0.0'):
+        print('pip install mmcv==2.0.0 -f https://download.openmmlab.com/mmcv/dist/cu118/torch2.0/index.html')
+    elif torch_version >= Version('1.13.0'):
+        print('pip install mmcv==2.0.0 -f https://download.openmmlab.com/mmcv/dist/cu117/torch1.13/index.html')
+    else:
+        raise Exception('dont know how to deal with this version for mmcv')
+    ")
+    echo "MMCV_INSTALL_COMMAND = $MMCV_INSTALL_COMMAND"
+    $MMCV_INSTALL_COMMAND
+    #python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/mmcv.txt
 fi
 
 if [[ "$WITH_TENSORFLOW" == "1" ]]; then

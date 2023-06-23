@@ -1,4 +1,16 @@
 # https://mmcv.readthedocs.io/en/latest/get_started/installation.html
+# 
+# SeeAlso:
+# /data/joncrall/dvc-repos/smart_expt_dvc/models/kitware/xview_dino/package_trained_model.py
+# ~/code/watch/watch/tasks/dino_detector/predict.py
+#
+# Notes:
+#
+#    # To test if mmcv is working on your machine:
+#
+#    python -c "from mmcv.ops import multi_scale_deform_attn"
+
+
 # --prefer-binary
 --find-links https://download.openmmlab.com/mmcv/dist/cu118/torch2.0/index.html
 mmcv>=2.0.0
