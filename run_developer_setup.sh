@@ -195,6 +195,11 @@ if [[ "$WITH_MMCV" == "1" ]]; then
     The requirements/mmcv.txt only works for torch2.0 with cuda 118, so we have
     special logic here to build the correct mmcv installation command.
 
+    To extend this logic see the mmcv website for figuring out what the correct
+    string for new versions is:
+
+    https://mmcv.readthedocs.io/en/latest/get_started/installation.html
+
     To test to see if your mmcv is working try running:
 
     .. code:: bash
@@ -202,6 +207,10 @@ if [[ "$WITH_MMCV" == "1" ]]; then
         python -c 'from mmcv.ops import multi_scale_deform_attn'
 
     If there is no error, then it should be ok.
+
+    Gotcha: if you have a bad mmcv, you need to uninstall it before running
+    this command.  pip can't tell the difference between packages with the same
+    version from different indexes.
     "
 
     # Logic to determine the opencv install command.
