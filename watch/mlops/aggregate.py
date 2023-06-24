@@ -630,11 +630,11 @@ class ParamPlotter:
                 for col in resolved_params.columns:
                     if len(macro_table[col].unique()) > 1:
                         chosen_params.append(col)
-                param_name_to_stats = {}
+            param_name_to_stats = {}
 
         # ranked_params = ['bas_poly_eval.params.bas_pxl.package_fpath']
-        if len(ranked_params):
-            print('Warning: no ranked params')
+        if len(chosen_params):
+            print('Warning: no chosen params')
 
         def shrink_param_names(param_histogram):
             text_len_thresh = 20

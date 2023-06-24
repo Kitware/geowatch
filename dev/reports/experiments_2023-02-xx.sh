@@ -2448,7 +2448,7 @@ python -m watch.mlops.aggregate \
         enabled: 1
         stats_ranking: 0
         min_variations: 1
-        params_of_interst:
+        params_of_interest:
             - sv_depth_filter.threshold
             - sv_depth_score.model_fpath
             - bas_poly.thresh
@@ -2461,7 +2461,7 @@ python -m watch.mlops.aggregate \
         print_models: True
         reference_region: final
     " \
-    --rois="KR_R002,PE_R001,NZ_R001,CH_R001"
+    --rois="KR_R002,PE_R001,NZ_R001,CH_R001,KR_R001,AE_R001,BR_R002,BR_R004"
 
     #--rois="KR_R002"
 
