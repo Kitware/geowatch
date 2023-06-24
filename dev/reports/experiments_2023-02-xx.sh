@@ -2433,7 +2433,7 @@ geowatch schedule --params="
 # Pull out baseline tables
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch.mlops.aggregate \
-    --pipeline=bas \
+    --pipeline=bas_building_and_depth_vali \
     --target "
         - $DVC_EXPT_DPATH/_horologic_sv_sweep
     " \
@@ -2448,6 +2448,10 @@ python -m watch.mlops.aggregate \
         enabled: 1
         stats_ranking: 0
         min_variations: 1
+        params_of_interst:
+            - sv_depth_filter.threshold
+            - sv_depth_score.model_fpath
+            - bas_poly.thresh
     " \
     --stdout_report="
         top_k: 10
@@ -2457,7 +2461,9 @@ python -m watch.mlops.aggregate \
         print_models: True
         reference_region: final
     " \
-    --rois="KR_R002"
+    --rois="KR_R002,PE_R001,NZ_R001,CH_R001"
+
+    #--rois="KR_R002"
 
 ### Helper to build SV crop dataset submatrix
 python -c "if 1:
