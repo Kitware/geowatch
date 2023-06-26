@@ -263,10 +263,22 @@ def run_bas_fusion_for_baseline(config):
     ub.cmd(crop_cmd, check=True, verbose=3)
 
     # Validate and fix all outputs
-    util_framework.fixup_and_validate_site_and_region_models(
-        region_dpath=cropped_region_models_outdir,
-        site_dpath=cropped_site_models_outdir,
-    )
+    try:
+        util_framework.fixup_and_validate_site_and_region_models(
+            region_dpath=cropped_region_models_outdir,
+            site_dpath=cropped_site_models_outdir,
+        )
+    except:  # noqa
+        debug_s3_outdir = os.path.join(outbucket, '_debug/')
+
+        ub.cmd([*aws_base_command, '--recursive',
+                cropped_region_models_outdir, debug_s3_outdir],
+               check=True, verbose=3)
+        ub.cmd([*aws_base_command, '--recursive',
+                cropped_site_models_outdir, debug_s3_outdir],
+               check=True, verbose=3)
+
+        raise
 
     # 6. (Optional) collate TA-2 output
     if ta2_s3_collation_bucket is not None:
