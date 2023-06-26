@@ -28,7 +28,7 @@ import inspect
 from jsonargparse._common import is_dataclass_like
 from jsonargparse._common import is_subclass
 from jsonargparse._signatures import iter_to_set_str
-from jsonargparse._typing import register_pydantic_type
+from jsonargparse.typing import register_pydantic_type
 from jsonargparse._signatures import get_import_path
 
 kinds = inspect._ParameterKind
