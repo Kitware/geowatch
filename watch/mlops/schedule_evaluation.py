@@ -342,7 +342,7 @@ def schedule_evaluation(config):
 
     print_kwargs = {
         'with_status': 0,
-        'with_rich': 0,
+        'style': "colors",
         'with_locks': 0,
         'exclude_tags': ['boilerplate'],
     }

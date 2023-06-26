@@ -10,7 +10,7 @@ def test_bas_pipline_schedule_default_params():
 
     dvc_data_dpath = ub.Path('/my_data_dvc')
 
-    config = {
+    config = schedule_evaluation.ScheduleEvaluationConfig(**{
         'run': 0,
         'root_dpath': dpath,
         'pipeline': 'bas',
@@ -22,8 +22,8 @@ def test_bas_pipline_schedule_default_params():
             bas_poly_eval.true_region_dpath: {dvc_data_dpath}/annotations/region_models
             '''
         )
-    }
-    dag, queue = schedule_evaluation.main(cmdline=0, **config)
+    })
+    dag, queue = schedule_evaluation.schedule_evaluation(config)
 
     bas_poly_job = None
     bas_poly_eval_job = None
@@ -46,7 +46,7 @@ def test_bas_pipline_schedule1():
     dvc_data_dpath = ub.Path('/my_data_dvc')
     dvc_expt_dpath = ub.Path('/my_expt_dvc')
 
-    config = {
+    config = schedule_evaluation.ScheduleEvaluationConfig(**{
         'run': 0,
         'root_dpath': dpath,
         'pipeline': 'bas',
@@ -63,8 +63,8 @@ def test_bas_pipline_schedule1():
             bas_poly_eval.true_region_dpath: {dvc_data_dpath}/annotations/region_models
             '''
         )
-    }
-    dag, queue = schedule_evaluation.main(cmdline=0, **config)
+    })
+    dag, queue = schedule_evaluation.schedule_evaluation(config)
 
     bas_poly_job = None
     bas_poly_eval_job = None
@@ -87,7 +87,7 @@ def test_joint_bas_sc_pipline_schedule1():
     dvc_data_dpath = ub.Path('/my_data_dvc')
     dvc_expt_dpath = ub.Path('/my_expt_dvc')
 
-    config = {
+    config = schedule_evaluation.ScheduleEvaluationConfig(**{
         'run': 0,
         'root_dpath': dpath,
         'pipeline': 'joint_bas_sc',
@@ -106,8 +106,8 @@ def test_joint_bas_sc_pipline_schedule1():
             sc_poly_eval.true_region_dpath: {dvc_data_dpath}/annotations/region_models
             '''
         )
-    }
-    dag, queue = schedule_evaluation.main(cmdline=0, **config)
+    })
+    dag, queue = schedule_evaluation.schedule_evaluation(config)
 
     bas_poly_job = None
     bas_poly_eval_job = None
