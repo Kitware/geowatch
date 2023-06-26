@@ -595,6 +595,16 @@ class ParamPlotter:
         valid_cols = resolved_params.columns.difference(blocklist)
         resolved_params = resolved_params[valid_cols]
 
+        from kwutil.util_yaml import Yaml
+        params_of_interest = Yaml.coerce(plotter.plot_config.get('params_of_interest', None))
+        print('params_of_interest = {}'.format(ub.urepr(params_of_interest, nl=1)))
+
+        chosen_params = None
+
+        if params_of_interest is not None:
+            chosen_params = params_of_interest
+
+        # TODO: cleanup logic
         DO_STAT_ANALYSIS = plotter.plot_config.get('stats_ranking', False)
         if DO_STAT_ANALYSIS:
             ### Build param analysis
@@ -603,6 +613,7 @@ class ParamPlotter:
             results = {'params': resolved_params,
                        'metrics': metrics_table}
             # agg.primary_metric_cols)
+            # TODO: params_of_interest in analysis
             analysis = result_analysis.ResultAnalysis(
                 results, metrics=[main_metric], metric_objectives=metric_objectives)
             analysis.build()
@@ -611,16 +622,20 @@ class ParamPlotter:
             ranked_stats = list(sorted(analysis.statistics, key=lambda x: x['anova_rank_p']))
             param_name_to_stats = {s['param_name']: s for s in ranked_stats}
             ranked_params = ub.oset(param_name_to_stats.keys())
+            chosen_params = ranked_params
+            if params_of_interest is not None:
+                chosen_params = params_of_interest
         else:
-            ranked_params = []
-            for col in resolved_params.columns:
-                if len(macro_table[col].unique()) > 1:
-                    ranked_params.append(col)
+            if params_of_interest is None:
+                chosen_params = []
+                for col in resolved_params.columns:
+                    if len(macro_table[col].unique()) > 1:
+                        chosen_params.append(col)
             param_name_to_stats = {}
 
         # ranked_params = ['bas_poly_eval.params.bas_pxl.package_fpath']
-        if len(ranked_params):
-            print('Warning: no ranked params')
+        if len(chosen_params):
+            print('Warning: no chosen params')
 
         def shrink_param_names(param_histogram):
             text_len_thresh = 20
@@ -640,7 +655,7 @@ class ParamPlotter:
                 param_valname_map = ub.dzip(param_labels, param_labels)
             return param_valname_map, had_value_remap
 
-        for rank, param_name in enumerate(ub.ProgIter(ranked_params, desc='plot param for ' + vantage['name'], verbose=3)):
+        for rank, param_name in enumerate(ub.ProgIter(chosen_params, desc='plot param for ' + vantage['name'], verbose=3)):
 
             stats = param_name_to_stats.get(param_name, {})
             # stats['moments']

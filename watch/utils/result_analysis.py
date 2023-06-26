@@ -433,6 +433,8 @@ class ResultAnalysis(ub.NiceRepr):
         self.result_table = ResultTable.coerce(
             results, metric_cols=metrics, param_cols=params)
 
+        # TODO: params_of_interest
+
         if ignore_metrics is None:
             ignore_metrics = set()
         if ignore_params is None:

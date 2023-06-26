@@ -16,10 +16,12 @@ from pytorch_lightning.cli import Namespace
 from packaging.version import parse as Version
 JSONARGPARSE_VERSION = Version(jsonargparse.__version__)
 
-if JSONARGPARSE_VERSION <= Version('4.20.1'):
-    from watch.utils.lightning_ext import _jsonargparse_ext_lt_4_21 as _jsonargparse_ext
+if JSONARGPARSE_VERSION < Version('4.21.0'):
+    from watch.utils.lightning_ext import _jsonargparse_ext_ge_4_xx_and_lt_4_21 as _jsonargparse_ext
+elif JSONARGPARSE_VERSION < Version('4.22.0'):
+    from watch.utils.lightning_ext import _jsonargparse_ext_ge_4_21_and_lt_4_22 as _jsonargparse_ext
 else:
-    from watch.utils.lightning_ext import _jsonargparse_ext_ge_4_21 as _jsonargparse_ext
+    from watch.utils.lightning_ext import _jsonargparse_ext_ge_4_22_and_lt_xxx as _jsonargparse_ext
 
 
 class LightningArgumentParser_Extension(_jsonargparse_ext.ArgumentParserPatches, LightningArgumentParser):
@@ -34,9 +36,16 @@ class LightningArgumentParser_Extension(_jsonargparse_ext.ArgumentParserPatches,
 
 # Monkey patch jsonargparse so its subcommands use our extended functionality
 jsonargparse.ArgumentParser = LightningArgumentParser_Extension
-jsonargparse.core.ArgumentParser = LightningArgumentParser_Extension
-jsonargparse.core._find_action_and_subcommand = _jsonargparse_ext._find_action_and_subcommand
-jsonargparse.actions._find_action_and_subcommand = _jsonargparse_ext._find_action_and_subcommand
+
+
+if JSONARGPARSE_VERSION < Version('4.22.0'):
+    jsonargparse.core.ArgumentParser = LightningArgumentParser_Extension
+    jsonargparse.core._find_action_and_subcommand = _jsonargparse_ext._find_action_and_subcommand
+    jsonargparse.actions._find_action_and_subcommand = _jsonargparse_ext._find_action_and_subcommand
+else:
+    jsonargparse._core.ArgumentParser = LightningArgumentParser_Extension
+    jsonargparse._core._find_action_and_subcommand = _jsonargparse_ext._find_action_and_subcommand
+    jsonargparse._actions._find_action_and_subcommand = _jsonargparse_ext._find_action_and_subcommand
 
 
 # Should try to patch into upstream

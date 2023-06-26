@@ -1056,6 +1056,19 @@ def load_geojson_datas(geojson_fpaths, format='dataframe', workers=0,
         'verbose': (workers > 0) and verbose
     }
 
+    # FIXME: kwutil.util_progress is not properly disabling progress when
+    # verbose=0, fix that and then reenable this.
+    # try:
+    #     num_jobs = len(geojson_fpaths)
+    # except Exception:
+    #     num_jobs = None
+
+    # if num_jobs is not None and num_jobs < 1000:
+    #     # Don't bother with a progress bar for submit jobs
+    #     # if there are not too many of them.
+    #     submit_progkw['verbose'] = 0
+    #     submit_progkw['enabled'] = False
+
     kwargs = {}
     if format == 'dataframe':
         loader = util_gis.load_geojson

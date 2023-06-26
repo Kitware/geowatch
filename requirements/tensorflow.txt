@@ -1,2 +1,7 @@
 # Conflicts with tensorboardX (required by lightning) due to protobuf
 tensorflow>=2.12
+
+# Oh, Protobuf, a language of data, so clean, With promises of simplicity, you
+# were seen.  But little did we know, the path we'd tread, Into the depths of
+# dependency hell we'd be led. - ChatGPT
+protobuf==3.20.3

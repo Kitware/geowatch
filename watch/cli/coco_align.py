@@ -268,11 +268,11 @@ class CocoAlignGeotiffConfig(ExtractConfig):
             '''), group='outputs')
 
     regions = scfg.Value('annots', help=ub.paragraph(
-            '''
-            Strategy for extracting regions, if annots, uses the convex
-            hulls of clustered annotations. Can also be a path to a
-            geojson file to use pre-defined regions.
-            '''), group='inputs')
+        '''
+        The path to a set of geojson input region or site models.  Can also be
+        a strategy for extracting regions, if annots, uses the convex hulls of
+        clustered annotations.
+        '''), group='inputs')
     site_summary = scfg.Value(False, help='Crop to site summaries instead')
 
     context_factor = scfg.Value(1.0, help=ub.paragraph(

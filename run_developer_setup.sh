@@ -7,6 +7,19 @@ CommandLine:
     cd $HOME/code/watch
     ./run_developer_setup.sh
 '
+
+
+# Script configuration
+WATCH_STRICT=${WATCH_STRICT:=0}
+WITH_MMCV=${WITH_MMCV:="auto"}
+WITH_TENSORFLOW=${WITH_TENSORFLOW:=0}
+WITH_DVC=${WITH_DVC:=0}
+WITH_AWS=${WITH_AWS:=0}
+WITH_COLD=${WITH_COLD:=0}
+WITH_MATERIALS=${WITH_MATERIALS:=0}
+WITH_APT_ENSURE=${WITH_APT_ENSURE:="auto"}
+
+
 if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
 	# Running as a script
 	set -eo pipefail
@@ -41,7 +54,7 @@ apt_ensure(){
     for PKG_NAME in "${ARGS[@]}"
     do
         #apt_ensure_single $EXE_NAME
-        RESULT=$(dpkg -l "$PKG_NAME" | grep "^ii *$PKG_NAME")
+        RESULT=$(dpkg -l "$PKG_NAME" | grep "^ii *$PKG_NAME" || true)
         if [ "$RESULT" == "" ]; then
             echo "Do not have PKG_NAME='$PKG_NAME'"
             # shellcheck disable=SC2268,SC2206
@@ -68,43 +81,6 @@ command_exists(){
     command -v "$COMMAND" &> /dev/null
 }
 
-###  ENSURE DEPENDENCIES ###
-
-# If on debian/ubuntu ensure the dependencies are installed
-if [[ "$WITH_APT_ENSURE" != "0" ]]; then
-    if command_exists apt; then
-        HAS_APT=1
-    else
-        HAS_APT=0
-        echo "
-        WARNING: Check and install of system packages is currently only supported
-        on Debian Linux. You will need to verify that ZLIB, GSL, OpenMP are
-        installed before running this script.
-        "
-    fi
-fi
-
-
-if [[ "$WITH_MMCV" != "0" ]]; then
-    if command_exists nvidia-smi; then
-        echo "nvidia-smi detected"
-        HAS_NVIDIA_SMI=1
-    else
-        echo "nvidia-smi not found"
-        HAS_NVIDIA_SMI=0
-    fi
-fi
-
-# User can overwrite this configuration
-WATCH_STRICT=${WATCH_STRICT:=0}
-WITH_MMCV=${WITH_MMCV:=$HAS_NVIDIA_SMI}
-WITH_TENSORFLOW=${WITH_TENSORFLOW:=0}
-WITH_DVC=${WITH_DVC:=0}
-WITH_AWS=${WITH_AWS:=0}
-WITH_COLD=${WITH_COLD:=0}
-WITH_MATERIALS=${WITH_MATERIALS:=0}
-WITH_APT_ENSURE=${WITH_APT_ENSURE:=$HAS_APT}
-
 echo "
 
 =======================================
@@ -126,9 +102,32 @@ WITH_TENSORFLOW=$WITH_TENSORFLOW
 WITH_APT_ENSURE=$WITH_APT_ENSURE
 "
 
+if [[ "$WITH_APT_ENSURE" == "auto" ]]; then
+    # If on debian/ubuntu ensure the dependencies are installed
+    if command_exists apt; then
+        WITH_APT_ENSURE=1
+    else
+        WITH_APT_ENSURE=0
+        echo "
+        WARNING: Check and install of system packages is currently only supported
+        on Debian Linux. You will need to verify that ZLIB, GSL, OpenMP are
+        installed before running this script.
+        "
+    fi
+fi
 
-# Do everything
+if [[ "$WITH_MMCV" == "auto" ]]; then
+    if command_exists nvidia-smi; then
+        echo "nvidia-smi detected"
+        WITH_MMCV=1
+    else
+        echo "nvidia-smi not found"
+        WITH_MMCV=0
+    fi
+fi
 
+
+###  ENSURE DEPENDENCIES ###
 if [[ "$WITH_APT_ENSURE" == "1" ]]; then
     apt_ensure ffmpeg tmux jq tree p7zip-full rsync libgsl-dev
 fi
@@ -175,11 +174,11 @@ python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/gdal.txt
 if [[ "$WITH_COLD" == "1" ]]; then
     # HACK FOR COLD ISSUE
     curl https://data.kitware.com/api/v1/file/6494e95df04fb36854429808/download -o pycold-0.1.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-    pip install astropy==5.2.2
+    pip install "astropy==5.2.2"
     #pip install astropy
     #curl https://ipfs.io/ipfs/QmeXUmFML1BBU7jTRdvtaqbFTPBMNL9VGhvwEgrwx2wRew > pycold-311.whl
     #curl ipfs.io/ipfs/QmeXUmFML1BBU7jTRdvtaqbFTPBMNL9VGhvwEgrwx2wRew -o pycold-311.whl
-    pip install pycold-0.1.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+    pip install "pycold-0.1.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
     #python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/aws.txt
 fi
 
@@ -188,7 +187,48 @@ if [[ "$WITH_AWS" == "1" ]]; then
 fi
 
 if [[ "$WITH_MMCV" == "1" ]]; then
-    python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/mmcv.txt
+
+    __mmcv_notes__="
+    The MMCV package is needed for DINO's deformable convolutions, and the
+    correct version is specific to both your torch and cuda versions.
+
+    The requirements/mmcv.txt only works for torch2.0 with cuda 118, so we have
+    special logic here to build the correct mmcv installation command.
+
+    To extend this logic see the mmcv website for figuring out what the correct
+    string for new versions is:
+
+    https://mmcv.readthedocs.io/en/latest/get_started/installation.html
+
+    To test to see if your mmcv is working try running:
+
+    .. code:: bash
+
+        python -c 'from mmcv.ops import multi_scale_deform_attn'
+
+    If there is no error, then it should be ok.
+
+    Gotcha: if you have a bad mmcv, you need to uninstall it before running
+    this command.  pip can't tell the difference between packages with the same
+    version from different indexes.
+    "
+
+    # Logic to determine the opencv install command.
+    MMCV_INSTALL_COMMAND=$(python -c "if 1:
+    from packaging.version import parse as Version
+    import pkg_resources
+    torch_version = Version(pkg_resources.get_distribution('torch').version)
+
+    if torch_version >= Version('2.0.0'):
+        print('pip install mmcv==2.0.0 -f https://download.openmmlab.com/mmcv/dist/cu118/torch2.0/index.html')
+    elif torch_version >= Version('1.13.0'):
+        print('pip install mmcv==2.0.0 -f https://download.openmmlab.com/mmcv/dist/cu117/torch1.13/index.html')
+    else:
+        raise Exception('dont know how to deal with this version for mmcv')
+    ")
+    echo "MMCV_INSTALL_COMMAND = $MMCV_INSTALL_COMMAND"
+    $MMCV_INSTALL_COMMAND
+    #python -m pip install --prefer-binary -r "$REQUIREMENTS_DPATH"/mmcv.txt
 fi
 
 if [[ "$WITH_TENSORFLOW" == "1" ]]; then

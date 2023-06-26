@@ -180,14 +180,8 @@ Example:
     xdev tree --dirblocklist "_*" my_expt_dir/_testpipe/ --max_files=1
 """
 import ubelt as ub
-# import cmd_queue
 import scriptconfig as scfg
 from cmd_queue.cli_boilerplate import CMDQueueConfig
-
-try:
-    from xdev import profile  # NOQA
-except ImportError:
-    from ubelt import identity as profile
 
 
 class ScheduleEvaluationConfig(CMDQueueConfig):
@@ -229,22 +223,6 @@ class ScheduleEvaluationConfig(CMDQueueConfig):
 
     print_varied = scfg.Value('auto', isflag=True, help='print the varied parameters')
 
-    # shuffle_jobs = scfg.Value(True, help='if True, shuffles the jobs so they are submitted in a random order')
-    # annotations_dpath = scfg.Value(None, help='path to IARPA annotations dpath for IARPA eval')
-    # virtualenv_cmd = scfg.Value(None, help=(
-    #     'command to activate a virtualenv if needed. '
-    #     '(might have issues with slurm backend)'))
-    # backend = scfg.Value('tmux', help=(
-    #     'The cmd_queue backend. Can be tmux, slurm, or serial'))
-    # queue_name = scfg.Value('schedule-eval', help='Name of the queue')
-    # partition = scfg.Value(None, help='specify slurm partition (slurm backend only)')
-    # mem = scfg.Value(None, help='specify slurm memory per task (slurm backend only)')
-    # run = scfg.Value(False, help='if False, only prints the commands, otherwise executes them')
-    # print_commands = scfg.Value('auto', isflag=True, help='enable / disable rprint before exec', alias=['rprint'])
-    # print_queue = scfg.Value('auto', isflag=True, help='print the cmd queue DAG')
-    # check_other_sessions = scfg.Value('auto', help=(
-    #     'if True, will ask to kill other sessions that might exist'), group='deprecated')
-
     def __post_init__(self):
         super().__post_init__()
         if self.queue_name is None:
@@ -262,21 +240,21 @@ class ScheduleEvaluationConfig(CMDQueueConfig):
             GPUS = None if devices is None else ensure_iterable(devices)
         self.devices = GPUS
 
-        # queue_size = config['queue_size']
-        # if queue_size == 'auto':
-        #     queue_size = len(GPUS)
+
+def main(cmdline=False, **kwargs):
+    config = ScheduleEvaluationConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
+    import rich
+    rich.print('ScheduleEvaluationConfig config = {}'.format(ub.urepr(config, nl=1, sv=1)))
+    schedule_evaluation(config)
 
 
-@profile
-def schedule_evaluation(cmdline=False, **kwargs):
+def schedule_evaluation(config):
     r"""
     First ensure that models have been copied to the DVC repo in the
     appropriate path. (as noted by model_dpath)
     """
-    config = ScheduleEvaluationConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
-    import rich
-    rich.print('ScheduleEvaluationConfig config = {}'.format(ub.urepr(config, nl=1, sv=1)))
     import watch
+    import rich
     from watch.mlops import smart_pipeline
     from kwutil import util_progress
     import pandas as pd
@@ -328,12 +306,6 @@ def schedule_evaluation(cmdline=False, **kwargs):
                 enable_links=config['enable_links'])
             configured_stats.append(summary)
 
-    # if 0:
-    #     rows = []
-    #     for s in configured_stats:
-    #         rows.append(s['node_status'])
-    #     pd.DataFrame(rows)
-
     print(f'len(queue)={len(queue)}')
 
     print_thresh = 30
@@ -370,7 +342,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
     print_kwargs = {
         'with_status': 0,
-        'with_rich': 0,
+        'style': "colors",
         'with_locks': 0,
         'exclude_tags': ['boilerplate'],
     }
@@ -443,10 +415,8 @@ Ignore:
 
 
 __config__ = ScheduleEvaluationConfig
-__config__.main = schedule_evaluation
-
-# profile.add_module()
+__config__.main = main
 
 
 if __name__ == '__main__':
-    schedule_evaluation(cmdline=True)
+    main()

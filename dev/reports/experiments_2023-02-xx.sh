@@ -2427,26 +2427,31 @@ geowatch schedule --params="
     --backend=tmux --queue_name "_horologic_sv_sweep" \
     --pipeline=bas_building_and_depth_vali \
     --skip_existing=1 \
-    --run=1
+    --run=0
 
 
 # Pull out baseline tables
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch.mlops.aggregate \
-    --pipeline=bas \
+    --pipeline=bas_building_and_depth_vali \
     --target "
-        - $DVC_EXPT_DPATH/_toothbrush_drop7_nowinter
+        - $DVC_EXPT_DPATH/_horologic_sv_sweep
     " \
-    --output_dpath="$DVC_EXPT_DPATH/_toothbrush_drop7_nowinter/aggregate" \
+    --output_dpath="$DVC_EXPT_DPATH/_horologic_sv_sweep/aggregate" \
     --resource_report=0 \
     --eval_nodes="
-        - bas_poly_eval
+        - sv_poly_eval
+        #- bas_poly_eval
         #- bas_pxl_eval
     " \
     --plot_params="
-        enabled: 0
+        enabled: 1
         stats_ranking: 0
         min_variations: 1
+        params_of_interest:
+            - params.sv_depth_filter.threshold
+            - params.sv_depth_score.model_fpath
+            - params.bas_poly.thresh
     " \
     --stdout_report="
         top_k: 10
@@ -2456,7 +2461,10 @@ python -m watch.mlops.aggregate \
         print_models: True
         reference_region: final
     " \
-    --rois="KR_R002"
+    --rois="PE_R001"
+    #--rois="KR_R002,PE_R001,NZ_R001,CH_R001,KR_R001,AE_R001,BR_R002,BR_R004"
+
+    #--rois="KR_R002"
 
 ### Helper to build SV crop dataset submatrix
 python -c "if 1:

@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import ubelt as ub
 import scriptconfig as scfg
 from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress
@@ -64,6 +65,12 @@ def main():
     # and then transfer the features to the time-combined data.
     ingress_kwcoco_path = ub.Path(ingress_kwcoco_path)
 
+    print('ingress_kwcoco_path = {}'.format(ub.urepr(ingress_kwcoco_path, nl=1)))
+    print(f'ingress_dir={ingress_dir}')
+    print(f'ingress_kwcoco_path.parent={ingress_kwcoco_path.parent}')
+    ingress_dir_contents1 = list(ingress_kwcoco_path.parent.ls())
+    print('ingress_dir_contents1 = {}'.format(ub.urepr(ingress_dir_contents1, nl=1)))
+
     # TODO: input/output paths should come from the config
     full_input_kwcoco_fpath = ingress_kwcoco_path.parent / 'cropped_kwcoco_for_bas.json'
     timecombined_input_kwcoco_fpath = ub.Path(full_input_kwcoco_fpath).augment(
@@ -75,7 +82,7 @@ def main():
     from watch.cli import watch_coco_stats
     from kwcoco.cli import coco_stats
     watch_coco_stats.main(cmdline=0, src=full_input_kwcoco_fpath)
-    coco_stats.main(cmdline=0, src=full_input_kwcoco_fpath)
+    coco_stats._CLI.main(cmdline=0, src=[full_input_kwcoco_fpath])
 
     # TOOD: better passing of configs
 
@@ -101,11 +108,14 @@ def main():
     base_combo_fpath = base_fpath.parent / (f'combo_{subset_name}_{combo_code}.kwcoco.zip')
     full_output_kwcoco_fpath = base_combo_fpath
 
+    ingress_dir_contents2 = list(ingress_kwcoco_path.parent.ls())
+    print('ingress_dir_contents2 = {}'.format(ub.urepr(ingress_dir_contents2, nl=1)))
+
     watch_coco_stats.main(cmdline=0, src=full_output_kwcoco_fpath)
-    coco_stats.main(cmdline=0, src=full_output_kwcoco_fpath)
+    coco_stats._CLI.main(cmdline=0, src=[full_output_kwcoco_fpath])
 
     watch_coco_stats.main(cmdline=0, src=timecombined_input_kwcoco_fpath)
-    coco_stats.main(cmdline=0, src=timecombined_input_kwcoco_fpath)
+    coco_stats._CLI.main(cmdline=0, src=[timecombined_input_kwcoco_fpath])
 
     ###
     # Execute the transfer of COLD features to the time-combined dataset
@@ -128,10 +138,13 @@ def main():
         node_dpath='.',
     )
     command = transfer_node.final_command()
-    ub.cmd(command, capture=False, verbose=3, check=True)
+    ub.cmd(command, shell=True, capture=False, verbose=3, check=True)
 
     watch_coco_stats.main(cmdline=0, src=timecombined_output_kwcoco_fpath)
-    coco_stats.main(cmdline=0, src=timecombined_output_kwcoco_fpath)
+    coco_stats._CLI.main(cmdline=0, src=[timecombined_output_kwcoco_fpath])
+
+    ingress_dir_contents3 = list(ingress_kwcoco_path.parent.ls())
+    print('ingress_dir_contents3 = {}'.format(ub.urepr(ingress_dir_contents3, nl=1)))
 
     # 3. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to

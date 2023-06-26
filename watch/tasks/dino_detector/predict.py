@@ -1,6 +1,11 @@
 """
 SeeAlso:
     * ~/data/dvc-repos/smart_expt_dvc/models/kitware/xview_dino/package_trained_model.py
+
+Notes:
+    # To test if mmcv is working on your machine:
+
+    python -c "from mmcv.ops import multi_scale_deform_attn"
 """
 #!/usr/bin/env python3
 import scriptconfig as scfg
