@@ -11,6 +11,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Add MAE features to prepare teamfeats
 * Add material features to prepare teamfeats
 * Added `params_of_interest` option to `aggregate`'s `plot_params` config.
+* Added `COLD` step in smartflow dags.
 
 ### Fixed
 * Added timeout to gdal subprocess commands to prevent hanging 

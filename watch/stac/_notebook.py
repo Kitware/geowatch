@@ -311,6 +311,8 @@ def check_processed_regions():
             row['sensor'] = 'WV'
         elif '-pd' in row['collection']:
             row['sensor'] = 'PD'
+        if 'sensor' not in row:
+            row['sensor'] = 'unknown'
 
     item_df = pd.DataFrame(peritem_rows)
 
