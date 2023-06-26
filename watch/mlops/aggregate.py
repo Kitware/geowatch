@@ -604,6 +604,7 @@ class ParamPlotter:
         if params_of_interest is not None:
             chosen_params = params_of_interest
 
+        # TODO: cleanup logic
         DO_STAT_ANALYSIS = plotter.plot_config.get('stats_ranking', False)
         if DO_STAT_ANALYSIS:
             ### Build param analysis

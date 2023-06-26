@@ -23,7 +23,7 @@ def test_bas_pipline_schedule_default_params():
             '''
         )
     }
-    dag, queue = schedule_evaluation.schedule_evaluation(cmdline=0, **config)
+    dag, queue = schedule_evaluation.main(cmdline=0, **config)
 
     bas_poly_job = None
     bas_poly_eval_job = None
@@ -64,7 +64,7 @@ def test_bas_pipline_schedule1():
             '''
         )
     }
-    dag, queue = schedule_evaluation.schedule_evaluation(cmdline=0, **config)
+    dag, queue = schedule_evaluation.main(cmdline=0, **config)
 
     bas_poly_job = None
     bas_poly_eval_job = None
@@ -107,7 +107,7 @@ def test_joint_bas_sc_pipline_schedule1():
             '''
         )
     }
-    dag, queue = schedule_evaluation.schedule_evaluation(cmdline=0, **config)
+    dag, queue = schedule_evaluation.main(cmdline=0, **config)
 
     bas_poly_job = None
     bas_poly_eval_job = None
