@@ -611,6 +611,7 @@ def _sample_single_video_spacetime_targets(
 
         needs_sliding_window = (
             use_grid_negatives or
+            use_grid_positives or
             use_centered_positives or
             (not use_annot_info)
         )

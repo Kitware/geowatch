@@ -1,4 +1,7 @@
 """
+CommandLine:
+    HAS_DVC=1 xdoctest -m watch.tasks.depth_pcd.model_test __doc__
+
 Example:
     >>> # xdoctest: +REQUIRES(env:HAS_DVC)
     >>> import numpy as np
