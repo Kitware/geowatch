@@ -500,9 +500,9 @@ def main(cmdline=True, **kwargs):
 
         region_dpaths = out_dirs
 
-        info.append(proc_context.stop())
-
-        info['IARPA_METRICS_VERSION'] = str(IARPA_METRICS_VERSION)
+        context = proc_context.stop()
+        context['IARPA_METRICS_VERSION'] = str(IARPA_METRICS_VERSION)
+        info.append(context)
 
         json_data, bas_df, sc_df, best_bas_rows = merge_metrics_results(region_dpaths, true_site_dpath,
                                                                         true_region_dpath, args.merge_fbetas)
