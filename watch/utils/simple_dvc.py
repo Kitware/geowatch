@@ -406,12 +406,15 @@ import scriptconfig as scfg  # NOQA
 
 class SimpleDVC_CLI(scfg.ModalCLI):
     """
-    A DVC CLI That uses our simplified (and more permissive) interface
+    A DVC CLI That uses our simplified (and more permissive) interface.
+
+    The main advantage is that you can run these commands outside a DVC repo as
+    long as you point to a valid in-repo path.
     """
 
     class Add(scfg.DataConfig):
         """
-        SubCLI for adding data to DVC
+        Add data to the DVC repo.
         """
         __command__ = 'add'
 
@@ -425,7 +428,7 @@ class SimpleDVC_CLI(scfg.ModalCLI):
 
     class Request(scfg.DataConfig):
         """
-        SubCLI for pulling data from DVC
+        Pull data if the requested file doesn't exist.
         """
         __command__ = 'request'
 
@@ -437,6 +440,20 @@ class SimpleDVC_CLI(scfg.ModalCLI):
             config = cls.cli(cmdline=cmdline, data=kwargs, strict=True)
             dvc = SimpleDVC()
             dvc.request(config.paths)
+
+    class CacheDir(scfg.DataConfig):
+        """
+        Print the cache directory
+        """
+        __command__ = 'cache_dir'
+
+        dvc_root = scfg.Value('.', position=1, help='get the cache path for this DVC repo')
+
+        @classmethod
+        def main(cls, cmdline=1, **kwargs):
+            config = cls.cli(cmdline=cmdline, data=kwargs, strict=True)
+            dvc = SimpleDVC(dvc_root=config.dvc_root)
+            print(dvc.cache_dir)
 
 
 def _import_dvc_main():
@@ -451,6 +468,8 @@ if __name__ == '__main__':
     """
 
     CommandLine:
+        python -m watch.utils.simple_dvc --help
         python -m watch.utils.simple_dvc request --help
+        python -m watch.utils.simple_dvc cache_dir
     """
     SimpleDVC_CLI.main()
