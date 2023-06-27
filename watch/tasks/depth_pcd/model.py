@@ -24,6 +24,12 @@ if 1:
         sys.path.append(os.fspath(TPL_DPATH))
 
     import tensorflow as tf
+
+    HACK_CPU_ONLY = 1
+    if HACK_CPU_ONLY:
+        # Hide GPU from visible devices
+        tf.config.set_visible_devices([], 'GPU')
+
     # print(tf.config.list_physical_devices('GPU'))
 
     from deeplab2 import config_pb2

@@ -302,6 +302,12 @@ def sample_video_spacetime_targets(dset,
         winspace_time_dims = time_dims
         winspace_space_dims = window_dims
 
+    if isinstance(time_kernel, str) and time_kernel.lower() == 'none':
+        time_kernel = None
+
+    if isinstance(time_span, str) and time_span.lower() == 'none':
+        time_span = None
+
     if time_kernel is not None and time_span is not None:
         raise ValueError('time_span and time_kernel are mutually exclusive')
 
@@ -689,6 +695,8 @@ def _sample_single_video_spacetime_targets(
         'winspace_full_dims': winspace_full_dims,
         'num_available_frames': len(time_sampler.indexes),
         'num_samples': len(_cached['video_targets']),
+        # TODO: if we are not classifying things as positive / negative
+        # then we should not include this to prevent confusion
         'num_pos_samples': len(_cached['video_positive_idxs']),
         'num_neg_samples': len(_cached['video_negative_idxs']),
     }
