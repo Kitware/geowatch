@@ -19,6 +19,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Fixed `geowatch model_stats` not respecting the LightningCLI config
 * If the kwcoco file is in a read-only directory, cached hashids no longer raise an error.
 * Fixed edge connections in mlops site characterization pipelines 
+* Bug in dataloader when `use_centered_annots=False` and `use_grid_negatives=cleared`
 
 ### Changed
 * MLOPs Nodes can now specify input paths as dictionaries if default input configs are known.
@@ -28,6 +29,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Depth Filter now marks sites as `system_rejected` instead of removing them.
 * Large rework of the scripts in `watch.cli.dag_cli`.
 * Removed internal utils in favor of the new `kwutil` module.
+* Hacked tensorflow to always use CPU
 
 
 ## Version 0.6.8 - Target 2023-05-22
