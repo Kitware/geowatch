@@ -194,8 +194,16 @@ python -m watch.mlops.aggregate \
         print_models: True
         reference_region: final
     " \
-    --query='(df["params.hashid.thresh"] == "hmownacdredt")' \
-    --rois="KR_R002,PE_R001,NZ_R001,CH_R001"
+    --rois="KR_R002,PE_R001,NZ_R001,CH_R001" \
+    --query='
+        #((df["params.sv_depth_filter.threshold"] > 0) &
+        # (df["param_hashid"] == "hmownacdredt") &
+        # (df["params.bas_poly.thresh"] == 0.35))
+    '
+
+    #
+    #
     #--rois="KR_R002,PE_R001,NZ_R001,CH_R001,KR_R001,AE_R001,BR_R002,BR_R004"
+    #--query='(df["param_hashid"] == "hmownacdredt")' \
     #--rois="PE_R001"
 
