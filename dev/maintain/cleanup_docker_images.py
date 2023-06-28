@@ -35,15 +35,15 @@ class CleanupDockerImagesCLI(scfg.DataConfig):
             >>> cls.main(cmdline=cmdline, **kwargs)
         """
         import rich
+        from kwutil import util_pattern
+        import json
         config = cls.cli(cmdline=cmdline, data=kwargs, strict=True)
         rich.print('config = ' + ub.urepr(config, nl=1))
 
-        from kwutil import util_pattern
         repo_pat = util_pattern.Pattern.coerce(config.repo_pattern)
 
         info = ub.cmd('docker images --format=json')
         info.check_returncode()
-        import json
         rows = []
         for line in info['out'].split('\n'):
             if line.strip():

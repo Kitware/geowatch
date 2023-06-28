@@ -12,6 +12,8 @@ addr_lut = {
     'namek': 'namek.kitware.com',
 }
 
+# Explicitly list the machines the data might exist on with absolute paths
+# to the dvc caches wrt to those specific machines.
 remotes = []
 remotes += [{'host': 'horologic',  'hardware': 'hdd', 'path': '/data/dvc-caches/smart_watch_dvc'}]
 remotes += [{'host': 'horologic',  'hardware': 'ssd', 'path': '/flash/smart_data_dvc/.dvc/cache'}]
