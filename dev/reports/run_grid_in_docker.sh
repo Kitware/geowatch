@@ -187,12 +187,15 @@ python -m watch.mlops.aggregate \
             - params.bas_poly.thresh
     " \
     --stdout_report="
-        top_k: 1
+        top_k: 5
         per_group: 1
         macro_analysis: 0
         analyze: 0
         print_models: True
         reference_region: final
-    "
+    " \
+    --query='(df["params.hashid.thresh"] == "hmownacdredt")' \
+    --rois="KR_R002,PE_R001,NZ_R001,CH_R001"
     #--rois="KR_R002,PE_R001,NZ_R001,CH_R001,KR_R001,AE_R001,BR_R002,BR_R004"
     #--rois="PE_R001"
+

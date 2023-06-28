@@ -192,6 +192,14 @@ def main(cmdline=True, **kwargs):
     rois = config.rois
     # rois = {'KR_R001', 'KR_R002', 'BR_R002'}
 
+    if config.embed:
+        # Sneaky way around linting filters, but also a more concise than
+        # try/except
+        embedding_modpath = ub.modname_to_modpath('xdev')
+        if embedding_modpath is not None:
+            embed_module = ub.import_module_from_name('xdev')
+            embed_module.embed()
+
     if config.query:
         print('Running query')
         new_eval_type_to_aggregator = {}
