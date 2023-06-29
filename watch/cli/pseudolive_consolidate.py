@@ -153,9 +153,9 @@ def pseudolive_consolidate(region_id,
         new_site_summary['properties']['end_date'] =\
             css['properties']['end_date']
 
-        new_site_geometry = mapping(
-            shape(pss['geometry']).union(shape(css['geometry'])))
-        new_site_summary['geometry'] = new_site_geometry
+        new_site_geometry =\
+            shape(pss['geometry']).union(shape(css['geometry'])).buffer(0)
+        new_site_summary['geometry'] = mapping(new_site_geometry)
 
         # Merge sites
         prev_site = _load_site_data(
@@ -171,7 +171,7 @@ def pseudolive_consolidate(region_id,
                 nssf['properties']['end_date'] =\
                     cssf['properties']['end_date']
 
-            nssf['geometry'] = new_site_geometry
+            nssf['geometry'] = mapping(new_site_geometry)
 
         # TODO: Update "phase_transition_days" of last site "observation"?
         new_site['features'].extend(
