@@ -446,6 +446,83 @@ for p in ub.ProgIter(problematic_paths):
 HDD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='hdd')
 SSD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='ssd')
 python -m watch.cli.cluster_sites \
-        --src "$HDD_DATA_DPATH"/annotations/drop6_hard_v1/region_models/KR_R002.geojson \
-        --dst_dpath "$SSD_DATA_DPATH"/Drop7-Cropped2GSD/clusters/cluster_KR_R002.geojson \
-        --draw_clusters True
+    --src "$HDD_DATA_DPATH"/annotations/drop6_hard_v1/region_models/KR_R002.geojson \
+    --dst_dpath "$SSD_DATA_DPATH"/Drop7-Cropped2GSD/clusters/KR_R002 \
+    --draw_clusters True
+
+
+# Execute alignment / crop script
+python -m watch.cli.coco_align \
+    --src "$HDD_DATA_DPATH"/Aligned-Drop7/KR_R002/imgonly-KR_R002.kwcoco.zip \
+    --dst "$SSD_DATA_DPATH"/Drop7-Cropped2GSD/KR_R002.kwcoco.zip \
+    --regions "$SSD_DATA_DPATH/Drop7-Cropped2GSD/clusters/KR_R002/*.geojson" \
+    --rpc_align_method orthorectify \
+    --workers=10 \
+    --aux_workers=2 \
+    --force_nodata=-9999 \
+    --context_factor=1.0 \
+    --minimum_size="128x128@2GSD" \
+    --force_min_gsd=2.0 \
+    --convexify_regions=True \
+    --target_gsd=2.0 \
+    --geo_preprop=False \
+    --exclude_sensors=L8 \
+    --keep img
+
+
+# Create a new queue
+HDD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='hdd')
+SSD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='ssd')
+python -m cmd_queue new "crop_for_sc_queue"
+
+#(cd "$HDD_DATA_DPATH"/Aligned-Drop7 && echo *)
+# Create multiple items in a bash array, and loop over that array
+REGION_IDS=(
+    KR_R001
+    KR_R002
+    AE_C001
+    AE_C002
+    AE_C003 AE_R001 BH_R001 BR_R001 BR_R002 BR_R004 BR_R005 CH_R001 CN_C000
+    CN_C001 CO_C001 CO_C009 IN_C000  LT_R001 NG_C000 NZ_R001 PE_C001 PE_C003
+    PE_C004 PE_R001 QA_C001 SA_C001 SA_C005 SN_C000 US_C000 US_C001 US_C010
+    US_C011 US_C012 US_C016 US_R001 US_R004 US_R005 US_R006 US_R007 VN_C002
+)
+for REGION_ID in "${REGION_IDS[@]}"; do
+
+    python -m cmd_queue --jobname="cluster-$REGION_ID" --depends="None" -- \
+        submit crop_for_sc_queue -- \
+        python -m watch.cli.cluster_sites \
+            --src "$HDD_DATA_DPATH/annotations/drop6_hard_v1/region_models/$REGION_ID.geojson" \
+            --dst_dpath "$HDD_DATA_DPATH/Drop7-Cropped2GSD/$REGION_ID/clusters" \
+            --draw_clusters True
+
+done
+
+# Show the generated script
+python -m cmd_queue show "crop_for_sc_queue"
+
+python -m cmd_queue run "crop_for_sc_queue" --workers=4
+
+
+REGION_ID=KR_R002
+HDD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='hdd')
+SSD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='ssd')
+REGION_ID=KR_R001
+#python -m cmd_queue --jobname="crop-$REGION_ID" --depends="cluster-$REGION_ID" -- \
+#    submit crop_for_sc_queue --  \
+    python -m watch.cli.coco_align \
+        --src "$HDD_DATA_DPATH/Aligned-Drop7/$REGION_ID/imgonly-$REGION_ID.kwcoco.zip" \
+        --dst "$HDD_DATA_DPATH/Drop7-Cropped2GSD/$REGION_ID/$REGION_ID.kwcoco.zip" \
+        --regions "$HDD_DATA_DPATH/Drop7-Cropped2GSD/$REGION_ID/clusters/*.geojson" \
+        --rpc_align_method orthorectify \
+        --workers=10 \
+        --aux_workers=2 \
+        --force_nodata=-9999 \
+        --context_factor=1.0 \
+        --minimum_size="128x128@2GSD" \
+        --force_min_gsd=2.0 \
+        --convexify_regions=True \
+        --target_gsd=2.0 \
+        --geo_preprop=False \
+        --exclude_sensors=L8 \
+        --keep img

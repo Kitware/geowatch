@@ -1114,6 +1114,27 @@ class RegionHeader(_Feature):
                     return cls(**RegionModel(**data).header)
         raise TypeError(data)
 
+    def infer_mgrs(self):
+        from shapely.geometry import shape
+        import mgrs
+        _geom = shape(self.geometry)
+        lon = _geom.centroid.xy[0][0]
+        lat = _geom.centroid.xy[1][0]
+        mgrs_code = mgrs.MGRS().toMGRS(lat, lon, MGRSPrecision=0)
+        self.properties['mgrs'] = mgrs_code
+        return self
+
+    def ensure_isodates(self):
+        date_keys = ['start_date', 'end_date', 'predicted_phase_transition_date']
+        feat = self
+        props = feat['properties']
+        for key in date_keys:
+            if key in props:
+                old_val = props[key]
+                if old_val is not None:
+                    props[key] = util_time.coerce_datetime(old_val).date().isoformat()
+        return self
+
 
 class SiteSummary(_Feature, _SiteOrSummaryMixin):
     """

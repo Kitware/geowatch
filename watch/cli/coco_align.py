@@ -1254,7 +1254,7 @@ class SimpleDataCube:
                     return ts.isoformat()
                 else:
                     return ts
-            timestamp_keys = ['start_date', 'end_date']
+            timestamp_keys = ['start_date', 'end_date', 'predicted_phase_transition_date']
             for issue in issues:
                 found = False
                 for k in timestamp_keys:

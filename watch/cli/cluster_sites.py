@@ -58,15 +58,40 @@ class ClusterSiteConfig(scfg.DataConfig):
     """
     Creates a new region file that groups nearby sites.
     """
-    src = scfg.Value(None, help='input region files with site summaries')
+    src = scfg.Value(None, help='input region files with site summaries', alias=['regions'])
     dst_dpath = scfg.Value(None, help='output path to store the resulting region files')
     io_workers = scfg.Value(10, help='number of io workers')
     draw_clusters = scfg.Value(False, isflag=True, help='if True draw the clusters')
     crop_time = scfg.Value(True, isflag=True, help='if True also crops temporal extent to the sites, otherwise uses the region extent')
 
 
-def main(cmdline=0, **kwargs):
+def main(cmdline=1, **kwargs):
     """
+    Example:
+        >>> from watch.cli.cluster_sites import *  # NOQA
+        >>> from watch.cli import cluster_sites
+        >>> import ubelt as ub
+        >>> dpath = ub.Path.appdir('watch', 'doctests', 'cluster_sites').ensuredir()
+        >>> src_dpath = (dpath / 'src').ensuredir()
+        >>> dst_dpath = (dpath / 'dst')
+        >>> from watch.geoannots import geomodels
+        >>> region = geomodels.RegionModel.random(num_sites=100)
+        >>> src_fpath = src_dpath / 'demo_region.geojson'
+        >>> src_fpath.write_text(region.dumps())
+        >>> kwargs = {
+        >>>     'src': src_fpath,
+        >>>     'dst_dpath': dst_dpath,
+        >>>     'io_workers': 0,
+        >>>     'draw_clusters': True,
+        >>>     'crop_time': True,
+        >>> }
+        >>> cmdline = 0
+        >>> cluster_sites.main(cmdline=cmdline, **kwargs)
+
+    Ignore:
+        import xdev
+        xdev.profile_now(cluster_sites.main)(cmdline=cmdline, **kwargs)
+
     Ignore:
         import sys, ubelt
         sys.path.append(ubelt.expandpath('~/code/watch'))
@@ -78,17 +103,19 @@ def main(cmdline=0, **kwargs):
         kwargs = dict(src=src, dst_dpath=dst_dpath, draw_clusters=True)
         main(**kwargs)
     """
-    from watch.utils import util_gis
-    import kwimage
     config = ClusterSiteConfig.cli(data=kwargs)
-    print('config = {}'.format(ub.urepr(dict(config), nl=1)))
+    import rich
+    rich.print('config = {}'.format(ub.urepr(config, nl=1)))
 
-    import pandas as pd
+    from watch import heuristics
+    from watch.utils import util_gis
     from watch.utils import util_kwimage
     import geopandas as gpd
-    import json
-    from watch import heuristics
+    import kwimage
+    import pandas as pd
+    from watch.geoannots import geomodels
     dst_dpath = ub.Path(config.dst_dpath)
+    rich.print(f'Will write to: [link={dst_dpath}]{dst_dpath}[/link]')
 
     site_results = list(util_gis.coerce_geojson_datas(
         config['src'], workers=config['io_workers'],
@@ -130,7 +157,8 @@ def main(cmdline=0, **kwargs):
         #
         # region_sites['status'] == 'system_confirmed'
 
-        region_sites_utm = util_gis.project_gdf_to_local_utm(region_sites, max_utm_zones=2)
+        region_sites_utm = util_gis.project_gdf_to_local_utm(region_sites, max_utm_zones=2)  # 99% of the time
+
         polygons = kwimage.PolygonList([kwimage.Polygon.from_shapely(s) for s in region_sites_utm.geometry])
 
         keep_bbs, overlap_idxs = util_kwimage.find_low_overlap_covering_boxes(polygons, scale, min_box_dim, max_box_dim, max_iters=100)
@@ -181,8 +209,7 @@ def main(cmdline=0, **kwargs):
             # Drop columns that dont go in site summaries
             # contained_sites = contained_sites.drop(['region_id', 'comments'], axis=1)
 
-            from watch.geoannots.geomodels import SiteSummary, RegionModel, RegionHeader
-            site_summaries = list(SiteSummary.from_geopandas_frame(contained_sites))
+            site_summaries = list(geomodels.SiteSummary.from_geopandas_frame(contained_sites))
             # site_summaries = json.loads(contained_sites.to_json(drop_id=True))['features']
 
             if len(start_dates) and config.crop_time:
@@ -195,7 +222,7 @@ def main(cmdline=0, **kwargs):
             else:
                 region_row['end_date'].iloc[0]
 
-            sub_region_header = RegionHeader(
+            sub_region_header = geomodels.RegionHeader(
                 geometry=geometry,
                 properties={
                     "region_id": subregion_id,
@@ -208,27 +235,16 @@ def main(cmdline=0, **kwargs):
                     "comments": '',
                 }
             )
-            from kwutil import util_time
-            import mgrs
-            from shapely.geometry import shape
-            start_time = util_time.coerce_datetime(sub_region_header.properties['start_date'])
-            end_time = util_time.coerce_datetime(sub_region_header.properties['end_date'])
-            sub_region_header.properties['start_date'] = start_time.date().isoformat()
-            sub_region_header.properties['end_date'] = end_time.date().isoformat()
-            _geom = shape(sub_region_header.geometry)
-            lon = _geom.centroid.xy[0][0]
-            lat = _geom.centroid.xy[1][0]
-            mgrs_code = mgrs.MGRS().toMGRS(lat, lon, MGRSPrecision=0)
-            sub_region_header.properties['mgrs_code'] = mgrs_code
+            sub_region_header.ensure_isodates()
+            sub_region_header.infer_mgrs()
 
-            sub_region = RegionModel(features=[
+            sub_region = geomodels.RegionModel(features=[
                 sub_region_header
             ] + site_summaries)
-            sub_region_ = sub_region.dumps()
 
             dst_dpath.ensuredir()
             fpath = dst_dpath / (subregion_id + '.geojson')
-            fpath.write_text(json.dumps(sub_region_))
+            fpath.write_text(sub_region.dumps())
 
         SHOW_SUBREGIONS = config.draw_clusters
         if SHOW_SUBREGIONS:
@@ -245,17 +261,25 @@ def main(cmdline=0, **kwargs):
             kwplot.figure(fnum=1, doclf=1)
             # polygons.draw(color='pink')
             for poly, color in zip(polygons, color_list):
-                poly.draw(color=color)
+                edgecolor = color.adjust(saturate=-.1, lighten=.1)
+                poly.draw(color=color, edgecolor=edgecolor)
             # candidate_bbs.draw(color='blue', setlim=1)
             keep_bbs.draw(color='orange', setlim=1, labels=subregion_suffix_list)
             plt.gca().set_title('find_low_overlap_covering_boxes')
             fig = plt.gcf()
             viz_dpath = (dst_dpath / '_viz_clusters').ensuredir()
+            import rich
+            rich.print(f'Viz dpath: [link={viz_dpath}]{viz_dpath}[/link]')
+
             finalizer = util_kwplot.FigureFinalizer(
                 size_inches=(16, 16),
                 dpath=viz_dpath,
             )
             finalizer(fig, 'clusters_' + region_id + '.png')
+
+
+__cli__ = ClusterSiteConfig
+__cli__.main = main
 
 
 if __name__ == '__main__':
