@@ -50,12 +50,40 @@ import math
 
 
 class ReprojectAnnotationsConfig(scfg.DataConfig):
-    """
+    r"""
     Projects annotations from geospace onto a kwcoco dataset and optionally
     propogates them across time.
 
     References:
         https://smartgitlab.com/TE/annotations/-/wikis/Alternate-Site-Type
+
+    The following is example usage in bash
+
+    .. code:: bash
+
+        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
+        geowatch reproject_annotations \
+            --src $DVC_DATA_DPATH/Drop6/data.kwcoco.json \
+            --dst $DVC_DATA_DPATH/Drop6/data.kwcoco.json \
+            --region_models="$DVC_DATA_DPATH/annotations/drop6_hard_v1/region_models/*.geojson" \
+            --site_models="$DVC_DATA_DPATH/annotations/drop6_hard_v1/site_models/*.geojson"
+
+    And equivalent usage in Python
+
+    .. code:: python
+
+        from watch.cli import reproject_annotations
+        import watch
+        dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        # Note that every CLI argument has a corresponding key/value argument
+        kwargs = {
+            'src': dvc_data_dpath / 'Drop6/data.kwcoco.json',
+            'dst': dvc_data_dpath / 'Drop6/data.kwcoco.json',
+            'region_models': dvc_data_dpath / 'annotations/drop6_hard_v1/region_models/*.geojson',
+            'site_models': dvc_data_dpath / 'annotations/drop6_hard_v1/site_models/*.geojson',
+        }
+        reproject_annotations.main(cmdline=False, **kwargs)
+
     """
     __fuzzy_hyphens__ = 1
 
@@ -78,13 +106,13 @@ class ReprojectAnnotationsConfig(scfg.DataConfig):
             '''
             Geospatial geojson "site" annotation files. Either a path to
             a file, or a directory.
-            '''))
+            '''), alias=['sites'])
 
     region_models = scfg.Value(None, help=ub.paragraph(
             '''
             Geospatial geojson "region" annotation files. Containing
             site summaries. Either a path to a file, or a directory.
-            '''))
+            '''), alias=['regions'])
 
     viz_dpath = scfg.Value(None, help=ub.paragraph(
             '''
@@ -1656,6 +1684,9 @@ def is_nonish(x):
 
 
 __config__ = ReprojectAnnotationsConfig
+
+__cli__ = ReprojectAnnotationsConfig
+__cli__.main = main
 
 
 if __name__ == '__main__':

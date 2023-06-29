@@ -44,7 +44,10 @@ def perterb_site_model(sites, rng=None, **kwargs):
 
     pred_sites = []
     for idx, site in enumerate(templates):
-        pred_site = perterb_single_site_model(site, idx=idx, rng=rng, **kwargs)
+        try:
+            pred_site = perterb_single_site_model(site, idx=idx, rng=rng, **kwargs)
+        except IndexError:
+            continue  # drop the site
         pred_sites.append(pred_site)
     return pred_sites
 

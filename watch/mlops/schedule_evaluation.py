@@ -241,7 +241,7 @@ class ScheduleEvaluationConfig(CMDQueueConfig):
         self.devices = GPUS
 
 
-def main(cmdline=False, **kwargs):
+def main(cmdline=True, **kwargs):
     config = ScheduleEvaluationConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
     import rich
     rich.print('ScheduleEvaluationConfig config = {}'.format(ub.urepr(config, nl=1, sv=1)))

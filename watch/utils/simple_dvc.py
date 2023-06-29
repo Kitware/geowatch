@@ -5,6 +5,7 @@ A simplified Python DVC API
 import ubelt as ub
 import os
 from kwutil import util_path
+from kwutil.util_yaml import Yaml
 
 
 class SimpleDVC(ub.NiceRepr):
@@ -72,6 +73,9 @@ class SimpleDVC(ub.NiceRepr):
     def find_root(cls, path=None):
         """
         Given a path, search its ancestors to find the root of a dvc repo.
+
+        Returns:
+            Path | None
         """
         if path is None:
             raise Exception('no way to find dvc root')
@@ -352,9 +356,8 @@ class SimpleDVC(ub.NiceRepr):
             dpath = dpath.parent
 
     def read_dvc_sidecar(self, sidecar_fpath):
-        from kwutil import util_yaml
         sidecar_fpath = ub.Path(sidecar_fpath)
-        data = util_yaml.Yaml.loads(sidecar_fpath.read_text())
+        data = Yaml.loads(sidecar_fpath.read_text())
         return data
 
     def resolve_cache_paths(self, sidecar_fpath):
@@ -364,14 +367,15 @@ class SimpleDVC(ub.NiceRepr):
         Args:
             sidecar_fpath (PathLike | str): path to the .dvc file
         """
-        from kwutil import util_yaml
         sidecar_fpath = ub.Path(sidecar_fpath)
-        data = util_yaml.Yaml.loads(sidecar_fpath.read_text())
+        data = Yaml.loads(sidecar_fpath.read_text())
+
+        # TODO: dvc 3.0 added new hashes! Yay! But we have to support this.
         for item in data['outs']:
             md5 = item['md5']
             cache_fpath = self.cache_dir / md5[0:2] / md5[2:]
             if md5.endswith('.dir') and cache_fpath.exists():
-                dir_data = util_yaml.Yaml.loads(cache_fpath.read_text())
+                dir_data = Yaml.loads(cache_fpath.read_text())
                 for item in dir_data:
                     file_md5 = item['md5']
                     assert not file_md5.endswith('.dir'), 'unhandled'
@@ -406,12 +410,15 @@ import scriptconfig as scfg  # NOQA
 
 class SimpleDVC_CLI(scfg.ModalCLI):
     """
-    A DVC CLI That uses our simplified (and more permissive) interface
+    A DVC CLI That uses our simplified (and more permissive) interface.
+
+    The main advantage is that you can run these commands outside a DVC repo as
+    long as you point to a valid in-repo path.
     """
 
     class Add(scfg.DataConfig):
         """
-        SubCLI for adding data to DVC
+        Add data to the DVC repo.
         """
         __command__ = 'add'
 
@@ -425,7 +432,7 @@ class SimpleDVC_CLI(scfg.ModalCLI):
 
     class Request(scfg.DataConfig):
         """
-        SubCLI for pulling data from DVC
+        Pull data if the requested file doesn't exist.
         """
         __command__ = 'request'
 
@@ -437,6 +444,20 @@ class SimpleDVC_CLI(scfg.ModalCLI):
             config = cls.cli(cmdline=cmdline, data=kwargs, strict=True)
             dvc = SimpleDVC()
             dvc.request(config.paths)
+
+    class CacheDir(scfg.DataConfig):
+        """
+        Print the cache directory
+        """
+        __command__ = 'cache_dir'
+
+        dvc_root = scfg.Value('.', position=1, help='get the cache path for this DVC repo')
+
+        @classmethod
+        def main(cls, cmdline=1, **kwargs):
+            config = cls.cli(cmdline=cmdline, data=kwargs, strict=True)
+            dvc = SimpleDVC(dvc_root=config.dvc_root)
+            print(dvc.cache_dir)
 
 
 def _import_dvc_main():
@@ -451,6 +472,8 @@ if __name__ == '__main__':
     """
 
     CommandLine:
+        python -m watch.utils.simple_dvc --help
         python -m watch.utils.simple_dvc request --help
+        python -m watch.utils.simple_dvc cache_dir
     """
     SimpleDVC_CLI.main()

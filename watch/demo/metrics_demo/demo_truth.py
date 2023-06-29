@@ -655,6 +655,8 @@ def make_site_summary(observations, mgrs_code, site_id, status, summary_geom=Non
         summary_geom = unary_union(
             [kwimage.MultiPolygon.coerce(o["geometry"]).to_shapely() for o in observations]
         ).convex_hull
+    if len(observations) == 0:
+        raise IndexError('No observations, cannot make a site summary')
     start_date = observations[0]["properties"]["observation_date"]
     end_date = observations[-1]["properties"]["observation_date"]
     sitesum_props = {

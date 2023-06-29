@@ -137,6 +137,8 @@ class AggregateEvluationConfig(AggregateLoader):
 
     query = Value(None, type=str, help='a pandas query to restrict the rows of the table we consider')
 
+    embed = Value(False, isflag=True, help='if True, embed into IPython.')
+
     def __post_init__(self):
         super().__post_init__()
         from kwutil.util_yaml import Yaml
@@ -191,6 +193,17 @@ def main(cmdline=True, **kwargs):
 
     rois = config.rois
     # rois = {'KR_R001', 'KR_R002', 'BR_R002'}
+
+    if config.embed:
+        # Sneaky way around linting filters, but also a more concise than
+        # try/except, and perhaps we can generalize to people's favorite
+        # shells?
+        embedding_modpath = ub.modname_to_modpath('xdev')
+        if embedding_modpath is None:
+            print('missing embed module')
+        if embedding_modpath is not None:
+            embed_module = ub.import_module_from_name('xdev')
+            embed_module.embed()
 
     if config.query:
         print('Running query')

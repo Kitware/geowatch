@@ -749,11 +749,19 @@ class SiteModel(_Model):
             if prop.get('sensor_name') == 'WorldView 1':
                 prop['sensor_name'] = 'WorldView'
 
+    def fix_current_phase_salient(self):
+        for feat in self.observations():
+            prop = feat['properties']
+            if 'salient' in prop.get('current_phase'):
+                prop['current_phase'] = prop['current_phase'].replace(
+                    'salient', 'Active Construction')
+
     def fixup(self):
         self._update_cache_key()
         self.clamp_scores()
         self.fix_sensor_names()
         self.ensure_isodates()
+        self.fix_current_phase_salient()
         # self.fix_geom()
 
     def ensure_isodates(self):

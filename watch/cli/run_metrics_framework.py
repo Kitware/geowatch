@@ -249,10 +249,11 @@ def main(cmdline=True, **kwargs):
     try:
         # Do we have the latest and greatest?
         import iarpa_smart_metrics
-        METRICS_VERSION = version.Version(iarpa_smart_metrics.__version__)
+        IARPA_METRICS_VERSION = version.Version(iarpa_smart_metrics.__version__)
     except Exception:
         raise AssertionError('The iarpa_smart_metrics package should be pip installed ' 'in your virtualenv')
-    assert METRICS_VERSION >= version.Version('0.2.0')
+    assert IARPA_METRICS_VERSION >= version.Version('0.2.0')
+    assert IARPA_METRICS_VERSION >= version.Version('1.2.0')
 
     # Record information about this process
     info = []
@@ -425,8 +426,8 @@ def main(cmdline=True, **kwargs):
             # '--loglevel', 'error',
         ]
 
-        print(f'METRICS_VERSION={METRICS_VERSION}')
-        if METRICS_VERSION >= version.Version('1.0.0'):
+        print(f'IARPA_METRICS_VERSION={IARPA_METRICS_VERSION}')
+        if IARPA_METRICS_VERSION >= version.Version('1.0.0'):
             run_eval_command += [
                 '--performer=kit',  # parameterize
                 '--eval_num=0',
@@ -499,7 +500,9 @@ def main(cmdline=True, **kwargs):
 
         region_dpaths = out_dirs
 
-        info.append(proc_context.stop())
+        context = proc_context.stop()
+        context['IARPA_METRICS_VERSION'] = str(IARPA_METRICS_VERSION)
+        info.append(context)
 
         json_data, bas_df, sc_df, best_bas_rows = merge_metrics_results(region_dpaths, true_site_dpath,
                                                                         true_region_dpath, args.merge_fbetas)

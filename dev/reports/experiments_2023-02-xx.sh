@@ -2320,7 +2320,7 @@ DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_HDD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 
-python -m watch.utils.simple_dvc request
+python -m watch.utils.simple_dvc request \
     "$DVC_EXPT_DPATH"/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt \
     "$DVC_EXPT_DPATH"/models/depth_pcd/basicModel2.h5 \
     "$DVC_EXPT_DPATH"/models/depth_pcd/model3.h5
@@ -2440,12 +2440,12 @@ python -m watch.mlops.aggregate \
     --output_dpath="$DVC_EXPT_DPATH/_horologic_sv_sweep/aggregate" \
     --resource_report=0 \
     --eval_nodes="
-        - sv_poly_eval
-        #- bas_poly_eval
+        #- sv_poly_eval
+        - bas_poly_eval
         #- bas_pxl_eval
     " \
     --plot_params="
-        enabled: 1
+        enabled: 0
         stats_ranking: 0
         min_variations: 1
         params_of_interest:
@@ -2454,15 +2454,15 @@ python -m watch.mlops.aggregate \
             - params.bas_poly.thresh
     " \
     --stdout_report="
-        top_k: 10
+        top_k: 1
         per_group: 1
         macro_analysis: 0
         analyze: 0
         print_models: True
         reference_region: final
     " \
-    --rois="PE_R001"
-    #--rois="KR_R002,PE_R001,NZ_R001,CH_R001,KR_R001,AE_R001,BR_R002,BR_R004"
+    --rois="KR_R002,PE_R001,NZ_R001,CH_R001,KR_R001,AE_R001,BR_R002,BR_R004"
+    #--rois="PE_R001"
 
     #--rois="KR_R002"
 

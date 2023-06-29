@@ -29,6 +29,11 @@ def generate_demo_metrics_framework_data(
         >>>     p_transition=0.3, drop_noise=0.5, drop_limit=0.5)
         >>> print('demo_info = {}'.format(ub.urepr(demo_info, nl=1)))
         >>> # TODO: visualize
+
+    Ignore:
+        from watch.demo.metrics_demo.generate_demodata import *  # NOQA
+        import xdev
+        globals().update(xdev.get_func_kwargs(generate_demo_metrics_framework_data))
     """
 
     if outdir is None:
