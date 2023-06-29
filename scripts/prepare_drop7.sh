@@ -444,18 +444,20 @@ for p in ub.ProgIter(problematic_paths):
 
 
 HDD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='hdd')
-SSD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='ssd')
 python -m watch.cli.cluster_sites \
     --src "$HDD_DATA_DPATH"/annotations/drop6_hard_v1/region_models/KR_R002.geojson \
-    --dst_dpath "$SSD_DATA_DPATH"/Drop7-Cropped2GSD/clusters/KR_R002 \
+    --dst_dpath "$HDD_DATA_DPATH"/Drop7-Cropped2GSD/clusters/KR_R002 \
+    --minimum_size="128x128@2GSD" \
+    --maximum_size="1024x1024@2GSD" \
+    --context_factor=1.3 \
     --draw_clusters True
 
 
 # Execute alignment / crop script
 python -m watch.cli.coco_align \
     --src "$HDD_DATA_DPATH"/Aligned-Drop7/KR_R002/imgonly-KR_R002.kwcoco.zip \
-    --dst "$SSD_DATA_DPATH"/Drop7-Cropped2GSD/KR_R002.kwcoco.zip \
-    --regions "$SSD_DATA_DPATH/Drop7-Cropped2GSD/clusters/KR_R002/*.geojson" \
+    --dst "$HDD_DATA_DPATH"/Drop7-Cropped2GSD/KR_R002.kwcoco.zip \
+    --regions "$HDD_DATA_DPATH/Drop7-Cropped2GSD/clusters/KR_R002/*.geojson" \
     --rpc_align_method orthorectify \
     --workers=10 \
     --aux_workers=2 \
@@ -472,7 +474,6 @@ python -m watch.cli.coco_align \
 
 # Create a new queue
 HDD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='hdd')
-SSD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='ssd')
 python -m cmd_queue new "crop_for_sc_queue"
 
 #(cd "$HDD_DATA_DPATH"/Aligned-Drop7 && echo *)

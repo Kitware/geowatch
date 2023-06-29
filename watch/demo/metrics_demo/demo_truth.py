@@ -262,7 +262,7 @@ def random_region_model(region_id=None, region_poly=None, num_sites=3,
                 if site_d1 <= datetime and datetime <= site_d2:
                     wld_site_poly = kwimage.Polygon.coerce(sitesum["geometry"])
                     img_site_poly = wld_site_poly.warp(tf_image_from_region)
-                    img_site_poly.meta["color"] = sitesum["properties"]["annotation_cache"][
+                    img_site_poly.meta["color"] = sitesum["properties"]["cache"][
                         "color"
                     ]
                     visible_polys.append(img_site_poly)
@@ -471,7 +471,7 @@ def random_site_model(region_id, site_id, region_corners, observables,
                 'originator': 'demo',
                 'model_content': 'annotation',
                 'validated': 'True',
-                'annotation_cache': {
+                'cache': {
                     'color': [1.0, 0.36777954425013254, 0.0]
                 }
             }
@@ -634,15 +634,14 @@ def random_site_model(region_id, site_id, region_corners, observables,
     site_summary = make_site_summary(
         observations, mgrs_code, site_id, status, summary_geom
     )
-    if "annotation_cache" not in site_summary["properties"]:
-        site_summary["properties"]["annotation_cache"] = {}
-    site_summary["properties"]["annotation_cache"]["color"] = color
+    if "cache" not in site_summary["properties"]:
+        site_summary["properties"]["cache"] = {}
+    site_summary["properties"]["cache"]["color"] = color
 
     site_header = site_summary.copy()
     site_header["properties"] = site_header["properties"].copy()
     site_header["properties"]["type"] = "site"
     site_header["properties"]["region_id"] = region_id
-    site_header["properties"]["misc_info"] = site_header["properties"].pop("annotation_cache")
     site = geojson.FeatureCollection([site_header] + observations)
     return site_summary, site
 

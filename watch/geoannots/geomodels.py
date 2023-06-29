@@ -393,6 +393,11 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
             >>> self._update_cache_key()
             >>> assert 'cache' in feat['properties']
             >>> assert feat['properties']['cache']['foo'] == 'bar'
+
+            self.header['properties']['cache'] = None
+            self.fixup()
+            self.validate(strict=0)
+            assert self.header['properties']['cache'] == {}
         """
         for feat in self['features']:
             prop = feat['properties']
@@ -478,7 +483,9 @@ class RegionModel(_Model):
         Returns:
             geopandas.GeoDataFrame: the site summaries as a data frame
         """
-        gdf = gpd.GeoDataFrame.from_features(list(self.site_summaries()))
+        from watch.utils import util_gis
+        crs84 = util_gis.get_crs84()
+        gdf = gpd.GeoDataFrame.from_features(list(self.site_summaries()), crs=crs84)
         return gdf
 
     def pandas_region(self):
@@ -486,7 +493,9 @@ class RegionModel(_Model):
         Returns:
             geopandas.GeoDataFrame: the region header as a data frame
         """
-        gdf = gpd.GeoDataFrame.from_features([self.header])
+        from watch.utils import util_gis
+        crs84 = util_gis.get_crs84()
+        gdf = gpd.GeoDataFrame.from_features([self.header], crs=crs84)
         return gdf
 
     @classmethod
@@ -554,6 +563,9 @@ class RegionModel(_Model):
         return self.header['properties']['region_id']
 
     def fixup(self):
+        """
+        Fix common issues with this region model
+        """
         self._update_cache_key()
         self.remove_invalid_properties()
         self.ensure_isodates()
@@ -584,12 +596,17 @@ class RegionModel(_Model):
                         props[key] = newval
 
     def remove_invalid_properties(self):
+        """
+        Remove invalid properties from this region model
+        """
         props = self.header['properties']
         bad_region_header_properties = ['validated', 'score', 'site_id', 'status', 'socre']
         for key in bad_region_header_properties:
             props.pop(key, None)
 
-        bad_sitesum_features = ['region_id', 'validate', 'validated']
+        bad_sitesum_features = ['region_id', 'validate', 'validated',
+                                'predicted_phase_transition',
+                                'predicted_phase_transition_date']
         for sitesum in self.body_features():
             siteprops = sitesum['properties']
             for key in bad_sitesum_features:
@@ -757,6 +774,9 @@ class SiteModel(_Model):
                     'salient', 'Active Construction')
 
     def fixup(self):
+        """
+        Fix common issues with this site model
+        """
         self._update_cache_key()
         self.clamp_scores()
         self.fix_sensor_names()
@@ -803,6 +823,9 @@ class SiteModel(_Model):
             fprop['score'] = float(max(min(1, fprop['score']), 0))
 
     def remove_invalid_properties(self):
+        """
+        Remove invalid properties from this site model
+        """
         # T&E site schema no longer allows extraneous keys to be
         # included in region / site models; removing all unsupported
         # keys (could consider putting in 'misc_info' rather than
@@ -1311,3 +1334,6 @@ def _update_propery_cache(prop):
         cache = ub.udict.union(prop.pop('misc_info', {}), cache)
         if cache:
             prop['cache'] = cache
+    if 'cache' in prop:
+        if prop['cache'] is None:
+            prop['cache'] = {}

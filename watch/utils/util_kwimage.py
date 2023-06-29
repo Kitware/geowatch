@@ -1218,6 +1218,12 @@ def find_low_overlap_covering_boxes(polygons, scale, min_box_dim, max_box_dim, m
 
     Then we will search for small boxes that can be merged, and iterate.
 
+    Args:
+        polygons (List[Polygon): the input shapes that need clustering
+        scale (float): scale factor for context we want around each polygon.
+        min_box_dim (float): minimum side length of a returned box
+        max_box_dim (float): maximum side length of a returned box
+
     References:
         https://aip.scitation.org/doi/pdf/10.1063/1.5090003?cookieSet=1
         Mercantile - https://pypi.org/project/mercantile/0.4/

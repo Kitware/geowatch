@@ -311,7 +311,8 @@ def shapely_flip_xy(geom):
     return ops.transform(_flip, geom)
 
 
-def project_gdf_to_local_utm(gdf_crs84, max_utm_zones=1):
+def project_gdf_to_local_utm(gdf_crs84, max_utm_zones=1, mode=0,
+                             tolerance=None):
     """
     Find the local UTM zone for a geo data frame and project to it.
 
@@ -326,6 +327,17 @@ def project_gdf_to_local_utm(gdf_crs84, max_utm_zones=1):
         max_utm_zones (int):
             If the data spans more than this many UTM zones, error.
             Otherwise, we take the first one.
+
+        mode (int):
+            which version of the logic to use. Default is 0, which is the
+            original.  Also have version 1 which is experimental and maybe
+            faster.
+
+        tolerance (int):
+            if the projected region is further than this many meters from the
+            center of the estimated UTM zone, raise a
+            :class:`pyproj.exceptions.CRSError` error.
+            Only used in mode 1.
 
     Returns:
         geopandas.GeoDataFrame
@@ -361,6 +373,25 @@ def project_gdf_to_local_utm(gdf_crs84, max_utm_zones=1):
         >>> with pytest.raises(ValueError):
         >>>     gdf_utm = project_gdf_to_local_utm(gdf_crs84)
 
+    Example:
+        >>> from watch.utils.util_gis import *  # NOQA
+        >>> import geopandas as gpd
+        >>> import kwarray
+        >>> import kwimage
+        >>> # Data convers a lot of utm zones
+        >>> rng = kwarray.ensure_rng(0)
+        >>> gdf_crs84 = gpd.GeoDataFrame({'geometry': [
+        >>>     kwimage.Polygon.random(rng=rng).scale(2).translate((-1, -1)).scale(0.001, about='centroid').scale((180, 90)).to_shapely()
+        >>>     for _ in range(30)
+        >>> ]}, crs='crs84')
+        >>> # Mode 1 uses a tolerance test instead
+        >>> gdf_utm = project_gdf_to_local_utm(gdf_crs84, mode=1, tolerance=float('inf'))
+        >>> import pytest
+        >>> import pyproj
+        >>> with pytest.raises(pyproj.exceptions.CRSError):
+        >>>     gdf_utm = project_gdf_to_local_utm(gdf_crs84, mode=1, tolerance=10000)
+        >>> # Mode 1 uses the bounds of the entire region
+
     # TODO: Gracefully handle cases where the UTM zones are different
     # but all neighbors. Find a good example of this.
     # Example:
@@ -387,22 +418,50 @@ def project_gdf_to_local_utm(gdf_crs84, max_utm_zones=1):
     """
     # if gdf_crs84.crs.name != 'WGS 84 (CRS84)':
     #     raise AssertionError('expected CRS-84 input')
-    epsg_zones = []
-    for geom_crs84 in gdf_crs84.geometry:
-        epsg_zone = find_local_meter_epsg_crs(geom_crs84)
-        epsg_zones.append(epsg_zone)
-    if not ub.allsame(epsg_zones):
-        unique_utm = set(epsg_zones)
-        if len(unique_utm) > max_utm_zones:
-            raise ValueError(ub.paragraph(
-                '''
-                Input data spanned multiple UTM zones.
-                This is currently not allowed. {}
-                '''
-            ).format(unique_utm))
-    # TODO: if there are more than one is there a way to get "the best one?"
-    epsg_zone = epsg_zones[0]
-    gdf_utm = gdf_crs84.to_crs(epsg_zone)
+    # try:
+    #     gdf_crs84.estimate_utm_crs()
+    # except Exception:
+
+    if mode == 0:
+        epsg_zones = []
+        for geom_crs84 in gdf_crs84.geometry:
+            epsg_zone = find_local_meter_epsg_crs(geom_crs84)
+            epsg_zones.append(epsg_zone)
+
+        if not ub.allsame(epsg_zones):
+            unique_utm = set(epsg_zones)
+            if len(unique_utm) > max_utm_zones:
+                raise ValueError(ub.paragraph(
+                    '''
+                    Input data spanned multiple UTM zones.
+                    This is currently not allowed. {}
+                    '''
+                ).format(unique_utm))
+        # TODO: if there are more than one is there a way to get "the best one?"
+        epsg_zone = epsg_zones[0]
+        gdf_utm = gdf_crs84.to_crs(epsg_zone)
+    elif mode == 1:
+        utm_crs = gdf_crs84.estimate_utm_crs()
+        gdf_utm = gdf_crs84.to_crs(utm_crs)
+        if tolerance is not None:
+            # not sure what a good default is here.
+            import pyproj
+            # Quick check first, then expensive check
+            max_dist1 = np.abs(gdf_utm.bounds.values).max()
+            if max_dist1 > tolerance:
+                for geom in gdf_utm.geometry:
+                    xys = np.array(geom.exterior.xy).T
+                    max_dist = np.abs(xys).max()
+                    if max_dist > tolerance:
+                        if 1:
+                            epsg_zones = []
+                            for geom_crs84 in gdf_crs84.geometry:
+                                epsg_zone = find_local_meter_epsg_crs(geom_crs84)
+                                epsg_zones.append(epsg_zone)
+                            print(f'epsg_zones={epsg_zones}')
+                        raise pyproj.exceptions.CRSError(f'Projection distance={max_dist} is greater than tolerance={tolerance}')
+    else:
+        raise NotImplementedError(mode)
     return gdf_utm
 
 
