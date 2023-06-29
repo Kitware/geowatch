@@ -82,6 +82,12 @@ def main(cmdline=0, **kwargs):
     import kwimage
     config = ClusterSiteConfig.cli(data=kwargs)
     print('config = {}'.format(ub.urepr(dict(config), nl=1)))
+
+    import pandas as pd
+    from watch.utils import util_kwimage
+    import geopandas as gpd
+    import json
+    from watch import heuristics
     dst_dpath = ub.Path(config.dst_dpath)
 
     site_results = list(util_gis.coerce_geojson_datas(
@@ -118,9 +124,6 @@ def main(cmdline=0, **kwargs):
     min_box_dim = 384
     max_box_dim = 384 * 4
 
-    import pandas as pd
-    from watch.utils import util_kwimage
-
     for region_id, geoms in region_id_to_geoms.items():
         region_sites = pd.concat(geoms).reset_index()
 
@@ -144,9 +147,6 @@ def main(cmdline=0, **kwargs):
         subregion_ids = []
         subregion_suffix_list = []
 
-        import geopandas as gpd
-        import json
-        from watch import heuristics
         for utm_box in keep_bbs.to_shapely():
 
             region_utm = region_row.to_crs(utm_crs)
@@ -159,6 +159,12 @@ def main(cmdline=0, **kwargs):
 
             is_contained = region_sites_utm.intersects(final_geom_utm)
             contained_sites = region_sites[is_contained]
+
+            if 'predicted_phase_transition_date' in contained_sites:
+                f = contained_sites['predicted_phase_transition_date'].isnull()
+                tmp = contained_sites['predicted_phase_transition_date'].apply(str)
+                tmp.loc[f[f].index] = None
+                contained_sites = contained_sites.assign(predicted_phase_transition_date=tmp)
 
             contained_site_ids = sorted(contained_sites['site_id'].tolist())
             contained_hashid = ub.hash_data(contained_site_ids, base=26)[0:8]
@@ -175,8 +181,9 @@ def main(cmdline=0, **kwargs):
             # Drop columns that dont go in site summaries
             # contained_sites = contained_sites.drop(['region_id', 'comments'], axis=1)
 
-            json.loads(contained_sites.to_json())
-            site_summaries = json.loads(contained_sites.to_json(drop_id=True))['features']
+            from watch.geoannots.geomodels import SiteSummary, RegionModel, RegionHeader
+            site_summaries = list(SiteSummary.from_geopandas_frame(contained_sites))
+            # site_summaries = json.loads(contained_sites.to_json(drop_id=True))['features']
 
             if len(start_dates) and config.crop_time:
                 start_date = start_dates.min()
@@ -188,14 +195,36 @@ def main(cmdline=0, **kwargs):
             else:
                 region_row['end_date'].iloc[0]
 
-            sub_region = RegionModel(
-                region_id=subregion_id,
+            sub_region_header = RegionHeader(
                 geometry=geometry,
-                start_date=start_date,
-                end_date=end_date,
-                site_summaries=site_summaries,
+                properties={
+                    "region_id": subregion_id,
+                    "version": '2.4.3',
+                    "mgrs": None,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "originator": "kit-cluster",
+                    "model_content": "annotation",
+                    "comments": '',
+                }
             )
-            sub_region_ = sub_region.to_geojson()
+            from kwutil import util_time
+            import mgrs
+            from shapely.geometry import shape
+            start_time = util_time.coerce_datetime(sub_region_header.properties['start_date'])
+            end_time = util_time.coerce_datetime(sub_region_header.properties['end_date'])
+            sub_region_header.properties['start_date'] = start_time.date().isoformat()
+            sub_region_header.properties['end_date'] = end_time.date().isoformat()
+            _geom = shape(sub_region_header.geometry)
+            lon = _geom.centroid.xy[0][0]
+            lat = _geom.centroid.xy[1][0]
+            mgrs_code = mgrs.MGRS().toMGRS(lat, lon, MGRSPrecision=0)
+            sub_region_header.properties['mgrs_code'] = mgrs_code
+
+            sub_region = RegionModel(features=[
+                sub_region_header
+            ] + site_summaries)
+            sub_region_ = sub_region.dumps()
 
             dst_dpath.ensuredir()
             fpath = dst_dpath / (subregion_id + '.geojson')
@@ -211,6 +240,7 @@ def main(cmdline=0, **kwargs):
                 color_list.append(color)
 
             import kwplot
+            from watch.utils import util_kwplot
             plt = kwplot.autoplt()
             kwplot.figure(fnum=1, doclf=1)
             # polygons.draw(color='pink')
@@ -220,60 +250,12 @@ def main(cmdline=0, **kwargs):
             keep_bbs.draw(color='orange', setlim=1, labels=subregion_suffix_list)
             plt.gca().set_title('find_low_overlap_covering_boxes')
             fig = plt.gcf()
-            from watch.utils import util_kwplot
             viz_dpath = (dst_dpath / '_viz_clusters').ensuredir()
             finalizer = util_kwplot.FigureFinalizer(
                 size_inches=(16, 16),
                 dpath=viz_dpath,
             )
             finalizer(fig, 'clusters_' + region_id + '.png')
-
-
-class RegionModel:
-    # TODO: use watch.geoannots instead
-    def __init__(self, region_id, geometry, start_date, end_date, site_summaries=None):
-        _version = '2.4.3'
-        self.properties = {
-            "type": "region",
-            "region_id": region_id,
-            "version": _version,
-            "mgrs": None,
-            "start_date": start_date,
-            "end_date": end_date,
-            "originator": "kit-cluster",
-            "model_content": "annotation",
-            "comments": '',
-        }
-        self.geometry = geometry
-        self.site_summaries = site_summaries
-        self._update_internals()
-
-    def add_site_summaries(self):
-        raise NotImplementedError
-
-    def to_geojson(self):
-        import geojson
-        region_feature = geojson.Feature(
-            properties=self.properties,
-            geometry=self.geometry
-        )
-        site_summaries = self.site_summaries
-        if site_summaries is None:
-            site_summaries = []
-        region = geojson.FeatureCollection([region_feature] + site_summaries)
-        return region
-
-    def _update_internals(self):
-        from kwutil import util_time
-        import mgrs
-        start_time = util_time.coerce_datetime(self.properties['start_date'])
-        end_time = util_time.coerce_datetime(self.properties['end_date'])
-        self.properties['start_date'] = start_time.date().isoformat()
-        self.properties['end_date'] = end_time.date().isoformat()
-        lon = self.geometry.centroid.xy[0][0]
-        lat = self.geometry.centroid.xy[1][0]
-        mgrs_code = mgrs.MGRS().toMGRS(lat, lon, MGRSPrecision=0)
-        self.properties['mgrs_code'] = mgrs_code
 
 
 if __name__ == '__main__':

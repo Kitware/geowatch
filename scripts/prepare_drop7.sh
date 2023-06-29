@@ -435,3 +435,17 @@ for p in ub.ProgIter(problematic_paths):
         #print(info['bands'])
         #...
 "
+
+
+
+###########################
+## BUILD SC CROPPED DATASET
+###########################
+
+
+HDD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='hdd')
+SSD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='ssd')
+python -m watch.cli.cluster_sites \
+        --src "$HDD_DATA_DPATH"/annotations/drop6_hard_v1/region_models/KR_R002.geojson \
+        --dst_dpath "$SSD_DATA_DPATH"/Drop7-Cropped2GSD/clusters/cluster_KR_R002.geojson \
+        --draw_clusters True

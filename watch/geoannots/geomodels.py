@@ -1122,6 +1122,14 @@ class SiteSummary(_Feature, _SiteOrSummaryMixin):
     _model_cls = RegionModel
     _feat_type = RegionModel._body_type
 
+    @classmethod
+    def from_geopandas_frame(cls, df, drop_id=True):
+        json_text = df.to_json(drop_id=drop_id)
+        json_data = json.loads(json_text)
+        for feat in json_data['features']:
+            if feat['properties']['type'] == 'site_summary':
+                yield cls(**feat)
+
     def as_site(self):
         """
         Modify and return this site summary feature as a site header feature
