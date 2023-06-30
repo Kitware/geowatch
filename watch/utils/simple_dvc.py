@@ -370,16 +370,32 @@ class SimpleDVC(ub.NiceRepr):
         sidecar_fpath = ub.Path(sidecar_fpath)
         data = Yaml.loads(sidecar_fpath.read_text())
 
+        dvc3_cache_base = (self.cache_dir / 'files/md5')
+        try_dvc3 = dvc3_cache_base.exists()
+
         # TODO: dvc 3.0 added new hashes! Yay! But we have to support this.
         for item in data['outs']:
             md5 = item['md5']
-            cache_fpath = self.cache_dir / md5[0:2] / md5[2:]
+
+            if try_dvc3:
+                cache_fpath = self.cache_dir / 'files' / 'md5' / md5[0:2] / md5[2:]
+                if not cache_fpath.exists():
+                    cache_fpath = self.cache_dir / md5[0:2] / md5[2:]
+            else:
+                cache_fpath = self.cache_dir / md5[0:2] / md5[2:]
+                if not cache_fpath.exists():
+                    cache_fpath = self.cache_dir / 'files' / 'md5' / md5[0:2] / md5[2:]
+
             if md5.endswith('.dir') and cache_fpath.exists():
                 dir_data = Yaml.loads(cache_fpath.read_text())
                 for item in dir_data:
                     file_md5 = item['md5']
                     assert not file_md5.endswith('.dir'), 'unhandled'
-                    file_cache_fpath = self.cache_dir / file_md5[0:2] / file_md5[2:]
+                    if try_dvc3:
+                        file_cache_fpath = self.cache_dir / 'files' / 'md5' / file_md5[0:2] / file_md5[2:]
+                    else:
+                        file_cache_fpath = self.cache_dir / file_md5[0:2] / file_md5[2:]
+
                     yield file_cache_fpath
             yield cache_fpath
 
