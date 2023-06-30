@@ -99,3 +99,4 @@ There are several other documents on the topic:
 
 * https://tenthousandmeters.com/blog/python-behind-the-scenes-11-how-the-python-import-system-works/
 * https://towardsdatascience.com/understanding-python-imports-init-py-and-pythonpath-once-and-for-all-4c5249ab6355
+* https://www.devdungeon.com/content/python-import-syspath-and-pythonpath-tutorial

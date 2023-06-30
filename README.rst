@@ -58,6 +58,9 @@ to install this manually from the Kitware hosted GDAL large image wheels.
 
     pip install --prefer-binary GDAL>=3.4.1 --find-links https://girder.github.io/large_image_wheels
 
+    # NEW in 0.8.0. Instead of using the above command you can run:
+    geowatch finish_install
+
 
 If you use the fully featured install command (which you can run after the
 fact), you can test that your install is functioning correctly by running the

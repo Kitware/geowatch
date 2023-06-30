@@ -87,7 +87,20 @@ class DataRegistry:
         unknown = ub.udict(kwargs) - self._default_attributes
         if unknown:
             raise ValueError(f'Unknown kwargs={unknown}')
-        row = ub.udict({'name': name, 'path': path}) | self._default_attributes
+
+        path = ub.Path(path).absolute()
+
+        if 'hardware' in kwargs:
+            if kwargs['hardware'] == 'auto':
+                from watch.utils import util_hardware
+                info = util_hardware.disk_info_of_path(path)
+                if 'hwtype' in info:
+                    kwargs['hardware'] = info['hwtype']
+                else:
+                    print('unable to automatically determine hardware type')
+                    kwargs.pop('hardware')
+
+        row = ub.udict({'name': name, 'path': os.fspath(path)}) | self._default_attributes
         row |= (kwargs & row)
         shelf = self._open()
         try:

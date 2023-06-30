@@ -44,6 +44,7 @@ def main(cmdline=True, **kw):
         'coco_average_features',
 
         # 'mlops_cli',
+        'special.finish_install',
     ]
 
     cmd_alias = {
@@ -65,6 +66,7 @@ def main(cmdline=True, **kw):
         'watch.cli.crop_sites_to_regions': ['crop_sitemodels'],
         'watch.cli.coco_remove_bad_images': ['remove_bad_images'],
         'watch.cli.mlops_cli': ['mlops'],
+        'watch.cli.special.finish_install': [],
     }
 
     module_lut = {}
