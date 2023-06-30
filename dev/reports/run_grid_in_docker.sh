@@ -173,9 +173,9 @@ python -m watch.mlops.aggregate \
     --output_dpath="$DVC_EXPT_DPATH/_namek_sv_sweep/aggregate" \
     --resource_report=0 \
     --eval_nodes="
-        #- sv_poly_eval
+        - sv_poly_eval
         - bas_poly_eval
-        #- bas_pxl_eval
+        - bas_pxl_eval
     " \
     --plot_params="
         enabled: 0
@@ -194,7 +194,8 @@ python -m watch.mlops.aggregate \
         print_models: True
         reference_region: final
     " \
-    --rois="KR_R002,PE_R001,NZ_R001,CH_R001,KR_R001,BR_R002,BR_R004" \
+    --rois="KR_R002,PE_R001,NZ_R001,CH_R001,KR_R001,BR_R002,BR_R004"
+
     --query='
         ((df["params.sv_depth_filter.threshold"] > 0) &
          (df["params.bas_poly.thresh"] >= 0.3) &

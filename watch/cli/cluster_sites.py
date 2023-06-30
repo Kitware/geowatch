@@ -244,6 +244,7 @@ def main(cmdline=1, **kwargs):
 
             if 1:
                 for s in site_summaries:
+                    s.fixup()
                     s.validate(strict=0)
 
             if len(start_dates) and config.crop_time:

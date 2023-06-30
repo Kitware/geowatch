@@ -1185,6 +1185,13 @@ class SiteSummary(_Feature, _SiteOrSummaryMixin):
         new_cls = SiteHeader
         return self._convert(new_cls)
 
+    def fixup(self):
+        """
+        Fixup the site summary
+        """
+        self._update_cache_key()
+        # self.ensure_isodates()
+
 
 class SiteHeader(_Feature, _SiteOrSummaryMixin):
     """

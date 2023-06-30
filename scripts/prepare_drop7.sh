@@ -437,6 +437,17 @@ for p in ub.ProgIter(problematic_paths):
 "
 
 
+#DATA_DVC_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='ssd')
+#geowatch visualize \
+#    "$DATA_DVC_DPATH"/Drop7-MedianNoWinter10GSD/combo_imganns-KR_R002_EI2LMSC.kwcoco.zip \
+#    --channels="(L8):(red_COLD_cv|green_COLD_cv|blue_COLD_cv)" \
+#    --exclude_sensors=WV,PD \
+#    --stack=True \
+#    --animate=True \
+#    --only_boxes=True \
+#    --draw_labels=False
+
+
 
 ###########################
 ## BUILD SC CROPPED DATASET
@@ -446,7 +457,7 @@ for p in ub.ProgIter(problematic_paths):
 HDD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='hdd')
 python -m watch.cli.cluster_sites \
     --src "$HDD_DATA_DPATH"/annotations/drop6_hard_v1/region_models/KR_R002.geojson \
-    --dst_dpath "$HDD_DATA_DPATH"/Drop7-Cropped2GSD/clusters/KR_R002 \
+    --dst_dpath "$HDD_DATA_DPATH"/Drop7-Cropped2GSD/KR_R002/clusters \
     --minimum_size="128x128@2GSD" \
     --maximum_size="1024x1024@2GSD" \
     --context_factor=1.3 \
@@ -456,8 +467,8 @@ python -m watch.cli.cluster_sites \
 # Execute alignment / crop script
 python -m watch.cli.coco_align \
     --src "$HDD_DATA_DPATH"/Aligned-Drop7/KR_R002/imgonly-KR_R002.kwcoco.zip \
-    --dst "$HDD_DATA_DPATH"/Drop7-Cropped2GSD/KR_R002.kwcoco.zip \
-    --regions "$HDD_DATA_DPATH/Drop7-Cropped2GSD/clusters/KR_R002/*.geojson" \
+    --dst "$HDD_DATA_DPATH"/Drop7-Cropped2GSD/KR_R002/KR_R002.kwcoco.zip \
+    --regions "$HDD_DATA_DPATH/Drop7-Cropped2GSD/KR_R002/clusters/*.geojson" \
     --rpc_align_method orthorectify \
     --workers=10 \
     --aux_workers=2 \
@@ -469,7 +480,18 @@ python -m watch.cli.coco_align \
     --target_gsd=2.0 \
     --geo_preprop=False \
     --exclude_sensors=L8 \
+    --sensor_to_time_window "
+        S2: 1month
+    " \
     --keep img
+
+HDD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='hdd')
+geowatch reproject_annotations \
+    --src "$HDD_DATA_DPATH"/Drop7-Cropped2GSD/KR_R002.kwcoco.zip \
+    --dst "$HDD_DATA_DPATH"/Drop7-Cropped2GSD/KR_R002.kwcoco.zip \
+    --io_workers=avail \
+    --region_models="$HDD_DATA_DPATH/annotations/drop6_hard_v1/region_models/*.geojson" \
+    --site_models="$HDD_DATA_DPATH/annotations/drop6_hard_v1/site_models/*.geojson"
 
 
 # Create a new queue
@@ -497,6 +519,9 @@ for REGION_ID in "${REGION_IDS[@]}"; do
             --dst_dpath "$HDD_DATA_DPATH/Drop7-Cropped2GSD/$REGION_ID/clusters" \
             --draw_clusters True
 
+    #python -m cmd_queue --jobname="crop-$REGION_ID" --depends="cluster-$REGION_ID" -- \
+    #    submit crop_for_sc_queue --  \
+
 done
 
 # Show the generated script
@@ -505,12 +530,30 @@ python -m cmd_queue show "crop_for_sc_queue"
 python -m cmd_queue run "crop_for_sc_queue" --workers=4
 
 
-REGION_ID=KR_R002
 HDD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='hdd')
-SSD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='ssd')
 REGION_ID=KR_R001
-#python -m cmd_queue --jobname="crop-$REGION_ID" --depends="cluster-$REGION_ID" -- \
-#    submit crop_for_sc_queue --  \
+REGION_ID=KR_R002
+REGION_ID=AE_R001
+REGION_ID=PE_R001
+REGION_ID=CH_R001
+
+REGION_IDS=(
+    #KR_R001 KR_R002 AE_R001 PE_R001
+    BH_R001 BR_R001 BR_R002 BR_R004 BR_R005
+    CH_R001 LT_R001 NZ_R001 US_C010 US_C011 US_C012 US_C016 US_R001 US_R004
+    US_R005 US_R006 US_R007
+)
+
+for REGION_ID in "${REGION_IDS[@]}"; do
+
+    python -m watch.cli.cluster_sites \
+        --src "$HDD_DATA_DPATH"/annotations/drop6_hard_v1/region_models/"$REGION_ID".geojson \
+        --dst_dpath "$HDD_DATA_DPATH"/Drop7-Cropped2GSD/"$REGION_ID"/clusters \
+        --minimum_size="128x128@2GSD" \
+        --maximum_size="1024x1024@2GSD" \
+        --context_factor=1.3 \
+        --draw_clusters True
+
     python -m watch.cli.coco_align \
         --src "$HDD_DATA_DPATH/Aligned-Drop7/$REGION_ID/imgonly-$REGION_ID.kwcoco.zip" \
         --dst "$HDD_DATA_DPATH/Drop7-Cropped2GSD/$REGION_ID/$REGION_ID.kwcoco.zip" \
@@ -526,4 +569,9 @@ REGION_ID=KR_R001
         --target_gsd=2.0 \
         --geo_preprop=False \
         --exclude_sensors=L8 \
+        --sensor_to_time_window "
+            S2: 1month
+        " \
         --keep img
+
+done

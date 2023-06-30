@@ -240,6 +240,13 @@ class ExtractConfig(ImageExtractConfig):
         Limit the number of frames per video (mainly for debugging)
         '''))
 
+    sensor_to_time_window = scfg.Value(None, help=ub.paragraph(
+        '''
+        Specify a yaml mapping from a sensor to a time window. We will chunk up
+        candidate images based on this window and only choose 1 image per
+        chunk with the lowest cloud cover using earlier images as tiebreakers.
+        '''))
+
     def __post_init__(config):
         super().__post_init__()
         if isinstance(config['target_gsd'], str):
@@ -1189,6 +1196,7 @@ class SimpleDataCube:
         from kwcoco.util.util_json import ensure_json_serializable
         import geopandas as gpd
         from kwutil import util_time
+        from kwutil.util_yaml import Yaml
         from watch.utils import util_gis
         from watch.utils import kwcoco_extensions
         import kwcoco
@@ -1239,6 +1247,63 @@ class SimpleDataCube:
 
         latmin, lonmin, latmax, lonmax = space_box.data[0]
         datetimes = sorted(datetime_to_gids)
+        datetime_to_gids = ub.udict(datetime_to_gids).subdict(datetimes)
+
+        # If specified, only choose a subset of images over time.
+        TIME_WINDOW_FILTER = 1
+        if TIME_WINDOW_FILTER:
+            # TODO: this filter should be part of the earlier query
+            sensor_to_time_window = Yaml.coerce(extract_config.sensor_to_time_window)
+            sensor_to_time_window = ub.udict(sensor_to_time_window)
+            sensor_to_time_window = sensor_to_time_window.map_values(util_time.coerce_timedelta)
+            if sensor_to_time_window is not None:
+                rows = []
+                for dt, gids in datetime_to_gids.items():
+                    for gid in gids:
+                        img = coco_dset.imgs[gid]
+                        row = {
+                            'gid': gid,
+                            'sensor': img['sensor_coarse'],
+                            'unixtime': dt.timestamp(),
+                        }
+                        rows.append(row)
+
+                df = pd.DataFrame(rows)
+                sensor_to_df = dict(list(df.groupby('sensor')))
+
+                restrict_sensors = list(sensor_to_time_window.keys())
+                chosen_gids = set()
+                for group in (ub.udict(sensor_to_df) - restrict_sensors).values():
+                    chosen_gids.update(group['gid'])
+
+                for sensor in restrict_sensors:
+                    # TODO: need cloudcover info
+                    if sensor in sensor_to_df:
+                        subdf = sensor_to_df[sensor]
+                        window_seconds = sensor_to_time_window[sensor].total_seconds()
+                        subdf['bucket'] = (subdf['unixtime'] // window_seconds).astype(int)
+                        subdf['cloudcover'] = 0.10
+                        for _, group in subdf.groupby('bucket'):
+                            group = group.sort_values(['cloudcover', 'unixtime'])
+                            chosen_gid = group.iloc[0]['gid']
+                            chosen_gids.add(chosen_gid)
+
+                # Hack the datetime_to_gids to finalize this filter.
+                # should probably make this impl cleaner.
+                num_filtered = 0
+                num_total = 0
+                new_datetime_to_gids = {}
+                for dt, gids in datetime_to_gids.items():
+                    new_gids = ub.oset(gids) & chosen_gids
+                    num_total += len(gids)
+                    num_filtered += len(gids) - len(new_gids)
+                    if new_gids:
+                        new_datetime_to_gids[dt] = new_gids
+                num_keep = num_total - num_filtered
+                print(f'TimeWindow: keeping: {num_keep} / {num_total}')
+                datetime_to_gids = new_datetime_to_gids
+                datetimes = sorted(datetime_to_gids)
+                datetime_to_gids = ub.udict(datetime_to_gids).subdict(datetimes)
 
         valid_region_geos = space_region.to_geojson()
 
