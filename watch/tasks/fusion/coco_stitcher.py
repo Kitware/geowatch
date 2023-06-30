@@ -548,7 +548,7 @@ class CocoStitchingManager(object):
 
         # Get spatial relationship between the stitch space and image space
         if self.stiching_space == 'video':
-            vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
+            vid_from_img = kwimage.Affine.coerce(img.get('warp_img_to_vid', None))
             img_from_stitch = vid_from_img.inv()
         elif self.stiching_space == 'image':
             img_from_stitch = kwimage.Affine.eye()
