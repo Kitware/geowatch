@@ -35,17 +35,17 @@ def main():
                         default=False,
                         help='Show progress for AWS CLI commands')
 
-    baseline_framework_kwcoco_ingress(**vars(parser.parse_args()))
+    smartflow_ingress(**vars(parser.parse_args()))
 
     return 0
 
 
-def baseline_framework_kwcoco_ingress(input_path,
-                                      assets,
-                                      outdir,
-                                      aws_profile=None,
-                                      dryrun=False,
-                                      show_progress=False):
+def smartflow_ingress(input_path,
+                      assets,
+                      outdir,
+                      aws_profile=None,
+                      dryrun=False,
+                      show_progress=False):
 
     from watch.utils.util_framework import AWS_S3_Command
     os.makedirs(outdir, exist_ok=True)
@@ -77,11 +77,12 @@ def baseline_framework_kwcoco_ingress(input_path,
     if len(input_stac_items) != 1:
         raise RuntimeError("Expecting one and only one STAC item from input")
     kwcoco_stac_item = input_stac_items[0]
+    kwcoco_stac_item_assets =\
+        {k: v['href'] for k, v in kwcoco_stac_item['assets'].items()}
 
-    local_asset_paths = {}
     for asset in assets:
         try:
-            asset_href = kwcoco_stac_item['assets'][asset]['href']
+            asset_href = kwcoco_stac_item_assets[asset]
         except KeyError:
             raise RuntimeError("Expecting asset named '{}' in input KWCOCO STAC item".format(asset))  # noqa
 
@@ -92,10 +93,10 @@ def baseline_framework_kwcoco_ingress(input_path,
         aws_cp.args = [asset_href, asset_outpath]
         aws_cp.run()
 
-        local_asset_paths[asset] = asset_outpath
+        kwcoco_stac_item_assets[asset] = asset_outpath
 
-    # Returns local path to retreived assets
-    return local_asset_paths
+    # Returns assets (with downloaded asset hrefs updated)
+    return kwcoco_stac_item_assets
 
 
 if __name__ == "__main__":

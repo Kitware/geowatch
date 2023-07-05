@@ -129,10 +129,13 @@ def smartflow_egress(assetnames_and_local_paths,
 
     assetnames_and_s3_paths = {}
     for asset, local_path in assetnames_and_local_paths.items():
+        # Passing in assets with paths already on S3 simply passes
+        # them through
+        if local_path.startswith('s3'):
+            continue
+
         asset_s3_outpath = join(outbucket, basename(local_path))
 
-        # Recursive copy entire KWCOCO directory (assumed that all cropped
-        # imagery referenced in KWCOCO dataset resides in this directory)
         aws_cp.update(recursive=True)
         aws_cp.args = [local_path, asset_s3_outpath]
         aws_cp.run()
