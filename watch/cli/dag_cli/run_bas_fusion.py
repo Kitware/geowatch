@@ -75,7 +75,7 @@ def main():
 
 
 def run_bas_fusion_for_baseline(config):
-    from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress
+    from watch.cli.smartflow_ingress import smartflow_ingress
     from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress
     from watch.cli.concat_kwcoco_videos import concat_kwcoco_datasets
     from watch.utils.util_framework import download_region, determine_region_id
@@ -103,8 +103,11 @@ def run_bas_fusion_for_baseline(config):
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
     ingress_dir = ub.Path('/tmp/ingress')
-    ingress_kwcoco_path = baseline_framework_kwcoco_ingress(
+    ingressed_assets = smartflow_ingress(
         input_path,
+        ['timecombined_kwcoco_file_for_bas_with_landcover',
+         'timecombined_kwcoco_file_for_bas_assets',
+         'landcover_assets'],
         ingress_dir,
         aws_profile,
         dryrun)
@@ -146,6 +149,7 @@ def run_bas_fusion_for_baseline(config):
     if bas_pxl_config.get('package_fpath', None) is None:
         raise ValueError('Requires package_fpath')
 
+    ingress_kwcoco_path = ingressed_assets['timecombined_kwcoco_file_for_bas_with_landcover']
     predict(devices='0,',
             write_preds=False,
             write_probs=True,
