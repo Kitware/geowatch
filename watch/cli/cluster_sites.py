@@ -112,7 +112,7 @@ def main(cmdline=1, **kwargs):
         kwargs = dict(src=src, dst_dpath=dst_dpath, draw_clusters=True)
         main(**kwargs)
     """
-    config = ClusterSiteConfig.cli(data=kwargs)
+    config = ClusterSiteConfig.cli(cmdline=cmdline, data=kwargs)
     import rich
     rich.print('config = {}'.format(ub.urepr(config, nl=1)))
 

@@ -1250,10 +1250,11 @@ class SimpleDataCube:
         datetime_to_gids = ub.udict(datetime_to_gids).subdict(datetimes)
 
         # If specified, only choose a subset of images over time.
+        sensor_to_time_window = Yaml.coerce(extract_config.sensor_to_time_window)
+
         TIME_WINDOW_FILTER = 1
-        if TIME_WINDOW_FILTER:
+        if TIME_WINDOW_FILTER and sensor_to_time_window is not None:
             # TODO: this filter should be part of the earlier query
-            sensor_to_time_window = Yaml.coerce(extract_config.sensor_to_time_window)
             sensor_to_time_window = ub.udict(sensor_to_time_window)
             sensor_to_time_window = sensor_to_time_window.map_values(util_time.coerce_timedelta)
             if sensor_to_time_window is not None:
@@ -2074,6 +2075,9 @@ def _aligncrop(obj_group,
                is_multi_image,
                local_epsg=None,
                asset_config=None):
+    """
+    Threaded worker function for :func:`SimpleDataCube.extract_image_job`.
+    """
     import watch
     import kwcoco
     from watch.utils import util_gdal

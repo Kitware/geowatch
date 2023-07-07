@@ -1043,7 +1043,7 @@ class _SiteOrSummaryMixin:
             >>> import pytest
             >>> with pytest.raises(Exception):
             >>>     site2 = summary1.as_site()
-            >>> summary1['properties']['annotation_cache']['region_id'] = region.region_id
+            >>> summary1['properties']['cache']['region_id'] = region.region_id
             >>> site2 = summary1.as_site()
             >>> site2.validate(strict=False)
             >>> # Check the round-trip conversion
