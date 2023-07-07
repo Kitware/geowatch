@@ -4,12 +4,12 @@ import ubelt as ub
 def test_init_from_pretrained_state():
     # Train a demo model (in the future grab a pretrained demo model)
     import ubelt as ub
-    from watch.tasks.fusion.fit import fit_model  # NOQA
     import kwcoco
 
     import pytest
     pytest.skip('slow test: switch to lightning')
 
+    from watch.tasks.fusion.fit import fit_model  # NOQA
     # import xdev
     # xdev.make_warnings_print_tracebacks()
 
