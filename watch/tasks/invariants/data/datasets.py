@@ -92,6 +92,83 @@ class GriddedDataset(torch.utils.data.Dataset):
         >>> import kwplot
         >>> kwplot.autompl()
         >>> kwplot.imshow(canvas)
+
+    Ignore:
+        >>> # xdoctest: +SKIP
+        >>> from watch.tasks.invariants.data.datasets import *  # NOQA
+        >>> import watch
+        >>> import kwcoco
+        >>> import rich
+        >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
+        >>> # TEST DROP6
+        >>> coco_drop6 = kwcoco.CocoDataset(dvc_dpath / 'Drop6/data_vali_split6.kwcoco.zip')
+        >>> data_drop6 = GriddedDataset(coco_drop6, window_space_scale='30GSD')
+        >>> item = data_drop6[0]
+        >>> item_summary6 = data_drop6.summarize_item(item)
+        >>> rich.print('item_summary6 = {}'.format(ub.urepr(item_summary6, nl=1, sort=0, align=':')))
+        >>> # TEST DROP7
+        >>> coco_drop7 = kwcoco.CocoDataset(dvc_dpath / 'Drop7-MedianNoWinter10GSD/data_vali_EI2LMSC_split6.kwcoco.zip')
+        >>> data_drop7 = GriddedDataset(coco_drop7, window_space_scale='30GSD')
+        >>> item = data_drop7[0]
+        >>> item_summary7 = data_drop7.summarize_item(item)
+        >>> rich.print('item_summary7 = {}'.format(ub.urepr(item_summary7, nl=1, sort=0, align=':')))
+        >>> ###
+        >>> rich.print('item_summary6 = {}'.format(ub.urepr(item_summary6, nl=1, sort=0, align=':')))
+        >>> rich.print('item_summary7 = {}'.format(ub.urepr(item_summary7, nl=1, sort=0, align=':')))
+
+        import watch
+        import kwcoco
+        import rich
+        dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
+        coco_drop7 = kwcoco.CocoDataset(dvc_dpath / 'Drop7-MedianNoWinter10GSD/data_vali_EI2LMSC_split6.kwcoco.zip')
+        self = GriddedDataset(coco_drop7, window_space_scale='10GSD')
+        sampler = self.sampler
+
+        target = {
+            'main_idx': 1,
+            'video_id': 1,
+            'vidid': 1,
+            'gids': [54, 62],
+            'main_gid': 62,
+            'frame_index': 18,
+            'frame_indexes': [5, 18],
+            'resampled': None,
+            'label': None,
+            'space_slice': (slice(0, 384, None), slice(0, 384, None)),
+            'scale': 0.3333333333333333,
+            'channels': 'red|green|blue|nir|swir16|swir22',
+            '_input_gsd': 30.0,
+            '_native_video_gsd': 10.0,
+            'verbose_ndsample': True,
+        }
+        sample = sampler.load_sample(target, nodata='float', with_annots=False)
+        print(sample['im'].shape)
+
+        print(chr(10) * 10 + '----' + chr(10) * 10)
+
+        target = {
+            'main_idx': 1,
+            'video_id': 1,
+            'vidid': 1,
+            'gids': [54, 62],
+            'main_gid': 62,
+            'frame_index': 18,
+            'frame_indexes': [5, 18],
+            'resampled': None,
+            'label': None,
+            'space_slice': (slice(0, 128, None), slice(0, 128, None)),
+            'scale': 1.0,
+            'channels': 'red|green|blue|nir|swir16|swir22',
+            '_input_gsd': 10.0,
+            '_native_video_gsd': 10.0,
+            'verbose_ndsample': True,
+        }
+        sample = sampler.load_sample(target, nodata='float', with_annots=False)
+        visible_thresh = 0.0
+        kwargs = dict(nodata='float')
+        print(sample['im'].shape)
+
+
     """
     # S2_l2a_channel_names = [
     #     'B02.tif', 'B01.tif', 'B03.tif', 'B04.tif', 'B05.tif', 'B06.tif', 'B07.tif', 'B08.tif', 'B09.tif', 'B11.tif', 'B12.tif', 'B8A.tif'
@@ -290,6 +367,7 @@ class GriddedDataset(torch.utils.data.Dataset):
                             poly.fill(frame_mask, value=-1)
                     segmentation_masks.append(frame_mask)
             else:
+                print('target = {}'.format(ub.urepr(target, nl=1)))
                 sample = self.sampler.load_sample(target, nodata='float', with_annots=False)
             offset_sample = self.sampler.load_sample(offset_tr, nodata='float', with_annots=False)
 

@@ -261,7 +261,10 @@ def prep_splits(cmdline=False, **kwargs):
     if config['virtualenv_cmd']:
         queue.add_header_command(config['virtualenv_cmd'])
 
-    dst_dpath = ub.Path(config.dst_dpath)
+    if config.dst_dpath is not None:
+        dst_dpath = ub.Path(config.dst_dpath)
+    else:
+        dst_dpath = None
     suffix = config.suffix
 
     if config['constructive_mode']:
