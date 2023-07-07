@@ -121,7 +121,7 @@ def main(cmdline=1, **kwargs):
     from watch.utils import util_kwimage
     import geopandas as gpd
     import kwimage
-    import pandas as pd
+    # import pandas as pd
     from watch.geoannots import geomodels
     dst_dpath = ub.Path(config.dst_dpath)
     rich.print(f'Will write to: [link={dst_dpath}]{dst_dpath}[/link]')
