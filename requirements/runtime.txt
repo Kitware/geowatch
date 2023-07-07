@@ -157,7 +157,7 @@ lark_cython >= 0.0.12
 distinctipy>=1.2.1
 kwimage>=0.9.19
 kwcoco>=0.6.2
-delayed_image>=0.2.7
+delayed_image>=0.2.8
 albumentations==1.0.0  # pinned for invariants model
 ndsampler>=0.7.3
 tifffile>=2021.4.8
@@ -234,4 +234,4 @@ absl_py>=1.4.0
 PyYAML>=6.0
 tqdm>=4.64.1
 
-cmd_queue >= 0.1.16
+cmd_queue >= 0.1.17
