@@ -162,8 +162,7 @@ geowatch schedule --params="
 
 # Pull out baseline tables
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-
-sudo chown -R "$USER":smart "$DVC_EXPT_DPATH"/_namek_sv_sweep
+#sudo chown -R "$USER":smart "$DVC_EXPT_DPATH"/_namek_sv_sweep
 
 python -m watch.mlops.aggregate \
     --pipeline=bas_building_and_depth_vali \
@@ -174,8 +173,8 @@ python -m watch.mlops.aggregate \
     --resource_report=0 \
     --eval_nodes="
         - sv_poly_eval
-        - bas_poly_eval
-        - bas_pxl_eval
+        #- bas_poly_eval
+        #- bas_pxl_eval
     " \
     --plot_params="
         enabled: 0
@@ -194,6 +193,8 @@ python -m watch.mlops.aggregate \
         print_models: True
         reference_region: final
     " \
+    --rois="PE_R001"
+
     --rois="KR_R002,PE_R001,NZ_R001,CH_R001,KR_R001,BR_R002,BR_R004"
 
     --query='

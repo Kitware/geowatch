@@ -531,7 +531,6 @@ def predict(cmdline=False, **kwargs):
     """
     Example:
         >>> # Train a demo model (in the future grab a pretrained demo model)
-        >>> # from watch.tasks.fusion.fit import fit_model  # NOQA
         >>> from watch.tasks.fusion.predict import *  # NOQA
         >>> import os
         >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
@@ -573,7 +572,6 @@ def predict(cmdline=False, **kwargs):
         >>> fit_lightning.main(fit_config)
         >>> # Unfortunately, its not as easy to get the package path of
         >>> # this call..
-        >>> #package_fpath = fit_model(**fit_kwargs)
         >>> assert ub.Path(package_fpath).exists()
         >>> # Predict via that model
         >>> predict_kwargs = kwargs = {
@@ -673,7 +671,6 @@ def predict(cmdline=False, **kwargs):
         >>> # Save the self
         >>> package_fpath = root_dpath / 'final_package.pt'
         >>> model.save_package(package_fpath)
-        >>> # package_fpath = fit_model(**fit_kwargs)
         >>> assert ub.Path(package_fpath).exists()
 
         >>> # Predict via that model
@@ -1361,4 +1358,7 @@ if __name__ == '__main__':
         --test_dataset=$TEST_DATASET
 
     """
+    if ub.argflag('--warntb'):
+        import xdev
+        xdev.make_warnings_print_tracebacks()
     main()

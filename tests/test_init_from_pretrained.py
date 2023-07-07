@@ -8,7 +8,7 @@ def test_init_from_pretrained_state():
     import kwcoco
 
     import pytest
-    pytest.skip('slow test')
+    pytest.skip('slow test: switch to lightning')
 
     # import xdev
     # xdev.make_warnings_print_tracebacks()

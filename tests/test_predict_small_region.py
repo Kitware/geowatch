@@ -1,7 +1,7 @@
 
 def test_small_predict_region():
     import pytest
-    pytest.skip()
+    pytest.skip('TODO: switch to lightning')
     from watch.tasks.fusion.fit import fit_model  # NOQA
     import ubelt as ub
     from watch.tasks.fusion.predict import predict

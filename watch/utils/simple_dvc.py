@@ -420,7 +420,7 @@ class SimpleDVC(ub.NiceRepr):
 
     def find_dir_tracker(cls, path):
         # Find if an ancestor parent dpath is tracked
-        path = ub.Path(path)
+        path = ub.Path(path).absolute()
         prev = path
         dpath = path.parent
         while (not (dpath / '.dvc').exists()) and prev != dpath:
@@ -429,6 +429,9 @@ class SimpleDVC(ub.NiceRepr):
                 return tracker_fpath
             prev = dpath
             dpath = dpath.parent
+        tracker_fpath = dpath.augment(tail='.dvc')
+        if tracker_fpath.exists():
+            return tracker_fpath
 
     def read_dvc_sidecar(self, sidecar_fpath):
         sidecar_fpath = ub.Path(sidecar_fpath)
@@ -488,6 +491,29 @@ class SimpleDVC(ub.NiceRepr):
             for f in fs:
                 if f.endswith('.dvc'):
                     yield r / f
+
+    def resolve_sidecar(self, path):
+        """
+        Given a path in a DVC repo, resolve it to a sidecar file that it
+        corresponds to. If the input is a .dvc file return it.
+
+        If it is inside a directory that corresponds to a dvc repo, search for
+        that.
+
+        Args:
+            path (Path | str): directory or file in dvc repo to search
+
+        Yields:
+            ub.Path: existing dvc sidecar files
+        """
+        # TODO: handle .dvcignore
+        path = ub.Path(path).absolute()
+        if path.name.endswith('.dvc'):
+            return path
+        elif path.augment(tail='.dvc').exists():
+            return path.augment(tail='.dvc')
+        else:
+            return self.find_dir_tracker(path)
 
 
 def _ensure_iterable(inputs):

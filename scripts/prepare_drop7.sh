@@ -405,36 +405,36 @@ geowatch visualize data_vali_EI2LMSC_split6.kwcoco.zip \
     --smart
 
 
-fixup="
-coco_images = dset.images().coco_images
-from watch.utils import util_gdal
+#fixup="
+#coco_images = dset.images().coco_images
+#from watch.utils import util_gdal
 
-coco_img = dset.coco_image(408)
+#coco_img = dset.coco_image(408)
 
-for asset in coco_img.assets:
-    fpath = ub.Path(coco_img.bundle_dpath) / asset['file_name']
-    bak_fpath = fpath.augment(prefix='_backup_')
-    fpath.move(bak_fpath)
-    print(fpath)
+#for asset in coco_img.assets:
+#    fpath = ub.Path(coco_img.bundle_dpath) / asset['file_name']
+#    bak_fpath = fpath.augment(prefix='_backup_')
+#    fpath.move(bak_fpath)
+#    print(fpath)
 
 
-problematic_paths = []
-for img in coco_images:
-    for asset in img.assets:
-        if isinstance(asset['parent_file_name'], list) and len(asset['parent_file_name']) > 2:
-            print(len(asset['parent_file_name']))
-            problematic_paths.append(ub.Path(img.bundle_dpath) / asset['file_name'])
+#problematic_paths = []
+#for img in coco_images:
+#    for asset in img.assets:
+#        if isinstance(asset['parent_file_name'], list) and len(asset['parent_file_name']) > 2:
+#            print(len(asset['parent_file_name']))
+#            problematic_paths.append(ub.Path(img.bundle_dpath) / asset['file_name'])
 
-for p in ub.ProgIter(problematic_paths):
-    p.delete()
+#for p in ub.ProgIter(problematic_paths):
+#    p.delete()
 
-        #fpath = ub.Path(img.bundle_dpath) / asset['file_name']
-        #print(fpath)
-        #ptr = util_gdal.GdalOpen(fpath, mode='r')
-        #info = ptr.info()
-        #print(info['bands'])
-        #...
-"
+#        #fpath = ub.Path(img.bundle_dpath) / asset['file_name']
+#        #print(fpath)
+#        #ptr = util_gdal.GdalOpen(fpath, mode='r')
+#        #info = ptr.info()
+#        #print(info['bands'])
+#        #...
+#"
 
 
 #DATA_DVC_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='ssd')
@@ -454,124 +454,439 @@ for p in ub.ProgIter(problematic_paths):
 ###########################
 
 
-HDD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='hdd')
-python -m watch.cli.cluster_sites \
-    --src "$HDD_DATA_DPATH"/annotations/drop6_hard_v1/region_models/KR_R002.geojson \
-    --dst_dpath "$HDD_DATA_DPATH"/Drop7-Cropped2GSD/KR_R002/clusters \
-    --minimum_size="128x128@2GSD" \
-    --maximum_size="1024x1024@2GSD" \
-    --context_factor=1.3 \
-    --draw_clusters True
+#HDD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='hdd')
+#python -m watch.cli.cluster_sites \
+#    --src "$HDD_DATA_DPATH"/annotations/drop6_hard_v1/region_models/KR_R002.geojson \
+#    --dst_dpath "$HDD_DATA_DPATH"/Drop7-Cropped2GSD/KR_R002/clusters \
+#    --minimum_size="128x128@2GSD" \
+#    --maximum_size="1024x1024@2GSD" \
+#    --context_factor=1.3 \
+#    --draw_clusters True
 
 
-# Execute alignment / crop script
-python -m watch.cli.coco_align \
-    --src "$HDD_DATA_DPATH"/Aligned-Drop7/KR_R002/imgonly-KR_R002.kwcoco.zip \
-    --dst "$HDD_DATA_DPATH"/Drop7-Cropped2GSD/KR_R002/KR_R002.kwcoco.zip \
-    --regions "$HDD_DATA_DPATH/Drop7-Cropped2GSD/KR_R002/clusters/*.geojson" \
-    --rpc_align_method orthorectify \
-    --workers=10 \
-    --aux_workers=2 \
-    --force_nodata=-9999 \
-    --context_factor=1.0 \
-    --minimum_size="128x128@2GSD" \
-    --force_min_gsd=2.0 \
-    --convexify_regions=True \
-    --target_gsd=2.0 \
-    --geo_preprop=False \
-    --exclude_sensors=L8 \
-    --sensor_to_time_window "
-        S2: 1month
-    " \
-    --keep img
+## Execute alignment / crop script
+#python -m watch.cli.coco_align \
+#    --src "$HDD_DATA_DPATH"/Aligned-Drop7/KR_R002/imgonly-KR_R002.kwcoco.zip \
+#    --dst "$HDD_DATA_DPATH"/Drop7-Cropped2GSD/KR_R002/KR_R002.kwcoco.zip \
+#    --regions "$HDD_DATA_DPATH/Drop7-Cropped2GSD/KR_R002/clusters/*.geojson" \
+#    --rpc_align_method orthorectify \
+#    --workers=10 \
+#    --aux_workers=2 \
+#    --force_nodata=-9999 \
+#    --context_factor=1.0 \
+#    --minimum_size="128x128@2GSD" \
+#    --force_min_gsd=2.0 \
+#    --convexify_regions=True \
+#    --target_gsd=2.0 \
+#    --geo_preprop=False \
+#    --exclude_sensors=L8 \
+#    --sensor_to_time_window "
+#        S2: 1month
+#    " \
+#    --keep img
 
-HDD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='hdd')
-geowatch reproject_annotations \
-    --src "$HDD_DATA_DPATH"/Drop7-Cropped2GSD/KR_R002.kwcoco.zip \
-    --dst "$HDD_DATA_DPATH"/Drop7-Cropped2GSD/KR_R002.kwcoco.zip \
-    --io_workers=avail \
-    --region_models="$HDD_DATA_DPATH/annotations/drop6_hard_v1/region_models/*.geojson" \
-    --site_models="$HDD_DATA_DPATH/annotations/drop6_hard_v1/site_models/*.geojson"
+#HDD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='hdd')
+#geowatch reproject_annotations \
+#    --src "$HDD_DATA_DPATH"/Drop7-Cropped2GSD/KR_R002.kwcoco.zip \
+#    --dst "$HDD_DATA_DPATH"/Drop7-Cropped2GSD/KR_R002.kwcoco.zip \
+#    --io_workers=avail \
+#    --region_models="$HDD_DATA_DPATH/annotations/drop6_hard_v1/region_models/*.geojson" \
+#    --site_models="$HDD_DATA_DPATH/annotations/drop6_hard_v1/site_models/*.geojson"
 
 
-# Create a new queue
-HDD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='hdd')
-python -m cmd_queue new "crop_for_sc_queue"
 
 #(cd "$HDD_DATA_DPATH"/Aligned-Drop7 && echo *)
 # Create multiple items in a bash array, and loop over that array
-REGION_IDS=(
-    KR_R001
-    KR_R002
-    AE_C001
-    AE_C002
-    AE_C003 AE_R001 BH_R001 BR_R001 BR_R002 BR_R004 BR_R005 CH_R001 CN_C000
-    CN_C001 CO_C001 CO_C009 IN_C000  LT_R001 NG_C000 NZ_R001 PE_C001 PE_C003
-    PE_C004 PE_R001 QA_C001 SA_C001 SA_C005 SN_C000 US_C000 US_C001 US_C010
-    US_C011 US_C012 US_C016 US_R001 US_R004 US_R005 US_R006 US_R007 VN_C002
-)
+#REGION_IDS=(
+#    #KR_R001
+#    #KR_R002
+#    #AE_C001
+#    #AE_C002
+#    AE_C003 AE_R001 BH_R001 BR_R001 BR_R002 BR_R004 BR_R005 CH_R001 CN_C000
+#    CN_C001 CO_C001 CO_C009 IN_C000  LT_R001 NG_C000 NZ_R001 PE_C001 PE_C003
+#    PE_C004 PE_R001 QA_C001 SA_C001 SA_C005 SN_C000 US_C000 US_C001 US_C010
+#    US_C011 US_C012 US_C016 US_R001 US_R004 US_R005 US_R006 US_R007 VN_C002
+#)
+
+# Create a new queue
+HDD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='hdd')
+SSD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='ssd')
+
+SRC_DATA_DPATH=$HDD_DATA_DPATH
+#DST_DATA_DPATH=$HDD_DATA_DPATH
+#DST_DATA_DPATH=$SSD_DATA_DPATH
+DST_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='auto')
+ANN_DATA_DPATH=$SSD_DATA_DPATH
+
+test -d "$ANN_DATA_DPATH/annotations/drop6_hard_v1/region_models" || echo "ERROR: ANNOTATIONS DONT EXIT"
+
+REGION_IDS=(KR_R001 KR_R002 AE_R001 PE_R001 US_R007 BH_R001 BR_R001 BR_R002 BR_R004 BR_R005 CH_R001 LT_R001 NZ_R001 US_C010 US_C011 US_C012 US_C016 US_R001 US_R004 US_R005 US_R006)
+#REGION_IDS=(KR_R001)
+
+TRUE_REGION_DPATH="$DST_DATA_DPATH/annotations/drop6_hard_v1/region_models"
+SRC_BUNDLE_DPATH=$SRC_DATA_DPATH/Aligned-Drop7
+DST_BUNDLE_DPATH=$DST_DATA_DPATH/Drop7-Cropped2GSD
+
+
+python -m cmd_queue new "crop_for_sc_queue"
+for REGION_ID in "${REGION_IDS[@]}"; do
+    echo "REGION_ID = $REGION_ID"
+done
 for REGION_ID in "${REGION_IDS[@]}"; do
 
-    python -m cmd_queue --jobname="cluster-$REGION_ID" --depends="None" -- \
-        submit crop_for_sc_queue -- \
+    cmd_queue submit --jobname="cluster-$REGION_ID" --depends="None" -- crop_for_sc_queue \
         python -m watch.cli.cluster_sites \
-            --src "$HDD_DATA_DPATH/annotations/drop6_hard_v1/region_models/$REGION_ID.geojson" \
-            --dst_dpath "$HDD_DATA_DPATH/Drop7-Cropped2GSD/$REGION_ID/clusters" \
+            --src "$TRUE_REGION_DPATH/$REGION_ID.geojson" \
+            --dst_dpath "$DST_BUNDLE_DPATH/$REGION_ID/clusters" \
             --draw_clusters True
 
-    #python -m cmd_queue --jobname="crop-$REGION_ID" --depends="cluster-$REGION_ID" -- \
-    #    submit crop_for_sc_queue --  \
+    python -m cmd_queue submit --jobname="crop-$REGION_ID" --depends="cluster-$REGION_ID" -- crop_for_sc_queue \
+        python -m watch.cli.coco_align \
+            --src "$SRC_BUNDLE_DPATH/$REGION_ID/imgonly-$REGION_ID.kwcoco.zip" \
+            --dst "$DST_BUNDLE_DPATH/$REGION_ID/$REGION_ID.kwcoco.zip" \
+            --regions "$DST_BUNDLE_DPATH/$REGION_ID/clusters/*.geojson" \
+            --rpc_align_method orthorectify \
+            --workers=10 \
+            --aux_workers=2 \
+            --force_nodata=-9999 \
+            --context_factor=1.0 \
+            --minimum_size="128x128@2GSD" \
+            --force_min_gsd=2.0 \
+            --convexify_regions=True \
+            --target_gsd=2.0 \
+            --geo_preprop=False \
+            --exclude_sensors=L8 \
+            --sensor_to_time_window "
+                S2: 1month
+            " \
+            --keep img
 
+    python -m cmd_queue submit --jobname="reproject-$REGION_ID" --depends="crop-$REGION_ID" -- crop_for_sc_queue \
+        geowatch reproject_annotations \
+            --src "$DST_BUNDLE_DPATH/$REGION_ID/$REGION_ID.kwcoco.zip" \
+            --dst "$DST_BUNDLE_DPATH/$REGION_ID/imgannots-$REGION_ID.kwcoco.zip" \
+            --io_workers="avail/2" \
+            --region_models="$ANN_DATA_DPATH/annotations/drop6_hard_v1/region_models/${REGION_ID}.geojson" \
+            --site_models="$ANN_DATA_DPATH/annotations/drop6_hard_v1/site_models/${REGION_ID}_*.geojson"
 done
 
 # Show the generated script
 python -m cmd_queue show "crop_for_sc_queue"
 
-python -m cmd_queue run "crop_for_sc_queue" --workers=4
+python -m cmd_queue run --workers=8 "crop_for_sc_queue"
+
+DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='ssd')
+ls "$DVC_DATA_DPATH/Drop7-Cropped2GSD"
+python -m watch.cli.prepare_splits \
+    --base_fpath "$DVC_DATA_DPATH"/Drop7-Cropped2GSD/*/imgannots-*.kwcoco.zip \
+    --dst_dpath "$DVC_DATA_DPATH"/Drop7-Cropped2GSD \
+    --suffix=rawbands --run=1 --workers=2
 
 
-HDD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='hdd')
-REGION_ID=KR_R001
-REGION_ID=KR_R002
-REGION_ID=AE_R001
-REGION_ID=PE_R001
-REGION_ID=CH_R001
+#git clone git+ssh://namek.kitware.com/flash/smart_drop7/.git smart_drop7
+#dvc remote add namek_ssd ssh://namek.kitware.com/flash/smart_drop7/.dvc/cache
 
-REGION_IDS=(
-    #KR_R001 KR_R002 AE_R001 PE_R001
-    BH_R001 BR_R001 BR_R002 BR_R004 BR_R005
-    CH_R001 LT_R001 NZ_R001 US_C010 US_C011 US_C012 US_C016 US_R001 US_R004
-    US_R005 US_R006 US_R007
-)
+geowatch_dvc add drop7_data_ssd --path=/flash/smart_drop7 --tags drop7_data --hardware ssd
+geowatch_dvc add drop7_data_ssd --path=/media/joncrall/flash1/smart_drop7 --tags drop7_data --hardware ssd
 
-for REGION_ID in "${REGION_IDS[@]}"; do
+#HDD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='hdd')
+#REGION_ID=KR_R001
+#REGION_ID=KR_R002
+#REGION_ID=AE_R001
+#REGION_ID=PE_R001
+#REGION_ID=CH_R001
+#REGION_ID=US_R007
+#REGION_IDS=(
+#    #KR_R001 KR_R002 AE_R001 PE_R001
+#    BH_R001 BR_R001 BR_R002 BR_R004 BR_R005
+#    CH_R001 LT_R001 NZ_R001 US_C010 US_C011 US_C012 US_C016 US_R001 US_R004
+#    US_R005 US_R006
+#)
+#for REGION_ID in "${REGION_IDS[@]}"; do
+#    echo "REGION_ID = $REGION_ID"
+#done
+#for REGION_ID in "${REGION_IDS[@]}"; do
+#    python -m watch.cli.cluster_sites \
+#        --src "$HDD_DATA_DPATH"/annotations/drop6_hard_v1/region_models/"$REGION_ID".geojson \
+#        --dst_dpath "$HDD_DATA_DPATH"/Drop7-Cropped2GSD/"$REGION_ID"/clusters \
+#        --minimum_size="128x128@2GSD" \
+#        --maximum_size="1024x1024@2GSD" \
+#        --context_factor=1.3 \
+#        --draw_clusters True
 
-    python -m watch.cli.cluster_sites \
-        --src "$HDD_DATA_DPATH"/annotations/drop6_hard_v1/region_models/"$REGION_ID".geojson \
-        --dst_dpath "$HDD_DATA_DPATH"/Drop7-Cropped2GSD/"$REGION_ID"/clusters \
-        --minimum_size="128x128@2GSD" \
-        --maximum_size="1024x1024@2GSD" \
-        --context_factor=1.3 \
-        --draw_clusters True
+#    python -m watch.cli.coco_align \
+#        --src "$HDD_DATA_DPATH/Aligned-Drop7/$REGION_ID/imgonly-$REGION_ID.kwcoco.zip" \
+#        --dst "$HDD_DATA_DPATH/Drop7-Cropped2GSD/$REGION_ID/$REGION_ID.kwcoco.zip" \
+#        --regions "$HDD_DATA_DPATH/Drop7-Cropped2GSD/$REGION_ID/clusters/*.geojson" \
+#        --rpc_align_method orthorectify \
+#        --workers=10 \
+#        --aux_workers=2 \
+#        --force_nodata=-9999 \
+#        --context_factor=1.0 \
+#        --minimum_size="128x128@2GSD" \
+#        --force_min_gsd=2.0 \
+#        --convexify_regions=True \
+#        --target_gsd=2.0 \
+#        --geo_preprop=False \
+#        --exclude_sensors=L8 \
+#        --sensor_to_time_window "
+#            S2: 1month
+#        " \
+#        --keep img
+#done
 
-    python -m watch.cli.coco_align \
-        --src "$HDD_DATA_DPATH/Aligned-Drop7/$REGION_ID/imgonly-$REGION_ID.kwcoco.zip" \
-        --dst "$HDD_DATA_DPATH/Drop7-Cropped2GSD/$REGION_ID/$REGION_ID.kwcoco.zip" \
-        --regions "$HDD_DATA_DPATH/Drop7-Cropped2GSD/$REGION_ID/clusters/*.geojson" \
-        --rpc_align_method orthorectify \
-        --workers=10 \
-        --aux_workers=2 \
-        --force_nodata=-9999 \
-        --context_factor=1.0 \
-        --minimum_size="128x128@2GSD" \
-        --force_min_gsd=2.0 \
-        --convexify_regions=True \
-        --target_gsd=2.0 \
-        --geo_preprop=False \
-        --exclude_sensors=L8 \
-        --sensor_to_time_window "
-            S2: 1month
-        " \
-        --keep img
 
-done
+#cd Drop7-Cropped2GSD
+#dvc add -- */*/S2 */*/WV* */*/PD
+#dvc add -- */*.kwcoco.zip */clusters
+dvc push -r namek_ssd -- */*.dvc
+
+
+REGION_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='ssd')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='auto')
+geowatch reproject_annotations \
+    --src "$DVC_DATA_DPATH"/Drop7-Cropped2GSD/KR_R002/KR_R002.kwcoco.zip \
+    --dst "$DVC_DATA_DPATH"/Drop7-Cropped2GSD/KR_R002/imgannots-KR_R002.kwcoco.zip \
+    --io_workers=avail \
+    --region_models="$REGION_DATA_DPATH/annotations/drop6_hard_v1/region_models/*.geojson" \
+    --site_models="$REGION_DATA_DPATH/annotations/drop6_hard_v1/site_models/*.geojson"
+
+
+REGION_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='ssd')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='auto')
+geowatch reproject_annotations \
+    --src "$DVC_DATA_DPATH"/Drop7-Cropped2GSD/KR_R001/KR_R001.kwcoco.zip \
+    --dst "$DVC_DATA_DPATH"/Drop7-Cropped2GSD/KR_R001/imgannots-KR_R001.kwcoco.zip \
+    --io_workers=avail \
+    --region_models="$REGION_DATA_DPATH/annotations/drop6_hard_v1/region_models/*.geojson" \
+    --site_models="$REGION_DATA_DPATH/annotations/drop6_hard_v1/site_models/*.geojson"
+
+REGION_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='ssd')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='auto')
+geowatch reproject_annotations \
+    --src "$DVC_DATA_DPATH"/Drop7-Cropped2GSD/PE_R001/PE_R001.kwcoco.zip \
+    --dst "$DVC_DATA_DPATH"/Drop7-Cropped2GSD/PE_R001/imgannots-PE_R001.kwcoco.zip \
+    --io_workers=avail \
+    --region_models="$REGION_DATA_DPATH/annotations/drop6_hard_v1/region_models/PE_R001*.geojson" \
+    --site_models="$REGION_DATA_DPATH/annotations/drop6_hard_v1/site_models/PE_R001*.geojson"
+
+
+
+# On namek - test training - no teamfeat
+export CUDA_VISIBLE_DEVICES=0
+DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
+echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop7-Cropped2GSD
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/KR_R001/imgannots-KR_R001.kwcoco.zip
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/KR_R002/imgannots-KR_R002.kwcoco.zip
+CHANNELS="(L8,S2):(blue|green|red|nir),(WV):(blue|green|red),(WV1):(pan)"
+EXPERIMENT_NAME=Drop7-Cropped2GSD_SC_bgrn_kronly_small_V01
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+TARGET_LR=1e-4
+WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
+echo "WEIGHT_DECAY = $WEIGHT_DECAY"
+MAX_STEPS=80000
+WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+data:
+    select_videos          : $SELECT_VIDEOS
+    num_workers            : 5
+    train_dataset          : $TRAIN_FPATH
+    vali_dataset           : $VALI_FPATH
+    window_dims            : '196,196'
+    time_steps             : 9
+    time_sampling          : uniform-soft5-soft4-contiguous
+    time_kernel            : '(-1.25y,-1.08y,-0.25y,-0.08y,0.0y,0.08y,0.25y,1.08y,1.25y)'
+    window_resolution     : 2.0GSD
+    input_resolution      : 2.0GSD
+    output_resolution     : 2.0GSD
+    neg_to_pos_ratio       : 1.0
+    batch_size             : 2
+    normalize_perframe     : false
+    normalize_peritem      : 'blue|green|red|nir|pan'
+    max_epoch_length       : 1000000
+    channels               : '$CHANNELS'
+    min_spacetime_weight   : 0.6
+    temporal_dropout       : 0.5
+    mask_low_quality       : False
+    mask_samecolor_method  : None
+    observable_threshold   : 0.0
+    quality_threshold      : 0.0
+    weight_dilate          : 10
+    use_centered_positives : True
+    use_grid_positives     : True
+    use_grid_negatives     : True
+    normalize_inputs       : 1024
+    balance_areas          : True
+model:
+    class_path: MultimodalTransformer
+    init_args:
+        #saliency_weights      : '1:1'
+        #class_weights         : auto
+        tokenizer              : linconv
+        arch_name              : smt_it_stm_p16
+        decoder                : mlp
+        positive_change_weight : 1
+        negative_change_weight : 0.01
+        stream_channels        : 16
+        class_loss             : 'dicefocal'
+        saliency_loss          : 'focal'
+        saliency_head_hidden   : 6
+        change_head_hidden     : 6
+        class_head_hidden      : 6
+        global_change_weight   : 0.00
+        global_class_weight    : 1.00
+        global_saliency_weight : 0.20
+        multimodal_reduce      : learned_linear
+optimizer:
+    class_path: torch.optim.AdamW
+    init_args:
+        lr           : $TARGET_LR
+        weight_decay : $WEIGHT_DECAY
+lr_scheduler:
+  class_path: torch.optim.lr_scheduler.OneCycleLR
+  init_args:
+    max_lr: $TARGET_LR
+    total_steps: $MAX_STEPS
+    anneal_strategy: cos
+    pct_start: 0.05
+trainer:
+    accumulate_grad_batches: 24
+    default_root_dir     : $DEFAULT_ROOT_DIR
+    accelerator          : gpu
+    devices              : 0,
+    limit_val_batches    : 256
+    limit_train_batches  : 2048
+    num_sanity_val_steps : 0
+    max_epochs           : 360
+    callbacks:
+        - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+          init_args:
+              monitor: val_loss
+              mode: min
+              save_top_k: 5
+              filename: '{epoch}-{step}-{val_loss:.3f}.ckpt'
+              save_last: true
+
+torch_globals:
+    float32_matmul_precision: auto
+
+initializer:
+    init: $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
+"
+
+
+# On namek - test training - no teamfeat (PE)
+export CUDA_VISIBLE_DEVICES=0
+DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
+echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop7-Cropped2GSD
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_rawbands_split6.kwcoco.zip
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_rawbands_split6.kwcoco.zip
+CHANNELS="(L8,S2):(blue|green|red|nir),(WV):(blue|green|red),(WV1):(pan)"
+EXPERIMENT_NAME=Drop7-Cropped2GSD_SC_bgrn_split6_V05
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+TARGET_LR=1e-4
+WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
+echo "WEIGHT_DECAY = $WEIGHT_DECAY"
+MAX_STEPS=80000
+WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+data:
+    select_videos          : $SELECT_VIDEOS
+    num_workers            : 5
+    train_dataset          : $TRAIN_FPATH
+    vali_dataset           : $VALI_FPATH
+    window_dims            : '256,256'
+    time_steps             : 9
+    time_sampling          : uniform-soft5-soft4-contiguous
+    time_kernel            : '(-1.25y,-1.08y,-0.25y,-0.08y,0.0y,0.08y,0.25y,1.08y,1.25y)'
+    window_resolution     : 2.0GSD
+    input_resolution      : 2.0GSD
+    output_resolution     : 2.0GSD
+    neg_to_pos_ratio       : 1.0
+    batch_size             : 4
+    normalize_perframe     : false
+    normalize_peritem      : 'blue|green|red|nir|pan'
+    max_epoch_length       : 1000000
+    channels               : '$CHANNELS'
+    min_spacetime_weight   : 0.6
+    temporal_dropout       : 0.5
+    mask_low_quality       : False
+    mask_samecolor_method  : None
+    observable_threshold   : 0.0
+    quality_threshold      : 0.0
+    weight_dilate          : 10
+    use_centered_positives : True
+    use_grid_positives     : False
+    use_grid_negatives     : False
+    normalize_inputs       : 1024
+    balance_areas          : True
+model:
+    class_path: MultimodalTransformer
+    init_args:
+        #saliency_weights      : '1:1'
+        #class_weights         : auto
+        tokenizer              : linconv
+        arch_name              : smt_it_stm_p16
+        decoder                : mlp
+        positive_change_weight : 1
+        negative_change_weight : 0.01
+        stream_channels        : 16
+        class_loss             : 'dicefocal'
+        saliency_loss          : 'focal'
+        saliency_head_hidden   : 6
+        change_head_hidden     : 6
+        class_head_hidden      : 6
+        global_change_weight   : 0.00
+        global_class_weight    : 1.00
+        global_saliency_weight : 0.01
+        multimodal_reduce      : learned_linear
+optimizer:
+    class_path: torch.optim.AdamW
+    init_args:
+        lr           : $TARGET_LR
+        weight_decay : $WEIGHT_DECAY
+lr_scheduler:
+  class_path: torch.optim.lr_scheduler.OneCycleLR
+  init_args:
+    max_lr: $TARGET_LR
+    total_steps: $MAX_STEPS
+    anneal_strategy: cos
+    pct_start: 0.05
+trainer:
+    accumulate_grad_batches: 24
+    default_root_dir     : $DEFAULT_ROOT_DIR
+    accelerator          : gpu
+    devices              : 0,
+    limit_val_batches    : 256
+    limit_train_batches  : 2048
+    num_sanity_val_steps : 0
+    max_epochs           : 360
+    callbacks:
+        - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+          init_args:
+              monitor: val_loss
+              mode: min
+              save_top_k: 5
+              filename: '{epoch}-{step}-{val_loss:.3f}.ckpt'
+              save_last: true
+
+torch_globals:
+    float32_matmul_precision: auto
+
+initializer:
+    init: $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
+"
+
+
+
+
+echo "hello" > foo
+aws s3 cp foo s3://kitware-smart-watch-data/dvc3/foo
+
+aws s3 rm s3://kitware-smart-watch-data/dvc3/foo

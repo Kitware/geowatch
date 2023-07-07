@@ -15,7 +15,7 @@ modal = ModalCLI(
 
 
 @modal.register
-class CachePurgeCLI(scfg.Config):
+class CachePurgeCLI(scfg.DataConfig):
     """
     Destroy all files in the DVC cache referenced in the target directory.
 
@@ -25,23 +25,32 @@ class CachePurgeCLI(scfg.Config):
 
     """
     __command__ = 'purge'
-    __default__ = dict(
-        dpath=scfg.Value('.', position=1, help='input path'),
-        workers=scfg.Value(0, help='number of parallel jobs'),
-        invert=scfg.Value(False, isflag=True, help='if True, pure all the unreferenced files in the cache instead')
-    )
+
+    path = scfg.Value('.', position=1, help='input path')
+    workers = scfg.Value(0, help='number of parallel jobs')
+    invert = scfg.Value(False, isflag=True, help='if True, purge all the unreferenced files in the cache instead')
 
     @classmethod
     def main(cls, cmdline=False, **kwargs):
+        """
+        Ignore:
+            ...
+            cls = CachePurgeCLI
+            cmdline = 0
+            kwargs = {
+                'path': 'WV.dvc'
+            }
+
+        """
         from kwutil import util_progress
         from watch.utils.simple_dvc import SimpleDVC
         config = cls(cmdline=cmdline, data=kwargs)
-        dpath = ub.Path(config['dpath'])
+        path = ub.Path(config['path'])
         workers = config['workers']
-        dvc = SimpleDVC.coerce(dpath)
+        dvc = SimpleDVC.coerce(path)
 
         if config['invert']:
-            for r, ds, fs in dpath.walk('.'):
+            for r, ds, fs in path.walk('.'):
                 print(f'r={r}')
                 for f in fs:
                     fpath = r / f
@@ -52,7 +61,9 @@ class CachePurgeCLI(scfg.Config):
             import xdev
             xdev.embed()
         else:
-            cache_fpath_iter = find_cached_fpaths(dvc, dpath)
+            list(dvc.find_sidecar_paths(path))
+
+            cache_fpath_iter = find_cached_fpaths(dvc, path)
 
             jobs = ub.JobPool(mode='thread', max_workers=workers)
             with jobs:
@@ -72,7 +83,7 @@ class CachePurgeCLI(scfg.Config):
 @modal.register
 class CacheCopyCLI(scfg.Config):
     """
-    Copy all files reference in the current checkout from one cache to another
+    Copy all files referenced in the current checkout from one cache to another
     cache.
     """
     __command__ = 'copy'
@@ -88,16 +99,16 @@ class CacheCopyCLI(scfg.Config):
         Ignore:
             cmdline = 0
             kwargs = dict(
-                dpath='/home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_expt_dvc',
+                # dpath='/home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_expt_dvc',
+                dpath='.',
                 workers=0,
-                new_cache_dpath='/data/dvc-caches/smart_expt_dvc_cache'
+                new_cache_dpath=ub.Path('~/data/dvc-repos/smart_data_dvc-ssd/.dvc/cache').expand()
             )
             cls = CacheCopyCLI
             ...
         """
         config = cls(cmdline=cmdline, data=kwargs)
-
-        from kwutil import util_progress
+        # from kwutil import util_progress
         from watch.utils.simple_dvc import SimpleDVC
         dpath = ub.Path(config['dpath'])
         dvc = SimpleDVC.coerce(dpath)
@@ -107,27 +118,38 @@ class CacheCopyCLI(scfg.Config):
         workers = config['workers']
 
         cache_fpath_iter = find_cached_fpaths(dvc, dpath)
+        cache_fpath_iter = list(ub.ProgIter(cache_fpath_iter))
 
-        def copy_job(fpath):
-            if fpath.exists():
+        from kwutil.copy_manager import CopyManager
+
+        cman = CopyManager(mode='thread', workers=workers)
+        with cman:
+            for fpath in cache_fpath_iter:
                 cache_rel_path = fpath.relative_to(old_cache_dpath)
                 new_fpath = new_cache_dpath / cache_rel_path
                 if not new_fpath.exists():
-                    new_fpath.parent.ensuredir()
-                    fpath.copy(new_fpath)
+                    cman.submit(fpath, new_fpath)
+                cman.run()
 
-        jobs = ub.JobPool(mode='thread', max_workers=workers)
-        with jobs:
-            pman = util_progress.ProgressManager()
-            with pman:
-                for fpath in pman(cache_fpath_iter, desc='moving cache'):
-                    jobs.submit(copy_job, fpath)
+        # def copy_job(fpath):
+        #     if fpath.exists():
+        #         cache_rel_path = fpath.relative_to(old_cache_dpath)
+        #         new_fpath = new_cache_dpath / cache_rel_path
+        #         if not new_fpath.exists():
+        #             new_fpath.parent.ensuredir()
+        #             fpath.copy(new_fpath)
 
-                for job in pman(jobs.as_completed(), desc='finish moving'):
-                    try:
-                        job.result()
-                    except Exception as ex:
-                        print(f'ex={ex}')
+        # jobs = ub.JobPool(mode='thread', max_workers=workers)
+        # with jobs:
+        #     pman = util_progress.ProgressManager()
+        #     with pman:
+        #         for fpath in pman(cache_fpath_iter, desc='moving cache'):
+        #             jobs.submit(copy_job, fpath)
+        #         for job in pman(jobs.as_completed(), desc='finish moving'):
+        #             try:
+        #                 job.result()
+        #             except Exception as ex:
+        #                 print(f'ex={ex}')
 
 
 def find_cached_fpaths(dvc, dpath):

@@ -42,7 +42,9 @@ class PrepareSplitsConfig(scfg.DataConfig):
         base_fpath = 'imganns*.kwcoco.*'
     """
     __default__ = {
-        'base_fpath': scfg.Value(None, nargs='+', help='base coco file to split or a globstring in constructive mode', position=1),
+        'base_fpath': scfg.Value(None, nargs='+', help='input kwcoco files to be joined into splits (or one base coco file to split in non-constructive mode)', position=1),
+
+        'dst_dpath': scfg.Value(None, help='location to write the new kwcoco files. If unspecfied uses the folder of the first input kwcoco file'),
 
         'virtualenv_cmd': scfg.Value(None, type=str, help=ub.paragraph(
             '''
@@ -98,7 +100,7 @@ IGNORE_REGIONS = {
 }
 
 
-def _submit_constructive_split_jobs(base_fpath, suffix, queue, depends=[]):
+def _submit_constructive_split_jobs(base_fpath, dst_dpath, suffix, queue, depends=[]):
     """
     new method for splits to construct them from previouly partitioned files
     """
@@ -106,19 +108,21 @@ def _submit_constructive_split_jobs(base_fpath, suffix, queue, depends=[]):
     import shlex
     partitioned_fpaths = util_path.coerce_patterned_paths(base_fpath)
     print('partitioned_fpaths = {}'.format(ub.urepr(partitioned_fpaths, nl=1)))
-    dpath = ub.Path(partitioned_fpaths[0]).parent  # Hack
 
-    full_fpath = dpath / 'data.kwcoco.zip'
+    if dst_dpath is None:
+        dst_dpath = ub.Path(partitioned_fpaths[0]).parent  # Hack
+
+    full_fpath = dst_dpath / 'data.kwcoco.zip'
 
     for split, vali_regions in VALI_REGIONS_SPLITS.items():
-        train_split_fpath = dpath / f'data_train_{split}.kwcoco.zip'
-        vali_split_fpath = dpath / f'data_vali_{split}.kwcoco.zip'
+        train_split_fpath = dst_dpath / f'data_train_{split}.kwcoco.zip'
+        vali_split_fpath = dst_dpath / f'data_vali_{split}.kwcoco.zip'
         if suffix:
-            train_split_fpath = dpath / f'data_train_{suffix}_{split}.kwcoco.zip'
-            vali_split_fpath = dpath / f'data_vali_{suffix}_{split}.kwcoco.zip'
+            train_split_fpath = dst_dpath / f'data_train_{suffix}_{split}.kwcoco.zip'
+            vali_split_fpath = dst_dpath / f'data_vali_{suffix}_{split}.kwcoco.zip'
         else:
-            train_split_fpath = dpath / f'data_train_{split}.kwcoco.zip'
-            vali_split_fpath = dpath / f'data_vali_{split}.kwcoco.zip'
+            train_split_fpath = dst_dpath / f'data_train_{split}.kwcoco.zip'
+            vali_split_fpath = dst_dpath / f'data_vali_{split}.kwcoco.zip'
         train_parts = []
         vali_parts = []
         for fpath in partitioned_fpaths:
@@ -257,9 +261,13 @@ def prep_splits(cmdline=False, **kwargs):
     if config['virtualenv_cmd']:
         queue.add_header_command(config['virtualenv_cmd'])
 
+    dst_dpath = ub.Path(config.dst_dpath)
+    suffix = config.suffix
+
     if config['constructive_mode']:
-        _submit_constructive_split_jobs(base_fpath, config['suffix'], queue)
+        _submit_constructive_split_jobs(base_fpath, dst_dpath, suffix, queue)
     else:
+        print('WARNING: non-constructive mode has not been maintained')
         _submit_split_jobs(base_fpath, queue)
 
     if config['verbose']:
