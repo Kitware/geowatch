@@ -737,6 +737,7 @@ def combine_mean_stds(means, stds, nums=None, axis=None, keepdims=False,
         >>> stds = np.random.rand(2, 3, 5, 7)
         >>> nums = (np.random.rand(2, 3, 5, 7) * 10) + 1
         >>> cm, cs, cn = combine_mean_stds(means, stds, nums, axis=1, keepdims=1)
+        >>> print('cs = {}'.format(ub.urepr(cs, nl=1)))
         >>> assert cm.shape == cs.shape == cn.shape
         >>> print(f'cm.shape={cm.shape}')
         >>> cm, cs, cn = combine_mean_stds(means, stds, nums, axis=(0, 2), keepdims=1)
@@ -773,10 +774,10 @@ def combine_mean_stds(means, stds, nums=None, axis=None, keepdims=False,
         weights = nums / combo_num
         combo_mean = np.average(means, weights=weights, axis=axis)
         combo_mean = _postprocess_keepdims(means, combo_mean, axis)
-        numer_p1 = ((nums - bessel) * stds).sum(axis=axis, keepdims=1)
+        numer_p1 = (np.maximum(nums - bessel, 0) * stds).sum(axis=axis, keepdims=1)
         numer_p2 = (nums * ((means - combo_mean) ** 2)).sum(axis=axis, keepdims=1)
         numer = numer_p1 + numer_p2
-        denom = combo_num - bessel
+        denom = np.maximum(combo_num - bessel, 0)
         # if denom == 0:
         with warnings.catch_warnings():
             warnings.filterwarnings('ignore', 'invalid value encountered', category=RuntimeWarning)

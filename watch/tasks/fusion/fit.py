@@ -18,7 +18,7 @@ SeeAlso:
 
 def coerce_initializer(init):
     import os
-    import ubelta as ub
+    import ubelt as ub
     from watch.monkey import monkey_torchmetrics
     from watch.monkey import monkey_torch
     monkey_torchmetrics.fix_torchmetrics_compatability()
@@ -56,10 +56,13 @@ def coerce_initializer(init):
             # Remove the normalization keys, we don't want to transfer them
             # in this step. They will be set correctly depending on if
             # normalize_inputs=transfer or not.
-            ignore_keys = [key for key in state_dict if 'input_norms' in key]
-            for k in ignore_keys:
-                state_dict.pop(k)
-            print('Hacking a packaged model for init')
+            HACK_IGNORE_INPUT_NORMS = True
+            if HACK_IGNORE_INPUT_NORMS:
+                ignore_keys = [key for key in state_dict if 'input_norms' in key]
+                for k in ignore_keys:
+                    state_dict.pop(k)
+                print('Hacking a packaged model for init')
+
             # print(ub.urepr(sorted(state_dict.keys())))
             weights_fpath = tfile.name
             torch.save(state_dict, weights_fpath)

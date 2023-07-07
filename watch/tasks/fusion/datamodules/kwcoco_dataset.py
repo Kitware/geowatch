@@ -2677,7 +2677,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             ('with_intensity', with_intensity),
             ('with_class', with_class),
             ('prenormalizers', self.prenormalizers),
-            ('depends_version', 19),  # bump if `compute_dataset_stats` changes
+            ('depends_version', 21),  # bump if `compute_dataset_stats` changes
         ])
         if self.config['normalize_peritem']:
             depends['normalize_peritem'] = self.config['normalize_peritem']
@@ -2767,7 +2767,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                                   shuffle=True, batch_size=batch_size)
 
         # Track moving average of each fused channel stream
-        norm_stats = ub.ddict(kwarray.RunningStats)
+        norm_stats = ub.ddict(lambda: kwarray.RunningStats(nan_policy='omit'))
 
         classes = self.classes
         num_classes = len(classes)
@@ -2909,6 +2909,10 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             stat_lines.append('Unique Video Samples: {}'.format(len(video_id_histogram)))
             info_text = '\n'.join(stat_lines).strip()
             if info_text:
+                # TODO: cleanup once new kwutil is released
+                if (hasattr(pman, 'is_rich') and pman.is_rich) or hasattr(pman.backend, 'setup_rich'):
+                    from rich.markup import escape
+                    info_text = escape(info_text)
                 pman.update_info(info_text)
 
         def update_intensity_estimates(item):
@@ -2951,6 +2955,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         from kwutil import util_progress
         from kwutil import util_environ
         pman = util_progress.ProgressManager()
+        # pman = util_progress.ProgressManager('progiter')
 
         # Create timer to periodically summarize intermediate results while
         # full dataset stats are accumulating
@@ -2966,6 +2971,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             iter_ = iter(prog)
 
             for batch_items in iter_:
+
                 for item in batch_items:
                     if item is None:
                         continue

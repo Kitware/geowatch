@@ -4700,7 +4700,7 @@ data:
     num_workers            : 5
     train_dataset          : $TRAIN_FPATH
     vali_dataset           : $VALI_FPATH
-    window_dims            : '196,196'
+    window_dims            : '224,224'
     time_steps             : 9
     time_sampling          : uniform-soft5-soft4-contiguous
     time_kernel            : '(-1.25y,-1.08y,-0.25y,-0.08y,0.0y,0.08y,0.25y,1.08y,1.25y)'
