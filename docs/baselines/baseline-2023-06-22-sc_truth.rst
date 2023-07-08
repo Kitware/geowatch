@@ -112,9 +112,9 @@ Use this code to get a feel for what parameters are available / required
             sc_poly_viz.enabled: 0
         " \
         --pipeline=crop_sc \
-        --root_dpath="$DVC_EXPT_DPATH/_drop7_baseline_sc_truth" \
+        --root_dpath="$DVC_EXPT_DPATH/_drop7_baseline_sc_truth2" \
         --queue_name "_drop7_baseline_sc_truth" \
-        --devices="0,1" \
+        --devices=",1" \
         --backend=tmux --tmux_workers=6 \
         --cache=1 --skip_existing=1 --run=1
 

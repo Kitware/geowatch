@@ -9,7 +9,7 @@ from kwutil.util_time import coerce_timedelta
 from datetime import datetime as datetime_cls  # NOQA
 from .exceptions import TimeSampleError
 from .utils import guess_missing_unixtimes
-from watch.tasks.fusion.datamodules.temporal_sampling.utils import coerce_time_kernel
+from .utils import coerce_time_kernel
 
 try:
     from xdev import profile
@@ -43,10 +43,10 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
             Number of sample indices to return
 
         include_indices (List[int]):
-            Indicies that must be included in the sample
+            Indices that must be included in the sample
 
         exclude_indices (List[int]):
-            Indicies that cannnot be included in the sample
+            Indices that cannot be included in the sample
 
         update_rule (str):
             Modifies how the affinity matrix is used to create the
@@ -101,9 +101,12 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
             kernel.
 
     Returns:
-        ndarray | Tuple[ndarray, Dict] -
+        ndarray | Tuple[ndarray, Dict]:
             The ``chosen`` indexes for the sample, or if return_info is True,
             then returns a tuple of ``chosen`` and the info dictionary.
+
+    Raises:
+        TimeSampleError : if sampling is impossible
 
     Possible Related Work:
         * Random Stratified Sampling Affinity Matrix
@@ -276,8 +279,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
     num_sample = size - len(chosen)
 
     if jit:
-        raise NotImplementedError
-        # # out of date
+        raise NotImplementedError('A cython version of this would be useful')
         # cython_mod = cython_aff_samp_mod()
         # return cython_mod.cython_affinity_sample(affinity, num_sample, current_weights, chosen, rng)
 
@@ -294,9 +296,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         # next_ideal_idx = None
 
     current_mask = initial_mask = next_mask
-    # current_ideal_idx = next_ideal_idx
 
-    # available_idxs = np.arange(affinity.shape[0])
     if return_info:
         denom = current_weights.sum()
         if denom == 0:
@@ -319,7 +319,10 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
             'time_kernel': time_kernel,
         }
 
+    # Errors will be accumulated in this list if we encounter them and the user
+    # requested debug info.
     errors = []
+
     for _ in range(num_sample):
         # Choose the next image based on combined sample affinity
 
@@ -390,7 +393,6 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         # Modify weights / mask to impact next sample
         current_weights = current_weights * update_weights
         current_mask = next_mask
-        # current_ideal_idx = next_ideal_idx
 
         # Don't resample the same item
         current_weights[next_idx] = 0
@@ -497,19 +499,36 @@ def make_soft_mask(time_kernel, relative_unixtimes):
 @profile
 def _handle_degenerate_weights(affinity, chosen, exclude_indices, errors,
                                error_level, return_info, rng):
+    """
+    Called by :func:`affinity_sample` when the exact requested sampling is
+    impossible. Depending on the error level this function either tries to
+    recover or raises an error with debug info.
+    """
+
+    debug_parts = [
+        f'{affinity.shape=}',
+        f'{len(chosen)=}',
+        f'{len(exclude_indices)=}',
+        f'{error_level=}',
+    ]
     if error_level == 3:
-        raise TimeSampleError('all probability is exhausted')
+        msg = '\n'.join(debug_parts)
+        raise TimeSampleError('all probability is exhausted.' + msg)
+
     current_weights = affinity[chosen[0]].copy()
     current_weights[chosen] = 0
     current_weights[exclude_indices] = 0
 
     total_weight = current_weights.sum()
+
     if return_info:
         errors.append('all indices were chosen, excluded, or had no affinity')
+
     if total_weight == 0:
         # Should really never get here in day-to-day, but just in case
         if error_level == 2:
             raise TimeSampleError('all included probability is exhausted')
+
         # Zero weight method: neighbors
         zero_weight_method = 'neighbors'
         if zero_weight_method == 'neighbors':
@@ -522,23 +541,35 @@ def _handle_degenerate_weights(affinity, chosen, exclude_indices, errors,
                 if len(ideal_idxs) == 0:
                     ideal_idxs = chosen_neighbor_idxs
                 current_weights[ideal_idxs] = 1
-
-        if zero_weight_method == 'random':
+        elif zero_weight_method == 'random':
             current_weights[:] = rng.rand(len(current_weights))
+        else:
+            raise KeyError(zero_weight_method)
 
         current_weights[chosen] = 0
         total_weight = current_weights.sum()
         if return_info:
             errors.append('all indices were chosen, excluded')
         if total_weight == 0:
+
             if error_level == 1:
-                raise TimeSampleError('all chosen probability is exhausted')
+                debug_parts.append(f'{total_weight=}')
+                msg = '\n'.join(debug_parts)
+                raise TimeSampleError('all chosen probability is exhausted' + msg)
+
             if zero_weight_method == 'neighbors':
                 current_weights[:] = rng.rand(len(current_weights))
-            if zero_weight_method == 'random':
+            elif zero_weight_method == 'random':
                 current_weights[:] = rng.rand(len(current_weights))
+            else:
+                raise KeyError(zero_weight_method)
+
             if return_info:
                 errors.append('all indices were chosen, punting')
+
+    if return_info:
+        errors.append('\n'.join(debug_parts))
+
     return current_weights
 
 

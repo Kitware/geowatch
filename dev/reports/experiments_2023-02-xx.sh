@@ -2481,3 +2481,71 @@ python -c "if 1:
               sv_crop.crop_src_fpath: {dvc_var2}/Aligned-Drop7/{region_id}/imgonly-{region_id}.kwcoco.zip
           '''), ' ' * 8))
 "
+
+
+
+HIRES_DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware=auto)
+HIRES_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+
+python -m watch.mlops.schedule_evaluation --params="
+    matrix:
+        #####################
+        ## SC PIXEL PARAMS ##
+        #####################
+
+        sc_pxl.test_dataset:
+          #- $HIRES_DVC_DATA_DPATH/Drop7-Cropped2GSD/KR_R002/KR_R002.kwcoco.zip
+          - $HIRES_DVC_DATA_DPATH/Aligned-Drop7/KR_R002/imgonly-KR_R002.kwcoco.zip
+        sc_pxl.package_fpath:
+            - $DVC_EXPT_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt
+        sc_pxl.tta_fliprot: 0.0
+        sc_pxl.tta_time: 0.0
+        sc_pxl.chip_overlap: 0.3
+        sc_pxl.input_space_scale: 2GSD
+        sc_pxl.window_space_scale: 2GSD
+        sc_pxl.output_space_scale: 2GSD
+        #sc_pxl.time_span: 6m
+        #sc_pxl.time_sampling: auto
+        #sc_pxl.time_steps: 12
+        #sc_pxl.chip_dims: auto
+        sc_pxl.set_cover_algo: null
+        sc_pxl.resample_invalid_frames: 3
+        sc_pxl.observable_threshold: 0.0
+        sc_pxl.mask_low_quality: true
+        sc_pxl.drop_unused_frames: true
+        sc_pxl.num_workers: 12
+        sc_pxl.batch_size: 1
+        sc_pxl.write_workers: 0
+
+        #####################
+        ## SC POLY PARAMS  ##
+        #####################
+
+        sc_poly.thresh: 0.07
+        sc_poly.boundaries_as: polys
+        sc_poly.resolution: 2GSD
+        sc_poly.min_area_square_meters: 7200
+
+        ##########################
+        ## SC POLY EVAL PARAMS  ##
+        ##########################
+
+        sc_poly_eval.true_site_dpath: $HIRES_DVC_DATA_DPATH/annotations/drop6/site_models
+        sc_poly_eval.true_region_dpath: $HIRES_DVC_DATA_DPATH/annotations/drop6/region_models
+
+        ##################################
+        ## HIGH LEVEL PIPELINE CONTROLS ##
+        ##################################
+        sc_pxl.enabled: 1
+        sc_pxl_eval.enabled: 1
+        sc_poly.enabled: 1
+        sc_poly_eval.enabled: 1
+        sc_poly_viz.enabled: 0
+    " \
+    --pipeline=sc \
+    --root_dpath="$DVC_EXPT_DPATH/_drop7_baseline_sc_truth" \
+    --queue_name "_drop7_baseline_sc_truth" \
+    --devices="0,1" \
+    --backend=tmux --tmux_workers=6 \
+    --cache=1 --skip_existing=1 --run=0
