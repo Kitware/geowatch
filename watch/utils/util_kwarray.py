@@ -733,12 +733,14 @@ def combine_mean_stds(means, stds, nums=None, axis=None, keepdims=False,
         >>> assert np.allclose(cs2, cs3)
 
     Example:
+        >>> from watch.utils.util_kwarray import *  # NOQA
         >>> means = np.random.rand(2, 3, 5, 7)
         >>> stds = np.random.rand(2, 3, 5, 7)
         >>> nums = (np.random.rand(2, 3, 5, 7) * 10) + 1
         >>> cm, cs, cn = combine_mean_stds(means, stds, nums, axis=1, keepdims=1)
         >>> print('cs = {}'.format(ub.urepr(cs, nl=1)))
         >>> assert cm.shape == cs.shape == cn.shape
+        ...
         >>> print(f'cm.shape={cm.shape}')
         >>> cm, cs, cn = combine_mean_stds(means, stds, nums, axis=(0, 2), keepdims=1)
         >>> assert cm.shape == cs.shape == cn.shape
