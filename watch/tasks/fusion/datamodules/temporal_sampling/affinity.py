@@ -23,7 +23,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
                     time_kernel=None, unixtimes=None,
                     error_level=2, rng=None, return_info=False, jit=False):
     """
-    Randomly select `size` timesteps from a larger pool based on "affinity".
+    Randomly select ``size`` timesteps from a larger pool based on ``affinity``.
 
     Given an NxN affinity matrix between frames and an initial set of indices
     to include, chooses a sample of other frames to complete the sample.  Each
@@ -65,7 +65,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
             Exponent that modulates the probability distribution. Lower gamma
             will "flatten" the probability curve. At gamma=0, all frames will
             be equally likely regardless of affinity. As gamma -> inf, the rule
-            becomes more likely to sample the maximum probaility at each
+            becomes more likely to sample the maximum probability at each
             timestep. In the limit this becomes equivalent to
             ``deterministic=True``.
 
@@ -86,7 +86,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
             error level 3:
                 duplicate, excluded, and 0-affinity indexes will raise an error
 
-        rng (Coercable[RandomState]):
+        rng (Coercible[RandomState]):
             random state for reproducible sampling
 
         return_info (bool):

@@ -528,7 +528,7 @@ class UTM_TransformContext:
     def __init__(self, data_crs84):
         """
         Args:
-            data_crs84 (Coercable[GeoSeries]):
+            data_crs84 (Coercible[GeoSeries]):
                 something we know how to transform into a GeoSeries
         """
         from watch.utils import util_gis
@@ -570,7 +570,7 @@ class UTM_TransformContext:
     def finalize(self, final_utm):
         """
         Args:
-            final_utm (Coercable[GeoSeries]):
+            final_utm (Coercible[GeoSeries]):
                 something coercable to geometry in UTM coordinates
         """
         final_geoms_utm = self._coerce_geo_series(

@@ -426,7 +426,7 @@ class TimeWindowSampler(CommonSamplerMixin):
             Modulates sampling probability. Higher values
             See :func:`affinity_sample` for details.
 
-        time_span (Coercable[datetime.timedelta]):
+        time_span (Coercible[datetime.timedelta]):
             The ideal distince in time that frames should be separated in.
             This is typically a string code. E.g. "1y" is one year.
 

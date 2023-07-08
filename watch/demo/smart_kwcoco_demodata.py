@@ -467,7 +467,7 @@ def coerce_kwcoco(data='watch-msi', **kwargs):
     project.
 
     Args:
-        data (str | Coercable[kwcoco.CocoDataset]):
+        data (str | Coercible[kwcoco.CocoDataset]):
             the special code to coerce
 
         **kwargs:

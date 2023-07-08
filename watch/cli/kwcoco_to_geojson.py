@@ -87,7 +87,7 @@ class KWCocoToGeoJSONConfig(scfg.DataConfig):
     # SeeAlso: notes in from_heatmap.__devnote__
     # e.g.
     #
-    # in_file : scfg.Coercable(help='Input KWCOCO to convert', position=1) = None
+    # in_file : scfg.Coercible(help='Input KWCOCO to convert', position=1) = None
     # in_file : scfg.Type(help='Input KWCOCO to convert', position=1) = None
     # in_file : scfg.PathLike(help='Input KWCOCO to convert', position=1) = None
     #
