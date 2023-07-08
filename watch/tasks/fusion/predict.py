@@ -778,7 +778,7 @@ def predict(cmdline=False, **kwargs):
     # knows how to construct the appropriate test dataset?
     config, traintime_params, datamodule = resolve_datamodule(config, method, datamodule_defaults)
 
-    # TODO: if TTA=True, disable determenistic time sampling
+    # TODO: if TTA=True, disable deterministic time sampling
     datamodule.setup('test')
     print('Finished dataset setup')
 

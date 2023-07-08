@@ -525,7 +525,7 @@ def _sample_single_video_spacetime_targets(
     gid_arr = np.array(video_gids)
     time_sampler.video_gids = gid_arr
     time_sampler.gid_to_index = ub.udict(enumerate(time_sampler.video_gids)).invert()
-    time_sampler.determenistic = True
+    time_sampler.deterministic = True
 
     # Convert winspace to vidspace and use that for the rest of the function
     vidspace_video_height = video_info['height']
@@ -588,7 +588,7 @@ def _sample_single_video_spacetime_targets(
         video_targets = []
         video_positive_idxs = []
         video_negative_idxs = []
-        # For each frame, determenistically compute an initial list of which
+        # For each frame, deterministically compute an initial list of which
         # supporting frames we will look at when making a prediction for the
         # "main" frame. Initially this is only based on temporal metadata.  We
         # may modify this later depending on spatial properties.
@@ -685,7 +685,7 @@ def _sample_single_video_spacetime_targets(
         cacher.save(_cached)
 
     # Disable determenism in the returned sampler
-    time_sampler.determenistic = False
+    time_sampler.deterministic = False
     meta = {
         'video_name': video_name,
         'resolved_scale': resolved_scale,

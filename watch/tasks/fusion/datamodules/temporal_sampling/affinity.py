@@ -19,7 +19,7 @@ except ImportError:
 
 @profile
 def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
-                    update_rule='pairwise', gamma=1, determenistic=False,
+                    update_rule='pairwise', gamma=1, deterministic=False,
                     time_kernel=None, unixtimes=None,
                     error_level=2, rng=None, return_info=False, jit=False):
     """
@@ -67,9 +67,9 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
             be equally likely regardless of affinity. As gamma -> inf, the rule
             becomes more likely to sample the maximum probaility at each
             timestep. In the limit this becomes equivalent to
-            ``determenistic=True``.
+            ``deterministic=True``.
 
-        determenistic (bool):
+        deterministic (bool):
             if True, on each step we choose the next timestamp with maximum
             probability. Otherwise, we randomly choose a timestep, but with
             probability according to the current distribution.
@@ -124,7 +124,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         >>> include_indices = [5]
         >>> size = 5
         >>> chosen, info = affinity_sample(affinity, size, include_indices, update_rule='pairwise',
-        >>>                                return_info=True, determenistic=True)
+        >>>                                return_info=True, deterministic=True)
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
         >>> from watch.tasks.fusion.datamodules.temporal_sampling.plots import show_affinity_sample_process
@@ -141,7 +141,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         >>> self = TimeWindowSampler(unixtimes, sensors=None, time_window=4,
         >>>     affinity_type='soft2', time_span='0.3y',
         >>>     update_rule='distribute+pairwise')
-        >>> self.determenistic = False
+        >>> self.deterministic = False
         >>> import pytest
         >>> with pytest.raises(IndexError):
         >>>     self.sample(0, exclude=[1, 2, 4], error_level=3)
@@ -182,19 +182,19 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         >>>     time_kernel=time_kernel_code,
         >>>     affinity_type='soft3',
         >>>     update_rule='')
-        >>> self.determenistic = False
+        >>> self.deterministic = False
         >>> self.show_affinity()
         >>> include_indices = [len(self.unixtimes) // 2]
         >>> exclude_indices = []
         >>> affinity = self.affinity
         >>> size = self.time_window
-        >>> determenistic = self.determenistic
+        >>> deterministic = self.deterministic
         >>> update_rule = self.update_rule
         >>> unixtimes = self.unixtimes
         >>> gamma = self.gamma
         >>> time_kernel = self.time_kernel
         >>> rng = kwarray.ensure_rng(None)
-        >>> determenistic = True
+        >>> deterministic = True
         >>> return_info = True
         >>> error_level = 2
         >>> chosen, info = affinity_sample(
@@ -204,7 +204,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         >>>     exclude_indices=exclude_indices,
         >>>     update_rule=update_rule,
         >>>     gamma=gamma,
-        >>>     determenistic=determenistic,
+        >>>     deterministic=deterministic,
         >>>     error_level=error_level,
         >>>     rng=rng,
         >>>     return_info=return_info,
@@ -349,7 +349,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         else:
             masked_current_weights = current_weights
 
-        if determenistic:
+        if deterministic:
             next_idx = masked_current_weights.argmax()
         else:
             cumprobs = (masked_current_weights ** gamma).cumsum()

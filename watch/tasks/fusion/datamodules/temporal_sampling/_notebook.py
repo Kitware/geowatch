@@ -108,7 +108,7 @@ def test_time_strategy():
     self = TimeWindowSampler.from_coco_video(
         dset, vidid,
         time_window=11,
-        affinity_type='hardish3', time_span='3m', update_rule='pairwise+distribute', determenistic=True
+        affinity_type='hardish3', time_span='3m', update_rule='pairwise+distribute', deterministic=True
     )
 
     # from scipy.special import expit
