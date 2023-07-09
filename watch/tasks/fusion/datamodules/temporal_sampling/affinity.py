@@ -19,8 +19,8 @@ except ImportError:
 
 @profile
 def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
-                    update_rule='pairwise', gamma=1, deterministic=False,
-                    time_kernel=None, unixtimes=None,
+                    allow_fewer=False, update_rule='pairwise', gamma=1,
+                    deterministic=False, time_kernel=None, unixtimes=None,
                     error_level=2, rng=None, return_info=False, jit=False):
     """
     Randomly select ``size`` timesteps from a larger pool based on ``affinity``.
@@ -47,6 +47,10 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
 
         exclude_indices (List[int]):
             Indices that cannot be included in the sample
+
+        allow_fewer (bool):
+            if True, we will allow fewer than the requested "size" samples to
+            be returned.
 
         update_rule (str):
             Modifies how the affinity matrix is used to create the
@@ -278,6 +282,14 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
 
     num_sample = size - len(chosen)
 
+    if not allow_fewer:
+        num_available = len(affinity)
+        if size > num_available:
+            raise TimeSampleError(
+                '{size=} is greater than {num_available=}. '
+                'Set allow_fewer=True if returning less than the requested '
+                'number of samples is ok.')
+
     if jit:
         raise NotImplementedError('A cython version of this would be useful')
         # cython_mod = cython_aff_samp_mod()
@@ -323,79 +335,85 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
     # requested debug info.
     errors = []
 
-    for _ in range(num_sample):
-        # Choose the next image based on combined sample affinity
+    try:
+        for _ in range(num_sample):
+            # Choose the next image based on combined sample affinity
 
-        if return_info:
-            errors = []
+            if return_info:
+                errors = []
 
-        total_weight = current_weights.sum()
+            total_weight = current_weights.sum()
 
-        # If we zeroed out all of the probabilities try two things before
-        # punting and setting everything to uniform.
-        if total_weight == 0:
-            current_weights = _handle_degenerate_weights(
-                affinity, chosen, exclude_indices, errors, error_level,
-                return_info, rng)
-
-        if current_mask is not None:
-            masked_current_weights = current_weights * current_mask
-
-            total_weight = masked_current_weights.sum()
+            # If we zeroed out all of the probabilities try two things before
+            # punting and setting everything to uniform.
             if total_weight == 0:
-                masked_current_weights = _handle_degenerate_weights(
-                    affinity, chosen, exclude_indices, errors, error_level,
+                current_weights = _handle_degenerate_weights(
+                    affinity, size, chosen, exclude_indices, errors, error_level,
                     return_info, rng)
-        else:
-            masked_current_weights = current_weights
 
-        if deterministic:
-            next_idx = masked_current_weights.argmax()
-        else:
-            cumprobs = (masked_current_weights ** gamma).cumsum()
-            dart = rng.rand() * cumprobs[-1]
-            next_idx = np.searchsorted(cumprobs, dart)
+            if current_mask is not None:
+                masked_current_weights = current_weights * current_mask
 
-        update_weights = 1
-
-        if do_pairwise:
-            if next_idx < affinity.shape[0]:
-                update_weights = affinity[next_idx] * update_weights
-
-        if do_distribute:
-            update_weights = (np.abs(col_idxs - next_idx) / len(col_idxs)) * update_weights
-
-        chosen.append(next_idx)
-
-        if current_mask is not None:
-            # Build the next mask
-            if len(unsatisfied_kernel_idxs):
-                kernel_idx = unsatisfied_kernel_idxs[0]
-                next_mask = kernel_masks[kernel_idx]
-                unsatisfied_kernel_idxs = unsatisfied_kernel_idxs[1:]
+                total_weight = masked_current_weights.sum()
+                if total_weight == 0:
+                    masked_current_weights = _handle_degenerate_weights(
+                        affinity, size, chosen, exclude_indices, errors,
+                        error_level, return_info, rng)
             else:
-                next_mask = None
+                masked_current_weights = current_weights
 
-        if return_info:
-            if total_weight == 0:
-                probs = masked_current_weights.copy()
+            if deterministic:
+                next_idx = masked_current_weights.argmax()
             else:
-                probs = masked_current_weights / total_weight
-            probs = masked_current_weights
-            info['steps'].append({
-                'probs': probs,
-                'next_idx': next_idx,
-                'update_weights': update_weights,
-                'next_mask': next_mask,
-                'errors': errors,
-            })
+                cumprobs = (masked_current_weights ** gamma).cumsum()
+                dart = rng.rand() * cumprobs[-1]
+                next_idx = np.searchsorted(cumprobs, dart)
 
-        # Modify weights / mask to impact next sample
-        current_weights = current_weights * update_weights
-        current_mask = next_mask
+            update_weights = 1
 
-        # Don't resample the same item
-        current_weights[next_idx] = 0
+            if do_pairwise:
+                if next_idx < affinity.shape[0]:
+                    update_weights = affinity[next_idx] * update_weights
+
+            if do_distribute:
+                update_weights = (np.abs(col_idxs - next_idx) / len(col_idxs)) * update_weights
+
+            chosen.append(next_idx)
+
+            if current_mask is not None:
+                # Build the next mask
+                if len(unsatisfied_kernel_idxs):
+                    kernel_idx = unsatisfied_kernel_idxs[0]
+                    next_mask = kernel_masks[kernel_idx]
+                    unsatisfied_kernel_idxs = unsatisfied_kernel_idxs[1:]
+                else:
+                    next_mask = None
+
+            if return_info:
+                if total_weight == 0:
+                    probs = masked_current_weights.copy()
+                else:
+                    probs = masked_current_weights / total_weight
+                probs = masked_current_weights
+                info['steps'].append({
+                    'probs': probs,
+                    'next_idx': next_idx,
+                    'update_weights': update_weights,
+                    'next_mask': next_mask,
+                    'errors': errors,
+                })
+
+            # Modify weights / mask to impact next sample
+            current_weights = current_weights * update_weights
+            current_mask = next_mask
+
+            # Don't resample the same item
+            current_weights[next_idx] = 0
+    except TimeSampleError:
+        if len(chosen) == 0:
+            raise
+        if not allow_fewer:
+            raise
 
     chosen = sorted(chosen)
     if return_info:
@@ -497,7 +515,7 @@ def make_soft_mask(time_kernel, relative_unixtimes):
 
 
 @profile
-def _handle_degenerate_weights(affinity, chosen, exclude_indices, errors,
+def _handle_degenerate_weights(affinity, size, chosen, exclude_indices, errors,
                                error_level, return_info, rng):
     """
     Called by :func:`affinity_sample` when the exact requested sampling is
@@ -506,14 +524,15 @@ def _handle_degenerate_weights(affinity, chosen, exclude_indices, errors,
     """
 
     debug_parts = [
+        f'{size=}',
         f'{affinity.shape=}',
         f'{len(chosen)=}',
         f'{len(exclude_indices)=}',
         f'{error_level=}',
     ]
     if error_level == 3:
-        msg = '\n'.join(debug_parts)
-        raise TimeSampleError('all probability is exhausted.' + msg)
+        msg3 = '\n'.join(['all probability is exhausted.'] + debug_parts)
+        raise TimeSampleError(msg3)
 
     current_weights = affinity[chosen[0]].copy()
     current_weights[chosen] = 0
@@ -527,7 +546,8 @@ def _handle_degenerate_weights(affinity, chosen, exclude_indices, errors,
     if total_weight == 0:
         # Should really never get here in day-to-day, but just in case
         if error_level == 2:
-            raise TimeSampleError('all included probability is exhausted')
+            msg2 = '\n'.join(['all included probability is exhausted.'] + debug_parts)
+            raise TimeSampleError(msg2)
 
         # Zero weight method: neighbors
         zero_weight_method = 'neighbors'
@@ -554,8 +574,8 @@ def _handle_degenerate_weights(affinity, chosen, exclude_indices, errors,
 
             if error_level == 1:
                 debug_parts.append(f'{total_weight=}')
-                msg = '\n'.join(debug_parts)
-                raise TimeSampleError('all chosen probability is exhausted' + msg)
+                msg1 = '\n'.join(['all chosen probability is exhausted.'] + debug_parts)
+                raise TimeSampleError(msg1)
 
             if zero_weight_method == 'neighbors':
                 current_weights[:] = rng.rand(len(current_weights))

@@ -922,9 +922,11 @@ def _refine_time_sample(dset, main_idx_to_gids, vidspace_box, refine_iosa_thresh
                 if good_gids != gids:
                     include_idxs = np.where(kwarray.isect_flags(video_gids, good_gids))[0]
                     exclude_idxs = np.where(kwarray.isect_flags(video_gids, all_bad_gids))[0]
+
                     chosen = time_sampler.sample(
                         include=include_idxs, exclude=exclude_idxs,
                         error_level=1, return_info=False, rng=rng)
+
                     new_gids = list(ub.take(video_gids, chosen))
                     # Are we allowed to return less than the initial expected
                     # number of frames? For transformers yes, but we should be

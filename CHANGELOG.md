@@ -8,6 +8,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 * Fixed issue with kwcoco directory roots in prepare splits.
+* TemporalSampler now is allowed to return fewer timesteps than requested if
+  none are available.
 
 ### Removed
 * Removed old fit script. The lightning CLI script is considered stable.

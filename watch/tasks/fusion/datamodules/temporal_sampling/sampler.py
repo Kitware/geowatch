@@ -8,6 +8,7 @@ This following doctest illustrates the method on project data.
 
 CommandLine:
     SMART_DATA_DVC_DPATH=1 XDEV_PROFILE=1 xdoctest -m watch.tasks.fusion.datamodules.temporal_sampling __doc__:3
+    SMART_DATA_DVC_DPATH=1 xdoctest -m watch.tasks.fusion.datamodules.temporal_sampling __doc__:3
 
 Example:
     >>> # Basic overview demo of the algorithm
@@ -77,6 +78,7 @@ Example:
     >>> self.show_summary(samples_per_frame=3, fnum=1)
     >>> self.show_procedure(fnum=4)
     >>> plt.subplots_adjust(top=0.9)
+    >>> kwplot.show_if_requested()
 
 Example:
     >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
@@ -101,6 +103,7 @@ Example:
     >>> self.show_summary(samples_per_frame=1, fnum=1)
     >>> chosen, info = self.show_procedure(fnum=4, idx=10)
     >>> plt.subplots_adjust(top=0.9)
+    >>> kwplot.show_if_requested()
 
 Example:
     >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
@@ -120,6 +123,7 @@ Example:
     >>> import kwplot
     >>> kwplot.autosns()
     >>> self.show_summary(3)
+    >>> kwplot.show_if_requested()
 
 Example:
     >>> # xdoctest: +SKIP
@@ -141,14 +145,15 @@ import numpy as np
 import ubelt as ub
 import itertools as it
 from dateutil import parser
-from watch.tasks.fusion.datamodules.temporal_sampling.utils import coerce_time_kernel
-from watch.tasks.fusion.datamodules.temporal_sampling.utils import coerce_multi_time_kernel
-from watch.tasks.fusion.datamodules.temporal_sampling.plots import plot_dense_sample_indices
-from watch.tasks.fusion.datamodules.temporal_sampling.plots import plot_temporal_sample_indices
-from watch.tasks.fusion.datamodules.temporal_sampling.plots import show_affinity_sample_process
-from watch.tasks.fusion.datamodules.temporal_sampling.affinity import soft_frame_affinity
-from watch.tasks.fusion.datamodules.temporal_sampling.affinity import hard_frame_affinity
-from watch.tasks.fusion.datamodules.temporal_sampling.affinity import affinity_sample
+from .utils import coerce_time_kernel
+from .utils import coerce_multi_time_kernel
+from .plots import plot_dense_sample_indices
+from .plots import plot_temporal_sample_indices
+from .plots import show_affinity_sample_process
+from .affinity import soft_frame_affinity
+from .affinity import hard_frame_affinity
+from .affinity import affinity_sample
+from .exceptions import TimeSampleError
 
 
 try:
@@ -316,9 +321,26 @@ class MultiTimeWindowSampler(CommonSamplerMixin):
         # self.deterministic
         chosen_key = rng.choice(list(self.sub_samplers.keys()))
         chosen_sampler = self.sub_samplers[chosen_key]
-        return chosen_sampler.sample(main_frame_idx, include=include,
-                                     exclude=exclude, return_info=return_info,
-                                     rng=rng, error_level=error_level)
+
+        try:
+            return chosen_sampler.sample(main_frame_idx, include=include,
+                                         exclude=exclude, return_info=return_info,
+                                         rng=rng, error_level=error_level)
+        except TimeSampleError as ex:
+            debug_parts = [
+                f'{self.name=}',
+                f'{self.affinity_type=}',
+                f'{self.deterministic=}',
+                f'{self.gamma=}',
+                f'{self.time_kernel=}',
+                f'{self.time_span=}',
+                f'{self.num_frames=}',
+                f'{main_frame_idx=}',
+                f'{include=}',
+                f'{exclude=}',
+            ]
+            ex.args = ('\n'.join(list(ex.args) + debug_parts),)
+            raise
 
     @property
     def affinity(self):
@@ -733,6 +755,7 @@ class TimeWindowSampler(CommonSamplerMixin):
             return_info=return_info,
             time_kernel=time_kernel,
             unixtimes=unixtimes,
+            allow_fewer=True,
         )
         return ret
 
