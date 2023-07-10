@@ -2,7 +2,7 @@ import argparse
 import sys
 import json
 import tempfile
-from os.path import join, dirname, basename
+from os.path import join, dirname, basename, isdir
 import uuid
 
 from shapely.geometry import shape
@@ -136,7 +136,11 @@ def smartflow_egress(assetnames_and_local_paths,
 
         asset_s3_outpath = join(outbucket, basename(local_path))
 
-        aws_cp.update(recursive=True)
+        if isdir(local_path):
+            aws_cp.update(recursive=True)
+        else:
+            aws_cp.update(recursive=False)
+
         aws_cp.args = [local_path, asset_s3_outpath]
         aws_cp.run()
 
