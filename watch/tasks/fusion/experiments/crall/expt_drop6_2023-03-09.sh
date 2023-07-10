@@ -4793,8 +4793,8 @@ DATASET_CODE=Drop7-Cropped2GSD
 KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_rawbands_split6.kwcoco.zip
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_rawbands_split6.kwcoco.zip
-CHANNELS="(L8,S2):(blue|green|red|nir),(WV):(blue|green|red)"
-EXPERIMENT_NAME=Drop7-Cropped2GSD_SC_bgrn_split6_V07
+CHANNELS="(L8,S2):(blue|green|red|nir),(WV):(blue|green|red),(WV,WV1):pan"
+EXPERIMENT_NAME=Drop7-Cropped2GSD_SC_bgrn_split6_V08
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
@@ -4808,8 +4808,8 @@ data:
     vali_dataset           : $VALI_FPATH
     window_dims            : '224,224'
     time_steps             : 9
-    time_sampling          : uniform-soft5-soft4-contiguous
-    time_kernel            : '(-1.25y,-1.08y,-0.25y,-0.08y,0.0y,0.08y,0.25y,1.08y,1.25y)'
+    time_sampling          : soft4
+    time_kernel            : '(-1.08y,-1y,-0.25y,-0.08y,0.0y,0.08y,0.25y,1y,1.08y)'
     window_resolution     : 2.0GSD
     input_resolution      : 2.0GSD
     output_resolution     : 2.0GSD
@@ -4849,7 +4849,7 @@ model:
         class_head_hidden      : 6
         global_change_weight   : 0.00
         global_class_weight    : 1.00
-        global_saliency_weight : 0.01
+        global_saliency_weight : 0.0001
         multimodal_reduce      : learned_linear
 optimizer:
     class_path: torch.optim.AdamW

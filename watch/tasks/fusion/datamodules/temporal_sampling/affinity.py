@@ -424,56 +424,74 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
 
 def make_soft_mask(time_kernel, relative_unixtimes):
     """
-    Ignore:
-        from watch.tasks.fusion.datamodules.temporal_sampling.affinity import *  # NOQA
-        time_kernel = coerce_time_kernel('-1H,-5M,0,5M,1H')
-        relative_unixtimes = coerce_time_kernel('-90M,-70M,-50M,0,1sec,10S,30M')
-        # relative_unixtimes = coerce_time_kernel('-90M,-70M,-50M,-20M,-10M,0,1sec,10S,30M,57M,87M')
+    Assign probabilities to real observations based on an ideal time kernel
 
-        kernel_masks, kernel_attrs = make_soft_mask(time_kernel, relative_unixtimes)
+    Args:
+        time_kernel (ndarray):
+            A list of relative seconds in the time kernel. Each element in this
+            list is referred to as a "kernel entry".
 
-        min_t = min(kattr['left'] for kattr in kernel_attrs)
-        max_t = max(kattr['right'] for kattr in kernel_attrs)
+        relative_unixtimes (ndarray):
+            A list of available unixtimes.
 
-        import kwplot
-        plt = kwplot.autoplt()
-        import kwimage
-        kwplot.figure(fnum=1, doclf=1)
-        kernel_color = kwimage.Color.coerce('kitware_green').as01()
-        obs_color = kwimage.Color.coerce('kitware_blue').as01()
+    Returns:
+        Tuple[List[ndarray], List[Dict]]:
+            A tuple of (kernel_masks, kernel_attrs).  For each element in the
+            time kernel there is a corresponding entry in the output
+            kernel_masks and kernel_attrs list, with the former being a
+            probability assigned to each observation for that particular kernel
+            entry, and the latter is a dictionary of information about that
+            kernel entry.
 
-        kwplot.figure(fnum=1, pnum=(2, 1, 1))
-        plt.plot(time_kernel, [0] * len(time_kernel), '-o', color=kernel_color, label='kernel')
-
-        for kattr in kernel_attrs:
-            rv = kattr['rv']
-            xs = np.linspace(min_t, max_t, 1000)
-            ys = rv.pdf(xs)
-            ys_norm = ys / ys.sum()
-            plt.plot(xs, ys_norm)
-
-        ax = plt.gca()
-        # ax.set_ylim(0, 1)
-        ax.legend()
-        ax.set_xlabel('time')
-        ax.set_ylabel('ideal probability')
-        ax.set_title('ideal kernel')
-
-        kwplot.figure(fnum=1, pnum=(2, 1, 2))
-        plt.plot(relative_unixtimes, [0] * len(relative_unixtimes), '-o', color=obs_color, label='observation')
-        ax = plt.gca()
-
-        for kattr in kernel_attrs:
-            rv = kattr['rv']
-            xs = relative_unixtimes
-            ys = rv.pdf(xs)
-            ys_norm = ys / ys.sum()
-            plt.plot(xs, ys_norm)
-        ax.legend()
-        ax.set_xlabel('time')
-        ax.set_ylabel('sample probability')
-        ax.set_title('discrete observations')
-        plt.subplots_adjust(top=0.9, hspace=.3)
+    Example:
+        >>> from watch.tasks.fusion.datamodules.temporal_sampling.affinity import *  # NOQA
+        >>> time_kernel = coerce_time_kernel('-1H,-5M,0,5M,1H')
+        >>> relative_unixtimes = coerce_time_kernel('-90M,-70M,-50M,0,1sec,10S,30M')
+        >>> # relative_unixtimes = coerce_time_kernel('-90M,-70M,-50M,-20M,-10M,0,1sec,10S,30M,57M,87M')
+        >>> kernel_masks, kernel_attrs = make_soft_mask(time_kernel, relative_unixtimes)
+        >>> #
+        >>> min_t = min(kattr['left'] for kattr in kernel_attrs)
+        >>> max_t = max(kattr['right'] for kattr in kernel_attrs)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwimage
+        >>> import kwplot
+        >>> plt = kwplot.autoplt()
+        >>> kwplot.figure(fnum=1, doclf=1)
+        >>> kernel_color = kwimage.Color.coerce('kitware_green').as01()
+        >>> obs_color = kwimage.Color.coerce('kitware_blue').as01()
+        >>> #
+        >>> kwplot.figure(fnum=1, pnum=(2, 1, 1))
+        >>> plt.plot(time_kernel, [0] * len(time_kernel), '-o', color=kernel_color, label='kernel')
+        >>> #
+        >>> for kattr in kernel_attrs:
+        >>>     rv = kattr['rv']
+        >>>     xs = np.linspace(min_t, max_t, 1000)
+        >>>     ys = rv.pdf(xs)
+        >>>     ys_norm = ys / ys.sum()
+        >>>     plt.plot(xs, ys_norm)
+        >>> #
+        >>> ax = plt.gca()
+        >>> ax.legend()
+        >>> ax.set_xlabel('time')
+        >>> ax.set_ylabel('ideal probability')
+        >>> ax.set_title('ideal kernel')
+        >>> #
+        >>> kwplot.figure(fnum=1, pnum=(2, 1, 2))
+        >>> plt.plot(relative_unixtimes, [0] * len(relative_unixtimes), '-o', color=obs_color, label='observation')
+        >>> ax = plt.gca()
+        >>> #
+        >>> for kattr in kernel_attrs:
+        >>>     rv = kattr['rv']
+        >>>     xs = relative_unixtimes
+        >>>     ys = rv.pdf(xs)
+        >>>     ys_norm = ys / ys.sum()
+        >>>     plt.plot(xs, ys_norm)
+        >>> ax.legend()
+        >>> ax.set_xlabel('time')
+        >>> ax.set_ylabel('sample probability')
+        >>> ax.set_title('discrete observations')
+        >>> plt.subplots_adjust(top=0.9, hspace=.3)
+        >>> kwplot.show_if_requested()
     """
     if len(time_kernel) == 1:
         raise Exception
@@ -506,10 +524,14 @@ def make_soft_mask(time_kernel, relative_unixtimes):
         })
 
     kernel_masks = []
-    for kattr in kernel_attrs:
-        probs = kattr['rv'].pdf(relative_unixtimes)
-        pmf = probs / probs.sum()
-        kernel_masks.append(pmf)
+    import warnings
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', 'invalid value encountered', category=RuntimeWarning)
+
+        for kattr in kernel_attrs:
+            probs = kattr['rv'].pdf(relative_unixtimes)
+            pmf = probs / probs.sum()
+            kernel_masks.append(pmf)
 
     return kernel_masks, kernel_attrs
 

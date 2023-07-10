@@ -2495,8 +2495,8 @@ python -m watch.mlops.schedule_evaluation --params="
         #####################
 
         sc_pxl.test_dataset:
-          #- $HIRES_DVC_DATA_DPATH/Drop7-Cropped2GSD/KR_R002/KR_R002.kwcoco.zip
-          - $HIRES_DVC_DATA_DPATH/Aligned-Drop7/KR_R002/imgonly-KR_R002.kwcoco.zip
+          - $HIRES_DVC_DATA_DPATH/Drop7-Cropped2GSD/KR_R002/KR_R002.kwcoco.zip
+          #- $HIRES_DVC_DATA_DPATH/Aligned-Drop7/KR_R002/imgonly-KR_R002.kwcoco.zip
         sc_pxl.package_fpath:
             - $DVC_EXPT_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt
         sc_pxl.tta_fliprot: 0.0
@@ -2546,6 +2546,6 @@ python -m watch.mlops.schedule_evaluation --params="
     --pipeline=sc \
     --root_dpath="$DVC_EXPT_DPATH/_drop7_baseline_sc_truth" \
     --queue_name "_drop7_baseline_sc_truth" \
-    --devices="0,1" \
+    --devices=",1" \
     --backend=tmux --tmux_workers=6 \
-    --cache=1 --skip_existing=1 --run=0
+    --cache=1 --skip_existing=1 --run=1
