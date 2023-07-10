@@ -132,19 +132,19 @@ def smartflow_egress(assetnames_and_local_paths,
         # Passing in assets with paths already on S3 simply passes
         # them through
         if local_path.startswith('s3'):
-            continue
-
-        asset_s3_outpath = join(outbucket, basename(local_path))
-
-        if isdir(local_path):
-            aws_cp.update(recursive=True)
+            asset_s3_outpath = local_path
         else:
-            aws_cp.update(recursive=False)
+            asset_s3_outpath = join(outbucket, basename(local_path))
 
-        aws_cp.args = [local_path, asset_s3_outpath]
-        aws_cp.run()
+            if isdir(local_path):
+                aws_cp.update(recursive=True)
+            else:
+                aws_cp.update(recursive=False)
 
-        assetnames_and_s3_paths[asset] = asset_s3_outpath
+            aws_cp.args = [local_path, asset_s3_outpath]
+            aws_cp.run()
+
+        assetnames_and_s3_paths[asset] = {'href': asset_s3_outpath}
 
     output_stac_item = _build_stac_item(region_path,
                                         assetnames_and_s3_paths)

@@ -53,6 +53,8 @@ def smartflow_ingress(input_path,
     aws_cp = AWS_S3_Command('cp', profile=aws_profile, dryrun=dryrun,
                             only_show_errors=not show_progress)
 
+    aws_ls = AWS_S3_Command('ls', profile=aws_profile)
+
     def _load_input(path):
         try:
             with open(path) as f:
@@ -89,7 +91,14 @@ def smartflow_ingress(input_path,
         asset_basename = os.path.basename(asset_href)
         asset_outpath = os.path.join(outdir, asset_basename)
 
-        aws_cp.update(recursive=True)
+        aws_ls.args = [asset_href]
+        ls_out = aws_ls.run(capture=True)
+        # Must correctly set 'recursive' flag for AWS S3 cp calls
+        if ls_out['out'].strip().startswith('PRE'):
+            aws_cp.update(recursive=True)
+        else:
+            aws_cp.update(recursive=False)
+
         aws_cp.args = [asset_href, asset_outpath]
         aws_cp.run()
 
