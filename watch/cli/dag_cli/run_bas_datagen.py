@@ -419,7 +419,7 @@ def run_stac_to_cropped_kwcoco(config):
     assets_to_egress = {
         'timecombined_kwcoco_file_for_bas': combined_timecombined_kwcoco_path,
         'timecombined_kwcoco_file_for_bas_assets': ta1_cropped_dir / 'raw_bands',
-        'kwcoco_for_sc': ta1_kwcoco_path_for_sc}
+        'kwcoco_for_sc': ta1_sc_kwcoco_path}
     smartflow_egress(assets_to_egress,
                      local_region_path,
                      config.output_path,
