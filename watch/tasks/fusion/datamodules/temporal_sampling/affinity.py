@@ -432,7 +432,10 @@ def make_soft_mask(time_kernel, relative_unixtimes):
             list is referred to as a "kernel entry".
 
         relative_unixtimes (ndarray):
-            A list of available unixtimes.
+            A list of available unixtimes corresponding to real observations.
+            These should be relative to an "ideal" center. I.e. the "main"
+            observation the kernel is centered around should have a relative
+            unixtime of zero.
 
     Returns:
         Tuple[List[ndarray], List[Dict]]:
