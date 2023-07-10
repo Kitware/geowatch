@@ -1296,8 +1296,6 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
         blur2 = kwarray.atleast_nd(kwimage.gaussian_blur(raw_canvas, sigma=1.6), n=3)
         dog = blur1 - blur2
         shift_dog = dog - min(0, np.nanmin(dog))
-        # import xdev
-        # mxdev.embed()
         canvas = blur2
         canvas = shift_dog
         # orig_max = np.nanmax(raw_canvas)
@@ -1364,6 +1362,12 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
     # Do the channels correspond to classes with known colors?
     chan_names = chan_row['chan'].to_list()
     channel_colors = []
+
+    from watch import heuristics
+    # For some reason predict is not preserving categories
+    for cat in heuristics.CATEGORIES:
+        coco_dset.ensure_category(**cat)
+    heuristics.ensure_heuristic_coco_colors(coco_dset)
     for cname in chan_names:
         if cname in coco_dset.index.name_to_cat:
             cat = coco_dset.index.name_to_cat[cname]
