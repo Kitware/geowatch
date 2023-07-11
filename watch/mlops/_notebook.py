@@ -7,6 +7,137 @@ from watch.mlops.aggregate import fix_duplicate_param_hashids
 from watch.utils import util_pandas
 
 
+
+def _sitevisit_2023_july_report():
+    import watch
+    from watch.mlops.aggregate import AggregateLoader
+    expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+
+    load_kwargs = {
+        'target': [
+            expt_dvc_dpath / 'aggregate_results/dzyne/bas_poly_eval_2023-07-10T131639-5.csv.zip',
+            expt_dvc_dpath / 'aggregate_results/dzyne/bas_poly_eval_2023-07-10T164254-5.csv.zip',
+            expt_dvc_dpath / 'aggregate_results/dzyne/sv_poly_eval_2023-07-10T164254-5.csv.zip',
+            expt_dvc_dpath / 'aggregate_results/horologic/bas_poly_eval_2023-07-10T155903-5.csv.zip',
+            expt_dvc_dpath / 'aggregate_results/horologic/sv_poly_eval_2023-07-10T155903-5.csv.zip',
+            expt_dvc_dpath / 'aggregate_results/namek/bas_poly_eval_2023-04-19T113433-5.csv.zip',
+            expt_dvc_dpath / 'aggregate_results/namek/bas_poly_eval_2023-07-10T161857-5.csv.zip',
+            expt_dvc_dpath / 'aggregate_results/namek/bas_pxl_eval_2023-04-19T113433-5.csv.zip',
+            expt_dvc_dpath / 'aggregate_results/namek/bas_pxl_eval_2023-07-10T161857-5.csv.zip',
+            expt_dvc_dpath / 'aggregate_results/namek/sv_poly_eval_2023-07-10T161857-5.csv.zip',
+            expt_dvc_dpath / 'aggregate_results/toothbrush/bas_poly_eval_2023-04-19T105718-5.csv.zip',
+            expt_dvc_dpath / 'aggregate_results/toothbrush/bas_poly_eval_2023-07-10T150132-5.csv.zip',
+            expt_dvc_dpath / 'aggregate_results/toothbrush/bas_pxl_eval_2023-04-19T105718-5.csv.zip',
+            expt_dvc_dpath / 'aggregate_results/toothbrush/bas_pxl_eval_2023-07-10T150132-5.csv.zip',
+            expt_dvc_dpath / 'aggregate_results/toothbrush/sv_poly_eval_2023-04-19T105718-5.csv.zip',
+            expt_dvc_dpath / 'aggregate_results/toothbrush/sv_poly_eval_2023-07-10T150132-5.csv.zip',
+            expt_dvc_dpath / 'aggregate_results/uconn/COLD_candidates_0705.zip',
+            expt_dvc_dpath / 'aggregate_results/wu/bas_pxl_eval_2023-07-11T180910+0.csv.zip',
+            expt_dvc_dpath / 'aggregate_results/wu/bas_poly_eval_2023-07-11T180910+0.csv.zip',
+            expt_dvc_dpath / 'aggregate_results/wu/bas_pxl_eval_2023-07-11T181515+0.csv.zip',
+            expt_dvc_dpath / 'aggregate_results/wu/bas_poly_eval_2023-07-11T181515+0.csv.zip',
+            expt_dvc_dpath / 'aggregate_results/connor/bas_poly_eval_2023-07-11T134348-5.csv.zip',
+            expt_dvc_dpath / 'aggregate_results/connor/bas_pxl_eval_2023-07-11T134348-5.csv.zip',
+        ],
+        'pipeline': 'bas_building_and_depth_vali',
+        'io_workers': 'avail',
+    }
+    loader = AggregateLoader(**load_kwargs)
+    eval_type_to_agg = loader.coerce_aggregators()
+
+    agg = eval_type_to_agg['bas_poly_eval']
+
+    from watch.mlops.smart_global_helper import SMART_HELPER
+    SMART_HELPER.populate_test_dataset_bundles(agg)
+
+    from watch.utils.util_pandas import DotDictDataFrame
+    table = DotDictDataFrame(agg.table)
+
+    test_bundle_cols = [c + '_bundle' for c in agg.test_dset_cols]
+
+    table['machine.bas_poly_eval.user'].value_counts()
+    table[['machine.bas_poly_eval.user'] + test_bundle_cols].value_counts()
+    table[['machine.bas_poly_eval.user', 'machine.bas_poly_eval.host']].value_counts()
+
+    rois = [
+        'KR_R002', 'NZ_R001', 'CH_R001', 'KR_R001',
+        # 'BR_R002', 'BR_R004'
+        # 'AE_R001',
+        # 'PE_R001',
+    ]
+    agg.build_macro_tables(rois)
+
+    table['params.bas_pxl.test_dataset_bundle'] == 'Drop7-MedianNoWinter10GSD'
+
+    agg.filterto()
+    table
+
+    from kwutil import util_time
+    start_time_cols = table.search_columns('start_timestamp')
+    end_time_cols = table.search_columns('stop_timestamp')
+    timestamps = {}
+    for k in start_time_cols + end_time_cols:
+        timestamps[k] = table.loc[:, k].apply(lambda x: util_time.coerce_datetime(x) if not pd.isnull(x) else x)
+
+    min_times = {}
+    max_times = {}
+    for k, vs in timestamps.items():
+        try:
+            min_times[k] = vs[~pd.isna(vs)].min()
+            max_times[k] = vs[~pd.isna(vs)].max()
+        except Exception as ex:
+            print(f'ex={ex}')
+
+    table['params.bas_pxl.test_dataset'].unique()
+
+    min_time = min(min_times.values())
+    max_time = min(max_times.values())
+    print(f'min_time={min_time.isoformat()}')
+    print(f'max_time={max_time.isoformat()}')
+
+    resources = agg.resource_summary_table()
+
+    from watch.utils import util_kwplot
+    util_kwplot.dataframe_table(resources, 'resource_summary_bas.png')
+
+    import kwplot
+    sns = kwplot.autosns()
+    plt = kwplot.autoplt()  # NOQA
+    kwplot.close_figures()
+
+    from watch.mlops.aggregate import build_special_columns, preprocess_table
+    build_special_columns(agg)
+    agg.build()
+    single_table = preprocess_table(agg.table)
+
+    param_to_palette = SMART_HELPER.shared_palletes(single_table)
+
+    region_ids = single_table['region_id'].unique()
+    unique_colors = sns.color_palette(n_colors=len(region_ids))
+
+    fig = kwplot.figure(fnum=2, doclf=True)
+    y = 'metrics.bas_poly_eval.bas_f1'
+    x = 'metrics.bas_poly_eval.bas_ffpa'
+    ax = sns.scatterplot(data=single_table, x=x, y=y, hue='region_id', legend=True)
+    ax.set_xscale('log')
+    ax.set_ylim(0, 1)
+    ax.set_title(f'BAS Per-Region Results (n={len(agg)})')
+
+    # 'eval_nodes': ['sv_poly_eval', 'bas_poly_eval'],
+    # 'output_dpath': '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_bigagg/aggregate',
+    # 'export_tables': False,
+    # 'plot_params': {'enabled': 0, 'stats_ranking': 0, 'min_variations': 1, 'params_of_interest': ['resolved_params.sv_depth_filter.threshold',
+    #                                                                                               'resolved_params.sv_depth_score.model_fpath', 'resolved_params.bas_poly.thresh', 'resolved_params.bas_pxl.channels']},
+    # 'stdout_report': '\n        top_k: 1\n        per_group: 1\n        macro_analysis: 0\n        analyze: 0\n        print_models: True\n        reference_region: final\n    ',
+    # 'resource_report': 0,
+    # 'rois': ['KR_R002', 'PE_R001', 'NZ_R001', 'CH_R001', 'KR_R001', 'AE_R001', 'BR_R002', 'BR_R004'],
+    # 'inspect': None,
+    # 'query': None,
+    # 'embed': False,
+    # })
+
+
+
 def _debug_roi_issue():
     import watch
     from watch.mlops.aggregate import AggregateLoader

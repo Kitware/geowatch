@@ -662,7 +662,19 @@ class SiteModel(_Model):
         Returns:
             geopandas.GeoDataFrame: the site summaries as a data frame
         """
-        gdf = gpd.GeoDataFrame.from_features(list(self.observations()))
+        from watch.utils import util_gis
+        crs84 = util_gis.get_crs84()
+        gdf = gpd.GeoDataFrame.from_features(list(self.observations()), crs=crs84)
+        return gdf
+
+    def pandas_site(self):
+        """
+        Returns:
+            geopandas.GeoDataFrame: the region header as a data frame
+        """
+        from watch.utils import util_gis
+        crs84 = util_gis.get_crs84()
+        gdf = gpd.GeoDataFrame.from_features([self.header], crs=crs84)
         return gdf
 
     @classmethod

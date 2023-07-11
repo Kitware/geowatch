@@ -2563,7 +2563,7 @@ python -m watch.mlops.aggregate \
     --output_dpath="$DVC_EXPT_DPATH/_tmp/_dzyne_csvs/aggregate" \
     --resource_report=0 \
     --eval_nodes="
-        - sv_poly_eval
+        #- sv_poly_eval
         - bas_poly_eval
     " \
     --plot_params="
@@ -2584,7 +2584,22 @@ python -m watch.mlops.aggregate \
         print_models: True
         reference_region: final
     " \
-    --rois="KR_R002,PE_R001,NZ_R001,CH_R001,KR_R001,AE_R001,BR_R002,BR_R004"
+    --rois="KR_R002,PE_R001,NZ_R001,CH_R001,KR_R001,AE_R001,BR_R002,BR_R004" --embed
+
+
+
+# Change the "pipeline" to the one you ran MLOPs with.
+python -m watch.mlops.aggregate \
+    --pipeline=bas_building_and_depth_vali \
+    --target "
+        - $DVC_EXPT_DPATH/YOUR_MLOPS_OUTPUT_DIR
+    " \
+    --export_tables=True \
+    --output_dpath="$DVC_EXPT_DPATH/YOUR_MLOPS_OUTPUT_DIR/aggregate"
+
+
+
+### REPRODUCE DZYNE
 
 
 # Pre Agg
@@ -2665,6 +2680,10 @@ python -m watch.mlops.aggregate \
         - $DVC_EXPT_DPATH/aggregate_results/toothbrush/sv_poly_eval_2023-07-10T150132-5.csv.zip
         - $DVC_EXPT_DPATH/aggregate_results/uconn/COLD_candidates_0705.zip
         #- $DVC_EXPT_DPATH/aggregate_results/uconn/bas_poly_eval_2023-06-20T140324-5_COLD.csv
+        - $DVC_EXPT_DPATH/aggregate_results/wu/bas_pxl_eval_2023-07-11T180910+0.csv.zip
+        - $DVC_EXPT_DPATH/aggregate_results/wu/bas_poly_eval_2023-07-11T180910+0.csv.zip
+        - $DVC_EXPT_DPATH/aggregate_results/wu/bas_pxl_eval_2023-07-11T181515+0.csv.zip
+        - $DVC_EXPT_DPATH/aggregate_results/wu/bas_poly_eval_2023-07-11T181515+0.csv.zip
     " \
     --output_dpath="$DVC_EXPT_DPATH/_bigagg/aggregate" \
     --resource_report=0 \
@@ -2695,3 +2714,54 @@ python -m watch.mlops.aggregate \
     #--rois="KR_R002,KR_R001"
     #--rois="KR_R002"
     #--rois="PE_R001"
+
+
+
+# Big aggregation
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+python -m watch.mlops.aggregate \
+    --pipeline=bas_building_and_depth_vali \
+    --target "
+        /home/joncrall/quicklinks/toothbrush_smart_expt_dvc/aggregate_results/wu/
+/home/joncrall/quicklinks/toothbrush_smart_expt_dvc/aggregate_results/wu/
+    " \
+    --output_dpath="$DVC_EXPT_DPATH/_bigagg/aggregate" \
+    --resource_report=0 \
+    --plot_params="
+        enabled: 0
+        stats_ranking: 0
+        min_variations: 1
+        params_of_interest:
+            - resolved_params.sv_depth_filter.threshold
+            - resolved_params.sv_depth_score.model_fpath
+            - resolved_params.bas_poly.thresh
+            - resolved_params.bas_pxl.channels
+    " \
+    --stdout_report="
+        top_k: 1
+        per_group: 1
+        macro_analysis: 0
+        analyze: 0
+        print_models: True
+        reference_region: final
+    " \
+    --rois="KR_R002,PE_R001,NZ_R001,CH_R001,KR_R001,AE_R001,BR_R002,BR_R004"
+    #--rois="KR_R002,KR_R001"
+    #--rois="KR_R002"
+    #--rois="PE_R001"
+
+    #--eval_nodes="
+    #    - sv_poly_eval
+    #    - bas_poly_eval
+    #    #- bas_pxl_eval
+    #" \
+
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+# Change the "pipeline" to the one you ran MLOPs with.
+python -m watch.mlops.aggregate \
+    --pipeline=bas_building_and_depth_vali \
+    --target "
+        - $DVC_EXPT_DPATH/YOUR_MLOPS_OUTPUT_DIR
+    " \
+    --export_tables=True \
+    --output_dpath="$DVC_EXPT_DPATH/YOUR_MLOPS_OUTPUT_DIR/aggregate"

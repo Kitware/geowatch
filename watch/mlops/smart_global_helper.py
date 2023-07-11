@@ -465,6 +465,28 @@ class SmartGlobalHelper:
                     ub.varied_values(DotDictDataFrame(subset)['resolved_params.bas_poly'].to_dict('records'), min_variations=2).keys()
                     DotDictDataFrame(subset)['resolved_params.bas_pxl']
 
+    def populate_test_dataset_bundles(self, agg):
+        """
+        Attempt to parse out which kwcoco bundle test datasets belonged to
+        """
+        import os
+        test_datasets = agg.table[agg.test_dset_cols]
+        dataset_to_bundle = {}
+        for key, values in test_datasets.to_dict('list').items():
+            for value in ub.unique(values):
+                if isinstance(value, (str, os.PathLike)):
+                    path = ub.Path(value)
+                    bundle_name = path.parent.name
+                    dataset_to_bundle[value] = bundle_name
+
+        new_columns = {}
+        for key in agg.test_dset_cols:
+            new_columns[key] = agg.table[key].apply(lambda x: dataset_to_bundle.get(x, 'unknown'))
+
+        for key, vals in new_columns.items():
+            new_key = key + '_bundle'
+            agg.table[new_key] = vals
+
     def get_delivered_model_params(self):
         delivered_model_params = []
         delivered_model_params += [

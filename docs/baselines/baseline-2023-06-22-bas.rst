@@ -48,6 +48,7 @@ The following is the EVAL11 baseline MLOPs grid.
             bas_poly.inner_window_size:
                 - 1y
             bas_poly.inner_agg_fn:
+                ### NOTE: this should have been mean!
                 - max
             bas_poly.norm_ord:
                 - inf

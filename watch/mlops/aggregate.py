@@ -78,6 +78,27 @@ class AggregateLoader(DataConfig):
     def __post_init__(self):
         from kwutil.util_yaml import Yaml
         self.eval_nodes = Yaml.coerce(self.eval_nodes)
+        ####
+        # Pre-corece patterned inputs for nicer reporting?
+        inputs = self.target
+        if inputs is not None:
+            from ruamel.yaml.composer import ComposerError
+            resolved = []
+            def resolve_item(item):
+                try:
+                    loaded = Yaml.loads(item)
+                except (ComposerError, TypeError):
+                    loaded = item
+                if ub.iterable(loaded):
+                    yield from loaded
+                else:
+                    yield loaded
+            if ub.iterable(inputs):
+                for item in inputs:
+                    resolved.extend(list(resolve_item(item)))
+            else:
+                resolved.extend(list(resolve_item(inputs)))
+            self.target = resolved
 
     @profile
     def coerce_aggregators(config):
@@ -185,6 +206,10 @@ def main(cmdline=True, **kwargs):
     rich.print('config = {}'.format(ub.urepr(config, nl=1)))
 
     eval_type_to_aggregator = config.coerce_aggregators()
+    orig_eval_type_to_aggregator = eval_type_to_aggregator  # NOQA
+
+    if config.eval_nodes is not None:
+        eval_type_to_aggregator = ub.udict(eval_type_to_aggregator) & config.eval_nodes
 
     output_dpath = ub.Path(config['output_dpath'])
     for agg in eval_type_to_aggregator.values():
@@ -268,51 +293,51 @@ def main(cmdline=True, **kwargs):
                     #     # confusor_analysis.main(cmdline=0, )
 
 
+def build_special_columns(agg):
+    from watch.utils import util_pandas
+    resolved_params = util_pandas.DotDictDataFrame(agg.resolved_params)
+    part1 = resolved_params.query_column('batch_size')
+    if len(part1) > 1:
+        # Disambiguate fit and pred batch size
+        part1_ = [p for p in part1 if '_fit' in p]
+        if len(part1_) == 1:
+            part1 = part1_
+
+    part2 = resolved_params.query_column('accumulate_grad_batches')
+    prefix_to_batchsize = ub.group_items(part1, key=lambda x: x.rsplit('.', 1)[0])
+    prefix_to_accumbatch = ub.group_items(part2, key=lambda x: x.rsplit('.', 1)[0])
+
+    for prefix in set(prefix_to_batchsize) | set(prefix_to_accumbatch):
+        cols1 = prefix_to_batchsize.get(prefix, None)
+        cols2 = prefix_to_accumbatch.get(prefix, None)
+        val_accum = 1
+        val_bsize = resolved_params[cols1[0]]
+        if cols2 is not None:
+            assert len(cols2) == 1
+            val_accum = resolved_params[cols2[0]].copy()
+            val_accum[val_accum.isnull()] = 1
+            val_accum[val_accum == 'None'] = 1
+        val_effective_bsize = val_bsize * val_accum
+        agg.table.loc[:, prefix + '.effective_batch_size'] = val_effective_bsize
+
+
+def preprocess_table(agg, table):
+    fillna_cols = table.columns.intersection(agg.resolved_params.columns.union(agg.resolved_params.columns))
+    table.loc[:, fillna_cols] = table.loc[:, fillna_cols].fillna('None')
+    table = table.applymap(lambda x: str(x) if isinstance(x, list) else x)
+    return table
+
+
 @profile
 def build_all_param_plots(agg, rois, config):
     from watch.mlops.smart_global_helper import SMART_HELPER
-    from watch.utils import util_pandas
-
-    def build_special_columns(agg):
-        resolved_params = util_pandas.DotDictDataFrame(agg.resolved_params)
-        part1 = resolved_params.query_column('batch_size')
-        if len(part1) > 1:
-            # Disambiguate fit and pred batch size
-            part1_ = [p for p in part1 if '_fit' in p]
-            if len(part1_) == 1:
-                part1 = part1_
-
-        part2 = resolved_params.query_column('accumulate_grad_batches')
-        prefix_to_batchsize = ub.group_items(part1, key=lambda x: x.rsplit('.', 1)[0])
-        prefix_to_accumbatch = ub.group_items(part2, key=lambda x: x.rsplit('.', 1)[0])
-
-        for prefix in set(prefix_to_batchsize) | set(prefix_to_accumbatch):
-            cols1 = prefix_to_batchsize.get(prefix, None)
-            cols2 = prefix_to_accumbatch.get(prefix, None)
-            val_accum = 1
-            val_bsize = resolved_params[cols1[0]]
-            if cols2 is not None:
-                assert len(cols2) == 1
-                val_accum = resolved_params[cols2[0]].copy()
-                val_accum[val_accum.isnull()] = 1
-                val_accum[val_accum == 'None'] = 1
-            val_effective_bsize = val_bsize * val_accum
-            agg.table.loc[:, prefix + '.effective_batch_size'] = val_effective_bsize
-
-    plot_config = ub.udict(config.plot_params) - {'enabled'}
 
     build_special_columns(agg)
     agg.build()
-
-    def preprocess_table(table):
-        fillna_cols = table.columns.intersection(agg.resolved_params.columns.union(agg.resolved_params.columns))
-        table.loc[:, fillna_cols] = table.loc[:, fillna_cols].fillna('None')
-        table = table.applymap(lambda x: str(x) if isinstance(x, list) else x)
-        return table
-
     single_table = table = agg.table
     single_table = preprocess_table(table)
 
+    plot_config = ub.udict(config.plot_params) - {'enabled'}
     MARK_DELIVERED = plot_config.get('mark_delivered', False)
     if MARK_DELIVERED:
         SMART_HELPER.mark_delivery(single_table)
@@ -322,7 +347,7 @@ def build_all_param_plots(agg, rois, config):
     if rois is not None:
         agg.build_macro_tables(rois)
         macro_table = agg.region_to_tables[agg.primary_macro_region].copy()
-        macro_table = preprocess_table(macro_table)
+        macro_table = preprocess_table(agg, macro_table)
 
         if MARK_DELIVERED:
             SMART_HELPER.mark_delivery(macro_table)
@@ -490,7 +515,6 @@ class ParamPlotter:
             dpath=vantage_dpath,
             size_inches=np.array([6.4, 4.8]) * 1.0,
         )
-
         fig = kwplot.figure(fnum=2, doclf=True)
         ax = sns.scatterplot(data=single_table, x=x, y=y, hue='region_id', legend=False)
         if plotter.plot_config.get('compare_sv_hack', False):
@@ -1367,12 +1391,14 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
 
         Example:
             >>> from watch.mlops.aggregate import *  # NOQA
-            >>> agg = Aggregator.demo(rng=0)
+            >>> agg = Aggregator.demo(rng=0, num=100)
             >>> print(agg.table)
             >>> agg.build()
+            >>> agg.analyze()
+            >>> agg.resource_summary_table()
             >>> agg.report_best()
         """
-        from kwarray import distributions as d
+        from kwarray import distributions as dmod
         import pandas as pd
         import kwarray
         import uuid
@@ -1385,15 +1411,16 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         # Define distributions to generate random rows for our tables.
         distributions = {}
         distributions['params'] = {
-            f'{node}.param1': d.Distribution.random(rng=rng),
-            f'{node}.param2': d.Distribution.random(rng=rng),
-            f'{node}.test_dataset': d.Categorical([
+            f'{node}.param1': dmod.Categorical(['a', 'b', 'c']),
+            f'{node}.param2': dmod.Categorical(['e', 'f', 'g']),
+            f'{node}.param3': dmod.Distribution.random(rng=rng),
+            f'{node}.test_dataset': dmod.Categorical([
                 '/path/to/test_dataset1.kwcoco.zip',
                 '/incompatable/paths/to/another/test_dataset2.kwcoco.zip',
                 'relative_path/to/test_dataset2.kwcoco.zip',
                 'test_dataset3.kwcoco.zip',
             ], rng=rng),
-            f'{node}.package_fpath': d.Categorical([
+            f'{node}.package_fpath': dmod.Categorical([
                 '/path/to/model1.pt',
                 '/incompatable/paths/to/another/model2.pt',
                 'relative_path/to/model3.pt',
@@ -1401,13 +1428,14 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             ], rng=rng)
         }
         distributions['metrics'] = {
-            f'{node}.metric1': d.Distribution.random(rng=rng),
-            f'{node}.metric2': d.Distribution.random(rng=rng),
-            f'{node}.metric3': d.Distribution.random(rng=rng),
+            f'{node}.metric1': dmod.Distribution.random(rng=rng),
+            f'{node}.metric2': dmod.Distribution.random(rng=rng),
+            f'{node}.metric3': dmod.Distribution.random(rng=rng),
         }
         distributions['resources'] = {
-            f'{node}.kwh': d.Uniform(1, 100, rng=rng),
-            f'{node}.co2_kg': d.Uniform(1, 100, rng=rng),
+            f'{node}.duration': dmod.Uniform(1, 100, rng=rng),
+            f'{node}.kwh': dmod.Uniform(1, 100, rng=rng),
+            f'{node}.co2_kg': dmod.Uniform(1, 100, rng=rng),
         }
 
         columns = {}
@@ -1428,6 +1456,11 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             for key2, distri in distris.items():
                 key = f'{key1}.{key2}'
                 columns[key] = distri.sample(num)
+
+        # Sometimes parameters are "auto", which means that they need to be
+        # resolved to get the real value they used.
+        for param_key in distributions['params'].keys():
+            columns['resolved_params.' + param_key] = columns['params.' + param_key]
 
         # For parameters, they need an extra set of columns to indicate if they
         # were specified - or somehow inferred.
@@ -1554,10 +1587,15 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             key = macro_keys[-1]
         return key
 
-    def filterto(agg, models=None, param_hashids=None, index=None, query=None):
+    def filterto(agg, index=None, models=None, param_hashids=None, query=None):
         import numpy as np
         import kwarray
         final_flags = 1
+
+        if index is not None:
+            flags = kwarray.isect_flags(agg.index.index, index)
+            final_flags = np.logical_and(final_flags, flags)
+
         if param_hashids is not None:
             if not ub.iterable(param_hashids):
                 param_hashids = [param_hashids]
@@ -1568,10 +1606,6 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             if not ub.iterable(models):
                 models = [models]
             flags = kwarray.isect_flags(agg.effective_params[agg.model_cols[0]].values, models)
-            final_flags = np.logical_and(final_flags, flags)
-
-        if index is not None:
-            flags = kwarray.isect_flags(agg.index.index, index)
             final_flags = np.logical_and(final_flags, flags)
 
         def our_hacky_query(df, query):
