@@ -2549,3 +2549,149 @@ python -m watch.mlops.schedule_evaluation --params="
     --devices=",1" \
     --backend=tmux --tmux_workers=6 \
     --cache=1 --skip_existing=1 --run=1
+
+
+# Dzyne agg
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+python -m watch.mlops.aggregate \
+    --pipeline=bas_building_and_depth_vali \
+    --target "
+        - $DVC_EXPT_DPATH/aggregate_results/dzyne/bas_poly_eval_2023-07-10T131639-5.csv.zip
+        - $DVC_EXPT_DPATH/aggregate_results/dzyne/bas_poly_eval_2023-07-10T164254-5.csv.zip
+        - $DVC_EXPT_DPATH/aggregate_results/dzyne/sv_poly_eval_2023-07-10T164254-5.csv.zip
+    " \
+    --output_dpath="$DVC_EXPT_DPATH/_tmp/_dzyne_csvs/aggregate" \
+    --resource_report=0 \
+    --eval_nodes="
+        - sv_poly_eval
+        - bas_poly_eval
+    " \
+    --plot_params="
+        enabled: 0
+        stats_ranking: 0
+        min_variations: 1
+        params_of_interest:
+            - resolved_params.sv_depth_filter.threshold
+            - resolved_params.sv_depth_score.model_fpath
+            - resolved_params.bas_poly.thresh
+            - resolved_params.bas_pxl.channels
+    " \
+    --stdout_report="
+        top_k: 1
+        per_group: 1
+        macro_analysis: 0
+        analyze: 0
+        print_models: True
+        reference_region: final
+    " \
+    --rois="KR_R002,PE_R001,NZ_R001,CH_R001,KR_R001,AE_R001,BR_R002,BR_R004"
+
+
+# Pre Agg
+
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+python -m watch.mlops.aggregate \
+    --pipeline=bas_building_and_depth_vali \
+    --target "
+        - $DVC_EXPT_DPATH/_mlops_eval10_baseline
+        - $DVC_EXPT_DPATH/_drop7_nowinter_baseline_joint_bas_sc
+        - $DVC_EXPT_DPATH/_drop7_nowinter_baseline
+        - $DVC_EXPT_DPATH/_split6_toothbrush_meanyear
+        - $DVC_EXPT_DPATH/_timekernel_test_drop4
+        - $DVC_EXPT_DPATH/_toothbrush_eval_split6_MeanYear10GSD
+        - $DVC_EXPT_DPATH/_toothbrush_split6_landcover_MeanYear10GSD-V2
+    " \
+    --output_dpath="$DVC_EXPT_DPATH/_preagg_toothbrush/aggregate" \
+    --export_tables=True
+
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+python -m watch.mlops.aggregate \
+    --pipeline=bas_building_and_depth_vali \
+    --target "
+        - $DVC_EXPT_DPATH/_namek_sv_sweep
+        - $DVC_EXPT_DPATH/_timekernel_test_drop4
+        - $DVC_EXPT_DPATH/_toothbrush_drop7_nowinter
+        - $DVC_EXPT_DPATH/_namek_split6_landcover_MeanYear10GSD-V2
+        - $DVC_EXPT_DPATH/_namek_split1_eval_filter1_MeanYear10GSD-V2
+        - $DVC_EXPT_DPATH/_namek_split1_eval_filter1_MeanYear10GSD
+        - $DVC_EXPT_DPATH/_namek_split1_eval_filter1
+        - $DVC_EXPT_DPATH/_namek_preeval12
+        - $DVC_EXPT_DPATH/_namek_eval
+        - $DVC_EXPT_DPATH/_mlops_eval10_baseline
+    " \
+    --output_dpath="$DVC_EXPT_DPATH/_preagg_namek/aggregate" \
+    --export_tables=True
+
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+python -m watch.mlops.aggregate \
+    --pipeline=bas_building_and_depth_vali \
+    --target "
+        - $DVC_EXPT_DPATH/_horologic_sv_sweep
+    " \
+    --output_dpath="$DVC_EXPT_DPATH/_horologic_sv_sweep/aggregate" \
+    --export_tables=True
+
+
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+python -m watch.mlops.aggregate \
+    --pipeline=bas_building_and_depth_vali \
+    --target "
+        - $DVC_EXPT_DPATH/_ooo_split2_eval_filter1_MeanYear10GSD-V2
+    " \
+    --output_dpath="$DVC_EXPT_DPATH/_ooo_split2_eval_filter1_MeanYear10GSD-V2/aggregate" \
+    --export_tables=True
+
+
+# Big aggregation
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+python -m watch.mlops.aggregate \
+    --pipeline=bas_building_and_depth_vali \
+    --target "
+        - $DVC_EXPT_DPATH/aggregate_results/dzyne/bas_poly_eval_2023-07-10T131639-5.csv.zip
+        - $DVC_EXPT_DPATH/aggregate_results/dzyne/bas_poly_eval_2023-07-10T164254-5.csv.zip
+        - $DVC_EXPT_DPATH/aggregate_results/dzyne/sv_poly_eval_2023-07-10T164254-5.csv.zip
+        - $DVC_EXPT_DPATH/aggregate_results/horologic/bas_poly_eval_2023-07-10T155903-5.csv.zip
+        - $DVC_EXPT_DPATH/aggregate_results/horologic/sv_poly_eval_2023-07-10T155903-5.csv.zip
+        - $DVC_EXPT_DPATH/aggregate_results/namek/bas_poly_eval_2023-04-19T113433-5.csv.zip
+        - $DVC_EXPT_DPATH/aggregate_results/namek/bas_poly_eval_2023-07-10T161857-5.csv.zip
+        - $DVC_EXPT_DPATH/aggregate_results/namek/bas_pxl_eval_2023-04-19T113433-5.csv.zip
+        - $DVC_EXPT_DPATH/aggregate_results/namek/bas_pxl_eval_2023-07-10T161857-5.csv.zip
+        - $DVC_EXPT_DPATH/aggregate_results/namek/sv_poly_eval_2023-07-10T161857-5.csv.zip
+        - $DVC_EXPT_DPATH/aggregate_results/toothbrush/bas_poly_eval_2023-04-19T105718-5.csv.zip
+        - $DVC_EXPT_DPATH/aggregate_results/toothbrush/bas_poly_eval_2023-07-10T150132-5.csv.zip
+        - $DVC_EXPT_DPATH/aggregate_results/toothbrush/bas_pxl_eval_2023-04-19T105718-5.csv.zip
+        - $DVC_EXPT_DPATH/aggregate_results/toothbrush/bas_pxl_eval_2023-07-10T150132-5.csv.zip
+        - $DVC_EXPT_DPATH/aggregate_results/toothbrush/sv_poly_eval_2023-04-19T105718-5.csv.zip
+        - $DVC_EXPT_DPATH/aggregate_results/toothbrush/sv_poly_eval_2023-07-10T150132-5.csv.zip
+        - $DVC_EXPT_DPATH/aggregate_results/uconn/COLD_candidates_0705.zip
+        #- $DVC_EXPT_DPATH/aggregate_results/uconn/bas_poly_eval_2023-06-20T140324-5_COLD.csv
+    " \
+    --output_dpath="$DVC_EXPT_DPATH/_bigagg/aggregate" \
+    --resource_report=0 \
+    --eval_nodes="
+        - sv_poly_eval
+        - bas_poly_eval
+        #- bas_pxl_eval
+    " \
+    --plot_params="
+        enabled: 0
+        stats_ranking: 0
+        min_variations: 1
+        params_of_interest:
+            - resolved_params.sv_depth_filter.threshold
+            - resolved_params.sv_depth_score.model_fpath
+            - resolved_params.bas_poly.thresh
+            - resolved_params.bas_pxl.channels
+    " \
+    --stdout_report="
+        top_k: 1
+        per_group: 1
+        macro_analysis: 0
+        analyze: 0
+        print_models: True
+        reference_region: final
+    " \
+    --rois="KR_R002,PE_R001,NZ_R001,CH_R001,KR_R001,AE_R001,BR_R002,BR_R004"
+    #--rois="KR_R002,KR_R001"
+    #--rois="KR_R002"
+    #--rois="PE_R001"

@@ -54,13 +54,12 @@ try:
 except ImportError:
     profile = ub.identity
 
-# import xdev
-# xdev.make_warnings_print_tracebacks()
-
 
 class AggregateLoader(DataConfig):
     """
-    Just the part of the config related to loading
+    Base config that will be mixed in to the :class:`AggregateEvluationConfig`.
+    This config just defines parts related to constructing the
+    :class:`Aggregator` objects (i.e.  loading the tables).
     """
 
     target = Value(None, help=ub.paragraph(
@@ -569,6 +568,7 @@ class ParamPlotter:
         import kwplot
         import kwarray
         import pandas as pd
+        import rich
         from kwcoco.metrics.drawing import concice_si_display
         from watch.utils import util_pandas
         from watch.utils import util_kwplot
@@ -617,6 +617,14 @@ class ParamPlotter:
         if params_of_interest is not None:
             chosen_params = params_of_interest
 
+            valid_params_of_interest = list(resolved_params.columns.intersection(params_of_interest))
+            missing = set(params_of_interest) - set(valid_params_of_interest)
+            chosen_params = valid_params_of_interest
+            if missing:
+                rich.print('[yellow]WARNING: unknown params of interest!')
+                rich.print('missing: {}'.format(ub.repr2(missing)))
+                print('chosen_params = {}'.format(ub.urepr(chosen_params, nl=1)))
+
         # TODO: cleanup logic
         DO_STAT_ANALYSIS = plotter.plot_config.get('stats_ranking', False)
         if DO_STAT_ANALYSIS:
@@ -647,7 +655,7 @@ class ParamPlotter:
             param_name_to_stats = {}
 
         # ranked_params = ['bas_poly_eval.params.bas_pxl.package_fpath']
-        if len(chosen_params):
+        if not len(chosen_params):
             print('Warning: no chosen params')
 
         def shrink_param_names(param_histogram):
@@ -809,6 +817,8 @@ class ParamPlotter:
                 util_kwplot.dataframe_table(lut_style, param_fpath, title=param_title)
             ub.symlink(real_path=param_fpath, link_path=vantage_fpath, overwrite=True)
 
+        rich.print(f'Dpath: [link={plotter.agg_group_dpath}]{plotter.agg_group_dpath}[/link]')
+
 
 def automated_analysis(eval_type_to_aggregator, config):
     timestamp = ub.timestamp()
@@ -894,10 +904,9 @@ def generic_analysis(agg0, macro_groups=None, selector=None):
     print('chosen_macro_rois = {}'.format(ub.urepr(chosen_macro_rois, nl=1)))
     agg0_.build_macro_tables(chosen_macro_rois)
 
-    agg_best, param_lut = agg0_.report_best(top_k=1)
-    params_of_interest = pd.concat(agg_best.values())['param_hashid'].value_counts()
-
-    params_of_interest = list(param_lut.keys())
+    report0 = agg0_.report_best(top_k=1)
+    params_of_interest = pd.concat(report0.region_id_to_summary.values())['param_hashid'].value_counts()
+    params_of_interest = list(report0.top_param_lut.keys())
     n1 = len(params_of_interest)
     n2 = len(agg0_.index['param_hashid'])
     print(f'Restrict to {n1} / {n2} top parameters')
@@ -907,18 +916,27 @@ def generic_analysis(agg0, macro_groups=None, selector=None):
     models_of_interest = subagg1.effective_params[subagg1.model_cols].value_counts()
     print('models_of_interest = {}'.format(ub.urepr(models_of_interest, nl=1)))
 
-    agg1_best, param_lut1 = subagg1.report_best(top_k=1)
-    param_hashid = agg1_best[hash_regions(selector)]['param_hashid'].iloc[0]
+    report1 = subagg1.report_best(top_k=1)
+    param_hashid = report1.region_id_to_summary[hash_regions(selector)]['param_hashid'].iloc[0]
     params_of_interest1 = [param_hashid]
-    # params_of_interest1 = [list(agg1_best.values())[-1]['param_hashid'].iloc[0]]
+    # params_of_interest1 = [list(report1.region_id_to_summary.values())[-1]['param_hashid'].iloc[0]]
 
     n1 = len(params_of_interest1)
     n2 = len(agg0_.index['param_hashid'])
     print(f'Restrict to {n1} / {n2} top parameters')
     subagg2 = agg0_.filterto(param_hashids=params_of_interest1)
     subagg2.build_macro_tables(chosen_macro_rois)
-    agg2_best, param_lut2 = subagg2.report_best(top_k=1)  # NOQA
+    report2 = subagg2.report_best(top_k=1)  # NOQA
     return subagg2
+
+
+class TopResultsReport:
+    """
+    Object to hold the result of :func:`Aggregator.report_best`.
+    """
+    def __init__(self, region_id_to_summary, top_param_lut):
+        self.top_param_lut = top_param_lut
+        self.region_id_to_summary = region_id_to_summary
 
 
 class AggregatorAnalysisMixin:
@@ -1011,7 +1029,7 @@ class AggregatorAnalysisMixin:
         # analysis.results
         analysis.analysis()
 
-    def report_best(agg, top_k=3, shorten=True, per_group=2, verbose=1, reference_region=None, print_models=False):
+    def report_best(agg, top_k=3, shorten=True, per_group=2, verbose=1, reference_region=None, print_models=False) -> TopResultsReport:
         """
         Report the top k pointwise results for each region / macro-region.
 
@@ -1032,9 +1050,9 @@ class AggregatorAnalysisMixin:
                 macro region). Can be set to the special key "final" to choose
                 the last region, which is typically a macro region.
 
-
         Returns:
-            Tuple[T1, T2]:
+            TopResultsReport:
+                contains:
                 region_id_to_summary (T1=Dict[str, DataFrame]):
                     mapping from region_id to top k results
                 top_param_lut (T2=Dict[str, DataFrame]):
@@ -1153,13 +1171,14 @@ class AggregatorAnalysisMixin:
                     rich.print('')
 
         if print_models:
+            import itertools as it
+            from kwutil.util_yaml import Yaml
             # FIXME: handle macro regions
             tocombine_indexes = []
             for region_id, summary in region_id_to_summary.items():
                 if not region_id.startswith('macro_'):
                     tocombine_indexes.append(list(summary.index))
 
-            import itertools as it
             top_indexes = list(ub.oset([x for x in ub.flatten(
                 it.zip_longest(*tocombine_indexes)) if x is not None]))
 
@@ -1195,7 +1214,6 @@ class AggregatorAnalysisMixin:
             # flags = ~np.array(['invariants' in chan for chan in chosen_table['resolved_params.bas_pxl_fit.channels']])
             # chosen_table = chosen_table[flags]
 
-            from kwutil.util_yaml import Yaml
             chosen_models = list(ub.oset(chosen_table[model_col].tolist()))
             shortlist_text = Yaml.dumps(chosen_models)
             print('Model shortlist (top of the list is a higher scoring model):')
@@ -1208,7 +1226,7 @@ class AggregatorAnalysisMixin:
             #     new_models_fpath = ub.Path('$HOME/code/watch/dev/reports/unnamed_shortlist.yaml').expand()
             # new_models_fpath.write_text(shortlist_text)
 
-        return region_id_to_summary, top_param_lut
+        return TopResultsReport(region_id_to_summary, top_param_lut)
 
     def resource_summary_table(agg):
         import pandas as pd
@@ -1290,6 +1308,30 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
                  type=None,
                  primary_metric_cols='auto',
                  display_metric_cols='auto'):
+        """
+        Args:
+            table (pandas.DataFrame):
+                a table with a specific column structure (e.g. built by the
+                aggregate_loader). See the demo for an example. Needs more docs
+                here.
+
+            output_dpath (None | PathLike):
+                Path where output aggregate results should be written
+
+            type (str | None):
+                should not need to specify this anymore. This should just be
+                the "node" column in the table.
+
+            primary_metric_cols (List[str] | Literal['auto']):
+                if "auto", then the "type" must be known by the global helpers.
+                Otherwise list the metric columns in the priority that should
+                be used to rank the rows.
+
+            display_metric_cols (List[str] | Literal['auto']):
+                if "auto", then the "type" must be known by the global helpers.
+                Otherwise list the metric columns in the order they should be
+                displayed (after the primary metrics).
+        """
         agg.output_dpath = output_dpath
         agg.table = table
         agg.type = type
@@ -1299,18 +1341,119 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             'primary_metric_cols': primary_metric_cols,
         }
 
+        # This attribute will hold columns that store paths to model files
+        agg.model_cols = None
+
+        # This attribute will hold columns that store paths test datasets
+        agg.test_dset_cols = None
+
+        agg.hashid_to_params = None
+        agg.mappings = None
+        agg.effective_params = None
+        agg.macro_key_to_regions = None
+        agg.region_to_tables = None
+        agg.macro_compatible = None
+
+    @classmethod
+    def demo(cls, num=10, rng=None):
+        """
+        Build a demo aggregator for testing.
+
+        This gives an example of the very particular column format that is
+        expected as input the the aggregator.
+
+        Args:
+            num (int): number of rows
+
+        Example:
+            >>> from watch.mlops.aggregate import *  # NOQA
+            >>> agg = Aggregator.demo(rng=0)
+            >>> print(agg.table)
+            >>> agg.build()
+            >>> agg.report_best()
+        """
+        from kwarray import distributions as d
+        import pandas as pd
+        import kwarray
+        import uuid
+        rng = kwarray.ensure_rng(rng)
+
+        # An aggregator needs to correspond to a specific "evaluation node" in
+        # some DAG.
+        node = 'demo_node'
+
+        # Define distributions to generate random rows for our tables.
+        distributions = {}
+        distributions['params'] = {
+            f'{node}.param1': d.Distribution.random(rng=rng),
+            f'{node}.param2': d.Distribution.random(rng=rng),
+            f'{node}.test_dataset': d.Categorical([
+                '/path/to/test_dataset1.kwcoco.zip',
+                '/incompatable/paths/to/another/test_dataset2.kwcoco.zip',
+                'relative_path/to/test_dataset2.kwcoco.zip',
+                'test_dataset3.kwcoco.zip',
+            ], rng=rng),
+            f'{node}.package_fpath': d.Categorical([
+                '/path/to/model1.pt',
+                '/incompatable/paths/to/another/model2.pt',
+                'relative_path/to/model3.pt',
+                'model4.pt',
+            ], rng=rng)
+        }
+        distributions['metrics'] = {
+            f'{node}.metric1': d.Distribution.random(rng=rng),
+            f'{node}.metric2': d.Distribution.random(rng=rng),
+            f'{node}.metric3': d.Distribution.random(rng=rng),
+        }
+        distributions['resources'] = {
+            f'{node}.kwh': d.Uniform(1, 100, rng=rng),
+            f'{node}.co2_kg': d.Uniform(1, 100, rng=rng),
+        }
+
+        columns = {}
+
+        columns['node'] = [node] * num
+
+        # We currently expect something called a "region_id" which corresponds
+        # roughly to a test dataset, but abstracts away specific pre-processing
+        # of that dataset. This is hard coded for SMART, but should be
+        # generalized later.
+        columns['region_id'] = ['region1'] * num
+
+        columns[f'context.{node}.uuid'] = [str(uuid.uuid4()) for _ in range(num)]
+        columns[f'machine.{node}.host'] = ['pc1'] * num
+
+        # Sample from the distributions to construct the demo rows
+        for key1, distris in distributions.items():
+            for key2, distri in distris.items():
+                key = f'{key1}.{key2}'
+                columns[key] = distri.sample(num)
+
+        # For parameters, they need an extra set of columns to indicate if they
+        # were specified - or somehow inferred.
+        for param_key in distributions['params'].keys():
+            columns['specified.params.' + param_key] = [1] * num
+
+        table = pd.DataFrame(columns)
+
+        primary_metric_cols = [f'metrics.{node}.metric1']
+        display_metric_cols = [f'metrics.{node}.metric3']
+        agg = cls(table, primary_metric_cols=primary_metric_cols,
+                  display_metric_cols=display_metric_cols)
+        return agg
+
     # def __export(agg):
     #     ...
-
     #     agg.table
-
     #     fname = f'{agg.type}_{agg.output_dpath.parent.name}.csv'
     #     agg.table.to_csv(fpath, index_label=False)
-
     #     fpath = 'bas_results_2023-01.csv.zip'
     #     agg.table.to_csv(fpath, index_label=False)
 
     def build(agg):
+        """
+        Inspect the aggregator's table and build supporting information
+        """
         from watch.mlops.smart_global_helper import SMART_HELPER
         from watch.utils import util_pandas
         agg.__dict__.update(**agg.config)
@@ -1342,16 +1485,20 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
 
         if agg.type is None:
             agg.type = agg.table['node'].iloc[0]
-        _primary_metrics_suffixes, _display_metrics_suffixes = SMART_HELPER._default_metrics(agg)
 
-        if agg.primary_metric_cols == 'auto':
-            # agg.primary_metric_cols = util_pandas.pandas_suffix_columns(  # fixme sorting
-            #     agg.metrics, _primary_metrics_suffixes)
-            agg.primary_metric_cols = [f'metrics.{agg.type}.{s}' for s in _primary_metrics_suffixes]
-        if agg.display_metric_cols == 'auto':
-            # agg.display_metric_cols = util_pandas.pandas_suffix_columns(  # fixme sorting
-            #     agg.metrics, _display_metrics_suffixes)
-            agg.display_metric_cols = [f'metrics.{agg.type}.{s}' for s in _display_metrics_suffixes]
+        metrics_prefix = f'metrics.{agg.type}'
+        # params_prefix = f'params.{agg.type}'
+        if agg.primary_metric_cols == 'auto' or agg.display_metric_cols == 'auto':
+            _primary_metrics_suffixes, _display_metrics_suffixes = SMART_HELPER._default_metrics(agg)
+
+            if agg.primary_metric_cols == 'auto':
+                # agg.primary_metric_cols = util_pandas.pandas_suffix_columns(  # fixme sorting
+                #     agg.metrics, _primary_metrics_suffixes)
+                agg.primary_metric_cols = [f'{metrics_prefix}.{s}' for s in _primary_metrics_suffixes]
+            if agg.display_metric_cols == 'auto':
+                # agg.display_metric_cols = util_pandas.pandas_suffix_columns(  # fixme sorting
+                #     agg.metrics, _display_metrics_suffixes)
+                agg.display_metric_cols = [f'{metrics_prefix}.{s}' for s in _display_metrics_suffixes]
 
         _model_suffixes = ['package_fpath']
         _testdset_suffixes = ['test_dataset', 'crop_src_fpath']
@@ -1360,6 +1507,22 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             agg.requested_params, _model_suffixes)
         agg.test_dset_cols = util_pandas.pandas_suffix_columns(
             agg.requested_params, _testdset_suffixes)
+
+        # def _ensure_prefixed_names(names, prefix):
+        #     """
+        #     If names are given without the appropriate prefix, then append it.
+        #     """
+        #     prefix_ = prefix + '.'
+        #     new_names = []
+        #     for c in names:
+        #         if not c.startswith(prefix_):
+        #             c = prefix_ + c
+        #         new_names.append(c)
+        #     return new_names
+        # agg.display_metric_cols = _ensure_prefixed_names(agg.display_metric_cols, metrics_prefix)
+        # agg.primary_metric_cols = _ensure_prefixed_names(agg.primary_metric_cols, metrics_prefix)
+        # agg.model_cols = _ensure_prefixed_names(agg.model_cols, 'params')
+        # agg.test_dset_cols = _ensure_prefixed_names(agg.test_dset_cols, 'params')
 
         # util_pandas.pandas_suffix_columns(agg.resolved_params, _testdset_suffixes)
 
@@ -1489,6 +1652,11 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
     def build_effective_params(agg):
         """
         Consolodate / cleanup / expand information
+
+        The "effective params" normalize the full set of given parameters so we
+        can compute more consistent param_hashid. This is done by condensing
+        paths (which is a debatable design decision) as well as mapping
+        non-hashable data to strings.
         """
         import pandas as pd
         from watch.utils import util_pandas
@@ -1497,6 +1665,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
 
         HACK_FIX_JUNK_PARAMS = True
         if HACK_FIX_JUNK_PARAMS:
+            # hacks to remove junk params that happen to be in our tables
             junk_suffixes = ['space_basale']
             junk_cols = util_pandas.pandas_suffix_columns(effective_params, junk_suffixes)
             effective_params = effective_params.drop(junk_cols, axis=1)
@@ -1526,23 +1695,22 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             list(effective_params.groupby(param_cols, dropna=False))
         except Exception:
             effective_params = effective_params.applymap(lambda x: str(x) if isinstance(x, list) else x)
+
         for param_vals, group in effective_params.groupby(param_cols, dropna=False):
             # Further subdivide the group so each row only computes its hash
             # with the parameters that were included in its row
-            for param_flags, subgroup in is_param_included.loc[group.index].groupby(param_cols, dropna=False):
+            is_group_included = is_param_included.loc[group.index]
+            for param_flags, subgroup in is_group_included.groupby(param_cols, dropna=False):
                 valid_param_cols = list(ub.compress(param_cols, param_flags))
                 valid_param_vals = list(ub.compress(param_vals, param_flags))
                 unique_params = ub.dzip(valid_param_cols, valid_param_vals)
                 hashid = hash_param(unique_params, version=1)
                 hashid_to_params[hashid] = unique_params
                 hashids_v1.loc[subgroup.index] = hashid
-                # hashids_v0.loc[subgroup.index] = hash_param(unique_params, version=0)
 
         # Update the index with an effective parameter hashid
         agg.index.loc[hashids_v1.index, 'param_hashid'] = hashids_v1
         agg.table.loc[hashids_v1.index, 'param_hashid'] = hashids_v1
-        # agg.index.loc[hashids_v0.index, 'param_hashid_v0'] = hashids_v0
-
         return effective_params, mappings, hashid_to_params
 
     def find_macro_comparable(agg):

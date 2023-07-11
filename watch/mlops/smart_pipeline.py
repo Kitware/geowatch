@@ -1184,6 +1184,23 @@ def make_smart_pipeline(name):
         >>> dag.print_graphs()
         >>> dag.inspect_configurables()
 
+        >>> from watch.mlops.smart_pipeline import *  # NOQA
+        >>> dag = make_smart_pipeline('joint_bas_sv_sc')
+        >>> dag.print_graphs()
+        >>> dag.inspect_configurables()
+
+    Ignore:
+        # Make a graphviz illustration of the DAG
+        from watch.utils import util_yaml
+        # Change the labels a bit
+        for node, data in dag.proc_graph.nodes(data=True):
+            data['label'] = node
+        for node, data in dag.io_graph.nodes(data=True):
+            data['label'] = node
+        from graphid import util
+        util.util_graphviz.dump_nx_ondisk(dag.proc_graph, 'proc_graph.png')
+        util.util_graphviz.dump_nx_ondisk(dag.io_graph, 'io_graph.png')
+
     Example:
         >>> from watch.mlops.smart_pipeline import *  # NOQA
         >>> dag = make_smart_pipeline('bas_depth_vali')
@@ -1194,6 +1211,11 @@ def make_smart_pipeline(name):
     from functools import partial
     node_makers = {
         'joint_bas_sc': partial(make_smart_pipeline_nodes, site_crops=True),
+
+        'joint_bas_sv_sc': partial(make_smart_pipeline_nodes, site_crops=True,
+                                   building_validation=True,
+                                   depth_validation=True),
+
         'joint_bas_sc_nocrop': partial(make_smart_pipeline_nodes, site_crops=False),
         'crop_sc': partial(make_smart_pipeline_nodes, with_bas=False, site_crops=True),
         'sc': sc_nodes,
