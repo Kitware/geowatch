@@ -52,8 +52,8 @@ def main():
 
 
 def run_dino_sv(config):
-    from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress
-    from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress
+    from watch.cli.smartflow_ingress import smartflow_ingress
+    from watch.cli.smartflow_egress import smartflow_egress
     from watch.utils.util_framework import download_region, determine_region_id
     from kwutil.util_yaml import Yaml
     from watch.utils import util_framework
@@ -69,13 +69,15 @@ def run_dino_sv(config):
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
     ingress_dir = ub.Path('/tmp/ingress')
-    ingress_kwcoco_path = baseline_framework_kwcoco_ingress(
+    ingressed_assets = smartflow_ingress(
+        ['depth_filtered_sites',
+         'depth_filtered_regions',
+         'cropped_kwcoco_for_sv',
+         'cropped_kwcoco_for_sv_assets'],
         input_path,
         ingress_dir,
         aws_profile,
         dryrun)
-
-    print(f'ingress_kwcoco_path={ingress_kwcoco_path}')
 
     # # 2. Download and prune region file
     print("* Downloading and pruning region file *")
@@ -98,14 +100,14 @@ def run_dino_sv(config):
     # site validation, the path to the region / sites directories should be
     # parameters passed to us from the DAG (so we can shift the order in
     # which operations are applied at the DAG level)
-    input_region_dpath = ingress_dir / 'depth_filtered_regions'
-    input_sites_dpath = ingress_dir / 'depth_filtered_sites'
+    input_region_dpath = ingressed_assets['depth_filtered_regions']
+    input_sites_dpath = ingressed_assets['depth_filtered_sites']
     input_region_fpath = input_region_dpath / f'{region_id}.geojson'
 
     # NOTE; we want to be using the output of SV crop, not necesarilly the the
     # dzyne output referenced by ingress_kwcoco_path
     # input_kwcoco_fpath = ingress_kwcoco_path
-    input_kwcoco_fpath = ingress_dir / "cropped_kwcoco_for_sv.json"
+    input_kwcoco_fpath = ingressed_assets['cropped_kwcoco_for_sv']
 
     # FIXME: these output directories for region / site models should be passed
     # to us from the DAG
@@ -196,13 +198,16 @@ def run_dino_sv(config):
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)
     print("* Egressing KWCOCO dataset and associated STAC item *")
-    baseline_framework_kwcoco_egress(dino_boxes_kwcoco_path,
-                                     local_region_path,
-                                     output_path,
-                                     outbucket,
-                                     aws_profile=None,
-                                     dryrun=False,
-                                     newline=False)
+    ingressed_assets['sv_out_site_models'] = output_sites_dpath
+    ingressed_assets['sv_out_region_models'] = output_region_dpath
+    ingressed_assets['sv_dino_boxes_kwcoco'] = dino_boxes_kwcoco_path
+    smartflow_egress(ingressed_assets,
+                     local_region_path,
+                     output_path,
+                     outbucket,
+                     aws_profile=None,
+                     dryrun=False,
+                     newline=False)
 
 
 if __name__ == "__main__":

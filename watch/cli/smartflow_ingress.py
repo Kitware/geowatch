@@ -34,6 +34,10 @@ def main():
                         action='store_true',
                         default=False,
                         help='Show progress for AWS CLI commands')
+    parser.add_argument('--dont-error-on-missing-asset',
+                        action='store_true',
+                        default=False,
+                        help="Don't raise error on missing asset, just warn")
 
     smartflow_ingress(**vars(parser.parse_args()))
 
@@ -45,7 +49,8 @@ def smartflow_ingress(input_path,
                       outdir,
                       aws_profile=None,
                       dryrun=False,
-                      show_progress=False):
+                      show_progress=False,
+                      dont_error_on_missing_asset=False):
 
     from watch.utils.util_framework import AWS_S3_Command
     os.makedirs(outdir, exist_ok=True)
@@ -86,7 +91,11 @@ def smartflow_ingress(input_path,
         try:
             asset_href = kwcoco_stac_item_assets[asset]
         except KeyError:
-            raise RuntimeError("Expecting asset named '{}' in input KWCOCO STAC item".format(asset))  # noqa
+            missing_asset_str = "Expecting asset named '{}' in input KWCOCO STAC item".format(asset)  # noqa
+            if dont_error_on_missing_asset:
+                print("* Warning: {}".format(missing_asset_str))
+            else:
+                raise RuntimeError(missing_asset_str)  # noqa
 
         asset_basename = os.path.basename(asset_href)
         asset_outpath = os.path.join(outdir, asset_basename)

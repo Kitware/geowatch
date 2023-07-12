@@ -76,7 +76,7 @@ def main():
 
 def run_bas_fusion_for_baseline(config):
     from watch.cli.smartflow_ingress import smartflow_ingress
-    from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress
+    from watch.cli.smartflow_egress import smartflow_egress
     from watch.cli.concat_kwcoco_videos import concat_kwcoco_datasets
     from watch.utils.util_framework import download_region, determine_region_id
     from watch.tasks.fusion.predict import predict
@@ -298,13 +298,15 @@ def run_bas_fusion_for_baseline(config):
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)
     print("* Egressing KWCOCO dataset and associated STAC item *")
-    baseline_framework_kwcoco_egress(bas_fusion_kwcoco_path,
-                                     local_region_path,
-                                     output_path,
-                                     outbucket,
-                                     aws_profile=None,
-                                     dryrun=False,
-                                     newline=False)
+    ingressed_assets['cropped_region_models_bas'] = cropped_region_models_outdir
+    ingressed_assets['cropped_site_models_bas'] = cropped_site_models_outdir
+    smartflow_egress(ingressed_assets,
+                     local_region_path,
+                     config.output_path,
+                     config.outbucket,
+                     aws_profile=None,
+                     dryrun=False,
+                     newline=False)
 
 
 if __name__ == "__main__":

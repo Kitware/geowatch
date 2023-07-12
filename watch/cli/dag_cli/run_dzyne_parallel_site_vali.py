@@ -78,8 +78,8 @@ def main():
 
 
 def run_dzyne_parallel_site_vali_for_baseline(config):
-    from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress
-    from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress
+    from watch.cli.smartflow_ingress import smartflow_ingress
+    from watch.cli.smartflow_egress import smartflow_egress
     # from watch.cli.concat_kwcoco_videos import concat_kwcoco_datasets
     from watch.utils.util_framework import download_region, determine_region_id
     # from watch.tasks.fusion.predict import predict
@@ -95,12 +95,15 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
     ingress_dir = ub.Path('/tmp/ingress')
-    ingress_kwcoco_path = baseline_framework_kwcoco_ingress(
+    ingressed_assets = smartflow_ingress(
         input_path,
+        ['cropped_kwcoco_for_sv',
+         'cropped_kwcoco_for_sv_assets',
+         'cropped_site_models_bas',
+         'cropped_region_models_bas'],
         ingress_dir,
         aws_profile,
         dryrun)
-    print(f'ingress_kwcoco_path={ingress_kwcoco_path}')
 
     # # 2. Download and prune region file
     print("* Downloading and pruning region file *")
@@ -149,9 +152,10 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
 
     # TODO: The input / output site and region paths should be specified as
     # parameters passed to us by the DAG.
-    input_kwcoco_fpath = ingress_dir / "cropped_kwcoco_for_sv.json"
-    input_sites_dpath = ingress_dir / 'cropped_site_models_bas'
-    input_region_fpath = ingress_dir / f'cropped_region_models_bas/{region_id}.geojson'
+    input_kwcoco_fpath = ingressed_assets['cropped_kwcoco_for_sv']
+    input_sites_dpath = ingressed_assets['cropped_site_models_bas']
+    input_region_dpath = ingressed_assets['cropped_region_models_bas']
+    input_region_fpath = input_region_dpath / f'{region_id}.geojson'
     # input_region_fpath = local_region_path  # is this right?
 
     scored_kwcoco_fpath = ingress_dir / "poly_depth_scored.kwcoco.zip"
@@ -218,13 +222,15 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)
     print("* Egressing KWCOCO dataset and associated STAC item *")
-    baseline_framework_kwcoco_egress(scored_kwcoco_fpath,
-                                     local_region_path,
-                                     output_path,
-                                     outbucket,
-                                     aws_profile=aws_profile,
-                                     dryrun=dryrun,
-                                     newline=False)
+    ingressed_assets['depth_filtered_sites'] = output_sites_dpath
+    ingressed_assets['depth_filtered_regions'] = output_region_dpath
+    smartflow_egress(ingressed_assets,
+                     local_region_path,
+                     output_path,
+                     outbucket,
+                     aws_profile=aws_profile,
+                     dryrun=dryrun,
+                     newline=False)
 
 
 if __name__ == "__main__":

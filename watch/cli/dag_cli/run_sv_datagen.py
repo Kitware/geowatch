@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import subprocess
-from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress
-from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress
+from watch.cli.smartflow_ingress import smartflow_ingress
+from watch.cli.smartflow_egress import smartflow_egress
 from watch.utils.util_framework import download_region
 import ubelt as ub
 import scriptconfig as scfg
@@ -81,8 +81,11 @@ def run_generate_sv_cropped_kwcoco(input_path,
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
     ingress_dir = ub.Path('/tmp/ingress')
-    _ = baseline_framework_kwcoco_ingress(
+    ingressed_assets = smartflow_ingress(
         input_path,
+        ['kwcoco_for_sc',
+         'cropped_region_models_bas',
+         'cropped_site_models_bas'],
         ingress_dir,
         aws_profile,
         dryrun)
@@ -102,8 +105,8 @@ def run_generate_sv_cropped_kwcoco(input_path,
         raise RuntimeError("Couldn't parse 'region_id' from input region file")
 
     # Paths to inputs generated in previous pipeline steps
-    bas_region_path = ingress_dir / f'cropped_region_models_bas/{region_id}.geojson'
-    ta1_sc_kwcoco_path = ingress_dir /  'kwcoco_for_sc.json'
+    bas_region_path = ingressed_assets['cropped_region_models_bas'] / f'{region_id}.geojson'
+    ta1_sc_kwcoco_path = ingressed_assets['kwcoco_for_sc']
 
     # 4. Crop ingress KWCOCO dataset to region for SV
     print("* Cropping KWCOCO dataset to region for SV*")
@@ -123,13 +126,15 @@ def run_generate_sv_cropped_kwcoco(input_path,
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)
     print("* Egressing KWCOCO dataset and associated STAC item *")
-    baseline_framework_kwcoco_egress(ta1_sv_cropped_kwcoco_path,
-                                     local_region_path,
-                                     output_path,
-                                     outbucket,
-                                     aws_profile=None,
-                                     dryrun=False,
-                                     newline=False)
+    ingressed_assets['cropped_kwcoco_for_sv'] = ta1_sv_cropped_kwcoco_path
+    ingressed_assets['cropped_kwcoco_for_sv_assets'] = ingress_dir / f'{region_id}'
+    smartflow_egress(ingressed_assets,
+                     local_region_path,
+                     output_path,
+                     outbucket,
+                     aws_profile=None,
+                     dryrun=False,
+                     newline=False)
 
 
 if __name__ == "__main__":
