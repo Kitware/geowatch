@@ -9,7 +9,7 @@ import scriptconfig as scfg
 import ubelt as ub
 
 
-class GeojsonSiteStatConfig(scfg.DataConfig):
+class GeojsonSiteStatsConfig(scfg.DataConfig):
     """
     Compute statistics about geojson sites.
 
@@ -41,13 +41,14 @@ def main(cmdline=1, **kwargs):
             --region_models="$DVC_DATA_DPATH/annotations/drop6/region_models/PE_R001.geojson" \
             --site_models="$DVC_DATA_DPATH/annotations/drop6/site_models/PE_R001_*.geojson"
     """
-    config = GeojsonSiteStatConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
+    config = GeojsonSiteStatsConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
     import rich
     rich.print('config = ' + ub.repr2(config))
     import pandas as pd
     import numpy as np
     from watch.utils import util_gis
     from kwutil import util_time
+    import copy
     import matplotlib.dates as mdates
 
     from watch.geoannots import geomodels
@@ -66,6 +67,9 @@ def main(cmdline=1, **kwargs):
 
     obs_stats_accum = []
     site_stat_accum = []
+
+    region_to_obs_accum = {}
+    region_to_site_accum = {}
 
     for region_id in unique_region_ids:
         sites = region_to_sites.get(region_id, [])
@@ -86,14 +90,82 @@ def main(cmdline=1, **kwargs):
 
         print(f'Region: {region_id} has {len(sites)} site models')
 
+        region_to_obs_accum[region_id] = region_obs_accum = []
+        region_to_site_accum[region_id] = region_site_accum = []
+
+        # Build up per-site information to expand summary stats if we have it.
+        site_id_to_stats = {}
+        for site in sites:
+            obs_df = site.pandas_observations()
+            obs_utm = util_gis.project_gdf_to_local_utm(obs_df, mode=1)
+            obs_utm = geopandas_shape_stats(obs_utm)
+
+            metric_keys = ['rt_area', 'major_obox_ratio', 'obox_major', 'obox_minor', 'hull_rt_area']
+            keep_keys = ['current_phase', 'observation_date'] + metric_keys
+            obs_subdf = obs_utm[keep_keys].copy()
+
+            valid_obs_rows = obs_subdf[~pd.isnull(obs_utm['observation_date'])]
+            valid_obs_rows = valid_obs_rows.sort_values('observation_date')
+            obs_datetimes = [util_time.coerce_datetime(d) for d in valid_obs_rows['observation_date']]
+            obs_unixtimes = [d.timestamp() for d in obs_datetimes]
+            duration = np.diff(obs_unixtimes)
+            obs_subdf.loc[valid_obs_rows.index[0:-1], 'duration'] = duration
+
+            multiphase_to_duration = obs_subdf.groupby('current_phase')['duration'].sum()
+            phase_to_duration = ub.ddict(lambda: 0)
+            for mk, v in multiphase_to_duration.items():
+                for k in mk.split(','):
+                    phase_to_duration['duration.' + k.strip()] += v
+
+            keep_keys = ['status', 'region_id', 'site_id', 'start_date', 'end_date'] + metric_keys
+            site_df = site.pandas_site()
+            site_df = util_gis.project_gdf_to_local_utm(site_df, mode=1)
+            site_df = geopandas_shape_stats(site_df)
+            site_subdf = site_df[keep_keys].copy()
+            durr_df = pd.DataFrame(ub.udict(phase_to_duration).map_values(lambda x: [x]))
+            site_subdf = pd.concat([site_subdf, durr_df], axis=1)
+
+            region_obs_accum.append(obs_subdf)
+            region_site_accum.append(site_subdf)
+
+            phases = [p for p in obs_subdf['current_phase'].unique() if not pd.isnull(p)]
+            site_row = copy.deepcopy(site.header['properties'])
+            site_row['num_phases'] = len(phases)
+            site_id_to_stats[site.site_id] = site_row
+            if region is not None:
+                is_earlier = region.start_date > np.array(obs_datetimes)
+                is_later = region.end_date < np.array(obs_datetimes)
+                num_obs_outside_time_bounds = is_earlier.sum() + is_later.sum()
+                site_row['num_obs_outside_time_bounds'] = num_obs_outside_time_bounds
+                site_row['num_obs'] = len(obs_utm)
+
         if region is not None:
             summary_df = region.pandas_summaries()
             summary_df['status'].value_counts()
+            summary_df = summary_df.sort_values('status')
             summary_utm = util_gis.project_gdf_to_local_utm(summary_df, mode=1)
             display_summary = summary_utm.drop(['type', 'geometry'], axis=1)
             display_summary['area_square_meters'] = summary_utm.geometry.area
-            rich.print(display_summary)
-            rich.print(summary_df['status'].value_counts())
+            # rich.print(display_summary)
+
+            new_rows = []
+            for sitesum in display_summary.to_dict('records'):
+                row = site_id_to_stats.get(sitesum['site_id'], sitesum)
+                inconsistency = 0
+                if row['status'] != sitesum['status']:
+                    inconsistency += 1
+                if row['start_date'] != sitesum['start_date']:
+                    inconsistency += 1
+                if row['end_date'] != sitesum['end_date']:
+                    inconsistency += 1
+                row.update(sitesum)
+                row.pop('type', None)
+                row.pop('misc_info', None)
+                row.pop('cache', None)
+                new_rows.append(row)
+
+            new_sitesums = pd.DataFrame(new_rows)
+            rich.print(new_sitesums)
 
             status_summaries = []
             for status, group in display_summary.groupby('status'):
@@ -113,90 +185,14 @@ def main(cmdline=1, **kwargs):
             summary_stats = pd.DataFrame(status_summaries)
             rich.print(summary_stats)
 
-        for site in sites:
-            obs_df = site.pandas_observations()
-            obs_utm = util_gis.project_gdf_to_local_utm(obs_df, mode=1)
-            obs_utm = geopandas_shape_stats(obs_utm)
 
-            metric_keys = ['rt_area', 'major_obox_ratio', 'obox_major', 'obox_minor', 'hull_rt_area']
-            keep_keys = ['current_phase', 'observation_date'] + metric_keys
-            obs_subdf = obs_utm[keep_keys].copy()
-
-            valid_obs_rows = obs_subdf[~pd.isnull(obs_utm['observation_date'])]
-            valid_obs_rows = valid_obs_rows.sort_values('observation_date')
-            obs_unixtimes = [util_time.coerce_datetime(d).timestamp() for d in valid_obs_rows['observation_date']]
-            duration = np.diff(obs_unixtimes)
-            obs_subdf.loc[valid_obs_rows.index[0:-1], 'duration'] = duration
-
-            multiphase_to_duration = obs_subdf.groupby('current_phase')['duration'].sum()
-            phase_to_duration = ub.ddict(lambda: 0)
-            for mk, v in multiphase_to_duration.items():
-                for k in mk.split(','):
-                    phase_to_duration['duration.' + k.strip()] += v
-
-            keep_keys = ['status', 'region_id', 'site_id', 'start_date', 'end_date'] + metric_keys
-            site_df = site.pandas_site()
-            site_df = util_gis.project_gdf_to_local_utm(site_df, mode=1)
-            site_df = geopandas_shape_stats(site_df)
-            site_subdf = site_df[keep_keys].copy()
-            durr_df = pd.DataFrame(ub.udict(phase_to_duration).map_values(lambda x: [x]))
-            site_subdf = pd.concat([site_subdf, durr_df], axis=1)
-
-            obs_stats_accum.append(obs_subdf)
-            site_stat_accum.append(site_subdf)
+    obs_stats_accum = list(region_to_obs_accum.values())
+    site_stat_accum = list(region_to_site_accum.values())
 
     viz_dpath = config['viz_dpath']
     if viz_dpath is None:
         viz_dpath = '_viz_sitestat'
     viz_dpath = ub.Path(viz_dpath).ensuredir()
-
-    # OLDER CODE
-    # site_infos = list(util_gis.coerce_geojson_datas(config['site_models']))
-    # obs_stats_accum = []
-    # site_stat_accum = []
-    # for site_info in site_infos:
-    #     data_crs84 = site_info['data']
-    #     data_utm = util_gis.project_gdf_to_local_utm(data_crs84, mode=1)
-    #     type_to_datas = dict(list(data_utm.groupby('type')))
-    #     obs_df = type_to_datas.pop('observation', [])
-    #     site_df = type_to_datas.pop('site', [])
-    #     assert len(type_to_datas) == 0
-    #     site_row = site_df.iloc[0]
-
-    #     site_df = geopandas_shape_stats(site_df)
-
-    #     obs_df = geopandas_shape_stats(obs_df)
-    #     obs_df['region_id'] = site_row.region_id
-    #     metric_keys = ['rt_area', 'major_obox_ratio', 'obox_major', 'obox_minor', 'hull_rt_area']
-
-    #     keep_keys = ['status', 'region_id', 'site_id', 'current_phase', 'observation_date'] + metric_keys
-    #     obs_subdf = obs_df[keep_keys].copy()
-
-    #     valid_obs_rows = obs_subdf[~pd.isnull(obs_df['observation_date'])]
-    #     valid_obs_rows = valid_obs_rows.sort_values('observation_date')
-    #     obs_unixtimes = [util_time.coerce_datetime(d).timestamp() for d in valid_obs_rows['observation_date']]
-    #     duration = np.diff(obs_unixtimes)
-    #     obs_subdf.loc[valid_obs_rows.index[0:-1], 'duration'] = duration
-
-    #     multiphase_to_duration = obs_subdf.groupby('current_phase')['duration'].sum()
-    #     phase_to_duration = ub.ddict(lambda: 0)
-    #     for mk, v in multiphase_to_duration.items():
-    #         for k in mk.split(','):
-    #             phase_to_duration['duration.' + k.strip()] += v
-
-    #     keep_keys = ['status', 'region_id', 'site_id', 'start_date', 'end_date'] + metric_keys
-    #     site_subdf = site_df[keep_keys].copy()
-    #     durr_df = pd.DataFrame(ub.udict(phase_to_duration).map_values(lambda x: [x]))
-    #     site_subdf = pd.concat([site_subdf, durr_df], axis=1)
-
-    #     # pred_info_fpath = site_info['fpath'].parent.parent / 'site_tracks_manifest.json'
-    #     # if pred_info_fpath.exists():
-    #     #     import json
-    #     #     info_section = smart_result_parser.parse_json_header(pred_info_fpath)
-    #     #     track_kw = json.loads(info_section[-1]['properties']['args']['track_kwargs'])
-    #     #     stats_df.loc[:, 'thresh'] = track_kw['thresh']
-    #     obs_stats_accum.append(obs_subdf)
-    #     site_stat_accum.append(site_subdf)
 
     site_stats = pd.concat(site_stat_accum)
     obs_stats = pd.concat(obs_stats_accum)
@@ -403,7 +399,7 @@ def geopandas_shape_stats(df):
     return df
 
 
-__config__ = GeojsonSiteStatConfig
+__config__ = GeojsonSiteStatsConfig
 
 if __name__ == '__main__':
     """

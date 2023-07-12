@@ -485,7 +485,12 @@ class SmartGlobalHelper:
 
         for key, vals in new_columns.items():
             new_key = key + '_bundle'
+            new_key_suffix = new_key.split('.', 1)[1]
+            new_key2 = 'specified.params.' + new_key_suffix
+            new_key3 = 'resolved_params.' + new_key_suffix
             agg.table[new_key] = vals
+            agg.table[new_key2] = False
+            agg.table[new_key3] = vals
 
     def get_delivered_model_params(self):
         delivered_model_params = []
@@ -592,6 +597,44 @@ class SmartGlobalHelper:
         #     },
         # ]
         return delivered_model_params
+
+    def custom_channel_relabel(self, sub_macro_table, channel_key):
+        unique_channels = sub_macro_table['resolved_params.bas_pxl.channels'].unique()
+        channel_maps = {
+            'water|forest|field|impervious|barren|landcover_hidden:32': 'land',
+            'blue|green|red|nir': 'BGRN',
+            'invariants:16': 'invar1',
+            'invariants:17': 'invar2',
+            'blue|green|red': 'BGR',
+            'pan': 'pan',
+            'mae:16': 'mae',
+            'sam:64': 'SAM',
+        }
+        cold_maps = {}
+        presentation_map = {}
+
+        import kwcoco
+        for c in unique_channels:
+            if c is not None:
+                new_streams = []
+                sensorchan = kwcoco.SensorChanSpec.coerce(c)
+                for stream in sensorchan.normalize().streams():
+                    stream.sensor
+                    concise_chans = stream.chans.concise().spec
+                    if 'COLD' in concise_chans:
+                        cold_maps[concise_chans] = 'COLD{}'.format(len(cold_maps) + 1)
+                        channel_maps[concise_chans] = cold_maps[concise_chans]
+
+                    if concise_chans in channel_maps:
+                        concise_chans = channel_maps[concise_chans]
+                    else:
+                        print('warning concise_chans = {}'.format(ub.urepr(concise_chans, nl=1)))
+                    new_streams.append(f'{stream.sensor.spec}:{concise_chans}')
+                new_c = kwcoco.SensorChanSpec.coerce(','.join(new_streams)).concise().spec
+                presentation_map[c] = new_c
+
+        new_columns = sub_macro_table['resolved_params.bas_pxl.channels'].apply(presentation_map.get)
+        return new_columns
 
 
 SMART_HELPER = SmartGlobalHelper()

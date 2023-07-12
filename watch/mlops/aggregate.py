@@ -383,6 +383,25 @@ def build_all_param_plots(agg, rois, config):
         plotter.plot_vantage_params(vantage)
 
 
+def shrink_param_names(param_name, param_histogram):
+    text_len_thresh = 20
+    param_labels = [str(p) for p in param_histogram]
+    text_label_size = len(''.join(param_labels))
+    if text_label_size > text_len_thresh:
+        had_value_remap = True
+        # Param names are too long. need to map parameter names to codes.
+        param_valname_map = {}
+        prefixchar = param_name.split('.')[-1][0].upper()
+        for idx, value in enumerate(sorted(param_histogram.keys())):
+            old_name = str(value)
+            new_name = f'{prefixchar}{idx:02d}'
+            param_valname_map[old_name] = new_name
+    else:
+        had_value_remap = False
+        param_valname_map = ub.dzip(param_labels, param_labels)
+    return param_valname_map, had_value_remap
+
+
 class ParamPlotter:
     """
     Builds the scatter plots and barcharts over different params.
@@ -681,24 +700,6 @@ class ParamPlotter:
         # ranked_params = ['bas_poly_eval.params.bas_pxl.package_fpath']
         if not len(chosen_params):
             print('Warning: no chosen params')
-
-        def shrink_param_names(param_histogram):
-            text_len_thresh = 20
-            param_labels = [str(p) for p in param_histogram]
-            text_label_size = len(''.join(param_labels))
-            if text_label_size > text_len_thresh:
-                had_value_remap = True
-                # Param names are too long. need to map parameter names to codes.
-                param_valname_map = {}
-                prefixchar = param_name.split('.')[-1][0].upper()
-                for idx, value in enumerate(sorted(param_histogram.keys())):
-                    old_name = str(value)
-                    new_name = f'{prefixchar}{idx:02d}'
-                    param_valname_map[old_name] = new_name
-            else:
-                had_value_remap = False
-                param_valname_map = ub.dzip(param_labels, param_labels)
-            return param_valname_map, had_value_remap
 
         for rank, param_name in enumerate(ub.ProgIter(chosen_params, desc='plot param for ' + vantage['name'], verbose=3)):
 
@@ -1805,7 +1806,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             regions_of_interest = rois
         return regions_of_interest
 
-    def build_macro_tables(agg, rois=None):
+    def build_macro_tables(agg, rois=None, **kwargs):
         """
         Builds one or more macro tables
         """
@@ -1816,14 +1817,20 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         if isinstance(rois, list) and len(rois) and ub.iterable(rois[0]):
             # Asked for multiple groups of ROIS.
             for single_rois in rois:
-                agg.build_single_macro_table(single_rois)
+                agg.build_single_macro_table(single_rois, **kwargs)
         else:
-            agg.build_single_macro_table(rois)
+            agg.build_single_macro_table(rois, **kwargs)
 
     @profile
-    def build_single_macro_table(agg, rois):
+    def build_single_macro_table(agg, rois, average='mean'):
         """
         Builds a single macro table for a choice of regions.
+
+        There is some hard-coded values in this function, but the core idea is
+        general, and they just need to be parameterized correctly.
+
+        Args:
+            average (str): mean or gmean
         """
 
         import pandas as pd
@@ -1836,17 +1843,38 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         # Define how to aggregate each column
         sum_cols = [c for c in agg.metrics.columns if c.endswith((
             '_tp', '_fp', '_fn', '_ntrue', '_npred'))]
-        mean_cols = [c for c in agg.metrics.columns if c.endswith((
+        average_cols = [c for c in agg.metrics.columns if c.endswith((
             'mAP', 'APUC', 'mAPUC', 'mAUC', 'AP', 'AUC', 'f1', 'FAR', 'ppv',
             'tpr', 'ffpa', 'f1', 'f1_siteprep', 'f1_active'))]
+        ignore_cols = [c for c in agg.metrics.columns if c.endswith(('rho', 'tau'))]
         sum_cols = agg.metrics.columns.intersection(sum_cols)
-        mean_cols = agg.metrics.columns.intersection(mean_cols)
-        other_metric_cols = agg.metrics.columns.difference(sum_cols).difference(mean_cols)
+
+        from watch.utils.util_pandas import DotDictDataFrame
+        start_time_cols = DotDictDataFrame.search_columns(agg.table, 'start_timestamp')
+        stop_time_cols = DotDictDataFrame.search_columns(agg.table, 'stop_timestamp')
+
+        ignore_cols = [c for c in agg.metrics.columns if c.endswith(('rho', 'tau'))]
+
+        average_cols = agg.metrics.columns.intersection(average_cols)
+        other_metric_cols = agg.metrics.columns.difference(sum_cols).difference(average_cols)
+        other_metric_cols = other_metric_cols.difference(ignore_cols)
         if len(other_metric_cols):
             print(f'ignoring agg {other_metric_cols}')
-        aggregator = {c: 'mean' for c in mean_cols}
+
+        if average == 'mean':
+            average = 'mean'
+            aggregator = {c: 'mean' for c in average_cols}
+        elif average == 'gmean':
+            import scipy.stats.mstats
+            gmean = scipy.stats.mstats.gmean
+            average = gmean
+            aggregator = {c: gmean for c in average_cols}
+        else:
+            raise KeyError(average)
         aggregator.update({c: 'sum' for c in sum_cols})
         aggregator.update({c: 'sum' for c in agg.resources.select_dtypes(np.number).columns})
+        aggregator.update({c: 'min' for c in start_time_cols})
+        aggregator.update({c: 'max' for c in stop_time_cols})
 
         # Gather groups that can be aggregated
         comparable_groups = agg.gather_macro_compatable_groups(regions_of_interest)
@@ -1860,9 +1888,9 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         else:
             # Macro aggregaet comparable groups
             macro_rows = []
-            for group in comparable_groups:
+            for group in ub.ProgIter(comparable_groups, desc='macro aggregate'):
                 if len(group) > 0:
-                    macro_row = macro_aggregate(agg, group, aggregator)
+                    macro_row = macro_aggregate(agg, group, aggregator, average=average)
                     macro_rows.append(macro_row)
 
             macro_table = pd.DataFrame(macro_rows).reset_index(drop=True)
@@ -1967,6 +1995,20 @@ def aggregate_param_cols(df, aggregator=None, hash_cols=None, allow_nonuniform=F
     TODO:
         - [ ] optimize this
         - [ ] Rectify with ~/code/watch/watch/utils/util_pandas.py :: aggregate_columns
+
+    Example:
+        >>> from watch.mlops.aggregate import *  # NOQA
+        >>> import pandas as pd
+        >>> agg = Aggregator.demo(num=3)
+        >>> agg.build()
+        >>> df = pd.concat([agg.table] * 3).reset_index()
+        >>> import scipy.stats.mstats
+        >>> gmean = scipy.stats.mstats.gmean
+        >>> aggregator = {'metrics.demo_node.metric1': gmean}
+        >>> hash_cols = 'param_hashid'
+        >>> allow_nonuniform = True
+        >>> hash_cols = ['region_id'] + agg.test_dset_cols
+        >>> aggregate_param_cols(df, aggregator=aggregator, hash_cols=hash_cols, allow_nonuniform=allow_nonuniform)
     """
     import pandas as pd
     import numpy as np
@@ -2025,7 +2067,7 @@ def aggregate_param_cols(df, aggregator=None, hash_cols=None, allow_nonuniform=F
 
 
 @profile
-def macro_aggregate(agg, group, aggregator):
+def macro_aggregate(agg, group, aggregator, average='mean'):
     """
     Helper function
     """
@@ -2045,8 +2087,8 @@ def macro_aggregate(agg, group, aggregator):
     if has_multiple_param_runs:
 
         # All aggregations are the mean when combining over the same region id
-        sub_aggregator = {c: 'mean' for c in aggregator.keys()}
-        sub_aggregator.update({c: 'mean' for c in agg.resources.columns})
+        sub_aggregator = {c: average for c in aggregator.keys()}
+        sub_aggregator.update({c: average for c in agg.resources.columns})
 
         sub_hash_cols = agg.test_dset_cols
         subgroups = table.groupby('region_id')

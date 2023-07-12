@@ -262,6 +262,10 @@ def coco_watch_stats(dset, with_video_info=False):
     print('dset.tag = {!r}'.format(dset.tag))
 
     basic_stats = dset.basic_stats()
+
+    # Note: kwcoco should be doing this.
+    basic_stats['n_tracks'] = len(dset.index.trackid_to_aids)
+
     ext_stats = dset.extended_stats()
     rich.print('basic_stats = {}'.format(ub.urepr(basic_stats, nl=1, sort=0)))
     rich.print('ext_stats = {}'.format(ub.urepr(ext_stats, nl=1, align=':', precision=3)))

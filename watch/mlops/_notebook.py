@@ -10,7 +10,8 @@ from watch.utils import util_pandas
 
 def _sitevisit_2023_july_report():
     import watch
-    from watch.mlops.aggregate import AggregateLoader
+    from watch.mlops.aggregate import AggregateLoader, shrink_param_names
+    import pandas  as pd
     expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
 
     load_kwargs = {
@@ -36,24 +37,27 @@ def _sitevisit_2023_july_report():
             expt_dvc_dpath / 'aggregate_results/wu/bas_poly_eval_2023-07-11T180910+0.csv.zip',
             expt_dvc_dpath / 'aggregate_results/wu/bas_pxl_eval_2023-07-11T181515+0.csv.zip',
             expt_dvc_dpath / 'aggregate_results/wu/bas_poly_eval_2023-07-11T181515+0.csv.zip',
+            expt_dvc_dpath / 'aggregate_results/wu/bas_pxl_eval_2023-07-11T213433+0.csv.zip',
+            expt_dvc_dpath / 'aggregate_results/wu/bas_poly_eval_2023-07-11T213433+0.csv.zip',
             expt_dvc_dpath / 'aggregate_results/connor/bas_poly_eval_2023-07-11T134348-5.csv.zip',
             expt_dvc_dpath / 'aggregate_results/connor/bas_pxl_eval_2023-07-11T134348-5.csv.zip',
         ],
         'pipeline': 'bas_building_and_depth_vali',
         'io_workers': 'avail',
     }
-    loader = AggregateLoader(**load_kwargs)
-    eval_type_to_agg = loader.coerce_aggregators()
+    with ub.Timer('load'):
+        loader = AggregateLoader(**load_kwargs)
+        eval_type_to_agg = loader.coerce_aggregators()
 
-    agg = eval_type_to_agg['bas_poly_eval']
+    agg0 = eval_type_to_agg['bas_poly_eval']
 
     from watch.mlops.smart_global_helper import SMART_HELPER
-    SMART_HELPER.populate_test_dataset_bundles(agg)
+    SMART_HELPER.populate_test_dataset_bundles(agg0)
 
     from watch.utils.util_pandas import DotDictDataFrame
-    table = DotDictDataFrame(agg.table)
+    table = DotDictDataFrame(agg0.table)
 
-    test_bundle_cols = [c + '_bundle' for c in agg.test_dset_cols]
+    test_bundle_cols = [c + '_bundle' for c in agg0.test_dset_cols]
 
     table['machine.bas_poly_eval.user'].value_counts()
     table[['machine.bas_poly_eval.user'] + test_bundle_cols].value_counts()
@@ -61,24 +65,27 @@ def _sitevisit_2023_july_report():
 
     rois = [
         'KR_R002', 'NZ_R001', 'CH_R001', 'KR_R001',
-        # 'BR_R002', 'BR_R004'
         # 'AE_R001',
-        # 'PE_R001',
+        'PE_R001', 'BR_R002', 'BR_R004'
     ]
-    agg.build_macro_tables(rois)
+    agg0.build_macro_tables(rois)
 
-    table['params.bas_pxl.test_dataset_bundle'] == 'Drop7-MedianNoWinter10GSD'
+    flags = table['params.bas_pxl.test_dataset_bundle'] == 'Drop7-MedianNoWinter10GSD'
+    subagg = agg0.filterto(index=flags[flags].index)
+    # subagg.build_macro_tables(rois)
+    # subagg.build_macro_tables(average='mean')
+    subagg.build_macro_tables(average='gmean')
+    # agg = subagg
 
-    agg.filterto()
-    table
+    subagg.report_best(top_k=3, print_models=True)
 
+    table = DotDictDataFrame(subagg.table)
     from kwutil import util_time
     start_time_cols = table.search_columns('start_timestamp')
     end_time_cols = table.search_columns('stop_timestamp')
     timestamps = {}
     for k in start_time_cols + end_time_cols:
         timestamps[k] = table.loc[:, k].apply(lambda x: util_time.coerce_datetime(x) if not pd.isnull(x) else x)
-
     min_times = {}
     max_times = {}
     for k, vs in timestamps.items():
@@ -87,16 +94,12 @@ def _sitevisit_2023_july_report():
             max_times[k] = vs[~pd.isna(vs)].max()
         except Exception as ex:
             print(f'ex={ex}')
-
-    table['params.bas_pxl.test_dataset'].unique()
-
     min_time = min(min_times.values())
     max_time = min(max_times.values())
     print(f'min_time={min_time.isoformat()}')
     print(f'max_time={max_time.isoformat()}')
 
-    resources = agg.resource_summary_table()
-
+    resources = subagg.resource_summary_table()
     from watch.utils import util_kwplot
     util_kwplot.dataframe_table(resources, 'resource_summary_bas.png')
 
@@ -106,22 +109,123 @@ def _sitevisit_2023_july_report():
     kwplot.close_figures()
 
     from watch.mlops.aggregate import build_special_columns, preprocess_table
-    build_special_columns(agg)
-    agg.build()
-    single_table = preprocess_table(agg.table)
+    build_special_columns(subagg)
+    # subagg.build()
+    single_table = preprocess_table(subagg, subagg.table)
 
+    macro_table = subagg.region_to_tables[subagg.primary_macro_region].copy()
+    macro_table = preprocess_table(subagg, macro_table)
     param_to_palette = SMART_HELPER.shared_palletes(single_table)
 
-    region_ids = single_table['region_id'].unique()
-    unique_colors = sns.color_palette(n_colors=len(region_ids))
+    # region_ids = macro_table['region_id'].unique()
+    # unique_colors = sns.color_palette(n_colors=len(region_ids))
+    sub_macro_table = macro_table
+    sub_macro_table = sub_macro_table[sub_macro_table['resolved_params.bas_pxl.channels'] != 'None']
+    sub_macro_table = sub_macro_table[~sub_macro_table['resolved_params.bas_pxl.channels'].isna()]
+
+
+    new_columns = SMART_HELPER.custom_channel_relabel(sub_macro_table, channel_key='resolved_params.bas_pxl.channels')
+    sub_macro_table['channels'] = new_columns
+    param_name = 'channels'
+
+    fig = kwplot.figure(fnum=1, doclf=True)
+    y = 'metrics.bas_poly_eval.bas_f1'
+    x = 'metrics.bas_poly_eval.bas_ffpa'
+
+    # x = 'context.bas_poly_eval.stop_timestamp'
+    ax = sns.scatterplot(data=sub_macro_table, x=x, y=y,
+                         hue=param_name,
+                         # hue='machine.bas_poly.user',
+                         legend=True)
+    ax.set_xscale('log')
+    ax.set_ylim(0, 1)
+    ax.set_title(f'BAS Results (n={len(sub_macro_table)})\n'
+                 f'Macro Analysis over {ub.urepr(rois, sv=1, nl=0)}')
 
     fig = kwplot.figure(fnum=2, doclf=True)
     y = 'metrics.bas_poly_eval.bas_f1'
-    x = 'metrics.bas_poly_eval.bas_ffpa'
-    ax = sns.scatterplot(data=single_table, x=x, y=y, hue='region_id', legend=True)
-    ax.set_xscale('log')
+    # x = 'metrics.bas_poly_eval.bas_ffpa'
+    x = 'context.bas_poly_eval.stop_timestamp'
+    sub_macro_table['bas_poly_eval.stop_timestamp'] = util_kwplot.fix_matplotlib_dates(sub_macro_table[x])
+    x = 'bas_poly_eval.stop_timestamp'
+
+    ax = sns.scatterplot(data=sub_macro_table, x=x, y=y,
+                         # hue=param_name,
+                         hue='machine.bas_poly.user',
+                         legend=True)
+    # ax.set_xscale('log')
     ax.set_ylim(0, 1)
-    ax.set_title(f'BAS Per-Region Results (n={len(agg)})')
+    import matplotlib.dates as mdates
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+    ax.xaxis.set_major_locator(mdates.DayLocator(interval=356))
+    # ax.set_title(f'BAS Per-Region Results (n={len(sub_macro_table)})')
+    ax.set_title(f'BAS Results (n={len(sub_macro_table)})\n'
+                 f'Macro Analysis over {ub.urepr(rois, sv=1, nl=0)}')
+
+
+    param_histogram = ub.udict(sub_macro_table.groupby(param_name).size().to_dict())
+    param_histogram = param_histogram.map_keys(str)
+    param_valname_map, had_value_remap = shrink_param_names(param_name, param_histogram)
+
+    # Mapper for the scatterplot legend
+    if had_value_remap:
+        freq_mapper_scatter = util_kwplot.LabelModifier({
+            param_value: f'{param_value}\n{param_valname_map[param_value]} (n={num})'
+            for param_value, num in param_histogram.items()
+        })
+    else:
+        freq_mapper_scatter = util_kwplot.LabelModifier({
+            param_value: f'{param_value}\n(n={num})'
+            for param_value, num in param_histogram.items()
+        })
+
+    freq_mapper_box = util_kwplot.LabelModifier({
+        param_value: f'{param_valname_map[param_value]}\n(n={num})'
+        for param_value, num in param_histogram.items()
+    })
+
+    sub_macro_table = sub_macro_table.sort_values(param_name)
+
+    freq_mapper_box = util_kwplot.LabelModifier({
+        param_value: f'{param_valname_map[param_value]}\n(n={num})'
+        for param_value, num in param_histogram.items()
+    })
+
+    snskw = {}
+    # if param_name in param_to_palette:
+    #     snskw['palette'] = param_to_palette[param_name]
+
+    modifier = SMART_HELPER.label_modifier()
+
+    header_lines = [
+        f'BAS Results (n={len(sub_macro_table)})',
+        f'Macro Analysis over {ub.urepr(rois, sv=1, nl=0)}',
+    ]
+    header_text = '\n'.join(header_lines)
+
+
+    fig = kwplot.figure(fnum=5, doclf=True)
+    ax = sns.boxplot(data=sub_macro_table, x=param_name, y=y, **snskw)
+    freq_mapper_box.relabel_xticks(ax)
+    ax.set_title(header_text)
+    modifier.relabel(ax, ticks=False)
+    modifier.relabel_xticks(ax)
+
+    param_code_lut = []
+    for old_name, new_name in param_valname_map.items():
+        param_code_lut.append({
+            'code': new_name,
+            'value': old_name,
+            'num': param_histogram[old_name],
+        })
+    param_code_lut = pd.DataFrame(param_code_lut)
+    if not had_value_remap:
+        param_code_lut = param_code_lut.drop('code', axis=1)
+    param_title = 'Key: ' + modifier._modify_text(param_name)
+    lut_style = param_code_lut.style.set_caption(param_title)
+    param_fpath = 'param_lut.png'
+    util_kwplot.dataframe_table(lut_style, param_fpath, title=param_title)
+
 
     # 'eval_nodes': ['sv_poly_eval', 'bas_poly_eval'],
     # 'output_dpath': '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_bigagg/aggregate',
@@ -1005,6 +1109,7 @@ def _namek_eval():
             # )
             sns.scatterplot(
                 data=joined_table,
+                # x='metrics.bas_poly_eval.bas_f1',
                 x='metrics.bas_poly_eval.bas_f1',
                 y='metrics.bas_pxl_eval.salient_AP',
                 hue='resolved_params.bas_poly.agg_fn',
