@@ -1190,16 +1190,41 @@ def make_smart_pipeline(name):
         >>> dag.inspect_configurables()
 
     Ignore:
+        from watch.mlops.smart_pipeline import *  # NOQA
+        dag = make_smart_pipeline('joint_bas_sv_sc')
+        dag.print_graphs()
+        dag.inspect_configurables()
         # Make a graphviz illustration of the DAG
         from watch.utils import util_yaml
         # Change the labels a bit
-        for node, data in dag.proc_graph.nodes(data=True):
-            data['label'] = node
-        for node, data in dag.io_graph.nodes(data=True):
+
+        proc_graph = dag.proc_graph.copy()
+        proc_graph.remove_nodes_from([n for n in proc_graph.nodes if n.endswith(('_viz', '_eval'))])
+
+        import kwimage
+        relabel = {}
+        for node in proc_graph.nodes:
+            if node.startswith('bas_'):
+                proc_graph.nodes[node]['color'] = kwimage.Color.coerce('kitware_yellow').ashex()
+            if node.startswith('sv_'):
+                proc_graph.nodes[node]['color'] = kwimage.Color.coerce('kitware_blue').ashex()
+            if node.startswith(('sc_', 'ac_')):
+                relabel[node] = node.replace('sc_', 'ac_')
+                proc_graph.nodes[node]['label'] = node.replace('sc_', 'ac_')
+                proc_graph.nodes[node]['color'] = kwimage.Color.coerce('kitware_green').ashex()
+        proc_graph = nx.relabel_nodes(proc_graph, relabel)
+        nx.write_network_text(proc_graph)
+
+
+        for node, data in proc_graph.nodes(data=True):
             data['label'] = node
         from graphid import util
-        util.util_graphviz.dump_nx_ondisk(dag.proc_graph, 'proc_graph.png')
-        util.util_graphviz.dump_nx_ondisk(dag.io_graph, 'io_graph.png')
+        util.util_graphviz.dump_nx_ondisk(proc_graph, 'proc_graph.png')
+        import xdev
+        xdev.startfile('proc_graph.png')
+        # for node, data in dag.io_graph.nodes(data=True):
+        #     data['label'] = node
+        # util.util_graphviz.dump_nx_ondisk(dag.io_graph, 'io_graph.png')
 
     Example:
         >>> from watch.mlops.smart_pipeline import *  # NOQA

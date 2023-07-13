@@ -12,10 +12,13 @@ class SmartGlobalHelper:
     def __init__(self):
         import kwimage
         self.delivery_to_color = {
-            'Eval7': kwimage.Color('kitware_yellow').as01(),
-            'Eval8': kwimage.Color('kitware_orange').as01(),
-            'Eval9': kwimage.Color('kitware_darkgreen').as01(),
+            # 'Eval7': kwimage.Color('kitware_yellow').as01(),
+            # 'Eval8': kwimage.Color('kitware_orange').as01(),
+            'Eval9': kwimage.Color('purple').as01(),
             'Eval10': kwimage.Color('kitware_darkblue').as01(),
+            'Eval11': kwimage.Color('kitware_orange').as01(),
+            'Eval13': kwimage.Color('kitware_blue').as01(),
+            'Baseline2023-07': kwimage.Color('kitware_green').as01(),
         }
 
     VIZ_BLOCKLIST = {
@@ -115,7 +118,11 @@ class SmartGlobalHelper:
         'resolved_params.bas_pxl_eval.workers',
     }
 
-    def shared_palletes(self, macro_table):
+    def shared_palettes(self, macro_table):
+        """
+        For each key in a hard code set (relevant to SMART), assign a
+        consistent color to those values so our plots are comparble.
+        """
         # import kwplot
         import numpy as np
         import seaborn as sns
@@ -152,7 +159,6 @@ class SmartGlobalHelper:
             except TypeError:
                 unique_vals = set(macro_table[group_params].values.ravel())
 
-            # 'Spectral'
             if len(unique_vals) > 5:
                 unique_colors = sns.color_palette('Spectral', n_colors=len(unique_vals))
                 # kwplot.imshow(_draw_color_swatch(unique_colors), fnum=32)
@@ -161,6 +167,23 @@ class SmartGlobalHelper:
             palette = ub.dzip(unique_vals, unique_colors)
             param_to_palette.update({p: palette for p in group_params})
         return param_to_palette
+
+    def make_param_palette(self, param_values):
+        import numpy as np
+        import seaborn as sns
+        try:
+            unique_vals = np.unique(param_values)
+        except TypeError:
+            unique_vals = set(param_values.ravel())
+
+        # 'Spectral'
+        if False and len(unique_vals) > 5:
+            unique_colors = sns.color_palette('Spectral', n_colors=len(unique_vals))
+            # kwplot.imshow(_draw_color_swatch(unique_colors), fnum=32)
+        else:
+            unique_colors = sns.color_palette(n_colors=len(unique_vals))
+        palette = ub.dzip(unique_vals, unique_colors)
+        return palette
 
     def label_modifier(self):
         """
@@ -409,20 +432,29 @@ class SmartGlobalHelper:
             pkgmap[pkg] = new_name
         macro_table['bas_pxl.package_fpath'] = macro_table['bas_pxl.package_fpath'].apply(lambda x: pkgmap.get(x, x))
 
-    def mark_delivery(self, table):
+    def mark_delivery(self, table, include=None):
         """
         self = SMART_HELPER
         """
         from watch.utils.util_pandas import DotDictDataFrame
         delivered_model_params = self.get_delivered_model_params()
 
-        delivered_params = delivered_model_params[3]
+        delivered_params = delivered_model_params[-1]
         table['delivery'] = None
         table['delivered_params']  = None
         for delivered_params in delivered_model_params:
+            if include is not None:
+                if delivered_params['delivery'] not in include:
+                    continue
             if delivered_params['task'] == 'BAS':
-                is_delivered_model = table['resolved_params.bas_pxl.package_fpath'].str.endswith(delivered_params['bas_pxl.package_fpath'])
-                table.loc[is_delivered_model, 'delivery_model'] = delivered_params['delivery']
+                try:
+                    is_delivered_model = table['resolved_params.bas_pxl.package_fpath'].str.endswith(delivered_params['bas_pxl.package_fpath'])
+                except Exception:
+                    is_delivered_model = table['resolved_params.bas_pxl.package_fpath'].apply(str).str.endswith(delivered_params['bas_pxl.package_fpath'])
+                is_delivered_model = is_delivered_model.fillna(False)
+
+                if is_delivered_model.any():
+                    table.loc[is_delivered_model, 'delivery_model'] = delivered_params['delivery']
 
                 if True:
                     subset = table[is_delivered_model]
@@ -465,6 +497,9 @@ class SmartGlobalHelper:
                     ub.varied_values(DotDictDataFrame(subset)['resolved_params.bas_poly'].to_dict('records'), min_variations=2).keys()
                     DotDictDataFrame(subset)['resolved_params.bas_pxl']
 
+            delivered_marked = table['delivered_params'].unique()
+            print('delivered_marked = {}'.format(ub.urepr(delivered_marked, nl=1)))
+
     def populate_test_dataset_bundles(self, agg):
         """
         Attempt to parse out which kwcoco bundle test datasets belonged to
@@ -483,14 +518,18 @@ class SmartGlobalHelper:
         for key in agg.test_dset_cols:
             new_columns[key] = agg.table[key].apply(lambda x: dataset_to_bundle.get(x, 'unknown'))
 
+        test_bundle_cols = []
+
         for key, vals in new_columns.items():
             new_key = key + '_bundle'
             new_key_suffix = new_key.split('.', 1)[1]
             new_key2 = 'specified.params.' + new_key_suffix
             new_key3 = 'resolved_params.' + new_key_suffix
+            test_bundle_cols.append(new_key)
             agg.table[new_key] = vals
             agg.table[new_key2] = False
             agg.table[new_key3] = vals
+        return test_bundle_cols
 
     def get_delivered_model_params(self):
         delivered_model_params = []
@@ -585,6 +624,46 @@ class SmartGlobalHelper:
                 'bas_poly.min_area_square_meters': 7200.0,
                 'bas_poly.max_area_square_meters': 8000000.0,
                 'task': 'BAS',
+            },
+
+            {
+                'delivery': 'Eval13',
+                'bas_pxl.package_fpath': 'models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt',
+                'bas_pxl.chip_dims': '[196, 196]',
+                'bas_pxl.time_sampling': 'soft4',
+                'bas_pxl.tta_fliprot': 1,
+                'bas_pxl.tta_time': 1,
+                'bas_poly.thresh': 0.40,
+                'bas_poly.time_thresh': 0.8,
+                'bas_poly.inner_window_size': '1y',
+                'bas_poly.inner_agg_fn': 'mean',
+                'bas_poly.agg_fn': 'probs',
+                'bas_poly.moving_window_size': 'None',
+                'bas_poly.polygon_simplify_tolerance': 1,
+                'bas_poly.norm_ord': float('inf'),
+                'bas_poly.poly_merge_method': 'v2',
+                'bas_poly.min_area_square_meters': 7200.0,
+                'bas_poly.max_area_square_meters': 8000000.0,
+                'task': 'BAS',
+            },
+
+            {
+                'delivery': 'Baseline2023-07',
+                'bas_pxl.package_fpath': 'models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt',
+                'bas_pxl.chip_dims': '[196, 196]',
+                'bas_pxl.time_sampling': 'soft4',
+                'bas_poly.thresh': 0.425,
+                'bas_poly.time_thresh': 0.8,
+                'bas_poly.inner_window_size': '1y',
+                'bas_poly.inner_agg_fn': 'max',
+                'bas_poly.agg_fn': 'probs',
+                'bas_poly.moving_window_size': 'None',
+                'bas_poly.polygon_simplify_tolerance': 1,
+                'bas_poly.norm_ord': float('inf'),
+                'bas_poly.poly_merge_method': 'v2',
+                'bas_poly.min_area_square_meters': 7200.0,
+                'bas_poly.max_area_square_meters': 8000000.0,
+                'task': 'BAS',
             }
         ]
 
@@ -598,17 +677,19 @@ class SmartGlobalHelper:
         # ]
         return delivered_model_params
 
-    def custom_channel_relabel(self, sub_macro_table, channel_key):
+    def custom_channel_relabel(self, sub_macro_table, channel_key, coarsen=False):
+
         unique_channels = sub_macro_table['resolved_params.bas_pxl.channels'].unique()
         channel_maps = {
             'water|forest|field|impervious|barren|landcover_hidden:32': 'land',
-            'blue|green|red|nir': 'BGRN',
-            'invariants:16': 'invar1',
-            'invariants:17': 'invar2',
-            'blue|green|red': 'BGR',
-            'pan': 'pan',
+            'blue|green|red|nir': 'raw' if coarsen else 'BGRN',
+            'invariants:16': 'invar' if coarsen else 'invar1',
+            'invariants:17': 'invar' if coarsen else 'invar1',
+            'blue|green|red': 'raw' if coarsen else 'BGR',
+            'pan': 'raw' if coarsen else 'pan',
             'mae:16': 'mae',
             'sam:64': 'SAM',
+            'mat_feats:16|materials:9|mtm': 'mat',
         }
         cold_maps = {}
         presentation_map = {}
@@ -622,7 +703,10 @@ class SmartGlobalHelper:
                     stream.sensor
                     concise_chans = stream.chans.concise().spec
                     if 'COLD' in concise_chans:
-                        cold_maps[concise_chans] = 'COLD{}'.format(len(cold_maps) + 1)
+                        if coarsen:
+                            cold_maps[concise_chans] = 'COLD'
+                        else:
+                            cold_maps[concise_chans] = 'COLD{}'.format(len(cold_maps) + 1)
                         channel_maps[concise_chans] = cold_maps[concise_chans]
 
                     if concise_chans in channel_maps:
@@ -630,11 +714,47 @@ class SmartGlobalHelper:
                     else:
                         print('warning concise_chans = {}'.format(ub.urepr(concise_chans, nl=1)))
                     new_streams.append(f'{stream.sensor.spec}:{concise_chans}')
-                new_c = kwcoco.SensorChanSpec.coerce(','.join(new_streams)).concise().spec
+                new_sensorchan = kwcoco.SensorChanSpec.coerce(','.join(new_streams)).concise()
+
+                if coarsen:
+                    new_sensorchan = kwcoco.ChannelSpec.coerce(','.join(sorted(set(sc.chans.spec for sc in new_sensorchan.streams()))))
+                    new_c = new_sensorchan.spec
+                else:
+                    new_c = new_sensorchan.spec
                 presentation_map[c] = new_c
 
         new_columns = sub_macro_table['resolved_params.bas_pxl.channels'].apply(presentation_map.get)
         return new_columns
+
+    def print_minmax_times(self, table):
+        import pandas  as pd
+        from watch.utils.util_pandas import DotDictDataFrame
+        from kwutil import util_time
+        table = DotDictDataFrame(table)
+        start_time_cols = table.search_columns('start_timestamp')
+        end_time_cols = table.search_columns('stop_timestamp')
+        timestamps = {}
+        for k in start_time_cols + end_time_cols:
+            timestamps[k] = table.loc[:, k].apply(lambda x: util_time.coerce_datetime(x) if not pd.isnull(x) else x)
+        min_times = {}
+        max_times = {}
+        for k, vs in timestamps.items():
+            try:
+                min_times[k] = vs[~pd.isna(vs)].min()
+                max_times[k] = vs[~pd.isna(vs)].max()
+            except Exception as ex:
+                print(f'ex={ex}')
+        min_time = min(min_times.values())
+        max_time = min(max_times.values())
+        print(f'min_time={min_time.isoformat()}')
+        print(f'max_time={max_time.isoformat()}')
+
+    def threshold_param_groups(self, table, param_name, metric_name, metric_threshold):
+        import pandas as pd
+        param_groups = table.groupby(param_name)
+        passed_thresh = param_groups[metric_name].describe()['max'] > metric_threshold
+        filtered_table = pd.concat(list((ub.udict(list(param_groups)) & passed_thresh[passed_thresh].index).values()))
+        return filtered_table
 
 
 SMART_HELPER = SmartGlobalHelper()

@@ -321,7 +321,7 @@ def build_special_columns(agg):
         agg.table.loc[:, prefix + '.effective_batch_size'] = val_effective_bsize
 
 
-def preprocess_table(agg, table):
+def preprocess_table_for_seaborn(agg, table):
     fillna_cols = table.columns.intersection(agg.resolved_params.columns.union(agg.resolved_params.columns))
     table.loc[:, fillna_cols] = table.loc[:, fillna_cols].fillna('None')
     table = table.applymap(lambda x: str(x) if isinstance(x, list) else x)
@@ -335,7 +335,7 @@ def build_all_param_plots(agg, rois, config):
     build_special_columns(agg)
     agg.build()
     single_table = table = agg.table
-    single_table = preprocess_table(table)
+    single_table = preprocess_table_for_seaborn(table)
 
     plot_config = ub.udict(config.plot_params) - {'enabled'}
     MARK_DELIVERED = plot_config.get('mark_delivered', False)
@@ -347,18 +347,18 @@ def build_all_param_plots(agg, rois, config):
     if rois is not None:
         agg.build_macro_tables(rois)
         macro_table = agg.region_to_tables[agg.primary_macro_region].copy()
-        macro_table = preprocess_table(agg, macro_table)
+        macro_table = preprocess_table_for_seaborn(agg, macro_table)
 
         if MARK_DELIVERED:
             SMART_HELPER.mark_delivery(macro_table)
-        if 0:
-            SMART_HELPER.old_hacked_model_case(macro_table)
-        param_to_palette = SMART_HELPER.shared_palletes(macro_table)
+        # if 0:
+        #     SMART_HELPER.old_hacked_model_case(macro_table)
+        param_to_palette = SMART_HELPER.shared_palettes(macro_table)
         if 0:
             SMART_HELPER.mark_star_models(macro_table)
     else:
         macro_table = None
-        param_to_palette = SMART_HELPER.shared_palletes(single_table)
+        param_to_palette = SMART_HELPER.shared_palettes(single_table)
 
     # agg = plotter.agg
     agg_group_dpath = (agg.output_dpath / ('all_params' + ub.timestamp())).ensuredir()
@@ -383,16 +383,15 @@ def build_all_param_plots(agg, rois, config):
         plotter.plot_vantage_params(vantage)
 
 
-def shrink_param_names(param_name, param_histogram):
-    text_len_thresh = 20
-    param_labels = [str(p) for p in param_histogram]
+def shrink_param_names(param_name, param_values, text_len_thresh=20):
+    param_labels = [str(p) for p in param_values]
     text_label_size = len(''.join(param_labels))
     if text_label_size > text_len_thresh:
         had_value_remap = True
         # Param names are too long. need to map parameter names to codes.
         param_valname_map = {}
         prefixchar = param_name.split('.')[-1][0].upper()
-        for idx, value in enumerate(sorted(param_histogram.keys())):
+        for idx, value in enumerate(sorted(param_values)):
             old_name = str(value)
             new_name = f'{prefixchar}{idx:02d}'
             param_valname_map[old_name] = new_name
@@ -745,7 +744,7 @@ class ParamPlotter:
 
             param_dpath = (param_group_dpath / param_name).ensuredir().resolve()
 
-            param_valname_map, had_value_remap = shrink_param_names(param_histogram)
+            param_valname_map, had_value_remap = shrink_param_names(list(param_histogram))
 
             # Mapper for the scatterplot legend
             if had_value_remap:
@@ -790,7 +789,7 @@ class ParamPlotter:
             finalize_figure.finalize(fig, vantage_fpath)
             ub.symlink(real_path=vantage_fpath, link_path=param_fpath, overwrite=True)
 
-            # Scatter legend  (doesnt care about the vantage)
+            # Scatter legend (doesnt care about the vantage)
             try:
                 param_fpath = param_dpath / f'{param_prefix}_PLT03_scatter_onlylegend.png'
                 vantage_fpath = vantage_dpath / f'{fname_prefix}_PLT03_scatter_onlylegend.png'
