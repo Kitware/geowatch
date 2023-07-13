@@ -185,7 +185,6 @@ def main(cmdline=1, **kwargs):
             summary_stats = pd.DataFrame(status_summaries)
             rich.print(summary_stats)
 
-
     obs_stats_accum = list(region_to_obs_accum.values())
     site_stat_accum = list(region_to_site_accum.values())
 

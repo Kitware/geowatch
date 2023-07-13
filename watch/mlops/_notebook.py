@@ -114,7 +114,7 @@ def _sitevisit_2023_july_report():
     param_presenter = ParamPresenter(param_name, new_columns.unique())
 
     snskw = {}
-    import kwimage
+    # import kwimage
     param_presenter.param_palette['raw'] = (0.1, 0.1, 0.1)
     snskw['palette'] = param_presenter.param_palette
 
@@ -460,10 +460,10 @@ def make_per_region_channel_sitevisit_plots(subagg):
         # show='eog')
         # break
 
-    votes = ub.dict_hist(list(ub.flatten(region_to_top_params.values())))
+    # votes = ub.dict_hist(list(ub.flatten(region_to_top_params.values())))
     param_code_lut = param_presenter.build_lut()
 
-    subsub_agg = subagg.filterto(sub_table.index)
+    # subsub_agg = subagg.filterto(sub_table.index)
     rois = {
         # 'AE_R001',
         # 'BR_R001',
