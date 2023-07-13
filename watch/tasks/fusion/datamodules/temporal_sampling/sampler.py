@@ -490,7 +490,7 @@ class TimeWindowSampler(CommonSamplerMixin):
     def __init__(self, unixtimes, sensors, time_window=None,
                  affinity_type='hard', update_rule='distribute',
                  deterministic=False, gamma=1, time_span=None,
-                 time_kernel=None, affkw=None, name='?'):
+                 time_kernel=None, affkw=None, name='?', allow_fewer=True):
 
         if isinstance(time_span, str) and time_span == 'None':
             time_span = None
@@ -515,6 +515,7 @@ class TimeWindowSampler(CommonSamplerMixin):
         self.num_frames = len(unixtimes)
         self.time_span = time_span
         self.affkw = affkw  # extra args to affinity matrix building
+        self.allow_fewer = allow_fewer
 
         self.compute_affinity()
 
@@ -755,7 +756,7 @@ class TimeWindowSampler(CommonSamplerMixin):
             return_info=return_info,
             time_kernel=time_kernel,
             unixtimes=unixtimes,
-            allow_fewer=True,
+            allow_fewer=self.allow_fewer,
         )
         return ret
 

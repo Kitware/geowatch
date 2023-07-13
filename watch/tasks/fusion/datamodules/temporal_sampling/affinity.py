@@ -144,7 +144,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         >>> unixtimes = np.array(sorted(rng.randint(low, high, 5)), dtype=float)
         >>> self = TimeWindowSampler(unixtimes, sensors=None, time_window=4,
         >>>     affinity_type='soft2', time_span='0.3y',
-        >>>     update_rule='distribute+pairwise')
+        >>>     update_rule='distribute+pairwise', allow_fewer=False)
         >>> self.deterministic = False
         >>> import pytest
         >>> with pytest.raises(IndexError):
