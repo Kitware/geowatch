@@ -105,7 +105,7 @@ def run_generate_sv_cropped_kwcoco(input_path,
         raise RuntimeError("Couldn't parse 'region_id' from input region file")
 
     # Paths to inputs generated in previous pipeline steps
-    bas_region_path = ingressed_assets['cropped_region_models_bas'] / f'{region_id}.geojson'
+    bas_region_path = ub.Path(ingressed_assets['cropped_region_models_bas']) / f'{region_id}.geojson'
     ta1_sc_kwcoco_path = ingressed_assets['kwcoco_for_sc']
 
     # 4. Crop ingress KWCOCO dataset to region for SV

@@ -155,7 +155,7 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
     input_kwcoco_fpath = ingressed_assets['cropped_kwcoco_for_sv']
     input_sites_dpath = ingressed_assets['cropped_site_models_bas']
     input_region_dpath = ingressed_assets['cropped_region_models_bas']
-    input_region_fpath = input_region_dpath / f'{region_id}.geojson'
+    input_region_fpath = ub.Path(input_region_dpath) / f'{region_id}.geojson'
     # input_region_fpath = local_region_path  # is this right?
 
     scored_kwcoco_fpath = ingress_dir / "poly_depth_scored.kwcoco.zip"

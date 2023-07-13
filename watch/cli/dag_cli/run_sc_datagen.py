@@ -105,11 +105,11 @@ def run_generate_sc_cropped_kwcoco(config):
 
     # Paths to inputs generated in previous pipeline steps
     if 'sv_out_region_models' in ingressed_assets:
-        input_region_path = ingressed_assets['sv_out_region_models'] / f'{region_id}.geojson'
+        input_region_path = ub.Path(ingressed_assets['sv_out_region_models']) / f'{region_id}.geojson'
     else:
         print("* Didn't find region output from SV; using region output "
               "from BAS *")
-        input_region_path = ingressed_assets['cropped_region_models_bas'] / f'{region_id}.geojson'
+        input_region_path = ub.Path(ingressed_assets['cropped_region_models_bas']) / f'{region_id}.geojson'
 
     ta1_sc_kwcoco_path = ingressed_assets['kwcoco_for_sc']
 

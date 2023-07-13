@@ -102,7 +102,7 @@ def run_dino_sv(config):
     # which operations are applied at the DAG level)
     input_region_dpath = ingressed_assets['depth_filtered_regions']
     input_sites_dpath = ingressed_assets['depth_filtered_sites']
-    input_region_fpath = input_region_dpath / f'{region_id}.geojson'
+    input_region_fpath = ub.Path(input_region_dpath) / f'{region_id}.geojson'
 
     # NOTE; we want to be using the output of SV crop, not necesarilly the the
     # dzyne output referenced by ingress_kwcoco_path

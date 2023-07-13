@@ -205,7 +205,7 @@ def run_sc_fusion_for_baseline(config):
                 '--out_sites_fpath', site_models_manifest_outpath,
                 '--out_kwcoco', tracked_sc_kwcoco_path,
                 '--default_track_fn', config.sc_track_fn,
-                '--site_summary', cropped_region_models_bas / '*.geojson',
+                '--site_summary', ub.Path(cropped_region_models_bas) / '*.geojson',
                 '--append_mode', 'True',
                 '--track_kwargs', json.dumps(sc_track_kwargs)],
                 check=True, verbose=3, capture=False)
