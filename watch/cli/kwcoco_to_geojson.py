@@ -681,23 +681,6 @@ def convert_kwcoco_to_iarpa(coco_dset,
     return sites
 
 
-# debug mode is for comparing against a set of known GT site models
-DEBUG_MODE = 0
-if DEBUG_MODE:
-    SITE_SUMMARY_POS_STATUS = {
-        'positive_annotated',
-        'system_proposed', 'system_confirmed',
-        'positive_annotated_static',  # TODO confirm
-        'negative',
-    }
-else:
-    # TODO handle positive_partial
-    SITE_SUMMARY_POS_STATUS = {
-        'positive_annotated',
-        'system_proposed', 'system_confirmed',
-    }
-
-
 def _coerce_site_summaries(site_summary_or_region_model,
                            default_region_id=None):
     """
@@ -722,13 +705,29 @@ def _coerce_site_summaries(site_summary_or_region_model,
     from watch.geoannots import geomodels
     import jsonschema
 
-    TRUST_REGION_SCHEMA = 1
+    TRUST_REGION_SCHEMA = 0
 
     geojson_infos = list(util_gis.coerce_geojson_datas(
         site_summary_or_region_model, format='json', allow_raw=True))
 
     # validate the json
     site_summaries = []
+
+    # # debug mode is for comparing against a set of known GT site models
+    # DEBUG_MODE = 1
+    # if DEBUG_MODE:
+    #     SITE_SUMMARY_POS_STATUS = {
+    #         'positive_annotated',
+    #         'system_proposed', 'system_confirmed',
+    #         'positive_annotated_static',  # TODO confirm
+    #         'negative',
+    #     }
+    # else:
+    #     # TODO handle positive_partial
+    #     SITE_SUMMARY_POS_STATUS = {
+    #         'positive_annotated',
+    #         'system_proposed', 'system_confirmed',
+    #     }
 
     for info in geojson_infos:
         data = info['data']
@@ -743,6 +742,7 @@ def _coerce_site_summaries(site_summary_or_region_model,
             region_model = geomodels.RegionModel(**data)
 
             if TRUST_REGION_SCHEMA:
+                region_model.fixup()
                 region_model.validate(strict=False)
 
             region_model._validate_quick_checks()
@@ -753,7 +753,8 @@ def _coerce_site_summaries(site_summary_or_region_model,
 
             _summaries = [
                 f for f in region_model.site_summaries()
-                if f['properties']['status'] in SITE_SUMMARY_POS_STATUS
+                # if f['properties']['status'] in SITE_SUMMARY_POS_STATUS
+                if f['properties']['status'] not in {'system_rejected'}
             ]
             region_id = region_header['properties'].get('region_id', default_region_id)
             site_summaries.extend([(region_id, s) for s in _summaries])
@@ -811,14 +812,14 @@ def add_site_summary_to_kwcoco(possible_summaries,
 
     # write site summaries
     import watch
-    cid = coco_dset.ensure_category(watch.heuristics.SITE_SUMMARY_CNAME)
+    site_summary_cid = coco_dset.ensure_category(watch.heuristics.SITE_SUMMARY_CNAME)
 
     print('Searching for assignment between requested site summaries and the kwcoco videos')
 
     site_idx_to_vidid = []
     unassigned_site_idxs = []
 
-    USE_NAME_ASSIGNMENT = DEBUG_MODE  # off by default, for known site models
+    USE_NAME_ASSIGNMENT = 0  # off by default, for known site models
     USE_GEO_ASSIGNMENT = 1
 
     if USE_NAME_ASSIGNMENT:
@@ -847,6 +848,17 @@ def add_site_summary_to_kwcoco(possible_summaries,
         video_gdf = gpd.GeoDataFrame(video_rows, crs=util_gis._get_crs84())
 
         sitesum_gdf = gpd.GeoDataFrame.from_features([t[1] for t in site_summaries], crs=util_gis._get_crs84(), columns=['geometry'])
+
+        if 0:
+            import kwplot
+            kwplot.autompl()
+            fig = kwplot.figure(fnum=1, doclf=1)
+            ax = fig.gca()
+            import kwimage
+            color1 = kwimage.Color('red', alpha=0.5).as01('rgba')
+            color2 = kwimage.Color('blue', alpha=0.5).as01('rgba')
+            video_gdf.plot(ax=ax, facecolor=color2)
+            sitesum_gdf.plot(ax=ax, facecolor=color1)
 
         site_idx_to_video_idx = util_gis.geopandas_pairwise_overlaps(sitesum_gdf, video_gdf)
 
@@ -927,7 +939,7 @@ def add_site_summary_to_kwcoco(possible_summaries,
             # space in a later step
             coco_dset.add_annotation(
                 image_id=img['id'],
-                category_id=cid,
+                category_id=site_summary_cid,
                 # bbox=bbox,
                 # segmentation=img_poly,
                 segmentation_geos=poly_crs84_geojson,
