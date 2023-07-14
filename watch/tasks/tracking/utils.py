@@ -435,7 +435,7 @@ def pop_tracks(coco_dset,
     annots = annots.compress(
         np.in1d(np.array(annots.cnames, dtype=str), cnames))
     if len(annots) < 1:
-        print(f'warning: no {cnames} annots in dset {coco_dset.tag}!')
+        print(f'warning: no cnames={cnames} annots in dset dset.tag={coco_dset.tag}!')
 
     # Load polygon annotation segmentation in video space
     coco_imgs = annots.images.coco_images
