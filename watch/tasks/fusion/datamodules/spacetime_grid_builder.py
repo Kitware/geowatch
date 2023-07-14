@@ -367,7 +367,7 @@ def sample_video_spacetime_targets(dset,
         use_centered_positives,
         refine_iosa_thresh,
         respect_valid_regions,
-        'cache_v13',
+        'cache_v14',
     ]
     # Higher level cacher (not sure if adding this secondary level of caching
     # is faster or not).
@@ -568,7 +568,7 @@ def _sample_single_video_spacetime_targets(
         refine_iosa_thresh,
         respect_valid_regions,
         set_cover_algo,
-        'cache_v11',
+        'cache_v14',
     ]
 
     # Only use the cache if this is probably going to be a slow operation.

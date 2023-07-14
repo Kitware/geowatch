@@ -79,7 +79,7 @@ def _sitevisit_2023_july_report():
 
     # subagg.build_macro_tables(average='gmean')
 
-    subagg.report_best(top_k=3, print_models=0, reference_region='final')
+    subagg.report_best(top_k=10, print_models=1, reference_region='final')
     SMART_HELPER.print_minmax_times(subagg.table)
 
     resources = subagg.resource_summary_table()

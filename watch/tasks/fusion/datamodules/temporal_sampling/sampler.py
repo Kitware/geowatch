@@ -245,7 +245,7 @@ class MultiTimeWindowSampler(CommonSamplerMixin):
 
     def __init__(self, unixtimes, sensors, time_window=None, affinity_type='hard',
                  update_rule='distribute', deterministic=False, gamma=1,
-                 time_span=None, time_kernel=None, name='?'):
+                 time_span=None, time_kernel=None, name='?', allow_fewer=True):
         """
         Args:
             time_span (List[List[str]]):
@@ -279,6 +279,7 @@ class MultiTimeWindowSampler(CommonSamplerMixin):
         self.num_frames = len(unixtimes)
         self.time_span = time_span
         self.sub_samplers = {}
+        self.allow_fewer = allow_fewer
         self._build()
 
     def _build(self):
@@ -294,6 +295,7 @@ class MultiTimeWindowSampler(CommonSamplerMixin):
                 name=self.name,
                 time_span=time_span,
                 time_kernel=time_kernel,
+                allow_fewer=self.allow_fewer,
             )
             key = ':'.join([str(time_span), str(time_kernel), affinity_type, update_rule])
             self.sub_samplers[key] = sub_sampler
