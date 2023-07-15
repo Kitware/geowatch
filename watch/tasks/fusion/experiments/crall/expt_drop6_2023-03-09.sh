@@ -4924,7 +4924,7 @@ data:
     input_resolution      : 2.0GSD
     output_resolution     : 2.0GSD
     neg_to_pos_ratio       : 1.0
-    batch_size             : 4
+    batch_size             : 2
     normalize_perframe     : false
     normalize_peritem      : 'blue|green|red|nir|pan'
     max_epoch_length       : 1000000
@@ -5004,3 +5004,115 @@ initializer:
     init: $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V08/Drop7-Cropped2GSD_SC_bgrn_split6_V08_epoch336_step28982.pt
 "
 
+
+
+# On toothbrush - SC training - continued with shuffled hyperparams
+export CUDA_VISIBLE_DEVICES=1
+DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='auto')
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
+echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop7-Cropped2GSD
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_rawbands_split6.kwcoco.zip
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_rawbands_split6.kwcoco.zip
+CHANNELS="(L8,S2):(blue|green|red|nir),(WV):(blue|green|red),(WV,WV1):pan"
+EXPERIMENT_NAME=Drop7-Cropped2GSD_SC_bgrn_split6_V10
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+TARGET_LR=1e-4
+WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
+echo "WEIGHT_DECAY = $WEIGHT_DECAY"
+MAX_STEPS=80000
+WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
+data:
+    select_videos          : $SELECT_VIDEOS
+    num_workers            : 5
+    train_dataset          : $TRAIN_FPATH
+    vali_dataset           : $VALI_FPATH
+    window_dims            : '224,224'
+    time_steps             : 9
+    time_sampling          : soft4
+    time_kernel            : '(-1.08y,-1y,-0.25y,-0.08y,0.0y,0.08y,0.25y,1y,1.08y)'
+    window_resolution     : 2.0GSD
+    input_resolution      : 2.0GSD
+    output_resolution     : 2.0GSD
+    neg_to_pos_ratio       : 1.0
+    batch_size             : 4
+    normalize_perframe     : false
+    normalize_peritem      : 'blue|green|red|nir|pan'
+    max_epoch_length       : 1000000
+    channels               : '$CHANNELS'
+    min_spacetime_weight   : 0.6
+    temporal_dropout       : 0.5
+    mask_low_quality       : False
+    mask_samecolor_method  : None
+    observable_threshold   : 0.0
+    quality_threshold      : 0.0
+    weight_dilate          : 10
+    use_centered_positives : True
+    use_grid_positives     : False
+    use_grid_negatives     : False
+    normalize_inputs       : 1024
+    balance_areas          : True
+model:
+    class_path: MultimodalTransformer
+    init_args:
+        #saliency_weights      : '1:1'
+        #class_weights         : auto
+        tokenizer              : linconv
+        arch_name              : smt_it_stm_p16
+        decoder                : mlp
+        positive_change_weight : 1
+        negative_change_weight : 0.01
+        stream_channels        : 16
+        class_loss             : 'dicefocal'
+        saliency_loss          : 'focal'
+        saliency_head_hidden   : 6
+        change_head_hidden     : 6
+        class_head_hidden      : 6
+        global_change_weight   : 0.00
+        global_class_weight    : 1.00
+        global_saliency_weight : 0.00001
+        multimodal_reduce      : learned_linear
+optimizer:
+    class_path: torch.optim.AdamW
+    init_args:
+        lr           : $TARGET_LR
+        weight_decay : $WEIGHT_DECAY
+        betas:
+            - 0.95
+            - 0.998
+lr_scheduler:
+  class_path: torch.optim.lr_scheduler.OneCycleLR
+  init_args:
+    max_lr: $TARGET_LR
+    total_steps: $MAX_STEPS
+    anneal_strategy: cos
+    pct_start: 0.3
+    div_factor: 10
+    final_div_factor: 10000
+    cycle_momentum: false
+trainer:
+    accumulate_grad_batches: 48
+    default_root_dir     : $DEFAULT_ROOT_DIR
+    accelerator          : gpu
+    devices              : 0,
+    limit_val_batches    : 256
+    limit_train_batches  : 2048
+    num_sanity_val_steps : 0
+    max_epochs           : 560
+    callbacks:
+        - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+          init_args:
+              monitor: val_loss
+              mode: min
+              save_top_k: 5
+              filename: '{epoch}-{step}-{val_loss:.3f}.ckpt'
+              save_last: true
+
+torch_globals:
+    float32_matmul_precision: auto
+
+initializer:
+    init: $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V08/Drop7-Cropped2GSD_SC_bgrn_split6_V08_epoch336_step28982.pt
+"
