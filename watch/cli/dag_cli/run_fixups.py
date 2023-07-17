@@ -71,8 +71,8 @@ def main():
     dummy_kwcoco_path = ingress_dir / 'dummy.kwcoco.json'
     dummy_kwcoco_path.touch()
 
-    input_region_dpath = ingressed_assets['cropped_region_models_sc']
-    input_site_dpath = ingressed_assets['cropped_site_models_sc']
+    input_region_dpath = ub.Path(ingressed_assets['cropped_region_models_sc'])
+    input_site_dpath = ub.Path(ingressed_assets['cropped_site_models_sc'])
 
     output_region_dpath = ingress_dir / 'cropped_region_models_fixed'
     output_site_dpath = ingress_dir / 'cropped_site_models_fixed'
