@@ -70,11 +70,11 @@ def run_dino_sv(config):
     print("* Running baseline framework kwcoco ingress *")
     ingress_dir = ub.Path('/tmp/ingress')
     ingressed_assets = smartflow_ingress(
+        input_path,
         ['depth_filtered_sites',
          'depth_filtered_regions',
          'cropped_kwcoco_for_sv',
          'cropped_kwcoco_for_sv_assets'],
-        input_path,
         ingress_dir,
         aws_profile,
         dryrun)
