@@ -397,6 +397,7 @@ def transfer_features_main(cmdline=1, **kwargs):
             copy_tasks.append(copy_task)
 
         new_asset['file_name'] = new_fname
+        new_asset['image_id'] = dst_coco_img['id']
         dst_coco_img.add_asset(**new_asset)
 
     print(f'Found {len(copy_tasks)} assets to copy')
