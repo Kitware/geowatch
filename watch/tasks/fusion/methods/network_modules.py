@@ -604,6 +604,7 @@ def coerce_criterion(loss_code, weights, ohem_ratio, focal_gamma):
             # weight=torch.FloatTensor([self.negative_change_weight, self.positive_change_weight]),
             sigmoid=True,
             to_onehot_y=False,
+            focal_weight=weights,
             reduction='none',
             ohem_ratio_focal=ohem_ratio,
             gamma=focal_gamma)
