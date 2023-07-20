@@ -3,7 +3,6 @@ import sys
 import json
 import os
 import tempfile
-from os.path import join, dirname, basename
 
 
 def main():
@@ -16,7 +15,7 @@ def main():
     parser.add_argument('assets',
                         type=str,
                         nargs='+',
-                        help="Assets to download")
+                        help="Names of assets to download")
     parser.add_argument("-o", "--outdir",
                         type=str,
                         required=True,
@@ -84,16 +83,16 @@ def smartflow_ingress(input_path,
     if len(input_stac_items) != 1:
         raise RuntimeError("Expecting one and only one STAC item from input")
     kwcoco_stac_item = input_stac_items[0]
-    kwcoco_stac_item_assets =\
-        {k: v['href'] for k, v in kwcoco_stac_item['assets'].items()}
+    kwcoco_stac_item_assets = {
+        k: v['href'] for k, v in kwcoco_stac_item['assets'].items()}
 
     for asset in assets:
         try:
             asset_href = kwcoco_stac_item_assets[asset]
         except KeyError:
-            missing_asset_str = "Expecting asset named '{}' in input KWCOCO STAC item".format(asset)  # noqa
+            missing_asset_str = f"Expecting asset named {asset!r} in input KWCOCO STAC item"  # noqa
             if dont_error_on_missing_asset:
-                print("* Warning: {}".format(missing_asset_str))
+                print(f"* Warning: {missing_asset_str!r}")
             else:
                 raise RuntimeError(missing_asset_str)  # noqa
 
@@ -103,6 +102,8 @@ def smartflow_ingress(input_path,
         aws_ls.args = [asset_href]
         ls_out = aws_ls.run(capture=True)
         # Must correctly set 'recursive' flag for AWS S3 cp calls
+        # `aws ls` on a "directory" or really "prefix" of one or more
+        # objects in S3 prints "PRE" (indicating it's a prefix)
         if ls_out['out'].strip().startswith('PRE'):
             aws_cp.update(recursive=True)
         else:

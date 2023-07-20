@@ -2,7 +2,7 @@ import argparse
 import sys
 import json
 import tempfile
-from os.path import join, dirname, basename, isdir
+from os.path import join, basename, isdir
 import uuid
 
 from shapely.geometry import shape
