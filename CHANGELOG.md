@@ -15,6 +15,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   when color information for a category channel is not given.
 * Major Bugfix: Issue in tracker where annotations were not read in the requested resolution causing scores of zero.
 * Fixed issue where DiceFocalLoss was not passed class weights correctly.
+* We no longer require a hacked pycold
 
 
 ### Changed
