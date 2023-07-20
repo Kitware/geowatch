@@ -60,21 +60,21 @@ def _build_stac_item(region_path,
     with open(region_path) as f:
         region = json.load(f)
 
-    region_features = []
-    for feature in region.get('features', ()):
-        if ('properties' in feature
-           and feature['properties'].get('type') == 'region'):
-            region_features.append(feature)
+    from watch.geoannots.geomodels import RegionModel
 
-    # WARNING: Big assumption here that we only ever have a single
-    # feature with type 'region' in the region file
-    if len(region_features) != 1:
-        raise RuntimeError("Expecting one and only one feature of type "
-                           "'region' in region file")
-    region_feature = region_features[0]
+    import json
+    with open(region_path) as f:
+        data = json.load(f)
 
-    region_geometry = region_feature['geometry']
-    region_bbox = list(shape(region_geometry).bounds)
+    region = RegionModel(**data)
+
+    # These are fast checks that include the assertion that there is only one
+    # header (i.e. type=region) feature.
+    region._validate_quick_checks()
+
+    import shapely
+    region_geometry: shapely.geometry.polygon.Polygon = region.geometry
+    region_bbox = list(region_geometry.bounds)
 
     return {'type': 'Feature',
             'stac_version': '1.0.0',
@@ -174,4 +174,4 @@ def smartflow_egress(assetnames_and_local_paths,
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()
