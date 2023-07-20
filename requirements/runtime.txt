@@ -150,8 +150,8 @@ progiter>=1.1.0
 fire>=0.4.0
 
 # Parsing
-lark >= 1.1.2
-lark_cython >= 0.0.12
+lark >= 1.1.2, <=1.1.5
+lark_cython >= 0.0.12, <=0.0.14
 
 # Imaging
 distinctipy>=1.2.1
