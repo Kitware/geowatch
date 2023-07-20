@@ -11,10 +11,10 @@ except Exception:
 
 
 def trackid_is_default(trackid):
-    '''
+    """
     Hack to decide if a trackid is really a site_id or if it was randomly
     assigned
-    '''
+    """
     if trackid is None:
         return True
     try:
@@ -25,23 +25,23 @@ def trackid_is_default(trackid):
 
 
 class TrackFunction:
-    '''
+    """
     Abstract class that all track functions should inherit from.
-    '''
+    """
 
     def __call__(self, sub_dset):
-        '''
+        """
         Ensure each annotation in coco_dset has a track_id.
 
         Returns:
             kwcoco.CocoDataset
-        '''
+        """
         raise NotImplementedError('must be implemented by subclasses')
 
     def apply_per_video(self, coco_dset, overwrite=False):
-        '''
+        """
         Main entrypoint for this class.
-        '''
+        """
         import kwcoco
         legacy = False
 
@@ -229,9 +229,9 @@ class TrackFunction:
 
 
 class NoOpTrackFunction(TrackFunction):
-    '''
+    """
     Use existing tracks.
-    '''
+    """
 
     def __init__(self, **kwargs):
         self.kwargs = kwargs  # Unused
@@ -241,10 +241,10 @@ class NoOpTrackFunction(TrackFunction):
 
 
 class NewTrackFunction(TrackFunction):
-    '''
+    """
     Specialization of TrackFunction to create polygons that do not yet exist
     in coco_dset, and add them as new annotations
-    '''
+    """
     def __call__(self, sub_dset):
         print('Create tracks')
         tracks = self.create_tracks(sub_dset)
@@ -409,7 +409,7 @@ def pop_tracks(coco_dset,
                remove: bool = True,
                score_chan=None,
                resolution: Optional[str] = None):
-    '''
+    """
     Convert kwcoco annotations into tracks.
 
     Args:
@@ -425,7 +425,7 @@ def pop_tracks(coco_dset,
     Returns:
         gpd dataframe.
         Mutates coco_dset if remove=True.
-    '''
+    """
     # TODO could refactor to work on coco_dset.annots() and integrate
     import geopandas as gpd
     import numpy as np
@@ -477,20 +477,43 @@ def _rasterized_poly(shp_poly, h, w, pixels_are):
 
 @profile
 def score_poly(poly, probs, threshold=-1, use_rasterio=True):
-    '''
+    """
     Args:
-        poly: kwimage.Polygon or MultiPolygon in pixel coords
+        poly (kwimage.Polygon | MultiPolygon):
+            in pixel coords
 
-        probs: heatmap to compare poly against. Any leading batch dimensions
-        will be preserved in output, e.g. (gid chan w h) -> (gid chan)
+        probs (ndarray):
+            heatmap to compare poly against. Any leading batch dimensions will
+            be preserved in output, e.g. (gid chan w h) -> (gid chan)
 
-        use_rasterio: use rasterio.features module instead of kwimage
+        use_rasterio (bool):
+            use rasterio.features module instead of kwimage
 
-        threshold: Return fraction of poly with probs > threshold.
-        If -1, return average value of probs in poly. Can be a list of values,
-        in which case returns all of them.
+        threshold (float):
+            Return fraction of poly with probs > threshold.  If -1, return
+            average value of probs in poly. Can be a list of values, in which
+            case returns all of them.
 
-    '''
+    Returns:
+        ndarray | List[ndarray]
+
+    Example:
+        >>> import numpy as np
+        >>> import kwimage
+        >>> from watch.tasks.tracking.utils import score_poly
+        >>> h = w = 64
+        >>> poly = kwimage.Polygon.random().scale((w, h))
+        >>> probs = np.random.rand(1, 2, h, w)
+        >>> # Test with one threshold
+        >>> threshold = [0.1, 0.2]
+        >>> result = score_poly(poly, probs, threshold=threshold, use_rasterio=True)
+        >>> # Test with multiple thresholds
+        >>> threshold = 0.1
+        >>> result = score_poly(poly, probs, threshold=threshold, use_rasterio=True)
+        >>> # Test with -1 threshold
+        >>> threshold = -1
+        >>> result = score_poly(poly, probs, threshold=threshold, use_rasterio=True)
+    """
     import kwimage
     import numpy as np
     if not isinstance(poly, (kwimage.Polygon, kwimage.MultiPolygon)):
@@ -502,16 +525,16 @@ def score_poly(poly, probs, threshold=-1, use_rasterio=True):
 
     # First compute the valid bounds of the polygon
     # And create a mask for only the valid region of the polygon
-    box = poly.bounding_box().quantize().to_xywh()
+    box = poly.box().quantize().to_xywh()
     # Ensure box is inside probs
     ymax, xmax = probs.shape[-2:]
     box = box.clip(0, 0, xmax, ymax).to_xywh()
-    if box.area[0][0] == 0:
+    if box.area == 0:
         warnings.warn(
             'warning: scoring a polygon against an img with no overlap!')
         zeros = np.zeros(probs.shape[:-2])
         return [zeros] * len(threshold) if _return_list else zeros
-    x, y, w, h = box.data[0]
+    x, y, w, h = box.data
     pixels_are = 'areas' if use_rasterio else 'points'
     # kwimage inverse
     # 95% of runtime... would batch be faster?
@@ -527,9 +550,11 @@ def score_poly(poly, probs, threshold=-1, use_rasterio=True):
 
     # handle nans
     msk = (np.isfinite(rel_probs) * rel_mask).astype(bool)
+    all_non_finite = not msk.any()
+
     for t in threshold:
-        if not msk.any():
-            result.append(np.nan * np.ones(rel_probs.shape[:-2]))
+        if all_non_finite:
+            result.append(np.full(rel_probs.shape[:-2], fill_value=np.nan))
         elif t == -1:
             mskd = np.ma.array(rel_probs, mask=~msk)
             result.append(mskd.mean(axis=(-2, -1)).filled(0))
