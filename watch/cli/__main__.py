@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 # PYTHON_ARGCOMPLETE_OK
-import sys
 import ubelt as ub
 
 __devnotes__ = """
