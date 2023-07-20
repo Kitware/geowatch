@@ -1,46 +1,38 @@
-import argparse
-import sys
 import json
 import os
 import tempfile
 
+import ubelt as ub
+import scriptconfig as scfg
+
+
+class SmartflowIngressConfig(scfg.DataConfig):
+    """
+    Egress KWCOCO data to T&E baseline framework structure
+    """
+    input_path = scfg.Value(None, type=str, position=1, required=True, help=ub.paragraph(
+            '''
+            Path to input T&E Baseline Framework JSON
+            '''))
+    assets = scfg.Value(None, type=str, position=2, required=True, help='Names of assets to download', nargs='+')
+    outdir = scfg.Value(None, type=str, group='optional arguments', required=True, short_alias=['o'], help=ub.paragraph(
+            '''
+            Output directory for ingressed assets an output STAC Catalog
+            '''))
+    aws_profile = scfg.Value(None, type=str, group='optional arguments', help=ub.paragraph(
+            '''
+            AWS Profile to use for AWS S3 CLI commands
+            '''))
+    dryrun = scfg.Value(False, isflag=True, group='optional arguments', short_alias=['d'], help='Run AWS CLI commands with --dryrun flag')
+    show_progress = scfg.Value(False, isflag=True, group='optional arguments', short_alias=['s'], help='Show progress for AWS CLI commands')
+    dont_error_on_missing_asset = scfg.Value(False, isflag=True, group='optional arguments', help=ub.paragraph(
+            '''
+            Don't raise error on missing asset, just warn
+            '''))
+
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Egress KWCOCO data to T&E baseline framework structure")
-
-    parser.add_argument('input_path',
-                        type=str,
-                        help="Path to input T&E Baseline Framework JSON")
-    parser.add_argument('assets',
-                        type=str,
-                        nargs='+',
-                        help="Names of assets to download")
-    parser.add_argument("-o", "--outdir",
-                        type=str,
-                        required=True,
-                        help="Output directory for ingressed assets an output "
-                             "STAC Catalog")
-    parser.add_argument("--aws_profile",
-                        required=False,
-                        type=str,
-                        help="AWS Profile to use for AWS S3 CLI commands")
-    parser.add_argument("-d", "--dryrun",
-                        action='store_true',
-                        default=False,
-                        help="Run AWS CLI commands with --dryrun flag")
-    parser.add_argument('-s', '--show-progress',
-                        action='store_true',
-                        default=False,
-                        help='Show progress for AWS CLI commands')
-    parser.add_argument('--dont-error-on-missing-asset',
-                        action='store_true',
-                        default=False,
-                        help="Don't raise error on missing asset, just warn")
-
-    smartflow_ingress(**vars(parser.parse_args()))
-
-    return 0
+    smartflow_ingress(**SmartflowIngressConfig.cli())
 
 
 def smartflow_ingress(input_path,
