@@ -134,6 +134,7 @@ def run_sc_fusion_for_baseline(config):
 
     if len(ingress_kwcoco_data.get('videos', ())) > 0:
         # 3. Run fusion
+        print('*********************')
         print("* Running SC fusion *")
 
         # TODO: remove these defaults or replace them with whatever is the
@@ -182,6 +183,7 @@ def run_sc_fusion_for_baseline(config):
             traceback.print_exception(*sys.exc_info())
         else:
             # 4. Compute tracks (SC)
+            print('*************************')
             print("* Computing tracks (SC) *")
 
             # TODO: remove these defaults or replace them with whatever is the

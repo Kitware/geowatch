@@ -250,10 +250,10 @@ def _split_props(parts):
 
 @profile
 def coco_create_observation(coco_dset, anns, with_properties=True):
-    '''
+    """
     Group kwcoco annotations in the same track (site) and image
     into one Feature in an IARPA site model
-    '''
+    """
     import geojson
     import kwcoco
     import shapely
@@ -267,10 +267,10 @@ def coco_create_observation(coco_dset, anns, with_properties=True):
 
     @profile
     def _per_image_properties(coco_img: kwcoco.CocoImage):
-        '''
+        """
         Properties defined per-img instead of per-ann, to reduce duplicate
         computation.
-        '''
+        """
         # pick the image that is actually copied to the metrics framework
         # the source field is implied to be a STAC id, but overload it to
         # enable viz during scoring without referring back to the kwcoco file
@@ -417,9 +417,9 @@ def coco_create_observation(coco_dset, anns, with_properties=True):
 @profile
 def coco_track_to_site(coco_dset, trackid, region_id, site_idx=None,
                        as_summary=False):
-    '''
+    """
     Turn a kwcoco track into an IARPA site model or site summary
-    '''
+    """
     import geojson
 
     # get annotations in this track sorted by frame_index
@@ -455,7 +455,7 @@ def coco_track_to_site(coco_dset, trackid, region_id, site_idx=None,
 
 
 def predict_phase_changes(site_id, features):
-    '''
+    """
     Set predicted_phase_transition and predicted_phase_transition_date.
 
     This should only kick in when the site does not end before the current
@@ -480,7 +480,7 @@ def predict_phase_changes(site_id, features):
         >>> features = list(site.body_features())
         >>> features[-1]['properties']['misc_info'] = {'phase_transition_days': [100]}
         >>> predict_phase_changes(site_id, features)
-    '''
+    """
     import datetime as datetime_mod
     import dateutil.parser
 
@@ -530,9 +530,9 @@ def predict_phase_changes(site_id, features):
 
 
 def coco_create_site_header(coco_dset, region_id, site_id, trackid, gids, features, as_summary):
-    '''
+    """
     Feature containing metadata about the site
-    '''
+    """
     from mgrs import MGRS
     import numpy as np
     import geojson
@@ -1268,7 +1268,7 @@ def main(argv=None, **kwargs):
         video_region_assignments = assign_videos_to_regions(video_gdf, boundary_regions_gdf)
     else:
         import rich
-        if args.site_summary is not None:
+        if args.site_summary is None:
             rich.print('[yellow]Warning: No boundary regions or site summaries specified')
         else:
             rich.print('No boundary regions specified')

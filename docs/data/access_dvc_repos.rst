@@ -19,6 +19,11 @@ As of 2022-09-29 there are two primary internal DVC repos:
 * The Phase 2 Internal SMART GEOWATCH DVC **Experiment** Repo: https://gitlab.kitware.com/smart/smart_expt_dvc/
 
 
+Note: There is an additional repo for Drop7 Cropped AC/SC data:
+
+* The Phase 2 Internal SMART GEOWATCH DVC AC/SC **Data** Repo:  https://gitlab.kitware.com/smart/smart_drop7
+
+
 This document will outline how to clone the DVC repos, and then how to pull
 relevant data from them.
 

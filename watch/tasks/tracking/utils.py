@@ -314,36 +314,12 @@ def gpd_compute_scores(
         ks: Dict,
         USE_DASK=False,
         resolution=None):
+    """
+    TODO: This needs docs and examples for the BAS and SC/AC cases.
+    """
     import numpy as np
     import pandas as pd
-
-    def compute_scores(grp, thrs=[], keys=[]):
-        gid = getattr(grp, 'name', None)
-        if gid is None:
-            for thr in thrs:
-                grp[[(k, thr) for k in keys]] = 0
-        else:
-            heatmaps = []
-            img = sub_dset.coco_image(gid)
-            for k in keys:
-                # TODO handle keys as channelcodes
-                if k in img.channels:
-                    heatmap = img.imdelay(k, space='video', resolution=resolution).finalize()
-                    heatmap = np.squeeze(heatmap, -1)
-                else:
-                    w, h = img.imdelay(space='video', resolution=resolution).dsize
-                    heatmap = np.zeros((h, w))
-                heatmaps.append(heatmap)
-            heatmaps = np.stack(heatmaps, axis=0)
-            score_cols = list(itertools.product(keys, thrs))
-            scores = grp['poly'].apply(
-                lambda p: pd.Series(dict(zip(
-                    score_cols,
-                    # awk, making this serializable for kwcoco dataset
-                    list(ub.flatten(score_poly(p, heatmaps, threshold=thrs)))))
-                ))
-            grp[score_cols] = scores
-        return grp
+    import kwcoco
 
     ks = {k: v for k, v in ks.items() if v}
     _valid_keys = list(set().union(itertools.chain.from_iterable(
@@ -358,7 +334,7 @@ def gpd_compute_scores(
         # npartitions and chunksize are mutually exclusive
         gdf = dask_geopandas.from_geopandas(gdf, npartitions=8)
         meta = gdf._meta.join(pd.DataFrame(columns=score_cols, dtype=float))
-        gdf = gdf.groupby('gid', group_keys=False).apply(compute_scores,
+        gdf = gdf.groupby('gid', group_keys=False).apply(_compute_group_scores,
                                                          thrs=thrs,
                                                          keys=_valid_keys,
                                                          meta=meta)
@@ -374,7 +350,7 @@ def gpd_compute_scores(
 
     else:  # 95% runtime
         grouped = gdf.groupby('gid', group_keys=False)
-        gdf = grouped.apply(compute_scores, thrs=thrs, keys=_valid_keys)
+        gdf = grouped.apply(_compute_group_scores, thrs=thrs, keys=_valid_keys)
 
     # fill nan scores from nodata pxls
     # groupby track instead of gid
@@ -398,6 +374,44 @@ def gpd_compute_scores(
                 scored_gdf[(k, thr)] = scored_gdf[sum_cols].sum(axis=1)
 
     return scored_gdf
+
+
+def _compute_group_scores(grp, thrs=[], keys=[]):
+    """
+    Helper for :func:`gpd_compute_scores`.
+    """
+    gid = getattr(grp, 'name', None)
+    if gid is None:
+        for thr in thrs:
+            grp[[(k, thr) for k in keys]] = 0
+    else:
+        img = sub_dset.coco_image(gid)
+
+        # Load the channels to score
+        channels = kwcoco.FusedChannelSpec.coerce(keys)
+        heatmaps_hwc = img.imdelay(channels, space='video', resolution=resolution).finalize()
+        heatmaps = heatmaps_hwc.transpose(2, 0, 1)
+
+        score_cols = list(itertools.product(keys, thrs))
+
+        # Compute scores for each polygon.
+        new_scores_rows = []
+        for poly in grp['poly']:
+            poly_scores_ = score_poly(poly, heatmaps, threshold=thrs)
+            # awk, making this serializable for kwcoco dataset
+            poly_scores = list(ub.flatten(poly_scores_))
+            col_to_score = dict(zip(score_cols, poly_scores))
+            new_scores_rows.append(pd.Series(col_to_score))
+        grp[score_cols] = new_scores_rows
+
+        # scores = grp['poly'].apply(
+        #     lambda p: pd.Series(dict(zip(
+        #         score_cols,
+        #         # awk, making this serializable for kwcoco dataset
+        #         list(ub.flatten(score_poly(p, heatmaps, threshold=thrs)))))
+        #     ))
+        # grp[score_cols] = scores
+    return grp
 
 
 # -----------------------
@@ -437,11 +451,26 @@ def pop_tracks(coco_dset,
     if len(annots) < 1:
         print(f'warning: no cnames={cnames} annots in dset dset.tag={coco_dset.tag}!')
 
-    # Load polygon annotation segmentation in video space
+    # Load polygon annotation segmentation in video space at the target
+    # resolution
+    gids = annots.images.ids
+    gid_to_anns = ub.group_items(annots.objs, gids)
+
+    for image_id, anns in gid_to_anns.items():
+        coco_img = coco_dset.coco_image(image_id)
+        ...
+
+
     coco_imgs = annots.images.coco_images
     polys = []
     for coco_img, ann in zip(coco_imgs, annots.objs):
         poly = coco_img._annot_segmentation(ann, space='video')
+
+        if resolution is not None:
+            # TODO: in kwcoco 0.6.5 we can pass resolution to
+            # _annot_segmentation instead.
+            scale = coco_img._scalefactor_for_resolution(space='video',
+                                                         resolution=resolution)
         polys.append(poly)
 
     assert len(polys) == len(annots), ('TODO handle multipolygon boundaries')
@@ -478,13 +507,17 @@ def _rasterized_poly(shp_poly, h, w, pixels_are):
 @profile
 def score_poly(poly, probs, threshold=-1, use_rasterio=True):
     """
+    Compute the average heatmap response of a heatmap inside of a polygon.
+
     Args:
         poly (kwimage.Polygon | MultiPolygon):
             in pixel coords
 
         probs (ndarray):
-            heatmap to compare poly against. Any leading batch dimensions will
-            be preserved in output, e.g. (gid chan w h) -> (gid chan)
+            heatmap to compare poly against in [..., c, h, w] format.
+            The last two dimensions should be height, and width.
+            Any leading batch dimensions will be preserved in output,
+            e.g. (gid, chan, h, w) -> (gid, chan)
 
         use_rasterio (bool):
             use rasterio.features module instead of kwimage
@@ -495,7 +528,11 @@ def score_poly(poly, probs, threshold=-1, use_rasterio=True):
             case returns all of them.
 
     Returns:
-        ndarray | List[ndarray]
+        List[ndarray] | ndarray:
+
+            When thresholds is a list, returns a corresponding list of ndarrays
+            with an entry keeping the leading dimensions of probs and
+            marginalizing over the last two.
 
     Example:
         >>> import numpy as np
@@ -503,16 +540,27 @@ def score_poly(poly, probs, threshold=-1, use_rasterio=True):
         >>> from watch.tasks.tracking.utils import score_poly
         >>> h = w = 64
         >>> poly = kwimage.Polygon.random().scale((w, h))
-        >>> probs = np.random.rand(1, 2, h, w)
+        >>> probs = np.random.rand(1, 3, h, w)
         >>> # Test with one threshold
         >>> threshold = [0.1, 0.2]
         >>> result = score_poly(poly, probs, threshold=threshold, use_rasterio=True)
+        >>> print('result = {}'.format(ub.urepr(result, nl=1)))
         >>> # Test with multiple thresholds
         >>> threshold = 0.1
         >>> result = score_poly(poly, probs, threshold=threshold, use_rasterio=True)
+        >>> print('result = {}'.format(ub.urepr(result, nl=1)))
         >>> # Test with -1 threshold
         >>> threshold = -1
         >>> result = score_poly(poly, probs, threshold=threshold, use_rasterio=True)
+        >>> print('result = {}'.format(ub.urepr(result, nl=1)))
+
+    Example:
+        ### Grid of cases
+
+        basis = {
+            'threshold':
+        }
+
     """
     import kwimage
     import numpy as np
@@ -525,7 +573,13 @@ def score_poly(poly, probs, threshold=-1, use_rasterio=True):
 
     # First compute the valid bounds of the polygon
     # And create a mask for only the valid region of the polygon
-    box = poly.box().quantize().to_xywh()
+
+    # TODO: use this when kwimage 0.9.20 is out
+    # box = poly.box().quantize().to_xywh()
+
+    boxes = poly.bounding_box().quantize().to_xywh()
+    box = kwimage.Box.coerce(boxes.data[0], boxes.format)
+
     # Ensure box is inside probs
     ymax, xmax = probs.shape[-2:]
     box = box.clip(0, 0, xmax, ymax).to_xywh()
@@ -574,10 +628,14 @@ def mask_to_polygons(probs,
                      thresh_hysteresis=None):
     """
     Args:
-        probs: aka heatmap, image of probability values
+        probs (ndarray): aka heatmap, image of probability values
+
         thresh: to turn probs into a hard mask
+
         bounds: a kwimage or shapely polygon to crop the results to
+
         use_rasterio: use rasterio.features module instead of kwimage
+
         thresh_hysteresis: if not None, only keep polygons with at least one
             pixel of score >= thresh_hysteresis
 

@@ -679,6 +679,10 @@ def time_aggregated_polys(sub_dset, **kwargs):
         thrs.add(-1)
     if config.time_thresh:
         thrs.add(config.time_thresh * config.thresh)
+    #####
+    ## Jon C: I'm not sure about this. Going from a set to a list, and then having
+    ## the resulting function depend on the order of the list makes me nerevous.
+    #####
     thrs = list(thrs)
 
     ks = {'fg': config.key, 'bg': config.bg_key}
@@ -1411,7 +1415,8 @@ class TimeAggregatedSV(CommonTrackFn):
     '''
     Wrapper for Site Validation that looks for phase heatmaps.
 
-    Alias: class_heatmaps
+    Alias:
+        site_validation
 
     Note:
         This is a valid choice of `track_fn` in ../../cli/kwcoco_to_geojson.py
