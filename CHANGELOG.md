@@ -13,6 +13,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Fixed issue with coco visualize colors in construction activity
   characterization, but a proper general fix is needed for choosing darker colors
   when color information for a category channel is not given.
+* Major Bugfix: Issue in tracker where annotations were not read in the requested resolution causing scores of zero.
+* Fixed issue where DiceFocalLoss was not passed class weights correctly.
+
+
+### Changed
+* Improved `geowatch site_stats` to accept region and/or site models and provide nice statistics.
 
 ### Removed
 * Removed old fit script. The lightning CLI script is considered stable.

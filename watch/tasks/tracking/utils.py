@@ -45,6 +45,8 @@ class TrackFunction:
         import kwcoco
         legacy = False
 
+        assert not overwrite, 'overwrite should always be false'
+
         tracked_subdsets = []
         vid_gids = coco_dset.index.vidid_to_gids.values()
         total = len(coco_dset.index.vidid_to_gids)
@@ -133,6 +135,8 @@ class TrackFunction:
 
     @profile
     def safe_apply(self, coco_dset, gids, overwrite, legacy=True):
+        assert not legacy, 'todo: remove legacy code'
+
         import numpy as np
         DEBUG_JSON_SERIALIZABLE = 0
         if DEBUG_JSON_SERIALIZABLE:
@@ -151,7 +155,10 @@ class TrackFunction:
 
         if DEBUG_JSON_SERIALIZABLE:
             debug_json_unserializable(sub_dset.dataset, 'Before __call__')
+
         if overwrite:
+            raise AssertionError('overwrite should always be False')
+
             sub_dset = self(sub_dset)
             if DEBUG_JSON_SERIALIZABLE:
                 debug_json_unserializable(sub_dset.dataset,
@@ -163,7 +170,13 @@ class TrackFunction:
             orig_aids = list(orig_annots)
 
             # TODO more sophisticated way to check if we can skip self()
+
+            ####
+            # APPLY THE TRACKING FUNCTION.
+            # THIS IS THE MAIN WORK. SEE SPECIFIC __call__ FUNCTIOSN
             sub_dset = self(sub_dset)
+            ####
+
             if DEBUG_JSON_SERIALIZABLE:
                 debug_json_unserializable(sub_dset.dataset, 'After __call__')
 
@@ -205,6 +218,9 @@ class TrackFunction:
     @staticmethod
     @profile
     def safe_partition(coco_dset, gids, remove=True):
+
+        assert not remove, 'should never remove'
+
         sub_dset = coco_dset.subset(gids=gids, copy=True)
         # HACK ensure tracks are not duplicated between videos
         # (if they are, this is fixed in dedupe_tracks anyway)
@@ -219,6 +235,7 @@ class TrackFunction:
     @staticmethod
     @profile
     def safe_union(coco_dset, new_dset, existing_aids=[]):
+        raise AssertionError('scheduled for removal')
         coco_dset._build_index()
         new_dset._build_index()
         # we handle tracks in normalize.dedupe_tracks anyway, and
@@ -246,12 +263,14 @@ class NewTrackFunction(TrackFunction):
     in coco_dset, and add them as new annotations
     """
     def __call__(self, sub_dset):
+        print(f'Enter {self.__class__} __call__ function')
         print('Create tracks')
         tracks = self.create_tracks(sub_dset)
         print('Add tracks to dset')
         sub_dset = self.add_tracks_to_dset(sub_dset, tracks)
         print('After tracking sub_dset.stats(): ' +
               ub.urepr(sub_dset.basic_stats()))
+        print(f'Exit {self.__class__} __call__ function')
         return sub_dset
 
     def create_tracks(self, sub_dset):
@@ -317,9 +336,7 @@ def gpd_compute_scores(
     """
     TODO: This needs docs and examples for the BAS and SC/AC cases.
     """
-    import numpy as np
     import pandas as pd
-    import kwcoco
 
     ks = {k: v for k, v in ks.items() if v}
     _valid_keys = list(set().union(itertools.chain.from_iterable(
@@ -337,7 +354,9 @@ def gpd_compute_scores(
         gdf = gdf.groupby('gid', group_keys=False).apply(_compute_group_scores,
                                                          thrs=thrs,
                                                          keys=_valid_keys,
-                                                         meta=meta)
+                                                         meta=meta,
+                                                         resolution=resolution,
+                                                         sub_dset=sub_dset)
         # raises this, which is probably fine:
         # /home/local/KHQ/matthew.bernstein/.local/conda/envs/watch/lib/python3.9/site-packages/rasterio/features.py:362:
         # NotGeoreferencedWarning: Dataset has no geotransform, gcps, or rpcs.
@@ -350,7 +369,8 @@ def gpd_compute_scores(
 
     else:  # 95% runtime
         grouped = gdf.groupby('gid', group_keys=False)
-        gdf = grouped.apply(_compute_group_scores, thrs=thrs, keys=_valid_keys)
+        gdf = grouped.apply(_compute_group_scores, thrs=thrs, keys=_valid_keys,
+                            resolution=resolution, sub_dset=sub_dset)
 
     # fill nan scores from nodata pxls
     # groupby track instead of gid
@@ -376,10 +396,12 @@ def gpd_compute_scores(
     return scored_gdf
 
 
-def _compute_group_scores(grp, thrs=[], keys=[]):
+def _compute_group_scores(grp, thrs=[], keys=[], resolution=None, sub_dset=None):
     """
     Helper for :func:`gpd_compute_scores`.
     """
+    import kwcoco
+    import pandas as pd
     gid = getattr(grp, 'name', None)
     if gid is None:
         for thr in thrs:
@@ -418,27 +440,34 @@ def _compute_group_scores(grp, thrs=[], keys=[]):
 
 
 @profile
-def pop_tracks(coco_dset,
-               cnames: Iterable[str],
-               remove: bool = True,
-               score_chan=None,
-               resolution: Optional[str] = None):
+def score_track_polys(coco_dset,
+                      cnames: Iterable[str],
+                      score_chan=None,
+                      resolution: Optional[str] = None):
     """
-    Convert kwcoco annotations into tracks.
+    Score the polygons in a kwcoco dataset based on heatmaps without chaning
+    the polygon boundaries.
 
     Args:
         coco_dset (kwcoco.CocoDataset):
 
-        cnames: category names
-
-        remove: remove the annotations from coco_dset
+        cnames (List[str]):
+            category names. Only annotations with these names will be
+            considered.
 
         score_chan (kwcoco.ChannelSpec | None):
             score the track polygons by image overlap with this channel
 
+    Note:
+        This function needs a rename because we don't want this to mutate the
+        kwcoco dataset ever.
+
     Returns:
         gpd dataframe.
-        Mutates coco_dset if remove=True.
+
+    Note:
+        The returned unerlying GDF should return polygons in video space as it
+        will be consumed by :func:`_add_tracks_to_dset`.
     """
     # TODO could refactor to work on coco_dset.annots() and integrate
     import geopandas as gpd
@@ -456,30 +485,33 @@ def pop_tracks(coco_dset,
     gids = annots.images.ids
     gid_to_anns = ub.group_items(annots.objs, gids)
 
+    flat_polys = []
+    flat_gids = []
+    flat_track_ids = []
+    flat_scales = []
     for image_id, anns in gid_to_anns.items():
         coco_img = coco_dset.coco_image(image_id)
-        ...
-
-
-    coco_imgs = annots.images.coco_images
-    polys = []
-    for coco_img, ann in zip(coco_imgs, annots.objs):
-        poly = coco_img._annot_segmentation(ann, space='video')
-
+        img_polys = _annot_segmentations(coco_img, anns, space='video',
+                                         resolution=resolution)
+        flat_polys.extend(img_polys)
+        flat_gids.extend([image_id] * len(img_polys))
+        flat_track_ids.extend([ann['track_id'] for ann in anns])
         if resolution is not None:
-            # TODO: in kwcoco 0.6.5 we can pass resolution to
-            # _annot_segmentation instead.
+            # Need to remember the inverse scale factor to get back to video
+            # space.
             scale = coco_img._scalefactor_for_resolution(space='video',
                                                          resolution=resolution)
-        polys.append(poly)
+            flat_scales.append(scale)
 
-    assert len(polys) == len(annots), ('TODO handle multipolygon boundaries')
+    assert len(flat_polys) == len(annots), ('TODO handle multipolygon boundaries')
 
-    polys = [p.to_shapely() for p in polys]
-    gdf = gpd.GeoDataFrame(dict(gid=annots.gids,
-                                poly=polys,
-                                track_idx=annots.get('track_id')),
-                           geometry='poly')
+    flat_polys = [p.to_shapely() for p in flat_polys]
+    gdf = gpd.GeoDataFrame({
+        'gid': flat_gids,
+        'poly': flat_polys,
+        'track_idx': flat_track_ids,
+    }, geometry='poly')
+
     if score_chan is not None:
         keys = {score_chan.spec: list(score_chan.unique())}
         # gdf = gpd_compute_scores(gdf, coco_dset, [-1], keys, USE_DASK=True,
@@ -490,8 +522,17 @@ def pop_tracks(coco_dset,
         np.unique(annots.gids))
     gdf = gpd_sort_by_gid(gdf, sorted_gids)
 
-    if remove:
-        coco_dset.remove_categories(cnames, keep_annots=False)
+    if resolution is not None:
+        # It should be the case that all of the scale factors are the same
+        # because it is wrt to video space. Check for this and then
+        # just apply a single warp.
+        assert ub.allsame(flat_scales)
+        if flat_scales:
+            inverse_scale = 1 / flat_scales[0][0], 1 / flat_scales[0][1]
+            gdf['poly'] = gdf['poly'].scale(
+                xfact=inverse_scale[0],
+                yfact=inverse_scale[1],
+                origin=(0, 0, 0))
 
     return gdf
 
@@ -726,3 +767,42 @@ def _validate_keys(key, bg_key):
     if not set(key).isdisjoint(set(bg_key)):
         raise ValueError('cannot have a key in foreground and background')
     return key, bg_key
+
+
+def _warp_for_resolution(self, space, resolution=None):
+    """
+    Compute a transform from image-space to the requested space at a
+    target resolution.
+
+    Note:
+        Will be part of CocoImage in kwcoco 0.6.5
+    """
+    import kwimage
+    if space == 'image':
+        warp_space_from_img = kwimage.Affine(None)
+    elif space == 'video':
+        warp_space_from_img = self.warp_vid_from_img
+    else:
+        raise NotImplementedError(space)  # auxiliary/asset space
+
+    if resolution is None:
+        warp_final_from_img = warp_space_from_img
+    else:
+        # Requested the annotation at a resolution, so we need to apply a
+        # scale factor
+        scale = self._scalefactor_for_resolution(space=space,
+                                                 resolution=resolution)
+        warp_final_from_space = kwimage.Affine.scale(scale)
+        warp_final_from_img = warp_final_from_space @ warp_space_from_img
+    return warp_final_from_img
+
+
+def _annot_segmentations(self, anns, space='video', resolution=None):
+    import kwimage
+    warp_final_from_img = self._warp_for_resolution(space=space, resolution=resolution)
+    warped_ssegs = []
+    for ann in anns:
+        img_sseg = kwimage.MultiPolygon.coerce(ann['segmentation'])
+        warped_sseg = img_sseg.warp(warp_final_from_img)
+        warped_ssegs.append(warped_sseg)
+    return warped_ssegs
