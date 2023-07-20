@@ -799,7 +799,7 @@ def _warp_for_resolution(self, space, resolution=None):
 
 def _annot_segmentations(self, anns, space='video', resolution=None):
     import kwimage
-    warp_final_from_img = self._warp_for_resolution(space=space, resolution=resolution)
+    warp_final_from_img = _warp_for_resolution(self, space=space, resolution=resolution)
     warped_ssegs = []
     for ann in anns:
         img_sseg = kwimage.MultiPolygon.coerce(ann['segmentation'])
