@@ -1,4 +1,3 @@
-import argparse
 import json
 import tempfile
 from os.path import join, basename, isdir
@@ -40,14 +39,9 @@ def main():
 def _build_stac_item(region_path,
                      assetnames_and_s3_paths):
     with open(region_path) as f:
-        region = json.load(f)
-
-    from watch.geoannots.geomodels import RegionModel
-
-    import json
-    with open(region_path) as f:
         data = json.load(f)
 
+    from watch.geoannots.geomodels import RegionModel
     region = RegionModel(**data)
 
     # These are fast checks that include the assertion that there is only one
