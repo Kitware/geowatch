@@ -86,7 +86,6 @@ def run_bas_fusion_for_baseline(config):
 
     input_path = config.input_path
     input_region_path = config.input_region_path
-    output_path = config.output_path
     outbucket = config.outbucket
     aws_profile = config.aws_profile
     dryrun = config.dryrun

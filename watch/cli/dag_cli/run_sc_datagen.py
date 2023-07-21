@@ -3,7 +3,6 @@
 See Old Script:
     ~/code/watch/scripts/run_generate_sc_cropped_kwcoco.py
 """
-import os
 import subprocess
 from watch.cli.smartflow_ingress import smartflow_ingress
 from watch.cli.smartflow_egress import smartflow_egress
