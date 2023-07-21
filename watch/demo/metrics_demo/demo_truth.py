@@ -6,7 +6,7 @@ import kwarray
 import kwimage
 import mgrs
 import ubelt as ub
-from datetime import datetime as datetime_cls
+# from datetime import datetime as datetime_cls
 from shapely.ops import unary_union
 from kwarray.distributions import TruncNormal
 from watch.demo.metrics_demo import demo_utils

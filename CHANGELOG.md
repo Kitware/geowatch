@@ -17,6 +17,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Fixed issue where DiceFocalLoss was not passed class weights correctly.
 * We no longer require a hacked pycold
 * Demo region model timestamps no longer depend on the locale.
+* Bumped to kwutil 0.2.3, which fixes a problem with numeric timestamps being parsed in the local time zone instead of UTC.
 
 
 ### Changed
