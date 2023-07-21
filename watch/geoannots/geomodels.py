@@ -149,7 +149,7 @@ Example:
     site_obs.properties = {
         'type': 'observation',
         'observation_date': '2011-05-28',
-        'source': 'demosat-220110528T142754',
+        'source': 'demosat-220110528T132754',
         'sensor_name': 'demosat-2',
         'current_phase': 'No Activity',
         'is_occluded': 'False',

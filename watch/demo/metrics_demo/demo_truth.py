@@ -166,6 +166,7 @@ def random_region_model(region_id=None, region_poly=None, num_sites=3,
             ],
         }
     """
+    from kwutil import util_time
     rng = kwarray.ensure_rng(rng)
 
     if num_observations <= 0:
@@ -196,13 +197,11 @@ def random_region_model(region_id=None, region_poly=None, num_sites=3,
     if end_time is None:
         end_time = observables[-1]['datetime']
     else:
-        from kwutil import util_time
         end_time = util_time.coerce_datetime(end_time)
 
     if start_time is None:
         start_time = observables[0]['datetime']
     else:
-        from kwutil import util_time
         start_time = util_time.coerce_datetime(start_time)
 
     # Define the region feature
@@ -255,8 +254,8 @@ def random_region_model(region_id=None, region_poly=None, num_sites=3,
 
             visible_polys = []
             for sitesum in site_summaries:
-                site_d1 = datetime_cls.fromisoformat(sitesum["properties"]["start_date"])
-                site_d2 = datetime_cls.fromisoformat(sitesum["properties"]["end_date"])
+                site_d1 = util_time.coerce_datetime(sitesum["properties"]["start_date"])
+                site_d2 = util_time.coerce_datetime(sitesum["properties"]["end_date"])
                 # TODO: more date range intersection query, can blend between geom
                 # observations
                 if site_d1 <= datetime and datetime <= site_d2:

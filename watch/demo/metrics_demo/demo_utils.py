@@ -7,6 +7,7 @@ import kwarray
 import numpy as np
 import geopandas as gpd
 from shapely import geometry
+import datetime as datetime_mod
 from datetime import datetime as datetime_cls
 
 
@@ -166,7 +167,7 @@ def random_time_sequence(min_date_iso, max_date_iso, num_observations, rng=None)
         rng: random state or seed
 
     Returns:
-        List[datetime_cls]: sampled dates
+        List[datetime_cls]: sampled dates in the UTC timezone
 
     Example:
         >>> from watch.demo.metrics_demo.demo_utils import *  # NOQA
@@ -176,18 +177,38 @@ def random_time_sequence(min_date_iso, max_date_iso, num_observations, rng=None)
         >>> obs_sequence = random_time_sequence(min_date_iso, max_date_iso, num_observations, rng=9320)
         >>> print('obs_sequence = {}'.format(ub.urepr(obs_sequence, nl=1)))
         obs_sequence = [
-            datetime.datetime(1997, 9, 17, 20, 49, 7, 888653),
-            datetime.datetime(2001, 6, 29, 17, 43, 36, 108233),
-            datetime.datetime(2009, 4, 2, 10, 26, 54, 429200),
+            datetime.datetime(1997, 9, 17, 20, 49, 7, 888653, tzinfo=datetime.timezone.utc),
+            datetime.datetime(2001, 6, 29, 17, 43, 36, 108233, tzinfo=datetime.timezone.utc),
+            datetime.datetime(2009, 4, 2, 10, 26, 54, 429200, tzinfo=datetime.timezone.utc),
         ]
+
+    Ignore:
+        # In Docker, test that the code provides the same number in different
+        # locale.
+        export TZ="Africa/Lusaka"
+        rm -rf /etc/localtime
+        ln -s /usr/share/zoneinfo/Africa/Lusaka /etc/localtime
+        python -c "import datetime as datetime_mod; print(datetime_mod.datetime.fromisoformat('1996-06-23').replace(tzinfo=datetime_mod.timezone.utc).timestamp())"
     """
     rng = kwarray.ensure_rng(rng)
-    min_date = datetime_cls.fromisoformat(min_date_iso)
-    max_date = datetime_cls.fromisoformat(max_date_iso)
+    from kwutil import util_time
+    min_date = util_time.coerce_datetime(min_date_iso)
+    max_date = util_time.coerce_datetime(max_date_iso)
+    # min_date = datetime_cls.fromisoformat(min_date_iso)
+    # max_date = datetime_cls.fromisoformat(max_date_iso)
+    # # Assume user is specifying UTC by default.
+    # if min_date.tzinfo is None:
+    #     min_date = min_date.replace(tzinfo=datetime_mod.timezone.utc)
+    # if max_date.tzinfo is None:
+    #     max_date = max_date.replace(tzinfo=datetime_mod.timezone.utc)
     min_ts = min_date.timestamp()
     max_ts = max_date.timestamp()
     obs_timestamps = rng.rand(num_observations) * (max_ts - min_ts) + min_ts
-    obs_sequence = [datetime_cls.fromtimestamp(ts) for ts in sorted(obs_timestamps)]
+    obs_sequence = [
+        # util_time.coerce_datetime(ts)
+        datetime_cls.fromtimestamp(ts, tz=datetime_mod.timezone.utc)
+        for ts in sorted(obs_timestamps)
+    ]
     return obs_sequence
 
 

@@ -76,7 +76,7 @@ def generate_demo_metrics_framework_data(
         rng,
         truekw,
         predkw,
-        "v1",
+        "v2",
     ]
 
     stamp = ub.CacheStamp("demodata", dpath=cache_dpath, depends=depends,
