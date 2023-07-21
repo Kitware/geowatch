@@ -56,7 +56,7 @@ def _build_stac_item(region_path,
             'stac_version': '1.0.0',
             'stac_extensions': [],
             'id': uuid.uuid4().hex,
-            'geometry': region_geometry,
+            'geometry': shapely.geometry.mapping(region_geometry),
             'bbox': region_bbox,
             'properties': {},
             'assets': assetnames_and_s3_paths}
