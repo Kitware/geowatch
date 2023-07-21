@@ -69,8 +69,8 @@ def main():
 
 
 def run_sc_fusion_for_baseline(config):
-    from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress
-    from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress
+    from watch.cli.smartflow_ingress import smartflow_ingress
+    from watch.cli.smartflow_egress import smartflow_egress
     from watch.tasks.fusion.predict import predict
     from watch.tasks.fusion.datamodules.temporal_sampling import TimeSampleError
     from watch.utils.util_framework import download_region, determine_region_id
@@ -88,8 +88,11 @@ def run_sc_fusion_for_baseline(config):
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
     ingress_dir = ub.Path('/tmp/ingress')
-    ingress_kwcoco_path = baseline_framework_kwcoco_ingress(
+    ingressed_assets = smartflow_ingress(
         config.input_path,
+        ['cropped_region_models_bas',
+         'cropped_kwcoco_for_sc',
+         'cropped_kwcoco_for_sc_assets'],
         ingress_dir,
         config.aws_profile,
         config.dryrun)
@@ -109,7 +112,7 @@ def run_sc_fusion_for_baseline(config):
     region_id = determine_region_id(local_region_path)
 
     sc_fusion_kwcoco_path = ingress_dir / 'sc_fusion_kwcoco.json'
-    cropped_region_models_bas = ingress_dir / 'cropped_region_models_bas'
+    cropped_region_models_bas = ingressed_assets['cropped_region_models_bas']
 
     site_models_outdir = ingress_dir / 'sc_out_site_models'
     os.makedirs(site_models_outdir, exist_ok=True)
@@ -126,7 +129,7 @@ def run_sc_fusion_for_baseline(config):
 
     # 3.1. Check that we have at least one "video" (BAS identified
     # site) to run over; if not skip SC fusion and KWCOCO to GeoJSON
-    with open(ingress_kwcoco_path) as f:
+    with open(ingressed_assets['cropped_kwcoco_for_sc']) as f:
         ingress_kwcoco_data = json.load(f)
 
     if len(ingress_kwcoco_data.get('videos', ())) > 0:
@@ -170,7 +173,7 @@ def run_sc_fusion_for_baseline(config):
                     with_change=False,
                     with_saliency=False,
                     with_class=True,
-                    test_dataset=ingress_kwcoco_path,
+                    test_dataset=ingressed_assets['cropped_kwcoco_for_sc'],
                     pred_dataset=sc_fusion_kwcoco_path,
                     **sc_pxl_config)
         except TimeSampleError:
@@ -202,7 +205,7 @@ def run_sc_fusion_for_baseline(config):
                 '--out_sites_fpath', site_models_manifest_outpath,
                 '--out_kwcoco', tracked_sc_kwcoco_path,
                 '--default_track_fn', config.sc_track_fn,
-                '--site_summary', cropped_region_models_bas / '*.geojson',
+                '--site_summary', ub.Path(cropped_region_models_bas) / '*.geojson',
                 '--append_mode', 'True',
                 '--track_kwargs', json.dumps(sc_track_kwargs)],
                 check=True, verbose=3, capture=False)
@@ -231,13 +234,15 @@ def run_sc_fusion_for_baseline(config):
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)
     print("* Egressing KWCOCO dataset and associated STAC item *")
-    baseline_framework_kwcoco_egress(sc_fusion_kwcoco_path,
-                                     local_region_path,
-                                     config.output_path,
-                                     config.outbucket,
-                                     aws_profile=config.aws_profile,
-                                     dryrun=False,
-                                     newline=False)
+    ingressed_assets['cropped_site_models_sc'] = cropped_site_models_outdir
+    ingressed_assets['cropped_region_models_sc'] = cropped_region_models_outdir
+    smartflow_egress(ingressed_assets,
+                     local_region_path,
+                     config.output_path,
+                     config.outbucket,
+                     aws_profile=config.aws_profile,
+                     dryrun=False,
+                     newline=False)
 
     # 6. (Optional) collate TA-2 output
     if config.ta2_s3_collation_bucket is not None:

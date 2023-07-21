@@ -7,8 +7,8 @@ SeeAlso:
 """
 import ubelt as ub
 import scriptconfig as scfg
-from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress
-from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress
+from watch.cli.smartflow_ingress import smartflow_ingress
+from watch.cli.smartflow_egress import smartflow_egress
 
 
 class TeamFeatLandcoverConfig(scfg.DataConfig):
@@ -56,8 +56,10 @@ def run_landcover_for_baseline(config):
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
     ingress_dir = ub.Path('/tmp/ingress')
-    ingress_kwcoco_path = baseline_framework_kwcoco_ingress(
+    ingressed_assets = smartflow_ingress(
         config.input_path,
+        ['timecombined_kwcoco_file_for_bas',
+         'timecombined_kwcoco_file_for_bas_assets'],
         ingress_dir,
         config.aws_profile,
         config.dryrun)
@@ -76,9 +78,10 @@ def run_landcover_for_baseline(config):
     print("* Generating landcover features *")
     dzyne_landcover_features_kwcoco_path = ingress_dir / 'dzyne_landcover_kwcoco.json'
 
+    timecombined_kwcoco_file_for_bas = ingressed_assets['timecombined_kwcoco_file_for_bas']
     ub.cmd([
         'python', '-m', 'watch.tasks.landcover.predict',
-        '--dataset', ingress_kwcoco_path,
+        '--dataset', timecombined_kwcoco_file_for_bas,
         '--deployed', config.model_path,
         '--output', dzyne_landcover_features_kwcoco_path,
         '--num_workers', '2',
@@ -92,7 +95,7 @@ def run_landcover_for_baseline(config):
     combo_features_kwcoco_path = ingress_dir / 'features_combo_with_landcover_kwcoco.json'
     ub.cmd([
         'python', '-m', 'watch.cli.coco_combine_features',
-        '--src', ingress_kwcoco_path, dzyne_landcover_features_kwcoco_path,
+        '--src', timecombined_kwcoco_file_for_bas, dzyne_landcover_features_kwcoco_path,
         '--dst', combo_features_kwcoco_path,
     ], check=True, verbose=3, capture=False)
 
@@ -100,13 +103,17 @@ def run_landcover_for_baseline(config):
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)
     print("* Egressing KWCOCO dataset and associated STAC item *")
-    baseline_framework_kwcoco_egress(combo_features_kwcoco_path,
-                                     local_region_path,
-                                     config.output_path,
-                                     config.outbucket,
-                                     aws_profile=None,
-                                     dryrun=False,
-                                     newline=False)
+    # Add new assets to be egressed
+    ingressed_assets['timecombined_kwcoco_file_for_bas_with_landcover'] =\
+        combo_features_kwcoco_path
+    ingressed_assets['landcover_assets'] = ingress_dir / '_assets'
+    smartflow_egress(ingressed_assets,
+                     local_region_path,
+                     config.output_path,
+                     config.outbucket,
+                     aws_profile=None,
+                     dryrun=False,
+                     newline=False)
 
 
 if __name__ == "__main__":

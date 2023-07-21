@@ -3,10 +3,9 @@
 See Old Script:
     ~/code/watch/scripts/run_generate_sc_cropped_kwcoco.py
 """
-import os
 import subprocess
-from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress
-from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress
+from watch.cli.smartflow_ingress import smartflow_ingress
+from watch.cli.smartflow_egress import smartflow_egress
 from watch.utils.util_framework import download_region
 import ubelt as ub
 import scriptconfig as scfg
@@ -79,11 +78,15 @@ def run_generate_sc_cropped_kwcoco(config):
 
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
-    _ = baseline_framework_kwcoco_ingress(
+    ingressed_assets = smartflow_ingress(
         input_path=config.input_path,
+        assets=['kwcoco_for_sc',
+                'sv_out_region_models',
+                'cropped_region_models_bas'],
         outdir=ingress_dir,
         aws_profile=config.aws_profile,
-        dryrun=config.dryrun)
+        dryrun=config.dryrun,
+        dont_error_on_missing_asset=True)
 
     # 2. Download and prune region file
     print("* Downloading and pruning region file *")
@@ -100,13 +103,14 @@ def run_generate_sc_cropped_kwcoco(config):
         raise RuntimeError("Couldn't parse 'region_id' from input region file")
 
     # Paths to inputs generated in previous pipeline steps
-    input_region_path = ingress_dir / 'sv_out_region_models' / f'{region_id}.geojson'
-    if not os.path.isfile(input_region_path):
+    if 'sv_out_region_models' in ingressed_assets:
+        input_region_path = ub.Path(ingressed_assets['sv_out_region_models']) / f'{region_id}.geojson'
+    else:
         print("* Didn't find region output from SV; using region output "
               "from BAS *")
-        input_region_path = ingress_dir / 'cropped_region_models_bas' / f'{region_id}.geojson'
+        input_region_path = ub.Path(ingressed_assets['cropped_region_models_bas']) / f'{region_id}.geojson'
 
-    ta1_sc_kwcoco_path = ingress_dir / 'kwcoco_for_sc.json'
+    ta1_sc_kwcoco_path = ingressed_assets['kwcoco_for_sc']
 
     align_config_default = ub.udict(Yaml.coerce(ub.codeblock(
         f'''
@@ -156,13 +160,15 @@ def run_generate_sc_cropped_kwcoco(config):
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)
     print("* Egressing KWCOCO dataset and associated STAC item *")
-    baseline_framework_kwcoco_egress(ta1_sc_cropped_kwcoco_path,
-                                     local_region_path,
-                                     config.output_path,
-                                     config.outbucket,
-                                     aws_profile=config.aws_profile,
-                                     dryrun=config.dryrun,
-                                     newline=False)
+    ingressed_assets['cropped_kwcoco_for_sc'] = ta1_sc_cropped_kwcoco_path
+    ingressed_assets['cropped_kwcoco_for_sc_assets'] = ingress_dir / f'{region_id}'
+    smartflow_egress(ingressed_assets,
+                     local_region_path,
+                     config.output_path,
+                     config.outbucket,
+                     aws_profile=config.aws_profile,
+                     dryrun=config.dryrun,
+                     newline=False)
 
 
 if __name__ == "__main__":

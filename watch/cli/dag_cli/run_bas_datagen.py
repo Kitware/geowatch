@@ -9,7 +9,7 @@ import json
 import shutil
 
 from watch.cli.baseline_framework_ingress import baseline_framework_ingress, load_input_stac_items
-from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress
+from watch.cli.smartflow_egress import smartflow_egress
 from watch.cli.stac_to_kwcoco import stac_to_kwcoco
 from watch.cli import coco_add_watch_fields
 from watch.utils.util_framework import download_region
@@ -416,13 +416,17 @@ def run_stac_to_cropped_kwcoco(config):
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)
     print("* Egressing KWCOCO dataset and associated STAC item *")
-    baseline_framework_kwcoco_egress(combined_timecombined_kwcoco_path,
-                                     local_region_path,
-                                     config.output_path,
-                                     config.outbucket,
-                                     aws_profile=config.aws_profile,
-                                     dryrun=config.dryrun,
-                                     newline=config.newline)
+    assets_to_egress = {
+        'timecombined_kwcoco_file_for_bas': combined_timecombined_kwcoco_path,
+        'timecombined_kwcoco_file_for_bas_assets': ta1_cropped_dir / 'raw_bands',
+        'kwcoco_for_sc': ta1_sc_kwcoco_path}
+    smartflow_egress(assets_to_egress,
+                     local_region_path,
+                     config.output_path,
+                     config.outbucket,
+                     aws_profile=config.aws_profile,
+                     dryrun=config.dryrun,
+                     newline=config.newline)
 
 
 if __name__ == "__main__":

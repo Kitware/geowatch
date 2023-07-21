@@ -75,8 +75,8 @@ def main():
 
 
 def run_bas_fusion_for_baseline(config):
-    from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress
-    from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress
+    from watch.cli.smartflow_ingress import smartflow_ingress
+    from watch.cli.smartflow_egress import smartflow_egress
     from watch.cli.concat_kwcoco_videos import concat_kwcoco_datasets
     from watch.utils.util_framework import download_region, determine_region_id
     from watch.tasks.fusion.predict import predict
@@ -86,7 +86,6 @@ def run_bas_fusion_for_baseline(config):
 
     input_path = config.input_path
     input_region_path = config.input_region_path
-    output_path = config.output_path
     outbucket = config.outbucket
     aws_profile = config.aws_profile
     dryrun = config.dryrun
@@ -103,8 +102,11 @@ def run_bas_fusion_for_baseline(config):
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
     ingress_dir = ub.Path('/tmp/ingress')
-    ingress_kwcoco_path = baseline_framework_kwcoco_ingress(
+    ingressed_assets = smartflow_ingress(
         input_path,
+        ['timecombined_kwcoco_file_for_bas_with_landcover',
+         'timecombined_kwcoco_file_for_bas_assets',
+         'landcover_assets'],
         ingress_dir,
         aws_profile,
         dryrun)
@@ -146,6 +148,7 @@ def run_bas_fusion_for_baseline(config):
     if bas_pxl_config.get('package_fpath', None) is None:
         raise ValueError('Requires package_fpath')
 
+    ingress_kwcoco_path = ingressed_assets['timecombined_kwcoco_file_for_bas_with_landcover']
     predict(devices='0,',
             write_preds=False,
             write_probs=True,
@@ -294,13 +297,15 @@ def run_bas_fusion_for_baseline(config):
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)
     print("* Egressing KWCOCO dataset and associated STAC item *")
-    baseline_framework_kwcoco_egress(bas_fusion_kwcoco_path,
-                                     local_region_path,
-                                     output_path,
-                                     outbucket,
-                                     aws_profile=None,
-                                     dryrun=False,
-                                     newline=False)
+    ingressed_assets['cropped_region_models_bas'] = cropped_region_models_outdir
+    ingressed_assets['cropped_site_models_bas'] = cropped_site_models_outdir
+    smartflow_egress(ingressed_assets,
+                     local_region_path,
+                     config.output_path,
+                     config.outbucket,
+                     aws_profile=None,
+                     dryrun=False,
+                     newline=False)
 
 
 if __name__ == "__main__":

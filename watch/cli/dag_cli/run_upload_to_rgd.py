@@ -108,7 +108,7 @@ def upload_to_rgd(input_site_models_s3,
         rgd_endpoint = rgd_endpoint_override
 
     # Check that our run doesn't already exist
-    model_run_results_url = f"http://{rgd_endpoint}/api/model-runs"
+    model_run_results_url = f"http://{rgd_endpoint}/api/model-runs/"
     model_runs_result = requests.get(model_run_results_url,
                                      params={'limit': '0'})
 
@@ -126,10 +126,11 @@ def upload_to_rgd(input_site_models_s3,
     if existing_model_run is not None:
         model_run_id = model_run['id']
     else:
-        post_model_url = f"http://{rgd_endpoint}/api/model-runs"
+        post_model_url = f"http://{rgd_endpoint}/api/model-runs/"
         post_model_data = {"performer": performer_shortcode,
                            "title": title,
-                           "region": {"name": region_id}}
+                           "region": {"name": region_id},
+                           "parameters": {}}
 
         if expiration_time is not None:
             post_model_data['expiration_time'] = expiration_time
@@ -142,7 +143,7 @@ def upload_to_rgd(input_site_models_s3,
         model_run_id = post_model_result.json()['id']
 
     post_site_url =\
-        f"http://{rgd_endpoint}/api/model-runs/{model_run_id}/site-model"
+        f"http://{rgd_endpoint}/api/model-runs/{model_run_id}/site-model/"
 
     executor = ub.Executor(mode='process' if jobs > 1 else 'serial',
                            max_workers=jobs)

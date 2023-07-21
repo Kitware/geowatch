@@ -39,8 +39,8 @@ def main():
     config = FixupConfig.cli(strict=True)
     print('config = {}'.format(ub.urepr(dict(config), nl=1, align=':')))
 
-    from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress
-    from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress
+    from watch.cli.smartflow_ingress import smartflow_ingress
+    from watch.cli.smartflow_egress import smartflow_egress
     from watch.utils.util_framework import download_region
     from watch.utils.util_framework import AWS_S3_Command
     from watch.utils import util_framework
@@ -49,18 +49,13 @@ def main():
     print("* Running baseline framework kwcoco ingress *")
     ingress_dir = ub.Path('/tmp/ingress')
 
-    baseline_framework_kwcoco_ingress(
+    ingressed_assets = smartflow_ingress(
         config.input_path,
+        ['cropped_region_models_sc',
+         'cropped_site_models_sc'],
         ingress_dir,
         config.aws_profile,
-        config.dryrun,
-        # Hack for only downloading a subset of the data
-        # TODO: better ingress/egress
-        specific_paths=[
-            'cropped_region_models',
-            'cropped_site_models',
-        ]
-    )
+        config.dryrun)
 
     # # 2. Download and prune region file
     print("* Downloading and pruning region file *")
@@ -76,8 +71,8 @@ def main():
     dummy_kwcoco_path = ingress_dir / 'dummy.kwcoco.json'
     dummy_kwcoco_path.touch()
 
-    input_region_dpath = ingress_dir / 'cropped_region_models'
-    input_site_dpath = ingress_dir / 'cropped_site_models'
+    input_region_dpath = ub.Path(ingressed_assets['cropped_region_models_sc'])
+    input_site_dpath = ub.Path(ingressed_assets['cropped_site_models_sc'])
 
     output_region_dpath = ingress_dir / 'cropped_region_models_fixed'
     output_site_dpath = ingress_dir / 'cropped_site_models_fixed'
@@ -97,13 +92,15 @@ def main():
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)
     print("* Egressing KWCOCO dataset and associated STAC item *")
-    baseline_framework_kwcoco_egress(dummy_kwcoco_path,
-                                     local_region_path,
-                                     config.output_path,
-                                     config.outbucket,
-                                     aws_profile=config.aws_profile,
-                                     dryrun=False,
-                                     newline=False)
+    ingressed_assets['cropped_region_models_fixed'] = output_region_dpath
+    ingressed_assets['cropped_site_models_fixed'] = output_site_dpath
+    smartflow_egress(ingressed_assets,
+                     local_region_path,
+                     config.output_path,
+                     config.outbucket,
+                     aws_profile=config.aws_profile,
+                     dryrun=False,
+                     newline=False)
 
     # 6. (Optional) collate TA-2 output
     if config.ta2_s3_collation_bucket is not None:
