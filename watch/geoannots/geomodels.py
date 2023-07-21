@@ -23,6 +23,25 @@ both site and region models are:
 
     * random - classmethod to make a random instance of the site / region model for testing
 
+
+Official T&E Terminology:
+
+A Region Model gives an overview of entire region and summarizes all sites it contains. It consists of:
+
+* A single header feature with type="region" that defines the region spacetime bounds
+
+* Multiple body features with type="site_summary" that correspond to the bounds of an entire site. (i.e. there is one for each site in the region). A site summary has a "status" that applies to the entire temporal range of the site. (i.e. positive, negative, ignore)
+
+A Site Model gives a detailed account of a single site within a region. It consists of:
+
+* A single header feature with type="site" that roughly corresponds to one of the "site_summary" features in the region model. It also contains the holistic "status" field.
+
+* Multiple body features with type="observation". This represents a single keyframe at a single point in time within the site's activity sequence. It contains a "current_phase" label that describes the specific phase of an activity at that current point in time.
+
+
+Note: A site summary may exist on its own (i.e. without a corresponding site model) that gives a rough overview with holistic status, rough spatial bounds and a start / end date.
+
+
 New region model specific convenience methods / properties are:
 
     * site_summaries
@@ -63,6 +82,82 @@ Example:
     >>> region_model = region_models[0]
     >>> gdf = region_model.pandas()
     >>> print(gdf)
+
+
+For testing the following example shows how to generate and inspect a random
+site / region model.
+
+
+Example:
+    >>> from watch.geoannots.geomodels import *
+    >>> # Generate a region model and also return its sites
+    >>> region, sites = RegionModel.random(with_sites=True, rng=0)
+    >>> # A region model consists of a region header
+    >>> region_header = region.header
+    >>> # And multiple site summaries. (We take the first one here)
+    >>> site_summary = list(region.site_summaries())[0]
+    >>> print('region_header.properties = {}'.format(ub.urepr(region_header['properties'], nl=1)))
+    region_header.properties = {
+        'type': 'region',
+        'region_id': 'DR_R684',
+        'version': '2.4.3',
+        'mgrs': '51PXM',
+        'start_date': '2011-05-28',
+        'end_date': '2018-09-13',
+        'originator': 'demo-truth',
+        'model_content': 'annotation',
+        'comments': 'demo-data',
+    }
+    >>> print('site_summary.properties = {}'.format(ub.urepr(site_summary['properties'], nl=1)))
+    site_summary.properties = {
+        'type': 'site_summary',
+        'status': 'positive_annotated',
+        'version': '2.0.1',
+        'site_id': 'DR_R684_0000',
+        'mgrs': '51PXM',
+        'start_date': '2011-05-28',
+        'end_date': '2018-09-13',
+        'score': 1,
+        'originator': 'demo',
+        'model_content': 'annotation',
+        'validated': 'True',
+        'cache': {'color': [0.5511393746687864, 1.0, 0.0]},
+    }
+    >>> # A site model consists of a site header that roughly corresponds to a
+    >>> # site summary in the region file
+    >>> site = sites[0]
+    >>> site_header = site.header
+    >>> # It also contains one or more observations
+    >>> site_obs = list(site.observations())[0]
+    >>> print('site_header.properties = {}'.format(ub.urepr(site_header['properties'], nl=1)))
+    site_header.properties = {
+        'type': 'site',
+        'status': 'positive_annotated',
+        'version': '2.0.1',
+        'site_id': 'DR_R684_0000',
+        'mgrs': '51PXM',
+        'start_date': '2011-05-28',
+        'end_date': '2018-09-13',
+        'score': 1,
+        'originator': 'demo',
+        'model_content': 'annotation',
+        'validated': 'True',
+        'cache': {'color': [0.5511393746687864, 1.0, 0.0]},
+        'region_id': 'DR_R684',
+    }
+    >>> print('site_obs.properties = {}'.format(ub.urepr(site_obs['properties'], nl=1)))
+    site_obs.properties = {
+        'type': 'observation',
+        'observation_date': '2011-05-28',
+        'source': 'demosat-220110528T142754',
+        'sensor_name': 'demosat-2',
+        'current_phase': 'No Activity',
+        'is_occluded': 'False',
+        'is_site_boundary': 'True',
+        'score': 1.0,
+    }
+
+
 """
 import ubelt as ub
 import geopandas as gpd
