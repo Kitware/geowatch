@@ -18,6 +18,7 @@ HIRES_CACHE_DIR=$(python -m watch.utils.simple_dvc cache_dir "$DVC_HIRES_DATA_DP
 # Ensure models exist locally
 python -m watch.utils.simple_dvc request \
     "$DVC_EXPT_DPATH"/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt \
+    "$DVC_EXPT_DPATH"/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V68/Drop7-MedianNoWinter10GSD_bgrn_split6_V68_epoch34_stepNone.pt \
     "$DVC_EXPT_DPATH"/models/depth_pcd/basicModel2.h5 \
     "$DVC_EXPT_DPATH"/models/depth_pcd/model3.h5
 
@@ -60,6 +61,7 @@ geowatch schedule --params="
     matrix:
         bas_pxl.package_fpath:
             - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V68/Drop7-MedianNoWinter10GSD_bgrn_split6_V68_epoch34_stepNone.pt
         bas_pxl.test_dataset:
             - $DVC_LORES_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-KR_R002_EI2LMSC.kwcoco.zip
             - $DVC_LORES_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-CH_R001_EI2LMSC.kwcoco.zip
@@ -111,7 +113,9 @@ geowatch schedule --params="
         sv_dino_boxes.fixed_resolution: 3GSD
 
         sv_dino_filter.enabled: 1
-        sv_dino_filter.end_min_score: 0.15
+        sv_dino_filter.end_min_score:
+            - 0.1
+            - 0.15
         sv_dino_filter.start_max_score: 1.0
         sv_dino_filter.box_score_threshold: 0.01
         sv_dino_filter.box_isect_threshold: 0.1
@@ -162,8 +166,7 @@ geowatch schedule --params="
 
 # Pull out baseline tables
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
-
-sudo chown -R "$USER":smart "$DVC_EXPT_DPATH"/_namek_sv_sweep
+#sudo chown -R "$USER":smart "$DVC_EXPT_DPATH"/_namek_sv_sweep
 
 python -m watch.mlops.aggregate \
     --pipeline=bas_building_and_depth_vali \
@@ -174,7 +177,7 @@ python -m watch.mlops.aggregate \
     --resource_report=0 \
     --eval_nodes="
         - sv_poly_eval
-        #- bas_poly_eval
+        - bas_poly_eval
         #- bas_pxl_eval
     " \
     --plot_params="
@@ -194,12 +197,16 @@ python -m watch.mlops.aggregate \
         print_models: True
         reference_region: final
     " \
-    --rois="KR_R002,PE_R001,NZ_R001,CH_R001" \
+    --rois="KR_R002,PE_R001,NZ_R001,CH_R001,KR_R001,BR_R002,BR_R004"
+
+    #--rois="PE_R001"
     --query='
-        #((df["params.sv_depth_filter.threshold"] > 0) &
-        # (df["param_hashid"] == "hmownacdredt") &
-        # (df["params.bas_poly.thresh"] == 0.35))
+        ((df["params.sv_depth_filter.threshold"] > 0) &
+         (df["params.bas_poly.thresh"] >= 0.3) &
     '
+
+         #(df["params.sv_depth_filter.threshold"] == 0.35))
+        # (df["param_hashid"] == "hmownacdredt") &
 
     #
     #

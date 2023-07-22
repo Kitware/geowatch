@@ -4,7 +4,30 @@ This changelog follows the specifications detailed in: [Keep a Changelog](https:
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
 
-## Version 0.7.3 - Target 2023-06-xx
+## Version 0.8.0 - Target 2023-07-xx
+
+### Fixed
+* Fixed issue with kwcoco directory roots in prepare splits.
+* TemporalSampler now is allowed to return fewer timesteps than requested if
+  none are available.
+* Fixed issue with coco visualize colors in construction activity
+  characterization, but a proper general fix is needed for choosing darker colors
+  when color information for a category channel is not given.
+* Major Bugfix: Issue in tracker where annotations were not read in the requested resolution causing scores of zero.
+* Fixed issue where DiceFocalLoss was not passed class weights correctly.
+* We no longer require a hacked pycold
+* Demo region model timestamps no longer depend on the locale.
+* Bumped to kwutil 0.2.3, which fixes a problem with numeric timestamps being parsed in the local time zone instead of UTC.
+
+
+### Changed
+* Improved `geowatch site_stats` to accept region and/or site models and provide nice statistics.
+
+### Removed
+* Removed old fit script. The lightning CLI script is considered stable.
+
+
+## Version 0.7.5 - Target 2023-06-30
 
 ### Added
 * Add transfer-feature script to COLD task to port features to time-averaged data

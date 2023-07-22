@@ -108,6 +108,8 @@ def dataframe_table(table, fpath, title=None, fontsize=12,
     elif show == 'eog':
         import xdev
         xdev.startfile(fpath)
+    elif show:
+        raise KeyError(show)
 
 
 def humanize_dataframe(df, col_formats=None, human_labels=None, index_format=None,
@@ -157,7 +159,7 @@ def humanize_dataframe(df, col_formats=None, human_labels=None, index_format=Non
 
 
 def scatterplot_highlight(data, x, y, highlight, size=10, color='orange',
-                          marker='*', val_to_color=None, ax=None):
+                          marker='*', val_to_color=None, ax=None, linewidths=None):
     if ax is None:
         import kwplot
         plt = kwplot.autoplt()
@@ -171,6 +173,9 @@ def scatterplot_highlight(data, x, y, highlight, size=10, color='orange',
     star_data = data[flags]
     star_x = star_data[x]
     star_y = star_data[y]
+
+    if linewidths is not None:
+        _starkw['linewidths'] = linewidths
 
     if color != 'group':
         _starkw['edgecolor'] = color
@@ -392,14 +397,75 @@ class FigureFinalizer:
         return self.finalize(fig, fpath, **kwargs)
 
 
-def fix_matplotlib_dates(dates):
+def fix_matplotlib_dates(dates, format='mdate'):
+    """
+
+    Args:
+        dates (List[None | Coerceble[datetime]]):
+            input dates to fixup
+
+        format (str):
+            can be mdate for direct matplotlib usage or datetime for seaborn usage.
+
+    Note:
+        seaborn seems to do just fine with timestamps...
+        todo:
+            add regular matplotlib test for a real demo of where this is useful
+
+    Example:
+        >>> from watch.utils.util_kwplot import *  # NOQA
+        >>> from kwutil.util_time import coerce_datetime
+        >>> from kwutil.util_time import coerce_timedelta
+        >>> import pandas as pd
+        >>> import numpy as np
+        >>> delta = coerce_timedelta('1 day')
+        >>> n = 100
+        >>> min_date = coerce_datetime('2020-01-01').timestamp()
+        >>> max_date = coerce_datetime('2021-01-01').timestamp()
+        >>> from kwarray.distributions import Uniform
+        >>> distri = Uniform(min_date, max_date)
+        >>> timestamps = distri.sample(n)
+        >>> timestamps[np.random.rand(n) > 0.5] = np.nan
+        >>> dates = list(map(coerce_datetime, timestamps))
+        >>> scores = np.random.rand(len(dates))
+        >>> table = pd.DataFrame({
+        >>>     'isodates': [None if d is None else d.isoformat() for d in dates],
+        >>>     'dates': dates,
+        >>>     'timestamps': timestamps,
+        >>>     'scores': scores
+        >>> })
+        >>> table['fixed_dates'] = fix_matplotlib_dates(table.dates, format='datetime')
+        >>> table['fixed_timestamps'] = fix_matplotlib_dates(table.timestamps, format='datetime')
+        >>> table['fixed_isodates'] = fix_matplotlib_dates(table.isodates, format='datetime')
+        >>> table['mdate_dates'] = fix_matplotlib_dates(table.dates, format='mdate')
+        >>> table['mdate_timestamps'] = fix_matplotlib_dates(table.timestamps, format='mdate')
+        >>> table['mdate_isodates'] = fix_matplotlib_dates(table.isodates, format='mdate')
+        >>> # xdoctest: +REQUIRES(env:PLOTTING_DOCTESTS)
+        >>> import kwplot
+        >>> sns = kwplot.autosns()
+        >>> pnum_ = kwplot.PlotNums(nSubplots=8)
+        >>> ax = kwplot.figure(fnum=1, doclf=1)
+        >>> for key in table.columns.difference({'scores'}):
+        >>>     ax = kwplot.figure(fnum=1, doclf=0, pnum=pnum_()).gca()
+        >>>     sns.scatterplot(data=table, x=key, y='scores', ax=ax)
+        >>>     if key.startswith('mdate_'):
+        >>>         # TODO: make this formatter fixup work better.
+        >>>         import matplotlib.dates as mdates
+        >>>         ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+        >>>         ax.xaxis.set_major_locator(mdates.DayLocator(interval=90))
+    """
     from kwutil import util_time
     import matplotlib.dates as mdates
     new = []
     for d in dates:
         n = util_time.coerce_datetime(d)
         if n is not None:
-            n = mdates.date2num(n)
+            if format == 'mdate':
+                n = mdates.date2num(n)
+            elif format == 'datetime':
+                ...
+            else:
+                raise KeyError(format)
         new.append(n)
     return new
 

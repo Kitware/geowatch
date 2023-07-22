@@ -23,6 +23,25 @@ both site and region models are:
 
     * random - classmethod to make a random instance of the site / region model for testing
 
+
+Official T&E Terminology:
+
+A Region Model gives an overview of entire region and summarizes all sites it contains. It consists of:
+
+* A single header feature with type="region" that defines the region spacetime bounds
+
+* Multiple body features with type="site_summary" that correspond to the bounds of an entire site. (i.e. there is one for each site in the region). A site summary has a "status" that applies to the entire temporal range of the site. (i.e. positive, negative, ignore)
+
+A Site Model gives a detailed account of a single site within a region. It consists of:
+
+* A single header feature with type="site" that roughly corresponds to one of the "site_summary" features in the region model. It also contains the holistic "status" field.
+
+* Multiple body features with type="observation". This represents a single keyframe at a single point in time within the site's activity sequence. It contains a "current_phase" label that describes the specific phase of an activity at that current point in time.
+
+
+Note: A site summary may exist on its own (i.e. without a corresponding site model) that gives a rough overview with holistic status, rough spatial bounds and a start / end date.
+
+
 New region model specific convenience methods / properties are:
 
     * site_summaries
@@ -63,6 +82,82 @@ Example:
     >>> region_model = region_models[0]
     >>> gdf = region_model.pandas()
     >>> print(gdf)
+
+
+For testing the following example shows how to generate and inspect a random
+site / region model.
+
+
+Example:
+    >>> from watch.geoannots.geomodels import *
+    >>> # Generate a region model and also return its sites
+    >>> region, sites = RegionModel.random(with_sites=True, rng=0)
+    >>> # A region model consists of a region header
+    >>> region_header = region.header
+    >>> # And multiple site summaries. (We take the first one here)
+    >>> site_summary = list(region.site_summaries())[0]
+    >>> print('region_header.properties = {}'.format(ub.urepr(region_header['properties'], nl=1)))
+    region_header.properties = {
+        'type': 'region',
+        'region_id': 'DR_R684',
+        'version': '2.4.3',
+        'mgrs': '51PXM',
+        'start_date': '2011-05-28',
+        'end_date': '2018-09-13',
+        'originator': 'demo-truth',
+        'model_content': 'annotation',
+        'comments': 'demo-data',
+    }
+    >>> print('site_summary.properties = {}'.format(ub.urepr(site_summary['properties'], nl=1)))
+    site_summary.properties = {
+        'type': 'site_summary',
+        'status': 'positive_annotated',
+        'version': '2.0.1',
+        'site_id': 'DR_R684_0000',
+        'mgrs': '51PXM',
+        'start_date': '2011-05-28',
+        'end_date': '2018-09-13',
+        'score': 1,
+        'originator': 'demo',
+        'model_content': 'annotation',
+        'validated': 'True',
+        'cache': {'color': [0.5511393746687864, 1.0, 0.0]},
+    }
+    >>> # A site model consists of a site header that roughly corresponds to a
+    >>> # site summary in the region file
+    >>> site = sites[0]
+    >>> site_header = site.header
+    >>> # It also contains one or more observations
+    >>> site_obs = list(site.observations())[0]
+    >>> print('site_header.properties = {}'.format(ub.urepr(site_header['properties'], nl=1)))
+    site_header.properties = {
+        'type': 'site',
+        'status': 'positive_annotated',
+        'version': '2.0.1',
+        'site_id': 'DR_R684_0000',
+        'mgrs': '51PXM',
+        'start_date': '2011-05-28',
+        'end_date': '2018-09-13',
+        'score': 1,
+        'originator': 'demo',
+        'model_content': 'annotation',
+        'validated': 'True',
+        'cache': {'color': [0.5511393746687864, 1.0, 0.0]},
+        'region_id': 'DR_R684',
+    }
+    >>> print('site_obs.properties = {}'.format(ub.urepr(site_obs['properties'], nl=1)))
+    site_obs.properties = {
+        'type': 'observation',
+        'observation_date': '2011-05-28',
+        'source': 'demosat-220110528T132754',
+        'sensor_name': 'demosat-2',
+        'current_phase': 'No Activity',
+        'is_occluded': 'False',
+        'is_site_boundary': 'True',
+        'score': 1.0,
+    }
+
+
 """
 import ubelt as ub
 import geopandas as gpd
@@ -393,6 +488,11 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
             >>> self._update_cache_key()
             >>> assert 'cache' in feat['properties']
             >>> assert feat['properties']['cache']['foo'] == 'bar'
+
+            self.header['properties']['cache'] = None
+            self.fixup()
+            self.validate(strict=0)
+            assert self.header['properties']['cache'] == {}
         """
         for feat in self['features']:
             prop = feat['properties']
@@ -478,7 +578,9 @@ class RegionModel(_Model):
         Returns:
             geopandas.GeoDataFrame: the site summaries as a data frame
         """
-        gdf = gpd.GeoDataFrame.from_features(list(self.site_summaries()))
+        from watch.utils import util_gis
+        crs84 = util_gis.get_crs84()
+        gdf = gpd.GeoDataFrame.from_features(list(self.site_summaries()), crs=crs84)
         return gdf
 
     def pandas_region(self):
@@ -486,7 +588,9 @@ class RegionModel(_Model):
         Returns:
             geopandas.GeoDataFrame: the region header as a data frame
         """
-        gdf = gpd.GeoDataFrame.from_features([self.header])
+        from watch.utils import util_gis
+        crs84 = util_gis.get_crs84()
+        gdf = gpd.GeoDataFrame.from_features([self.header], crs=crs84)
         return gdf
 
     @classmethod
@@ -554,6 +658,9 @@ class RegionModel(_Model):
         return self.header['properties']['region_id']
 
     def fixup(self):
+        """
+        Fix common issues with this region model
+        """
         self._update_cache_key()
         self.remove_invalid_properties()
         self.ensure_isodates()
@@ -584,12 +691,17 @@ class RegionModel(_Model):
                         props[key] = newval
 
     def remove_invalid_properties(self):
+        """
+        Remove invalid properties from this region model
+        """
         props = self.header['properties']
         bad_region_header_properties = ['validated', 'score', 'site_id', 'status', 'socre']
         for key in bad_region_header_properties:
             props.pop(key, None)
 
-        bad_sitesum_features = ['region_id', 'validate', 'validated']
+        bad_sitesum_features = ['region_id', 'validate', 'validated',
+                                'predicted_phase_transition',
+                                'predicted_phase_transition_date']
         for sitesum in self.body_features():
             siteprops = sitesum['properties']
             for key in bad_sitesum_features:
@@ -645,7 +757,19 @@ class SiteModel(_Model):
         Returns:
             geopandas.GeoDataFrame: the site summaries as a data frame
         """
-        gdf = gpd.GeoDataFrame.from_features(list(self.observations()))
+        from watch.utils import util_gis
+        crs84 = util_gis.get_crs84()
+        gdf = gpd.GeoDataFrame.from_features(list(self.observations()), crs=crs84)
+        return gdf
+
+    def pandas_site(self):
+        """
+        Returns:
+            geopandas.GeoDataFrame: the region header as a data frame
+        """
+        from watch.utils import util_gis
+        crs84 = util_gis.get_crs84()
+        gdf = gpd.GeoDataFrame.from_features([self.header], crs=crs84)
         return gdf
 
     @classmethod
@@ -757,6 +881,9 @@ class SiteModel(_Model):
                     'salient', 'Active Construction')
 
     def fixup(self):
+        """
+        Fix common issues with this site model
+        """
         self._update_cache_key()
         self.clamp_scores()
         self.fix_sensor_names()
@@ -803,6 +930,9 @@ class SiteModel(_Model):
             fprop['score'] = float(max(min(1, fprop['score']), 0))
 
     def remove_invalid_properties(self):
+        """
+        Remove invalid properties from this site model
+        """
         # T&E site schema no longer allows extraneous keys to be
         # included in region / site models; removing all unsupported
         # keys (could consider putting in 'misc_info' rather than
@@ -1020,7 +1150,7 @@ class _SiteOrSummaryMixin:
             >>> import pytest
             >>> with pytest.raises(Exception):
             >>>     site2 = summary1.as_site()
-            >>> summary1['properties']['annotation_cache']['region_id'] = region.region_id
+            >>> summary1['properties']['cache']['region_id'] = region.region_id
             >>> site2 = summary1.as_site()
             >>> site2.validate(strict=False)
             >>> # Check the round-trip conversion
@@ -1114,6 +1244,27 @@ class RegionHeader(_Feature):
                     return cls(**RegionModel(**data).header)
         raise TypeError(data)
 
+    def infer_mgrs(self):
+        from shapely.geometry import shape
+        import mgrs
+        _geom = shape(self.geometry)
+        lon = _geom.centroid.xy[0][0]
+        lat = _geom.centroid.xy[1][0]
+        mgrs_code = mgrs.MGRS().toMGRS(lat, lon, MGRSPrecision=0)
+        self.properties['mgrs'] = mgrs_code
+        return self
+
+    def ensure_isodates(self):
+        date_keys = ['start_date', 'end_date', 'predicted_phase_transition_date']
+        feat = self
+        props = feat['properties']
+        for key in date_keys:
+            if key in props:
+                old_val = props[key]
+                if old_val is not None:
+                    props[key] = util_time.coerce_datetime(old_val).date().isoformat()
+        return self
+
 
 class SiteSummary(_Feature, _SiteOrSummaryMixin):
     """
@@ -1121,6 +1272,14 @@ class SiteSummary(_Feature, _SiteOrSummaryMixin):
     """
     _model_cls = RegionModel
     _feat_type = RegionModel._body_type
+
+    @classmethod
+    def from_geopandas_frame(cls, df, drop_id=True):
+        json_text = df.to_json(drop_id=drop_id)
+        json_data = json.loads(json_text)
+        for feat in json_data['features']:
+            if feat['properties']['type'] == 'site_summary':
+                yield cls(**feat)
 
     def as_site(self):
         """
@@ -1132,6 +1291,13 @@ class SiteSummary(_Feature, _SiteOrSummaryMixin):
         """
         new_cls = SiteHeader
         return self._convert(new_cls)
+
+    def fixup(self):
+        """
+        Fixup the site summary
+        """
+        self._update_cache_key()
+        # self.ensure_isodates()
 
 
 class SiteHeader(_Feature, _SiteOrSummaryMixin):
@@ -1282,3 +1448,6 @@ def _update_propery_cache(prop):
         cache = ub.udict.union(prop.pop('misc_info', {}), cache)
         if cache:
             prop['cache'] = cache
+    if 'cache' in prop:
+        if prop['cache'] is None:
+            prop['cache'] = {}

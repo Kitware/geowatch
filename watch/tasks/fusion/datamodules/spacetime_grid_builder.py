@@ -367,7 +367,7 @@ def sample_video_spacetime_targets(dset,
         use_centered_positives,
         refine_iosa_thresh,
         respect_valid_regions,
-        'cache_v13',
+        'cache_v14',
     ]
     # Higher level cacher (not sure if adding this secondary level of caching
     # is faster or not).
@@ -525,7 +525,7 @@ def _sample_single_video_spacetime_targets(
     gid_arr = np.array(video_gids)
     time_sampler.video_gids = gid_arr
     time_sampler.gid_to_index = ub.udict(enumerate(time_sampler.video_gids)).invert()
-    time_sampler.determenistic = True
+    time_sampler.deterministic = True
 
     # Convert winspace to vidspace and use that for the rest of the function
     vidspace_video_height = video_info['height']
@@ -568,7 +568,7 @@ def _sample_single_video_spacetime_targets(
         refine_iosa_thresh,
         respect_valid_regions,
         set_cover_algo,
-        'cache_v11',
+        'cache_v14',
     ]
 
     # Only use the cache if this is probably going to be a slow operation.
@@ -588,7 +588,7 @@ def _sample_single_video_spacetime_targets(
         video_targets = []
         video_positive_idxs = []
         video_negative_idxs = []
-        # For each frame, determenistically compute an initial list of which
+        # For each frame, deterministically compute an initial list of which
         # supporting frames we will look at when making a prediction for the
         # "main" frame. Initially this is only based on temporal metadata.  We
         # may modify this later depending on spatial properties.
@@ -685,7 +685,7 @@ def _sample_single_video_spacetime_targets(
         cacher.save(_cached)
 
     # Disable determenism in the returned sampler
-    time_sampler.determenistic = False
+    time_sampler.deterministic = False
     meta = {
         'video_name': video_name,
         'resolved_scale': resolved_scale,
@@ -922,9 +922,11 @@ def _refine_time_sample(dset, main_idx_to_gids, vidspace_box, refine_iosa_thresh
                 if good_gids != gids:
                     include_idxs = np.where(kwarray.isect_flags(video_gids, good_gids))[0]
                     exclude_idxs = np.where(kwarray.isect_flags(video_gids, all_bad_gids))[0]
+
                     chosen = time_sampler.sample(
                         include=include_idxs, exclude=exclude_idxs,
                         error_level=1, return_info=False, rng=rng)
+
                     new_gids = list(ub.take(video_gids, chosen))
                     # Are we allowed to return less than the initial expected
                     # number of frames? For transformers yes, but we should be

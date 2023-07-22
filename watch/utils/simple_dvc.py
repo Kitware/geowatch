@@ -8,6 +8,63 @@ from kwutil import util_path
 from kwutil.util_yaml import Yaml
 
 
+def __test_simple_dvc():
+    """
+    Builds a medium complexity dvc repo, todo:
+        implement some tests
+    """
+    import ubelt as ub
+    test_root = ub.Path.appdir('simpledvc', 'tests', 'basic')
+    dvc_root = test_root / 'repo'
+    dvc_root.delete()
+    SimpleDVC.init(dvc_root, no_scm=True)
+
+    dvc = SimpleDVC.coerce(dvc_root)
+
+    # Build basic data
+    (dvc_root / 'test-set1').ensuredir()
+    assets_dpath = (dvc_root / 'test-set1/assets').ensuredir()
+    for idx in range(1, 21):
+        fpath = assets_dpath / f'asset_{idx:03d}.data'
+        fpath.write_text(str(idx) * 100)
+    manifest_fpath = (dvc_root / 'test-set1/manifest.txt')
+    manifest_fpath.write_text('pretend-data')
+
+    root_fpath = dvc_root / 'root_file'
+    root_fpath.write_text('----' * 100)
+
+    root_dpath = dvc_root / 'root_dir'
+
+    # Use networkx to make a random complex directory structure
+    import networkx as nx
+    graph = nx.erdos_renyi_graph(30, p=0.2, directed=True)
+    tree = nx.minimum_spanning_arborescence(graph)
+    nx.write_network_text(tree)
+    sources = [n for n in tree.nodes if not tree.pred[n]]
+    sinks = [n for n in tree.nodes if not tree.succ[n]]
+
+    node_paths = []
+    for t in sinks:
+        for s in sources:
+            paths = list(nx.all_simple_edge_paths(tree, s, t))
+            if paths:
+                node_path = [u for (u, v) in paths[0]] + [t]
+                node_paths.append(node_path)
+
+    for node_path in node_paths:
+        rel_fpath = ub.Path(*[f'dir_{n}' for n in node_path[0:-1]]) / ('file_' + str(node_path[-1]) + '.data')
+        fpath = root_dpath / rel_fpath
+        fpath.parent.ensuredir()
+        fpath.write_text(str(node_path))
+
+    dvc.add(root_dpath)
+    dvc.add(root_fpath)
+    dvc.add(manifest_fpath)
+    dvc.add(assets_dpath)
+
+    # xdev.tree_repr(dvc_root)
+
+
 class SimpleDVC(ub.NiceRepr):
     """
     A Simple DVC API
@@ -35,6 +92,23 @@ class SimpleDVC(ub.NiceRepr):
 
     def __nice__(self):
         return f'dvc_root={self.dvc_root}'
+
+    @classmethod
+    def init(cls, dpath, no_scm=False, force=False, verbose=0):
+        """
+        Initialize a DVC repo in a path
+        """
+        dpath = ub.Path(dpath.ensuredir())
+        args = ['dvc', 'init']
+        if verbose:
+            args += ['--verbose']
+        if force:
+            args += ['--force']
+        if no_scm:
+            args += ['--no-scm']
+        ub.cmd(args, cwd=dpath, verbose=3, check=True)
+        self = cls(dpath)
+        return self
 
     @ub.memoize_property
     def cache_dir(self):
@@ -132,7 +206,8 @@ class SimpleDVC(ub.NiceRepr):
         dvc_root, rel_paths = self._dvc_path_op('add', path, verbose)
         has_autostage = ub.cmd('dvc config core.autostage', cwd=dvc_root, check=True)['out'].strip() == 'true'
         if not has_autostage:
-            raise NotImplementedError('Need autostage to complete the git commit')
+            print('warning: Need autostage to complete the git commit')
+            # raise NotImplementedError('Need autostage to complete the git commit')
 
     def pathsremove(self, path, verbose=0):
         """
@@ -345,7 +420,7 @@ class SimpleDVC(ub.NiceRepr):
 
     def find_dir_tracker(cls, path):
         # Find if an ancestor parent dpath is tracked
-        path = ub.Path(path)
+        path = ub.Path(path).absolute()
         prev = path
         dpath = path.parent
         while (not (dpath / '.dvc').exists()) and prev != dpath:
@@ -354,6 +429,9 @@ class SimpleDVC(ub.NiceRepr):
                 return tracker_fpath
             prev = dpath
             dpath = dpath.parent
+        tracker_fpath = dpath.augment(tail='.dvc')
+        if tracker_fpath.exists():
+            return tracker_fpath
 
     def read_dvc_sidecar(self, sidecar_fpath):
         sidecar_fpath = ub.Path(sidecar_fpath)
@@ -370,16 +448,32 @@ class SimpleDVC(ub.NiceRepr):
         sidecar_fpath = ub.Path(sidecar_fpath)
         data = Yaml.loads(sidecar_fpath.read_text())
 
+        dvc3_cache_base = (self.cache_dir / 'files/md5')
+        try_dvc3 = dvc3_cache_base.exists()
+
         # TODO: dvc 3.0 added new hashes! Yay! But we have to support this.
         for item in data['outs']:
             md5 = item['md5']
-            cache_fpath = self.cache_dir / md5[0:2] / md5[2:]
+
+            if try_dvc3:
+                cache_fpath = self.cache_dir / 'files' / 'md5' / md5[0:2] / md5[2:]
+                if not cache_fpath.exists():
+                    cache_fpath = self.cache_dir / md5[0:2] / md5[2:]
+            else:
+                cache_fpath = self.cache_dir / md5[0:2] / md5[2:]
+                if not cache_fpath.exists():
+                    cache_fpath = self.cache_dir / 'files' / 'md5' / md5[0:2] / md5[2:]
+
             if md5.endswith('.dir') and cache_fpath.exists():
                 dir_data = Yaml.loads(cache_fpath.read_text())
                 for item in dir_data:
                     file_md5 = item['md5']
                     assert not file_md5.endswith('.dir'), 'unhandled'
-                    file_cache_fpath = self.cache_dir / file_md5[0:2] / file_md5[2:]
+                    if try_dvc3:
+                        file_cache_fpath = self.cache_dir / 'files' / 'md5' / file_md5[0:2] / file_md5[2:]
+                    else:
+                        file_cache_fpath = self.cache_dir / file_md5[0:2] / file_md5[2:]
+
                     yield file_cache_fpath
             yield cache_fpath
 
@@ -397,6 +491,29 @@ class SimpleDVC(ub.NiceRepr):
             for f in fs:
                 if f.endswith('.dvc'):
                     yield r / f
+
+    def resolve_sidecar(self, path):
+        """
+        Given a path in a DVC repo, resolve it to a sidecar file that it
+        corresponds to. If the input is a .dvc file return it.
+
+        If it is inside a directory that corresponds to a dvc repo, search for
+        that.
+
+        Args:
+            path (Path | str): directory or file in dvc repo to search
+
+        Yields:
+            ub.Path: existing dvc sidecar files
+        """
+        # TODO: handle .dvcignore
+        path = ub.Path(path).absolute()
+        if path.name.endswith('.dvc'):
+            return path
+        elif path.augment(tail='.dvc').exists():
+            return path.augment(tail='.dvc')
+        else:
+            return self.find_dir_tracker(path)
 
 
 def _ensure_iterable(inputs):

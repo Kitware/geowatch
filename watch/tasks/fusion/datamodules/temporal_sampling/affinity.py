@@ -9,7 +9,7 @@ from kwutil.util_time import coerce_timedelta
 from datetime import datetime as datetime_cls  # NOQA
 from .exceptions import TimeSampleError
 from .utils import guess_missing_unixtimes
-from watch.tasks.fusion.datamodules.temporal_sampling.utils import coerce_time_kernel
+from .utils import coerce_time_kernel
 
 try:
     from xdev import profile
@@ -19,11 +19,11 @@ except ImportError:
 
 @profile
 def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
-                    update_rule='pairwise', gamma=1, determenistic=False,
-                    time_kernel=None, unixtimes=None,
+                    allow_fewer=False, update_rule='pairwise', gamma=1,
+                    deterministic=False, time_kernel=None, unixtimes=None,
                     error_level=2, rng=None, return_info=False, jit=False):
     """
-    Randomly select `size` timesteps from a larger pool based on "affinity".
+    Randomly select ``size`` timesteps from a larger pool based on ``affinity``.
 
     Given an NxN affinity matrix between frames and an initial set of indices
     to include, chooses a sample of other frames to complete the sample.  Each
@@ -43,10 +43,14 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
             Number of sample indices to return
 
         include_indices (List[int]):
-            Indicies that must be included in the sample
+            Indices that must be included in the sample
 
         exclude_indices (List[int]):
-            Indicies that cannnot be included in the sample
+            Indices that cannot be included in the sample
+
+        allow_fewer (bool):
+            if True, we will allow fewer than the requested "size" samples to
+            be returned.
 
         update_rule (str):
             Modifies how the affinity matrix is used to create the
@@ -65,11 +69,11 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
             Exponent that modulates the probability distribution. Lower gamma
             will "flatten" the probability curve. At gamma=0, all frames will
             be equally likely regardless of affinity. As gamma -> inf, the rule
-            becomes more likely to sample the maximum probaility at each
+            becomes more likely to sample the maximum probability at each
             timestep. In the limit this becomes equivalent to
-            ``determenistic=True``.
+            ``deterministic=True``.
 
-        determenistic (bool):
+        deterministic (bool):
             if True, on each step we choose the next timestamp with maximum
             probability. Otherwise, we randomly choose a timestep, but with
             probability according to the current distribution.
@@ -86,7 +90,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
             error level 3:
                 duplicate, excluded, and 0-affinity indexes will raise an error
 
-        rng (Coercable[RandomState]):
+        rng (Coercible[RandomState]):
             random state for reproducible sampling
 
         return_info (bool):
@@ -101,9 +105,12 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
             kernel.
 
     Returns:
-        ndarray | Tuple[ndarray, Dict] -
+        ndarray | Tuple[ndarray, Dict]:
             The ``chosen`` indexes for the sample, or if return_info is True,
             then returns a tuple of ``chosen`` and the info dictionary.
+
+    Raises:
+        TimeSampleError : if sampling is impossible
 
     Possible Related Work:
         * Random Stratified Sampling Affinity Matrix
@@ -121,7 +128,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         >>> include_indices = [5]
         >>> size = 5
         >>> chosen, info = affinity_sample(affinity, size, include_indices, update_rule='pairwise',
-        >>>                                return_info=True, determenistic=True)
+        >>>                                return_info=True, deterministic=True)
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
         >>> from watch.tasks.fusion.datamodules.temporal_sampling.plots import show_affinity_sample_process
@@ -137,8 +144,8 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         >>> unixtimes = np.array(sorted(rng.randint(low, high, 5)), dtype=float)
         >>> self = TimeWindowSampler(unixtimes, sensors=None, time_window=4,
         >>>     affinity_type='soft2', time_span='0.3y',
-        >>>     update_rule='distribute+pairwise')
-        >>> self.determenistic = False
+        >>>     update_rule='distribute+pairwise', allow_fewer=False)
+        >>> self.deterministic = False
         >>> import pytest
         >>> with pytest.raises(IndexError):
         >>>     self.sample(0, exclude=[1, 2, 4], error_level=3)
@@ -179,19 +186,19 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         >>>     time_kernel=time_kernel_code,
         >>>     affinity_type='soft3',
         >>>     update_rule='')
-        >>> self.determenistic = False
+        >>> self.deterministic = False
         >>> self.show_affinity()
         >>> include_indices = [len(self.unixtimes) // 2]
         >>> exclude_indices = []
         >>> affinity = self.affinity
         >>> size = self.time_window
-        >>> determenistic = self.determenistic
+        >>> deterministic = self.deterministic
         >>> update_rule = self.update_rule
         >>> unixtimes = self.unixtimes
         >>> gamma = self.gamma
         >>> time_kernel = self.time_kernel
         >>> rng = kwarray.ensure_rng(None)
-        >>> determenistic = True
+        >>> deterministic = True
         >>> return_info = True
         >>> error_level = 2
         >>> chosen, info = affinity_sample(
@@ -201,7 +208,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         >>>     exclude_indices=exclude_indices,
         >>>     update_rule=update_rule,
         >>>     gamma=gamma,
-        >>>     determenistic=determenistic,
+        >>>     deterministic=deterministic,
         >>>     error_level=error_level,
         >>>     rng=rng,
         >>>     return_info=return_info,
@@ -275,9 +282,16 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
 
     num_sample = size - len(chosen)
 
+    if not allow_fewer:
+        num_available = len(affinity)
+        if size > num_available:
+            raise TimeSampleError(
+                '{size=} is greater than {num_available=}. '
+                'Set allow_fewer=True if returning less than the requested '
+                'number of samples is ok.')
+
     if jit:
-        raise NotImplementedError
-        # # out of date
+        raise NotImplementedError('A cython version of this would be useful')
         # cython_mod = cython_aff_samp_mod()
         # return cython_mod.cython_affinity_sample(affinity, num_sample, current_weights, chosen, rng)
 
@@ -294,9 +308,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         # next_ideal_idx = None
 
     current_mask = initial_mask = next_mask
-    # current_ideal_idx = next_ideal_idx
 
-    # available_idxs = np.arange(affinity.shape[0])
     if return_info:
         denom = current_weights.sum()
         if denom == 0:
@@ -319,81 +331,89 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
             'time_kernel': time_kernel,
         }
 
+    # Errors will be accumulated in this list if we encounter them and the user
+    # requested debug info.
     errors = []
-    for _ in range(num_sample):
-        # Choose the next image based on combined sample affinity
 
-        if return_info:
-            errors = []
+    try:
+        for _ in range(num_sample):
+            # Choose the next image based on combined sample affinity
 
-        total_weight = current_weights.sum()
+            if return_info:
+                errors = []
 
-        # If we zeroed out all of the probabilities try two things before
-        # punting and setting everything to uniform.
-        if total_weight == 0:
-            current_weights = _handle_degenerate_weights(
-                affinity, chosen, exclude_indices, errors, error_level,
-                return_info, rng)
+            total_weight = current_weights.sum()
 
-        if current_mask is not None:
-            masked_current_weights = current_weights * current_mask
-
-            total_weight = masked_current_weights.sum()
+            # If we zeroed out all of the probabilities try two things before
+            # punting and setting everything to uniform.
             if total_weight == 0:
-                masked_current_weights = _handle_degenerate_weights(
-                    affinity, chosen, exclude_indices, errors, error_level,
+                current_weights = _handle_degenerate_weights(
+                    affinity, size, chosen, exclude_indices, errors, error_level,
                     return_info, rng)
-        else:
-            masked_current_weights = current_weights
 
-        if determenistic:
-            next_idx = masked_current_weights.argmax()
-        else:
-            cumprobs = (masked_current_weights ** gamma).cumsum()
-            dart = rng.rand() * cumprobs[-1]
-            next_idx = np.searchsorted(cumprobs, dart)
+            if current_mask is not None:
+                masked_current_weights = current_weights * current_mask
 
-        update_weights = 1
-
-        if do_pairwise:
-            if next_idx < affinity.shape[0]:
-                update_weights = affinity[next_idx] * update_weights
-
-        if do_distribute:
-            update_weights = (np.abs(col_idxs - next_idx) / len(col_idxs)) * update_weights
-
-        chosen.append(next_idx)
-
-        if current_mask is not None:
-            # Build the next mask
-            if len(unsatisfied_kernel_idxs):
-                kernel_idx = unsatisfied_kernel_idxs[0]
-                next_mask = kernel_masks[kernel_idx]
-                unsatisfied_kernel_idxs = unsatisfied_kernel_idxs[1:]
+                total_weight = masked_current_weights.sum()
+                if total_weight == 0:
+                    masked_current_weights = _handle_degenerate_weights(
+                        affinity, size, chosen, exclude_indices, errors,
+                        error_level, return_info, rng)
             else:
-                next_mask = None
+                masked_current_weights = current_weights
 
-        if return_info:
-            if total_weight == 0:
-                probs = masked_current_weights.copy()
+            if deterministic:
+                next_idx = masked_current_weights.argmax()
             else:
-                probs = masked_current_weights / total_weight
-            probs = masked_current_weights
-            info['steps'].append({
-                'probs': probs,
-                'next_idx': next_idx,
-                'update_weights': update_weights,
-                'next_mask': next_mask,
-                'errors': errors,
-            })
+                cumprobs = (masked_current_weights ** gamma).cumsum()
+                dart = rng.rand() * cumprobs[-1]
+                next_idx = np.searchsorted(cumprobs, dart)
 
-        # Modify weights / mask to impact next sample
-        current_weights = current_weights * update_weights
-        current_mask = next_mask
-        # current_ideal_idx = next_ideal_idx
+            update_weights = 1
 
-        # Don't resample the same item
-        current_weights[next_idx] = 0
+            if do_pairwise:
+                if next_idx < affinity.shape[0]:
+                    update_weights = affinity[next_idx] * update_weights
+
+            if do_distribute:
+                update_weights = (np.abs(col_idxs - next_idx) / len(col_idxs)) * update_weights
+
+            chosen.append(next_idx)
+
+            if current_mask is not None:
+                # Build the next mask
+                if len(unsatisfied_kernel_idxs):
+                    kernel_idx = unsatisfied_kernel_idxs[0]
+                    next_mask = kernel_masks[kernel_idx]
+                    unsatisfied_kernel_idxs = unsatisfied_kernel_idxs[1:]
+                else:
+                    next_mask = None
+
+            if return_info:
+                if total_weight == 0:
+                    probs = masked_current_weights.copy()
+                else:
+                    probs = masked_current_weights / total_weight
+                probs = masked_current_weights
+                info['steps'].append({
+                    'probs': probs,
+                    'next_idx': next_idx,
+                    'update_weights': update_weights,
+                    'next_mask': next_mask,
+                    'errors': errors,
+                })
+
+            # Modify weights / mask to impact next sample
+            current_weights = current_weights * update_weights
+            current_mask = next_mask
+
+            # Don't resample the same item
+            current_weights[next_idx] = 0
+    except TimeSampleError:
+        if len(chosen) == 0:
+            raise
+        if not allow_fewer:
+            raise
 
     chosen = sorted(chosen)
     if return_info:
@@ -404,56 +424,77 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
 
 def make_soft_mask(time_kernel, relative_unixtimes):
     """
-    Ignore:
-        from watch.tasks.fusion.datamodules.temporal_sampling.affinity import *  # NOQA
-        time_kernel = coerce_time_kernel('-1H,-5M,0,5M,1H')
-        relative_unixtimes = coerce_time_kernel('-90M,-70M,-50M,0,1sec,10S,30M')
-        # relative_unixtimes = coerce_time_kernel('-90M,-70M,-50M,-20M,-10M,0,1sec,10S,30M,57M,87M')
+    Assign probabilities to real observations based on an ideal time kernel
 
-        kernel_masks, kernel_attrs = make_soft_mask(time_kernel, relative_unixtimes)
+    Args:
+        time_kernel (ndarray):
+            A list of relative seconds in the time kernel. Each element in this
+            list is referred to as a "kernel entry".
 
-        min_t = min(kattr['left'] for kattr in kernel_attrs)
-        max_t = max(kattr['right'] for kattr in kernel_attrs)
+        relative_unixtimes (ndarray):
+            A list of available unixtimes corresponding to real observations.
+            These should be relative to an "ideal" center. I.e. the "main"
+            observation the kernel is centered around should have a relative
+            unixtime of zero.
 
-        import kwplot
-        plt = kwplot.autoplt()
-        import kwimage
-        kwplot.figure(fnum=1, doclf=1)
-        kernel_color = kwimage.Color.coerce('kitware_green').as01()
-        obs_color = kwimage.Color.coerce('kitware_blue').as01()
+    Returns:
+        Tuple[List[ndarray], List[Dict]]:
+            A tuple of (kernel_masks, kernel_attrs).  For each element in the
+            time kernel there is a corresponding entry in the output
+            kernel_masks and kernel_attrs list, with the former being a
+            probability assigned to each observation for that particular kernel
+            entry, and the latter is a dictionary of information about that
+            kernel entry.
 
-        kwplot.figure(fnum=1, pnum=(2, 1, 1))
-        plt.plot(time_kernel, [0] * len(time_kernel), '-o', color=kernel_color, label='kernel')
-
-        for kattr in kernel_attrs:
-            rv = kattr['rv']
-            xs = np.linspace(min_t, max_t, 1000)
-            ys = rv.pdf(xs)
-            ys_norm = ys / ys.sum()
-            plt.plot(xs, ys_norm)
-
-        ax = plt.gca()
-        # ax.set_ylim(0, 1)
-        ax.legend()
-        ax.set_xlabel('time')
-        ax.set_ylabel('ideal probability')
-        ax.set_title('ideal kernel')
-
-        kwplot.figure(fnum=1, pnum=(2, 1, 2))
-        plt.plot(relative_unixtimes, [0] * len(relative_unixtimes), '-o', color=obs_color, label='observation')
-        ax = plt.gca()
-
-        for kattr in kernel_attrs:
-            rv = kattr['rv']
-            xs = relative_unixtimes
-            ys = rv.pdf(xs)
-            ys_norm = ys / ys.sum()
-            plt.plot(xs, ys_norm)
-        ax.legend()
-        ax.set_xlabel('time')
-        ax.set_ylabel('sample probability')
-        ax.set_title('discrete observations')
-        plt.subplots_adjust(top=0.9, hspace=.3)
+    Example:
+        >>> from watch.tasks.fusion.datamodules.temporal_sampling.affinity import *  # NOQA
+        >>> time_kernel = coerce_time_kernel('-1H,-5M,0,5M,1H')
+        >>> relative_unixtimes = coerce_time_kernel('-90M,-70M,-50M,0,1sec,10S,30M')
+        >>> # relative_unixtimes = coerce_time_kernel('-90M,-70M,-50M,-20M,-10M,0,1sec,10S,30M,57M,87M')
+        >>> kernel_masks, kernel_attrs = make_soft_mask(time_kernel, relative_unixtimes)
+        >>> #
+        >>> min_t = min(kattr['left'] for kattr in kernel_attrs)
+        >>> max_t = max(kattr['right'] for kattr in kernel_attrs)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwimage
+        >>> import kwplot
+        >>> plt = kwplot.autoplt()
+        >>> kwplot.figure(fnum=1, doclf=1)
+        >>> kernel_color = kwimage.Color.coerce('kitware_green').as01()
+        >>> obs_color = kwimage.Color.coerce('kitware_blue').as01()
+        >>> #
+        >>> kwplot.figure(fnum=1, pnum=(2, 1, 1))
+        >>> plt.plot(time_kernel, [0] * len(time_kernel), '-o', color=kernel_color, label='kernel')
+        >>> #
+        >>> for kattr in kernel_attrs:
+        >>>     rv = kattr['rv']
+        >>>     xs = np.linspace(min_t, max_t, 1000)
+        >>>     ys = rv.pdf(xs)
+        >>>     ys_norm = ys / ys.sum()
+        >>>     plt.plot(xs, ys_norm)
+        >>> #
+        >>> ax = plt.gca()
+        >>> ax.legend()
+        >>> ax.set_xlabel('time')
+        >>> ax.set_ylabel('ideal probability')
+        >>> ax.set_title('ideal kernel')
+        >>> #
+        >>> kwplot.figure(fnum=1, pnum=(2, 1, 2))
+        >>> plt.plot(relative_unixtimes, [0] * len(relative_unixtimes), '-o', color=obs_color, label='observation')
+        >>> ax = plt.gca()
+        >>> #
+        >>> for kattr in kernel_attrs:
+        >>>     rv = kattr['rv']
+        >>>     xs = relative_unixtimes
+        >>>     ys = rv.pdf(xs)
+        >>>     ys_norm = ys / ys.sum()
+        >>>     plt.plot(xs, ys_norm)
+        >>> ax.legend()
+        >>> ax.set_xlabel('time')
+        >>> ax.set_ylabel('sample probability')
+        >>> ax.set_title('discrete observations')
+        >>> plt.subplots_adjust(top=0.9, hspace=.3)
+        >>> kwplot.show_if_requested()
     """
     if len(time_kernel) == 1:
         raise Exception
@@ -486,30 +527,53 @@ def make_soft_mask(time_kernel, relative_unixtimes):
         })
 
     kernel_masks = []
-    for kattr in kernel_attrs:
-        probs = kattr['rv'].pdf(relative_unixtimes)
-        pmf = probs / probs.sum()
-        kernel_masks.append(pmf)
+    import warnings
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', 'invalid value encountered', category=RuntimeWarning)
+
+        for kattr in kernel_attrs:
+            probs = kattr['rv'].pdf(relative_unixtimes)
+            pmf = probs / probs.sum()
+            kernel_masks.append(pmf)
 
     return kernel_masks, kernel_attrs
 
 
 @profile
-def _handle_degenerate_weights(affinity, chosen, exclude_indices, errors,
+def _handle_degenerate_weights(affinity, size, chosen, exclude_indices, errors,
                                error_level, return_info, rng):
+    """
+    Called by :func:`affinity_sample` when the exact requested sampling is
+    impossible. Depending on the error level this function either tries to
+    recover or raises an error with debug info.
+    """
+
+    debug_parts = [
+        f'{size=}',
+        f'{affinity.shape=}',
+        f'{len(chosen)=}',
+        f'{len(exclude_indices)=}',
+        f'{error_level=}',
+    ]
     if error_level == 3:
-        raise TimeSampleError('all probability is exhausted')
+        msg3 = '\n'.join(['all probability is exhausted.'] + debug_parts)
+        raise TimeSampleError(msg3)
+
     current_weights = affinity[chosen[0]].copy()
     current_weights[chosen] = 0
     current_weights[exclude_indices] = 0
 
     total_weight = current_weights.sum()
+
     if return_info:
         errors.append('all indices were chosen, excluded, or had no affinity')
+
     if total_weight == 0:
         # Should really never get here in day-to-day, but just in case
         if error_level == 2:
-            raise TimeSampleError('all included probability is exhausted')
+            msg2 = '\n'.join(['all included probability is exhausted.'] + debug_parts)
+            raise TimeSampleError(msg2)
+
         # Zero weight method: neighbors
         zero_weight_method = 'neighbors'
         if zero_weight_method == 'neighbors':
@@ -522,23 +586,35 @@ def _handle_degenerate_weights(affinity, chosen, exclude_indices, errors,
                 if len(ideal_idxs) == 0:
                     ideal_idxs = chosen_neighbor_idxs
                 current_weights[ideal_idxs] = 1
-
-        if zero_weight_method == 'random':
+        elif zero_weight_method == 'random':
             current_weights[:] = rng.rand(len(current_weights))
+        else:
+            raise KeyError(zero_weight_method)
 
         current_weights[chosen] = 0
         total_weight = current_weights.sum()
         if return_info:
             errors.append('all indices were chosen, excluded')
         if total_weight == 0:
+
             if error_level == 1:
-                raise TimeSampleError('all chosen probability is exhausted')
+                debug_parts.append(f'{total_weight=}')
+                msg1 = '\n'.join(['all chosen probability is exhausted.'] + debug_parts)
+                raise TimeSampleError(msg1)
+
             if zero_weight_method == 'neighbors':
                 current_weights[:] = rng.rand(len(current_weights))
-            if zero_weight_method == 'random':
+            elif zero_weight_method == 'random':
                 current_weights[:] = rng.rand(len(current_weights))
+            else:
+                raise KeyError(zero_weight_method)
+
             if return_info:
                 errors.append('all indices were chosen, punting')
+
+    if return_info:
+        errors.append('\n'.join(debug_parts))
+
     return current_weights
 
 

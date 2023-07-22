@@ -469,8 +469,8 @@ def check_datamodule_consistency(dev_input_dset_, pro_input_dset_, trk_pxl_param
     pro_sampler = ub.peek(pro_dmod.test_dataset.new_sample_grid['vidid_to_time_sampler'].values())
     dev_sampler = ub.peek(dev_dmod.test_dataset.new_sample_grid['vidid_to_time_sampler'].values())
 
-    pro_sampler.determenistic = True
-    dev_sampler.determenistic = True
+    pro_sampler.deterministic = True
+    dev_sampler.deterministic = True
 
     for i in range(pro_sampler.num_frames):
         a = pro_sampler.sample(i)

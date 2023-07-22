@@ -48,6 +48,7 @@ The following is the EVAL11 baseline MLOPs grid.
             bas_poly.inner_window_size:
                 - 1y
             bas_poly.inner_agg_fn:
+                ### NOTE: this should have been mean!
                 - max
             bas_poly.norm_ord:
                 - inf
@@ -128,3 +129,19 @@ To report your scores:
             reference_region: final
         " \
         --rois="auto"
+
+
+This will result in something like this table:
+
+.. code::
+
+               region_id  param_hashid  bas_faa_f1  bas_tp  bas_fp  bas_fn   bas_tpr    bas_f1  bas_ffpa
+    7            AE_R001  fovtyjydzdjx    0.451815   183.0   279.0    76.0  0.706600  0.507600  0.109900
+    0            BR_R002  fovtyjydzdjx    0.397880     2.0     5.0     1.0  0.666700  0.400000  0.005300
+    5            BR_R004  fovtyjydzdjx    0.220783     6.0    39.0     1.0  0.857100  0.230800  0.043400
+    4            CH_R001  fovtyjydzdjx    0.421669    37.0    87.0    12.0  0.755100  0.427700  0.014100
+    1            KR_R001  fovtyjydzdjx    0.688673     8.0     6.0     1.0  0.888900  0.695700  0.010100
+    2            KR_R002  fovtyjydzdjx    0.572208    17.0    11.0    14.0  0.548400  0.576300  0.007100
+    6            NZ_R001  fovtyjydzdjx    0.486650    15.0    27.0     3.0  0.833300  0.500000  0.026700
+    3            PE_R001  fovtyjydzdjx    0.055333     1.0    31.0     3.0  0.250000  0.055600  0.004800
+    0    macro_08_0bcb55  fovtyjydzdjx    0.411877   269.0   485.0   111.0  0.688262  0.424212  0.027675

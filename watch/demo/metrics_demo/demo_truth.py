@@ -6,7 +6,7 @@ import kwarray
 import kwimage
 import mgrs
 import ubelt as ub
-from datetime import datetime as datetime_cls
+# from datetime import datetime as datetime_cls
 from shapely.ops import unary_union
 from kwarray.distributions import TruncNormal
 from watch.demo.metrics_demo import demo_utils
@@ -166,6 +166,7 @@ def random_region_model(region_id=None, region_poly=None, num_sites=3,
             ],
         }
     """
+    from kwutil import util_time
     rng = kwarray.ensure_rng(rng)
 
     if num_observations <= 0:
@@ -196,13 +197,11 @@ def random_region_model(region_id=None, region_poly=None, num_sites=3,
     if end_time is None:
         end_time = observables[-1]['datetime']
     else:
-        from kwutil import util_time
         end_time = util_time.coerce_datetime(end_time)
 
     if start_time is None:
         start_time = observables[0]['datetime']
     else:
-        from kwutil import util_time
         start_time = util_time.coerce_datetime(start_time)
 
     # Define the region feature
@@ -255,14 +254,14 @@ def random_region_model(region_id=None, region_poly=None, num_sites=3,
 
             visible_polys = []
             for sitesum in site_summaries:
-                site_d1 = datetime_cls.fromisoformat(sitesum["properties"]["start_date"])
-                site_d2 = datetime_cls.fromisoformat(sitesum["properties"]["end_date"])
+                site_d1 = util_time.coerce_datetime(sitesum["properties"]["start_date"])
+                site_d2 = util_time.coerce_datetime(sitesum["properties"]["end_date"])
                 # TODO: more date range intersection query, can blend between geom
                 # observations
                 if site_d1 <= datetime and datetime <= site_d2:
                     wld_site_poly = kwimage.Polygon.coerce(sitesum["geometry"])
                     img_site_poly = wld_site_poly.warp(tf_image_from_region)
-                    img_site_poly.meta["color"] = sitesum["properties"]["annotation_cache"][
+                    img_site_poly.meta["color"] = sitesum["properties"]["cache"][
                         "color"
                     ]
                     visible_polys.append(img_site_poly)
@@ -471,7 +470,7 @@ def random_site_model(region_id, site_id, region_corners, observables,
                 'originator': 'demo',
                 'model_content': 'annotation',
                 'validated': 'True',
-                'annotation_cache': {
+                'cache': {
                     'color': [1.0, 0.36777954425013254, 0.0]
                 }
             }
@@ -634,15 +633,14 @@ def random_site_model(region_id, site_id, region_corners, observables,
     site_summary = make_site_summary(
         observations, mgrs_code, site_id, status, summary_geom
     )
-    if "annotation_cache" not in site_summary["properties"]:
-        site_summary["properties"]["annotation_cache"] = {}
-    site_summary["properties"]["annotation_cache"]["color"] = color
+    if "cache" not in site_summary["properties"]:
+        site_summary["properties"]["cache"] = {}
+    site_summary["properties"]["cache"]["color"] = color
 
     site_header = site_summary.copy()
     site_header["properties"] = site_header["properties"].copy()
     site_header["properties"]["type"] = "site"
     site_header["properties"]["region_id"] = region_id
-    site_header["properties"]["misc_info"] = site_header["properties"].pop("annotation_cache")
     site = geojson.FeatureCollection([site_header] + observations)
     return site_summary, site
 

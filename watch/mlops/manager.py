@@ -36,6 +36,7 @@ Example:
     python -m watch.mlops.manager "push packages" --dataset_codes Drop6-MedianSummer10GSD --yes
     python -m watch.mlops.manager "push packages" --dataset_codes Drop6-NoWinterMedian10GSD --yes
     python -m watch.mlops.manager "push packages" --dataset_codes Drop7-MedianNoWinter10GSD --yes
+    python -m watch.mlops.manager "push packages" --dataset_codes Drop7-Cropped2GSD --yes
 
     python -m watch.mlops.manager "status" --dataset_codes Drop6-MeanYear10GSD-V2
     python -m watch.mlops.manager "pull packages" --dataset_codes Drop6-MeanYear10GSD --yes
@@ -1001,6 +1002,8 @@ def checkpoint_filepath_info(fname):
     # We assume it must have this
     suffix = ''.join(fname.partition('epoch')[1:])
     # Hack: making name assumptions
+    # could probably parse the right one out of filename in lightning monitor
+    # callbacks if we get access to that sort of into.
     parsers = [
         parse.Parser('epoch={epoch:d}-step={step:d}-{ckpt_ver}.{ext}'),
         parse.Parser('epoch={epoch:d}-step={step:d}.{ext}'),
@@ -1017,6 +1020,9 @@ def checkpoint_filepath_info(fname):
         parse.Parser('epoch={epoch:d}-val_loss={val_loss:f}'),
         parse.Parser('epoch={epoch:d}-val_loss={val_loss:f}.{ext}'),
         parse.Parser('epoch={epoch:d}-val_loss={val_loss:f}.{ext1}.{ext}'),
+        #
+        parse.Parser('epoch={epoch:d}-step={step:d}-val_loss={val_loss:f}'),
+        parse.Parser('epoch={epoch:d}-step={step:d}-val_loss={val_loss:f}.{ext1}.{ext}'),
     ]
     # results = parser.parse(str(path))
     info = None

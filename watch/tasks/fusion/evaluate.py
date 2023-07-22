@@ -211,7 +211,7 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
     # Load ground truth annotations
     if score_space == 'video':
         warp_img_to_vid = kwimage.Affine.coerce(
-            true_coco_img.img['warp_img_to_vid'])
+            true_coco_img.img.get('warp_img_to_vid', {'type': 'affine'}))
         true_dets = true_dets.warp(warp_img_to_vid)
     if scale is not None:
         true_dets = true_dets.scale(scale)

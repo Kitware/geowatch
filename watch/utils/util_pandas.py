@@ -256,9 +256,22 @@ class DotDictDataFrame(pd.DataFrame):
         return self._column_prefix_trie.values(col)
 
     def find_columns(self, pat, hint='glob'):
-        from watch.utils import util_pattern
+        # DEPRECATE use match or search columns instead.
+        from kwutil import util_pattern
         pat = util_pattern.Pattern.coerce(pat, hint=hint)
         found = [c for c in self.columns if pat.match(c)]
+        return found
+
+    def match_columns(self, pat, hint='glob'):
+        from kwutil import util_pattern
+        pat = util_pattern.Pattern.coerce(pat, hint=hint)
+        found = [c for c in self.columns if pat.match(c)]
+        return found
+
+    def search_columns(self, pat, hint='glob'):
+        from kwutil import util_pattern
+        pat = util_pattern.Pattern.coerce(pat, hint=hint)
+        found = [c for c in self.columns if pat.search(c)]
         return found
 
     def subframe(self, key, drop_prefix=True):

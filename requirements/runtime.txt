@@ -89,7 +89,7 @@ mgrs>=1.4.3     ; python_version < '3.10' and python_version >= '3.9'    # Pytho
 mgrs>=1.3.7     ; python_version < '3.9'  and python_version >= '3.8'    # Python 3.8
 
 # Numeric
-kwarray>=0.6.12
+kwarray>=0.6.14
 xarray>=0.17.0
 filterpy>=1.4.5
 einops>=0.6.0
@@ -115,12 +115,12 @@ text_unidecode>=1.3
 configargparse>=1.5.1
 parse>=1.19.0
 affine>=2.3.0
-ubelt>=1.3.0
+ubelt>=1.3.2
 xmltodict>=0.12.0
 Pygments>=2.12.0
 requests>=2.27.1
 fasteners>=0.16.3
-kwutil>=0.1.1
+kwutil>=0.2.3
 
 blake3>=0.3.1  ;  python_version < '4' and python_version >= '3.11'    # Python 3.11+ 
 blake3>=0.2.1  ;  python_version < '3.11' # Python 3.10- 
@@ -150,14 +150,14 @@ progiter>=1.1.0
 fire>=0.4.0
 
 # Parsing
-lark >= 1.1.2
-lark_cython >= 0.0.12
+lark >= 1.1.7
+lark_cython >= 0.0.15
 
 # Imaging
 distinctipy>=1.2.1
 kwimage>=0.9.19
-kwcoco>=0.6.2
-delayed_image>=0.2.7
+kwcoco>=0.6.4
+delayed_image>=0.2.8
 albumentations==1.0.0  # pinned for invariants model
 ndsampler>=0.7.3
 tifffile>=2021.4.8
@@ -194,7 +194,7 @@ hydra-core >=1.3.2
 
 #pytorch_lightning[extra]>=1.8.6,<2.0.0
 #pytorch_lightning[extra]>=1.8.6
-pytorch_lightning>=1.8.6
+pytorch_lightning>=1.9.0
 
 monai>=0.8.0     ; python_version < '4.0'  and python_version >= '3.11'    # Python 3.11+
 monai>=0.6.0     ; python_version < '3.11' 
@@ -234,4 +234,4 @@ absl_py>=1.4.0
 PyYAML>=6.0
 tqdm>=4.64.1
 
-cmd_queue >= 0.1.16
+cmd_queue >= 0.1.17

@@ -8,6 +8,7 @@ This following doctest illustrates the method on project data.
 
 CommandLine:
     SMART_DATA_DVC_DPATH=1 XDEV_PROFILE=1 xdoctest -m watch.tasks.fusion.datamodules.temporal_sampling __doc__:3
+    SMART_DATA_DVC_DPATH=1 xdoctest -m watch.tasks.fusion.datamodules.temporal_sampling __doc__:3
 
 Example:
     >>> # Basic overview demo of the algorithm
@@ -77,6 +78,7 @@ Example:
     >>> self.show_summary(samples_per_frame=3, fnum=1)
     >>> self.show_procedure(fnum=4)
     >>> plt.subplots_adjust(top=0.9)
+    >>> kwplot.show_if_requested()
 
 Example:
     >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
@@ -89,9 +91,9 @@ Example:
     >>> self = TimeWindowSampler.from_coco_video(
     >>>     dset, vidid,
     >>>     time_kernel='-1y,-8m,-2w,0,2w,8m,1y',
-    >>>     affinity_type='soft4', update_rule='', determenistic=True
+    >>>     affinity_type='soft4', update_rule='', deterministic=True
     >>>     #time_window=5,
-    >>>     #affinity_type='hardish3', time_span='3m', update_rule='pairwise+distribute', determenistic=True
+    >>>     #affinity_type='hardish3', time_span='3m', update_rule='pairwise+distribute', deterministic=True
     >>> )
     >>> idxs = self.sample()
     >>> idxs = self.sample()
@@ -101,6 +103,7 @@ Example:
     >>> self.show_summary(samples_per_frame=1, fnum=1)
     >>> chosen, info = self.show_procedure(fnum=4, idx=10)
     >>> plt.subplots_adjust(top=0.9)
+    >>> kwplot.show_if_requested()
 
 Example:
     >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
@@ -120,6 +123,7 @@ Example:
     >>> import kwplot
     >>> kwplot.autosns()
     >>> self.show_summary(3)
+    >>> kwplot.show_if_requested()
 
 Example:
     >>> # xdoctest: +SKIP
@@ -141,14 +145,15 @@ import numpy as np
 import ubelt as ub
 import itertools as it
 from dateutil import parser
-from watch.tasks.fusion.datamodules.temporal_sampling.utils import coerce_time_kernel
-from watch.tasks.fusion.datamodules.temporal_sampling.utils import coerce_multi_time_kernel
-from watch.tasks.fusion.datamodules.temporal_sampling.plots import plot_dense_sample_indices
-from watch.tasks.fusion.datamodules.temporal_sampling.plots import plot_temporal_sample_indices
-from watch.tasks.fusion.datamodules.temporal_sampling.plots import show_affinity_sample_process
-from watch.tasks.fusion.datamodules.temporal_sampling.affinity import soft_frame_affinity
-from watch.tasks.fusion.datamodules.temporal_sampling.affinity import hard_frame_affinity
-from watch.tasks.fusion.datamodules.temporal_sampling.affinity import affinity_sample
+from .utils import coerce_time_kernel
+from .utils import coerce_multi_time_kernel
+from .plots import plot_dense_sample_indices
+from .plots import plot_temporal_sample_indices
+from .plots import show_affinity_sample_process
+from .affinity import soft_frame_affinity
+from .affinity import hard_frame_affinity
+from .affinity import affinity_sample
+from .exceptions import TimeSampleError
 
 
 try:
@@ -239,8 +244,8 @@ class MultiTimeWindowSampler(CommonSamplerMixin):
     """
 
     def __init__(self, unixtimes, sensors, time_window=None, affinity_type='hard',
-                 update_rule='distribute', determenistic=False, gamma=1,
-                 time_span=None, time_kernel=None, name='?'):
+                 update_rule='distribute', deterministic=False, gamma=1,
+                 time_span=None, time_kernel=None, name='?', allow_fewer=True):
         """
         Args:
             time_span (List[List[str]]):
@@ -268,12 +273,13 @@ class MultiTimeWindowSampler(CommonSamplerMixin):
         self.time_window = time_window
         self.update_rule = update_rule
         self.affinity_type = affinity_type
-        self.determenistic = determenistic
+        self.deterministic = deterministic
         self.gamma = gamma
         self.name = name
         self.num_frames = len(unixtimes)
         self.time_span = time_span
         self.sub_samplers = {}
+        self.allow_fewer = allow_fewer
         self._build()
 
     def _build(self):
@@ -284,11 +290,12 @@ class MultiTimeWindowSampler(CommonSamplerMixin):
                 time_window=self.time_window,
                 update_rule=update_rule,
                 affinity_type=affinity_type,
-                determenistic=self.determenistic,
+                deterministic=self.deterministic,
                 gamma=self.gamma,
                 name=self.name,
                 time_span=time_span,
                 time_kernel=time_kernel,
+                allow_fewer=self.allow_fewer,
             )
             key = ':'.join([str(time_span), str(time_kernel), affinity_type, update_rule])
             self.sub_samplers[key] = sub_sampler
@@ -313,12 +320,29 @@ class MultiTimeWindowSampler(CommonSamplerMixin):
         """
         rng = kwarray.ensure_rng(rng)
         # FIXME: the selection of the subsampler does not respect
-        # self.determenistic
+        # self.deterministic
         chosen_key = rng.choice(list(self.sub_samplers.keys()))
         chosen_sampler = self.sub_samplers[chosen_key]
-        return chosen_sampler.sample(main_frame_idx, include=include,
-                                     exclude=exclude, return_info=return_info,
-                                     rng=rng, error_level=error_level)
+
+        try:
+            return chosen_sampler.sample(main_frame_idx, include=include,
+                                         exclude=exclude, return_info=return_info,
+                                         rng=rng, error_level=error_level)
+        except TimeSampleError as ex:
+            debug_parts = [
+                f'{self.name=}',
+                f'{self.affinity_type=}',
+                f'{self.deterministic=}',
+                f'{self.gamma=}',
+                f'{self.time_kernel=}',
+                f'{self.time_span=}',
+                f'{self.num_frames=}',
+                f'{main_frame_idx=}',
+                f'{include=}',
+                f'{exclude=}',
+            ]
+            ex.args = ('\n'.join(list(ex.args) + debug_parts),)
+            raise
 
     @property
     def affinity(self):
@@ -359,7 +383,7 @@ class MultiTimeWindowSampler(CommonSamplerMixin):
         title_info = ub.codeblock(
             f'''
             name={self.name}
-            affinity_type={self.affinity_type} determenistic={self.determenistic}
+            affinity_type={self.affinity_type} deterministic={self.deterministic}
             update_rule={self.update_rule} gamma={self.gamma}
             ''')
 
@@ -426,7 +450,7 @@ class TimeWindowSampler(CommonSamplerMixin):
             Modulates sampling probability. Higher values
             See :func:`affinity_sample` for details.
 
-        time_span (Coercable[datetime.timedelta]):
+        time_span (Coercible[datetime.timedelta]):
             The ideal distince in time that frames should be separated in.
             This is typically a string code. E.g. "1y" is one year.
 
@@ -434,7 +458,7 @@ class TimeWindowSampler(CommonSamplerMixin):
             A name for this object.  For developer convinience, has no
             influence on the algorithm.
 
-        determenistic (bool):
+        deterministic (bool):
             if True, on each step we choose the next timestamp with maximum
             probability. Otherwise, we randomly choose a timestep, but with
             probability according to the current distribution.  This is an
@@ -459,16 +483,16 @@ class TimeWindowSampler(CommonSamplerMixin):
         >>>     time_window=5,
         >>>     affinity_type='hardish3', time_span='1y',
         >>>     update_rule='distribute')
-        >>> self.determenistic = False
+        >>> self.deterministic = False
         >>> self.show_summary(samples_per_frame=1, fnum=1)
-        >>> self.determenistic = True
+        >>> self.deterministic = True
         >>> self.show_summary(samples_per_frame=3, fnum=2)
     """
 
     def __init__(self, unixtimes, sensors, time_window=None,
                  affinity_type='hard', update_rule='distribute',
-                 determenistic=False, gamma=1, time_span=None,
-                 time_kernel=None, affkw=None, name='?'):
+                 deterministic=False, gamma=1, time_span=None,
+                 time_kernel=None, affkw=None, name='?', allow_fewer=True):
 
         if isinstance(time_span, str) and time_span == 'None':
             time_span = None
@@ -487,12 +511,13 @@ class TimeWindowSampler(CommonSamplerMixin):
         self.time_window = time_window
         self.update_rule = update_rule
         self.affinity_type = affinity_type
-        self.determenistic = determenistic
+        self.deterministic = deterministic
         self.gamma = gamma
         self.name = name
         self.num_frames = len(unixtimes)
         self.time_span = time_span
         self.affkw = affkw  # extra args to affinity matrix building
+        self.allow_fewer = allow_fewer
 
         self.compute_affinity()
 
@@ -514,7 +539,7 @@ class TimeWindowSampler(CommonSamplerMixin):
             >>>     time_window=5,
             >>>     affinity_type='contiguous',
             >>>     update_rule='pairwise')
-            >>> self.determenistic = True
+            >>> self.deterministic = True
             >>> self.show_procedure(fnum=1)
         """
         if self.affkw is None:
@@ -677,8 +702,8 @@ class TimeWindowSampler(CommonSamplerMixin):
             >>>     time_window=3,
             >>>     affinity_type='soft2',
             >>>     update_rule='distribute+pairwise')
-            >>> self.determenistic = False
-            >>> self.show_summary(samples_per_frame=1 if self.determenistic else 10, fnum=1)
+            >>> self.deterministic = False
+            >>> self.show_summary(samples_per_frame=1 if self.deterministic else 10, fnum=1)
             >>> self.show_procedure(fnum=2)
 
         Example:
@@ -694,9 +719,9 @@ class TimeWindowSampler(CommonSamplerMixin):
             >>>     time_window=3,
             >>>     affinity_type='soft2',
             >>>     update_rule='distribute+pairwise')
-            >>> self.determenistic = True
+            >>> self.deterministic = True
             >>> # xdoctest: +REQUIRES(--show)
-            >>> self.show_summary(samples_per_frame=1 if self.determenistic else 10, fnum=1)
+            >>> self.show_summary(samples_per_frame=1 if self.deterministic else 10, fnum=1)
             >>> self.show_procedure(fnum=2)
 
         Ignore:
@@ -712,7 +737,7 @@ class TimeWindowSampler(CommonSamplerMixin):
         exclude_indices = exclude
         affinity = self.affinity
         size = self.time_window
-        determenistic = self.determenistic
+        deterministic = self.deterministic
         update_rule = self.update_rule
         gamma = self.gamma
         time_kernel = self.time_kernel
@@ -727,12 +752,13 @@ class TimeWindowSampler(CommonSamplerMixin):
             exclude_indices=exclude_indices,
             update_rule=update_rule,
             gamma=gamma,
-            determenistic=determenistic,
+            deterministic=deterministic,
             error_level=error_level,
             rng=rng,
             return_info=return_info,
             time_kernel=time_kernel,
             unixtimes=unixtimes,
+            allow_fewer=self.allow_fewer,
         )
         return ret
 
@@ -772,8 +798,8 @@ class TimeWindowSampler(CommonSamplerMixin):
             >>> grid = list(ub.named_product({
             >>>     'affinity_type': ['hard', 'soft2', 'hardish3', 'hardish2'],
             >>>     'update_rule': ['distribute', 'pairwise+distribute'][0:1],
-            >>>     #'determenistic': [False, True],
-            >>>     'determenistic': [False],
+            >>>     #'deterministic': [False, True],
+            >>>     'deterministic': [False],
             >>>     'time_window': [5],
             >>> }))
             >>> import kwplot
@@ -781,14 +807,14 @@ class TimeWindowSampler(CommonSamplerMixin):
             >>> for idx, kwargs in enumerate(grid):
             >>>     print('kwargs = {!r}'.format(kwargs))
             >>>     self = TimeWindowSampler.from_coco_video(dset, vidid, **kwargs)
-            >>>     self.show_summary(samples_per_frame=30, fnum=idx, show_indexes=False, determenistic=True)
+            >>>     self.show_summary(samples_per_frame=30, fnum=idx, show_indexes=False, deterministic=True)
         """
         import kwplot
         kwplot.autompl()
 
         if compare_determ:
-            _prev_determenistic = self.determenistic
-            self.determenistic = False
+            _prev_deterministic = self.deterministic
+            self.deterministic = False
 
         sample_idxs = []
         for idx in range(self.affinity.shape[0]):
@@ -807,7 +833,7 @@ class TimeWindowSampler(CommonSamplerMixin):
             affinity_type={self.affinity_type}
             update_rule={self.update_rule} gamma={self.gamma}
             ''') + title_suffix
-        # determenistic={self.determenistic}
+        # deterministic={self.deterministic}
 
         with_mat = True
 
@@ -834,21 +860,21 @@ class TimeWindowSampler(CommonSamplerMixin):
 
         if with_temporal:
             kwplot.figure(fnum=fnum, pnum=pnum_())
-            plot_temporal_sample_indices(sample_idxs, self.unixtimes, sensors=self.sensors, title_suffix=': non-determenistic')
+            plot_temporal_sample_indices(sample_idxs, self.unixtimes, sensors=self.sensors, title_suffix=': non-deterministic')
 
             if compare_determ:
-                self.determenistic = True
+                self.deterministic = True
                 sample_idxs = []
                 for idx in range(self.affinity.shape[0]):
                     idxs = self.sample(idx)
                     sample_idxs.append(idxs)
                 kwplot.figure(fnum=fnum, pnum=pnum_())
-                plot_temporal_sample_indices(sample_idxs, self.unixtimes, sensors=self.sensors, title_suffix=': determenistic')
+                plot_temporal_sample_indices(sample_idxs, self.unixtimes, sensors=self.sensors, title_suffix=': deterministic')
 
         fig.suptitle(title_info)
 
         if compare_determ:
-            self.determenistic = _prev_determenistic
+            self.deterministic = _prev_deterministic
 
     def show_affinity(self, fnum=3):
         """
@@ -884,7 +910,7 @@ class TimeWindowSampler(CommonSamplerMixin):
             >>>     time_window=5,
             >>>     affinity_type='soft2',
             >>>     update_rule='distribute+pairwise')
-            >>> self.determenistic = False
+            >>> self.deterministic = False
             >>> self.show_procedure(idx=0, fnum=10)
             >>> self.show_affinity(fnum=100)
 
@@ -894,29 +920,29 @@ class TimeWindowSampler(CommonSamplerMixin):
 
 
             self = TimeWindowSampler.from_coco_video(dset, vidid, time_window=5, affinity_type='soft2', update_rule='distribute+pairwise')
-            self.determenistic = True
+            self.deterministic = True
             self.show_summary(samples_per_frame=20, fnum=1)
-            self.determenistic = False
+            self.deterministic = False
             self.show_summary(samples_per_frame=20, fnum=2)
 
             self = TimeWindowSampler.from_coco_video(dset, vidid, time_window=5, affinity_type='hard', update_rule='distribute')
-            self.determenistic = True
+            self.deterministic = True
             self.show_summary(samples_per_frame=20, fnum=3)
-            self.determenistic = False
+            self.deterministic = False
             self.show_summary(samples_per_frame=20, fnum=4)
 
             self = TimeWindowSampler.from_coco_video(dset, vidid, time_window=5, affinity_type='hardish', update_rule='distribute')
-            self.determenistic = True
+            self.deterministic = True
             self.show_summary(samples_per_frame=20, fnum=5)
-            self.determenistic = False
+            self.deterministic = False
             self.show_summary(samples_per_frame=20, fnum=6)
 
             >>> self.show_procedure(fnum=1)
-            >>> self.determenistic = True
+            >>> self.deterministic = True
             >>> self.show_procedure(fnum=2)
             >>> self.show_procedure(fnum=3)
             >>> self.show_procedure(fnum=4)
-            >>> self.determenistic = False
+            >>> self.deterministic = False
             >>> self.show_summary(samples_per_frame=3, fnum=10)
 
         Ignore:
@@ -955,7 +981,7 @@ class TimeWindowSampler(CommonSamplerMixin):
         title_info = ub.codeblock(
             f'''
             name={self.name}
-            affinity_type={self.affinity_type} determenistic={self.determenistic}
+            affinity_type={self.affinity_type} deterministic={self.deterministic}
             update_rule={self.update_rule} gamma={self.gamma}
             {approx_code}
             ''')

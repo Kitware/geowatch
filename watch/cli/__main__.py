@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 # PYTHON_ARGCOMPLETE_OK
-import sys
 import ubelt as ub
 
 __devnotes__ = """
@@ -44,11 +43,12 @@ def main(cmdline=True, **kw):
         'coco_average_features',
 
         # 'mlops_cli',
+        'special.finish_install',
     ]
 
     cmd_alias = {
         'watch.cli.torch_model_stats': ['model_stats', 'model_info'],
-        'watch.cli.geojson_site_stats': ['site_stats'],
+        'watch.cli.geojson_site_stats': ['site_stats', 'geojson_stats'],
         'watch.cli.watch_coco_stats': ['stats'],
         'watch.cli.coco_visualize_videos': ['visualize'],
         'watch.cli.coco_align': ['align', 'coco_align_geotiffs'],
@@ -65,6 +65,7 @@ def main(cmdline=True, **kw):
         'watch.cli.crop_sites_to_regions': ['crop_sitemodels'],
         'watch.cli.coco_remove_bad_images': ['remove_bad_images'],
         'watch.cli.mlops_cli': ['mlops'],
+        'watch.cli.special.finish_install': [],
     }
 
     module_lut = {}
@@ -172,4 +173,5 @@ if __name__ == '__main__':
         python -m watch.cli --help
         python -m watch.cli.watch_coco_stats
     """
-    sys.exit(main())
+    main()
+    # sys.exit(main())

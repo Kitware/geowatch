@@ -16,7 +16,7 @@ from watch.heuristics import SITE_SUMMARY_CNAME, CNAMES_DCT
 from watch.tasks.tracking.utils import NoOpTrackFunction  # NOQA
 from watch.tasks.tracking.utils import (NewTrackFunction,
                                         mask_to_polygons,
-                                        _validate_keys, pop_tracks,
+                                        _validate_keys, score_track_polys,
                                         trackid_is_default,
                                         gpd_sort_by_gid, gpd_len,
                                         gpd_compute_scores)
@@ -315,9 +315,16 @@ class ResponsePolygonFilter:
 
 @profile
 def _add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
+    """
+    This takes the GeoDataFrame with computed or modified tracks and adds them
+    to ``sub_dset``.
+
+    We are assuming the polygon geometry in "tracks" is in video space.
+    """
     import kwcoco
     import kwimage
     import numpy as np
+    from watch.utils import kwcoco_extensions
     key, bg_key = _validate_keys(key, bg_key)
 
     if tracks.empty:
@@ -365,7 +372,6 @@ def _add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
                        track_id=track_id)
         return new_ann
 
-    from watch.utils import kwcoco_extensions
     new_trackids = kwcoco_extensions.TrackidGenerator(sub_dset)
 
     all_new_anns = []
@@ -387,8 +393,8 @@ def _add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
         import warnings
         warnings.warn('warning: no tracks to add the the kwcoco dataset')
     else:
+        score_chan = kwcoco.ChannelSpec('|'.join(key))
         for tid, grp in tracks.groupby('track_idx', axis=0):
-            score_chan = kwcoco.ChannelSpec('|'.join(key))
             this_score = grp[(score_chan.spec, -1)]
             scores_dct = {k: grp[(k, -1)] for k in score_chan.unique()}
             scores_dct = [dict(zip(scores_dct, t))
@@ -679,6 +685,10 @@ def time_aggregated_polys(sub_dset, **kwargs):
         thrs.add(-1)
     if config.time_thresh:
         thrs.add(config.time_thresh * config.thresh)
+    #####
+    ## Jon C: I'm not sure about this. Going from a set to a list, and then having
+    ## the resulting function depend on the order of the list makes me nerevous.
+    #####
     thrs = list(thrs)
 
     ks = {'fg': config.key, 'bg': config.bg_key}
@@ -1028,7 +1038,7 @@ def _gids_polys(sub_dset, **kwargs):
     config = _GidPolyConfig(**kwargs)
 
     if config.use_boundaries:  # for SC
-        raw_boundary_tracks = pop_tracks(sub_dset, [SITE_SUMMARY_CNAME])
+        raw_boundary_tracks = score_track_polys(sub_dset, [SITE_SUMMARY_CNAME])
         assert len(raw_boundary_tracks) > 0, 'need valid site boundaries!'
         gids = raw_boundary_tracks['gid'].unique()
         print('generating polys in bounds: number of bounds: ',
@@ -1355,7 +1365,7 @@ class TimeAggregatedSC(TrackFnWithSV):
         import kwimage
 
         if self.boundaries_as == 'polys':
-            tracks = pop_tracks(
+            tracks = score_track_polys(
                 sub_dset,
                 cnames=[SITE_SUMMARY_CNAME],
                 # these are SC scores, not BAS, so this is not a
@@ -1411,7 +1421,8 @@ class TimeAggregatedSV(CommonTrackFn):
     '''
     Wrapper for Site Validation that looks for phase heatmaps.
 
-    Alias: class_heatmaps
+    Alias:
+        site_validation
 
     Note:
         This is a valid choice of `track_fn` in ../../cli/kwcoco_to_geojson.py
@@ -1431,7 +1442,7 @@ class TimeAggregatedSV(CommonTrackFn):
         import kwcoco
         import kwimage
         if self.boundaries_as == 'polys':
-            tracks = pop_tracks(
+            tracks = score_track_polys(
                 sub_dset,
                 cnames=[SITE_SUMMARY_CNAME],
                 # these are SC scores, not BAS, so this is not a

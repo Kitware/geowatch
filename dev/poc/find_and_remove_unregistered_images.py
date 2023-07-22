@@ -99,6 +99,10 @@ def main(cmdline=1, **kwargs):
     if len(unregistered_fpaths) > 0:
         import rich.prompt
         rich.print('unregistered_fpaths = {}'.format(ub.urepr([os.fspath(f) for f in unregistered_fpaths], nl=1)))
+        rich.print(f'{len(registered_paths)=}')
+        rich.print(f'{len(existing_image_paths)=}')
+        rich.print(f'{len(missing_fpaths)=}')
+        rich.print(f'{len(unregistered_fpaths)=}')
         ans = config.yes or rich.prompt.Confirm.ask(f'Delete these {len(unregistered_fpaths)} unregistered files?')
 
         if ans:

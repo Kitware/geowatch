@@ -44,17 +44,17 @@ def build_tables(root_dpath, pipeline, io_workers, eval_nodes):
          'result_loader': smart_result_parser.load_iarpa_poly_eval},
     ]
 
+    if eval_nodes is None:
+        node_eval_infos_chosen = node_eval_infos
+    else:
+        lut = ub.udict({info['name']: info for info in node_eval_infos})
+        node_eval_infos_chosen = list(lut.take(eval_nodes))
+
     from concurrent.futures import as_completed
     pman = util_progress.ProgressManager(backend='rich')
     # pman = util_progress.ProgressManager(backend='progiter')
     with pman:
         eval_type_to_results = {}
-
-        if eval_nodes is None:
-            node_eval_infos_chosen = node_eval_infos
-        else:
-            lut = ub.udict({info['name']: info for info in node_eval_infos})
-            node_eval_infos_chosen = list(lut.take(eval_nodes))
 
         eval_node_prog = pman.progiter(node_eval_infos_chosen, desc='Loading node results')
 

@@ -597,13 +597,12 @@ def coerce_criterion(loss_code, weights, ohem_ratio, focal_gamma):
         target_shape = 'b c h w t'
 
     elif loss_code == 'dicefocal':
-        # TODO: can we apply weights here?
         from watch.utils.ext_monai import DiceFocalLoss
         # from monai.losses import DiceFocalLoss
         criterion = DiceFocalLoss(
-            # weight=torch.FloatTensor([self.negative_change_weight, self.positive_change_weight]),
             sigmoid=True,
             to_onehot_y=False,
+            focal_weight=weights,
             reduction='none',
             ohem_ratio_focal=ohem_ratio,
             gamma=focal_gamma)

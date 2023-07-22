@@ -10,7 +10,7 @@ autopep8 >= 1.5.7
 mkinit >= 0.3.3
 
 timerit >= 0.3.0
-codecarbon >= 2.0.0
+codecarbon >= 2.2.4
 
 humanize >= 4.4.0
 
