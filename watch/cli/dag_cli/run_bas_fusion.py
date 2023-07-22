@@ -104,8 +104,8 @@ def run_bas_fusion_for_baseline(config):
     ingress_dir = ub.Path('/tmp/ingress')
     ingressed_assets = smartflow_ingress(
         input_path,
-        ['timecombined_kwcoco_file_for_bas_with_landcover',
-         'timecombined_kwcoco_file_for_bas_assets',
+        ['enriched_bas_kwcoco_file',
+         'enriched_bas_kwcoco_teamfeats',
          'landcover_assets'],
         ingress_dir,
         aws_profile,
@@ -148,7 +148,7 @@ def run_bas_fusion_for_baseline(config):
     if bas_pxl_config.get('package_fpath', None) is None:
         raise ValueError('Requires package_fpath')
 
-    ingress_kwcoco_path = ingressed_assets['timecombined_kwcoco_file_for_bas_with_landcover']
+    ingress_kwcoco_path = ingressed_assets['enriched_bas_kwcoco_file']
     predict(devices='0,',
             write_preds=False,
             write_probs=True,

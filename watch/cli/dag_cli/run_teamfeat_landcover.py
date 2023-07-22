@@ -1,10 +1,3 @@
-"""
-See Old Version:
-    ../../../scripts/run_uky_invariants_for_baseline.py
-
-SeeAlso:
-    ~/code/watch-smartflow-dags/KIT_TA2_PREEVAL10_PYENV.py
-"""
 import ubelt as ub
 import scriptconfig as scfg
 from watch.cli.smartflow_ingress import smartflow_ingress
@@ -58,8 +51,9 @@ def run_landcover_for_baseline(config):
     ingress_dir = ub.Path('/tmp/ingress')
     ingressed_assets = smartflow_ingress(
         config.input_path,
-        ['timecombined_kwcoco_file_for_bas',
-         'timecombined_kwcoco_file_for_bas_assets'],
+        ['enriched_bas_kwcoco_file',
+         'enriched_bas_kwcoco_teamfeats',
+         'enriched_bas_kwcoco_rawbands'],
         ingress_dir,
         config.aws_profile,
         config.dryrun)
@@ -78,14 +72,15 @@ def run_landcover_for_baseline(config):
     print("* Generating landcover features *")
     dzyne_landcover_features_kwcoco_path = ingress_dir / 'dzyne_landcover_kwcoco.json'
 
-    timecombined_kwcoco_file_for_bas = ingressed_assets['timecombined_kwcoco_file_for_bas']
+    enriched_bas_kwcoco_file = ingressed_assets['enriched_bas_kwcoco_file']
     ub.cmd([
         'python', '-m', 'watch.tasks.landcover.predict',
-        '--dataset', timecombined_kwcoco_file_for_bas,
+        '--dataset', enriched_bas_kwcoco_file,
         '--deployed', config.model_path,
         '--output', dzyne_landcover_features_kwcoco_path,
         '--num_workers', '2',
         '--with_hidden', '32',
+        '--assets_dname', '_teamfeats',
         '--select_images', '.sensor_coarse == "S2"',
         '--device', '0'
     ], check=True, verbose=3, capture=False)
@@ -95,7 +90,7 @@ def run_landcover_for_baseline(config):
     combo_features_kwcoco_path = ingress_dir / 'features_combo_with_landcover_kwcoco.json'
     ub.cmd([
         'python', '-m', 'watch.cli.coco_combine_features',
-        '--src', timecombined_kwcoco_file_for_bas, dzyne_landcover_features_kwcoco_path,
+        '--src', enriched_bas_kwcoco_file, dzyne_landcover_features_kwcoco_path,
         '--dst', combo_features_kwcoco_path,
     ], check=True, verbose=3, capture=False)
 
@@ -104,9 +99,13 @@ def run_landcover_for_baseline(config):
     #    S3 bucket)
     print("* Egressing KWCOCO dataset and associated STAC item *")
     # Add new assets to be egressed
-    ingressed_assets['timecombined_kwcoco_file_for_bas_with_landcover'] =\
-        combo_features_kwcoco_path
-    ingressed_assets['landcover_assets'] = ingress_dir / '_assets'
+    ingressed_assets['timecombined_kwcoco_file_for_bas_with_landcover'] = (
+        combo_features_kwcoco_path)
+    ingressed_assets['landcover_assets'] = ingress_dir / '_teamfeats'
+
+    ingressed_assets['enriched_bas_kwcoco_file'] = combo_features_kwcoco_path
+    ingressed_assets['enriched_bas_kwcoco_teamfeats'] = ingress_dir / '_teamfeats'
+
     smartflow_egress(ingressed_assets,
                      local_region_path,
                      config.output_path,

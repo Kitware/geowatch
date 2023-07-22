@@ -99,7 +99,9 @@ def smartflow_egress(assetnames_and_local_paths,
     Args:
         assetnames_and_local_paths (Dict):
             Mapping from an asset name to the local path to upload. The asset
-            name will be indexable in the uploaded STAC item.
+            name will be indexable in the uploaded STAC item. Any local path
+            specified multiple times will only be uploaded once, but multiple
+            STAC assets will be associated with it.
 
         region_path (str | PathLike):
             local path to the region file associated with a processing node
@@ -136,11 +138,14 @@ def smartflow_egress(assetnames_and_local_paths,
         >>> region_path = dpath / 'demo_region.geojson'
         >>> region_path.write_text(region.dumps())
         >>> assetnames_and_local_paths = {
-        >>>     'asset_file1': dpath / 'my_path.txt',
-        >>>     'asset_dir1': dpath / 'my_dir',
+        >>>     'asset_file1': dpath / 'my_path1.txt',
+        >>>     'asset_file2': dpath / 'my_path2.txt',
+        >>>     'asset_file_reference': dpath / 'my_path1.txt',
+        >>>     'asset_dir1': dpath / 'my_dir1',
         >>> }
         >>> # Generate local data we will pretend to egress
-        >>> assetnames_and_local_paths['asset_file1'].write_text('foobar')
+        >>> assetnames_and_local_paths['asset_file1'].write_text('foobar1')
+        >>> assetnames_and_local_paths['asset_file2'].write_text('foobar2')
         >>> assetnames_and_local_paths['asset_dir1'].ensuredir()
         >>> (assetnames_and_local_paths['asset_dir1'] / 'data1').write_text('data1')
         >>> (assetnames_and_local_paths['asset_dir1'] / 'data1').write_text('data2')
@@ -163,6 +168,10 @@ def smartflow_egress(assetnames_and_local_paths,
         only_show_errors=not show_progress,
     )
 
+    # TODO: can generate a set of upload commands that we can execute in
+    # parallel
+
+    seen = set()  # Prevent duplicate uploads
     assetnames_and_s3_paths = {}
     for asset, local_path in assetnames_and_local_paths.items():
         # Passing in assets with paths already on S3 simply passes
@@ -172,13 +181,15 @@ def smartflow_egress(assetnames_and_local_paths,
         else:
             asset_s3_outpath = join(outbucket, basename(local_path))
 
-            if isdir(local_path):
-                aws_cp.update(recursive=True)
-            else:
-                aws_cp.update(recursive=False)
+            if local_path not in seen:
+                if isdir(local_path):
+                    aws_cp.update(recursive=True)
+                else:
+                    aws_cp.update(recursive=False)
 
-            aws_cp.args = [local_path, asset_s3_outpath]
-            aws_cp.run()
+                aws_cp.args = [local_path, asset_s3_outpath]
+                aws_cp.run()
+                seen.add(local_path)
 
         assetnames_and_s3_paths[asset] = {'href': asset_s3_outpath}
 

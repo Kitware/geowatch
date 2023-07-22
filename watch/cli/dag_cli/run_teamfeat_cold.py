@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 import ubelt as ub
 import scriptconfig as scfg
-from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress
-from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress
+from watch.cli.smartflow_ingress import smartflow_ingress
+from watch.cli.smartflow_egress import smartflow_egress
 
 
 class TeamFeatColdConfig(scfg.DataConfig):
@@ -44,11 +44,23 @@ def main():
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
     ingress_dir = ub.Path('/tmp/ingress')
-    ingress_kwcoco_path = baseline_framework_kwcoco_ingress(
+    ingressed_assets = smartflow_ingress(
         config.input_path,
+        [
+            # Pull the current teamfeature-enriched dataset to modify
+            'enriched_bas_kwcoco_file',
+            'enriched_bas_kwcoco_teamfeats',
+            'enriched_bas_kwcoco_rawbands',
+
+            # Pull the dense temporal data needed by COLD
+            'timedense_bas_kwcoco_file',
+            'timedense_bas_kwcoco_rawbands'
+        ],
         ingress_dir,
         config.aws_profile,
         config.dryrun)
+
+    print('ingressed_assets = {}'.format(ub.urepr(ingressed_assets, nl=1)))
 
     # 2. Download and prune region file
     print("* Downloading and pruning region file *")
@@ -63,18 +75,11 @@ def main():
     # NOTE:
     # For COLD we need to compute on the full non-time-combined data,
     # and then transfer the features to the time-combined data.
-    ingress_kwcoco_path = ub.Path(ingress_kwcoco_path)
-
-    print('ingress_kwcoco_path = {}'.format(ub.urepr(ingress_kwcoco_path, nl=1)))
-    print(f'ingress_dir={ingress_dir}')
-    print(f'ingress_kwcoco_path.parent={ingress_kwcoco_path.parent}')
-    ingress_dir_contents1 = list(ingress_kwcoco_path.parent.ls())
+    ingress_dir_contents1 = list(ingress_dir.ls())
     print('ingress_dir_contents1 = {}'.format(ub.urepr(ingress_dir_contents1, nl=1)))
 
-    # TODO: input/output paths should come from the config
-    full_input_kwcoco_fpath = ingress_kwcoco_path.parent / 'cropped_kwcoco_for_bas.json'
-    timecombined_input_kwcoco_fpath = ub.Path(full_input_kwcoco_fpath).augment(
-        stemsuffix='_timecombined', ext='.kwcoco.zip', multidot=True)
+    full_input_kwcoco_fpath = ingressed_assets['timedense_kwcoco_for_bas']
+    timecombined_input_kwcoco_fpath = ingressed_assets['timecombined_kwcoco_file_for_bas']
 
     timecombined_output_kwcoco_fpath = ub.Path(timecombined_input_kwcoco_fpath).augment(
         stemsuffix='_cold', ext='.kwcoco.zip', multidot=True)
@@ -89,7 +94,6 @@ def main():
     # Quick and dirty, just the existing prepare teamfeat script to get the
     # cold invocation. This has a specific output pattern that we hard code
     # here.
-
     from watch.cli import prepare_teamfeats
     base_fpath = full_input_kwcoco_fpath
     prepare_teamfeats.main(
@@ -98,6 +102,7 @@ def main():
         expt_dvc_dpath=config.expt_dvc_dpath,
         base_fpath=full_input_kwcoco_fpath,
         cold_workers=4,
+        assets_dname='_teamfeats',
         cold_workermode='process',
         run=1,
         backend='serial',
@@ -108,7 +113,7 @@ def main():
     base_combo_fpath = base_fpath.parent / (f'combo_{subset_name}_{combo_code}.kwcoco.zip')
     full_output_kwcoco_fpath = base_combo_fpath
 
-    ingress_dir_contents2 = list(ingress_kwcoco_path.parent.ls())
+    ingress_dir_contents2 = list(ingress_dir.ls())
     print('ingress_dir_contents2 = {}'.format(ub.urepr(ingress_dir_contents2, nl=1)))
 
     watch_coco_stats.main(cmdline=0, src=full_output_kwcoco_fpath)
@@ -143,20 +148,24 @@ def main():
     watch_coco_stats.main(cmdline=0, src=timecombined_output_kwcoco_fpath)
     coco_stats._CLI.main(cmdline=0, src=[timecombined_output_kwcoco_fpath])
 
-    ingress_dir_contents3 = list(ingress_kwcoco_path.parent.ls())
+    ingress_dir_contents3 = list(ingress_dir.ls())
     print('ingress_dir_contents3 = {}'.format(ub.urepr(ingress_dir_contents3, nl=1)))
 
-    # 3. Egress (envelop KWCOCO dataset in a STAC item and egress;
-    #    will need to recursive copy the kwcoco output directory up to
-    #    S3 bucket)
     print("* Egressing KWCOCO dataset and associated STAC item *")
-    baseline_framework_kwcoco_egress(timecombined_output_kwcoco_fpath,
-                                     local_region_path,
-                                     config.output_path,
-                                     config.outbucket,
-                                     aws_profile=None,
-                                     dryrun=False,
-                                     newline=False)
+
+    # This is the location that COLD features will be written to.
+    ingressed_assets['enriched_bas_kwcoco_teamfeats'] = ingress_dir / '_teamfeats'
+    # This is the kwcoco file with the all teamfeature outputs (i.e. previous
+    # team features + COLD)
+    ingressed_assets['enriched_bas_kwcoco_file'] = timecombined_output_kwcoco_fpath
+
+    smartflow_egress(ingressed_assets,
+                     local_region_path,
+                     config.output_path,
+                     config.outbucket,
+                     aws_profile=config.aws_profile,
+                     dryrun=config.dryrun,
+                     newline=config.newline)
 
 
 if __name__ == "__main__":

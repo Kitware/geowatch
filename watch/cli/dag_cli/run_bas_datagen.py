@@ -287,6 +287,12 @@ def run_stac_to_cropped_kwcoco(config):
                                         aws_profile=config.aws_profile,
                                         strip_nonregions=True)
 
+    # HACK: this is what coco-align outputs by default. We should have this be
+    # explicit and configurable so we can set it to what we want here.
+    from watch.utils.util_framework import determine_region_id
+    region_id = determine_region_id(local_region_path)
+    ta1_cropped_rawband_dpath = ta1_cropped_dir / region_id
+
     # 3. Convert ingressed STAC catalog to KWCOCO
     print("* Converting STAC to KWCOCO *")
     stac_to_kwcoco(ingress_catalog,
@@ -415,11 +421,29 @@ def run_stac_to_cropped_kwcoco(config):
     # 7. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)
+
+    timecombined_rawband_dpath = ta1_cropped_dir / 'raw_bands'
+    timecombined_teamfeat_dpath = ta1_cropped_dir / '_teamfeats'
+    timecombined_teamfeat_dpath.ensuredir()  # Empty for now
+
     print("* Egressing KWCOCO dataset and associated STAC item *")
     assets_to_egress = {
         'timecombined_kwcoco_file_for_bas': combined_timecombined_kwcoco_path,
-        'timecombined_kwcoco_file_for_bas_assets': ta1_cropped_dir / 'raw_bands',
-        'kwcoco_for_sc': ta1_sc_kwcoco_path}
+        'timecombined_kwcoco_file_for_bas_assets': timecombined_rawband_dpath,
+
+        # This is an alias to the BAS dataset and assets that team feature
+        # scripts will update.
+        'enriched_bas_kwcoco_file': combined_timecombined_kwcoco_path,
+        'enriched_bas_kwcoco_teamfeats': timecombined_teamfeat_dpath,
+        'enriched_bas_kwcoco_rawbands': timecombined_rawband_dpath,
+
+        # TODO: @DMJ: I dont think anything uses this? Can it be removed?
+        'kwcoco_for_sc': ta1_sc_kwcoco_path,
+
+        # We need to egress the temporally dense dataset for COLD
+        'timedense_bas_kwcoco_file': ta1_cropped_kwcoco_path,
+        'timedense_bas_kwcoco_rawbands': ta1_cropped_rawband_dpath,
+    }
     smartflow_egress(assets_to_egress,
                      local_region_path,
                      config.output_path,

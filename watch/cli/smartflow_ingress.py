@@ -149,6 +149,9 @@ def smartflow_ingress(input_path,
     kwcoco_stac_item_assets = {
         k: v['href'] for k, v in kwcoco_stac_item['assets'].items()}
 
+    # TODO: can generate a set of download commands that we can execute in
+    # parallel
+    seen = set()  # Prevent duplicate downloads
     for asset in assets:
         try:
             asset_href = kwcoco_stac_item_assets[asset]
@@ -164,20 +167,22 @@ def smartflow_ingress(input_path,
         asset_basename = os.path.basename(asset_href)
         asset_outpath = os.path.join(outdir, asset_basename)
 
-        aws_ls.args = [asset_href]
-        if not dryrun:
-            ls_out = aws_ls.run(capture=True)
-            # Must correctly set 'recursive' flag for AWS S3 cp calls
-            # `aws ls` on a "directory" or really "prefix" of one or more
-            # objects in S3 prints "PRE" (indicating it's a prefix)
-            if ls_out['out'].strip().startswith('PRE'):
-                aws_cp.update(recursive=True)
-            else:
-                aws_cp.update(recursive=False)
+        if asset_outpath not in seen:
+            aws_ls.args = [asset_href]
+            if not dryrun:
+                ls_out = aws_ls.run(capture=True)
+                # Must correctly set 'recursive' flag for AWS S3 cp calls
+                # `aws ls` on a "directory" or really "prefix" of one or more
+                # objects in S3 prints "PRE" (indicating it's a prefix)
+                if ls_out['out'].strip().startswith('PRE'):
+                    aws_cp.update(recursive=True)
+                else:
+                    aws_cp.update(recursive=False)
 
-        if not testing:
-            aws_cp.args = [asset_href, asset_outpath]
-            aws_cp.run()
+            if not testing:
+                aws_cp.args = [asset_href, asset_outpath]
+                aws_cp.run()
+            seen.add(asset_outpath)
 
         kwcoco_stac_item_assets[asset] = asset_outpath
 
