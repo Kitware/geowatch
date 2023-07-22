@@ -95,7 +95,7 @@ def main():
     # cold invocation. This has a specific output pattern that we hard code
     # here.
     from watch.cli import prepare_teamfeats
-    base_fpath = full_input_kwcoco_fpath
+    base_fpath = ub.Path(full_input_kwcoco_fpath)
     prepare_teamfeats.main(
         cmdline=0,
         with_cold=1,
