@@ -78,8 +78,8 @@ def main():
     ingress_dir_contents1 = list(ingress_dir.ls())
     print('ingress_dir_contents1 = {}'.format(ub.urepr(ingress_dir_contents1, nl=1)))
 
-    full_input_kwcoco_fpath = ingressed_assets['timedense_kwcoco_for_bas']
-    timecombined_input_kwcoco_fpath = ingressed_assets['timecombined_kwcoco_file_for_bas']
+    full_input_kwcoco_fpath = ingressed_assets['timedense_bas_kwcoco_file']
+    timecombined_input_kwcoco_fpath = ingressed_assets['enriched_bas_kwcoco_file']
 
     timecombined_output_kwcoco_fpath = ub.Path(timecombined_input_kwcoco_fpath).augment(
         stemsuffix='_cold', ext='.kwcoco.zip', multidot=True)
