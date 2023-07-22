@@ -187,6 +187,7 @@ def smartflow_ingress(input_path,
         kwcoco_stac_item_assets[asset] = asset_outpath
 
     # Returns assets (with downloaded asset hrefs updated)
+    print('INGRESSED = {}'.format(ub.urepr(kwcoco_stac_item_assets, nl=1)))
     return kwcoco_stac_item_assets
 
 

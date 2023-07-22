@@ -158,7 +158,6 @@ def smartflow_egress(assetnames_and_local_paths,
         >>>     newline=False,
         >>>     show_progress=False,
         >>> )
-        >>> print('te_output = {}'.format(ub.urepr(te_output, nl=-1)))
     """
     from watch.utils.util_framework import AWS_S3_Command
     aws_cp = AWS_S3_Command('cp')
@@ -170,7 +169,6 @@ def smartflow_egress(assetnames_and_local_paths,
 
     # TODO: can generate a set of upload commands that we can execute in
     # parallel
-
     seen = set()  # Prevent duplicate uploads
     assetnames_and_s3_paths = {}
     for asset, local_path in assetnames_and_local_paths.items():
@@ -217,6 +215,7 @@ def smartflow_egress(assetnames_and_local_paths,
         aws_cp.args = [temporary_file.name, output_path]
         aws_cp.run()
 
+    print('EGRESSED: {}'.format(ub.urepr(te_output, nl=-1)))
     return te_output
 
 
