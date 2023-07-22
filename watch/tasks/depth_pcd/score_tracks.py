@@ -172,7 +172,7 @@ def score_tracks(img_coco_dset, model_fpath):
         }
         try:
             data = sampler.load_sample(target, with_annots=False)
-        except:
+        except ValueError:
             tq.update(1)
             continue
         ims = data['im']
