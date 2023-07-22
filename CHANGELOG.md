@@ -4,7 +4,9 @@ This changelog follows the specifications detailed in: [Keep a Changelog](https:
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
 
-## Version 0.8.0 - Target 2023-07-xx
+## Version 0.8.1 - Target 2023-07-xx
+
+## Version 0.8.0 - 
 
 ### Fixed
 * Fixed issue with kwcoco directory roots in prepare splits.

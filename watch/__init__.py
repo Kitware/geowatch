@@ -18,7 +18,7 @@ import ubelt as ub
 import warnings
 
 
-__version__ = '0.8.0'
+__version__ = '0.8.1'
 
 
 # ~/code/watch/dev/maintain/generate_authors.py
