@@ -7,6 +7,8 @@ import ubelt as ub
 import scriptconfig as scfg
 
 
+# FIXME: Looks like this CLI is not functional.
+
 class SmartflowEgressConfig(scfg.DataConfig):
     """
     Egress KWCOCO data to T&E baseline framework structure
@@ -15,7 +17,7 @@ class SmartflowEgressConfig(scfg.DataConfig):
             '''
             Path to input T&E Baseline Framework JSON
             '''))
-    assets = scfg.Value(None, type=str, position=2, required=True, help='Assets to download', nargs='+')
+    assets = scfg.Value(None, type=str, position=2, required=True, help='Assets to upload', nargs='+')
     outdir = scfg.Value(None, type=str, required=True, short_alias=['o'], help=ub.paragraph(
             '''
             Output directory for ingressed assets an output STAC Catalog
@@ -26,10 +28,6 @@ class SmartflowEgressConfig(scfg.DataConfig):
             '''))
     dryrun = scfg.Value(False, isflag=True, short_alias=['d'], help='Run AWS CLI commands with --dryrun flag')
     show_progress = scfg.Value(False, isflag=True, short_alias=['s'], help='Show progress for AWS CLI commands')
-    dont_error_on_missing_asset = scfg.Value(False, isflag=True, help=ub.paragraph(
-            '''
-            Don't raise error on missing asset, just warn
-            '''))
 
 
 def main():
@@ -95,6 +93,68 @@ def smartflow_egress(assetnames_and_local_paths,
                      dryrun=False,
                      newline=False,
                      show_progress=False):
+    """
+    Uploads specified assets to S3 with a STAC manifest.
+
+    Args:
+        assetnames_and_local_paths (Dict):
+            Mapping from an asset name to the local path to upload. The asset
+            name will be indexable in the uploaded STAC item.
+
+        region_path (str | PathLike):
+            local path to the region file associated with a processing node
+
+        output_path (str):
+            The path in the s3 bucket that the stac item will be uploaded to.
+
+        outbucket (str):
+            The s3 bucket that assets will be uploaded to.
+
+        aws_profile (str | None): aws cp argument
+
+        dryrun (bool): aws cp argument
+
+        show_progress (bool): aws cp argument
+
+        newline (bool): controls formatting of output stac item
+
+    Returns:
+        Dict: the new STAC item
+
+    CommandLine:
+        xdoctest -m watch.cli.smartflow_egress smartflow_egress
+
+    Example:
+        >>> from watch.cli.smartflow_egress import *  # NOQA
+        >>> from watch.geoannots.geomodels import RegionModel
+        >>> dpath = ub.Path.appdir('watch/tests/smartflow_egress').ensuredir()
+        >>> local_dpath = (dpath / 'local').ensuredir()
+        >>> #remote_dpath = (dpath / 'remote').ensuredir()
+        >>> outbucket = 's3://fake/bucket'
+        >>> output_path = join(outbucket, 'items.jsonl')
+        >>> region = RegionModel.random()
+        >>> region_path = dpath / 'demo_region.geojson'
+        >>> region_path.write_text(region.dumps())
+        >>> assetnames_and_local_paths = {
+        >>>     'asset_file1': dpath / 'my_path.txt',
+        >>>     'asset_dir1': dpath / 'my_dir',
+        >>> }
+        >>> # Generate local data we will pretend to egress
+        >>> assetnames_and_local_paths['asset_file1'].write_text('foobar')
+        >>> assetnames_and_local_paths['asset_dir1'].ensuredir()
+        >>> (assetnames_and_local_paths['asset_dir1'] / 'data1').write_text('data1')
+        >>> (assetnames_and_local_paths['asset_dir1'] / 'data1').write_text('data2')
+        >>> te_output = smartflow_egress(
+        >>>     assetnames_and_local_paths,
+        >>>     region_path,
+        >>>     output_path,
+        >>>     outbucket,
+        >>>     dryrun=True,
+        >>>     newline=False,
+        >>>     show_progress=False,
+        >>> )
+        >>> print('te_output = {}'.format(ub.urepr(te_output, nl=-1)))
+    """
     from watch.utils.util_framework import AWS_S3_Command
     aws_cp = AWS_S3_Command('cp')
     aws_cp.update(

@@ -8,7 +8,7 @@ import scriptconfig as scfg
 
 class SmartflowIngressConfig(scfg.DataConfig):
     """
-    Egress KWCOCO data to T&E baseline framework structure
+    Ingress KWCOCO data to T&E baseline framework structure
     """
     input_path = scfg.Value(None, type=str, position=1, required=True, help=ub.paragraph(
             '''
@@ -41,10 +41,81 @@ def smartflow_ingress(input_path,
                       aws_profile=None,
                       dryrun=False,
                       show_progress=False,
+                      testing=False,
                       dont_error_on_missing_asset=False):
+    """
+    Downloads a STAC manifest and select items within it.
+
+    Args:
+        input_path (str):
+            The path in the s3 bucket that the STAC item will be downloaded from.
+
+        assets (List[str]):
+            A List of keys into the stac item assets that we will download.
+
+        outdir (str | PathLike):
+            local path to download to.
+
+        aws_profile (str | None): aws cp argument
+
+        dryrun (bool): aws cp argument
+
+        show_progress (bool): aws cp argument
+
+        testing (bool):
+            only used in testing. if true, no cp commands are executed.
+
+        dont_error_on_missing_asset (bool):
+            if True warn if an asset is missing.
+            TODO: variable name is too long and has a double negative.
+            maybe rename to "missing_policy" or "ignore_missing"
+
+    Returns:
+        Dict[str, str | PathLike]:
+            mapping from downloaded assets to their local path
+
+    Example:
+        >>> from watch.cli.smartflow_ingress import *  # NOQA
+        >>> dpath = ub.Path.appdir('watch/tests/smartflow_ingress').ensuredir()
+        >>> # Save this dummy stac item locally
+        >>> # In practice we download it, but we are using dry run mode
+        >>> # so we cant do that here.
+        >>> demo_stac_content = {'raw_images': [],
+        >>>  'stac': {'type': 'FeatureCollection',
+        >>>   'features': [{'type': 'Feature',
+        >>>     'stac_version': '1.0.0',
+        >>>     'stac_extensions': [],
+        >>>     'id': '66d3e2f605a44aa8b7bacc6ce7e96b9a',
+        >>>     'geometry': {'type': 'Polygon',
+        >>>      'coordinates': (((-109.56, 44.56),
+        >>>        (-109.57, 44.55),
+        >>>        (-109.53, 44.56),
+        >>>        (-109.56, 44.56)),)},
+        >>>     'bbox': [-109.57, 44.52, -109.51, 44.56],
+        >>>     'properties': {},
+        >>>     'assets': {'asset_file1': {'href': 's3://fake/bucket/my_path.txt'},
+        >>>      'asset_dir1': {'href': 's3://fake/bucket/my_dir'}}}]}}
+        >>> remote_dpath = (dpath / 'remote').ensuredir()
+        >>> input_path = remote_dpath / 'items.jsonl'
+        >>> input_path.write_text(json.dumps(demo_stac_content))
+        >>> outdir = (dpath / 'local').ensuredir()
+        >>> assets = ['asset_file1', 'asset_dir1']
+        >>> kwcoco_stac_item_assets = smartflow_ingress(
+        >>>     input_path,
+        >>>     assets,
+        >>>     outdir,
+        >>>     dryrun=True, testing=True
+        >>> )
+        >>> assert kwcoco_stac_item_assets['asset_file1'] == os.fspath(outdir / 'my_path.txt')
+        >>> assert kwcoco_stac_item_assets['asset_dir1'] == os.fspath(outdir / 'my_dir')
+    """
 
     from watch.utils.util_framework import AWS_S3_Command
     os.makedirs(outdir, exist_ok=True)
+
+    # TODO: perhaps there is a way to use fsspec to generalize this over
+    # different file systems, namely S3, ssh, and local. Being able to run this
+    # locally would be nice for testing.
 
     aws_cp = AWS_S3_Command('cp', profile=aws_profile, dryrun=dryrun,
                             only_show_errors=not show_progress)
@@ -82,7 +153,9 @@ def smartflow_ingress(input_path,
         try:
             asset_href = kwcoco_stac_item_assets[asset]
         except KeyError:
-            missing_asset_str = f"Expecting asset named {asset!r} in input KWCOCO STAC item"  # noqa
+            missing_asset_str = (
+                f"Expecting asset named {asset!r} in input KWCOCO STAC item"
+            )
             if dont_error_on_missing_asset:
                 print(f"* Warning: {missing_asset_str!r}")
             else:
@@ -92,17 +165,19 @@ def smartflow_ingress(input_path,
         asset_outpath = os.path.join(outdir, asset_basename)
 
         aws_ls.args = [asset_href]
-        ls_out = aws_ls.run(capture=True)
-        # Must correctly set 'recursive' flag for AWS S3 cp calls
-        # `aws ls` on a "directory" or really "prefix" of one or more
-        # objects in S3 prints "PRE" (indicating it's a prefix)
-        if ls_out['out'].strip().startswith('PRE'):
-            aws_cp.update(recursive=True)
-        else:
-            aws_cp.update(recursive=False)
+        if not dryrun:
+            ls_out = aws_ls.run(capture=True)
+            # Must correctly set 'recursive' flag for AWS S3 cp calls
+            # `aws ls` on a "directory" or really "prefix" of one or more
+            # objects in S3 prints "PRE" (indicating it's a prefix)
+            if ls_out['out'].strip().startswith('PRE'):
+                aws_cp.update(recursive=True)
+            else:
+                aws_cp.update(recursive=False)
 
-        aws_cp.args = [asset_href, asset_outpath]
-        aws_cp.run()
+        if not testing:
+            aws_cp.args = [asset_href, asset_outpath]
+            aws_cp.run()
 
         kwcoco_stac_item_assets[asset] = asset_outpath
 
