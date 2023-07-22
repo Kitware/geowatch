@@ -49,7 +49,7 @@ def main():
         [
             # Pull the current teamfeature-enriched dataset to modify
             'enriched_bas_kwcoco_file',
-            'enriched_bas_kwcoco_teamfeats',
+            # 'enriched_bas_kwcoco_teamfeats',  # Hack because we know we are first
             'enriched_bas_kwcoco_rawbands',
 
             # Pull the dense temporal data needed by COLD
