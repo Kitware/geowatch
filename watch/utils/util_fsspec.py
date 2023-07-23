@@ -1,6 +1,14 @@
 """
 fsspec wrappers that should make working with S3 / the local file system
 seemless.
+
+TODO:
+    Someone must have already implemented this somewhere. Find that to
+    either use directly or as a reference.
+
+Look into:
+    https://github.com/fsspec/universal_pathlib
+    https://pypi.org/project/pathlibfs/
 """
 from os.path import join
 import pathlib
@@ -21,10 +29,6 @@ class FSPath(str):
     to implement things like :meth:`FSPath.relative_to` and
     :meth:`FSPath.joinpath` (which behave differently than pathlib)
 
-    TODO:
-        Someone must have already implemented this somewhere. Find that to
-        either use directly or as a reference.
-
     Note:
         Not all of the fsspec / pathlib operations are currently implemented
     """
@@ -41,10 +45,11 @@ class FSPath(str):
         Determine which backend to use automatically
 
         Example:
-            >>> path1 = FSPath.coerce('s3://demo_bucket')
             >>> path2 = FSPath.coerce('/local/path')
-            >>> assert path1.is_remote()
             >>> assert path2.is_local()
+            >>> # xdoctest: +REQUIRES(module:s3fs)
+            >>> path1 = FSPath.coerce('s3://demo_bucket')
+            >>> assert path1.is_remote()
         """
         if path.startswith('s3:'):
             self = S3Path(path)

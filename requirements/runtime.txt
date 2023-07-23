@@ -163,7 +163,7 @@ ndsampler>=0.7.3
 tifffile>=2021.4.8
 
 # Includes SimpleITK. Used in depth predictor.
-medpy>=0.4.0 
+medpy>=0.4.0
 
 # Plotting
 kwplot>=0.4.14
@@ -231,7 +231,12 @@ imagesize>=1.4.1
 pytorch_msssim==0.1.5
 
 absl_py>=1.4.0
-PyYAML>=6.0
+
+# PyYAML>=6.0
+
+PyYAML>=5.5
 tqdm>=4.64.1
 
 cmd_queue >= 0.1.17
+
+fsspec>=2022.10.0
