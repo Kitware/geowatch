@@ -19,7 +19,26 @@ import fsspec
 NOOP_CALLBACK = fsspec.callbacks.NoOpCallback()
 
 
-class FSPath(str):
+class MetaFSPath(type):
+
+    @property
+    def fs(cls):
+        """
+        The underlying filesystem attribute with lazy initialization
+        """
+        # Lazy initialization of the fs attribute
+        try:
+            return cls._fs
+        except AttributeError:
+            if cls.__protocol__ is NotImplemented:
+                raise AttributeError(
+                    f'Cannot initialize fs for {cls} without defining '
+                    '__protocol__')
+            cls._fs = fsspec.filesystem(cls.__protocol__)
+            return cls._fs
+
+
+class FSPath(str, metaclass=MetaFSPath):
     """
     Provide a pathlib.Path-like way of interacting with fsspec.
 
@@ -32,8 +51,11 @@ class FSPath(str):
     Note:
         Not all of the fsspec / pathlib operations are currently implemented
     """
+    __protocol__ = NotImplemented
 
-    fs: fsspec.spec.AbstractFileSystem = NotImplemented
+    @property
+    def fs(self):
+        return self.__class__.fs
 
     def __init__(self, path):
         # I don't know why this works without a super().__init__(path)
@@ -415,12 +437,34 @@ class FSPath(str):
 class LocalPath(FSPath):
     """
     The implementation for the local filesystem
+
+    CommandLine:
+        xdoctest -m watch.utils.util_fsspec LocalPath
+
+    Example:
+        >>> from watch.utils.util_fsspec import *  # NOQA
+        >>> dpath = ub.Path.appdir('watch/tests/util_fsspec/demo')
+        >>> dpath.ensuredir()
+        >>> (dpath / 'file1.txt').write_text('data')
+        >>> (dpath / 'dpath').ensuredir()
+        >>> (dpath / 'dpath/file2.txt').write_text('data')
+        >>> self = LocalPath(dpath).absolute()
+        >>> print(f'self={self}')
+        >>> print(f'self.fs={cwd.fs}')
+        >>> print(f'self.__class__.fs={self.__class__.fs}')
+        >>> print(self.ls())
+        >>> print(f'self.fs={self.fs}')
+        >>> print(f'self.__class__.fs={self.__class__.fs}')
+        >>> info = self.tree()
     """
-    fs = fsspec.filesystem('file')  # type: fsspec.implementations.local.LocalFileSystem
+    __protocol__ = 'file'
 
     def ensuredir(self, mode=0o0777):
         pathlib.Path(self).mkdir(mode=mode, parents=True, exist_ok=True)
         return self
+
+    def absolute(self):
+        return self.__class__(os.path.abspath(self))
 
 
 class RemotePath(FSPath):
@@ -432,5 +476,9 @@ class RemotePath(FSPath):
 class S3Path(RemotePath):
     """
     The specific S3 remote filesystem.
+
+    Example:
+        >>> # xdoctest: +REQUIRES(module:s3fs)
+        >>> S3Path.fs
     """
-    fs = fsspec.filesystem('s3')  # type: s3fs.core.S3FileSystem
+    __protocol__ = 's3'
