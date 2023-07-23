@@ -154,6 +154,8 @@ def main():
     print("* Egressing KWCOCO dataset and associated STAC item *")
 
     # This is the location that COLD features will be written to.
+    (ingress_dir / '_teamfeats').ensuredir()
+    (ingress_dir / '_teamfeats/dummy').touch()
     ingressed_assets['enriched_bas_kwcoco_teamfeats'] = ingress_dir / '_teamfeats'
 
     # HACK: teamfeats is not ACTUALLY where the features were written. They are
