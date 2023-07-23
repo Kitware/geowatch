@@ -49,7 +49,7 @@ def main():
         [
             # Pull the current teamfeature-enriched dataset to modify
             'enriched_bas_kwcoco_file',
-            # 'enriched_bas_kwcoco_teamfeats',  # Hack because we know we are first
+            'enriched_bas_kwcoco_teamfeats',
             'enriched_bas_kwcoco_rawbands',
 
             # Pull the dense temporal data needed by COLD
@@ -173,6 +173,8 @@ def main():
                      aws_profile=config.aws_profile,
                      dryrun=config.dryrun,
                      newline=config.newline)
+
+    print('Finish run_teamfeat_cold')
 
 
 if __name__ == "__main__":
