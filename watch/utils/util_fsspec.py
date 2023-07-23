@@ -55,7 +55,8 @@ class FSPath(str, metaclass=MetaFSPath):
     :meth:`FSPath.joinpath` (which behave differently than pathlib)
 
     Note:
-        Not all of the fsspec / pathlib operations are currently implemented
+        Not all of the fsspec / pathlib operations are currently implemented,
+        add as needed.
     """
 
     # Final subclasses must define this as a string to be passed to
@@ -127,6 +128,10 @@ class FSPath(str, metaclass=MetaFSPath):
         return self.fs.rm(self, recursive=recursive, maxdepth=maxdepth)
 
     def mkdir(self, create_parents=True, **kwargs):
+        """
+        Note:
+            does nothing on some filesystems (e.g. S3)
+        """
         return self.fs.mkdir(self, create_parents=create_parents, **kwargs)
 
     def info(self):
@@ -297,8 +302,14 @@ class FSPath(str, metaclass=MetaFSPath):
         Like the unix util tree, but allow writing numbers of files per directory
         when given -d option
 
+        Ported from xdev.misc.tree_repr
+
+        TODO:
+            instead of building the networkx structure and then waiting to
+            display everything, build and display simultaniously. Will require
+            using a modified version of write_network_text
+
         Args:
-            cwd (None | str | PathLike) : directory to print
             max_files (int | None) : maximum files to print before supressing a directory
             pathstyle (str): can be rel, name, or abs
             return_tree (bool): if True return the tree
@@ -489,6 +500,19 @@ class RemotePath(FSPath):
 class S3Path(RemotePath):
     """
     The specific S3 remote filesystem.
+
+    Control credentials with the environment variables: AWS_ACCESS_KEY_ID,
+    AWS_SECRET_ACCESS_KEY, and AWS_SESSION_TOKEN.
+
+    TODO:
+        Allow for creating subclasses for different sessions or something to
+        manage the case where the credentials may not be the same for the
+        entire program. For now, we are punting on this (although the user does
+        have some control by overwriting the fs attribute with a custom
+        s3fs.S3FileSystem object)
+
+    References:
+        .. [S3FS_Docs] https://s3fs.readthedocs.io/en/latest/?badge=latest
 
     Example:
         >>> # xdoctest: +REQUIRES(module:s3fs)
