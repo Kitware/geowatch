@@ -68,9 +68,11 @@ class FSPath(str, metaclass=MetaFSPath):
 
         Example:
             >>> path2 = FSPath.coerce('/local/path')
+            >>> print(f'path2={path2}')
             >>> assert path2.is_local()
             >>> # xdoctest: +REQUIRES(module:s3fs)
             >>> path1 = FSPath.coerce('s3://demo_bucket')
+            >>> print(f'path1={path1}')
             >>> assert path1.is_remote()
         """
         if path.startswith('s3:'):
@@ -440,6 +442,7 @@ class LocalPath(FSPath):
 
     CommandLine:
         xdoctest -m watch.utils.util_fsspec LocalPath
+        xdoctest watch/utils/util_fsspec.py
 
     Example:
         >>> from watch.utils.util_fsspec import *  # NOQA
