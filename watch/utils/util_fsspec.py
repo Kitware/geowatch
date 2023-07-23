@@ -20,6 +20,12 @@ NOOP_CALLBACK = fsspec.callbacks.NoOpCallback()
 
 
 class MetaFSPath(type):
+    """
+    Enriches FSSpec classes with a class-level fs property.
+
+    We use a metaclass for this so we can lazilly initialize fs based on the
+    value of __protocol__
+    """
 
     @property
     def fs(cls):
@@ -51,15 +57,19 @@ class FSPath(str, metaclass=MetaFSPath):
     Note:
         Not all of the fsspec / pathlib operations are currently implemented
     """
+
+    # Final subclasses must define this as a string to be passed to
+    # fsspec.filesystem(__protocol__)
     __protocol__ = NotImplemented
 
     @property
     def fs(self):
         return self.__class__.fs
 
-    def __init__(self, path):
-        # I don't know why this works without a super().__init__(path)
-        self.path = path
+    # def __init__(self, path):
+    #     # Note: the value of the string is set in the __new__ method because
+    #     # strings are immutable. So we dont need to call super or anything.
+    #     self.path = path
 
     @classmethod
     def coerce(cls, path):
@@ -453,7 +463,7 @@ class LocalPath(FSPath):
         >>> (dpath / 'dpath/file2.txt').write_text('data')
         >>> self = LocalPath(dpath).absolute()
         >>> print(f'self={self}')
-        >>> print(f'self.fs={cwd.fs}')
+        >>> print(f'self.fs={self.fs}')
         >>> print(f'self.__class__.fs={self.__class__.fs}')
         >>> print(self.ls())
         >>> print(f'self.fs={self.fs}')

@@ -165,6 +165,7 @@ def smartflow_egress(assetnames_and_local_paths,
     # underlying filesytem so we can test locally and use it with s3 in
     # production.
     # SEE: dev/poc/fsspec_wrapper_classes.py
+    # TODO: if fsspec works, we can ditch AWS_S3_Command
     if USE_FSSPEC_IMPL:
         from watch.utils.util_fsspec import FSPath
         outbucket = FSPath.coerce(outbucket)
