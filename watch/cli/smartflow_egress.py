@@ -131,7 +131,7 @@ def smartflow_egress(assetnames_and_local_paths,
         >>> from watch.geoannots.geomodels import RegionModel
         >>> dpath = ub.Path.appdir('watch/tests/smartflow_egress').ensuredir()
         >>> local_dpath = (dpath / 'local').ensuredir()
-        >>> #remote_dpath = (dpath / 'remote').ensuredir()
+        >>> #remote_root = (dpath / 'remote').ensuredir()
         >>> outbucket = 's3://fake/bucket'
         >>> output_path = join(outbucket, 'items.jsonl')
         >>> region = RegionModel.random()
@@ -160,6 +160,12 @@ def smartflow_egress(assetnames_and_local_paths,
         >>> )
     """
     from watch.utils.util_framework import AWS_S3_Command
+
+    # It might be a good idea to use fsspec here to abstract away the
+    # underlying filesytem so we can test locally and use it with s3 in
+    # production.
+    # SEE: dev/poc/fsspec_wrapper_classes.py
+
     aws_cp = AWS_S3_Command('cp')
     aws_cp.update(
         profile=aws_profile,
@@ -217,7 +223,6 @@ def smartflow_egress(assetnames_and_local_paths,
 
     print('EGRESSED: {}'.format(ub.urepr(te_output, nl=-1)))
     return te_output
-
 
 if __name__ == "__main__":
     main()

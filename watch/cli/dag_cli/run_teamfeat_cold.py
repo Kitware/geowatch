@@ -38,7 +38,7 @@ def main():
     import os
     os.environ['NO_COLOR'] = '1'
     config = TeamFeatColdConfig.cli(strict=True)
-    print('config = {}'.format(ub.urepr(config, nl=0, align=':')))
+    print('config = {}'.format(ub.urepr(config, nl=1, align=':')))
     from watch.utils.util_framework import download_region
     from watch.mlops.pipeline_nodes import ProcessNode
     # 1. Ingress data

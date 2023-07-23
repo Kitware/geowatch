@@ -24,6 +24,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 * Improved `geowatch site_stats` to accept region and/or site models and provide nice statistics.
+* Pytorch Package Headers now include extra information like timestamp, and git hashes.
 
 ### Removed
 * Removed old fit script. The lightning CLI script is considered stable.
