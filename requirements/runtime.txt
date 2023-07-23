@@ -239,4 +239,5 @@ tqdm>=4.64.1
 
 cmd_queue >= 0.1.17
 
-fsspec>=2022.10.0
+# fsspec>=2022.10.0
+fsspec

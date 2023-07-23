@@ -1,4 +1,4 @@
-# awscli>=1.20.54
+awscli>=1.20.54
 
 # The AWS CLI has stupidly strict dependencies
 # Often we just can't use it.
