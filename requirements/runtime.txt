@@ -240,4 +240,6 @@ tqdm>=4.64.1
 cmd_queue >= 0.1.17
 
 # fsspec>=2022.10.0
-fsspec
+# NOTE: It is very difficult to pin a minimum version of fsspec because of its
+# interactions with other libraries.
+fsspec>=2023.6.0
