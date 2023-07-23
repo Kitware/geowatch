@@ -155,6 +155,11 @@ def main():
 
     # This is the location that COLD features will be written to.
     ingressed_assets['enriched_bas_kwcoco_teamfeats'] = ingress_dir / '_teamfeats'
+
+    # HACK: teamfeats is not ACTUALLY where the features were written. They are
+    # in the reccg folder, we should fix this, but for now lets just get an
+    # end-to-end run.
+    ingressed_assets['hacked_cold_assets'] = ingress_dir / 'reccg'
     # This is the kwcoco file with the all teamfeature outputs (i.e. previous
     # team features + COLD)
     ingressed_assets['enriched_bas_kwcoco_file'] = timecombined_output_kwcoco_fpath

@@ -106,6 +106,7 @@ def run_bas_fusion_for_baseline(config):
         input_path,
         ['enriched_bas_kwcoco_file',
          'enriched_bas_kwcoco_teamfeats',
+         'hacked_cold_assets',
          'landcover_assets'],
         ingress_dir,
         aws_profile,
