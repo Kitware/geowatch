@@ -426,6 +426,7 @@ def run_stac_to_cropped_kwcoco(config):
     timecombined_teamfeat_dpath = ta1_cropped_dir / '_teamfeats'
     # Put a dummy file in this directory so we can upload a nearly-empty folder
     # to S3
+    timecombined_teamfeat_dpath.ensuredir()
     (timecombined_teamfeat_dpath / 'dummy').write_text('dummy')
 
     print("* Egressing KWCOCO dataset and associated STAC item *")
