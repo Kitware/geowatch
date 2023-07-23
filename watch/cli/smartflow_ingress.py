@@ -42,7 +42,7 @@ def smartflow_ingress(input_path,
                       dryrun=False,
                       show_progress=False,
                       testing=False,
-                      dont_error_on_missing_asset=False):
+                      dont_error_on_missing_asset=False, USE_FSSPEC_IMPL=1):
     """
     Downloads a STAC manifest and select items within it.
 
@@ -76,7 +76,17 @@ def smartflow_ingress(input_path,
 
     Example:
         >>> from watch.cli.smartflow_ingress import *  # NOQA
-        >>> dpath = ub.Path.appdir('watch/tests/smartflow_ingress').ensuredir()
+        >>> dpath = ub.Path.appdir('watch/tests/smartflow_ingress/dst').ensuredir()
+        >>> fake_remote = ub.Path.appdir('watch/tests/smartflow_ingress/fake_remote').ensuredir()
+        >>> fake_fpath = fake_remote / 'my_path.txt'
+        >>> fake_fpath.write_text('foobar')
+        >>> fake_dpath = (fake_remote / 'my_dir').ensuredir()
+        >>> (fake_dpath / 'content1').touch()
+        >>> (fake_dpath / 'content2').touch()
+        >>> (fake_dpath / 'subdir1').ensuredir()
+        >>> (fake_dpath / 'subdir1/subcontent1').touch()
+        >>> (fake_dpath / 'subdir1/subcontent2').touch()
+        >>> (fake_dpath / 'subdir1/subsubdir').ensuredir()
         >>> # Save this dummy stac item locally
         >>> # In practice we download it, but we are using dry run mode
         >>> # so we cant do that here.
@@ -93,8 +103,8 @@ def smartflow_ingress(input_path,
         >>>        (-109.56, 44.56)),)},
         >>>     'bbox': [-109.57, 44.52, -109.51, 44.56],
         >>>     'properties': {},
-        >>>     'assets': {'asset_file1': {'href': 's3://fake/bucket/my_path.txt'},
-        >>>      'asset_dir1': {'href': 's3://fake/bucket/my_dir'}}}]}}
+        >>>     'assets': {'asset_file1': {'href': str(fake_fpath)},
+        >>>      'asset_dir1': {'href': str(fake_dpath)}}}]}}
         >>> remote_dpath = (dpath / 'remote').ensuredir()
         >>> input_path = remote_dpath / 'items.jsonl'
         >>> input_path.write_text(json.dumps(demo_stac_content))
@@ -103,43 +113,60 @@ def smartflow_ingress(input_path,
         >>> kwcoco_stac_item_assets = smartflow_ingress(
         >>>     input_path,
         >>>     assets,
-        >>>     outdir,
-        >>>     dryrun=True, testing=True
+        >>>     outdir, USE_FSSPEC_IMPL=1
         >>> )
         >>> assert kwcoco_stac_item_assets['asset_file1'] == os.fspath(outdir / 'my_path.txt')
         >>> assert kwcoco_stac_item_assets['asset_dir1'] == os.fspath(outdir / 'my_dir')
+        >>> assert len(ub.Path(kwcoco_stac_item_assets['asset_dir1']).ls()) > 0
+        >>> assert ub.Path(kwcoco_stac_item_assets['asset_file1']).exists()
     """
-
-    from watch.utils.util_framework import AWS_S3_Command
     os.makedirs(outdir, exist_ok=True)
 
     # TODO: perhaps there is a way to use fsspec to generalize this over
     # different file systems, namely S3, ssh, and local. Being able to run this
     # locally would be nice for testing.
 
-    aws_cp = AWS_S3_Command('cp', profile=aws_profile, dryrun=dryrun,
-                            only_show_errors=not show_progress)
+    if USE_FSSPEC_IMPL:
+        from watch.utils.util_fsspec import FSPath
+        input_path = FSPath.coerce(input_path)
 
-    aws_ls = AWS_S3_Command('ls', profile=aws_profile)
+        def _loads_input(text):
+            try:
+                input_json = json.loads(text)
+                return input_json['stac'].get('features', [])
+            # Excepting KeyError here in case of a single line STAC item input
+            except (json.decoder.JSONDecodeError, KeyError):
+                # Support for simple newline separated STAC items
+                lines = text.split('\n')
+                return [json.loads(line) for line in lines]
 
-    def _load_input(path):
-        try:
-            with open(path) as f:
-                input_json = json.load(f)
-            return input_json['stac'].get('features', [])
-        # Excepting KeyError here in case of a single line STAC item input
-        except (json.decoder.JSONDecodeError, KeyError):
-            # Support for simple newline separated STAC items
-            with open(path) as f:
-                return [json.loads(line) for line in f]
+        input_text = input_path.read_text()
+        input_stac_items = _loads_input(input_text)
 
-    if input_path.startswith('s3'):
-        with tempfile.NamedTemporaryFile() as temporary_file:
-            aws_cp.args = [input_path, temporary_file.name]
-            aws_cp.run()
-            input_stac_items = _load_input(temporary_file.name)
     else:
-        input_stac_items = _load_input(input_path)
+        from watch.utils.util_framework import AWS_S3_Command
+        aws_cp = AWS_S3_Command('cp', profile=aws_profile, dryrun=dryrun,
+                                only_show_errors=not show_progress)
+
+        aws_ls = AWS_S3_Command('ls', profile=aws_profile)
+
+        def _load_input(path):
+            try:
+                with open(path) as f:
+                    input_json = json.load(f)
+                return input_json['stac'].get('features', [])
+            # Excepting KeyError here in case of a single line STAC item input
+            except (json.decoder.JSONDecodeError, KeyError):
+                # Support for simple newline separated STAC items
+                with open(path) as f:
+                    return [json.loads(line) for line in f]
+        if input_path.startswith('s3'):
+            with tempfile.NamedTemporaryFile() as temporary_file:
+                aws_cp.args = [input_path, temporary_file.name]
+                aws_cp.run()
+                input_stac_items = _load_input(temporary_file.name)
+        else:
+            input_stac_items = _load_input(input_path)
 
     # Our baseline KWCOCO egress script should only ever write out a
     # single KWCOCO STAC item
@@ -164,27 +191,35 @@ def smartflow_ingress(input_path,
             else:
                 raise RuntimeError(missing_asset_str)  # noqa
 
-        asset_basename = os.path.basename(asset_href)
-        asset_outpath = os.path.join(outdir, asset_basename)
-
-        if asset_outpath not in seen:
-            aws_ls.args = [asset_href]
-            if not dryrun:
-                ls_out = aws_ls.run(capture=True)
-                # Must correctly set 'recursive' flag for AWS S3 cp calls
-                # `aws ls` on a "directory" or really "prefix" of one or more
-                # objects in S3 prints "PRE" (indicating it's a prefix)
-                if ls_out['out'].strip().startswith('PRE'):
-                    aws_cp.update(recursive=True)
-                else:
-                    aws_cp.update(recursive=False)
-
-            if not testing:
-                aws_cp.args = [asset_href, asset_outpath]
-                aws_cp.run()
+        if USE_FSSPEC_IMPL:
+            outdir = FSPath.coerce(outdir)
+            asset_href = FSPath.coerce(asset_href)
+            asset_outpath = outdir / asset_href.name
+            if asset_outpath not in seen:
+                asset_href.copy(asset_outpath)
             seen.add(asset_outpath)
+        else:
+            asset_basename = os.path.basename(asset_href)
+            asset_outpath = os.path.join(outdir, asset_basename)
 
-        kwcoco_stac_item_assets[asset] = asset_outpath
+            if asset_outpath not in seen:
+                aws_ls.args = [asset_href]
+                if not dryrun:
+                    ls_out = aws_ls.run(capture=True)
+                    # Must correctly set 'recursive' flag for AWS S3 cp calls
+                    # `aws ls` on a "directory" or really "prefix" of one or more
+                    # objects in S3 prints "PRE" (indicating it's a prefix)
+                    if ls_out['out'].strip().startswith('PRE'):
+                        aws_cp.update(recursive=True)
+                    else:
+                        aws_cp.update(recursive=False)
+
+                if not testing:
+                    aws_cp.args = [asset_href, asset_outpath]
+                    aws_cp.run()
+                seen.add(asset_outpath)
+
+        kwcoco_stac_item_assets[asset] = str(asset_outpath)
 
     # Returns assets (with downloaded asset hrefs updated)
     print('INGRESSED = {}'.format(ub.urepr(kwcoco_stac_item_assets, nl=1)))

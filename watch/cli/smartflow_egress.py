@@ -92,7 +92,8 @@ def smartflow_egress(assetnames_and_local_paths,
                      aws_profile=None,
                      dryrun=False,
                      newline=False,
-                     show_progress=False):
+                     show_progress=False,
+                     USE_FSSPEC_IMPL=1):
     """
     Uploads specified assets to S3 with a STAC manifest.
 
@@ -131,8 +132,9 @@ def smartflow_egress(assetnames_and_local_paths,
         >>> from watch.geoannots.geomodels import RegionModel
         >>> dpath = ub.Path.appdir('watch/tests/smartflow_egress').ensuredir()
         >>> local_dpath = (dpath / 'local').ensuredir()
-        >>> #remote_root = (dpath / 'remote').ensuredir()
-        >>> outbucket = 's3://fake/bucket'
+        >>> remote_root = (dpath / 'fake_s3_loc').ensuredir()
+        >>> #outbucket = 's3://fake/bucket'
+        >>> outbucket = remote_root
         >>> output_path = join(outbucket, 'items.jsonl')
         >>> region = RegionModel.random()
         >>> region_path = dpath / 'demo_region.geojson'
@@ -154,24 +156,26 @@ def smartflow_egress(assetnames_and_local_paths,
         >>>     region_path,
         >>>     output_path,
         >>>     outbucket,
-        >>>     dryrun=True,
+        >>>     dryrun=0,
         >>>     newline=False,
-        >>>     show_progress=False,
+        >>>     show_progress=False, USE_FSSPEC_IMPL=1
         >>> )
     """
-    from watch.utils.util_framework import AWS_S3_Command
-
     # It might be a good idea to use fsspec here to abstract away the
     # underlying filesytem so we can test locally and use it with s3 in
     # production.
     # SEE: dev/poc/fsspec_wrapper_classes.py
-
-    aws_cp = AWS_S3_Command('cp')
-    aws_cp.update(
-        profile=aws_profile,
-        dryrun=dryrun,
-        only_show_errors=not show_progress,
-    )
+    if USE_FSSPEC_IMPL:
+        from watch.utils.util_fsspec import FSPath
+        outbucket = FSPath.coerce(outbucket)
+    else:
+        from watch.utils.util_framework import AWS_S3_Command
+        aws_cp = AWS_S3_Command('cp')
+        aws_cp.update(
+            profile=aws_profile,
+            dryrun=dryrun,
+            only_show_errors=not show_progress,
+        )
 
     # TODO: can generate a set of upload commands that we can execute in
     # parallel
@@ -186,16 +190,21 @@ def smartflow_egress(assetnames_and_local_paths,
             asset_s3_outpath = join(outbucket, basename(local_path))
 
             if local_path not in seen:
-                if isdir(local_path):
-                    aws_cp.update(recursive=True)
+                if USE_FSSPEC_IMPL:
+                    _asset_s3_outpath = outbucket.__class__(asset_s3_outpath)
+                    _local_path = FSPath.coerce(local_path)
+                    _local_path.copy(_asset_s3_outpath)
                 else:
-                    aws_cp.update(recursive=False)
+                    if isdir(local_path):
+                        aws_cp.update(recursive=True)
+                    else:
+                        aws_cp.update(recursive=False)
 
-                aws_cp.args = [local_path, asset_s3_outpath]
-                aws_cp.run()
+                    aws_cp.args = [local_path, asset_s3_outpath]
+                    aws_cp.run()
                 seen.add(local_path)
 
-        assetnames_and_s3_paths[asset] = {'href': asset_s3_outpath}
+        assetnames_and_s3_paths[asset] = {'href': str(asset_s3_outpath)}
 
     output_stac_item = _build_stac_item(region_path,
                                         assetnames_and_s3_paths)
@@ -217,9 +226,14 @@ def smartflow_egress(assetnames_and_local_paths,
             else:
                 print(json.dumps(te_output, indent=2), file=f)
 
-        aws_cp.update(recursive=False)
-        aws_cp.args = [temporary_file.name, output_path]
-        aws_cp.run()
+        if USE_FSSPEC_IMPL:
+            _temp_path = FSPath.coerce(temporary_file.name)
+            _output_path = FSPath.coerce(output_path)
+            _temp_path.copy(_output_path)
+        else:
+            aws_cp.update(recursive=False)
+            aws_cp.args = [temporary_file.name, output_path]
+            aws_cp.run()
 
     print('EGRESSED: {}'.format(ub.urepr(te_output, nl=-1)))
     return te_output
