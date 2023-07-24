@@ -167,7 +167,7 @@ def smartflow_ingress(input_path,
 
         outdir = FSPath.coerce(outdir)
         asset_href = FSPath.coerce(asset_href)
-        asset_outpath = outdir / asset_href.key
+        asset_outpath = outdir / asset_href.name
         if asset_outpath not in seen:
             asset_href.copy(asset_outpath)
         seen.add(asset_outpath)
