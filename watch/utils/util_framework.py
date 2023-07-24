@@ -151,7 +151,16 @@ def download_region(input_region_path,
                     strip_nonregions=False,
                     ensure_comments=False):
     scheme, *_ = urlparse(input_region_path)
-    if scheme == 's3':
+
+    if aws_profile is None:
+        from watch.utils.util_fsspec import FSPath
+        input_region_path = FSPath.coerce(input_region_path)
+        with input_region_path.open('r') as file:
+            out_region_data = json.load(file)
+
+    # TODO: can remove the rest of this is the FSPath implementation works
+    # nicely.
+    elif scheme == 's3':
         aws_cp = AWS_S3_Command('cp')
         aws_cp.update(
             profile=aws_profile

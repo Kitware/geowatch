@@ -19,32 +19,7 @@ import fsspec
 NOOP_CALLBACK = fsspec.callbacks.NoOpCallback()
 
 
-class MetaFSPath(type):
-    """
-    Enriches FSSpec classes with a class-level fs property.
-
-    We use a metaclass for this so we can lazilly initialize fs based on the
-    value of __protocol__
-    """
-
-    @property
-    def fs(cls):
-        """
-        The underlying filesystem attribute with lazy initialization
-        """
-        # Lazy initialization of the fs attribute
-        try:
-            return cls._fs
-        except AttributeError:
-            if cls.__protocol__ is NotImplemented:
-                raise AttributeError(
-                    f'Cannot initialize fs for {cls} without defining '
-                    '__protocol__')
-            cls._fs = fsspec.filesystem(cls.__protocol__)
-            return cls._fs
-
-
-class FSPath(str, metaclass=MetaFSPath):
+class FSPath(str):
     """
     Provide a pathlib.Path-like way of interacting with fsspec.
 
@@ -57,20 +32,45 @@ class FSPath(str, metaclass=MetaFSPath):
     Note:
         Not all of the fsspec / pathlib operations are currently implemented,
         add as needed.
-    """
 
+    Example:
+        >>> cwd = FSPath.coerce('.')
+        >>> print(cwd)
+        >>> print(cwd.fs)
+    """
     # Final subclasses must define this as a string to be passed to
     # fsspec.filesystem(__protocol__)
     __protocol__ = NotImplemented
 
-    @property
-    def fs(self):
-        return self.__class__.fs
+    @classmethod
+    def _new_fs(cls, **kwargs):
+        """
+        Create a new filesystem instance based on __protocol__
+        """
+        return fsspec.filesystem(cls.__protocol__, **kwargs)
 
-    # def __init__(self, path):
-    #     # Note: the value of the string is set in the __new__ method because
-    #     # strings are immutable. So we dont need to call super or anything.
-    #     self.path = path
+    @classmethod
+    def _current_fs(cls, **kwargs):
+        """
+        The "default" FileSystem object.  Get the most recent filesystem with
+        this protocol, or create a new one with defaults.
+
+        Returns:
+            AbstractFileSystem
+        """
+        fs_cls = fsspec.get_filesystem_class(cls.__protocol__)
+        return fs_cls.current()
+
+    def __new__(cls, path, *, fs=None):
+        # Note: the value of the string is set in the __new__ method because
+        # strings are immutable. So we dont need to call super or anything.
+        # The first argument will be the value of the string.
+        if fs is None:
+            # Lazy creation of a new fs
+            fs = cls._current_fs()
+        self = str.__new__(cls, path)
+        self.fs = fs
+        return self
 
     @classmethod
     def coerce(cls, path):
@@ -101,8 +101,32 @@ class FSPath(str, metaclass=MetaFSPath):
     def is_local(self):
         return isinstance(self, LocalPath)
 
+    def open(self, mode='rb', block_size=None, cache_options=None, compression=None):
+        """
+        Example:
+            >>> from watch.utils import util_fsspec
+            >>> dpath = util_fsspec.LocalPath.appdir('watch/fsspec/tests/open').ensuredir()
+            >>> fpath = dpath / 'file.txt'
+            >>> file = fpath.open(mode='w')
+            >>> file.write('hello world')
+            >>> file.close()
+            >>> assert fpath.read_text() == fpath.open('r').read()
+        """
+        return self.fs.open(self, mode=mode, block_size=block_size,
+                            cache_options=cache_options,
+                            compression=compression)
+
     def ls(self, detail=False, **kwargs):
         return self.fs.ls(self, detail=detail, **kwargs)
+
+    def touch(self, truncate=False, **kwargs):
+        self.fs.touch(self, truncate=truncate, **kwargs)
+
+    def move(self, path1, path2, recursive='auto', maxdepth=None, **kwargs):
+        if recursive == 'auto':
+            recursive = self.is_dir()
+        self.fs.move(self, path2, recursive=recursive, maxdepth=maxdepth,
+                     **kwargs)
 
     def delete(self, recursive='auto', maxdepth=True):
         """
@@ -134,8 +158,8 @@ class FSPath(str, metaclass=MetaFSPath):
         """
         return self.fs.mkdir(self, create_parents=create_parents, **kwargs)
 
-    def info(self):
-        return self.fs.info(self)
+    def stat(self):
+        return self.fs.stat(self)
 
     def is_dir(self):
         return self.fs.isdir(self)
@@ -167,16 +191,16 @@ class FSPath(str, metaclass=MetaFSPath):
             include_protocol = self.is_remote()
         if include_protocol:
             for root, dnames, fnames in self.fs.walk(self, **kwargs):
-                root = self.__class__(self.fs.unstrip_protocol(root))
+                root = self.__class__(self.fs.unstrip_protocol(root), fs=self.fs)
                 yield root, dnames, fnames
         else:
             for root, dnames, fnames in self.fs.walk(self, **kwargs):
-                root = self.__class__(root)
+                root = self.__class__(root, fs=self.fs)
                 yield root, dnames, fnames
 
     @property
     def parent(self):
-        return self.__class__(os.path.dirname(self))
+        return self.__class__(os.path.dirname(self), fs=self.fs)
 
     @property
     def name(self):
@@ -275,22 +299,22 @@ class FSPath(str, metaclass=MetaFSPath):
             raise TypeError(type(self))
 
     def joinpath(self, *others):
-        return self.__class__(join(self, *others))
+        return self.__class__(join(self, *others), fs=self.fs)
 
     def __truediv__(self, other):
-        return self.__class__(join(self, other))
+        return self.__class__(join(self, other), fs=self.fs)
 
     def __add__(self, other):
         """
         Returns a new string starting with this fspath representation.
         """
-        return self.__class__(str(self) + other)
+        return self.__class__(str(self) + other, fs=self.fs)
 
     def __radd__(self, other):
         """
         Returns a new string ending with this fspath representation.
         """
-        return self.__class__(other + str(self))
+        return self.__class__(other + str(self), fs=self.fs)
 
     def tree(self, max_files=100, dirblocklist=None, show_nfiles='auto',
              return_text=False, return_tree=True, pathstyle='name',
@@ -474,11 +498,7 @@ class LocalPath(FSPath):
         >>> (dpath / 'dpath/file2.txt').write_text('data')
         >>> self = LocalPath(dpath).absolute()
         >>> print(f'self={self}')
-        >>> print(f'self.fs={self.fs}')
-        >>> print(f'self.__class__.fs={self.__class__.fs}')
         >>> print(self.ls())
-        >>> print(f'self.fs={self.fs}')
-        >>> print(f'self.__class__.fs={self.__class__.fs}')
         >>> info = self.tree()
     """
     __protocol__ = 'file'
@@ -488,7 +508,11 @@ class LocalPath(FSPath):
         return self
 
     def absolute(self):
-        return self.__class__(os.path.abspath(self))
+        return self.__class__(os.path.abspath(self), fs=self.fs)
+
+    @classmethod
+    def appdir(cls, *args, **kw):
+        return cls(str(ub.Path.appdir(*args, **kw)))
 
 
 class RemotePath(FSPath):
@@ -504,18 +528,57 @@ class S3Path(RemotePath):
     Control credentials with the environment variables: AWS_ACCESS_KEY_ID,
     AWS_SECRET_ACCESS_KEY, and AWS_SESSION_TOKEN.
 
-    TODO:
-        Allow for creating subclasses for different sessions or something to
-        manage the case where the credentials may not be the same for the
-        entire program. For now, we are punting on this (although the user does
-        have some control by overwriting the fs attribute with a custom
-        s3fs.S3FileSystem object)
+    A single S3 filesystem is used by default, but you can work with multiple
+    of them if you pass in the fs object. E.g.
+
+        fs = S3Path._new_fs(profile='iarpa')
+        self = S3Path('s3://kitware-smart-watch-data/', fs=fs)
+        self.ls()
+
+    To work with different S3 filesystems,
 
     References:
         .. [S3FS_Docs] https://s3fs.readthedocs.io/en/latest/?badge=latest
 
     Example:
         >>> # xdoctest: +REQUIRES(module:s3fs)
-        >>> S3Path.fs
+        >>> fs = S3Path._new_fs()
     """
     __protocol__ = 's3'
+
+
+class SSHPath(RemotePath):
+    """
+    Ignore:
+        fs = SSHPath._new_fs(host='localhost')
+        self = SSHPath('.', fs=fs)
+        self.ls()
+        self = SSHPath('misc/notes', fs=fs)
+        self.tree()
+    """
+    __protocol__ = 'ssh'
+
+    @property
+    def host(self):
+        return self.fs.host
+
+
+class MemoryPath(FSPath):
+    """
+    Ignore:
+        self = MemoryPath('/')
+        self.ls()
+        (self / 'file').write_text('data')
+        self.ls()
+
+        ref_mempath = MemoryPath('/')
+        ref_mempath.ls()
+
+        # The MemoryFileSystem is global for the entire program
+        new_mempath = MemoryPath('/', fs=MemoryPath._new_fs())
+        new_mempath.ls()
+
+        # Show the entire contents of the memory filesystem
+        new_mempath.fs.store
+    """
+    __protocol__ = 'memory'
