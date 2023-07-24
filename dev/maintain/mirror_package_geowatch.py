@@ -1,8 +1,10 @@
 """
 Setup the geowatch package mirror
 
+python ~/code/watch/dev/maintain/mirror_package_geowatch.py
+
 SeeAlso:
-    ~/code/watch/dev/maintain/port_to_geowatch.sh
+    ~/code/watch/dev/maintain/port_to_geowatch.py
 """
 
 
@@ -61,8 +63,6 @@ def main():
         import parso
         import ast
         module = parso.parse(old_text)
-        import xdev
-        xdev.embed()
         for child in module.children:
             if child.type == 'if_stmt':
                 if_stmt = child

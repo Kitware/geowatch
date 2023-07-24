@@ -4,7 +4,11 @@ This changelog follows the specifications detailed in: [Keep a Changelog](https:
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
 
-## Version 0.8.0 - Target 2023-07-xx
+## Version 0.8.1 - Target 2023-07-xx
+
+### Added
+
+* Add `watch.utils.util_ffspec` as an alternative to `AWS_S3_Command`, and updated most old usages.
 
 ### Fixed
 * Fixed issue with kwcoco directory roots in prepare splits.
@@ -22,6 +26,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 * Improved `geowatch site_stats` to accept region and/or site models and provide nice statistics.
+* Pytorch Package Headers now include extra information like timestamp, and git hashes.
+* Refactored smartflow ingress / egress 
 
 ### Removed
 * Removed old fit script. The lightning CLI script is considered stable.

@@ -3,7 +3,6 @@
 See Old Script:
     ~/code/watch/scripts/run_generate_sc_cropped_kwcoco.py
 """
-import subprocess
 from watch.cli.smartflow_ingress import smartflow_ingress
 from watch.cli.smartflow_egress import smartflow_egress
 from watch.utils.util_framework import download_region
@@ -28,7 +27,7 @@ class SCDatasetConfig(scfg.DataConfig):
             '''
             AWS Profile to use for AWS S3 CLI commands
             '''))
-    dryrun = scfg.Value(False, isflag=True, short_alias=['d'], help='Run AWS CLI commands with --dryrun flag')
+    dryrun = scfg.Value(False, isflag=True, short_alias=['d'], help='DEPRECATD. DO NOT USE')
     outbucket = scfg.Value(None, type=str, required=True, short_alias=['o'], help=ub.paragraph(
             '''
             S3 Output directory for STAC item / asset egress
@@ -57,19 +56,18 @@ def main():
 
 
 def run_generate_sc_cropped_kwcoco(config):
-    from watch.utils.util_framework import AWS_S3_Command
     from kwutil.util_yaml import Yaml
     from watch.utils import util_framework
     from watch.cli import coco_align
+    from watch.utils import util_fsspec
+
+    if config.aws_profile is not None:
+        # This should be sufficient, but it is not tested.
+        util_fsspec.S3Path._new_fs(profile=config.aws_profile)
+
     if config.dont_recompute:
-        aws_ls = AWS_S3_Command('ls', profile=config.aws_profile)
-        aws_ls_command = aws_ls.finalize()
-        try:
-            ub.cmd([*aws_ls_command, config.output_path], check=True, verbose=3, capture=False)
-        except subprocess.CalledProcessError:
-            # Continue processing
-            pass
-        else:
+        output_path = util_fsspec.FSPath.coerce(config.output_path)
+        if output_path.exists():
             # If output_path file was there, nothing to do
             return
 

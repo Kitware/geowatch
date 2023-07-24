@@ -181,6 +181,20 @@ class NoopModel(pl.LightningModule, WatchModuleMixins):
             >>>     assert (model_state[key] == recon_state[key]).all()
             >>>     assert model_state[key] is not recon_state[key]
 
+            >>> # Check what's inside of the package
+            >>> import zipfile
+            >>> import json
+            >>> zfile = zipfile.ZipFile(package_path)
+            >>> header_file = zfile.open('my_package/package_header/package_header.json')
+            >>> package_header = json.loads(header_file.read())
+            >>> print('package_header = {}'.format(ub.urepr(package_header, nl=1)))
+            >>> assert 'version' in package_header
+            >>> assert 'arch_name' in package_header
+            >>> assert 'module_name' in package_header
+            >>> assert 'packaging_time' in package_header
+            >>> assert 'git_hash' in package_header
+            >>> assert 'module_path' in package_header
+
         Example:
             >>> # Test with datamodule
             >>> import ubelt as ub

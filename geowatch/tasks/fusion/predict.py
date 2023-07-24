@@ -14,4 +14,7 @@ def __dir__():
 
 
 if __name__ == '__main__':
+    if ub.argflag('--warntb'):
+        import xdev
+        xdev.make_warnings_print_tracebacks()
     main()

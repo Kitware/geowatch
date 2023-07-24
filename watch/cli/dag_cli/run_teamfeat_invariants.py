@@ -1,14 +1,7 @@
-"""
-See Old Version:
-    ../../../scripts/run_uky_invariants_for_baseline.py
-
-SeeAlso:
-    ~/code/watch-smartflow-dags/KIT_TA2_PREEVAL10_PYENV.py
-"""
 import ubelt as ub
 import scriptconfig as scfg
-from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress
-from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress
+from watch.cli.smartflow_ingress import smartflow_ingress
+from watch.cli.smartflow_egress import smartflow_egress
 
 
 class TeamFeatInvariantsConfig(scfg.DataConfig):
@@ -56,11 +49,17 @@ def run_uky_invariants_for_baseline(config):
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
     ingress_dir = ub.Path('/tmp/ingress')
-    ingress_kwcoco_path = baseline_framework_kwcoco_ingress(
+
+    ingressed_assets = smartflow_ingress(
         config.input_path,
+        ['enriched_bas_kwcoco_file',
+         'enriched_bas_kwcoco_teamfeats',
+         'enriched_bas_kwcoco_rawbands'],
         ingress_dir,
         config.aws_profile,
         config.dryrun)
+
+    timecombined_kwcoco_file_for_bas = ingressed_assets['enriched_bas_kwcoco_file']
 
     # 2. Download and prune region file
     print("* Downloading and pruning region file *")
@@ -73,14 +72,16 @@ def run_uky_invariants_for_baseline(config):
     )
 
     # 2. Generate Invariants
-    print("* Generating UKY invariant features for L8 *")
-    sc_invariants_kwcoco_path = ingress_dir / 'sc_invariants_kwcoco.json'
+    print("* Generating UKY/WU invariant features *")
+    # FIXME: probably should not be called "SC" invariants
+    invariants_kwcoco_path = ingress_dir / 'sc_invariants_kwcoco.json'
     ub.cmd([
         'python', '-m', 'watch.tasks.invariants.predict',
-        '--input_kwcoco', ingress_kwcoco_path,
-        '--output_kwcoco', sc_invariants_kwcoco_path,
+        '--input_kwcoco', timecombined_kwcoco_file_for_bas,
+        '--output_kwcoco', invariants_kwcoco_path,
         '--pretext_package_path', config.model_path,
         '--pca_projection_path', config.pca_projection_path,
+        '--assets_dname', '_teamfeats',
         '--input_space_scale', '30GSD',
         '--window_space_scale', '30GSD',
         '--patch_size', '256',
@@ -95,13 +96,17 @@ def run_uky_invariants_for_baseline(config):
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)
     print("* Egressing KWCOCO dataset and associated STAC item *")
-    baseline_framework_kwcoco_egress(sc_invariants_kwcoco_path,
-                                     local_region_path,
-                                     config.output_path,
-                                     config.outbucket,
-                                     aws_profile=None,
-                                     dryrun=False,
-                                     newline=False)
+
+    ingressed_assets['enriched_bas_kwcoco_file'] = invariants_kwcoco_path
+    ingressed_assets['enriched_bas_kwcoco_teamfeats'] = ingress_dir / '_teamfeats'
+
+    smartflow_egress(ingressed_assets,
+                     local_region_path,
+                     config.output_path,
+                     config.outbucket,
+                     aws_profile=None,
+                     dryrun=False,
+                     newline=False)
 
 
 if __name__ == "__main__":

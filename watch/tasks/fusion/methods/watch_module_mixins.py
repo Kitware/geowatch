@@ -701,6 +701,8 @@ class WatchModuleMixins:
             """
             exp = torch.package.PackageExporter(package_path, debug=True)
             """
+            import warnings
+            warnings.filterwarnings('ignore', category=UserWarning, message='TypedStorage is deprecated')
             # with torch.package.PackageExporter(package_path) as exp:
             with torch.package.PackageExporter(package_path) as exp:
                 # if True:
@@ -720,10 +722,25 @@ class WatchModuleMixins:
                 # Add information about how this was trained, and what epoch it
                 # was saved at.
                 package_header = {
-                    'version': '0.2.0',
+                    'version': '0.3.0',
                     'arch_name': arch_name,
                     'module_name': module_name,
+                    'packaging_time': ub.timestamp(),
+                    'git_hash': None,
+                    'module_path': None,
                 }
+
+                # Encode a git hash if we can identify that we are in a git
+                # repository
+                try:
+                    import os
+                    module_path = ub.Path(ub.modname_to_modpath(self.__class__.__module__)).absolute()
+                    package_header['module_path'] = os.fspath(module_path)
+                    info = ub.cmd('git rev-parse --short HEAD', cwd=module_path.parent)
+                    if info.returncode == 0:
+                        package_header['git_hash'] = info.stdout.strip()
+                except Exception:
+                    ...
 
                 exp.save_text(
                     'package_header', 'package_header.json',

@@ -1,11 +1,12 @@
 import json
 import tempfile
-from os.path import join, basename, isdir
 import uuid
 
 import ubelt as ub
 import scriptconfig as scfg
 
+
+# FIXME: Looks like this CLI is not functional.
 
 class SmartflowEgressConfig(scfg.DataConfig):
     """
@@ -15,21 +16,17 @@ class SmartflowEgressConfig(scfg.DataConfig):
             '''
             Path to input T&E Baseline Framework JSON
             '''))
-    assets = scfg.Value(None, type=str, position=2, required=True, help='Assets to download', nargs='+')
+    assets = scfg.Value(None, type=str, position=2, required=True, help='Assets to upload', nargs='+')
     outdir = scfg.Value(None, type=str, required=True, short_alias=['o'], help=ub.paragraph(
             '''
             Output directory for ingressed assets an output STAC Catalog
             '''))
     aws_profile = scfg.Value(None, type=str, help=ub.paragraph(
             '''
-            AWS Profile to use for AWS S3 CLI commands
+            AWS Profile to use. UNUSED. Hook up to fsspec if needed.
             '''))
-    dryrun = scfg.Value(False, isflag=True, short_alias=['d'], help='Run AWS CLI commands with --dryrun flag')
-    show_progress = scfg.Value(False, isflag=True, short_alias=['s'], help='Show progress for AWS CLI commands')
-    dont_error_on_missing_asset = scfg.Value(False, isflag=True, help=ub.paragraph(
-            '''
-            Don't raise error on missing asset, just warn
-            '''))
+    dryrun = scfg.Value(False, isflag=True, short_alias=['d'], help='UNUSED. DEPRECATED')
+    show_progress = scfg.Value(False, isflag=True, short_alias=['s'], help='UNUSED. DEPRECATED')
 
 
 def main():
@@ -95,32 +92,89 @@ def smartflow_egress(assetnames_and_local_paths,
                      dryrun=False,
                      newline=False,
                      show_progress=False):
-    from watch.utils.util_framework import AWS_S3_Command
-    aws_cp = AWS_S3_Command('cp')
-    aws_cp.update(
-        profile=aws_profile,
-        dryrun=dryrun,
-        only_show_errors=not show_progress,
-    )
+    """
+    Uploads specified assets to S3 with a STAC manifest.
 
+    Args:
+        assetnames_and_local_paths (Dict):
+            Mapping from an asset name to the local path to upload. The asset
+            name will be indexable in the uploaded STAC item. Any local path
+            specified multiple times will only be uploaded once, but multiple
+            STAC assets will be associated with it.
+
+        region_path (str | PathLike):
+            local path to the region file associated with a processing node
+
+        output_path (str):
+            The path in the s3 bucket that the stac item will be uploaded to.
+
+        outbucket (str):
+            The s3 bucket that assets will be uploaded to.
+
+        aws_profile (str | None): aws cp argument
+
+        newline (bool): controls formatting of output stac item
+
+    Returns:
+        Dict: the new STAC item
+
+    CommandLine:
+        xdoctest -m watch.cli.smartflow_egress smartflow_egress
+
+    Example:
+        >>> from watch.cli.smartflow_egress import *  # NOQA
+        >>> from watch.geoannots.geomodels import RegionModel
+        >>> from os.path import join
+        >>> dpath = ub.Path.appdir('watch/tests/smartflow_egress').ensuredir()
+        >>> local_dpath = (dpath / 'local').ensuredir()
+        >>> remote_root = (dpath / 'fake_s3_loc').ensuredir()
+        >>> #outbucket = 's3://fake/bucket'
+        >>> outbucket = remote_root
+        >>> output_path = join(outbucket, 'items.jsonl')
+        >>> region = RegionModel.random()
+        >>> region_path = dpath / 'demo_region.geojson'
+        >>> region_path.write_text(region.dumps())
+        >>> assetnames_and_local_paths = {
+        >>>     'asset_file1': dpath / 'my_path1.txt',
+        >>>     'asset_file2': dpath / 'my_path2.txt',
+        >>>     'asset_file_reference': dpath / 'my_path1.txt',
+        >>>     'asset_dir1': dpath / 'my_dir1',
+        >>> }
+        >>> # Generate local data we will pretend to egress
+        >>> assetnames_and_local_paths['asset_file1'].write_text('foobar1')
+        >>> assetnames_and_local_paths['asset_file2'].write_text('foobar2')
+        >>> assetnames_and_local_paths['asset_dir1'].ensuredir()
+        >>> (assetnames_and_local_paths['asset_dir1'] / 'data1').write_text('data1')
+        >>> (assetnames_and_local_paths['asset_dir1'] / 'data1').write_text('data2')
+        >>> te_output = smartflow_egress(
+        >>>     assetnames_and_local_paths,
+        >>>     region_path,
+        >>>     output_path,
+        >>>     outbucket,
+        >>>     newline=False,
+        >>> )
+    """
+    # TODO: handle aws_profile.
+    from watch.utils.util_fsspec import FSPath
+
+    assert aws_profile is None, 'unhandled'
+    outbucket = FSPath.coerce(outbucket)
+
+    # TODO: Can use fsspec to grab multiple files in parallel
+    seen = set()  # Prevent duplicate uploads
     assetnames_and_s3_paths = {}
     for asset, local_path in assetnames_and_local_paths.items():
-        # Passing in assets with paths already on S3 simply passes
-        # them through
+        # Assets with paths already on S3 simply pass a reference through
+        local_path = FSPath.coerce(local_path)
         if local_path.startswith('s3'):
             asset_s3_outpath = local_path
         else:
-            asset_s3_outpath = join(outbucket, basename(local_path))
+            asset_s3_outpath = outbucket / local_path.name
+            if local_path not in seen:
+                local_path.copy(asset_s3_outpath)
+                seen.add(local_path)
 
-            if isdir(local_path):
-                aws_cp.update(recursive=True)
-            else:
-                aws_cp.update(recursive=False)
-
-            aws_cp.args = [local_path, asset_s3_outpath]
-            aws_cp.run()
-
-        assetnames_and_s3_paths[asset] = {'href': asset_s3_outpath}
+        assetnames_and_s3_paths[asset] = {'href': str(asset_s3_outpath)}
 
     output_stac_item = _build_stac_item(region_path,
                                         assetnames_and_s3_paths)
@@ -142,12 +196,12 @@ def smartflow_egress(assetnames_and_local_paths,
             else:
                 print(json.dumps(te_output, indent=2), file=f)
 
-        aws_cp.update(recursive=False)
-        aws_cp.args = [temporary_file.name, output_path]
-        aws_cp.run()
+        _temp_path = FSPath.coerce(temporary_file.name)
+        _output_path = FSPath.coerce(output_path)
+        _temp_path.copy(_output_path)
 
+    print('EGRESSED: {}'.format(ub.urepr(te_output, nl=-1)))
     return te_output
-
 
 if __name__ == "__main__":
     main()

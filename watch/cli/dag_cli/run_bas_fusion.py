@@ -34,10 +34,10 @@ class BasFusionConfig(scfg.DataConfig):
 
     aws_profile = scfg.Value(None, type=str, help=ub.paragraph(
             '''
-            AWS Profile to use for AWS S3 CLI commands
+            AWS Profile to use for AWS S3 CLI commands.
             '''))
 
-    dryrun = scfg.Value(False, isflag=True, short_alias=['d'], help='Run AWS CLI commands with --dryrun flag')
+    dryrun = scfg.Value(False, isflag=True, short_alias=['d'], help='DEPRECATED. DO NOT USE.')
 
     outbucket = scfg.Value(None, type=str, required=True, short_alias=['o'], help=ub.paragraph(
             '''
@@ -81,8 +81,8 @@ def run_bas_fusion_for_baseline(config):
     from watch.utils.util_framework import download_region, determine_region_id
     from watch.tasks.fusion.predict import predict
     from kwutil.util_yaml import Yaml
-    from watch.utils.util_framework import AWS_S3_Command
     from watch.utils import util_framework
+    from watch.utils import util_fsspec
 
     input_path = config.input_path
     input_region_path = config.input_region_path
@@ -92,21 +92,23 @@ def run_bas_fusion_for_baseline(config):
     previous_bas_outbucket = config.previous_bas_outbucket
     ta2_s3_collation_bucket = config.ta2_s3_collation_bucket
 
-    aws_cp = AWS_S3_Command('cp')
-    aws_cp.update(
-        profile=aws_profile,
-        dryrun=dryrun,
-    )
-    aws_base_command = aws_cp.finalize()
+    if aws_profile is not None:
+        # This should be sufficient, but it is not tested.
+        util_fsspec.S3Path._new_fs(profile=aws_profile)
+
+    assert not dryrun, 'unsupported'
 
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
     ingress_dir = ub.Path('/tmp/ingress')
     ingressed_assets = smartflow_ingress(
         input_path,
-        ['timecombined_kwcoco_file_for_bas_with_landcover',
-         'timecombined_kwcoco_file_for_bas_assets',
-         'landcover_assets'],
+        ['enriched_bas_kwcoco_file',
+         'enriched_bas_kwcoco_teamfeats',
+         'enriched_bas_kwcoco_rawbands',
+         {"key": 'hacked_cold_assets', "allow_missing": True},
+         {"key": 'landcover_assets', "allow_missing": True},
+         ],
         ingress_dir,
         aws_profile,
         dryrun)
@@ -148,7 +150,7 @@ def run_bas_fusion_for_baseline(config):
     if bas_pxl_config.get('package_fpath', None) is None:
         raise ValueError('Requires package_fpath')
 
-    ingress_kwcoco_path = ingressed_assets['timecombined_kwcoco_file_for_bas_with_landcover']
+    ingress_kwcoco_path = ingressed_assets['enriched_bas_kwcoco_file']
     predict(devices='0,',
             write_preds=False,
             write_probs=True,
@@ -166,9 +168,9 @@ def run_bas_fusion_for_baseline(config):
 
         previous_ingress_dir = ub.Path('/tmp/ingress_previous')
 
-        ub.cmd([*aws_base_command, '--recursive',
-                previous_bas_outbucket, previous_ingress_dir],
-               check=True, verbose=3)
+        previous_bas_outbucket = util_fsspec.FSPath.coerce(previous_bas_outbucket)
+        previous_ingress_dir = util_fsspec.FSPath.coerce(previous_ingress_dir)
+        previous_bas_outbucket.copy(previous_ingress_dir, recursive=True)
 
         previous_bas_fusion_kwcoco_path = previous_ingress_dir / 'combined_bas_fusion_kwcoco.json'
 
@@ -271,16 +273,13 @@ def run_bas_fusion_for_baseline(config):
             region_dpath=cropped_region_models_outdir,
             site_dpath=cropped_site_models_outdir,
         )
-    except:  # noqa
+    except Exception as ex:  # noqa
+        print(f'Encountered Exception, ex={ex}, uploading debug informaiton and then exiting')
         debug_s3_outdir = os.path.join(outbucket, '_debug/')
-
-        ub.cmd([*aws_base_command, '--recursive',
-                cropped_region_models_outdir, debug_s3_outdir],
-               check=True, verbose=3)
-        ub.cmd([*aws_base_command, '--recursive',
-                cropped_site_models_outdir, debug_s3_outdir],
-               check=True, verbose=3)
-
+        cropped_region_models_outdir = util_fsspec.FSPath.coerce(cropped_region_models_outdir)
+        debug_s3_outdir = util_fsspec.FSPath.coerce(debug_s3_outdir)
+        cropped_region_models_outdir.copy(debug_s3_outdir, recursive=True)
+        cropped_site_models_outdir.copy(debug_s3_outdir, recursive=True)
         raise
 
     # 6. (Optional) collate TA-2 output
@@ -288,7 +287,7 @@ def run_bas_fusion_for_baseline(config):
         # only used if we are going to submit our BAS predictions as the final
         # ones?
         print("* Collating TA-2 output")
-        util_framework.ta2_collate_output(aws_base_command,
+        util_framework.ta2_collate_output(None,
                                           cropped_region_models_outdir,
                                           cropped_site_models_outdir,
                                           ta2_s3_collation_bucket)

@@ -18,10 +18,10 @@ import ubelt as ub
 import warnings
 
 
-__version__ = '0.8.0'
+__version__ = '0.8.1'
 
 
-# ~/code/watch/dev/maintain/generate_authors.py
+# ../dev/maintain/generate_authors.py
 __author__ = 'GEOWATCH Developers, Kitware Inc., Jon Crall, David Joy, Matthew Bernstein, Connor Greenwell, Benjamin Brodie, Peri Akiva, Usman Rafique, Jacob DeRosa, Matthew Purri, Ajay Upadhyaya, Ji Won Suh, Jacob Birge, Ryan LaClair, Scott Workman, Dexter Lau, Sergii Skakun, Aram Ansary Ogholbake, Cohen Archbold, Bane Sullivan, Srikumar Sastry, Armin Hadzic'
 
 __author_email__ = 'kitware@kitware.com, jon.crall@kitware.com'

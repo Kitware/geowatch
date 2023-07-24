@@ -4,7 +4,6 @@ See Old Script:
     ~/code/watch/scripts/run_stac_to_cropped_kwcoco.py
 """
 import os
-import subprocess
 import json
 import shutil
 
@@ -116,23 +115,20 @@ def build_combined_kwcoco(input_path,
                           virtual=False,
                           from_collated=False):
 
-    from watch.utils.util_framework import AWS_S3_Command
-    aws_ls = AWS_S3_Command('ls', profile=aws_profile)
-    aws_cp = AWS_S3_Command('cp', profile=aws_profile)
-    aws_cp_command = aws_cp.finalize()
-    aws_ls_command = aws_ls.finalize()
+    from watch.utils import util_fsspec
+    if aws_profile is not None:
+        # This should be sufficient, but it is not tested.
+        util_fsspec.S3Path._new_fs(profile=aws_profile)
 
-    input_stac_items = load_input_stac_items(input_path, aws_cp_command)
+    input_stac_items = load_input_stac_items(input_path, None)
 
     combined_stac_items_path = os.path.join(
         ta1_cropped_dir, 'combined_input_stac_items.jsonl')
 
     # Confirm that the previous interval input path actually exists on
     # S3 (for first iteration it will not)
-    try:
-        ub.cmd([*aws_ls_command, previous_input_path], check=True, verbose=3,
-               capture=False)
-    except subprocess.CalledProcessError:
+    previous_input_path = util_fsspec.FSPath.corece(previous_input_path)
+    if not previous_input_path.exists():
         # If we don't have previous interval input path, set the input
         # as the "combined" for next interval
         with open(combined_stac_items_path, 'w') as f:
@@ -140,8 +136,7 @@ def build_combined_kwcoco(input_path,
                              for item in input_stac_items)), file=f)
         return
 
-    previous_input_stac_items = load_input_stac_items(previous_input_path,
-                                                      aws_cp_command)
+    previous_input_stac_items = load_input_stac_items(previous_input_path, None)
     input_stac_items.extend(previous_input_stac_items)
 
     with open(combined_stac_items_path, 'w') as f:
@@ -175,17 +170,17 @@ def build_combined_kwcoco(input_path,
 
 
 def run_stac_to_cropped_kwcoco(config):
-    from watch.utils.util_framework import AWS_S3_Command
     from watch.utils import util_framework
+    from watch.utils import util_fsspec
     from kwutil.util_yaml import Yaml
     from delayed_image.channel_spec import ChannelSpec
     # from kwcoco import ChannelSpec
     from watch.cli import coco_align
     from watch.cli import coco_time_combine
-    aws_ls = AWS_S3_Command('ls', profile=config.aws_profile)
-    aws_cp = AWS_S3_Command('cp', profile=config.aws_profile)
-    aws_base_command = aws_cp.finalize()
-    aws_ls_command = aws_ls.finalize()
+
+    if config.aws_profile is not None:
+        # This should be sufficient, but it is not tested.
+        util_fsspec.S3Path._new_fs(profile=config.aws_profile)
 
     align_config_default = ub.udict(Yaml.coerce(ub.codeblock(
         f'''
@@ -228,13 +223,8 @@ def run_stac_to_cropped_kwcoco(config):
     target_gsd = align_config['target_gsd']
 
     if config.dont_recompute:
-        try:
-            ub.cmd([*aws_ls_command, config.output_path],
-                   check=True, capture=False, verbose=3)
-        except subprocess.CalledProcessError:
-            # Continue processing
-            pass
-        else:
+        output_path = util_fsspec.FSPath.coerce(config.output_path)
+        if output_path.exists():
             # If output_path file was there, nothing to do
             return
 
@@ -286,6 +276,12 @@ def run_stac_to_cropped_kwcoco(config):
                                         local_region_path,
                                         aws_profile=config.aws_profile,
                                         strip_nonregions=True)
+
+    # HACK: this is what coco-align outputs by default. We should have this be
+    # explicit and configurable so we can set it to what we want here.
+    from watch.utils.util_framework import determine_region_id
+    region_id = determine_region_id(local_region_path)
+    ta1_cropped_rawband_dpath = ta1_cropped_dir / region_id
 
     # 3. Convert ingressed STAC catalog to KWCOCO
     print("* Converting STAC to KWCOCO *")
@@ -384,11 +380,9 @@ def run_stac_to_cropped_kwcoco(config):
         print('* Combining previous interval time combined kwcoco with'
               'current *')
         combined_timecombined_kwcoco_path = ta1_cropped_dir / 'combined_timecombined_kwcoco.json'
-
         previous_ingress_dir = ub.Path('/tmp/ingress_previous')
-        ub.cmd([*aws_base_command, '--recursive',
-                config.previous_outbucket, previous_ingress_dir],
-               check=True, verbose=3, capture=False)
+        previous_outbucket = util_fsspec.FSPath.coerce(config.previous_outbucket)
+        previous_outbucket.copy(previous_ingress_dir, recursive=True)
 
         previous_timecombined_kwcoco_path = previous_ingress_dir / 'combined_timecombined_kwcoco.json'
 
@@ -415,11 +409,32 @@ def run_stac_to_cropped_kwcoco(config):
     # 7. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)
+
+    timecombined_rawband_dpath = ta1_cropped_dir / 'raw_bands'
+    timecombined_teamfeat_dpath = ta1_cropped_dir / '_teamfeats'
+    # Put a dummy file in this directory so we can upload a nearly-empty folder
+    # to S3
+    timecombined_teamfeat_dpath.ensuredir()
+    (timecombined_teamfeat_dpath / 'dummy').write_text('dummy')
+
     print("* Egressing KWCOCO dataset and associated STAC item *")
     assets_to_egress = {
         'timecombined_kwcoco_file_for_bas': combined_timecombined_kwcoco_path,
-        'timecombined_kwcoco_file_for_bas_assets': ta1_cropped_dir / 'raw_bands',
-        'kwcoco_for_sc': ta1_sc_kwcoco_path}
+        'timecombined_kwcoco_file_for_bas_assets': timecombined_rawband_dpath,
+
+        # This is an alias to the BAS dataset and assets that team feature
+        # scripts will update.
+        'enriched_bas_kwcoco_file': combined_timecombined_kwcoco_path,
+        'enriched_bas_kwcoco_teamfeats': timecombined_teamfeat_dpath,
+        'enriched_bas_kwcoco_rawbands': timecombined_rawband_dpath,
+
+        # TODO: @DMJ: I dont think anything uses this? Can it be removed?
+        'kwcoco_for_sc': ta1_sc_kwcoco_path,
+
+        # We need to egress the temporally dense dataset for COLD
+        'timedense_bas_kwcoco_file': ta1_cropped_kwcoco_path,
+        'timedense_bas_kwcoco_rawbands': ta1_cropped_rawband_dpath,
+    }
     smartflow_egress(assets_to_egress,
                      local_region_path,
                      config.output_path,

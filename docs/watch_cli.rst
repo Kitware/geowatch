@@ -219,17 +219,6 @@ geotiffs_to_kwcoco - Make a kwcoco from unordered geotiffs collections.
 merge_region_models - merges a multiple geojson file into a single one. Probably not needed, but still used in one demo.
 
 
-DevOps Scripts
-~~~~~~~~~~~~~~
-
-baseline_framework_egress - Mainly used for TA-1 to upload STAC and assets to S3
-
-baseline_framework_kwcoco_egress - TA-2 tool for downloading STACified KWCOCO manifest and data (very simple script as it just assumes there's a single STAC item to pull down that's the full KWCOCO manifest and directory of crops etc.)
-
-baseline_framework_kwcoco_ingress - Useful for both TA-1 and TA-2 to download STAC and assets from S3 or optionally replacing S3 asset links with /vsis3/ links
-
-
-
 The "geowatch_dvc" command
 ----------------------------
 
