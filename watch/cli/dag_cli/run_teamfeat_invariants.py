@@ -50,12 +50,6 @@ def run_uky_invariants_for_baseline(config):
     print("* Running baseline framework kwcoco ingress *")
     ingress_dir = ub.Path('/tmp/ingress')
 
-    # ingress_kwcoco_path = baseline_framework_kwcoco_ingress(
-    #     config.input_path,
-    #     ingress_dir,
-    #     config.aws_profile,
-    #     config.dryrun)
-
     ingressed_assets = smartflow_ingress(
         config.input_path,
         ['enriched_bas_kwcoco_file',

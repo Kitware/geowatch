@@ -3,8 +3,280 @@ import subprocess
 import json
 import os
 import pystac
-from watch.cli.baseline_framework_ingress import ingress_item
-from watch.cli.baseline_framework_egress import egress_item
+from os.path import join
+
+
+def egress_item(stac_item, outbucket, aws_base_command):
+    if isinstance(stac_item, dict):
+        stac_item_dict = stac_item
+    elif isinstance(stac_item, pystac.Item):
+        stac_item_dict = stac_item.to_dict()
+    else:
+        raise TypeError("Expecting 'stac_item' to be either a dictionary "
+                        "or pystac.Item")
+
+    stac_item_outpath = join(
+        outbucket, "{}.json".format(stac_item.id))
+
+    assets_outdir = join(outbucket, stac_item.id)
+
+    for asset_name, asset in stac_item_dict.get('assets', {}).items():
+        asset_basename = os.path.basename(asset['href'])
+
+        asset_outpath = join(assets_outdir, asset_basename)
+
+        command = [*aws_base_command, asset['href'], asset_outpath]
+
+        print("Running: {}".format(' '.join(command)))
+        # TODO: Manually check return code / output
+        subprocess.run(command, check=True)
+
+        # Update feature asset href to point to local outpath
+        asset['href'] = asset_outpath
+
+    with tempfile.NamedTemporaryFile() as temporary_file:
+        with open(temporary_file.name, 'w') as f:
+            print(json.dumps(stac_item_dict, indent=2), file=f)
+
+        command = [*aws_base_command,
+                   temporary_file.name, stac_item_outpath]
+
+        subprocess.run(command, check=True)
+
+    output_stac_item = pystac.Item.from_dict(stac_item_dict)
+    output_stac_item.set_self_href(stac_item_outpath)
+    return output_stac_item
+
+
+def ingress_item(feature,
+                 outdir,
+                 aws_base_command,
+                 dryrun,
+                 relative=False,
+                 virtual=False):
+    """
+    Originally from the baseline_framework_ingress code; could probably be
+    cleaned up.
+
+    FIXME: Something is this is not concurrent-safe
+    """
+    import subprocess
+    from urllib.parse import urlparse
+    import pystac
+    SENTINEL_PLATFORMS = {'sentinel-2b', 'sentinel-2a'}
+    # Adding a reference back to the original STAC
+    # item if not already present
+    self_link = None
+    has_original = False
+    for link in feature.get('links', ()):
+        if link['rel'] == 'self':
+            self_link = link
+        elif link['rel'] == 'original':
+            has_original = True
+
+    if not has_original and self_link is not None:
+        feature.setdefault('links', []).append(
+            {'rel': 'original',
+             'href': self_link['href'],
+             'type': 'application/json'})
+
+    # Should only be added the first time the item is ingressed
+    if 'watch:original_item_id' not in feature['properties']:
+        feature['properties']['watch:original_item_id'] = feature['id']
+
+    assets = feature.get('assets', {})
+
+    # HTML index page for certain Landsat items, not needed here
+    # so remove from assets dict
+    if 'index' in assets:
+        del assets['index']
+
+    new_assets = {}
+    assets_to_remove = set()
+    for asset_name, asset in assets.items():
+        asset_basename = os.path.basename(asset['href'])
+
+        feature_output_dir = os.path.join(outdir, feature['id'])
+
+        asset_outpath = os.path.join(feature_output_dir, asset_basename)
+
+        asset_href = asset['href']
+
+        try:
+            if ('productmetadata' not in assets
+               and feature['properties']['platform'] in SENTINEL_PLATFORMS
+               and asset_name == 'metadata'):
+                asset_outpath = os.path.join(
+                    feature_output_dir, 'MTD_TL.xml')
+
+                new_asset = download_mtd_msil1c(
+                    feature['properties']['sentinel:product_id'],
+                    asset_href, feature_output_dir, aws_base_command,
+                    dryrun)
+
+                if new_asset is not None:
+                    new_assets['productmetadata'] = new_asset
+        except KeyError:
+            pass
+
+        local_asset_href = os.path.abspath(asset_outpath)
+        if relative:
+            local_asset_href = os.path.relpath(asset_outpath, outdir)
+
+        if not dryrun:
+            os.makedirs(feature_output_dir, exist_ok=True)
+
+        if os.path.isfile(asset_outpath):
+            print('Asset already exists at outpath {!r}, '
+                  'not redownloading'.format(asset_outpath))
+            # Update feature asset href to point to local outpath
+            asset['href'] = local_asset_href
+        else:
+            # Prefer to pull asset from S3 if available
+            parsed_asset_href = urlparse(asset_href)
+            if (parsed_asset_href.scheme != 's3'
+               and 'alternate' in asset and 's3' in asset['alternate']):
+                asset_href_for_download = asset['alternate']['s3']['href']
+            else:
+                asset_href_for_download = asset_href
+
+            # Need to reparse the href if it switched from http to s3
+            parsed_asset_href = urlparse(asset_href_for_download)
+
+            if virtual:
+                if parsed_asset_href.scheme == 's3':
+                    virtual_href = '/vsis3/{}{}'.format(
+                        parsed_asset_href.netloc,
+                        parsed_asset_href.path)
+                    # print(f'virtual_href={virtual_href}')
+                    asset['href'] = virtual_href
+                elif parsed_asset_href.scheme in {'http', 'https'}:
+                    virtual_href = '/vsicurl/{}://{}{}'.format(
+                        parsed_asset_href.scheme,
+                        parsed_asset_href.netloc,
+                        parsed_asset_href.path)
+                    # print(f'virtual_href={virtual_href}')
+                    asset['href'] = virtual_href
+                else:
+                    print("* Unsupported URI scheme '{}' for virtual ingress; "
+                          "not updating href: {}".format(
+                              parsed_asset_href.scheme, asset_href))
+            else:
+                try:
+                    success = download_file(asset_href_for_download,
+                                            asset_outpath,
+                                            aws_base_command,
+                                            dryrun)
+                except subprocess.CalledProcessError:
+                    print("* Error * Couldn't download asset from href: '{}', "
+                          "removing asset from item!".format(
+                              asset_href_for_download))
+                    assets_to_remove.add(asset_name)
+                    continue
+                else:
+                    if success:
+                        asset['href'] = local_asset_href
+                    else:
+                        print('Warning unrecognized scheme for asset href: '
+                              '{!r}, skipping!'.format(
+                                  asset_href_for_download))
+                        continue
+
+    for asset_name in assets_to_remove:
+        del assets[asset_name]
+
+    for new_asset_name, new_asset in new_assets.items():
+        assets[new_asset_name] = new_asset
+
+    item = pystac.Item.from_dict(feature)
+    item.set_collection(None)  # Clear the collection if present
+
+    item_href = os.path.join(outdir, feature['id'], feature['id'] + '.json')
+    # Transform to absolute
+    item_href = os.path.abspath(item_href)
+    if relative:
+        # Transform to relative if requested
+        item_href = os.path.relpath(item_href, outdir)
+
+    item.set_self_href(item_href)
+    # print('item = {}'.format(ub.urepr(item.to_dict(), nl=2)))
+    return item
+
+
+def download_mtd_msil1c(product_id,
+                        metadata_href,
+                        outdir,
+                        aws_base_command,
+                        dryrun):
+    from datetime import datetime as datetime_cls
+    import subprocess
+    from urllib.parse import urlparse
+    # The metadata of the product, which tile is part of, are available in
+    # parallel folder (productInfo.json contains the name of the product).
+    # This can be found in products/[year]/[month]/[day]/[product name].
+    # (https://roda.sentinel-hub.com/sentinel-s2-l1c/readme.html)
+    try:
+        dt = datetime_cls.strptime(product_id.split('_')[2], '%Y%m%dT%H%M%S')
+    except ValueError:
+        # Support for older format product ID format, e.g.:
+        # "S2A_OPER_PRD_MSIL1C_PDMC_20160413T135705_R065_V20160412T102058_20160412T102058"
+        dt = datetime_cls.strptime(product_id.split('_')[7][1:], '%Y%m%dT%H%M%S')
+
+    scheme, netloc, path, *_ = urlparse(metadata_href)
+    index = path.find('tiles')
+    path = (path[:index] +
+            f'products/{dt.year}/{dt.month}/{dt.day}/{product_id}/metadata.xml')
+    mtd_msil1c_href = f'{scheme}://{netloc}{path}'
+    mtd_msil1c_outpath = os.path.join(outdir, 'MTD_MSIL1C.xml')
+
+    try:
+        success = download_file(
+            mtd_msil1c_href, mtd_msil1c_outpath, aws_base_command, dryrun)
+    except subprocess.CalledProcessError:
+        print('* Warning * Failed to download MTD_MSIL1C.xml')
+        return None
+
+    if success:
+        return {
+            'href': mtd_msil1c_outpath,
+            'type': 'application/xml',
+            'title': 'Product XML metadata',
+            'roles': ['metadata']
+        }
+    else:
+        print('Warning unrecognized scheme for asset href: {!r}, '
+              'skipping!'.format(mtd_msil1c_href))
+        return None
+
+
+def download_file(href, outpath, aws_base_command, dryrun):
+    import subprocess
+    from urllib.parse import urlparse
+    # TODO: better handling of possible download failure?
+    scheme, *_ = urlparse(href)
+    verbose = 0
+    if scheme == 's3':
+        command = [*aws_base_command, href, outpath]
+        if verbose > 1:
+            print('Running: {}'.format(' '.join(command)))
+        # TODO: Manually check return code / output
+        subprocess.run(command, check=True)
+    elif scheme in {'https', 'http'}:
+        if verbose > 1:
+            print('Downloading: {!r} to {!r}'.format(href, outpath))
+        if not dryrun:
+            download_http_file(href, outpath)
+    else:
+        return False
+    return True
+
+
+def download_http_file(url, outpath):
+    import requests
+    response = requests.get(url)
+    with open(outpath, 'wb') as outf:
+        for chunk in response.iter_content(chunk_size=128):
+            outf.write(chunk)
 
 
 class CacheItemOutputS3Wrapper:
@@ -462,7 +734,6 @@ def ta2_collate_output(aws_base_command, local_region_dir, local_sites_dir,
     that T&E wants them.
     """
     from glob import glob
-    from os.path import join
     import ubelt as ub
     def _get_suffixed_basename(local_path):
         base, ext = os.path.splitext(os.path.basename(local_path))
