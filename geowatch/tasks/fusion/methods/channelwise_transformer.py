@@ -270,7 +270,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         >>> #self = MultimodalTransformer(arch_name='smt_it_joint_p8')
         >>> self = MultimodalTransformer(arch_name='smt_it_joint_p2',
         >>>                              dataset_stats=dataset_stats,
-        >>>                              classes=datamodule.classes,
+        >>>                              classes=datamodule.predictable_classes,
         >>>                              decoder='segmenter',
         >>>                              change_loss='dicefocal',
         >>>                              #attention_impl='performer'
@@ -1075,7 +1075,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>>     arch_name='smt_it_joint_p8', tokenizer='rearrange',
             >>>     decoder='segmenter',
             >>>     dataset_stats=datamodule.dataset_stats, global_saliency_weight=1.0, global_change_weight=1.0, global_class_weight=1.0,
-            >>>     classes=datamodule.classes, input_sensorchan=datamodule.input_sensorchan)
+            >>>     classes=datamodule.predictable_classes, input_sensorchan=datamodule.input_sensorchan)
             >>> with_loss = True
             >>> outputs = self.forward_step(batch, with_loss=with_loss)
             >>> canvas = datamodule.draw_batch(batch, outputs=outputs, max_items=3, overlay_on_image=False)
@@ -1492,7 +1492,14 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             if 'change' in resampled_logits:
                 probs['change'] = resampled_logits['change'].detach().softmax(dim=4)[0, ..., 1]
             if 'class' in resampled_logits:
-                probs['class'] = resampled_logits['class'].detach().sigmoid()[0]
+                criterion_encoding = self.criterions["class"].target_encoding
+                logits = resampled_logits['class'].detach()
+                if criterion_encoding == "onehot":
+                    probs['class'] = logits.sigmoid()[0]
+                elif criterion_encoding == "softmax":
+                    probs['class'] = logits.softmax(dim=-1)[0]
+                else:
+                    raise NotImplementedError
             if 'saliency' in resampled_logits:
                 probs['saliency'] = resampled_logits['saliency'].detach().sigmoid()[0]
         else:
@@ -1532,7 +1539,14 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             if 'change' in resampled_logits:
                 probs['change'] = resampled_logits['change'].detach().softmax(dim=4)[0, ..., 1]
             if 'class' in resampled_logits:
-                probs['class'] = resampled_logits['class'].detach().sigmoid()[0]
+                criterion_encoding = self.criterions["class"].target_encoding
+                logits = resampled_logits['class'].detach()
+                if criterion_encoding == "onehot":
+                    probs['class'] = logits.sigmoid()[0]
+                elif criterion_encoding == "softmax":
+                    probs['class'] = logits.softmax(dim=-1)[0]
+                else:
+                    raise NotImplementedError
             if 'saliency' in resampled_logits:
                 probs['saliency'] = resampled_logits['saliency'].detach().sigmoid()[0]
 
@@ -1651,6 +1665,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         EPS_F32 = 1.1920929e-07
         weighted_head_loss = (full_head_weight * unreduced_head_loss).sum() / (full_head_weight.sum() + EPS_F32)
         head_loss = global_head_weight * weighted_head_loss
+
         return head_loss
 
     def _build_item_loss_parts(self, item, resampled_logits):

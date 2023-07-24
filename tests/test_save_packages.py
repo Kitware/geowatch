@@ -22,7 +22,8 @@ def test_save_channelwise_with_dataloader():
         batch_size=1, time_steps=2, num_workers=2, normalize_inputs=10, channels='auto')
     datamodule.setup('fit')
     dataset_stats = datamodule.torch_datasets['train'].cached_dataset_stats(num=3)
-    classes = datamodule.torch_datasets['train'].classes
+
+    classes = datamodule.torch_datasets['train'].predictable_classes
 
     # Use one of our fusion.architectures in a test
     model = methods.MultimodalTransformer(

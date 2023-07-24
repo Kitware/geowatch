@@ -278,6 +278,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
 
         # will only correspond to train
         self.classes = None
+        self.predictable_classes = None
         # self.input_channels = None
         self.input_sensorchan = None
 
@@ -372,6 +373,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             )
 
             self.classes = train_dataset.classes
+            self.predictable_classes = train_dataset.predictable_classes
             self.torch_datasets['train'] = train_dataset
 
             if self.input_sensorchan is None:

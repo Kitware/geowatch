@@ -769,6 +769,8 @@ class TruthMixin:
         space_shape = frame_target_shape
         frame_cidxs = np.full(space_shape, dtype=np.int32,
                               fill_value=bg_idx)
+        frame_drawable_cidxs = np.full(space_shape, dtype=np.int32,
+                                       fill_value=bg_idx)
 
         # A "Salient" class is anything that is a foreground class
         task_target_ohe = {}
@@ -921,7 +923,8 @@ class TruthMixin:
         if wants_class_sseg:
             ### Build single frame CLASS target labels and weights
 
-            task_target_ohe['class'] = np.zeros((len(self.classes),) + space_shape, dtype=np.uint8)
+            task_target_ohe['class'] = np.zeros((self.num_classes,) + space_shape, dtype=np.uint8)
+            task_target_ohe['drawable_class'] = np.zeros((len(self.classes),) + space_shape, dtype=np.uint8)
             task_target_ignore['class'] = np.zeros(space_shape, dtype=np.uint8)
             task_target_weight['class'] = np.ones(space_shape, dtype=np.float32)
 
@@ -962,17 +965,23 @@ class TruthMixin:
 
             for poly in class_sseg_groups['ignore']:
                 poly.fill(task_target_ignore['class'], value=1, assert_inplace=True)
-                poly.fill(task_target_ohe['class'][poly.meta['new_class_cidx']], value=1, assert_inplace=True)
+                poly.fill(task_target_ohe['drawable_class'][poly.meta['orig_cidx']], value=1, assert_inplace=True)
 
             for poly in class_sseg_groups['background']:
-                poly.fill(task_target_ohe['class'][poly.meta['new_class_cidx']], value=1, assert_inplace=True)
+                idx = self.class_class_idx_map[poly.meta['new_class_cidx']]
+                poly.fill(task_target_ohe['class'][idx], value=1, assert_inplace=True)
+                poly.fill(task_target_ohe['drawable_class'][poly.meta['orig_cidx']], value=1, assert_inplace=True)
 
             for poly in class_sseg_groups['undistinguished']:
                 task_target_ignore['class'] = poly.fill(task_target_ignore['class'], value=1, assert_inplace=True)
-                poly.fill(task_target_ohe['class'][poly.meta['new_class_cidx']], value=1, assert_inplace=True)
+                idx = self.class_class_idx_map[poly.meta['new_class_cidx']]
+                poly.fill(task_target_ohe['class'][idx], value=1, assert_inplace=True)
+                poly.fill(task_target_ohe['drawable_class'][poly.meta['orig_cidx']], value=1, assert_inplace=True)
 
             for poly in class_sseg_groups['foreground']:
-                poly.fill(task_target_ohe['class'][poly.meta['new_class_cidx']], value=1, assert_inplace=True)
+                idx = self.class_class_idx_map[poly.meta['new_class_cidx']]
+                poly.fill(task_target_ohe['class'][idx], value=1, assert_inplace=True)
+                poly.fill(task_target_ohe['drawable_class'][poly.meta['new_class_cidx']], value=1, assert_inplace=True)
                 weight = poly.meta['weight']
 
                 if balance_areas:
@@ -1021,6 +1030,11 @@ class TruthMixin:
             for cidx, class_map in enumerate(task_target_ohe['class']):
                 # class_map = kwimage.morphology(class_map, 'dilate', kernel=5)
                 frame_cidxs[class_map > 0] = cidx
+
+            for cidx, class_map in enumerate(task_target_ohe['drawable_class']):
+                # class_map = kwimage.morphology(class_map, 'dilate', kernel=5)
+                frame_drawable_cidxs[class_map > 0] = cidx
+
             task_frame_weight = (
                 (1 - task_target_ignore['class']) *
                 task_target_weight['class'] *
@@ -1031,8 +1045,10 @@ class TruthMixin:
             # ordering of each dimension (or used xarray / named tensors when
             # they become supported)
             frame_item['class_idxs'] = frame_cidxs
+            frame_item['class_drawable_idxs'] = frame_drawable_cidxs
             frame_item['class_ohe'] = einops.rearrange(task_target_ohe['class'], 'c h w -> h w c')
             frame_item['class_weights'] = np.clip(task_frame_weight, 0, None)
+
         if wants_saliency_sseg:
             task_frame_weight = (
                 (1 - task_target_ignore['saliency']) *
@@ -2193,6 +2209,33 @@ class IntrospectMixin:
         if norm_over_time == 'auto':
             norm_over_time = self.normalize_peritem is not None
 
+        if (item_output is not None) and ("class_probs" in item_output):
+            # Previously we have mapped the indices of classes we want to predict down to a subset,
+            # now we need to un-map those by adding layers of zeros to the predicted probs for the ignored classes.
+
+            orig_frames = item_output["class_probs"] # list of class_prob tensors shaped (h,w,c), where c=len(self.predictable_classes)
+            new_frames = []
+            for orig_frame in orig_frames:
+                h, w, _ = orig_frame.shape
+                # new_frame = torch.zeros(h, w, len(self.classes))
+                new_frame = np.zeros((h, w, len(self.classes)))
+                for idx, idy in self.class_class_idx_map.items():
+                    new_frame[:, :, idx] = orig_frame[:, :, idy]
+                new_frames.append(new_frame)
+            item_output["class_probs"] = new_frames
+
+            # we also need to map back the one hot encoding
+
+            orig_frames = item["frames"] # list of class_prob tensors shaped (h,w,c), where c=len(self.predictable_classes)
+            for orig_frame in orig_frames:
+                # h, w = orig_frame["class_idxs"].shape
+                # new_frame = torch.zeros_like(orig_frame["class_idxs"])
+                # for idx, idy in self.class_class_idx_map.items():
+                #     mask = (orig_frame["class_idxs"] == idy)
+                #     new_frame[mask] = idx
+                # orig_frame["class_idxs"] = new_frame
+                orig_frame["class_idxs"] = torch.tensor(orig_frame["class_drawable_idxs"])
+
         from geowatch.tasks.fusion.datamodules.batch_visualization import BatchVisualizationBuilder
         builder = BatchVisualizationBuilder(
             item=item, item_output=item_output,
@@ -3094,6 +3137,18 @@ class KWCocoVideoDataset(data.Dataset, GetItemMixin, BalanceMixin, PreprocessMix
             self.background_classes |
             self.ignore_classes |
             self.undistinguished_classes)
+
+        self.predictable_classes = kwcoco.CategoryTree.coerce(list(self.background_classes | self.class_foreground_classes))
+        self.num_classes = len(self.predictable_classes)
+
+        self.class_class_idx_map = {
+            self.classes.node_to_idx[class_name]: self.predictable_classes.node_to_idx[class_name]
+            for class_name in self.predictable_classes
+        }
+        self.class_class_idx_map_inv = {
+            val: key
+            for key, val in self.class_class_idx_map.items()
+        }
 
         channels = config['channels']
         max_epoch_length = config['max_epoch_length']
