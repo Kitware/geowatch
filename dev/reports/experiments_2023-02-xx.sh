@@ -2765,3 +2765,99 @@ python -m watch.mlops.aggregate \
     " \
     --export_tables=True \
     --output_dpath="$DVC_EXPT_DPATH/YOUR_MLOPS_OUTPUT_DIR/aggregate"
+
+
+
+# Eval 13 BAS Grid
+
+geowatch schedule --params="
+    matrix:
+        bas_pxl.package_fpath:
+            - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
+            - $DVC_EXPT_DPATH/models/fusion/uconn/D7-MNW10_coldL8S2-cv-a0-a1-b1-c1-rmse-split6_eval11_Norm_lr1e4_bs48_focal/epoch=16-step=374.pt
+        bas_pxl.test_dataset:
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-KR_R002_EI2LMSC.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-CH_R001_EI2LMSC.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-NZ_R001_EI2LMSC.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-BR_R002_EI2LMSC.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-KR_R001_EI2LMSC.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-AE_R001_EI2LMSC.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-PE_R001_EI2LMSC.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-BR_R004_EI2LMSC.kwcoco.zip
+        bas_pxl.chip_overlap: 0.3
+        bas_pxl.chip_dims: auto
+        bas_pxl.time_span: auto
+        bas_pxl.time_sampling: soft4
+        bas_poly.thresh:
+            - 0.35
+            - 0.375
+            - 0.4
+            - 0.425
+        bas_poly.inner_window_size: 1y
+        bas_poly.inner_agg_fn: mean
+        bas_poly.norm_ord: inf
+        bas_poly.polygon_simplify_tolerance: 1
+        bas_poly.agg_fn: probs
+        bas_poly.time_thresh:
+            - 0.8
+            - 0.6
+        bas_poly.resolution: 10GSD
+        bas_poly.moving_window_size: null
+        bas_poly.poly_merge_method: 'v2'
+        bas_poly.min_area_square_meters: 7200
+        bas_poly.max_area_square_meters: 8000000
+        bas_poly.boundary_region: $DVC_DATA_DPATH/annotations/drop6/region_models
+        bas_poly_eval.true_site_dpath: $DVC_DATA_DPATH/annotations/drop6/site_models
+        bas_poly_eval.true_region_dpath: $DVC_DATA_DPATH/annotations/drop6/region_models
+        bas_pxl.enabled: 1
+        bas_pxl_eval.enabled: 0
+        bas_poly.enabled: 1
+        bas_poly_eval.enabled: 1
+        bas_poly_viz.enabled: 0
+        sv_crop.enabled: 1
+        sv_crop.minimum_size: '256x256@2GSD'
+        sv_crop.num_start_frames: 3
+        sv_crop.num_end_frames: 3
+        sv_crop.context_factor: 1.6
+
+        sv_dino_boxes.enabled: 1
+        sv_dino_boxes.package_fpath: $DVC_EXPT_DPATH/models/kitware/xview_dino.pt
+        sv_dino_boxes.window_dims: 256
+        sv_dino_boxes.window_overlap: 0.5
+        sv_dino_boxes.fixed_resolution: 3GSD
+
+        sv_dino_filter.enabled: 1
+        sv_dino_filter.end_min_score: 0.15
+        sv_dino_filter.start_max_score: 1.0
+        sv_dino_filter.box_score_threshold: 0.01
+        sv_dino_filter.box_isect_threshold: 0.1
+
+        sv_depth_score.enabled: 1
+        sv_depth_score.model_fpath:
+            - $DVC_EXPT_DPATH/models/depth_pcd/basicModel2.h5
+        sv_depth_filter.threshold:
+            - 0.25
+    submatrices:
+        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-KR_R001_EI2LMSC.kwcoco.zip
+          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/KR_R001/imgonly-KR_R001.kwcoco.zip
+        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-KR_R002_EI2LMSC.kwcoco.zip
+          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/KR_R002/imgonly-KR_R002.kwcoco.zip
+        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-AE_R001_EI2LMSC.kwcoco.zip
+          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/AE_R001/imgonly-AE_R001.kwcoco.zip
+        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-BR_R002_EI2LMSC.kwcoco.zip
+          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/BR_R002/imgonly-BR_R002.kwcoco.zip
+        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-CH_R001_EI2LMSC.kwcoco.zip
+          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/CH_R001/imgonly-CH_R001.kwcoco.zip
+        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-NZ_R001_EI2LMSC.kwcoco.zip
+          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/NZ_R001/imgonly-NZ_R001.kwcoco.zip
+        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-PE_R001_EI2LMSC.kwcoco.zip
+          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/PE_R001/imgonly-PE_R001.kwcoco.zip
+        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-BR_R004_EI2LMSC.kwcoco.zip
+          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/BR_R004/imgonly-BR_R004.kwcoco.zip
+    " \
+    --root_dpath="$DVC_EXPT_DPATH/_namek_eval13_sweep" \
+    --devices="0,1" --tmux_workers=8 \
+    --backend=tmux --queue_name "_namek_eval13_sweep" \
+    --pipeline=bas_building_and_depth_vali \
+    --skip_existing=1 \
+    --run=0
