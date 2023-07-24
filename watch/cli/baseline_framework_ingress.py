@@ -67,6 +67,7 @@ def baseline_framework_ingress(input_path,
     import rich
     import pystac
     import traceback
+    from watch.utils import util_fsspec
     from watch.utils.util_framework import ingress_item
 
     workers = util_parallel.coerce_num_workers(jobs)
@@ -103,6 +104,11 @@ def baseline_framework_ingress(input_path,
 
     if requester_pays:
         aws_base_command.extend(['--request-payer', 'requester'])
+
+    if aws_profile is not None or requester_pays:
+        # This should be sufficient, but it is not tested.
+        util_fsspec.S3Path._new_fs(
+            profile=aws_profile, requester_pays=requester_pays)
 
     input_stac_items = load_input_stac_items(input_path, aws_base_command)
 
@@ -159,19 +165,26 @@ def read_input_stac_items(path):
     separated data.
     """
     import json
+
+    def _open(p, m):
+        # handle fsspath objects gracefully
+        if hasattr(path, 'open'):
+            return path.open(m)
+        else:
+            return open(path, m)
     try:
-        with open(path, 'r') as f:
+        with _open(path, 'r') as f:
             input_json = json.load(f)
         items = input_json['stac'].get('features', [])
     # Excepting KeyError here in case of a single line STAC item input
     except (json.decoder.JSONDecodeError, KeyError):
         try:
             # Support for simple newline separated STAC items
-            with open(path, 'r') as f:
+            with _open(path, 'r') as f:
                 items = [json.loads(line) for line in f]
         except json.decoder.JSONDecodeError:
             # Support for whitespace separated data
-            with open(path, 'r') as f:
+            with _open(path, 'r') as f:
                 text = f.read()
             items = []
             stack = [line for line in text.split('\n')[::-1] if line]
@@ -197,15 +210,20 @@ def load_input_stac_items(input_path, aws_base_command):
     """
     import subprocess
     import tempfile
-    if input_path.startswith('s3'):
+
+    if aws_base_command is None or not input_path.startswith('s3'):
+        # New method
+        from watch.utils import util_fsspec
+        input_path = util_fsspec.FSPath.coerce(input_path)
+        input_stac_items = read_input_stac_items(input_path)
+    else:
+        # Old method, remove once we can
         with tempfile.NamedTemporaryFile() as temporary_file:
             subprocess.run(
                 [*aws_base_command, input_path, temporary_file.name],
                 check=True)
 
             input_stac_items = read_input_stac_items(temporary_file.name)
-    else:
-        input_stac_items = read_input_stac_items(input_path)
 
     return input_stac_items
 

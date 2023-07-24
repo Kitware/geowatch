@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import subprocess
 from watch.cli.smartflow_ingress import smartflow_ingress
 from watch.cli.smartflow_egress import smartflow_egress
 from watch.utils.util_framework import download_region
@@ -63,18 +62,16 @@ def run_generate_sv_cropped_kwcoco(input_path,
                                    jobs=1,
                                    dont_recompute=False,
                                    sv_cropping_config=None):
-
-    from watch.utils.util_framework import AWS_S3_Command
     from watch.utils import util_framework
+    from watch.utils import util_fsspec
+
+    if aws_profile is not None:
+        # This should be sufficient, but it is not tested.
+        util_fsspec.S3Path._new_fs(profile=aws_profile)
+
     if dont_recompute:
-        aws_ls = AWS_S3_Command('ls', profile=aws_profile)
-        aws_ls_command = aws_ls.finalize()
-        try:
-            ub.cmd([*aws_ls_command, output_path], check=True, verbose=3, capture=False)
-        except subprocess.CalledProcessError:
-            # Continue processing
-            pass
-        else:
+        output_path = util_fsspec.FSPath.coerce(output_path)
+        if output_path.exists():
             # If output_path file was there, nothing to do
             return
 

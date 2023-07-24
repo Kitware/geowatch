@@ -37,7 +37,7 @@ class SCFusionConfig(scfg.DataConfig):
             '''
             AWS Profile to use for AWS S3 CLI commands
             '''))
-    dryrun = scfg.Value(False, isflag=True, short_alias=['d'], help='Run AWS CLI commands with --dryrun flag')
+    dryrun = scfg.Value(False, isflag=True, short_alias=['d'], help='DEPRECATED. DO NOT USE')
     outbucket = scfg.Value(None, type=str, required=True, short_alias=['o'], help=ub.paragraph(
             '''
             S3 Output directory for STAC item / asset egress
@@ -75,15 +75,12 @@ def run_sc_fusion_for_baseline(config):
     from watch.tasks.fusion.datamodules.temporal_sampling import TimeSampleError
     from watch.utils.util_framework import download_region, determine_region_id
     from kwutil.util_yaml import Yaml
-    from watch.utils.util_framework import AWS_S3_Command
     from watch.utils import util_framework
 
-    aws_cp = AWS_S3_Command('cp')
-    aws_cp.update(
-        profile=config.aws_profile,
-        dryrun=config.dryrun,
-    )
-    aws_base_command = aws_cp.finalize()
+    if config.aws_profile is not None:
+        # This should be sufficient, but it is not tested.
+        from watch.utils import util_fsspec
+        util_fsspec.S3Path._new_fs(profile=config.aws_profile)
 
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
@@ -249,7 +246,7 @@ def run_sc_fusion_for_baseline(config):
     # 6. (Optional) collate TA-2 output
     if config.ta2_s3_collation_bucket is not None:
         print("* Collating TA-2 output")
-        util_framework.ta2_collate_output(aws_base_command,
+        util_framework.ta2_collate_output(None,
                                           cropped_region_models_outdir,
                                           cropped_site_models_outdir,
                                           config.ta2_s3_collation_bucket)

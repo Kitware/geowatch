@@ -734,24 +734,29 @@ def ta2_collate_output(aws_base_command, local_region_dir, local_sites_dir,
     that T&E wants them.
     """
     from glob import glob
-    import ubelt as ub
+    from watch.utils import util_fsspec
+    assert aws_base_command is None, 'unused'
+
     def _get_suffixed_basename(local_path):
         base, ext = os.path.splitext(os.path.basename(local_path))
         return "{}_{}{}".format(base, performer_suffix, ext)
 
     for region in glob(join(local_region_dir, '*.geojson')):
+
         region_s3_outpath = '/'.join((destination_s3_bucket,
                                       'region_models',
                                       _get_suffixed_basename(region)))
-        ub.cmd([*aws_base_command, region, region_s3_outpath], check=True,
-               verbose=3, capture=False)
+        region = util_fsspec.FSPath.coerce(region)
+        region_s3_outpath = util_fsspec.FSPath.coerce(region_s3_outpath)
+        region.copy(region_s3_outpath)
 
     for site in glob(join(local_sites_dir, '*.geojson')):
         site_s3_outpath = '/'.join((destination_s3_bucket,
                                     'site_models',
                                     _get_suffixed_basename(site)))
-        ub.cmd([*aws_base_command, site, site_s3_outpath], check=True,
-               verbose=3, capture=False)
+        site = util_fsspec.FSPath.coerce(site)
+        site_s3_outpath = util_fsspec.FSPath.coerce(site_s3_outpath)
+        site.copy(site_s3_outpath)
 
 
 def fixup_and_validate_site_and_region_models(region_dpath, site_dpath):

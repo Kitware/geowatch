@@ -223,7 +223,7 @@ class FSPath(str):
         return self.split(self.fs.sep)
 
     def copy(self, dst, recursive='auto', maxdepth=None, on_error=None,
-             callback=None, verbose=1, **kwargs):
+             callback=None, verbose=1, idempotent=True, **kwargs):
         """
         Copies this file or directory to dst
 
@@ -252,6 +252,10 @@ class FSPath(str):
             on_error (str):
                 either "raise", "ignore". Only applicable in the "copy" case.
 
+            idempotent (bool):
+                if False, use standard fsspec behavior, otherwise attempt to
+                be idempotent.
+
         Note:
             There are different functions depending on if we are going from
             remote->remote (copy), local->remote (put), or remote->local (get)
@@ -270,8 +274,6 @@ class FSPath(str):
             'maxdepth': maxdepth,
             **kwargs,
         }
-
-        idempotent = True
 
         if verbose:
             print(f'Copy {self} -> {dst}')
@@ -492,7 +494,7 @@ class LocalPath(FSPath):
     Example:
         >>> from watch.utils.util_fsspec import *  # NOQA
         >>> dpath = ub.Path.appdir('watch/tests/util_fsspec/demo')
-        >>> dpath.ensuredir()
+        >>> dpath.delete().ensuredir()
         >>> (dpath / 'file1.txt').write_text('data')
         >>> (dpath / 'dpath').ensuredir()
         >>> (dpath / 'dpath/file2.txt').write_text('data')
@@ -500,6 +502,16 @@ class LocalPath(FSPath):
         >>> print(f'self={self}')
         >>> print(self.ls())
         >>> info = self.tree()
+        >>> fsspec_dpath = (dpath / 'dpath')
+        >>> fsspec_fpath = (dpath / 'file1.txt')
+        >>> pathlib_dpath = ub.Path(dpath / 'pathlib_dpath')
+        >>> pathlib_fpath = ub.Path(dpath / 'pathlib_fpath')
+        >>> assert not pathlib_dpath.exists()
+        >>> assert not pathlib_fpath.exists()
+        >>> fsspec_dpath.copy(pathlib_dpath)
+        >>> fsspec_fpath.copy(pathlib_fpath)
+        >>> assert pathlib_dpath.exists()
+        >>> assert pathlib_fpath.exists()
     """
     __protocol__ = 'file'
 
