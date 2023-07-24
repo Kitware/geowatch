@@ -944,7 +944,8 @@ def coerce_geojson_paths(data, return_manifests=False):
         >>> import json
         >>> from watch.demo.metrics_demo import generate_demodata
         >>> # Setup a bunch of geojson files
-        >>> outdir = ub.Path.appdir("watch/tests/gis/coerce_geojson")
+        >>> outdir = ub.Path.appdir("watch/tests/gis/coerce_geojson_v1")
+        >>> # outdir.delete().ensuredir()
         >>> info1 = generate_demodata.generate_demo_metrics_framework_data(roi='DR_R001', outdir=outdir)
         >>> info2 = generate_demodata.generate_demo_metrics_framework_data(roi='DR_R002', outdir=outdir)
         >>> info3 = generate_demodata.generate_demo_metrics_framework_data(roi='DR_R003', outdir=outdir)
@@ -961,7 +962,7 @@ def coerce_geojson_paths(data, return_manifests=False):
         >>> assert len(geojson_fpaths) == 2
         >>> # Test directory case
         >>> geojson_fpaths = coerce_geojson_paths(geojson_dpath)
-        >>> assert len(geojson_fpaths) == 15
+        >>> assert len(geojson_fpaths) == 15, 'maybe cache is bad?'
         >>> # Test glob case
         >>> geojson_fpaths = coerce_geojson_paths(geojson_dpath / '*R001_*')
         >>> assert len(geojson_fpaths) == 3
