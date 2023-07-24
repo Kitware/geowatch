@@ -106,8 +106,9 @@ def run_bas_fusion_for_baseline(config):
         ['enriched_bas_kwcoco_file',
          'enriched_bas_kwcoco_teamfeats',
          'enriched_bas_kwcoco_rawbands',
-         'hacked_cold_assets',
-         'landcover_assets'],
+         {"key": 'hacked_cold_assets', "allow_missing": True},
+         {"key": 'landcover_assets', "allow_missing": True},
+         ],
         ingress_dir,
         aws_profile,
         dryrun)

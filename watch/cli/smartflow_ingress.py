@@ -47,8 +47,12 @@ def smartflow_ingress(input_path,
         input_path (str):
             The path in the s3 bucket that the STAC item will be downloaded from.
 
-        assets (List[str]):
+        assets (List[str | Dict]):
             A List of keys into the stac item assets that we will download.
+            Can also be a list of dictionaries that must contain a
+            ``"key": <str>`` item, as well as other options to control
+            behavior, like ``"allow_missing": True``.
+
 
         outdir (str | PathLike):
             local path to download to.
@@ -143,26 +147,32 @@ def smartflow_ingress(input_path,
 
     # TODO: can use fsspec to handle multiple downloads in parallel.
     seen = set()  # Prevent duplicate downloads
-    for asset in assets:
+    for _asset in assets:
+        if isinstance(_asset, str):
+            asset_info = {'key': _asset}
+        else:
+            asset_info = _asset
+        asset_key = asset_info['key']
         try:
-            asset_href = kwcoco_stac_item_assets[asset]
+            asset_href = kwcoco_stac_item_assets[asset_key]
         except KeyError:
             missing_asset_str = (
-                f"Expecting asset named {asset!r} in input KWCOCO STAC item"
+                f"Expecting asset named {asset_key!r} in input KWCOCO STAC item"
             )
-            if dont_error_on_missing_asset:
+            if asset_info.get('allow_missing', dont_error_on_missing_asset):
                 print(f"* Warning: {missing_asset_str!r}")
+                continue
             else:
                 raise RuntimeError(missing_asset_str)  # noqa
 
         outdir = FSPath.coerce(outdir)
         asset_href = FSPath.coerce(asset_href)
-        asset_outpath = outdir / asset_href.name
+        asset_outpath = outdir / asset_href.key
         if asset_outpath not in seen:
             asset_href.copy(asset_outpath)
         seen.add(asset_outpath)
 
-        kwcoco_stac_item_assets[asset] = str(asset_outpath)
+        kwcoco_stac_item_assets[asset_key] = str(asset_outpath)
 
     # Returns assets (with downloaded asset hrefs updated)
     print('INGRESSED = {}'.format(ub.urepr(kwcoco_stac_item_assets, nl=1)))
