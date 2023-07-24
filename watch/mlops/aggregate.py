@@ -1053,7 +1053,7 @@ class AggregatorAnalysisMixin:
         # analysis.results
         analysis.analysis()
 
-    def report_best(agg, top_k=3, shorten=True, per_group=2, verbose=1, reference_region=None, print_models=False) -> TopResultsReport:
+    def report_best(agg, top_k=3, shorten=True, per_group=2, verbose=1, reference_region=None, print_models=False, concise=False) -> TopResultsReport:
         """
         Report the top k pointwise results for each region / macro-region.
 
@@ -1067,6 +1067,10 @@ class AggregatorAnalysisMixin:
 
             shorten (bool): if True, shorten the columns by removing
                 non-ambiguous prefixes wrt to a known node type.
+
+            concise (bool):
+                if True, remove certain columns that communicate context for a
+                more concise report.
 
             reference_region (str | None):
                 if specified filter the top results in all other regions to
@@ -1159,7 +1163,10 @@ class AggregatorAnalysisMixin:
         top_param_lut = ub.udict(big_param_lut).subdict(param_hashid_order)
 
         if verbose:
+            from watch.utils.result_analysis import varied_value_counts
             rich.print('Parameter LUT: {}'.format(ub.urepr(top_param_lut, nl=2)))
+            varied = varied_value_counts(top_param_lut.values(), dropna=True, min_variations=2)
+            rich.print('Varied Parameters: = {}'.format(ub.urepr(varied, nl=2)))
 
             # Check for a common special case that we can make more concise output for
             only_one_top_item = all(len(t) == 1 for t in region_id_to_summary.values())
@@ -1176,7 +1183,10 @@ class AggregatorAnalysisMixin:
                 # submacro = ub.udict(_agg.macro_key_to_regions) & justone['region_id'].values
                 # if submacro:
                 #     print('Macro Regions LUT: ' +  ub.urepr(submacro, nl=1))
-                rich.print(justone)
+                _justone = util_pandas.DataFrame(justone)
+                if concise:
+                    _justone = _justone.safe_drop(['node'], axis=1)
+                rich.print(_justone)
                 rich.print('agg.macro_key_to_regions = {}'.format(ub.urepr(_agg.macro_key_to_regions, nl=1)))
             else:
                 for region_id, summary_table in region_id_to_summary.items():
@@ -1191,7 +1201,11 @@ class AggregatorAnalysisMixin:
                         rich.print(f'Top {len(summary_table)} / {ntotal} for {region_id} = {macro_regions}{ref_text}')
                     else:
                         rich.print(f'Top {len(summary_table)} / {ntotal} for {region_id}{ref_text}')
-                    rich.print(summary_table.iloc[::-1].to_string())
+
+                    _summary_table = util_pandas.DataFrame(summary_table)
+                    if concise:
+                        _summary_table = _summary_table.safe_drop(['node', 'fpath'], axis=1)
+                    rich.print(_summary_table.iloc[::-1].to_string())
                     rich.print('')
 
         if print_models:

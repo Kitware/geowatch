@@ -9,6 +9,46 @@ from kwutil import slugify_ext
 from watch.utils.util_stringalgo import shortest_unique_suffixes
 
 
+class DataFrame(pd.DataFrame):
+    """
+    https://stackoverflow.com/questions/22155951/how-can-i-subclass-a-pandas-dataframe
+
+    Example:
+        from watch.utils.util_pandas import *  # NOQA
+        from watch.utils import util_pandas
+        df = util_pandas.DataFrame.random()
+    """
+    # _metadata = ['added_property']
+    # added_property = 1  # This will be passed to copies
+
+    @classmethod
+    def random(cls, n=10):
+        import numpy as np
+        self = cls({k: np.random.rand(10) for k in 'abcde'})
+        return self
+
+    @property
+    def _constructor(self):
+        return DataFrame
+
+    def safe_drop(self, labels, axis=0):
+        """
+        Args:
+            df (pd.DataFrame): df
+            labels (List): ...
+            axis (int): todo
+
+        Example:
+            >>> from watch.utils.util_pandas import *  # NOQA
+            >>> import numpy as np
+            >>> self = DataFrame({k: np.random.rand(10) for k in 'abcde'})
+            >>> self.safe_drop(list('bdf'), axis=1)
+        """
+        existing = self.axes[axis]
+        labels = existing.intersection(labels)
+        return self.drop(labels, axis=axis)
+
+
 def pandas_reorder_columns(df, columns):
     remain = df.columns.difference(columns)
     return df.reindex(columns=(columns + list(remain)))
