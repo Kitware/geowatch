@@ -2,10 +2,7 @@ import tempfile
 import subprocess
 import json
 import os
-from urllib.parse import urlparse
-
 import pystac
-
 from watch.cli.baseline_framework_ingress import ingress_item
 from watch.cli.baseline_framework_egress import egress_item
 
@@ -150,36 +147,15 @@ def download_region(input_region_path,
                     aws_profile=None,
                     strip_nonregions=False,
                     ensure_comments=False):
-    scheme, *_ = urlparse(input_region_path)
-
-    if aws_profile is None:
-        from watch.utils.util_fsspec import FSPath
-        input_region_path = FSPath.coerce(input_region_path)
-        with input_region_path.open('r') as file:
-            out_region_data = json.load(file)
-
-    # TODO: can remove the rest of this is the FSPath implementation works
-    # nicely.
-    elif scheme == 's3':
-        aws_cp = AWS_S3_Command('cp')
-        aws_cp.update(
-            profile=aws_profile
-        )
-        with tempfile.NamedTemporaryFile() as temporary_file:
-
-            aws_cp.args = [input_region_path, temporary_file.name]
-            aws_cp.run()
-
-            with open(temporary_file.name) as f:
-                out_region_data = json.load(f)
-    elif scheme == '':
-        with open(input_region_path) as f:
-            out_region_data = json.load(f)
-    else:
-        raise NotImplementedError("Don't know how to pull down region file "
-                                  "with URI scheme: '{}'".format(scheme))
-
+    from watch.utils.util_fsspec import FSPath
     from watch.geoannots import geomodels
+
+    # TODO: handle aws_profile
+    assert aws_profile is None, 'unhandled'
+
+    input_region_path = FSPath.coerce(input_region_path)
+    with input_region_path.open('r') as file:
+        out_region_data = json.load(file)
 
     region = geomodels.RegionModel.coerce(out_region_data)
     region.fixup()
@@ -219,6 +195,9 @@ def determine_region_id(region_fpath):
 class AWS_S3_Command:
     """
     Helper to build and execute AWS S3 bash commands
+
+    Note:
+        probably should use fsspec instead of this in most cases.
 
     References:
         https://docs.aws.amazon.com/cli/latest/reference/s3/
