@@ -3,10 +3,10 @@
 
 
 def __getattr__(key):
-    import watch.utils.lightning_ext._jsonargparse_ext_ge_4_21 as mirror
+    import watch.mlops._sv_notebook as mirror
     return getattr(mirror, key)
 
 
 def __dir__():
-    import watch.utils.lightning_ext._jsonargparse_ext_ge_4_21 as mirror
+    import watch.mlops._sv_notebook as mirror
     return dir(mirror)

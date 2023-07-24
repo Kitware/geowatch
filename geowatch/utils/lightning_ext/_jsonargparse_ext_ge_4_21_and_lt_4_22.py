@@ -3,10 +3,10 @@
 
 
 def __getattr__(key):
-    import watch.tasks.rutgers_material_seg_v2.models as mirror
+    import watch.utils.lightning_ext._jsonargparse_ext_ge_4_21_and_lt_4_22 as mirror
     return getattr(mirror, key)
 
 
 def __dir__():
-    import watch.tasks.rutgers_material_seg_v2.models as mirror
+    import watch.utils.lightning_ext._jsonargparse_ext_ge_4_21_and_lt_4_22 as mirror
     return dir(mirror)

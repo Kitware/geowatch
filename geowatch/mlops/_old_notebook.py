@@ -3,10 +3,10 @@
 
 
 def __getattr__(key):
-    import watch.tasks.rutgers_material_seg_v2 as mirror
+    import watch.mlops._old_notebook as mirror
     return getattr(mirror, key)
 
 
 def __dir__():
-    import watch.tasks.rutgers_material_seg_v2 as mirror
+    import watch.mlops._old_notebook as mirror
     return dir(mirror)
