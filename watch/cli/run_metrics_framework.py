@@ -502,6 +502,15 @@ def main(cmdline=True, **kwargs):
 
         context = proc_context.stop()
         context['IARPA_METRICS_VERSION'] = str(IARPA_METRICS_VERSION)
+
+        # Record the git hash of the metrics code if possible.
+        try:
+            metrics_modpath = ub.Path(iarpa_smart_metrics.__file__).parent
+            gitout = ub.cmd('git rev-parse --short HEAD', cwd=metrics_modpath, check=None)
+            context['IARPA_METRICS_GIT_HASH'] = gitout.stdout.strip()
+        except Exception:
+            context['IARPA_METRICS_GIT_HASH'] = None
+
         info.append(context)
 
         json_data, bas_df, sc_df, best_bas_rows = merge_metrics_results(region_dpaths, true_site_dpath,

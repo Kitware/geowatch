@@ -1053,7 +1053,7 @@ class AggregatorAnalysisMixin:
         # analysis.results
         analysis.analysis()
 
-    def report_best(agg, top_k=3, shorten=True, per_group=2, verbose=1, reference_region=None, print_models=False, concise=False) -> TopResultsReport:
+    def report_best(agg, top_k=3, shorten=True, per_group=2, verbose=1, reference_region=None, print_models=False, concise=False, show_csv=False) -> TopResultsReport:
         """
         Report the top k pointwise results for each region / macro-region.
 
@@ -1198,14 +1198,19 @@ class AggregatorAnalysisMixin:
 
                     if region_id in _agg.macro_key_to_regions:
                         macro_regions = _agg.macro_key_to_regions[region_id]
-                        rich.print(f'Top {len(summary_table)} / {ntotal} for {region_id} = {macro_regions}{ref_text}')
+                        rich.print(f'Top {len(summary_table)} / {ntotal} for {agg.type}, {region_id} = {macro_regions}{ref_text}')
                     else:
-                        rich.print(f'Top {len(summary_table)} / {ntotal} for {region_id}{ref_text}')
+                        rich.print(f'Top {len(summary_table)} / {ntotal} for {agg.type}, {region_id}{ref_text}')
 
                     _summary_table = util_pandas.DataFrame(summary_table)
                     if concise:
-                        _summary_table = _summary_table.safe_drop(['node', 'fpath'], axis=1)
-                    rich.print(_summary_table.iloc[::-1].to_string())
+                        _summary_table = _summary_table.safe_drop(['node'], axis=1)
+                        _summary_table = _summary_table.safe_drop(['fpath'], axis=1)
+
+                    rich.print(_summary_table.iloc[::-1].to_string(index=False))
+                    if show_csv:
+                        print(_summary_table.iloc[::-1].to_csv(header=True, index=False))
+                        ...
                     rich.print('')
 
         if print_models:
@@ -1251,11 +1256,13 @@ class AggregatorAnalysisMixin:
             # # Need to remove invariants for now
             # flags = ~np.array(['invariants' in chan for chan in chosen_table['resolved_params.bas_pxl_fit.channels']])
             # chosen_table = chosen_table[flags]
-
-            chosen_models = list(ub.oset(chosen_table[model_col].tolist()))
-            shortlist_text = Yaml.dumps(chosen_models)
-            print('Model shortlist (top of the list is a higher scoring model):')
-            print(shortlist_text)
+            # chosen_models = list(ub.oset(chosen_table[model_col].tolist()))
+            print('Model shortlist (lower rank is a better scoring model):')
+            for chosen_row in ub.unique(chosen_table.to_dict('records'), key=lambda row: row[model_col]):
+                model_fpath = chosen_row[model_col]
+                rank = chosen_row['rank']
+                rich.print(f'[blue]# Best Rank: [cyan] {rank}')
+                print(Yaml.dumps([model_fpath]).strip())
 
             # all_models_fpath = ub.Path('$HOME/code/watch/dev/reports/split1_all_models.yaml').expand()
             # known_models = Yaml.coerce(all_models_fpath)

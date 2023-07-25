@@ -2882,7 +2882,7 @@ python -m watch.mlops.aggregate \
     --output_dpath="$DVC_EXPT_DPATH/_namek_eval13_sweep/aggregate" \
     --resource_report=0 \
     --eval_nodes="
-        #- sv_poly_eval
+        - sv_poly_eval
         - bas_poly_eval
         #- bas_pxl_eval
     " \
@@ -2902,7 +2902,8 @@ python -m watch.mlops.aggregate \
         analyze: 0
         print_models: True
         reference_region: final
-        concise: True
+        concise: 0
+        show_csv: 1
     " \
     --rois="KR_R002,NZ_R001,CH_R001,KR_R001"
 
