@@ -76,9 +76,9 @@ class BASDatasetConfig(scfg.DataConfig):
             STAC json input file for previous interval
             '''))
 
-    previous_outbucket = scfg.Value(None, type=str, help=ub.paragraph(
+    previous_interval_output = scfg.Value(None, type=str, help=ub.paragraph(
             '''
-            Outbucket for previous interval BAS DatasetGen
+            Output path for previous interval BAS DatasetGen step
             '''))
 
     bas_align_config = scfg.Value(None, type=str, help=ub.paragraph(
@@ -178,6 +178,7 @@ def run_stac_to_cropped_kwcoco(config):
     from watch.cli import coco_align
     from watch.cli import coco_time_combine
     from watch.mlops.pipeline_nodes import ProcessNode
+    from watch.cli.smartflow_ingress import smartflow_ingress
 
     if config.aws_profile is not None:
         # This should be sufficient, but it is not tested.
@@ -433,15 +434,21 @@ def run_stac_to_cropped_kwcoco(config):
         final_interval_bas_kwcoco_path = ta1_cropped_kwcoco_path
 
     # 6.1. Combine previous interval time-combined data for BAS
-    if config.previous_outbucket is not None:
+    if config.previous_interval_output is not None:
         print('* Combining previous interval time combined kwcoco with'
               'current *')
         combined_timecombined_kwcoco_path = ta1_cropped_dir / 'combined_timecombined_kwcoco.json'
         previous_ingress_dir = ub.Path('/tmp/ingress_previous')
-        previous_outbucket = util_fsspec.FSPath.coerce(config.previous_outbucket)
-        previous_outbucket.copy(previous_ingress_dir, recursive=True)
+        previous_ingressed_assets = smartflow_ingress(
+            config.previous_interval_output,
+            ['timecombined_kwcoco_file_for_bas',
+             'timecombined_kwcoco_file_for_bas_assets'],
+            previous_ingress_dir,
+            config.aws_profile,
+            config.dryrun)
 
-        previous_timecombined_kwcoco_path = previous_ingress_dir / 'combined_timecombined_kwcoco.json'
+        previous_timecombined_kwcoco_path =\
+            previous_ingressed_assets['timecombined_kwcoco_file_for_bas']
 
         # On first interval nothing will be copied down so need to
         # check that we have the input explicitly
