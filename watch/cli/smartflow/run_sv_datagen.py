@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import os
 from watch.cli.smartflow_ingress import smartflow_ingress
 from watch.cli.smartflow_egress import smartflow_egress
 from watch.utils.util_framework import download_region
@@ -132,7 +133,12 @@ def run_generate_sv_cropped_kwcoco(input_path,
 
     print("* Egressing KWCOCO dataset and associated STAC item *")
     ingressed_assets['cropped_kwcoco_for_sv'] = ta1_sv_cropped_kwcoco_path
-    ingressed_assets['cropped_kwcoco_for_sv_assets'] = assets_dpath
+    ingressed_assets['cropped_kwcoco_for_sv_assets'] = ingress_dir / f'{region_id}'
+    # Ensure that the assets directory at least exists before copying
+    # (for incremental mode it's possible there are no assets for the
+    # given interval; egress will fail if a source directory / file
+    # doesn't exist)
+    os.makedirs(ingressed_assets['cropped_kwcoco_for_sv_assets'], exist_ok=True)
     smartflow_egress(ingressed_assets,
                      local_region_path,
                      output_path,
