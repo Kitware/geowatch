@@ -1171,7 +1171,8 @@ class AggregatorAnalysisMixin:
             from watch.utils.result_analysis import varied_value_counts
             rich.print('Parameter LUT: {}'.format(ub.urepr(top_param_lut, nl=2)))
 
-            varied = varied_value_counts(top_param_lut.values(), dropna=True, min_variations=2)
+            varied = varied_value_counts(top_param_lut.values(), dropna=True,
+                                         min_variations=2, default=None)
 
             if show_csv:
                 varied_keys = list(varied.keys())
@@ -1280,8 +1281,9 @@ class AggregatorAnalysisMixin:
             print('Model shortlist (lower rank is a better scoring model):')
             for chosen_row in ub.unique(chosen_table.to_dict('records'), key=lambda row: row[model_col]):
                 model_fpath = chosen_row[model_col]
+                param_hashid = chosen_row['param_hashid']
                 rank = chosen_row['rank']
-                rich.print(f'[blue]# Best Rank: [cyan] {rank}')
+                rich.print(f'[blue]# Best Rank: [cyan] {rank} [blue]{param_hashid}')
                 print(Yaml.dumps([model_fpath]).strip())
 
             # all_models_fpath = ub.Path('$HOME/code/watch/dev/reports/split1_all_models.yaml').expand()

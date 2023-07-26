@@ -11,6 +11,7 @@ It goes over:
 4. Evaluate a model with geowatch.mlops
 
 
+
 1. Access AC Data
 -----------------
 
@@ -147,6 +148,14 @@ initially computed.
 The following is a training run that I recently ran, and I have no idea if its
 params are good or not, but it provides an example of how to train an AC model
 
+
+Be sure to grab a pretrained model to start from:
+
+.. code:: bash
+
+    DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
+    python -m watch.utils.simple_dvc request \
+        "$DVC_EXPT_DPATH"/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V08/Drop7-Cropped2GSD_SC_bgrn_split6_V08_epoch336_step28982.pt
 
 
 .. code:: bash
@@ -345,9 +354,9 @@ packaged model in the grid and adjust parameters as desired.
             sc_poly_viz.enabled: 0
 
         submatrices:
-            - bas_pxl.test_dataset: $HIRES_DVC_DATA_DPATH/Drop7-Cropped2GSD/KR_R001/KR_R001.kwcoco.zip
+            - sc_pxl.test_dataset: $HIRES_DVC_DATA_DPATH/Drop7-Cropped2GSD/KR_R001/KR_R001.kwcoco.zip
               sc_poly.site_summary: $TRUTH_DVC_DATA_DPATH/annotations/drop6/region_models/KR_R001.geojson
-            - bas_pxl.test_dataset: $HIRES_DVC_DATA_DPATH/Drop7-Cropped2GSD/KR_R002/KR_R002.kwcoco.zip
+            - sc_pxl.test_dataset: $HIRES_DVC_DATA_DPATH/Drop7-Cropped2GSD/KR_R002/KR_R002.kwcoco.zip
               sc_poly.site_summary: $TRUTH_DVC_DATA_DPATH/annotations/drop6/region_models/KR_R002.geojson
         " \
         --pipeline=sc \

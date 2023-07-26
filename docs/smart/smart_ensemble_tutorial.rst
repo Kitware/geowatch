@@ -97,7 +97,7 @@ Then for reference you could grab a template for bas commands like:
 And using this as a reference you might construct a set of command that look like this:
 
 
-..code:: bash
+.. code:: bash
 
     # I copied the pixel predict step twice  and put in some custom paths
     python -m watch.tasks.fusion.predict \
