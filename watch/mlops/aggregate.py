@@ -1201,6 +1201,7 @@ class AggregatorAnalysisMixin:
                 _justone = util_pandas.DataFrame(justone)
                 if concise:
                     _justone = _justone.safe_drop(['node'], axis=1)
+                    _justone = _justone.safe_drop(['fpath'], axis=1)
                 rich.print(_justone)
                 rich.print('agg.macro_key_to_regions = {}'.format(ub.urepr(_agg.macro_key_to_regions, nl=1)))
             else:

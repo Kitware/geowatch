@@ -2902,7 +2902,7 @@ python -m watch.mlops.aggregate \
             - params.bas_poly.thresh
     " \
     --stdout_report="
-        top_k: 10
+        top_k: 30
         per_group: 1
         macro_analysis: 0
         analyze: 0
@@ -2911,6 +2911,9 @@ python -m watch.mlops.aggregate \
         concise: 1
         show_csv: 1
     " \
+    --query='
+        (df["param_hashid"] == "kaniujrrtybn")
+    ' \
     --rois="KR_R002,NZ_R001,CH_R001,KR_R001"
 
     #--rois="KR_R002,PE_R001,NZ_R001,CH_R001,KR_R001,AE_R001,BR_R002,BR_R004"
@@ -2923,6 +2926,7 @@ python -m watch.mlops.aggregate \
 python -m watch.mlops.manager "list" --dataset_codes Drop7-Cropped2GSD
 
 HIRES_DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware=auto)
+TRUTH_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 
 python -m watch.mlops.schedule_evaluation --params="
@@ -3015,8 +3019,8 @@ python -m watch.mlops.schedule_evaluation --params="
         ## AC/SC POLY EVAL PARAMS  ##
         #############################
 
-        sc_poly_eval.true_site_dpath: $HIRES_DVC_DATA_DPATH/annotations/drop6/site_models
-        sc_poly_eval.true_region_dpath: $HIRES_DVC_DATA_DPATH/annotations/drop6/region_models
+        sc_poly_eval.true_site_dpath: $TRUTH_DVC_DATA_DPATH/annotations/drop6/site_models
+        sc_poly_eval.true_region_dpath: $TRUTH_DVC_DATA_DPATH/annotations/drop6/region_models
 
         ##################################
         ## HIGH LEVEL PIPELINE CONTROLS ##
@@ -3026,6 +3030,10 @@ python -m watch.mlops.schedule_evaluation --params="
         sc_poly.enabled: 1
         sc_poly_eval.enabled: 1
         sc_poly_viz.enabled: 0
+
+    submatrices:
+        - bas_pxl.test_dataset: $HIRES_DVC_DATA_DPATH/Drop7-Cropped2GSD/KR_R001/KR_R001.kwcoco.zip
+          sc_poly.site_summary: $TRUTH_DVC_DATA_DPATH/annotations/drop6/region_models/KR_R001.geojson
     " \
     --pipeline=sc \
     --root_dpath="$DVC_EXPT_DPATH/_toothbrush_preeval14_ac_eval" \
