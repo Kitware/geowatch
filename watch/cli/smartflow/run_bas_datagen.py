@@ -449,6 +449,7 @@ def run_stac_to_cropped_kwcoco(config):
         except FileNotFoundError:
             print("** Warning: Couldn't ingress previous interval output; "
                   "assuming this is the first interval **")
+            combined_timecombined_kwcoco_path = final_interval_bas_kwcoco_path
         else:
             combined_timecombined_kwcoco_path = ta1_cropped_dir / 'combined_timecombined_kwcoco.json'
 
