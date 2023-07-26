@@ -138,7 +138,10 @@ def run_generate_sv_cropped_kwcoco(input_path,
     # (for incremental mode it's possible there are no assets for the
     # given interval; egress will fail if a source directory / file
     # doesn't exist)
-    os.makedirs(ingressed_assets['cropped_kwcoco_for_sv_assets'], exist_ok=True)
+    if not os.path.isdir(ingressed_assets['cropped_kwcoco_for_sv_assets']):
+        os.makedirs(ingressed_assets['cropped_kwcoco_for_sv_assets'], exist_ok=True)
+        ub.Path(ingressed_assets['cropped_kwcoco_for_sv_assets'] / '.empty').touch()
+
     smartflow_egress(ingressed_assets,
                      local_region_path,
                      output_path,
