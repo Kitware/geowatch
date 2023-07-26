@@ -166,6 +166,8 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
     output_region_dpath = ingress_dir / "depth_filtered_regions"
     output_region_fpath = output_region_dpath / f'{region_id}.geojson'
 
+    output_region_dpath.ensuredir()
+
     # 3.3. Check that we have at least one "video" (BAS identified
     # site) to run over; if not skip SV fusion and KWCOCO to GeoJSON
     import kwcoco
