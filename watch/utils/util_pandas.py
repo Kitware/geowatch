@@ -48,8 +48,28 @@ class DataFrame(pd.DataFrame):
         labels = existing.intersection(labels)
         return self.drop(labels, axis=axis)
 
+    def reorder(self, labels, axis=0, intersect=False):
+        """
+        Change the order of the row or column index. Unspecified labels will
+        keep their existing order after the specified labels.
+
+        Args:
+            intersect (bool):
+                if True ignores labels that doen't exist, otherwise an error
+                will occur if a label is specified that does not exist.
+        """
+        existing = self.axes[axis]
+        if intersect:
+            resolved_labels = ub.oset(labels) & ub.oset(list(existing))
+        else:
+            resolved_labels = labels
+        remain = existing.difference(resolved_labels)
+        new_labels = list(resolved_labels) + list(remain)
+        return self.reindex(labels=new_labels, axis=axis)
+
 
 def pandas_reorder_columns(df, columns):
+    # Use DataFrame.reorder instead
     remain = df.columns.difference(columns)
     return df.reindex(columns=(columns + list(remain)))
 

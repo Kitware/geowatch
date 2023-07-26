@@ -1053,7 +1053,9 @@ class AggregatorAnalysisMixin:
         # analysis.results
         analysis.analysis()
 
-    def report_best(agg, top_k=3, shorten=True, per_group=2, verbose=1, reference_region=None, print_models=False, concise=False, show_csv=False) -> TopResultsReport:
+    def report_best(agg, top_k=3, shorten=True, per_group=2, verbose=1,
+                    reference_region=None, print_models=False, concise=False,
+                    show_csv=False) -> TopResultsReport:
         """
         Report the top k pointwise results for each region / macro-region.
 
@@ -1077,6 +1079,9 @@ class AggregatorAnalysisMixin:
                 only be with respect to the top results in this region (or
                 macro region). Can be set to the special key "final" to choose
                 the last region, which is typically a macro region.
+
+            show_csv (bool):
+                also print as a CSV suitable for copy/paste into google sheets.
 
         Returns:
             TopResultsReport:
@@ -1165,7 +1170,17 @@ class AggregatorAnalysisMixin:
         if verbose:
             from watch.utils.result_analysis import varied_value_counts
             rich.print('Parameter LUT: {}'.format(ub.urepr(top_param_lut, nl=2)))
+
             varied = varied_value_counts(top_param_lut.values(), dropna=True, min_variations=2)
+
+            if show_csv:
+                varied_keys = list(varied.keys())
+                param_table = pd.DataFrame.from_dict(top_param_lut).T
+                param_table.index.name = 'param_hashid'
+                param_table = util_pandas.DataFrame(param_table)
+                param_table = param_table.reorder(varied_keys, axis=1, intersect=1)
+                print(param_table.to_csv(header=True, index=True))
+
             rich.print('Varied Parameters: = {}'.format(ub.urepr(varied, nl=2)))
 
             # Check for a common special case that we can make more concise output for
@@ -1203,13 +1218,15 @@ class AggregatorAnalysisMixin:
                         rich.print(f'Top {len(summary_table)} / {ntotal} for {agg.type}, {region_id}{ref_text}')
 
                     _summary_table = util_pandas.DataFrame(summary_table)
+                    _summary_table_csv = _summary_table
                     if concise:
                         _summary_table = _summary_table.safe_drop(['node'], axis=1)
                         _summary_table = _summary_table.safe_drop(['fpath'], axis=1)
+                        _summary_table_csv = _summary_table_csv.safe_drop(['fpath'], axis=1)
 
                     rich.print(_summary_table.iloc[::-1].to_string(index=False))
                     if show_csv:
-                        print(_summary_table.iloc[::-1].to_csv(header=True, index=False))
+                        print(_summary_table_csv.iloc[::-1].to_csv(header=True, index=False))
                         ...
                     rich.print('')
 

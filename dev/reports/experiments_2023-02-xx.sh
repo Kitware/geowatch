@@ -2801,7 +2801,9 @@ geowatch schedule --params="
         bas_pxl.time_sampling: soft4
         bas_poly.thresh:
             - 0.35
+            - 0.3625
             - 0.375
+            - 0.3875
             - 0.4
             - 0.425
         bas_poly.inner_window_size: 1y
@@ -2811,7 +2813,7 @@ geowatch schedule --params="
         bas_poly.agg_fn: probs
         bas_poly.time_thresh:
             - 0.8
-            - 0.6
+            #- 0.6
         bas_poly.resolution: 10GSD
         bas_poly.moving_window_size: null
         bas_poly.poly_merge_method: 'v2'
@@ -2838,7 +2840,10 @@ geowatch schedule --params="
         sv_dino_boxes.fixed_resolution: 3GSD
 
         sv_dino_filter.enabled: 1
-        sv_dino_filter.end_min_score: 0.15
+        sv_dino_filter.end_min_score:
+            - 0.05
+            - 0.10
+            - 0.15
         sv_dino_filter.start_max_score: 1.0
         sv_dino_filter.box_score_threshold: 0.01
         sv_dino_filter.box_isect_threshold: 0.1
@@ -2847,6 +2852,7 @@ geowatch schedule --params="
         sv_depth_score.model_fpath:
             - $DVC_EXPT_DPATH/models/depth_pcd/basicModel2.h5
         sv_depth_filter.threshold:
+            - 0.10
             - 0.25
     submatrices:
         - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/combo_imganns-KR_R001_EI2LMSC.kwcoco.zip
@@ -2883,7 +2889,7 @@ python -m watch.mlops.aggregate \
     --resource_report=0 \
     --eval_nodes="
         - sv_poly_eval
-        - bas_poly_eval
+        #- bas_poly_eval
         #- bas_pxl_eval
     " \
     --plot_params="
@@ -2902,8 +2908,8 @@ python -m watch.mlops.aggregate \
         analyze: 0
         print_models: True
         reference_region: final
-        concise: 0
-        show_csv: 1
+        concise: 1
+        show_csv: 0
     " \
     --rois="KR_R002,NZ_R001,CH_R001,KR_R001"
 
