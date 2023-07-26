@@ -271,8 +271,17 @@ def schedule_evaluation(config):
     dag.print_graphs()
     dag.inspect_configurables()
 
-    queue_dpath = root_dpath / '_cmd_queue_schedule'
-    queue_dpath.ensuredir()
+    (root_dpath / '_cmd_queue_schedule').ensuredir()
+    mlops_meta = (root_dpath / '_mlops_schedule').ensuredir()
+
+    if config.run:
+        # Write some metadata to help aggregate set its defaults automatically
+        most_recent_fpath = mlops_meta / 'most_recent_run.json'
+        data = {
+            'pipeline': str(config.pipeline),
+        }
+        import json
+        most_recent_fpath.write_text(json.dumps(data, indent='    '))
 
     queue = config.create_queue(gpus=config.devices)
 

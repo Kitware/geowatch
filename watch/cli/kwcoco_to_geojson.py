@@ -746,17 +746,15 @@ def _coerce_site_summaries(site_summary_or_region_model,
                 region_model.validate(strict=False)
 
             region_model._validate_quick_checks()
-            region_header = region_model.header
-            # assert region_header['type'] == 'Feature'
-            # if region_header['properties']['type'] not in {'region', 'site_summary'}:
-            #     raise jsonschema.ValidationError('not a region')
 
             _summaries = [
                 f for f in region_model.site_summaries()
                 # if f['properties']['status'] in SITE_SUMMARY_POS_STATUS
                 if f['properties']['status'] not in {'system_rejected'}
             ]
-            region_id = region_header['properties'].get('region_id', default_region_id)
+            region_id = region_model.region_id
+            # TODO: handle default region-id if needed
+
             site_summaries.extend([(region_id, s) for s in _summaries])
 
         except jsonschema.ValidationError:
@@ -919,14 +917,26 @@ def add_site_summary_to_kwcoco(possible_summaries,
 
         # get relevant images
         images = coco_dset.images(vidid=video_id)
-        start_date = dateutil.parser.parse(
-            site_summary['properties']['start_date']).date()
-        end_date = dateutil.parser.parse(
-            site_summary['properties']['end_date']).date()
-        flags = [
-            start_date <= dateutil.parser.parse(date_str).date() <= end_date
-            for date_str in images.lookup('date_captured')
-        ]
+
+        # and their dates
+        from kwutil import util_time
+        image_dates = [util_time.coerce_datetime(d).date()
+                       for d in images.lookup('date_captured')]
+        first_date = image_dates[0]
+        last_date = image_dates[-1]
+
+        start_dt = site_summary.start_date
+        end_dt = site_summary.end_date
+        if start_dt is None:
+            start_date = first_date
+        else:
+            start_date = start_dt.date()
+        if end_dt is None:
+            end_date = last_date
+        else:
+            end_date = end_dt.date()
+
+        flags = [start_date <= d <= end_date for d in image_dates]
         images = images.compress(flags)
         if track_id in images.get('track_id', None):
             print(f'warning: site_summary {track_id} already in dset!')

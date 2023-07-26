@@ -2902,22 +2902,56 @@ python -m watch.mlops.aggregate \
             - params.bas_poly.thresh
     " \
     --stdout_report="
-        top_k: 30
+        top_k: 13
         per_group: 1
         macro_analysis: 0
         analyze: 0
         print_models: True
         reference_region: final
-        concise: 1
-        show_csv: 1
+        concise: 0
+        show_csv: 0
     " \
-    --query='
-        (df["param_hashid"] == "kaniujrrtybn")
-    ' \
     --rois="KR_R002,NZ_R001,CH_R001,KR_R001"
 
+    #--query='
+    #    (df["param_hashid"] == "kaniujrrtybn")
+    #' \
     #--rois="KR_R002,PE_R001,NZ_R001,CH_R001,KR_R001,AE_R001,BR_R002,BR_R004"
     #--rois="PE_R001"
+
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+python -m watch.mlops.aggregate \
+    --pipeline=bas_building_and_depth_vali \
+    --target "
+        - $DVC_EXPT_DPATH/_namek_eval13_sweep_old_metrics
+    " \
+    --output_dpath="$DVC_EXPT_DPATH/_namek_eval13_sweep_old_metrics/aggregate" \
+    --resource_report=0 \
+    --eval_nodes="
+        - sv_poly_eval
+        #- bas_poly_eval
+        #- bas_pxl_eval
+    " \
+    --plot_params="
+        enabled: 0
+        stats_ranking: 0
+        min_variations: 1
+        params_of_interest:
+            - params.sv_depth_filter.threshold
+            - params.sv_depth_score.model_fpath
+            - params.bas_poly.thresh
+    " \
+    --stdout_report="
+        top_k: 13
+        per_group: 1
+        macro_analysis: 0
+        analyze: 0
+        print_models: True
+        reference_region: final
+        concise: 0
+        show_csv: 0
+    " \
+    --rois="KR_R002,NZ_R001,CH_R001,KR_R001"
 
 
 
@@ -2941,51 +2975,51 @@ python -m watch.mlops.schedule_evaluation --params="
           #- $HIRES_DVC_DATA_DPATH/Aligned-Drop7/KR_R002/imgonly-KR_R002.kwcoco.zip
           #
         sc_pxl.package_fpath:
-            #- $DVC_EXPT_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt
             - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V07/Drop7-Cropped2GSD_SC_bgrn_split6_V07_epoch73_step6364.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V07/Drop7-Cropped2GSD_SC_bgrn_split6_V07_epoch1_step172.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V07/Drop7-Cropped2GSD_SC_bgrn_split6_V07_epoch2_step258.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V07/Drop7-Cropped2GSD_SC_bgrn_split6_V07_epoch74_step6450.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V07/Drop7-Cropped2GSD_SC_bgrn_split6_V07_epoch0_step86.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_petest_V06/Drop7-Cropped2GSD_SC_bgrn_petest_V06_epoch27_step700.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_petest_V06/Drop7-Cropped2GSD_SC_bgrn_petest_V06_epoch19_step500.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_petest_V06/Drop7-Cropped2GSD_SC_bgrn_petest_V06_epoch25_step650.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_petest_V06/Drop7-Cropped2GSD_SC_bgrn_petest_V06_epoch0_step0.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_petest_V06/Drop7-Cropped2GSD_SC_bgrn_petest_V06_epoch28_step710.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_petest_V06/Drop7-Cropped2GSD_SC_bgrn_petest_V06_epoch22_step575.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_petest_V06/Drop7-Cropped2GSD_SC_bgrn_petest_V06_epoch10_step275.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V10/Drop7-Cropped2GSD_SC_bgrn_split6_V10_epoch398_step17157.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V10/Drop7-Cropped2GSD_SC_bgrn_split6_V10_epoch468_step20167.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V10/Drop7-Cropped2GSD_SC_bgrn_split6_V10_epoch486_step20921.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V10/Drop7-Cropped2GSD_SC_bgrn_split6_V10_epoch268_step11567.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V10/Drop7-Cropped2GSD_SC_bgrn_split6_V10_epoch389_step16770.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V10/Drop7-Cropped2GSD_SC_bgrn_split6_V10_epoch299_step12900.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V09/Drop7-Cropped2GSD_SC_bgrn_split6_V09_epoch76_step3311.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V09/Drop7-Cropped2GSD_SC_bgrn_split6_V09_epoch545_step23478.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V09/Drop7-Cropped2GSD_SC_bgrn_split6_V09_epoch1_step86.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V09/Drop7-Cropped2GSD_SC_bgrn_split6_V09_epoch4_step215.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V09/Drop7-Cropped2GSD_SC_bgrn_split6_V09_epoch2_step129.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V09/Drop7-Cropped2GSD_SC_bgrn_split6_V09_epoch538_step23177.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V09/Drop7-Cropped2GSD_SC_bgrn_split6_V09_epoch0_step43.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V09/Drop7-Cropped2GSD_SC_bgrn_split6_V09_epoch5_step249.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V09/Drop7-Cropped2GSD_SC_bgrn_split6_V09_epoch448_step19307.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V09/Drop7-Cropped2GSD_SC_bgrn_split6_V09_epoch3_step172.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V09/Drop7-Cropped2GSD_SC_bgrn_split6_V09_epoch20_step903.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V05/Drop7-Cropped2GSD_SC_bgrn_split6_V05_epoch77_step6708.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V05/Drop7-Cropped2GSD_SC_bgrn_split6_V05_epoch75_step6536.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V05/Drop7-Cropped2GSD_SC_bgrn_split6_V05_epoch78_step6794.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V05/Drop7-Cropped2GSD_SC_bgrn_split6_V05_epoch48_step4214.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V05/Drop7-Cropped2GSD_SC_bgrn_split6_V05_epoch60_step5246.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V08/Drop7-Cropped2GSD_SC_bgrn_split6_V08_epoch336_step28982.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V08/Drop7-Cropped2GSD_SC_bgrn_split6_V08_epoch326_step28122.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V08/Drop7-Cropped2GSD_SC_bgrn_split6_V08_epoch302_step26058.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V08/Drop7-Cropped2GSD_SC_bgrn_split6_V08_epoch202_step17458.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V08/Drop7-Cropped2GSD_SC_bgrn_split6_V08_epoch216_step18662.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V11/Drop7-Cropped2GSD_SC_bgrn_split6_V11_epoch374_step16125.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V11/Drop7-Cropped2GSD_SC_bgrn_split6_V11_epoch272_step11739.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V11/Drop7-Cropped2GSD_SC_bgrn_split6_V11_epoch217_step9374.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V11/Drop7-Cropped2GSD_SC_bgrn_split6_V11_epoch129_step5590.pt
-            #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V11/Drop7-Cropped2GSD_SC_bgrn_split6_V11_epoch444_step19135.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V07/Drop7-Cropped2GSD_SC_bgrn_split6_V07_epoch1_step172.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V07/Drop7-Cropped2GSD_SC_bgrn_split6_V07_epoch2_step258.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V07/Drop7-Cropped2GSD_SC_bgrn_split6_V07_epoch74_step6450.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V07/Drop7-Cropped2GSD_SC_bgrn_split6_V07_epoch0_step86.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_petest_V06/Drop7-Cropped2GSD_SC_bgrn_petest_V06_epoch27_step700.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_petest_V06/Drop7-Cropped2GSD_SC_bgrn_petest_V06_epoch19_step500.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_petest_V06/Drop7-Cropped2GSD_SC_bgrn_petest_V06_epoch25_step650.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_petest_V06/Drop7-Cropped2GSD_SC_bgrn_petest_V06_epoch0_step0.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_petest_V06/Drop7-Cropped2GSD_SC_bgrn_petest_V06_epoch28_step710.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_petest_V06/Drop7-Cropped2GSD_SC_bgrn_petest_V06_epoch22_step575.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_petest_V06/Drop7-Cropped2GSD_SC_bgrn_petest_V06_epoch10_step275.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V10/Drop7-Cropped2GSD_SC_bgrn_split6_V10_epoch398_step17157.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V10/Drop7-Cropped2GSD_SC_bgrn_split6_V10_epoch468_step20167.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V10/Drop7-Cropped2GSD_SC_bgrn_split6_V10_epoch486_step20921.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V10/Drop7-Cropped2GSD_SC_bgrn_split6_V10_epoch268_step11567.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V10/Drop7-Cropped2GSD_SC_bgrn_split6_V10_epoch389_step16770.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V10/Drop7-Cropped2GSD_SC_bgrn_split6_V10_epoch299_step12900.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V09/Drop7-Cropped2GSD_SC_bgrn_split6_V09_epoch76_step3311.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V09/Drop7-Cropped2GSD_SC_bgrn_split6_V09_epoch545_step23478.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V09/Drop7-Cropped2GSD_SC_bgrn_split6_V09_epoch1_step86.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V09/Drop7-Cropped2GSD_SC_bgrn_split6_V09_epoch4_step215.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V09/Drop7-Cropped2GSD_SC_bgrn_split6_V09_epoch2_step129.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V09/Drop7-Cropped2GSD_SC_bgrn_split6_V09_epoch538_step23177.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V09/Drop7-Cropped2GSD_SC_bgrn_split6_V09_epoch0_step43.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V09/Drop7-Cropped2GSD_SC_bgrn_split6_V09_epoch5_step249.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V09/Drop7-Cropped2GSD_SC_bgrn_split6_V09_epoch448_step19307.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V09/Drop7-Cropped2GSD_SC_bgrn_split6_V09_epoch3_step172.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V09/Drop7-Cropped2GSD_SC_bgrn_split6_V09_epoch20_step903.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V05/Drop7-Cropped2GSD_SC_bgrn_split6_V05_epoch77_step6708.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V05/Drop7-Cropped2GSD_SC_bgrn_split6_V05_epoch75_step6536.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V05/Drop7-Cropped2GSD_SC_bgrn_split6_V05_epoch78_step6794.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V05/Drop7-Cropped2GSD_SC_bgrn_split6_V05_epoch48_step4214.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V05/Drop7-Cropped2GSD_SC_bgrn_split6_V05_epoch60_step5246.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V08/Drop7-Cropped2GSD_SC_bgrn_split6_V08_epoch336_step28982.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V08/Drop7-Cropped2GSD_SC_bgrn_split6_V08_epoch326_step28122.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V08/Drop7-Cropped2GSD_SC_bgrn_split6_V08_epoch302_step26058.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V08/Drop7-Cropped2GSD_SC_bgrn_split6_V08_epoch202_step17458.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V08/Drop7-Cropped2GSD_SC_bgrn_split6_V08_epoch216_step18662.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V11/Drop7-Cropped2GSD_SC_bgrn_split6_V11_epoch374_step16125.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V11/Drop7-Cropped2GSD_SC_bgrn_split6_V11_epoch272_step11739.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V11/Drop7-Cropped2GSD_SC_bgrn_split6_V11_epoch217_step9374.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V11/Drop7-Cropped2GSD_SC_bgrn_split6_V11_epoch129_step5590.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V11/Drop7-Cropped2GSD_SC_bgrn_split6_V11_epoch444_step19135.pt
 
         sc_pxl.tta_fliprot: 0.0
         sc_pxl.tta_time: 0.0
@@ -3012,7 +3046,7 @@ python -m watch.mlops.schedule_evaluation --params="
 
         sc_poly.thresh: 0.07
         sc_poly.boundaries_as: polys
-        sc_poly.resolution: 2GSD
+        #sc_poly.resolution: 2GSD
         sc_poly.min_area_square_meters: 7200
 
         #############################
@@ -3041,3 +3075,40 @@ python -m watch.mlops.schedule_evaluation --params="
     --devices="0,1" \
     --backend=tmux --tmux_workers=6 \
     --cache=1 --skip_existing=1 --run=1
+
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+python -m watch.mlops.aggregate \
+    --pipeline=sc \
+    --target "
+        - $DVC_EXPT_DPATH/_toothbrush_preeval14_ac_eval
+    " \
+    --output_dpath="$DVC_EXPT_DPATH/_toothbrush_preeval14_ac_eval/aggregate" \
+    --resource_report=0 \
+    --eval_nodes="
+        - sc_poly_eval
+        #- sv_poly_eval
+        #- bas_poly_eval
+        #- bas_pxl_eval
+    " \
+    --plot_params="
+        enabled: 0
+        stats_ranking: 0
+        min_variations: 1
+        params_of_interest:
+            - params.sv_depth_filter.threshold
+            - params.sv_depth_score.model_fpath
+            - params.bas_poly.thresh
+    " \
+    --stdout_report="
+        top_k: 13
+        per_group: 1
+        macro_analysis: 0
+        analyze: 0
+        print_models: True
+        reference_region: final
+        concise: 0
+        show_csv: 0
+    "
+
+    \
+    --rois="KR_R002,NZ_R001,CH_R001,KR_R001"

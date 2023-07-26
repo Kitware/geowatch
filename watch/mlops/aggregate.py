@@ -1179,6 +1179,7 @@ class AggregatorAnalysisMixin:
                 param_table.index.name = 'param_hashid'
                 param_table = util_pandas.DataFrame(param_table)
                 param_table = param_table.reorder(varied_keys, axis=1, intersect=1)
+                print('Note, to paste into sheets, there will be an icon after you paste (that looks like a clipboard) you can click and it give you an option: Split text to columns')
                 print(param_table.to_csv(header=True, index=True))
 
             rich.print('Varied Parameters: = {}'.format(ub.urepr(varied, nl=2)))
@@ -1227,6 +1228,7 @@ class AggregatorAnalysisMixin:
 
                     rich.print(_summary_table.iloc[::-1].to_string(index=False))
                     if show_csv:
+                        print('Note, to paste into sheets, there will be an icon after you paste (that looks like a clipboard) you can click and it give you an option: Split text to columns')
                         print(_summary_table_csv.iloc[::-1].to_csv(header=True, index=False))
                         ...
                     rich.print('')
