@@ -191,6 +191,13 @@ def coerce_multi_time_kernel(pattern):
                 # We might be given a list of multiple kernels
                 try:
                     multi_kernel = [coerce_time_kernel(p) for p in pattern]
+                    WORKAROUND_SINGLE_KERNELS = 1
+                    if WORKAROUND_SINGLE_KERNELS:
+                        # This is not a total fix for the ambiguous case, but
+                        # it will get us by for now. If all sub-kernels have a
+                        # length of 1, the user probably didnt mean that.
+                        if all(len(k) == 1 for k in multi_kernel):
+                            raise Exception('ambiguity workaround')
                 except Exception:
                     # Or we might be given just a single kernel.
                     multi_kernel = [[coerce_timedelta(d) for d in pattern]]

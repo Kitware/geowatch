@@ -809,10 +809,27 @@ class ExperimentState(ub.NiceRepr):
                 print(subdf.drop(ub.oset(todrop) & df.columns, axis=1).to_string())
 
         if ready_packages is not None:
+            import os
+            REPLACE_ENVIRON = 1
+            if REPLACE_ENVIRON:
+                # Shorten paths with an environment variable
+                environ = 'DVC_EXPT_DPATH'
+                prefix = f'${environ}/'
+                shrunk_packages = []
+                for fpath in ready_packages:
+                    fpath = ub.Path(fpath)
+                    if fpath.is_relative_to(self.expt_dvc_dpath):
+                        suffix = fpath.relative_to(self.expt_dvc_dpath)
+                        fpath = prefix + suffix
+                    shrunk_packages.append(os.fspath(fpath))
+                ready_packages = shrunk_packages
+
             from kwutil import util_yaml
             print(util_yaml.Yaml.dumps({
                 'ready_packages': ready_packages,
             }))
+        else:
+            print('ERROR: Ready packages was None')
             # print('ready_packages = {}'.format(ub.urepr(ready_packages, nl=1)))
 
     def summarize(self):
