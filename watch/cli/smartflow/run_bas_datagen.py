@@ -437,36 +437,42 @@ def run_stac_to_cropped_kwcoco(config):
     if config.previous_interval_output is not None:
         print('* Combining previous interval time combined kwcoco with'
               'current *')
-        combined_timecombined_kwcoco_path = ta1_cropped_dir / 'combined_timecombined_kwcoco.json'
         previous_ingress_dir = ub.Path('/tmp/ingress_previous')
-        previous_ingressed_assets = smartflow_ingress(
-            config.previous_interval_output,
-            ['timecombined_kwcoco_file_for_bas',
-             'timecombined_kwcoco_file_for_bas_assets'],
-            previous_ingress_dir,
-            config.aws_profile,
-            config.dryrun)
-
-        previous_timecombined_kwcoco_path =\
-            previous_ingressed_assets['timecombined_kwcoco_file_for_bas']
-
-        # On first interval nothing will be copied down so need to
-        # check that we have the input explicitly
-        from watch.cli.concat_kwcoco_videos import concat_kwcoco_datasets
-        if previous_timecombined_kwcoco_path.is_file():
-            concat_kwcoco_datasets(
-                (previous_timecombined_kwcoco_path, final_interval_bas_kwcoco_path),
-                combined_timecombined_kwcoco_path)
-            # Copy saliency assets from previous bas fusion
-            shutil.copytree(
-                previous_ingress_dir / 'raw_bands',
-                ta1_cropped_dir / 'raw_bands',
-                dirs_exist_ok=True)
+        try:
+            previous_ingressed_assets = smartflow_ingress(
+                config.previous_interval_output,
+                ['timecombined_kwcoco_file_for_bas',
+                 'timecombined_kwcoco_file_for_bas_assets'],
+                previous_ingress_dir,
+                config.aws_profile,
+                config.dryrun)
+        except FileNotFoundError:
+            print("** Warning: Couldn't ingress previous interval output; "
+                  "assuming this is the first interval **")
         else:
-            # Copy current bas_fusion_kwcoco_path to combined path as
-            # this is the first interval
-            shutil.copy(final_interval_bas_kwcoco_path,
-                        combined_timecombined_kwcoco_path)
+            combined_timecombined_kwcoco_path = ta1_cropped_dir / 'combined_timecombined_kwcoco.json'
+
+            previous_timecombined_kwcoco_path =\
+                previous_ingressed_assets['timecombined_kwcoco_file_for_bas']
+
+            # On first interval nothing will be copied down so need to
+            # check that we have the input explicitly
+            from watch.cli.concat_kwcoco_videos import concat_kwcoco_datasets
+            if previous_timecombined_kwcoco_path.is_file():
+                concat_kwcoco_datasets(
+                    (previous_timecombined_kwcoco_path, final_interval_bas_kwcoco_path),
+                    combined_timecombined_kwcoco_path)
+                # Copy saliency assets from previous bas fusion
+                shutil.copytree(
+                    previous_ingress_dir / 'raw_bands',
+                    ta1_cropped_dir / 'raw_bands',
+                    dirs_exist_ok=True)
+            else:
+                # Copy current bas_fusion_kwcoco_path to combined path as
+                # this is the first interval
+                shutil.copy(final_interval_bas_kwcoco_path,
+                            combined_timecombined_kwcoco_path)
+
     else:
         combined_timecombined_kwcoco_path = final_interval_bas_kwcoco_path
 
