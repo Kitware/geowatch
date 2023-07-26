@@ -190,11 +190,11 @@ def run_dino_sv(config):
 
         ub.cmd(dino_building_filter.command(), check=True, verbose=3, system=True)
 
-    # Validate and fix all outputs
-    util_framework.fixup_and_validate_site_and_region_models(
-        region_dpath=output_region_fpath.parent,
-        site_dpath=output_sites_dpath,
-    )
+        # Validate and fix all outputs
+        util_framework.fixup_and_validate_site_and_region_models(
+            region_dpath=output_region_fpath.parent,
+            site_dpath=output_sites_dpath,
+        )
 
     # 5. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
