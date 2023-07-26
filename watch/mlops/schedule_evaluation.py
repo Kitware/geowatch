@@ -271,10 +271,9 @@ def schedule_evaluation(config):
     dag.print_graphs()
     dag.inspect_configurables()
 
-    (root_dpath / '_cmd_queue_schedule').ensuredir()
-    mlops_meta = (root_dpath / '_mlops_schedule').ensuredir()
-
     if config.run:
+        mlops_meta = (root_dpath / '_mlops_schedule').ensuredir()
+        (root_dpath / '_cmd_queue_schedule').ensuredir()
         # Write some metadata to help aggregate set its defaults automatically
         most_recent_fpath = mlops_meta / 'most_recent_run.json'
         data = {
