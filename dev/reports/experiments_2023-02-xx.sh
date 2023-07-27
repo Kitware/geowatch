@@ -2882,7 +2882,7 @@ geowatch schedule --params="
     --backend=tmux --queue_name "_namek_eval13_sweep" \
     --pipeline=bas_building_and_depth_vali \
     --skip_existing=1 \
-    --run=0
+    --run=1
 
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch.mlops.aggregate \
@@ -3127,7 +3127,5 @@ python -m watch.mlops.aggregate \
         reference_region: final
         concise: 0
         show_csv: 0
-    "
-
-    #\
-    #--rois="KR_R002,NZ_R001,CH_R001,KR_R001"
+    " \
+    --rois="KR_R002,NZ_R001,CH_R001,KR_R001"
