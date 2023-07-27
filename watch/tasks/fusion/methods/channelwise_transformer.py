@@ -194,6 +194,10 @@ class MultimodalTransformerConfig(scfg.DataConfig):
         the original O(n^2) method. 'performer' - a linear
         approximation. 'reformer' - a LSH approximation.
         '''))
+    attention_kwargs = scfg.Value(dict(), type=dict, help=ub.paragraph(
+        '''
+        Extra options for attention operations in the FusionModel. Including `add_zero_attn`.
+        '''))
     multimodal_reduce = scfg.Value('max', help=ub.paragraph(
         '''
         operation used to combine multiple modes from the same timestep
@@ -500,6 +504,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                 **encoder_config,
                 in_features=in_features,
                 attention_impl=self.hparams.attention_impl,
+                attention_kwargs=self.hparams.attention_kwargs,
                 dropout=self.hparams.dropout,
             )
             self.encoder = encoder

@@ -249,7 +249,7 @@ except ImportError:
     pass
 
 
-def new_attention_layer(embedding_size, n_heads, attention_impl='exact'):
+def new_attention_layer(embedding_size, n_heads, attention_impl='exact', **kwargs):
     """
     Example:
         >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
@@ -283,14 +283,14 @@ def new_attention_layer(embedding_size, n_heads, attention_impl='exact'):
         >>> outputs1 = layer1(inputs, key_padding_mask=key_padding_mask)
     """
     if attention_impl == 'exact':
-        attention = MultiheadSelfAttention(embedding_size, n_heads)
+        attention = MultiheadSelfAttention(embedding_size, n_heads, **kwargs)
     elif attention_impl == 'performer':
         import performer_pytorch  # NOQA
         # from performer_pytorch import SelfAttention
         # attention = SelfAttention(dim=embedding_size, heads=n_heads)
-        attention = FastMultiheadSelfAttention(embedding_size, n_heads)
+        attention = FastMultiheadSelfAttention(embedding_size, n_heads, **kwargs)
     elif attention_impl == 'reformer':
-        attention = ReformerMultiheadedSelfAttention(embedding_size, n_heads)
+        attention = ReformerMultiheadedSelfAttention(embedding_size, n_heads, **kwargs)
     else:
         raise KeyError(attention_impl)
 
@@ -424,7 +424,8 @@ class ChannelwiseTransformerEncoderLayer(nn.Module):
         default_shape=('batch', 'time', 'mode', 'height', 'width', 'feature'),
         feature_axis='feature',
         batch_axis='batch',
-        attention_impl='exact'
+        attention_impl='exact',
+        attention_kwargs=dict(),
     ):
         super().__init__()
         self.axes = axes
@@ -442,7 +443,10 @@ class ChannelwiseTransformerEncoderLayer(nn.Module):
 
         self.attention_modules = nn.ModuleDict({
             self.axsep.join(axis): new_attention_layer(
-                embedding_size, n_heads, attention_impl=attention_impl)
+                embedding_size, n_heads,
+                attention_impl=attention_impl,
+                **attention_kwargs,
+            )
             for axis in axes
         })
         self.mlp = new_mlp_layer(embedding_size, dropout)
@@ -899,7 +903,9 @@ class FusionEncoder(nn.Module):
                  n_heads=8,
                  dropout=0.0,
                  attention_impl='exact',
-                 in_features=None):
+                 attention_kwargs=dict(),
+                 in_features=None,
+                ):
         super().__init__()
         if in_features is None:
             # Use lazy linear to allow data to specify the channel dims
@@ -917,6 +923,7 @@ class FusionEncoder(nn.Module):
                 feature_axis=feature_axis,
                 batch_axis=batch_axis,
                 attention_impl=attention_impl,
+                attention_kwargs=attention_kwargs,
             )
             for _ in range(n_layers)
         ]
