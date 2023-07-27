@@ -1243,6 +1243,79 @@ class TransformerEncoderDecoder(nn.Module, BackboneEncoderDecoder):
         return self.to_logits(x)
 
 
+class TransformerEncoderLayerExtended(nn.TransformerEncoderLayer):
+    __constants__ = ['batch_first', 'norm_first']
+
+    def __init__(self, d_model: int, nhead: int, dim_feedforward: int = 2048, dropout: float = 0.1,
+                 activation: str = "relu",
+                 layer_norm_eps: float = 1e-5, batch_first: bool = False, norm_first: bool = False,
+                 mha_kwargs = None,
+                 device=None, dtype=None) -> None:
+        factory_kwargs = {'device': device, 'dtype': dtype}
+        super().__init__(
+            d_model=d_model,
+            nhead=nhead,
+            dim_feedforward=dim_feedforward,
+            dropout=dropout,
+            activation=activation,
+            layer_norm_eps=layer_norm_eps,
+            batch_first=batch_first,
+            norm_first=norm_first,
+            device=device,
+            dtype=dtype,
+        )
+        self.self_attn = nn.MultiheadAttention(
+            d_model,
+            nhead,
+            dropout=dropout,
+            batch_first=batch_first,
+            **mha_kwargs,
+        )
+
+
+class VanillaTransformerEncoder(nn.Module, BackboneEncoderDecoder):
+    def __init__(
+        self,
+        num_layers: int,
+        d_model: int,
+        nhead: int,
+        dim_feedforward: int = 2048,
+        dropout: float = 0.0,
+        activation: str = "gelu",
+        layer_norm_eps: float = 1e-5,
+        batch_first: bool = True,
+        norm_first: bool = True,
+        mha_kwargs = None,
+    ):
+        if mha_kwargs == None:
+            mha_kwargs = dict()
+
+        super().__init__()
+        self.encoder = nn.TransformerEncoder(
+            TransformerEncoderLayerExtended(
+                d_model=d_model,
+                nhead=nhead,
+                dim_feedforward=dim_feedforward,
+                dropout=dropout,
+                activation=activation,
+                layer_norm_eps=layer_norm_eps,
+                batch_first=batch_first,
+                norm_first=norm_first,
+                mha_kwargs=mha_kwargs,
+            ),
+            num_layers=num_layers,
+        )
+
+    def forward(
+        self,
+        x,
+        mask=None,
+        queries=None
+    ):
+        assert queries == None
+        return self.encoder(x, src_key_padding_mask=(mask==0))
+
+
 class MM_VITEncoderDecoder(nn.Module, BackboneEncoderDecoder):
     """
     mmsegmentation variant of VIT
