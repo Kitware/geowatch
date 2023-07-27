@@ -782,8 +782,6 @@ def add_site_summary_to_kwcoco(possible_summaries,
     independently) that need SC processing. We need to associate these and
     place them in the correct videos so we can process those areas.
     """
-    import dateutil.parser
-
     # input validation
     print(f'possible_summaries={possible_summaries}')
     print(f'coco_dset={coco_dset}')

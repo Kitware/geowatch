@@ -3124,8 +3124,10 @@ python -m watch.mlops.aggregate \
         macro_analysis: 0
         analyze: 0
         print_models: True
-        reference_region: final
+        reference_region: null
         concise: 0
         show_csv: 0
-    " \
+    "
+
+    \
     --rois="KR_R002,NZ_R001,CH_R001,KR_R001"
