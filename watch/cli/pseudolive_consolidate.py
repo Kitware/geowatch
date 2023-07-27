@@ -21,6 +21,10 @@ def main():
     parser.add_argument('region_id',
                         type=str,
                         help="Region ID")
+    parser.add_argument("--input_region_path",
+                        type=str,
+                        required=True,
+                        help="Path to input region file for current interval")
     parser.add_argument("-o", "--outdir",
                         type=str,
                         required=True,
@@ -80,8 +84,11 @@ def _load_region_data(region_id, ta2_collated_dir, performer_suffix=None):
             ta2_collated_dir, 'region_models',
             "{}.geojson".format(region_id))
 
-    with open(region_path) as f:
-        return json.load(f)
+    if os.path.isfile(region_path):
+        with open(region_path) as f:
+            return json.load(f)
+    else:
+        return None
 
 
 def _load_site_data(site_id, ta2_collated_dir, performer_suffix=None):
@@ -99,26 +106,36 @@ def _load_site_data(site_id, ta2_collated_dir, performer_suffix=None):
 
 
 def pseudolive_consolidate(region_id,
+                           input_region_path,
                            ta2_collated_dir_previous,
                            ta2_collated_dir_current,
                            outdir,
                            iou_threshold,
                            performer_suffix=None,
                            just_deconflict=False):
+    with open(input_region_path) as f:
+        input_region = json.load(f)
+
+    with _yield_first_feature(input_region, type_='region') as ir:
+        new_region_end_date = ir['properties']['end_date']
+
     os.makedirs(os.path.join(outdir, 'region_models'), exist_ok=True)
     os.makedirs(os.path.join(outdir, 'site_models'), exist_ok=True)
 
     previous_region = _load_region_data(
         region_id, ta2_collated_dir_previous, performer_suffix)
-    current_region = _load_region_data(
-        region_id, ta2_collated_dir_current, performer_suffix)
-
     previous_sites_by_id = {f['properties']['site_id']: f
                             for f in previous_region.get('features', ())
                             if f['properties']['type'] == 'site_summary'}
-    current_sites_by_id = {f['properties']['site_id']: f
-                           for f in current_region.get('features', ())
-                           if f['properties']['type'] == 'site_summary'}
+
+    current_region = _load_region_data(
+        region_id, ta2_collated_dir_current, performer_suffix)
+    if current_region is None:
+        current_sites_by_id = {}
+    else:
+        current_sites_by_id = {f['properties']['site_id']: f
+                               for f in current_region.get('features', ())
+                               if f['properties']['type'] == 'site_summary'}
 
     overlaps = []
     for pss in previous_sites_by_id.values():
@@ -141,8 +158,7 @@ def pseudolive_consolidate(region_id,
     output_region['features'] = [f for f in output_region.get('features', ())
                                  if f['properties']['type'] != 'site_summary']
     with _yield_first_feature(output_region, type_='region') as outr:
-        with _yield_first_feature(current_region, type_='region') as cr:
-            outr['properties']['end_date'] = cr['properties']['end_date']
+        outr['properties']['end_date'] = new_region_end_date
 
     # TODO: Move this function to top-level scope
     def _combine_sites(psid, csid):
