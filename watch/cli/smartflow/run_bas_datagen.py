@@ -454,7 +454,7 @@ def run_stac_to_cropped_kwcoco(config):
             combined_timecombined_kwcoco_path = ta1_cropped_dir / 'combined_timecombined_kwcoco.json'
 
             previous_timecombined_kwcoco_path =\
-                previous_ingressed_assets['timecombined_kwcoco_file_for_bas']
+                ub.Path(previous_ingressed_assets['timecombined_kwcoco_file_for_bas'])
 
             # On first interval nothing will be copied down so need to
             # check that we have the input explicitly
