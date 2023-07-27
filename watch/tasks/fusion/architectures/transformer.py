@@ -425,9 +425,14 @@ class ChannelwiseTransformerEncoderLayer(nn.Module):
         feature_axis='feature',
         batch_axis='batch',
         attention_impl='exact',
-        attention_kwargs=dict(),
+        attention_kwargs=None,
     ):
+
+        if attention_kwargs is None:
+            attention_kwargs = {}
+
         super().__init__()
+
         self.axes = axes
         self.default_shape = default_shape
         self.feature_axis = feature_axis
@@ -904,8 +909,7 @@ class FusionEncoder(nn.Module):
                  dropout=0.0,
                  attention_impl='exact',
                  attention_kwargs=dict(),
-                 in_features=None,
-                ):
+                 in_features=None):
         super().__init__()
         if in_features is None:
             # Use lazy linear to allow data to specify the channel dims

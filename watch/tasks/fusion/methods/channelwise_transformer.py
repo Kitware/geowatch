@@ -194,7 +194,7 @@ class MultimodalTransformerConfig(scfg.DataConfig):
         the original O(n^2) method. 'performer' - a linear
         approximation. 'reformer' - a LSH approximation.
         '''))
-    attention_kwargs = scfg.Value(dict(), type=str, help=ub.paragraph(
+    attention_kwargs = scfg.Value(None, type=str, help=ub.paragraph(
         '''
         Extra options for attention operations in the FusionModel. Including `add_zero_attn`.
         '''))
@@ -221,7 +221,6 @@ class MultimodalTransformerConfig(scfg.DataConfig):
         super().__post_init__()
         from kwutil.util_yaml import Yaml
         self.attention_kwargs = Yaml.coerce(self.attention_kwargs)
-
 
 
 class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
