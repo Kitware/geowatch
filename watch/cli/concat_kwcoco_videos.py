@@ -4,6 +4,8 @@ import sys
 import ubelt
 import kwcoco
 
+from watch.utils import kwcoco_extensions
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -50,6 +52,9 @@ def concat_kwcoco_datasets(src_kwcoco_datasets, dst):
                         out_dset.add_image(**image)
             else:
                 out_dset.add_video(dset.videos([video_id]))
+
+    # Ensure video frames are in the right order
+    kwcoco_extensions.reorder_video_frames(out_dset)
 
     out_dset.dump(dst, indent=2, newlines=True)
 
