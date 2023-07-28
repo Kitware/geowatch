@@ -137,130 +137,6 @@ class PredictConfig(DataModuleConfigMixin):
             '''))
 
 
-def make_new_predict_config(cmdline=False, **kwargs):
-    """
-    NEW scriptconfig config.
-    """
-    args = PredictConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
-    args.datamodule_defaults = args.__DATAMODULE_DEFAULTS__
-    return args
-
-
-def make_old_predict_config(cmdline=False, **kwargs):
-    """
-    OLD configargparse config.
-    Configuration for fusion prediction
-    """
-    # TODO: switch to jsonargparse / scriptconfig + jsonargparse
-    from watch.utils import configargparse_ext
-    from scriptconfig.smartcast import smartcast
-
-    parser = configargparse_ext.ArgumentParser(
-        add_config_file_help=False,
-        description='Prediction script for the fusion task',
-        auto_env_var_prefix='WATCH_FUSION_PREDICT_',
-        add_env_var_help=True,
-        formatter_class='raw',
-        config_file_parser_class='yaml',
-        args_for_setting_config_path=['--config'],
-        args_for_writing_out_config_file=['--dump'],
-    )
-    parser.add_argument('--datamodule', default='KWCocoVideoDataModule')
-    parser.add_argument('--pred_dataset', default=None, dest='pred_dataset', help='path to the output dataset (note: test_dataset is the input dataset)')
-
-    # parser.add_argument('--pred_dpath', dest='pred_dpath', type=pathlib.Path, help='path to dump results. Deprecated, do not use.')
-
-    parser.add_argument('--package_fpath', type=str)
-    parser.add_argument('--devices', default=None, help='lightning devices')  # TODO accelerator and whatever
-    parser.add_argument('--thresh', type=smartcast, default=0.01)
-
-    parser.add_argument('--with_change', type=smartcast, default='auto')
-    parser.add_argument('--with_class', type=smartcast, default='auto')
-    parser.add_argument('--with_saliency', type=smartcast, default='auto')
-
-    parser.add_argument('--track_emissions', type=smartcast, default=True, help='set to false to disable emission tracking')
-    parser.add_argument('--record_context', default=True, type=smartcast, help='If enabled records process context stats')
-
-    parser.add_argument('--quantize', type=smartcast, default=True, help='quantize outputs')
-
-    parser.add_argument('--tta_fliprot', type=smartcast, default=0, help='number of times to flip/rotate the frame, can be in [0,7]')
-    parser.add_argument('--tta_time', type=smartcast, default=0, help='number of times to expand the temporal sample for a frame'),
-
-    parser.add_argument('--clear_annots', type=smartcast, default=1, help='Clear existing annotations in output file. Otherwise keep them')
-    parser.add_argument('--drop_unused_frames', type=smartcast, default=0, help='if True, remove any images that were not predicted on')
-    parser.add_argument('--write_workers', type=smartcast, default='datamodule', help='workers to use for writing results. If unspecified uses the datamodule num_workers')
-
-    parser.add_argument('--compress', type=str, default='DEFLATE', help='type of compression for prob images')
-    parser.add_argument('--format', type=str, default='cog', help='the output format of the predicted images')
-
-    # TODO:
-    # parser.add_argument('--cache', type=smartcast, default=0, help='if True, dont rerun prediction on images where predictions exist'),
-
-    parser.add_argument(
-        '--write_preds', default=False, type=smartcast, help=ub.paragraph(
-            '''
-            If True, convert probability maps into raw "hard" predictions and
-            write them as annotations to the prediction kwcoco file.
-            '''))
-
-    parser.add_argument(
-        '--write_probs', default=True, type=smartcast, help=ub.paragraph(
-            '''
-            If True, write raw "soft" probability maps into the kwcoco file as
-            a new auxiliary channel.  The channel name is currently hard-coded
-            based on expected output heads. This may change in the future.
-            '''))
-
-    parser.set_defaults(**kwargs)
-    # parse the datamodule and method strings
-    default_args = None if cmdline else []
-    temp_args, _ = parser.parse_known_args(
-        default_args, ignore_help_args=True, ignore_write_args=True)
-
-    # get the datamodule and method classes
-    datamodule_class = getattr(datamodules, temp_args.datamodule)
-
-    # add the appropriate args to the parse
-    # for dataset, method, and trainer
-    # Note: Adds '--test_dataset' to argparse (
-    # may want to modify behavior to only expose non-training params)
-    overloadable_datamodule_keys = [
-        'channels',
-        'normalize_peritem',
-        'normalize_perframe',
-        'chip_size',
-        'chip_dims',
-        'time_steps',
-        'time_sampling',
-        'time_span',
-        'time_kernel',
-        'input_space_scale',
-        'window_space_scale',
-        'output_space_scale',
-        'use_cloudmask',
-        'mask_low_quality',
-        'observable_threshold',
-        'quality_threshold',
-        'resample_invalid_frames',
-        'set_cover_algo',
-    ]
-    parser = datamodule_class.add_argparse_args(parser)
-    datamodule_defaults = {k: parser.get_default(k) for k in overloadable_datamodule_keys}
-    parser.set_defaults(**{
-        'batch_size': 1,
-        'chip_overlap': 0.3,
-    })
-    parser.set_defaults(**{k: 'auto' for k in overloadable_datamodule_keys})
-
-    # parse and pass to main
-    parser.set_defaults(**kwargs)
-    # args, _ = parser.parse_known_args(default_args)
-    args = parser.parse_args(default_args)
-    args.datamodule_defaults = datamodule_defaults
-    # assert args.batch_size == 1
-    return args
-
-
 def build_stitching_managers(config, method, result_dataset, writer_queue=None):
     # could be torch on-device stitching
     stitch_managers = {}
@@ -718,18 +594,12 @@ def predict(cmdline=False, **kwargs):
         >>> # assert pred2.max() > 1
     """
     import rich
-    if 1:
-        args = make_new_predict_config(cmdline=cmdline, **kwargs)
-        config = args.asdict()
-        datamodule_defaults = args.datamodule_defaults
-        # print('kwargs = {}'.format(ub.urepr(kwargs, nl=1)))
-        rich.print('config = {}'.format(ub.urepr(args, nl=2)))
-    else:
-        args = make_old_predict_config(cmdline=cmdline, **kwargs)
-        config = args.__dict__.copy()
-        datamodule_defaults = args.datamodule_defaults
-        # print('kwargs = {}'.format(ub.urepr(kwargs, nl=1)))
-        rich.print('config = {}'.format(ub.urepr(args, nl=2)))
+    args = PredictConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
+    args.datamodule_defaults = args.__DATAMODULE_DEFAULTS__
+    config = args.asdict()
+    datamodule_defaults = args.datamodule_defaults
+    # print('kwargs = {}'.format(ub.urepr(kwargs, nl=1)))
+    rich.print('config = {}'.format(ub.urepr(args, nl=2)))
 
     package_fpath = ub.Path(config['package_fpath']).expand()
 
