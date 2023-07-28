@@ -9,6 +9,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Added
 
 * Add `watch.utils.util_ffspec` as an alternative to `AWS_S3_Command`, and updated most old usages.
+* Add `attention_kwargs` to models for "fixed off-by-one attention"
 
 ### Fixed
 * Fixed issue with kwcoco directory roots in prepare splits.

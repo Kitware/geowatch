@@ -1249,9 +1249,9 @@ class TransformerEncoderLayerExtended(nn.TransformerEncoderLayer):
     def __init__(self, d_model: int, nhead: int, dim_feedforward: int = 2048, dropout: float = 0.1,
                  activation: str = "relu",
                  layer_norm_eps: float = 1e-5, batch_first: bool = False, norm_first: bool = False,
-                 mha_kwargs = None,
+                 mha_kwargs=None,
                  device=None, dtype=None) -> None:
-        factory_kwargs = {'device': device, 'dtype': dtype}
+        # factory_kwargs = {'device': device, 'dtype': dtype}
         super().__init__(
             d_model=d_model,
             nhead=nhead,
@@ -1285,9 +1285,9 @@ class VanillaTransformerEncoder(nn.Module, BackboneEncoderDecoder):
         layer_norm_eps: float = 1e-5,
         batch_first: bool = True,
         norm_first: bool = True,
-        mha_kwargs = None,
+        mha_kwargs=None,
     ):
-        if mha_kwargs == None:
+        if mha_kwargs is None:
             mha_kwargs = dict()
 
         super().__init__()
@@ -1312,8 +1312,8 @@ class VanillaTransformerEncoder(nn.Module, BackboneEncoderDecoder):
         mask=None,
         queries=None
     ):
-        assert queries == None
-        return self.encoder(x, src_key_padding_mask=(mask==0))
+        assert queries is None
+        return self.encoder(x, src_key_padding_mask=(mask == 0))
 
 
 class MM_VITEncoderDecoder(nn.Module, BackboneEncoderDecoder):
