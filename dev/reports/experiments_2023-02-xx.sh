@@ -3089,7 +3089,7 @@ python -m watch.mlops.schedule_evaluation --params="
           sc_poly.site_summary: $TRUTH_DVC_DATA_DPATH/annotations/drop6/region_models/NZ_R001.geojson
     " \
     --pipeline=sc \
-    --root_dpath="$DVC_EXPT_DPATH/_toothbrush_preeval14_ac_eval" \
+    --root_dpath="$DVC_EXPT_DPATH/_toothbrush_preeval14_ac_eval_v2" \
     --queue_name "_toothbrush_preeval14_ac_eval" \
     --devices="0,1" \
     --backend=tmux --tmux_workers=6 \
