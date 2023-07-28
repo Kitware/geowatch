@@ -249,7 +249,7 @@ except ImportError:
     pass
 
 
-def new_attention_layer(embedding_size, n_heads, attention_impl='exact'):
+def new_attention_layer(embedding_size, n_heads, attention_impl='exact', **kwargs):
     """
     Example:
         >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
@@ -283,14 +283,14 @@ def new_attention_layer(embedding_size, n_heads, attention_impl='exact'):
         >>> outputs1 = layer1(inputs, key_padding_mask=key_padding_mask)
     """
     if attention_impl == 'exact':
-        attention = MultiheadSelfAttention(embedding_size, n_heads)
+        attention = MultiheadSelfAttention(embedding_size, n_heads, **kwargs)
     elif attention_impl == 'performer':
         import performer_pytorch  # NOQA
         # from performer_pytorch import SelfAttention
         # attention = SelfAttention(dim=embedding_size, heads=n_heads)
-        attention = FastMultiheadSelfAttention(embedding_size, n_heads)
+        attention = FastMultiheadSelfAttention(embedding_size, n_heads, **kwargs)
     elif attention_impl == 'reformer':
-        attention = ReformerMultiheadedSelfAttention(embedding_size, n_heads)
+        attention = ReformerMultiheadedSelfAttention(embedding_size, n_heads, **kwargs)
     else:
         raise KeyError(attention_impl)
 
@@ -424,9 +424,15 @@ class ChannelwiseTransformerEncoderLayer(nn.Module):
         default_shape=('batch', 'time', 'mode', 'height', 'width', 'feature'),
         feature_axis='feature',
         batch_axis='batch',
-        attention_impl='exact'
+        attention_impl='exact',
+        attention_kwargs=None,
     ):
+
+        if attention_kwargs is None:
+            attention_kwargs = {}
+
         super().__init__()
+
         self.axes = axes
         self.default_shape = default_shape
         self.feature_axis = feature_axis
@@ -442,7 +448,10 @@ class ChannelwiseTransformerEncoderLayer(nn.Module):
 
         self.attention_modules = nn.ModuleDict({
             self.axsep.join(axis): new_attention_layer(
-                embedding_size, n_heads, attention_impl=attention_impl)
+                embedding_size, n_heads,
+                attention_impl=attention_impl,
+                **attention_kwargs,
+            )
             for axis in axes
         })
         self.mlp = new_mlp_layer(embedding_size, dropout)
@@ -899,6 +908,7 @@ class FusionEncoder(nn.Module):
                  n_heads=8,
                  dropout=0.0,
                  attention_impl='exact',
+                 attention_kwargs=dict(),
                  in_features=None):
         super().__init__()
         if in_features is None:
@@ -917,6 +927,7 @@ class FusionEncoder(nn.Module):
                 feature_axis=feature_axis,
                 batch_axis=batch_axis,
                 attention_impl=attention_impl,
+                attention_kwargs=attention_kwargs,
             )
             for _ in range(n_layers)
         ]
@@ -1230,6 +1241,79 @@ class TransformerEncoderDecoder(nn.Module, BackboneEncoderDecoder):
 
         # final linear out
         return self.to_logits(x)
+
+
+class TransformerEncoderLayerExtended(nn.TransformerEncoderLayer):
+    __constants__ = ['batch_first', 'norm_first']
+
+    def __init__(self, d_model: int, nhead: int, dim_feedforward: int = 2048, dropout: float = 0.1,
+                 activation: str = "relu",
+                 layer_norm_eps: float = 1e-5, batch_first: bool = False, norm_first: bool = False,
+                 mha_kwargs=None,
+                 device=None, dtype=None) -> None:
+        # factory_kwargs = {'device': device, 'dtype': dtype}
+        super().__init__(
+            d_model=d_model,
+            nhead=nhead,
+            dim_feedforward=dim_feedforward,
+            dropout=dropout,
+            activation=activation,
+            layer_norm_eps=layer_norm_eps,
+            batch_first=batch_first,
+            norm_first=norm_first,
+            device=device,
+            dtype=dtype,
+        )
+        self.self_attn = nn.MultiheadAttention(
+            d_model,
+            nhead,
+            dropout=dropout,
+            batch_first=batch_first,
+            **mha_kwargs,
+        )
+
+
+class VanillaTransformerEncoder(nn.Module, BackboneEncoderDecoder):
+    def __init__(
+        self,
+        num_layers: int,
+        d_model: int,
+        nhead: int,
+        dim_feedforward: int = 2048,
+        dropout: float = 0.0,
+        activation: str = "gelu",
+        layer_norm_eps: float = 1e-5,
+        batch_first: bool = True,
+        norm_first: bool = True,
+        mha_kwargs=None,
+    ):
+        if mha_kwargs is None:
+            mha_kwargs = dict()
+
+        super().__init__()
+        self.encoder = nn.TransformerEncoder(
+            TransformerEncoderLayerExtended(
+                d_model=d_model,
+                nhead=nhead,
+                dim_feedforward=dim_feedforward,
+                dropout=dropout,
+                activation=activation,
+                layer_norm_eps=layer_norm_eps,
+                batch_first=batch_first,
+                norm_first=norm_first,
+                mha_kwargs=mha_kwargs,
+            ),
+            num_layers=num_layers,
+        )
+
+    def forward(
+        self,
+        x,
+        mask=None,
+        queries=None
+    ):
+        assert queries is None
+        return self.encoder(x, src_key_padding_mask=(mask == 0))
 
 
 class MM_VITEncoderDecoder(nn.Module, BackboneEncoderDecoder):
