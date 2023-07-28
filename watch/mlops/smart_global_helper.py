@@ -118,6 +118,10 @@ class SmartGlobalHelper:
         'resolved_params.bas_pxl_eval.workers',
     }
 
+    EXTRA_HASHID_IGNORE_COLUMNS = [
+        'params.sc_poly.site_summary',
+    ]
+
     def shared_palettes(self, macro_table):
         """
         For each key in a hard code set (relevant to SMART), assign a

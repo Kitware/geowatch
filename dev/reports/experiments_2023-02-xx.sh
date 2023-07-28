@@ -3127,7 +3127,5 @@ python -m watch.mlops.aggregate \
         reference_region: null
         concise: 1
         show_csv: 0
-    "
-
-    \
+    " \
     --rois="KR_R002,NZ_R001,CH_R001,KR_R001"

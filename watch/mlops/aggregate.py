@@ -75,6 +75,13 @@ class AggregateLoader(DataConfig):
 
     eval_nodes = Value(None, help='eval nodes to look at')
 
+    cache_resolved_results = Value(True, isflag=True, help=ub.paragraph(
+        '''
+        if True, avoid recomputing parameter resolution if possible.
+        Set to False if the specific resolved parameter / result parsers have
+        changed.
+        '''))
+
     def __post_init__(self):
         from kwutil.util_yaml import Yaml
         self.eval_nodes = Yaml.coerce(self.eval_nodes)
@@ -111,7 +118,10 @@ class AggregateLoader(DataConfig):
         for target in ub.ProgIter(input_targets, desc='loading targets', verbose=3):
             if target.is_dir():
                 # Assume Pipeline Output dir
-                eval_type_to_results = build_tables(target, config.pipeline, config.io_workers, config.eval_nodes)
+                eval_type_to_results = build_tables(
+                    target, config.pipeline, config.io_workers,
+                    config.eval_nodes,
+                    cache_resolved_results=config.cache_resolved_results)
                 for type, results in eval_type_to_results.items():
                     table = pd.concat(list(results.values()), axis=1)
                     eval_type_to_tables[type].append(table)
@@ -1759,6 +1769,8 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         """
         Consolodate / cleanup / expand information
 
+        THIS COMPUTES THE ``param_hashid`` COLUMN!
+
         The "effective params" normalize the full set of given parameters so we
         can compute more consistent param_hashid. This is done by condensing
         paths (which is a debatable design decision) as well as mapping
@@ -1766,6 +1778,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         """
         import pandas as pd
         from watch.utils import util_pandas
+        from watch.mlops.smart_global_helper import SMART_HELPER
         params = agg.params
         effective_params = params.copy()
 
@@ -1787,21 +1800,36 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             mappings[colname] = mapper
             effective_params[colname] = condensed
 
+        for colname in SMART_HELPER.EXTRA_HASHID_IGNORE_COLUMNS:
+            effective_params[colname] = 'ignore'
+
         _specified = util_pandas.DotDictDataFrame(agg.specified_params)
         _specified_params = _specified.subframe('specified')
         is_param_included = _specified_params > 0
 
         # For each unique set of effective parameters compute a hashid
-        param_cols = ub.oset(effective_params.columns).difference(agg.test_dset_cols)
+        # TODO: better mechanism for user-specified ignore param columns
+        hashid_ignore_columns = list(agg.test_dset_cols)
+        hashid_ignore_columns += SMART_HELPER.EXTRA_HASHID_IGNORE_COLUMNS
+
+        param_cols = ub.oset(effective_params.columns).difference(hashid_ignore_columns)
         param_cols = list(param_cols - {'region_id', 'node'})
-        hashids_v1 = pd.Series([None] * len(agg.index), index=agg.index.index)
-        # hashids_v0 = pd.Series([None] * len(agg.index), index=agg.index.index)
-        hashid_to_params = {}
+
         try:
             list(effective_params.groupby(param_cols, dropna=False))
         except Exception:
             effective_params = effective_params.applymap(lambda x: str(x) if isinstance(x, list) else x)
 
+        if 0:
+            # dev helper to check which params are being varied. This can help
+            # find ones that you would not expect to be varied, so they can
+            # be manually excluded.
+            from watch.utils.result_analysis import varied_value_counts
+            varied_value_counts(effective_params, min_variations=2)
+
+        # Preallocate a series with the appropriate index
+        hashids_v1 = pd.Series([None] * len(agg.index), index=agg.index.index)
+        hashid_to_params = {}
         for param_vals, group in effective_params.groupby(param_cols, dropna=False):
             # Further subdivide the group so each row only computes its hash
             # with the parameters that were included in its row
@@ -1819,13 +1847,23 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         agg.table.loc[hashids_v1.index, 'param_hashid'] = hashids_v1
         return effective_params, mappings, hashid_to_params
 
-    def find_macro_comparable(agg):
+    def find_macro_comparable(agg, verbose=0):
         """
         Search for groups that have the same parameters over multiple regions.
+
+        We determine if two columns have the same parameters by using the
+        param_hashid, so the details of how that is computed (and which
+        parameters are ignored when computing it - e.g. paths to datasets) has
+        a big impact on the behavior of this function.
+
+        SeeAlso:
+            :meth:`Aggregator.build_effective_params` -
+                the method that determines what parameters go into the
+                param_hashid, and how to normalize them.
         """
         import pandas as pd
         table = pd.concat([agg.index, agg.metrics, agg.resolved_params], axis=1)
-        table[['param_hashid']]
+        # table[['param_hashid']]
 
         # Macro aggregation over regions.
         macro_compatible = ub.ddict(list)
@@ -1840,8 +1878,10 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             for group, num in macro_compatible_num.items():
                 if region_id in group:
                     region_to_num_compatible[region_id] += num
-        # print('macro_compatible_num = {}'.format(ub.urepr(macro_compatible_num, nl=1)))
-        # print('region_to_num_compatible = {}'.format(ub.urepr(region_to_num_compatible, nl=1)))
+
+        if verbose:
+            print('macro_compatible_num = {}'.format(ub.urepr(macro_compatible_num, nl=1)))
+            print('region_to_num_compatible = {}'.format(ub.urepr(region_to_num_compatible, nl=1)))
         return macro_compatible
 
     def gather_macro_compatable_groups(agg, regions_of_interest):
@@ -1956,6 +1996,10 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
                 [yellow]WARNING: Failed to build macro results. No comparable groups
                 for rois={rois}
                 '''))
+            DEBUG = 1
+            if DEBUG:
+                # Give the user a hint as to why...
+                agg.find_macro_comparable(verbose=1)
         else:
             # Macro aggregaet comparable groups
             macro_rows = []

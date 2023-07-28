@@ -149,11 +149,13 @@ def load_iarpa_evaluation(fpath):
             sc_json_text = json.dumps(sc_json_data)
             sc_df = pd.read_json(io.StringIO(sc_json_text), orient='table')
 
+        site_prep_f1 = sc_df.loc['__macro__', 'Site Preparation']['F1']
+        active_f1 = sc_df.loc['__macro__', 'Active Construction']['F1']
         metrics.update({
             # 'mean_f1': sc_df.loc['F1'].mean(),
-            'sc_macro_f1': sc_df.loc['__macro__']['F1'].mean(),
-            'macro_f1_siteprep': sc_df.loc['__macro__', 'Site Preparation']['F1'],
-            'macro_f1_active': sc_df.loc['__macro__', 'Site Preparation']['F1'],
+            'sc_macro_f1': (site_prep_f1 + active_f1) / 2,
+            'macro_f1_siteprep': site_prep_f1,
+            'macro_f1_active': active_f1,
         })
 
         if '__micro__' in sc_df.index:
