@@ -349,7 +349,7 @@ def building_in_image_features(coco_img, site_id, config):
     import geopandas as gpd
     import warnings
     annots = coco_img.annots()
-    flags = np.array([r == 'pred_poly' for r in annots.lookup('role', None)])
+    flags = np.array([r == 'pred_poly' for r in annots.lookup('role', None)], dtype=bool)
     box_annots = annots.compress(~flags)
     poly_annots = annots.compress(flags)
     is_main_poly = [t == site_id for t in poly_annots.lookup('track_id')]
