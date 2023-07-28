@@ -1169,10 +1169,35 @@ class AggregatorAnalysisMixin:
 
         if verbose:
             from watch.utils.result_analysis import varied_value_counts
-            rich.print('Parameter LUT: {}'.format(ub.urepr(top_param_lut, nl=2)))
+
+            PARAMTER_DISPLAY_MODE = 'auto'
+
+            if PARAMTER_DISPLAY_MODE == 'auto':
+                PARAMTER_DISPLAY_MODE = 'varied-requested'
+                if len(top_param_lut) == 1:
+                    PARAMTER_DISPLAY_MODE = 'full-requested'
 
             varied = varied_value_counts(top_param_lut.values(), dropna=True,
                                          min_variations=2, default=None)
+
+            if PARAMTER_DISPLAY_MODE == 'full-requested':
+                # Show full requested parameters for each hash
+                rich.print('Parameter LUT: {}'.format(ub.urepr(top_param_lut, nl=2)))
+            elif PARAMTER_DISPLAY_MODE == 'varied-requested':
+                # Show all unvaried requested parameters and then the varied
+                # requested parameters for each hash
+                varied_param_names = set(varied.keys())
+                top_varied_param_lut = {k: ub.udict(v) & varied_param_names
+                                        for k, v in top_param_lut.items()}
+
+                top_nonvaried_param_lut = {
+                    k: ub.udict(v) - varied_param_names
+                    for k, v in top_param_lut.items()}
+
+                non_varied_params = ub.udict.union(*top_nonvaried_param_lut.values())
+                rich.print('Varied Basis: = {}'.format(ub.urepr(varied, nl=2)))
+                rich.print('Constant Params: {}'.format(ub.urepr(non_varied_params, nl=2)))
+                rich.print('Varied Parameter LUT: {}'.format(ub.urepr(top_varied_param_lut, nl=2)))
 
             if show_csv:
                 varied_keys = list(varied.keys())
@@ -1182,8 +1207,6 @@ class AggregatorAnalysisMixin:
                 param_table = param_table.reorder(varied_keys, axis=1, intersect=1)
                 print('Note, to paste into sheets, there will be an icon after you paste (that looks like a clipboard) you can click and it give you an option: Split text to columns')
                 print(param_table.to_csv(header=True, index=True))
-
-            rich.print('Varied Parameters: = {}'.format(ub.urepr(varied, nl=2)))
 
             # Check for a common special case that we can make more concise output for
             only_one_top_item = all(len(t) == 1 for t in region_id_to_summary.values())
@@ -1229,7 +1252,13 @@ class AggregatorAnalysisMixin:
 
                     rich.print(_summary_table.iloc[::-1].to_string(index=False))
                     if show_csv:
-                        print('Note, to paste into sheets, there will be an icon after you paste (that looks like a clipboard) you can click and it give you an option: Split text to columns')
+                        print(ub.paragraph(
+                            '''
+                            Note, to paste into sheets, there will be an icon
+                            after you paste (that looks like a clipboard) you
+                            can click and it give you an option: Split text to
+                            columns
+                        '''))
                         print(_summary_table_csv.iloc[::-1].to_csv(header=True, index=False))
                         ...
                     rich.print('')

@@ -3090,7 +3090,7 @@ python -m watch.mlops.schedule_evaluation --params="
     " \
     --pipeline=sc \
     --root_dpath="$DVC_EXPT_DPATH/_toothbrush_preeval14_ac_eval_v2" \
-    --queue_name "_toothbrush_preeval14_ac_eval" \
+    --queue_name "_toothbrush_preeval14_ac_eval_v2" \
     --devices="0,1" \
     --backend=tmux --tmux_workers=6 \
     --cache=1 --skip_existing=1 --run=1
@@ -3099,9 +3099,9 @@ DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch.mlops.aggregate \
     --pipeline=sc \
     --target "
-        - $DVC_EXPT_DPATH/_toothbrush_preeval14_ac_eval
+        - $DVC_EXPT_DPATH/_toothbrush_preeval14_ac_eval_v2
     " \
-    --output_dpath="$DVC_EXPT_DPATH/_toothbrush_preeval14_ac_eval/aggregate" \
+    --output_dpath="$DVC_EXPT_DPATH/_toothbrush_preeval14_ac_eval_v2/aggregate" \
     --resource_report=0 \
     --eval_nodes="
         - sc_poly_eval
@@ -3125,7 +3125,7 @@ python -m watch.mlops.aggregate \
         analyze: 0
         print_models: True
         reference_region: null
-        concise: 0
+        concise: 1
         show_csv: 0
     "
 
