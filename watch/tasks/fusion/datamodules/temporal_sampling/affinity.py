@@ -497,7 +497,7 @@ def make_soft_mask(time_kernel, relative_unixtimes):
         >>> kwplot.show_if_requested()
     """
     if len(time_kernel) == 1:
-        raise Exception
+        raise Exception(f'Time kernel has a length of 1: time_kernel={time_kernel!r}')
 
     first = time_kernel[0]
     second = time_kernel[1]

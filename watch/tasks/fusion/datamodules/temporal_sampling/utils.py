@@ -2,10 +2,27 @@ import numpy as np
 import ubelt as ub
 
 
-def guess_missing_unixtimes(unixtimes):
+def guess_missing_unixtimes(unixtimes, assume_delta=86400):
     """
     Hueristic solution to fill in missing time values via interpolation /
     extrapolation.
+
+    To succesfully interpolate nan values must be between two non-nan values.
+    In all other cases we have to make an assumption about the timedelta
+    between frames, which can be specified and is one day by default.
+
+    Args:
+        unixtimes (ndarray): numpy array of numeric unix timestamps that may
+            contain nan values.
+
+        assume_delta (float):
+            The fallback delta between timesteps when surrounding context is
+            unavailable.  Defaults to 86400 seconds - i.e. 1 day.
+
+    Returns:
+        ndarray:
+            The same array, but nan values are filled with interpolated or
+            extrapolated values.
 
     Example:
         >>> from watch.tasks.fusion.datamodules.temporal_sampling.utils import *  # NOQA
@@ -33,7 +50,6 @@ def guess_missing_unixtimes(unixtimes):
         have_exactly1 = num_have == 1
         have_atleast2 = num_have > 1
 
-        assume_delta = 60 * 60 * 24  # 1 day
         if have_exactly1:
             # Only 1 date still means we have to extrapolate.
             have_idx = np.where(~missing_date)[0][0]
@@ -191,6 +207,13 @@ def coerce_multi_time_kernel(pattern):
                 # We might be given a list of multiple kernels
                 try:
                     multi_kernel = [coerce_time_kernel(p) for p in pattern]
+                    WORKAROUND_SINGLE_KERNELS = 1
+                    if WORKAROUND_SINGLE_KERNELS:
+                        # This is not a total fix for the ambiguous case, but
+                        # it will get us by for now. If all sub-kernels have a
+                        # length of 1, the user probably didnt mean that.
+                        if all(len(k) == 1 for k in multi_kernel):
+                            raise Exception('ambiguity workaround')
                 except Exception:
                     # Or we might be given just a single kernel.
                     multi_kernel = [[coerce_timedelta(d) for d in pattern]]

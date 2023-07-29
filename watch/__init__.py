@@ -4,6 +4,7 @@ The GEOWATCH module
 Useful environs:
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
     DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+    HIGHRES_DVC_EXPT_DPATH=$(geowatch_dvc --tags='smart_drop7' --hardware=auto)
     DATA_DVC_DPATH=$DVC_DATA_DPATH
     EXPT_DVC_DPATH=$DVC_EXPT_DPATH
 
@@ -18,7 +19,7 @@ import ubelt as ub
 import warnings
 
 
-__version__ = '0.8.1'
+__version__ = '0.8.2'
 
 
 # ../dev/maintain/generate_authors.py

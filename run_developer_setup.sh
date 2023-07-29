@@ -6,6 +6,12 @@ Install watch development environment
 CommandLine:
     cd $HOME/code/watch
     ./run_developer_setup.sh
+
+JonSetup:
+
+    WATCH_STRICT=0 WITH_DVC=1 WITH_COLD=1 ./run_developer_setup.sh
+
+
 '
 
 

@@ -75,6 +75,13 @@ class AggregateLoader(DataConfig):
 
     eval_nodes = Value(None, help='eval nodes to look at')
 
+    cache_resolved_results = Value(True, isflag=True, help=ub.paragraph(
+        '''
+        if True, avoid recomputing parameter resolution if possible.
+        Set to False if the specific resolved parameter / result parsers have
+        changed.
+        '''))
+
     def __post_init__(self):
         from kwutil.util_yaml import Yaml
         self.eval_nodes = Yaml.coerce(self.eval_nodes)
@@ -111,7 +118,10 @@ class AggregateLoader(DataConfig):
         for target in ub.ProgIter(input_targets, desc='loading targets', verbose=3):
             if target.is_dir():
                 # Assume Pipeline Output dir
-                eval_type_to_results = build_tables(target, config.pipeline, config.io_workers, config.eval_nodes)
+                eval_type_to_results = build_tables(
+                    target, config.pipeline, config.io_workers,
+                    config.eval_nodes,
+                    cache_resolved_results=config.cache_resolved_results)
                 for type, results in eval_type_to_results.items():
                     table = pd.concat(list(results.values()), axis=1)
                     eval_type_to_tables[type].append(table)
@@ -1053,7 +1063,9 @@ class AggregatorAnalysisMixin:
         # analysis.results
         analysis.analysis()
 
-    def report_best(agg, top_k=3, shorten=True, per_group=2, verbose=1, reference_region=None, print_models=False) -> TopResultsReport:
+    def report_best(agg, top_k=3, shorten=True, per_group=2, verbose=1,
+                    reference_region=None, print_models=False, concise=False,
+                    show_csv=False) -> TopResultsReport:
         """
         Report the top k pointwise results for each region / macro-region.
 
@@ -1068,11 +1080,18 @@ class AggregatorAnalysisMixin:
             shorten (bool): if True, shorten the columns by removing
                 non-ambiguous prefixes wrt to a known node type.
 
+            concise (bool):
+                if True, remove certain columns that communicate context for a
+                more concise report.
+
             reference_region (str | None):
                 if specified filter the top results in all other regions to
                 only be with respect to the top results in this region (or
                 macro region). Can be set to the special key "final" to choose
                 the last region, which is typically a macro region.
+
+            show_csv (bool):
+                also print as a CSV suitable for copy/paste into google sheets.
 
         Returns:
             TopResultsReport:
@@ -1159,7 +1178,45 @@ class AggregatorAnalysisMixin:
         top_param_lut = ub.udict(big_param_lut).subdict(param_hashid_order)
 
         if verbose:
-            rich.print('Parameter LUT: {}'.format(ub.urepr(top_param_lut, nl=2)))
+            from watch.utils.result_analysis import varied_value_counts
+
+            PARAMTER_DISPLAY_MODE = 'auto'
+
+            if PARAMTER_DISPLAY_MODE == 'auto':
+                PARAMTER_DISPLAY_MODE = 'varied-requested'
+                if len(top_param_lut) == 1:
+                    PARAMTER_DISPLAY_MODE = 'full-requested'
+
+            varied = varied_value_counts(top_param_lut.values(), dropna=True,
+                                         min_variations=2, default=None)
+
+            if PARAMTER_DISPLAY_MODE == 'full-requested':
+                # Show full requested parameters for each hash
+                rich.print('Parameter LUT: {}'.format(ub.urepr(top_param_lut, nl=2)))
+            elif PARAMTER_DISPLAY_MODE == 'varied-requested':
+                # Show all unvaried requested parameters and then the varied
+                # requested parameters for each hash
+                varied_param_names = set(varied.keys())
+                top_varied_param_lut = {k: ub.udict(v) & varied_param_names
+                                        for k, v in top_param_lut.items()}
+
+                top_nonvaried_param_lut = {
+                    k: ub.udict(v) - varied_param_names
+                    for k, v in top_param_lut.items()}
+
+                non_varied_params = ub.udict.union(*top_nonvaried_param_lut.values())
+                rich.print('Varied Basis: = {}'.format(ub.urepr(varied, nl=2)))
+                rich.print('Constant Params: {}'.format(ub.urepr(non_varied_params, nl=2)))
+                rich.print('Varied Parameter LUT: {}'.format(ub.urepr(top_varied_param_lut, nl=2)))
+
+            if show_csv:
+                varied_keys = list(varied.keys())
+                param_table = pd.DataFrame.from_dict(top_param_lut).T
+                param_table.index.name = 'param_hashid'
+                param_table = util_pandas.DataFrame(param_table)
+                param_table = param_table.reorder(varied_keys, axis=1, intersect=1)
+                print('Note, to paste into sheets, there will be an icon after you paste (that looks like a clipboard) you can click and it give you an option: Split text to columns')
+                print(param_table.to_csv(header=True, index=True))
 
             # Check for a common special case that we can make more concise output for
             only_one_top_item = all(len(t) == 1 for t in region_id_to_summary.values())
@@ -1176,7 +1233,11 @@ class AggregatorAnalysisMixin:
                 # submacro = ub.udict(_agg.macro_key_to_regions) & justone['region_id'].values
                 # if submacro:
                 #     print('Macro Regions LUT: ' +  ub.urepr(submacro, nl=1))
-                rich.print(justone)
+                _justone = util_pandas.DataFrame(justone)
+                if concise:
+                    _justone = _justone.safe_drop(['node'], axis=1)
+                    _justone = _justone.safe_drop(['fpath'], axis=1)
+                rich.print(_justone)
                 rich.print('agg.macro_key_to_regions = {}'.format(ub.urepr(_agg.macro_key_to_regions, nl=1)))
             else:
                 for region_id, summary_table in region_id_to_summary.items():
@@ -1188,10 +1249,28 @@ class AggregatorAnalysisMixin:
 
                     if region_id in _agg.macro_key_to_regions:
                         macro_regions = _agg.macro_key_to_regions[region_id]
-                        rich.print(f'Top {len(summary_table)} / {ntotal} for {region_id} = {macro_regions}{ref_text}')
+                        rich.print(f'Top {len(summary_table)} / {ntotal} for {agg.type}, {region_id} = {macro_regions}{ref_text}')
                     else:
-                        rich.print(f'Top {len(summary_table)} / {ntotal} for {region_id}{ref_text}')
-                    rich.print(summary_table.iloc[::-1].to_string())
+                        rich.print(f'Top {len(summary_table)} / {ntotal} for {agg.type}, {region_id}{ref_text}')
+
+                    _summary_table = util_pandas.DataFrame(summary_table)
+                    _summary_table_csv = _summary_table
+                    if concise:
+                        _summary_table = _summary_table.safe_drop(['node'], axis=1)
+                        _summary_table = _summary_table.safe_drop(['fpath'], axis=1)
+                        _summary_table_csv = _summary_table_csv.safe_drop(['fpath'], axis=1)
+
+                    rich.print(_summary_table.iloc[::-1].to_string(index=False))
+                    if show_csv:
+                        print(ub.paragraph(
+                            '''
+                            Note, to paste into sheets, there will be an icon
+                            after you paste (that looks like a clipboard) you
+                            can click and it give you an option: Split text to
+                            columns
+                        '''))
+                        print(_summary_table_csv.iloc[::-1].to_csv(header=True, index=False))
+                        ...
                     rich.print('')
 
         if print_models:
@@ -1237,11 +1316,14 @@ class AggregatorAnalysisMixin:
             # # Need to remove invariants for now
             # flags = ~np.array(['invariants' in chan for chan in chosen_table['resolved_params.bas_pxl_fit.channels']])
             # chosen_table = chosen_table[flags]
-
-            chosen_models = list(ub.oset(chosen_table[model_col].tolist()))
-            shortlist_text = Yaml.dumps(chosen_models)
-            print('Model shortlist (top of the list is a higher scoring model):')
-            print(shortlist_text)
+            # chosen_models = list(ub.oset(chosen_table[model_col].tolist()))
+            print('Model shortlist (lower rank is a better scoring model):')
+            for chosen_row in ub.unique(chosen_table.to_dict('records'), key=lambda row: row[model_col]):
+                model_fpath = chosen_row[model_col]
+                param_hashid = chosen_row['param_hashid']
+                rank = chosen_row['rank']
+                rich.print(f'[blue]# Best Rank: [cyan] {rank} [blue]{param_hashid}')
+                print(Yaml.dumps([model_fpath]).strip())
 
             # all_models_fpath = ub.Path('$HOME/code/watch/dev/reports/split1_all_models.yaml').expand()
             # known_models = Yaml.coerce(all_models_fpath)
@@ -1687,6 +1769,8 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         """
         Consolodate / cleanup / expand information
 
+        THIS COMPUTES THE ``param_hashid`` COLUMN!
+
         The "effective params" normalize the full set of given parameters so we
         can compute more consistent param_hashid. This is done by condensing
         paths (which is a debatable design decision) as well as mapping
@@ -1694,6 +1778,7 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         """
         import pandas as pd
         from watch.utils import util_pandas
+        from watch.mlops.smart_global_helper import SMART_HELPER
         params = agg.params
         effective_params = params.copy()
 
@@ -1715,21 +1800,36 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             mappings[colname] = mapper
             effective_params[colname] = condensed
 
+        for colname in SMART_HELPER.EXTRA_HASHID_IGNORE_COLUMNS:
+            effective_params[colname] = 'ignore'
+
         _specified = util_pandas.DotDictDataFrame(agg.specified_params)
         _specified_params = _specified.subframe('specified')
         is_param_included = _specified_params > 0
 
         # For each unique set of effective parameters compute a hashid
-        param_cols = ub.oset(effective_params.columns).difference(agg.test_dset_cols)
+        # TODO: better mechanism for user-specified ignore param columns
+        hashid_ignore_columns = list(agg.test_dset_cols)
+        hashid_ignore_columns += SMART_HELPER.EXTRA_HASHID_IGNORE_COLUMNS
+
+        param_cols = ub.oset(effective_params.columns).difference(hashid_ignore_columns)
         param_cols = list(param_cols - {'region_id', 'node'})
-        hashids_v1 = pd.Series([None] * len(agg.index), index=agg.index.index)
-        # hashids_v0 = pd.Series([None] * len(agg.index), index=agg.index.index)
-        hashid_to_params = {}
+
         try:
             list(effective_params.groupby(param_cols, dropna=False))
         except Exception:
             effective_params = effective_params.applymap(lambda x: str(x) if isinstance(x, list) else x)
 
+        if 0:
+            # dev helper to check which params are being varied. This can help
+            # find ones that you would not expect to be varied, so they can
+            # be manually excluded.
+            from watch.utils.result_analysis import varied_value_counts
+            varied_value_counts(effective_params, min_variations=2)
+
+        # Preallocate a series with the appropriate index
+        hashids_v1 = pd.Series([None] * len(agg.index), index=agg.index.index)
+        hashid_to_params = {}
         for param_vals, group in effective_params.groupby(param_cols, dropna=False):
             # Further subdivide the group so each row only computes its hash
             # with the parameters that were included in its row
@@ -1747,13 +1847,23 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         agg.table.loc[hashids_v1.index, 'param_hashid'] = hashids_v1
         return effective_params, mappings, hashid_to_params
 
-    def find_macro_comparable(agg):
+    def find_macro_comparable(agg, verbose=0):
         """
         Search for groups that have the same parameters over multiple regions.
+
+        We determine if two columns have the same parameters by using the
+        param_hashid, so the details of how that is computed (and which
+        parameters are ignored when computing it - e.g. paths to datasets) has
+        a big impact on the behavior of this function.
+
+        SeeAlso:
+            :meth:`Aggregator.build_effective_params` -
+                the method that determines what parameters go into the
+                param_hashid, and how to normalize them.
         """
         import pandas as pd
         table = pd.concat([agg.index, agg.metrics, agg.resolved_params], axis=1)
-        table[['param_hashid']]
+        # table[['param_hashid']]
 
         # Macro aggregation over regions.
         macro_compatible = ub.ddict(list)
@@ -1768,8 +1878,10 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
             for group, num in macro_compatible_num.items():
                 if region_id in group:
                     region_to_num_compatible[region_id] += num
-        # print('macro_compatible_num = {}'.format(ub.urepr(macro_compatible_num, nl=1)))
-        # print('region_to_num_compatible = {}'.format(ub.urepr(region_to_num_compatible, nl=1)))
+
+        if verbose:
+            print('macro_compatible_num = {}'.format(ub.urepr(macro_compatible_num, nl=1)))
+            print('region_to_num_compatible = {}'.format(ub.urepr(region_to_num_compatible, nl=1)))
         return macro_compatible
 
     def gather_macro_compatable_groups(agg, regions_of_interest):
@@ -1884,6 +1996,10 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
                 [yellow]WARNING: Failed to build macro results. No comparable groups
                 for rois={rois}
                 '''))
+            DEBUG = 1
+            if DEBUG:
+                # Give the user a hint as to why...
+                agg.find_macro_comparable(verbose=1)
         else:
             # Macro aggregaet comparable groups
             macro_rows = []

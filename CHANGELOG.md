@@ -23,12 +23,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * We no longer require a hacked pycold
 * Demo region model timestamps no longer depend on the locale.
 * Bumped to kwutil 0.2.3, which fixes a problem with numeric timestamps being parsed in the local time zone instead of UTC.
+* Added workaround to time kernel parser for an ambiguous case. Still not totally fixed, but current models now work by default.
 
 
 ### Changed
 * Improved `geowatch site_stats` to accept region and/or site models and provide nice statistics.
 * Pytorch Package Headers now include extra information like timestamp, and git hashes.
 * Refactored smartflow ingress / egress 
+* Metrics now remember the git hash of the metrics code in addition to its version.
 
 ### Removed
 * Removed old fit script. The lightning CLI script is considered stable.

@@ -13,7 +13,8 @@ from watch.mlops import smart_pipeline
 from watch.mlops import smart_result_parser
 
 
-def build_tables(root_dpath, pipeline, io_workers, eval_nodes):
+def build_tables(root_dpath, pipeline, io_workers, eval_nodes,
+                 cache_resolved_results):
     import pandas as pd
     from kwutil import util_progress
     dag = smart_pipeline.make_smart_pipeline(pipeline)
@@ -92,7 +93,8 @@ def build_tables(root_dpath, pipeline, io_workers, eval_nodes):
                 transient=True)
             for fpath in submit_prog:
                 job = executor.submit(load_result_worker, fpath, node_name,
-                                      out_node_key)
+                                      out_node_key,
+                                      use_cache=cache_resolved_results)
                 jobs.append(job)
 
             num_ignored = 0
@@ -139,7 +141,7 @@ def _lookup_result_loader(node_name):
 
 
 @xdev.profile
-def load_result_worker(fpath, node_name, out_node_key):
+def load_result_worker(fpath, node_name, out_node_key, use_cache=True):
     """
     Ignore:
         fpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_testpipe/eval/flat/bas_poly_eval/bas_poly_eval_id_1ad531cc/poly_eval.json')
@@ -150,8 +152,10 @@ def load_result_worker(fpath, node_name, out_node_key):
     from watch.utils import util_json
     import safer
     fpath = ub.Path(fpath)
-    resolved_json_fpath = fpath.parent / 'resolved_result_row_v6.json'
-    if resolved_json_fpath.exists():
+
+    resolved_json_fpath = fpath.parent / 'resolved_result_row_v7.json'
+
+    if use_cache and resolved_json_fpath.exists():
         # Load the cached row data
         result = json.loads(resolved_json_fpath.read_text())
     else:
@@ -278,13 +282,25 @@ def load_result_resolved(node_dpath):
     Recurse through the DAG filesytem structure and load resolved
     configurations from each step.
 
-    from watch.mlops.aggregate import *  # NOQA
-    node_dpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_testpipe/eval/flat/bas_poly_eval/bas_poly_eval_id_1ad531cc')
-    got = load_result_resolved(node_dpath)
+    Args:
+        node_dpath (str | PathLike):
+            the path to the evaluation node directory. The specific type of
+            evaluation node must have a known (currently hard-coded) condition
+            in this function that knows how to parse it.
 
-    node_dpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_testpipe/eval/flat/bas_pxl_eval/bas_pxl_eval_id_6028edfe/')
+    Returns:
+        Dict - flat_resolved - a flat dot-dictionary with resolved params
 
-    node_dpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_timekernel_test_drop4/eval/flat/bas_pxl_eval/bas_pxl_eval_id_5d38c6b3')
+    TODO:
+        Some mechanism to let the user specify how to parse an evaluation node
+        of a given type.
+
+    Ignore:
+        from watch.mlops.aggregate import *  # NOQA
+        node_dpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_testpipe/eval/flat/bas_poly_eval/bas_poly_eval_id_1ad531cc')
+        got = load_result_resolved(node_dpath)
+        node_dpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_testpipe/eval/flat/bas_pxl_eval/bas_pxl_eval_id_6028edfe/')
+        node_dpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_timekernel_test_drop4/eval/flat/bas_pxl_eval/bas_pxl_eval_id_5d38c6b3')
     """
     # from watch.utils.util_dotdict import explore_nested_dict
     node_dpath = ub.Path(node_dpath)
@@ -423,9 +439,7 @@ def _generalized_process_flat_resolved(fpath, node_process_name, node_type):
     info = smart_result_parser.parse_json_header(fpath)
     proc_item = smart_result_parser.find_info_items(info, {'process'}, {node_process_name})
     items = list(proc_item)
-    import xdev
-    with xdev.embed_on_exception_context:
-        assert len(items) == 1
+    assert len(items) == 1
     proc_item = items[0]
     nest_resolved = new_process_context_parser(proc_item)
     flat_resolved = util_dotdict.DotDict.from_nested(nest_resolved)
