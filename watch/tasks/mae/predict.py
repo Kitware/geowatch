@@ -171,6 +171,20 @@ class WatchDataset(Dataset):
             samples = sample_grid['targets']
             for tr in samples:
                 tr['vidid'] = tr['video_id']  # hack
+
+            WORKAROUND_NON_UNIQUE_IMAGE_IDS = 1
+            if WORKAROUND_NON_UNIQUE_IMAGE_IDS:
+                # FIXME: there is an issue in sample_video_spacetime_targets.
+                # It should not be producing duplicate image ids. Workaround it
+                # for now, but fix it for real later.
+                workaround_samples = []
+                for tr in samples:
+                    unique_gids = list(ub.unique(tr['gids']))
+                    if len(unique_gids) == time_dims:
+                        tr['gids'] = unique_gids
+                        workaround_samples.append(tr)
+                samples = workaround_samples
+
             print('made grid')
         else:
             grid = self.sampler.new_sample_grid(**{
