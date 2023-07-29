@@ -100,6 +100,22 @@ class MAEPredictConfig(scfg.DataConfig):
 
 
 class WatchDataset(Dataset):
+    """
+
+    Example:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> from watch.tasks.mae.predict import *  # NOQA
+        >>> import watch
+        >>> import kwcoco
+        >>> import ubelt as ub
+        >>> dvc_dpath = watch.find_dvc_dpath(tags='drop7_data', hardware='auto')
+        >>> coco_fpath = dvc_dpath / 'Drop7-Cropped2GSD/BR_R002/BR_R002.kwcoco.zip'
+        >>> self = WatchDataset(coco_fpath)
+        >>> for idx in ub.ProgIter(range(len(self))):
+        >>>     images, item = self[idx]
+
+    """
+
     S2_l2a_channel_names = [
         'B02.tif', 'B01.tif', 'B03.tif', 'B04.tif', 'B05.tif', 'B06.tif', 'B07.tif', 'B08.tif', 'B09.tif', 'B11.tif', 'B12.tif', 'B8A.tif'
     ]
