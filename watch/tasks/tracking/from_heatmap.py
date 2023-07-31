@@ -1244,6 +1244,13 @@ class TimeAggregatedPolysConfig(_GidPolyConfig):
     """
     This is an intermediate config that we will use to transition between the
     current dataclass configuration and a new scriptconfig based one.
+
+
+    python -c "if 1:
+        from watch.tasks.tracking.from_heatmap import TimeAggregatedBAS
+        TimeAggregatedBAS().argparse().print_help()
+    "
+
     """
     bg_key = scfg.Value(None, help=ub.paragraph(
         '''
