@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import sys
 import traceback
+import shutil
 
 import scriptconfig as scfg
 import ubelt as ub
@@ -254,6 +255,8 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
                 traceback.print_exception(*sys.exc_info())
                 ingressed_assets['depth_filtered_sites'] = input_sites_dpath
                 ingressed_assets['depth_filtered_regions'] = input_region_dpath
+                shutil.copytree(input_sites_dpath, output_sites_dpath)
+                shutil.copytree(input_region_dpath, output_region_dpath)
             else:
                 raise
         else:
@@ -264,11 +267,11 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
                 site_dpath=output_sites_dpath,
             )
 
-            # HACK: Only egress sites and models if there was data to
-            # generate them; with the intent of skipping the downstream
-            # tasks in the DAG if there's no site output here
-            ingressed_assets['depth_filtered_sites'] = output_sites_dpath
-            ingressed_assets['depth_filtered_regions'] = output_region_dpath
+    # HACK: Only egress sites and models if there was data to
+    # generate them; with the intent of skipping the downstream
+    # tasks in the DAG if there's no site output here
+    ingressed_assets['depth_filtered_sites'] = output_sites_dpath
+    ingressed_assets['depth_filtered_regions'] = output_region_dpath
 
     # 4. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to

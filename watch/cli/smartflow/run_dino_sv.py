@@ -8,6 +8,7 @@ SeeAlso:
 """
 import sys
 import traceback
+import shutil
 
 import scriptconfig as scfg
 import ubelt as ub
@@ -202,14 +203,11 @@ def run_dino_sv(config):
                 print("WARNING: Exception occurred (printed below), passing input sites / region models as output")
                 traceback.print_exception(*sys.exc_info())
 
-                ingressed_assets['sv_out_site_models'] = input_sites_dpath
-                ingressed_assets['sv_out_region_models'] = input_region_dpath
+                shutil.copytree(input_sites_dpath, output_sites_dpath)
+                shutil.copytree(input_region_dpath, output_region_dpath)
             else:
                 raise
         else:
-            ingressed_assets['sv_out_site_models'] = output_sites_dpath
-            ingressed_assets['sv_out_region_models'] = output_region_dpath
-
             # Validate and fix all outputs
             util_framework.fixup_and_validate_site_and_region_models(
                 region_dpath=output_region_fpath.parent,
@@ -220,7 +218,8 @@ def run_dino_sv(config):
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)
     print("* Egressing KWCOCO dataset and associated STAC item *")
-
+    ingressed_assets['sv_out_site_models'] = output_sites_dpath
+    ingressed_assets['sv_out_region_models'] = output_region_dpath
     if dino_boxes_kwcoco_path.exists():
         ingressed_assets['sv_dino_boxes_kwcoco'] = dino_boxes_kwcoco_path
 
