@@ -203,8 +203,8 @@ def run_dino_sv(config):
                 print("WARNING: Exception occurred (printed below), passing input sites / region models as output")
                 traceback.print_exception(*sys.exc_info())
 
-                shutil.copytree(input_sites_dpath, output_sites_dpath)
-                shutil.copytree(input_region_dpath, output_region_dpath)
+                shutil.copytree(input_sites_dpath, output_sites_dpath, dirs_exist_ok=True)
+                shutil.copytree(input_region_dpath, output_region_dpath, dirs_exist_ok=True)
             else:
                 raise
         else:

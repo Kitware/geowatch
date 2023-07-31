@@ -176,6 +176,7 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
     output_region_fpath = output_region_dpath / f'{region_id}.geojson'
 
     output_region_dpath.ensuredir()
+    output_sites_dpath.ensuredir()
 
     # 3.3. Check that we have at least one "video" (BAS identified
     # site) to run over; if not skip SV fusion and KWCOCO to GeoJSON
@@ -255,8 +256,8 @@ def run_dzyne_parallel_site_vali_for_baseline(config):
                 traceback.print_exception(*sys.exc_info())
                 ingressed_assets['depth_filtered_sites'] = input_sites_dpath
                 ingressed_assets['depth_filtered_regions'] = input_region_dpath
-                shutil.copytree(input_sites_dpath, output_sites_dpath)
-                shutil.copytree(input_region_dpath, output_region_dpath)
+                shutil.copytree(input_sites_dpath, output_sites_dpath, dirs_exist_ok=True)
+                shutil.copytree(input_region_dpath, output_region_dpath, dirs_exist_ok=True)
             else:
                 raise
         else:
