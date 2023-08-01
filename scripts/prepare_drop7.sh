@@ -694,7 +694,7 @@ python -m watch.cli.prepare_teamfeats \
     --cold_workermode=process \
     --cold_workers=8 \
     --tmux_workers=2 \
-    --backend=tmux --run=0
+    --backend=tmux --run=0 --print-commands
     #--base_fpath "$BUNDLE_DPATH"/*/imganns-*[0-9].kwcoco.zip \
 
 
@@ -726,3 +726,28 @@ python -m watch.tasks.depth.predict \
     --output=/data2/dvc-repos/smart_drop7/Drop7-Cropped2GSD/NZ_R001/NZ_R001_dzyne_depth.kwcoco.zip \
     --data_workers=2 \
     --window_size=1440
+
+
+python -m watch.tasks.rutgers_material_seg_v2.predict \
+    --kwcoco_fpath=/media/joncrall/flash1/smart_drop7/Drop7-Cropped2GSD/KR_R001/KR_R001.kwcoco.zip \
+    --model_fpath=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/rutgers/ru_model_05_25_2023.ckpt \
+    --config_fpath=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/rutgers/ru_config_05_25_2023.yaml \
+    --output_kwcoco_fpath=/media/joncrall/flash1/smart_drop7/Drop7-Cropped2GSD/KR_R001/KR_R001_rutgers_material_seg_v4.kwcoco.zip \
+    --workers=2
+
+
+DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='ssd')
+ls "$DVC_DATA_DPATH/Drop7-Cropped2GSD"
+python -m watch.cli.prepare_splits \
+    --base_fpath "$DVC_DATA_DPATH"/Drop7-Cropped2GSD/*/combo_*_D.kwcoco.zip \
+    --dst_dpath "$DVC_DATA_DPATH"/Drop7-Cropped2GSD \
+    --suffix=depth --run=1 --workers=2
+
+REGION_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='ssd')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='auto')
+geowatch reproject_annotations \
+    --src "$DVC_DATA_DPATH"/Drop7-Cropped2GSD/PE_R001.kwcoco.zip \
+    --inplace \
+    --io_workers=avail \
+    --region_models="$REGION_DATA_DPATH/annotations/drop6_hard_v1/region_models/*.geojson" \
+    --site_models="$REGION_DATA_DPATH/annotations/drop6_hard_v1/site_models/*.geojson"

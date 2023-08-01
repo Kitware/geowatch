@@ -63,6 +63,8 @@ class PrepareSplitsConfig(scfg.DataConfig):
         'workers': scfg.Value(2, help='', alias=['tmux_workers']),
 
         'suffix': scfg.Value('', help='suffix for the output split filenames'),
+
+        'splits': scfg.Value('*', help='restrict to only a specific split')
     }
 
 
@@ -100,11 +102,14 @@ IGNORE_REGIONS = {
 }
 
 
-def _submit_constructive_split_jobs(base_fpath, dst_dpath, suffix, queue, depends=[]):
+def _submit_constructive_split_jobs(base_fpath, dst_dpath, suffix, queue, config, depends=[]):
     """
     new method for splits to construct them from previouly partitioned files
     """
     from kwutil import util_path
+    from kwutil import util_pattern
+    split_pat = util_pattern.MultiPattern.coerce(config.splits)
+
     import shlex
     partitioned_fpaths = util_path.coerce_patterned_paths(base_fpath)
     print('partitioned_fpaths = {}'.format(ub.urepr(partitioned_fpaths, nl=1)))
@@ -115,6 +120,9 @@ def _submit_constructive_split_jobs(base_fpath, dst_dpath, suffix, queue, depend
     full_fpath = dst_dpath / 'data.kwcoco.zip'
 
     for split, vali_regions in VALI_REGIONS_SPLITS.items():
+        if not split_pat.match(split):
+            continue
+
         train_split_fpath = dst_dpath / f'data_train_{split}.kwcoco.zip'
         vali_split_fpath = dst_dpath / f'data_vali_{split}.kwcoco.zip'
         if suffix:
@@ -154,12 +162,12 @@ def _submit_constructive_split_jobs(base_fpath, dst_dpath, suffix, queue, depend
             ''')
         queue.submit(command, depends=depends, log=False)
 
-    all_parts_Str = ' '.join([shlex.quote(str(p)) for p in partitioned_fpaths])
+    all_parts_str = ' '.join([shlex.quote(str(p)) for p in partitioned_fpaths])
     command = ub.codeblock(
         fr'''
         python -m kwcoco union \
             --remember_parent=True \
-            --src {all_parts_Str} \
+            --src {all_parts_str} \
             --dst {full_fpath}
         ''')
     queue.submit(command, depends=depends, log=False)
@@ -268,8 +276,9 @@ def prep_splits(cmdline=False, **kwargs):
     suffix = config.suffix
 
     if config['constructive_mode']:
-        _submit_constructive_split_jobs(base_fpath, dst_dpath, suffix, queue)
+        _submit_constructive_split_jobs(base_fpath, dst_dpath, suffix, queue, config)
     else:
+        raise NotImplementedError('non-constructive mode is no longer supported')
         print('WARNING: non-constructive mode has not been maintained')
         _submit_split_jobs(base_fpath, queue)
 
