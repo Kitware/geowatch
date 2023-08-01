@@ -84,7 +84,9 @@ def mask(raster: Union[rasterio.DatasetReader, str],
         use_overview (int):
             if non-zero uses the closest overview if it is available.
             This increases computation time, but gives a better polygon when
-            use_overview is closer to 0.
+            use_overview is closer to 0. Note, the polygon is rescaled to
+            ensure it is returned in the input pixel space, not the overview
+            space.
 
     Returns:
         If as_poly, a shapely Polygon or MultiPolygon bounding the valid
@@ -286,6 +288,7 @@ def mask(raster: Union[rasterio.DatasetReader, str],
         if scale_factor is not None:
             # Move from area space into point space?
             # mask_poly = shapely.affinity.translate(mask_poly, xoff=-0.5, yoff=-0.5)
+            import shapely.affinity
             mask_poly = shapely.affinity.scale(mask_poly,
                                                xfact=scale_factor,
                                                yfact=scale_factor,

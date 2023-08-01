@@ -503,9 +503,9 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
     })
 
     if info['utm_corners'] is not None:
-        utm_box = kwimage.Polygon(exterior=info['utm_corners']).bounding_box()
-        meter_w = float(utm_box.width.ravel()[0])
-        meter_h = float(utm_box.height.ravel()[0])
+        utm_box = kwimage.Polygon(exterior=info['utm_corners']).box()
+        meter_w = float(utm_box.width)
+        meter_h = float(utm_box.height)
         meter_hw = np.mean([meter_h , meter_w])
         pxl_hw = np.array(info['img_shape'])
         gsd = (meter_hw / pxl_hw).mean()

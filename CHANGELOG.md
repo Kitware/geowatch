@@ -4,7 +4,12 @@ This changelog follows the specifications detailed in: [Keep a Changelog](https:
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
 
-## Version 0.8.1 - Target 2023-07-xx
+## Version 0.9.0 - Target 2023-07-xx
+
+### Fixed
+* The `valid_region` property computed in `coco_populate_geo_heuristics` now properly uses image space (before it was in asset space, which usually aligned, but was not guaranteed)
+
+## Version 0.8.2 - Target 2023-07-xx
 
 ### Added
 
