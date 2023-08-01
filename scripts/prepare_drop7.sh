@@ -685,16 +685,39 @@ python -m watch.cli.prepare_teamfeats \
     --with_landcover=0 \
     --with_invariants2=0 \
     --with_sam=0 \
-    --with_materials=0 \
-    --with_depth=1 \
+    --with_materials=1 \
+    --with_depth=0 \
     --with_cold=0 \
     --skip_existing=1 \
     --assets_dname=teamfeats \
     --gres=0, \
     --cold_workermode=process \
     --cold_workers=8 \
-    --tmux_workers=16 \
+    --tmux_workers=2 \
     --backend=tmux --run=0
+    #--base_fpath "$BUNDLE_DPATH"/*/imganns-*[0-9].kwcoco.zip \
+
+
+DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware="auto")
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
+BUNDLE_DPATH=$DVC_DATA_DPATH/Drop7-Cropped2GSD
+python -m watch.cli.prepare_teamfeats \
+    --base_fpath "$BUNDLE_DPATH"/*/[A-Z][A-Z]_R*[0-9].kwcoco.zip \
+    --expt_dvc_dpath="$DVC_EXPT_DPATH" \
+    --with_landcover=0 \
+    --with_invariants2=0 \
+    --with_sam=0 \
+    --with_materials=0 \
+    --with_depth=0 \
+    --with_mae=1 \
+    --with_cold=0 \
+    --skip_existing=1 \
+    --assets_dname=teamfeats \
+    --gres=0,1 \
+    --cold_workermode=process \
+    --cold_workers=8 \
+    --tmux_workers=2 \
+    --backend=tmux --run=1
     #--base_fpath "$BUNDLE_DPATH"/*/imganns-*[0-9].kwcoco.zip \
 
 python -m watch.tasks.depth.predict \

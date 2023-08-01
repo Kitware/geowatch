@@ -34,6 +34,10 @@ Example:
         --region_models="$DVC_DATA_DPATH"/annotations/drop6/region_models
 
     python -m watch.cli.validate_annotation_schemas \
+        --site_models="<path-to-site-models>" \
+        --region_models="<path-to-region-models>"
+
+    python -m watch.cli.validate_annotation_schemas \
         --region_models="$DVC_DATA_DPATH"/annotations/drop6/region_models/AE_C001.geojson
 """
 
