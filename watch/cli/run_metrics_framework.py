@@ -255,6 +255,14 @@ def main(cmdline=True, **kwargs):
     assert IARPA_METRICS_VERSION >= version.Version('0.2.0')
     assert IARPA_METRICS_VERSION >= version.Version('1.2.0')
 
+    # Record the git hash of the metrics code if possible.
+    try:
+        metrics_modpath = ub.Path(iarpa_smart_metrics.__file__).parent
+        gitout = ub.cmd('git rev-parse --short HEAD', cwd=metrics_modpath, check=None)
+        IARPA_METRICS_GIT_HASH = gitout.stdout.strip()
+    except Exception:
+        IARPA_METRICS_GIT_HASH = None
+
     # Record information about this process
     info = []
 
@@ -502,15 +510,7 @@ def main(cmdline=True, **kwargs):
 
         context = proc_context.stop()
         context['IARPA_METRICS_VERSION'] = str(IARPA_METRICS_VERSION)
-
-        # Record the git hash of the metrics code if possible.
-        try:
-            metrics_modpath = ub.Path(iarpa_smart_metrics.__file__).parent
-            gitout = ub.cmd('git rev-parse --short HEAD', cwd=metrics_modpath, check=None)
-            context['IARPA_METRICS_GIT_HASH'] = gitout.stdout.strip()
-        except Exception:
-            context['IARPA_METRICS_GIT_HASH'] = None
-
+        context['IARPA_METRICS_GIT_HASH'] = IARPA_METRICS_GIT_HASH
         info.append(context)
 
         json_data, bas_df, sc_df, best_bas_rows = merge_metrics_results(region_dpaths, true_site_dpath,
@@ -553,6 +553,7 @@ def main(cmdline=True, **kwargs):
 
 
 __config__ = MetricsConfig
+__config__.main = main
 
 if __name__ == '__main__':
     main()
