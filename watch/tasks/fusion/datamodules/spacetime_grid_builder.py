@@ -892,24 +892,36 @@ def _build_vidspace_track_qtree(dset, video_gids, negative_classes,
 def _refine_time_sample(dset, main_idx_to_gids, vidspace_box, refine_iosa_thresh, time_sampler, get_image_valid_region_in_vidspace):
     """
     Refine the time sample based on spatial information
+
+    Attempt to remove images where valid data does not spatially intersect the
+    query box.
     """
     from watch.tasks.fusion.datamodules import temporal_sampling as tsm  # NOQA
     video_gids = time_sampler.video_gids
 
-    gid_to_isbad = {}
-    for gid in video_gids:
-        vidspace_valid_poly = get_image_valid_region_in_vidspace(gid)
-        gid_to_isbad[gid] = False
-        # If the area is of the valid polygon is less than zero, there was
-        # probably an issue. treat it as if it didn't specify a valid
-        # region.
-        if vidspace_valid_poly is not None and vidspace_valid_poly.area > 0:
-            vidspace_box_poly = vidspace_box.to_shapely()[0]
-            # Intersection over smaller area
-            isect = vidspace_valid_poly.intersection(vidspace_box_poly)
-            iosa = isect.area / min(vidspace_box_poly.area, vidspace_valid_poly.area)
-            if iosa < refine_iosa_thresh:
-                gid_to_isbad[gid] = True
+    import warnings
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", category=RuntimeWarning,
+            message="invalid value encountered in intersection")
+
+        # Mark images where the valid region does not intersect the
+        # query vidspace box.
+        gid_to_isbad = {}
+        if refine_iosa_thresh > 0:
+            for gid in video_gids:
+                vidspace_valid_poly = get_image_valid_region_in_vidspace(gid)
+                gid_to_isbad[gid] = False
+                # If the area is of the valid polygon is less than zero, there
+                # was probably an issue. treat it as if it didn't specify a
+                # valid region.
+                if vidspace_valid_poly is not None and vidspace_valid_poly.area > 0:
+                    vidspace_box_poly = vidspace_box.to_shapely()[0]
+                    # Intersection over smaller area
+                    isect = vidspace_valid_poly.intersection(vidspace_box_poly)
+                    iosa = isect.area / min(vidspace_box_poly.area, vidspace_valid_poly.area)
+                    if iosa < refine_iosa_thresh:
+                        gid_to_isbad[gid] = True
 
     all_bad_gids = [gid for gid, flag in gid_to_isbad.items() if flag]
 

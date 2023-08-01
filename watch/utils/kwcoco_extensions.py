@@ -437,12 +437,6 @@ def coco_populate_geo_img_heuristics2(coco_img, overwrite=False,
 def _populate_valid_region(coco_img):
     """
     Ignore:
-        import kwcoco
-        coco_dset = kwcoco.CocoDataset('/media/joncrall/flash1/smart_drop7/Drop7-Cropped2GSD/data_train_rawbands_split1.kwcoco.zip')
-        gid = 22895
-        coco_img = coco_dset.coco_image(gid)
-
-    Ignore:
         >>> # Make a dummy image with nodata to test that this works
         >>> from watch.utils.kwcoco_extensions import *  # NOQA
         >>> from watch.utils.kwcoco_extensions import _populate_valid_region
@@ -508,7 +502,7 @@ def _populate_valid_region(coco_img):
         convex_hull=True,
     )
     kw_asset_poly = kwimage.MultiPolygon.from_shapely(sh_poly)
-    # print('kw_asset_poly = {!r}'.format(kw_asset_poly.data[0]))
+
     info = primary_obj.get('geotiff_metadata', None)
     if info is None:
         metakw = {}
