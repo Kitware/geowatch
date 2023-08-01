@@ -275,12 +275,12 @@ def prep_splits(cmdline=False, **kwargs):
         dst_dpath = None
     suffix = config.suffix
 
-    if config['constructive_mode']:
-        _submit_constructive_split_jobs(base_fpath, dst_dpath, suffix, queue, config)
-    else:
+    if not config['constructive_mode']:
         raise NotImplementedError('non-constructive mode is no longer supported')
         print('WARNING: non-constructive mode has not been maintained')
         _submit_split_jobs(base_fpath, queue)
+
+    _submit_constructive_split_jobs(base_fpath, dst_dpath, suffix, queue, config)
 
     if config['verbose']:
         queue.rprint()

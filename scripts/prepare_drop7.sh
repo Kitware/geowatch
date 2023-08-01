@@ -697,8 +697,7 @@ python -m watch.cli.prepare_teamfeats \
     --backend=tmux --run=0 --print-commands
     #--base_fpath "$BUNDLE_DPATH"/*/imganns-*[0-9].kwcoco.zip \
 
-
-DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware="auto")
+GDVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware="auto")
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 BUNDLE_DPATH=$DVC_DATA_DPATH/Drop7-Cropped2GSD
 python -m watch.cli.prepare_teamfeats \
@@ -735,6 +734,14 @@ python -m watch.tasks.rutgers_material_seg_v2.predict \
     --output_kwcoco_fpath=/media/joncrall/flash1/smart_drop7/Drop7-Cropped2GSD/KR_R001/KR_R001_rutgers_material_seg_v4.kwcoco.zip \
     --workers=2
 
+DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='ssd')
+ls "$DVC_DATA_DPATH/Drop7-Cropped2GSD"
+python -m watch.cli.prepare_splits \
+    --base_fpath "$DVC_DATA_DPATH"/Drop7-Cropped2GSD/*/combo_*_E.kwcoco.zip \
+    --dst_dpath "$DVC_DATA_DPATH"/Drop7-Cropped2GSD \
+    --suffix=mae --run=1 --workers=2 \
+    --splits split6
+
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='ssd')
 ls "$DVC_DATA_DPATH/Drop7-Cropped2GSD"
@@ -746,7 +753,25 @@ python -m watch.cli.prepare_splits \
 REGION_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='ssd')
 DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='auto')
 geowatch reproject_annotations \
-    --src "$DVC_DATA_DPATH"/Drop7-Cropped2GSD/PE_R001.kwcoco.zip \
+    --src "$DVC_DATA_DPATH"/Drop7-Cropped2GSD/data_vali_depth_split6.kwcoco.zip \
+    --inplace \
+    --io_workers=avail \
+    --region_models="$REGION_DATA_DPATH/annotations/drop6_hard_v1/region_models/*.geojson" \
+    --site_models="$REGION_DATA_DPATH/annotations/drop6_hard_v1/site_models/*.geojson"
+
+REGION_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='ssd')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='auto')
+geowatch reproject_annotations \
+    --src "$DVC_DATA_DPATH"/Drop7-Cropped2GSD/data_vali_depth_split6.kwcoco.zip \
+    --inplace \
+    --io_workers=avail \
+    --region_models="$REGION_DATA_DPATH/annotations/drop6_hard_v1/region_models/*.geojson" \
+    --site_models="$REGION_DATA_DPATH/annotations/drop6_hard_v1/site_models/*.geojson"
+
+REGION_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='ssd')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='auto')
+geowatch reproject_annotations \
+    --src "$DVC_DATA_DPATH"/Drop7-Cropped2GSD/data_train_depth_split6.kwcoco.zip \
     --inplace \
     --io_workers=avail \
     --region_models="$REGION_DATA_DPATH/annotations/drop6_hard_v1/region_models/*.geojson" \
