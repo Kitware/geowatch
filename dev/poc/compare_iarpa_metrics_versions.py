@@ -15,7 +15,11 @@ Usage:
         --roi KR_R001 \
         --sm_dir $HOME/data/dvc-repos/smart_expt_dvc/_airflow/preeval14_batch_v28/KR_R001/kit_fixups_v2/cropped_site_models_fixed \
         --gt_dir $ANNOTATIONS_DPATH/site_models \
-        --rm_dir $ANNOTATIONS_DPATH/region_models
+        --rm_dir $ANNOTATIONS_DPATH/region_models \
+        --versions \
+            kitware-main-2023-07-25 \
+            new_kit_speedups_2023-08-01 \
+            make-database-reqs-optional
 
 
 Requirements:
