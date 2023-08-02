@@ -6,11 +6,14 @@ CommandLine:
 
 Example:
     >>> from watch.cli.prepare_splits import *  # NOQA
-    >>> base_fpath = 'data.kwcoco.json'
+    >>> dpath = ub.Path.appdir('watch', 'tests', 'prep_splits').ensuredir()
+    >>> (dpath / 'KR_R001.kwcoco.zip').touch()
+    >>> (dpath / 'KR_R002.kwcoco.zip').touch()
+    >>> (dpath / 'BR_R002.kwcoco.zip').touch()
     >>> config = {
-    >>>     'base_fpath': './bundle/data.kwcoco.json',
+    >>>     'base_fpath': dpath / '*.kwcoco.zip',
     >>>     'virtualenv_cmd': 'conda activate watch',
-    >>>     'constructive_mode': False,
+    >>>     'constructive_mode': True,
     >>>     'run': 0,
     >>>     'cache': False,
     >>>     'backend': 'serial',
@@ -144,23 +147,25 @@ def _submit_constructive_split_jobs(base_fpath, dst_dpath, suffix, queue, config
         train_parts_str = ' '.join([shlex.quote(str(p)) for p in train_parts])
         vali_parts_str = ' '.join([shlex.quote(str(p)) for p in vali_parts])
 
-        command = ub.codeblock(
-            fr'''
-            python -m kwcoco union \
-                --remember_parent=True \
-                --src {vali_parts_str} \
-                --dst {vali_split_fpath}
-            ''')
-        queue.submit(command, begin=1, depends=depends, log=False)
+        if len(vali_parts):
+            command = ub.codeblock(
+                fr'''
+                python -m kwcoco union \
+                    --remember_parent=True \
+                    --src {vali_parts_str} \
+                    --dst {vali_split_fpath}
+                ''')
+            queue.submit(command, begin=1, depends=depends, log=False)
 
-        command = ub.codeblock(
-            fr'''
-            python -m kwcoco union \
-                --remember_parent=True \
-                --src {train_parts_str} \
-                --dst {train_split_fpath}
-            ''')
-        queue.submit(command, depends=depends, log=False)
+        if len(train_parts):
+            command = ub.codeblock(
+                fr'''
+                python -m kwcoco union \
+                    --remember_parent=True \
+                    --src {train_parts_str} \
+                    --dst {train_split_fpath}
+                ''')
+            queue.submit(command, depends=depends, log=False)
 
     all_parts_str = ' '.join([shlex.quote(str(p)) for p in partitioned_fpaths])
     command = ub.codeblock(

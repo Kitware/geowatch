@@ -5347,7 +5347,7 @@ KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_mae_split6.kwcoco.zip
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_mae_split6.kwcoco.zip
 CHANNELS="(L8,S2):(blue|green|red),(S2):(mae.0:16),(WV):(blue|green|red)"
-EXPERIMENT_NAME=Drop7-Cropped2GSD_SC_bgrn_depth_split6_V13
+EXPERIMENT_NAME=Drop7-Cropped2GSD_SC_bgrn_depth_split6_V14
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TARGET_LR=1e-4
 WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
@@ -5404,6 +5404,8 @@ model:
         global_class_weight    : 1.00
         global_saliency_weight : 0.01
         multimodal_reduce      : learned_linear
+        attention_kwargs:
+            add_zero_attn: true
 optimizer:
     class_path: torch.optim.AdamW
     init_args:

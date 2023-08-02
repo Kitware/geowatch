@@ -511,7 +511,7 @@ def _populate_valid_region(coco_img):
             metakw['elevation'] = 0
         info = watch.gis.geotiff.geotiff_metadata(primary_fpath, **metakw)
 
-    warp_img_from_asset = kwimage.Affine.coerce(primary_obj['warp_aux_to_img'])
+    warp_img_from_asset = kwimage.Affine.coerce(primary_obj.get('warp_aux_to_img', None))
     if warp_img_from_asset.isclose_identity():
         kw_img_poly = kw_asset_poly
     else:
