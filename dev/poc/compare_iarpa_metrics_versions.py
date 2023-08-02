@@ -10,6 +10,13 @@ Usage:
         --gt_dir $ANNOTATIONS_DPATH/site_models \
         --rm_dir $ANNOTATIONS_DPATH/region_models
 
+    ANNOTATIONS_DPATH=$HOME/data/dvc-repos/smart_data_dvc-ssd/annotations/drop6
+    python ~/code/watch/dev/poc/compare_iarpa_metrics_versions.py \
+        --roi KR_R001 \
+        --sm_dir $HOME/data/dvc-repos/smart_expt_dvc/_airflow/preeval14_batch_v28/KR_R001/kit_fixups_v2/cropped_site_models_fixed \
+        --gt_dir $ANNOTATIONS_DPATH/site_models \
+        --rm_dir $ANNOTATIONS_DPATH/region_models
+
 
 Requirements:
     pip install ubelt scriptconfig rich cmd_queue pandas
@@ -20,6 +27,8 @@ import cmd_queue
 import itertools as it
 import pandas as pd
 import rich
+import numbers
+import numpy as np
 
 
 class CompareIarpaMetricsVersionsCLI(scfg.DataConfig):
@@ -41,6 +50,12 @@ class CompareIarpaMetricsVersionsCLI(scfg.DataConfig):
 
     tmux_workers = scfg.Value(4, help='number of tmux workers')
 
+    versions = scfg.Value([
+        'kitware-main-2023-07-25',
+        'new_kit_speedups_2023-08-01',
+        'make-database-reqs-optional',
+    ], nargs='+', help='Multiple git hashes or branch names of the metric repo to test')
+
     @classmethod
     def main(cls, cmdline=1, **kwargs):
         """
@@ -55,15 +70,6 @@ class CompareIarpaMetricsVersionsCLI(scfg.DataConfig):
         config = cls.cli(cmdline=cmdline, data=kwargs, strict=True)
         rich.print('config = ' + ub.urepr(config, nl=1))
 
-        import iarpa_smart_metrics
-        if config.repo_dpath is None:
-            repo_dpath = ub.Path(iarpa_smart_metrics.__file__).parent.parent
-        else:
-            repo_dpath = ub.Path(config.repo_dpath)
-
-        src_gitdir = repo_dpath / '.git'
-        assert src_gitdir.exists()
-
         roi = config.roi
         performer = config.performer
         gt_dir = ub.Path(config.gt_dir)
@@ -73,52 +79,23 @@ class CompareIarpaMetricsVersionsCLI(scfg.DataConfig):
         assert rm_dir.exists()
         assert sm_dir.exists()
 
-        # Install different versions of the code to different virtual
-        # environments.
-        versions = [
-            'kitware-main',
-            # 'main',
-            'new_kit_speedups_2023-08-01',
-            'make-database-reqs-optional',
-        ]
+        versions = config.versions
 
-        clone_base = ub.Path.appdir('cache', 'watch', 'tests', 'metrics', 'versions')
+        # Ensure we have a venv for each requested version with a standalone
+        # checkout of the code installed.
+        repo_infos = setup_versioned_repos(versions, repo_dpath=None)
 
+        # Setup a command queue which will execute all of the metrics commands
+        # in parallel
         queue = cmd_queue.Queue.create(backend='tmux',
                                        size=min(len(versions), config.tmux_workers))
 
         requests = []
-        for version in versions:
-            info = ub.cmd(f'git rev-parse {version}', cwd=repo_dpath, check=1)
-            commit_hashid = info.stdout.strip()[0:8]
-            requests.append({
-                'version': version,
-                'commit_hashid': commit_hashid,
-            })
-
-        for request in requests:
-            commit_hashid = request['commit_hashid']
-            clone_dpath = clone_base / f'metrics_{commit_hashid}'
-            venv_dpath = clone_dpath / f'venv_{commit_hashid}'
-            request['venv_dpath'] = venv_dpath
-            request['clone_dpath'] = clone_dpath
+        for repo_info in repo_infos:
+            # Build an evaluation command specific to each version of the code
             sm_hashid = ub.hash_data(sm_dir)[0:8]
-            request['output_dir'] = (request['clone_dpath'] / f'output_{roi}_{sm_hashid}')
-            clone_dpath.parent.ensuredir()
-            if not clone_dpath.exists():
-                ub.cmd(f'git clone {src_gitdir} {clone_dpath}', verbose=3)
-                ub.cmd(f'git reset --hard {commit_hashid}', verbose=3, cwd=clone_dpath)
-            if not venv_dpath.exists():
-                ub.cmd(f'python -m venv {venv_dpath}', verbose=3)
-            if 0 or  not list(clone_dpath.glob('*.egg-info')):
-                # Hack to ensure specific versions
-                ub.cmd(f"bash -c 'source {venv_dpath}/bin/activate && pip install pandas==1.5.3'", shell=True, cwd=clone_dpath, verbose=3, check=True)
-                ub.cmd(f"bash -c 'source {venv_dpath}/bin/activate && pip install -e .[runtime-strict]'", shell=True, cwd=clone_dpath, verbose=3, check=True)
-
-        # Add invocations of the evaluation script to a command queue.
-        for request in requests:
-            output_dir = request['output_dir']
-            venv_dpath = request['venv_dpath']
+            output_dir = (repo_info['clone_dpath'] / f'output_{roi}_{sm_hashid}')
+            venv_dpath = repo_info['venv_dpath']
             metrics_command = ub.codeblock(
                 fr'''
                 source {venv_dpath}/bin/activate && python -m iarpa_smart_metrics.run_evaluation \
@@ -136,18 +113,23 @@ class CompareIarpaMetricsVersionsCLI(scfg.DataConfig):
                     --no-viz-slices \
                     --no-viz-detection-table --no-viz-comparison-table --no-viz-associate-metrics --no-viz-activity-metrics
                 ''')
+            request = repo_info.copy()
             request['metrics_command'] = metrics_command
+            request['output_dir'] = output_dir
             if not output_dir.exists():
                 queue.submit(metrics_command)
+            requests.append(request)
 
         queue.print_commands()
         queue.run()
 
+        rich.print('repo_infos = {}'.format(ub.urepr(repo_infos, nl=2)))
+
         # Load up all metric outputs and compare them.
         outputs = {}
-        for request in requests:
-            hashid = request['commit_hashid']
-            output_dir = request['output_dir']
+        for repo_info in requests:
+            hashid = repo_info['commit_hashid']
+            output_dir = repo_info['output_dir']
             print(f'Load results: output_dir={output_dir}')
             outputs[hashid] = load_metric_results(output_dir)
 
@@ -155,162 +137,72 @@ class CompareIarpaMetricsVersionsCLI(scfg.DataConfig):
         for out_hashid1, out_hashid2 in it.combinations(outputs, 2):
             outs1 = outputs[out_hashid1]
             outs2 = outputs[out_hashid2]
+            print('----')
+            rich.print(f'Compare: {out_hashid1} and {out_hashid2}')
             status = compare_output_pair(outs1, outs2)
             if status['n_common'] == 0:
-                print(f'{out_hashid1} and {out_hashid2} have NO COMMON FILES')
-            elif status['has_difference']:
-                print(f'{out_hashid1} and {out_hashid2} are NOT the same')
+                rich.print(f'[red]{out_hashid1} and {out_hashid2} have NO COMMON FILES')
+            elif status['has_major_difference']:
+                rich.print(f'[red]{out_hashid1} and {out_hashid2} are NOT the same')
+            elif status['has_minor_difference']:
+                rich.print(f'[yellow]{out_hashid1} and {out_hashid2} are very close')
             else:
-                print(f'{out_hashid1} and {out_hashid2} are the same')
-            print('status = {}'.format(ub.urepr(status, nl=1)))
+                rich.print(f'[green]{out_hashid1} and {out_hashid2} are exactly the same')
+            rich.print('status = {}'.format(ub.urepr(status, nl=-1)))
 
 
-def compare_output_pair(outs1, outs2):
-    status = {}
+def setup_versioned_repos(versions, repo_dpath=None):
+    """
+    Setup a standalone virtual environment and clone for each specific branch
+    of the metrics repo, and install the repo to that venv.
+    """
+    import iarpa_smart_metrics
+    if repo_dpath is None:
+        repo_dpath = ub.Path(iarpa_smart_metrics.__file__).parent.parent
+    else:
+        repo_dpath = ub.Path(repo_dpath)
+    src_gitdir = repo_dpath / '.git'
+    assert src_gitdir.exists()
 
-    fnames1 = set(outs1.keys())
-    fnames2 = set(outs2.keys())
-    common_fnames = fnames1 & fnames2
-    unpaired_fnames = fnames1 ^ fnames2
+    # Temporary dir where we will store
+    clone_base = ub.Path.appdir('cache', 'iarpa_smart_metrics', 'compare-versions')
 
-    status['n_common'] = len(common_fnames)
-    status['n_unpaired'] = len(unpaired_fnames)
+    repo_infos = []
+    for version in versions:
+        info = ub.cmd(f'git rev-parse {version}', cwd=repo_dpath, check=1)
+        commit_hashid = info.stdout.strip()[0:8]
+        repo_infos.append({
+            'version': version,
+            'commit_hashid': commit_hashid,
+        })
 
-    if fnames1 != fnames2:
-        raise Exception('Versions did not produce the same exact output files')
+    # Install different versions of the code to different virtual environments.
+    for repo_info in repo_infos:
+        commit_hashid = repo_info['commit_hashid']
+        clone_dpath = clone_base / f'metrics_{commit_hashid}'
+        venv_dpath = clone_dpath / f'venv_{commit_hashid}'
+        repo_info['venv_dpath'] = venv_dpath
+        repo_info['clone_dpath'] = clone_dpath
+        clone_dpath.parent.ensuredir()
+        if not clone_dpath.exists():
+            ub.cmd(f'git clone {src_gitdir} {clone_dpath}', verbose=3)
+            ub.cmd(f'git reset --hard {commit_hashid}', verbose=3, cwd=clone_dpath)
+        if not venv_dpath.exists():
+            ub.cmd(f'python -m venv {venv_dpath}', verbose=3)
 
-    exactsame_fnames = []
-    hasdiff_fnames = []
-    for fname in common_fnames:
-        if outs1[fname]['hash'] == outs2[fname]['hash']:
-            exactsame_fnames.append(fname)
-        else:
-            hasdiff_fnames.append(fname)
+        # Skip if we already installed thep package
+        if not list(clone_dpath.glob('*.egg-info')):
+            # Hack to ensure specific versions
+            ub.cmd(f"bash -c 'source {venv_dpath}/bin/activate && pip install pandas==1.5.3'", shell=True, cwd=clone_dpath, verbose=3, check=True)
+            ub.cmd(f"bash -c 'source {venv_dpath}/bin/activate && pip install -e .[runtime-strict]'", shell=True, cwd=clone_dpath, verbose=3, check=True)
 
-    status['n_exact_same'] = len(exactsame_fnames)
-    status['n_some_diff'] = len(hasdiff_fnames)
-
-    errors = []
-
-    total_major_differences = 0
-    total_minor_differences = 0
-    total_itemdiff_checks = 0
-
-    bad_fpaths = [
-        (fname, outs1[fname]['fpath'], outs2[fname]['fpath'])
-        for fname in hasdiff_fnames
-    ]
-    # Take a closer look at cases where the hash is different
-    # it might be a non-important difference
-    for fname, fpath1, fpath2 in bad_fpaths:
-        if fpath1.name == 'ac_phase_table.csv':
-            compare_ac_phase_table(fpath1, fpath2)
-        elif fpath1.name.endswith('.csv'):
-            df1 = pd.read_csv(fpath1)
-            df2 = pd.read_csv(fpath2)
-            isna1 = df1.isna()
-            isna2 = df1.isna()
-            flags = ~((df1 == df2) | (isna1 & isna2))
-
-            total_itemdiff_checks += df1.values.size
-
-            if flags.values.any():
-                bad_rows1 = df1[flags.any(axis=1)]
-                bad_rows2 = df2[flags.any(axis=1)]
-
-                # Check to see if the difference is a minor floating point
-                # difference issue
-                import numbers
-                import numpy as np
-                is_both_nan = (bad_rows1.isna() & bad_rows2.isna())
-                is_bad_item = (bad_rows1 != bad_rows2) & ~is_both_nan
-                bad_values1 = bad_rows1.values[is_bad_item]
-                bad_values2 = bad_rows2.values[is_bad_item]
-                is_major_difference = 0
-                is_minor_difference = 0
-                NUMBER = (numbers.Number, np.number)
-                for v1, v2 in zip(bad_values1, bad_values2):
-                    if isinstance(v1, NUMBER) and isinstance(v2, NUMBER):
-                        if v1 != v2:
-                            if np.isclose(v1, v2):
-                                is_minor_difference += 1
-                            else:
-                                is_major_difference += 1
-                    else:
-                        is_major_difference += 1
-
-                total_major_differences += is_major_difference
-                total_minor_differences += is_minor_difference
-
-                if is_major_difference:
-                    msg = f'{fname} has {len(bad_rows2)} / {len(df2)} rows with major differences'
-                    print('=========')
-                    print('BAD ROWS:', msg)
-                    print('=========')
-                    print(f'{fpath1}')
-                    print(f'{fpath2}')
-                    print(bad_rows1)
-                    print('---')
-                    print(bad_rows2)
-                    print('---')
-                    a = bad_rows1.to_string()
-                    b = bad_rows2.to_string()
-                    print('Diff:')
-                    print(difftext(a, b, colored=True))
-                    errors.append(msg)
-        else:
-            print(f'{fpath1=}')
-            t1 = fpath1.read_text()
-            t2 = fpath2.read_text()
-            print(difftext(t1, t2, colored=True))
-            raise Exception
-
-    status['total_major_differences'] = total_major_differences
-    status['total_minor_differences'] = total_minor_differences
-    status['total_itemdiff_checks'] = total_itemdiff_checks
-
-    has_difference = False
-    if status['n_unpaired'] > 0:
-        has_difference = True
-
-    if status['n_some_diff'] > 0:
-        has_difference = True
-
-    if len(errors):
-        has_difference = True
-
-    status['has_difference'] = has_difference
-    status['errors'] = errors
-    return status
-
-
-def compare_ac_phase_table(fpath1, fpath2):
-    df1 = pd.read_csv(fpath1)
-    df2 = pd.read_csv(fpath2)
-    assert (df1.columns == df2.columns).all()
-    assert (df1['date'] == df2['date']).all()
-
-    def normalize_row(row):
-        new_row = {}
-        for k, v in row.items():
-            if isinstance(v, str) and 'vs.' in v:
-                parts = v.split('vs.')
-                import ast
-                sets = [ast.literal_eval(p) for p in parts]
-                v = sets
-            new_row[k] = v
-        return new_row
-
-    records1 = df1.to_dict('records')
-    records2 = df2.to_dict('records')
-    for row1, row2 in zip(records1, records2):
-        if row1 != row2:
-            norm_row1 = normalize_row(row1)
-            norm_row2 = normalize_row(row2)
-            assert norm_row1 == norm_row2
+    return repo_infos
 
 
 def load_metric_results(output_dir):
+    """
+    Get a list of all files and their hashes in an output directory
+    """
     fpaths = {}
     for r, ds, fs in output_dir.walk():
         for f in fs:
@@ -323,6 +215,233 @@ def load_metric_results(output_dir):
                     'hash': ub.hash_file(fpath),
                 }
     return fpaths
+
+
+def compare_output_pair(outs1, outs2):
+    """
+    Given a precomputed list of files / hashes in two directories, compare the
+    directory contents and return information about how many major / minor
+    differences there were.
+    """
+    fnames1 = set(outs1.keys())
+    fnames2 = set(outs2.keys())
+    common_fnames = fnames1 & fnames2
+    unpaired_fnames = fnames1 ^ fnames2
+
+    exactsame_fnames = []
+    hasdiff_fnames = []
+    errors = []
+    diffs = {
+        'ac_phase_table': {
+            'major': 0,
+            'minor': 0,
+            'rows_checked': 0,
+            'files_checked': 0,
+            'exact_same': 0,
+        },
+        'other_csv': {
+            'major': 0,
+            'minor': 0,
+            'items_checked': 0,
+            'files_checked': 0,
+            'exact_same': 0,
+        },
+    }
+
+    if fnames1 != fnames2:
+        errors.append('Versions did not produce the same exact same output files names')
+
+    for fname in common_fnames:
+        info1 = outs1[fname]
+        info2 = outs2[fname]
+        fpath1 = info1['fpath']
+        fpath2 = info2['fpath']
+
+        if fpath1.name == 'ac_phase_table.csv':
+            # Type of diff we do depends on the specific file
+            diff_key = 'ac_phase_table'
+        elif fpath1.name.endswith('.csv'):
+            diff_key = 'other_csv'
+        else:
+            diff_key = NotImplemented
+            raise NotImplementedError
+
+        if info1['hash'] == info2['hash']:
+            exactsame_fnames.append(fname)
+            diffs[diff_key]['exact_same'] += 1
+        else:
+            hasdiff_fnames.append(fname)
+            if diff_key == 'ac_phase_table':
+                _this_diff = compare_ac_phase_table(fpath1, fpath2)
+                for k, v in _this_diff.items():
+                    diffs[diff_key][k] += v
+            elif fpath1.name.endswith('.csv'):
+                _this_diff = compare_generic_csv(fpath1, fpath2)
+                if 'error' in _this_diff:
+                    errors.append(_this_diff.pop('error'))
+                for k, v in _this_diff.items():
+                    diffs[diff_key][k] += v
+            else:
+                raise NotImplementedError('TODO: handle if this comes up')
+                print(f'{fpath1=}')
+                t1 = fpath1.read_text()
+                t2 = fpath2.read_text()
+                print(difftext(t1, t2, colored=True))
+                raise Exception
+
+    # Summarize how different the two output dirs are
+    status = {}
+    status['n_common'] = len(common_fnames)
+    status['n_unpaired'] = len(unpaired_fnames)
+    status['diffs'] = diffs
+    status['n_exact_same'] = len(exactsame_fnames)
+    status['n_some_diff'] = len(hasdiff_fnames)
+
+    has_major_difference = False
+    has_minor_difference = False
+    if status['n_unpaired'] > 0:
+        has_major_difference = True
+
+    if status['n_some_diff'] > 0:
+        has_minor_difference = True
+
+    for subdiff in diffs.values():
+        if subdiff['major'] > 0:
+            has_major_difference = True
+        if subdiff['minor'] > 0:
+            has_minor_difference = True
+
+    if len(errors):
+        has_major_difference = True
+
+    if has_major_difference:
+        has_minor_difference = True
+
+    status['has_major_difference'] = has_major_difference
+    status['has_minor_difference'] = has_minor_difference
+    status['errors'] = errors
+    return status
+
+
+def compare_generic_csv(fpath1, fpath2):
+    """
+    Basic comparison of CSVs
+    """
+    df1 = pd.read_csv(fpath1)
+    df2 = pd.read_csv(fpath2)
+    isna1 = df1.isna()
+    isna2 = df1.isna()
+    flags = ~((df1 == df2) | (isna1 & isna2))
+
+    this_diff = {
+        'files_checked': 1,
+        'items_checked': df1.values.size,
+    }
+    if flags.values.any():
+        bad_rows1 = df1[flags.any(axis=1)]
+        bad_rows2 = df2[flags.any(axis=1)]
+
+        # Check to see if the difference is a minor floating point
+        # difference issue
+        is_both_nan = (bad_rows1.isna() & bad_rows2.isna())
+        is_bad_item = (bad_rows1 != bad_rows2) & ~is_both_nan
+        bad_values1 = bad_rows1.values[is_bad_item]
+        bad_values2 = bad_rows2.values[is_bad_item]
+        _major_diffs = 0
+        _minor_diffs = 0
+        NUMBER = (numbers.Number, np.number)
+        for v1, v2 in zip(bad_values1, bad_values2):
+            if isinstance(v1, NUMBER) and isinstance(v2, NUMBER):
+                if v1 != v2:
+                    if np.isclose(v1, v2):
+                        _minor_diffs += 1
+                    else:
+                        _major_diffs += 1
+            else:
+                _major_diffs += 1
+
+        this_diff['minor'] = _minor_diffs
+        this_diff['major'] = _major_diffs
+
+        if _major_diffs:
+            msg = f'Has {len(bad_rows2)} / {len(df2)} rows with major differences'
+            print('=========')
+            print('BAD ROWS:', msg)
+            print('=========')
+            print(f'{fpath1}')
+            print(f'{fpath2}')
+            print(bad_rows1)
+            print('---')
+            print(bad_rows2)
+            print('---')
+            a = bad_rows1.to_string()
+            b = bad_rows2.to_string()
+            print('Diff:')
+            print(difftext(a, b, colored=True))
+            this_diff['error'] = msg
+
+    return this_diff
+
+
+def compare_ac_phase_table(fpath1, fpath2):
+    df1 = pd.read_csv(fpath1)
+    df2 = pd.read_csv(fpath2)
+    assert (df1.columns == df2.columns).all()
+    assert (df1['date'] == df2['date']).all()
+
+    this_diff = {
+        'files_checked': 1,
+    }
+
+    def normalize_row(row):
+        new_row = {}
+        for k, v in row.items():
+            if isinstance(v, str) and 'vs.' in v:
+                parts = v.split('vs.')
+                import ast
+                sets = []
+                for p in parts:
+                    try:
+                        p = ast.literal_eval(p)
+                    except Exception:
+                        p = p.strip()
+                    # Remove ordering of subsites
+                    p = '_'.join(sorted(p.split('_')))
+                    sets.append(p)
+                v = sets
+            new_row[k] = v
+        return new_row
+
+    records1 = df1.to_dict('records')
+    records2 = df2.to_dict('records')
+
+    major_diffs = 0
+    minor_diffs = 0
+    rows_checked = 0
+    for row1, row2 in zip(records1, records2):
+        rows_checked += 1
+        if row1 != row2:
+            norm_row1 = normalize_row(row1)
+            norm_row2 = normalize_row(row2)
+            if norm_row1 == norm_row2:
+                minor_diffs += 1
+            else:
+                norm_row1
+                print('ERROR:')
+                print('norm_row1 = {}'.format(ub.urepr(norm_row1, nl=1)))
+                print('norm_row2 = {}'.format(ub.urepr(norm_row2, nl=1)))
+                a = ub.urepr(norm_row1, nl=1)
+                b = ub.urepr(norm_row2, nl=1)
+                print('Diff:')
+                print(difftext(a, b, colored=True))
+                major_diffs += 1
+
+    this_diff.update({
+        'rows_checked': rows_checked,
+        'minor': minor_diffs,
+        'major': major_diffs,
+    })
+    return this_diff
 
 
 def difftext(text1, text2, context_lines=0, ignore_whitespace=False,
