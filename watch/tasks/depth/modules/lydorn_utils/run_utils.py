@@ -759,7 +759,7 @@ def load_defaults_in_config(config: dict, filepath_key: str = "defaults_filepath
 
     # Check items of all other keys
     for key, item in config.items():
-        if type(item) == dict:
+        if isinstance(item, dict):
             config[key] = load_defaults_in_config(item, filepath_key=filepath_key, depth=depth + 1)
 
     return config

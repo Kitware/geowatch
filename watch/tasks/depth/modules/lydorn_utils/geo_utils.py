@@ -260,7 +260,7 @@ def save_shapefile_from_polygons(polygons, image_filepath, output_shapefile_file
     """
     https://gis.stackexchange.com/a/52708/8104
     """
-    assert type(polygons) == list and type(polygons[0]) == np.ndarray and \
+    assert isinstance(polygons, list) and isinstance(polygons[0], np.ndarray) and \
            len(polygons[0].shape) == 2 and polygons[0].shape[1] == 2, \
             "polygons should be a list of numpy arrays with shape (N, 2)"
     if properties_list is not None:

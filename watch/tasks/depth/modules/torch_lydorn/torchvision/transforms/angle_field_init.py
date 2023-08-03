@@ -26,9 +26,9 @@ def init_angle_field(polygons, shape, line_width=1):
     :return: (angles: np.array((num_edge_pixels, ), dtype=np.uint8),
               mask: np.array((num_edge_pixels, 2), dtype=np.int))
     """
-    assert type(polygons) == list, "polygons should be a list"
+    assert isinstance(polygons, list), "polygons should be a list"
     if len(polygons):
-        assert type(polygons[0]) == shapely.geometry.Polygon, "polygon should be a shapely.geometry.Polygon"
+        assert isinstance(polygons[0], shapely.geometry.Polygon), "polygon should be a shapely.geometry.Polygon"
 
     im = Image.new("L", (shape[1], shape[0]))
     im_px_access = im.load()  # NOQA

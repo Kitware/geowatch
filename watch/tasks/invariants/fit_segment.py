@@ -7,7 +7,7 @@ from datetime import date
 
 
 def main(args):
-    if type(args) == dict:
+    if isinstance(args, dict):
         args = Namespace(**args)
 
     log_dir = '{}/{}/{}/{}/{}'.format(

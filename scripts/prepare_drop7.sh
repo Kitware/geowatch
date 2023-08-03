@@ -822,7 +822,30 @@ python -c "if 1:
     import kwcoco
     import ubelt as ub
     from kwcoco.cli.coco_move_assets import CocoMoveAssetManager
-    region_dpaths = list(ub.Path('.').glob('*_R*'))
+    region_dpaths = [p for p in ub.Path('.').glob('*_R*') if p.is_dir()]
+
+    for region_dpath in ub.ProgIter(region_dpaths):
+        region_dpath = region_dpath.absolute()
+        region_id = region_dpath.name
+        coco_paths = list(region_dpath.glob('*.kwcoco.*'))
+        dst_dpath = (region_dpath / 'rawbands')
+        if dst_dpath.exists():
+            continue
+        coco_dsets = list(kwcoco.CocoDataset.coerce_multiple(coco_paths))
+        mv_man = CocoMoveAssetManager(coco_dsets)
+        src_dpaths = list(region_dpath.glob('*_CLUSTER_*'))
+        dst_dpaths = [p.parent / 'rawbands' / p.name for p in src_dpaths]
+        for src, dst in zip(src_dpaths, dst_dpaths):
+            mv_man.submit(src, dst)
+        mv_man.run()
+"
+
+# Fixes on yardrat
+cd /data2/dvc-repos/smart_drop7/Drop7-Cropped2GSD
+python -c "if 1:
+    import kwcoco
+    import ubelt as ub
+    region_dpaths = [p for p in ub.Path('.').glob('*_R*') if p.is_dir()]
 
     for region_dpath in ub.ProgIter(region_dpaths):
         region_dpath = region_dpath.absolute()

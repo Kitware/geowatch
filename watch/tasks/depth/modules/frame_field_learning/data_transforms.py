@@ -23,14 +23,14 @@ class Print(object):
         print("\n")
         print(sample.keys())
         for key, item in sample.items():
-            if type(item) == np.ndarray or type(item) == torch.Tensor:
+            if isinstance(item, np.ndarray) or isinstance(item, torch.Tensor):
                 if len(item.shape):
                     print(key, type(item), item.shape, item.dtype, item.min(), item.max())
                 else:
                     print(key, type(item), item, item.dtype, item.min(), item.max())
-            elif type(item) == PIL.Image.Image:
+            elif isinstance(item, PIL.Image.Image):
                 print(key, type(item), item.size, item.mode, np.array(item).min(), np.array(item).max())
-            elif type(item) == list:
+            elif isinstance(item, list):
                 print(key, type(item[0]), len(item))
         # exit()
         # print(sample["image"].dtype)
