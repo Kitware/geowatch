@@ -185,7 +185,8 @@ class SmartLightningCLI(LightningCLI_Extension):
         parser.link_arguments(
             "trainer.default_root_dir",
             "packager.package_fpath",
-            compute_fn=lambda root: None if root is None else str(ub.Path(root) / "final_package.pt")
+            compute_fn=_final_pkg_compute_fn,
+            # lambda root: None if root is None else str(ub.Path(root) / "final_package.pt")
             # apply_on="instantiate",
         )
 
@@ -210,6 +211,11 @@ class SmartLightningCLI(LightningCLI_Extension):
             apply_on="instantiate")
 
         super().add_arguments_to_parser(parser)
+
+
+def _final_pkg_compute_fn(root):
+    # cant be a lambda for pickle
+    return None if root is None else str(ub.Path(root) / "final_package.pt")
 
 
 def make_cli(config=None):

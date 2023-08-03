@@ -847,9 +847,23 @@ python -c "if 1:
     import ubelt as ub
     region_dpaths = [p for p in ub.Path('.').glob('*_R*') if p.is_dir()]
 
+    import ubelt as ub
+    from kwutil.copy_manager import CopyManager
+    cman = CopyManager()
+
     for region_dpath in ub.ProgIter(region_dpaths):
         region_dpath = region_dpath.absolute()
         region_id = region_dpath.name
+        new_region_dpath = region_dpath.parent.parent / 'Drop7-Cropped2GSD-Features' / region_dpath.name
+
+        for fpath in region_dpath.glob('*.kwcoco.zip'):
+            cman.submit(fpath, fpath.augment(dpath=new_region_dpath))
+        cman.submit(region_dpath / '_assets', new_region_dpath / '_assets')
+    cman.run()
+
+
+        region_dpath.assets
+
         coco_paths = list(region_dpath.glob('*.kwcoco.*'))
         dst_dpath = (region_dpath / 'rawbands')
         if dst_dpath.exists():
