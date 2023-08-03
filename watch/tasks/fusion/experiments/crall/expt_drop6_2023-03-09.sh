@@ -5573,7 +5573,7 @@ MAX_STEPS=80000
 WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
-    num_workers            : 5
+    num_workers            : 2
     train_dataset          : $TRAIN_FPATH
     vali_dataset           : $VALI_FPATH
     window_dims            : '128,128'

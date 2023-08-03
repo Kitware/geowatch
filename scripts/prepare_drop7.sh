@@ -852,6 +852,7 @@ python -c "if 1:
     from kwutil.copy_manager import CopyManager
     cman = CopyManager()
 
+    # Move the data from the old compute location to the new one.
     for region_dpath in ub.ProgIter(region_dpaths):
         region_dpath = region_dpath.absolute()
         region_id = region_dpath.name
@@ -862,39 +863,32 @@ python -c "if 1:
         cman.submit(region_dpath / '_assets', new_region_dpath / '_assets')
     cman.run()
 
-    import kwcoco
-    import ubelt as ub
-    from kwcoco.cli.coco_move_assets import CocoMoveAssetManager
-    region_dpaths = [p for p in ub.Path('.').glob('*_R*') if p.is_dir()]
+    # Now change the name from _assets to teamfeats
 
-        region_dpath.assets
-
-        coco_paths = list(region_dpath.glob('*.kwcoco.*'))
-        dst_dpath = (region_dpath / 'rawbands')
-        if dst_dpath.exists():
-            continue
-        coco_dsets = list(kwcoco.CocoDataset.coerce_multiple(coco_paths))
-        mv_man = CocoMoveAssetManager(coco_dsets)
-        src_dpaths = list(region_dpath.glob('*_CLUSTER_*'))
-        dst_dpaths = [p.parent / 'rawbands' / p.name for p in src_dpaths]
-        for src, dst in zip(src_dpaths, dst_dpaths):
-            mv_man.submit(src, dst)
-        mv_man.run()
-
+    # from kwcoco.cli.coco_move_assets import CocoMoveAssetManager
     root = ub.Path('/data2/dvc-repos/smart_drop7/Drop7-Cropped2GSD-Features')
     region_dpaths = [p for p in root.glob('*_R*') if p.is_dir()]
     for region_dpath in ub.ProgIter(region_dpaths):
         region_dpath = region_dpath.absolute()
         region_id = region_dpath.name
-        coco_paths = list(region_dpath.glob('*.kwcoco.*'))
-        dst_dpath = (region_dpath / '_assets')
+        coco_paths = list(region_dpath.glob('*.kwcoco.zip'))
+
+        src_path = (region_dpath / '_assets' / 'dzyne_depth')
+        dst_path = (region_dpath / 'teamfeats' / 'dzyne_depth')
         if dst_dpath.exists():
             continue
-        coco_dsets = list(kwcoco.CocoDataset.coerce_multiple(coco_paths))
-        mv_man = CocoMoveAssetManager(coco_dsets)
-        src_dpaths = list(region_dpath.glob('*_CLUSTER_*'))
-        dst_dpaths = [p.parent / 'rawbands' / p.name for p in src_dpaths]
-        for src, dst in zip(src_dpaths, dst_dpaths):
-            mv_man.submit(src, dst)
+
+        coco_dsets = list(kwcoco.CocoDataset.coerce_multiple(coco_paths, workers='avail'))
+        self = mv_man = CocoMoveAssetManager(coco_dsets)
+
+        mv_man.submit(src_path, dst_path)
+
+        # Also mark old stuff that happened
+        prev_dst_dpaths = list((region_dpath / 'rawbands').glob('*'))
+        prev_src_dpaths = [p.parent.parent / p.name for p in prev_dst_dpaths]
+        for src, dst in zip(prev_src_dpaths, prev_dst_dpaths):
+            assert not src.exists()
+            mv_man.mark_perviously_moved(src, dst)
+
         mv_man.run()
 "
