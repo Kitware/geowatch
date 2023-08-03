@@ -731,7 +731,7 @@ class SmartGlobalHelper:
         return new_columns
 
     def print_minmax_times(self, table):
-        import pandas  as pd
+        import pandas as pd
         from watch.utils.util_pandas import DotDictDataFrame
         from kwutil import util_time
         table = DotDictDataFrame(table)

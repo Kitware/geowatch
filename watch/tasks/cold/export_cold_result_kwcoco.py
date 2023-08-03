@@ -464,5 +464,6 @@ def read_json_metadata(stacked_path):
                     metadata = json.load(f)
                     return metadata
 
+
 if __name__ == '__main__':
     export_cold_main()

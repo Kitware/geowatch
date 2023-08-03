@@ -698,28 +698,6 @@ python -m watch.cli.prepare_teamfeats \
     #--base_fpath "$BUNDLE_DPATH"/*/imganns-*[0-9].kwcoco.zip \
 
 
-DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware="auto")
-DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
-BUNDLE_DPATH=$DVC_DATA_DPATH/Drop7-Cropped2GSD
-python -m watch.cli.prepare_teamfeats \
-    --base_fpath "$BUNDLE_DPATH"/*/[A-Z][A-Z]_R*[0-9].kwcoco.zip \
-    --expt_dvc_dpath="$DVC_EXPT_DPATH" \
-    --with_landcover=0 \
-    --with_invariants2=0 \
-    --with_sam=0 \
-    --with_materials=0 \
-    --with_depth=0 \
-    --with_mae=1 \
-    --with_cold=0 \
-    --skip_existing=1 \
-    --assets_dname=teamfeats \
-    --gres=0,1 \
-    --cold_workermode=process \
-    --cold_workers=8 \
-    --tmux_workers=2 \
-    --backend=tmux --run=1
-    #--base_fpath "$BUNDLE_DPATH"/*/imganns-*[0-9].kwcoco.zip \
-
 python -m watch.tasks.depth.predict \
     --dataset=/data2/dvc-repos/smart_drop7/Drop7-Cropped2GSD/NZ_R001/NZ_R001.kwcoco.zip \
     --deployed=/home/local/KHQ/jon.crall/remote/yardrat/data/dvc-repos/smart_expt_dvc/models/depth/weights_v1.pt \
@@ -771,6 +749,28 @@ geowatch reproject_annotations \
 
 
 
+
+DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware="auto")
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
+BUNDLE_DPATH=$DVC_DATA_DPATH/Drop7-Cropped2GSD
+python -m watch.cli.prepare_teamfeats \
+    --base_fpath "$BUNDLE_DPATH"/*/[A-Z][A-Z]_R*[0-9].kwcoco.zip \
+    --expt_dvc_dpath="$DVC_EXPT_DPATH" \
+    --with_landcover=0 \
+    --with_invariants2=0 \
+    --with_sam=0 \
+    --with_materials=0 \
+    --with_depth=0 \
+    --with_mae=1 \
+    --with_cold=0 \
+    --skip_existing=1 \
+    --assets_dname=teamfeats \
+    --gres=0,1 \
+    --cold_workermode=process \
+    --cold_workers=8 \
+    --tmux_workers=2 \
+    --backend=tmux --run=1
+
 DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='ssd')
 ls "$DVC_DATA_DPATH/Drop7-Cropped2GSD"
 python -m watch.cli.prepare_splits \
@@ -797,3 +797,45 @@ geowatch reproject_annotations \
     --io_workers=avail \
     --region_models="$REGION_DATA_DPATH/annotations/drop6_hard_v1/region_models/*.geojson" \
     --site_models="$REGION_DATA_DPATH/annotations/drop6_hard_v1/site_models/*.geojson"
+
+
+/media/joncrall/flash1/smart_drop7/Drop7-Cropped2GSD-Features/Drop7-Cropped2GSD/KR_R001
+
+cd /media/joncrall/flash1/smart_drop7/Drop7-Cropped2GSD-Features/Drop7-Cropped2GSD/KR_R001
+
+python -c "if 1:
+    import kwcoco
+    import ubelt as ub
+    dst_dpaths = [p.parent / 'rawbands' / p.name for p in src_dpaths]
+
+    ub.Path('.').glob('*.kwcoco.*')
+
+    import kwcoco
+    kwcoco.CocoDataset('KR_R001.data.kwcoco
+
+    mv_man = self = CocoMoveAssetManager()
+    for src, dst in zip(src_dpaths, dst_dpaths):
+        mv_man.submit(src, dst)
+"
+
+python -c "if 1:
+    import kwcoco
+    import ubelt as ub
+    from kwcoco.cli.coco_move_assets import CocoMoveAssetManager
+    region_dpaths = list(ub.Path('.').glob('*_R*'))
+
+    for region_dpath in ub.ProgIter(region_dpaths):
+        region_dpath = region_dpath.absolute()
+        region_id = region_dpath.name
+        coco_paths = list(region_dpath.glob('*.kwcoco.*'))
+        dst_dpath = (region_dpath / 'rawbands')
+        if dst_dpath.exists():
+            continue
+        coco_dsets = list(kwcoco.CocoDataset.coerce_multiple(coco_paths))
+        mv_man = CocoMoveAssetManager(coco_dsets)
+        src_dpaths = list(region_dpath.glob('*_CLUSTER_*'))
+        dst_dpaths = [p.parent / 'rawbands' / p.name for p in src_dpaths]
+        for src, dst in zip(src_dpaths, dst_dpaths):
+            mv_man.submit(src, dst)
+        mv_man.run()
+"

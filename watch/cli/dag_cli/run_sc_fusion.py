@@ -235,6 +235,11 @@ def run_sc_fusion_for_baseline(config):
     print("* Egressing KWCOCO dataset and associated STAC item *")
     ingressed_assets['cropped_site_models_sc'] = cropped_site_models_outdir
     ingressed_assets['cropped_region_models_sc'] = cropped_region_models_outdir
+
+    # Add in intermediate outputs for debugging
+    ingressed_assets['sc_heatmap_kwcoco_file'] = sc_fusion_kwcoco_path
+    ingressed_assets['sc_tracked_kwcoco_file'] = tracked_sc_kwcoco_path
+
     smartflow_egress(ingressed_assets,
                      local_region_path,
                      config.output_path,

@@ -17,6 +17,7 @@ Example:
     >>>     'run': 0,
     >>>     'cache': False,
     >>>     'backend': 'serial',
+    >>>     'splits': 'split6',
     >>>     'verbose': 0,
     >>> }
     >>> queue = prep_splits(cmdline=False, **config)

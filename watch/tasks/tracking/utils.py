@@ -262,6 +262,7 @@ class NewTrackFunction(TrackFunction):
     Specialization of TrackFunction to create polygons that do not yet exist
     in coco_dset, and add them as new annotations
     """
+
     def __call__(self, sub_dset):
         print(f'Enter {self.__class__} __call__ function')
         print('Create tracks')
