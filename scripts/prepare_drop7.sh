@@ -887,7 +887,7 @@ python -c "if 1:
         region_dpath = region_dpath.absolute()
         region_id = region_dpath.name
         coco_paths = list(region_dpath.glob('*.kwcoco.*'))
-        dst_dpath = (region_dpath / 'rawbands')
+        dst_dpath = (region_dpath / '_assets')
         if dst_dpath.exists():
             continue
         coco_dsets = list(kwcoco.CocoDataset.coerce_multiple(coco_paths))

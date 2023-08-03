@@ -210,12 +210,19 @@ def _final_pkg_compute_fn(root):
     return None if root is None else str(ub.Path(root) / "final_package.pt")
 
 
-def _data_value_getter(key):
-    # Hack to call setup on the datamodule before linking args
-    def get_value(data):
+class _ValueGetter:
+    # Made into a class instead of a closure for pickling issues
+    def __init__(self, key):
+        self.key = key
+
+    def __call__(self, data):
         if not data.did_setup:
             data.setup('fit')
-        return getattr(data, key)
+        return getattr(data, self.key)
+
+def _data_value_getter(key):
+    # Hack to call setup on the datamodule before linking args
+    get_value = _ValueGetter(key)
     return get_value
 
 
