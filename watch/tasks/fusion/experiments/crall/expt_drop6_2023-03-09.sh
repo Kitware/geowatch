@@ -5573,7 +5573,7 @@ MAX_STEPS=80000
 WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
 data:
     select_videos          : $SELECT_VIDEOS
-    num_workers            : 2
+    num_workers            : 1
     train_dataset          : $TRAIN_FPATH
     vali_dataset           : $VALI_FPATH
     window_dims            : '128,128'
@@ -5584,7 +5584,7 @@ data:
     input_resolution      : 2.0GSD
     output_resolution     : 2.0GSD
     neg_to_pos_ratio       : 1.0
-    batch_size             : 2
+    batch_size             : 5
     normalize_perframe     : false
     normalize_peritem      : 'blue|green|red|nir|pan'
     max_epoch_length       : 1000000
@@ -5601,6 +5601,7 @@ data:
     use_grid_negatives     : False
     normalize_inputs       : 1024
     balance_areas          : True
+    sqlview                : sqlite
 model:
     class_path: MultimodalTransformer
     init_args:

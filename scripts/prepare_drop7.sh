@@ -888,7 +888,9 @@ python -c "if 1:
         prev_src_dpaths = [p.parent.parent / p.name for p in prev_dst_dpaths]
         for src, dst in zip(prev_src_dpaths, prev_dst_dpaths):
             assert not src.exists()
-            mv_man.mark_perviously_moved(src, dst)
+            mv_man.submit(src, dst)
 
         mv_man.run()
 "
+
+dvc add -- */teamfeats/dzyne_depth */*_depth.kwcoco.zip */*_D.kwcoco.zip
