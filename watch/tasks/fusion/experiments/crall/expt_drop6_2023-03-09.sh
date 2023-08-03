@@ -5638,6 +5638,7 @@ trainer:
     default_root_dir     : $DEFAULT_ROOT_DIR
     accelerator          : gpu
     devices              : 0,1
+    strategy             : ddp
     limit_val_batches    : 256
     limit_train_batches  : 2048
     num_sanity_val_steps : 0
