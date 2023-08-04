@@ -2774,9 +2774,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         bins = np.arange(num_classes + 1)
         total_freq = np.zeros(num_classes, dtype=np.int64)
 
-        sensor_mode_hist = ub.ddict(lambda: 0)
-        video_id_histogram = ub.ddict(lambda: 0)
-        image_id_histogram = ub.ddict(lambda: 0)
+        sensor_mode_hist = ub.ddict(int)
+        video_id_histogram = ub.ddict(int)
+        image_id_histogram = ub.ddict(int)
 
         # Make a list of all unique modes in the dataset.
         # User specifies all of this explicitly now
