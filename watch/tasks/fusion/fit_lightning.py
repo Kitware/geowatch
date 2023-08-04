@@ -220,6 +220,7 @@ class _ValueGetter:
             data.setup('fit')
         return getattr(data, self.key)
 
+
 def _data_value_getter(key):
     # Hack to call setup on the datamodule before linking args
     get_value = _ValueGetter(key)
