@@ -352,13 +352,8 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 coco_train_sampler, mode='fit', **self.train_dataset_config,
             )
 
-            # Unfortunately lightning seems to only enable / disables
-            # validation depending on the methods that are defined, so we are
-            # not able to statically define them.
             self.classes = train_dataset.classes
             self.torch_datasets['train'] = train_dataset
-            # Can we get rid of inject method?
-            ub.inject_method(self, lambda self: self._make_dataloader('train', shuffle=True), 'train_dataloader')
 
             if self.input_sensorchan is None:
                 self.input_sensorchan = train_dataset.input_sensorchan
@@ -406,7 +401,6 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 vali_dataset = KWCocoVideoDataset(
                     vali_coco_sampler, mode='vali', **self.vali_dataset_config)
                 self.torch_datasets['vali'] = vali_dataset
-                ub.inject_method(self, lambda self: self._make_dataloader('vali', shuffle=False), 'val_dataloader')
 
         if stage == 'test' or stage is None:
             test_coco_dset = _read_kwcoco_split('test')
@@ -417,23 +411,19 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             self.torch_datasets['test'] = KWCocoVideoDataset(
                 test_coco_sampler, mode='test', **self.test_dataset_config,
             )
-            ub.inject_method(self, lambda self: self._make_dataloader('test', shuffle=False), 'test_dataloader')
 
         print('self.torch_datasets = {}'.format(ub.urepr(self.torch_datasets, nl=1)))
         self._notify_about_tasks(self.requested_tasks)
         self.did_setup = True
 
-    # def train_dataloader(self):
-    #     return self._make_dataloader('train', shuffle=True)
+    def train_dataloader(self):
+        return self._make_dataloader('train', shuffle=True)
 
-    # def val_dataloader(self):
-    #     try:
-    #         return self._make_dataloader('vali', shuffle=True)
-    #     except KeyError:
-    #         raise AttributeError
+    def val_dataloader(self):
+        return self._make_dataloader('vali', shuffle=True)
 
-    # def test_dataloader(self):
-    #     return self._make_dataloader('test', shuffle=True)
+    def test_dataloader(self):
+        return self._make_dataloader('test', shuffle=True)
 
     @property
     def train_dataset(self):
@@ -448,9 +438,16 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         return self.torch_datasets.get('vali', None)
 
     def _make_dataloader(self, stage, shuffle=False):
-        # import nonechucks
-        # nonechucks.SafeDataset
-        loader = self.torch_datasets[stage].make_loader(
+        """
+        If the stage doesn't exist, resturns None.
+
+        Returns:
+            torch.utils.data.DataLoader | None
+        """
+        dataset = self.torch_datasets.get(stage, None)
+        if dataset is None:
+            return None
+        loader = dataset.make_loader(
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             shuffle=shuffle,
