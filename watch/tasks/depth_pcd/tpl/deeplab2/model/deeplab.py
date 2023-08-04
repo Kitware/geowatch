@@ -40,7 +40,7 @@ class DeepLab(tf.keras.Model):
     """
 
     def __init__(self,
-                 config: config_pb2.ExperimentOptions):
+                 config: config_pb2.ExperimentOptions, use_ln=False):
         # dataset_descriptor: dataset.DatasetDescriptor):
         """Initializes a DeepLab architecture.
 
@@ -65,6 +65,9 @@ class DeepLab(tf.keras.Model):
                 tf.keras.layers.BatchNormalization,
                 momentum=config.trainer_options.solver_options.batchnorm_momentum,
                 epsilon=config.trainer_options.solver_options.batchnorm_epsilon)
+
+        if use_ln:
+            bn_layer = tf.keras.layers.LayerNormalization
 
         # Divide weight decay by 2 to match the implementation of tf.nn.l2_loss. In
         # this way, we allow our users to use a normal weight decay (e.g., 1e-4 for

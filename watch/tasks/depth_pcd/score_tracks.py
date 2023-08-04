@@ -48,7 +48,10 @@ def score_tracks(img_coco_dset, model_fpath):
 
     print('loading site validation model')
     proto_fpath = TPL_DPATH / 'deeplab2/max_deeplab_s_backbone_os16.textproto'
-    model = getModel(proto=proto_fpath)
+    use_ln = False
+    if str(model_fpath).find('model4') != -1:
+        use_ln = True
+    model = getModel(proto=proto_fpath, use_ln=use_ln)
 
     model.load_weights(model_fpath, by_name=True, skip_mismatch=True)
     # model.load_weights('/media/hdd2/antonio/models/urbanTCDs-use.h5', by_name=True, skip_mismatch=True)
@@ -167,7 +170,11 @@ def score_tracks(img_coco_dset, model_fpath):
             'space_slice': vidspace_slice,
             'use_native_scale': True,
         }
-        data = sampler.load_sample(target, with_annots=False)
+        try:
+            data = sampler.load_sample(target, with_annots=False)
+        except ValueError:
+            tq.update(1)
+            continue
         ims = data['im']
 
         good_ims = []

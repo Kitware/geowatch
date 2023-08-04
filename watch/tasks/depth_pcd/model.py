@@ -29,6 +29,9 @@ if 1:
     if HACK_CPU_ONLY:
         # Hide GPU from visible devices
         tf.config.set_visible_devices([], 'GPU')
+    else:
+        for d in tf.config.list_physical_devices('GPU'):
+            tf.config.experimental.set_memory_growth(d, True)
 
     # print(tf.config.list_physical_devices('GPU'))
 
@@ -64,13 +67,13 @@ def normalize(im, q=5, r=128):
     return im
 
 
-def getModel(proto=TPL_DPATH / 'deeplab2/max_deeplab_s_backbone_os16.textproto'):
+def getModel(proto=TPL_DPATH / 'deeplab2/max_deeplab_s_backbone_os16.textproto', use_ln=False):
     options = config_pb2.ExperimentOptions()
 
     with tf.io.gfile.GFile(proto) as f:
         text_format.Parse(f.read(), options)
 
-    model = DeepLab(options)
+    model = DeepLab(options, use_ln)
     i = tf.keras.Input([img_size, img_size, 3], batch_size=1)
 
     backbone = model.layers[0]
