@@ -269,6 +269,12 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         # self.input_channels = None
         self.input_sensorchan = None
 
+        # Can we get rid of inject method?
+        # Unfortunately lightning seems to only enable / disables
+        # validation depending on the methods that are defined, so we are
+        # not able to statically define them.
+        ub.inject_method(self, lambda self: self._make_dataloader('train', shuffle=True), 'train_dataloader')
+
         # Store train / test / vali
         self.torch_datasets: Dict[str, KWCocoVideoDataset] = {}
         self.coco_datasets: Dict[str, kwcoco.CocoDataset] = {}
@@ -401,6 +407,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 vali_dataset = KWCocoVideoDataset(
                     vali_coco_sampler, mode='vali', **self.vali_dataset_config)
                 self.torch_datasets['vali'] = vali_dataset
+                ub.inject_method(self, lambda self: self._make_dataloader('vali', shuffle=False), 'val_dataloader')
 
         if stage == 'test' or stage is None:
             test_coco_dset = _read_kwcoco_split('test')
@@ -411,19 +418,19 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             self.torch_datasets['test'] = KWCocoVideoDataset(
                 test_coco_sampler, mode='test', **self.test_dataset_config,
             )
+            ub.inject_method(self, lambda self: self._make_dataloader('test', shuffle=False), 'test_dataloader')
 
         print('self.torch_datasets = {}'.format(ub.urepr(self.torch_datasets, nl=1)))
         self._notify_about_tasks(self.requested_tasks)
         self.did_setup = True
 
-    def train_dataloader(self):
-        return self._make_dataloader('train', shuffle=True)
-
-    def val_dataloader(self):
-        return self._make_dataloader('vali', shuffle=True)
-
-    def test_dataloader(self):
-        return self._make_dataloader('test', shuffle=True)
+    # Can we use these instead of inject method?
+    # def train_dataloader(self):
+    #     return self._make_dataloader('train', shuffle=True)
+    # def val_dataloader(self):
+    #     return self._make_dataloader('vali', shuffle=True)
+    # def test_dataloader(self):
+    #     return self._make_dataloader('test', shuffle=True)
 
     @property
     def train_dataset(self):
