@@ -5554,7 +5554,7 @@ initializer:
 
 
 # On ooo - AC/SC MAE
-export CUDA_VISIBLE_DEVICES="0,1"
+export CUDA_VISIBLE_DEVICES="1"
 DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='auto')
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
@@ -5638,8 +5638,7 @@ trainer:
     accumulate_grad_batches: 24
     default_root_dir     : $DEFAULT_ROOT_DIR
     accelerator          : gpu
-    devices              : 0,1
-    strategy             : ddp
+    devices              : 0,
     limit_val_batches    : 256
     limit_train_batches  : 2048
     num_sanity_val_steps : 0
