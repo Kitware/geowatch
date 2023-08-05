@@ -26,7 +26,7 @@ class pretext(pl.LightningModule):
     def __init__(self, hparams):
         super().__init__()
 
-        if type(hparams) == dict:
+        if isinstance(hparams, dict):
             hparams = Namespace(**hparams)
 
         self.save_hyperparameters(hparams)

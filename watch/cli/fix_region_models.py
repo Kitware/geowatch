@@ -41,8 +41,10 @@ class FixRegionModelsCLI(scfg.DataConfig):
 class fakefloat(float):
     def __init__(self, value):
         self._value = value
+
     def __repr__(self):
         return str(self._value)
+
     def __str__(self):
         return str(self._value)
 
@@ -108,6 +110,7 @@ def special_dumps(region_model):
     t = region_model.copy()
     features = t.pop('features', None)
     lines = ['{']
+
     def oneline_dict(val):
         # import json
         # text = json.dumps(val, cls=DecimalEncoder)

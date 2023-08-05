@@ -100,6 +100,7 @@ class MaterialsPredictConfig(scfg.DataConfig):
                             Comma separated list of sensors to include.
                             '''))
 
+
 __config__ = MaterialsPredictConfig
 
 

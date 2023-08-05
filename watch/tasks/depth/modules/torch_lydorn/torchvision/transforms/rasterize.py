@@ -55,7 +55,7 @@ def compute_raster_distances_sizes(polygons, shape, fill=True, edges=True, verti
          - distances: sum of distance to closest and second-closest annotation for each pixel.
          - size_weights: relative size (normalized by image area) of annotation the pixel belongs to.
     """
-    assert type(polygons) == list, "polygons should be a list"
+    assert isinstance(polygons, list), "polygons should be a list"
 
     # Filter out zero-area polygons
     polygons = [polygon for polygon in polygons if 0 < polygon.area]
@@ -121,10 +121,10 @@ def compute_distances(distance_maps):
 
 
 def draw_polygons(polygons, shape, fill=True, edges=True, vertices=True, line_width=3, antialiasing=False):
-    assert type(polygons) == list, "polygons should be a list"
+    assert isinstance(polygons, list), "polygons should be a list"
     # print('LEN of polygon is :', len(polygons), '\n')
 
-    assert type(polygons[0]) == shapely.geometry.Polygon, "polygon should be a shapely.geometry.Polygon"
+    assert isinstance(polygons[0], shapely.geometry.Polygon), "polygon should be a shapely.geometry.Polygon"
 
     if antialiasing:
         draw_shape = (2 * shape[0], 2 * shape[1])

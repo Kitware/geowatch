@@ -1,9 +1,9 @@
 def format_key(key):
-    if type(key) == list:
+    if isinstance(key, list):
         for k in key:
-            assert type(k) == str, "keys should be strings"
+            assert isinstance(k, str), "keys should be strings"
     else:
-        assert type(key) == str
+        assert isinstance(key, str)
     return key
 
 
@@ -24,20 +24,20 @@ class TransformByKey(object):
         self.kwargs = kwargs
 
     def __call__(self, data):
-        assert type(data) == dict, "Input data should be a dictionary, not a {}".format(type(data))
+        assert isinstance(data, dict), "Input data should be a dictionary, not a {}".format(type(data))
         try:
             if self.key is None:
                 output = self.transform(**self.kwargs)
-            elif type(self.key) == str:
+            elif isinstance(self.key, str):
                 output = self.transform(data[self.key], **self.kwargs)
             else:
                 inputs = [data[k] for k in self.key]
                 output = self.transform(*inputs, **self.kwargs)
 
-            if type(self.outkey) == str:
+            if isinstance(self.outkey, str):
                 data[self.outkey] = output
             else:
-                assert type(output) == tuple, "Output should be tuple, not {} because outkey is {}".format(type(output), type(self.outkey))
+                assert isinstance(output, tuple), "Output should be tuple, not {} because outkey is {}".format(type(output), type(self.outkey))
                 assert len(self.outkey) == len(output), "len(outkey) and len(output) should be the same for a 1-to-1 matching."
                 for k, o in zip(self.outkey, output):
                     data[k] = o

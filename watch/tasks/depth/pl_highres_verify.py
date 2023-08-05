@@ -33,7 +33,7 @@ dfactor = 25.5
 def modify_bn(model, track_running_stats=True, bn_momentum=0.1):
     for m in model.modules():
         for child in m.children():
-            if type(child) == nn.BatchNorm2d:
+            if isinstance(child, nn.BatchNorm2d):
 
                 child.momentum = bn_momentum
                 child.track_running_stats = track_running_stats

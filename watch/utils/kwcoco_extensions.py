@@ -487,11 +487,11 @@ def _populate_valid_region(coco_img):
         warnings.warn('No primary asset found for img={}'.format(img))
         return
     primary_fname = primary_obj.get('file_name', None)
-
     primary_fpath = join(bundle_dpath, primary_fname)
 
     # NOTE: THIS POLYGON IS COMPUTED VIA RASTERIO, NOT SURE HOW WELL THIS AGREES
     # WITH OTHER POLYGONS WE DRAW (USUALLY VIA CV2)
+    # TODO: get a better heuristic here
     sh_poly = util_raster.mask(
         primary_fpath,
         tolerance=4,
@@ -501,8 +501,8 @@ def _populate_valid_region(coco_img):
         use_overview=2,
         convex_hull=True,
     )
-    kw_poly = kwimage.MultiPolygon.from_shapely(sh_poly)
-    # print('kw_poly = {!r}'.format(kw_poly.data[0]))
+    kw_asset_poly = kwimage.MultiPolygon.from_shapely(sh_poly)
+
     info = primary_obj.get('geotiff_metadata', None)
     if info is None:
         metakw = {}
@@ -511,16 +511,25 @@ def _populate_valid_region(coco_img):
             metakw['elevation'] = 0
         info = watch.gis.geotiff.geotiff_metadata(primary_fpath, **metakw)
 
-    # TODO: get a better heuristic here
-    primary_obj['valid_region'] = kw_poly.to_coco(style='new')
-    img['valid_region'] = kw_poly.to_coco(style='new')
+    warp_img_from_asset = kwimage.Affine.coerce(primary_obj.get('warp_aux_to_img', None))
+    if warp_img_from_asset.isclose_identity():
+        kw_img_poly = kw_asset_poly
+    else:
+        kw_img_poly = kw_asset_poly.warp(warp_img_from_asset)
+
+    # TODO: we probably should not add the valid region to the asset.
+    # Not sure if its used anywhere though.
+    primary_obj['valid_region'] = kw_asset_poly.to_coco(style='new')
+    img['valid_region'] = kw_img_poly.to_coco(style='new')
 
     if 'pxl_to_wld' in info:
-        pxl_to_wld = info['pxl_to_wld']
-        kw_poly_utm = kw_poly.warp(pxl_to_wld).warp(info['wld_to_utm'])
+        wld_from_asset = info['pxl_to_wld']
+        kw_poly_utm = kw_asset_poly.warp(wld_from_asset).warp(info['wld_to_utm'])
         poly_utm = kw_poly_utm.to_geojson()
         poly_utm['properties'] = {}
         poly_utm['properties']['crs'] = info['utm_crs_info']
+        # TODO: we probably should only add this to the image and not the
+        # asset?
         primary_obj['valid_region_utm'] = poly_utm
         img['valid_region_utm'] = poly_utm
 

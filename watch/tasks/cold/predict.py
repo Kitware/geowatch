@@ -429,5 +429,6 @@ def read_json_metadata(folder_path):
                     return metadata
     return None
 
+
 if __name__ == '__main__':
     cold_predict_main()

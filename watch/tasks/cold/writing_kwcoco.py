@@ -323,5 +323,6 @@ def read_json_metadata(folder_path):
                     metadata = json.load(f)
                     return metadata
 
+
 if __name__ == '__main__':
     cold_writing_kwcoco_main()

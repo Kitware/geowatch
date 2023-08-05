@@ -100,7 +100,7 @@ def split_list_into_chunks(ell, n, pad=False):
 
 def params_to_str(params):
     def to_str(value):
-        if type(value) == float and value == int(value):
+        if isinstance(value, float) and value == int(value):
             return str(int(value))
         return str(value)
 

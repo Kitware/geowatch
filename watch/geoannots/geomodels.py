@@ -84,6 +84,9 @@ Example:
     >>> print(gdf)
 
 
+XDEV_PROFILE=1 xdoctest ~/code/watch/watch/geoannots/geomodels.py
+
+
 For testing the following example shows how to generate and inspect a random
 site / region model.
 

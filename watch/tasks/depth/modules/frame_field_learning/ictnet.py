@@ -180,9 +180,9 @@ class ICTNetBackbone(nn.Module):
             growth_rate = growth_rate
             n_layers_per_block = n_layers_per_block
 
-        if type(n_layers_per_block) == list:
+        if isinstance(n_layers_per_block, list):
             assert (len(n_layers_per_block) == 2 * n_pool + 1)
-        elif type(n_layers_per_block) == int:
+        elif isinstance(n_layers_per_block, int):
             n_layers_per_block = [n_layers_per_block] * (2 * n_pool + 1)
         else:
             raise ValueError

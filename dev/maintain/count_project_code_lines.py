@@ -1,3 +1,9 @@
+"""
+SeeAlso:
+    ~/local/tools/repo_analysis.py
+"""
+
+
 def main():
     import networkx as nx
     import ubelt as ub

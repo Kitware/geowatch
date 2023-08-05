@@ -671,222 +671,226 @@ geowatch reproject_annotations \
     --site_models="$REGION_DATA_DPATH/annotations/drop6_hard_v1/site_models/PE_R001*.geojson"
 
 
-
-# On namek - test training - no teamfeat
-export CUDA_VISIBLE_DEVICES=0
-DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='auto')
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
-echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
-WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
-DATASET_CODE=Drop7-Cropped2GSD
-KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
-TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/KR_R001/imgannots-KR_R001.kwcoco.zip
-VALI_FPATH=$KWCOCO_BUNDLE_DPATH/KR_R002/imgannots-KR_R002.kwcoco.zip
-CHANNELS="(L8,S2):(blue|green|red|nir),(WV):(blue|green|red),(WV1):(pan)"
-EXPERIMENT_NAME=Drop7-Cropped2GSD_SC_bgrn_kronly_small_V01
-DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-TARGET_LR=1e-4
-WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
-echo "WEIGHT_DECAY = $WEIGHT_DECAY"
-MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
-data:
-    select_videos          : $SELECT_VIDEOS
-    num_workers            : 5
-    train_dataset          : $TRAIN_FPATH
-    vali_dataset           : $VALI_FPATH
-    window_dims            : '196,196'
-    time_steps             : 9
-    time_sampling          : uniform-soft5-soft4-contiguous
-    time_kernel            : '(-1.25y,-1.08y,-0.25y,-0.08y,0.0y,0.08y,0.25y,1.08y,1.25y)'
-    window_resolution     : 2.0GSD
-    input_resolution      : 2.0GSD
-    output_resolution     : 2.0GSD
-    neg_to_pos_ratio       : 1.0
-    batch_size             : 2
-    normalize_perframe     : false
-    normalize_peritem      : 'blue|green|red|nir|pan'
-    max_epoch_length       : 1000000
-    channels               : '$CHANNELS'
-    min_spacetime_weight   : 0.6
-    temporal_dropout       : 0.5
-    mask_low_quality       : False
-    mask_samecolor_method  : None
-    observable_threshold   : 0.0
-    quality_threshold      : 0.0
-    weight_dilate          : 10
-    use_centered_positives : True
-    use_grid_positives     : True
-    use_grid_negatives     : True
-    normalize_inputs       : 1024
-    balance_areas          : True
-model:
-    class_path: MultimodalTransformer
-    init_args:
-        #saliency_weights      : '1:1'
-        #class_weights         : auto
-        tokenizer              : linconv
-        arch_name              : smt_it_stm_p16
-        decoder                : mlp
-        positive_change_weight : 1
-        negative_change_weight : 0.01
-        stream_channels        : 16
-        class_loss             : 'dicefocal'
-        saliency_loss          : 'focal'
-        saliency_head_hidden   : 6
-        change_head_hidden     : 6
-        class_head_hidden      : 6
-        global_change_weight   : 0.00
-        global_class_weight    : 1.00
-        global_saliency_weight : 0.20
-        multimodal_reduce      : learned_linear
-optimizer:
-    class_path: torch.optim.AdamW
-    init_args:
-        lr           : $TARGET_LR
-        weight_decay : $WEIGHT_DECAY
-lr_scheduler:
-  class_path: torch.optim.lr_scheduler.OneCycleLR
-  init_args:
-    max_lr: $TARGET_LR
-    total_steps: $MAX_STEPS
-    anneal_strategy: cos
-    pct_start: 0.05
-trainer:
-    accumulate_grad_batches: 24
-    default_root_dir     : $DEFAULT_ROOT_DIR
-    accelerator          : gpu
-    devices              : 0,
-    limit_val_batches    : 256
-    limit_train_batches  : 2048
-    num_sanity_val_steps : 0
-    max_epochs           : 360
-    callbacks:
-        - class_path: pytorch_lightning.callbacks.ModelCheckpoint
-          init_args:
-              monitor: val_loss
-              mode: min
-              save_top_k: 5
-              filename: '{epoch}-{step}-{val_loss:.3f}.ckpt'
-              save_last: true
+python -m watch.utils.simple_dvc request \
+    "$DVC_EXPT_DPATH"/models/depth/weights_v1.pt
 
-torch_globals:
-    float32_matmul_precision: auto
+# AC/SC Features on Clusters
+DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware="auto")
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
+BUNDLE_DPATH=$DVC_DATA_DPATH/Drop7-Cropped2GSD
+python -m watch.cli.prepare_teamfeats \
+    --base_fpath "$BUNDLE_DPATH"/*/[A-Z][A-Z]_R*[0-9].kwcoco.zip \
+    --expt_dvc_dpath="$DVC_EXPT_DPATH" \
+    --with_landcover=0 \
+    --with_invariants2=0 \
+    --with_sam=0 \
+    --with_materials=1 \
+    --with_depth=0 \
+    --with_cold=0 \
+    --skip_existing=1 \
+    --assets_dname=teamfeats \
+    --gres=0, \
+    --cold_workermode=process \
+    --cold_workers=8 \
+    --tmux_workers=2 \
+    --backend=tmux --run=0 --print-commands
+    #--base_fpath "$BUNDLE_DPATH"/*/imganns-*[0-9].kwcoco.zip \
 
-initializer:
-    init: $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
+
+python -m watch.tasks.depth.predict \
+    --dataset=/data2/dvc-repos/smart_drop7/Drop7-Cropped2GSD/NZ_R001/NZ_R001.kwcoco.zip \
+    --deployed=/home/local/KHQ/jon.crall/remote/yardrat/data/dvc-repos/smart_expt_dvc/models/depth/weights_v1.pt \
+    --output=/data2/dvc-repos/smart_drop7/Drop7-Cropped2GSD/NZ_R001/NZ_R001_dzyne_depth.kwcoco.zip \
+    --data_workers=2 \
+    --window_size=1440
+
+
+python -m watch.tasks.rutgers_material_seg_v2.predict \
+    --kwcoco_fpath=/media/joncrall/flash1/smart_drop7/Drop7-Cropped2GSD/KR_R001/KR_R001.kwcoco.zip \
+    --model_fpath=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/rutgers/ru_model_05_25_2023.ckpt \
+    --config_fpath=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/rutgers/ru_config_05_25_2023.yaml \
+    --output_kwcoco_fpath=/media/joncrall/flash1/smart_drop7/Drop7-Cropped2GSD/KR_R001/KR_R001_rutgers_material_seg_v4.kwcoco.zip \
+    --workers=2
+
+DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='ssd')
+ls "$DVC_DATA_DPATH/Drop7-Cropped2GSD"
+python -m watch.cli.prepare_splits \
+    --base_fpath "$DVC_DATA_DPATH"/Drop7-Cropped2GSD/*/combo_*_D.kwcoco.zip \
+    --dst_dpath "$DVC_DATA_DPATH"/Drop7-Cropped2GSD \
+    --suffix=depth --run=1 --workers=2
+
+REGION_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='ssd')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='auto')
+geowatch reproject_annotations \
+    --src "$DVC_DATA_DPATH"/Drop7-Cropped2GSD/data_vali_depth_split6.kwcoco.zip \
+    --inplace \
+    --io_workers=avail \
+    --region_models="$REGION_DATA_DPATH/annotations/drop6_hard_v1/region_models/*.geojson" \
+    --site_models="$REGION_DATA_DPATH/annotations/drop6_hard_v1/site_models/*.geojson"
+
+REGION_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='ssd')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='auto')
+geowatch reproject_annotations \
+    --src "$DVC_DATA_DPATH"/Drop7-Cropped2GSD/data_vali_depth_split6.kwcoco.zip \
+    --inplace \
+    --io_workers=avail \
+    --region_models="$REGION_DATA_DPATH/annotations/drop6_hard_v1/region_models/*.geojson" \
+    --site_models="$REGION_DATA_DPATH/annotations/drop6_hard_v1/site_models/*.geojson"
+
+REGION_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='ssd')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='auto')
+geowatch reproject_annotations \
+    --src "$DVC_DATA_DPATH"/Drop7-Cropped2GSD/data_train_depth_split6.kwcoco.zip \
+    --inplace \
+    --io_workers=avail \
+    --region_models="$REGION_DATA_DPATH/annotations/drop6_hard_v1/region_models/*.geojson" \
+    --site_models="$REGION_DATA_DPATH/annotations/drop6_hard_v1/site_models/*.geojson"
+
+
+
+
+DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware="auto")
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
+BUNDLE_DPATH=$DVC_DATA_DPATH/Drop7-Cropped2GSD
+python -m watch.cli.prepare_teamfeats \
+    --base_fpath "$BUNDLE_DPATH"/*/[A-Z][A-Z]_R*[0-9].kwcoco.zip \
+    --expt_dvc_dpath="$DVC_EXPT_DPATH" \
+    --with_landcover=0 \
+    --with_invariants2=0 \
+    --with_sam=0 \
+    --with_materials=0 \
+    --with_depth=0 \
+    --with_mae=1 \
+    --with_cold=0 \
+    --skip_existing=1 \
+    --assets_dname=teamfeats \
+    --gres=0,1 \
+    --cold_workermode=process \
+    --cold_workers=8 \
+    --tmux_workers=2 \
+    --backend=tmux --run=1
+
+DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='ssd')
+ls "$DVC_DATA_DPATH/Drop7-Cropped2GSD"
+python -m watch.cli.prepare_splits \
+    --base_fpath "$DVC_DATA_DPATH"/Drop7-Cropped2GSD/*/combo_*_E.kwcoco.zip \
+    --dst_dpath "$DVC_DATA_DPATH"/Drop7-Cropped2GSD \
+    --suffix=mae --run=1 --workers=2 \
+    --splits split6
+
+REGION_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='ssd')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='auto')
+geowatch reproject_annotations \
+    --src "$DVC_DATA_DPATH"/Drop7-Cropped2GSD/data_train_mae_split6.kwcoco.zip \
+    --inplace \
+    --io_workers=avail \
+    --region_models="$REGION_DATA_DPATH/annotations/drop6_hard_v1/region_models/*.geojson" \
+    --site_models="$REGION_DATA_DPATH/annotations/drop6_hard_v1/site_models/*.geojson"
+
+
+REGION_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='ssd')
+DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='auto')
+geowatch reproject_annotations \
+    --src "$DVC_DATA_DPATH"/Drop7-Cropped2GSD/data_vali_mae_split6.kwcoco.zip \
+    --inplace \
+    --io_workers=avail \
+    --region_models="$REGION_DATA_DPATH/annotations/drop6_hard_v1/region_models/*.geojson" \
+    --site_models="$REGION_DATA_DPATH/annotations/drop6_hard_v1/site_models/*.geojson"
+
+
+/media/joncrall/flash1/smart_drop7/Drop7-Cropped2GSD-Features/Drop7-Cropped2GSD/KR_R001
+
+cd /media/joncrall/flash1/smart_drop7/Drop7-Cropped2GSD-Features/Drop7-Cropped2GSD/KR_R001
+
+python -c "if 1:
+    import kwcoco
+    import ubelt as ub
+    dst_dpaths = [p.parent / 'rawbands' / p.name for p in src_dpaths]
+
+    ub.Path('.').glob('*.kwcoco.*')
+
+    import kwcoco
+    kwcoco.CocoDataset('KR_R001.data.kwcoco
+
+    mv_man = self = CocoMoveAssetManager()
+    for src, dst in zip(src_dpaths, dst_dpaths):
+        mv_man.submit(src, dst)
 "
 
+python -c "if 1:
+    import kwcoco
+    import ubelt as ub
+    from kwcoco.cli.coco_move_assets import CocoMoveAssetManager
+    region_dpaths = [p for p in ub.Path('.').glob('*_R*') if p.is_dir()]
 
-# On namek - test training - no teamfeat (PE)
-export CUDA_VISIBLE_DEVICES=0
-DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='auto')
-DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
-echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
-WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
-DATASET_CODE=Drop7-Cropped2GSD
-KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
-TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train_rawbands_split6.kwcoco.zip
-VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali_rawbands_split6.kwcoco.zip
-CHANNELS="(L8,S2):(blue|green|red|nir),(WV):(blue|green|red),(WV1):(pan)"
-EXPERIMENT_NAME=Drop7-Cropped2GSD_SC_bgrn_split6_V05
-DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-TARGET_LR=1e-4
-WEIGHT_DECAY=$(python -c "print($TARGET_LR * 0.01)")
-echo "WEIGHT_DECAY = $WEIGHT_DECAY"
-MAX_STEPS=80000
-WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
-data:
-    select_videos          : $SELECT_VIDEOS
-    num_workers            : 5
-    train_dataset          : $TRAIN_FPATH
-    vali_dataset           : $VALI_FPATH
-    window_dims            : '256,256'
-    time_steps             : 9
-    time_sampling          : uniform-soft5-soft4-contiguous
-    time_kernel            : '(-1.25y,-1.08y,-0.25y,-0.08y,0.0y,0.08y,0.25y,1.08y,1.25y)'
-    window_resolution     : 2.0GSD
-    input_resolution      : 2.0GSD
-    output_resolution     : 2.0GSD
-    neg_to_pos_ratio       : 1.0
-    batch_size             : 4
-    normalize_perframe     : false
-    normalize_peritem      : 'blue|green|red|nir|pan'
-    max_epoch_length       : 1000000
-    channels               : '$CHANNELS'
-    min_spacetime_weight   : 0.6
-    temporal_dropout       : 0.5
-    mask_low_quality       : False
-    mask_samecolor_method  : None
-    observable_threshold   : 0.0
-    quality_threshold      : 0.0
-    weight_dilate          : 10
-    use_centered_positives : True
-    use_grid_positives     : False
-    use_grid_negatives     : False
-    normalize_inputs       : 1024
-    balance_areas          : True
-model:
-    class_path: MultimodalTransformer
-    init_args:
-        #saliency_weights      : '1:1'
-        #class_weights         : auto
-        tokenizer              : linconv
-        arch_name              : smt_it_stm_p16
-        decoder                : mlp
-        positive_change_weight : 1
-        negative_change_weight : 0.01
-        stream_channels        : 16
-        class_loss             : 'dicefocal'
-        saliency_loss          : 'focal'
-        saliency_head_hidden   : 6
-        change_head_hidden     : 6
-        class_head_hidden      : 6
-        global_change_weight   : 0.00
-        global_class_weight    : 1.00
-        global_saliency_weight : 0.01
-        multimodal_reduce      : learned_linear
-optimizer:
-    class_path: torch.optim.AdamW
-    init_args:
-        lr           : $TARGET_LR
-        weight_decay : $WEIGHT_DECAY
-lr_scheduler:
-  class_path: torch.optim.lr_scheduler.OneCycleLR
-  init_args:
-    max_lr: $TARGET_LR
-    total_steps: $MAX_STEPS
-    anneal_strategy: cos
-    pct_start: 0.05
-trainer:
-    accumulate_grad_batches: 24
-    default_root_dir     : $DEFAULT_ROOT_DIR
-    accelerator          : gpu
-    devices              : 0,
-    limit_val_batches    : 256
-    limit_train_batches  : 2048
-    num_sanity_val_steps : 0
-    max_epochs           : 360
-    callbacks:
-        - class_path: pytorch_lightning.callbacks.ModelCheckpoint
-          init_args:
-              monitor: val_loss
-              mode: min
-              save_top_k: 5
-              filename: '{epoch}-{step}-{val_loss:.3f}.ckpt'
-              save_last: true
-
-torch_globals:
-    float32_matmul_precision: auto
-
-initializer:
-    init: $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
+    for region_dpath in ub.ProgIter(region_dpaths):
+        region_dpath = region_dpath.absolute()
+        region_id = region_dpath.name
+        coco_paths = list(region_dpath.glob('*.kwcoco.*'))
+        dst_dpath = (region_dpath / 'rawbands')
+        if dst_dpath.exists():
+            continue
+        coco_dsets = list(kwcoco.CocoDataset.coerce_multiple(coco_paths))
+        mv_man = CocoMoveAssetManager(coco_dsets)
+        src_dpaths = list(region_dpath.glob('*_CLUSTER_*'))
+        dst_dpaths = [p.parent / 'rawbands' / p.name for p in src_dpaths]
+        for src, dst in zip(src_dpaths, dst_dpaths):
+            mv_man.submit(src, dst)
+        mv_man.run()
 "
 
+# Fixes on yardrat
+cd /data2/dvc-repos/smart_drop7/Drop7-Cropped2GSD
+python -c "if 1:
+    import kwcoco
+    import ubelt as ub
+    root = ub.Path('.')
+    region_dpaths = [p for p in root.glob('*_R*') if p.is_dir()]
 
+    import ubelt as ub
+    from kwutil.copy_manager import CopyManager
+    cman = CopyManager()
 
+    # Move the data from the old compute location to the new one.
+    for region_dpath in ub.ProgIter(region_dpaths):
+        region_dpath = region_dpath.absolute()
+        region_id = region_dpath.name
+        new_region_dpath = region_dpath.parent.parent / 'Drop7-Cropped2GSD-Features' / region_dpath.name
 
-echo "hello" > foo
-aws s3 cp foo s3://kitware-smart-watch-data/dvc3/foo
+        for fpath in region_dpath.glob('*.kwcoco.zip'):
+            cman.submit(fpath, fpath.augment(dpath=new_region_dpath))
+        cman.submit(region_dpath / '_assets', new_region_dpath / '_assets')
+    cman.run()
 
-aws s3 rm s3://kitware-smart-watch-data/dvc3/foo
+    # Now change the name from _assets to teamfeats
+
+    # from kwcoco.cli.coco_move_assets import CocoMoveAssetManager
+    root = ub.Path('/data2/dvc-repos/smart_drop7/Drop7-Cropped2GSD-Features')
+    region_dpaths = [p for p in root.glob('*_R*') if p.is_dir()]
+    for region_dpath in ub.ProgIter(region_dpaths):
+        region_dpath = region_dpath.absolute()
+        region_id = region_dpath.name
+        coco_paths = list(region_dpath.glob('*.kwcoco.zip'))
+
+        src_path = (region_dpath / '_assets' / 'dzyne_depth')
+        dst_path = (region_dpath / 'teamfeats' / 'dzyne_depth')
+        if dst_dpath.exists():
+            continue
+
+        coco_dsets = list(kwcoco.CocoDataset.coerce_multiple(coco_paths, workers='avail'))
+        self = mv_man = CocoMoveAssetManager(coco_dsets)
+
+        mv_man.submit(src_path, dst_path)
+
+        # Also mark old stuff that happened
+        prev_dst_dpaths = list((region_dpath / 'rawbands').glob('*'))
+        prev_src_dpaths = [p.parent.parent / p.name for p in prev_dst_dpaths]
+        for src, dst in zip(prev_src_dpaths, prev_dst_dpaths):
+            assert not src.exists()
+            mv_man.submit(src, dst)
+
+        mv_man.run()
+"
+
+dvc add -- */teamfeats/dzyne_depth */*_depth.kwcoco.zip */*_D.kwcoco.zip

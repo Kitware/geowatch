@@ -185,31 +185,46 @@ class SmartLightningCLI(LightningCLI_Extension):
         parser.link_arguments(
             "trainer.default_root_dir",
             "packager.package_fpath",
-            compute_fn=lambda root: None if root is None else str(ub.Path(root) / "final_package.pt")
+            compute_fn=_final_pkg_compute_fn,
+            # lambda root: None if root is None else str(ub.Path(root) / "final_package.pt")
             # apply_on="instantiate",
         )
-
-        def data_value_getter(key):
-            # Hack to call setup on the datamodule before linking args
-            def get_value(data):
-                if not data.did_setup:
-                    data.setup('fit')
-                return getattr(data, key)
-            return get_value
 
         # pass dataset stats to model after initialization datamodule
         parser.link_arguments(
             "data",
             "model.init_args.dataset_stats",
-            compute_fn=data_value_getter('dataset_stats'),
+            compute_fn=_data_value_getter('dataset_stats'),
             apply_on="instantiate")
         parser.link_arguments(
             "data",
             "model.init_args.classes",
-            compute_fn=data_value_getter('classes'),
+            compute_fn=_data_value_getter('classes'),
             apply_on="instantiate")
 
         super().add_arguments_to_parser(parser)
+
+
+def _final_pkg_compute_fn(root):
+    # cant be a lambda for pickle
+    return None if root is None else str(ub.Path(root) / "final_package.pt")
+
+
+class _ValueGetter:
+    # Made into a class instead of a closure for pickling issues
+    def __init__(self, key):
+        self.key = key
+
+    def __call__(self, data):
+        if not data.did_setup:
+            data.setup('fit')
+        return getattr(data, self.key)
+
+
+def _data_value_getter(key):
+    # Hack to call setup on the datamodule before linking args
+    get_value = _ValueGetter(key)
+    return get_value
 
 
 def make_cli(config=None):

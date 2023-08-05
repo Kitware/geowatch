@@ -203,5 +203,6 @@ def smartflow_egress(assetnames_and_local_paths,
     print('EGRESSED: {}'.format(ub.urepr(te_output, nl=-1)))
     return te_output
 
+
 if __name__ == "__main__":
     main()

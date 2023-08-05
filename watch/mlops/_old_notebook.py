@@ -103,7 +103,6 @@ def _debug_roi_issue():
         ax.plot(point_A['metrics.sv_poly_eval.bas_tpr'], point_A['metrics.sv_poly_eval.bas_f1'], '*', markersize=20, color='orange')
         ax.text(*target_pt, 'A', fontdict={'weight': 'bold'})
 
-
         # Pt C
         target_pt = (0.656, 0.60)
         delta = points[['metrics.sv_poly_eval.bas_tpr', 'metrics.sv_poly_eval.bas_f1']].values - target_pt
@@ -174,8 +173,6 @@ def _debug_roi_issue():
             link_fpath = eval_links / (row['region_id'] + '_' + node_dpath.name)
             ub.symlink(node_dpath, link_fpath)
 
-
-
     agg.table['resolved_params.sv_crop.src'].unique()
 
     bad_values['resolved_params.sv_crop.src'].unique()
@@ -184,7 +181,6 @@ def _debug_roi_issue():
     bad_values = agg.table[flags]
     good_values = agg.table[~flags]
 
-
     node_dpath = '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_toothbrush_split6_landcover_MeanYear10GSD-V2/eval/flat/sv_poly_eval/sv_poly_eval_id_cb328495/.pred/sv_dino_filter/sv_dino_filter_id_321a821e/.pred/sv_dino_boxes/sv_dino_boxes_id_c6cc58bf/.pred/sv_crop/sv_crop_id_55fc5fce/'
     from watch.mlops.aggregate_loader import load_result_resolved
     r = load_result_resolved(node_dpath)
@@ -192,8 +188,6 @@ def _debug_roi_issue():
     fpath = '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_toothbrush_split6_landcover_MeanYear10GSD-V2/eval/flat/sv_poly_eval/sv_poly_eval_id_cb328495/poly_eval.json'
     node_name = agg.type
     out_node_key = 'sv_poly_eval.eval_fpath'
-
-
 
 
 def _sitevisit_2023_april_report():
@@ -222,7 +216,6 @@ def _sitevisit_2023_april_report():
 
     _ = poly_agg.report_best(top_k=10, print_models=True)
 
-
     agg = poly_agg
     agg.output_dpath = expt_dvc_dpath / 'site_visit_plots'
     print(ub.urepr(ub.udict(agg.macro_compatible).map_values(len).sorted_values()))
@@ -235,9 +228,8 @@ def _sitevisit_2023_april_report():
     rich.print('resolved.nested_columns = {}'.format(ub.urepr(table.nested_columns, nl=True)))
     from watch.mlops.smart_global_helper import SmartGlobalHelper
 
-
     def experiment_timeline():
-        import pandas  as pd
+        import pandas as pd
         from kwutil import util_time
         resources = agg.resources
         duration_cols = [k for k in resources.keys() if k.endswith('.duration')]
@@ -324,14 +316,12 @@ def _sitevisit_2023_april_report():
         ax.autoscale_view()
         ax.xaxis_date()
 
-
         # from collections import Counter
         # c = Counter()
         # for
         # c[1]
 
         max(ub.dict_hist().values())
-
 
         np.sea
 
@@ -346,12 +336,9 @@ def _sitevisit_2023_april_report():
         if 0:
             fig = px.timeline(df, x_start="Start", x_end="Finish", y="Task", color="Completion_pct")
 
-
         resource_summary_df = pd.DataFrame(resource_summary)
         import rich
         rich.print(resource_summary_df.to_string())
-
-
 
     table['resolved_params.bas_pxl.package_fpath']
 

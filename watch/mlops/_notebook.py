@@ -9,7 +9,7 @@ import ubelt as ub
 def _sitevisit_2023_july_report():
     import watch
     from watch.mlops.aggregate import AggregateLoader
-    import pandas  as pd
+    import pandas as pd
     from watch.utils.util_pandas import DotDictDataFrame
     expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
 

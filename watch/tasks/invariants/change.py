@@ -17,7 +17,7 @@ class change(pl.LightningModule):
     def __init__(self, hparams):
         super().__init__()
 
-        if type(hparams) == dict:
+        if isinstance(hparams, dict):
             hparams = Namespace(**hparams)
 
         ### Define backbone network.
@@ -215,7 +215,7 @@ class change(pl.LightningModule):
 
 
 def main(args):
-    if type(args) == dict:
+    if isinstance(args, dict):
         args = Namespace(**args)
 
     if args.change:

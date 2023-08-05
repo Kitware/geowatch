@@ -91,6 +91,7 @@ class AggregateLoader(DataConfig):
         if inputs is not None:
             from ruamel.yaml.composer import ComposerError
             resolved = []
+
             def resolve_item(item):
                 try:
                     loaded = Yaml.loads(item)
@@ -968,6 +969,7 @@ class TopResultsReport:
     """
     Object to hold the result of :func:`Aggregator.report_best`.
     """
+
     def __init__(self, region_id_to_summary, top_param_lut):
         self.top_param_lut = top_param_lut
         self.region_id_to_summary = region_id_to_summary

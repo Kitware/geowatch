@@ -269,6 +269,12 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         # self.input_channels = None
         self.input_sensorchan = None
 
+        # Can we get rid of inject method?
+        # Unfortunately lightning seems to only enable / disables
+        # validation depending on the methods that are defined, so we are
+        # not able to statically define them.
+        ub.inject_method(self, lambda self: self._make_dataloader('train', shuffle=True), 'train_dataloader')
+
         # Store train / test / vali
         self.torch_datasets: Dict[str, KWCocoVideoDataset] = {}
         self.coco_datasets: Dict[str, kwcoco.CocoDataset] = {}
@@ -352,12 +358,8 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 coco_train_sampler, mode='fit', **self.train_dataset_config,
             )
 
-            # Unfortunately lightning seems to only enable / disables
-            # validation depending on the methods that are defined, so we are
-            # not able to statically define them.
             self.classes = train_dataset.classes
             self.torch_datasets['train'] = train_dataset
-            ub.inject_method(self, lambda self: self._make_dataloader('train', shuffle=True), 'train_dataloader')
 
             if self.input_sensorchan is None:
                 self.input_sensorchan = train_dataset.input_sensorchan
@@ -422,6 +424,14 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self._notify_about_tasks(self.requested_tasks)
         self.did_setup = True
 
+    # Can we use these instead of inject method?
+    # def train_dataloader(self):
+    #     return self._make_dataloader('train', shuffle=True)
+    # def val_dataloader(self):
+    #     return self._make_dataloader('vali', shuffle=True)
+    # def test_dataloader(self):
+    #     return self._make_dataloader('test', shuffle=True)
+
     @property
     def train_dataset(self):
         return self.torch_datasets.get('train', None)
@@ -435,9 +445,16 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         return self.torch_datasets.get('vali', None)
 
     def _make_dataloader(self, stage, shuffle=False):
-        # import nonechucks
-        # nonechucks.SafeDataset
-        loader = self.torch_datasets[stage].make_loader(
+        """
+        If the stage doesn't exist, resturns None.
+
+        Returns:
+            torch.utils.data.DataLoader | None
+        """
+        dataset = self.torch_datasets.get(stage, None)
+        if dataset is None:
+            return None
+        loader = dataset.make_loader(
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             shuffle=shuffle,

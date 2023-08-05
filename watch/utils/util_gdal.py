@@ -447,6 +447,7 @@ class _ShrinkingTimeout:
         >>> new3 = _ShrinkingTimeout.coerce(None)
         >>> assert new3.remaining() is None
     """
+
     def __init__(self, value, minimum=0.0):
         import time
         self._start_time = time.monotonic()

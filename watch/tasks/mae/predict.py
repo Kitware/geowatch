@@ -100,6 +100,22 @@ class MAEPredictConfig(scfg.DataConfig):
 
 
 class WatchDataset(Dataset):
+    """
+
+    Example:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> from watch.tasks.mae.predict import *  # NOQA
+        >>> import watch
+        >>> import kwcoco
+        >>> import ubelt as ub
+        >>> dvc_dpath = watch.find_dvc_dpath(tags='drop7_data', hardware='auto')
+        >>> coco_fpath = dvc_dpath / 'Drop7-Cropped2GSD/BR_R002/BR_R002.kwcoco.zip'
+        >>> self = WatchDataset(coco_fpath)
+        >>> for idx in ub.ProgIter(range(len(self))):
+        >>>     images, item = self[idx]
+
+    """
+
     S2_l2a_channel_names = [
         'B02.tif', 'B01.tif', 'B03.tif', 'B04.tif', 'B05.tif', 'B06.tif', 'B07.tif', 'B08.tif', 'B09.tif', 'B11.tif', 'B12.tif', 'B8A.tif'
     ]
@@ -155,6 +171,20 @@ class WatchDataset(Dataset):
             samples = sample_grid['targets']
             for tr in samples:
                 tr['vidid'] = tr['video_id']  # hack
+
+            WORKAROUND_NON_UNIQUE_IMAGE_IDS = 1
+            if WORKAROUND_NON_UNIQUE_IMAGE_IDS:
+                # FIXME: there is an issue in sample_video_spacetime_targets.
+                # It should not be producing duplicate image ids. Workaround it
+                # for now, but fix it for real later.
+                workaround_samples = []
+                for tr in samples:
+                    unique_gids = list(ub.unique(tr['gids']))
+                    if len(unique_gids) == time_dims:
+                        tr['gids'] = unique_gids
+                        workaround_samples.append(tr)
+                samples = workaround_samples
+
             print('made grid')
         else:
             grid = self.sampler.new_sample_grid(**{

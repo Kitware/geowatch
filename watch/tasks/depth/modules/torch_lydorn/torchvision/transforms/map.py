@@ -24,5 +24,5 @@ class Map(object):
         self.transform = transform
 
     def __call__(self, data_list):
-        assert type(data_list) == list, "data_list should be a list"
+        assert isinstance(data_list, list), "data_list should be a list"
         return [self.transform(item) for item in data_list]

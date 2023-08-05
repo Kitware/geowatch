@@ -2,8 +2,11 @@
 """
 CommandLine:
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
-    python -m watch.cli.geojson_site_stats.py \
+    python -m watch.cli.geojson_site_stats \
         --site_models="$DVC_DATA_DPATH/annotations/drop6/site_models/*"
+
+    python -m watch.cli.geojson_site_stats \
+        --site_models=<path-to-site-models>
 """
 import scriptconfig as scfg
 import ubelt as ub

@@ -151,11 +151,21 @@ def load_iarpa_evaluation(fpath):
 
         site_prep_f1 = sc_df.loc['__macro__', 'Site Preparation']['F1']
         active_f1 = sc_df.loc['__macro__', 'Active Construction']['F1']
+
+        site_prep_te = sc_df.loc['__macro__', 'Site Preparation']['TE']
+        active_te = sc_df.loc['__macro__', 'Active Construction']['TE']
+        post_te = sc_df.loc['__macro__', 'Post Construction']['TE']
+
         metrics.update({
             # 'mean_f1': sc_df.loc['F1'].mean(),
             'sc_macro_f1': (site_prep_f1 + active_f1) / 2,
             'macro_f1_siteprep': site_prep_f1,
             'macro_f1_active': active_f1,
+
+            'sc_macro_te': sum([site_prep_te, active_te, post_te]) / 3,
+            'macro_te_siteprep': site_prep_te,
+            'macro_te_active': active_te,
+            'macro_te_post': post_te,
         })
 
         if '__micro__' in sc_df.index:

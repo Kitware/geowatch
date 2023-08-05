@@ -18,7 +18,7 @@ class segmentation_model(pl.LightningModule):
     def __init__(self, hparams):
         super().__init__()
 
-        if type(hparams) == dict:
+        if isinstance(hparams, dict):
             hparams = Namespace(**hparams)
 
         self.backbone = attention_unet(hparams.num_channels, 2, pos_encode=hparams.positional_encoding, attention_layers=hparams.attention_layers, mode=hparams.positional_encoding_mode)

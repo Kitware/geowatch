@@ -1037,7 +1037,7 @@ def colorize_weights(weights):
         # Define a function that maps values from [1,inf) to [0,1]
         # the last max value part does depend on the inputs, which is fine.
         mapper = interpolate.interp1d(x=[1.0, 10.0, 100.0, max(max_val, 1000.0)],
-                                      y=[0.0,  0.5,  0.75, 1.0])
+                                      y=[0.0, 0.5, 0.75, 1.0])
         cmap_values = mapper(gt_one_values)
         colors01 = cmap_(cmap_values)[..., 0:3]
 

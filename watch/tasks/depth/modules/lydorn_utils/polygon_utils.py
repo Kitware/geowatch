@@ -471,7 +471,7 @@ def crop_polygon_to_patch(polygon, bounding_box):
 
 
 def crop_polygon_to_patch_if_touch(polygon, bounding_box):
-    assert type(polygon) == np.ndarray, "polygon should be a numpy array, not {}".format(type(polygon))
+    assert isinstance(polygon, np.ndarray), "polygon should be a numpy array, not {}".format(type(polygon))
     assert len(polygon.shape) == 2 and polygon.shape[1] == 2, "polygon should be of shape (N, 2), not {}".format(
         polygon.shape)
     # Verify that at least one vertex is inside bounding_box
@@ -488,7 +488,7 @@ def crop_polygon_to_patch_if_touch(polygon, bounding_box):
 
 
 def crop_polygons_to_patch_if_touch(polygons, bounding_box, return_indices=False):
-    assert type(polygons) == list, "polygons should be a list"
+    assert isinstance(polygons, list), "polygons should be a list"
     if return_indices:
         indices = []
     cropped_polygons = []
@@ -524,10 +524,10 @@ def patch_polygons(polygons, minx, miny, maxx, maxy):
     @param minx:
     @return: [shapely.geometry.Polygon, ...]
     """
-    assert type(polygons) == list, "polygons should be a list"
+    assert isinstance(polygons, list), "polygons should be a list"
     if len(polygons) == 0:
         return polygons
-    assert type(polygons[0]) == shapely.geometry.Polygon, \
+    assert isinstance(polygons[0], shapely.geometry.Polygon), \
         f"Items of the polygons list should be of type shapely.geometry.Polygon, not {type(polygons[0])}"
 
     box_polygon = shapely.geometry.box(minx, miny, maxx, maxy)
@@ -1292,7 +1292,7 @@ def init_angle_field(polygons, shape, line_width=1):
     :return: (angles: np.array((num_edge_pixels, ), dtype=np.uint8),
               mask: np.array((num_edge_pixels, 2), dtype=np.int))
     """
-    assert type(polygons) == list, "polygons should be a list"
+    assert isinstance(polygons, list), "polygons should be a list"
 
     polygons = polygons_remove_holes(polygons)
     polygons = polygons_close(polygons)

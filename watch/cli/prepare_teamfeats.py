@@ -469,9 +469,9 @@ def _make_teamfeat_nodes(base_fpath, expt_dvc_dpath, aligned_bundle_dpath, confi
                 'window_size': depth_window_size,
             },
             perf_params={
-                'skip_existing': 1,
+                # 'skip_existing': 1,
                 'data_workers': depth_data_workers,
-                'workers': config.cold_workers,
+                # 'workers': config.cold_workers,
             },
             node_dpath='.',
         )
