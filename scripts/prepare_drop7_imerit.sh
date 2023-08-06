@@ -24,6 +24,9 @@ simple_dvc request "$DVC_DATA_DPATH/annotations/drop7" --verbose
 # MY_C000, BR_C010, BO_C001, PH_C001
 
 
+simple_dvc validate_sidecar "$DVC_DATA_DPATH/annotations/drop7"
+
+
 
 # Construct the TA2-ready dataset
 python -m watch.cli.prepare_ta2_dataset \

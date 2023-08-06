@@ -556,7 +556,7 @@ def main(cmdline=False, **kwargs):
             out_paths={
                 'uncropped_fielded_kwcoco_fpath': uncropped_fielded_kwcoco_fpath,
             },
-            stage='uncropped_feilds',
+            stage='uncropped_fields',
         )
 
         uncropped_fielded_jobs.append({
@@ -604,7 +604,7 @@ def main(cmdline=False, **kwargs):
         #     out_paths={
         #         'uncropped_final_kwcoco_fpath': uncropped_final_kwcoco_fpath,
         #     },
-        #     stage='union_uncropped_feilds',
+        #     stage='union_uncropped_fields',
         # )
         # uncropped_final_jobs = [union_job]
 
