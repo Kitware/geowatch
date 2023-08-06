@@ -894,3 +894,67 @@ python -c "if 1:
 "
 
 dvc add -- */teamfeats/dzyne_depth */*_depth.kwcoco.zip */*_D.kwcoco.zip
+
+
+DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware="auto")
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
+BUNDLE_DPATH=$DVC_DATA_DPATH/Drop7-Cropped2GSD-Features
+python -m watch.cli.prepare_teamfeats \
+    --base_fpath "$BUNDLE_DPATH"/*/[A-Z][A-Z]_R*[0-9].kwcoco.zip \
+    --expt_dvc_dpath="$DVC_EXPT_DPATH" \
+    --with_landcover=0 \
+    --with_invariants2=0 \
+    --with_sam=0 \
+    --with_materials=0 \
+    --with_depth=1 \
+    --with_mae=1 \
+    --with_cold=0 \
+    --skip_existing=1 \
+    --assets_dname=teamfeats \
+    --gres=0,1 \
+    --cold_workermode=process \
+    --cold_workers=8 \
+    --tmux_workers=2 \
+    --backend=tmux --run=1
+
+
+
+DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='ssd')
+ls "$DVC_DATA_DPATH/Drop7-Cropped2GSD-Features"
+
+# utils.sh
+#ls_array REGION_DPATHS "$DVC_DATA_DPATH/Drop7-Cropped2GSD-Features/*_R*"
+#bash_array_repr "${REGION_DPATHS[@]}"
+#cd $DVC_DATA_DPATH/Drop7-Cropped2GSD-Features/
+#ls_array REGION_IDS "*_R*"
+#bash_array_repr "${REGION_IDS[@]}"
+
+DST_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='auto')
+DST_BUNDLE_DPATH=$DST_DATA_DPATH/Drop7-Cropped2GSD-Features
+REGION_IDS=(KR_R001 KR_R002 AE_R001 PE_R001 US_R007 BH_R001 BR_R001 BR_R002 BR_R004 BR_R005 CH_R001 LT_R001 NZ_R001 US_C010 US_C011 US_C012 US_C016 US_R001 US_R004 US_R005 US_R006)
+#
+ANN_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='ssd')
+python -m cmd_queue new "reproject_queue"
+for REGION_ID in "${REGION_IDS[@]}"; do
+    echo "REGION_ID = $REGION_ID"
+done
+for REGION_ID in "${REGION_IDS[@]}"; do
+    SRC_FPATH="$DST_BUNDLE_DPATH/$REGION_ID/combo_${REGION_ID}_DE.kwcoco.zip"
+    test -f "$SRC_FPATH"
+    python -m cmd_queue submit --jobname="reproject-$REGION_ID" -- reproject_queue \
+        geowatch reproject_annotations \
+            --src="$SRC_FPATH"  \
+            --inplace \
+            --io_workers="avail/2" \
+            --region_models="$ANN_DATA_DPATH/annotations/drop6_hard_v1/region_models/${REGION_ID}.geojson" \
+            --site_models="$ANN_DATA_DPATH/annotations/drop6_hard_v1/site_models/${REGION_ID}_*.geojson"
+done
+python -m cmd_queue show "reproject_queue"
+python -m cmd_queue run --workers=8 "reproject_queue"
+
+DVC_DATA_DPATH=$(geowatch_dvc --tags='drop7_data' --hardware='ssd')
+ls "$DVC_DATA_DPATH/Drop7-Cropped2GSD-Features"
+python -m watch.cli.prepare_splits \
+    --base_fpath "$DVC_DATA_DPATH"/Drop7-Cropped2GSD-Features/*/combo_*_DE.kwcoco.zip \
+    --dst_dpath "$DVC_DATA_DPATH"/Drop7-Cropped2GSD-Features \
+    --suffix=DE --run=1 --workers=10
