@@ -5,10 +5,12 @@ SENSORS=TA1-S2-L8-WV-PD-ACC-3
 DATASET_SUFFIX=Drop7
 test -e "$DVC_DATA_DPATH/annotations/drop7/region_models"
 echo $?
-REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop7/region_models/*_C*.geojson"
-SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop7/site_models/*_C*.geojson"
+#REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop7/region_models/*_C*.geojson"
+#SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop7/site_models/*_C*.geojson"
 
 export GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR
+
+simple_dvc request "$DVC_DATA_DPATH/annotations/drop7" --verbose
 
 
 # Train Regions
@@ -50,7 +52,7 @@ python -m watch.cli.prepare_ta2_dataset \
     --requester_pays=False \
     --fields_workers=8 \
     --convert_workers=0 \
-    --align_workers=4 \
+    --align_workers=8 \
     --align_aux_workers=0 \
     --ignore_duplicates=1 \
     --separate_region_queues=1 \
@@ -65,7 +67,7 @@ python -m watch.cli.prepare_ta2_dataset \
     --hack_lazy=False \
     --backend=tmux \
     --tmux_workers=8 \
-    --run=0
+    --run=1
 
 
 python -c "if 1:
