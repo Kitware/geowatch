@@ -376,14 +376,15 @@ def main(cmdline=False, **kwargs):
 
                 sites = region_id_to_site_fpaths.get(region_id, None)
 
-                from kwutil.util_yaml import Yaml
+                # from kwutil.util_yaml import Yaml
                 stac_jobs.append({
                     'name': region_id,
                     'job': stac_search_job,
                     'inputs_fpath': region_inputs_fpath,
                     'region_globstr': final_region_fpath,
-                    'site_globstr': Yaml.dumps(list(map(os.fspath, sites))),
-                    # 'site_globstr': config.sites,
+                    # The YAML list can get too long pretty quickly.
+                    # 'site_globstr': Yaml.dumps(list(map(os.fspath, sites))),
+                    'site_globstr': config.sites,
                     'collated': default_collated,
                 })
         else:
