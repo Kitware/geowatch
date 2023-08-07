@@ -358,10 +358,6 @@ CATEGORIES = [
         'name': 'positive',
         'color': 'palegreen',
         'scored': False,
-        # 'conditional_tags': [
-        #     TAG_IF('positive', CONDITION('TASK_EQ', 'saliency')),
-        #     TAG_IF('ignore', CONDITION('TASK_EQ', 'class')),
-        # ],
     },
 
     {
@@ -369,9 +365,6 @@ CATEGORIES = [
         'color': 'gray',
         'scored': False,
         'tags': ['background'],
-        # 'conditional_tags': [
-        #     TAG_IF('hard_negative', CONDITION('TASK_EQ', 'class')),
-        # ],
     },
 
     {
@@ -392,32 +385,12 @@ CATEGORIES = [
         'color': 'darkturquoise',
         'scored': True,
         'tags': ['positive'],
-        # 'conditional_tags': [
-        #     TAG_IF('background', CONDITION('TASK_EQ', 'saliency')),
-        #     # Only positive if task=CLASS and has context
-        #     TAG_IF('positive', ALL(
-        #         CONDITION('TASK_EQ', 'class'),
-        #         CONDITION('ALSO_HAS', [
-        #             'Site Preparation', 'Active Construction', 'No Activity'],
-        #         )
-        #     )),
-        # ],
     },
     {
         'name': 'No Activity',
         'color': 'tomato',
         'scored': True,
         'tags': ['saliency'],
-        # 'conditional_tags': [
-        #     TAG_IF('background', CONDITION('TASK_EQ', 'saliency')),
-        #     # Only positive if task=CLASS and has context
-        #     TAG_IF('positive', ALL(
-        #         CONDITION('TASK_EQ', 'class'),
-        #         CONDITION('ALSO_HAS', [
-        #             'Site Preparation', 'Active Construction', 'No Activity'],
-        #         )
-        #     )),
-        # ],
     },
 ]
 
@@ -519,11 +492,6 @@ def hack_track_categories(track_catnames, task):
 # Backwards compat (remove if nothing uses them)
 CATEGORIES_SCORED = [c for c in CATEGORIES if c.get('scored', False)]
 CATEGORIES_UNSCORED = [c for c in CATEGORIES if not c.get('scored', False)]
-
-# CATEGORIES_UNSCORED = [
-#     {'name': 'positive', 'color': 'olive', 'scored': False},
-# ]
-# CATEGORIES = CATEGORIES_SCORED + CATEGORIES_UNSCORED
 
 
 # Might need to split this up into a finer-grained structure

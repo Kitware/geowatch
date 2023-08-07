@@ -175,8 +175,9 @@ class ReprojectAnnotationsConfig(scfg.DataConfig):
             self.io_workers = self.workers
 
 
+# Could be more robust here
 DUMMY_START_DATE = '1970-01-01'
-DUMMY_END_DATE = '2101-01-01'
+DUMMY_END_DATE = '2050-01-01'
 
 
 def main(cmdline=False, **kwargs):
@@ -217,7 +218,7 @@ def main(cmdline=False, **kwargs):
         >>> from watch.cli.reproject_annotations import *  # NOQA
         >>> import watch
         >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-        >>> coco_fpath = dvc_dpath / 'Drop6/imgonly-NZ_R001.kwcoco.json'
+        >>> coco_fpath = dvc_dpath / 'Drop6/imgonly-KR_R001.kwcoco.json'
         >>> dpath = ub.Path.appdir('watch/tests/project_annots').ensuredir()
         >>> cmdline = False
         >>> output_fpath = dpath / 'test_project_data.kwcoco.json'
@@ -367,7 +368,7 @@ def main(cmdline=False, **kwargs):
         import kwplot
         kwplot.autoplt()
         viz_dpath = ub.Path(viz_dpath).ensuredir()
-        print('viz_dpath = {!r}'.format(viz_dpath))
+        rich.print(f'viz_dpath = [link={viz_dpath}]{viz_dpath}[/link]')
         for fnum, info in enumerate(ub.ProgIter(all_drawable_infos, desc='draw region site propogation', verbose=3)):
             drawable_region_sites = info['drawable_region_sites']
             region_id = info['region_id']
@@ -815,8 +816,8 @@ def validate_site_dataframe(site_df):
     """
     from kwutil import util_time
     import numpy as np
-    dummy_start_date = '1970-01-01'  # hack, could be more robust here
-    dummy_end_date = '2101-01-01'
+    dummy_start_date = DUMMY_START_DATE
+    dummy_end_date = DUMMY_END_DATE
     first = site_df.iloc[0]
     rest = site_df.iloc[1:]
     assert first['type'] == 'site', 'first row must have type of site'
@@ -1106,7 +1107,6 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
         return None, None
 
     if not np.all(flags):
-        import warnings
         warnings.warn(f'Site {track_id} is missing {sum(flags)} / {len(flags)} observation dates')
 
     FIX_BACKWARDS_DATES = True

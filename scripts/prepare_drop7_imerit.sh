@@ -62,9 +62,9 @@ python -m watch.cli.prepare_ta2_dataset \
     --separate_align_jobs=1 \
     --visualize=0 \
     --target_gsd=10 \
-    --cache=0 \
+    --cache=1 \
     --verbose=100 \
-    --skip_existing=0 \
+    --skip_existing=1 \
     --force_min_gsd=2.0 \
     --force_nodata=-9999 \
     --hack_lazy=False \
