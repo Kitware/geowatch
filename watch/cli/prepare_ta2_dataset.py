@@ -722,8 +722,11 @@ def main(cmdline=False, **kwargs):
                     --dst "{aligned_imganns_fpath}" \
                     --propogate_strategy="{config.propogate_strategy}" \
                     --site_models="{site_globstr}" \
+                    --io_workers="avail/2" \
                     --region_models="{region_globstr}" {viz_part}
-                ''').format(**locals()), depends=[align_job], name=f'project-annots-{name}',
+                ''').format(**locals()),
+                depends=[align_job],
+                name=f'project-annots-{name}',
                 in_paths={
                     'aligned_imgonly_fpath': aligned_imgonly_fpath,
                 },

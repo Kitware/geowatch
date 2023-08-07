@@ -1257,7 +1257,6 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
         if HACK_TO_FIX_HARDNEGS:
             if len(site_polygons) != len(site_catnames):
                 if site_catnames != ['negative']:
-                    import warnings
                     warnings.warn(
                         f'We exepcted site_catnames to be [negative] but got {site_catnames}. '
                         'This is likely a symptom of a different issue.')
