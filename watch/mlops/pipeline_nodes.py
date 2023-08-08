@@ -92,11 +92,11 @@ class Pipeline:
         if self._dirty:
             self.build_nx_graphs()
 
-    def submit(self, command, **kwargs):
+    def submit(self, executable, **kwargs):
         """
         Dynamically create a new unique process node and add it to the dag
         """
-        task = ProcessNode(command=command, **kwargs)
+        task = ProcessNode(executable=executable, **kwargs)
         self.nodes.append(task)
         self._dirty = True
         return task
@@ -331,7 +331,15 @@ class Pipeline:
 
         node_order = list(nx.topological_sort(self.proc_graph))
         for node_name in node_order:
-            node = self.proc_graph.nodes[node_name]['node']
+            node_data = self.proc_graph.nodes[node_name]
+            try:
+                node = node_data['node']
+            except KeyError:
+                import rich
+                rich.print('[red]ERROR')
+                print('node_name = {}'.format(ub.urepr(node_name, nl=1)))
+                print('node_data = {}'.format(ub.urepr(node_data, nl=1)))
+                raise
             node.will_exist = None
 
         summary = {
@@ -865,6 +873,7 @@ class ProcessNode(Node):
                  _overwrite_node_dpath=None,  # overwrites the configured node dpath
                  _overwrite_group_dpath=None,  # overwrites the configured group dpath
                  _no_outarg=False,
+                 _no_inarg=False,
                  **aliases):
         if aliases:
             if 'command' in aliases:
@@ -918,6 +927,7 @@ class ProcessNode(Node):
         self.enabled = True
         self.cache = True
         self._no_outarg = _no_outarg
+        self._no_inarg = _no_inarg
 
         # TODO: make specifying these overloads more natural
         # Basically: use templates unless the user gives these
@@ -1010,7 +1020,8 @@ class ProcessNode(Node):
         It is more of a "finalized" requested config.
         """
         final_config = self.config.copy()
-        final_config.update(self.final_in_paths)
+        if not self._no_inarg:
+            final_config.update(self.final_in_paths)
         if not self._no_outarg:
             # Hacky option, improve the API to make this not necessary
             # when the full command is given and we dont need to
@@ -1078,7 +1089,10 @@ class ProcessNode(Node):
         # input paths being in the final algo config? If not we should
         # probably remove it.
 
-        unconnected_in_paths = ub.udict(self.final_in_paths) & unconnected_inputs
+        if self._no_inarg:
+            unconnected_in_paths = ub.udict({})
+        else:
+            unconnected_in_paths = ub.udict(self.final_in_paths) & unconnected_inputs
         final_algo_config = (self.config - self.non_algo_keys) | unconnected_in_paths
 
         if isinstance(self.algo_params, dict):
@@ -1210,6 +1224,27 @@ class ProcessNode(Node):
             if node_id not in seen:
                 seen[node_id] = node
                 nodes = node.predecessor_process_nodes()
+                stack.extend(nodes)
+        seen.pop(id(self))  # remove self
+        ancestors = list(seen.values())
+        return ancestors
+
+    def _uncached_ancestor_process_nodes(self):
+        # Not sure why the cached version of this is not working
+        # in prepare-ta2-dataset. Hack around it for now.
+        # TODO: we need to ensure that this returns a consistent order
+        seen = {}
+        stack = [self]
+        while stack:
+            node = stack.pop()
+            node_id = id(node)
+            if node_id not in seen:
+                seen[node_id] = node
+                nodes = [
+                    pred.parent for k, v in node.inputs.items()
+                    for pred in v.pred
+                ]
+                # nodes = node.predecessor_process_nodes()
                 stack.extend(nodes)
         seen.pop(id(self))  # remove self
         ancestors = list(seen.values())

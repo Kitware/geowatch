@@ -1694,3 +1694,17 @@ if __name__ == '__main__':
         python ~/code/watch/watch/cli/reproject_annotations.py
     """
     main(cmdline=True)
+
+
+# python -m watch reproject_annotations \
+#     --src "$HOME/remote/namek/data/dvc-repos/smart_data_dvc/Aligned-Drop7/imgonly-VN_C002.kwcoco.zip" \
+#     --dst "$HOME/remote/namek/data/dvc-repos/smart_data_dvc/Aligned-Drop7/imganns-VN_C002.kwcoco.zip" \
+#     --io_workers avail \
+#     --propogate_strategy="NEW-SMART" \
+#     --site_models="
+#         - /home/joncrall/remote/namek/data/dvc-repos/smart_data_dvc/annotations/drop7/site_models/CN_C000_*.geojson                                                                         - /home/joncrall/remote/namek/data/dvc-repos/smart_data_dvc/annotations/drop7/site_models/KW_C001_*.geojson
+#         - /home/joncrall/remote/namek/data/dvc-repos/smart_data_dvc/annotations/drop7/site_models/SA_C001_*.geojson
+#         - /home/joncrall/remote/namek/data/dvc-repos/smart_data_dvc/annotations/drop7/site_models/CO_C001_*.geojson
+#         - /home/joncrall/remote/namek/data/dvc-repos/smart_data_dvc/annotations/drop7/site_models/VN_C002_*.geojson
+#     " \
+#     --region_models="$HOME/remote/namek/data/dvc-repos/smart_data_dvc/annotations/drop7/region_models/VN_C002.geojson"

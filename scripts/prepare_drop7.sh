@@ -166,7 +166,6 @@ move_kwcoco_paths(){
     "
     #kwcoco move imgonly-AE_R001.kwcoco.zip ./AE_R001
     kwcoco move imganns-AE_C001.kwcoco.zip ./AE_R001
-
 }
 
 add_coco_files(){

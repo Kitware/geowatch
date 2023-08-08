@@ -5,8 +5,8 @@ SENSORS=TA1-S2-L8-WV-PD-ACC-3
 DATASET_SUFFIX=Drop7
 test -e "$DVC_DATA_DPATH/annotations/drop7/region_models"
 echo $?
-#REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop7/region_models/*_C*.geojson"
-#SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop7/site_models/*_C*.geojson"
+REGION_GLOBSTR="$DVC_DATA_DPATH/annotations/drop7/region_models/*_C*.geojson"
+SITE_GLOBSTR="$DVC_DATA_DPATH/annotations/drop7/site_models/*_C*.geojson"
 
 export GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR
 
@@ -27,6 +27,20 @@ simple_dvc request "$DVC_DATA_DPATH/annotations/drop7" --verbose
 simple_dvc validate_sidecar "$DVC_DATA_DPATH/annotations/drop7"
 
 
+    #--regions="
+    #    - $DVC_DATA_DPATH/annotations/drop7/region_models/CN_C000.geojson
+    #    - $DVC_DATA_DPATH/annotations/drop7/region_models/KW_C001.geojson
+    #    - $DVC_DATA_DPATH/annotations/drop7/region_models/SA_C001.geojson
+    #    - $DVC_DATA_DPATH/annotations/drop7/region_models/CO_C001.geojson
+    #    - $DVC_DATA_DPATH/annotations/drop7/region_models/VN_C002.geojson
+    #" \
+    #--sites="
+    #    - $DVC_DATA_DPATH/annotations/drop7/site_models/CN_C000_*.geojson
+    #    - $DVC_DATA_DPATH/annotations/drop7/site_models/KW_C001_*.geojson
+    #    - $DVC_DATA_DPATH/annotations/drop7/site_models/SA_C001_*.geojson
+    #    - $DVC_DATA_DPATH/annotations/drop7/site_models/CO_C001_*.geojson
+    #    - $DVC_DATA_DPATH/annotations/drop7/site_models/VN_C002_*.geojson
+    #" \
 
 # Construct the TA2-ready dataset
 python -m watch.cli.prepare_ta2_dataset \
@@ -37,21 +51,9 @@ python -m watch.cli.prepare_ta2_dataset \
     --api_key=env:SMART_STAC_API_KEY \
     --collated True \
     --dvc_dpath="$DVC_DATA_DPATH" \
+    --regions="$REGION_GLOBSTR" \
+    --sites="$SITE_GLOBSTR" \
     --aws_profile=iarpa \
-    --regions="
-        - $DVC_DATA_DPATH/annotations/drop7/region_models/CN_C000.geojson
-        - $DVC_DATA_DPATH/annotations/drop7/region_models/KW_C001.geojson
-        - $DVC_DATA_DPATH/annotations/drop7/region_models/SA_C001.geojson
-        - $DVC_DATA_DPATH/annotations/drop7/region_models/CO_C001.geojson
-        - $DVC_DATA_DPATH/annotations/drop7/region_models/VN_C002.geojson
-    " \
-    --sites="
-        - $DVC_DATA_DPATH/annotations/drop7/site_models/CN_C000_*.geojson
-        - $DVC_DATA_DPATH/annotations/drop7/site_models/KW_C001_*.geojson
-        - $DVC_DATA_DPATH/annotations/drop7/site_models/SA_C001_*.geojson
-        - $DVC_DATA_DPATH/annotations/drop7/site_models/CO_C001_*.geojson
-        - $DVC_DATA_DPATH/annotations/drop7/site_models/VN_C002_*.geojson
-    " \
     --requester_pays=False \
     --fields_workers=8 \
     --convert_workers=0 \
@@ -72,6 +74,11 @@ python -m watch.cli.prepare_ta2_dataset \
     --tmux_workers=8 \
     --run=1
 
+dvc add CN_C000/L8 KW_C001/L8 SA_C001/L8 CO_C001/L8 VN_C002/L8 CN_C000/S2 KW_C001/S2 SA_C001/S2 CO_C001/S2 VN_C002/S2 KW_C001/WV
+
+dvc push -vv -r aws CN_C000/*.dvc KW_C001/*.dvc SA_C001/*.dvc CO_C001/*.dvc VN_C002/*.dvc
+dvc pull -vv -r namek_hdd CN_C000/*.dvc KW_C001/*.dvc SA_C001/*.dvc CO_C001/*.dvc VN_C002/*.dvc
+
 
 python -c "if 1:
 
@@ -89,3 +96,63 @@ python -c "if 1:
         print(dpath.ls())
 
 "
+python -c "if 1:
+
+import ubelt as ub
+bundle_dpath = ub.Path('.').absolute()
+all_paths = list(bundle_dpath.glob('*_[C]*'))
+region_dpaths = []
+for p in all_paths:
+    if p.is_dir() and str(p.name)[2] == '_':
+        region_dpaths.append(p)
+
+import cmd_queue
+queue = cmd_queue.Queue.create('tmux', size=16)
+
+for dpath in region_dpaths:
+    print(ub.urepr(dpath.ls()))
+
+for dpath in region_dpaths:
+    region_id = dpath.name
+    fnames = [
+        f'imgonly-{region_id}.kwcoco.zip',
+        f'imganns-{region_id}.kwcoco.zip',
+    ]
+    for fname in fnames:
+        old_fpath = bundle_dpath / fname
+        new_fpath = dpath / fname
+        if old_fpath.exists() and not new_fpath.exists():
+            queue.submit(f'kwcoco move {old_fpath} {new_fpath}')
+
+queue.run()
+"
+
+dvc add CN_C000/*.kwcoco.zip KW_C001/*.kwcoco.zip SA_C001/*.kwcoco.zip  CO_C001/*.kwcoco.zip  VN_C002/*.kwcoco.zip
+dvc push -r aws CN_C000/*.kwcoco.zip KW_C001/*.kwcoco.zip SA_C001/*.kwcoco.zip  CO_C001/*.kwcoco.zip  VN_C002/*.kwcoco.zip
+dvc pull -r namek_hdd -- */*.kwcoco.zip.dvc
+
+
+#python ~/code/watch-smartflow-dags/reproduce_mlops.py imgonly-US_R006.kwcoco.zip
+# ~/code/watch/dev/poc/prepare_time_combined_dataset.py
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
+python ~/code/watch/watch/cli/queue_cli/prepare_time_combined_dataset.py \
+    --regions="
+      - CN_C000
+      - KW_C001
+      - SA_C001
+      - CO_C001
+      - VN_C002
+    " \
+    --input_bundle_dpath="$DVC_DATA_DPATH"/Aligned-Drop7 \
+    --output_bundle_dpath="$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD \
+    --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop6_hard_v1/site_models \
+    --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop6_hard_v1/region_models \
+    --spatial_tile_size=1024 \
+    --merge_method=median \
+    --remove_seasons=winter \
+    --tmux_workers=4 \
+    --time_window=1y \
+    --combine_workers=4 \
+    --resolution=10GSD \
+    --backend=tmux \
+    --run=1
