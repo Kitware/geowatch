@@ -545,21 +545,15 @@ def main(cmdline=False, **kwargs):
 
         uncropped_kwcoco_fpath = uncropped_dpath / f'data_{s3_name}.kwcoco.zip'
 
-        convert_options = []
-        if collated:
-            convert_options.append('--from-collated')
-        if config['ignore_duplicates']:
-            convert_options.append('--ignore_duplicates')
-        convert_options_str = ' '.join(convert_options)
-
         convert_node = new_pipeline.submit(
             name=f'stac_to_kwcoco-{s3_name}',
             executable=ub.codeblock(
                 fr'''
                 {job_environ_str}python -m watch.cli.stac_to_kwcoco \
-                    "{uncropped_catalog_fpath}" \
+                    --input_stac_catalog="{uncropped_catalog_fpath}" \
                     --outpath="{uncropped_kwcoco_fpath}" \
-                    {convert_options_str} \
+                    --from_collated="{collated}" \
+                    --ignore_duplicates="{config.ignore_duplicates}" \
                     --jobs "{config['convert_workers']}"
                 '''),
             in_paths={
