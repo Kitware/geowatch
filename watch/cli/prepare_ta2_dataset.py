@@ -258,11 +258,10 @@ def main(cmdline=False, **kwargs):
     aligned_kwcoco_bundle = out_dpath / aligned_bundle_name
 
     # TODO: use the new pipeline
-    USE_OLD_PIPELINE = 0
     from watch.mlops.pipeline_nodes import Pipeline
 
-    if USE_OLD_PIPELINE:
-        # can't do this anymore unfortunately
+    if 0:
+        # can't do this with the new pipeline unfortunately (yet)
         uncropped_dpath = uncropped_dpath.shrinkuser(home='$HOME')
         uncropped_query_dpath = uncropped_query_dpath.shrinkuser(home='$HOME')
         uncropped_query_dpath = uncropped_query_dpath.shrinkuser(home='$HOME')
@@ -286,20 +285,6 @@ def main(cmdline=False, **kwargs):
     job_environ_str = ' '.join(job_environs)
     if job_environ_str:
         job_environ_str += ' '
-
-    # def _coerce_globstr(p):
-    #     if not p:
-    #         return None
-    #     globstr = ub.Path(p)
-    #     if str(globstr).startswith('./'):
-    #         final_globstr = globstr
-    #     else:
-    #         final_globstr = out_dpath / globstr
-    #     final_globstr = final_globstr.shrinkuser(home='$HOME')
-    #     return final_globstr
-    # region_models = list(region_dpath.glob('*.geojson'))
-    # final_region_globstr = _coerce_globstr(config['regions'])
-    # final_site_globstr = _coerce_globstr(config['sites'])
 
     # Global environs are given to all jobs
     api_key = config['api_key']
@@ -325,12 +310,9 @@ def main(cmdline=False, **kwargs):
     # inputs / outputs for us. At the time of writing we are still doing that
     # explicitly, but we could remove that code and just rely on implicit
     # dependencies based in in / out paths.
-    from watch.mlops.old import pipeline_v1
-    old_pipeline = pipeline_v1.Pipeline()
     new_pipeline = Pipeline()
 
     stac_jobs = []
-    # base_mkdir_job = old_pipeline.submit(f'mkdir -p "{uncropped_query_dpath}"', name='mkdir-base')
     if config['stac_query_mode'] == 'auto':
         # Each region gets their own job in the queue
         # Note: this requires the annotation files to exist on disk.  or we
@@ -378,12 +360,8 @@ def main(cmdline=False, **kwargs):
             if region_id in region_id_blocklist:
                 continue
 
-            if USE_OLD_PIPELINE:
-                region_inputs_fpath = (uncropped_query_dpath / (region_id + '.input')).shrinkuser(home='$HOME')
-                final_region_fpath = region_fpath.shrinkuser(home='$HOME')
-            else:
-                region_inputs_fpath = (uncropped_query_dpath / (region_id + '.input'))
-                final_region_fpath = region_fpath
+            region_inputs_fpath = (uncropped_query_dpath / (region_id + '.input'))
+            final_region_fpath = region_fpath
 
             stac_search_node = new_pipeline.submit(
                 name=f'stac-search-{region_id}',
@@ -411,14 +389,6 @@ def main(cmdline=False, **kwargs):
                 _no_outarg=True,
                 _no_inarg=True,
             )
-            stac_search_job = old_pipeline.submit(
-                command=stac_search_node.executable,
-                name=stac_search_node.name,
-                in_paths=stac_search_node.in_paths,
-                out_paths=stac_search_node.out_paths,
-                depends=[],
-                stage='stac_search',
-            )
 
             # NOTE: The YAML list can get too long pretty quickly.
             # So we can't pass this as site-globstr. However, we could write a
@@ -429,7 +399,6 @@ def main(cmdline=False, **kwargs):
 
             stac_jobs.append({
                 'name': region_id,
-                'job': stac_search_job,
                 'node': stac_search_node,
                 'inputs_fpath': region_inputs_fpath,
                 'region_globstr': final_region_fpath,
@@ -445,7 +414,6 @@ def main(cmdline=False, **kwargs):
         stac_jobs = []
         for s3_fpath, collated in zip(s3_fpath_list, collated_list):
             stac_jobs.append({
-                'job': None,
                 'node': None,
                 'name': ub.Path(s3_fpath).stem,
                 'inputs_fpath': s3_fpath,
@@ -457,21 +425,14 @@ def main(cmdline=False, **kwargs):
     for stac_job in stac_jobs:
         s3_fpath = ub.Path(stac_job['inputs_fpath'])
         s3_name = stac_job['name']
-        parent_job = stac_job['job']
         parent_node = stac_job['node']
         collated = stac_job['collated']
         uncropped_query_fpath = uncropped_query_dpath / s3_fpath.name
-        if USE_OLD_PIPELINE:
-            uncropped_query_fpath = uncropped_query_fpath.shrinkuser(home='$HOME')
-
         uncropped_catalog_fpath = uncropped_ingress_dpath / f'catalog_{s3_name}.json'
-        if USE_OLD_PIPELINE:
-            uncropped_ingress_dpath = uncropped_ingress_dpath.shrinkuser(home='$HOME')
 
         if not str(s3_fpath).startswith('s3'):
             # Don't really need to copy anything in this case.
             uncropped_query_fpath = s3_fpath
-            grab_job = parent_job
             grab_node = parent_node
         else:
             # GRAB Input STAC List
@@ -491,15 +452,6 @@ def main(cmdline=False, **kwargs):
                 _no_inarg=True,
             )
             parent_node.outputs['region_inputs_fpath'].connect(grab_node.inputs['s3_fpath'])
-
-            grab_job = old_pipeline.submit(
-                command=grab_node.executable,
-                name=grab_node.name,
-                in_paths=grab_node.in_paths,
-                out_paths=grab_node.out_paths,
-                depends=parent_job,
-                stage='grab',
-            )
 
         ingress_options = [
             '--virtual',
@@ -534,18 +486,7 @@ def main(cmdline=False, **kwargs):
         except KeyError:
             grab_node.outputs['region_inputs_fpath'].connect(ingress_node.inputs['uncropped_query_fpath'])
 
-        ingress_job = old_pipeline.submit(
-            command=ingress_node.executable,
-            name=ingress_node.name,
-            in_paths=ingress_node.in_paths,
-            out_paths=ingress_node.out_paths,
-            depends=[grab_job],
-            stage='catalog',
-        )
-
         uncropped_kwcoco_fpath = uncropped_dpath / f'data_{s3_name}.kwcoco.zip'
-        if USE_OLD_PIPELINE:
-            uncropped_kwcoco_fpath = uncropped_kwcoco_fpath.shrinkuser(home='$HOME')
 
         convert_options = []
         if collated:
@@ -575,18 +516,7 @@ def main(cmdline=False, **kwargs):
         )
         ingress_node.connect(convert_node)
 
-        convert_job = old_pipeline.submit(
-            command=convert_node.executable,
-            name=convert_node.name,
-            in_paths=convert_node.in_paths,
-            out_paths=convert_node.out_paths,
-            depends=[ingress_job],
-            stage='uncropped_kwcoco',
-        )
-
         uncropped_fielded_kwcoco_fpath = uncropped_dpath / f'data_{s3_name}_fielded.kwcoco.zip'
-        if USE_OLD_PIPELINE:
-            uncropped_fielded_kwcoco_fpath = uncropped_fielded_kwcoco_fpath.shrinkuser(home='$HOME')
 
         add_fields_node = new_pipeline.submit(
             name=f'coco_add_watch_fields-{s3_name}',
@@ -612,18 +542,8 @@ def main(cmdline=False, **kwargs):
         )
         convert_node.connect(add_fields_node)
 
-        add_fields_job = old_pipeline.submit(
-            command=add_fields_node.executable,
-            name=add_fields_node.name,
-            in_paths=add_fields_node.in_paths,
-            out_paths=add_fields_node.out_paths,
-            depends=convert_job,
-            stage='uncropped_fields',
-        )
-
         uncropped_fielded_jobs.append({
             'name': stac_job['name'],
-            'job': add_fields_job,
             'node': add_fields_node,
             'uncropped_fielded_fpath': uncropped_fielded_kwcoco_fpath,
             'region_globstr': stac_job['region_globstr'],
@@ -653,7 +573,6 @@ def main(cmdline=False, **kwargs):
         aligned_imganns_fpath = info['aligned_imganns_fpath']
         region_globstr = info['region_globstr']
         site_globstr = info['site_globstr']
-        parent_job = info['job']
         parent_node = info['node']
 
         debug_valid_regions = config.debug
@@ -699,15 +618,6 @@ def main(cmdline=False, **kwargs):
         parent_node.outputs['uncropped_fielded_kwcoco_fpath'].connect(
             align_node.inputs['uncropped_fielded_fpath'])
 
-        align_job = old_pipeline.submit(
-            command=align_node.executable,
-            name=align_node.name,
-            in_paths=align_node.in_paths,
-            out_paths=align_node.out_paths,
-            depends=parent_job,
-            stage='align_kwcoco',
-        )
-
         if config['visualize']:
             aligned_img_viz_dpath = aligned_kwcoco_bundle / '_viz512_img'
             viz_max_dim = 512
@@ -735,14 +645,6 @@ def main(cmdline=False, **kwargs):
                 _no_inarg=True,
             )
             align_node.connect(viz_img_node)
-            old_pipeline.submit(
-                command=viz_img_node.executable,
-                name=viz_img_node.name,
-                in_paths=viz_img_node.in_paths,
-                out_paths=viz_img_node.out_paths,
-                depends=[align_job],
-                stage='viz_imgs',
-            )
 
         if site_globstr:
             # Visualization here is too slow, add on another option if we
@@ -771,15 +673,6 @@ def main(cmdline=False, **kwargs):
             )
             align_node.connect(project_anns_node)
 
-            project_anns_job = old_pipeline.submit(
-                command=project_anns_node.executable,
-                name=project_anns_node.name,
-                in_paths=project_anns_node.in_paths,
-                out_paths=project_anns_node.out_paths,
-                depends=[align_job],
-                stage='project_annots',
-            )
-
             if config.visualize:
                 aligned_img_viz_dpath = aligned_kwcoco_bundle / '_viz512_ann'
                 viz_ann_node = new_pipeline.submit(
@@ -807,35 +700,21 @@ def main(cmdline=False, **kwargs):
                     _no_inarg=True,
                 )
                 project_anns_node.connect(viz_ann_node)
-                old_pipeline.submit(
-                    command=viz_ann_node.executable,
-                    name=viz_ann_node.name,
-                    in_paths=viz_ann_node.in_paths,
-                    out_paths=viz_ann_node.out_paths,
-                    depends=[project_anns_job],
-                    stage='viz_anns',
-                )
         else:
             aligned_imganns_fpath = aligned_imgonly_fpath
             info['aligned_imganns_fpath'] = aligned_imgonly_fpath
-            project_anns_job = align_job
             project_anns_node = align_node
 
         align_info = info.copy()
-        align_info['job'] = project_anns_job
         align_info['node'] = project_anns_node
         alignment_jobs.append(align_info)
 
     # Need a final union step
     aligned_fpaths = [d['aligned_imganns_fpath'] for d in alignment_jobs]
-    union_depends_jobs = [d['job'] for d in alignment_jobs]
     union_depends_nodes = [d['node'] for d in alignment_jobs]
-    # union_suffix = ub.hash_data([p.name for p in aligned_fpaths])[0:8]
-    # aligned_final_fpath = (aligned_kwcoco_bundle / 'data.kwcoco.zip').shrinkuser(home='$HOME')
+
     aligned_final_fpath = (aligned_kwcoco_bundle / 'data.kwcoco.zip')
-    # .shrinkuser(home='$HOME')
     aligned_multi_src_part = ' '.join(['"{}"'.format(p) for p in aligned_fpaths])
-    # cache_prefix = f'[[ -f {aligned_final_fpath} ]] || ' if stages.nodes['final_union']['cache'] else ''
 
     # COMBINE Uncropped datasets
     union_node = new_pipeline.submit(
@@ -861,15 +740,6 @@ def main(cmdline=False, **kwargs):
         except KeyError:
             node.outputs['aligned_imgonly_fpath'].connect(union_node.inputs['aligned_fpaths'])
 
-    union_job = old_pipeline.submit(
-        command=union_node.executable,
-        name=union_node.name,
-        in_paths=union_node.in_paths,
-        out_paths=union_node.out_paths,
-        depends=union_depends_jobs,
-        stage='final_union',
-    )
-    aligned_final_jobs = [union_job]
     aligned_final_nodes = [union_node]
 
     # Determine what stages will be cached.
@@ -880,20 +750,14 @@ def main(cmdline=False, **kwargs):
     config.tmux_workers = min(len(stac_jobs), config.tmux_workers)
     queue = config.create_queue(environ=environ)
 
-    if USE_OLD_PIPELINE:
-        old_pipeline._update_stage_otf_cache(cache)
-        # old_pipeline._populate_explicit_dependency_queue(queue)
-        old_pipeline._populate_implicit_dependency_queue(
-            queue, skip_existing=config.skip_existing)
-    else:
-        new_pipeline.build_nx_graphs()
-        new_pipeline.configure()
-        new_pipeline.submit_jobs(
-            queue, skip_existing=config.skip_existing,
-            enable_links=False,
-            write_configs=False,
-            write_invocations=False,
-        )
+    new_pipeline.build_nx_graphs()
+    new_pipeline.configure()
+    new_pipeline.submit_jobs(
+        queue, skip_existing=config.skip_existing,
+        enable_links=False,
+        write_configs=False,
+        write_invocations=False,
+    )
 
     # queue.print_graph()
     # queue.rprint()
@@ -905,7 +769,7 @@ def main(cmdline=False, **kwargs):
         raise NotImplementedError('broken')
         from watch.cli import prepare_splits
         prepare_splits._submit_split_jobs(
-            aligned_final_fpath, queue, depends=[aligned_final_jobs])
+            aligned_final_fpath, queue, depends=[aligned_final_nodes])
 
     # TODO: Can start the DVC add of the region subdirectories here
     ub.codeblock(
@@ -929,14 +793,6 @@ def main(cmdline=False, **kwargs):
         dvc pull
         */*.json
         ''')
-
-    # old_pipeline.submit(ub.codeblock(
-    #     '''
-    #     DVC_DPATH=$(geowatch_dvc)
-    #     python -m watch.cli.prepare_splits \
-    #         --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.zip \
-    #         --run=1 --serial=True
-    #     '''))
 
     config.run_queue(queue, system=True)
 

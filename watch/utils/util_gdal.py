@@ -1321,7 +1321,7 @@ class GdalDataset(ub.NiceRepr):
                 # gdal.GetLastErrorNo()
                 msg = gdal.GetLastErrorMsg()
                 raise RuntimeError(msg + f' for {_path}')
-        except Exception:
+        except Exception as ex:
             import time
             if _path.startswith(GDAL_VIRTUAL_FILESYSTEM_PREFIX):
                 for _ in range(virtual_retries):
@@ -1335,7 +1335,7 @@ class GdalDataset(ub.NiceRepr):
                     else:
                         break
             if __ref is None:
-                raise
+                raise RuntimeError('Error opening {_path}') from ex
         self = cls(__ref, _path, _str_mode)
         return self
 

@@ -404,3 +404,13 @@ rm ".tmpmerge.foo.tif"
 mv ".tmpcog.foo.tif" "foo.tif"
 
 gdalwarp -overwrite -multi --debug off -t_srs epsg:32611 -of COG -te -119.87286231977664 39.50858235928912 -119.69118742654352 39.57493758700605 -te_srs epsg:4326 -tr 2.0 2.0 -wm 1500 -co OVERVIEWS=AUTO -co BLOCKSIZE=256 -co COMPRESS=DEFLATE -co NUM_THREADS=2 --config GDAL_CACHEMAX 1500 /vsis3/smart-data-accenture/ta-1/ta1-wv-acc-3/11/S/KD/2018/12/11/18DEC11220322-P1BS-014489713010_01_P001/18DEC11220322-P1BS-014489713010_01_P001_ACC_B01.tif foo.tif
+
+
+aws s3 --profile=iarpa ls s3://smart-data-accenture/ta-1/ta1-s2-acc-3/23/K/LP/2017/12/13/S2B_23KLP_20171213_0_L1C/
+AWS_DEFAULT_PROFILE=iarpa gdalinfo /vsis3/smart-data-accenture/ta-1/ta1-s2-acc-3/23/K/LP/2017/12/13/S2B_23KLP_20171213_0_L1C/S2B_23KLP_20171213_0_L1C_ACC_B12.tif
+
+gdalinfo /vsis3/smart-data-accenture/ta-1/ta1-s2-acc-3/23/K/LP/2017/12/13/S2B_23KLP_20171213_0_L1C/S2B_23KLP_20171213_0_L1C_ACC_QA.tif
+aws s3 --profile=iarpa ls s3://smart-data-accenture/ta-1/ta1-s2-acc-3/23/K/LP/2017/12/13/S2B_23KLP_20171213_0_L1C/S2B_23KLP_20171213_0_L1C_ACC_QA.tif
+
+aws s3 --profile=iarpa cp s3://smart-data-accenture/ta-1/ta1-s2-acc-3/23/K/LP/2017/12/13/S2B_23KLP_20171213_0_L1C/S2B_23KLP_20171213_0_L1C_ACC_QA.tif foo-qa.tif
+aws s3 --profile=iarpa cp s3://smart-data-accenture/ta-1/ta1-s2-acc-3/23/K/LP/2017/12/13/S2B_23KLP_20171213_0_L1C/S2B_23KLP_20171213_0_L1C_ACC_B12.tif foo-12.tif

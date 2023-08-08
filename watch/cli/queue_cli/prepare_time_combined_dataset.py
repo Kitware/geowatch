@@ -13,7 +13,10 @@ class PrepareTimeAverages(CMDQueueConfig):
     """
     Prepare a temporally averaged dataset on multiple regions
     """
-    regions = scfg.Value('all', type=str, help='The regions to time average (this is not a robust implementation)')
+    regions = scfg.Value('all', type=str, help=ub.paragraph(
+        '''
+        The regions to time average (this is not a robust implementation)
+        '''))
 
     reproject = scfg.Value(True, isflag=True, help='Enable reprojection of annotations')
 
@@ -99,37 +102,49 @@ def main(cmdline=1, **kwargs):
     # Need these for landcover
     other_s2_bands = '|coastal|cirrus|B05|B06|B07|B8A|B09'
 
-    def submit_job_step(node, depends=None, name=None):
+    def submit_job_step(node, depends=None):
         if config.skip_existing and node.outputs_exist:
             job = None
         else:
             node.cache = config.cache
-            job = queue.submit(node.final_command(), depends=depends, name=name)
+            job = queue.submit(node.final_command(), depends=depends, name=node.name)
         return job
 
     for region in chosen_regions:
 
         fmtdict = dict(
             # DVC_DATA_DPATH=dvc_data_dpath,
-            OUTPUT_BUNDLE_DPATH=config.output_bundle_dpath,
             INPUT_BUNDLE_DPATH=config.input_bundle_dpath,
+            OUTPUT_BUNDLE_DPATH=config.output_bundle_dpath,
             REGION=region,
             # SUFFIX='MeanYear',
             # TIME_DURATION='3months',
             # SUFFIX='Mean3Month10GSD',
-            RESOLUTION=config.resolution,
-            WORKERS=config.combine_workers,
             TRUE_SITE_DPATH=config.true_site_dpath,
+            TRUE_REGION_DPATH=config.true_region_dpath,
             CHANNELS='red|green|blue|nir|swir16|swir22|pan' + other_s2_bands,
             remove_seasons_str=None if not config.remove_seasons else ','.join(config.remove_seasons),
         )
         fmtdict.update(config)
 
+        input_bundle_dpath = ub.Path(config.input_bundle_dpath)
+        output_bundle_dpath = ub.Path(config.output_bundle_dpath)
+
+        INPUT_KWCOCO_FPATH = input_bundle_dpath / region / f'imgonly-{region}.kwcoco.zip'
+        TAVE_KWCOCO_FPATH = output_bundle_dpath / region / f'imgonly-{region}.kwcoco.zip'
+        FIELDED_KWCOCO_FPATH = output_bundle_dpath / region / f'imgonly-{region}-fielded.kwcoco.zip'
+        FINAL_KWCOCO_FPATH = output_bundle_dpath / region / f'imganns-{region}.kwcoco.zip'
+
+        fmtdict['INPUT_KWCOCO_FPATH'] = INPUT_KWCOCO_FPATH
+        fmtdict['TAVE_KWCOCO_FPATH'] = TAVE_KWCOCO_FPATH
+        fmtdict['FIELDED_KWCOCO_FPATH'] = FIELDED_KWCOCO_FPATH
+        fmtdict['FINAL_KWCOCO_FPATH'] = FINAL_KWCOCO_FPATH
+
         code = subtemplate(ub.codeblock(
             r'''
             python -m watch.cli.coco_time_combine \
-                --kwcoco_fpath="$INPUT_BUNDLE_DPATH/imgonly-${REGION}.kwcoco.zip" \
-                --output_kwcoco_fpath="$OUTPUT_BUNDLE_DPATH/imgonly-${REGION}.kwcoco.zip" \
+                --kwcoco_fpath="$INPUT_KWCOCO_FPATH" \
+                --output_kwcoco_fpath="$TAVE_KWCOCO_FPATH" \
                 --channels="$CHANNELS" \
                 --resolution="$resolution" \
                 --time_window=$time_window \
@@ -138,49 +153,53 @@ def main(cmdline=1, **kwargs):
                 --spatial_tile_size=$spatial_tile_size \
                 --start_time=2010-03-01 \
                 --assets_dname="raw_bands" \
-                --workers=$WORKERS
+                --workers=$combine_workers
             '''), fmtdict)
         node = ProcessNode(
+            name=f'combine-time-{region}',
             command=code,
-            out_paths={
-                'kwcoco_fpath': subtemplate('$OUTPUT_BUNDLE_DPATH/imgonly-${REGION}.kwcoco.zip', fmtdict),
-            },
-            _no_outarg=True
+            in_paths={'kwcoco_fpath': subtemplate('$INPUT_KWCOCO_FPATH', fmtdict)},
+            out_paths={'output_kwcoco_fpath': subtemplate('$TAVE_KWCOCO_FPATH', fmtdict)},
+            _no_outarg=True,
+            _no_inarg=True,
         )
-        combine_job = submit_job_step(node, name=f'combine-time-{region}')
+        combine_job = submit_job_step(node)
 
         if config.reproject:
             code = subtemplate(ub.codeblock(
                 r'''
                 python -m watch add_fields \
-                    --src $OUTPUT_BUNDLE_DPATH/imgonly-${REGION}.kwcoco.zip \
-                    --dst $OUTPUT_BUNDLE_DPATH/imgonly-${REGION}-fielded.kwcoco.zip
+                    --src $TAVE_KWCOCO_FPATH \
+                    --dst $FIELDED_KWCOCO_FPATH
                 '''), fmtdict)
             node = ProcessNode(
+                name=f'add-fields-{region}',
                 command=code,
-                out_paths={
-                    'dst': subtemplate('$OUTPUT_BUNDLE_DPATH/imgonly-${REGION}-fielded.kwcoco.zip', fmtdict)
-                },
-                _no_outarg=True
+                in_paths={'src': subtemplate('$TAVE_KWCOCO_FPATH', fmtdict)},
+                out_paths={'dst': subtemplate('$FIELDED_KWCOCO_FPATH', fmtdict)},
+                _no_outarg=True,
+                _no_inarg=True,
             )
-            field_job = submit_job_step(node, depends=[combine_job], name=f'add-fields-{region}')
+            field_job = submit_job_step(node, depends=[combine_job])
 
             code = subtemplate(ub.codeblock(
                 r'''
                 python -m watch reproject \
-                    --src $OUTPUT_BUNDLE_DPATH/imgonly-${REGION}-fielded.kwcoco.zip \
-                    --dst $OUTPUT_BUNDLE_DPATH/imganns-${REGION}.kwcoco.zip \
+                    --src $FIELDED_KWCOCO_FPATH \
+                    --dst $FINAL_KWCOCO_FPATH \
                     --status_to_catname="positive_excluded: positive" \
-                    --site_models="$TRUE_SITE_DPATH/${REGION}_*.geojson"
+                    --regions="$TRUE_REGION_DPATH/${REGION}.geojson" \
+                    --sites="$TRUE_SITE_DPATH/${REGION}_*.geojson"
                 '''), fmtdict)
             node = ProcessNode(
                 command=code,
-                out_paths={
-                    'dst': subtemplate('$OUTPUT_BUNDLE_DPATH/imganns-${REGION}.kwcoco.zip', fmtdict)
-                },
-                _no_outarg=True
+                name=f'reproject-ann-{region}',
+                in_paths={'src': subtemplate('$FIELDED_KWCOCO_FPATH', fmtdict)},
+                out_paths={'dst': subtemplate('$FINAL_KWCOCO_FPATH', fmtdict)},
+                _no_outarg=True,
+                _no_inarg=True,
             )
-            field_job = submit_job_step(node, depends=[field_job], name=f'reproject-ann-{region}')
+            field_job = submit_job_step(node, depends=[field_job])
 
     config.run_queue(queue)
 

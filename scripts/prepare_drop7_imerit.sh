@@ -131,6 +131,8 @@ dvc add CN_C000/*.kwcoco.zip KW_C001/*.kwcoco.zip SA_C001/*.kwcoco.zip  CO_C001/
 dvc push -r aws CN_C000/*.kwcoco.zip KW_C001/*.kwcoco.zip SA_C001/*.kwcoco.zip  CO_C001/*.kwcoco.zip  VN_C002/*.kwcoco.zip
 dvc pull -r namek_hdd -- */*.kwcoco.zip.dvc
 
+dvc pull -R namek_hdd -- CN_C000 KW_C001 SA_C001 CO_C001 VN_C002
+
 
 #python ~/code/watch-smartflow-dags/reproduce_mlops.py imgonly-US_R006.kwcoco.zip
 # ~/code/watch/dev/poc/prepare_time_combined_dataset.py
@@ -138,13 +140,13 @@ DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
 python ~/code/watch/watch/cli/queue_cli/prepare_time_combined_dataset.py \
     --regions="
       - CN_C000
-      - KW_C001
-      - SA_C001
-      - CO_C001
-      - VN_C002
+      #- KW_C001
+      #- SA_C001
+      #- CO_C001
+      #- VN_C002
     " \
     --input_bundle_dpath="$DVC_DATA_DPATH"/Aligned-Drop7 \
-    --output_bundle_dpath="$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD \
+    --output_bundle_dpath="$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD-iMERIT \
     --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop6_hard_v1/site_models \
     --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop6_hard_v1/region_models \
     --spatial_tile_size=1024 \
@@ -155,4 +157,20 @@ python ~/code/watch/watch/cli/queue_cli/prepare_time_combined_dataset.py \
     --combine_workers=4 \
     --resolution=10GSD \
     --backend=tmux \
-    --run=1
+    --skip_existing=0 \
+    --cache=1 \
+    --run=0
+
+
+
+###---
+#
+
+geowatch site_stats --regions /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/annotations/drop6_hard_v1/region_models/CN_C000.geojson
+
+python -m watch reproject \
+    --src /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/Drop7-MedianNoWinter10GSD-iMERIT/CN_C000/imgonly-CN_C000-fielded.kwcoco.zip \
+    --dst /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/Drop7-MedianNoWinter10GSD-iMERIT/CN_C000/imganns-CN_C000.kwcoco.zip \
+    --status_to_catname="positive_excluded: positive" \
+    --regions="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/annotations/drop6_hard_v1/region_models/CN_C000.geojson" \
+    --sites="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/annotations/drop6_hard_v1/site_models/CN_C000_*.geojson"
