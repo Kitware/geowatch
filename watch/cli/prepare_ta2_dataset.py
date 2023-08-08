@@ -76,110 +76,173 @@ from cmd_queue.cli_boilerplate import CMDQueueConfig
 
 
 class PrepareTA2Config(CMDQueueConfig):
-    __default__ = {
-        'dataset_suffix': scfg.Value(None, help=''),
 
-        'cloud_cover': scfg.Value(10, help='maximum cloud cover percentage (ignored if s3_fpath given)'),
-        'sensors': scfg.Value("L2", help='(ignored if s3_fpath given)'),
-        'max_products_per_region': scfg.Value(None, help='does uniform affinity sampling over time to filter down to this many results per region'),
+    queue_name = scfg.Value('prep-ta2-dataset', group='cmd_queue', help='name for the command queue')
 
-        'stac_query_mode': scfg.Value(None, help='if set to auto we try to make the .input files. Mutex with s3_fpath', group='stac'),
-        'api_key': scfg.Value('env:SMART_STAC_API_KEY', help='The API key or where to get it (ignored if s3_fpath given)', group='stac'),
+    dataset_suffix = scfg.Value(None, help='')
 
-        's3_fpath': scfg.Value(None, nargs='+', help='A list of .input files which were the results of an existing stac query. Mutex with stac_query_* args. Mutex with sensors.', group='stac'),
-        'aws_profile': scfg.Value('iarpa', help='AWS profile to use for remote data access', group='stac'),
+    cloud_cover = scfg.Value(10, help=ub.paragraph(
+            '''
+            maximum cloud cover percentage (ignored if s3_fpath given)
+            '''))
 
-        'out_dpath': scfg.Value('auto', help='This is the path that all resulting files will be written to. Defaults the the phase2 DATA_DVC_DPATH', alias=['dvc_dpath']),
+    sensors = scfg.Value('L2', help='(ignored if s3_fpath given)')
 
-        'collated': scfg.Value([True], nargs='+', help='set to false if the input data is not collated'),
-        'queue_name': scfg.Value('prep-ta2-dataset', help='name for the command queue', group='cmd_queue'),
+    max_products_per_region = scfg.Value(None, help=ub.paragraph(
+            '''
+            does uniform affinity sampling over time to filter down to
+            this many results per region
+            '''))
 
-        'max_regions': None,
+    stac_query_mode = scfg.Value(None, group='stac', help=ub.paragraph(
+            '''
+            if set to auto we try to make the .input files. Mutex with
+            s3_fpath
+            '''))
 
-        'query_workers': scfg.Value('0', help='workers for STAC search'),
-        'convert_workers': scfg.Value('0', help='workers for stac-to-kwcoco script. Keep this set to zero!'),
-        'fields_workers': scfg.Value('min(avail,max(all/2,8))', type=str, help='workers for add-watch-fields script'),
+    api_key = scfg.Value('env:SMART_STAC_API_KEY', group='stac', help=ub.paragraph(
+            '''
+            The API key or where to get it (ignored if s3_fpath given)
+            '''))
 
-        'align_workers': scfg.Value(0, help='primary workers for align script', group='align'),
-        'align_aux_workers': scfg.Value(0, help='threads per align process (typically set this to 0)', group='align'),
+    s3_fpath = scfg.Value(None, group='stac', help=ub.paragraph(
+            '''
+            A list of .input files which were the results of an existing
+            stac query. Mutex with stac_query_* args. Mutex with
+            sensors.
+            '''), nargs='+')
 
-        'ignore_duplicates': scfg.Value(1, help='workers for align script'),
+    aws_profile = scfg.Value('iarpa', group='stac', help=ub.paragraph(
+            '''
+            AWS profile to use for remote data access
+            '''))
 
-        'visualize': scfg.Value(0, isflag=1, help='if True runs visualize'),
-        'visualize_only_boxes': scfg.Value(True, isflag=1, help='if False will draw full polygons'),
+    out_dpath = scfg.Value('auto', alias=['dvc_dpath'], help=ub.paragraph(
+            '''
+            This is the path that all resulting files will be written
+            to. Defaults the the phase2 DATA_DVC_DPATH
+            '''))
 
-        'verbose': scfg.Value(0, help='help control verbosity (just align for now)'),
+    collated = scfg.Value([True], help=ub.paragraph(
+            '''
+            set to false if the input data is not collated
+            '''), nargs='+')
 
-        # '--requester_pays'
-        'requester_pays': scfg.Value(0, help='if True, turn on requester_pays in ingress. Needed for official L1/L2 catalogs.'),
+    max_regions = scfg.Value(None, help=None)
 
-        'debug': scfg.Value(False, isflag=1, help='if enabled, turns on debug visualizations'),
-        'select_images': scfg.Value(False, help='if enabled only uses select images'),
+    query_workers = scfg.Value(0, help='workers for STAC search')
 
+    convert_workers = scfg.Value(0, help=ub.paragraph(
+            '''
+            workers for stac-to-kwcoco script. Keep this set to zero!
+            '''))
 
-        'include_channels': scfg.Value(None, help='specific channels to use in align crop', group='align'),
-        'exclude_channels': scfg.Value(None, help='specific channels to NOT use in align crop', group='align'),
-        'target_gsd': scfg.Value(10, group='align'),
-        'force_min_gsd': scfg.Value(None, group='align'),
-        'align_keep': scfg.Value('img', choices=['img', 'img-roi', 'none', None], help=ub.paragraph(
+    fields_workers = scfg.Value('min(avail,max(all/2,8))', type='str', help='workers for add-watch-fields script')
+
+    align_workers = scfg.Value(0, group='align', help='primary workers for align script')
+
+    align_aux_workers = scfg.Value(0, group='align', help=ub.paragraph(
+            '''
+            threads per align process (typically set this to 0)
+            '''))
+
+    ignore_duplicates = scfg.Value(1, help='workers for align script')
+
+    visualize = scfg.Value(0, isflag=1, help='if True runs visualize')
+
+    visualize_only_boxes = scfg.Value(True, isflag=1, help='if False will draw full polygons')
+
+    verbose = scfg.Value(0, help=ub.paragraph(
+            '''
+            help control verbosity (just align for now)
+            '''))
+
+    requester_pays = scfg.Value(0, help=ub.paragraph(
+            '''
+            if True, turn on requester_pays in ingress. Needed for
+            official L1/L2 catalogs.
+            '''))
+
+    debug = scfg.Value(False, isflag=1, help=ub.paragraph(
+            '''
+            if enabled, turns on debug visualizations
+            '''))
+
+    select_images = scfg.Value(False, help='if enabled only uses select images')
+
+    include_channels = scfg.Value(None, group='align', help='specific channels to use in align crop')
+
+    exclude_channels = scfg.Value(None, group='align', help=ub.paragraph(
+            '''
+            specific channels to NOT use in align crop
+            '''))
+
+    target_gsd = scfg.Value(10, group='align', help=None)
+
+    force_min_gsd = scfg.Value(None, group='align', help=None)
+
+    align_keep = scfg.Value('img', group='align', help=ub.paragraph(
             '''
             if the coco align script caches or recomputes images / rois
-            '''), group='align'),
-        'force_nodata': scfg.Value(None, help='if specified, forces nodata to this value', group='align'),
+            '''), choices=['img', 'img-roi', 'none', None])
 
-        'splits': scfg.Value(False, isflag=1, help='if True do splits'),
-
-        'regions': scfg.Value('annotations/region_models', help=ub.paragraph(
+    force_nodata = scfg.Value(None, group='align', help=ub.paragraph(
             '''
-            region model globstr (relative to the dvc path, unless absolute or prefixed by "./")
-            '''), alias=['region_globstr']),
+            if specified, forces nodata to this value
+            '''))
+    splits = scfg.Value(False, isflag=1, help='if True do splits')
 
-        'sites': scfg.Value(None, help=ub.paragraph(
-                '''
-                site model globstr (relative to the dvc path, unless absolute or prefixed by "./")
-                '''), alias=['site_globstr']),
-
-        'propogate_strategy': scfg.Value('NEW-SMART', help='changes propogation behavior'),
-
-        'remove_broken': scfg.Value(True, isflag=1, help=ub.paragraph(
+    regions = scfg.Value('annotations/region_models', alias=['region_globstr'], help=ub.paragraph(
             '''
-            if True, will remove any image that fails population (e.g. caused by a 404)
-            ''')),
+            region model globstr (relative to the dvc path, unless
+            absolute or prefixed by "./")
+            '''))
 
-        'cache': scfg.Value(1, isflag=1, help=ub.paragraph(
+    sites = scfg.Value(None, alias=['site_globstr'], help=ub.paragraph(
             '''
-            If 1 or 0 globally enable/disable caching. If a comma separated
-            list of strings, only cache those stages'''),
-            group='queue-related'),
+            site model globstr (relative to the dvc path, unless
+            absolute or prefixed by "./")
+            '''))
 
-        'skip_existing': scfg.Value(False, help=ub.paragraph(
-            '''
-            Unlike cache=1, which checks for file existence at runtime, this
-            will explicitly not submit any job with a product that already
-            exist
-            '''), group='queue-related'),
+    propogate_strategy = scfg.Value('NEW-SMART', help='changes propogation behavior')
 
-        'rpc_align_method': scfg.Value('orthorectify', help=ub.paragraph(
+    remove_broken = scfg.Value(True, isflag=1, help=ub.paragraph(
             '''
-            Can be one of:
-                (1) orthorectify - which uses gdalwarp with -rpc if available
-                    otherwise falls back to affine transform,
-                (2) affine_warp - which ignores RPCs and uses the affine
-                    transform in the geotiff metadata.
-            '''
-        )),
+            if True, will remove any image that fails population (e.g.
+            caused by a 404)
+            '''))
 
-        'hack_lazy': scfg.Value(False, isflag=True, help=ub.paragraph(
+    cache = scfg.Value(1, isflag=1, group='queue-related', help=ub.paragraph(
             '''
-            Hack lazy is a proof of concept with the intent on speeding up the
-            download / cropping of data by flattening the gdal processing into
-            a single queue of parallel processes executed via a command queue.
+            If 1 or 0 globally enable/disable caching. If a comma
+            separated list of strings, only cache those stages
+            '''))
 
-            By running once with this flag on, it will execute the command
-            queue, and then running again, it should see all of the data as
-            existing and construct the aligned kwcoco dataset as normal.
-            ''')),
-    }
+    skip_existing = scfg.Value(False, group='queue-related', help=ub.paragraph(
+            '''
+            Unlike cache=1, which checks for file existence at runtime,
+            this will explicitly not submit any job with a product that
+            already exist
+            '''))
+
+    rpc_align_method = scfg.Value('orthorectify', help=ub.paragraph(
+            '''
+            Can be one of: (1) orthorectify - which uses gdalwarp with
+            -rpc if available otherwise falls back to affine transform,
+            (2) affine_warp - which ignores RPCs and uses the affine
+            transform in the geotiff metadata.
+            '''))
+
+    hack_lazy = scfg.Value(False, isflag=True, help=ub.paragraph(
+            '''
+            Hack lazy is a proof of concept with the intent on speeding
+            up the download / cropping of data by flattening the gdal
+            processing into a single queue of parallel processes
+            executed via a command queue. By running once with this flag
+            on, it will execute the command queue, and then running
+            again, it should see all of the data as existing and
+            construct the aligned kwcoco dataset as normal.
+            '''))
 
     @classmethod
     def _register_main(cls, func):
