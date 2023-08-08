@@ -137,7 +137,7 @@ class PrepareTA2Config(CMDQueueConfig):
             workers for stac-to-kwcoco script. Keep this set to zero!
             '''))
 
-    fields_workers = scfg.Value('min(avail,max(all/2,8))', type='str', help='workers for add-watch-fields script')
+    fields_workers = scfg.Value('min(avail,max(all/2,8))', type=str, help='workers for add-watch-fields script')
 
     align_workers = scfg.Value(0, group='align', help='primary workers for align script')
 
@@ -516,13 +516,6 @@ def main(cmdline=False, **kwargs):
             )
             parent_node.outputs['region_inputs_fpath'].connect(grab_node.inputs['s3_fpath'])
 
-        ingress_options = [
-            '--virtual',
-        ]
-        if config['requester_pays']:
-            ingress_options.append('--requester_pays')
-        ingress_options_str = ' '.join(ingress_options)
-
         ingress_node = new_pipeline.submit(
             name=f'baseline_ingress-{s3_name}',
             executable=ub.codeblock(
@@ -530,10 +523,11 @@ def main(cmdline=False, **kwargs):
                 python -m watch.cli.baseline_framework_ingress \
                     --aws_profile {aws_profile} \
                     --jobs avail \
-                    {ingress_options_str} \
+                    --virtual True \
+                    --requester_pays {config.requester_pays} \
                     --outdir "{uncropped_ingress_dpath}" \
-                    --catalog_fpath "{uncropped_catalog_fpath}" \
-                    "{uncropped_query_fpath}"
+                    --input_path "{uncropped_query_fpath}" \
+                    --catalog_fpath "{uncropped_catalog_fpath}"
                 '''),
             in_paths={
                 'uncropped_query_fpath': uncropped_query_fpath,

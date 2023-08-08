@@ -240,6 +240,11 @@ class ScheduleEvaluationConfig(CMDQueueConfig):
             GPUS = None if devices is None else ensure_iterable(devices)
         self.devices = GPUS
 
+        if self['root_dpath'] in {None, 'auto'}:
+            import watch
+            expt_dvc_dpath = watch.find_smart_dvc_dpath(tags='phase2_expt', hardware='auto')
+            self['root_dpath'] = expt_dvc_dpath / 'dag_runs'
+
 
 def main(cmdline=True, **kwargs):
     config = ScheduleEvaluationConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
@@ -253,16 +258,11 @@ def schedule_evaluation(config):
     First ensure that models have been copied to the DVC repo in the
     appropriate path. (as noted by model_dpath)
     """
-    import watch
     import rich
     from watch.mlops import smart_pipeline
     from kwutil import util_progress
     import pandas as pd
     from watch.utils.util_param_grid import expand_param_grid
-
-    if config['root_dpath'] in {None, 'auto'}:
-        expt_dvc_dpath = watch.find_smart_dvc_dpath(tags='phase2_expt', hardware='auto')
-        config['root_dpath'] = expt_dvc_dpath / 'dag_runs'
 
     root_dpath = ub.Path(config['root_dpath'])
 

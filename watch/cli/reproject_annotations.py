@@ -85,8 +85,6 @@ class ReprojectAnnotationsConfig(scfg.DataConfig):
         reproject_annotations.main(cmdline=False, **kwargs)
 
     """
-    __fuzzy_hyphens__ = 1
-
     src = scfg.Value(None, position=1, help=ub.paragraph(
             '''
             Input coco file to project annotations onto.
@@ -1184,10 +1182,11 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
                 'applies': applies,
             }
 
-            # HACK:
-            if catname == 'positive':
-                if annot_idx == len(observations) - 1:
-                    keyframe['max_frames'] = 1
+            # HACK: dont project these end states!
+            if end_date is not None:
+                if catname in {'positive', 'negative', 'ignore', 'Unknown'}:
+                    if annot_idx == len(observations) - 1:
+                        keyframe['max_frames'] = 1
             key_infos.append(keyframe)
         obs_associated_gxs = keyframe_interpolate(image_times, key_infos)
     else:
@@ -1725,7 +1724,10 @@ def plot_image_and_site_times(coco_dset, region_image_dates, drawable_region_sit
     propogate_attrs['segments']
     propogate_attrs['colors']
 
-    ax.set_xlim(min(all_times), max(all_times))
+    max_observable_times = max(region_image_dates)
+    max_annotated_times = max(all_times)
+
+    ax.set_xlim(min(all_times), max_observable_times)
     ax.set_ylim(0, len(drawable_region_sites))
 
     cat_to_color = {cat['name']: cat['color'] for cat in coco_dset.cats.values()}

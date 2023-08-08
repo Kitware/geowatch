@@ -174,3 +174,62 @@ python -m watch reproject \
     --status_to_catname="positive_excluded: positive" \
     --regions="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/annotations/drop6_hard_v1/region_models/CN_C000.geojson" \
     --sites="/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/annotations/drop6_hard_v1/site_models/CN_C000_*.geojson"
+
+
+# Run BAS on iMERIT
+
+
+# PREEVAL 14 BAS+SV Grid
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+python -m watch.utils.simple_dvc request \
+    "$DVC_EXPT_DPATH"/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt \
+    "$DVC_EXPT_DPATH"/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V68/Drop7-MedianNoWinter10GSD_bgrn_split6_V68_epoch34_stepNone.pt \
+    "$DVC_EXPT_DPATH"/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt \
+    "$DVC_EXPT_DPATH"/models/fusion/uconn/D7-MNW10_coldL8S2-cv-a0-a1-b1-c1-rmse-split6_eval11_Norm_lr1e4_bs48_focal/epoch=16-step=374.pt \
+    "$DVC_EXPT_DPATH"/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgr_cold_split6_V62/Drop7-MedianNoWinter10GSD_bgr_cold_split6_V62_epoch359_step15480.pt
+
+
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+TEST_DPATH=$DVC_EXPT_DPATH/_test/_imeritbas
+
+geowatch schedule --params="
+    matrix:
+        bas_pxl.package_fpath:
+            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V68/Drop7-MedianNoWinter10GSD_bgrn_split6_V68_epoch34_stepNone.pt
+        bas_pxl.test_dataset:
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-iMERIT/CN_C000/imganns-CN_C000.kwcoco.zip
+        bas_pxl.chip_overlap: 0.3
+        bas_pxl.chip_dims: auto
+        bas_pxl.time_span: auto
+        bas_pxl.time_sampling: soft4
+        bas_poly.thresh:
+            - 0.4
+        bas_poly.inner_window_size: 1y
+        bas_poly.inner_agg_fn: mean
+        bas_poly.norm_ord: inf
+        bas_poly.polygon_simplify_tolerance: 1
+        bas_poly.agg_fn: probs
+        bas_poly.time_thresh:
+            - 0.8
+        bas_poly.resolution: 10GSD
+        bas_poly.moving_window_size: null
+        bas_poly.poly_merge_method: 'v2'
+        bas_poly.min_area_square_meters: 7200
+        bas_poly.max_area_square_meters: 8000000
+        bas_poly.boundary_region: $DVC_DATA_DPATH/annotations/drop7/region_models
+        bas_poly_eval.true_site_dpath: $DVC_DATA_DPATH/annotations/drop7/site_models
+        bas_poly_eval.true_region_dpath: $DVC_DATA_DPATH/annotations/drop7/region_models
+        bas_pxl.enabled: 1
+        bas_pxl_eval.enabled: 0
+        bas_poly.enabled: 1
+        bas_poly_eval.enabled: 1
+        bas_poly_viz.enabled: 0
+    " \
+    --root_dpath="$TEST_DPATH" \
+    --devices="0,1" --tmux_workers=8 \
+    --backend=tmux \
+    --pipeline=bas \
+    --skip_existing=1 \
+    --run=1
