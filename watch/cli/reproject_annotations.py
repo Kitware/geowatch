@@ -1179,10 +1179,16 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
                 if annot_idx == 0 and catname in heuristics.HEURISTIC_START_STATES:
                     applies = 'past'
 
-            key_infos.append({
+            keyframe = {
                 'time': dt.timestamp(),
                 'applies': applies,
-            })
+            }
+
+            # HACK:
+            if catname == 'positive':
+                if annot_idx == len(observations) - 1:
+                    keyframe['max_frames'] = 1
+            key_infos.append(keyframe)
         obs_associated_gxs = keyframe_interpolate(image_times, key_infos)
     else:
         if propogate_strategy == 'SMART':
@@ -1422,7 +1428,7 @@ def keyframe_interpolate(image_times, key_infos):
     curr_idxs = padded_curr_idxs - 1
     next_idxs = padded_next_idxs - 1
 
-    DEBUG = 1
+    DEBUG = 0
 
     if DEBUG:
         import pandas as pd
