@@ -1147,6 +1147,10 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
     PROJECT_ENDSTATE = True
     BACKPROJECT_START_STATES = 0  # turn off back-projection
 
+    # if track_id == 'CN_C000_0000':
+    #     import xdev
+    #     xdev.embed()
+
     if propogate_strategy == 'OLD-SMART':
         raise NotImplementedError('The old strategy had bugs, use the new one')
     elif propogate_strategy == "NEW-PAST":
@@ -1352,6 +1356,27 @@ def keyframe_interpolate(image_times, key_infos):
         >>> key_times = [d['time'] for d in key_infos]
         >>> key_times = np.array(key_times)
         >>> plot_poc_keyframe_interpolate(image_times, key_times, key_assignment)
+
+    Example:
+        >>> from watch.cli.reproject_annotations import *  # NOQA
+        >>> import numpy as np
+        >>> image_times = np.array([1, 2, 3, 4, 5, 6, 7])
+        >>> # TODO: likely also needs a range for a maximum amount of time you will
+        >>> # apply the observation for.
+        >>> key_infos = [
+        >>>     {'time': 1.2, 'applies': 'future', 'max_frames': 1},
+        >>>     {'time': 3.2, 'applies': 'future'},
+        >>>     {'time': 6, 'applies': 'future', 'max_frames': 1},
+        >>> ]
+        >>> key_assignment = keyframe_interpolate(image_times, key_infos)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> # xdoctest: +REQUIRES(module:kwplot)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.figure(fnum=1, doclf=1)
+        >>> key_times = [d['time'] for d in key_infos]
+        >>> key_times = np.array(key_times)
+        >>> plot_poc_keyframe_interpolate(image_times, key_times, key_assignment)
     """
     import numpy as np
     key_times = [d['time'] for d in key_infos]
@@ -1397,14 +1422,26 @@ def keyframe_interpolate(image_times, key_infos):
     curr_idxs = padded_curr_idxs - 1
     next_idxs = padded_next_idxs - 1
 
-    if 0:
+    DEBUG = 1
+
+    if DEBUG:
         import pandas as pd
-        print(pd.DataFrame({
+        import rich
+        rich.print(ub.paragraph(
+            '''
+            The following table has a row for each image. It indicates the
+            previous, current and next index of the keyframes assigned to each
+            image.
+            '''))
+
+        img_table = pd.DataFrame({
             'image_time': image_times,
             'prev': prev_idxs,
             'curr': curr_idxs,
             'next': next_idxs,
-        }))
+        })
+        img_table.index.name = 'img-idx'
+        rich.print(img_table.to_string())
 
     # Note that the config of prev, curr, next forms a grouping where each
     # unique row has the same operation applied to it.
@@ -1418,6 +1455,10 @@ def keyframe_interpolate(image_times, key_infos):
     row_groupids = uidx[uinv]
     unique_rowxs, groupxs = kwarray.group_indices(row_groupids)
     ### --- </opaque group logic>
+
+    if DEBUG:
+        print(f'groupxs={groupxs}')
+        print(f'unique_rowxs={unique_rowxs}')
 
     keyidx_to_imageidxs = [[] for _ in range(len(key_infos))]
     # Now we have groups of images corresponding to each unique keyframe case.
@@ -1473,6 +1514,48 @@ def keyframe_interpolate(image_times, key_infos):
                 # It is ok if neither keyframe is relevant that is a hole in
                 # the track.
                 ...
+
+    _keyidx_to_imageidxs = []
+    for rowx, imageidxs in enumerate(keyidx_to_imageidxs):
+        # Postprocess to handle max frame constraints
+        # This is a hacky tack-on, and is only written to consider the case of
+        # future projection. In the future we should update this.
+        key_info = key_infos[rowx]
+        max_frames = key_info.get('max_frames', None)
+        if max_frames is not None:
+            if len(imageidxs) > max_frames:
+                imageidxs = imageidxs[0:max_frames]
+        _keyidx_to_imageidxs.append(imageidxs)
+    keyidx_to_imageidxs = _keyidx_to_imageidxs
+
+    if DEBUG:
+        import pandas as pd
+        import rich
+        rich.print(ub.paragraph(
+            '''
+            The following table has a row for each keyframe.
+            It indicates the assignment from keyframe to images.
+            '''))
+        rows = []
+        for x, r in enumerate(key_infos):
+            r = r.copy()
+            r['img_idxs'] = keyidx_to_imageidxs[x]
+            rows.append(r)
+
+        key_table = pd.DataFrame(rows)
+        key_table.index.name = 'key-idx'
+        rich.print(key_table.to_string())
+
+        grid = []
+        for r in rows:
+            img_row = np.zeros(len(image_times)).astype(bool)
+            img_row[r['img_idxs']] = 1
+            grid.append(img_row)
+        grid = pd.DataFrame(grid)
+        grid.index.name = 'key-idx'
+        grid.columns.name = 'image-idx'
+        rich.print(grid.to_string())
+
     return keyidx_to_imageidxs
 
 
