@@ -230,6 +230,8 @@ def main(cmdline=False, **kwargs):
         >>>     'site_models': dvc_dpath / 'annotations/drop6/site_models/KR_R001*',
         >>>     'region_models': dvc_dpath / 'annotations/drop6/region_models/KR_R001*',
         >>> }
+        >>> import kwplot
+        >>> kwplot.autoplt()  # For interactive viewing
         >>> main(cmdline=cmdline, **kwargs)
     """
     config = ReprojectAnnotationsConfig.cli(data=kwargs, cmdline=cmdline)
@@ -1702,7 +1704,15 @@ def plot_image_and_site_times(coco_dset, region_image_dates, drawable_region_sit
                 # Draw a line for each "part" of the side at this timestep
                 # Note: some sites seem to have a ton of parts that could be
                 # consolodated? Is this real or is there a bug?
+                seen_ = set()
                 for yoff, color in zip(yoffsets, cat_colors):
+                    if color in seen_:
+                        # For efficiency only draw subsite parts if the
+                        # subsites have different labels I think there is some
+                        # other plotting inefficiency happening. These lists
+                        # seem to be too long.
+                        continue
+                    seen_.add(color)
                     for tp in row['propogated_on']:
                         x1 = mpl.dates.date2num(t1)
                         x2 = mpl.dates.date2num(tp)
@@ -1725,7 +1735,7 @@ def plot_image_and_site_times(coco_dset, region_image_dates, drawable_region_sit
     propogate_attrs['colors']
 
     max_observable_times = max(region_image_dates)
-    max_annotated_times = max(all_times)
+    # max_annotated_times = max(all_times)
 
     ax.set_xlim(min(all_times), max_observable_times)
     ax.set_ylim(0, len(drawable_region_sites))

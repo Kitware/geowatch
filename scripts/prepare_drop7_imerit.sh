@@ -193,10 +193,10 @@ python -m watch.utils.simple_dvc request \
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 TEST_DPATH=$DVC_EXPT_DPATH/_test/_imeritbas
-
 geowatch schedule --params="
     matrix:
         bas_pxl.package_fpath:
+            #- $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
             - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V68/Drop7-MedianNoWinter10GSD_bgrn_split6_V68_epoch34_stepNone.pt
         bas_pxl.test_dataset:
             - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-iMERIT/CN_C000/imganns-CN_C000.kwcoco.zip
@@ -205,18 +205,31 @@ geowatch schedule --params="
         bas_pxl.time_span: auto
         bas_pxl.time_sampling: soft4
         bas_poly.thresh:
+            #- 0.3
+            - 0.325
             - 0.35
             - 0.375
+            - 0.39
             - 0.4
+            - 0.4125
             - 0.425
+            #- 0.435
+            #- 0.45
+            #- 0.5
         bas_poly.inner_window_size: 1y
         bas_poly.inner_agg_fn: mean
         bas_poly.norm_ord: inf
         bas_poly.polygon_simplify_tolerance: 1
         bas_poly.agg_fn: probs
         bas_poly.time_thresh:
+            - 0.95
+            - 0.925
+            - 0.9
+            - 0.85
             - 0.8
-            - 0.6
+            - 0.75
+            - 0.7
+            #- 0.6
         bas_poly.resolution: 10GSD
         bas_poly.moving_window_size: null
         bas_poly.poly_merge_method: 'v2'
@@ -232,8 +245,8 @@ geowatch schedule --params="
         bas_poly_viz.enabled: 0
     " \
     --root_dpath="$TEST_DPATH" \
-    --devices="0,1" --tmux_workers=8 \
-    --backend=tmux \
+    --devices="0,1" --tmux_workers=2 \
+    --backend=serial \
     --pipeline=bas \
     --skip_existing=1 \
     --run=1
@@ -253,13 +266,13 @@ python -m watch.mlops.aggregate \
         - bas_pxl_eval
     " \
     --plot_params="
-        enabled: 0
-        stats_ranking: 0
+        enabled: 1
+        stats_ranking: 1
         min_variations: 1
         params_of_interest:
-            - params.sv_depth_filter.threshold
-            - params.sv_depth_score.model_fpath
+            - params.bas_poly.time_thresh
             - params.bas_poly.thresh
+            - effective_params.bas_pxl.package_fpath
     " \
     --stdout_report="
         top_k: 13

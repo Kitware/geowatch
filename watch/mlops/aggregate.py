@@ -346,7 +346,7 @@ def build_all_param_plots(agg, rois, config):
     build_special_columns(agg)
     agg.build()
     single_table = table = agg.table
-    single_table = preprocess_table_for_seaborn(table)
+    single_table = preprocess_table_for_seaborn(agg, table)
 
     plot_config = ub.udict(config.plot_params) - {'enabled'}
     MARK_DELIVERED = plot_config.get('mark_delivered', False)
@@ -755,7 +755,7 @@ class ParamPlotter:
 
             param_dpath = (param_group_dpath / param_name).ensuredir().resolve()
 
-            param_valname_map, had_value_remap = shrink_param_names(list(param_histogram))
+            param_valname_map, had_value_remap = shrink_param_names(param_name, list(param_histogram))
 
             # Mapper for the scatterplot legend
             if had_value_remap:
