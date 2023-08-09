@@ -77,7 +77,7 @@ from cmd_queue.cli_boilerplate import CMDQueueConfig
 
 class PrepareTA2Config(CMDQueueConfig):
 
-    queue_name = scfg.Value('prep-ta2-dataset', group='cmd_queue', help='name for the command queue')
+    queue_name = scfg.Value('prep-ta2-dataset', group='cmd-queue', help='name for the command queue')
 
     dataset_suffix = scfg.Value(None, help='')
 
@@ -533,7 +533,7 @@ def main(cmdline=False, **kwargs):
                 'uncropped_query_fpath': uncropped_query_fpath,
             },
             out_paths={
-                'uncropped_catalog_fpath': uncropped_catalog_fpath,
+                'catalog_fpath': uncropped_catalog_fpath,
             },
             _no_outarg=True,
             _no_inarg=True,
@@ -557,15 +557,13 @@ def main(cmdline=False, **kwargs):
                     --jobs "{config['convert_workers']}"
                 '''),
             in_paths={
-                'uncropped_catalog_fpath': uncropped_catalog_fpath,
+                'input_stac_catalog': uncropped_catalog_fpath,
             },
             out_paths={
-                'uncropped_kwcoco_fpath': uncropped_kwcoco_fpath,
+                'outpath': uncropped_kwcoco_fpath,
             },
-            _no_outarg=True,
-            _no_inarg=True,
         )
-        ingress_node.connect(convert_node)
+        ingress_node.outputs['catalog_fpath'].connect(convert_node.inputs['input_stac_catalog'])
 
         uncropped_fielded_kwcoco_fpath = uncropped_dpath / f'data_{s3_name}_fielded.kwcoco.zip'
 
@@ -583,7 +581,7 @@ def main(cmdline=False, **kwargs):
                     --workers="{config['fields_workers']}"
                 '''),
             in_paths={
-                'uncropped_kwcoco_fpath': uncropped_kwcoco_fpath,
+                'src': uncropped_kwcoco_fpath,
             },
             out_paths={
                 'uncropped_fielded_kwcoco_fpath': uncropped_fielded_kwcoco_fpath,
@@ -591,7 +589,7 @@ def main(cmdline=False, **kwargs):
             _no_outarg=True,
             _no_inarg=True,
         )
-        convert_node.connect(add_fields_node)
+        convert_node.outputs['outpath'].connect(add_fields_node.inputs['src'])
 
         uncropped_fielded_jobs.append({
             'name': stac_job['name'],
@@ -658,16 +656,16 @@ def main(cmdline=False, **kwargs):
                     --hack_lazy={config.hack_lazy}
                 '''),
             in_paths={
-                'uncropped_fielded_fpath': uncropped_fielded_fpath,
+                'src': uncropped_fielded_fpath,
             },
             out_paths={
-                'aligned_imgonly_fpath': aligned_imgonly_fpath,
+                'dst': aligned_imgonly_fpath,
             },
             _no_outarg=True,
             _no_inarg=True,
         )
         parent_node.outputs['uncropped_fielded_kwcoco_fpath'].connect(
-            align_node.inputs['uncropped_fielded_fpath'])
+            align_node.inputs['src'])
 
         if config['visualize']:
             aligned_img_viz_dpath = aligned_kwcoco_bundle / '_viz512_img'
@@ -684,18 +682,19 @@ def main(cmdline=False, **kwargs):
                         --channels="red|green|blue" \
                         --max_dim={viz_max_dim} \
                         --stack=only \
-                        --animate=True --workers=auto
+                        --animate=True \
+                        --workers=auto
                     '''),
                 in_paths={
-                    'aligned_imgonly_fpath': aligned_imgonly_fpath,
+                    'src': aligned_imgonly_fpath,
                 },
                 out_paths={
-                    'aligned_img_viz_dpath': aligned_img_viz_dpath,
+                    'viz_dpath': aligned_img_viz_dpath,
                 },
                 _no_outarg=True,
                 _no_inarg=True,
             )
-            align_node.connect(viz_img_node)
+            align_node.outputs['dst'].connect(viz_img_node.inputs['src'])
 
         if site_globstr:
             # Visualization here is too slow, add on another option if we
@@ -714,15 +713,15 @@ def main(cmdline=False, **kwargs):
                         --region_models="{region_globstr}" {viz_part}
                     ''').format(**locals()),
                 in_paths={
-                    'aligned_imgonly_fpath': aligned_imgonly_fpath,
+                    'src': aligned_imgonly_fpath,
                 },
                 out_paths={
-                    'aligned_imganns_fpath': aligned_imganns_fpath,
+                    'dst': aligned_imganns_fpath,
                 },
                 _no_outarg=True,
                 _no_inarg=True,
             )
-            align_node.connect(project_anns_node)
+            align_node.outputs['dst'].connect(project_anns_node.inputs['src'])
 
             if config.visualize:
                 aligned_img_viz_dpath = aligned_kwcoco_bundle / '_viz512_ann'
@@ -737,20 +736,21 @@ def main(cmdline=False, **kwargs):
                             --draw_imgs=False \
                             --channels="red|green|blue" \
                             --max_dim={viz_max_dim} \
-                            --animate=True --workers=auto \
+                            --animate=True \
+                            --workers=auto \
                             --stack=only \
                             --only_boxes={config["visualize_only_boxes"]}
                         '''),
                     in_paths={
-                        'aligned_imganns_fpath': aligned_imganns_fpath,
+                        'src': aligned_imganns_fpath,
                     },
                     out_paths={
-                        'aligned_img_viz_dpath': aligned_img_viz_dpath,
+                        'viz_dpath': aligned_img_viz_dpath,
                     },
                     _no_outarg=True,
                     _no_inarg=True,
                 )
-                project_anns_node.connect(viz_ann_node)
+                project_anns_node.outputs['dst'].connect(viz_ann_node.inputs['src'])
         else:
             aligned_imganns_fpath = aligned_imgonly_fpath
             info['aligned_imganns_fpath'] = aligned_imgonly_fpath
@@ -777,19 +777,16 @@ def main(cmdline=False, **kwargs):
                 --dst "{aligned_final_fpath}"
             '''),
         in_paths={
-            'aligned_fpaths': aligned_fpaths,
+            'src': aligned_fpaths,
         },
         out_paths={
-            'aligned_final_fpath': aligned_final_fpath,
+            'dst': aligned_final_fpath,
         },
         _no_outarg=True,
         _no_inarg=True,
     )
     for node in union_depends_nodes:
-        try:
-            node.outputs['aligned_imganns_fpath'].connect(union_node.inputs['aligned_fpaths'])
-        except KeyError:
-            node.outputs['aligned_imgonly_fpath'].connect(union_node.inputs['aligned_fpaths'])
+        node.outputs['dst'].connect(union_node.inputs['src'])
 
     aligned_final_nodes = [union_node]
 
@@ -844,6 +841,8 @@ def main(cmdline=False, **kwargs):
         dvc pull
         */*.json
         ''')
+
+    new_pipeline.print_graphs()
 
     config.run_queue(queue, system=True)
 
