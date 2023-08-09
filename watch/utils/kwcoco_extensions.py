@@ -92,17 +92,21 @@ def filter_image_ids(coco_dset, gids=None, include_sensors=None,
     return valid_gids
 
 
-def populate_watch_fields(coco_dset, target_gsd=10.0, vidids=None,
-                          overwrite=False, default_gsd=None,
-                          conform=True,
-                          enable_video_stats=True,
-                          enable_valid_region=False,
-                          enable_intensity_stats=False,
-                          workers=0,
-                          mode='thread',
-                          remove_broken=False,
-                          skip_populate_errors=False,
-                         ):
+def populate_watch_fields(
+    coco_dset,
+    target_gsd=10.0,
+    vidids=None,
+    overwrite=False,
+    default_gsd=None,
+    conform=True,
+    enable_video_stats=True,
+    enable_valid_region=False,
+    enable_intensity_stats=False,
+    workers=0,
+    mode='thread',
+    remove_broken=False,
+    skip_populate_errors=False,
+):
     """
     Aggregate populate function for fields useful to GEOWATCH.
 
@@ -294,13 +298,15 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
 
 
 @profile
-def coco_populate_geo_img_heuristics2(coco_img, overwrite=False,
-                                      default_gsd=None,
-                                      keep_geotiff_metadata=False,
-                                      enable_intensity_stats=False,
-                                      enable_valid_region=False,
-                                      skip_populate_errors=False,
-                                     ):
+def coco_populate_geo_img_heuristics2(
+    coco_img,
+    overwrite=False,
+    default_gsd=None,
+    keep_geotiff_metadata=False,
+    enable_intensity_stats=False,
+    enable_valid_region=False,
+    skip_populate_errors=False,
+):
     """
     Note: this will not overwrite existing channel info unless specified
 
@@ -404,7 +410,7 @@ def coco_populate_geo_img_heuristics2(coco_img, overwrite=False,
         if img.get('file_name', None) is None:
             assets = list(coco_img.assets)
             asset_dsizes = [
-                (asset['width'], asset['height']) 
+                (asset['width'], asset['height'])
                 for asset in assets
                 if ("width" in asset) and ("height" in asset)
             ]
