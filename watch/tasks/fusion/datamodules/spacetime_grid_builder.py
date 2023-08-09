@@ -981,6 +981,7 @@ def lookup_track_info(coco_dset, tid):
         vidspace_box = imgspace_box.warp(vid_from_img)
         vidspace_boxes.append(vidspace_box)
     all_vidspace_boxes = kwimage.Boxes.concatenate(vidspace_boxes)
+
     full_vid_box = all_vidspace_boxes.bounding_box().to_xywh()
 
     frame_index = coco_dset.images(track_gids).lookup('frame_index')

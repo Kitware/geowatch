@@ -359,7 +359,7 @@ def _add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
             img_from_vid = _warp_img_from_vid(gid)
             poly = kwimage.MultiPolygon.coerce(poly).warp(img_from_vid)
 
-        bbox = list(poly.bounding_box().to_coco())[0]
+        bbox = list(poly.box().boxes.to_coco())[0]
         segmentation = poly.to_coco(style='new')
 
         # Add the polygon as an annotation on the image
