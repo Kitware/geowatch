@@ -905,6 +905,11 @@ class ProcessNode(Node):
                  _no_inarg=False,
                  **aliases):
         if aliases:
+            if 'perf_config' in aliases:
+                raise ValueError('You probably meant perf_params')
+            if 'algo_config' in aliases:
+                raise ValueError('You probably meant algo_params')
+
             if 'command' in aliases:
                 executable = aliases['command']
 

@@ -10,7 +10,7 @@ See Also:
     ~/code/watch/scripts/prepare_drop4.sh
     ~/code/watch/scripts/prepare_drop5.sh
 
-Example:
+CommandLine:
 
     # Create a demo region file, and create vairables that point at relevant
     # paths, which are by default written in your ~/.cache folder
@@ -54,6 +54,7 @@ Example:
         --convert_workers=0 \
         --align_workers=26 \
         --cache=0 \
+        --skip_existing=0 \
         --ignore_duplicates=1 \
         --target_gsd=30 \
         --visualize=True \
@@ -66,6 +67,36 @@ Example:
 TODO:
     handl GE01 and WV01 platforms
 
+CommandLine:
+    xdoctest -m watch.cli.prepare_ta2_dataset __doc__:0
+
+Example:
+    >>> from watch.cli.prepare_ta2_dataset import *  # NOQA
+    >>> import ubelt as ub
+    >>> dpath = ub.Path.appdir('watch/test/prep_ta2_dataset').delete().ensuredir()
+    >>> from watch.geoannots import geomodels
+    >>> # Write dummy regions / sites
+    >>> for rng in [0, 1, 3]:
+    >>>     region, sites = geomodels.RegionModel.random(rng=rng, with_sites=True)
+    >>>     region_dpath = (dpath / 'region_models').ensuredir()
+    >>>     site_dpath = (dpath / 'site_models').ensuredir()
+    >>>     region_fpath = region_dpath / (region.region_id + '.geojson')
+    >>>     region_fpath.write_text(region.dumps())
+    >>>     for site in sites:
+    >>>         site_fpath = site_dpath / (site.site_id + '.geojson')
+    >>>         site_fpath.write_text(site.dumps())
+    >>> # Prepare config and test a dry run
+    >>> kwargs = PrepareTA2Config()
+    >>> kwargs['dataset_suffix'] = 'DEMO_DOCTEST'
+    >>> kwargs['run'] = 0
+    >>> kwargs['stac_query_mode'] = 'auto'
+    >>> kwargs['regions'] = region_dpath
+    >>> kwargs['sites'] = site_dpath
+    >>> kwargs['backend'] = 'serial'
+    >>> kwargs['visualize'] = 1
+    >>> kwargs['collated'] = [True]
+    >>> cmdline = 0
+    >>> PrepareTA2Config.main(cmdline=cmdline, **kwargs)
 """
 
 
@@ -253,35 +284,14 @@ class PrepareTA2Config(CMDQueueConfig):
 __config__ = PrepareTA2Config
 
 
+def _dev(d):
+    return set(d.keys())
+    # return d
+
+
 @__config__._register_main
 def main(cmdline=False, **kwargs):
     """
-    Example:
-        >>> from watch.cli.prepare_ta2_dataset import *  # NOQA
-        >>> import ubelt as ub
-        >>> dpath = ub.Path.appdir('watch/test/prep_ta2_dataset').delete().ensuredir()
-        >>> from watch.geoannots import geomodels
-        >>> # Write dummy regions / sites
-        >>> for rng in [0, 1]:
-        >>>     region, sites = geomodels.RegionModel.random(rng=rng, with_sites=True)
-        >>>     region_dpath = (dpath / 'region_models').ensuredir()
-        >>>     site_dpath = (dpath / 'site_models').ensuredir()
-        >>>     region_fpath = region_dpath / (region.region_id + '.geojson')
-        >>>     region_fpath.write_text(region.dumps())
-        >>>     for site in sites:
-        >>>         site_fpath = site_dpath / (site.site_id + '.geojson')
-        >>>         site_fpath.write_text(site.dumps())
-        >>> # Prepare config and test a dry run
-        >>> kwargs = PrepareTA2Config()
-        >>> kwargs['dataset_suffix'] = 'DEMO_DOCTEST'
-        >>> kwargs['run'] = 0
-        >>> kwargs['stac_query_mode'] = 'auto'
-        >>> kwargs['regions'] = region_dpath
-        >>> kwargs['sites'] = site_dpath
-        >>> kwargs['backend'] = 'serial'
-        >>> kwargs['collated'] = [True]
-        >>> cmdline = 0
-        >>> PrepareTA2Config.main(cmdline=cmdline, **kwargs)
 
     Ignore:
         from watch.cli.prepare_ta2_dataset import *  # NOQA
@@ -428,30 +438,35 @@ def main(cmdline=False, **kwargs):
 
             stac_search_node = new_pipeline.submit(
                 name=f'stac-search-{region_id}',
+                perf_params={
+                    'api_key': config.api_key,
+                    'query_workers': config.query_workers,
+                    'verbose': 2,
+                },
+                algo_params={
+                    'search_json': 'auto',
+                    'cloud_cover': config.cloud_cover,
+                    'sensors': config.sensors,
+                    'max_products_per_region': config.max_products_per_region,
+                    'append_mode': False,
+                    'mode': 'area',
+                },
                 executable=ub.codeblock(
-                    fr'''
-                    python -m watch.cli.stac_search \
-                        --region_file "{final_region_fpath}" \
-                        --search_json "auto" \
-                        --cloud_cover "{config['cloud_cover']}" \
-                        --sensors "{config['sensors']}" \
-                        --api_key "{config['api_key']}" \
-                        --query_workers "{config['query_workers']}" \
-                        --max_products_per_region "{config['max_products_per_region']}" \
-                        --append_mode=False \
-                        --mode area \
-                        --verbose 2 \
-                        --outfile "{region_inputs_fpath}"
+                    r'''
+                    python -m watch.cli.stac_search
                     '''),
-                in_paths={
-                    'final_region_fpath': final_region_fpath,
-                },
+                in_paths=_dev({
+                    'region_file': final_region_fpath,
+                }),
                 out_paths={
-                    'region_inputs_fpath': region_inputs_fpath,
+                    'outfile': region_inputs_fpath,
                 },
-                _no_outarg=True,
-                _no_inarg=True,
             )
+
+            # All other paths fall out after specifying this one
+            stac_search_node.configure({
+                    'region_file': final_region_fpath,
+            })
 
             # NOTE: The YAML list can get too long pretty quickly.
             # So we can't pass this as site-globstr. However, we could write a
@@ -505,60 +520,59 @@ def main(cmdline=False, **kwargs):
                     f'''
                     aws s3 --profile {aws_profile} cp "{s3_fpath}" "{uncropped_query_dpath}"
                     '''),
-                in_paths={
+                in_paths=_dev({
                     's3_fpath': s3_fpath,
-                },
+                }),
                 out_paths={
                     'uncropped_query_fpath': uncropped_query_fpath,
                 },
                 _no_outarg=True,
                 _no_inarg=True,
             )
-            parent_node.outputs['region_inputs_fpath'].connect(grab_node.inputs['s3_fpath'])
+            parent_node.outputs['outfile'].connect(grab_node.inputs['s3_fpath'])
 
         ingress_node = new_pipeline.submit(
             name=f'baseline_ingress-{s3_name}',
-            executable=ub.codeblock(
-                fr'''
-                python -m watch.cli.baseline_framework_ingress \
-                    --aws_profile {aws_profile} \
-                    --jobs avail \
-                    --virtual True \
-                    --requester_pays {config.requester_pays} \
-                    --outdir "{uncropped_ingress_dpath}" \
-                    --input_path "{uncropped_query_fpath}" \
-                    --catalog_fpath "{uncropped_catalog_fpath}"
-                '''),
-            in_paths={
-                'uncropped_query_fpath': uncropped_query_fpath,
+            perf_params={
+                'virtual': True,
+                'jobs': 'avail',
+                'aws_profile': aws_profile,
+                'requester_pays': config.requester_pays,
             },
+            executable=ub.codeblock(
+                r'''
+                python -m watch.cli.baseline_framework_ingress
+                '''),
+            in_paths=_dev({
+                'input_path': uncropped_query_fpath,
+            }),
             out_paths={
                 'catalog_fpath': uncropped_catalog_fpath,
             },
-            _no_outarg=True,
-            _no_inarg=True,
         )
         try:
-            grab_node.outputs['uncropped_query_dpath'].connect(ingress_node.inputs['uncropped_query_fpath'])
+            grab_node.outputs['uncropped_query_fpath'].connect(ingress_node.inputs['input_path'])
         except KeyError:
-            grab_node.outputs['region_inputs_fpath'].connect(ingress_node.inputs['uncropped_query_fpath'])
+            grab_node.outputs['outfile'].connect(ingress_node.inputs['input_path'])
 
         uncropped_kwcoco_fpath = uncropped_dpath / f'data_{s3_name}.kwcoco.zip'
 
         convert_node = new_pipeline.submit(
             name=f'stac_to_kwcoco-{s3_name}',
+            algo_params={
+                'from_collated': collated,
+                'ignore_duplicates': config.ignore_duplicates,
+            },
+            perf_params={
+                'jobs': config.convert_workers,
+            },
             executable=ub.codeblock(
                 fr'''
-                {job_environ_str}python -m watch.cli.stac_to_kwcoco \
-                    --input_stac_catalog="{uncropped_catalog_fpath}" \
-                    --outpath="{uncropped_kwcoco_fpath}" \
-                    --from_collated="{collated}" \
-                    --ignore_duplicates="{config.ignore_duplicates}" \
-                    --jobs "{config['convert_workers']}"
+                {job_environ_str}python -m watch.cli.stac_to_kwcoco
                 '''),
-            in_paths={
+            in_paths=_dev({
                 'input_stac_catalog': uncropped_catalog_fpath,
-            },
+            }),
             out_paths={
                 'outpath': uncropped_kwcoco_fpath,
             },
@@ -569,25 +583,25 @@ def main(cmdline=False, **kwargs):
 
         add_fields_node = new_pipeline.submit(
             name=f'coco_add_watch_fields-{s3_name}',
+            algo_params={
+                'enable_video_stats': False,
+                'target_gsd': config.target_gsd,
+                'remove_broken': config.remove_broken,
+            },
+            perf_params={
+                'overwrite': 'warp',
+                'workers': config.fields_workers,
+            },
             executable=ub.codeblock(
                 fr'''
-                {job_environ_str}python -m watch.cli.coco_add_watch_fields \
-                    --src "{uncropped_kwcoco_fpath}" \
-                    --dst "{uncropped_fielded_kwcoco_fpath}" \
-                    --enable_video_stats=False \
-                    --overwrite=warp \
-                    --target_gsd={config['target_gsd']} \
-                    --remove_broken={config['remove_broken']} \
-                    --workers="{config['fields_workers']}"
+                {job_environ_str}python -m watch.cli.coco_add_watch_fields
                 '''),
-            in_paths={
+            in_paths=_dev({
                 'src': uncropped_kwcoco_fpath,
-            },
+            }),
             out_paths={
-                'uncropped_fielded_kwcoco_fpath': uncropped_fielded_kwcoco_fpath,
+                'dst': uncropped_fielded_kwcoco_fpath,
             },
-            _no_outarg=True,
-            _no_inarg=True,
         )
         convert_node.outputs['outpath'].connect(add_fields_node.inputs['src'])
 
@@ -636,8 +650,6 @@ def main(cmdline=False, **kwargs):
             executable=ub.codeblock(
                 fr'''
                 {job_environ_str}python -m watch.cli.coco_align \
-                    --src "{uncropped_fielded_fpath}" \
-                    --dst "{aligned_imgonly_fpath}" \
                     --regions "{region_globstr}" \
                     --context_factor=1 \
                     --geo_preprop=auto \
@@ -655,17 +667,14 @@ def main(cmdline=False, **kwargs):
                     --workers={config.align_workers} \
                     --hack_lazy={config.hack_lazy}
                 '''),
-            in_paths={
+            in_paths=_dev({
                 'src': uncropped_fielded_fpath,
-            },
+            }),
             out_paths={
                 'dst': aligned_imgonly_fpath,
             },
-            _no_outarg=True,
-            _no_inarg=True,
         )
-        parent_node.outputs['uncropped_fielded_kwcoco_fpath'].connect(
-            align_node.inputs['src'])
+        parent_node.outputs['dst'].connect(align_node.inputs['src'])
 
         if config['visualize']:
             aligned_img_viz_dpath = aligned_kwcoco_bundle / '_viz512_img'
@@ -675,8 +684,6 @@ def main(cmdline=False, **kwargs):
                 executable=ub.codeblock(
                     fr'''
                     python -m watch visualize \
-                        --src "{aligned_imgonly_fpath}" \
-                        --viz_dpath "{aligned_img_viz_dpath}" \
                         --draw_anns=False \
                         --draw_imgs=True \
                         --channels="red|green|blue" \
@@ -685,14 +692,12 @@ def main(cmdline=False, **kwargs):
                         --animate=True \
                         --workers=auto
                     '''),
-                in_paths={
+                in_paths=_dev({
                     'src': aligned_imgonly_fpath,
-                },
+                }),
                 out_paths={
                     'viz_dpath': aligned_img_viz_dpath,
                 },
-                _no_outarg=True,
-                _no_inarg=True,
             )
             align_node.outputs['dst'].connect(viz_img_node.inputs['src'])
 
@@ -705,21 +710,17 @@ def main(cmdline=False, **kwargs):
                 executable=ub.codeblock(
                     r'''
                     python -m watch reproject_annotations \
-                        --src "{aligned_imgonly_fpath}" \
-                        --dst "{aligned_imganns_fpath}" \
                         --propogate_strategy="{config.propogate_strategy}" \
                         --site_models="{site_globstr}" \
                         --io_workers="avail/2" \
                         --region_models="{region_globstr}" {viz_part}
                     ''').format(**locals()),
-                in_paths={
+                in_paths=_dev({
                     'src': aligned_imgonly_fpath,
-                },
+                }),
                 out_paths={
                     'dst': aligned_imganns_fpath,
                 },
-                _no_outarg=True,
-                _no_inarg=True,
             )
             align_node.outputs['dst'].connect(project_anns_node.inputs['src'])
 
@@ -730,8 +731,6 @@ def main(cmdline=False, **kwargs):
                     executable=ub.codeblock(
                         fr'''
                         python -m watch visualize \
-                            --src "{aligned_imganns_fpath}" \
-                            --viz_dpath "{aligned_img_viz_dpath}" \
                             --draw_anns=True \
                             --draw_imgs=False \
                             --channels="red|green|blue" \
@@ -741,14 +740,12 @@ def main(cmdline=False, **kwargs):
                             --stack=only \
                             --only_boxes={config["visualize_only_boxes"]}
                         '''),
-                    in_paths={
+                    in_paths=_dev({
                         'src': aligned_imganns_fpath,
-                    },
+                    }),
                     out_paths={
                         'viz_dpath': aligned_img_viz_dpath,
                     },
-                    _no_outarg=True,
-                    _no_inarg=True,
                 )
                 project_anns_node.outputs['dst'].connect(viz_ann_node.inputs['src'])
         else:
@@ -772,18 +769,14 @@ def main(cmdline=False, **kwargs):
         name='kwcoco-union',
         executable=ub.codeblock(
             fr'''
-            {job_environ_str}python -m kwcoco union \
-                --src {aligned_multi_src_part} \
-                --dst "{aligned_final_fpath}"
+            {job_environ_str}python -m kwcoco union
             '''),
-        in_paths={
+        in_paths=_dev({
             'src': aligned_fpaths,
-        },
+        }),
         out_paths={
             'dst': aligned_final_fpath,
         },
-        _no_outarg=True,
-        _no_inarg=True,
     )
     for node in union_depends_nodes:
         node.outputs['dst'].connect(union_node.inputs['src'])

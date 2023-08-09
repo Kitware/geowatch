@@ -42,6 +42,8 @@ class BaselineFrameworkIngressConfig(scfg.DataConfig):
         # super().__post_init__()
         if self.catalog_fpath is None and self.outdir is not None:
             self.catalog_fpath = os.path.join(self.outdir, 'catalog.json')
+        if self.catalog_fpath is not None and self.outdir is None:
+            self.outdir = os.path.dirname(os.path.abspath(self.catalog_fpath))
 
 
 def main():
