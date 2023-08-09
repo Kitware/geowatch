@@ -425,6 +425,9 @@ CONVINIENCE_SENSOR_GROUPS = {
     'TA1-10M-TSMOOTH-ACC-3': [
         'ta1-10m-tsmoothed-acc-3',
     ],
+    'TA1-S2-ACC-3': [
+        'ta1-s2-acc-3',
+    ],
 }
 
 

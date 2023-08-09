@@ -376,8 +376,7 @@ def coco_populate_geo_img_heuristics2(coco_img, overwrite=False,
             asset_errors.append(errors)
         except Exception as ex:
             if skip_populate_errors:
-                print("Skipping! Reason:")
-                print(ex)
+                asset_errors.append(str(ex))
             else:
                 raise
 
@@ -404,7 +403,11 @@ def coco_populate_geo_img_heuristics2(coco_img, overwrite=False,
         # (typically the one with the largest size)
         if img.get('file_name', None) is None:
             assets = list(coco_img.assets)
-            asset_dsizes = [(asset['width'], asset['height']) for asset in assets]
+            asset_dsizes = [
+                (asset['width'], asset['height']) 
+                for asset in assets
+                if ("width" in asset) and ("height" in asset)
+            ]
             idx = ub.argmax(asset_dsizes)
             main_asset = assets[idx]
 

@@ -244,6 +244,12 @@ class PrepareTA2Config(CMDQueueConfig):
             caused by a 404)
             '''))
 
+    skip_populate_errors = scfg.Value(False, isflag=1, help=ub.paragraph(
+            '''
+            if True, skip processing any bands that raise errors (e.g.
+            caused by permission errors on S3)
+            '''))
+
     cache = scfg.Value(1, isflag=1, group='queue-related', help=ub.paragraph(
             '''
             If 1 or 0 globally enable/disable caching. If a comma
@@ -588,6 +594,7 @@ def main(cmdline=False, **kwargs):
                 'enable_video_stats': False,
                 'target_gsd': config.target_gsd,
                 'remove_broken': config.remove_broken,
+                'skip_populate_errors': config.skip_populate_errors,
             },
             perf_params={
                 'overwrite': 'warp',

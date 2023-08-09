@@ -48,6 +48,8 @@ class AddWatchFieldsConfig(scfg.DataConfig):
 
     remove_broken = scfg.Value(False, help='if True, will remove any image that fails population (e.g. caused by a 404)')
 
+    skip_populate_errors = scfg.Value(False, help='if True, skip processing any bands that raise errors (e.g. caused by permission errors on S3)')
+
     def __post_init__(config):
         super().__post_init__()
         if isinstance(config['target_gsd'], str):
