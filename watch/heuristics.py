@@ -163,7 +163,7 @@ HUERISTIC_STATUS_DATA = [
         'positive_match_confusion': 'gt_positive_unbounded',
     },
 
-    ### Transcient Rows
+    ### Transient Rows
     {
         'status': 'transient_positive',
         'color': 'steelblue',
@@ -391,6 +391,13 @@ CATEGORIES = [
         'color': 'tomato',
         'scored': True,
         'tags': ['saliency'],
+    },
+    # Transient
+    {
+        'name': 'transient',
+        'color': 'steelblue',
+        'scored': True,
+        'tags': ['positive'],
     },
 ]
 
