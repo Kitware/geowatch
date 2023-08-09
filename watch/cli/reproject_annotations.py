@@ -286,9 +286,11 @@ def main(cmdline=False, **kwargs):
     status_to_catname_default = ub.udict(heuristics.PHASE_STATUS_TO_KWCOCO_CATNAME)
     status_to_catname = Yaml.coerce(config['status_to_catname'])
     if status_to_catname is not None:
+        print(f"updating status_to_catname with {status_to_catname}")
         status_to_catname = status_to_catname_default | status_to_catname
     else:
         status_to_catname = status_to_catname_default
+    print(f"status_to_catname={status_to_catname}")
 
     sites = []
     for info in site_model_infos:
