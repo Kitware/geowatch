@@ -616,11 +616,7 @@ def score_poly(poly, probs, threshold=-1, use_rasterio=True):
     # First compute the valid bounds of the polygon
     # And create a mask for only the valid region of the polygon
 
-    # TODO: use this when kwimage 0.9.20 is out
-    # box = poly.box().quantize().to_xywh()
-
-    boxes = poly.bounding_box().quantize().to_xywh()
-    box = kwimage.Box.coerce(boxes.data[0], boxes.format)
+    box = poly.box().quantize().to_xywh()
 
     # Ensure box is inside probs
     ymax, xmax = probs.shape[-2:]

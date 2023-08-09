@@ -196,7 +196,7 @@ TEST_DPATH=$DVC_EXPT_DPATH/_test/_imeritbas
 geowatch schedule --params="
     matrix:
         bas_pxl.package_fpath:
-            #- $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
+            - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
             - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V68/Drop7-MedianNoWinter10GSD_bgrn_split6_V68_epoch34_stepNone.pt
         bas_pxl.test_dataset:
             - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-iMERIT/CN_C000/imganns-CN_C000.kwcoco.zip
@@ -206,6 +206,7 @@ geowatch schedule --params="
         bas_pxl.time_sampling: soft4
         bas_poly.thresh:
             #- 0.3
+            - 0.3
             - 0.325
             - 0.35
             - 0.375
@@ -272,7 +273,7 @@ python -m watch.mlops.aggregate \
         params_of_interest:
             - params.bas_poly.time_thresh
             - params.bas_poly.thresh
-            - effective_params.bas_pxl.package_fpath
+            - params.bas_pxl.package_fpath
     " \
     --stdout_report="
         top_k: 13
