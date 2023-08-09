@@ -125,30 +125,31 @@ class Pipeline:
         for name, node in node_dict.items():
             self.proc_graph.add_node(node.name, node=node)
 
-            # for s in node.succ:
             for s in node.successor_process_nodes():
                 self.proc_graph.add_edge(node.name, s.name)
 
-            # for p in node.pred:
             for p in node.predecessor_process_nodes():
                 self.proc_graph.add_edge(p.name, node.name)
 
         self.io_graph = nx.DiGraph()
+
+        # Add nodes first
         for name, node in node_dict.items():
-            self.io_graph.add_node(node.key, node=node)
-
+            self.io_graph.add_node(node.key, node=node, node_clsname=node.__class__.__name__)
             for iname, inode in node.inputs.items():
-                self.io_graph.add_node(inode.key, node=inode)
-                self.io_graph.add_edge(inode.key, node.key)
+                self.io_graph.add_node(inode.key, node=inode, node_clsname=inode.__class__.__name__)
+            for oname, onode in node.outputs.items():
+                self.io_graph.add_node(onode.key, node=onode, node_clsname=onode.__class__.__name__)
 
+        # Next add edges
+        for name, node in node_dict.items():
+            for iname, inode in node.inputs.items():
+                self.io_graph.add_edge(inode.key, node.key)
                 # Account for input/input connections
                 for succ in inode.succ:
                     self.io_graph.add_edge(inode.key, succ.key)
-
             for oname, onode in node.outputs.items():
-                self.io_graph.add_node(onode.key, node=onode)
                 self.io_graph.add_edge(node.key, onode.key)
-
                 for oi_node in onode.succ:
                     self.io_graph.add_edge(onode.key, oi_node.key)
 
@@ -257,38 +258,66 @@ class Pipeline:
                 node_config = dict(dotconfig.prefix_get(node.name, {}))
                 node.configure(node_config, cache=cache)
 
-    def print_graphs(self):
+    def print_graphs(self, shrink_labels=1, smart_colors=0):
         """
         Prints the Process and IO graph for the DAG.
         """
         self._ensure_clean()
 
-        def labelize_graph(graph):
+        colors = ['bright_magenta', 'yellow', 'cyan']
+        unused_colors = colors.copy()
+        clsname_to_color = {
+            'ProcessNode': 'yellow',
+            'InputNode': 'bright_cyan',
+            'OutputNode': 'bright_yellow',
+
+        }
+
+        def labelize_graph(graph, color_procs=0):
             # # self.io_graph.add_node(name + '.proc', node=node)
             all_names = []
             for _, data in graph.nodes(data=True):
                 all_names.append(data['node'].name)
 
-            ambiguous_names = list(ub.find_duplicates(all_names))
+            if shrink_labels:
+                ambiguous_names = list(ub.find_duplicates(all_names))
+
             for _, data in graph.nodes(data=True):
 
-                if data['node'].name in ambiguous_names:
-                    data['label'] = data['node'].key
+                if shrink_labels:
+                    if data['node'].name in ambiguous_names:
+                        data['label'] = data['node'].key
+                    else:
+                        data['label'] = data['node'].name
                 else:
-                    data['label'] = data['node'].name
+                    data['label'] = data['node'].key
 
-                # SMART specific hack: remove later
-                if 'bas' in data['label']:
-                    data['label'] = '[yellow]' + data['label']
-                elif 'sc' in data['label']:
-                    data['label'] = '[cyan]' + data['label']
-                elif 'crop' in data['label']:
-                    data['label'] = '[white]' + data['label']
-                elif 'building' in data['label']:
-                    data['label'] = '[bright_magenta]' + data['label']
-                elif 'sv' in data['label']:
-                    data['label'] = '[bright_magenta]' + data['label']
-        labelize_graph(self.io_graph)
+                if color_procs:
+                    clsname = data.get('node_clsname')
+                    if clsname not in clsname_to_color:
+                        if unused_colors:
+                            color = unused_colors.pop()
+                        else:
+                            color = None
+                        clsname_to_color[clsname] = color
+                    color = clsname_to_color[clsname]
+                    if color is not None:
+                        label = data['label']
+                        data['label'] = f'[{color}]{label}[/{color}]'
+
+                elif smart_colors:
+                    # SMART specific hack: remove later
+                    if 'bas' in data['label']:
+                        data['label'] = '[yellow]' + data['label']
+                    elif 'sc' in data['label']:
+                        data['label'] = '[cyan]' + data['label']
+                    elif 'crop' in data['label']:
+                        data['label'] = '[white]' + data['label']
+                    elif 'building' in data['label']:
+                        data['label'] = '[bright_magenta]' + data['label']
+                    elif 'sv' in data['label']:
+                        data['label'] = '[bright_magenta]' + data['label']
+        labelize_graph(self.io_graph, color_procs=True)
         labelize_graph(self.proc_graph)
 
         import rich

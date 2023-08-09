@@ -268,7 +268,7 @@ def schedule_evaluation(config):
 
     # Load the requested pipeline
     dag = smart_pipeline.make_smart_pipeline(config['pipeline'])
-    dag.print_graphs()
+    dag.print_graphs(smart_colors=1)
     dag.inspect_configurables()
 
     if config.run:

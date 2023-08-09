@@ -205,7 +205,10 @@ geowatch schedule --params="
         bas_pxl.time_span: auto
         bas_pxl.time_sampling: soft4
         bas_poly.thresh:
+            - 0.35
+            - 0.375
             - 0.4
+            - 0.425
         bas_poly.inner_window_size: 1y
         bas_poly.inner_agg_fn: mean
         bas_poly.norm_ord: inf
@@ -213,6 +216,7 @@ geowatch schedule --params="
         bas_poly.agg_fn: probs
         bas_poly.time_thresh:
             - 0.8
+            - 0.6
         bas_poly.resolution: 10GSD
         bas_poly.moving_window_size: null
         bas_poly.poly_merge_method: 'v2'
@@ -233,3 +237,37 @@ geowatch schedule --params="
     --pipeline=bas \
     --skip_existing=1 \
     --run=1
+
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+TEST_DPATH=$DVC_EXPT_DPATH/_test/_imeritbas
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+python -m watch.mlops.aggregate \
+    --pipeline=bas \
+    --target "
+        - $TEST_DPATH
+    " \
+    --output_dpath="$TEST_DPATH/aggregate" \
+    --resource_report=0 \
+    --eval_nodes="
+        - bas_poly_eval
+        - bas_pxl_eval
+    " \
+    --plot_params="
+        enabled: 0
+        stats_ranking: 0
+        min_variations: 1
+        params_of_interest:
+            - params.sv_depth_filter.threshold
+            - params.sv_depth_score.model_fpath
+            - params.bas_poly.thresh
+    " \
+    --stdout_report="
+        top_k: 13
+        per_group: 1
+        macro_analysis: 0
+        analyze: 0
+        print_models: True
+        reference_region: null
+        concise: 1
+        show_csv: 0
+    "
