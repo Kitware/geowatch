@@ -166,6 +166,11 @@ class Pipeline:
             that are required / suggested / unnecessary. For now it gives a
             little bit of that information, but more work could be done to make
             it nicer.
+
+        Example:
+            >>> from watch.mlops.pipeline_nodes import *  # NOQA
+            >>> self: Pipeline = demodata_pipeline()
+            >>> self.inspect_configurables()
         """
         # Nodes don't always have full knowledge of their entire parameter
         # space, but they should at least have some knowledge of it.
@@ -234,6 +239,11 @@ class Pipeline:
     def configure(self, config=None, root_dpath=None, cache=True):
         """
         Update the DAG configuration
+
+        Example:
+            >>> from watch.mlops.pipeline_nodes import *  # NOQA
+            >>> self: Pipeline = demodata_pipeline()
+            >>> self.configure()
         """
         self._ensure_clean()
 
@@ -1577,14 +1587,14 @@ def _fixup_config_serializability(config):
     return fixed_config
 
 
-def demo_pipeline():
+def demodata_pipeline():
     """
     A simple test pipeline.
 
     Example:
         >>> # Self test
         >>> from watch.mlops.pipeline_nodes import *  # NOQA
-        >>> demo_pipeline()
+        >>> demodata_pipeline()
     """
     dpath = ub.Path.appdir('watch/tests/mlops/pipeline').ensuredir()
     dpath.delete().ensuredir()
@@ -1734,6 +1744,20 @@ def demo_pipeline():
         'node_A2.dst': dpath / 'DST_OVERRIDE',
         'node_C1.perf_param3': 'GOFAST',
     }, root_dpath=runs_dpath, cache=False)
+
+    return dag
+
+
+def demo_pipeline():
+    """
+    A simple test pipeline.
+
+    Example:
+        >>> # Self test
+        >>> from watch.mlops.pipeline_nodes import *  # NOQA
+        >>> demo_pipeline()
+    """
+    dag = demodata_pipeline()
 
     dag.print_graphs()
     dag.inspect_configurables()

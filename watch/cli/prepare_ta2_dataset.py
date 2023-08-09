@@ -53,7 +53,7 @@ CommandLine:
         --fields_workers=8 \
         --convert_workers=0 \
         --align_workers=26 \
-        --cache=0 \
+        --cache=1 \
         --skip_existing=0 \
         --ignore_duplicates=1 \
         --target_gsd=30 \
@@ -95,6 +95,7 @@ Example:
     >>> kwargs['backend'] = 'serial'
     >>> kwargs['visualize'] = 1
     >>> kwargs['collated'] = [True]
+    >>> kwargs['out_dpath'] = '.'
     >>> cmdline = 0
     >>> PrepareTA2Config.main(cmdline=cmdline, **kwargs)
 """
@@ -284,7 +285,7 @@ class PrepareTA2Config(CMDQueueConfig):
 __config__ = PrepareTA2Config
 
 
-def _dev(d):
+def _justkeys(d):
     return set(d.keys())
     # return d
 
@@ -310,6 +311,7 @@ def main(cmdline=False, **kwargs):
     from kwutil import slugify_ext
     from watch.utils import util_gis
     import rich
+    from watch.mlops.pipeline_nodes import Pipeline
     rich.print('config = {}'.format(ub.urepr(dict(config), nl=1)))
 
     out_dpath = config['out_dpath']
@@ -323,24 +325,15 @@ def main(cmdline=False, **kwargs):
     aligned_bundle_name = f'Aligned-{config["dataset_suffix"]}'
     uncropped_bundle_name = f'Uncropped-{config["dataset_suffix"]}'
 
-    uncropped_dpath = out_dpath / uncropped_bundle_name
+    if 1:
+        uncropped_dpath = out_dpath / uncropped_bundle_name
+        aligned_kwcoco_bundle = out_dpath / aligned_bundle_name
+    else:
+        uncropped_dpath = ub.Path('.') / uncropped_bundle_name
+        aligned_kwcoco_bundle = ub.Path('.') / aligned_bundle_name
+
     uncropped_query_dpath = uncropped_dpath / '_query/items'
-
     uncropped_ingress_dpath = uncropped_dpath / 'ingress'
-
-    aligned_kwcoco_bundle = out_dpath / aligned_bundle_name
-
-    # TODO: use the new pipeline
-    from watch.mlops.pipeline_nodes import Pipeline
-
-    if 0:
-        # can't do this with the new pipeline unfortunately (yet)
-        uncropped_dpath = uncropped_dpath.shrinkuser(home='$HOME')
-        uncropped_query_dpath = uncropped_query_dpath.shrinkuser(home='$HOME')
-        uncropped_query_dpath = uncropped_query_dpath.shrinkuser(home='$HOME')
-        uncropped_query_dpath = uncropped_query_dpath.shrinkuser(home='$HOME')
-        uncropped_ingress_dpath = uncropped_ingress_dpath.shrinkuser(home='$HOME')
-        aligned_kwcoco_bundle = aligned_kwcoco_bundle.shrinkuser(home='$HOME')
 
     # Ignore these regions (only works in separate region queue mode)
     region_id_blocklist = {
@@ -384,6 +377,8 @@ def main(cmdline=False, **kwargs):
     # explicitly, but we could remove that code and just rely on implicit
     # dependencies based in in / out paths.
     new_pipeline = Pipeline()
+
+    pipe_config = {}
 
     stac_jobs = []
     if config['stac_query_mode'] == 'auto':
@@ -455,18 +450,21 @@ def main(cmdline=False, **kwargs):
                     r'''
                     python -m watch.cli.stac_search
                     '''),
-                in_paths=_dev({
+                in_paths=_justkeys({
                     'region_file': final_region_fpath,
                 }),
                 out_paths={
                     'outfile': region_inputs_fpath,
                 },
+                group_dname=uncropped_bundle_name,
+                # node_dpath
             )
 
             # All other paths fall out after specifying this one
             stac_search_node.configure({
-                    'region_file': final_region_fpath,
+                'region_file': final_region_fpath,
             })
+            pipe_config[stac_search_node.name + '.region_file'] = final_region_fpath
 
             # NOTE: The YAML list can get too long pretty quickly.
             # So we can't pass this as site-globstr. However, we could write a
@@ -520,7 +518,7 @@ def main(cmdline=False, **kwargs):
                     f'''
                     aws s3 --profile {aws_profile} cp "{s3_fpath}" "{uncropped_query_dpath}"
                     '''),
-                in_paths=_dev({
+                in_paths=_justkeys({
                     's3_fpath': s3_fpath,
                 }),
                 out_paths={
@@ -530,6 +528,7 @@ def main(cmdline=False, **kwargs):
                 _no_inarg=True,
             )
             parent_node.outputs['outfile'].connect(grab_node.inputs['s3_fpath'])
+            print('warning... config might be off...')
 
         ingress_node = new_pipeline.submit(
             name=f'baseline_ingress-{s3_name}',
@@ -543,12 +542,13 @@ def main(cmdline=False, **kwargs):
                 r'''
                 python -m watch.cli.baseline_framework_ingress
                 '''),
-            in_paths=_dev({
+            in_paths=_justkeys({
                 'input_path': uncropped_query_fpath,
             }),
             out_paths={
                 'catalog_fpath': uncropped_catalog_fpath,
             },
+            group_dname=uncropped_bundle_name,
         )
         try:
             grab_node.outputs['uncropped_query_fpath'].connect(ingress_node.inputs['input_path'])
@@ -570,12 +570,13 @@ def main(cmdline=False, **kwargs):
                 fr'''
                 {job_environ_str}python -m watch.cli.stac_to_kwcoco
                 '''),
-            in_paths=_dev({
+            in_paths=_justkeys({
                 'input_stac_catalog': uncropped_catalog_fpath,
             }),
             out_paths={
                 'outpath': uncropped_kwcoco_fpath,
             },
+            group_dname=uncropped_bundle_name,
         )
         ingress_node.outputs['catalog_fpath'].connect(convert_node.inputs['input_stac_catalog'])
 
@@ -596,12 +597,13 @@ def main(cmdline=False, **kwargs):
                 fr'''
                 {job_environ_str}python -m watch.cli.coco_add_watch_fields
                 '''),
-            in_paths=_dev({
+            in_paths=_justkeys({
                 'src': uncropped_kwcoco_fpath,
             }),
             out_paths={
                 'dst': uncropped_fielded_kwcoco_fpath,
             },
+            group_dname=uncropped_bundle_name,
         )
         convert_node.outputs['outpath'].connect(add_fields_node.inputs['src'])
 
@@ -667,12 +669,13 @@ def main(cmdline=False, **kwargs):
                     --workers={config.align_workers} \
                     --hack_lazy={config.hack_lazy}
                 '''),
-            in_paths=_dev({
+            in_paths=_justkeys({
                 'src': uncropped_fielded_fpath,
             }),
             out_paths={
                 'dst': aligned_imgonly_fpath,
             },
+            group_dname=aligned_bundle_name,
         )
         parent_node.outputs['dst'].connect(align_node.inputs['src'])
 
@@ -692,12 +695,13 @@ def main(cmdline=False, **kwargs):
                         --animate=True \
                         --workers=auto
                     '''),
-                in_paths=_dev({
+                in_paths=_justkeys({
                     'src': aligned_imgonly_fpath,
                 }),
                 out_paths={
                     'viz_dpath': aligned_img_viz_dpath,
                 },
+                group_dname=aligned_bundle_name,
             )
             align_node.outputs['dst'].connect(viz_img_node.inputs['src'])
 
@@ -715,12 +719,13 @@ def main(cmdline=False, **kwargs):
                         --io_workers="avail/2" \
                         --region_models="{region_globstr}" {viz_part}
                     ''').format(**locals()),
-                in_paths=_dev({
+                in_paths=_justkeys({
                     'src': aligned_imgonly_fpath,
                 }),
                 out_paths={
                     'dst': aligned_imganns_fpath,
                 },
+                group_dname=aligned_bundle_name,
             )
             align_node.outputs['dst'].connect(project_anns_node.inputs['src'])
 
@@ -740,12 +745,13 @@ def main(cmdline=False, **kwargs):
                             --stack=only \
                             --only_boxes={config["visualize_only_boxes"]}
                         '''),
-                    in_paths=_dev({
+                    in_paths=_justkeys({
                         'src': aligned_imganns_fpath,
                     }),
                     out_paths={
                         'viz_dpath': aligned_img_viz_dpath,
                     },
+                    group_dname=aligned_bundle_name,
                 )
                 project_anns_node.outputs['dst'].connect(viz_ann_node.inputs['src'])
         else:
@@ -771,12 +777,13 @@ def main(cmdline=False, **kwargs):
             fr'''
             {job_environ_str}python -m kwcoco union
             '''),
-        in_paths=_dev({
+        in_paths=_justkeys({
             'src': aligned_fpaths,
         }),
         out_paths={
             'dst': aligned_final_fpath,
         },
+        group_dname=aligned_bundle_name,
     )
     for node in union_depends_nodes:
         node.outputs['dst'].connect(union_node.inputs['src'])
@@ -792,12 +799,24 @@ def main(cmdline=False, **kwargs):
     queue = config.create_queue(environ=environ)
 
     new_pipeline.build_nx_graphs()
-    new_pipeline.configure()
+
+    # new_pipeline.inspect_configurables()
+    rich.print('pipe_config = {}'.format(ub.urepr(pipe_config, nl=1)))
+
+    new_pipeline.configure(
+        config=pipe_config,
+        root_dpath=out_dpath,
+        cache=config.cache
+    )
+
+    new_pipeline.inspect_configurables()
+    new_pipeline.print_graphs()
+
     new_pipeline.submit_jobs(
         queue, skip_existing=config.skip_existing,
         enable_links=False,
-        write_configs=False,
-        write_invocations=False,
+        write_configs=1,
+        write_invocations=1,
     )
 
     # queue.print_graph()
@@ -835,10 +854,7 @@ def main(cmdline=False, **kwargs):
         */*.json
         ''')
 
-    new_pipeline.print_graphs()
-
     config.run_queue(queue, system=True)
-
     # if config.rprint:
     #     queue.print_graph()
     #     queue.rprint()
