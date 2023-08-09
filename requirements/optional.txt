@@ -17,3 +17,12 @@ humanize >= 4.4.0
 # Nicer CLIs
 rich_argparse>=1.1.0; python_version >= '3.7'
 argcomplete>=3.0.5
+
+
+Levenshtein>=0.20.8    ; python_version < '4.0'  and python_version >= '3.11'    # Python 3.11+
+Levenshtein>=0.16.0    ; python_version < '3.11' and python_version >= '3.10'    # Python 3.10
+Levenshtein>=0.12.0    ; python_version < '3.10' and python_version >= '3.9'     # Python 3.9
+Levenshtein>=0.12.0    ; python_version < '3.9'  and python_version >= '3.8'     # Python 3.8
+Levenshtein>=0.12.0    ; python_version < '3.8'  and python_version >= '3.7'     # Python 3.7
+Levenshtein>=0.12.0    ; python_version < '3.7'  and python_version >= '3.6'     # Python 3.6
+Levenshtein>=0.12.0    ; python_version < '3.6'  and python_version >= '3.5'     # Python 3.5

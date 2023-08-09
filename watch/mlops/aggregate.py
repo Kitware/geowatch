@@ -374,6 +374,19 @@ def build_all_param_plots(agg, rois, config):
     # agg = plotter.agg
     agg_group_dpath = (agg.output_dpath / ('all_params' + ub.timestamp())).ensuredir()
 
+    USE_EFFECTIVE = 1
+    if USE_EFFECTIVE:
+        # Relabel the resolved params to use the "effective-params"
+        # instead.
+        print(f'agg.mappings={agg.mappings}')
+        for col, lut in agg.mappings.items():
+            resolved_col = 'resolved_' + col
+            for c in [col, resolved_col]:
+                for table in [macro_table, single_table]:
+                    if table is not None:
+                        new = table[resolved_col].apply(lambda x: lut.get(x, x))
+                        table[resolved_col] = new
+
     plotter = ParamPlotter(agg)
 
     plotter.agg_group_dpath = agg_group_dpath
@@ -671,12 +684,20 @@ class ParamPlotter:
             chosen_params = params_of_interest
 
             valid_params_of_interest = list(resolved_params.columns.intersection(params_of_interest))
-            missing = set(params_of_interest) - set(valid_params_of_interest)
+            missing = sorted(set(params_of_interest) - set(valid_params_of_interest))
             chosen_params = valid_params_of_interest
             if missing:
                 rich.print('[yellow]WARNING: unknown params of interest!')
                 rich.print('missing: {}'.format(ub.repr2(missing)))
                 print('chosen_params = {}'.format(ub.urepr(chosen_params, nl=1)))
+
+                try:
+                    distances = np.array(edit_distance(missing, resolved_params.columns))
+                    for got, dists in zip(missing, distances):
+                        alternative = resolved_params.columns[dists.argmin()]
+                        rich.print(f'[yellow] Got: {got}. Did you mean {alternative}?')
+                except ImportError:
+                    ...
 
         # TODO: cleanup logic
         DO_STAT_ANALYSIS = plotter.plot_config.get('stats_ranking', False)
@@ -1643,10 +1664,11 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
 
         # util_pandas.pandas_suffix_columns(agg.resolved_params, _testdset_suffixes)
 
-        effective_params, mappings, hashid_to_params = agg.build_effective_params()
-        agg.hashid_to_params = ub.udict(hashid_to_params)
-        agg.mappings = mappings
-        agg.effective_params = effective_params
+        agg.build_effective_params()
+        # effective_params, mappings, hashid_to_params = agg.build_effective_params()
+        # agg.hashid_to_params = ub.udict(hashid_to_params)
+        # agg.mappings = mappings
+        # agg.effective_params = effective_params
 
         agg.macro_key_to_regions = {}
         agg.region_to_tables = {}
@@ -1847,7 +1869,11 @@ class Aggregator(ub.NiceRepr, AggregatorAnalysisMixin):
         # Update the index with an effective parameter hashid
         agg.index.loc[hashids_v1.index, 'param_hashid'] = hashids_v1
         agg.table.loc[hashids_v1.index, 'param_hashid'] = hashids_v1
-        return effective_params, mappings, hashid_to_params
+
+        agg.hashid_to_params = ub.udict(hashid_to_params)
+        agg.mappings = mappings
+        agg.effective_params = effective_params
+        # return effective_params, mappings, hashid_to_params
 
     def find_macro_comparable(agg, verbose=0):
         """
@@ -2272,6 +2298,52 @@ def nan_eq(a, b):
         return True
     else:
         return a == b
+
+
+def edit_distance(string1, string2):
+    """
+    Edit distance algorithm. String1 and string2 can be either
+    strings or lists of strings
+
+    Args:
+        string1 (str | List[str]):
+        string2 (str | List[str]):
+
+    Requirements:
+        pip install python-Levenshtein
+
+    Returns:
+        float | List[float] | List[List[float]]
+
+    Example:
+        >>> # xdoctest: +REQUIRES(module:Levenshtein)
+        >>> string1 = 'hello world'
+        >>> string2 = ['goodbye world', 'rofl', 'hello', 'world', 'lowo']
+        >>> edit_distance(['hello', 'one'], ['goodbye', 'two'])
+        >>> edit_distance('hello', ['goodbye', 'two'])
+        >>> edit_distance(['hello', 'one'], 'goodbye')
+        >>> edit_distance('hello', 'goodbye')
+        >>> distmat = edit_distance(string1, string2)
+        >>> result = ('distmat = %s' % (ub.repr2(distmat),))
+        >>> print(result)
+        >>> [7, 9, 6, 6, 7]
+    """
+
+    import Levenshtein
+    isiter1 = ub.iterable(string1)
+    isiter2 = ub.iterable(string2)
+    strs1 = string1 if isiter1 else [string1]
+    strs2 = string2 if isiter2 else [string2]
+    distmat = [
+        [Levenshtein.distance(str1, str2) for str2 in strs2]
+        for str1 in strs1
+    ]
+    # broadcast
+    if not isiter2:
+        distmat = [row[0] for row in distmat]
+    if not isiter1:
+        distmat = distmat[0]
+    return distmat
 
 
 __config__ = AggregateEvluationConfig

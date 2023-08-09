@@ -268,12 +268,12 @@ python -m watch.mlops.aggregate \
     " \
     --plot_params="
         enabled: 1
-        stats_ranking: 1
+        stats_ranking: 0
         min_variations: 1
         params_of_interest:
-            - params.bas_poly.time_thresh
-            - params.bas_poly.thresh
-            - params.bas_pxl.package_fpath
+            - resolved_params.bas_poly.time_thresh
+            - resolved_params.bas_poly.thresh
+            - resolved_params.bas_pxl.package_fpath
     " \
     --stdout_report="
         top_k: 13
