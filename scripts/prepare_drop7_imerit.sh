@@ -267,7 +267,7 @@ python -m watch.mlops.aggregate \
         - bas_pxl_eval
     " \
     --plot_params="
-        enabled: 1
+        enabled: 0
         stats_ranking: 0
         min_variations: 1
         params_of_interest:

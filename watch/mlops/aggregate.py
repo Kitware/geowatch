@@ -1283,7 +1283,20 @@ class AggregatorAnalysisMixin:
                         _summary_table = _summary_table.safe_drop(['fpath'], axis=1)
                         _summary_table_csv = _summary_table_csv.safe_drop(['fpath'], axis=1)
 
-                    rich.print(_summary_table.iloc[::-1].to_string(index=False))
+                    text = _summary_table.iloc[::-1].to_string(index=False)
+
+                    RICH_LINKS = 1
+                    if RICH_LINKS:
+                        # Make the param hashids link to their directory
+                        lut = summary_table.set_index('param_hashid')
+                        if 'fpath' in lut.columns:
+                            for param_hashid in _summary_table['param_hashid']:
+                                fpath = ub.Path(lut.loc[param_hashid]['fpath'])
+                                if fpath.exists():
+                                    text = text.replace(param_hashid, f'[link={fpath.parent}]{param_hashid}[/link]')
+
+                    rich.print(text)
+
                     if show_csv:
                         print(ub.paragraph(
                             '''
