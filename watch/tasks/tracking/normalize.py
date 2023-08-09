@@ -495,7 +495,7 @@ def normalize_phases(coco_dset,
     return coco_dset
 
 
-def normalize_sensors(coco_dset):
+def normalize_sensors(coco_dset, sensor_warnings=True):
     """
     Convert internal representations of sensors to their IARPA standards
     """
@@ -511,9 +511,10 @@ def normalize_sensors(coco_dset):
         except KeyError:
             sensor = img.get('sensor_coarse', None)
             # name = img.get('name', img['file_name'])
-            import warnings
-            warnings.warn(
-                f'image has unknown sensor {sensor} in tag={coco_dset.tag}')
+            if sensor_warnings:
+                import warnings
+                warnings.warn(
+                    f'image has unknown sensor {sensor} in tag={coco_dset.tag}')
 
     return coco_dset
 
@@ -591,12 +592,13 @@ def dedupe_dates(coco_dset):
 
 
 @profile
-def normalize(
+def run_tracking_pipeline(
         coco_dset,
         track_fn,
         gt_dset=None,
         viz_out_dir=None,
         use_viterbi=False,
+        sensor_warnings=True,
         # t_probs=None,  # for viterbi
         # e_probs=None,  # for viterbi
         **track_kwargs):
@@ -646,7 +648,7 @@ def normalize(
         >>> coco_dset = normalize_phases(coco_dset, baseline_keys={'change'})
         >>> assert (coco_dset.annots().cnames ==
         >>> ['Site Preparation', 'Site Preparation', 'Post Construction'])
-        >>> coco_dset = normalize_sensors(coco_dset)
+        >>> coco_dset = normalize_sensors(coco_dset, sensor_warnings=False)
         >>> assert (coco_dset.images().get('sensor_coarse') ==
         >>>     ['WorldView', 'Sentinel-2', 'Landsat 8'])
     """
@@ -741,7 +743,7 @@ def normalize(
     if DEBUG_JSON_SERIALIZABLE:
         debug_json_unserializable(out_dset.dataset, 'After normalize_phases: ')
 
-    out_dset = normalize_sensors(out_dset)
+    out_dset = normalize_sensors(out_dset, sensor_warnings=sensor_warnings)
 
     # HACK, ensure out_dset.index is up to date
     out_dset._build_index()
@@ -767,5 +769,5 @@ def normalize(
 
 
 # Note: smooth transition while changing the name of "normalize"
-# Make a long search replacable name that we can fix later.
-run_tracking_pipeline = normalize
+# Backwards compatability:
+normalize = run_tracking_pipeline

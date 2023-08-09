@@ -198,6 +198,8 @@ class KWCocoToGeoJSONConfig(scfg.DataConfig):
     #         (as specified in the site summary) will be removed.
     #         '''), group='behavior')
 
+    sensor_warnings = scfg.Value(True, help='if False, disable sensor warnings')
+
 
 __config__ = KWCocoToGeoJSONConfig
 
@@ -648,7 +650,9 @@ def convert_kwcoco_to_iarpa(coco_dset,
         >>> from watch.tasks.tracking.from_polygon import MonoTrack
         >>> import ubelt as ub
         >>> coco_dset = watch.coerce_kwcoco('watch-msi', heatmap=True, geodata=True, dates=True)
-        >>> coco_dset = run_tracking_pipeline(coco_dset, track_fn=MonoTrack, overwrite=False)
+        >>> coco_dset = run_tracking_pipeline(
+        >>>     coco_dset, track_fn=MonoTrack, overwrite=False,
+        >>>     sensor_warnings=False)
         >>> videos = coco_dset.videos()
         >>> videos.set('name', ['DM_R{:03d}'.format(vidid) for vidid in videos])
         >>> sites = convert_kwcoco_to_iarpa(coco_dset)
@@ -1006,6 +1010,7 @@ def main(argv=None, **kwargs):
         >>>     '--out_site_summaries_fpath',  str(bas_fpath),
         >>>     '--out_kwcoco', str(bas_coco_fpath),
         >>>     '--track_fn', 'saliency_heatmaps',
+        >>>     '--sensor_warnings', 'False',
         >>>     '--track_kwargs', json.dumps({
         >>>        'thresh': 1e-9, 'min_area_square_meters': None,
         >>>        'max_area_square_meters': None,
@@ -1021,6 +1026,7 @@ def main(argv=None, **kwargs):
         >>>     '--out_kwcoco', str(sc_coco_fpath),
         >>>     '--track_fn', 'class_heatmaps',
         >>>     '--site_summary', str(bas_fpath),
+        >>>     '--sensor_warnings', 'False',
         >>>     '--track_kwargs', json.dumps(
         >>>         {'thresh': 1e-9, 'min_area_square_meters': None, 'max_area_square_meters': None,
         >>>          'polygon_simplify_tolerance': 1, 'key': 'salient'}),
@@ -1074,6 +1080,7 @@ def main(argv=None, **kwargs):
         >>>     'out_kwcoco': str(out_fpath),
         >>>     'track_fn': 'saliency_heatmaps',
         >>>     'track_kwargs': track_kwargs,
+        >>>     'sensor_warnings': False,
         >>> }
         >>> argv = []
         >>> # Test case for no results
@@ -1094,6 +1101,7 @@ def main(argv=None, **kwargs):
         >>>     'out_kwcoco': str(out_fpath),
         >>>     'track_fn': 'saliency_heatmaps',
         >>>     'track_kwargs': track_kwargs,
+        >>>     'sensor_warnings': False,
         >>> }
         >>> argv = []
         >>> main(argv=argv, **kwargs)
@@ -1299,7 +1307,8 @@ def main(argv=None, **kwargs):
     """
     coco_dset = watch.tasks.tracking.normalize.run_tracking_pipeline(
         coco_dset, track_fn=track_fn, gt_dset=gt_dset,
-        viz_out_dir=args.viz_out_dir, **track_kwargs)
+        viz_out_dir=args.viz_out_dir, sensor_warnings=args.sensor_warnings,
+        **track_kwargs)
 
     if boundary_regions_gdf is not None:
         print('Cropping to boundary regions')
