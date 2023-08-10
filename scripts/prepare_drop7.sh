@@ -375,6 +375,59 @@ redo_cold_transfer(){
         --run=1
 }
 
+# Reproject annotations onto time averaged BAS data
+DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
+DST_BUNDLE_DPATH=$DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD
+REGION_IDS=(KR_R001 KR_R002 AE_R001 PE_R001 US_R007 BH_R001 BR_R001 BR_R002 BR_R004 BR_R005 CH_R001 LT_R001 NZ_R001 US_C010 US_C011 US_C012 US_C016 US_R001 US_R004 US_R005 US_R006)
+#
+ANN_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='ssd')
+python -m cmd_queue new "reproject_queue"
+for REGION_ID in "${REGION_IDS[@]}"; do
+    echo "REGION_ID = $REGION_ID"
+done
+for REGION_ID in "${REGION_IDS[@]}"; do
+    SRC_GLOB_FPATH="$DST_BUNDLE_DPATH/combo_imganns-${REGION_ID}_*.kwcoco.zip"
+    for SRC_FPATH in $SRC_GLOB_FPATH; do
+        if test -f "$SRC_FPATH"; then
+            HASHID=$(echo "$SRC_FPATH" | sha256sum | cut -c1-8)
+            python -m cmd_queue submit --jobname="reproject-$REGION_ID-$HASHID" -- reproject_queue \
+                geowatch reproject_annotations \
+                    --src="$SRC_FPATH"  \
+                    --inplace \
+                    --io_workers="avail/6" \
+                    --region_models="$ANN_DATA_DPATH/annotations/drop6_hard_v1/region_models/${REGION_ID}.geojson" \
+                    --site_models="$ANN_DATA_DPATH/annotations/drop6_hard_v1/site_models/${REGION_ID}_*.geojson"
+       fi
+    done
+    SRC_GLOB_FPATH="$DST_BUNDLE_DPATH/imganns-${REGION_ID}.kwcoco.zip"
+    for SRC_FPATH in $SRC_GLOB_FPATH; do
+        if test -f "$SRC_FPATH"; then
+            HASHID=$(echo "$SRC_FPATH" | sha256sum | cut -c1-8)
+            python -m cmd_queue submit --jobname="reproject-$REGION_ID-$HASHID" -- reproject_queue \
+                geowatch reproject_annotations \
+                    --src="$SRC_FPATH"  \
+                    --inplace \
+                    --io_workers="avail/6" \
+                    --region_models="$ANN_DATA_DPATH/annotations/drop6_hard_v1/region_models/${REGION_ID}.geojson" \
+                    --site_models="$ANN_DATA_DPATH/annotations/drop6_hard_v1/site_models/${REGION_ID}_*.geojson"
+       fi
+    done
+done
+python -m cmd_queue show "reproject_queue"
+python -m cmd_queue run --workers=8 "reproject_queue"
+
+python -c "if 1:
+    import simple_dvc
+    dvc = simple_dvc.SimpleDVC.coerce('.')
+    bundle_dpath = dvc.dpath / 'Drop7-MedianNoWinter10GSD'
+    to_update = [str(p)[:-4] for p in list(dvc.find_sidecar_paths_in_dpath(bundle_dpath)) if 'kwcoco' in str(p)]
+    dvc.add(to_update, verbose=3)
+    dvc.git_commitpush(message='update annotations')
+    dvc.push(to_update, verbose=3)
+"
+
+geowatch imganns-KR_R001.kwcoco.zip --smart
+
 
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
