@@ -230,9 +230,6 @@ def prep_feats(cmdline=True, **kwargs):
     else:
         expt_dvc_dpath = ub.Path(config['expt_dvc_dpath'])
 
-    # from watch.mlops.old import pipeline_v1
-    # pipeline = pipeline_v1.Pipeline()
-
     blocklist = [
         '_dzyne_landcover',
         '_uky_invariants',

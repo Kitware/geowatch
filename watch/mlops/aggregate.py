@@ -1094,8 +1094,8 @@ class AggregatorAnalysisMixin:
 
         Note:
             Results are chosen per-region independently. To get comparable
-            results for a specific set of parameters, filter to them and then
-            report the top results for that filtering.
+            results for a specific set of parameters choose a
+            ``reference_region``, which could be a macro region.
 
         Args:
             top_k (int): number of top results for each region

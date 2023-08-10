@@ -15,6 +15,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Removed:
 * Removed `separate_region_queues` `separate_align_jobs` options from `prepare-ta2-dataset`, they are now always True.
+* Removed old `watch.tasks.fusion.organize` module
+* Removed old `watch.tasks.fusion.aggregate_results` module
+* Removed old `watch.mlops.old` module, which included the old pipeline
 
 
 ## Version 0.8.2 - Target 2023-07-xx

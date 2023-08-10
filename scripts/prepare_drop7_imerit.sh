@@ -205,7 +205,8 @@ geowatch schedule --params="
         bas_pxl.time_span: auto
         bas_pxl.time_sampling: soft4
         bas_poly.thresh:
-            #- 0.3
+            - 0.2
+            - 0.25
             - 0.3
             - 0.325
             - 0.35
@@ -214,8 +215,8 @@ geowatch schedule --params="
             - 0.4
             - 0.4125
             - 0.425
-            #- 0.435
-            #- 0.45
+            - 0.435
+            - 0.45
             #- 0.5
         bas_poly.inner_window_size: 1y
         bas_poly.inner_agg_fn: mean
@@ -227,10 +228,12 @@ geowatch schedule --params="
             - 0.925
             - 0.9
             - 0.85
+            - 0.825
             - 0.8
+            - 0.775
             - 0.75
             - 0.7
-            #- 0.6
+            - 0.6
         bas_poly.resolution: 10GSD
         bas_poly.moving_window_size: null
         bas_poly.poly_merge_method: 'v2'
@@ -247,7 +250,7 @@ geowatch schedule --params="
     " \
     --root_dpath="$TEST_DPATH" \
     --devices="0,1" --tmux_workers=2 \
-    --backend=serial \
+    --backend=tmux \
     --pipeline=bas \
     --skip_existing=1 \
     --run=1
