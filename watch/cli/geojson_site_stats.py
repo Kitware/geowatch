@@ -169,7 +169,7 @@ def main(cmdline=1, **kwargs):
 
             new_sitesums = pd.DataFrame(new_rows)
             print('Site Summaries:')
-            rich.print(new_sitesums)
+            rich.print(new_sitesums.to_string())
 
             status_summaries = []
             for status, group in display_summary.groupby('status'):

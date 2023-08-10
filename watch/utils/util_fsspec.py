@@ -399,8 +399,8 @@ class FSPath(str):
                 types.append('F')
             if isdir:
                 if colors:
-                    scolor = '[blue]'
-                    tcolor = '[/blue]'
+                    scolor = f'[blue][link={p.absolute()}]'
+                    tcolor = '[/link][/blue]'
                 types.append('D')
 
             if islink:

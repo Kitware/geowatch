@@ -92,11 +92,11 @@ class Pipeline:
         if self._dirty:
             self.build_nx_graphs()
 
-    def submit(self, command, **kwargs):
+    def submit(self, executable, **kwargs):
         """
         Dynamically create a new unique process node and add it to the dag
         """
-        task = ProcessNode(command=command, **kwargs)
+        task = ProcessNode(executable=executable, **kwargs)
         self.nodes.append(task)
         self._dirty = True
         return task
@@ -125,30 +125,31 @@ class Pipeline:
         for name, node in node_dict.items():
             self.proc_graph.add_node(node.name, node=node)
 
-            # for s in node.succ:
             for s in node.successor_process_nodes():
                 self.proc_graph.add_edge(node.name, s.name)
 
-            # for p in node.pred:
             for p in node.predecessor_process_nodes():
                 self.proc_graph.add_edge(p.name, node.name)
 
         self.io_graph = nx.DiGraph()
+
+        # Add nodes first
         for name, node in node_dict.items():
-            self.io_graph.add_node(node.key, node=node)
-
+            self.io_graph.add_node(node.key, node=node, node_clsname=node.__class__.__name__)
             for iname, inode in node.inputs.items():
-                self.io_graph.add_node(inode.key, node=inode)
-                self.io_graph.add_edge(inode.key, node.key)
+                self.io_graph.add_node(inode.key, node=inode, node_clsname=inode.__class__.__name__)
+            for oname, onode in node.outputs.items():
+                self.io_graph.add_node(onode.key, node=onode, node_clsname=onode.__class__.__name__)
 
+        # Next add edges
+        for name, node in node_dict.items():
+            for iname, inode in node.inputs.items():
+                self.io_graph.add_edge(inode.key, node.key)
                 # Account for input/input connections
                 for succ in inode.succ:
                     self.io_graph.add_edge(inode.key, succ.key)
-
             for oname, onode in node.outputs.items():
-                self.io_graph.add_node(onode.key, node=onode)
                 self.io_graph.add_edge(node.key, onode.key)
-
                 for oi_node in onode.succ:
                     self.io_graph.add_edge(onode.key, oi_node.key)
 
@@ -165,6 +166,11 @@ class Pipeline:
             that are required / suggested / unnecessary. For now it gives a
             little bit of that information, but more work could be done to make
             it nicer.
+
+        Example:
+            >>> from watch.mlops.pipeline_nodes import *  # NOQA
+            >>> self: Pipeline = demodata_pipeline()
+            >>> self.inspect_configurables()
         """
         # Nodes don't always have full knowledge of their entire parameter
         # space, but they should at least have some knowledge of it.
@@ -233,6 +239,11 @@ class Pipeline:
     def configure(self, config=None, root_dpath=None, cache=True):
         """
         Update the DAG configuration
+
+        Example:
+            >>> from watch.mlops.pipeline_nodes import *  # NOQA
+            >>> self: Pipeline = demodata_pipeline()
+            >>> self.configure()
         """
         self._ensure_clean()
 
@@ -257,38 +268,66 @@ class Pipeline:
                 node_config = dict(dotconfig.prefix_get(node.name, {}))
                 node.configure(node_config, cache=cache)
 
-    def print_graphs(self):
+    def print_graphs(self, shrink_labels=1, smart_colors=0):
         """
         Prints the Process and IO graph for the DAG.
         """
         self._ensure_clean()
 
-        def labelize_graph(graph):
+        colors = ['bright_magenta', 'yellow', 'cyan']
+        unused_colors = colors.copy()
+        clsname_to_color = {
+            'ProcessNode': 'yellow',
+            'InputNode': 'bright_cyan',
+            'OutputNode': 'bright_yellow',
+
+        }
+
+        def labelize_graph(graph, color_procs=0):
             # # self.io_graph.add_node(name + '.proc', node=node)
             all_names = []
             for _, data in graph.nodes(data=True):
                 all_names.append(data['node'].name)
 
-            ambiguous_names = list(ub.find_duplicates(all_names))
+            if shrink_labels:
+                ambiguous_names = list(ub.find_duplicates(all_names))
+
             for _, data in graph.nodes(data=True):
 
-                if data['node'].name in ambiguous_names:
-                    data['label'] = data['node'].key
+                if shrink_labels:
+                    if data['node'].name in ambiguous_names:
+                        data['label'] = data['node'].key
+                    else:
+                        data['label'] = data['node'].name
                 else:
-                    data['label'] = data['node'].name
+                    data['label'] = data['node'].key
 
-                # SMART specific hack: remove later
-                if 'bas' in data['label']:
-                    data['label'] = '[yellow]' + data['label']
-                elif 'sc' in data['label']:
-                    data['label'] = '[cyan]' + data['label']
-                elif 'crop' in data['label']:
-                    data['label'] = '[white]' + data['label']
-                elif 'building' in data['label']:
-                    data['label'] = '[bright_magenta]' + data['label']
-                elif 'sv' in data['label']:
-                    data['label'] = '[bright_magenta]' + data['label']
-        labelize_graph(self.io_graph)
+                if color_procs:
+                    clsname = data.get('node_clsname')
+                    if clsname not in clsname_to_color:
+                        if unused_colors:
+                            color = unused_colors.pop()
+                        else:
+                            color = None
+                        clsname_to_color[clsname] = color
+                    color = clsname_to_color[clsname]
+                    if color is not None:
+                        label = data['label']
+                        data['label'] = f'[{color}]{label}[/{color}]'
+
+                elif smart_colors:
+                    # SMART specific hack: remove later
+                    if 'bas' in data['label']:
+                        data['label'] = '[yellow]' + data['label']
+                    elif 'sc' in data['label']:
+                        data['label'] = '[cyan]' + data['label']
+                    elif 'crop' in data['label']:
+                        data['label'] = '[white]' + data['label']
+                    elif 'building' in data['label']:
+                        data['label'] = '[bright_magenta]' + data['label']
+                    elif 'sv' in data['label']:
+                        data['label'] = '[bright_magenta]' + data['label']
+        labelize_graph(self.io_graph, color_procs=True)
         labelize_graph(self.proc_graph)
 
         import rich
@@ -331,7 +370,15 @@ class Pipeline:
 
         node_order = list(nx.topological_sort(self.proc_graph))
         for node_name in node_order:
-            node = self.proc_graph.nodes[node_name]['node']
+            node_data = self.proc_graph.nodes[node_name]
+            try:
+                node = node_data['node']
+            except KeyError:
+                import rich
+                rich.print('[red]ERROR')
+                print('node_name = {}'.format(ub.urepr(node_name, nl=1)))
+                print('node_data = {}'.format(ub.urepr(node_data, nl=1)))
+                raise
             node.will_exist = None
 
         summary = {
@@ -865,8 +912,14 @@ class ProcessNode(Node):
                  _overwrite_node_dpath=None,  # overwrites the configured node dpath
                  _overwrite_group_dpath=None,  # overwrites the configured group dpath
                  _no_outarg=False,
+                 _no_inarg=False,
                  **aliases):
         if aliases:
+            if 'perf_config' in aliases:
+                raise ValueError('You probably meant perf_params')
+            if 'algo_config' in aliases:
+                raise ValueError('You probably meant algo_params')
+
             if 'command' in aliases:
                 executable = aliases['command']
 
@@ -918,6 +971,7 @@ class ProcessNode(Node):
         self.enabled = True
         self.cache = True
         self._no_outarg = _no_outarg
+        self._no_inarg = _no_inarg
 
         # TODO: make specifying these overloads more natural
         # Basically: use templates unless the user gives these
@@ -1010,7 +1064,8 @@ class ProcessNode(Node):
         It is more of a "finalized" requested config.
         """
         final_config = self.config.copy()
-        final_config.update(self.final_in_paths)
+        if not self._no_inarg:
+            final_config.update(self.final_in_paths)
         if not self._no_outarg:
             # Hacky option, improve the API to make this not necessary
             # when the full command is given and we dont need to
@@ -1078,7 +1133,10 @@ class ProcessNode(Node):
         # input paths being in the final algo config? If not we should
         # probably remove it.
 
-        unconnected_in_paths = ub.udict(self.final_in_paths) & unconnected_inputs
+        if self._no_inarg:
+            unconnected_in_paths = ub.udict({})
+        else:
+            unconnected_in_paths = ub.udict(self.final_in_paths) & unconnected_inputs
         final_algo_config = (self.config - self.non_algo_keys) | unconnected_in_paths
 
         if isinstance(self.algo_params, dict):
@@ -1210,6 +1268,27 @@ class ProcessNode(Node):
             if node_id not in seen:
                 seen[node_id] = node
                 nodes = node.predecessor_process_nodes()
+                stack.extend(nodes)
+        seen.pop(id(self))  # remove self
+        ancestors = list(seen.values())
+        return ancestors
+
+    def _uncached_ancestor_process_nodes(self):
+        # Not sure why the cached version of this is not working
+        # in prepare-ta2-dataset. Hack around it for now.
+        # TODO: we need to ensure that this returns a consistent order
+        seen = {}
+        stack = [self]
+        while stack:
+            node = stack.pop()
+            node_id = id(node)
+            if node_id not in seen:
+                seen[node_id] = node
+                nodes = [
+                    pred.parent for k, v in node.inputs.items()
+                    for pred in v.pred
+                ]
+                # nodes = node.predecessor_process_nodes()
                 stack.extend(nodes)
         seen.pop(id(self))  # remove self
         ancestors = list(seen.values())
@@ -1508,14 +1587,14 @@ def _fixup_config_serializability(config):
     return fixed_config
 
 
-def demo_pipeline():
+def demodata_pipeline():
     """
     A simple test pipeline.
 
     Example:
         >>> # Self test
         >>> from watch.mlops.pipeline_nodes import *  # NOQA
-        >>> demo_pipeline()
+        >>> demodata_pipeline()
     """
     dpath = ub.Path.appdir('watch/tests/mlops/pipeline').ensuredir()
     dpath.delete().ensuredir()
@@ -1665,6 +1744,20 @@ def demo_pipeline():
         'node_A2.dst': dpath / 'DST_OVERRIDE',
         'node_C1.perf_param3': 'GOFAST',
     }, root_dpath=runs_dpath, cache=False)
+
+    return dag
+
+
+def demo_pipeline():
+    """
+    A simple test pipeline.
+
+    Example:
+        >>> # Self test
+        >>> from watch.mlops.pipeline_nodes import *  # NOQA
+        >>> demo_pipeline()
+    """
+    dag = demodata_pipeline()
 
     dag.print_graphs()
     dag.inspect_configurables()

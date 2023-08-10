@@ -798,101 +798,105 @@ class ResultAnalysis(ub.NiceRepr):
         stats_row["anova_mean_p"] = anova_1way_result.pvalue
         stats_row["moments"] = moments
 
-        pair_stats_list = []
-        for pair in value_pairs:
-            pair_stats = {}
-            param_val1, param_val2 = pair
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', 'divide by zero', category=RuntimeWarning)
+            warnings.filterwarnings('ignore', 'invalid value', category=RuntimeWarning)
 
-            metric_vals1 = value_to_metric[param_val1]
-            metric_vals2 = value_to_metric[param_val2]
+            pair_stats_list = []
+            for pair in value_pairs:
+                pair_stats = {}
+                param_val1, param_val2 = pair
 
-            rank1 = param_to_rank[param_val1]
-            rank2 = param_to_rank[param_val2]
-            pair_stats["winner"] = param_val1 if rank1 < rank2 else param_val2
-            pair_stats["value1"] = param_val1
-            pair_stats["value2"] = param_val2
-            pair_stats["n1"] = len(metric_vals1)
-            pair_stats["n2"] = len(metric_vals2)
+                metric_vals1 = value_to_metric[param_val1]
+                metric_vals2 = value_to_metric[param_val2]
 
-            TEST_ONLY_FOR_DIFFERENCE = True
-            if TEST_ONLY_FOR_DIFFERENCE:
-                if ascending:
-                    # We want to minimize the metric
-                    alternative = "less" if rank1 < rank2 else "greater"
+                rank1 = param_to_rank[param_val1]
+                rank2 = param_to_rank[param_val2]
+                pair_stats["winner"] = param_val1 if rank1 < rank2 else param_val2
+                pair_stats["value1"] = param_val1
+                pair_stats["value2"] = param_val2
+                pair_stats["n1"] = len(metric_vals1)
+                pair_stats["n2"] = len(metric_vals2)
+
+                TEST_ONLY_FOR_DIFFERENCE = True
+                if TEST_ONLY_FOR_DIFFERENCE:
+                    if ascending:
+                        # We want to minimize the metric
+                        alternative = "less" if rank1 < rank2 else "greater"
+                    else:
+                        # We want to maximize the metric
+                        alternative = "greater" if rank1 < rank2 else "less"
                 else:
-                    # We want to maximize the metric
-                    alternative = "greater" if rank1 < rank2 else "less"
-            else:
-                alternative = "two-sided"
+                    alternative = "two-sided"
 
-            ind_kw = dict(
-                equal_var=False,
-                alternative=alternative,
-            )
-            with warnings.catch_warnings():
-                warnings.filterwarnings('ignore', 'Degrees of freedom', category=RuntimeWarning)
-                warnings.filterwarnings('ignore', 'invalid value', category=RuntimeWarning)
-                ttest_ind_result = scipy.stats.ttest_ind(
-                    metric_vals1, metric_vals2, **ind_kw
+                ind_kw = dict(
+                    equal_var=False,
+                    alternative=alternative,
                 )
+                with warnings.catch_warnings():
+                    warnings.filterwarnings('ignore', 'Degrees of freedom', category=RuntimeWarning)
+                    warnings.filterwarnings('ignore', 'invalid value', category=RuntimeWarning)
+                    ttest_ind_result = scipy.stats.ttest_ind(
+                        metric_vals1, metric_vals2, **ind_kw
+                    )
 
-            if 0:
-                from benchmarker.benchmarker import stats_dict
+                if 0:
+                    from benchmarker.benchmarker import stats_dict
 
-                stats1 = stats_dict(metric_vals1)
-                stats2 = stats_dict(metric_vals2)
-                scipy.stats.ttest_ind_from_stats(
-                    stats1["mean"],
-                    stats1["std"],
-                    stats1["nobs"],
-                    stats2["mean"],
-                    stats2["std"],
-                    stats2["nobs"],
-                    **ind_kw,
-                )
-                # metric_vals1, metric_vals2, equal_var=False)
+                    stats1 = stats_dict(metric_vals1)
+                    stats2 = stats_dict(metric_vals2)
+                    scipy.stats.ttest_ind_from_stats(
+                        stats1["mean"],
+                        stats1["std"],
+                        stats1["nobs"],
+                        stats2["mean"],
+                        stats2["std"],
+                        stats2["nobs"],
+                        **ind_kw,
+                    )
+                    # metric_vals1, metric_vals2, equal_var=False)
 
-            scipy.stats.ttest_ind_from_stats
+                scipy.stats.ttest_ind_from_stats
 
-            pair_stats["ttest_ind"] = ttest_ind_result
+                pair_stats["ttest_ind"] = ttest_ind_result
 
-            # Do relative checks, need to find comparable subgroups
-            metric_group1 = value_to_metric_group[param_val1]
-            metric_group2 = value_to_metric_group[param_val2]
-            if nuisance_cols:
-                nuisance_vals1 = metric_group1[nuisance_cols]
-                nuisance_vals2 = metric_group2[nuisance_cols]
-                nk_to_group1 = dict(list(fix_groupby(nuisance_vals1.groupby(nuisance_cols))))
-                nk_to_group2 = dict(list(fix_groupby(nuisance_vals2.groupby(nuisance_cols))))
-            else:
-                nk_to_group1 = {None: metric_group1}
-                nk_to_group2 = {None: metric_group2}
-            common = set(nk_to_group1.keys()) & set(nk_to_group2.keys())
-            comparable_indexes1 = []
-            comparable_indexes2 = []
-            if common:
-                for nk in common:
-                    group1 = nk_to_group1[nk]
-                    group2 = nk_to_group2[nk]
-                    # TODO: Not sure if taking the product of everything within
-                    # the comparable group is correct or not. I think it is ok.
-                    # TODO: randomly take these if there are too many
-                    for i, j in it.product(group1.index, group2.index):
-                        comparable_indexes1.append(i)
-                        comparable_indexes2.append(j)
+                # Do relative checks, need to find comparable subgroups
+                metric_group1 = value_to_metric_group[param_val1]
+                metric_group2 = value_to_metric_group[param_val2]
+                if nuisance_cols:
+                    nuisance_vals1 = metric_group1[nuisance_cols]
+                    nuisance_vals2 = metric_group2[nuisance_cols]
+                    nk_to_group1 = dict(list(fix_groupby(nuisance_vals1.groupby(nuisance_cols))))
+                    nk_to_group2 = dict(list(fix_groupby(nuisance_vals2.groupby(nuisance_cols))))
+                else:
+                    nk_to_group1 = {None: metric_group1}
+                    nk_to_group2 = {None: metric_group2}
+                common = set(nk_to_group1.keys()) & set(nk_to_group2.keys())
+                comparable_indexes1 = []
+                comparable_indexes2 = []
+                if common:
+                    for nk in common:
+                        group1 = nk_to_group1[nk]
+                        group2 = nk_to_group2[nk]
+                        # TODO: Not sure if taking the product of everything within
+                        # the comparable group is correct or not. I think it is ok.
+                        # TODO: randomly take these if there are too many
+                        for i, j in it.product(group1.index, group2.index):
+                            comparable_indexes1.append(i)
+                            comparable_indexes2.append(j)
 
-                comparable_groups1 = metric_group1.loc[comparable_indexes1, metric_key]
-                comparable_groups2 = metric_group2.loc[comparable_indexes2, metric_key]
+                    comparable_groups1 = metric_group1.loc[comparable_indexes1, metric_key]
+                    comparable_groups2 = metric_group2.loc[comparable_indexes2, metric_key]
 
-                # Does this need to have the values aligned?
-                # I think that is the case giving my understanding of paired
-                # t-tests, but the docs need a PR to make that more clear.
-                ttest_rel_result = scipy.stats.ttest_rel(
-                    comparable_groups1, comparable_groups2
-                )
-                pair_stats["n_common"] = len(common)
-                pair_stats["ttest_rel"] = ttest_rel_result
-            pair_stats_list.append(pair_stats)
+                    # Does this need to have the values aligned?
+                    # I think that is the case giving my understanding of paired
+                    # t-tests, but the docs need a PR to make that more clear.
+                    ttest_rel_result = scipy.stats.ttest_rel(
+                        comparable_groups1, comparable_groups2
+                    )
+                    pair_stats["n_common"] = len(common)
+                    pair_stats["ttest_rel"] = ttest_rel_result
+                pair_stats_list.append(pair_stats)
 
         stats_row["pairwise"] = pair_stats_list
         return stats_row
@@ -942,7 +946,6 @@ class ResultAnalysis(ub.NiceRepr):
                 try:
                     stats_row = self.test_group(param_group, metric_key)
                 except ValueError as ex:
-                    import warnings
                     warnings.warn(repr(ex))
                     # print(f'param_group={param_group}')
                     # print(f'metric_key={metric_key}')
@@ -1530,3 +1533,6 @@ if 1:
             return GroupbyFutureWrapper(groups)
         else:
             return groups
+
+# import xdev
+# xdev.make_warnings_print_tracebacks()

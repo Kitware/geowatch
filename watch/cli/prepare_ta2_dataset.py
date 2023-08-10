@@ -10,7 +10,7 @@ See Also:
     ~/code/watch/scripts/prepare_drop4.sh
     ~/code/watch/scripts/prepare_drop5.sh
 
-Example:
+CommandLine:
 
     # Create a demo region file, and create vairables that point at relevant
     # paths, which are by default written in your ~/.cache folder
@@ -53,18 +53,51 @@ Example:
         --fields_workers=8 \
         --convert_workers=0 \
         --align_workers=26 \
-        --cache=0 \
+        --cache=1 \
+        --skip_existing=0 \
         --ignore_duplicates=1 \
         --target_gsd=30 \
         --visualize=True \
         --max_products_per_region=10 \
-        --serial=True --run=0
+        --backend=serial \
+        --run=1
 
     smartwatch visualize $HOME/data/dvc-repos/smart_watch_dvc/Aligned-Drop2-TA1-2022-02-24/data.kwcoco_c9ea8bb9.json
 
 TODO:
     handl GE01 and WV01 platforms
 
+CommandLine:
+    xdoctest -m watch.cli.prepare_ta2_dataset __doc__:0
+
+Example:
+    >>> from watch.cli.prepare_ta2_dataset import *  # NOQA
+    >>> import ubelt as ub
+    >>> dpath = ub.Path.appdir('watch/test/prep_ta2_dataset').delete().ensuredir()
+    >>> from watch.geoannots import geomodels
+    >>> # Write dummy regions / sites
+    >>> for rng in [0, 1, 3]:
+    >>>     region, sites = geomodels.RegionModel.random(rng=rng, with_sites=True)
+    >>>     region_dpath = (dpath / 'region_models').ensuredir()
+    >>>     site_dpath = (dpath / 'site_models').ensuredir()
+    >>>     region_fpath = region_dpath / (region.region_id + '.geojson')
+    >>>     region_fpath.write_text(region.dumps())
+    >>>     for site in sites:
+    >>>         site_fpath = site_dpath / (site.site_id + '.geojson')
+    >>>         site_fpath.write_text(site.dumps())
+    >>> # Prepare config and test a dry run
+    >>> kwargs = PrepareTA2Config()
+    >>> kwargs['dataset_suffix'] = 'DEMO_DOCTEST'
+    >>> kwargs['run'] = 0
+    >>> kwargs['stac_query_mode'] = 'auto'
+    >>> kwargs['regions'] = region_dpath
+    >>> kwargs['sites'] = site_dpath
+    >>> kwargs['backend'] = 'serial'
+    >>> kwargs['visualize'] = 1
+    >>> kwargs['collated'] = [True]
+    >>> kwargs['out_dpath'] = '.'
+    >>> cmdline = 0
+    >>> PrepareTA2Config.main(cmdline=cmdline, **kwargs)
 """
 
 
@@ -75,108 +108,199 @@ from cmd_queue.cli_boilerplate import CMDQueueConfig
 
 
 class PrepareTA2Config(CMDQueueConfig):
-    __default__ = {
-        'dataset_suffix': scfg.Value(None, help=''),
 
-        'cloud_cover': scfg.Value(10, help='maximum cloud cover percentage (ignored if s3_fpath given)'),
-        'sensors': scfg.Value("L2", help='(ignored if s3_fpath given)'),
-        'max_products_per_region': scfg.Value(None, help='does uniform affinity sampling over time to filter down to this many results per region'),
+    queue_name = scfg.Value('prep-ta2-dataset', group='cmd-queue', help='name for the command queue')
 
-        'stac_query_mode': scfg.Value(None, help='if set to auto we try to make the .input files. Mutex with s3_fpath', group='stac'),
-        'api_key': scfg.Value('env:SMART_STAC_API_KEY', help='The API key or where to get it (ignored if s3_fpath given)', group='stac'),
+    dataset_suffix = scfg.Value(None, help='')
 
-        'separate_region_queues': scfg.Value(True, help='if True, create jobs for each region separately. This option to disable this may be removed in the future.'),
-        'separate_align_jobs': scfg.Value(True, help='if True, perform alignment for each region in its own job. The option to disable this may be removed in the future.'),
-
-        's3_fpath': scfg.Value(None, nargs='+', help='A list of .input files which were the results of an existing stac query. Mutex with stac_query_* args. Mutex with sensors.', group='stac'),
-        'aws_profile': scfg.Value('iarpa', help='AWS profile to use for remote data access', group='stac'),
-
-        'out_dpath': scfg.Value('auto', help='This is the path that all resulting files will be written to. Defaults the the phase2 DATA_DVC_DPATH', alias=['dvc_dpath']),
-
-        'collated': scfg.Value([True], nargs='+', help='set to false if the input data is not collated'),
-        'queue_name': scfg.Value('prep-ta2-dataset', help='name for the command queue', group='cmd_queue'),
-
-        'max_regions': None,
-
-        'query_workers': scfg.Value('0', help='workers for STAC search'),
-        'convert_workers': scfg.Value('0', help='workers for stac-to-kwcoco script. Keep this set to zero!'),
-        'fields_workers': scfg.Value('min(avail,max(all/2,8))', help='workers for add-watch-fields script'),
-
-        'align_workers': scfg.Value(0, help='primary workers for align script', group='align'),
-        'align_aux_workers': scfg.Value(0, help='threads per align process (typically set this to 0)', group='align'),
-
-        'ignore_duplicates': scfg.Value(1, help='workers for align script'),
-
-        'visualize': scfg.Value(0, isflag=1, help='if True runs visualize'),
-        'visualize_only_boxes': scfg.Value(True, isflag=1, help='if False will draw full polygons'),
-
-        'verbose': scfg.Value(0, help='help control verbosity (just align for now)'),
-
-        # '--requester_pays'
-        'requester_pays': scfg.Value(0, help='if True, turn on requester_pays in ingress. Needed for official L1/L2 catalogs.'),
-
-        'debug': scfg.Value(False, isflag=1, help='if enabled, turns on debug visualizations'),
-        'select_images': scfg.Value(False, help='if enabled only uses select images'),
-
-
-        'include_channels': scfg.Value(None, help='specific channels to use in align crop', group='align'),
-        'exclude_channels': scfg.Value(None, help='specific channels to NOT use in align crop', group='align'),
-        'target_gsd': scfg.Value(10, group='align'),
-        'force_min_gsd': scfg.Value(None, group='align'),
-        'align_keep': scfg.Value('img', choices=['img', 'img-roi', 'none', None], help='if the coco align script caches or recomputes images / rois', group='align'),
-        'force_nodata': scfg.Value(None, help='if specified, forces nodata to this value', group='align'),
-
-        'splits': scfg.Value(False, isflag=1, help='if True do splits'),
-
-        'region_globstr': scfg.Value('annotations/region_models', help='region model globstr (relative to the dvc path, unless absolute or prefixed by "./")'),
-        'site_globstr': scfg.Value(
-            None,
-            # 'annotations/site_models',
-            help='site model globstr (relative to the dvc path, unless absolute or prefixed by "./")'),
-
-        'propogate_strategy': scfg.Value('NEW-SMART', help='changes propogation behavior'),
-
-        'remove_broken': scfg.Value(True, isflag=1, help='if True, will remove any image that fails population (e.g. caused by a 404)'),
-
-        'cache': scfg.Value(1, isflag=1, help='If 1 or 0 globally enable/disable caching. If a comma separated list of strings, only cache those stages', group='queue-related'),
-        'skip_existing': scfg.Value(False, help='Unlike cache=1, which checks for file existence at runtime, this will explicitly not submit any job with a product that already exist', group='queue-related'),
-
-        'rpc_align_method': scfg.Value('orthorectify', help=ub.paragraph(
+    cloud_cover = scfg.Value(10, help=ub.paragraph(
             '''
-            Can be one of:
-                (1) orthorectify - which uses gdalwarp with -rpc if available
-                    otherwise falls back to affine transform,
-                (2) affine_warp - which ignores RPCs and uses the affine
-                    transform in the geotiff metadata.
-            '''
-        )),
+            maximum cloud cover percentage (ignored if s3_fpath given)
+            '''))
 
-        'hack_lazy': scfg.Value(False, isflag=True, help=ub.paragraph(
-            '''
-            Hack lazy is a proof of concept with the intent on speeding up the
-            download / cropping of data by flattening the gdal processing into
-            a single queue of parallel processes executed via a command queue.
+    sensors = scfg.Value('L2', help='(ignored if s3_fpath given)')
 
-            By running once with this flag on, it will execute the command
-            queue, and then running again, it should see all of the data as
-            existing and construct the aligned kwcoco dataset as normal.
-            ''')),
-    }
+    max_products_per_region = scfg.Value(None, help=ub.paragraph(
+            '''
+            does uniform affinity sampling over time to filter down to
+            this many results per region
+            '''))
+
+    stac_query_mode = scfg.Value(None, group='stac', help=ub.paragraph(
+            '''
+            if set to auto we try to make the .input files. Mutex with
+            s3_fpath
+            '''))
+
+    api_key = scfg.Value('env:SMART_STAC_API_KEY', group='stac', help=ub.paragraph(
+            '''
+            The API key or where to get it (ignored if s3_fpath given)
+            '''))
+
+    s3_fpath = scfg.Value(None, group='stac', help=ub.paragraph(
+            '''
+            A list of .input files which were the results of an existing
+            stac query. Mutex with stac_query_* args. Mutex with
+            sensors.
+            '''), nargs='+')
+
+    aws_profile = scfg.Value('iarpa', group='stac', help=ub.paragraph(
+            '''
+            AWS profile to use for remote data access
+            '''))
+
+    out_dpath = scfg.Value('auto', alias=['dvc_dpath'], help=ub.paragraph(
+            '''
+            This is the path that all resulting files will be written
+            to. Defaults the the phase2 DATA_DVC_DPATH
+            '''))
+
+    collated = scfg.Value([True], help=ub.paragraph(
+            '''
+            set to false if the input data is not collated
+            '''), nargs='+')
+
+    max_regions = scfg.Value(None, help=None)
+
+    query_workers = scfg.Value(0, help='workers for STAC search')
+
+    convert_workers = scfg.Value(0, help=ub.paragraph(
+            '''
+            workers for stac-to-kwcoco script. Keep this set to zero!
+            '''))
+
+    fields_workers = scfg.Value('min(avail,max(all/2,8))', type=str, help='workers for add-watch-fields script')
+
+    align_workers = scfg.Value(0, group='align', help='primary workers for align script')
+
+    align_aux_workers = scfg.Value(0, group='align', help=ub.paragraph(
+            '''
+            threads per align process (typically set this to 0)
+            '''))
+
+    ignore_duplicates = scfg.Value(1, help='workers for align script')
+
+    visualize = scfg.Value(0, isflag=1, help='if True runs visualize')
+
+    visualize_only_boxes = scfg.Value(True, isflag=1, help='if False will draw full polygons')
+
+    verbose = scfg.Value(0, help=ub.paragraph(
+            '''
+            help control verbosity (just align for now)
+            '''))
+
+    requester_pays = scfg.Value(0, help=ub.paragraph(
+            '''
+            if True, turn on requester_pays in ingress. Needed for
+            official L1/L2 catalogs.
+            '''))
+
+    debug = scfg.Value(False, isflag=1, help=ub.paragraph(
+            '''
+            if enabled, turns on debug visualizations
+            '''))
+
+    select_images = scfg.Value(False, help='if enabled only uses select images')
+
+    include_channels = scfg.Value(None, group='align', help='specific channels to use in align crop')
+
+    exclude_channels = scfg.Value(None, group='align', help=ub.paragraph(
+            '''
+            specific channels to NOT use in align crop
+            '''))
+
+    target_gsd = scfg.Value(10, group='align', help=None)
+
+    force_min_gsd = scfg.Value(None, group='align', help=None)
+
+    align_keep = scfg.Value('img', group='align', help=ub.paragraph(
+            '''
+            if the coco align script caches or recomputes images / rois
+            '''), choices=['img', 'img-roi', 'none', None])
+
+    force_nodata = scfg.Value(None, group='align', help=ub.paragraph(
+            '''
+            if specified, forces nodata to this value
+            '''))
+    splits = scfg.Value(False, isflag=1, help='if True do splits')
+
+    regions = scfg.Value('annotations/region_models', alias=['region_globstr'], help=ub.paragraph(
+            '''
+            region model globstr (relative to the dvc path, unless
+            absolute or prefixed by "./")
+            '''))
+
+    sites = scfg.Value(None, alias=['site_globstr'], help=ub.paragraph(
+            '''
+            site model globstr (relative to the dvc path, unless
+            absolute or prefixed by "./")
+            '''))
+
+    propogate_strategy = scfg.Value('NEW-SMART', help='changes propogation behavior')
+
+    remove_broken = scfg.Value(True, isflag=1, help=ub.paragraph(
+            '''
+            if True, will remove any image that fails population (e.g.
+            caused by a 404)
+            '''))
+
+    cache = scfg.Value(1, isflag=1, group='queue-related', help=ub.paragraph(
+            '''
+            If 1 or 0 globally enable/disable caching. If a comma
+            separated list of strings, only cache those stages
+            '''))
+
+    skip_existing = scfg.Value(False, group='queue-related', help=ub.paragraph(
+            '''
+            Unlike cache=1, which checks for file existence at runtime,
+            this will explicitly not submit any job with a product that
+            already exist
+            '''))
+
+    rpc_align_method = scfg.Value('orthorectify', help=ub.paragraph(
+            '''
+            Can be one of: (1) orthorectify - which uses gdalwarp with
+            -rpc if available otherwise falls back to affine transform,
+            (2) affine_warp - which ignores RPCs and uses the affine
+            transform in the geotiff metadata.
+            '''))
+
+    hack_lazy = scfg.Value(False, isflag=True, help=ub.paragraph(
+            '''
+            Hack lazy is a proof of concept with the intent on speeding
+            up the download / cropping of data by flattening the gdal
+            processing into a single queue of parallel processes
+            executed via a command queue. By running once with this flag
+            on, it will execute the command queue, and then running
+            again, it should see all of the data as existing and
+            construct the aligned kwcoco dataset as normal.
+            '''))
+
+    @classmethod
+    def _register_main(cls, func):
+        cls.main = func
+        return func
 
 
 __config__ = PrepareTA2Config
 
 
+def _justkeys(d):
+    return set(d.keys())
+    # return d
+
+
+@__config__._register_main
 def main(cmdline=False, **kwargs):
     """
-    Example:
+
+    Ignore:
         from watch.cli.prepare_ta2_dataset import *  # NOQA
         cmdline = False
         kwargs = {
             'dataset_suffix': 'TA1_FULL_SEQ_KR_S001_CLOUD_LT_10',
             's3_fpath': 's3://kitware-smart-watch-data/processed/ta1/eval2/master_collation_working/KR_S001.unique.fixed_ls_ids.cloudcover_lt_10.output',
         }
-
         kwargs = {
             'dataset_suffix': 'Drop2-2022-02-04',
             's3_fpath': 's3://kitware-smart-watch-data/processed/ta1/drop2_20220204/PE/coreg_and_brdf/watch-coreg-and-brdf_PE.output',
@@ -187,6 +311,7 @@ def main(cmdline=False, **kwargs):
     from kwutil import slugify_ext
     from watch.utils import util_gis
     import rich
+    from watch.mlops.pipeline_nodes import Pipeline
     rich.print('config = {}'.format(ub.urepr(dict(config), nl=1)))
 
     out_dpath = config['out_dpath']
@@ -200,19 +325,15 @@ def main(cmdline=False, **kwargs):
     aligned_bundle_name = f'Aligned-{config["dataset_suffix"]}'
     uncropped_bundle_name = f'Uncropped-{config["dataset_suffix"]}'
 
-    uncropped_dpath = out_dpath / uncropped_bundle_name
+    if 1:
+        uncropped_dpath = out_dpath / uncropped_bundle_name
+        aligned_kwcoco_bundle = out_dpath / aligned_bundle_name
+    else:
+        uncropped_dpath = ub.Path('.') / uncropped_bundle_name
+        aligned_kwcoco_bundle = ub.Path('.') / aligned_bundle_name
+
     uncropped_query_dpath = uncropped_dpath / '_query/items'
-
     uncropped_ingress_dpath = uncropped_dpath / 'ingress'
-
-    aligned_kwcoco_bundle = out_dpath / aligned_bundle_name
-
-    uncropped_dpath = uncropped_dpath.shrinkuser(home='$HOME')
-    uncropped_query_dpath = uncropped_query_dpath.shrinkuser(home='$HOME')
-    uncropped_query_dpath = uncropped_query_dpath.shrinkuser(home='$HOME')
-    uncropped_query_dpath = uncropped_query_dpath.shrinkuser(home='$HOME')
-    uncropped_ingress_dpath = uncropped_ingress_dpath.shrinkuser(home='$HOME')
-    aligned_kwcoco_bundle = aligned_kwcoco_bundle.shrinkuser(home='$HOME')
 
     # Ignore these regions (only works in separate region queue mode)
     region_id_blocklist = {
@@ -230,21 +351,6 @@ def main(cmdline=False, **kwargs):
     job_environ_str = ' '.join(job_environs)
     if job_environ_str:
         job_environ_str += ' '
-
-    def _coerce_globstr(p):
-        if not p:
-            return None
-        globstr = ub.Path(p)
-        if str(globstr).startswith('./'):
-            final_globstr = globstr
-        else:
-            final_globstr = out_dpath / globstr
-        final_globstr = final_globstr.shrinkuser(home='$HOME')
-        return final_globstr
-
-    # region_models = list(region_dpath.glob('*.geojson'))
-    final_region_globstr = _coerce_globstr(config['region_globstr'])
-    final_site_globstr = _coerce_globstr(config['site_globstr'])
 
     # Global environs are given to all jobs
     api_key = config['api_key']
@@ -270,132 +376,110 @@ def main(cmdline=False, **kwargs):
     # inputs / outputs for us. At the time of writing we are still doing that
     # explicitly, but we could remove that code and just rely on implicit
     # dependencies based in in / out paths.
-    from watch.mlops.old import pipeline_v1
-    pipeline = pipeline_v1.Pipeline()
+    new_pipeline = Pipeline()
+
+    pipe_config = {}
 
     stac_jobs = []
-    # base_mkdir_job = pipeline.submit(f'mkdir -p "{uncropped_query_dpath}"', name='mkdir-base')
     if config['stac_query_mode'] == 'auto':
         # Each region gets their own job in the queue
-        if config['separate_region_queues']:
+        # Note: this requires the annotation files to exist on disk.  or we
+        # have to write a mechanism that lets the explicit relative path be
+        # specified.
 
-            # Note: this requires the annotation files to exist on disk.  or we
-            # have to write a mechanism that lets the explicit relative path be
-            # specified.
-            region_file_fpaths = util_gis.coerce_geojson_paths(final_region_globstr.expand())
+        # Note pattern matching is driven by kwutil.util_path.coerce_patterned_paths
+        region_file_fpaths = util_gis.coerce_geojson_paths(config.regions)
 
-            if final_site_globstr:
-                region_site_fpaths = util_gis.coerce_geojson_paths(final_site_globstr.expand())
-            else:
-                region_site_fpaths = []
-
-            # Assign site models to region files
-            ASSIGN_BY_FPATH = True
-            if ASSIGN_BY_FPATH:
-                # This is not robust, but it doesn't require touching the disk
-                region_id_to_fpath = {p.stem: p for p in region_file_fpaths}
-                site_id_to_fpath = {p.stem: p for p in region_site_fpaths}
-                region_id_to_site_fpaths = ub.ddict(list)
-                for site_id, site_fpaths in site_id_to_fpath.items():
-                    region_id, site_num = site_id.rsplit('_', maxsplit=1)
-                    region_id_to_site_fpaths[region_id].append(site_fpaths)
-
-                if 1:
-                    regions_without_sites = set(region_id_to_fpath) - set(region_id_to_site_fpaths)
-                    sites_without_regions = set(region_id_to_site_fpaths) - set(region_id_to_fpath)
-                    regions_without_sites_str = slugify_ext.smart_truncate(ub.urepr(regions_without_sites, nl=1), max_length=1000, head="~~\n~~\n", tail="\n~~\n~~")
-                    sites_without_regions_str = slugify_ext.smart_truncate(ub.urepr(sites_without_regions, nl=1), max_length=1000, head="~~\n~~\n", tail="\n~~\n~~")
-                    print(f'regions_without_sites={regions_without_sites_str}')
-                    print(f'sites_without_regions={sites_without_regions_str}')
-            else:
-                raise NotImplementedError(
-                    'TODO: implement more robust alternative that reads '
-                    'file data to make assignment if needed')
-
-            if config['max_regions'] is not None:
-                region_file_fpaths = region_file_fpaths[:config['max_regions']]
-
-            print(f'region_file_fpaths={slugify_ext.smart_truncate(ub.urepr(sorted(region_file_fpaths), nl=1), max_length=1000)}')
-            for region_id, region_fpath in region_id_to_fpath.items():
-                if region_id in region_id_blocklist:
-                    continue
-
-                region_inputs_fpath = (uncropped_query_dpath / (region_id + '.input')).shrinkuser(home='$HOME')
-                final_region_fpath = region_fpath.shrinkuser(home='$HOME')
-
-                stac_search_job = pipeline.submit(
-                    command=ub.codeblock(
-                        rf'''
-                        python -m watch.cli.stac_search \
-                            --region_file "{final_region_fpath}" \
-                            --search_json "auto" \
-                            --cloud_cover "{config['cloud_cover']}" \
-                            --sensors "{config['sensors']}" \
-                            --api_key "{config['api_key']}" \
-                            --query_workers "{config['query_workers']}" \
-                            --max_products_per_region "{config['max_products_per_region']}" \
-                            --append_mode=False \
-                            --mode area \
-                            --verbose 2 \
-                            --outfile "{region_inputs_fpath}"
-                        '''),
-                    name=f'stac-search-{region_id}',
-                    depends=[],
-                    in_paths={
-                        'final_region_fpath': final_region_fpath,
-                    },
-                    out_paths={
-                        'region_inputs_fpath': region_inputs_fpath,
-                    },
-                    stage='stac_search',
-                )
-                # cache_prefix = f'[[ -f {region_inputs_fpath} ]] || ' if stages.nodes['stac_search']['cache'] else ''
-
-                stac_jobs.append({
-                    'name': region_id,
-                    'job': stac_search_job,
-                    'inputs_fpath': region_inputs_fpath,
-                    'region_globstr': final_region_fpath,
-                    'collated': default_collated,
-                })
+        if config.sites:
+            region_site_fpaths = util_gis.coerce_geojson_paths(config.sites)
         else:
-            warnings.warn(
-                'It is usually faster to split the queue amongst regions')
-            # All region queries are executed simultaniously and put into a
-            # single inputs file. The advantage here is we dont need to know
-            # how many regions there are beforehand.
-            combined_inputs_fpath = (uncropped_query_dpath / (f'combo_query_{config["dataset_suffix"]}.input')).shrinkuser(home='$HOME')
+            region_site_fpaths = []
 
-            combo_stac_search_job = pipeline.submit(
-                command=ub.codeblock(
-                    rf'''
-                    python -m watch.cli.stac_search \
-                    --region_globstr "{final_region_globstr}" \
-                    --search_json "auto" \
-                    --cloud_cover "{config['cloud_cover']}" \
-                    --sensors "{config['sensors']}" \
-                    --api_key "{config['api_key']}" \
-                    --max_products_per_region "{config['max_products_per_region']}" \
-                    --append_mode=False \
-                    --mode area \
-                    --verbose 2 \
-                    --outfile "{combined_inputs_fpath}"
+        # Assign site models to region files
+        ASSIGN_BY_FPATH = True
+        if ASSIGN_BY_FPATH:
+            # This is not robust, but it doesn't require touching the disk
+            region_id_to_fpath = {p.stem: p for p in region_file_fpaths}
+            site_id_to_fpath = {p.stem: p for p in region_site_fpaths}
+            region_id_to_site_fpaths = ub.ddict(list)
+            for site_id, site_fpaths in site_id_to_fpath.items():
+                region_id, site_num = site_id.rsplit('_', maxsplit=1)
+                region_id_to_site_fpaths[region_id].append(site_fpaths)
+
+            if 1:
+                regions_without_sites = set(region_id_to_fpath) - set(region_id_to_site_fpaths)
+                sites_without_regions = set(region_id_to_site_fpaths) - set(region_id_to_fpath)
+                regions_without_sites_str = slugify_ext.smart_truncate(ub.urepr(regions_without_sites, nl=1), max_length=1000, head="~~\n~~\n", tail="\n~~\n~~")
+                sites_without_regions_str = slugify_ext.smart_truncate(ub.urepr(sites_without_regions, nl=1), max_length=1000, head="~~\n~~\n", tail="\n~~\n~~")
+                print('len(regions_with_sites) = ' + str(len(region_id_to_site_fpaths)))
+                print('len(sites_with_region) = ' + str(sum(map(len, region_id_to_site_fpaths.values()))))
+                print(f'regions_without_sites={regions_without_sites_str}')
+                print(f'sites_without_regions={sites_without_regions_str}')
+        else:
+            raise NotImplementedError(
+                'TODO: implement more robust alternative that reads '
+                'file data to make assignment if needed')
+
+        if config['max_regions'] is not None:
+            region_file_fpaths = region_file_fpaths[:config['max_regions']]
+
+        print(f'region_file_fpaths={slugify_ext.smart_truncate(ub.urepr(sorted(region_file_fpaths), nl=1), max_length=1000)}')
+        for region_id, region_fpath in region_id_to_fpath.items():
+            if region_id in region_id_blocklist:
+                continue
+
+            region_inputs_fpath = (uncropped_query_dpath / (region_id + '.input'))
+            final_region_fpath = region_fpath
+
+            stac_search_node = new_pipeline.submit(
+                name=f'stac-search-{region_id}',
+                perf_params={
+                    'api_key': config.api_key,
+                    'query_workers': config.query_workers,
+                    'verbose': 2,
+                },
+                algo_params={
+                    'search_json': 'auto',
+                    'cloud_cover': config.cloud_cover,
+                    'sensors': config.sensors,
+                    'max_products_per_region': config.max_products_per_region,
+                    'append_mode': False,
+                    'mode': 'area',
+                },
+                executable=ub.codeblock(
+                    r'''
+                    python -m watch.cli.stac_search
                     '''),
-                name='stac-search', depends=[],
-                in_paths={
-                    'final_region_globstr': final_region_globstr,
-                },
+                in_paths=_justkeys({
+                    'region_file': final_region_fpath,
+                }),
                 out_paths={
-                    'combined_inputs_fpath': combined_inputs_fpath,
+                    'outfile': region_inputs_fpath,
                 },
-                stage='stac_search',
+                group_dname=uncropped_bundle_name,
+                # node_dpath
             )
 
+            # All other paths fall out after specifying this one
+            stac_search_node.configure({
+                'region_file': final_region_fpath,
+            })
+            pipe_config[stac_search_node.name + '.region_file'] = final_region_fpath
+
+            # NOTE: The YAML list can get too long pretty quickly.
+            # So we can't pass this as site-globstr. However, we could write a
+            # file with this info and pass that in...
+            # from kwutil.util_yaml import Yaml
+            # sites = region_id_to_site_fpaths.get(region_id, None)
+            # explicit_sites = Yaml.dumps(list(map(os.fspath, sites)))
+
             stac_jobs.append({
-                'name': 'combined',
-                'job': combo_stac_search_job,
-                'region_globstr': final_region_globstr,
-                'inputs_fpath': combined_inputs_fpath,
+                'name': region_id,
+                'node': stac_search_node,
+                'inputs_fpath': region_inputs_fpath,
+                'region_globstr': final_region_fpath,
+                # 'site_globstr': explicit_sites,
+                'site_globstr': config.sites,
                 'collated': default_collated,
             })
     else:
@@ -406,10 +490,10 @@ def main(cmdline=False, **kwargs):
         stac_jobs = []
         for s3_fpath, collated in zip(s3_fpath_list, collated_list):
             stac_jobs.append({
-                'job': None,
+                'node': None,
                 'name': ub.Path(s3_fpath).stem,
                 'inputs_fpath': s3_fpath,
-                'region_globstr': final_region_globstr,
+                'region_globstr': config.regions,
                 'collated': collated,
             })
 
@@ -417,175 +501,134 @@ def main(cmdline=False, **kwargs):
     for stac_job in stac_jobs:
         s3_fpath = ub.Path(stac_job['inputs_fpath'])
         s3_name = stac_job['name']
-        parent_job = stac_job['job']
+        parent_node = stac_job['node']
         collated = stac_job['collated']
         uncropped_query_fpath = uncropped_query_dpath / s3_fpath.name
-        uncropped_query_fpath = uncropped_query_fpath.shrinkuser(home='$HOME')
-
         uncropped_catalog_fpath = uncropped_ingress_dpath / f'catalog_{s3_name}.json'
-        uncropped_ingress_dpath = uncropped_ingress_dpath.shrinkuser(home='$HOME')
 
         if not str(s3_fpath).startswith('s3'):
             # Don't really need to copy anything in this case.
             uncropped_query_fpath = s3_fpath
-            grab_job = parent_job
-            # grab_job = pipeline.submit(ub.codeblock(
-            #     f'''
-            #     # GRAB Input STAC List
-            #     {cache_prefix}cp "{s3_fpath}" "{uncropped_query_dpath}"
-            #     '''), depends=parent_job, name=f'psudo-s3-pull-inputs-{s3_name}')
+            grab_node = parent_node
         else:
-            grab_job = pipeline.submit(command=ub.codeblock(
-                f'''
-                # GRAB Input STAC List
-                aws s3 --profile {aws_profile} cp "{s3_fpath}" "{uncropped_query_dpath}"
-                '''), depends=parent_job, name=f's3-pull-inputs-{s3_name}',
-                in_paths={
+            # GRAB Input STAC List
+            grab_node = new_pipeline.submit(
+                name=f's3-pull-inputs-{s3_name}',
+                executable=ub.codeblock(
+                    f'''
+                    aws s3 --profile {aws_profile} cp "{s3_fpath}" "{uncropped_query_dpath}"
+                    '''),
+                in_paths=_justkeys({
                     's3_fpath': s3_fpath,
-                },
+                }),
                 out_paths={
                     'uncropped_query_fpath': uncropped_query_fpath,
                 },
-                stage='grab',
+                _no_outarg=True,
+                _no_inarg=True,
             )
+            parent_node.outputs['outfile'].connect(grab_node.inputs['s3_fpath'])
+            print('warning... config might be off...')
 
-        ingress_options = [
-            '--virtual',
-        ]
-        if config['requester_pays']:
-            ingress_options.append('--requester_pays')
-        ingress_options_str = ' '.join(ingress_options)
-
-        ingress_job = pipeline.submit(command=ub.codeblock(
-            rf'''
-            python -m watch.cli.baseline_framework_ingress \
-                --aws_profile {aws_profile} \
-                --jobs avail \
-                {ingress_options_str} \
-                --outdir "{uncropped_ingress_dpath}" \
-                --catalog_fpath "{uncropped_catalog_fpath}" \
-                "{uncropped_query_fpath}"
-            '''), depends=[grab_job], name=f'baseline_ingress-{s3_name}',
-            in_paths={
-                'uncropped_query_fpath': uncropped_query_fpath,
+        ingress_node = new_pipeline.submit(
+            name=f'baseline_ingress-{s3_name}',
+            perf_params={
+                'virtual': True,
+                'jobs': 'avail',
+                'aws_profile': aws_profile,
+                'requester_pays': config.requester_pays,
             },
+            executable=ub.codeblock(
+                r'''
+                python -m watch.cli.baseline_framework_ingress
+                '''),
+            in_paths=_justkeys({
+                'input_path': uncropped_query_fpath,
+            }),
             out_paths={
-                'uncropped_catalog_fpath': uncropped_catalog_fpath,
+                'catalog_fpath': uncropped_catalog_fpath,
             },
-            stage='catalog',
+            group_dname=uncropped_bundle_name,
         )
+        try:
+            grab_node.outputs['uncropped_query_fpath'].connect(ingress_node.inputs['input_path'])
+        except KeyError:
+            grab_node.outputs['outfile'].connect(ingress_node.inputs['input_path'])
 
         uncropped_kwcoco_fpath = uncropped_dpath / f'data_{s3_name}.kwcoco.zip'
-        uncropped_kwcoco_fpath = uncropped_kwcoco_fpath.shrinkuser(home='$HOME')
 
-        convert_options = []
-        if collated:
-            convert_options.append('--from-collated')
-        if config['ignore_duplicates']:
-            convert_options.append('--ignore_duplicates')
-        convert_options_str = ' '.join(convert_options)
-
-        convert_job = pipeline.submit(
-            command=ub.codeblock(
-                rf'''
-                {job_environ_str}python -m watch.cli.stac_to_kwcoco \
-                    "{uncropped_catalog_fpath}" \
-                    --outpath="{uncropped_kwcoco_fpath}" \
-                    {convert_options_str} \
-                    --jobs "{config['convert_workers']}"
-                '''),
-            depends=[ingress_job],
+        convert_node = new_pipeline.submit(
             name=f'stac_to_kwcoco-{s3_name}',
-            in_paths={
-                'uncropped_catalog_fpath': uncropped_catalog_fpath,
+            algo_params={
+                'from_collated': collated,
+                'ignore_duplicates': config.ignore_duplicates,
             },
+            perf_params={
+                'jobs': config.convert_workers,
+            },
+            executable=ub.codeblock(
+                fr'''
+                {job_environ_str}python -m watch.cli.stac_to_kwcoco
+                '''),
+            in_paths=_justkeys({
+                'input_stac_catalog': uncropped_catalog_fpath,
+            }),
             out_paths={
-                'uncropped_kwcoco_fpath': uncropped_kwcoco_fpath,
+                'outpath': uncropped_kwcoco_fpath,
             },
-            stage='uncropped_kwcoco',
+            group_dname=uncropped_bundle_name,
         )
+        ingress_node.outputs['catalog_fpath'].connect(convert_node.inputs['input_stac_catalog'])
 
         uncropped_fielded_kwcoco_fpath = uncropped_dpath / f'data_{s3_name}_fielded.kwcoco.zip'
-        uncropped_fielded_kwcoco_fpath = uncropped_fielded_kwcoco_fpath.shrinkuser(home='$HOME')
 
-        add_fields_job = pipeline.submit(command=ub.codeblock(
-            rf'''
-            {job_environ_str}python -m watch.cli.coco_add_watch_fields \
-                --src "{uncropped_kwcoco_fpath}" \
-                --dst "{uncropped_fielded_kwcoco_fpath}" \
-                --enable_video_stats=False \
-                --overwrite=warp \
-                --target_gsd={config['target_gsd']} \
-                --remove_broken={config['remove_broken']} \
-                --workers="{config['fields_workers']}"
-            '''),
-            depends=convert_job, name=f'coco_add_watch_fields-{s3_name}',
-            in_paths={
-                'uncropped_kwcoco_fpath': uncropped_kwcoco_fpath,
+        add_fields_node = new_pipeline.submit(
+            name=f'coco_add_watch_fields-{s3_name}',
+            algo_params={
+                'enable_video_stats': False,
+                'target_gsd': config.target_gsd,
+                'remove_broken': config.remove_broken,
             },
+            perf_params={
+                'overwrite': 'warp',
+                'workers': config.fields_workers,
+            },
+            executable=ub.codeblock(
+                fr'''
+                {job_environ_str}python -m watch.cli.coco_add_watch_fields
+                '''),
+            in_paths=_justkeys({
+                'src': uncropped_kwcoco_fpath,
+            }),
             out_paths={
-                'uncropped_fielded_kwcoco_fpath': uncropped_fielded_kwcoco_fpath,
+                'dst': uncropped_fielded_kwcoco_fpath,
             },
-            stage='uncropped_feilds',
+            group_dname=uncropped_bundle_name,
         )
+        convert_node.outputs['outpath'].connect(add_fields_node.inputs['src'])
 
         uncropped_fielded_jobs.append({
             'name': stac_job['name'],
-            'job': add_fields_job,
+            'node': add_fields_node,
             'uncropped_fielded_fpath': uncropped_fielded_kwcoco_fpath,
             'region_globstr': stac_job['region_globstr'],
+            'site_globstr': stac_job['site_globstr'],
         })
 
-    if config['separate_align_jobs']:
-        alignment_input_jobs = []
-        # TODO: make use of region_id_to_site_fpaths
-        # to build a better site globstr (might need to write a tempoaray file
-        # to point to)
-        final_site_globstr = _coerce_globstr(config['site_globstr'])
-        for info in uncropped_fielded_jobs:
-            toalign_info = info.copy()
-            name = toalign_info['name'] = info['name']
-            toalign_info['aligned_imgonly_fpath'] = aligned_kwcoco_bundle / f'imgonly-{name}.kwcoco.zip'
-            toalign_info['aligned_imganns_fpath'] = aligned_kwcoco_bundle / f'imganns-{name}.kwcoco.zip'
-            # TODO: take only the corresponding set of site models here.
-            toalign_info['site_globstr'] = final_site_globstr
-            toalign_info['region_globstr'] = info['region_globstr']
-            alignment_input_jobs.append(toalign_info)
-    else:
-        # Do a noop for this case? Or make it fast in kwcoco itself?
-        uncropped_coco_paths = [d['uncropped_fielded_fpath'] for d in uncropped_fielded_jobs]
-        union_depends_jobs = [d['job'] for d in uncropped_fielded_jobs]
-        union_suffix = ub.hash_data([p.name for p in uncropped_coco_paths])[0:8]
-        uncropped_final_kwcoco_fpath = uncropped_dpath / f'data_{union_suffix}.kwcoco.zip'
-        uncropped_final_kwcoco_fpath = uncropped_final_kwcoco_fpath.shrinkuser(home='$HOME')
-        uncropped_multi_src_part = ' '.join(['"{}"'.format(p) for p in uncropped_coco_paths])
-        union_job = pipeline.submit(command=ub.codeblock(
-            rf'''
-            # COMBINE Uncropped datasets
-            {job_environ_str}python -m kwcoco union \
-                --src {uncropped_multi_src_part} \
-                --dst "{uncropped_final_kwcoco_fpath}"
-            '''), depends=union_depends_jobs, name='kwcoco-union',
-            in_paths={
-                'uncropped_coco_paths': uncropped_coco_paths,
-            },
-            out_paths={
-                'uncropped_final_kwcoco_fpath': uncropped_final_kwcoco_fpath,
-            },
-            stage='union_uncropped_feilds',
-        )
-        uncropped_final_jobs = [union_job]
-
-        final_site_globstr = _coerce_globstr(config['site_globstr'])
-        alignment_input_jobs = [{
-            'name': f'align-{union_suffix}',
-            'uncropped_fielded_fpath': uncropped_final_kwcoco_fpath,
-            'aligned_imgonly_fpath': aligned_kwcoco_bundle / 'imgonly.kwcoco.zip',
-            'aligned_imganns_fpath': aligned_kwcoco_bundle / 'imganns.kwcoco.zip',
-            'region_globstr': final_region_globstr,
-            'site_globstr': final_site_globstr,
-            'job': uncropped_final_jobs,
-        }]
+    alignment_input_jobs = []
+    # TODO: make use of region_id_to_site_fpaths
+    # to build a better site globstr (might need to write a tempoaray file
+    # to point to)
+    # final_site_globstr = _coerce_globstr(config['sites'])
+    for info in uncropped_fielded_jobs:
+        toalign_info = info.copy()
+        name = toalign_info['name'] = info['name']
+        toalign_info['aligned_imgonly_fpath'] = aligned_kwcoco_bundle / f'imgonly-{name}.kwcoco.zip'
+        toalign_info['aligned_imganns_fpath'] = aligned_kwcoco_bundle / f'imganns-{name}.kwcoco.zip'
+        # TODO: take only the corresponding set of site models here.
+        toalign_info['site_globstr'] = info['site_globstr']
+        toalign_info['region_globstr'] = info['region_globstr']
+        alignment_input_jobs.append(toalign_info)
 
     alignment_jobs = []
     for info in alignment_input_jobs:
@@ -595,193 +638,186 @@ def main(cmdline=False, **kwargs):
         aligned_imganns_fpath = info['aligned_imganns_fpath']
         region_globstr = info['region_globstr']
         site_globstr = info['site_globstr']
-        parent_job = info['job']
-
-        # cache_crops = 1
-        # if cache_crops:
-        #     align_keep = 'img'
-        #     # align_keep = 'roi-img'
-        # else:
-        #     align_keep = 'none'
+        parent_node = info['node']
 
         debug_valid_regions = config.debug
         align_visualize = config.debug
         include_channels = config.include_channels
         exclude_channels = config.exclude_channels
 
-        align_job = pipeline.submit(command=ub.codeblock(
-            rf'''
-            # MAIN WORKHORSE CROP IMAGES
-            # Crop big images to the geojson regions
-            {job_environ_str}python -m watch.cli.coco_align \
-                --src "{uncropped_fielded_fpath}" \
-                --dst "{aligned_imgonly_fpath}" \
-                --regions "{region_globstr}" \
-                --context_factor=1 \
-                --geo_preprop=auto \
-                --keep={config.align_keep} \
-                --force_nodata={config.force_nodata} \
-                --include_channels="{include_channels}" \
-                --exclude_channels="{exclude_channels}" \
-                --visualize={align_visualize} \
-                --debug_valid_regions={debug_valid_regions} \
-                --rpc_align_method {config.rpc_align_method} \
-                --verbose={config.verbose} \
-                --aux_workers={config.align_aux_workers} \
-                --target_gsd={config.target_gsd} \
-                --force_min_gsd={config.force_min_gsd} \
-                --workers={config.align_workers} \
-                --hack_lazy={config.hack_lazy}
-            '''),
-            depends=parent_job,
+        # MAIN WORKHORSE CROP IMAGES
+        # Crop big images to the geojson regions
+        align_node = new_pipeline.submit(
             name=f'align-geotiffs-{name}',
-            in_paths={
-                'uncropped_fielded_fpath': uncropped_fielded_fpath,
-            },
+            executable=ub.codeblock(
+                fr'''
+                {job_environ_str}python -m watch.cli.coco_align \
+                    --regions "{region_globstr}" \
+                    --context_factor=1 \
+                    --geo_preprop=auto \
+                    --keep={config.align_keep} \
+                    --force_nodata={config.force_nodata} \
+                    --include_channels="{include_channels}" \
+                    --exclude_channels="{exclude_channels}" \
+                    --visualize={align_visualize} \
+                    --debug_valid_regions={debug_valid_regions} \
+                    --rpc_align_method {config.rpc_align_method} \
+                    --verbose={config.verbose} \
+                    --aux_workers={config.align_aux_workers} \
+                    --target_gsd={config.target_gsd} \
+                    --force_min_gsd={config.force_min_gsd} \
+                    --workers={config.align_workers} \
+                    --hack_lazy={config.hack_lazy}
+                '''),
+            in_paths=_justkeys({
+                'src': uncropped_fielded_fpath,
+            }),
             out_paths={
-                'aligned_imgonly_fpath': aligned_imgonly_fpath,
+                'dst': aligned_imgonly_fpath,
             },
-            stage='align_kwcoco',
+            group_dname=aligned_bundle_name,
         )
-
-        # TODO:
-        # Project annotation from latest annotations subdir
-        # Prepare splits
-        # Add baseline datasets to DVC
-
-        aligned_viz_dpath = aligned_kwcoco_bundle / '_viz512'
-        viz_max_dim = 512
+        parent_node.outputs['dst'].connect(align_node.inputs['src'])
 
         if config['visualize']:
-            pipeline.submit(command=ub.codeblock(
-                rf'''
-                python -m watch visualize \
-                    --src "{aligned_imgonly_fpath}" \
-                    --viz_dpath "{aligned_viz_dpath}" \
-                    --draw_anns=False \
-                    --draw_imgs=True \
-                    --channels="red|green|blue" \
-                    --max_dim={viz_max_dim} \
-                    --stack=only \
-                    --animate=True --workers=auto
-                '''), depends=[align_job], name=f'viz-imgs-{name}',
-                in_paths={
-                    'aligned_imgonly_fpath': aligned_imgonly_fpath,
-                },
-                out_paths={
-                    'aligned_viz_dpath': aligned_viz_dpath,
-                },
-                stage='viz_imgs',
-            )
-
-        if site_globstr:
-            # site_model_dpath = (dvc_dpath / 'annotations/site_models').shrinkuser(home='$HOME')
-            # region_model_dpath = (dvc_dpath / 'annotations/region_models').shrinkuser(home='$HOME')
-
-            # Visualization here is too slow, add on another option if we really
-            # need to
-            # viz_part = '--viz_dpath=auto' if config.visualize else ''
-            viz_part = ''
-            project_anns_job = pipeline.submit(command=ub.codeblock(
-                rf'''
-                python -m watch reproject_annotations \
-                    --src "{aligned_imgonly_fpath}" \
-                    --dst "{aligned_imganns_fpath}" \
-                    --propogate_strategy="{config.propogate_strategy}" \
-                    --site_models="{site_globstr}" \
-                    --region_models="{region_globstr}" {viz_part}
-                '''), depends=[align_job], name=f'project-annots-{name}',
-                in_paths={
-                    'aligned_imgonly_fpath': aligned_imgonly_fpath,
-                },
-                out_paths={
-                    'aligned_imganns_fpath': aligned_imganns_fpath,
-                },
-                stage='project_annots',
-            )
-
-            if config.visualize:
-                pipeline.submit(command=ub.codeblock(
-                    rf'''
+            aligned_img_viz_dpath = aligned_kwcoco_bundle / '_viz512_img'
+            viz_max_dim = 512
+            viz_img_node = new_pipeline.submit(
+                name=f'viz-imgs-{name}',
+                executable=ub.codeblock(
+                    fr'''
                     python -m watch visualize \
-                        --src "{aligned_imganns_fpath}" \
-                        --viz_dpath "{aligned_viz_dpath}" \
-                        --draw_anns=True \
-                        --draw_imgs=False \
+                        --draw_anns=False \
+                        --draw_imgs=True \
                         --channels="red|green|blue" \
                         --max_dim={viz_max_dim} \
-                        --animate=True --workers=auto \
                         --stack=only \
-                        --only_boxes={config["visualize_only_boxes"]}
-                    '''), depends=[project_anns_job], name=f'viz-annots-{name}',
-                    in_paths={
-                        'aligned_imganns_fpath': aligned_imganns_fpath,
-                    },
+                        --animate=True \
+                        --workers=auto
+                    '''),
+                in_paths=_justkeys({
+                    'src': aligned_imgonly_fpath,
+                }),
+                out_paths={
+                    'viz_dpath': aligned_img_viz_dpath,
+                },
+                group_dname=aligned_bundle_name,
+            )
+            align_node.outputs['dst'].connect(viz_img_node.inputs['src'])
+
+        if site_globstr:
+            # Visualization here is too slow, add on another option if we
+            # really need to
+            viz_part = ''
+            project_anns_node = new_pipeline.submit(
+                name=f'project-annots-{name}',
+                executable=ub.codeblock(
+                    r'''
+                    python -m watch reproject_annotations \
+                        --propogate_strategy="{config.propogate_strategy}" \
+                        --site_models="{site_globstr}" \
+                        --io_workers="avail/2" \
+                        --region_models="{region_globstr}" {viz_part}
+                    ''').format(**locals()),
+                in_paths=_justkeys({
+                    'src': aligned_imgonly_fpath,
+                }),
+                out_paths={
+                    'dst': aligned_imganns_fpath,
+                },
+                group_dname=aligned_bundle_name,
+            )
+            align_node.outputs['dst'].connect(project_anns_node.inputs['src'])
+
+            if config.visualize:
+                aligned_img_viz_dpath = aligned_kwcoco_bundle / '_viz512_ann'
+                viz_ann_node = new_pipeline.submit(
+                    name=f'viz-annots-{name}',
+                    executable=ub.codeblock(
+                        fr'''
+                        python -m watch visualize \
+                            --draw_anns=True \
+                            --draw_imgs=False \
+                            --channels="red|green|blue" \
+                            --max_dim={viz_max_dim} \
+                            --animate=True \
+                            --workers=auto \
+                            --stack=only \
+                            --only_boxes={config["visualize_only_boxes"]}
+                        '''),
+                    in_paths=_justkeys({
+                        'src': aligned_imganns_fpath,
+                    }),
                     out_paths={
-                        'aligned_viz_dpath': aligned_viz_dpath,
+                        'viz_dpath': aligned_img_viz_dpath,
                     },
-                    stage='viz_anns',
+                    group_dname=aligned_bundle_name,
                 )
+                project_anns_node.outputs['dst'].connect(viz_ann_node.inputs['src'])
         else:
             aligned_imganns_fpath = aligned_imgonly_fpath
             info['aligned_imganns_fpath'] = aligned_imgonly_fpath
-            project_anns_job = align_job
+            project_anns_node = align_node
 
         align_info = info.copy()
-        align_info['job'] = project_anns_job
+        align_info['node'] = project_anns_node
         alignment_jobs.append(align_info)
 
-    if config.separate_align_jobs:
-        # Need a final union step
-        aligned_fpaths = [d['aligned_imganns_fpath'] for d in alignment_jobs]
-        union_depends_jobs = [d['job'] for d in alignment_jobs]
-        # union_suffix = ub.hash_data([p.name for p in aligned_fpaths])[0:8]
-        aligned_final_fpath = (aligned_kwcoco_bundle / 'data.kwcoco.zip').shrinkuser(home='$HOME')
-        aligned_multi_src_part = ' '.join(['"{}"'.format(p) for p in aligned_fpaths])
-        # cache_prefix = f'[[ -f {aligned_final_fpath} ]] || ' if stages.nodes['final_union']['cache'] else ''
-        union_job = pipeline.submit(command=ub.codeblock(
-            rf'''
-            # COMBINE Uncropped datasets
-            {job_environ_str}python -m kwcoco union \
-                --src {aligned_multi_src_part} \
-                --dst "{aligned_final_fpath}"
-            '''), depends=union_depends_jobs, name='kwcoco-union',
-            in_paths={
-                'aligned_fpaths': aligned_fpaths,
-            },
-            out_paths={
-                'aligned_final_fpath': aligned_final_fpath,
-            },
-            stage='final_union',
-        )
-        aligned_final_jobs = [union_job]
-    else:
-        assert len(alignment_jobs) == 1
-        aligned_final_fpath = alignment_jobs[0]['aligned_imganns_fpath']
-        aligned_final_fpath = alignment_jobs[0]['aligned_imganns_fpath']
-        aligned_final_jobs = [alignment_jobs[0]['job']]
+    # Need a final union step
+    aligned_fpaths = [d['aligned_imganns_fpath'] for d in alignment_jobs]
+    union_depends_nodes = [d['node'] for d in alignment_jobs]
 
-    # TODO:
-    # queue.synchronize -
-    # force all submissions to finish before starting new ones.
+    aligned_final_fpath = (aligned_kwcoco_bundle / 'data.kwcoco.zip')
+    aligned_multi_src_part = ' '.join(['"{}"'.format(p) for p in aligned_fpaths])
+
+    # COMBINE Uncropped datasets
+    union_node = new_pipeline.submit(
+        name='kwcoco-union',
+        executable=ub.codeblock(
+            fr'''
+            {job_environ_str}python -m kwcoco union
+            '''),
+        in_paths=_justkeys({
+            'src': aligned_fpaths,
+        }),
+        out_paths={
+            'dst': aligned_final_fpath,
+        },
+        group_dname=aligned_bundle_name,
+    )
+    for node in union_depends_nodes:
+        node.outputs['dst'].connect(union_node.inputs['src'])
+
+    aligned_final_nodes = [union_node]
 
     # Determine what stages will be cached.
     cache = config.cache
     if isinstance(cache, str):
         cache = [p.strip() for p in cache.split(',')]
 
-    self = pipeline
-    pipeline._update_stage_otf_cache(cache)
-
     config.tmux_workers = min(len(stac_jobs), config.tmux_workers)
     queue = config.create_queue(environ=environ)
-    # queue = cmd_queue.Queue.create(
-    #     backend=config['backend'], name=config['queue_name'], size=1,
-    #     gres=None, environ=environ)
 
-    # self._populate_explicit_dependency_queue(queue)
-    self._populate_implicit_dependency_queue(
-        queue, skip_existing=config.skip_existing)
+    new_pipeline.build_nx_graphs()
+
+    # new_pipeline.inspect_configurables()
+    rich.print('pipe_config = {}'.format(ub.urepr(pipe_config, nl=1)))
+
+    new_pipeline.configure(
+        config=pipe_config,
+        root_dpath=out_dpath,
+        cache=config.cache
+    )
+
+    new_pipeline.inspect_configurables()
+    new_pipeline.print_graphs()
+
+    new_pipeline.submit_jobs(
+        queue, skip_existing=config.skip_existing,
+        enable_links=False,
+        write_configs=1,
+        write_invocations=1,
+    )
 
     # queue.print_graph()
     # queue.rprint()
@@ -790,9 +826,10 @@ def main(cmdline=False, **kwargs):
     if config.splits:
         # Note: we probably could just do unions more cleverly rather than
         # splitting.
+        raise NotImplementedError('broken')
         from watch.cli import prepare_splits
         prepare_splits._submit_split_jobs(
-            aligned_final_fpath, queue, depends=[aligned_final_jobs])
+            aligned_final_fpath, queue, depends=[aligned_final_nodes])
 
     # TODO: Can start the DVC add of the region subdirectories here
     ub.codeblock(
@@ -817,16 +854,7 @@ def main(cmdline=False, **kwargs):
         */*.json
         ''')
 
-    # pipeline.submit(ub.codeblock(
-    #     '''
-    #     DVC_DPATH=$(geowatch_dvc)
-    #     python -m watch.cli.prepare_splits \
-    #         --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.zip \
-    #         --run=1 --serial=True
-    #     '''))
-
-    config.run_queue(queue)
-
+    config.run_queue(queue, system=True)
     # if config.rprint:
     #     queue.print_graph()
     #     queue.rprint()

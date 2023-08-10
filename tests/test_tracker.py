@@ -44,6 +44,7 @@ def test_tracker_with_sv():
         '--out_site_summaries_fpath',  str(bas_fpath),
         '--out_kwcoco', str(bas_coco_fpath),
         '--track_fn', 'saliency_heatmaps',
+        '--sensor_warnings', '0',
         '--track_kwargs', json.dumps({
             'thresh': 0.5,
             'time_thresh': .8,
@@ -69,6 +70,7 @@ def test_tracker_with_sv():
         '--out_kwcoco', str(sc_coco_fpath),
         '--track_fn', 'class_heatmaps',
         '--site_summary', str(bas_fpath),
+        '--sensor_warnings', '0',
         '--track_kwargs', json.dumps({
             'thresh': 1e-9, 'min_area_square_meters': None,
             'max_area_square_meters': None,
@@ -88,6 +90,7 @@ def test_tracker_with_sv():
         '--out_kwcoco', str(sv_coco_fpath),
         '--track_fn', 'site_validation',
         '--site_summary', str(bas_fpath),
+        '--sensor_warnings', '0',
         '--track_kwargs', json.dumps({
             'thresh': 1e-9,
             'min_area_square_meters': None,
@@ -237,6 +240,7 @@ def test_tracker_bas_with_boundary_region():
         '--track_fn', 'saliency_heatmaps',
         '--boundary_region', region_models_dpath,
         '--track_kwargs', json.dumps(track_kwargs),
+        '--sensor_warnings', '0',
     ]
     kwcoco_to_geojson.main(bas_argv1)
 
@@ -253,6 +257,7 @@ def test_tracker_bas_with_boundary_region():
         '--out_kwcoco', str(bas_coco_fpath2),
         '--track_fn', 'saliency_heatmaps',
         '--track_kwargs', json.dumps(track_kwargs),
+        '--sensor_warnings', '0',
     ]
     kwcoco_to_geojson.main(bas_argv2)
 
@@ -355,6 +360,7 @@ def test_tracker_nan_params():
         '--out_site_summaries_fpath',  str(bas_fpath),
         '--out_kwcoco', str(bas_coco_fpath),
         '--track_fn', 'saliency_heatmaps',
+        '--sensor_warnings', '0',
         '--track_kwargs', json.dumps({
             'thresh': 0.5,
             'time_thresh': .8,

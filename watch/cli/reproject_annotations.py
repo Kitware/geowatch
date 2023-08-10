@@ -85,8 +85,6 @@ class ReprojectAnnotationsConfig(scfg.DataConfig):
         reproject_annotations.main(cmdline=False, **kwargs)
 
     """
-    __fuzzy_hyphens__ = 1
-
     src = scfg.Value(None, position=1, help=ub.paragraph(
             '''
             Input coco file to project annotations onto.
@@ -175,8 +173,9 @@ class ReprojectAnnotationsConfig(scfg.DataConfig):
             self.io_workers = self.workers
 
 
+# Could be more robust here
 DUMMY_START_DATE = '1970-01-01'
-DUMMY_END_DATE = '2101-01-01'
+DUMMY_END_DATE = '2050-01-01'
 
 
 def main(cmdline=False, **kwargs):
@@ -217,7 +216,7 @@ def main(cmdline=False, **kwargs):
         >>> from watch.cli.reproject_annotations import *  # NOQA
         >>> import watch
         >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-        >>> coco_fpath = dvc_dpath / 'Drop6/imgonly-NZ_R001.kwcoco.json'
+        >>> coco_fpath = dvc_dpath / 'Drop6/imgonly-KR_R001.kwcoco.json'
         >>> dpath = ub.Path.appdir('watch/tests/project_annots').ensuredir()
         >>> cmdline = False
         >>> output_fpath = dpath / 'test_project_data.kwcoco.json'
@@ -231,6 +230,8 @@ def main(cmdline=False, **kwargs):
         >>>     'site_models': dvc_dpath / 'annotations/drop6/site_models/KR_R001*',
         >>>     'region_models': dvc_dpath / 'annotations/drop6/region_models/KR_R001*',
         >>> }
+        >>> import kwplot
+        >>> kwplot.autoplt()  # For interactive viewing
         >>> main(cmdline=cmdline, **kwargs)
     """
     config = ReprojectAnnotationsConfig.cli(data=kwargs, cmdline=cmdline)
@@ -287,9 +288,11 @@ def main(cmdline=False, **kwargs):
     status_to_catname_default = ub.udict(heuristics.PHASE_STATUS_TO_KWCOCO_CATNAME)
     status_to_catname = Yaml.coerce(config['status_to_catname'])
     if status_to_catname is not None:
+        print(f"updating status_to_catname with {status_to_catname}")
         status_to_catname = status_to_catname_default | status_to_catname
     else:
         status_to_catname = status_to_catname_default
+    print(f"status_to_catname={status_to_catname}")
 
     sites = []
     for info in site_model_infos:
@@ -367,7 +370,7 @@ def main(cmdline=False, **kwargs):
         import kwplot
         kwplot.autoplt()
         viz_dpath = ub.Path(viz_dpath).ensuredir()
-        print('viz_dpath = {!r}'.format(viz_dpath))
+        rich.print(f'viz_dpath = [link={viz_dpath}]{viz_dpath}[/link]')
         for fnum, info in enumerate(ub.ProgIter(all_drawable_infos, desc='draw region site propogation', verbose=3)):
             drawable_region_sites = info['drawable_region_sites']
             region_id = info['region_id']
@@ -815,8 +818,8 @@ def validate_site_dataframe(site_df):
     """
     from kwutil import util_time
     import numpy as np
-    dummy_start_date = '1970-01-01'  # hack, could be more robust here
-    dummy_end_date = '2101-01-01'
+    dummy_start_date = DUMMY_START_DATE
+    dummy_end_date = DUMMY_END_DATE
     first = site_df.iloc[0]
     rest = site_df.iloc[1:]
     assert first['type'] == 'site', 'first row must have type of site'
@@ -1106,7 +1109,6 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
         return None, None
 
     if not np.all(flags):
-        import warnings
         warnings.warn(f'Site {track_id} is missing {sum(flags)} / {len(flags)} observation dates')
 
     FIX_BACKWARDS_DATES = True
@@ -1147,6 +1149,10 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
     PROJECT_ENDSTATE = True
     BACKPROJECT_START_STATES = 0  # turn off back-projection
 
+    # if track_id == 'CN_C000_0000':
+    #     import xdev
+    #     xdev.embed()
+
     if propogate_strategy == 'OLD-SMART':
         raise NotImplementedError('The old strategy had bugs, use the new one')
     elif propogate_strategy == "NEW-PAST":
@@ -1175,10 +1181,17 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
                 if annot_idx == 0 and catname in heuristics.HEURISTIC_START_STATES:
                     applies = 'past'
 
-            key_infos.append({
+            keyframe = {
                 'time': dt.timestamp(),
                 'applies': applies,
-            })
+            }
+
+            # HACK: dont project these end states!
+            if end_date is not None:
+                if catname in {'positive', 'negative', 'ignore', 'Unknown'}:
+                    if annot_idx == len(observations) - 1:
+                        keyframe['max_frames'] = 1
+            key_infos.append(keyframe)
         obs_associated_gxs = keyframe_interpolate(image_times, key_infos)
     else:
         if propogate_strategy == 'SMART':
@@ -1257,7 +1270,6 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
         if HACK_TO_FIX_HARDNEGS:
             if len(site_polygons) != len(site_catnames):
                 if site_catnames != ['negative']:
-                    import warnings
                     warnings.warn(
                         f'We exepcted site_catnames to be [negative] but got {site_catnames}. '
                         'This is likely a symptom of a different issue.')
@@ -1353,6 +1365,27 @@ def keyframe_interpolate(image_times, key_infos):
         >>> key_times = [d['time'] for d in key_infos]
         >>> key_times = np.array(key_times)
         >>> plot_poc_keyframe_interpolate(image_times, key_times, key_assignment)
+
+    Example:
+        >>> from watch.cli.reproject_annotations import *  # NOQA
+        >>> import numpy as np
+        >>> image_times = np.array([1, 2, 3, 4, 5, 6, 7])
+        >>> # TODO: likely also needs a range for a maximum amount of time you will
+        >>> # apply the observation for.
+        >>> key_infos = [
+        >>>     {'time': 1.2, 'applies': 'future', 'max_frames': 1},
+        >>>     {'time': 3.2, 'applies': 'future'},
+        >>>     {'time': 6, 'applies': 'future', 'max_frames': 1},
+        >>> ]
+        >>> key_assignment = keyframe_interpolate(image_times, key_infos)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> # xdoctest: +REQUIRES(module:kwplot)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.figure(fnum=1, doclf=1)
+        >>> key_times = [d['time'] for d in key_infos]
+        >>> key_times = np.array(key_times)
+        >>> plot_poc_keyframe_interpolate(image_times, key_times, key_assignment)
     """
     import numpy as np
     key_times = [d['time'] for d in key_infos]
@@ -1398,14 +1431,26 @@ def keyframe_interpolate(image_times, key_infos):
     curr_idxs = padded_curr_idxs - 1
     next_idxs = padded_next_idxs - 1
 
-    if 0:
+    DEBUG = 0
+
+    if DEBUG:
         import pandas as pd
-        print(pd.DataFrame({
+        import rich
+        rich.print(ub.paragraph(
+            '''
+            The following table has a row for each image. It indicates the
+            previous, current and next index of the keyframes assigned to each
+            image.
+            '''))
+
+        img_table = pd.DataFrame({
             'image_time': image_times,
             'prev': prev_idxs,
             'curr': curr_idxs,
             'next': next_idxs,
-        }))
+        })
+        img_table.index.name = 'img-idx'
+        rich.print(img_table.to_string())
 
     # Note that the config of prev, curr, next forms a grouping where each
     # unique row has the same operation applied to it.
@@ -1419,6 +1464,10 @@ def keyframe_interpolate(image_times, key_infos):
     row_groupids = uidx[uinv]
     unique_rowxs, groupxs = kwarray.group_indices(row_groupids)
     ### --- </opaque group logic>
+
+    if DEBUG:
+        print(f'groupxs={groupxs}')
+        print(f'unique_rowxs={unique_rowxs}')
 
     keyidx_to_imageidxs = [[] for _ in range(len(key_infos))]
     # Now we have groups of images corresponding to each unique keyframe case.
@@ -1474,6 +1523,48 @@ def keyframe_interpolate(image_times, key_infos):
                 # It is ok if neither keyframe is relevant that is a hole in
                 # the track.
                 ...
+
+    _keyidx_to_imageidxs = []
+    for rowx, imageidxs in enumerate(keyidx_to_imageidxs):
+        # Postprocess to handle max frame constraints
+        # This is a hacky tack-on, and is only written to consider the case of
+        # future projection. In the future we should update this.
+        key_info = key_infos[rowx]
+        max_frames = key_info.get('max_frames', None)
+        if max_frames is not None:
+            if len(imageidxs) > max_frames:
+                imageidxs = imageidxs[0:max_frames]
+        _keyidx_to_imageidxs.append(imageidxs)
+    keyidx_to_imageidxs = _keyidx_to_imageidxs
+
+    if DEBUG:
+        import pandas as pd
+        import rich
+        rich.print(ub.paragraph(
+            '''
+            The following table has a row for each keyframe.
+            It indicates the assignment from keyframe to images.
+            '''))
+        rows = []
+        for x, r in enumerate(key_infos):
+            r = r.copy()
+            r['img_idxs'] = keyidx_to_imageidxs[x]
+            rows.append(r)
+
+        key_table = pd.DataFrame(rows)
+        key_table.index.name = 'key-idx'
+        rich.print(key_table.to_string())
+
+        grid = []
+        for r in rows:
+            img_row = np.zeros(len(image_times)).astype(bool)
+            img_row[r['img_idxs']] = 1
+            grid.append(img_row)
+        grid = pd.DataFrame(grid)
+        grid.index.name = 'key-idx'
+        grid.columns.name = 'image-idx'
+        rich.print(grid.to_string())
+
     return keyidx_to_imageidxs
 
 
@@ -1615,7 +1706,15 @@ def plot_image_and_site_times(coco_dset, region_image_dates, drawable_region_sit
                 # Draw a line for each "part" of the side at this timestep
                 # Note: some sites seem to have a ton of parts that could be
                 # consolodated? Is this real or is there a bug?
+                seen_ = set()
                 for yoff, color in zip(yoffsets, cat_colors):
+                    if color in seen_:
+                        # For efficiency only draw subsite parts if the
+                        # subsites have different labels I think there is some
+                        # other plotting inefficiency happening. These lists
+                        # seem to be too long.
+                        continue
+                    seen_.add(color)
                     for tp in row['propogated_on']:
                         x1 = mpl.dates.date2num(t1)
                         x2 = mpl.dates.date2num(tp)
@@ -1637,7 +1736,10 @@ def plot_image_and_site_times(coco_dset, region_image_dates, drawable_region_sit
     propogate_attrs['segments']
     propogate_attrs['colors']
 
-    ax.set_xlim(min(all_times), max(all_times))
+    max_observable_times = max(region_image_dates)
+    # max_annotated_times = max(all_times)
+
+    ax.set_xlim(min(all_times), max_observable_times)
     ax.set_ylim(0, len(drawable_region_sites))
 
     cat_to_color = {cat['name']: cat['color'] for cat in coco_dset.cats.values()}
@@ -1695,3 +1797,17 @@ if __name__ == '__main__':
         python ~/code/watch/watch/cli/reproject_annotations.py
     """
     main(cmdline=True)
+
+
+# python -m watch reproject_annotations \
+#     --src "$HOME/remote/namek/data/dvc-repos/smart_data_dvc/Aligned-Drop7/imgonly-VN_C002.kwcoco.zip" \
+#     --dst "$HOME/remote/namek/data/dvc-repos/smart_data_dvc/Aligned-Drop7/imganns-VN_C002.kwcoco.zip" \
+#     --io_workers avail \
+#     --propogate_strategy="NEW-SMART" \
+#     --site_models="
+#         - /home/joncrall/remote/namek/data/dvc-repos/smart_data_dvc/annotations/drop7/site_models/CN_C000_*.geojson                                                                         - /home/joncrall/remote/namek/data/dvc-repos/smart_data_dvc/annotations/drop7/site_models/KW_C001_*.geojson
+#         - /home/joncrall/remote/namek/data/dvc-repos/smart_data_dvc/annotations/drop7/site_models/SA_C001_*.geojson
+#         - /home/joncrall/remote/namek/data/dvc-repos/smart_data_dvc/annotations/drop7/site_models/CO_C001_*.geojson
+#         - /home/joncrall/remote/namek/data/dvc-repos/smart_data_dvc/annotations/drop7/site_models/VN_C002_*.geojson
+#     " \
+#     --region_models="$HOME/remote/namek/data/dvc-repos/smart_data_dvc/annotations/drop7/region_models/VN_C002.geojson"

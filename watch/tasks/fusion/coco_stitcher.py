@@ -694,7 +694,8 @@ class CocoStitchingManager(object):
                 for score, asset_poly in scored_polys:
                     # Transform the video polygon into image space
                     img_poly = asset_poly.warp(img_from_asset)
-                    bbox = list(img_poly.bounding_box().to_coco())[0]
+                    # bbox = list(img_poly.bounding_box().to_coco())[0]
+                    bbox = list(img_poly.box().boxes.to_coco())[0]
                     # Add the polygon as an annotation on the image
                     self.result_dataset.add_annotation(
                         image_id=gid, category_id=cid,

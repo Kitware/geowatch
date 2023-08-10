@@ -15,9 +15,9 @@ except Exception:
 
 
 def dedupe_annots(coco_dset):
-    '''
+    """
     Check for annotations with different aids that are the same geometry
-    '''
+    """
     annots = coco_dset.annots()
     # NOTE: Using segmentations to dedup with segmentation data is fragile
     eq_keys = ['image_id', 'category_id', 'track_id', 'segmentation']
@@ -40,7 +40,7 @@ def dedupe_annots(coco_dset):
 
 @profile
 def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
-    '''
+    """
     There are several reasons for a detection to be too small to keep.
     Remove these and return the rest of the dataset.
 
@@ -123,7 +123,7 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
         >>>     min_geo_precision=None)
         >>> assert filtered.n_annots > 0 and filtered.n_annots < coco_dset.n_annots
         >>> # TODO test min_geo_precision
-    '''
+    """
     if min_area_px is None:
         min_area_px = 0
 
@@ -199,10 +199,10 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
 
 
 def ensure_videos(coco_dset):
-    '''
+    """
     Ensure every image belongs to a video, even a dummy video
     and has a frame_index
-    '''
+    """
     # HACK, TODO this is probably a kwcoco bug that needs fixed
     if 'videos' not in coco_dset.dataset:
         coco_dset.dataset['videos'] = list(coco_dset.index.videos.values())
@@ -239,10 +239,10 @@ def ensure_videos(coco_dset):
 
 
 def dedupe_tracks(coco_dset):
-    '''
+    """
     Assuming that videos are made of disjoint images, ensure that trackids
     are not shared by two tracks in different videos.
-    '''
+    """
     new_trackids = TrackidGenerator(coco_dset)
 
     for trackid in coco_dset.index.trackid_to_aids.keys():
@@ -278,7 +278,7 @@ def normalize_phases(coco_dset,
                      e_probs=None,
                      baseline_keys={'salient'},
                      prediction_key='phase_transition_days'):
-    '''
+    """
     Convert internal representation of phases to their IARPA standards as well
     as inserting a baseline guess for activity classification and removing
     empty tracks.
@@ -326,7 +326,7 @@ def normalize_phases(coco_dset,
         >>>      (['Post Construction'])))
         >>> # try again with smoothing
         >>> dset = normalize_phases(dset, use_viterbi=True)
-    '''
+    """
     from watch.heuristics import CATEGORIES, CNAMES_DCT, SITE_SUMMARY_CNAME
     from watch.tasks.tracking import phase
     from collections import Counter
@@ -359,7 +359,14 @@ def normalize_phases(coco_dset,
     cnames_to_score = set(CNAMES_DCT['positive']['scored']) | set(
         CNAMES_DCT['negative']['scored'])
 
+    # TODO: maybe we should not try to enforce exepcted category names here?
+    # Is there a reason that we need to?
+
     allowed_cnames = cnames_to_replace | cnames_to_score
+
+    # Hack: add transient
+    allowed_cnames.add('transient')
+
     have_cnames = set(coco_dset.name_to_cat)
     if not have_cnames.issubset(allowed_cnames):
         raise AssertionError(
@@ -488,10 +495,10 @@ def normalize_phases(coco_dset,
     return coco_dset
 
 
-def normalize_sensors(coco_dset):
-    '''
+def normalize_sensors(coco_dset, sensor_warnings=True):
+    """
     Convert internal representations of sensors to their IARPA standards
-    '''
+    """
     # FIXME: should pull from heuristics
     from watch.heuristics import TE_SENSOR_NAMES
     sensor_dict = TE_SENSOR_NAMES
@@ -504,15 +511,16 @@ def normalize_sensors(coco_dset):
         except KeyError:
             sensor = img.get('sensor_coarse', None)
             # name = img.get('name', img['file_name'])
-            import warnings
-            warnings.warn(
-                f'image has unknown sensor {sensor} in tag={coco_dset.tag}')
+            if sensor_warnings:
+                import warnings
+                warnings.warn(
+                    f'image has unknown sensor {sensor} in tag={coco_dset.tag}')
 
     return coco_dset
 
 
 def dedupe_dates(coco_dset):
-    '''
+    """
     Ensure a tracked kwcoco file has at most 1 annot per track per date. [1]
 
     There are several potential ways to do this.
@@ -543,7 +551,7 @@ def dedupe_dates(coco_dset):
         >>> coco_dset_with_dups = coco_dset.copy()
         >>> coco_dset_fixed = dedupe_dates(coco_dset.copy())
         >>> assert coco_dset_fixed.n_images < coco_dset_with_dups.n_images
-    '''
+    """
     from kwutil import util_time
     from watch import heuristics
     sensor_priority = heuristics.SENSOR_TRACK_PRIORITY
@@ -584,16 +592,17 @@ def dedupe_dates(coco_dset):
 
 
 @profile
-def normalize(
+def run_tracking_pipeline(
         coco_dset,
         track_fn,
         gt_dset=None,
         viz_out_dir=None,
         use_viterbi=False,
+        sensor_warnings=True,
         # t_probs=None,  # for viterbi
         # e_probs=None,  # for viterbi
         **track_kwargs):
-    '''
+    """
     Driver function to apply all normalizations
 
     TODO:
@@ -639,10 +648,10 @@ def normalize(
         >>> coco_dset = normalize_phases(coco_dset, baseline_keys={'change'})
         >>> assert (coco_dset.annots().cnames ==
         >>> ['Site Preparation', 'Site Preparation', 'Post Construction'])
-        >>> coco_dset = normalize_sensors(coco_dset)
+        >>> coco_dset = normalize_sensors(coco_dset, sensor_warnings=False)
         >>> assert (coco_dset.images().get('sensor_coarse') ==
         >>>     ['WorldView', 'Sentinel-2', 'Landsat 8'])
-    '''
+    """
 
     DEBUG_JSON_SERIALIZABLE = 0
     if DEBUG_JSON_SERIALIZABLE:
@@ -734,7 +743,7 @@ def normalize(
     if DEBUG_JSON_SERIALIZABLE:
         debug_json_unserializable(out_dset.dataset, 'After normalize_phases: ')
 
-    out_dset = normalize_sensors(out_dset)
+    out_dset = normalize_sensors(out_dset, sensor_warnings=sensor_warnings)
 
     # HACK, ensure out_dset.index is up to date
     out_dset._build_index()
@@ -760,5 +769,5 @@ def normalize(
 
 
 # Note: smooth transition while changing the name of "normalize"
-# Make a long search replacable name that we can fix later.
-run_tracking_pipeline = normalize
+# Backwards compatability:
+normalize = run_tracking_pipeline

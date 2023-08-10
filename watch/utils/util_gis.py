@@ -935,7 +935,8 @@ def coerce_geojson_paths(data, return_manifests=False):
     the previous in a list.
 
     Args:
-        data : argument to coerce
+        data (Any): argument to coerce
+
         return_manifests (bool): if True additionally returns paths to
             any intermediate manifest files.
 
