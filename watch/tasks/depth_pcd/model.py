@@ -4,25 +4,9 @@ if 1:
     import os
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
-    # Monkey patch in deeplab2 to sys.path
-    try:
-        PARENT_DPATH = ub.Path(__file__).parent
-    except NameError:
-        from watch.tasks import depth_pcd as parent_package
-        PARENT_DPATH = ub.Path(parent_package.__file__).parent
-
-    TPL_DPATH = PARENT_DPATH / 'tpl'
-
-    import sys
-    if TPL_DPATH not in sys.path:
-        # Ideally we would use the PythonPathContext to ensure we do not
-        # pollute the pythonpath (or better yet, not need to modify the
-        # pythonpath at all), but for now we will just append to sys.path
-        # directly.
-
-        # with PythonPathContext(parent_dpath):
-        sys.path.append(os.fspath(TPL_DPATH))
-
+    # Monkeypatch deeplab_v2 into the namespace
+    import geowatch_tpl
+    TPL_DPATH = ub.Path(geowatch_tpl.MODULE_DPATH)
     import tensorflow as tf
 
     HACK_CPU_ONLY = 1

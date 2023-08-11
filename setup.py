@@ -280,6 +280,7 @@ if __name__ == '__main__':
             'watch', 'watch.*',
             # Alias the module while we transition to a new name.
             'geowatch', 'geowatch.*',
+            'geowatch_tpl', 'geowatch_tpl.*',
         ]),
         url='https://gitlab.kitware.com/computer-vision/geowatch.git',
         version=VERSION,
