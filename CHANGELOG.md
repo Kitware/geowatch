@@ -18,6 +18,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Removed old `watch.tasks.fusion.organize` module
 * Removed old `watch.tasks.fusion.aggregate_results` module
 * Removed old `watch.mlops.old` module, which included the old pipeline
+* Removed other old code.
 
 
 ## Version 0.8.2 - Target 2023-07-xx

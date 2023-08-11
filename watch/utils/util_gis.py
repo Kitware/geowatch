@@ -36,8 +36,8 @@ def geopandas_pairwise_overlaps(gdf1, gdf2, predicate='intersects'):
 
     Returns:
         dict:
-            mapping from integer-indexes in gdf1 to
-            overlapping integer-indexes in gdf2
+            mapping from integer-iloc-indexes in gdf1 to
+            overlapping integer-iloc-indexes in gdf2
 
     Example:
         >>> from watch.utils.util_gis import *  # NOQA

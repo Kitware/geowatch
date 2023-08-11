@@ -508,3 +508,143 @@ def extract_legend(ax):
     new_ax.legend(*legend_handles, title=orig_legend_title,
                             loc='lower center')
     return new_ax
+
+
+class LineManager:
+    """
+    Accumulates lines the user is interested in drawing so we can draw them
+    efficiently.
+
+    Example:
+        >>> # xdoctest: +SKIP
+        >>> from watch.utils.util_kwplot import *  # NOQA
+        >>> # xdoctest: +REQUIRES(env:PLOTTING_DOCTESTS)
+        >>> import kwplot
+        >>> sns = kwplot.autosns()
+        >>> fig = kwplot.figure(fnum=1)
+        >>> self = LineManager()
+        >>> import kwimage
+        >>> points = kwimage.Polygon.star().data['exterior'].data
+        >>> self.add_linestring(points)
+        >>> ax = fig.gca()
+        >>> self.add_to_axes(ax)
+        >>> ax.relim()
+        >>> ax.set_xlim(-1, 1)
+        >>> ax.set_ylim(-1, 1)
+
+    Example:
+        >>> # xdoctest: +SKIP
+        >>> from watch.utils.util_kwplot import *  # NOQA
+        >>> # xdoctest: +REQUIRES(env:PLOTTING_DOCTESTS)
+        >>> import kwplot
+        >>> sns = kwplot.autosns()
+        >>> fig = kwplot.figure(fnum=1)
+        >>> self = LineManager()
+        >>> import kwimage
+        >>> points = kwimage.Polygon.star().data['exterior'].data
+        >>> y = 1
+        >>> self.add_linestring([(0, y), (1, y)], color='kitware_blue')
+        >>> y = 2
+        >>> self.add_linestring([(0, y), (1, y)], color='kitware_green')
+        >>> y = 3
+        >>> self.add_linestring([(0, y), (1, y)], color='kitware_blue')
+        >>> y = 4
+        >>> self.add_linestring([(0, y), (1, y)], color='kitware_blue')
+        >>> self.add_linestring(np.array([
+        ...     (0.2, 0.5),
+        ...     (0.45, 1.6),
+        ...     (0.62, 2.3),
+        ...     (0.82, 4.9),
+        >>> ]), color='kitware_yellow')
+        >>> self.add_to_axes()
+        >>> ax = fig.gca()
+        >>> ax.set_xlim(0, 1)
+        >>> ax.set_ylim(0, 5)
+        >>> assert len(self.group_to_segments) == 3
+    """
+    def __init__(self):
+        self.group_to_segments = ub.ddict(list)
+        self.group_to_attrs = {}
+
+    def _normalize_attrs(self, attrs):
+        import kwimage
+        attrs = ub.udict(attrs)
+        if 'color' in attrs:
+            attrs['color'] = kwimage.Color.coerce(attrs['color']).as01()
+        if 'hashid' in attrs:
+            attrs = attrs - {'hashid'}
+        hashid = ub.hash_data(attrs)[0:8]
+        attrs['hashid'] = hashid
+        return attrs
+
+    def plot(self, xs, ys, **attrs):
+        """
+        Alternative way to add lines
+        """
+        import numpy as np
+        ys = [ys] if not ub.iterable(ys) else ys
+        xs = [xs] if not ub.iterable(ys) else xs
+        if len(ys) == 1 and len(xs) > 1:
+            ys = ys * len(xs)
+        if len(xs) == 1 and len(ys) > 1:
+            xs = xs * len(ys)
+        points = np.array(list(zip(xs, ys)))
+        self.add_linestring(points, **attrs)
+
+    def add_linestring(self, points, **attrs):
+        """
+        Args:
+            points (List[Tuple[float, float]] | ndarray):
+                an Nx2 set of ordered points
+        """
+        attrs = self._normalize_attrs(attrs)
+        hashid = attrs['hashid']
+        self.group_to_segments[hashid].append(points)
+        self.group_to_attrs[hashid] = attrs
+
+    def build_collections(self):
+        collections = []
+        for hashid, segments in self.group_to_segments.items():
+            attrs = self.group_to_attrs[hashid] - {'hashid'}
+            collection = mpl.collections.LineCollection(segments, **attrs)
+            collections.append(collection)
+        return collections
+
+    def add_to_axes(self, ax=None):
+        import kwplot
+        if ax is None:
+            plt = kwplot.autoplt()
+            ax = plt.gca()
+
+        collections = self.build_collections()
+        for collection in collections:
+            ax.add_collection(collection)
+
+    def bounds(self):
+        import numpy as np
+        all_lines = []
+        for segments in self.group_to_segments.values():
+            for lines in segments:
+                lines = np.array(lines)
+                all_lines.append(lines)
+
+        all_coords = np.concatenate(all_lines, axis=0)
+        import pandas as pd
+        flags = pd.isnull(all_coords)
+        all_coords[flags] = np.nan
+        all_coords = all_coords.astype(float)
+
+        minx, miny = np.nanmin(all_coords, axis=0) if len(all_coords) else 0
+        maxx, maxy = np.nanmax(all_coords, axis=0) if len(all_coords) else 1
+        ltrb = minx, miny, maxx, maxy
+        return ltrb
+
+    def setlims(self, ax=None):
+        import kwplot
+        if ax is None:
+            plt = kwplot.autoplt()
+            ax = plt.gca()
+
+        minx, miny, maxx, maxy = self.bounds()
+        ax.set_xlim(minx, maxx)
+        ax.set_ylim(miny, maxy)

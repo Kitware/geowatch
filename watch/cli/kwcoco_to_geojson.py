@@ -604,6 +604,7 @@ def coco_create_site_header(coco_dset, region_id, site_id, trackid, gids, featur
 
 @profile
 def create_region_header(region_id, site_summaries):
+    # TODO: use watch.geoannots.geomodels here
     import geojson
     geometry = _combined_geometries([
         _single_geometry(summary['geometry'])

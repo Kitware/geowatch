@@ -7,28 +7,45 @@ class ConfusorAnalysisConfig(scfg.DataConfig):
     """
     Requires that IARPA metrics are computed
     """
+
+    metrics_node_dpath = scfg.Value(None, help=ub.paragraph(
+        '''
+        A path to an IARPA metrics MLops output directory node.
+
+        Use this in the special case that you have an mlops or smartflow output
+        directory.
+        ''')),
+
     detections_fpath = scfg.Value(None, help=ub.paragraph(
         '''
         truth assignments
         usually detections_tau=0.2_rho=0.5_min_area=0.csv
+
+        Only required if bas_metric_dpath is not given.
         '''))
     proposals_fpath = scfg.Value(None, help=ub.paragraph(
         '''
-        detection assignments
+        detection assignments.
         usually proposals_tau=0.2_rho=0.5_min_area=0.csv
+
+        This does not need to be specified if bas_metric_dpath is given to an
+        mlops output path.
         '''))
 
     src_kwcoco = scfg.Value(None, help='the input kwcoco file to project onto')
     dst_kwcoco = scfg.Value(None, help='the reprojected output kwcoco file to write')
 
-    pred_sites = scfg.Value(None, help='the path to the predicted sites manifest / directory / globstr')
     bas_metric_dpath = scfg.Value(None, help='A path to bas metrics if det/prop paths are not specified')
+
+    pred_sites = scfg.Value(None, help='the path to the predicted sites manifest / directory / globstr')
 
     region_id = scfg.Value(None, help='the id for the region')
     true_site_dpath = scfg.Value(None, help='input')
     true_region_dpath = scfg.Value(None, help='input')
 
     performer_id = scfg.Value('kit', help='the performer id')
+
+    summary_visualization = scfg.Value(False, isflag=True)
 
     out_dpath = scfg.Value(None, help='where to write results')
 
@@ -45,29 +62,52 @@ class ConfusorAnalysisConfig(scfg.DataConfig):
         if self.out_dpath is not None:
             self.out_dpath = ub.Path(self.out_dpath)
 
+    def _infer_from_mlops_node(self):
+        import json
+        if self.metrics_node_dpath is not None:
+            # Infer things using assumptions about mlops directory structures
+            self.metrics_node_dpath = ub.Path(self.metrics_node_dpath)
+
+            overall_cands = list(self.metrics_node_dpath.glob('*/overall'))
+            sites_cands = list(self.metrics_node_dpath.glob('.pred/*/*/sites'))
+            src_kwcoco_cands = list(self.metrics_node_dpath.glob('.pred/*/*/poly.kwcoco.zip'))
+            assert len(overall_cands) == 1, 'mlops assumption violated'
+            assert len(sites_cands) == 1, 'mlops assumption violated'
+            assert len(src_kwcoco_cands) == 1, 'mlops assumption violated'
+
+            self.src_kwcoco = src_kwcoco_cands[0]
+            overall_dpath = overall_cands[0]
+            self.pred_sites = sites_cands[0]
+
+            self.bas_metric_dpath = overall_dpath / 'bas'
+            self.region_id = overall_dpath.parent.name
+            job_config_fpath = self.metrics_node_dpath / 'job_config.json'
+            job_config = json.loads(job_config_fpath.read_text())
+
+            if self.true_region_dpath is None:
+                self.true_region_dpath = job_config['bas_poly_eval.true_region_dpath']
+
+            if self.true_site_dpath is None:
+                self.true_site_dpath = job_config['bas_poly_eval.true_site_dpath']
+
+            if self.out_dpath is None:
+                self.out_dpath = (self.metrics_node_dpath / 'confusion_analysis')
+            self.dst_kwcoco = self.out_dpath / 'confusion_kwcoco' / 'confusion.kwcoco.zip'
+
+        if self.bas_metric_dpath is not None:
+            if self.detections_fpath is None:
+                self.detections_fpath = self.bas_metric_dpath / 'detections_tau=0.2_rho=0.5_min_area=0.csv'
+            if self.proposals_fpath is None:
+                self.proposals_fpath = self.bas_metric_dpath / 'proposals_tau=0.2_rho=0.5_min_area=0.csv'
+
+        self.__post_init__()
+
 
 def main(cmdline=1, **kwargs):
     """
     CommandLine:
         xdoctest -m /home/joncrall/code/watch/watch/mlops/confusor_analysis.py main
         HAS_DVC=1 xdoctest -m watch.mlops.confusor_analysis main:0
-
-    Ignore:
-        from ubelt import Path
-        kwargs = {
-        'detections_fpath' : '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_toothbrush_split6_landcover_MeanYear10GSD-V2/_custom/eval_links/KR_R002_sv_poly_eval_id_e865e066/KR_R002/overall/bas/detections_tau=0.2_rho=0.5_min_area=0.csv',
-        'proposals_fpath'  : '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_toothbrush_split6_landcover_MeanYear10GSD-V2/_custom/eval_links/KR_R002_sv_poly_eval_id_e865e066/KR_R002/overall/bas/proposals_tau=0.2_rho=0.5_min_area=0.csv',
-        'src_kwcoco'       :
-            '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_toothbrush_split6_landcover_MeanYear10GSD-V2/_custom/eval_links/KR_R002_sv_poly_eval_id_e865e066/.pred/sv_dino_filter/sv_dino_filter_id_32928a74/.pred/sv_dino_boxes/sv_dino_boxes_id_8de62349/.pred/sv_crop/sv_crop_id_64ea2fe6/.pred/bas_poly/bas_poly_id_efa920a0//.pred/bas_pxl/bas_pxl_id_fe488803//pred.kwcoco.zip',
-            'dst_kwcoco'       : '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_toothbrush_split6_landcover_MeanYear10GSD-V2/_custom/eval_links/KR_R002_sv_poly_eval_id_e865e066/analysis/confusion_analysis/bas_confusion.kwcoco.zip',
-            'pred_sites'       : '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_toothbrush_split6_landcover_MeanYear10GSD-V2/_custom/eval_links/KR_R002_sv_poly_eval_id_e865e066/.pred/sv_dino_filter/sv_dino_filter_id_32928a74/out_sites',
-            'bas_metric_dpath' : Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_toothbrush_split6_landcover_MeanYear10GSD-V2/_custom/eval_links/KR_R002_sv_poly_eval_id_e865e066/KR_R002/overall/bas'),
-            'region_id'        : 'KR_R002',
-            'true_site_dpath'  : Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/annotations/drop6/site_models'),
-            'true_region_dpath': Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/annotations/drop6/region_models'),
-            'performer_id'     : 'kit',
-            'out_dpath'        : Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_toothbrush_split6_landcover_MeanYear10GSD-V2/_custom/eval_links/KR_R002_sv_poly_eval_id_e865e066/analysis/confusion_analysis'),
-            }
 
     Example:
         >>> # xdoctest: +REQUIRES(env:HAS_DVC)
@@ -98,6 +138,7 @@ def main(cmdline=1, **kwargs):
         >>> main(cmdline=cmdline, **kwargs)
     """
     config = ConfusorAnalysisConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
+    config._infer_from_mlops_node()
 
     import rich
     import pandas as pd
@@ -105,18 +146,12 @@ def main(cmdline=1, **kwargs):
     from watch import heuristics
     from watch.utils import util_gis
     rich.print('config = ' + ub.urepr(config, nl=1, align=':'))
-    region_id = config.region_id
 
     performer_id = config.performer_id
     true_site_dpath = config.true_site_dpath
     true_region_dpath = config.true_region_dpath
     pred_site_fpaths = list(util_gis.coerce_geojson_paths(config.pred_sites))
-
-    if config.bas_metric_dpath is not None:
-        if config.detections_fpath is None:
-            config.detections_fpath = config.bas_metric_dpath / 'detections_tau=0.2_rho=0.5_min_area=0.csv'
-        if config.proposals_fpath is None:
-            config.proposals_fpath = config.bas_metric_dpath / 'proposals_tau=0.2_rho=0.5_min_area=0.csv'
+    region_id = config.region_id
 
     config.detections_fpath = ub.Path(config.detections_fpath)
     config.proposals_fpath = ub.Path(config.proposals_fpath)
@@ -135,6 +170,10 @@ def main(cmdline=1, **kwargs):
     assert not needs_recompute
 
     def fix_site_id(site_id):
+        site_id = site_id.strip()
+        splitters = ['_te_', '_iMERIT_', f'_{performer_id}_']
+        for marker in splitters:
+            site_id = site_id.split(marker)[0]
         # Hack because idk why the metrics code does this.
         if site_id.startswith('_'):
             site_id = region_id + site_id
@@ -145,18 +184,24 @@ def main(cmdline=1, **kwargs):
     pred_confusion_rows = []
     site_to_status = {}
     for row in assign1.to_dict('records'):
-        true_site_id = row['truth site'].split('_te_')[0]
+        true_site_id = row['truth site']
         true_site_id = fix_site_id(true_site_id)
         pred_site_ids = []
         truth_status = row['site type']
         site_to_status[true_site_id] = truth_status
         if isinstance(row['matched site models'], str):
             for name in row['matched site models'].split(','):
-                pred_site_id = name.strip().split(f'_{performer_id}_')[0]
+                pred_site_id = name
                 pred_site_id = fix_site_id(pred_site_id)
                 pred_site_ids.append(pred_site_id)
         has_positive_match = len(pred_site_ids)
         true_cfsn = heuristics.iarpa_assign_truth_confusion(truth_status, has_positive_match)
+
+        if true_cfsn is None:
+            print('truth_status = {}'.format(ub.urepr(truth_status, nl=1)))
+            print('has_positive_match = {}'.format(ub.urepr(has_positive_match, nl=1)))
+            raise AssertionError
+
         true_confusion_rows.append({
             'true_site_id': true_site_id,
             'pred_site_ids': pred_site_ids,
@@ -164,17 +209,22 @@ def main(cmdline=1, **kwargs):
         })
 
     for row in assign2.to_dict('records'):
-        pred_site_id = row['site model'].split(f'_{performer_id}_')[0]
+        pred_site_id = row['site model']
         pred_site_id = fix_site_id(pred_site_id)
         true_site_ids = []
         truth_match_statuses = []
         if isinstance(row['matched truth sites'], str):
             for name in row['matched truth sites'].split(','):
-                true_site_id = name.strip().split('_te_')[0]
+                true_site_id = name
                 true_site_id = fix_site_id(true_site_id)
                 truth_match_statuses.append(site_to_status[true_site_id])
                 true_site_ids.append(true_site_id)
         pred_cfsn = heuristics.iarpa_assign_pred_confusion(truth_match_statuses)
+        if pred_cfsn is None:
+            print('row = {}'.format(ub.urepr(row, nl=1)))
+            print('truth_match_statuses = {}'.format(ub.urepr(truth_match_statuses, nl=1)))
+            raise AssertionError
+
         pred_confusion_rows.append({
             'pred_site_id': pred_site_id,
             'true_site_ids': true_site_ids,
@@ -219,6 +269,7 @@ def main(cmdline=1, **kwargs):
     # assert pred_sites_fpath.exists()
     # pred_site_fpaths = list(util_gis.coerce_geojson_paths(pred_sites_fpath))
     from watch.geoannots.geomodels import SiteModel, SiteModelCollection, RegionModel
+    import kwcoco
     import json
 
     rm_files = list(true_region_dpath.glob(region_id + '*.geojson'))
@@ -236,6 +287,7 @@ def main(cmdline=1, **kwargs):
     # Ensure all data cast to site models
 
     true_region_model = orig_regions[0]
+    true_region_model.fixup()
 
     for site in it.chain(pred_sites, true_sites):
         site.header['properties'].setdefault('cache', {})
@@ -257,10 +309,6 @@ def main(cmdline=1, **kwargs):
         all_models = SiteModelCollection(pred_sites + true_sites)
         all_models.fixup()
         all_models.validate(workers=0)
-        # for sm in all_models:
-        #     assert sm.header['geometry']['type'] == 'Polygon'
-        #     sm.validate()
-        # ...
 
     pred_region_model = pred_sites.as_region_model(region=true_region_model.header)
     pred_df = pred_region_model.pandas_summaries()
@@ -338,23 +386,138 @@ def main(cmdline=1, **kwargs):
         text = json.dumps(new_site, indent='    ')
         fpath.write_text(text)
 
-    # Dump confusion categorized site models to disk
-    cfsn_dpath = config.out_dpath / 'confusion_sites'
-    true_cfsn_dpath = (cfsn_dpath / 'true').ensuredir()
-    pred_cfsn_dpath = (cfsn_dpath / 'pred').ensuredir()
-    for pred_site_id, pred_site in id_to_pred_site.items():
-        fpath = pred_cfsn_dpath / (pred_site_id + '.geojson')
-        text = json.dumps(pred_site, indent='    ')
-        fpath.write_text(text)
+    # Group by confusion type
+    true_type_to_sites = ub.ddict(list)
     for true_site_id, true_site in id_to_true_site.items():
-        fpath = true_cfsn_dpath / (true_site_id + '.geojson')
-        text = json.dumps(true_site, indent='    ')
-        fpath.write_text(text)
+        confusion_type = true_site.header['properties']['cache']['confusion']['type']
+        true_type_to_sites[confusion_type].append(true_site)
+
+    pred_type_to_sites = ub.ddict(list)
+    for pred_site_id, pred_site in id_to_pred_site.items():
+        confusion_type = pred_site.header['properties']['cache']['confusion']['type']
+        pred_type_to_sites[confusion_type].append(pred_site)
+
+    assert set(true_type_to_sites).isdisjoint(set(pred_type_to_sites))
+
+    type_to_sites = ub.udict(pred_type_to_sites) | true_type_to_sites
+    type_to_sites['pred'] = list(id_to_pred_site.values())
+    type_to_sites['true'] = list(id_to_true_site.values())
+
+    # Dump confusion categorized site models to disk
+    cfsn_group_dpath = config.out_dpath / 'confusion_groups'
+
+    print(ub.urepr(type_to_sites.map_values(len)))
+
+    # Create site summaries for each type of confusion
+    type_to_summary = {}
+    for group_type, sites in type_to_sites.items():
+        sites = SiteModelCollection(sites)
+        cfsn_summary = sites.as_region_model(true_region_model)
+        if group_type not in {'true', 'pred'}:
+            cfsn_summary.header['properties']['cache']['confusion_type'] = confusion_type
+            cfsn_summary.header['properties']['cache']['originator'] = performer_id
+        type_to_summary[group_type] = cfsn_summary
+
+    TIME_OVERLAP_SUMMARY = 1
+    if TIME_OVERLAP_SUMMARY:
+        # Time analysis of false positives that overlap with something.
+        true_summary = type_to_summary['true']
+        wrong_summary = type_to_summary['sm_completely_wrong']
+
+        true_sites = type_to_sites['true']
+        wrong_sites = type_to_sites['sm_completely_wrong']
+
+        true_gdf = true_summary.pandas_summaries()
+        wrong_gdf = wrong_summary.pandas_summaries()
+        idx1_to_idxs2 = util_gis.geopandas_pairwise_overlaps(wrong_gdf, true_gdf)
+
+        import xdev
+        xdev.embed()
+
+        import kwplot
+        kwplot.autosns()
+        fig = kwplot.figure(fnum=1)
+        fig.clf()
+
+        from watch.utils import util_kwplot
+        lineman = util_kwplot.LineManager()
+        yloc = 0
+        for idx1, idxs2 in idx1_to_idxs2.items():
+            if len(idxs2):
+                # sub1 = wrong_gdf.iloc[idx1][['start_date', 'end_date', 'status', 'geometry']]
+                # sub2 = true_gdf.iloc[idxs2][['start_date', 'end_date', 'status', 'geometry']]
+
+                yloc += 1
+
+                pred_site = wrong_sites[idx1]
+                pred_obs = pred_site.pandas_observations()
+
+                pred_ys = yloc
+                pred_xs = util_kwplot.fix_matplotlib_dates(pred_obs['observation_date'].values)
+
+                pred_obs['current_phase']
+                pred_obs['score']
+
+                lineman.plot(pred_xs, pred_ys, color='kitware_blue')
+
+                for idx2 in idxs2:
+                    true_site = true_sites[idx2]
+                    true_obs = true_site.pandas_observations()
+                    true_xs = util_kwplot.fix_matplotlib_dates(true_obs['observation_date'].values)
+                    yloc += 1
+                    true_ys = yloc
+                    lineman.plot(true_xs, true_ys, color='kitware_green')
+
+                yloc += 20
+
+        lineman.add_to_axes()
+        ax = fig.gca()
+        # TODO: make this formatter fixup work better.
+        import matplotlib.dates as mdates
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+        ax.xaxis.set_major_locator(mdates.DayLocator(interval=90))
+        lineman.setlims()
+
+    for group_type, sites in type_to_sites.items():
+        cfsn_summary = type_to_summary[group_type]
+        group_site_dpath = (cfsn_group_dpath / group_type).ensuredir()
+        group_region_fpath = (cfsn_group_dpath / (group_type + '.geojson'))
+        text = cfsn_summary.dumps(indent='    ')
+        group_region_fpath.write_text(text)
+        for site in sites:
+            site_fpath = group_site_dpath / (site.site_id + '.geojson')
+            text = json.dumps(pred_site, indent='    ')
+            site_fpath.write_text(text)
+
+    USE_KML = 1
+    if USE_KML:
+        cfsn_kml_dpath = (config.out_dpath / 'confusion_kml').ensuredir()
+        for group_type, sites in type_to_sites.items():
+            cfsn_summary = type_to_summary[group_type]
+            # data = cfsn_summary
+            kml = to_styled_kml(cfsn_summary)
+            kml_fpath = cfsn_kml_dpath / (group_type + '.kml')
+            kml.save(kml_fpath)
+
+    import xdev
+    xdev.embed()
+
+    if USE_KML and 0:
+        # TODO: write nice images that can be used with QGIS
+        src_dset = kwcoco.CocoDataset(config.src_kwcoco)
+        coco_img = src_dset.images().coco_images[0]
+        fpath = coco_img.find_asset('salient')['file_name']
+        img_lpath = cfsn_kml_dpath / 'heatmap.tiff'
+        ub.symlink(fpath, img_lpath)
+        fpath = coco_img.primary_image_filepath()
+        img_lpath = cfsn_kml_dpath / 'img.tiff'
+        ub.symlink(fpath, img_lpath)
 
     # Need to build site summaries from site models.
 
     # Write a new "enriched truth" file that reweights false negatives add
     # false positive as hard negatives.
+    rich.print(f'Confusion Analysis: [link={config.out_dpath}]{config.out_dpath}[/link]')
 
     REPROJECT = config.src_kwcoco is not None
     if REPROJECT:
@@ -417,20 +580,24 @@ def main(cmdline=1, **kwargs):
             print(f'repr2={repr2}')
             print(f'repr3={repr3}')
 
+            if config.dst_kwcoco is not None:
+                ub.Path(dst_dset.fpath).parent.ensuredir()
+                dst_dset.dump()
+
             # set(dst_dset.annots().lookup('role', None))
             # set([x.get('role', None) for x in dst_dset.annots().lookup('cache', None)])
 
             # dst_dset.annots().take([0, 1, 2])
-            viz_dpath = cfsn_dpath
-            summary_visualization(dst_dset, viz_dpath)
-            rich.print(f'Viz Dpath: [link={viz_dpath}]{viz_dpath}[/link]')
+            viz_dpath = (config.out_dpath / 'summary_viz').ensuredir()
+            if config.summary_visualization:
+                make_summary_visualization(dst_dset, viz_dpath)
 
 
-def summary_visualization(dst_dset, viz_dpath):
+def make_summary_visualization(dst_dset, viz_dpath):
     import kwplot
     import numpy as np
 
-    resolution = '5GSD'
+    resolution = '10GSD'
 
     from kwutil import util_progress
     from kwutil import util_time
@@ -561,14 +728,14 @@ def summary_visualization(dst_dset, viz_dpath):
 
             alpha = 0.6
 
-            for row in ub.ProgIter(role_to_summary.get('true_confusion', [])):
+            for row in ub.ProgIter(role_to_summary.get('true_confusion', []), desc='true cfsn'):
                 for k1, v1 in canvases.items():
                     v1['true'] = row['poly'].draw_on(v1['true'], fill=False, edgecolor=row['confusion_color'], alpha=alpha)
                     v1['cfsn'] = row['poly'].draw_on(v1['cfsn'], fill=False, edgecolor=row['confusion_color'], alpha=alpha)
                 # row['poly'].draw_on(canvas_true, fill=False, edgecolor=row['confusion_color'])
                 # row['poly'].draw_on(canvas_cfsn, fill=False, edgecolor=row['confusion_color'])
 
-            for row in ub.ProgIter(role_to_summary.get('pred_confusion', [])):
+            for row in ub.ProgIter(role_to_summary.get('pred_confusion', []), desc='pred cfsn'):
                 for k1, v1 in canvases.items():
                     v1['pred'] = row['poly'].draw_on(v1['pred'], fill=False, edgecolor=row['confusion_color'], alpha=alpha)
                     v1['cfsn'] = row['poly'].draw_on(v1['cfsn'], fill=False, edgecolor=row['confusion_color'], alpha=alpha)
@@ -594,6 +761,65 @@ def summary_visualization(dst_dset, viz_dpath):
     from watch import heuristics
     legend_img = kwplot.make_legend_img(heuristics.IARPA_CONFUSION_COLORS)
     kwimage.imwrite(viz_dpath / 'confusion_legend.png', legend_img)
+    import rich
+    rich.print(f'Viz Dpath: [link={viz_dpath}]{viz_dpath}[/link]')
+
+
+def to_styled_kml(data):
+    """
+    Make a kml version of the geojson that works nice with QGIS
+    """
+    import kwimage
+    import simplekml
+    kml = simplekml.Kml()
+    for feat in data['features']:
+        if feat['geometry']['type'] == 'Polygon':
+
+            if 'site_id' in feat['properties']:
+                name = feat['properties']['site_id']
+            else:
+                name = feat['properties']['region_id']
+
+            poly = kml.newpolygon(name=name,
+                                  description='test',
+                                  outerboundaryis=feat['geometry']['coordinates'][0])
+
+            cache = feat['properties']['cache']
+            if 'confusion' in cache:
+                hexcol = (kwimage.Color.coerce(cache['confusion']['color']).ashex()[1:] + 'ff')
+                kmlcol = ''.join(ub.flatten(list(ub.chunks(hexcol, chunksize=2))[::-1]))
+                linecol = simplekml.Color.changealphaint(100, kmlcol)
+                facecol = simplekml.Color.changealphaint(50, kmlcol)
+                poly.style.linestyle.color = linecol
+                poly.style.linestyle.width = 5
+                poly.style.polystyle.color = facecol
+            else:
+                if feat['properties']['type'] == 'region':
+                    hexcol = (kwimage.Color.coerce('white').ashex()[1:] + 'ff')
+                    kmlcol = ''.join(ub.flatten(list(ub.chunks(hexcol, chunksize=2))[::-1]))
+                    linecol = simplekml.Color.changealphaint(100, hexcol)
+                    facecol = simplekml.Color.changealphaint(1, hexcol)
+                    poly.style.linestyle.color = linecol
+                    poly.style.linestyle.width = 5
+                    poly.style.polystyle.color = facecol
+                else:
+                    hexcol = (kwimage.Color.coerce('kitware_darkgray').ashex()[1:] + 'ff')
+                    kmlcol = ''.join(ub.flatten(list(ub.chunks(hexcol, chunksize=2))[::-1]))
+                    linecol = simplekml.Color.changealphaint(100, kmlcol)
+                    facecol = simplekml.Color.changealphaint(50, kmlcol)
+                    poly.style.linestyle.color = linecol
+                    poly.style.linestyle.width = 5
+                    poly.style.polystyle.color = facecol
+
+        elif feat['geometry']['type'] == 'LineString':
+            kml.newlinestring(name=name,
+                              description='test',
+                              coords=feat['geometry']['coordinates'])
+        elif feat['geometry']['type'] == 'Point':
+            kml.newpoint(name=name,
+                         description='test',
+                         coords=[feat['geometry']['coordinates']])
+    return kml
 
 
 if __name__ == '__main__':

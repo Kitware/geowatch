@@ -426,8 +426,33 @@ python -c "if 1:
     dvc.push(to_update, verbose=3)
 "
 
-geowatch imganns-KR_R001.kwcoco.zip --smart
+# Also update splits
+DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
+DST_BUNDLE_DPATH=$DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD
+cd "$DST_BUNDLE_DPATH"
+#
+ANN_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='ssd')
+python -m cmd_queue new "reproject_queue"
+for SRC_FPATH in data_*.kwcoco.zip; do
+    echo "SRC_FPATH = $SRC_FPATH"
+    HASHID=$(echo "$SRC_FPATH" | sha256sum | cut -c1-8)
+    if test -f "$SRC_FPATH".dvc; then
+        python -m cmd_queue submit --jobname="reproject-$HASHID" -- reproject_queue \
+            geowatch reproject_annotations \
+                --src="$SRC_FPATH"  \
+                --inplace \
+                --io_workers="avail/6" \
+                --region_models="$ANN_DATA_DPATH/annotations/drop6_hard_v1/region_models" \
+                --site_models="$ANN_DATA_DPATH/annotations/drop6_hard_v1/site_models"
+    else
+        echo "not updating file without a dvc sidecar"
+    fi
+done
+python -m cmd_queue show "reproject_queue"
+python -m cmd_queue run --workers=8 "reproject_queue"
 
+
+geowatch imganns-KR_R001.kwcoco.zip --smart
 
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")

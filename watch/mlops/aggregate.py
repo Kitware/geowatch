@@ -896,8 +896,11 @@ def automated_analysis(eval_type_to_aggregator, config):
             print((eval_fpath.parent / 'job_config.json').read_text())
             print(f'eval_fpath={eval_fpath}')
             ub.symlink(real_path=eval_fpath.parent, link_path=agg_group_dpath / eval_fpath.parent.name)
-            from watch.mlops import confusion_visualization
-            eval_dpath = confusion_visualization.bas_poly_eval_confusion_analysis(eval_fpath)
+            from watch.mlops import confusor_analysis
+            eval_dpath = eval_fpath.parent
+            cfsn_dpath = eval_dpath / 'confusion_analysis'
+            confusor_analysis.main(cmdline=0, metrics_node_dpath=eval_dpath,
+                                   out_dpath=cfsn_dpath)
             # TODO: use the region_id.
             ub.symlink(real_path=eval_dpath, link_path=agg_group_dpath / eval_dpath.name)
 

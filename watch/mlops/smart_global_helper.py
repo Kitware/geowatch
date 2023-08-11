@@ -1,5 +1,6 @@
 import kwarray
 import ubelt as ub
+from kwutil.util_yaml import Yaml
 
 
 class SmartGlobalHelper:
@@ -668,7 +669,41 @@ class SmartGlobalHelper:
                 'bas_poly.min_area_square_meters': 7200.0,
                 'bas_poly.max_area_square_meters': 8000000.0,
                 'task': 'BAS',
-            }
+            },
+
+            Yaml.loads(
+                '''
+                delivery: Eval14
+                task: BAS
+                bas_pxl.package_fpath: models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgr_cold_split6_V62/Drop7-MedianNoWinter10GSD_bgr_cold_split6_V62_epoch359_step15480.pt
+                bas_poly.thresh: 0.3875
+                bas_poly.time_thresh: 0.8
+                sv_dino_filter.end_min_score: 0.1
+                sv_depth_score.model_fpath: models/depth_pcd/basicModel2.h5
+                sv_depth_filter.threshold: 0.1
+
+                bas_pxl.chip_overlap: 0.3
+                bas_pxl.chip_dims: auto
+                bas_pxl.chip_dims: 196,196
+                bas_pxl.time_span: auto
+                bas_pxl.fixed_resolution: 10GSD
+                bas_pxl.time_sampling: soft4
+                bas_pxl.tta_fliprot: 3
+                bas_pxl.tta_time: 3
+                bas_poly.inner_window_size: 1y
+                bas_poly.inner_agg_fn: mean
+                bas_poly.norm_ord: inf
+                bas_poly.resolution: 10GSD
+                bas_poly.moving_window_size: null
+                bas_poly.poly_merge_method: v2
+                bas_poly.polygon_simplify_tolerance: 1
+                bas_poly.agg_fn: probs
+                bas_poly.min_area_square_meters: 7200
+                bas_poly.max_area_square_meters: 8000000
+                sv_dino_filter.box_isect_threshold: 0.1
+                sv_dino_filter.box_score_threshold: 0.01
+                sv_dino_filter.start_max_score: 1
+                ''')
         ]
 
         ## SC
