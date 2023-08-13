@@ -297,7 +297,7 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
         elif isinstance(data, gpd.GeoDataFrame):
             return cls.from_dataframe(data)
         elif isinstance(data, (str, os.PathLike)):
-            got = list(cls.coerce_multiple(data, parse_float=parse_float))
+            got = list(cls.coerce_multiple(data, parse_float=parse_float, verbose=0))
             assert len(got) == 1
             return got[0]
         else:
@@ -1446,6 +1446,7 @@ class SiteModelCollection(ModelCollection):
 
         if region is not None:
             region_header = RegionHeader.coerce(region)
+            region_header = copy.deepcopy(region_header)
         else:
             region_header = RegionHeader.empty()
 

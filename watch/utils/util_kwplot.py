@@ -645,6 +645,8 @@ class LineManager:
             plt = kwplot.autoplt()
             ax = plt.gca()
 
+        from kwimage.structs import _generic
         minx, miny, maxx, maxy = self.bounds()
-        ax.set_xlim(minx, maxx)
-        ax.set_ylim(miny, maxy)
+        _generic._setlim(minx, miny, maxx, maxy, 1.1, ax=ax)
+        # ax.set_xlim(minx, maxx)
+        # ax.set_ylim(miny, maxy)

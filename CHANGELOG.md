@@ -10,8 +10,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * The `valid_region` property computed in `coco_populate_geo_heuristics` now properly uses image space (before it was in asset space, which usually aligned, but was not guaranteed)
 
 ### Changed
-* prepare-ta2-dataset now uses the new v3 mlops pipeline instead of the old v1
-  pipeline.
+* Prepare-ta2-dataset now uses the new v3 mlops pipeline instead of the old v1 pipeline.
+* Moved third-party-libraries into a geowatch TPL module.
 
 ### Removed:
 * Removed `separate_region_queues` `separate_align_jobs` options from `prepare-ta2-dataset`, they are now always True.

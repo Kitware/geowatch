@@ -268,7 +268,9 @@ def main(cmdline=1, **kwargs):
     # pred_sites_fpath = poly_pred_dpath / 'sites_manifest.json'
     # assert pred_sites_fpath.exists()
     # pred_site_fpaths = list(util_gis.coerce_geojson_paths(pred_sites_fpath))
-    from watch.geoannots.geomodels import SiteModel, SiteModelCollection, RegionModel
+    from watch.geoannots.geomodels import SiteModel
+    from watch.geoannots.geomodels import RegionModel
+    from watch.geoannots.geomodels import SiteModelCollection
     import kwcoco
     import json
 
@@ -405,78 +407,17 @@ def main(cmdline=1, **kwargs):
 
     # Dump confusion categorized site models to disk
     cfsn_group_dpath = config.out_dpath / 'confusion_groups'
-
     print(ub.urepr(type_to_sites.map_values(len)))
 
     # Create site summaries for each type of confusion
     type_to_summary = {}
     for group_type, sites in type_to_sites.items():
         sites = SiteModelCollection(sites)
-        cfsn_summary = sites.as_region_model(true_region_model)
+        cfsn_summary = sites.as_region_model(true_region_model.header)
         if group_type not in {'true', 'pred'}:
-            cfsn_summary.header['properties']['cache']['confusion_type'] = confusion_type
+            cfsn_summary.header['properties']['cache']['confusion_type'] = group_type
             cfsn_summary.header['properties']['cache']['originator'] = performer_id
         type_to_summary[group_type] = cfsn_summary
-
-    TIME_OVERLAP_SUMMARY = 1
-    if TIME_OVERLAP_SUMMARY:
-        # Time analysis of false positives that overlap with something.
-        true_summary = type_to_summary['true']
-        wrong_summary = type_to_summary['sm_completely_wrong']
-
-        true_sites = type_to_sites['true']
-        wrong_sites = type_to_sites['sm_completely_wrong']
-
-        true_gdf = true_summary.pandas_summaries()
-        wrong_gdf = wrong_summary.pandas_summaries()
-        idx1_to_idxs2 = util_gis.geopandas_pairwise_overlaps(wrong_gdf, true_gdf)
-
-        import xdev
-        xdev.embed()
-
-        import kwplot
-        kwplot.autosns()
-        fig = kwplot.figure(fnum=1)
-        fig.clf()
-
-        from watch.utils import util_kwplot
-        lineman = util_kwplot.LineManager()
-        yloc = 0
-        for idx1, idxs2 in idx1_to_idxs2.items():
-            if len(idxs2):
-                # sub1 = wrong_gdf.iloc[idx1][['start_date', 'end_date', 'status', 'geometry']]
-                # sub2 = true_gdf.iloc[idxs2][['start_date', 'end_date', 'status', 'geometry']]
-
-                yloc += 1
-
-                pred_site = wrong_sites[idx1]
-                pred_obs = pred_site.pandas_observations()
-
-                pred_ys = yloc
-                pred_xs = util_kwplot.fix_matplotlib_dates(pred_obs['observation_date'].values)
-
-                pred_obs['current_phase']
-                pred_obs['score']
-
-                lineman.plot(pred_xs, pred_ys, color='kitware_blue')
-
-                for idx2 in idxs2:
-                    true_site = true_sites[idx2]
-                    true_obs = true_site.pandas_observations()
-                    true_xs = util_kwplot.fix_matplotlib_dates(true_obs['observation_date'].values)
-                    yloc += 1
-                    true_ys = yloc
-                    lineman.plot(true_xs, true_ys, color='kitware_green')
-
-                yloc += 20
-
-        lineman.add_to_axes()
-        ax = fig.gca()
-        # TODO: make this formatter fixup work better.
-        import matplotlib.dates as mdates
-        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-        ax.xaxis.set_major_locator(mdates.DayLocator(interval=90))
-        lineman.setlims()
 
     for group_type, sites in type_to_sites.items():
         cfsn_summary = type_to_summary[group_type]
@@ -486,8 +427,12 @@ def main(cmdline=1, **kwargs):
         group_region_fpath.write_text(text)
         for site in sites:
             site_fpath = group_site_dpath / (site.site_id + '.geojson')
-            text = json.dumps(pred_site, indent='    ')
+            text = json.dumps(site, indent='    ')
             site_fpath.write_text(text)
+
+    TIME_OVERLAP_SUMMARY = 0
+    if TIME_OVERLAP_SUMMARY:
+        visualize_time_overlap(type_to_summary, type_to_sites)
 
     USE_KML = 1
     if USE_KML:
@@ -499,10 +444,7 @@ def main(cmdline=1, **kwargs):
             kml_fpath = cfsn_kml_dpath / (group_type + '.kml')
             kml.save(kml_fpath)
 
-    import xdev
-    xdev.embed()
-
-    if USE_KML and 0:
+    if USE_KML and 1:
         # TODO: write nice images that can be used with QGIS
         src_dset = kwcoco.CocoDataset(config.src_kwcoco)
         coco_img = src_dset.images().coco_images[0]
@@ -820,6 +762,197 @@ def to_styled_kml(data):
                          description='test',
                          coords=[feat['geometry']['coordinates']])
     return kml
+
+
+def visualize_time_overlap(type_to_summary, type_to_sites):
+    """
+    dpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_test/_imeritbas/eval/flat/bas_poly_eval/bas_poly_eval_id_fd88699a/')
+    group_dpath = (dpath / 'confusion_analysis/confusion_groups')
+
+    from watch.geoannots.geomodels import SiteModel
+    from watch.geoannots.geomodels import RegionModel
+
+    region_paths = []
+    site_dpaths = []
+    for p in group_dpath.ls():
+        if p.endswith('.geojson'):
+            region_paths.append(p)
+        else:
+            site_dpaths.append(p)
+
+    type_to_summary = ub.udict({p.stem: RegionModel.coerce(p) for p in region_paths})
+    type_to_summary.map_values(lambda x: len(x['features']))
+
+    type_to_sites = ub.udict({p.name: list(SiteModel.coerce_multiple(p)) for p in site_dpaths})
+    type_to_sites.map_values(len)
+    """
+    from watch.utils import util_gis
+    # Time analysis of false positives that overlap with something.
+    true_summary = type_to_summary['true']
+    wrong_summary = type_to_summary['sm_completely_wrong']
+
+    true_gdf = true_summary.pandas_summaries()
+    wrong_gdf = wrong_summary.pandas_summaries()
+
+    # Work in UTM
+    true_gdf = util_gis.project_gdf_to_local_utm(true_gdf, mode=1)
+    wrong_gdf = util_gis.project_gdf_to_local_utm(wrong_gdf, mode=1)
+
+    # Ensure the ordering is the same as the summaries
+    _true_sites = type_to_sites['true']
+    _wrong_sites = type_to_sites['sm_completely_wrong']
+
+    true_sites = list(ub.udict({s.site_id: s for s in _true_sites}).take(true_gdf['site_id']))
+    wrong_sites = list(ub.udict({s.site_id: s for s in _wrong_sites}).take(wrong_gdf['site_id']))
+
+    idx1_to_idxs2 = util_gis.geopandas_pairwise_overlaps(wrong_gdf, true_gdf)
+    import pandas as pd
+    from kwutil import util_time
+
+    inspect_cases = []
+    for idx1, idxs2 in idx1_to_idxs2.items():
+        if len(idxs2):
+            inspect_cases.append((idx1, idxs2))
+
+    region_start_date = true_summary.start_date
+    region_end_date = true_summary.end_date
+
+    cases = []
+
+    for idx1, idxs2 in inspect_cases:
+        pred_site = wrong_sites[idx1]
+        pred_obs = pred_site.pandas_observations()
+        # pred_ys = yloc
+
+        pred_dates = pred_obs['observation_date'].values
+        pred_dates = list(map(util_time.coerce_datetime, pred_dates))
+        # pred_xs = util_kwplot.fix_matplotlib_dates()
+
+        pred_obs['current_phase']
+        pred_obs['score']
+
+        assert wrong_gdf.iloc[idx1]['site_id'] == pred_site.site_id
+
+        pred_geom = wrong_gdf.iloc[idx1].geometry
+        pred_area = pred_geom.area
+        # pred_rt_area = np.sqrt(pred_area)
+        # lineman.plot(pred_xs, pred_ys, color='kitware_blue')
+
+        for idx2 in idxs2:
+            true_site = true_sites[idx2]
+            true_obs = true_site.pandas_observations()
+
+            true_geom = true_gdf.iloc[idx2].geometry
+            true_area = true_geom.area
+            # true_rt_area = np.sqrt(true_area)
+
+            pred_site.geometry.intersection(true_site.geometry).area
+
+            isect_area = true_geom.intersection(pred_geom).area
+            union_area = true_geom.union(pred_geom).area
+            space_iou = isect_area / union_area
+            space_iot = isect_area / true_area
+            space_iop = isect_area / pred_area
+
+            site_start_date = true_site.start_date or region_start_date
+            site_end_date = true_site.end_date or region_end_date
+
+            # start_x = util_kwplot.fix_matplotlib_dates([site_start_date])
+            # end_x = util_kwplot.fix_matplotlib_dates([site_end_date])
+            true_dates = true_obs['observation_date']
+            true_dates = list(true_dates[~pd.isnull(true_dates)])
+            true_dates = [site_start_date] + true_dates + [site_end_date]
+            true_dates = list(map(util_time.coerce_datetime, true_dates))
+
+            true_duration = true_dates[-1] - true_dates[0]
+            pred_duration = pred_dates[-1] - pred_dates[0]
+
+            isect_start = max(true_dates[0], pred_dates[0])
+            union_start = min(true_dates[0], pred_dates[0])
+            isect_end = min(true_dates[-1], pred_dates[-1])
+            union_end = max(true_dates[-1], pred_dates[-1])
+
+            isect_duration = max((isect_end - isect_start), util_time.coerce_timedelta(0))
+            union_duration = max((union_end - union_start), util_time.coerce_timedelta(0))
+
+            time_iou = isect_duration / union_duration
+            time_iot = isect_duration / true_duration
+            time_iop = isect_duration / pred_duration
+
+            true_duration = true_dates[-1] - true_dates[0]
+            pred_duration = pred_dates[-1] - pred_dates[0]
+
+            case = {
+                'pred_idx': idx1,
+                'true_idx': idx2,
+
+                'pred_area': pred_area,
+                'true_area': true_area,
+
+                'space_iou': space_iou,
+                'space_iot': space_iot,
+                'space_iop': space_iop,
+
+                'time_iou': time_iou,
+                'time_iot': time_iot,
+                'time_iop': time_iop,
+
+                'pred_dates': pred_dates,
+                'true_dates': true_dates,
+            }
+            cases.append(case)
+
+    import kwplot
+    kwplot.autosns()
+    fig = kwplot.figure(fnum=1)
+    fig.clf()
+
+    from watch.utils import util_kwplot
+    lineman = util_kwplot.LineManager()
+    yloc = 1
+    cases = sorted(cases, key=lambda x: x['time_iou'])[::-1]
+
+    # max_date = max([max(case['pred_dates'] + case['true_dates']) for case in cases])
+    # max_x = util_kwplot.fix_matplotlib_dates([max_date])[0]
+
+    min_date = min([min(case['pred_dates'] + case['true_dates']) for case in cases])
+    min_x = util_kwplot.fix_matplotlib_dates([min_date])[0]
+
+    for case in cases[-10:]:
+        pred_xs = util_kwplot.fix_matplotlib_dates(case['pred_dates'])
+        true_xs = util_kwplot.fix_matplotlib_dates(case['true_dates'])
+        lineman.plot(pred_xs, yloc, color='kitware_blue')
+        yloc += 1
+        lineman.plot(true_xs, yloc, color='kitware_green')
+        yloc += 1
+
+        idx1 = case['pred_idx']
+        idx2 = case['true_idx']
+
+        pred_site = wrong_sites[idx1]
+        true_site = true_sites[idx2]
+
+        pred_site_id = pred_site.site_id
+        true_site_id = true_site.site_id
+
+        plt = kwplot.plt
+
+        show = ub.udict(case) & {'space_iou', 'time_iou', 'pred_area', 'true_area'}
+        show['pred'] = pred_site_id
+        show['true'] = true_site_id
+        text = ub.urepr(show, precision=2, nl=0)
+        # med_x = (max_x + min_x) / 2
+        plt.annotate(text, (min_x, yloc))
+
+        yloc += 20
+
+    lineman.add_to_axes()
+    ax = fig.gca()
+    # TODO: make this formatter fixup work better.
+    import matplotlib.dates as mdates
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+    ax.xaxis.set_major_locator(mdates.DayLocator(interval=360))
+    lineman.setlims()
 
 
 if __name__ == '__main__':
