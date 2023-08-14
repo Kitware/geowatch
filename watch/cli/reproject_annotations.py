@@ -934,14 +934,13 @@ def assign_sites_to_images(coco_dset,
         geospace_lookup = not coco_video_names.issubset(region_ids)
         print('geospace_lookup = {!r}'.format(geospace_lookup))
 
-    # Find the video associated with each region
+    # Find the region(s) associated with each video
     # If this assumption is not valid, we could refactor to loop through
     # each site, do the geospatial lookup, etc...
     # but this is faster if we know regions are consistent
-    video_id_to_region_id = {}
+    video_id_to_region_id = ub.ddict(list)
     if geospace_lookup:
         # Association via geospace lookup
-        video_id_to_region_ids = ub.ddict(list)
         for region_id, region_sites in region_id_to_sites.items():
             video_ids = []
             for site_gdf in region_sites:
@@ -964,17 +963,7 @@ def assign_sites_to_images(coco_dset,
                 print('No geo-space match for region_id={}'.format(region_id))
                 continue
             for video_id in video_ids:
-                video_id_to_region_ids[video_id].append(region_id)
-
-            for video_id, region_ids in video_id_to_region_ids.items():
-                if len(region_ids) != 1:
-                    # FIXME: This should not be the case, but it seems it is
-                    # due to super regions maybe? If it is super regions this
-                    # hack of just choosing one of them, should be mostly ok?
-                    msg = f'a video {video_id=} contains more than one region {region_ids=}, not a handled case yet. We are punting and just choosing 1'
-                    warnings.warn(msg)
-                    # raise AssertionError(msg)
-                video_id_to_region_id[video_id] = region_ids[0]
+                video_id_to_region_id[video_id].append(region_id)
 
     else:
         # Association via video name
@@ -987,7 +976,7 @@ def assign_sites_to_images(coco_dset,
                     print('No region-id match for region_id={}'.format(region_id))
                 continue
             video_id = video['id']
-            video_id_to_region_id[video_id] = region_id
+            video_id_to_region_id[video_id].append(region_id)
 
     from kwutil.slugify_ext import smart_truncate
     print('Found Association: video_id_to_region_id = {}'.format(
@@ -997,10 +986,12 @@ def assign_sites_to_images(coco_dset,
     ))
 
     propogated_annotations = []
-    for video_id, region_id in ub.ProgIter(list(video_id_to_region_id.items()), desc='reproject'):
-        region_sites = region_id_to_sites[region_id]
+    for video_id, region_ids in ub.ProgIter(list(video_id_to_region_id.items()), desc='reproject'):
+        region_sites = []
+        for region_id in region_ids:
+            region_sites += region_id_to_sites[region_id]
         if 0:
-            print(f'{region_id=} {video_id=} #sites={len(region_sites)}')
+            print(f'{region_ids=} {video_id=} #sites={len(region_sites)}')
         # Grab the images data frame for that video
         subimg_df = vidid_to_imgdf[video_id]
         region_image_dates = np.array(list(map(dateutil.parser.parse, subimg_df['date_captured'])))
@@ -1023,7 +1014,7 @@ def assign_sites_to_images(coco_dset,
             region_sites = filtered_region_sites
 
             if 0:
-                print(f'{region_id=} {video_id=} #filtered(sites)={len(region_sites)}')
+                print(f'{region_ids=} {video_id=} #filtered(sites)={len(region_sites)}')
 
         drawable_region_sites = []
 
@@ -1053,7 +1044,7 @@ def assign_sites_to_images(coco_dset,
 
         all_drawable_infos.append({
             'drawable_region_sites': drawable_region_sites,
-            'region_id': region_id,
+            'region_id': "_".join(region_ids),
             'region_image_dates': region_image_dates,
         })
 
