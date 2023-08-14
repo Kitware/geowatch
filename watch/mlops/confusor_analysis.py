@@ -14,7 +14,7 @@ class ConfusorAnalysisConfig(scfg.DataConfig):
 
         Use this in the special case that you have an mlops or smartflow output
         directory.
-        ''')),
+        '''))
 
     detections_fpath = scfg.Value(None, help=ub.paragraph(
         '''
@@ -764,10 +764,14 @@ def to_styled_kml(data):
     return kml
 
 
-def visualize_time_overlap(type_to_summary, type_to_sites):
+def visualize_time_overlap(type_to_summary, type_to_sites, coco_dset=None):
     """
     dpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_test/_imeritbas/eval/flat/bas_poly_eval/bas_poly_eval_id_fd88699a/')
     group_dpath = (dpath / 'confusion_analysis/confusion_groups')
+
+    import kwcoco
+    coco_fpath = (dpath / 'confusion_analysis/confusion_kwcoco/confusion.kwcoco.zip')
+    coco_dset = kwcoco.CocoDataset(coco_fpath)
 
     from watch.geoannots.geomodels import SiteModel
     from watch.geoannots.geomodels import RegionModel
@@ -883,6 +887,8 @@ def visualize_time_overlap(type_to_summary, type_to_sites):
             pred_duration = pred_dates[-1] - pred_dates[0]
 
             case = {
+                'true_site_id': true_site.site_id,
+                'pred_site_id': pred_site.site_id,
                 'pred_idx': idx1,
                 'true_idx': idx2,
 
@@ -911,6 +917,107 @@ def visualize_time_overlap(type_to_summary, type_to_sites):
     lineman = util_kwplot.LineManager()
     yloc = 1
     cases = sorted(cases, key=lambda x: x['time_iou'])[::-1]
+
+    def fixtracks(coco_dset):
+        # coco_dset = kwcoco.CocoDataset(coco_fpath)
+        for tid, aids in list(coco_dset.index.trackid_to_aids.items()):
+            ...
+            if tid not in coco_dset.index.tracks:
+                if isinstance(tid, str):
+                    name = tid
+                else:
+                    name = f'track_{tid:03d}'
+                assert name not in coco_dset.index.name_to_track
+                new_tid = coco_dset.add_track(name=name)
+
+                for aid in aids:
+                    coco_dset.index.anns[aid]['track_id'] = new_tid
+                coco_dset.index.trackid_to_aids[new_tid] = aids
+                coco_dset.index.trackid_to_aids.pop(tid)
+
+    if coco_dset is not None:
+        true_tracks = coco_dset.tracks(names=[case['true_site_id']])
+        pred_tracks = coco_dset.tracks(names=[case['pred_site_id']])
+        true_track = true_tracks.objs[0]
+        pred_track = pred_tracks.objs[0]
+        pred_tid = pred_track['id']
+        true_tid = true_track['id']
+        true_annots = true_tracks.annots[0]
+        pred_annots = pred_tracks.annots[0]
+
+        all_aids = list(set(true_annots) | set(pred_annots))
+        all_gids = list(set(true_annots.images) | set(pred_annots.images))
+        all_images = coco_dset.images(all_gids)
+        sortx = ub.argsort(all_images.lookup('frame_index'))
+        all_images = all_images.take(sortx)
+
+        all_annots = coco_dset.annots(all_aids)
+        gid_to_aids = ub.group_items(all_annots, all_annots.images)
+
+        import ndsampler
+        # TODO: use ndsampler to make this a little easier.
+        sampler = ndsampler.CocoSampler(coco_dset)
+
+        channel_priority = [
+            'red|green|blue',
+            'pan',
+        ]
+
+        def find_visual_channels(coco_img, channel_priority):
+            import kwcoco
+            have_chans = coco_img.channels
+            for p in channel_priority:
+                p = kwcoco.FusedChannelSpec.coerce(p)
+                common = have_chans & p
+                if common.numel() == p.numel():
+                    return p
+
+        for coco_img in all_images.coco_images:
+            aids = gid_to_aids[coco_img['id']]
+            annots = coco_dset.annots(aids)
+
+            coco_dset.tracks(annots.lookup('track_id')).lookup('name')
+
+            anns = annots.objs
+
+            ssegs = coco_img._annot_segmentations(anns, space='video')
+            from shapely.ops import unary_union
+            hull = unary_union([s.to_shapely() for s in ssegs]).convex_hull
+
+            import kwimage
+            poly = kwimage.Polygon.from_shapely(hull)
+            bound = poly.box().scale(1.2).quantize()
+
+            channels = find_visual_channels(coco_img, channel_priority)
+
+            if 0:
+                gid = coco_img['id']
+                target = {
+                    'gids': [gid],
+                    'space_slice': bound.to_slice(),
+                    'channels': channels,
+                    'aids': aids
+                }
+                sample = sampler.load_sample(target, with_annots=True)
+                imdata = sample['im']
+                dets = sample['annots']['frame_dets'][0]
+
+            delayed = coco_img.imdelay(channels=channels)
+            imcrop = delayed[bound.to_slice()]
+
+            canvas = imcrop.finalize()
+            import kwarray
+            canvas = kwarray.robust_normalize(canvas)
+
+            kwplot.imshow(canvas)
+
+            coco_img.warp_vid_from_img
+
+            ...
+
+        true_annots.images.coco_images
+        pred_annots.images.coco_images
+        ...
 
     # max_date = max([max(case['pred_dates'] + case['true_dates']) for case in cases])
     # max_x = util_kwplot.fix_matplotlib_dates([max_date])[0]
