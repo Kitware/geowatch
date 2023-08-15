@@ -162,7 +162,7 @@ def hack_seed_geometadata_in_dset(coco_dset, force=False, rng=None,
 
     override_geom_box = None
 
-    if isinstance(region_geom, str) and region_geom == 'random':
+    if region_geom is None or isinstance(region_geom, str) and region_geom == 'random':
         ...
     else:
         assert len(list(coco_dset.videos())) == 1, 'only handle 1 video for now'

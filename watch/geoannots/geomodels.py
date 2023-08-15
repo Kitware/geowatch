@@ -605,7 +605,17 @@ class RegionModel(_Model):
         Args:
             with_sites (bool):
                 also returns site models if True
-            **kwargs : passed to :func:`watch.demo.metrics_demo.demo_truth.random_region_model`
+
+            **kwargs :
+                passed to
+                :func:`watch.demo.metrics_demo.demo_truth.random_region_model`.
+                Some of these args are:
+                    num_sites
+                    num_observations
+                    start_time
+                    end_time
+                    region_poly
+                    rng
 
         Returns:
             RegionModel | Tuple[RegionModel, SiteModelCollection]
@@ -617,9 +627,6 @@ class RegionModel(_Model):
             >>> assert region1 == region2, 'rngs should be the same'
         """
         from watch.demo.metrics_demo import demo_truth
-
-        if not with_sites:
-            kwargs['num_sites'] = 0
 
         region, sites, _ = demo_truth.random_region_model(
             **kwargs, with_renderables=False)
