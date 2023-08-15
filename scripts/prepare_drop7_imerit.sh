@@ -201,6 +201,8 @@ python -m watch reproject \
     --sites="$DVC_DATA_DPATH"/annotations/drop7/site_models/*.geojson
 
 
+dvc add -vv -- */raw_bands
+
 
 ###---
 #

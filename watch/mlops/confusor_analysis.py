@@ -103,6 +103,490 @@ class ConfusorAnalysisConfig(scfg.DataConfig):
         self.__post_init__()
 
 
+class ConfusionAnalysis:
+    def __init__(self, config):
+        self.config = config
+
+        self.true_sites = None
+        self.id_to_pred_site = None
+        self.true_region_model = None
+        self.region_id = None
+        self.id_to_true_site = None
+        self.id_to_pred_site = None
+
+        self.new_sites = None
+        self.new_region = None
+        self.type_to_sites = None
+
+        self.enriched_dpath = None
+        self.enriched_sites_dpath = None
+        self.enriched_region_dpath = None
+
+    def load_assignment(self):
+        """
+        True Confusion Spec
+        -------------------
+
+        "cache":  {
+            "confusion": {
+                "true_site_id": str,          # redundant site id information,
+                "pred_site_ids": List[str],   # the matching predicted site ids,
+                "type": str,                  # the type of true confusion assigned by T&E
+                "color": str,                 # a named color coercable via kwimage.Color.coerce
+            }
+        }
+
+        Predicted Confusion Spec
+        -------------------
+
+        "cache":  {
+            "confusion": {
+                "pred_site_id": str,          # redundant site id information,
+                "true_site_ids": List[str],   # the matching predicted site ids,
+                "type": str,        # the type of predicted confusion assigned by T&E
+                "color": str,       # a named color coercable via kwimage.Color.coerce
+            }
+        }
+
+        # The possible confusion codes and the corresponding confusion_color they
+        # will be assigned is defined in heuristics.IARPA_CONFUSION_COLORS
+        """
+        config = self.config
+
+        import rich
+        import pandas as pd
+        import itertools as it
+        from watch import heuristics
+        from watch.utils import util_gis
+        from watch.geoannots.geomodels import SiteModel
+        from watch.geoannots.geomodels import RegionModel
+        from watch.geoannots.geomodels import SiteModelCollection
+
+        performer_id = config.performer_id
+        true_site_dpath = config.true_site_dpath
+        true_region_dpath = config.true_region_dpath
+        pred_site_fpaths = list(util_gis.coerce_geojson_paths(config.pred_sites))
+        region_id = config.region_id
+
+        config.detections_fpath = ub.Path(config.detections_fpath)
+        config.proposals_fpath = ub.Path(config.proposals_fpath)
+        assert config.proposals_fpath.exists()
+        assert config.detections_fpath.exists()
+
+        assign1 = pd.read_csv(config.detections_fpath)
+        assign2 = pd.read_csv(config.proposals_fpath)
+
+        rich.print(assign1)
+        rich.print(assign2)
+        rich.print(f'{len(assign1)=}')
+        rich.print(f'{len(assign2)=}')
+
+        needs_recompute = any('_seq_' in m or m.startswith('seq_') for m in assign2['site model'] if m)
+        assert not needs_recompute
+
+        def fix_site_id(site_id):
+            site_id = site_id.strip()
+            splitters = ['_te_', '_iMERIT_', f'_{performer_id}_']
+            for marker in splitters:
+                site_id = site_id.split(marker)[0]
+            # Hack because idk why the metrics code does this.
+            if site_id.startswith('_'):
+                site_id = region_id + site_id
+            return site_id
+
+        ### Assign a confusion label to each truth and predicted annotation
+        true_confusion_rows = []
+        pred_confusion_rows = []
+        site_to_status = {}
+        for row in assign1.to_dict('records'):
+            true_site_id = row['truth site']
+            true_site_id = fix_site_id(true_site_id)
+            pred_site_ids = []
+            truth_status = row['site type']
+            site_to_status[true_site_id] = truth_status
+            if isinstance(row['matched site models'], str):
+                for name in row['matched site models'].split(','):
+                    pred_site_id = name
+                    pred_site_id = fix_site_id(pred_site_id)
+                    pred_site_ids.append(pred_site_id)
+            has_positive_match = len(pred_site_ids)
+            true_cfsn = heuristics.iarpa_assign_truth_confusion(truth_status, has_positive_match)
+
+            if true_cfsn is None:
+                print('truth_status = {}'.format(ub.urepr(truth_status, nl=1)))
+                print('has_positive_match = {}'.format(ub.urepr(has_positive_match, nl=1)))
+                raise AssertionError
+
+            true_confusion_rows.append({
+                'true_site_id': true_site_id,
+                'pred_site_ids': pred_site_ids,
+                'type': true_cfsn,
+            })
+
+        for row in assign2.to_dict('records'):
+            pred_site_id = row['site model']
+            pred_site_id = fix_site_id(pred_site_id)
+            true_site_ids = []
+            truth_match_statuses = []
+            if isinstance(row['matched truth sites'], str):
+                for name in row['matched truth sites'].split(','):
+                    true_site_id = name
+                    true_site_id = fix_site_id(true_site_id)
+                    truth_match_statuses.append(site_to_status[true_site_id])
+                    true_site_ids.append(true_site_id)
+            pred_cfsn = heuristics.iarpa_assign_pred_confusion(truth_match_statuses)
+            if pred_cfsn is None:
+                print('row = {}'.format(ub.urepr(row, nl=1)))
+                print('truth_match_statuses = {}'.format(ub.urepr(truth_match_statuses, nl=1)))
+                raise AssertionError
+
+            pred_confusion_rows.append({
+                'pred_site_id': pred_site_id,
+                'true_site_ids': true_site_ids,
+                'type': pred_cfsn,
+            })
+
+        for row in true_confusion_rows + pred_confusion_rows:
+            row['color'] = heuristics.IARPA_CONFUSION_COLORS.get(row['type'])
+
+        # Add the confusion info as misc data in new site files and reproject them
+        # onto the truth for visualization.
+        # pred_sites_fpath = poly_pred_dpath / 'sites_manifest.json'
+        # assert pred_sites_fpath.exists()
+        # pred_site_fpaths = list(util_gis.coerce_geojson_paths(pred_sites_fpath))
+
+        rm_files = list(true_region_dpath.glob(region_id + '*.geojson'))
+        gt_files = list(true_site_dpath.glob(region_id + '*.geojson'))
+        sm_files = pred_site_fpaths
+
+        true_sites = SiteModelCollection(list(SiteModel.coerce_multiple(gt_files)))
+        pred_sites = SiteModelCollection(list(SiteModel.coerce_multiple(sm_files)))
+
+        # for site in true_sites:
+        #     if site.start_date is None and site.end_date is None:
+        #         raise AssertionError
+
+        orig_regions = list(RegionModel.coerce_multiple(rm_files))
+        if len(orig_regions) != 1:
+            raise AssertionError(f'Got {orig_regions=}')
+
+        # Ensure all site data has misc-info
+        # Ensure all data cast to site models
+
+        true_region_model = orig_regions[0]
+        true_region_model.fixup()
+
+        for site in it.chain(pred_sites, true_sites):
+            site.header['properties'].setdefault('cache', {})
+
+        id_to_true_site = {s.site_id: s for s in true_sites}
+        id_to_pred_site = {s.site_id: s for s in pred_sites}
+
+        # Add confusion metadata to predicted and truth models
+        # https://gis.stackexchange.com/questions/346518/opening-geojson-style-properties-in-qgis
+        for row in true_confusion_rows:
+            site = id_to_true_site[row['true_site_id']]
+            site.header['properties']['cache']['confusion'] = row
+        for row in pred_confusion_rows:
+            site = id_to_pred_site[row['pred_site_id']]
+            site.header['properties']['cache']['confusion'] = row
+
+        VALIDATE = 1
+        if VALIDATE:
+            all_models = SiteModelCollection(pred_sites + true_sites)
+            all_models.fixup()
+            all_models.validate(workers=0)
+
+        self.true_sites = true_sites
+        self.pred_sites = pred_sites
+        self.id_to_pred_site = id_to_pred_site
+        self.true_region_model = true_region_model
+        self.region_id = region_id
+        self.id_to_true_site = id_to_true_site
+        self.id_to_pred_site = id_to_pred_site
+
+    def build_hard_cases(self):
+        from watch.utils import util_gis
+
+        true_sites = self.true_sites
+        pred_sites = self.pred_sites
+        id_to_pred_site = self.id_to_pred_site
+        true_region_model = self.true_region_model
+        region_id = self.region_id
+        id_to_true_site = self.id_to_true_site
+        id_to_pred_site = self.id_to_pred_site
+
+        pred_region_model = pred_sites.as_region_model(region=true_region_model.header)
+        pred_df = pred_region_model.pandas_summaries()
+        true_df = true_region_model.pandas_summaries()
+        idx1_to_idx2 = util_gis.geopandas_pairwise_overlaps(pred_df, true_df)
+
+        # Find predicted annotations that have no truth overlap
+        non_intersecting_idxs = [idx1 for idx1, idx2s in idx1_to_idx2.items() if not len(idx2s)]
+        cand_df = pred_df.iloc[non_intersecting_idxs]
+
+        hard_positive_site_ids = []
+        for true_site in true_sites:
+            misc = true_site.header['properties']['cache']
+            if misc['confusion']['type'] in 'gt_false_neg':
+                hard_positive_site_ids.append(true_site.header['properties']['site_id'])
+
+        hard_negative_sites = []
+        for site_id in cand_df['site_id']:
+            pred_site = id_to_pred_site[site_id]
+            misc = pred_site.header['properties']['cache']
+            if misc['confusion']['type'] in 'sm_completely_wrong':
+                hard_negative_sites.append(pred_site.deepcopy())
+
+        orig_site_num = int(true_df['site_id'].max().split('_')[-1])
+        base_site_num = max(700, orig_site_num)
+        for num, hard_neg in enumerate(hard_negative_sites, start=base_site_num):
+            header_prop = hard_neg.header['properties']
+            header_prop['site_id'] = region_id + f'_{num:04d}'
+            header_prop['status'] = 'negative'
+            header_prop['model_content'] = 'annotation'
+            header_prop['cache'].pop('confusion', None)
+            header_prop['cache']['kwcoco'] = {'weight': 1.5}
+            header_prop['comments'] = 'hard_negative'
+            for obs in hard_neg.observations():
+                props = obs['properties']
+                props['current_phase'] = None
+                props['is_site_boundary'] = None
+                props.pop('predicted_phase_transition', None)
+                props.pop('predicted_phase_transition_date', None)
+
+        # Need to build site summaries from site models.
+        hard_neg_summaries = [s.as_summary() for s in hard_negative_sites]
+        new_region = true_region_model.deepcopy()
+        new_region['features'] += hard_neg_summaries
+        new_true_sites = [s.deepcopy() for s in true_sites]
+
+        # Upweight hard positive true sites
+        print('hard_positive_site_ids = {}'.format(ub.urepr(hard_positive_site_ids, nl=1)))
+        new_true_props = [n.header['properties'] for n in new_true_sites] + [s['properties'] for s in new_region.site_summaries()]
+        for prop in new_true_props:
+            if 'cache' not in prop:
+                prop['cache'] = {}
+            prop['cache'].pop('confusion', None)
+            if prop['site_id'] in hard_positive_site_ids:
+                prop['cache']['kwcoco'] = {'weight': 2.0}
+                if 'comments' not in prop or not prop['comments']:
+                    prop['comments'] = 'hard_positive'
+                else:
+                    prop['comments'] += ';hard_positive'
+
+        # Group by confusion type
+        true_type_to_sites = ub.ddict(list)
+        for true_site_id, true_site in id_to_true_site.items():
+            confusion_type = true_site.header['properties']['cache']['confusion']['type']
+            true_type_to_sites[confusion_type].append(true_site)
+
+        pred_type_to_sites = ub.ddict(list)
+        for pred_site_id, pred_site in id_to_pred_site.items():
+            confusion_type = pred_site.header['properties']['cache']['confusion']['type']
+            pred_type_to_sites[confusion_type].append(pred_site)
+
+        assert set(true_type_to_sites).isdisjoint(set(pred_type_to_sites))
+
+        type_to_sites = ub.udict(pred_type_to_sites) | true_type_to_sites
+        type_to_sites['pred'] = list(id_to_pred_site.values())
+        type_to_sites['true'] = list(id_to_true_site.values())
+
+        # Add in hard negatives
+        new_sites = new_true_sites + hard_negative_sites
+        self.new_sites = new_sites
+        self.new_region = new_region
+        self.type_to_sites = type_to_sites
+
+    def dump_confusion_geojson(self):
+        import json
+        import rich
+        import kwcoco
+        from watch.geoannots.geomodels import SiteModelCollection
+        config = self.config
+        region_id = self.region_id
+        performer_id = config.performer_id
+        type_to_sites = self.type_to_sites
+
+        true_region_model = self.true_region_model
+        new_sites = self.new_sites
+        new_region = self.new_region
+
+        enriched_dpath = config.out_dpath / 'enriched_annots'
+        enriched_sites_dpath = enriched_dpath / 'site_models'
+        enriched_region_dpath = enriched_dpath / 'region_models'
+
+        enriched_sites_dpath.ensuredir()
+        enriched_region_dpath.ensuredir()
+
+        rich.print(f'enriched_dpath: [link={enriched_dpath}]{enriched_dpath}[/link]')
+        new_region_fpath = enriched_region_dpath / (region_id + '.geojson')
+        new_region_fpath.write_text(json.dumps(new_region, indent='    '))
+        for new_site in new_sites:
+            fpath = enriched_sites_dpath / (new_site.site_id + '.geojson')
+            text = json.dumps(new_site, indent='    ')
+            fpath.write_text(text)
+
+        # Dump confusion categorized site models to disk
+        cfsn_group_dpath = config.out_dpath / 'confusion_groups'
+        print(ub.urepr(type_to_sites.map_values(len)))
+
+        # Create site summaries for each type of confusion
+        type_to_summary = {}
+        for group_type, sites in type_to_sites.items():
+            sites = SiteModelCollection(sites)
+            cfsn_summary = sites.as_region_model(true_region_model.header)
+            if group_type not in {'true', 'pred'}:
+                cfsn_summary.header['properties']['cache']['confusion_type'] = group_type
+                cfsn_summary.header['properties']['cache']['originator'] = performer_id
+            type_to_summary[group_type] = cfsn_summary
+
+        for group_type, sites in type_to_sites.items():
+            cfsn_summary = type_to_summary[group_type]
+            group_site_dpath = (cfsn_group_dpath / group_type).ensuredir()
+            group_region_fpath = (cfsn_group_dpath / (group_type + '.geojson'))
+            text = cfsn_summary.dumps(indent='    ')
+            group_region_fpath.write_text(text)
+            for site in sites:
+                site_fpath = group_site_dpath / (site.site_id + '.geojson')
+                text = json.dumps(site, indent='    ')
+                site_fpath.write_text(text)
+
+        TIME_OVERLAP_SUMMARY = 0
+        if TIME_OVERLAP_SUMMARY:
+            visualize_time_overlap(type_to_summary, type_to_sites)
+
+        USE_KML = 1
+        if USE_KML:
+            cfsn_kml_dpath = (config.out_dpath / 'confusion_kml').ensuredir()
+            for group_type, sites in type_to_sites.items():
+                cfsn_summary = type_to_summary[group_type]
+                # data = cfsn_summary
+                kml = to_styled_kml(cfsn_summary)
+                kml_fpath = cfsn_kml_dpath / (group_type + '.kml')
+                kml.save(kml_fpath)
+
+        if USE_KML and 1:
+            # TODO: write nice images that can be used with QGIS
+            src_dset = kwcoco.CocoDataset(config.src_kwcoco)
+            coco_img = src_dset.images().coco_images[0]
+            fpath = coco_img.find_asset('salient')['file_name']
+            img_lpath = cfsn_kml_dpath / 'heatmap.tiff'
+            ub.symlink(fpath, img_lpath)
+            fpath = coco_img.primary_image_filepath()
+            img_lpath = cfsn_kml_dpath / 'img.tiff'
+            ub.symlink(fpath, img_lpath)
+
+
+        self.enriched_dpath = enriched_dpath
+        self.enriched_sites_dpath = enriched_sites_dpath
+        self.enriched_region_dpath = enriched_region_dpath
+
+    def dump_confusion_kwcoco(self):
+        import rich
+
+        region_id = self.region_id
+        enriched_dpath = self.enriched_dpath
+        enriched_sites_dpath = self.enriched_sites_dpath
+        enriched_region_dpath = self.enriched_region_dpath
+        id_to_true_site = self.id_to_true_site
+        id_to_pred_site = self.id_to_pred_site
+
+        config = self.config
+        # Write a new "enriched truth" file that reweights false negatives add
+        # false positive as hard negatives.
+        rich.print(f'Confusion Analysis: [link={config.out_dpath}]{config.out_dpath}[/link]')
+
+        REPROJECT = config.src_kwcoco is not None
+        if REPROJECT:
+            from watch.cli import reproject_annotations
+            new_coco_fpath = enriched_dpath / f'hardneg-{region_id}.kwcoco.zip'
+            common_kwargs = ub.udict(
+                src=config.src_kwcoco,
+                dst=new_coco_fpath,
+                site_models=enriched_sites_dpath,
+                region_models=enriched_region_dpath,
+                workers=2,
+            )
+            reproject_annotations.main(cmdline=0, **common_kwargs)
+
+            if 1:
+                # Project confusion site models onto kwcoco for visualization
+                import kwcoco
+                from watch.cli import reproject_annotations
+                src_dset = kwcoco.CocoDataset(config.src_kwcoco)
+                dst_dset = src_dset.copy()
+                dst_dset.fpath = config.dst_kwcoco
+                dst_dset.clear_annotations()
+                true_site_infos2 = [s.pandas() for s in id_to_true_site.values()]
+                pred_site_infos2 = [s.pandas() for s in id_to_pred_site.values()]
+
+                # Differentiate true and predicted site-ids when projecting onto a
+                # single file.
+                for site_df in true_site_infos2:
+                    site_id = site_df.iloc[0]['site_id']
+                    a, b = site_id.rsplit('_', 1)
+                    new_site_id = f'{a}_te_{b}'
+                    site_df.loc[site_df.index[0], 'site_id'] = new_site_id
+
+                for site_df in pred_site_infos2:
+                    site_id = site_df.iloc[0]['site_id']
+                    a, b = site_id.rsplit('_', 1)
+                    new_site_id = f'{a}_{config.performer_id}_{b}'
+                    site_df.loc[site_df.index[0], 'site_id'] = new_site_id
+
+                for site_df in true_site_infos2:
+                    reproject_annotations.validate_site_dataframe(site_df)
+
+                dst_dset.clear_annotations()
+                common_kwargs = ub.udict(
+                    clear_existing=False,
+                    src=dst_dset,
+                    dst='return',
+                    workers=2,
+                )
+                true_kwargs = common_kwargs | ub.udict(
+                    role='true_confusion',
+                    # propogate_strategy=False,
+                    # propogate_strategy=False,
+                    site_models=true_site_infos2,
+                    # viz_dpath=(out_dpath / '_true_projection'),
+                )
+                # kwargs = true_kwargs
+                pred_kwargs = common_kwargs | ub.udict(
+                    role='pred_confusion',
+                    site_models=pred_site_infos2,
+                    # viz_dpath=(out_dpath / '_pred_projection'),
+                )
+
+                # I don't know why this isn't in-place. Maybe it is a scriptconfig thing?
+                repr1 = str(dst_dset.annots())
+                print(f'repr1={repr1}')
+                dst_dset = reproject_annotations.main(cmdline=0, **true_kwargs)
+                repr2 = str(dst_dset.annots())
+                print(f'repr1={repr1}')
+                print(f'repr2={repr2}')
+                pred_kwargs['src'] = dst_dset
+                dst_dset = reproject_annotations.main(cmdline=0, **pred_kwargs)
+                repr3 = str(dst_dset.annots())
+                print(f'repr1={repr1}')
+                print(f'repr2={repr2}')
+                print(f'repr3={repr3}')
+
+                if config.dst_kwcoco is not None:
+                    ub.Path(dst_dset.fpath).parent.ensuredir()
+                    print(f'dump to dst_dset.fpath={dst_dset.fpath}')
+                    dst_dset.dump()
+
+                # set(dst_dset.annots().lookup('role', None))
+                # set([x.get('role', None) for x in dst_dset.annots().lookup('cache', None)])
+
+                # dst_dset.annots().take([0, 1, 2])
+                viz_dpath = (config.out_dpath / 'summary_viz').ensuredir()
+                if config.summary_visualization:
+                    make_summary_visualization(dst_dset, viz_dpath)
+
+
 def main(cmdline=1, **kwargs):
     """
     CommandLine:
@@ -138,421 +622,15 @@ def main(cmdline=1, **kwargs):
         >>> main(cmdline=cmdline, **kwargs)
     """
     config = ConfusorAnalysisConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
-    config._infer_from_mlops_node()
-
     import rich
-    import pandas as pd
-    import itertools as it
-    from watch import heuristics
-    from watch.utils import util_gis
+    config._infer_from_mlops_node()
     rich.print('config = ' + ub.urepr(config, nl=1, align=':'))
 
-    performer_id = config.performer_id
-    true_site_dpath = config.true_site_dpath
-    true_region_dpath = config.true_region_dpath
-    pred_site_fpaths = list(util_gis.coerce_geojson_paths(config.pred_sites))
-    region_id = config.region_id
-
-    config.detections_fpath = ub.Path(config.detections_fpath)
-    config.proposals_fpath = ub.Path(config.proposals_fpath)
-    assert config.proposals_fpath.exists()
-    assert config.detections_fpath.exists()
-
-    assign1 = pd.read_csv(config.detections_fpath)
-    assign2 = pd.read_csv(config.proposals_fpath)
-
-    rich.print(assign1)
-    rich.print(assign2)
-    rich.print(f'{len(assign1)=}')
-    rich.print(f'{len(assign2)=}')
-
-    needs_recompute = any('_seq_' in m or m.startswith('seq_') for m in assign2['site model'] if m)
-    assert not needs_recompute
-
-    def fix_site_id(site_id):
-        site_id = site_id.strip()
-        splitters = ['_te_', '_iMERIT_', f'_{performer_id}_']
-        for marker in splitters:
-            site_id = site_id.split(marker)[0]
-        # Hack because idk why the metrics code does this.
-        if site_id.startswith('_'):
-            site_id = region_id + site_id
-        return site_id
-
-    ### Assign a confusion label to each truth and predicted annotation
-    true_confusion_rows = []
-    pred_confusion_rows = []
-    site_to_status = {}
-    for row in assign1.to_dict('records'):
-        true_site_id = row['truth site']
-        true_site_id = fix_site_id(true_site_id)
-        pred_site_ids = []
-        truth_status = row['site type']
-        site_to_status[true_site_id] = truth_status
-        if isinstance(row['matched site models'], str):
-            for name in row['matched site models'].split(','):
-                pred_site_id = name
-                pred_site_id = fix_site_id(pred_site_id)
-                pred_site_ids.append(pred_site_id)
-        has_positive_match = len(pred_site_ids)
-        true_cfsn = heuristics.iarpa_assign_truth_confusion(truth_status, has_positive_match)
-
-        if true_cfsn is None:
-            print('truth_status = {}'.format(ub.urepr(truth_status, nl=1)))
-            print('has_positive_match = {}'.format(ub.urepr(has_positive_match, nl=1)))
-            raise AssertionError
-
-        true_confusion_rows.append({
-            'true_site_id': true_site_id,
-            'pred_site_ids': pred_site_ids,
-            'type': true_cfsn,
-        })
-
-    for row in assign2.to_dict('records'):
-        pred_site_id = row['site model']
-        pred_site_id = fix_site_id(pred_site_id)
-        true_site_ids = []
-        truth_match_statuses = []
-        if isinstance(row['matched truth sites'], str):
-            for name in row['matched truth sites'].split(','):
-                true_site_id = name
-                true_site_id = fix_site_id(true_site_id)
-                truth_match_statuses.append(site_to_status[true_site_id])
-                true_site_ids.append(true_site_id)
-        pred_cfsn = heuristics.iarpa_assign_pred_confusion(truth_match_statuses)
-        if pred_cfsn is None:
-            print('row = {}'.format(ub.urepr(row, nl=1)))
-            print('truth_match_statuses = {}'.format(ub.urepr(truth_match_statuses, nl=1)))
-            raise AssertionError
-
-        pred_confusion_rows.append({
-            'pred_site_id': pred_site_id,
-            'true_site_ids': true_site_ids,
-            'type': pred_cfsn,
-        })
-
-    for row in true_confusion_rows + pred_confusion_rows:
-        row['color'] = heuristics.IARPA_CONFUSION_COLORS.get(row['type'])
-
-    """
-    True Confusion Spec
-    -------------------
-
-    "cache":  {
-        "confusion": {
-            "true_site_id": str,          # redundant site id information,
-            "pred_site_ids": List[str],   # the matching predicted site ids,
-            "type": str,                  # the type of true confusion assigned by T&E
-            "color": str,                 # a named color coercable via kwimage.Color.coerce
-        }
-    }
-
-    Predicted Confusion Spec
-    -------------------
-
-    "cache":  {
-        "confusion": {
-            "pred_site_id": str,          # redundant site id information,
-            "true_site_ids": List[str],   # the matching predicted site ids,
-            "type": str,        # the type of predicted confusion assigned by T&E
-            "color": str,       # a named color coercable via kwimage.Color.coerce
-        }
-    }
-
-    # The possible confusion codes and the corresponding confusion_color they
-    # will be assigned is defined in heuristics.IARPA_CONFUSION_COLORS
-    """
-
-    # Add the confusion info as misc data in new site files and reproject them
-    # onto the truth for visualization.
-    # pred_sites_fpath = poly_pred_dpath / 'sites_manifest.json'
-    # assert pred_sites_fpath.exists()
-    # pred_site_fpaths = list(util_gis.coerce_geojson_paths(pred_sites_fpath))
-    from watch.geoannots.geomodels import SiteModel
-    from watch.geoannots.geomodels import RegionModel
-    from watch.geoannots.geomodels import SiteModelCollection
-    import kwcoco
-    import json
-
-    rm_files = list(true_region_dpath.glob(region_id + '*.geojson'))
-    gt_files = list(true_site_dpath.glob(region_id + '*.geojson'))
-    sm_files = pred_site_fpaths
-
-    true_sites = SiteModelCollection(list(SiteModel.coerce_multiple(gt_files)))
-    pred_sites = SiteModelCollection(list(SiteModel.coerce_multiple(sm_files)))
-
-    # for site in true_sites:
-    #     if site.start_date is None and site.end_date is None:
-    #         raise AssertionError
-
-    orig_regions = list(RegionModel.coerce_multiple(rm_files))
-    if len(orig_regions) != 1:
-        raise AssertionError(f'Got {orig_regions=}')
-
-    # Ensure all site data has misc-info
-    # Ensure all data cast to site models
-
-    true_region_model = orig_regions[0]
-    true_region_model.fixup()
-
-    for site in it.chain(pred_sites, true_sites):
-        site.header['properties'].setdefault('cache', {})
-
-    id_to_true_site = {s.site_id: s for s in true_sites}
-    id_to_pred_site = {s.site_id: s for s in pred_sites}
-
-    # Add confusion metadata to predicted and truth models
-    # https://gis.stackexchange.com/questions/346518/opening-geojson-style-properties-in-qgis
-    for row in true_confusion_rows:
-        site = id_to_true_site[row['true_site_id']]
-        site.header['properties']['cache']['confusion'] = row
-    for row in pred_confusion_rows:
-        site = id_to_pred_site[row['pred_site_id']]
-        site.header['properties']['cache']['confusion'] = row
-
-    VALIDATE = 1
-    if VALIDATE:
-        all_models = SiteModelCollection(pred_sites + true_sites)
-        all_models.fixup()
-        all_models.validate(workers=0)
-
-    pred_region_model = pred_sites.as_region_model(region=true_region_model.header)
-    pred_df = pred_region_model.pandas_summaries()
-    true_df = true_region_model.pandas_summaries()
-    idx1_to_idx2 = util_gis.geopandas_pairwise_overlaps(pred_df, true_df)
-
-    # Find predicted annotations that have no truth overlap
-    non_intersecting_idxs = [idx1 for idx1, idx2s in idx1_to_idx2.items() if not len(idx2s)]
-    cand_df = pred_df.iloc[non_intersecting_idxs]
-
-    hard_positive_site_ids = []
-    for true_site in true_sites:
-        misc = true_site.header['properties']['cache']
-        if misc['confusion']['type'] in 'gt_false_neg':
-            hard_positive_site_ids.append(true_site.header['properties']['site_id'])
-
-    hard_negative_sites = []
-    for site_id in cand_df['site_id']:
-        pred_site = id_to_pred_site[site_id]
-        misc = pred_site.header['properties']['cache']
-        if misc['confusion']['type'] in 'sm_completely_wrong':
-            hard_negative_sites.append(pred_site.deepcopy())
-
-    orig_site_num = int(true_df['site_id'].max().split('_')[-1])
-    base_site_num = max(700, orig_site_num)
-    for num, hard_neg in enumerate(hard_negative_sites, start=base_site_num):
-        header_prop = hard_neg.header['properties']
-        header_prop['site_id'] = region_id + f'_{num:04d}'
-        header_prop['status'] = 'negative'
-        header_prop['model_content'] = 'annotation'
-        header_prop['cache'].pop('confusion', None)
-        header_prop['cache']['kwcoco'] = {'weight': 1.5}
-        header_prop['comments'] = 'hard_negative'
-        for obs in hard_neg.observations():
-            props = obs['properties']
-            props['current_phase'] = None
-            props['is_site_boundary'] = None
-            props.pop('predicted_phase_transition', None)
-            props.pop('predicted_phase_transition_date', None)
-
-    hard_neg_summaries = [s.as_summary() for s in hard_negative_sites]
-    new_region = true_region_model.deepcopy()
-    new_region['features'] += hard_neg_summaries
-    new_true_sites = [s.deepcopy() for s in true_sites]
-
-    # Upweight hard positive true sites
-    print('hard_positive_site_ids = {}'.format(ub.urepr(hard_positive_site_ids, nl=1)))
-    new_true_props = [n.header['properties'] for n in new_true_sites] + [s['properties'] for s in new_region.site_summaries()]
-    for prop in new_true_props:
-        if 'cache' not in prop:
-            prop['cache'] = {}
-        prop['cache'].pop('confusion', None)
-        if prop['site_id'] in hard_positive_site_ids:
-            prop['cache']['kwcoco'] = {'weight': 2.0}
-            if 'comments' not in prop or not prop['comments']:
-                prop['comments'] = 'hard_positive'
-            else:
-                prop['comments'] += ';hard_positive'
-
-    # Add in hard negatives
-    new_sites = new_true_sites + hard_negative_sites
-
-    enriched_dpath = config.out_dpath / 'enriched_annots'
-    enriched_sites_dpath = enriched_dpath / 'site_models'
-    enriched_region_dpath = enriched_dpath / 'region_models'
-
-    enriched_sites_dpath.ensuredir()
-    enriched_region_dpath.ensuredir()
-
-    rich.print(f'enriched_dpath: [link={enriched_dpath}]{enriched_dpath}[/link]')
-    new_region_fpath = enriched_region_dpath / (region_id + '.geojson')
-    new_region_fpath.write_text(json.dumps(new_region, indent='    '))
-    for new_site in new_sites:
-        fpath = enriched_sites_dpath / (new_site.site_id + '.geojson')
-        text = json.dumps(new_site, indent='    ')
-        fpath.write_text(text)
-
-    # Group by confusion type
-    true_type_to_sites = ub.ddict(list)
-    for true_site_id, true_site in id_to_true_site.items():
-        confusion_type = true_site.header['properties']['cache']['confusion']['type']
-        true_type_to_sites[confusion_type].append(true_site)
-
-    pred_type_to_sites = ub.ddict(list)
-    for pred_site_id, pred_site in id_to_pred_site.items():
-        confusion_type = pred_site.header['properties']['cache']['confusion']['type']
-        pred_type_to_sites[confusion_type].append(pred_site)
-
-    assert set(true_type_to_sites).isdisjoint(set(pred_type_to_sites))
-
-    type_to_sites = ub.udict(pred_type_to_sites) | true_type_to_sites
-    type_to_sites['pred'] = list(id_to_pred_site.values())
-    type_to_sites['true'] = list(id_to_true_site.values())
-
-    # Dump confusion categorized site models to disk
-    cfsn_group_dpath = config.out_dpath / 'confusion_groups'
-    print(ub.urepr(type_to_sites.map_values(len)))
-
-    # Create site summaries for each type of confusion
-    type_to_summary = {}
-    for group_type, sites in type_to_sites.items():
-        sites = SiteModelCollection(sites)
-        cfsn_summary = sites.as_region_model(true_region_model.header)
-        if group_type not in {'true', 'pred'}:
-            cfsn_summary.header['properties']['cache']['confusion_type'] = group_type
-            cfsn_summary.header['properties']['cache']['originator'] = performer_id
-        type_to_summary[group_type] = cfsn_summary
-
-    for group_type, sites in type_to_sites.items():
-        cfsn_summary = type_to_summary[group_type]
-        group_site_dpath = (cfsn_group_dpath / group_type).ensuredir()
-        group_region_fpath = (cfsn_group_dpath / (group_type + '.geojson'))
-        text = cfsn_summary.dumps(indent='    ')
-        group_region_fpath.write_text(text)
-        for site in sites:
-            site_fpath = group_site_dpath / (site.site_id + '.geojson')
-            text = json.dumps(site, indent='    ')
-            site_fpath.write_text(text)
-
-    TIME_OVERLAP_SUMMARY = 0
-    if TIME_OVERLAP_SUMMARY:
-        visualize_time_overlap(type_to_summary, type_to_sites)
-
-    USE_KML = 1
-    if USE_KML:
-        cfsn_kml_dpath = (config.out_dpath / 'confusion_kml').ensuredir()
-        for group_type, sites in type_to_sites.items():
-            cfsn_summary = type_to_summary[group_type]
-            # data = cfsn_summary
-            kml = to_styled_kml(cfsn_summary)
-            kml_fpath = cfsn_kml_dpath / (group_type + '.kml')
-            kml.save(kml_fpath)
-
-    if USE_KML and 1:
-        # TODO: write nice images that can be used with QGIS
-        src_dset = kwcoco.CocoDataset(config.src_kwcoco)
-        coco_img = src_dset.images().coco_images[0]
-        fpath = coco_img.find_asset('salient')['file_name']
-        img_lpath = cfsn_kml_dpath / 'heatmap.tiff'
-        ub.symlink(fpath, img_lpath)
-        fpath = coco_img.primary_image_filepath()
-        img_lpath = cfsn_kml_dpath / 'img.tiff'
-        ub.symlink(fpath, img_lpath)
-
-    # Need to build site summaries from site models.
-
-    # Write a new "enriched truth" file that reweights false negatives add
-    # false positive as hard negatives.
-    rich.print(f'Confusion Analysis: [link={config.out_dpath}]{config.out_dpath}[/link]')
-
-    REPROJECT = config.src_kwcoco is not None
-    if REPROJECT:
-        from watch.cli import reproject_annotations
-        new_coco_fpath = enriched_dpath / f'hardneg-{region_id}.kwcoco.zip'
-        common_kwargs = ub.udict(
-            src=config.src_kwcoco,
-            dst=new_coco_fpath,
-            site_models=enriched_sites_dpath,
-            region_models=enriched_region_dpath,
-            workers=2,
-        )
-        reproject_annotations.main(cmdline=0, **common_kwargs)
-
-        if 1:
-            # Project confusion site models onto kwcoco for visualization
-            import kwcoco
-            from watch.cli import reproject_annotations
-            src_dset = kwcoco.CocoDataset(config.src_kwcoco)
-            dst_dset = src_dset.copy()
-            dst_dset.fpath = config.dst_kwcoco
-            dst_dset.clear_annotations()
-            true_site_infos2 = [s.pandas() for s in id_to_true_site.values()]
-            pred_site_infos2 = [s.pandas() for s in id_to_pred_site.values()]
-
-            # Differentiate true and predicted site-ids when projecting onto a
-            # single file.
-            for site_df in true_site_infos2:
-                site_id = site_df.iloc[0]['site_id']
-                a, b = site_id.rsplit('_', 1)
-                new_site_id = f'{a}_te_{b}'
-                site_df.loc[site_df.index[0], 'site_id'] = new_site_id
-
-            for site_df in pred_site_infos2:
-                site_id = site_df.iloc[0]['site_id']
-                a, b = site_id.rsplit('_', 1)
-                new_site_id = f'{a}_{config.performer_id}_{b}'
-                site_df.loc[site_df.index[0], 'site_id'] = new_site_id
-
-            for site_df in true_site_infos2:
-                reproject_annotations.validate_site_dataframe(site_df)
-
-            dst_dset.clear_annotations()
-            common_kwargs = ub.udict(
-                clear_existing=False,
-                src=dst_dset,
-                dst='return',
-                workers=2,
-            )
-            true_kwargs = common_kwargs | ub.udict(
-                role='true_confusion',
-                # propogate_strategy=False,
-                # propogate_strategy=False,
-                site_models=true_site_infos2,
-                # viz_dpath=(out_dpath / '_true_projection'),
-            )
-            kwargs = true_kwargs
-            pred_kwargs = common_kwargs | ub.udict(
-                role='pred_confusion',
-                site_models=pred_site_infos2,
-                # viz_dpath=(out_dpath / '_pred_projection'),
-            )
-
-            # I don't know why this isn't in-place. Maybe it is a scriptconfig thing?
-            repr1 = str(dst_dset.annots())
-            print(f'repr1={repr1}')
-            dst_dset = reproject_annotations.main(cmdline=0, **true_kwargs)
-            repr2 = str(dst_dset.annots())
-            print(f'repr1={repr1}')
-            print(f'repr2={repr2}')
-            pred_kwargs['src'] = dst_dset
-            dst_dset = reproject_annotations.main(cmdline=0, **pred_kwargs)
-            repr3 = str(dst_dset.annots())
-            print(f'repr1={repr1}')
-            print(f'repr2={repr2}')
-            print(f'repr3={repr3}')
-
-            if config.dst_kwcoco is not None:
-                ub.Path(dst_dset.fpath).parent.ensuredir()
-                print(f'dump to dst_dset.fpath={dst_dset.fpath}')
-                dst_dset.dump()
-
-            # set(dst_dset.annots().lookup('role', None))
-            # set([x.get('role', None) for x in dst_dset.annots().lookup('cache', None)])
-
-            # dst_dset.annots().take([0, 1, 2])
-            viz_dpath = (config.out_dpath / 'summary_viz').ensuredir()
-            if config.summary_visualization:
-                make_summary_visualization(dst_dset, viz_dpath)
+    self = ConfusionAnalysis(config)
+    self.load_assignment()
+    self.build_hard_cases()
+    self.dump_confusion_geojson()
+    self.dump_confusion_kwcoco()
 
 
 def make_summary_visualization(dst_dset, viz_dpath):
