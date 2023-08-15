@@ -8,6 +8,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 * The `valid_region` property computed in `coco_populate_geo_heuristics` now properly uses image space (before it was in asset space, which usually aligned, but was not guaranteed)
+* Fix issue where positive-pending sites were not reprojected correctly when they were missing a start date.
 
 ### Changed
 * Prepare-ta2-dataset now uses the new v3 mlops pipeline instead of the old v1 pipeline.

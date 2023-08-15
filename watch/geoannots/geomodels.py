@@ -532,6 +532,9 @@ class RegionModel(_Model):
     """
     Wrapper around a geojson region model FeatureCollection
 
+    TODO:
+        Rename to Region?
+
     Example:
         >>> from watch.geoannots.geomodels import *  # NOQA
         >>> self = RegionModel.random()
@@ -614,6 +617,9 @@ class RegionModel(_Model):
             >>> assert region1 == region2, 'rngs should be the same'
         """
         from watch.demo.metrics_demo import demo_truth
+
+        if not with_sites:
+            kwargs['num_sites'] = 0
 
         region, sites, _ = demo_truth.random_region_model(
             **kwargs, with_renderables=False)
@@ -719,6 +725,9 @@ class RegionModel(_Model):
 class SiteModel(_Model):
     """
     Wrapper around a geojson site model FeatureCollection
+
+    TODO:
+        Rename to Site?
 
     Example:
         >>> from watch.geoannots.geomodels import *  # NOQA
@@ -1044,6 +1053,8 @@ class SiteModel(_Model):
 
 class _Feature(ub.NiceRepr, geojson.Feature):
     """
+    Base class for features
+
     Example:
         >>> # Test the class variables for subclasses are defined correctly
         >>> assert RegionHeader._feat_type == 'region'
@@ -1324,6 +1335,18 @@ class SiteSummary(_Feature, _SiteOrSummaryMixin):
         self._update_cache_key()
         # self.ensure_isodates()
 
+    @classmethod
+    def coerce(cls, data):
+        if isinstance(data, cls):
+            self = data
+        elif isinstance(data, dict):
+            assert data['type'] == 'Feature'
+            assert data['properties']['type'] == 'site_summary'
+            self = cls(**data)
+        else:
+            raise TypeError(type(data))
+        return self
+
 
 class SiteHeader(_Feature, _SiteOrSummaryMixin):
     """
@@ -1343,6 +1366,18 @@ class SiteHeader(_Feature, _SiteOrSummaryMixin):
         new_cls = SiteSummary
         return self._convert(new_cls)
 
+    @classmethod
+    def coerce(cls, data):
+        if isinstance(data, cls):
+            self = data
+        elif isinstance(data, dict):
+            assert data['type'] == 'Feature'
+            assert data['properties']['type'] == 'site'
+            self = cls(**data)
+        else:
+            raise TypeError(type(data))
+        return self
+
 
 class Observation(_Feature):
     """
@@ -1350,6 +1385,18 @@ class Observation(_Feature):
     """
     _model_cls = SiteModel
     _feat_type = SiteModel._body_type
+
+    @classmethod
+    def coerce(cls, data):
+        if isinstance(data, cls):
+            self = data
+        elif isinstance(data, dict):
+            assert data['type'] == 'Feature'
+            assert data['properties']['type'] == 'observation'
+            self = cls(**data)
+        else:
+            raise TypeError(type(data))
+        return self
 
 
 # def _site_header_from_observations(observations, mgrs_code, site_id, status, summary_geom=None):

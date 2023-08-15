@@ -281,6 +281,10 @@ def main(cmdline=1, **kwargs):
     true_sites = SiteModelCollection(list(SiteModel.coerce_multiple(gt_files)))
     pred_sites = SiteModelCollection(list(SiteModel.coerce_multiple(sm_files)))
 
+    # for site in true_sites:
+    #     if site.start_date is None and site.end_date is None:
+    #         raise AssertionError
+
     orig_regions = list(RegionModel.coerce_multiple(rm_files))
     if len(orig_regions) != 1:
         raise AssertionError(f'Got {orig_regions=}')
@@ -485,6 +489,20 @@ def main(cmdline=1, **kwargs):
             true_site_infos2 = [s.pandas() for s in id_to_true_site.values()]
             pred_site_infos2 = [s.pandas() for s in id_to_pred_site.values()]
 
+            # Differentiate true and predicted site-ids when projecting onto a
+            # single file.
+            for site_df in true_site_infos2:
+                site_id = site_df.iloc[0]['site_id']
+                a, b = site_id.rsplit('_', 1)
+                new_site_id = f'{a}_te_{b}'
+                site_df.loc[site_df.index[0], 'site_id'] = new_site_id
+
+            for site_df in pred_site_infos2:
+                site_id = site_df.iloc[0]['site_id']
+                a, b = site_id.rsplit('_', 1)
+                new_site_id = f'{a}_{config.performer_id}_{b}'
+                site_df.loc[site_df.index[0], 'site_id'] = new_site_id
+
             for site_df in true_site_infos2:
                 reproject_annotations.validate_site_dataframe(site_df)
 
@@ -508,6 +526,7 @@ def main(cmdline=1, **kwargs):
                 site_models=pred_site_infos2,
                 # viz_dpath=(out_dpath / '_pred_projection'),
             )
+
             # I don't know why this isn't in-place. Maybe it is a scriptconfig thing?
             repr1 = str(dst_dset.annots())
             print(f'repr1={repr1}')
@@ -524,6 +543,7 @@ def main(cmdline=1, **kwargs):
 
             if config.dst_kwcoco is not None:
                 ub.Path(dst_dset.fpath).parent.ensuredir()
+                print(f'dump to dst_dset.fpath={dst_dset.fpath}')
                 dst_dset.dump()
 
             # set(dst_dset.annots().lookup('role', None))
@@ -790,10 +810,43 @@ def visualize_time_overlap(type_to_summary, type_to_sites, coco_dset=None):
     type_to_sites = ub.udict({p.name: list(SiteModel.coerce_multiple(p)) for p in site_dpaths})
     type_to_sites.map_values(len)
     """
+    import pandas as pd
+    from kwutil import util_time
     from watch.utils import util_gis
+    from watch.geoannots.geomodels import SiteSummary
+
+    # Ensure data structures have consistent ordering
+    for key in type_to_summary.keys():
+        summary = type_to_summary[key]
+        sites = type_to_sites[key]
+        summary_gdf = summary.pandas_summaries()
+        assert not ub.find_duplicates([s.site_id for s in sites])
+        id_to_site = ub.udict({s.site_id: s for s in sites})
+        new_sites = list(id_to_site.take(summary_gdf['site_id']))
+        assert len(new_sites) == len(sites)
+        type_to_sites[key] = new_sites
+
+    # Double check ordering worked
+    for key in type_to_summary.keys():
+        summary = type_to_summary[key]
+        sites = type_to_sites[key]
+        summary_gdf = summary.pandas_summaries()
+        assert summary_gdf['site_id'].values.tolist() == [s.site_id for s in sites]
+
+    # set(type_to_summary['true'].pandas_summaries()['site_id'])
+    # set(type_to_summary['pred'].pandas_summaries()['site_id'])
+
+    true_id_to_site = {s.site_id: s for s in type_to_sites['true']}
+    pred_id_to_site = {s.site_id: s for s in type_to_sites['pred']}
+    true_id_to_summary = {ss.site_id: ss for ss in map(SiteSummary.coerce, type_to_summary['true'].site_summaries())}
+    pred_id_to_summary = {ss.site_id: ss for ss in map(SiteSummary.coerce, type_to_summary['pred'].site_summaries())}
+
     # Time analysis of false positives that overlap with something.
     true_summary = type_to_summary['true']
     wrong_summary = type_to_summary['sm_completely_wrong']
+
+    region_start_date = true_summary.start_date
+    region_end_date = true_summary.end_date
 
     true_gdf = true_summary.pandas_summaries()
     wrong_gdf = wrong_summary.pandas_summaries()
@@ -803,44 +856,41 @@ def visualize_time_overlap(type_to_summary, type_to_sites, coco_dset=None):
     wrong_gdf = util_gis.project_gdf_to_local_utm(wrong_gdf, mode=1)
 
     # Ensure the ordering is the same as the summaries
-    _true_sites = type_to_sites['true']
-    _wrong_sites = type_to_sites['sm_completely_wrong']
+    true_sites = type_to_sites['true']
+    wrong_sites = type_to_sites['sm_completely_wrong']
 
-    true_sites = list(ub.udict({s.site_id: s for s in _true_sites}).take(true_gdf['site_id']))
-    wrong_sites = list(ub.udict({s.site_id: s for s in _wrong_sites}).take(wrong_gdf['site_id']))
+    SANITY_CHECKS = 1
+    if SANITY_CHECKS:
+        annots = coco_dset.annots()
+        tid_to_aids = ub.udict(ub.group_items(annots, annots.lookup('track_id')))
+        tid_to_annots = tid_to_aids.map_values(coco_dset.annots)
+        tid_to_dups = tid_to_annots.map_values(lambda x: ub.find_duplicates(x.lookup('image_id')))
+        assert not any(map(any, tid_to_dups.values()))
 
+    # For each incorrect prediction check if it spatially overlaps any truth
     idx1_to_idxs2 = util_gis.geopandas_pairwise_overlaps(wrong_gdf, true_gdf)
-    import pandas as pd
-    from kwutil import util_time
-
     inspect_cases = []
     for idx1, idxs2 in idx1_to_idxs2.items():
         if len(idxs2):
             inspect_cases.append((idx1, idxs2))
 
-    region_start_date = true_summary.start_date
-    region_end_date = true_summary.end_date
+    def _hack_site_id(site_id, tag):
+        assert site_id.count('_') == 2
+        a, b = site_id.rsplit('_', 1)
+        new_site_id = f'{a}_{tag}_{b}'
+        return new_site_id
 
     cases = []
-
     for idx1, idxs2 in inspect_cases:
         pred_site = wrong_sites[idx1]
         pred_obs = pred_site.pandas_observations()
-        # pred_ys = yloc
 
         pred_dates = pred_obs['observation_date'].values
         pred_dates = list(map(util_time.coerce_datetime, pred_dates))
-        # pred_xs = util_kwplot.fix_matplotlib_dates()
-
-        pred_obs['current_phase']
-        pred_obs['score']
 
         assert wrong_gdf.iloc[idx1]['site_id'] == pred_site.site_id
-
         pred_geom = wrong_gdf.iloc[idx1].geometry
         pred_area = pred_geom.area
-        # pred_rt_area = np.sqrt(pred_area)
-        # lineman.plot(pred_xs, pred_ys, color='kitware_blue')
 
         for idx2 in idxs2:
             true_site = true_sites[idx2]
@@ -848,15 +898,16 @@ def visualize_time_overlap(type_to_summary, type_to_sites, coco_dset=None):
 
             true_geom = true_gdf.iloc[idx2].geometry
             true_area = true_geom.area
-            # true_rt_area = np.sqrt(true_area)
 
-            pred_site.geometry.intersection(true_site.geometry).area
+            assert pred_site.geometry.intersection(true_site.geometry).area > 0
 
             isect_area = true_geom.intersection(pred_geom).area
             union_area = true_geom.union(pred_geom).area
             space_iou = isect_area / union_area
             space_iot = isect_area / true_area
             space_iop = isect_area / pred_area
+
+            assert space_iou > 0
 
             site_start_date = true_site.start_date or region_start_date
             site_end_date = true_site.end_date or region_end_date
@@ -886,9 +937,16 @@ def visualize_time_overlap(type_to_summary, type_to_sites, coco_dset=None):
             true_duration = true_dates[-1] - true_dates[0]
             pred_duration = pred_dates[-1] - pred_dates[0]
 
+            true_coco_site_id = _hack_site_id(true_site.site_id, 'te')
+            pred_coco_site_id = _hack_site_id(pred_site.site_id, 'kit')
+
             case = {
                 'true_site_id': true_site.site_id,
                 'pred_site_id': pred_site.site_id,
+
+                'true_coco_site_id': true_coco_site_id,
+                'pred_coco_site_id': pred_coco_site_id,
+
                 'pred_idx': idx1,
                 'true_idx': idx2,
 
@@ -908,42 +966,40 @@ def visualize_time_overlap(type_to_summary, type_to_sites, coco_dset=None):
             }
             cases.append(case)
 
+    cases = sorted(cases, key=lambda x: x['time_iou'])[::-1]
+    # coco_upgrade_track_ids(coco_dset)
+    case = cases[4]
+
     import kwplot
     kwplot.autosns()
-    fig = kwplot.figure(fnum=1)
-    fig.clf()
-
-    from watch.utils import util_kwplot
-    lineman = util_kwplot.LineManager()
-    yloc = 1
-    cases = sorted(cases, key=lambda x: x['time_iou'])[::-1]
-
-    def fixtracks(coco_dset):
-        # coco_dset = kwcoco.CocoDataset(coco_fpath)
-        for tid, aids in list(coco_dset.index.trackid_to_aids.items()):
-            ...
-            if tid not in coco_dset.index.tracks:
-                if isinstance(tid, str):
-                    name = tid
-                else:
-                    name = f'track_{tid:03d}'
-                assert name not in coco_dset.index.name_to_track
-                new_tid = coco_dset.add_track(name=name)
-
-                for aid in aids:
-                    coco_dset.index.anns[aid]['track_id'] = new_tid
-                coco_dset.index.trackid_to_aids[new_tid] = aids
-                coco_dset.index.trackid_to_aids.pop(tid)
 
     if coco_dset is not None:
-        true_tracks = coco_dset.tracks(names=[case['true_site_id']])
-        pred_tracks = coco_dset.tracks(names=[case['pred_site_id']])
-        true_track = true_tracks.objs[0]
-        pred_track = pred_tracks.objs[0]
-        pred_tid = pred_track['id']
-        true_tid = true_track['id']
-        true_annots = true_tracks.annots[0]
-        pred_annots = pred_tracks.annots[0]
+        true_site_id = case['true_coco_site_id']
+        pred_site_id = case['pred_coco_site_id']
+
+        true_site = true_id_to_site[case['true_site_id']]  # NOQA
+        pred_site = pred_id_to_site[case['pred_site_id']]  # NOQA
+        true_summary = true_id_to_summary[case['true_site_id']]  # NOQA
+        pred_summary = pred_id_to_summary[case['pred_site_id']]  # NOQA
+
+        if true_site_id in getattr(coco_dset.index, 'name_to_track', set()):
+            raise NotImplementedError
+            # true_tracks = coco_dset.tracks(names=[case['true_site_id']])
+            # pred_tracks = coco_dset.tracks(names=[case['pred_site_id']])
+            # true_track = true_tracks.objs[0]
+            # pred_track = pred_tracks.objs[0]
+            # pred_tid = pred_track['id']
+            # true_tid = true_track['id']
+            # true_annots = true_tracks.annots[0]
+            # pred_annots = pred_tracks.annots[0]
+        else:
+            true_aids = list(coco_dset.index.trackid_to_aids[true_site_id])
+            pred_aids = list(coco_dset.index.trackid_to_aids[pred_site_id])
+            true_annots = coco_dset.annots(true_aids)
+            pred_annots = coco_dset.annots(pred_aids)
+
+        pred_annots.images.lookup('date_captured')
+        true_annots.images.lookup('date_captured')
 
         all_aids = list(set(true_annots) | set(pred_annots))
         all_gids = list(set(true_annots.images) | set(pred_annots.images))
@@ -954,78 +1010,132 @@ def visualize_time_overlap(type_to_summary, type_to_sites, coco_dset=None):
         all_annots = coco_dset.annots(all_aids)
         gid_to_aids = ub.group_items(all_annots, all_annots.images)
 
-        import ndsampler
-        # TODO: use ndsampler to make this a little easier.
-        sampler = ndsampler.CocoSampler(coco_dset)
+        assert set(all_annots.lookup('track_id')) == {true_site_id, pred_site_id}
 
-        channel_priority = [
+        tci_channel_priority = [
             'red|green|blue',
             'pan',
         ]
 
-        def find_visual_channels(coco_img, channel_priority):
-            import kwcoco
-            have_chans = coco_img.channels
-            for p in channel_priority:
-                p = kwcoco.FusedChannelSpec.coerce(p)
-                common = have_chans & p
-                if common.numel() == p.numel():
-                    return p
+        from shapely.ops import unary_union
+        import kwimage
+        import kwarray
 
-        for coco_img in all_images.coco_images:
-            aids = gid_to_aids[coco_img['id']]
-            annots = coco_dset.annots(aids)
+        gid_to_dets = {}
+        # Get the relevant annotations in each image
+        for coco_img in ub.ProgIter(all_images.coco_images, desc='building case'):
+            gid = coco_img['id']
+            aids = gid_to_aids[gid]
+            dets = coco_img._detections_for_resolution(aids=aids, space='video')
+            gid_to_dets[gid] = dets
 
-            coco_dset.tracks(annots.lookup('track_id')).lookup('name')
+        all_vidspace_polys = [
+            p.to_shapely() for dets in gid_to_dets.values()
+            for p in dets.data['segmentations']]
+        vidspace_hull = unary_union(all_vidspace_polys).convex_hull
+        vidspace_poly = kwimage.Polygon.from_shapely(vidspace_hull)
+        vidspace_bound = vidspace_poly.box().scale(2.0, about='centroid').quantize()
 
-            anns = annots.objs
+        cells = []
+        for coco_img in ub.ProgIter(all_images.coco_images, desc='building case'):
+            gid = coco_img['id']
+            dets = gid_to_dets[gid]
 
-            ssegs = coco_img._annot_segmentations(anns, space='video')
-            from shapely.ops import unary_union
-            hull = unary_union([s.to_shapely() for s in ssegs]).convex_hull
+            colors = []
+            for obj in coco_dset.annots(dets.data['aids']).objs:
+                color = obj['cache']['confusion']['color']
+                colors.append(color)
 
-            import kwimage
-            poly = kwimage.Polygon.from_shapely(hull)
-            bound = poly.box().scale(1.2).quantize()
+            channels = find_visual_channels(coco_img, tci_channel_priority)
 
-            channels = find_visual_channels(coco_img, channel_priority)
+            tci_delayed = coco_img.imdelay(channels=channels)
+            tci_imcrop = tci_delayed.crop(vidspace_bound.to_slice(), wrap=False, clip=False)
 
-            if 0:
-                gid = coco_img['id']
-                target = {
-                    'gids': [gid],
-                    'space_slice': bound.to_slice(),
-                    'channels': channels,
-                    'aids': aids
-                }
-                sample = sampler.load_sample(target, with_annots=True)
-                imdata = sample['im']
-                dets = sample['annots']['frame_dets'][0]
+            heatmap_delayed = coco_img.imdelay(channels='salient')
+            heatmap_imcrop = heatmap_delayed.crop(vidspace_bound.to_slice(), wrap=False, clip=False)
 
-            delayed = coco_img.imdelay(channels=channels)
-            imcrop = delayed[bound.to_slice()]
+            heatmap_canvas = heatmap_imcrop.finalize()
 
-            canvas = imcrop.finalize()
-            import kwarray
-            canvas = kwarray.robust_normalize(canvas)
+            tci_canvas = tci_imcrop.finalize()
+            tci_canvas = kwarray.robust_normalize(tci_canvas)
+            tci_canvas = kwimage.fill_nans_with_checkers(tci_canvas)
+            rel_dets = dets.translate((-vidspace_bound.tl_x, -vidspace_bound.tl_y))
 
-            kwplot.imshow(canvas)
+            det_canvas = rel_dets.draw_on(tci_canvas, color=colors, alpha=0.5)
+            cell_canvas = kwimage.stack_images([det_canvas, tci_canvas, heatmap_canvas], axis=0, pad=5)[..., 0:3]
+            header_lines = [
+                coco_img.img.get('sensor_coarse'),
+                util_time.coerce_datetime(coco_img.img.get('date_captured')).date().isoformat(),
+            ]
 
-            coco_img.warp_vid_from_img
+            header = kwimage.draw_text_on_image(None, text='\n'.join(header_lines))
+            header = kwimage.ensure_float01(header)
+            cell_canvas = kwimage.imresize(cell_canvas, dsize=(header.shape[1], None)).clip(0, 1)
+            cell_canvas = kwimage.stack_images([header, cell_canvas], axis=0)
+            # cell_canvas = kwimage.draw_header_text(cell_canvas, '\n'.join(header_lines), fit='grow')
+            cells.append(cell_canvas)
 
-            ...
+        canvas = kwimage.stack_images(cells, axis=1, pad=10)
+        kwplot.imshow(canvas, fnum=1)
 
-        true_annots.images.coco_images
-        pred_annots.images.coco_images
-        ...
+        if 1:
+            from watch.utils import util_kwplot
+            plt = kwplot.plt
+            import matplotlib.dates as mdates
+            fig = kwplot.figure(fnum=1321321)
+            ax = fig.gca()
+            ax.cla()
+
+            pred_xs = util_kwplot.fix_matplotlib_dates(case['pred_dates'])
+            true_xs = util_kwplot.fix_matplotlib_dates(case['true_dates'])
+
+            lineman = util_kwplot.LineManager()
+            lineman.plot(pred_xs, 1, color='kitware_blue')
+            lineman.plot(true_xs, 2, color='kitware_green')
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+            ax.xaxis.set_major_locator(mdates.DayLocator(interval=360))
+            lineman.add_to_axes(ax=ax)
+            lineman.setlims(ax=ax)
+
+            ax.set_ylim(0, 3)
+
+            fig.set_size_inches([10, 3])
+            fig.subplots_adjust(left=0, bottom=0.1, top=.9, right=1)
+
+            true_annots.images.coco_images
+            pred_annots.images.coco_images
+
+        # import ndsampler
+        # TODO: use ndsampler to make this a little easier.
+        # sampler = ndsampler.CocoSampler(coco_dset)
+        # if 0:
+        #     gid = coco_img['id']
+        #     target = {
+        #         'gids': [gid],
+        #         'space_slice': bound.to_slice(),
+        #         'channels': channels,
+        #         'aids': aids
+        #     }
+        #     sample = sampler.load_sample(target, with_annots=True, annot_ids=aids)
+        #     imdata = sample['im']
+        #     dets = sample['annots']['frame_dets'][0]
 
     # max_date = max([max(case['pred_dates'] + case['true_dates']) for case in cases])
     # max_x = util_kwplot.fix_matplotlib_dates([max_date])[0]
 
+    import kwplot
+    kwplot.autosns()
+    fig = kwplot.figure(fnum=1)
+    fig.clf()
+
+    from watch.utils import util_kwplot
+    lineman = util_kwplot.LineManager()
+    yloc = 1
+
     min_date = min([min(case['pred_dates'] + case['true_dates']) for case in cases])
     min_x = util_kwplot.fix_matplotlib_dates([min_date])[0]
 
-    for case in cases[-10:]:
+    for case in cases[:]:
         pred_xs = util_kwplot.fix_matplotlib_dates(case['pred_dates'])
         true_xs = util_kwplot.fix_matplotlib_dates(case['true_dates'])
         lineman.plot(pred_xs, yloc, color='kitware_blue')
@@ -1060,6 +1170,34 @@ def visualize_time_overlap(type_to_summary, type_to_sites, coco_dset=None):
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
     ax.xaxis.set_major_locator(mdates.DayLocator(interval=360))
     lineman.setlims()
+
+
+def find_visual_channels(coco_img, channel_priority):
+    import kwcoco
+    have_chans = coco_img.channels
+    for p in channel_priority:
+        p = kwcoco.FusedChannelSpec.coerce(p)
+        common = have_chans & p
+        if common.numel() == p.numel():
+            return p
+
+
+def coco_upgrade_track_ids(coco_dset):
+    # coco_dset = kwcoco.CocoDataset(coco_fpath)
+    for tid, aids in list(coco_dset.index.trackid_to_aids.items()):
+        ...
+        if tid not in coco_dset.index.tracks:
+            if isinstance(tid, str):
+                name = tid
+            else:
+                name = f'track_{tid:03d}'
+            assert name not in coco_dset.index.name_to_track
+            new_tid = coco_dset.add_track(name=name)
+
+            for aid in aids:
+                coco_dset.index.anns[aid]['track_id'] = new_tid
+            coco_dset.index.trackid_to_aids[new_tid] = aids
+            coco_dset.index.trackid_to_aids.pop(tid)
 
 
 if __name__ == '__main__':
