@@ -1,3 +1,7 @@
+"""
+A package that holds third-party libraries that some geowatch tasks require.
+"""
+
 import os
 import sys
 # Adds the "modules" subdirectory to the python path.
