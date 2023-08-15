@@ -2,7 +2,7 @@
 # Adds the "modules" subdirectory to the python path.
 # See https://gitlab.kitware.com/smart/watch/-/merge_requests/148#note_1050127
 # for discussion of how to refactor this in the future.
-import geowatch_tpl.modules_monkeypatch  # NOQA
+import geowatch_tpl  # NOQA
 
 import warnings
 import numpy as np

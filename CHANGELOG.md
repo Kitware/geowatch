@@ -12,7 +12,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 * Prepare-ta2-dataset now uses the new v3 mlops pipeline instead of the old v1 pipeline.
-* Moved third-party-libraries into a geowatch TPL module.
+* Moved third-party-libraries into a new `geowatch_tpl` module.
 
 ### Removed:
 * Removed `separate_region_queues` `separate_align_jobs` options from `prepare-ta2-dataset`, they are now always True.

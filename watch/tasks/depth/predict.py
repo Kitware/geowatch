@@ -17,7 +17,7 @@ from tqdm import tqdm
 
 from scipy import ndimage
 
-import geowatch_tpl.modules_monkeypatch  # NOQA
+import geowatch_tpl  # NOQA
 
 from .datasets import WVRgbDataset, WVSuperRgbDataset
 # from .pl_highres_verify import MultiTaskModel, modify_bn, dfactor, local_utils
