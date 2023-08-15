@@ -244,7 +244,10 @@ def main(cmdline=False, **kwargs):
     import kwcoco
     import rich
     import numpy as np
-    rich.print('config = {}'.format(ub.urepr(config, nl=1)))
+    from kwutil.slugify_ext import smart_truncate
+    rich.print('config = {}'.format(smart_truncate(
+        ub.urepr(config, nl=1), max_length=1000,
+    )))
 
     output_fpath = config['dst']
     if output_fpath is None:

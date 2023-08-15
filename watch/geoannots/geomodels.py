@@ -1086,6 +1086,10 @@ class _Feature(ub.NiceRepr, geojson.Feature):
         }
         return info
 
+    @property
+    def properties(self):
+        return self['properties']
+
     @classmethod
     def load_schema(cls, strict=True):
         """

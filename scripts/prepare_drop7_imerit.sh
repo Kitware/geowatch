@@ -202,6 +202,7 @@ python -m watch reproject \
 
 
 dvc add -vv -- */raw_bands
+dvc add -vv -- */imganns-*.kwcoco.zip
 
 
 ###---
@@ -336,4 +337,5 @@ DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
 python -m watch.mlops.confusor_analysis \
     --metrics_node_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_test/_imeritbas/eval/flat/bas_poly_eval/bas_poly_eval_id_fd88699a/ \
     --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop7/region_models \
-    --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop7/site_models
+    --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop7/site_models \
+    --viz_site_case=True
