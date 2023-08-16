@@ -256,9 +256,9 @@ def transfer_features_main(cmdline=1, **kwargs):
         'swir16_COLD_rmse', 'swir22_COLD_rmse'
     ]
 
-    coco_fpath = ub.Path(config['coco_fpath'])
-    combine_fpath = ub.Path(config['combine_fpath'])
-    new_coco_fpath = ub.Path(config['new_coco_fpath'])
+    do_return = (config['new_coco_fpath'] == 'return')
+    if not do_return:
+        new_coco_fpath = ub.Path(config['new_coco_fpath'])
 
     if config['channels_to_transfer'] is None:
         channels_to_transfer = default_channels
@@ -267,11 +267,13 @@ def transfer_features_main(cmdline=1, **kwargs):
         channels_to_transfer = list(channels_to_transfer)
 
     print('Reading source kwcoco file')
-    src = kwcoco.CocoDataset(coco_fpath)
+    src = kwcoco.CocoDataset.coerce(config['coco_fpath'])
 
     print('Reading destination kwcoco file')
-    dst = kwcoco.CocoDataset(combine_fpath)
-    _update_coco_fpath(dst, new_coco_fpath)
+    dst = kwcoco.CocoDataset.coerce(config['combine_fpath'])
+
+    if not do_return:
+        _update_coco_fpath(dst, new_coco_fpath)
 
     src_video_names = src.videos().lookup('name')
 
@@ -298,6 +300,11 @@ def transfer_features_main(cmdline=1, **kwargs):
         dst_sensors = dst_images.lookup('sensor_coarse')
         sensor_to_dst_gids = ub.group_items(dst_images, dst_sensors)
         sensor_to_src_gids = ub.group_items(src_images, src_sensors)
+
+        if not (set(sensor_to_dst_gids) & set(sensor_to_src_gids)):
+            # Hack and ignore sensors
+            sensor_to_src_gids = {'__hack__': src_images}
+            sensor_to_dst_gids = {'__hack__': dst_images}
 
         for sensor in sensor_to_src_gids.keys():
             src_image_ids = sensor_to_src_gids[sensor]
@@ -414,10 +421,13 @@ def transfer_features_main(cmdline=1, **kwargs):
     obj = proc_context.stop()
     dst.dataset['info'].append(obj)
 
-    print('Writing new coco file')
     dst._ensure_json_serializable()
-    dst.dump()
-    print(f'Wrote transfered features to: {dst.fpath}')
+    if not do_return:
+        print('Writing new coco file')
+        dst.dump()
+        print(f'Wrote transfered features to: {dst.fpath}')
+    else:
+        return dst
 
 
 if __name__ == '__main__':

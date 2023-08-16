@@ -700,7 +700,7 @@ def get_quality_mask(coco_image, space, resolution, avoid_quality_values=['cloud
                                  resolution=resolution)
     if crop_slice:
         delay = delay.crop(crop_slice)
-    qa_data = delay.finalize()
+    qa_data = delay.finalize(antialias=False, interpolation='nearest')
 
     if qa_data.dtype.kind == 'f':
         # If the qa band is a float, then it must be a nan channel

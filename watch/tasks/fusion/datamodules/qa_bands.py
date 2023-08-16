@@ -100,17 +100,67 @@ class QA_SpecMixin:
             >>> import kwplot
             >>> kwplot.autoplt()
             >>> kwplot.imshow(canvas)
+
+        Ignore:
+            >>> import kwcoco
+            >>> import watch
+            >>> import kwimage
+            >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='hdd')
+            >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
+            >>> coco_fpath = dvc_dpath / 'Aligned-Drop7/KR_R002/imgonly-KR_R002.kwcoco.zip'
+            >>> dset = kwcoco.CocoDataset(coco_fpath)
+            >>> wv_gids = [g for g, s in dset.images().lookup('sensor_coarse', keepid=True).items() if s == 'WV']
+            >>> gid = dset.images(wv_gids)[-3]
+            >>> coco_img = dset.coco_image(gid)
+            >>> # Load some quality and rgb data
+            >>> qa_delayed = coco_img.imdelay('quality', interpolation='nearest', antialias=False)
+            >>> rgb_delayed = coco_img.imdelay('red|green|blue')
+            >>> quality_im = qa_delayed.finalize(interpolation='nearest', antialias=False)
+            >>> rgb_raw = rgb_delayed.finalize(nodata_method='float')
+            >>> rgb_canvas = kwimage.normalize_intensity(rgb_raw)
+            >>> sensor = coco_img.img.get('sensor_coarse')
+            >>> print(f'sensor={sensor}')
+            >>> # Use the spec to draw it
+            >>> from watch.tasks.fusion.datamodules.qa_bands import QA_SPECS
+            >>> table = QA_SPECS.find_table('ACC-1', 'WV')
+            >>> #table = QA_SPECS.find_table('FMASK', '*')
+            >>> #table = QA_SPECS.find_table('Phase1_QA', '*')
+            >>> drawings = table.draw_labels(quality_im)
+            >>> qa_canvas = drawings['qa_canvas']
+            >>> legend = drawings['legend']
+            >>> canvas = kwimage.stack_images([rgb_canvas, qa_canvas], axis=1)
+            >>> canvas = kwimage.draw_header_text(canvas, sensor)
+            >>> #canvas = kwimage.stack_images([canvas, ], axis=0)
+            >>> import kwplot
+            >>> kwplot.autoplt()
+            >>> kwplot.imshow(canvas, fnum=1)
+            >>> kwplot.imshow(legend, fnum=2)
         """
         import kwimage
         import kwarray
         import numpy as np
         import kwplot
-        qavals_to_count = ub.dict_hist(quality_im.ravel())
+        _raw = quality_im.ravel()
+        is_nan = np.isnan(_raw)
+        num_nan = is_nan.sum()
+        _raw2 = _raw[~is_nan]
+        qavals_to_count = ub.dict_hist(_raw2)
+        if num_nan:
+            print('warning nan QA')
+            # qavals_to_count[np.nan] = num_nan
 
         unique_qavals = list(qavals_to_count.keys())
 
+        max_labels = 32
+        if len(qavals_to_count) > max_labels:
+            print('WARNING: QA band has a lot of unique values')
+            top_qvals = dict(list(ub.udict(qavals_to_count).sorted_values().items())[-max_labels:])
+            unique_qavals = list(top_qvals)
+            # qval_to_color = ub.udict(qval_to_color)
+            # qval_to_color = qval_to_color.subdict(top_qvals)
+
         # For the QA band lets assign a color to each category
-        colors = kwimage.Color.distinct(len(qavals_to_count))
+        colors = kwimage.Color.distinct(len(unique_qavals))
         qval_to_color = dict(zip(unique_qavals, colors))
 
         qval_to_desc = table.describe_values(unique_qavals)
@@ -118,7 +168,11 @@ class QA_SpecMixin:
 
         # Colorize the QA bands
         colorized = np.empty(quality_im.shape[0:2] + (3,), dtype=np.float32)
-        for qabit, color in qval_to_color.items():
+        if len(qval_to_color) > 10:
+            qa_iter = ub.ProgIter(qval_to_color.items(), total=len(qval_to_color), desc='complex QA')
+        else:
+            qa_iter = qval_to_color.items()
+        for qabit, color in qa_iter:
             mask = quality_im[:, :, 0] == qabit
             colorized[mask] = color
 
@@ -205,7 +259,10 @@ class QA_BitSpecTable(QA_SpecMixin):
                 descs = []
                 for bit_number in bit_positions:
                     bit_spec = bit_to_spec.get(bit_number, '?')
-                    descs.append(bit_spec['qa_description'])
+                    if bit_spec == '?':
+                        descs.append('?')
+                    else:
+                        descs.append(bit_spec['qa_description'])
 
                 parts = {}
                 parts['value'] = val

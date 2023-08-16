@@ -1027,3 +1027,105 @@ python -m watch.cli.prepare_splits \
     --base_fpath "$DVC_DATA_DPATH"/Drop7-Cropped2GSD-Features/*/combo_*_DE.kwcoco.zip \
     --dst_dpath "$DVC_DATA_DPATH"/Drop7-Cropped2GSD-Features \
     --suffix=DE --run=1 --workers=10
+
+
+####################3
+
+DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
+# FIXME: dst outpaths
+python -m watch.cli.prepare_splits \
+    --base_fpath="$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD-iMERIT/*/imganns*-*_[RC]*.kwcoco.zip \
+    --suffix=rawbands \
+    --backend=tmux --tmux_workers=6 \
+    --run=0
+
+DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
+kwcoco move \
+    "$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD-iMERIT/KW_C001/data_train_rawbands_split6.kwcoco.zip \
+    "$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD-iMERIT/data_train_rawbands_split6.kwcoco.zip
+
+
+DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
+kwcoco move \
+    "$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD-iMERIT/KW_C001/data_vali_rawbands_split6.kwcoco.zip \
+    "$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD-iMERIT/data_vali_rawbands_split6.kwcoco.zip
+
+DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
+python -m watch reproject \
+    --src "$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD-iMERIT/data_train_rawbands_split6.kwcoco.zip \
+    --inplace \
+    --status_to_catname="positive_excluded: positive" \
+    --regions="$DVC_DATA_DPATH"/drop7/region_models/*.geojson \
+    --sites="$DVC_DATA_DPATH"/annotations/drop7/site_models/*.geojson --io_workers=8
+
+
+DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
+python -m watch reproject \
+    --src "$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD-iMERIT/data_vali_rawbands_split6.kwcoco.zip \
+    --inplace \
+    --status_to_catname="positive_excluded: positive" \
+    --regions="$DVC_DATA_DPATH"/drop7/region_models/*.geojson \
+    --sites="$DVC_DATA_DPATH"/annotations/drop7/site_models/*.geojson --io_workers=8
+
+kwcoco union \
+    --absolute=True \
+    --src \
+        /data/joncrall/dvc-repos/smart_data_dvc/Drop7-MedianNoWinter10GSD/data_vali_EI2LMSC_split6.kwcoco.zip \
+        /data/joncrall/dvc-repos/smart_data_dvc/Drop7-MedianNoWinter10GSD-iMERIT/data_vali_rawbands_split6.kwcoco.zip \
+    --dst /data/joncrall/dvc-repos/smart_data_dvc/Drop7-MedianNoWinter10GSD-Both/data_vali_mixed_split6.kwcoco.zip
+
+
+kwcoco union \
+    --absolute=True \
+    --src \
+        /data/joncrall/dvc-repos/smart_data_dvc/Drop7-MedianNoWinter10GSD/data_train_EI2LMSC_split6.kwcoco.zip \
+        /data/joncrall/dvc-repos/smart_data_dvc/Drop7-MedianNoWinter10GSD-iMERIT/data_train_rawbands_split6.kwcoco.zip \
+    --dst /data/joncrall/dvc-repos/smart_data_dvc/Drop7-MedianNoWinter10GSD-Both/data_train_mixed_split6.kwcoco.zip
+
+
+#python ~/code/watch-smartflow-dags/reproduce_mlops.py imgonly-US_R006.kwcoco.zip
+# ~/code/watch/dev/poc/prepare_time_combined_dataset.py
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
+python ~/code/watch/watch/cli/queue_cli/prepare_time_combined_dataset.py \
+    --regions=all_tne \
+    --input_bundle_dpath="$DVC_DATA_DPATH"/Aligned-Drop7 \
+    --output_bundle_dpath="$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD-NoMask \
+    --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop6_hard_v1/site_models \
+    --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop6_hard_v1/region_models \
+    --spatial_tile_size=512 \
+    --merge_method=median \
+    --remove_seasons=winter \
+    --tmux_workers=1 \
+    --time_window=1y \
+    --combine_workers=4 \
+    --resolution=10GSD \
+    --backend=tmux \
+    --mask_low_quality=False \
+    --run=1
+
+
+# ~/code/watch/dev/poc/prepare_time_combined_dataset.py
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
+python ~/code/watch/watch/cli/queue_cli/prepare_time_combined_dataset.py \
+    --regions="['US_C010', 'NG_C000', 'KW_C001', 'SA_C005', 'US_C001', 'CO_C009',
+        'US_C014', 'CN_C000', 'PE_C004', 'IN_C000', 'PE_C001', 'SA_C001', 'US_C016',
+        'AE_C001', 'US_C011', 'AE_C002', 'PE_C003', 'RU_C000', 'CO_C001', 'US_C000',
+        'US_C012', 'AE_C003', 'CN_C001', 'QA_C001', 'SN_C000']
+        # 'VN_C002',
+    " \
+    --input_bundle_dpath="$DVC_DATA_DPATH"/Aligned-Drop7 \
+    --output_bundle_dpath="$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD-NoMask \
+    --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop7/site_models \
+    --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop7/region_models \
+    --spatial_tile_size=512 \
+    --merge_method=median \
+    --remove_seasons=winter \
+    --tmux_workers=2 \
+    --time_window=1y \
+    --combine_workers=4 \
+    --resolution=10GSD \
+    --backend=tmux \
+    --skip_existing=0 \
+    --cache=1 \
+    --mask_low_quality=False \
+    --run=1

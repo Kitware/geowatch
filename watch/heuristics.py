@@ -308,7 +308,7 @@ def iarpa_assign_pred_confusion(truth_match_statuses):
         IARPA_STATUS_TO_INFO[s].get('positive_match_confusion', None)
         for s in truth_match_statuses
     }
-    if 'gt_true_pos' in truth_cfsns:
+    if truth_cfsns & {'gt_true_pos', 'gt_positive_unbounded'}:
         if 'gt_false_pos' in truth_cfsns:
             pred_cfsn = 'sm_partially_wrong'
         else:
