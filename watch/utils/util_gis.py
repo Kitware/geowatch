@@ -1083,6 +1083,10 @@ def load_geojson_datas(geojson_fpaths, format='dataframe', workers=0,
             backend argument that will yield None after the data is submitted
             to force the data loading to start processing in the background.
 
+    TODO:
+        pass something in to allow for better progress management when a lot of
+        functions are calling this.
+
     Yields:
         Dict:
             containing keys, 'fpath' and 'gdf'.
