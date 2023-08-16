@@ -234,17 +234,23 @@ IARPA_REAL_STATUS = {
 }
 
 
+"""
+For official color definitions see:
+
+    :func:`iarpa_smart_metrics.evaluation.Evaluation.get_sm_color` and
+    :func:`iarpa_smart_metrics.evaluation.Evaluation.get_gt_color`
+"""
 IARPA_CONFUSION_COLORS = {}
-IARPA_CONFUSION_COLORS['gt_true_neg'] = 'darkgreen'  # no IARPA color for this, make one up.
+IARPA_CONFUSION_COLORS['gt_true_neg'] = 'green'  # no IARPA color for this, make one up.
 IARPA_CONFUSION_COLORS['gt_true_pos'] = 'lime'
 IARPA_CONFUSION_COLORS['gt_false_pos'] = 'red'
 IARPA_CONFUSION_COLORS['gt_false_neg'] = 'black'
 IARPA_CONFUSION_COLORS['gt_positive_unbounded'] = "darkviolet"
 IARPA_CONFUSION_COLORS['gt_ignore'] = "lightsalmon"
 IARPA_CONFUSION_COLORS['gt_seen'] = "gray"
-IARPA_CONFUSION_COLORS['sm_pos_match'] = "orange"
-IARPA_CONFUSION_COLORS['sm_partially_wrong'] = "magenta"
-IARPA_CONFUSION_COLORS['sm_completely_wrong'] = "aquamarine"
+IARPA_CONFUSION_COLORS['sm_pos_match'] = "aquamarine"
+IARPA_CONFUSION_COLORS['sm_partially_wrong'] = "orange"
+IARPA_CONFUSION_COLORS['sm_completely_wrong'] = "magenta"
 
 IARPA_CONFUSION_COLORS['sm_ignore'] = "lightsalmon"  # no IARPA color for this, make one up
 

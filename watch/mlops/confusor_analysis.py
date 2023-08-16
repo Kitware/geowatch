@@ -114,6 +114,12 @@ def main(cmdline=1, **kwargs):
         HAS_DVC=1 xdoctest -m watch.mlops.confusor_analysis main:0
 
     Ignore:
+
+        python -m watch.mlops.confusor_analysis \
+            --metrics_node_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_drop7_nowinter_baseline_joint_bas_sc/eval/flat/bas_poly_eval/bas_poly_eval_id_ec937017/ \
+            --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop7/region_models \
+            --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop7/site_models
+
         DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
         python -m watch.mlops.confusor_analysis \
             --metrics_node_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_test/_imeritbas/eval/flat/bas_poly_eval/bas_poly_eval_id_fd88699a/ \
@@ -353,6 +359,7 @@ class ConfusionAnalysis:
                     true_site_id = fix_site_id(true_site_id, region_id, performer_id)
                     truth_match_statuses.append(site_to_status[true_site_id])
                     true_site_ids.append(true_site_id)
+
             pred_cfsn = heuristics.iarpa_assign_pred_confusion(truth_match_statuses)
             if pred_cfsn is None:
                 print('row = {}'.format(ub.urepr(row, nl=1)))
