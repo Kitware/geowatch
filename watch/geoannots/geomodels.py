@@ -680,6 +680,7 @@ class RegionModel(_Model):
         self._update_cache_key()
         self.remove_invalid_properties()
         self.ensure_isodates()
+        return self
 
     def ensure_isodates(self):
         """
@@ -911,6 +912,7 @@ class SiteModel(_Model):
         self.ensure_isodates()
         self.fix_current_phase_salient()
         # self.fix_geom()
+        return self
 
     def ensure_isodates(self):
         """
@@ -1345,6 +1347,7 @@ class SiteSummary(_Feature, _SiteOrSummaryMixin):
         """
         self._update_cache_key()
         # self.ensure_isodates()
+        return self
 
     @classmethod
     def coerce(cls, data):
@@ -1450,6 +1453,7 @@ class ModelCollection(list):
         with pman:
             for s in pman.progiter(self, desc='fixup'):
                 s.fixup()
+        return self
 
     def validate(self, mode='process', workers=0, verbose=1):
         """

@@ -1,4 +1,35 @@
 #!/usr/bin/env python3
+r"""
+
+Ignore:
+
+    python -m watch.mlops.confusor_analysis \
+        --metrics_node_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_drop7_nowinter_baseline_joint_bas_sc/eval/flat/bas_poly_eval/bas_poly_eval_id_ec937017/ \
+        --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop7/region_models \
+        --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop7/site_models
+
+
+    python -m watch.mlops.confusor_analysis \
+        --metrics_node_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_drop7_nowinter_baseline_joint_bas_sc/eval/flat/bas_poly_eval/bas_poly_eval_id_ec937017/ \
+        --reload --viz_site_case
+
+
+    DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
+    python -m watch.mlops.confusor_analysis \
+        --metrics_node_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_test/_imeritbas/eval/flat/bas_poly_eval/bas_poly_eval_id_fd88699a/ \
+        --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop7/region_models \
+        --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop7/site_models \
+        --viz_site_case=True
+
+    DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
+    python -m watch.mlops.confusor_analysis \
+        --metrics_node_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_test/_imeritbas/eval/flat/bas_poly_eval/bas_poly_eval_id_fd88699a/ \
+        --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop7/region_models \
+        --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop7/site_models \
+        --viz_site_case=True \
+        --quick_viz=True
+
+"""
 import scriptconfig as scfg
 import ubelt as ub
 
@@ -51,7 +82,7 @@ class ConfusorAnalysisConfig(scfg.DataConfig):
 
     out_dpath = scfg.Value(None, help='where to write results')
 
-    quick_viz = scfg.Value(False, isflag=True, help='hack for dev')
+    reload = scfg.Value(False, isflag=True, help='if True, reload previously dumped confusion cases.')
 
     def __post_init__(self):
         if self.bas_metric_dpath is not None:
@@ -113,28 +144,6 @@ def main(cmdline=1, **kwargs):
         xdoctest -m /home/joncrall/code/watch/watch/mlops/confusor_analysis.py main
         HAS_DVC=1 xdoctest -m watch.mlops.confusor_analysis main:0
 
-    Ignore:
-
-        python -m watch.mlops.confusor_analysis \
-            --metrics_node_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_drop7_nowinter_baseline_joint_bas_sc/eval/flat/bas_poly_eval/bas_poly_eval_id_ec937017/ \
-            --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop7/region_models \
-            --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop7/site_models
-
-        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
-        python -m watch.mlops.confusor_analysis \
-            --metrics_node_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_test/_imeritbas/eval/flat/bas_poly_eval/bas_poly_eval_id_fd88699a/ \
-            --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop7/region_models \
-            --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop7/site_models \
-            --viz_site_case=True
-
-        DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
-        python -m watch.mlops.confusor_analysis \
-            --metrics_node_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_test/_imeritbas/eval/flat/bas_poly_eval/bas_poly_eval_id_fd88699a/ \
-            --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop7/region_models \
-            --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop7/site_models \
-            --viz_site_case=True \
-            --quick_viz=True
-
     Example:
         >>> # xdoctest: +REQUIRES(env:HAS_DVC)
         >>> from watch.mlops.confusor_analysis import *  # NOQA
@@ -169,23 +178,21 @@ def main(cmdline=1, **kwargs):
     rich.print('config = ' + ub.urepr(config, nl=1, align=':'))
 
     self = ConfusionAnalysis(config)
-    # import xdev
-    # xdev.embed()
 
-    if not config.quick_viz:
+    if config.reload:
+        self.reload()
+    else:
         self.load_assignment()
-        self.dump_confusion_geojson()
-
+        self.load_geojson_models()
+        self.add_confusion_to_geojson_models()
         self.build_hard_cases()
+        self.dump_confusion_geojson()
         self.dump_hardneg_geojson()
-
-        self.dump_confusion_kwcoco()
+        if config.src_kwcoco is not None:
+            self.dump_confusion_kwcoco()
+            self.dump_hardneg_kwcoco()
 
     if config.viz_site_case:
-
-        if config.quick_viz:
-            self._reload()
-
         self.dump_site_case_viz()
 
 
@@ -197,7 +204,7 @@ class ConfusionAnalysis:
     def __init__(self, config):
         self.config = config
 
-        self.region_id = None
+        self.region_id = config.region_id
 
         self.true_sites = None
         self.pred_sites = None
@@ -207,6 +214,9 @@ class ConfusionAnalysis:
         self.id_to_pred_site = None
         self.type_to_sites = None
         self.type_to_summary = None
+
+        self.true_confusion_rows = None
+        self.pred_confusion_rows = None
 
         self.new_sites = None
         self.new_region = None
@@ -224,9 +234,12 @@ class ConfusionAnalysis:
     # def from_config(cls, config):
     #     ...
 
-    def _reload(self):
+    def reload(self):
         """
         Reloads data we assume is previously written
+
+        FIXME:
+            be robust to the case of anyone putting bad files in these dirs
         """
         import kwcoco
         from watch.geoannots.geomodels import SiteModel
@@ -251,55 +264,75 @@ class ConfusionAnalysis:
         self.type_to_summary = type_to_summary
         self.cfsn_coco = coco_dset
 
+    def load_geojson_models(self):
+        """
+        Loads the true and predicted site models
+        """
+        from watch.geoannots.geomodels import SiteModel
+        from watch.geoannots.geomodels import RegionModel
+        from watch.geoannots.geomodels import SiteModelCollection
+        from watch.utils import util_gis
+        import itertools as it
+
+        config = self.config
+        region_id = config.region_id
+
+        true_site_dpath = config.true_site_dpath
+        true_region_dpath = config.true_region_dpath
+
+        pred_site_fpaths = list(util_gis.coerce_geojson_paths(config.pred_sites))
+        rm_files = list(true_region_dpath.glob(region_id + '*.geojson'))
+        gt_files = list(true_site_dpath.glob(region_id + '*.geojson'))
+        sm_files = pred_site_fpaths
+
+        true_sites = SiteModelCollection(list(SiteModel.coerce_multiple(gt_files)))
+        pred_sites = SiteModelCollection(list(SiteModel.coerce_multiple(sm_files)))
+
+        # for site in true_sites:
+        #     if site.start_date is None and site.end_date is None:
+        #         raise AssertionError
+
+        orig_regions = list(RegionModel.coerce_multiple(rm_files))
+        if len(orig_regions) != 1:
+            raise AssertionError(f'Got {orig_regions=}')
+
+        # Ensure all site data has misc-info
+        # Ensure all data cast to site models
+
+        true_region_model = orig_regions[0]
+        true_region_model.fixup()
+        true_region_model.header['properties'].setdefault('cache', {})
+
+        for site in it.chain(pred_sites, true_sites):
+            for feat in site.features:
+                feat['properties'].setdefault('cache', {})
+
+        id_to_true_site = {s.site_id: s for s in true_sites}
+        id_to_pred_site = {s.site_id: s for s in pred_sites}
+
+        self.true_sites = true_sites
+        self.pred_sites = pred_sites
+        self.id_to_true_site = id_to_true_site
+        self.id_to_pred_site = id_to_pred_site
+
+        self.true_region_model = true_region_model
+
     def load_assignment(self):
         """
-        Load true and predicted site models as well as the association between
-        them computed by the metrics framework. Add properties to each site
-        model (and their associated site summaries) indicating the type of
-        confusion they are causing based on the following "confusion specs".
+        Load the association between true and predicted site models computed by
+        the metrics framework.
 
-        True Confusion Spec
-        -------------------
-
-        "cache":  {
-            "confusion": {
-                "true_site_id": str,          # redundant site id information,
-                "pred_site_ids": List[str],   # the matching predicted site ids,
-                "type": str,                  # the type of true confusion assigned by T&E
-                "color": str,                 # a named color coercable via kwimage.Color.coerce
-            }
-        }
-
-        Predicted Confusion Spec
-        -------------------
-
-        "cache":  {
-            "confusion": {
-                "pred_site_id": str,          # redundant site id information,
-                "true_site_ids": List[str],   # the matching predicted site ids,
-                "type": str,        # the type of predicted confusion assigned by T&E
-                "color": str,       # a named color coercable via kwimage.Color.coerce
-            }
-        }
-
-        # The possible confusion codes and the corresponding confusion_color they
-        # will be assigned is defined in heuristics.IARPA_CONFUSION_COLORS
+        Note:
+            The possible confusion codes and the corresponding confusion_color
+            are assigned in :py:obj:`watch.heuristics.IARPA_CONFUSION_COLORS`
         """
         config = self.config
 
         import rich
         import pandas as pd
-        import itertools as it
         from watch import heuristics
-        from watch.utils import util_gis
-        from watch.geoannots.geomodels import SiteModel
-        from watch.geoannots.geomodels import RegionModel
-        from watch.geoannots.geomodels import SiteModelCollection
 
         performer_id = config.performer_id
-        true_site_dpath = config.true_site_dpath
-        true_region_dpath = config.true_region_dpath
-        pred_site_fpaths = list(util_gis.coerce_geojson_paths(config.pred_sites))
         region_id = config.region_id
 
         config.detections_fpath = ub.Path(config.detections_fpath)
@@ -375,38 +408,56 @@ class ConfusionAnalysis:
         for row in true_confusion_rows + pred_confusion_rows:
             row['color'] = heuristics.IARPA_CONFUSION_COLORS.get(row['type'])
 
-        # Add the confusion info as misc data in new site files and reproject them
-        # onto the truth for visualization.
-        # pred_sites_fpath = poly_pred_dpath / 'sites_manifest.json'
-        # assert pred_sites_fpath.exists()
-        # pred_site_fpaths = list(util_gis.coerce_geojson_paths(pred_sites_fpath))
+        self.true_confusion_rows = true_confusion_rows
+        self.pred_confusion_rows = pred_confusion_rows
 
-        rm_files = list(true_region_dpath.glob(region_id + '*.geojson'))
-        gt_files = list(true_site_dpath.glob(region_id + '*.geojson'))
-        sm_files = pred_site_fpaths
+    def add_confusion_to_geojson_models(self):
+        """
+        Modify region / site models with a confusion info in their cache.
 
-        true_sites = SiteModelCollection(list(SiteModel.coerce_multiple(gt_files)))
-        pred_sites = SiteModelCollection(list(SiteModel.coerce_multiple(sm_files)))
+        Add properties to each site model (and their associated site summaries)
+        indicating the type of confusion they are causing based on the
+        following "confusion specs".
 
-        # for site in true_sites:
-        #     if site.start_date is None and site.end_date is None:
-        #         raise AssertionError
+        .. code::
 
-        orig_regions = list(RegionModel.coerce_multiple(rm_files))
-        if len(orig_regions) != 1:
-            raise AssertionError(f'Got {orig_regions=}')
+            True Confusion Spec
+            -------------------
 
-        # Ensure all site data has misc-info
-        # Ensure all data cast to site models
+            "cache":  {
+                "confusion": {
+                    "true_site_id": str,          # redundant site id information,
+                    "pred_site_ids": List[str],   # the matching predicted site ids,
+                    "type": str,                  # the type of true confusion assigned by T&E
+                    "color": str,                 # a named color coercable via kwimage.Color.coerce
+                }
+            }
 
-        true_region_model = orig_regions[0]
-        true_region_model.fixup()
+            Predicted Confusion Spec
+            -------------------
 
-        for site in it.chain(pred_sites, true_sites):
-            site.header['properties'].setdefault('cache', {})
+            "cache":  {
+                "confusion": {
+                    "pred_site_id": str,          # redundant site id information,
+                    "true_site_ids": List[str],   # the matching predicted site ids,
+                    "type": str,        # the type of predicted confusion assigned by T&E
+                    "color": str,       # a named color coercable via kwimage.Color.coerce
+                }
+            }
+        """
+        # Add the confusion info as misc data in new site files
+        # We will later reproject them onto the truth for visualization.
+        from watch.geoannots.geomodels import SiteModelCollection
 
-        id_to_true_site = {s.site_id: s for s in true_sites}
-        id_to_pred_site = {s.site_id: s for s in pred_sites}
+        true_region_model = self.true_region_model
+        id_to_true_site = self.id_to_true_site
+        id_to_pred_site = self.id_to_pred_site
+        true_sites = self.true_sites
+        pred_sites = self.pred_sites
+        performer_id = self.config.performer_id
+
+        true_confusion_rows = self.true_confusion_rows
+        pred_confusion_rows = self.pred_confusion_rows
 
         # Add confusion metadata to predicted and truth models
         # https://gis.stackexchange.com/questions/346518/opening-geojson-style-properties-in-qgis
@@ -450,17 +501,27 @@ class ConfusionAnalysis:
                 cfsn_summary.header['properties']['cache']['originator'] = performer_id
             type_to_summary[group_type] = cfsn_summary
 
-        self.true_sites = true_sites
-        self.pred_sites = pred_sites
-        self.id_to_pred_site = id_to_pred_site
-        self.true_region_model = true_region_model
-        self.region_id = region_id
-        self.id_to_true_site = id_to_true_site
-        self.id_to_pred_site = id_to_pred_site
+        for group_type, summary in type_to_summary.items():
+            for feat in summary.features:
+                assert 'cache' in feat['properties']
+
+        for group_type, sites in type_to_sites.items():
+            for site in sites:
+                for feat in site.features:
+                    assert 'cache' in feat['properties']
+
         self.type_to_sites = type_to_sites
         self.type_to_summary = type_to_summary
 
     def build_hard_cases(self):
+        """
+        Build feedback to retrain on. Does to things:
+
+        1. Find the false positive cases that do not overlap with any truth and
+        add them as negative examples to a new set of "hard annotations".
+
+        2. Finds the false negative examples and increases their weight.
+        """
         from watch.utils import util_gis
 
         true_sites = self.true_sites
@@ -493,6 +554,7 @@ class ConfusionAnalysis:
                 hard_negative_sites.append(pred_site.deepcopy())
 
         orig_site_num = int(true_df['site_id'].max().split('_')[-1])
+        # hack to have true / pred together and comply with the strict schema
         base_site_num = max(700, orig_site_num)
         for num, hard_neg in enumerate(hard_negative_sites, start=base_site_num):
             header_prop = hard_neg.header['properties']
@@ -535,6 +597,9 @@ class ConfusionAnalysis:
         self.new_region = new_region
 
     def dump_confusion_geojson(self):
+        """
+        Write confusion geojson files for visualization and analysis
+        """
         import json
         import kwcoco
         config = self.config
@@ -582,6 +647,9 @@ class ConfusionAnalysis:
         #     visualize_time_overlap(type_to_summary, type_to_sites)
 
     def dump_hardneg_geojson(self):
+        """
+        Write new annotation file that can be fed back to the system.
+        """
         import json
         import rich
         region_id = self.region_id
@@ -605,109 +673,120 @@ class ConfusionAnalysis:
         self.enriched_sites_dpath = enriched_sites_dpath
         self.enriched_region_dpath = enriched_region_dpath
 
-    def dump_confusion_kwcoco(self):
-        import rich
+    def dump_hardneg_kwcoco(self):
+        """
+        Write kwcoco files for potential system feedback (not used atm)
+        """
+        from watch.cli import reproject_annotations
+        config = self.config
 
         region_id = self.region_id
         enriched_dpath = self.enriched_dpath
-        enriched_sites_dpath = self.enriched_sites_dpath
-        enriched_region_dpath = self.enriched_region_dpath
+        new_coco_fpath = enriched_dpath / f'hardneg-{region_id}.kwcoco.zip'
+        common_kwargs = ub.udict(
+            src=config.src_kwcoco,
+            dst=new_coco_fpath,
+            site_models=self.enriched_sites_dpath,
+            region_models=self.enriched_region_dpath,
+            workers=2,
+        )
+        reproject_annotations.main(cmdline=0, **common_kwargs)
+
+    def dump_confusion_kwcoco(self):
+        """
+        Write confusion kwcoco files for visualization and analysis
+        """
+        import rich
+        from watch.cli import reproject_annotations
+        import kwcoco
+        config = self.config
 
         true_sites = self.true_sites
         pred_sites = self.pred_sites
 
-        config = self.config
         # Write a new "enriched truth" file that reweights false negatives add
         # false positive as hard negatives.
         rich.print(f'Confusion Analysis: [link={self.out_dpath}]{self.out_dpath}[/link]')
 
-        REPROJECT = config.src_kwcoco is not None
-        if REPROJECT:
-            from watch.cli import reproject_annotations
-            new_coco_fpath = enriched_dpath / f'hardneg-{region_id}.kwcoco.zip'
-            common_kwargs = ub.udict(
-                src=config.src_kwcoco,
-                dst=new_coco_fpath,
-                site_models=enriched_sites_dpath,
-                region_models=enriched_region_dpath,
-                workers=2,
-            )
-            reproject_annotations.main(cmdline=0, **common_kwargs)
+        # Project confusion site models onto kwcoco for visualization
+        src_dset = kwcoco.CocoDataset(config.src_kwcoco)
+        dst_dset = src_dset.copy()
+        dst_dset.fpath = config.dst_kwcoco
+        dst_dset.clear_annotations()
 
-            if 1:
-                # Project confusion site models onto kwcoco for visualization
-                import kwcoco
-                from watch.cli import reproject_annotations
-                src_dset = kwcoco.CocoDataset(config.src_kwcoco)
-                dst_dset = src_dset.copy()
-                dst_dset.fpath = config.dst_kwcoco
-                dst_dset.clear_annotations()
+        true_site_infos2 = [s.pandas() for s in true_sites]
+        pred_site_infos2 = [s.pandas() for s in pred_sites]
 
-                true_site_infos2 = [s.pandas() for s in true_sites]
-                pred_site_infos2 = [s.pandas() for s in pred_sites]
+        # Differentiate true and predicted site-ids when projecting onto a
+        # single file.
+        for site_df in true_site_infos2:
+            site_id = site_df.iloc[0]['site_id']
+            new_site_id = differentiate_site_id(site_id, 'te')
+            site_df.loc[site_df.index[0], 'site_id'] = new_site_id
 
-                # Differentiate true and predicted site-ids when projecting onto a
-                # single file.
-                for site_df in true_site_infos2:
-                    site_id = site_df.iloc[0]['site_id']
-                    new_site_id = differentiate_site_id(site_id, 'te')
-                    site_df.loc[site_df.index[0], 'site_id'] = new_site_id
+        for site_df in pred_site_infos2:
+            site_id = site_df.iloc[0]['site_id']
+            new_site_id = differentiate_site_id(site_id, config.performer_id)
+            site_df.loc[site_df.index[0], 'site_id'] = new_site_id
 
-                for site_df in pred_site_infos2:
-                    site_id = site_df.iloc[0]['site_id']
-                    new_site_id = differentiate_site_id(site_id, config.performer_id)
-                    site_df.loc[site_df.index[0], 'site_id'] = new_site_id
+        for site_df in true_site_infos2:
+            reproject_annotations.validate_site_dataframe(site_df)
 
-                for site_df in true_site_infos2:
-                    reproject_annotations.validate_site_dataframe(site_df)
+        dst_dset.clear_annotations()
+        common_kwargs = ub.udict(
+            clear_existing=False,
+            src=dst_dset,
+            dst='return',
+            workers=2,
+        )
+        true_kwargs = common_kwargs | ub.udict(
+            role='true_confusion',
+            site_models=true_site_infos2,
+        )
+        # kwargs = true_kwargs
+        pred_kwargs = common_kwargs | ub.udict(
+            role='pred_confusion',
+            site_models=pred_site_infos2,
+        )
 
-                dst_dset.clear_annotations()
-                common_kwargs = ub.udict(
-                    clear_existing=False,
-                    src=dst_dset,
-                    dst='return',
-                    workers=2,
-                )
-                true_kwargs = common_kwargs | ub.udict(
-                    role='true_confusion',
-                    site_models=true_site_infos2,
-                )
-                # kwargs = true_kwargs
-                pred_kwargs = common_kwargs | ub.udict(
-                    role='pred_confusion',
-                    site_models=pred_site_infos2,
-                )
+        # I don't know why this isn't in-place. Maybe it is a scriptconfig thing?
+        repr1 = str(dst_dset.annots())
+        print(f'repr1={repr1}')
+        dst_dset = reproject_annotations.main(cmdline=0, **true_kwargs)
+        repr2 = str(dst_dset.annots())
+        print(f'repr1={repr1}')
+        print(f'repr2={repr2}')
+        pred_kwargs['src'] = dst_dset
+        dst_dset = reproject_annotations.main(cmdline=0, **pred_kwargs)
+        repr3 = str(dst_dset.annots())
+        print(f'repr1={repr1}')
+        print(f'repr2={repr2}')
+        print(f'repr3={repr3}')
 
-                # I don't know why this isn't in-place. Maybe it is a scriptconfig thing?
-                repr1 = str(dst_dset.annots())
-                print(f'repr1={repr1}')
-                dst_dset = reproject_annotations.main(cmdline=0, **true_kwargs)
-                repr2 = str(dst_dset.annots())
-                print(f'repr1={repr1}')
-                print(f'repr2={repr2}')
-                pred_kwargs['src'] = dst_dset
-                dst_dset = reproject_annotations.main(cmdline=0, **pred_kwargs)
-                repr3 = str(dst_dset.annots())
-                print(f'repr1={repr1}')
-                print(f'repr2={repr2}')
-                print(f'repr3={repr3}')
+        if config.dst_kwcoco is not None:
+            ub.Path(dst_dset.fpath).parent.ensuredir()
+            print(f'dump to dst_dset.fpath={dst_dset.fpath}')
+            dst_dset.dump()
 
-                if config.dst_kwcoco is not None:
-                    ub.Path(dst_dset.fpath).parent.ensuredir()
-                    print(f'dump to dst_dset.fpath={dst_dset.fpath}')
-                    dst_dset.dump()
+        self.cfsn_coco = dst_dset
 
-                self.cfsn_coco = dst_dset
+        # set(dst_dset.annots().lookup('role', None))
+        # set([x.get('role', None) for x in dst_dset.annots().lookup('cache', None)])
 
-                # set(dst_dset.annots().lookup('role', None))
-                # set([x.get('role', None) for x in dst_dset.annots().lookup('cache', None)])
-
-                # dst_dset.annots().take([0, 1, 2])
-                viz_dpath = (config.out_dpath / 'summary_viz').ensuredir()
-                if config.summary_visualization:
-                    make_summary_visualization(dst_dset, viz_dpath)
+    def dump_summary_viz(self):
+        """
+        Too slow
+        """
+        # dst_dset.annots().take([0, 1, 2])
+        dst_dset = self.cfsn_coco
+        if self.config.summary_visualization:
+            viz_dpath = (self.config.out_dpath / 'summary_viz').ensuredir()
+            make_summary_visualization(dst_dset, viz_dpath)
 
     def dump_site_case_viz(self):
+        """
+        Per-site visualization for analysis and presentations.
+        """
         import kwimage
         type_to_summary = self.type_to_summary
         type_to_sites = self.type_to_sites
