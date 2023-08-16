@@ -579,8 +579,11 @@ def coco_create_site_header(coco_dset, region_id, site_id, trackid, gids, featur
         'status': status,
         'model_content': 'proposed',
         'score': 1.0,  # TODO does this matter?
+
+        # FIXME: determine this by using phase predictions
         'start_date': min(dates),
         'end_date': max(dates),
+
         'originator': PERFORMER_ID,
         'validated': 'False'
     }
@@ -604,6 +607,7 @@ def coco_create_site_header(coco_dset, region_id, site_id, trackid, gids, featur
 
 @profile
 def create_region_header(region_id, site_summaries):
+    # TODO: use watch.geoannots.geomodels here
     import geojson
     geometry = _combined_geometries([
         _single_geometry(summary['geometry'])

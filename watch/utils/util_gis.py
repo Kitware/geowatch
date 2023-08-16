@@ -36,8 +36,8 @@ def geopandas_pairwise_overlaps(gdf1, gdf2, predicate='intersects'):
 
     Returns:
         dict:
-            mapping from integer-indexes in gdf1 to
-            overlapping integer-indexes in gdf2
+            mapping from integer-iloc-indexes in gdf1 to
+            overlapping integer-iloc-indexes in gdf2
 
     Example:
         >>> from watch.utils.util_gis import *  # NOQA
@@ -1082,6 +1082,10 @@ def load_geojson_datas(geojson_fpaths, format='dataframe', workers=0,
         yield_after_submit (bool):
             backend argument that will yield None after the data is submitted
             to force the data loading to start processing in the background.
+
+    TODO:
+        pass something in to allow for better progress management when a lot of
+        functions are calling this.
 
     Yields:
         Dict:

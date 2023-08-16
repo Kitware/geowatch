@@ -72,33 +72,35 @@ class PrepareSplitsConfig(scfg.DataConfig):
     }
 
 
+imerit_vali_regions = {'CN_C000', 'KW_C001', 'SA_C001', 'CO_C001', 'VN_C002'}
+
 # TODO: should be some sort of external file we read / define
 VALI_REGIONS_SPLITS = {
     'split1': {
         'KR_R001',
         'KR_R002',
-    },
+    } | imerit_vali_regions,
     'split2': {
         'BR_R002',
         'NZ_R001',
-    },
+    } | imerit_vali_regions,
     'split3': {
         'AE_R001',
         'US_R004',
-    },
+    } | imerit_vali_regions,
     'split4': {
         'BR_R001',
         'LT_R001',
         'US_R004',
-    },
+    } | imerit_vali_regions,
     'split5': {
         'BR_R001',
         'US_R001',
         'CH_R001',
-    },
+    } | imerit_vali_regions,
     'split6': {
         'KR_R002',  # can we do better on KR2 by training on KR1?
-    },
+    } | imerit_vali_regions,
 }
 
 IGNORE_REGIONS = {

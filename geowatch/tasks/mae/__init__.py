@@ -3,10 +3,10 @@
 
 
 def __getattr__(key):
-    import watch.mlops.old.expt_report as mirror
+    import watch.tasks.mae as mirror
     return getattr(mirror, key)
 
 
 def __dir__():
-    import watch.mlops.old.expt_report as mirror
+    import watch.tasks.mae as mirror
     return dir(mirror)

@@ -113,7 +113,11 @@ def hack_in_timedata(coco_dset, dates=True, rng=None):
     datekw = ub.udict({
         'start_time': '1970-01-01',
         'end_time': '2101-01-01',
+        'enabled': True,
     })
+    if not isinstance(dates, dict):
+        dates = {}
+
     if isinstance(dates, dict):
         extra = dates - datekw
         if extra:
@@ -123,6 +127,8 @@ def hack_in_timedata(coco_dset, dates=True, rng=None):
     rng = kwarray.ensure_rng(rng)
     min_time = util_time.coerce_datetime(datekw['start_time'])
     max_time = util_time.coerce_datetime(datekw['end_time'])
+    print(f'min_time={min_time}')
+    print(f'max_time={max_time}')
     time_distri = Uniform(min_time.timestamp(), max_time.timestamp(), rng=rng)
 
     # Hack in other metadata
@@ -135,7 +141,8 @@ def hack_in_timedata(coco_dset, dates=True, rng=None):
             img['date_captured'] = ts.isoformat()
 
 
-def hack_seed_geometadata_in_dset(coco_dset, force=False, rng=None):
+def hack_seed_geometadata_in_dset(coco_dset, force=False, rng=None,
+                                  region_geom=None):
     """
     Add random geo coordinates to one asset in each video
 
@@ -147,9 +154,21 @@ def hack_seed_geometadata_in_dset(coco_dset, force=False, rng=None):
         >>> print(ub.cmd('gdalinfo ' + fpath)['out'])
     """
     import kwarray
+    import kwimage
     from watch.utils import kwcoco_extensions
     rng = kwarray.ensure_rng(rng)
     modified = []
+    print('Hacking in seed geom data')
+
+    override_geom_box = None
+
+    if region_geom is None or isinstance(region_geom, str) and region_geom == 'random':
+        ...
+    else:
+        assert len(list(coco_dset.videos())) == 1, 'only handle 1 video for now'
+        override_geom_box = kwimage.Polygon.from_shapely(region_geom).box()
+        override_geom_epsg = 4326
+
     for vidid in coco_dset.videos():
         img = coco_dset.images(vidid=vidid).peek()
         coco_img = coco_dset._coco_image(img['id'])
@@ -159,12 +178,15 @@ def hack_seed_geometadata_in_dset(coco_dset, force=False, rng=None):
         format_info = kwcoco_extensions.geotiff_format_info(fpath)
         if force or not format_info['has_geotransform']:
 
-            utm_box, utm_crs_info = _random_utm_box(rng=rng)
-            auth = utm_crs_info['auth']
-            assert auth[0] == 'EPSG'
-            epsg_int = int(auth[1])
-
-            ulx, uly, lrx, lry = utm_box.to_ltrb().data[0]
+            if override_geom_box is None:
+                utm_box, utm_crs_info = _random_utm_box(rng=rng)
+                auth = utm_crs_info['auth']
+                assert auth[0] == 'EPSG'
+                epsg_int = int(auth[1])
+                ulx, uly, lrx, lry = utm_box.to_ltrb().data[0]
+            else:
+                ulx, uly, lrx, lry = override_geom_box.to_ltrb().data
+                epsg_int = int(override_geom_epsg)
 
             command = f'gdal_edit.py -a_ullr {ulx} {uly} {lrx} {lry} -a_srs EPSG:{epsg_int} {fpath}'
             cmdinfo = ub.cmd(command, shell=True)
@@ -272,12 +294,22 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
 
         heatmap (bool): if True adds dummy saliency heatmaps to the demodata.
 
-        geodata (bool): if True adds dummy geographic referencing to
+        geodata (bool | dict): if True adds dummy geographic referencing to
             the demodata.
+            If a dictionary can specify extra information.
+            Available keys:
+                region_geom
 
         bad_nodata (bool):
             if True, zeros out some pixels which simulates bad nodata for
             testing.
+
+        dates (bool | dict):
+            Include time data or not.
+            If a dictionary can specify extra information.
+            Available keys:
+                start_time
+                end_time
 
         **kwargs : additional arguments passed to :func:`kwcoco.CocoDataset.demo`.
 
@@ -319,6 +351,8 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
         'bad_nodata': bad_nodata,
         'version': 5,
     }
+
+    _register_polygon_hash_data()
 
     bundle_name = 'watch_vidshapes_' + ub.hash_data(depends)[0:8]
     bundle_dpath = dpath / bundle_name
@@ -375,10 +409,26 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
     if heatmap:
         hack_in_heatmaps(coco_dset, rng=rng)
 
-    if dates:
+    def coerce_bool_config_dict(data):
+        if not isinstance(data, dict):
+            if data:
+                data = {'enabled': True}
+            else:
+                data = {'enabled': False}
+        else:
+            # Enable by default if given as a dictionary
+            if 'enabled' not in data:
+                data = data.copy()
+                data['enabled'] = True
+        return data
+
+    geodata = coerce_bool_config_dict(geodata)
+    dates = coerce_bool_config_dict(dates)
+
+    if dates['enabled']:
         hack_in_timedata(coco_dset, dates, rng=rng)
 
-    if geodata:
+    if geodata['enabled']:
         for ann in coco_dset.anns.values():
 
             # both of these errors occur in the call:
@@ -413,7 +463,9 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
                                            .to_coco(style='new'))
 
         # Hack in geographic info
-        hack_seed_geometadata_in_dset(coco_dset, force=True, rng=rng)
+        region_geom = geodata.get('region_geom', 'random')
+        hack_seed_geometadata_in_dset(coco_dset, force=True, rng=rng,
+                                      region_geom=region_geom)
         from watch.utils import kwcoco_extensions
         # Do a consistent transfer of the hacked seeded geodata to the other images
         kwcoco_extensions.ensure_transfered_geo_data(coco_dset)
@@ -653,3 +705,12 @@ def demo_dataset_with_regions_and_sites(dpath=None):
             site_fpath.write_text(site.dumps(indent=' ' * 4))
 
     return coco_dset, region_dpath, site_dpath
+
+
+@ub.memoize
+def _register_polygon_hash_data():
+    import shapely.geometry.base
+
+    @ub.hash_data.extensions.register(shapely.geometry.base.BaseGeometry)
+    def hash_my_type(data):
+        return b'Geometry', data.wkb

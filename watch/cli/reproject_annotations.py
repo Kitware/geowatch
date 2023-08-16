@@ -244,7 +244,10 @@ def main(cmdline=False, **kwargs):
     import kwcoco
     import rich
     import numpy as np
-    rich.print('config = {}'.format(ub.urepr(config, nl=1)))
+    from kwutil.slugify_ext import smart_truncate
+    rich.print('config = {}'.format(smart_truncate(
+        ub.urepr(config, nl=1), max_length=1000,
+    )))
 
     output_fpath = config['dst']
     if output_fpath is None:
@@ -420,7 +423,7 @@ def separate_region_model_types(regions):
     from kwutil import util_time
     from kwutil import util_progress
     region_id_to_site_summaries = {}
-    region_id_region_row = {}
+    region_id_to_region_row = {}
     pman = util_progress.ProgressManager()
     with pman:
         for region_df in pman.progiter(regions, desc='checking region assumptions', verbose=3):
@@ -431,7 +434,7 @@ def separate_region_model_types(regions):
 
             region_row = region_part.iloc[0]
             region_id = region_row['region_id']
-            region_id_region_row[region_id] = region_row
+            region_id_to_region_row[region_id] = region_row
             assert region_id not in region_id_to_site_summaries
 
             # Hack to set all region-ids
@@ -453,15 +456,29 @@ def separate_region_model_types(regions):
                 raise
             region_id_to_site_summaries[region_id] = sites_part
 
+            region_start_date = region_row.get('start_date', None)
+            region_end_date = region_row.get('end_date', None)
+
+            if region_start_date is None:
+                region_start_date = DUMMY_START_DATE
+            if region_end_date is None:
+                region_end_date = DUMMY_END_DATE
+
+            region_start_date = util_time.coerce_datetime(region_start_date)
+            region_end_date = util_time.coerce_datetime(region_end_date)
+
+            print(f'region_start_date={region_start_date}')
+            print(f'region_end_date={region_end_date}')
+
             # Check datetime errors
-            sitesum_start_dates = sites_part['start_date'].apply(lambda x: util_time.coerce_datetime(x or DUMMY_START_DATE))
-            sitesum_end_dates = sites_part['end_date'].apply(lambda x: util_time.coerce_datetime(x or DUMMY_END_DATE))
+            sitesum_start_dates = sites_part['start_date'].apply(lambda x: util_time.coerce_datetime(x or region_start_date))
+            sitesum_end_dates = sites_part['end_date'].apply(lambda x: util_time.coerce_datetime(x or region_end_date))
             has_bad_time_range = sitesum_start_dates > sitesum_end_dates
             bad_dates = sites_part[has_bad_time_range]
             if len(bad_dates):
                 print('BAD DATES')
                 print(bad_dates)
-    return region_id_to_site_summaries, region_id_region_row
+    return region_id_to_site_summaries, region_id_to_region_row
 
 
 def expand_site_models_with_site_summaries(sites, regions, validate_checks=True):
@@ -481,11 +498,13 @@ def expand_site_models_with_site_summaries(sites, regions, validate_checks=True)
     import pandas as pd
     import numpy as np
     from watch.utils.util_pandas import pandas_reorder_columns
+    from kwutil import util_time
+    import rich
 
     if validate_checks:
         check_sitemodel_assumptions(sites)
 
-    region_id_to_site_summaries, region_id_region_row = separate_region_model_types(regions)
+    region_id_to_site_summaries, region_id_to_region_row = separate_region_model_types(regions)
 
     region_id_to_sites = ub.group_items(sites, lambda x: x.iloc[0]['region_id'])
 
@@ -503,7 +522,10 @@ def expand_site_models_with_site_summaries(sites, regions, validate_checks=True)
         'model_content', 'originator', 'validated', 'geometry', 'cache'
     ]
 
-    # Build site header info (1)
+    # The following code builds two variants of "site header / site summary"
+    # rows and checks for consistency between the two.
+
+    # Build site info (1) from site headers
     site_rows1 = []
     for region_id, region_sites in region_id_to_sites.items():
         for site in region_sites:
@@ -525,7 +547,7 @@ def expand_site_models_with_site_summaries(sites, regions, validate_checks=True)
     else:
         site_df1 = pd.DataFrame([], columns=expected_keys)
 
-    # Build site summary info (2)
+    # Build site info (2) from site summaries
     site_rows2 = []
     for region_id, site_summaries in region_id_to_site_summaries.items():
         site_rows2.append(site_summaries)
@@ -571,19 +593,22 @@ def expand_site_models_with_site_summaries(sites, regions, validate_checks=True)
     for colname in common_columns:
         col1 = common1[colname]
         col2 = common2[colname]
-        if col1.dtype.kind == 'O':
-            col1 = col1.apply(lambda x: str(x).lower())
-            col2 = col2.apply(lambda x: str(x).lower())
         error_flags = ~col_na_eq(col1, col2)
+        if col1.dtype.kind == 'O' and error_flags.any():
+            # If something is not equal, check to see if it is after a bit of
+            # permissive munging.
+            col1_alt = col1.apply(lambda x: str(x).lower())
+            col1_alt = col2.apply(lambda x: str(x).lower())
+            error_flags &= ~col_na_eq(col1_alt, col1_alt)
         col_to_flags[colname] = error_flags
 
     col_errors = ub.map_vals(sum, col_to_flags)
     col_errors = {k: v for k, v in col_errors.items() if v}
     if col_errors:
-        print('col_errors = {}'.format(ub.urepr(col_errors, nl=1)))
+        rich.print('col_errors = {}'.format(ub.urepr(col_errors, nl=1)))
         any_error_flag = np.logical_or.reduce(list(col_to_flags.values()))
         total_error_rows = any_error_flag.sum()
-        print('total_error_rows = {!r}'.format(total_error_rows))
+        rich.print('[yellow]total_error_rows = {!r}'.format(total_error_rows))
 
         error1 = common1[any_error_flag]
         error2 = common2[any_error_flag]
@@ -595,11 +620,11 @@ def expand_site_models_with_site_summaries(sites, regions, validate_checks=True)
 
         error1 = pandas_reorder_columns(error1, columns)
         error2 = pandas_reorder_columns(error2, columns)
-        print('Disagree rows for site models headers')
+        rich.print('[yellow]Disagree rows for site models headers')
         # print(error1.drop(['type', 'region_id', 'cache'], axis=1))
-        print(error1)
-        print('Disagree rows for region models site summaries')
-        print(error2)
+        rich.print(error1)
+        rich.print('[yellow]Disagree rows for region models site summaries')
+        rich.print(error2)
 
     # Find sites that only have a site-summary
     summary_only_site_ids = sorted(set(site_df2['site_id']) - set(site_df1['site_id']))
@@ -634,9 +659,9 @@ def expand_site_models_with_site_summaries(sites, regions, validate_checks=True)
     # print('BEFORE region_id_to_num_sites = {}'.format(ub.urepr(region_id_to_num_sites, nl=1)))
 
     for region_id, sitesummaries in region_id_to_only_site_summaries.items():
-        region_row = region_id_region_row[region_id]
-        pseud_sites = make_pseudo_sitemodels(region_row, sitesummaries)
-        region_id_to_sites[region_id].extend(pseud_sites)
+        region_row = region_id_to_region_row[region_id]
+        pseudo_sites = make_pseudo_sitemodels(region_row, sitesummaries)
+        region_id_to_sites[region_id].extend(pseudo_sites)
 
     region_id_to_num_sites = ub.map_vals(len, region_id_to_sites)
     if VERYVERBOSE:
@@ -647,19 +672,50 @@ def expand_site_models_with_site_summaries(sites, regions, validate_checks=True)
     if FIX_OBS_ORDER:
         new_region_id_to_sites = {}
         for region_id, region_sites in region_id_to_sites.items():
+
+            if region_id in region_id_to_region_row:
+                region_row = region_id_to_region_row[region_id]
+                region_start_date = util_time.coerce_datetime(region_row['start_date']) or util_time.coerce_datetime(DUMMY_START_DATE)
+                region_end_date = util_time.coerce_datetime(region_row['end_date']) or util_time.coerce_datetime(DUMMY_END_DATE)
+            else:
+                region_start_date = util_time.coerce_datetime(DUMMY_START_DATE)
+                region_end_date = util_time.coerce_datetime(DUMMY_END_DATE)
+
             _sites = []
             for site_gdf in region_sites:
                 site_gdf['observation_date'].argsort()
                 is_obs = site_gdf['type'] == 'observation'
                 obs_rows = site_gdf[is_obs]
                 site_rows = site_gdf[~is_obs]
-                obs_rows = obs_rows.iloc[obs_rows['observation_date'].argsort()]
 
                 assert not is_nonish(site_rows['status'])
-                if obs_rows['observation_date'].apply(is_nonish).any():
+                has_null_date = obs_rows['observation_date'].apply(is_nonish)
+                if has_null_date.any():
+
+                    site_start = util_time.coerce_datetime(site_rows['start_date'].iloc[0])
+                    site_end = util_time.coerce_datetime(site_rows['end_date'].iloc[0])
+
+                    if has_null_date.sum() > 2:
+                        raise AssertionError('more than 2 missing observation date, unhandled')
+
+                    if site_end is not None and site_start is not None:
+                        raise AssertionError('Missing observation date is ambiguous when site start and end are defined')
+                    elif site_start is not None:
+                        obs_rows.loc[has_null_date, 'observation_date'] = region_end_date
+                    elif site_end is not None:
+                        obs_rows.loc[has_null_date, 'observation_date'] = region_start_date
+                    else:
+                        if len(obs_rows) != 2:
+                            print(len(obs_rows))
+                            raise AssertionError('Missing observation date is ambiguous when site start and end are undefined and more than 2 observations')
+                        obs_rows.loc[obs_rows.index[0], 'observation_date'] = region_start_date
+                        obs_rows.loc[obs_rows.index[1], 'observation_date'] = region_end_date
+
                     obs_rows.loc[obs_rows['observation_date'].apply(is_nonish).values,
                                  'observation_date'] = DUMMY_END_DATE
                 assert not obs_rows['observation_date'].apply(is_nonish).any()
+
+                obs_rows = obs_rows.iloc[obs_rows['observation_date'].apply(util_time.coerce_datetime).argsort()]
 
                 # raise Exception
                 # site_gdf
@@ -748,8 +804,8 @@ def make_pseudo_sitemodels(region_row, sitesummaries):
 
         has_keys = site_summary.index.intersection(site_properites)
         # missing_keys = pd.Index(site_properites).difference(site_summary.index)
-        psudo_site_prop = site_summary[has_keys].to_dict()
-        psudo_site_prop['type'] = 'site'
+        pseudo_site_prop = site_summary[has_keys].to_dict()
+        pseudo_site_prop['type'] = 'site'
         # TODO: how to handle missing start / end dates?
         start_date = util_time.coerce_datetime(site_summary['start_date']) or region_start_date
         end_date = util_time.coerce_datetime(site_summary['end_date']) or region_end_date
@@ -761,8 +817,8 @@ def make_pseudo_sitemodels(region_row, sitesummaries):
         start_date_iso = start_date.date().isoformat()
         end_date_iso = end_date.date().isoformat()
 
-        psudo_site_prop['start_date'] = start_date_iso
-        psudo_site_prop['end_date'] = end_date_iso
+        pseudo_site_prop['start_date'] = start_date_iso
+        pseudo_site_prop['end_date'] = end_date_iso
 
         score = site_summary.get('score', None)
         try:
@@ -783,7 +839,7 @@ def make_pseudo_sitemodels(region_row, sitesummaries):
         }
 
         psudo_site_features = [geojson.Feature(
-            properties=psudo_site_prop,
+            properties=pseudo_site_prop,
             geometry=poly_json,
         )]
         psudo_site_features.append(
@@ -818,6 +874,8 @@ def validate_site_dataframe(site_df):
     """
     from kwutil import util_time
     import numpy as np
+    import math
+    import rich
     dummy_start_date = DUMMY_START_DATE
     dummy_end_date = DUMMY_END_DATE
     first = site_df.iloc[0]
@@ -830,23 +888,22 @@ def validate_site_dataframe(site_df):
 
     site_start_date = first['start_date'] or dummy_start_date
     site_end_date = first['end_date'] or dummy_end_date
-    import math
-    if isinstance(site_end_date, float) and math.isnan(site_end_date):
-        site_end_date = dummy_end_date
     if isinstance(site_start_date, float) and math.isnan(site_start_date):
         site_start_date = dummy_start_date
+    if isinstance(site_end_date, float) and math.isnan(site_end_date):
+        site_end_date = dummy_end_date
 
     site_start_datetime = util_time.coerce_datetime(site_start_date)
     site_end_datetime = util_time.coerce_datetime(site_end_date)
 
     if site_end_datetime < site_start_datetime:
-        print('\n\nBAD SITE DATES:')
+        rich.print('\n\n[red]BAD SITE DATES:')
         print(first)
 
     status = {}
     # Check datetime errors in observations
     try:
-        obs_dates = [None if x is None else util_time.coerce_datetime(x) for x in rest['observation_date']]
+        obs_dates = [util_time.coerce_datetime(x) for x in rest['observation_date']]
         obs_isvalid = [x is not None for x in obs_dates]
         valid_obs_dates = list(ub.compress(obs_dates, obs_isvalid))
         if not all(valid_obs_dates):
@@ -1060,7 +1117,9 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
     from watch.utils import util_gis
     from kwutil import util_time
     from watch import heuristics
+    import rich
     import kwimage
+    import pandas as pd
     import numpy as np
     from watch.geoannots.geomodels import SiteModel
 
@@ -1092,6 +1151,13 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
     start_date = site_model.start_date
     end_date = site_model.end_date
     status = site_model.status.lower().strip()
+
+    if pd.isnull(start_date):
+        start_date = None
+
+    if pd.isnull(end_date):
+        end_date = None
+
     if status == 'pending':
         # hack for QFabric
         status = 'positive_pending'
@@ -1114,17 +1180,19 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
 
     # This check doesn't seem generally necessary.
     if start_date is not None and observation_dates[0] != start_date:
-        print('WARNING: inconsistent start')
-        print(site_gdf)
-        print(f'start_date = {start_date}')
-        print(f'end_date   = {end_date}')
-        print('observation_dates = {}'.format(ub.urepr(observation_dates.tolist(), nl=1)))
+        print('\n')
+        rich.print('[yellow]WARNING: inconsistent start')
+        rich.print(site_gdf)
+        rich.print(f'[yellow]start_date = {start_date}')
+        rich.print(f'[yellow]end_date   = {end_date}')
+        rich.print('[yellow]observation_dates = {}'.format(ub.urepr(observation_dates.tolist(), nl=1)))
     if end_date is not None and observation_dates[-1] != end_date:
-        print('WARNING: inconsistent end date')
-        print(site_gdf)
-        print(f'start_date = {start_date}')
-        print(f'end_date   = {end_date}')
-        print('observation_dates = {}'.format(ub.urepr(observation_dates.tolist(), nl=1)))
+        print('\n')
+        rich.print('[yellow]WARNING: inconsistent end date')
+        rich.print(site_gdf)
+        rich.print(f'[yellow]start_date = {start_date}')
+        rich.print(f'[yellow]end_date   = {end_date}')
+        rich.print('[yellow]observation_dates = {}'.format(ub.urepr(observation_dates.tolist(), nl=1)))
 
     # Assuming observations are sorted by date
     assert all([d.total_seconds() >= 0 for d in np.diff(observation_dates)])

@@ -5,17 +5,8 @@ from torch.utils import data
 
 
 if 1:
-    # FIXME: put the vendored package into our namespace.
-    try:
-        PARENT_DPATH = ub.Path(__file__).parent
-    except NameError:
-        from watch.tasks.sam import predict as this_mod
-        PARENT_DPATH = ub.Path(this_mod.__file__)
-    TPL_DPATH = PARENT_DPATH / 'tpl'
-
-    import sys
-    import os
-    sys.path.append(os.fspath(TPL_DPATH / 'segment_anything'))
+    # put the vendored package into our namespace.
+    import geowatch_tpl  # NOQA
     import segment_anything
 
 

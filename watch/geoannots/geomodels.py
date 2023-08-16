@@ -297,7 +297,7 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
         elif isinstance(data, gpd.GeoDataFrame):
             return cls.from_dataframe(data)
         elif isinstance(data, (str, os.PathLike)):
-            got = list(cls.coerce_multiple(data, parse_float=parse_float))
+            got = list(cls.coerce_multiple(data, parse_float=parse_float, verbose=0))
             assert len(got) == 1
             return got[0]
         else:
@@ -532,6 +532,9 @@ class RegionModel(_Model):
     """
     Wrapper around a geojson region model FeatureCollection
 
+    TODO:
+        Rename to Region?
+
     Example:
         >>> from watch.geoannots.geomodels import *  # NOQA
         >>> self = RegionModel.random()
@@ -602,7 +605,17 @@ class RegionModel(_Model):
         Args:
             with_sites (bool):
                 also returns site models if True
-            **kwargs : passed to :func:`watch.demo.metrics_demo.demo_truth.random_region_model`
+
+            **kwargs :
+                passed to
+                :func:`watch.demo.metrics_demo.demo_truth.random_region_model`.
+                Some of these args are:
+                    num_sites
+                    num_observations
+                    start_time
+                    end_time
+                    region_poly
+                    rng
 
         Returns:
             RegionModel | Tuple[RegionModel, SiteModelCollection]
@@ -667,6 +680,7 @@ class RegionModel(_Model):
         self._update_cache_key()
         self.remove_invalid_properties()
         self.ensure_isodates()
+        return self
 
     def ensure_isodates(self):
         """
@@ -719,6 +733,9 @@ class RegionModel(_Model):
 class SiteModel(_Model):
     """
     Wrapper around a geojson site model FeatureCollection
+
+    TODO:
+        Rename to Site?
 
     Example:
         >>> from watch.geoannots.geomodels import *  # NOQA
@@ -879,9 +896,11 @@ class SiteModel(_Model):
     def fix_current_phase_salient(self):
         for feat in self.observations():
             prop = feat['properties']
-            if 'salient' in prop.get('current_phase'):
-                prop['current_phase'] = prop['current_phase'].replace(
-                    'salient', 'Active Construction')
+            current_phase = prop.get('current_phase')
+            if current_phase is not None:
+                if 'salient' in current_phase:
+                    prop['current_phase'] = prop['current_phase'].replace(
+                        'salient', 'Active Construction')
 
     def fixup(self):
         """
@@ -893,6 +912,7 @@ class SiteModel(_Model):
         self.ensure_isodates()
         self.fix_current_phase_salient()
         # self.fix_geom()
+        return self
 
     def ensure_isodates(self):
         """
@@ -1042,6 +1062,8 @@ class SiteModel(_Model):
 
 class _Feature(ub.NiceRepr, geojson.Feature):
     """
+    Base class for features
+
     Example:
         >>> # Test the class variables for subclasses are defined correctly
         >>> assert RegionHeader._feat_type == 'region'
@@ -1065,6 +1087,10 @@ class _Feature(ub.NiceRepr, geojson.Feature):
             'properties': self['properties'],
         }
         return info
+
+    @property
+    def properties(self):
+        return self['properties']
 
     @classmethod
     def load_schema(cls, strict=True):
@@ -1227,6 +1253,26 @@ class RegionHeader(_Feature):
     _feat_type = RegionModel._header_type
 
     @classmethod
+    def empty(cls):
+        """
+        Create an empty region header
+        """
+        self = geojson.Feature(
+            properties={
+                "type": "region",
+                "region_id": None,
+                "version": "2.4.3",
+                "mgrs": None,
+                "start_date": None,
+                "end_date": None,
+                "originator": None,
+                "model_content": None,
+            },
+            geometry=None,
+        )
+        return self
+
+    @classmethod
     def coerce(cls, data):
         """
         Example:
@@ -1301,6 +1347,19 @@ class SiteSummary(_Feature, _SiteOrSummaryMixin):
         """
         self._update_cache_key()
         # self.ensure_isodates()
+        return self
+
+    @classmethod
+    def coerce(cls, data):
+        if isinstance(data, cls):
+            self = data
+        elif isinstance(data, dict):
+            assert data['type'] == 'Feature'
+            assert data['properties']['type'] == 'site_summary'
+            self = cls(**data)
+        else:
+            raise TypeError(type(data))
+        return self
 
 
 class SiteHeader(_Feature, _SiteOrSummaryMixin):
@@ -1321,6 +1380,18 @@ class SiteHeader(_Feature, _SiteOrSummaryMixin):
         new_cls = SiteSummary
         return self._convert(new_cls)
 
+    @classmethod
+    def coerce(cls, data):
+        if isinstance(data, cls):
+            self = data
+        elif isinstance(data, dict):
+            assert data['type'] == 'Feature'
+            assert data['properties']['type'] == 'site'
+            self = cls(**data)
+        else:
+            raise TypeError(type(data))
+        return self
+
 
 class Observation(_Feature):
     """
@@ -1328,6 +1399,18 @@ class Observation(_Feature):
     """
     _model_cls = SiteModel
     _feat_type = SiteModel._body_type
+
+    @classmethod
+    def coerce(cls, data):
+        if isinstance(data, cls):
+            self = data
+        elif isinstance(data, dict):
+            assert data['type'] == 'Feature'
+            assert data['properties']['type'] == 'observation'
+            self = cls(**data)
+        else:
+            raise TypeError(type(data))
+        return self
 
 
 # def _site_header_from_observations(observations, mgrs_code, site_id, status, summary_geom=None):
@@ -1370,6 +1453,7 @@ class ModelCollection(list):
         with pman:
             for s in pman.progiter(self, desc='fixup'):
                 s.fixup()
+        return self
 
     def validate(self, mode='process', workers=0, verbose=1):
         """
@@ -1404,41 +1488,99 @@ class SiteModelCollection(ModelCollection):
         Convert a set of site models to a region model
 
         Args:
-            region (RegonModel | RegionHeader):
-                updates an existing region model with new site summaries
+            region (RegonModel | RegionHeader | None):
+                If specified, use this information to generate the new region
+                header. If unspecified, we attempt to infer this from the site
+                models.
+
+        Returns:
+            RegonModel: a new region model where each site in this collection
+                appears as a site summary.
+
+        Example:
+            >>> from watch.geoannots.geomodels import RegionModel
+            >>> region, sites = RegionModel.random(with_sites=True, rng=0)
+            >>> self = SiteModelCollection(sites)
+            >>> self.as_region_model()
         """
         site_summaries = [s.as_summary() for s in self]
+        site_header_properties = [site.header['properties'] for site in self]
 
         if region is not None:
             region_header = RegionHeader.coerce(region)
+            region_header = copy.deepcopy(region_header)
         else:
-            raise NotImplementedError
-            region_header = geojson.Feature(
-                properties={
-                    "type": "region",
-                    "region_id": None,
-                    "version": "2.4.3",
-                    "mgrs": None,
-                    "start_date": None,
-                    "end_date": None,
-                    "originator": None,
-                    "model_content": None,
-                    "comments": "",
-                },
-                geometry=None,
-            )
+            region_header = RegionHeader.empty()
 
-        region_geom = region_header['geometry']
-        if region_geom is None:
-            from shapely.ops import unary_union
-            import shapely.geometry
-            site_geoms = [shapely.geometry.shape(s['geometry']).buffer(0)
-                          for s in site_summaries]
-            region_geom = unary_union(site_geoms).convex_hull
+        region_props = region_header['properties']
+        # note: region_id does not appear in a site summary, but it does in the
+        # site model.
+        key = 'region_id'
+        if region_props[key] is None:
+            if len(self) == 0:
+                raise ValueError(f'No sites. Unable to infer {key}.')
+            unique_values = {p[key] for p in site_header_properties}
+            if len(unique_values) > 1:
+                raise ValueError('More than one {key} in sites: {unique_values}')
+            region_props[key] = list(unique_values)[0]
+
+        region_header = _infer_region_header_from_site_summaries(region_header, site_summaries)
 
         region_features = [region_header] + site_summaries
         region_model = RegionModel(features=region_features)
         return region_model
+
+
+def _infer_region_header_from_site_summaries(region_header, site_summaries):
+    """
+    Given a RegionHeader use site_summaries to fill missing data.
+    """
+    if region_header is None:
+        region_header = RegionHeader.empty()
+    region_props = region_header['properties']
+
+    site_summary_properties = [sitesum['properties'] for sitesum in site_summaries]
+
+    shared_unique_properties = ['originator', 'model_content', 'mgrs']
+
+    for key in shared_unique_properties:
+        if region_props[key] is None:
+            if len(site_summaries) == 0:
+                raise ValueError(f'No sites. Unable to infer {key}.')
+            unique_values = {p[key] for p in site_summary_properties}
+            if len(unique_values) > 1:
+                raise ValueError('More than one {key} in sites: {unique_values}')
+            region_props[key] = list(unique_values)[0]
+
+    if region_props['start_date'] is None:
+        if len(site_summaries) == 0:
+            raise ValueError('No sites. Unable to infer start_date.')
+        dates = [p['start_date'] for p in site_summary_properties if p['start_date'] is not None]
+        if len(dates) == 0:
+            raise ValueError('No sites with start dates')
+        region_props['start_date'] = min(dates)
+
+    if region_props['end_date'] is None:
+        if len(site_summaries) == 0:
+            raise ValueError('No sites. Unable to infer end_date.')
+        dates = [p['end_date'] for p in site_summary_properties if p['end_date'] is not None]
+        if len(dates) == 0:
+            raise ValueError('No sites with end dates')
+        region_props['end_date'] = max(dates)
+
+    if region_header['geometry'] is None:
+        if len(site_summaries) == 0:
+            raise ValueError(f'No sites. Unable to infer {key}.')
+        from shapely.ops import unary_union
+        import shapely.geometry
+        site_geoms = [shapely.geometry.shape(s['geometry']).buffer(0)
+                      for s in site_summaries]
+        region_header['geometry'] = unary_union(site_geoms).envelope
+
+    if region_props['mgrs'] is None:
+        RegionHeader(**region_header).infer_mgrs()
+
+    return region_header
 
 
 def _update_propery_cache(prop):

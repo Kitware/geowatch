@@ -8,16 +8,18 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 * The `valid_region` property computed in `coco_populate_geo_heuristics` now properly uses image space (before it was in asset space, which usually aligned, but was not guaranteed)
+* Fix issue where positive-pending sites were not reprojected correctly when they were missing a start date.
 
 ### Changed
-* prepare-ta2-dataset now uses the new v3 mlops pipeline instead of the old v1
-  pipeline.
+* Prepare-ta2-dataset now uses the new v3 mlops pipeline instead of the old v1 pipeline.
+* Moved third-party-libraries into a new `geowatch_tpl` module.
 
 ### Removed:
 * Removed `separate_region_queues` `separate_align_jobs` options from `prepare-ta2-dataset`, they are now always True.
 * Removed old `watch.tasks.fusion.organize` module
 * Removed old `watch.tasks.fusion.aggregate_results` module
 * Removed old `watch.mlops.old` module, which included the old pipeline
+* Removed other old code.
 
 
 ## Version 0.8.2 - Target 2023-07-xx

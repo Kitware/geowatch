@@ -41,7 +41,8 @@ class SiteModelGenerator:
 def random_region_model(region_id=None, region_poly=None, num_sites=3,
                         num_observations=5, p_observe=0.5, p_transition=0.15,
                         start_time=None, end_time=None,
-                        with_renderables=True, site_poly=None, rng=None):
+                        with_renderables=True, site_poly=None, rng=None,
+                        start_date=None, end_date=None, start_site_index=0):
     """
     Generate a random region model with random sites and observation support.
 
@@ -89,6 +90,9 @@ def random_region_model(region_id=None, region_poly=None, num_sites=3,
             typically this is only used when num_sites=1.
 
         rng (int | str | RandomState | None) : seed or random number generator
+
+        start_site_index (int):
+            the index of the first generated site. Defaults to 0
 
     Returns:
         Tuple[geojson.FeatureCollection, List[geojson.FeatureCollection], List | None]:
@@ -169,6 +173,12 @@ def random_region_model(region_id=None, region_poly=None, num_sites=3,
     from kwutil import util_time
     rng = kwarray.ensure_rng(rng)
 
+    if start_date is not None:
+        raise ValueError('Use start_time instead of start_date')
+
+    if end_date is not None:
+        raise ValueError('Use end_time instead of end_date')
+
     if num_observations <= 0:
         raise ValueError('must have at least one observation')
 
@@ -226,7 +236,7 @@ def random_region_model(region_id=None, region_poly=None, num_sites=3,
     # Create random site models within this region
     sites = []
     site_summaries = []
-    for site_num in range(num_sites):
+    for site_num in range(start_site_index, start_site_index + num_sites):
         site_id = f"{region_id}_{site_num:04d}"
         sitesum, site = random_site_model(
             region_id, site_id, region_corners, observables,

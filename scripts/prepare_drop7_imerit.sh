@@ -96,7 +96,13 @@ python -c "if 1:
         print(dpath.ls())
 
 "
+
+
+# Reorganize kwcoco files to be inside of their region folder
 python -c "if 1:
+
+import os
+os.chdir('/home/joncrall/remote/namek/data/dvc-repos/smart_data_dvc/Aligned-Drop7')
 
 import ubelt as ub
 bundle_dpath = ub.Path('.').absolute()
@@ -106,12 +112,15 @@ for p in all_paths:
     if p.is_dir() and str(p.name)[2] == '_':
         region_dpaths.append(p)
 
+region_dpaths
+
 import cmd_queue
 queue = cmd_queue.Queue.create('tmux', size=16)
 
 for dpath in region_dpaths:
     print(ub.urepr(dpath.ls()))
 
+existing = []
 for dpath in region_dpaths:
     region_id = dpath.name
     fnames = [
@@ -121,11 +130,16 @@ for dpath in region_dpaths:
     for fname in fnames:
         old_fpath = bundle_dpath / fname
         new_fpath = dpath / fname
-        if old_fpath.exists() and not new_fpath.exists():
-            queue.submit(f'kwcoco move {old_fpath} {new_fpath}')
+        if old_fpath.exists():
+            if new_fpath.exists():
+                existing.append(new_fpath)
+            if not new_fpath.exists():
+                queue.submit(f'kwcoco move {old_fpath} {new_fpath}')
 
+queue.write_network_text()
 queue.run()
 "
+
 
 dvc add CN_C000/*.kwcoco.zip KW_C001/*.kwcoco.zip SA_C001/*.kwcoco.zip  CO_C001/*.kwcoco.zip  VN_C002/*.kwcoco.zip
 dvc push -r aws CN_C000/*.kwcoco.zip KW_C001/*.kwcoco.zip SA_C001/*.kwcoco.zip  CO_C001/*.kwcoco.zip  VN_C002/*.kwcoco.zip
@@ -138,29 +152,57 @@ dvc pull -R namek_hdd -- CN_C000 KW_C001 SA_C001 CO_C001 VN_C002
 # ~/code/watch/dev/poc/prepare_time_combined_dataset.py
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
 python ~/code/watch/watch/cli/queue_cli/prepare_time_combined_dataset.py \
-    --regions="
-      - CN_C000
-      #- KW_C001
-      #- SA_C001
-      #- CO_C001
-      #- VN_C002
+    --regions="['US_C010', 'NG_C000', 'KW_C001', 'SA_C005', 'US_C001', 'CO_C009',
+        'US_C014', 'CN_C000', 'PE_C004', 'IN_C000', 'PE_C001', 'SA_C001', 'US_C016',
+        'AE_C001', 'US_C011', 'AE_C002', 'PE_C003', 'RU_C000', 'CO_C001', 'US_C000',
+        'US_C012', 'AE_C003', 'CN_C001', 'QA_C001', 'SN_C000']
+        # 'VN_C002',
     " \
     --input_bundle_dpath="$DVC_DATA_DPATH"/Aligned-Drop7 \
     --output_bundle_dpath="$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD-iMERIT \
-    --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop6_hard_v1/site_models \
-    --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop6_hard_v1/region_models \
-    --spatial_tile_size=1024 \
+    --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop7/site_models \
+    --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop7/region_models \
+    --spatial_tile_size=512 \
     --merge_method=median \
     --remove_seasons=winter \
-    --tmux_workers=4 \
+    --tmux_workers=2 \
     --time_window=1y \
     --combine_workers=4 \
     --resolution=10GSD \
     --backend=tmux \
     --skip_existing=0 \
     --cache=1 \
+    --run=1
+
+
+DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
+python -m watch.cli.prepare_splits \
+    --base_fpath="$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD-iMERIT/*/imganns*-*_[RC]*.kwcoco.zip \
+    --suffix=rawbands \
+    --backend=tmux --tmux_workers=6 \
     --run=0
 
+
+DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
+kwcoco move \
+    "$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD-iMERIT/US_C010/data_train_rawbands_split6.kwcoco.zip \
+    "$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD-iMERIT/data_train_rawbands_split6.kwcoco.zip
+
+kwcoco move \
+    "$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD-iMERIT/US_C010/data_vali_rawbands_split6.kwcoco.zip \
+    "$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD-iMERIT/data_vali_rawbands_split6.kwcoco.zip
+
+
+python -m watch reproject \
+    --src "$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD-iMERIT/.kwcoco.zip \
+    --dst "$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD-iMERIT/.kwcoco.zip \
+    --status_to_catname="positive_excluded: positive" \
+    --regions="$DVC_DATA_DPATH"/drop7/region_models/*.geojson \
+    --sites="$DVC_DATA_DPATH"/annotations/drop7/site_models/*.geojson
+
+
+dvc add -vv -- */raw_bands
+dvc add -vv -- */imganns-*.kwcoco.zip
 
 
 ###---
@@ -217,7 +259,8 @@ geowatch schedule --params="
             - 0.425
             - 0.435
             - 0.45
-            #- 0.5
+            - 0.5
+            - 0.6
         bas_poly.inner_window_size: 1y
         bas_poly.inner_agg_fn: mean
         bas_poly.norm_ord: inf
@@ -253,7 +296,7 @@ geowatch schedule --params="
     --backend=tmux \
     --pipeline=bas \
     --skip_existing=1 \
-    --run=1
+    --run=1 --help
 
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 TEST_DPATH=$DVC_EXPT_DPATH/_test/_imeritbas
@@ -270,7 +313,7 @@ python -m watch.mlops.aggregate \
         - bas_pxl_eval
     " \
     --plot_params="
-        enabled: 0
+        enabled: 1
         stats_ranking: 0
         min_variations: 1
         params_of_interest:
@@ -288,3 +331,11 @@ python -m watch.mlops.aggregate \
         concise: 1
         show_csv: 0
     "
+
+
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
+python -m watch.mlops.confusor_analysis \
+    --metrics_node_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_test/_imeritbas/eval/flat/bas_poly_eval/bas_poly_eval_id_fd88699a/ \
+    --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop7/region_models \
+    --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop7/site_models \
+    --viz_site_case=True
