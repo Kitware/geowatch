@@ -409,6 +409,13 @@ CATEGORIES = [
         'scored': True,
         'tags': ['positive'],
     },
+    # Transient
+    {
+        'name': 'transient',
+        'color': 'steelblue',
+        'scored': True,
+        'tags': ['positive'],
+    },
 ]
 
 

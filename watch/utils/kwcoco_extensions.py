@@ -92,15 +92,21 @@ def filter_image_ids(coco_dset, gids=None, include_sensors=None,
     return valid_gids
 
 
-def populate_watch_fields(coco_dset, target_gsd=10.0, vidids=None,
-                          overwrite=False, default_gsd=None,
-                          conform=True,
-                          enable_video_stats=True,
-                          enable_valid_region=False,
-                          enable_intensity_stats=False,
-                          workers=0,
-                          mode='thread',
-                          remove_broken=False):
+def populate_watch_fields(
+    coco_dset,
+    target_gsd=10.0,
+    vidids=None,
+    overwrite=False,
+    default_gsd=None,
+    conform=True,
+    enable_video_stats=True,
+    enable_valid_region=False,
+    enable_intensity_stats=False,
+    workers=0,
+    mode='thread',
+    remove_broken=False,
+    skip_populate_errors=False,
+):
     """
     Aggregate populate function for fields useful to GEOWATCH.
 
@@ -166,7 +172,9 @@ def populate_watch_fields(coco_dset, target_gsd=10.0, vidids=None,
         workers=workers, mode=mode,
         enable_intensity_stats=enable_intensity_stats,
         enable_valid_region=enable_valid_region,
-        remove_broken=remove_broken)
+        remove_broken=remove_broken,
+        skip_populate_errors=skip_populate_errors,
+    )
 
     # Modify videos to include cleared status
     if 1:
@@ -290,11 +298,15 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
 
 
 @profile
-def coco_populate_geo_img_heuristics2(coco_img, overwrite=False,
-                                      default_gsd=None,
-                                      keep_geotiff_metadata=False,
-                                      enable_intensity_stats=False,
-                                      enable_valid_region=False):
+def coco_populate_geo_img_heuristics2(
+    coco_img,
+    overwrite=False,
+    default_gsd=None,
+    keep_geotiff_metadata=False,
+    enable_intensity_stats=False,
+    enable_valid_region=False,
+    skip_populate_errors=False,
+):
     """
     Note: this will not overwrite existing channel info unless specified
 
@@ -362,11 +374,17 @@ def coco_populate_geo_img_heuristics2(coco_img, overwrite=False,
     # provided with them to determine their geo-properties.
     asset_errors = []
     for obj in asset_objs:
-        errors = _populate_canvas_obj(
-            bundle_dpath, obj, overwrite=overwrite, default_gsd=default_gsd,
-            keep_geotiff_metadata=keep_geotiff_metadata,
-            enable_intensity_stats=enable_intensity_stats)
-        asset_errors.append(errors)
+        try:
+            errors = _populate_canvas_obj(
+                bundle_dpath, obj, overwrite=overwrite, default_gsd=default_gsd,
+                keep_geotiff_metadata=keep_geotiff_metadata,
+                enable_intensity_stats=enable_intensity_stats)
+            asset_errors.append(errors)
+        except Exception as ex:
+            if skip_populate_errors:
+                asset_errors.append(str(ex))
+            else:
+                raise
 
     if all(asset_errors):
         info = ub.dict_isect(img, {'name', 'file_name', 'id'})
@@ -391,7 +409,11 @@ def coco_populate_geo_img_heuristics2(coco_img, overwrite=False,
         # (typically the one with the largest size)
         if img.get('file_name', None) is None:
             assets = list(coco_img.assets)
-            asset_dsizes = [(asset['width'], asset['height']) for asset in assets]
+            asset_dsizes = [
+                (asset['width'], asset['height'])
+                for asset in assets
+                if ("width" in asset) and ("height" in asset)
+            ]
             idx = ub.argmax(asset_dsizes)
             main_asset = assets[idx]
 
