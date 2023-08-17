@@ -27,17 +27,17 @@ except ImportError:
 
 class TransferCocoConfig(scfg.DataConfig):
     """
-    The docstring will be the description in the CLI help
+    Transfer channels to one kwcoco file to the nearest image in the future.
     """
 
-    coco_fpath = scfg.Value(None, position=1, help=ub.paragraph(
+    src_kwcoco = scfg.Value(None, position=1, help=ub.paragraph(
         '''
         a path to a file to input kwcoco file (to predict on)
-        '''))
-    combine_fpath = scfg.Value(None, help=ub.paragraph(
+        '''), alias=['coco_fpath'])
+    dst_kwcoco = scfg.Value(None, help=ub.paragraph(
         '''
         a path to a file to combined input kwcoco file (to merge with)
-        '''))
+        '''), alias=['combine_fpath'])
     new_coco_fpath = scfg.Value(None, help='file path for modified output coco json')
     channels_to_transfer = scfg.Value(None, help='COLD channels for transfer')
 
@@ -218,12 +218,71 @@ def transfer_features_main(cmdline=1, **kwargs):
         >>> cmdline=0
         >>> transfer_features_main(cmdline, **kwargs)
 
-    Ignore:
-        kwargs = {
-            'coco_fpath': ub.Path('/home/joncrall/remote/Ooo/data/dvc-repos/smart_data_dvc/Aligned-Drop7/BR_R001/imganns-BR_R001_cold.kwcoco.zip'),
-            'combine_fpath': ub.Path('/home/joncrall/remote/Ooo/data/dvc-repos/smart_data_dvc/Drop7-MedianNoWinter10GSD/combo_imganns-BR_R001_I2L.kwcoco.zip'),
-            'new_coco_fpath': ub.Path('/home/joncrall/remote/Ooo/data/dvc-repos/smart_data_dvc/Drop7-MedianNoWinter10GSD/combo_imganns-BR_R001_I2LC.kwcoco.zip')
-        }
+    Example:
+        >>> # Test case: transfer from temporal-lores to temporal-hires
+        >>> from watch.tasks.cold.transfer_features import transfer_features_main
+        >>> from watch.tasks.cold.transfer_features import *
+        >>> import watch
+        >>> dset1 = watch.coerce_kwcoco('watch-msi', geodata=True, heatmap=True, dates=True)
+        >>> dset2 = dset1.copy()
+        >>> # Remove half of the images from dset1
+        >>> dset1.remove_images(list(dset1.images())[::2])
+        >>> # Remove saliency assets from dset2
+        >>> for img in dset2.images().coco_images:
+        >>>     asset = img.find_asset_obj('salient')
+        >>>     img['auxiliary'].remove(asset)
+        >>> dset2_orig = dset2.copy()
+        >>> # Transfer the saliency from dset1 onto dset2
+        >>> kwargs = TransferCocoConfig(**{
+        >>>     'src_kwcoco': dset1,
+        >>>     'dst_kwcoco': dset2,
+        >>>     'new_coco_fpath': 'return',
+        >>>     'channels_to_transfer': 'salient',
+        >>>     'copy_assets': False,
+        >>> })
+        >>> cmdline = False
+        >>> new_dset = transfer_features_main(cmdline, **kwargs)
+        >>> assert new_dset is dset2, 'modifies combine_fpath inplace'
+        >>> from watch.utils import kwcoco_extensions
+        >>> stats1 = kwcoco_extensions.coco_channel_stats(dset1)
+        >>> stats2 = kwcoco_extensions.coco_channel_stats(dset2)
+        >>> stats2_orig = kwcoco_extensions.coco_channel_stats(dset2_orig)
+        >>> assert stats2['single_chan_hist']['salient'] == stats1['single_chan_hist']['salient'], 'all assets should transfer'
+        >>> assert stats2['single_chan_hist']['salient'] == dset2.n_images // 2, 'only some dst images get saliency'
+        >>> assert stats2_orig['single_chan_hist']['salient'] == 0
+
+    Example:
+        >>> # Test case: transfer from temporal-hires to temporal-lores
+        >>> from watch.tasks.cold.transfer_features import transfer_features_main
+        >>> from watch.tasks.cold.transfer_features import *
+        >>> import watch
+        >>> dset1 = watch.coerce_kwcoco('watch-msi', geodata=True, heatmap=True, dates=True)
+        >>> dset2 = dset1.copy()
+        >>> # Remove half of the images from dset2
+        >>> dset2.remove_images(list(dset1.images())[::2])
+        >>> # Remove saliency assets from dset2
+        >>> for img in dset2.images().coco_images:
+        >>>     asset = img.find_asset_obj('salient')
+        >>>     img['auxiliary'].remove(asset)
+        >>> dset2_orig = dset2.copy()
+        >>> # Transfer the saliency from dset1 onto dset2
+        >>> kwargs = TransferCocoConfig(**{
+        >>>     'src_kwcoco': dset1,
+        >>>     'dst_kwcoco': dset2,
+        >>>     'new_coco_fpath': 'return',
+        >>>     'channels_to_transfer': 'salient',
+        >>>     'copy_assets': False,
+        >>> })
+        >>> cmdline = False
+        >>> new_dset = transfer_features_main(cmdline, **kwargs)
+        >>> assert new_dset is dset2, 'modifies combine_fpath inplace'
+        >>> from watch.utils import kwcoco_extensions
+        >>> stats1 = kwcoco_extensions.coco_channel_stats(dset1)
+        >>> stats2 = kwcoco_extensions.coco_channel_stats(dset2)
+        >>> stats2_orig = kwcoco_extensions.coco_channel_stats(dset2_orig)
+        >>> assert stats2['single_chan_hist']['salient'] < stats1['single_chan_hist']['salient'], 'more saliency in dset1 than dset2'
+        >>> assert stats2['single_chan_hist']['salient'] == dset2.n_images, 'all dst images get saliency'
+        >>> assert stats2_orig['single_chan_hist']['salient'] == 0
     """
     #NOTE: This script doesn't consider timestamp = True
     config = TransferCocoConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
@@ -233,6 +292,7 @@ def transfer_features_main(cmdline=1, **kwargs):
     from watch.cli.reproject_annotations import keyframe_interpolate
     from watch.utils import process_context
     from watch.utils import util_json
+
     resolved_config = config.to_dict()
     resolved_config = util_json.ensure_json_serializable(resolved_config)
     proc_context = process_context.ProcessContext(
@@ -261,16 +321,18 @@ def transfer_features_main(cmdline=1, **kwargs):
         new_coco_fpath = ub.Path(config['new_coco_fpath'])
 
     if config['channels_to_transfer'] is None:
-        channels_to_transfer = default_channels
+        channels_to_transfer = kwcoco.FusedChannelSpec.coerce(default_channels)
     else:
-        channels_to_transfer = config['channels_to_transfer']
-        channels_to_transfer = list(channels_to_transfer)
+        channels_to_transfer = kwcoco.FusedChannelSpec.coerce(config['channels_to_transfer'])
 
-    print('Reading source kwcoco file')
-    src = kwcoco.CocoDataset.coerce(config['coco_fpath'])
+    print('Loading source kwcoco file')
+    src = kwcoco.CocoDataset.coerce(config['src_kwcoco'])
 
-    print('Reading destination kwcoco file')
-    dst = kwcoco.CocoDataset.coerce(config['combine_fpath'])
+    print('Loading destination kwcoco file')
+    dst = kwcoco.CocoDataset.coerce(config['dst_kwcoco'])
+
+    print(f'src={src}')
+    print(f'dst={dst}')
 
     if not do_return:
         _update_coco_fpath(dst, new_coco_fpath)
@@ -407,7 +469,11 @@ def transfer_features_main(cmdline=1, **kwargs):
         new_asset['image_id'] = dst_coco_img['id']
         dst_coco_img.add_asset(**new_asset)
 
-    print(f'Found {len(copy_tasks)} assets to copy')
+    if not copy_assets:
+        assert len(copy_tasks) == 0
+        print('Copy assets is False. Only transfering reference to assets.')
+    else:
+        print(f'Found {len(copy_tasks)} assets to copy')
 
     rich.print(f'Dest Bundle: [link={dst.bundle_dpath}]{dst.bundle_dpath}[/link]')
     if copy_tasks:

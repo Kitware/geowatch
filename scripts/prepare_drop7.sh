@@ -1090,8 +1090,8 @@ python ~/code/watch/watch/cli/queue_cli/prepare_time_combined_dataset.py \
     --regions=all_tne \
     --input_bundle_dpath="$DVC_DATA_DPATH"/Aligned-Drop7 \
     --output_bundle_dpath="$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD-NoMask \
-    --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop6_hard_v1/site_models \
-    --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop6_hard_v1/region_models \
+    --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop7/site_models \
+    --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop7/region_models \
     --spatial_tile_size=512 \
     --merge_method=median \
     --remove_seasons=winter \
@@ -1129,3 +1129,22 @@ python ~/code/watch/watch/cli/queue_cli/prepare_time_combined_dataset.py \
     --cache=1 \
     --mask_low_quality=False \
     --run=1
+
+__doc__="
+Ideal DVC:
+
+* DatasetName
+
+    - RegionName
+
+        - RegionKwcocoVariant1.dvc
+        - RegionKwcocoVariant2.dvc
+        - rawbands/WV.dvc
+        - rawbands/S2.dvc
+        - rawbands/L8.dvc
+        - rawbands/PD.dvc
+        - teamfeats/WV/landcover.dvc
+        - teamfeats/S2/landcover.dvc
+        - teamfeats/WV/mae.dvc
+        - teamfeats/S2/mae.dvc
+"
