@@ -912,6 +912,18 @@ REGION_STATUS = [
 
 
 # Mapping from our sensor names to the official T&E sensor names
+SENSOR_TABLE = [
+    {'te_name': 'WorldView',  'kit_name': 'WV'},
+    {'te_name': 'Sentinel-2', 'kit_name': 'S2'},
+    {'te_name': 'Landsat 7',  'kit_name': 'LE'},
+    {'te_name': 'Landsat 8',  'kit_name': 'LC'},
+    {'te_name': 'Landsat 8',  'kit_name': 'L8'},
+    {'te_name': 'WorldView',  'kit_name': 'WV1'},
+    {'te_name': 'Planet',     'kit_name': 'PD'},
+]
+{r['kit_name']: r['te_name'] for r in SENSOR_TABLE}
+# {r['te_name']: r['kit_name'] for r in SENSOR_TABLE[::-1]}
+
 TE_SENSOR_NAMES = {
     'WV': 'WorldView',
     'S2': 'Sentinel-2',
@@ -930,3 +942,27 @@ SENSOR_TRACK_PRIORITY = {
     'Landsat 8': 2,
     'Landsat 7': 1
 }
+
+
+def normalize_sensors(coco_dset, sensor_warnings=True, format='te'):
+    """
+    Convert to / from internal representations or IAPRA sensor standards
+    """
+    from watch.heuristics import TE_SENSOR_NAMES
+    sensor_dict = TE_SENSOR_NAMES
+    good_sensors = set(sensor_dict.values())
+
+    for img in coco_dset.dataset['images']:
+        try:
+            sensor = img['sensor_coarse']
+            if sensor not in good_sensors:
+                img['sensor_coarse'] = sensor_dict[sensor]
+        except KeyError:
+            if sensor_warnings:
+                # name = img.get('name', img['file_name'])
+                sensor = img.get('sensor_coarse', None)
+                import warnings
+                warnings.warn(
+                    f'image has unknown sensor {sensor} in tag={coco_dset.tag}')
+
+    return coco_dset

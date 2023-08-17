@@ -495,30 +495,6 @@ def normalize_phases(coco_dset,
     return coco_dset
 
 
-def normalize_sensors(coco_dset, sensor_warnings=True):
-    """
-    Convert internal representations of sensors to their IARPA standards
-    """
-    # FIXME: should pull from heuristics
-    from watch.heuristics import TE_SENSOR_NAMES
-    sensor_dict = TE_SENSOR_NAMES
-    good_sensors = set(sensor_dict.values())
-    for img in coco_dset.imgs.values():
-        try:
-            sensor = img['sensor_coarse']
-            if sensor not in good_sensors:
-                img['sensor_coarse'] = sensor_dict[sensor]
-        except KeyError:
-            sensor = img.get('sensor_coarse', None)
-            # name = img.get('name', img['file_name'])
-            if sensor_warnings:
-                import warnings
-                warnings.warn(
-                    f'image has unknown sensor {sensor} in tag={coco_dset.tag}')
-
-    return coco_dset
-
-
 def dedupe_dates(coco_dset):
     """
     Ensure a tracked kwcoco file has at most 1 annot per track per date. [1]
@@ -648,7 +624,9 @@ def run_tracking_pipeline(
         >>> coco_dset = normalize_phases(coco_dset, baseline_keys={'change'})
         >>> assert (coco_dset.annots().cnames ==
         >>> ['Site Preparation', 'Site Preparation', 'Post Construction'])
-        >>> coco_dset = normalize_sensors(coco_dset, sensor_warnings=False)
+        >>> from watch import heuristics
+        >>> coco_dset = heuristics.normalize_sensors(
+        >>>     coco_dset, sensor_warnings=False, format='iarpa')
         >>> assert (coco_dset.images().get('sensor_coarse') ==
         >>>     ['WorldView', 'Sentinel-2', 'Landsat 8'])
     """
@@ -743,7 +721,9 @@ def run_tracking_pipeline(
     if DEBUG_JSON_SERIALIZABLE:
         debug_json_unserializable(out_dset.dataset, 'After normalize_phases: ')
 
-    out_dset = normalize_sensors(out_dset, sensor_warnings=sensor_warnings)
+    from watch import heuristics
+    out_dset = heuristics.normalize_sensors(
+        out_dset, sensor_warnings=sensor_warnings, format='iarpa')
 
     # HACK, ensure out_dset.index is up to date
     out_dset._build_index()

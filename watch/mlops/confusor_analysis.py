@@ -52,7 +52,29 @@ Ignore:
 
 
 
+#### LORES
+
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
+python -m watch.mlops.confusor_analysis \
+    --metrics_node_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_drop7_nowinter_baseline_joint_bas_sc/eval/flat/bas_poly_eval/bas_poly_eval_id_ec937017/ \
+    --out_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_drop7_nowinter_baseline_joint_bas_sc/eval/flat/bas_poly_eval/bas_poly_eval_id_ec937017/lores-confusion \
+    --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop7/region_models \
+    --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop7/site_models \
+    --viz_site_case=True --reload=0
+
+
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
+python -m watch.mlops.confusor_analysis \
+    --metrics_node_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_drop7_nowinter_baseline/eval/flat/bas_poly_eval/bas_poly_id_custom00/ \
+    --out_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_drop7_nowinter_baseline/eval/flat/bas_poly_eval/bas_poly_id_custom00/lores-confusion \
+    --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop7/region_models \
+    --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop7/site_models \
+    --region_id=CH_R001 --viz-site-case --reload=0
+
+
 #### TEST WITH HIGHRES KWCOCO
+
+# ON KR_R002
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
 python -m watch.mlops.confusor_analysis \
@@ -60,7 +82,19 @@ python -m watch.mlops.confusor_analysis \
     --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop7/region_models \
     --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop7/site_models \
     --src_kwcoco=$DVC_DATA_DPATH/Aligned-Drop7/KR_R002/imgonly-KR_R002.kwcoco.zip \
-    --viz_site_case=True --reload=1
+    --viz_site_case=True --reload=0
+
+
+# ON CH_R001
+
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
+python -m watch.mlops.confusor_analysis \
+    --metrics_node_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_drop7_nowinter_baseline/eval/flat/bas_poly_eval/bas_poly_id_custom00/ \
+    --out_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_drop7_nowinter_baseline/eval/flat/bas_poly_eval/bas_poly_id_custom00/confusion-hires \
+    --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop7/region_models \
+    --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop7/site_models \
+    --src_kwcoco=$DVC_DATA_DPATH/Aligned-Drop7/CH_R001/imgonly-CH_R001.kwcoco.zip \
+    --region_id=CH_R001 --viz-site-case --reload=0
 
 
 """
@@ -703,7 +737,7 @@ class ConfusionAnalysis:
                 kml_fpath = cfsn_kml_dpath / (group_type + '.kml')
                 kml.save(kml_fpath)
 
-            if 1:
+            if 0:
                 # TODO: write nice images that can be used with QGIS
                 src_dset = kwcoco.CocoDataset(config.src_kwcoco)
                 coco_img = src_dset.images().coco_images[0]
@@ -843,15 +877,19 @@ class ConfusionAnalysis:
 
         if config.dst_kwcoco is not None:
 
-            if config.bas_kwcoco:
+            if config.bas_kwcoco and config.src_kwcoco != config.bas_kwcoco:
+                from watch import heuristics
                 from watch.tasks.cold import transfer_features
                 bas_dset = kwcoco.CocoDataset(config.bas_kwcoco)
+                heuristics.normalize_sensors(bas_dset)
+                heuristics.normalize_sensors(dst_dset)
                 # tf_fpath = dst_dset.fpath.augment(stemsuffix="-tf", multidot=1)
                 transfer_config = {
                     'coco_fpath': bas_dset,
                     'combine_fpath': dst_dset,
                     'new_coco_fpath': 'return',
                     'channels_to_transfer': ['salient'],
+                    'max_propogate': None,
                 }
                 new = transfer_features.transfer_features_main(cmdline=0, **transfer_config)
                 dst_dset = new
@@ -893,11 +931,19 @@ class ConfusionAnalysis:
         pred_id_to_site = {s.site_id: s for s in type_to_sites['pred']}
 
         errors = []
-        for case in ub.ProgIter(cases, desc='dump cases'):
+        for case in ub.ProgIter(cases, desc='dump cases', verbose=3):
             dpath = (viz_dpath / case['type']).ensuredir()
             fpath = dpath / (case['name'] + '.jpg')
+
+            if 'CH_R001_0076' in case['name']:
+                import xdev
+                xdev.embed()
+            else:
+                continue
+
             try:
-                canvas = visualize_single_site_case(coco_dset, case, true_id_to_site, pred_id_to_site)
+                canvas = visualize_single_site_case(
+                    coco_dset, case, true_id_to_site, pred_id_to_site)
             except Exception as ex:
                 errors.append(ex)
                 raise
@@ -1119,9 +1165,11 @@ def build_site_confusion_cases(type_to_summary, type_to_sites, coco_dset=None):
         for idx2 in idxs2:
             true_site = true_sites[idx2]
             true_geom = true_utm_gdf.iloc[idx2].geometry
+            true_site
             case = make_pairwise_case(true_site, pred_site, true_geom,
                                       pred_geom, region_start_date,
-                                      region_end_date, confusion_type + '_some_space_overlap')
+                                      region_end_date,
+                                      confusion_type + '_some_space_overlap_' + true_site.status)
             cases.append(case)
 
         if len(idxs2) == 0:
@@ -1149,6 +1197,13 @@ def build_site_confusion_cases(type_to_summary, type_to_sites, coco_dset=None):
     return cases
 
 
+# def enrich_case(coco_dset, case, true_id_to_site, pred_id_to_site):
+#     """
+#     Give the case enough information so it can be computed in parallel.
+#     """
+#     ...
+
+
 def visualize_single_site_case(coco_dset, case, true_id_to_site, pred_id_to_site):
     """
     cases = sorted(cases, key=lambda x: x['time_iou'])[::-1]
@@ -1165,7 +1220,6 @@ def visualize_single_site_case(coco_dset, case, true_id_to_site, pred_id_to_site
 
     main_trackids = []
 
-    # true_site = true_id_to_site[case['true_site_id']]
     try:
         pred_site = pred_id_to_site[case['pred_site_id']]
         pred_site_id = case['pred_coco_site_id']
@@ -1190,6 +1244,7 @@ def visualize_single_site_case(coco_dset, case, true_id_to_site, pred_id_to_site
 
     try:
         true_site_id = case['true_coco_site_id']
+        true_site = true_id_to_site[case['true_site_id']]
         # true_summary = true_id_to_summary[case['true_site_id']]
         # pred_summary = pred_id_to_summary[case['pred_site_id']]
 
@@ -1221,6 +1276,23 @@ def visualize_single_site_case(coco_dset, case, true_id_to_site, pred_id_to_site
             assert abs(pred_start_date_coco - pred_start_date_geoj) < util_time.coerce_timedelta('1 day')
             assert abs(pred_end_date_coco - pred_end_date_geoj) < util_time.coerce_timedelta('1 day')
 
+    if 1:
+        timelines = []
+        timeline = {}
+
+        sites = [pred_site, true_site]
+
+        site = pred_site
+        timeline['site_id'] = site.site_id
+        timeline['start_date'] = site.start_date
+        timeline['end_date'] = site.end_date
+        timeline['observation_date'] = site.pandas_observations()['observation_date']
+
+        true_site.pandas_observations()['observation_date']
+        case['pred_dates']
+        case['true_dates']
+        ...
+
     all_aids = sorted(all_aids)
     all_annots = coco_dset.annots(all_aids)
     _all_gids = list(set(all_annots.images))
@@ -1230,39 +1302,70 @@ def visualize_single_site_case(coco_dset, case, true_id_to_site, pred_id_to_site
 
     gid_to_weight = ub.ddict(lambda: 0)
 
-    MAX_IMAGES = 32
-    if MAX_IMAGES is not None:
+    # In most cases try to only use the "lo" number of images, but allow us to
+    # choose up to "hi" to get as many infinite weight examples as possible.
+    # but still limit the total number of shown examples.
+    MAX_IMAGES_LO = 16
+    MAX_IMAGES_HI = 32
+
+    if MAX_IMAGES_LO is not None:
+
+        rng = kwarray.ensure_rng(0)
+
         for tid in main_trackids:
-            annot_track = coco_dset.annots(track_id=tid)
-            catnames = annot_track.category_names
+            track_annots = coco_dset.annots(track_id=tid)
+            catnames = track_annots.category_names
 
             # Assing a weight for how much we want to show each frame, because we
             # can only show so many.
-            rng = kwarray.ensure_rng(0)
             # Randomly take images by default
-            # annot_weights = np.ones(len(annot_track))
+            # track_annot_weights = np.ones(len(track_annots))
 
             from watch import heuristics
-            sensors = annot_track.images.lookup('sensor_coarse')
-            annot_weights = np.array([
-                heuristics.SENSOR_TRACK_PRIORITY.get(heuristics.TE_SENSOR_NAMES.get(s, s), 1) for s in sensors], dtype=float)
-            annot_weights *= rng.rand(len(annot_track))
+            track_images = track_annots.images
+            sensors = track_annots.images.lookup('sensor_coarse')
+
+            channel_weights = [20 * ('salient' in c.channels) + 0.1 for c in track_images.coco_images]
+
+            sensor_weights = np.array([
+                heuristics.SENSOR_TRACK_PRIORITY.get(heuristics.TE_SENSOR_NAMES.get(s, s), 1)
+                for s in sensors], dtype=float)
+
+            random_weights = rng.rand(len(track_annots))
+
+            track_annot_weights = (
+                sensor_weights *
+                random_weights *
+                channel_weights
+            )
 
             for catname, idxs in zip(*kwarray.group_indices(catnames)):
                 consec_groups = kwarray.group_consecutive(idxs)
                 for consec_group in consec_groups:
                     idx = consec_group[0]
                     # Must show these frames where transition happens.
-                    annot_weights[idx] = np.inf
+                    track_annot_weights[idx] = np.inf
                     if idx > 0:
-                        annot_weights[idx - 1] = np.inf
-                    if idx < len(annot_weights) - 1:
-                        annot_weights[idx + 1] = np.inf
+                        track_annot_weights[idx - 1] = np.inf
+                    if idx < len(track_annot_weights) - 1:
+                        track_annot_weights[idx + 1] = np.inf
 
-            for gid, weights in ub.group_items(annot_weights, annot_track.image_id).items():
+            for gid, weights in ub.group_items(track_annot_weights, track_annots.image_id).items():
                 gid_to_weight[gid] += sum(weights)
 
-        final_gids = list(ub.udict(gid_to_weight).sorted_values(reverse=True).keys())[0:MAX_IMAGES]
+        gid_to_weight = ub.udict(gid_to_weight).sorted_values(reverse=True)
+        _gids = list(gid_to_weight.keys())
+        _weights = np.array(list(gid_to_weight.values()))
+        mustinclude_idxs = np.where(_weights >= np.inf)[0]
+        if len(mustinclude_idxs):
+            really_want_idx = max(mustinclude_idxs)
+            really_want_idx = min(really_want_idx, MAX_IMAGES_HI)
+        else:
+            really_want_idx = MAX_IMAGES_LO
+
+        MAX_IMAGES = max(MAX_IMAGES_LO, really_want_idx)
+
+        final_gids = _gids[0:MAX_IMAGES]
         all_images = coco_dset.images(ub.oset(all_images) & set(final_gids))
 
     if len(all_images) > 0:
@@ -1280,8 +1383,8 @@ def visualize_single_site_case(coco_dset, case, true_id_to_site, pred_id_to_site
         before_idxs = np.where(vid_frame_idxs < min_frame_index)[0]
         after_idxs = np.where(vid_frame_idxs > max_frame_index)[0]
 
-        chosen_before_idxs = before_idxs[-2:]
-        chosen_after_idxs = after_idxs[0:2]
+        chosen_before_idxs = ub.oset(before_idxs[0:1]) | ub.oset(before_idxs[-2:])
+        chosen_after_idxs = ub.oset(after_idxs[0:2]) | ub.oset(after_idxs[-1:])
         before_gids = video_images.take(chosen_before_idxs)._ids
         after_gids = video_images.take(chosen_after_idxs)._ids
 
@@ -1304,7 +1407,7 @@ def visualize_single_site_case(coco_dset, case, true_id_to_site, pred_id_to_site
 
     gid_to_dets = {}
     # Get the relevant annotations in each image
-    for coco_img in ub.ProgIter(all_images.coco_images, desc='building case'):
+    for coco_img in ub.ProgIter(all_images.coco_images, desc='building case', enabled=False):
         gid = coco_img['id']
         aids = gid_to_aids[gid]
         dets = coco_img._detections_for_resolution(aids=aids, space='video', resolution=resolution)
@@ -1320,7 +1423,7 @@ def visualize_single_site_case(coco_dset, case, true_id_to_site, pred_id_to_site
     vidspace_bound = vidspace_poly.box().scale(scale_factor, about='centroid').quantize()
 
     cells = []
-    for coco_img in ub.ProgIter(all_images.coco_images, desc='building case'):
+    for coco_img in ub.ProgIter(all_images.coco_images, desc='building case', enabled=False):
         gid = coco_img['id']
         dets = gid_to_dets[gid]
 
@@ -1350,7 +1453,13 @@ def visualize_single_site_case(coco_dset, case, true_id_to_site, pred_id_to_site
         det_blank_canvas = rel_dets.draw_on(blank_canvas, color=colors, alpha=0.5)
         det_tci_canvas = rel_dets.draw_on(tci_canvas, color=colors, alpha=0.5)
 
-        cell_canvas = kwimage.stack_images([det_blank_canvas, det_tci_canvas, tci_canvas, heatmap_canvas], axis=0, pad=5)[..., 0:3]
+        cell_canvas = kwimage.stack_images([
+            det_blank_canvas,
+            det_tci_canvas,
+            tci_canvas,
+            heatmap_canvas
+        ], axis=0, pad=5)[..., 0:3]
+
         header_lines = [
             coco_img.img.get('sensor_coarse'),
             util_time.coerce_datetime(coco_img.img.get('date_captured')).date().isoformat(),
@@ -1366,6 +1475,10 @@ def visualize_single_site_case(coco_dset, case, true_id_to_site, pred_id_to_site
         cells.append(cell_canvas)
 
     toshow = ub.udict(case) - {'pred_dates', 'true_dates'}
+
+    case = case.copy()
+
+    case['img_dates'] = all_images.lookup('date_captured')
 
     parts = []
     if 1:
@@ -1395,6 +1508,32 @@ def make_case_timeline(case):
     executor = ub.Executor('process', max_workers=1)
     future = executor.submit(make_case_timeline, case)
     future.result()
+
+    Ignore:
+        from watch.mlops.confusor_analysis import *  # NOQA
+        import kwplot
+        kwplot.autompl()
+        from kwutil import util_time
+        pred_dates = sorted([
+            util_time.datetime.random(start='2010-01-01', end='2020-01-01')
+            for _ in range(10)
+        ])
+        true_dates = sorted([
+            util_time.datetime.random(start='2010-01-01', end='2020-01-01')
+            for _ in range(10)
+        ])
+        case = {}
+        case['true_dates'] = true_dates
+        case['pred_dates'] = pred_dates
+
+        img_dates = sorted([
+            util_time.datetime.random(start='2010-01-01', end='2020-01-01')
+            for _ in range(10)
+        ])
+        case['img_dates'] = img_dates
+        canvas = make_case_timeline(case)
+        kwplot.imshow(canvas, fnum=1)
+        ...
     """
     import kwplot
     from watch.utils import util_kwplot
@@ -1406,20 +1545,29 @@ def make_case_timeline(case):
 
     lineman = util_kwplot.LineManager()
 
+    ylabel_map = {1: '', 2: '', 0: '', 3: ''}
+
+    if 'img_dates' in case:
+        img_xs = util_kwplot.fix_matplotlib_dates(case['img_dates'])
+        for img_x in img_xs:
+            lineman.plot([img_x, img_x], [0, 3], color='kitware_gray')
+
     try:
         pred_xs = util_kwplot.fix_matplotlib_dates(case['pred_dates'])
         lineman.plot(pred_xs, 1, color='kitware_blue')
+        ylabel_map[1] = 'pred'
     except KeyError:
         ...
 
     try:
         true_xs = util_kwplot.fix_matplotlib_dates(case['true_dates'])
         lineman.plot(true_xs, 2, color='kitware_green')
+        ylabel_map[2] = 'true'
     except KeyError:
         ...
 
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-    ax.xaxis.set_major_locator(mdates.DayLocator(interval=360))
+    ax.xaxis.set_major_locator(mdates.DayLocator(interval=720))
     lineman.add_to_axes(ax=ax)
     lineman.setlims(ax=ax)
 
@@ -1427,8 +1575,15 @@ def make_case_timeline(case):
 
     fig.set_size_inches([10, 3])
     fig.subplots_adjust(left=.1, bottom=0.3, top=.7, right=0.9)
+    kwplot.plt.locator_params(axis='x', nbins=4)
+    kwplot.plt.locator_params(axis='x', nbins=4)
     # true_annots.images.coco_images
     # pred_annots.images.coco_images
+
+    labelmod = util_kwplot.LabelModifier()
+    # labelmod.add_mapping({1.0: 'pred', 2.0: 'true'})
+    labelmod.add_mapping(ylabel_map)
+    labelmod.relabel_yticks(ax=ax)
 
     canvas = kwplot.render_figure_to_image(fig)
     return canvas
@@ -1490,8 +1645,8 @@ def visualize_all_timelines(cases, coco_dset, type_to_sites, type_to_summary):
     ax = fig.gca()
     # TODO: make this formatter fixup work better.
     import matplotlib.dates as mdates
-    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-    ax.xaxis.set_major_locator(mdates.DayLocator(interval=360))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y\n%m-%d'))
+    ax.xaxis.set_major_locator(mdates.DayLocator(interval=720))
     lineman.setlims()
 
 
