@@ -94,7 +94,7 @@ python -m watch.mlops.confusor_analysis \
     --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop7/region_models \
     --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop7/site_models \
     --src_kwcoco=$DVC_DATA_DPATH/Aligned-Drop7/CH_R001/imgonly-CH_R001.kwcoco.zip \
-    --region_id=CH_R001 --viz-site-case --reload=0
+    --region_id=CH_R001 --viz-site-case --reload=1
 
 
 """
@@ -443,24 +443,46 @@ class ConfusionAnalysis:
         assert config.proposals_fpath.exists()
         assert config.detections_fpath.exists()
 
-        assign1 = pd.read_csv(config.detections_fpath)
-        assign2 = pd.read_csv(config.proposals_fpath)
+        true_assign = pd.read_csv(config.detections_fpath)
+        pred_assign = pd.read_csv(config.proposals_fpath)
 
         rich.print(' --- Loaded True Assignment From : {config.detections_fpath} ---')
-        rich.print(assign1)
+        rich.print(true_assign)
         rich.print(' --- Loaded Pred Assignment From : {config.proposals_fpath} ---')
-        rich.print(assign2)
-        rich.print(f'{len(assign1)=}')
-        rich.print(f'{len(assign2)=}')
+        rich.print(pred_assign)
+        rich.print(f'{len(true_assign)=}')
+        rich.print(f'{len(pred_assign)=}')
 
-        needs_recompute = any('_seq_' in m or m.startswith('seq_') for m in assign2['site model'] if m)
+        needs_recompute = any('_seq_' in m or m.startswith('seq_') for m in pred_assign['site model'] if m)
         assert not needs_recompute
+
+        import math
+        def nan_to_null(x):
+            if isinstance(x, float) and math.isnan(x):
+                return None
+            else:
+                return x
 
         ### Assign a confusion label to each truth and predicted annotation
         true_confusion_rows = []
         pred_confusion_rows = []
         site_to_status = {}
-        for row in assign1.to_dict('records'):
+
+        score_cols = [c for c in true_assign.columns if 'score' in c]
+        assert len(score_cols) == 1
+        score_col = score_cols[0]
+
+        true_te_cols = [
+            'spatial overlap',
+            'temporal iot',
+            'temporal iop',
+            'site count',
+            'association status',
+            'associated',
+            'color code',
+            'site area',
+        ]
+        for row in true_assign.to_dict('records'):
             true_site_id = row['truth site']
 
             true_site_id = fix_site_id(true_site_id, region_id, performer_id)
@@ -480,13 +502,25 @@ class ConfusionAnalysis:
                 print('has_positive_match = {}'.format(ub.urepr(has_positive_match, nl=1)))
                 raise AssertionError
 
-            true_confusion_rows.append({
+            cfsn_row = {
                 'true_site_id': true_site_id,
                 'pred_site_ids': pred_site_ids,
                 'type': true_cfsn,
-            })
+            }
+            for te_key in true_te_cols:
+                our_key = 'te_' + te_key.replace(' ', '_')
+                cfsn_row[our_key] = nan_to_null(row[te_key])
+            cfsn_row['te_score'] = row[score_col]
+            true_confusion_rows.append(cfsn_row)
 
-        for row in assign2.to_dict('records'):
+        pred_te_cols = [
+            'site count',
+            'association status',
+            'associated',
+            'color code',
+            'site area',
+        ]
+        for row in pred_assign.to_dict('records'):
             pred_site_id = row['site model']
             pred_site_id = fix_site_id(pred_site_id, region_id, performer_id)
             true_site_ids = []
@@ -505,17 +539,31 @@ class ConfusionAnalysis:
                 print('truth_match_statuses = {}'.format(ub.urepr(truth_match_statuses, nl=1)))
                 raise AssertionError
 
-            pred_confusion_rows.append({
+            cfsn_row = {
                 'pred_site_id': pred_site_id,
                 'true_site_ids': true_site_ids,
                 'type': pred_cfsn,
-            })
+                'te_associated': nan_to_null(row['associated']),
+                'te_color_code': nan_to_null(row['color code']),
+                'te_association_status': nan_to_null(row['association status']),
+                'te_site_count': nan_to_null(row['site count']),
+            }
+            for te_key in pred_te_cols:
+                our_key = 'te_' + te_key.replace(' ', '_')
+                cfsn_row[our_key] = nan_to_null(row[te_key])
+            pred_confusion_rows.append(cfsn_row)
 
         for row in true_confusion_rows + pred_confusion_rows:
             row['color'] = heuristics.IARPA_CONFUSION_COLORS.get(row['type'])
 
         self.true_confusion_rows = true_confusion_rows
         self.pred_confusion_rows = pred_confusion_rows
+
+        if 1:
+            true_df = pd.DataFrame(self.true_confusion_rows)
+            pred_df = pd.DataFrame(self.pred_confusion_rows)
+            print(pred_df[['type', 'te_color_code', 'te_association_status', 'te_associated', 'te_site_count', 'color']].value_counts())
+            print(true_df[['type', 'te_color_code', 'te_association_status', 'te_associated', 'te_site_count', 'color']].value_counts())
 
     def add_confusion_to_geojson_models(self):
         """
@@ -931,25 +979,30 @@ class ConfusionAnalysis:
         pred_id_to_site = {s.site_id: s for s in type_to_sites['pred']}
 
         errors = []
-        for case in ub.ProgIter(cases, desc='dump cases', verbose=3):
-            dpath = (viz_dpath / case['type']).ensuredir()
-            fpath = dpath / (case['name'] + '.jpg')
+        from kwutil import util_progress
+        pman = util_progress.ProgressManager()
+        with pman:
+            for case in pman.progiter(cases, desc='dump cases', verbose=3):
+                # if 'CH_R001_0076' in case['name']:
+                #     raise Exception
+                #     import xdev
+                #     xdev.embed()
+                # else:
+                #     continue
+                dpath = (viz_dpath / case['type'])
+                fpath = dpath / (case['name'] + '.jpg')
 
-            if 'CH_R001_0076' in case['name']:
-                import xdev
-                xdev.embed()
-            else:
-                continue
-
-            try:
-                canvas = visualize_single_site_case(
-                    coco_dset, case, true_id_to_site, pred_id_to_site)
-            except Exception as ex:
-                errors.append(ex)
-                raise
-                continue
-            canvas = kwimage.ensure_uint255(canvas)
-            kwimage.imwrite(fpath, canvas)
+                try:
+                    canvas = visualize_single_site_case(
+                        coco_dset, case, true_id_to_site, pred_id_to_site)
+                except Exception as ex:
+                    rich.print(f'[red] ERRORS {len(errors)}')
+                    errors.append(ex)
+                    raise
+                    continue
+                dpath.ensuredir()
+                canvas = kwimage.ensure_uint255(canvas)
+                kwimage.imwrite(fpath, canvas)
 
         if errors:
             rich.print(f'[red]There were {len(errors)} errors in viz')
@@ -973,7 +1026,7 @@ def make_pairwise_case(true_site, pred_site, true_geom, pred_geom,
     pred_dates = pred_obs['observation_date'].values
     pred_dates = list(map(util_time.coerce_datetime, pred_dates))
 
-    assert pred_site.geometry.intersection(true_site.geometry).area > 0
+    # assert pred_site.geometry.intersection(true_site.geometry).area > 0
 
     isect_area = true_geom.intersection(pred_geom).area
     union_area = true_geom.union(pred_geom).area
@@ -981,7 +1034,7 @@ def make_pairwise_case(true_site, pred_site, true_geom, pred_geom,
     space_iot = isect_area / true_area
     space_iop = isect_area / pred_area
 
-    assert space_iou > 0
+    # assert space_iou > 0
 
     site_start_date = true_site.start_date or region_start_date
     site_end_date = true_site.end_date or region_end_date
@@ -1012,6 +1065,11 @@ def make_pairwise_case(true_site, pred_site, true_geom, pred_geom,
     true_coco_site_id = differentiate_site_id(true_site.site_id, 'te')
     pred_coco_site_id = differentiate_site_id(pred_site.site_id, 'kit')
 
+    true_confusion = ub.udict(true_site.header['properties']['cache']['confusion'])
+    pred_confusion = ub.udict(pred_site.header['properties']['cache']['confusion'])
+    pred_confusion &= {k for k in pred_confusion if k.startswith('te_')}
+    true_confusion &= {k for k in true_confusion if k.startswith('te_')}
+
     case = {
         'name': f'{pred_site.site_id}-vs-{true_site.site_id}',
 
@@ -1035,6 +1093,9 @@ def make_pairwise_case(true_site, pred_site, true_geom, pred_geom,
         'pred_dates': pred_dates,
         'true_dates': true_dates,
 
+        **true_confusion,
+        **pred_confusion,
+
         'type': type_,
     }
     return case
@@ -1047,6 +1108,8 @@ def make_single_case(site, geom, type_):
     obs = site.pandas_observations()
     dates = obs['observation_date'].values
     dates = list(map(util_time.coerce_datetime, dates))
+    confusion = ub.udict(site.header['properties']['cache']['confusion'])
+    confusion &= {k for k in confusion if k.startswith('te_')}
 
     if 'gt_' in type_:
         coco_site_id = differentiate_site_id(site.site_id, 'te')
@@ -1057,6 +1120,7 @@ def make_single_case(site, geom, type_):
             'true_area': area,
             'true_dates': dates,
             'type': type_,
+            **confusion,
         }
     else:
         coco_site_id = differentiate_site_id(site.site_id, 'kit')
@@ -1067,6 +1131,7 @@ def make_single_case(site, geom, type_):
             'pred_area': area,
             'pred_dates': dates,
             'type': type_,
+            **confusion,
         }
     return case
 
@@ -1131,10 +1196,10 @@ def build_site_confusion_cases(type_to_summary, type_to_sites, coco_dset=None):
     region_start_date = true_summary.start_date
     region_end_date = true_summary.end_date
 
-    wrong_summary = type_to_summary['sm_completely_wrong']
-    wrong_sites = type_to_sites['sm_completely_wrong']
-    wrong_gdf = wrong_summary.pandas_summaries()
-    wrong_utm_gdf = util_gis.project_gdf_to_local_utm(wrong_gdf, mode=1)
+    pred_summary = type_to_summary['pred']
+    pred_sites = type_to_sites['pred']
+    pred_gdf = pred_summary.pandas_summaries()
+    pred_utm_gdf = util_gis.project_gdf_to_local_utm(pred_gdf, mode=1)
 
     SANITY_CHECKS = 0
     if SANITY_CHECKS:
@@ -1145,27 +1210,20 @@ def build_site_confusion_cases(type_to_summary, type_to_sites, coco_dset=None):
         assert not any(map(any, tid_to_dups.values()))
 
     # For each incorrect prediction check if it spatially overlaps any truth
-    idx1_to_idxs2 = util_gis.geopandas_pairwise_overlaps(wrong_utm_gdf, true_utm_gdf)
+    idx1_to_idxs2 = util_gis.geopandas_pairwise_overlaps(pred_utm_gdf, true_utm_gdf)
+    # idx2_to_idxs1 = util_gis.geopandas_pairwise_overlaps(true_utm_gdf, pred_utm_gdf)
     cases = []
     for idx1, idxs2 in idx1_to_idxs2.items():
-        pred_site = wrong_sites[idx1]
-        pred_geom = wrong_utm_gdf.iloc[idx1].geometry
+        pred_site = pred_sites[idx1]
+        pred_geom = pred_utm_gdf.iloc[idx1].geometry
 
-        # if 0:
-        #     id_to_true_site = {s.site_id: s for s in true_sites}
-        #     for tsid in pred_site.header['properties']['cache']['confusion']['true_site_ids']:
-        #         id_to_true_site[tsid]
-        #     id_to_true_site = self.id_to_true_site
-
-        assert wrong_utm_gdf.iloc[idx1]['site_id'] == pred_site.site_id
-        # assert not pred_site.header['properties']['cache']['confusion']['true_site_ids']
-        assert pred_site.header['properties']['cache']['confusion']['type'] == 'sm_completely_wrong'
-        confusion_type = pred_site.header['properties']['cache']['confusion']['type']
+        assert pred_utm_gdf.iloc[idx1]['site_id'] == pred_site.site_id
+        pred_confusion = pred_site.header['properties']['cache']['confusion']
+        confusion_type = pred_confusion['type']
 
         for idx2 in idxs2:
             true_site = true_sites[idx2]
             true_geom = true_utm_gdf.iloc[idx2].geometry
-            true_site
             case = make_pairwise_case(true_site, pred_site, true_geom,
                                       pred_geom, region_start_date,
                                       region_end_date,
@@ -1263,6 +1321,7 @@ def visualize_single_site_case(coco_dset, case, true_id_to_site, pred_id_to_site
     except KeyError:
         true_annots = []
         true_aids = []
+        true_site = None
         true_site_id = None
     else:
         all_aids.update(true_aids)
@@ -1276,21 +1335,18 @@ def visualize_single_site_case(coco_dset, case, true_id_to_site, pred_id_to_site
             assert abs(pred_start_date_coco - pred_start_date_geoj) < util_time.coerce_timedelta('1 day')
             assert abs(pred_end_date_coco - pred_end_date_geoj) < util_time.coerce_timedelta('1 day')
 
-    if 1:
-        timelines = []
-        timeline = {}
-
-        sites = [pred_site, true_site]
-
-        site = pred_site
-        timeline['site_id'] = site.site_id
-        timeline['start_date'] = site.start_date
-        timeline['end_date'] = site.end_date
-        timeline['observation_date'] = site.pandas_observations()['observation_date']
-
-        true_site.pandas_observations()['observation_date']
-        case['pred_dates']
-        case['true_dates']
+    if true_site is not None:
+        # timelines = []
+        # timeline = {}
+        # sites = [pred_site, true_site]
+        # site = pred_site
+        # timeline['site_id'] = site.site_id
+        # timeline['start_date'] = site.start_date
+        # timeline['end_date'] = site.end_date
+        # timeline['observation_date'] = site.pandas_observations()['observation_date']
+        # true_site.pandas_observations()['observation_date']
+        # case['pred_dates']
+        # case['true_dates']
         ...
 
     all_aids = sorted(all_aids)
@@ -1543,40 +1599,40 @@ def make_case_timeline(case):
     ax = fig.gca()
     ax.cla()
 
-    lineman = util_kwplot.LineManager()
+    artman = util_kwplot.ArtistManager()
 
     ylabel_map = {1: '', 2: '', 0: '', 3: ''}
 
     if 'img_dates' in case:
         img_xs = util_kwplot.fix_matplotlib_dates(case['img_dates'])
         for img_x in img_xs:
-            lineman.plot([img_x, img_x], [0, 3], color='kitware_gray')
+            artman.plot([img_x, img_x], [0, 3], color='kitware_gray')
 
     try:
         pred_xs = util_kwplot.fix_matplotlib_dates(case['pred_dates'])
-        lineman.plot(pred_xs, 1, color='kitware_blue')
+        artman.plot(pred_xs, 1, color='kitware_blue')
         ylabel_map[1] = 'pred'
     except KeyError:
         ...
 
     try:
         true_xs = util_kwplot.fix_matplotlib_dates(case['true_dates'])
-        lineman.plot(true_xs, 2, color='kitware_green')
+        artman.plot(true_xs, 2, color='kitware_green')
         ylabel_map[2] = 'true'
     except KeyError:
         ...
 
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
     ax.xaxis.set_major_locator(mdates.DayLocator(interval=720))
-    lineman.add_to_axes(ax=ax)
-    lineman.setlims(ax=ax)
+    artman.add_to_axes(ax=ax)
+    artman.setlims(ax=ax)
 
     ax.set_ylim(0, 3)
 
     fig.set_size_inches([10, 3])
     fig.subplots_adjust(left=.1, bottom=0.3, top=.7, right=0.9)
-    kwplot.plt.locator_params(axis='x', nbins=4)
-    kwplot.plt.locator_params(axis='x', nbins=4)
+    # kwplot.plt.locator_params(axis='x', nbins=4)
+    # kwplot.plt.locator_params(axis='x', nbins=4)
     # true_annots.images.coco_images
     # pred_annots.images.coco_images
 
@@ -1611,7 +1667,7 @@ def visualize_all_timelines(cases, coco_dset, type_to_sites, type_to_summary):
     fig.clf()
 
     from watch.utils import util_kwplot
-    lineman = util_kwplot.LineManager()
+    artman = util_kwplot.ArtistManager()
     yloc = 1
 
     # min_date = min([min(case['pred_dates'] + case['true_dates']) for case in cases])
@@ -1621,9 +1677,9 @@ def visualize_all_timelines(cases, coco_dset, type_to_sites, type_to_summary):
     for case in cases[:]:
         pred_xs = util_kwplot.fix_matplotlib_dates(case['pred_dates'])
         true_xs = util_kwplot.fix_matplotlib_dates(case['true_dates'])
-        lineman.plot(pred_xs, yloc, color='kitware_blue')
+        artman.plot(pred_xs, yloc, color='kitware_blue')
         yloc += 1
-        lineman.plot(true_xs, yloc, color='kitware_green')
+        artman.plot(true_xs, yloc, color='kitware_green')
         yloc += 1
 
         true_site = true_id_to_site[case['true_site_id']]  # NOQA
@@ -1641,13 +1697,13 @@ def visualize_all_timelines(cases, coco_dset, type_to_sites, type_to_summary):
 
         yloc += 20
 
-    lineman.add_to_axes()
+    artman.add_to_axes()
     ax = fig.gca()
     # TODO: make this formatter fixup work better.
     import matplotlib.dates as mdates
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y\n%m-%d'))
     ax.xaxis.set_major_locator(mdates.DayLocator(interval=720))
-    lineman.setlims()
+    artman.setlims()
 
 
 def differentiate_site_id(site_id, tag):

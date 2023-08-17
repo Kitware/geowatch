@@ -510,10 +510,15 @@ def extract_legend(ax):
     return new_ax
 
 
-class LineManager:
+class ArtistManager:
     """
-    Accumulates lines the user is interested in drawing so we can draw them
-    efficiently.
+    Accumulates artist collections (e.g. lines, patches, ellipses) the user is
+    interested in drawing so we can draw them efficiently.
+
+    References:
+        https://matplotlib.org/stable/api/collections_api.html
+        https://matplotlib.org/stable/gallery/shapes_and_collections/ellipse_collection.html
+        https://stackoverflow.com/questions/32444037/how-can-i-plot-many-thousands-of-circles-quickly
 
     Example:
         >>> # xdoctest: +SKIP
@@ -522,7 +527,7 @@ class LineManager:
         >>> import kwplot
         >>> sns = kwplot.autosns()
         >>> fig = kwplot.figure(fnum=1)
-        >>> self = LineManager()
+        >>> self = ArtistManager()
         >>> import kwimage
         >>> points = kwimage.Polygon.star().data['exterior'].data
         >>> self.add_linestring(points)
@@ -539,7 +544,7 @@ class LineManager:
         >>> import kwplot
         >>> sns = kwplot.autosns()
         >>> fig = kwplot.figure(fnum=1)
-        >>> self = LineManager()
+        >>> self = ArtistManager()
         >>> import kwimage
         >>> points = kwimage.Polygon.star().data['exterior'].data
         >>> y = 1
@@ -547,9 +552,19 @@ class LineManager:
         >>> y = 2
         >>> self.add_linestring([(0, y), (1, y)], color='kitware_green')
         >>> y = 3
+        >>> self.add_circle((0, y), r=.1, color='kitware_darkgreen')
+        >>> self.add_circle((0.5, y), r=.1, color='kitware_darkblue')
+        >>> self.add_circle((0.2, y), r=.1, color='kitware_darkblue')
+        >>> self.add_circle((1.0, y), r=.1, color='kitware_darkblue')
+        >>> self.add_ellipse((0.2, 1), .1, .2, angle=10, color='kitware_gray')
         >>> self.add_linestring([(0, y), (1, y)], color='kitware_blue')
         >>> y = 4
         >>> self.add_linestring([(0, y), (1, y)], color='kitware_blue')
+        >>> self.add_circle_marker((0, y), r=10, color='kitware_darkgreen')
+        >>> self.add_circle_marker((0.5, y), r=10, color='kitware_darkblue')
+        >>> self.add_circle_marker((0.2, y), r=10, color='kitware_darkblue')
+        >>> self.add_circle_marker((1.0, y), r=10, color='kitware_darkblue')
+        >>> self.add_ellipse_marker((0.2, 2), 10, 20, angle=10, color='kitware_gray')
         >>> self.add_linestring(np.array([
         ...     (0.2, 0.5),
         ...     (0.45, 1.6),
@@ -560,10 +575,17 @@ class LineManager:
         >>> ax = fig.gca()
         >>> ax.set_xlim(0, 1)
         >>> ax.set_ylim(0, 5)
-        >>> assert len(self.group_to_segments) == 3
+        >>> ax.autoscale_view()
     """
     def __init__(self):
-        self.group_to_segments = ub.ddict(list)
+        self.group_to_line_segments = ub.ddict(list)
+        self.group_to_patches = ub.ddict(lambda : ub.ddict(list))
+        self.group_to_ellipse_markers = ub.ddict(lambda: {
+            'xy': [],
+            'rx': [],
+            'ry': [],
+            'angle': [],
+        })
         self.group_to_attrs = {}
 
     def _normalize_attrs(self, attrs):
@@ -583,7 +605,7 @@ class LineManager:
         """
         import numpy as np
         ys = [ys] if not ub.iterable(ys) else ys
-        xs = [xs] if not ub.iterable(ys) else xs
+        xs = [xs] if not ub.iterable(xs) else xs
         if len(ys) == 1 and len(xs) > 1:
             ys = ys * len(xs)
         if len(xs) == 1 and len(ys) > 1:
@@ -591,23 +613,135 @@ class LineManager:
         points = np.array(list(zip(xs, ys)))
         self.add_linestring(points, **attrs)
 
+    def add_circle_marker(self, xy, r, **attrs):
+        """
+        Args:
+            xy (List[Tuple[float, float]] | ndarray):
+                an Nx2 set of circle centers
+            r (List[float] | ndarray):
+                an Nx1 set of circle radii
+        """
+        self.add_ellipse_marker(xy, rx=r, ry=r, angle=0, **attrs)
+
     def add_linestring(self, points, **attrs):
         """
         Args:
             points (List[Tuple[float, float]] | ndarray):
                 an Nx2 set of ordered points
+
+        NOTE:
+            perhaps allow adding markers based on ax.scatter?
         """
         attrs = self._normalize_attrs(attrs)
         hashid = attrs['hashid']
-        self.group_to_segments[hashid].append(points)
+        self.group_to_line_segments[hashid].append(points)
         self.group_to_attrs[hashid] = attrs
 
-    def build_collections(self):
+    def add_ellipse(self, xy, rx, ry, angle=0, **attrs):
+        """
+        Real ellipses in dataspace
+        """
+        attrs = self._normalize_attrs(attrs)
+        hashid = attrs['hashid']
+        ell = mpl.patches.Ellipse(xy, rx, ry, angle=angle)
+        self.group_to_patches[hashid]['ellipse'].append(ell)
+        self.group_to_attrs[hashid] = attrs
+
+    def add_circle(self, xy, r, **attrs):
+        """
+        Real ellipses in dataspace
+        """
+        attrs = self._normalize_attrs(attrs)
+        hashid = attrs['hashid']
+        ell = mpl.patches.Circle(xy, r)
+        self.group_to_patches[hashid]['circle'].append(ell)
+        self.group_to_attrs[hashid] = attrs
+
+    def add_ellipse_marker(self, xy, rx, ry, angle=0, color=None, **attrs):
+        """
+        Args:
+            xy : center
+            rx : radius in the first axis (size is in points, i.e. same way plot markers are sized)
+            ry : radius in the second axis
+            angle (float): The angles of the first axes, degrees CCW from the x-axis.
+
+        """
+        import numpy as np
+        import kwimage
+        if color is not None:
+            if 'edgecolors' not in attrs:
+                attrs['edgecolors'] = kwimage.Color.coerce(color).as01()
+            if 'facecolors' not in attrs:
+                attrs['facecolors'] = kwimage.Color.coerce(color).as01()
+
+        attrs = self._normalize_attrs(attrs)
+        hashid = attrs['hashid']
+        cols = self.group_to_ellipse_markers[hashid]
+
+        xy = np.array(xy)
+        if len(xy.shape) == 1:
+            assert xy.shape[0] == 2
+            xy = xy[None, :]
+        elif len(xy.shape) == 2:
+            assert xy.shape[1] == 2
+        else:
+            raise ValueError
+
+        # Broadcast shapes
+        rx = [rx] if not ub.iterable(rx) else rx
+        ry = [ry] if not ub.iterable(ry) else ry
+        angle = [angle] if not ub.iterable(angle) else angle
+        nums = list(map(len, (xy, rx, ry, angle)))
+        if not ub.allsame(nums):
+            new_n = max(nums)
+            for n in nums:
+                assert n == 1 or n == new_n
+            if len(xy) == 1:
+                xy = np.repeat(xy, new_n, axis=0)
+            if len(rx) == 1:
+                rx = np.repeat(rx, new_n, axis=0)
+            if len(ry) == 1:
+                ry = np.repeat(ry, new_n, axis=0)
+            if len(angle) == 1:
+                ry = np.repeat(ry, new_n, axis=0)
+
+        cols['xy'].append(xy)
+        cols['rx'].append(rx)
+        cols['ry'].append(ry)
+        cols['angle'].append(angle)
+        self.group_to_attrs[hashid] = attrs
+
+    def build_collections(self, ax=None):
+        import numpy as np
         collections = []
-        for hashid, segments in self.group_to_segments.items():
+        for hashid, segments in self.group_to_line_segments.items():
             attrs = self.group_to_attrs[hashid] - {'hashid'}
             collection = mpl.collections.LineCollection(segments, **attrs)
             collections.append(collection)
+
+        for hashid, type_to_patches in self.group_to_patches.items():
+            for ptype, patches in type_to_patches.items():
+                collection = mpl.collections.PatchCollection(patches, **attrs)
+                collections.append(collection)
+
+        for hashid, cols in self.group_to_ellipse_markers.items():
+            attrs = self.group_to_attrs[hashid] - {'hashid'}
+            xy = np.concatenate(cols['xy'], axis=0)
+            rx = np.concatenate(cols['rx'], axis=0)
+            ry = np.concatenate(cols['ry'], axis=0)
+            angles = np.concatenate(cols['angle'], axis=0)
+            print(f'ry={ry}')
+            collection = mpl.collections.EllipseCollection(
+                widths=rx, heights=ry, offsets=xy, angles=angles,
+                units='points',
+                # units='x',
+                # units='xy',
+                transOffset=ax.transData,
+                **attrs
+            )
+            # collection.set_transOffset(ax.transData)
+            collections.append(collection)
+
         return collections
 
     def add_to_axes(self, ax=None):
@@ -616,14 +750,14 @@ class LineManager:
             plt = kwplot.autoplt()
             ax = plt.gca()
 
-        collections = self.build_collections()
+        collections = self.build_collections(ax=ax)
         for collection in collections:
             ax.add_collection(collection)
 
     def bounds(self):
         import numpy as np
         all_lines = []
-        for segments in self.group_to_segments.values():
+        for segments in self.group_to_line_segments.values():
             for lines in segments:
                 lines = np.array(lines)
                 all_lines.append(lines)
