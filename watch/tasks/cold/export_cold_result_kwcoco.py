@@ -71,7 +71,7 @@ class ExportColdKwcocoConfig(scfg.DataConfig):
     timestamp = scfg.Value(
         False,
         help='True: exporting cold result by timestamp, False: exporting cold result by year, Default is False')
-    combine = scfg.Value(True, help='for temporal combined mode, Default is True')
+    combine = scfg.Value(False, help='for temporal combined mode, Default is True')
     sensors = scfg.Value('L8', type=str, help='sensor type, default is "L8"')
 
 
@@ -210,7 +210,11 @@ def export_cold_main(cmdline=1, **kwargs):
     # sort image files by ordinal dates
     img_dates = []
     img_names = []
-
+    img_dates_L8 = []
+    img_names_L8 = []
+    img_dates_S2 = []
+    img_names_S2 = []
+    
     # read metadata and
     for meta in meta_files:
         meta_config = json.loads((block_folder / meta).read_text())
@@ -218,6 +222,18 @@ def export_cold_main(cmdline=1, **kwargs):
         img_name = meta_config['image_name'] + '.npy'
         img_dates.append(ordinal_date)
         img_names.append(img_name)
+    for meta in meta_files:
+        meta_config = json.loads((block_folder / meta).read_text())        
+        if '_L8_' in meta_config['image_name']:
+            ordinal_date_L8 = meta_config['ordinal_date']
+            img_name_L8 = meta_config['image_name'] + '.npy'
+            img_dates_L8.append(ordinal_date_L8)
+            img_names_L8.append(img_name_L8)        
+        elif '_S2_' in meta_config['image_name']:
+            ordinal_date_S2 = meta_config['ordinal_date']
+            img_name_S2 = meta_config['image_name'] + '.npy'
+            img_dates_S2.append(ordinal_date_S2)
+            img_names_S2.append(img_name_S2)
 
     if year_lowbound is None:
         year_low_ordinal = min(img_dates)
@@ -237,22 +253,49 @@ def export_cold_main(cmdline=1, **kwargs):
                                        zip(img_dates, img_names)))
     img_dates, img_names = zip(*filter(lambda x: x[0] < year_high_ordinal,
                                        zip(img_dates, img_names)))
+    img_dates_L8, img_names_L8 = zip(*filter(lambda x: x[0] >= year_low_ordinal,
+                                       zip(img_dates_L8, img_names_L8)))
+    img_dates_L8, img_names_L8 = zip(*filter(lambda x: x[0] < year_high_ordinal,
+                                       zip(img_dates_L8, img_names_L8)))
+    img_dates_S2, img_names_S2 = zip(*filter(lambda x: x[0] >= year_low_ordinal,
+                                       zip(img_dates_S2, img_names_S2)))
+    img_dates_S2, img_names_S2 = zip(*filter(lambda x: x[0] < year_high_ordinal,
+                                       zip(img_dates_S2, img_names_S2)))
 
     img_dates = sorted(img_dates)
     img_names = sorted(img_names)
+    img_dates_L8 = sorted(img_dates_L8)
+    img_names_L8 = sorted(img_names_L8)
+    img_dates_S2 = sorted(img_dates_S2)
+    img_names_S2 = sorted(img_names_S2)
+    
     if timestamp:
         ordinal_day_list = img_dates
     if not timestamp:
-        first_ordinal_dates = []
-        first_img_names = []
-        last_year = None
-        for ordinal_day, img_name in zip(img_dates, img_names):
-            year = pd.Timestamp.fromordinal(ordinal_day).year
-            if year != last_year:
-                first_ordinal_dates.append(ordinal_day)
-                first_img_names.append(img_name)
-                last_year = year
-        ordinal_day_list = first_ordinal_dates
+        first_ordinal_dates_L8 = []
+        first_img_names_L8 = []
+        first_ordinal_dates_S2 = []
+        first_img_names_S2 = []
+        last_year_L8 = None
+        last_year_S2 = None
+        for ordinal_day_L8, img_name_L8 in zip(img_dates_L8, img_names_L8):
+            year_L8 = pd.Timestamp.fromordinal(ordinal_day_L8).year
+            if year_L8 != last_year_L8:
+                # print("L8", img_name_L8)
+                first_ordinal_dates_L8.append(ordinal_day_L8)
+                first_img_names_L8.append(img_name_L8)
+                last_year_L8 = year_L8
+        for ordinal_day_S2, img_name_S2 in zip(img_dates_S2, img_names_S2):
+            year_S2 = pd.Timestamp.fromordinal(ordinal_day_S2).year
+            if year_S2 != last_year_S2:
+                # print("S2", img_name_S2)
+                first_ordinal_dates_S2.append(ordinal_day_S2)
+                first_img_names_S2.append(img_name_S2)
+                last_year_S2 = year_S2
+
+        ordinal_day_list = first_ordinal_dates_L8 + first_ordinal_dates_S2
+        ordinal_day_list.sort()
+        
     if combine:
         combined_coco_dset = kwcoco.CocoDataset(combined_coco_fpath)
 

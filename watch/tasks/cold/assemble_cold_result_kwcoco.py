@@ -50,7 +50,7 @@ class AssembleColdKwcocoConfig(scfg.DataConfig):
         a path to a file to combined kwcoco file
         '''))
     mod_coco_fpath = scfg.Value(None, help='file path for modified coco json')
-    write_kwcoco = scfg.Value(False, help='writing kwcoco file based on COLD feature, Default is False')
+    write_kwcoco = scfg.Value(True, help='writing kwcoco file based on COLD feature, Default is False')
     year_lowbound = scfg.Value(None, help='min year for saving geotiff, e.g., 2017')
     year_highbound = scfg.Value(None, help='max year for saving geotiff, e.g., 2022')
     coefs = scfg.Value(None, type=str, help="list of COLD coefficients for saving geotiff, e.g., a0,c1,a1,b1,a2,b2,a3,b3,cv,rmse")
@@ -183,7 +183,11 @@ def assemble_main(cmdline=1, **kwargs):
     # sort image files by ordinal dates
     img_dates = []
     img_names = []
-
+    img_dates_L8 = []
+    img_names_L8 = []
+    img_dates_S2 = []
+    img_names_S2 = []
+    
     # read metadata and
     for meta in meta_files:
         meta_config = json.loads((block_folder / meta).read_text())
@@ -191,6 +195,18 @@ def assemble_main(cmdline=1, **kwargs):
         img_name = meta_config['image_name']
         img_dates.append(ordinal_date)
         img_names.append(img_name)
+        
+    for meta in meta_files:
+        meta_config = json.loads((block_folder / meta).read_text())
+        ordinal_date = meta_config['ordinal_date']
+        if 'L8' in meta_config['image_name']:
+            img_name_L8 = meta_config['image_name'] + '.npy'
+            img_dates_L8.append(ordinal_date)
+            img_names_L8.append(img_name_L8)
+        elif 'S2' in meta_config['image_name']:
+            img_name_S2 = meta_config['image_name'] + '.npy'
+            img_dates_S2.append(ordinal_date)
+            img_names_S2.append(img_name_S2)
 
     if year_lowbound is None:
         year_low_ordinal = min(img_dates)
@@ -200,6 +216,10 @@ def assemble_main(cmdline=1, **kwargs):
 
     img_dates, img_names = zip(*filter(lambda x: x[0] >= year_low_ordinal,
                                         zip(img_dates, img_names)))
+    img_dates_L8, img_names_L8 = zip(*filter(lambda x: x[0] >= year_low_ordinal,
+                                        zip(img_dates_L8, img_names_L8)))
+    img_dates_S2, img_names_S2 = zip(*filter(lambda x: x[0] >= year_low_ordinal,
+                                        zip(img_dates_S2, img_names_S2)))
     if year_highbound is None:
         year_high_ordinal = max(img_dates)
         year_highbound = pd.Timestamp.fromordinal(year_high_ordinal).year
@@ -208,8 +228,16 @@ def assemble_main(cmdline=1, **kwargs):
 
     img_dates, img_names = zip(*filter(lambda x: x[0] < year_high_ordinal,
                                             zip(img_dates, img_names)))
+    img_dates_L8, img_names_L8 = zip(*filter(lambda x: x[0] < year_high_ordinal,
+                                            zip(img_dates_L8, img_names_L8)))
+    img_dates_S2, img_names_S2 = zip(*filter(lambda x: x[0] < year_high_ordinal,
+                                            zip(img_dates_S2, img_names_S2)))
     img_dates = sorted(img_dates)
     img_names = sorted(img_names)
+    img_dates_L8 = sorted(img_dates_L8)
+    img_names_L8 = sorted(img_names_L8)
+    img_dates_S2 = sorted(img_dates_S2)
+    img_names_S2 = sorted(img_names_S2)
     if timestamp:
         ordinal_day_list = img_dates
     if combine:
@@ -237,18 +265,25 @@ def assemble_main(cmdline=1, **kwargs):
         ordinal_day_list = ordinal_dates
     else:
         # Get only the first ordinal date of each year
-        first_ordinal_dates = []
-        first_img_names = []
+        first_ordinal_dates_L8 = []
+        first_img_names_L8 = []
+        first_ordinal_dates_S2 = []
+        first_img_names_S2 = []
         last_year = None
-        for ordinal_day, img_name in zip(img_dates, img_names):
+        for ordinal_day, img_name in zip(img_dates_L8, img_names_L8):
             year = pd.Timestamp.fromordinal(ordinal_day).year
             if year != last_year:
-                first_ordinal_dates.append(ordinal_day)
-                first_img_names.append(img_name)
+                first_ordinal_dates_L8.append(ordinal_day)
+                first_img_names_L8.append(img_name[:-4])
                 last_year = year
-
-        ordinal_day_list = first_ordinal_dates
-        img_names = first_img_names
+        for ordinal_day, img_name in zip(img_dates_S2, img_names_S2):
+            year = pd.Timestamp.fromordinal(ordinal_day).year
+            if year != last_year:
+                first_ordinal_dates_S2.append(ordinal_day)
+                first_img_names_S2.append(img_name[:-4])
+                last_year = year
+        ordinal_day_list = first_ordinal_dates_L8 + first_ordinal_dates_S2
+        img_names = first_img_names_L8 + first_img_names_S2
 
     # assemble
     logger.info('Generating COLD output geotiff')
@@ -299,7 +334,7 @@ def assemble_main(cmdline=1, **kwargs):
                 # sorting, or nest files to keep folder sizes small
 
     # Remove tmp files
-    shutil.rmtree(tmp_path)
+    # shutil.rmtree(tmp_path)
 
     # logger.info('Starting adding new asset to kwcoco json')
     if write_kwcoco:
