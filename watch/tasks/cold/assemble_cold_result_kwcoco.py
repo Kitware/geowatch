@@ -334,7 +334,7 @@ def assemble_main(cmdline=1, **kwargs):
                 # sorting, or nest files to keep folder sizes small
 
     # Remove tmp files
-    # shutil.rmtree(tmp_path)
+    shutil.rmtree(tmp_path)
 
     # logger.info('Starting adding new asset to kwcoco json')
     if write_kwcoco:
