@@ -1104,6 +1104,8 @@ python ~/code/watch/watch/cli/queue_cli/prepare_time_combined_dataset.py \
     --run=1
 
 
+########## COMBINED NO MASK
+
 # ~/code/watch/dev/poc/prepare_time_combined_dataset.py
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
 python ~/code/watch/watch/cli/queue_cli/prepare_time_combined_dataset.py \

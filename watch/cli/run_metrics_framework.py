@@ -81,12 +81,6 @@ class MetricsConfig(scfg.DataConfig):
                       help=ub.paragraph('''
         Short name for the algorithm used to generate the model
         '''))
-    use_cache = scfg.Value(False,
-                           isflag=1,
-                           help=ub.paragraph('''
-        IARPA metrics code currently contains a cache bug, do not
-        enable the cache until this is fixed.
-        '''))
 
     enable_sc_viz = scfg.Value(False,
                                isflag=1,
@@ -103,6 +97,8 @@ class MetricsConfig(scfg.DataConfig):
         Innvocate running IARPA T&E metrics in parallel. Note:
         Only works with IARPA T&E metrics version 1.0.0 or greater.
         '''))
+
+    performer = scfg.Value('kit', help='the performer id')
 
 
 def ensure_thumbnails(image_root, region_id, sites):
@@ -379,11 +375,6 @@ def main(cmdline=True, **kwargs):
         site_dpath = (tmp_dpath / 'site' / region_id).ensuredir()
         image_dpath = (tmp_dpath / 'image').ensuredir()
 
-        if args.use_cache:
-            cache_dpath = (tmp_dpath / 'cache' / region_id).ensuredir()
-        else:
-            cache_dpath = 'None'
-
         out_dir = (main_out_dir / region_id).ensuredir()
         out_dirs.append(out_dir)
 
@@ -428,37 +419,22 @@ def main(cmdline=True, **kwargs):
             '--output_dir',
             os.fspath(out_dir),
             ## Restrict to make this faster
-            # '--tau', '0.2',
-            # '--rho', '0.5',
+            '--tau', '0.2',
+            '--rho', '0.5',
             '--activity', 'overall',
             # '--loglevel', 'error',
+            f'--performer={config.performer}',
+            '--eval_num=0',
+            '--eval_run_num=0',
+            # '--no-db',
+            '--sequestered_id', '',
+            # 'seq',  # default None broken on autogen branch
         ]
-
-        print(f'IARPA_METRICS_VERSION={IARPA_METRICS_VERSION}')
-        if IARPA_METRICS_VERSION >= version.Version('1.0.0'):
-            run_eval_command += [
-                '--performer=kit',  # parameterize
-                '--eval_num=0',
-                '--eval_run_num=0',
-                # '--no-db',
-                '--sequestered_id', '',
-                # 'seq',  # default None broken on autogen branch
-            ]
-            # Add parallel flag if requested
-            if args.parallel:
-                run_eval_command += ['--parallel']
-            else:
-                run_eval_command += ['--serial']
+        # Add parallel flag if requested
+        if args.parallel:
+            run_eval_command += ['--parallel']
         else:
-            run_eval_command += [
-                '--cache_dir',
-                os.fspath(cache_dpath),
-                '--name',
-                name,
-                '--serial',
-                # '--no-db',
-                # '--sequestered_id', 'seq',  # default None broken on autogen branch
-            ]
+            run_eval_command += ['--serial']
 
         run_eval_command += viz_flags
         # run metrics framework

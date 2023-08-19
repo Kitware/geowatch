@@ -32,7 +32,7 @@ Ignore:
 
     python -m watch.mlops.confusor_analysis \
         --metrics_node_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_drop7_nowinter_baseline_joint_bas_sc/eval/flat/bas_poly_eval/bas_poly_eval_id_ec937017/ \
-        --reload --viz_site_case --embed=0
+        --reload --viz_sites --embed=0
 
 
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
@@ -40,14 +40,14 @@ Ignore:
         --metrics_node_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_test/_imeritbas/eval/flat/bas_poly_eval/bas_poly_eval_id_fd88699a/ \
         --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop7/region_models \
         --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop7/site_models \
-        --viz_site_case=True
+        --viz_sites=True
 
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
     python -m watch.mlops.confusor_analysis \
         --metrics_node_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_test/_imeritbas/eval/flat/bas_poly_eval/bas_poly_eval_id_fd88699a/ \
         --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop7/region_models \
         --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop7/site_models \
-        --viz_site_case=True \
+        --viz_sites=True \
         --reload=True
 
 
@@ -60,7 +60,7 @@ python -m watch.mlops.confusor_analysis \
     --out_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_drop7_nowinter_baseline_joint_bas_sc/eval/flat/bas_poly_eval/bas_poly_eval_id_ec937017/lores-confusion \
     --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop7/region_models \
     --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop7/site_models \
-    --viz_site_case=True --reload=0
+    --viz_sites=True --reload=0
 
 
 DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
@@ -82,7 +82,7 @@ python -m watch.mlops.confusor_analysis \
     --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop7/region_models \
     --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop7/site_models \
     --src_kwcoco=$DVC_DATA_DPATH/Aligned-Drop7/KR_R002/imgonly-KR_R002.kwcoco.zip \
-    --viz_site_case=True --reload=0
+    --viz_sites=True --reload=0
 
 
 # ON CH_R001
@@ -95,6 +95,31 @@ python -m watch.mlops.confusor_analysis \
     --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop7/site_models \
     --src_kwcoco=$DVC_DATA_DPATH/Aligned-Drop7/CH_R001/imgonly-CH_R001.kwcoco.zip \
     --region_id=CH_R001 --viz-site-case --reload=1
+
+
+#### TEST WITH AC KWCOCO
+
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
+python -m watch.mlops.confusor_analysis \
+    --metrics_node_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_demo_ac_eval/eval/flat/sc_poly_eval/sc_poly_eval_id_f689ba48 \
+    --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop7/region_models \
+    --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop7/site_models \
+    --viz_sites=True --reload=1
+
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
+python -m watch.mlops.confusor_analysis \
+    --metrics_node_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_demo_ac_eval/eval/flat/sc_poly_eval/sc_poly_eval_id_95fe6915/ \
+    --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop7/region_models \
+    --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop7/site_models \
+    --viz_sites=True --reload=auto
+
+DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
+python -m watch.mlops.confusor_analysis \
+    --metrics_node_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_demo_ac_eval/eval/flat/sc_poly_eval/sc_poly_eval_id_8e23f913/ \
+    --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop7/region_models \
+    --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop7/site_models \
+    --viz_sites=True --reload=auto
+
 
 
 """
@@ -134,7 +159,8 @@ class ConfusorAnalysisConfig(scfg.DataConfig):
     src_kwcoco = scfg.Value(None, help='the input kwcoco file to project onto')
     dst_kwcoco = scfg.Value(None, help='the reprojected output kwcoco file to write')
 
-    bas_kwcoco = None
+    bas_kwcoco = scfg.Value(None, help='path to kwcoco files containing bas heatmap predictions')
+    ac_kwcoco = scfg.Value(None, help='path to kwcoco files containing AC heatmap predictions')
 
     bas_metric_dpath = scfg.Value(None, help='A path to bas metrics if det/prop paths are not specified')
 
@@ -146,7 +172,7 @@ class ConfusorAnalysisConfig(scfg.DataConfig):
 
     performer_id = scfg.Value('kit', help='the performer id')
 
-    viz_site_case = scfg.Value(False, isflag=True, help='if True writes case visualizations')
+    viz_sites = scfg.Value(False, isflag=True, help='if True writes case visualizations')
     viz_summary = scfg.Value(False, isflag=True, help='too slow')
 
     out_dpath = scfg.Value(None, help='where to write results')
@@ -293,7 +319,7 @@ def main(cmdline=1, **kwargs):
             self.dump_hardneg_kwcoco()
         rich.print(f'Dumped Confusion Analysis: [link={self.out_dpath}]{self.out_dpath}[/link]')
 
-    if config.viz_site_case:
+    if config.viz_sites:
         self.dump_site_case_viz()
     if config.viz_summary:
         self.dump_summary_viz()
@@ -394,10 +420,14 @@ class ConfusionAnalysis:
         # for site in true_sites:
         #     if site.start_date is None and site.end_date is None:
         #         raise AssertionError
-
         orig_regions = list(RegionModel.coerce_multiple(rm_files))
         if len(orig_regions) != 1:
-            raise AssertionError(f'Got {orig_regions=}')
+            raise AssertionError(ub.paragraph(
+                f'''
+                Unable to load groundtruth region files. Got {orig_regions=}.
+                Set the value of ``true_region_dpath`` correctly. The current
+                value is {config.true_region_dpath}
+                '''))
 
         # Ensure all site data has misc-info
         # Ensure all data cast to site models
@@ -970,13 +1000,21 @@ class ConfusionAnalysis:
         type_to_summary = self.type_to_summary
         type_to_sites = self.type_to_sites
         coco_dset = self.cfsn_coco
-        cases = build_site_confusion_cases(type_to_summary, type_to_sites, coco_dset)
+        cases = build_site_confusion_cases(type_to_summary, type_to_sites,
+                                           self.config.performer_id, coco_dset)
         viz_dpath = self.out_dpath / 'site_viz'
 
         print(f'Found {len(cases)} cases')
 
+        if 1:
+            import pandas as pd
+            case_df = pd.DataFrame(cases)
+            print(case_df[['te_association_status', 'te_associated', 'te_color_code', 'type']].value_counts())
+
         true_id_to_site = {s.site_id: s for s in type_to_sites['true']}
         pred_id_to_site = {s.site_id: s for s in type_to_sites['pred']}
+
+        rich.print(f'Dumping Casess to: [link={viz_dpath}]{viz_dpath}[/link]')
 
         errors = []
         from kwutil import util_progress
@@ -1009,11 +1047,12 @@ class ConfusionAnalysis:
             print('errors = {}'.format(ub.urepr(errors, nl=1)))
             rich.print(f'[red]There were {len(errors)} errors in viz')
 
-        rich.print(f'Viz Dpath: [link={viz_dpath}]{viz_dpath}[/link]')
+        rich.print(f'Dumped Casess to: [link={viz_dpath}]{viz_dpath}[/link]')
 
 
 def make_pairwise_case(true_site, pred_site, true_geom, pred_geom,
-                       region_start_date, region_end_date, type_):
+                       region_start_date, region_end_date, performer_id,
+                       type_):
     import pandas as pd
     from kwutil import util_time
     true_obs = true_site.pandas_observations()
@@ -1055,15 +1094,21 @@ def make_pairwise_case(true_site, pred_site, true_geom, pred_geom,
     isect_duration = max((isect_end - isect_start), util_time.coerce_timedelta(0))
     union_duration = max((union_end - union_start), util_time.coerce_timedelta(0))
 
-    time_iou = isect_duration / union_duration
-    time_iot = isect_duration / true_duration
-    time_iop = isect_duration / pred_duration
+    def safediv(a, b):
+        try:
+            return a / b
+        except ZeroDivisionError:
+            return 0.0
+
+    time_iou = safediv(isect_duration, union_duration)
+    time_iot = safediv(isect_duration, true_duration)
+    time_iop = safediv(isect_duration, pred_duration)
 
     true_duration = true_dates[-1] - true_dates[0]
     pred_duration = pred_dates[-1] - pred_dates[0]
 
     true_coco_site_id = differentiate_site_id(true_site.site_id, 'te')
-    pred_coco_site_id = differentiate_site_id(pred_site.site_id, 'kit')
+    pred_coco_site_id = differentiate_site_id(pred_site.site_id, performer_id)
 
     true_confusion = ub.udict(true_site.header['properties']['cache']['confusion'])
     pred_confusion = ub.udict(pred_site.header['properties']['cache']['confusion'])
@@ -1136,7 +1181,8 @@ def make_single_case(site, geom, type_):
     return case
 
 
-def build_site_confusion_cases(type_to_summary, type_to_sites, coco_dset=None):
+def build_site_confusion_cases(type_to_summary, type_to_sites, performer_id,
+                               coco_dset=None):
     """
     Build a set of cases that inspect the predictions of a single site.
 
@@ -1224,10 +1270,16 @@ def build_site_confusion_cases(type_to_summary, type_to_sites, coco_dset=None):
         for idx2 in idxs2:
             true_site = true_sites[idx2]
             true_geom = true_utm_gdf.iloc[idx2].geometry
-            case = make_pairwise_case(true_site, pred_site, true_geom,
-                                      pred_geom, region_start_date,
-                                      region_end_date,
-                                      confusion_type + '_some_space_overlap_' + true_site.status)
+            case = make_pairwise_case(
+                true_site,
+                pred_site,
+                true_geom,
+                pred_geom,
+                region_start_date,
+                region_end_date,
+                performer_id,
+                confusion_type + '_some_space_overlap_' + true_site.status,
+            )
             cases.append(case)
 
         if len(idxs2) == 0:
@@ -1241,7 +1293,7 @@ def build_site_confusion_cases(type_to_summary, type_to_sites, coco_dset=None):
     # seen_pred_ids = {case['pred_site_id'] for case in cases if 'pred_site_id' in case}
     # seen_true_ids = {case['true_site_id'] for case in cases if 'true_site_id' in case}
 
-    for true_site in type_to_sites['gt_false_neg']:
+    for true_site in type_to_sites.get('gt_false_neg', []):
         confusion_type = true_site.header['properties']['cache']['confusion']['type']
         true_geom = true_site.geometry
         case = make_single_case(true_site, true_geom, confusion_type)
@@ -1277,6 +1329,8 @@ def visualize_single_site_case(coco_dset, case, true_id_to_site, pred_id_to_site
     all_aids = set()
 
     main_trackids = []
+    main_pred_aids = set()
+    main_true_aids = set()
 
     try:
         pred_site = pred_id_to_site[case['pred_site_id']]
@@ -1299,6 +1353,7 @@ def visualize_single_site_case(coco_dset, case, true_id_to_site, pred_id_to_site
             all_aids.update(pred_aids)
             pred_tid = pred_annots[0:1].lookup('track_id')[0]
             main_trackids.append(pred_tid)
+            main_pred_aids.update(pred_aids)
 
     try:
         true_site_id = case['true_coco_site_id']
@@ -1324,6 +1379,7 @@ def visualize_single_site_case(coco_dset, case, true_id_to_site, pred_id_to_site
         true_site = None
         true_site_id = None
     else:
+        main_true_aids.update(true_aids)
         all_aids.update(true_aids)
 
     if __debug__ and 0:
@@ -1476,7 +1532,23 @@ def visualize_single_site_case(coco_dset, case, true_id_to_site, pred_id_to_site
 
     vidspace_poly = kwimage.MultiPolygon.from_shapely(vidspace_hull)
     scale_factor = 3.0
-    vidspace_bound = vidspace_poly.box().scale(scale_factor, about='centroid').quantize()
+    vidspace_box = vidspace_poly.box()
+
+    BE_A_SQUARE = 0
+    if BE_A_SQUARE:
+        target_sidelen = (np.sqrt(vidspace_box.area) * scale_factor)
+        # target_area = target_sidelen ** 2
+        min_dim, max_dim = sorted([vidspace_box.width, vidspace_box.height])
+        sf1 = target_sidelen / max_dim
+        sf2 = target_sidelen / min_dim
+        if vidspace_box.width > vidspace_box.height:
+            sf1, sf2 = sf2, sf1
+        ar_scale_factor = (sf1, sf2)
+        scaled_box = vidspace_box.scale(ar_scale_factor, about='centroid')
+    else:
+        scaled_box = vidspace_box.scale(scale_factor, about='centroid')
+
+    vidspace_bound = scaled_box.quantize()
 
     cells = []
     for coco_img in ub.ProgIter(all_images.coco_images, desc='building case', enabled=False):
@@ -1490,31 +1562,75 @@ def visualize_single_site_case(coco_dset, case, true_id_to_site, pred_id_to_site
 
         channels = find_visual_channels(coco_img, tci_channel_priority)
 
-        tci_delayed = coco_img.imdelay(channels=channels, resolution=resolution)
+        tci_delayed = coco_img.imdelay(channels=channels, resolution=resolution, nodata_method='float')
         tci_imcrop = tci_delayed.crop(vidspace_bound.to_slice(), wrap=False, clip=False)
 
-        heatmap_delayed = coco_img.imdelay(channels='salient', resolution=resolution)
-        heatmap_imcrop = heatmap_delayed.crop(vidspace_bound.to_slice(), wrap=False, clip=False)
+        import kwcoco
+        BAS_CHANNELS = kwcoco.FusedChannelSpec.coerce('salient')
+        AC_CHANNELS = kwcoco.FusedChannelSpec.coerce('Site Preparation|Active Construction|Post Construction|No Activity')
 
-        heatmap = heatmap_imcrop.finalize().squeeze()
-        heatmap_canvas = kwimage.make_heatmask(heatmap, cmap='viridis')
+        tostack = []
 
         tci_canvas = tci_imcrop.finalize()
         tci_canvas = kwarray.robust_normalize(tci_canvas)
         tci_canvas = kwimage.fill_nans_with_checkers(tci_canvas)
         rel_dets = dets.translate((-vidspace_bound.tl_x, -vidspace_bound.tl_y))
 
-        blank_canvas = np.ones_like(tci_canvas)
+        if main_true_aids:
+            is_main_true = [a in main_true_aids for a in dets.data['aids']]
+            true_dets = rel_dets.compress(is_main_true)
+            det_true_canvas = np.ones_like(tci_canvas)
+            det_true_canvas = true_dets.draw_on(det_true_canvas, alpha=1.0, color='classes')
+            det_true_canvas = kwimage.draw_text_on_image(
+                det_true_canvas, 'true', (1, 2), valign='top', color='kitware_green')
+            tostack.append(det_true_canvas)
 
-        det_blank_canvas = rel_dets.draw_on(blank_canvas, color=colors, alpha=0.5)
+        if main_pred_aids:
+            is_main_pred = [a in main_pred_aids for a in dets.data['aids']]
+            pred_dets = rel_dets.compress(is_main_pred)
+            det_pred_canvas = np.ones_like(tci_canvas)
+            det_pred_canvas = pred_dets.draw_on(det_pred_canvas, alpha=1.0, color='classes')
+            det_pred_canvas = kwimage.draw_text_on_image(
+                det_pred_canvas, 'pred', (1, 2), valign='top', color='kitware_blue')
+            tostack.append(det_pred_canvas)
+
+        if 0:
+            det_both_canvas = np.ones_like(tci_canvas)
+            det_both_canvas = rel_dets.draw_on(det_both_canvas.copy(), color=colors, alpha=0.5)
+            tostack.append(det_both_canvas)
+
         det_tci_canvas = rel_dets.draw_on(tci_canvas, color=colors, alpha=0.5)
 
-        cell_canvas = kwimage.stack_images([
-            det_blank_canvas,
-            det_tci_canvas,
-            tci_canvas,
-            heatmap_canvas
-        ], axis=0, pad=5)[..., 0:3]
+        tostack.append(det_tci_canvas)
+        tostack.append(tci_canvas)
+
+        if (coco_img.channels & AC_CHANNELS).numel():
+            heatmap_delayed = coco_img.imdelay(channels=AC_CHANNELS, resolution=resolution, nodata_method='float')
+            heatmap_imcrop = heatmap_delayed.crop(vidspace_bound.to_slice(), wrap=False, clip=False)
+            heatmap = heatmap_imcrop.finalize()
+            from watch import heuristics
+            from watch.utils import util_kwimage
+            cat_to_color = ub.udict({cat['name']: cat['color'] for cat in heuristics.CATEGORIES})
+            channel_colors = list(cat_to_color.take(AC_CHANNELS.to_list()))
+            heatmap_canvas = util_kwimage.perchannel_colorize(heatmap, channel_colors=channel_colors)
+            heatmap_canvas = kwimage.nodata_checkerboard(heatmap_canvas, on_value=0.3)
+            if main_pred_aids:
+                # Draw main polgon in the heatmap
+                heatmap_canvas = pred_dets.data['segmentations'].draw_on(
+                    heatmap_canvas, alpha=0.3, edgecolor='kitware_lightgray',
+                    fill=False)
+
+            tostack.append(heatmap_canvas)
+
+        if (coco_img.channels & BAS_CHANNELS).numel():
+            heatmap_delayed = coco_img.imdelay(channels=BAS_CHANNELS, resolution=resolution, nodata_method='float')
+            heatmap_imcrop = heatmap_delayed.crop(vidspace_bound.to_slice(), wrap=False, clip=False)
+            heatmap = heatmap_imcrop.finalize().squeeze()
+            heatmap_canvas = kwimage.make_heatmask(heatmap, cmap='viridis')
+            heatmap_canvas = kwimage.nodata_checkerboard(heatmap_canvas, on_value=0.3)
+            tostack.append(heatmap_canvas)
+
+        cell_canvas = kwimage.stack_images(tostack, axis=0, pad=5)[..., 0:3]
 
         header_lines = [
             coco_img.img.get('sensor_coarse'),
