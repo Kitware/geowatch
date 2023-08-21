@@ -72,6 +72,7 @@ class ExportColdKwcocoConfig(scfg.DataConfig):
         False,
         help='True: exporting cold result by timestamp, False: exporting cold result by year, Default is False')
     combine = scfg.Value(False, help='for temporal combined mode, Default is True')
+    exclude_first = scfg.Value(True, help='exclude first date of image from each sensor, Default is True')
     sensors = scfg.Value('L8', type=str, help='sensor type, default is "L8"')
 
 
@@ -117,6 +118,7 @@ def export_cold_main(cmdline=1, **kwargs):
     coefs_bands = config_in['coefs_bands']
     combine = config_in['combine']
     timestamp = config_in['timestamp']
+    exclude_first = config_in['exclude_first']
     sensors = config_in['sensors']
 
     if combine:
@@ -292,10 +294,11 @@ def export_cold_main(cmdline=1, **kwargs):
                 first_ordinal_dates_S2.append(ordinal_day_S2)
                 first_img_names_S2.append(img_name_S2)
                 last_year_S2 = year_S2
-
-        ordinal_day_list = first_ordinal_dates_L8 + first_ordinal_dates_S2
+        if exclude_first:
+            ordinal_day_list = first_ordinal_dates_L8[1:] + first_ordinal_dates_S2[1:]
+        else:
+            ordinal_day_list = first_ordinal_dates_L8 + first_ordinal_dates_S2
         ordinal_day_list.sort()
-        
     if combine:
         combined_coco_dset = kwcoco.CocoDataset(combined_coco_fpath)
 

@@ -57,6 +57,7 @@ class AssembleColdKwcocoConfig(scfg.DataConfig):
     coefs_bands = scfg.Value(None, type=str, help='indicate the bands for output coefs_bands, e.g., 0,1,2,3,4,5')
     timestamp = scfg.Value(False, help='True: exporting cold result by timestamp, False: exporting cold result by year, Default is False')
     combine = scfg.Value(True, help='for temporal combined mode, Default is True')
+    exclude_first = scfg.Value(True, help='exclude first date of image from each sensor, Default is True')
     resolution = scfg.Value('30GSD', help=ub.paragraph(
         '''
         the resolution used when preparing the kwcoco data. Note: results will
@@ -122,6 +123,7 @@ def assemble_main(cmdline=1, **kwargs):
     coefs_bands = config_in['coefs_bands']
     timestamp = config_in['timestamp']
     combine = config_in['combine']
+    exclude_first = config_in['exclude_first']
     resolution = config_in['resolution']
     sensors = config_in['sensors']
 
@@ -282,9 +284,18 @@ def assemble_main(cmdline=1, **kwargs):
                 first_ordinal_dates_S2.append(ordinal_day)
                 first_img_names_S2.append(img_name[:-4])
                 last_year = year
-        ordinal_day_list = first_ordinal_dates_L8 + first_ordinal_dates_S2
-        img_names = first_img_names_L8 + first_img_names_S2
-
+        if exclude_first:
+            combined_data = list(zip(first_ordinal_dates_L8[1:] + first_ordinal_dates_S2[1:], 
+                                     first_img_names_L8[1:] + first_img_names_S2[1:]))
+            # ordinal_day_list = first_ordinal_dates_L8[1:] + first_ordinal_dates_S2[:1]
+            # img_names = first_img_names_L8[1:] + first_img_names_S2[1:]
+        else:
+            combined_data = list(zip(first_ordinal_dates_L8 + first_ordinal_dates_S2, 
+                                     first_img_names_L8 + first_img_names_S2))
+            # ordinal_day_list = first_ordinal_dates_L8 + first_ordinal_dates_S2
+            # img_names = first_img_names_L8 + first_img_names_S2
+        combined_data.sort(key=lambda x: x[0])
+        ordinal_day_list, img_names = zip(*combined_data)
     # assemble
     logger.info('Generating COLD output geotiff')
     if coefs is not None:
@@ -310,6 +321,7 @@ def assemble_main(cmdline=1, **kwargs):
                         outdriver_L8 = gdal.GetDriverByName('GTiff')
                         outdata_L8 = outdriver_L8.Create(os.fspath(outfile), vid_w, vid_h, 1, gdal.GDT_Float32)
                         outdata_L8.GetRasterBand(1).WriteArray(results[:vid_h, :vid_w, ninput])
+                        outdata_L8.GetRasterBand(1).SetNoDataValue(-9999)
                         outdata_L8.FlushCache()
                         outdata_L8.SetGeoTransform(L8_new_gdal_transform)
                         outdata_L8.FlushCache()
@@ -321,6 +333,7 @@ def assemble_main(cmdline=1, **kwargs):
                         outdriver_S2 = gdal.GetDriverByName('GTiff')
                         outdata_S2 = outdriver_S2.Create(os.fspath(outfile), vid_w, vid_h, 1, gdal.GDT_Float32)
                         outdata_S2.GetRasterBand(1).WriteArray(results[:vid_h, :vid_w, ninput])
+                        outdata_S2.GetRasterBand(1).SetNoDataValue(-9999)
                         outdata_S2.FlushCache()
                         outdata_S2.SetGeoTransform(S2_new_gdal_transform)
                         outdata_S2.FlushCache()

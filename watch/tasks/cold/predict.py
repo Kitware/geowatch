@@ -211,6 +211,7 @@ class ColdPredictConfig(scfg.DataConfig):
     combine = scfg.Value(False, help='for temporal combined mode, Default is False')
     track_emissions = scfg.Value(True, help='if True use codecarbon for emission tracking')
     resolution = scfg.Value('30GSD', help='if specified then data is processed at this resolution')
+    exclude_first = scfg.Value(True, help='exclude first date of image from each sensor, Default is True')
     workers = scfg.Value(16, help='total number of workers')
     workermode = scfg.Value('process', help='Can be process, serial, or thread')
 
@@ -358,6 +359,7 @@ def cold_predict_main(cmdline=1, **kwargs):
         export_kwargs['combine'] = config['combine']
         export_kwargs['coefs_bands'] = config['coefs_bands']
         export_kwargs['timestamp'] = config['timestamp']
+        export_kwargs['exclude_first'] = config['exclude_first']
         export_kwargs['sensors'] = sensors
         if use_subprogress:
             export_kwargs['pman'] = pman
@@ -392,6 +394,7 @@ def cold_predict_main(cmdline=1, **kwargs):
         assemble_kwargs['coefs_bands'] = config['coefs_bands']
         assemble_kwargs['timestamp'] = config['timestamp']
         assemble_kwargs['combine'] = config['combine']
+        assemble_kwargs['exclude_first'] = config['exclude_first']
         assemble_kwargs['resolution'] = config.resolution
         assemble_kwargs['sensors'] = sensors
 
