@@ -79,7 +79,8 @@ class MetricsConfig(scfg.DataConfig):
         '''))
     name = scfg.Value('unknown',
                       help=ub.paragraph('''
-        Short name for the algorithm used to generate the model
+        Short name for the algorithm used to generate the model.
+        UNUSED. TODO: incorporate
         '''))
 
     enable_sc_viz = scfg.Value(False,
@@ -305,7 +306,7 @@ def main(cmdline=True, **kwargs):
         # Is there a way to produce a valid empty file in the tracker?
         raise Exception('No input predicted sites were given')
 
-    name = args.name
+    # name = args.name
     true_site_dpath = args.true_site_dpath
     true_region_dpath = args.true_region_dpath
 

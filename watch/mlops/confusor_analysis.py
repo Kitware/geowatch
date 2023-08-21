@@ -308,8 +308,10 @@ def main(cmdline=1, **kwargs):
         self.build_hard_cases()
 
     if config.embed:
-        import xdev
-        xdev.embed()
+        # Using embed this way because our linter disallows the regular debuggy
+        # way.
+        from xdev import embed
+        embed()
 
     if not config.reload:
         self.dump_confusion_geojson()
