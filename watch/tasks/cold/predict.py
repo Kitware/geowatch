@@ -299,16 +299,32 @@ def cold_predict_main(cmdline=1, **kwargs):
         # ============
         main_prog.set_postfix('Step 1: Prepare')
 
-        metadata = read_json_metadata(out_dpath)
+        metadata = None
+        for region in os.listdir(out_dpath / 'stacked'):
+            if not region in str(config['coco_fpath']):
+                pass
+            elif region in str(config['coco_fpath']):
+                if os.path.exists(out_dpath / 'reccg' / region):
+                    logger.info('Skipping step 1 because the stacked image already exists...')
+                    for root, dirs, files in os.walk(out_dpath / 'stacked' / region):
+                        for file in files:
+                            if file.endswith(".json"):
+                                json_path = os.path.join(root, file)
+
+                                with open(json_path, "r") as f:
+                                    metadata = json.load(f)
+                            break
+
         if metadata is None:
-            prepare_kwcoco.prepare_kwcoco_main(
+            meta_fpath = prepare_kwcoco.prepare_kwcoco_main(
                 cmdline=0, coco_fpath=coco_fpath, out_dpath=out_dpath, sensors=sensors,
                 adj_cloud=adj_cloud, method=method, workers=workers,
                 resolution=config.resolution,
             )
-            metadata = read_json_metadata(out_dpath)
-        else:
-            logger.info('Skipping step 1 because the stacked image already exists...')
+            
+            with open(meta_fpath, "r") as f:
+                metadata = json.load(f)
+        
 
         main_prog.step()
 
