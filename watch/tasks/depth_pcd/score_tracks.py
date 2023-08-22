@@ -91,12 +91,16 @@ def score_tracks(img_coco_dset, model_fpath):
     # Group by track and video name.
     trackid_to_group = dict(list(annot_df.groupby('track_id')))
 
+    # TODO: use new kwcoco track mechanisms
+    # Ideally the dataset will be passed to us with tracks.
+    # This will happen once reproject annotations handles it.
     if 'tracks' not in img_coco_dset.dataset.keys():
         img_coco_dset.dataset['tracks'] = []
     tracks = img_coco_dset.dataset['tracks']
     tq = tqdm(total=len(trackid_to_group))
 
     for track_id, orig_track_group in trackid_to_group.items():
+        # TODO: use new kwcoco track mechanisms
         track_obj = {
             'id': track_id,
             'name': track_id,  # add a name for "future-proofing"
@@ -201,7 +205,7 @@ def score_tracks(img_coco_dset, model_fpath):
                 ims.append(np.stack([first, 0.5 * first + 0.5 * last, last], axis=-1).astype(np.float32))
 
         score = np.mean(model.predict(np.array(ims), batch_size=1, verbose=False)[8])
-        tracks[-1]['score'] = float(score)
+        track_obj['score'] = float(score)
         tq.set_description(f'{video_name} score {score:3.2f}')
         tq.update(1)
         if 0:

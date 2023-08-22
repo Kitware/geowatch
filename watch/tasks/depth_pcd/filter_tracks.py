@@ -47,7 +47,6 @@ def main(cmdline=1, **kwargs):
     import safer
     from watch.geoannots import geomodels
     from watch.utils import util_gis
-    import pandas as pd
     from kwcoco.util import util_json
     from watch.utils import process_context
 
@@ -67,12 +66,14 @@ def main(cmdline=1, **kwargs):
 
     track_ids_to_drop = []
     coco_dset = kwcoco.CocoDataset.coerce(config.input_kwcoco)
-    tracks = pd.DataFrame(coco_dset.dataset['tracks'])
-    tracks = tracks[tracks['src'] == 'sv_depth_pcd'].values.tolist()
+
+    # TODO: use new kwcoco track mechanisms
+    tracks = coco_dset.dataset['tracks']
+    tracks = [t for t in tracks if t['src'] == 'sv_depth_pcd']
 
     for t in tracks:
-        if t[2] < config.threshold:
-            track_ids_to_drop.append(t[0])
+        if t['score'] < config.threshold:
+            track_ids_to_drop.append(t['track_id'])
 
     print(f"Dropping {len(track_ids_to_drop)} / {len(tracks)} tracks")
 
@@ -108,14 +109,11 @@ def main(cmdline=1, **kwargs):
 
     new_summaries = list(keep_summaries.values())
 
-    MARK_INSTEAD_OF_REMOVE = 1
-    if MARK_INSTEAD_OF_REMOVE:
-        # Change the status of sites to "system_rejected" instead of droping
-        # them
-        reject_summaries = list(site_id_to_summary.subdict(reject_sites).values())
-        for sitesum in reject_summaries:
-            sitesum['properties']['status'] = 'system_rejected'
-        new_summaries.extend(reject_summaries)
+    # Change the status of sites to "system_rejected" instead of droping them
+    reject_summaries = list(site_id_to_summary.subdict(reject_sites).values())
+    for sitesum in reject_summaries:
+        sitesum['properties']['status'] = 'system_rejected'
+    new_summaries.extend(reject_summaries)
 
     # Copy the filtered site models over to the output directory
     output_sites_dpath = ub.Path(config.output_sites_dpath)
@@ -128,15 +126,14 @@ def main(cmdline=1, **kwargs):
         old_fpath.copy(new_fpath, overwrite=True)
         out_site_fpaths.append(new_fpath)
 
-    if MARK_INSTEAD_OF_REMOVE:
-        reject_site_fpaths = site_to_site_fpath.subdict(reject_sites)
-        # Copy the rejected sites as well, but modify their status
-        for old_fpath in reject_site_fpaths.values():
-            new_fpath = output_sites_dpath / old_fpath.name
-            old_site = geomodels.SiteModel.coerce(old_fpath)
-            old_site.header['properties']['status'] = 'system_rejected'
-            new_fpath.write_text(old_site.dumps())
-            out_site_fpaths.append(new_fpath)
+    reject_site_fpaths = site_to_site_fpath.subdict(reject_sites)
+    # Copy the rejected sites as well, but modify their status
+    for old_fpath in reject_site_fpaths.values():
+        new_fpath = output_sites_dpath / old_fpath.name
+        old_site = geomodels.SiteModel.coerce(old_fpath)
+        old_site.header['properties']['status'] = 'system_rejected'
+        new_fpath.write_text(old_site.dumps())
+        out_site_fpaths.append(new_fpath)
 
     new_region_model = geomodels.RegionModel.from_features(
         [region_model.header] + new_summaries)

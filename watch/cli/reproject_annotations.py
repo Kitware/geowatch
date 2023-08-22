@@ -554,7 +554,12 @@ def expand_site_models_with_site_summaries(sites, regions, validate_checks=True)
 
     if site_rows2:
         site_df2 = pd.concat(site_rows2).reset_index()
+    else:
+        site_df2 = []
+    if len(site_df2):
+        site_df2 = pd.concat(site_rows2).reset_index()
         if 'site_id' not in site_df2.columns:
+            print(site_rows2)
             print(f'{len(site_df2)=}')
             print(f'{site_df2.columns=}')
             print('site_df2:')
