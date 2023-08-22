@@ -194,6 +194,9 @@ def main(cmdline=True, **kwargs):
     Note currently depends on:
         https://smartgitlab.com/jon.crall/metrics-and-test-framework/-/tree/autogen-on-te
 
+    CommandLine:
+        xdoctest -m watch.cli.run_metrics_framework main
+
     Example:
         >>> # xdoctest: +REQUIRES(module:iarpa_smart_metrics)
         >>> from watch.cli.run_metrics_framework import *  # NOQA

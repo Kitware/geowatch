@@ -31,12 +31,14 @@ Example:
     python -m watch.mlops.manager "list" --dataset_codes Drop6 Drop6-MeanYear10GSD-V2
     python -m watch.mlops.manager "list" --dataset_codes Drop6 Drop6-MedianSummer10GSD
 
+
     python -m watch.mlops.manager "push packages" --dataset_codes Drop6-MeanYear10GSD --yes
     python -m watch.mlops.manager "push packages" --dataset_codes Drop6-MeanYear10GSD-V2 --yes
     python -m watch.mlops.manager "push packages" --dataset_codes Drop6-MedianSummer10GSD --yes
     python -m watch.mlops.manager "push packages" --dataset_codes Drop6-NoWinterMedian10GSD --yes
     python -m watch.mlops.manager "push packages" --dataset_codes Drop7-MedianNoWinter10GSD --yes
     python -m watch.mlops.manager "push packages" --dataset_codes Drop7-Cropped2GSD --yes
+    python -m watch.mlops.manager "push packages" --dataset_codes Drop7-MedianNoWinter10GSD-NoMask --yes
 
     python -m watch.mlops.manager "status" --dataset_codes Drop6-MeanYear10GSD-V2
     python -m watch.mlops.manager "pull packages" --dataset_codes Drop6-MeanYear10GSD --yes
@@ -44,10 +46,12 @@ Example:
     python -m watch.mlops.manager "pull packages" --dataset_codes Drop6-MedianSummer10GSD --yes
     python -m watch.mlops.manager "pull packages" --dataset_codes Drop6-NoWinterMedian10GSD --yes
     python -m watch.mlops.manager "pull packages" --dataset_codes Drop7-MedianNoWinter10GSD --yes
+    python -m watch.mlops.manager "pull packages" --dataset_codes Drop7-MedianNoWinter10GSD-NoMask --yes
 
     python -m watch.mlops.manager "pull packages" --dataset_codes Drop6-MeanYear10GSD-V2 --yes
 
-    python -m watch.mlops.manager "list packages" --dataset_codes Drop7-MedianNoWinter10GSD --yes
+    python -m watch.mlops.manager "list packages" --dataset_codes Drop7-MedianNoWinter10GSD
+    python -m watch.mlops.manager "list packages" --dataset_codes Drop7-MedianNoWinter10GSD-NoMask
 
     # On training machine
     python -m watch.mlops.manager "push packages" --dataset_codes Drop6

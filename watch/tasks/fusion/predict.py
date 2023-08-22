@@ -444,6 +444,7 @@ def predict(cmdline=False, **kwargs):
         ...     'fit.trainer.accelerator': 'cpu',
         ...     'fit.trainer.devices': 1,
         ...     'fit.trainer.max_epochs': 3,
+        ...     'fit.trainer.log_every_n_steps': 1,
         ...     'fit.trainer.default_root_dir': os.fspath(root_dpath),
         ... }
         >>> from watch.tasks.fusion import fit_lightning
