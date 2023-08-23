@@ -1596,3 +1596,23 @@ def _update_propery_cache(prop):
     if 'cache' in prop:
         if prop['cache'] is None:
             prop['cache'] = {}
+
+
+def coerce_site_or_region_model(model_data):
+    """
+    Args:
+        model_data (dict): A geojson FeatureCollection that should correspond
+            to a SiteModel or RegionModel.
+
+    Returns:
+        SiteModel | RegionModel - return type depends on the input data
+    """
+    assert isinstance(model_data, dict)
+    assert model_data['type'] == 'FeatureCollection'
+    for feat in model_data['features']:
+        assert feat['type'] == 'Feature'
+        if feat['properties']['type'] == 'region':
+            return RegionModel(**model_data)
+        elif feat['properties']['type'] == 'site':
+            return SiteModel(**model_data)
+    raise AssertionError('Did not find a region or site header')

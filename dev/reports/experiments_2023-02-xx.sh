@@ -3281,7 +3281,7 @@ geowatch schedule --params="
           sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/CN_C000/imgonly-CN_C000.kwcoco.zip
     " \
     --root_dpath="$DVC_EXPT_DPATH/_namek_eval15_bas_nomask" \
-    --devices="0,1" --tmux_workers=6 \
+    --devices="0,1" --tmux_workers=4 \
     --backend=tmux --queue_name "_namek_eval15_bas_nomask" \
     --pipeline=bas_building_and_depth_vali \
     --skip_existing=1 \
@@ -3333,6 +3333,7 @@ geowatch schedule --params="
         bas_pxl.enabled: 1
         bas_pxl_eval.enabled: 1
         bas_poly.enabled: 1
+        sv_poly.enabled: 1
         bas_poly_eval.enabled: 1
         bas_poly_viz.enabled: 0
         sv_crop.enabled: 1
@@ -3380,7 +3381,7 @@ geowatch schedule --params="
           sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/CN_C000/imgonly-CN_C000.kwcoco.zip
     " \
     --root_dpath="$DVC_EXPT_DPATH/_namek_eval15_bas_yesmask" \
-    --devices="0,1" --tmux_workers=2 \
+    --devices="0,1" --tmux_workers=4 \
     --backend=tmux --queue_name "_namek_eval15_bas_yesmask" \
     --pipeline=bas_building_and_depth_vali \
     --skip_existing=1 \
@@ -3421,6 +3422,7 @@ python -m watch.mlops.aggregate \
         show_csv: 0
     " \
     --rois="KR_R002,NZ_R001,CH_R001,KR_R001,CN_C000"
+    --rois="KR_R002,CN_C000"
 
 # VS MASKED
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
@@ -3455,7 +3457,8 @@ python -m watch.mlops.aggregate \
         concise: 0
         show_csv: 0
     " \
-    --rois="KR_R002,NZ_R001,CH_R001,KR_R001,CN_C000"
+    --rois="KR_R002,CN_C000"
+    #--rois="KR_R002,NZ_R001,CH_R001,KR_R001,CN_C000"
 
 # Both
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
@@ -3488,7 +3491,7 @@ python -m watch.mlops.aggregate \
         analyze: 0
         print_models: True
         reference_region: final
-        concise: 0
+        concise: 1
         show_csv: 0
     " \
     --rois="KR_R002"

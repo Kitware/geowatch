@@ -168,6 +168,12 @@ class ReprojectAnnotationsConfig(scfg.DataConfig):
 
     validate_checks = scfg.Value(True, help='disable if you know you have valid data')
 
+    ignore_system_rejected = scfg.Value(True, help=ub.paragraph(
+        '''
+        if True dont project system rejected annotations. Otherwise do it.
+        Note: this option should be generalized.
+        '''))
+
     def __post_init__(self):
         if self.io_workers == 'auto':
             self.io_workers = self.workers

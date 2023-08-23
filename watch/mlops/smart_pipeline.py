@@ -317,6 +317,7 @@ class PolygonEvaluation(ProcessNode):
                 --tmp_dir "{tmp_dpath}" \
                 --out_dir "{eval_dpath}" \
                 --merge_fpath "{eval_fpath}" \
+                --enable_viz=False \
                 {params_argstr} \
                 {perf_argstr}
             ''').format(**fmtkw)

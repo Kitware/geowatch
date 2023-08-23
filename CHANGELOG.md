@@ -13,6 +13,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Changed
 * Prepare-ta2-dataset now uses the new v3 mlops pipeline instead of the old v1 pipeline.
 * Moved third-party-libraries into a new `geowatch_tpl` module.
+* `geowatch geomodel_stats` has an easier to use CLI.
+* Upgrade to utilize 2.6.0 metrics
+* Training channelwise model now records all loss components separately
+* Generalized `cold.transfer_features` script to help project BAS predictions on high res kwcoco files.
+
+### Added
+* Confusion analysis script is given new functionality to visualize and categorize cases on a per-site basis.
 
 ### Removed:
 * Removed `separate_region_queues` `separate_align_jobs` options from `prepare-ta2-dataset`, they are now always True.

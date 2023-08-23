@@ -1,10 +1,85 @@
 #!/usr/bin/env python3
 """
+Script for running the iarpa metrics code with a bit of post-processing.
+
 TODO:
     - [ ] Rename to run_polygon_evaluation.py? Or run_iarpa_metrics.py?
+
+Note currently depends on :py:mod:`iarpa_smart_metrics`, which can be
+obtained from:
+
+    https://smartgitlab.com/TE/metrics-and-test-framework
+    or
+    https://gitlab.kitware.com/smart/metrics-and-test-framework
+
+
+Example:
+    >>> # xdoctest: +REQUIRES(module:iarpa_smart_metrics)
+    >>> from watch.cli.run_metrics_framework import *  # NOQA
+    >>> from watch.demo.metrics_demo.generate_demodata import generate_demo_metrics_framework_data
+    >>> cmdline = 0
+    >>> base_dpath = ub.Path.appdir('watch', 'tests', 'test-iarpa-metrics2')
+    >>> data_dpath = base_dpath / 'inputs'
+    >>> dpath = base_dpath / 'outputs'
+    >>> demo_info1 = generate_demo_metrics_framework_data(
+    >>>     roi='DR_R001',
+    >>>     num_sites=5, num_observations=10, noise=2, p_observe=0.5,
+    >>>     p_transition=0.3, drop_noise=0.5, drop_limit=0.5)
+    >>> demo_info2 = generate_demo_metrics_framework_data(
+    >>>     roi='DR_R002',
+    >>>     num_sites=7, num_observations=10, noise=1, p_observe=0.5,
+    >>>     p_transition=0.1, drop_noise=0.8, drop_limit=0.5)
+    >>> demo_info3 = generate_demo_metrics_framework_data(
+    >>>     roi='DR_R003',
+    >>>     num_sites=11, num_observations=10, noise=3, p_observe=0.5,
+    >>>     p_transition=0.2, drop_noise=0.3, drop_limit=0.5)
+    >>> print('demo_info1 = {}'.format(ub.urepr(demo_info1, nl=1)))
+    >>> print('demo_info2 = {}'.format(ub.urepr(demo_info2, nl=1)))
+    >>> print('demo_info3 = {}'.format(ub.urepr(demo_info3, nl=1)))
+    >>> out_dpath = dpath / 'region_metrics'
+    >>> merge_fpath = dpath / 'merged.json'
+    >>> out_dpath.delete()
+    >>> kwargs = {
+    >>>     'pred_sites': demo_info1['pred_site_dpath'],
+    >>>     'true_region_dpath': demo_info1['true_region_dpath'],
+    >>>     'true_site_dpath': demo_info1['true_site_dpath'],
+    >>>     'merge': True,
+    >>>     'merge_fpath': merge_fpath,
+    >>>     'out_dir': out_dpath,
+    >>> }
+    >>> main(cmdline=False, **kwargs)
+    >>> # TODO: visualize
+
+
+Example:
+    >>> # xdoctest: +REQUIRES(module:iarpa_smart_metrics)
+    >>> from watch.cli.run_metrics_framework import *  # NOQA
+    >>> from watch.demo.metrics_demo.generate_demodata import generate_demo_metrics_framework_data
+    >>> # Test single region case
+    >>> cmdline = 0
+    >>> base_dpath = ub.Path.appdir('watch', 'tests', 'test-iarpa-metrics5')
+    >>> data_dpath = (base_dpath / 'inputs').ensuredir()
+    >>> dpath = (base_dpath / 'outputs').ensuredir()
+    >>> demo_info1 = generate_demo_metrics_framework_data(
+    >>>     roi='DR_R004',
+    >>>     num_sites=5, num_observations=10, noise=2, p_observe=0.5,
+    >>>     p_transition=0.3, drop_noise=0.5, drop_limit=0.5, outdir=data_dpath)
+    >>> print('demo_info1 = {}'.format(ub.urepr(demo_info1, nl=1)))
+    >>> out_dpath = dpath / 'poly_eval'
+    >>> merge_fpath = dpath / 'poly_eval.json'
+    >>> out_dpath.delete()
+    >>> kwargs = {
+    >>>     'pred_sites': demo_info1['pred_site_dpath'],
+    >>>     'true_region_dpath': demo_info1['true_region_dpath'],
+    >>>     'true_site_dpath': demo_info1['true_site_dpath'],
+    >>>     'merge': True,
+    >>>     'merge_fpath': merge_fpath,
+    >>>     'out_dir': out_dpath,
+    >>> }
+    >>> main(cmdline=False, **kwargs)
+    >>> # TODO: visualize
 """
 import os
-import sys
 import json
 import shlex
 import ubelt as ub
@@ -191,48 +266,8 @@ def ensure_thumbnails(image_root, region_id, sites):
 
 def main(cmdline=True, **kwargs):
     """
-    Note currently depends on:
-        https://smartgitlab.com/jon.crall/metrics-and-test-framework/-/tree/autogen-on-te
-
     CommandLine:
         xdoctest -m watch.cli.run_metrics_framework main
-
-    Example:
-        >>> # xdoctest: +REQUIRES(module:iarpa_smart_metrics)
-        >>> from watch.cli.run_metrics_framework import *  # NOQA
-        >>> from watch.demo.metrics_demo.generate_demodata import generate_demo_metrics_framework_data
-        >>> cmdline = 0
-        >>> base_dpath = ub.Path.appdir('watch', 'tests', 'test-iarpa-metrics2')
-        >>> data_dpath = base_dpath / 'inputs'
-        >>> dpath = base_dpath / 'outputs'
-        >>> demo_info1 = generate_demo_metrics_framework_data(
-        >>>     roi='DR_R001',
-        >>>     num_sites=5, num_observations=10, noise=2, p_observe=0.5,
-        >>>     p_transition=0.3, drop_noise=0.5, drop_limit=0.5)
-        >>> demo_info2 = generate_demo_metrics_framework_data(
-        >>>     roi='DR_R002',
-        >>>     num_sites=7, num_observations=10, noise=1, p_observe=0.5,
-        >>>     p_transition=0.1, drop_noise=0.8, drop_limit=0.5)
-        >>> demo_info3 = generate_demo_metrics_framework_data(
-        >>>     roi='DR_R003',
-        >>>     num_sites=11, num_observations=10, noise=3, p_observe=0.5,
-        >>>     p_transition=0.2, drop_noise=0.3, drop_limit=0.5)
-        >>> print('demo_info1 = {}'.format(ub.urepr(demo_info1, nl=1)))
-        >>> print('demo_info2 = {}'.format(ub.urepr(demo_info2, nl=1)))
-        >>> print('demo_info3 = {}'.format(ub.urepr(demo_info3, nl=1)))
-        >>> out_dpath = dpath / 'region_metrics'
-        >>> merge_fpath = dpath / 'merged.json'
-        >>> out_dpath.delete()
-        >>> kwargs = {
-        >>>     'pred_sites': demo_info1['pred_site_dpath'],
-        >>>     'true_region_dpath': demo_info1['true_region_dpath'],
-        >>>     'true_site_dpath': demo_info1['true_site_dpath'],
-        >>>     'merge': True,
-        >>>     'merge_fpath': merge_fpath,
-        >>>     'out_dir': out_dpath,
-        >>> }
-        >>> main(cmdline=False, **kwargs)
-        >>> # TODO: visualize
     """
     from watch.utils import util_gis
     from kwcoco.util import util_json
@@ -242,7 +277,6 @@ def main(cmdline=True, **kwargs):
     config = MetricsConfig.cli(cmdline=cmdline, data=kwargs)
     args = config
 
-    # args, _ = parser.parse_known_args(args)
     config_dict = config.asdict()
     print('config = {}'.format(ub.urepr(config_dict, nl=2, sort=0)))
 
@@ -252,8 +286,7 @@ def main(cmdline=True, **kwargs):
         IARPA_METRICS_VERSION = version.Version(iarpa_smart_metrics.__version__)
     except Exception:
         raise AssertionError('The iarpa_smart_metrics package should be pip installed ' 'in your virtualenv')
-    assert IARPA_METRICS_VERSION >= version.Version('0.2.0')
-    assert IARPA_METRICS_VERSION >= version.Version('1.2.0')
+    assert IARPA_METRICS_VERSION >= version.Version('2.5.0')
 
     # Record the git hash of the metrics code if possible.
     try:
@@ -346,17 +379,6 @@ def main(cmdline=True, **kwargs):
     main_out_dir = ub.Path(args.out_dir or './iarpa-metrics-output')
     main_out_dir.ensuredir()
 
-    if 0:
-        # This is not necessary anymore with mlops v3
-        full_invocation_text = ub.codeblock('''
-            #!/bin/bash
-            __doc__="
-            This is an auto-generated file that records the command used to
-            generate this evaluation of multiple regions.
-            "
-            ''') + chr(10) + shlex.join(sys.argv) + chr(10)
-        (main_out_dir / 'invocation.sh').write_text(full_invocation_text)
-
     # First build up all of the commands and prepare necessary data for them.
     commands = []
 
@@ -398,7 +420,7 @@ def main(cmdline=True, **kwargs):
             viz_flags = []
         else:
             viz_flags = [
-                # '--no-viz-region',  # we do want this enabled
+                '--no-viz-region',  # we often want this enabled
                 '--no-viz-slices',
                 '--no-viz-detection-table',
                 '--no-viz-comparison-table',
@@ -426,7 +448,7 @@ def main(cmdline=True, **kwargs):
             '--tau', '0.2',
             '--rho', '0.5',
             '--activity', 'overall',
-            # '--loglevel', 'error',
+            '--loglevel', 'ERROR',
             f'--performer={config.performer}',
             '--eval_num=0',
             '--eval_run_num=0',
@@ -473,6 +495,33 @@ def main(cmdline=True, **kwargs):
                     print('error in metrics framework, probably due to zero '
                           'TP site matches or a region without site truth.')
 
+    print('grouped_sites = {}'.format(ub.urepr(grouped_sites, nl=1)))
+    if len(grouped_sites) == 1:
+        print('Dump confusion')
+        # In the case where there is one region:
+        # Write a the invocation for confusion analysis.
+        region_id = list(grouped_sites.keys())[0]
+        confusion_analysis_text = ub.codeblock(
+            rf'''
+            #!/bin/bash
+            __doc__="
+            This is an auto-generated file that records the command used to
+            generate this evaluation of multiple regions.
+            "
+            python -m watch.mlops.confusor_analysis \
+                --metrics_node_dpath={main_out_dir} \
+                --out_dpath={main_out_dir}/confusion_analysis \
+                --true_region_dpath={true_region_dpath} \
+                --true_site_dpath={true_site_dpath} \
+                --region_id={region_id} \
+                --viz_sites=True \
+                --reload=0
+            ''')
+        cfsn_invoke_fpath = (main_out_dir / 'confusion_analysis.sh')
+        cfsn_invoke_fpath.write_text(confusion_analysis_text)
+        import stat
+        cfsn_invoke_fpath.chmod(cfsn_invoke_fpath.stat().st_mode | stat.S_IXUSR)
+
     print('out_dirs = {}'.format(ub.urepr(out_dirs, nl=1)))
     if args.merge and out_dirs:
         from watch.tasks.metrics.merge_iarpa_metrics import merge_metrics_results
@@ -510,9 +559,10 @@ def main(cmdline=True, **kwargs):
         combined_viz_dpath = (merge_dpath / 'region_viz_overall').ensuredir()
 
         # Write a legend to go with the BAS viz
-        legend_img = iarpa_bas_color_legend()
-        legend_fpath = (combined_viz_dpath / 'bas_legend.png')
-        kwimage.imwrite(legend_fpath, legend_img)
+        if config.enable_viz:
+            legend_img = iarpa_bas_color_legend()
+            legend_fpath = (combined_viz_dpath / 'bas_legend.png')
+            kwimage.imwrite(legend_fpath, legend_img)
 
         bas_df.to_pickle(merge_dpath / 'bas_df.pkl')
         sc_df.to_pickle(merge_dpath / 'sc_df.pkl')

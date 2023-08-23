@@ -6802,42 +6802,42 @@ model:
         global_class_weight    : 0.00001
         global_saliency_weight : 1.00
         multimodal_reduce      : learned_linear
-optimizer:
-    class_path: torch.optim.AdamW
-    init_args:
+        optimizer:
+        class_path: torch.optim.AdamW
+        init_args:
         lr           : $TARGET_LR
         weight_decay : $WEIGHT_DECAY
-lr_scheduler:
-  class_path: torch.optim.lr_scheduler.OneCycleLR
-  init_args:
-    max_lr: $TARGET_LR
-    total_steps: $MAX_STEPS
-    anneal_strategy: cos
-    pct_start: 0.05
-trainer:
-    accumulate_grad_batches: 24
-    default_root_dir     : $DEFAULT_ROOT_DIR
-    accelerator          : gpu
-    devices              : 0,
-    limit_val_batches    : 1024
-    limit_train_batches  : 4096
-    num_sanity_val_steps : 0
-    max_epochs           : 360
-    callbacks:
+        lr_scheduler:
+        class_path: torch.optim.lr_scheduler.OneCycleLR
+        init_args:
+        max_lr: $TARGET_LR
+        total_steps: $MAX_STEPS
+        anneal_strategy: cos
+        pct_start: 0.05
+        trainer:
+        accumulate_grad_batches: 24
+        default_root_dir     : $DEFAULT_ROOT_DIR
+        accelerator          : gpu
+        devices              : 0,
+        limit_val_batches    : 1024
+        limit_train_batches  : 4096
+        num_sanity_val_steps : 0
+        max_epochs           : 360
+        callbacks:
         - class_path: pytorch_lightning.callbacks.ModelCheckpoint
-          init_args:
-              monitor: val_loss
-              mode: min
-              save_top_k: 5
-              filename: '{epoch}-{step}-{val_loss:.3f}.ckpt'
-              save_last: true
+        init_args:
+        monitor: val_loss
+        mode: min
+        save_top_k: 5
+        filename: '{epoch}-{step}-{val_loss:.3f}.ckpt'
+        save_last: true
 
-torch_globals:
-    float32_matmul_precision: auto
+        torch_globals:
+        float32_matmul_precision: auto
 
-initializer:
-    init: /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-MedianNoWinter10GSD/runs/Drop7-MedianNoWinter10GSD_bgrn_split6_oldckpt_V75/lightning_logs/version_0/checkpoints/epoch=6-step=1197-val_loss=7.161.ckpt.ckpt
-"
+        initializer:
+        init: /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop7-MedianNoWinter10GSD/runs/Drop7-MedianNoWinter10GSD_bgrn_split6_oldckpt_V75/lightning_logs/version_0/checkpoints/epoch=6-step=1197-val_loss=7.161.ckpt.ckpt
+        "
 
 
 # On toothbrush - retrain BAS with fixed annotations - no teamfeat / pan (higher LR)
@@ -6870,12 +6870,12 @@ echo "TRAIN_FPATH = $TRAIN_FPATH"
 #kwcoco stats "$VALI_FPATH"
 WATCH_GRID_WORKERS=0 python -m watch.tasks.fusion fit --config "
 data:
-    select_videos          : $SELECT_VIDEOS
-    num_workers            : 5
-    train_dataset          : $TRAIN_FPATH
-    vali_dataset           : $VALI_FPATH
-    window_dims            : '164,164'
-    time_steps             : 15
+select_videos          : $SELECT_VIDEOS
+num_workers            : 5
+train_dataset          : $TRAIN_FPATH
+vali_dataset           : $VALI_FPATH
+window_dims            : '164,164'
+time_steps             : 15
     time_sampling          : uniform-soft5-soft4-contiguous
     time_kernel            : '(-5y,-4y,-3y,-2.5y,-2y,-1.5y,-1y,0,1y,1.5y,2y,2.5y,3y,4y,5y)'
     window_resolution     : 10.0GSD

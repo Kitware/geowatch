@@ -48,7 +48,7 @@ def main(cmdline=True, **kw):
 
     cmd_alias = {
         'watch.cli.torch_model_stats': ['model_stats', 'model_info'],
-        'watch.cli.geojson_site_stats': ['site_stats', 'geojson_stats'],
+        'watch.cli.geojson_site_stats': ['site_stats', 'geojson_stats', 'geomodel_stats'],
         'watch.cli.watch_coco_stats': ['stats'],
         'watch.cli.coco_visualize_videos': ['visualize'],
         'watch.cli.coco_align': ['align', 'coco_align_geotiffs'],

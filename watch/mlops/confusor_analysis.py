@@ -181,6 +181,8 @@ class ConfusorAnalysisConfig(scfg.DataConfig):
 
     embed = scfg.Value(False, isflag=True, help='if True, embed to interact')
 
+    strict = scfg.Value(False, isflag=True, help='if True dont ignore errors')
+
     def __post_init__(self):
         if self.bas_metric_dpath is not None:
             self.bas_metric_dpath = ub.Path(self.bas_metric_dpath)
@@ -202,17 +204,23 @@ class ConfusorAnalysisConfig(scfg.DataConfig):
 
             if self.pred_sites is None:
                 pred_sites_cands = list(self.metrics_node_dpath.glob('.pred/*/*/sites'))
+                if len(pred_sites_cands) == 0:
+                    pred_sites_cands = list(self.metrics_node_dpath.glob('.pred/*/*/sv_depth_out_sites'))
                 assert len(pred_sites_cands) == 1, 'mlops assumption violated ' + str(len(pred_sites_cands))
                 self.pred_sites = pred_sites_cands[0]
 
             if self.src_kwcoco is None:
                 src_kwcoco_cands = list(self.metrics_node_dpath.glob('.pred/*/*/poly.kwcoco.zip'))
+                if len(src_kwcoco_cands) == 0:
+                    src_kwcoco_cands = list(self.metrics_node_dpath.glob('.pred/bas_poly_eval/*/.pred/bas_poly/*/poly.kwcoco.zip'))
                 assert len(src_kwcoco_cands) == 1, 'mlops assumption violated'
                 self.src_kwcoco = src_kwcoco_cands[0]
 
             if self.bas_kwcoco is None:
                 # hack: note robust
                 bas_kwcoco_cands = list(self.metrics_node_dpath.glob('.pred/*/*/poly.kwcoco.zip'))
+                if len(bas_kwcoco_cands) == 0:
+                    bas_kwcoco_cands = list(self.metrics_node_dpath.glob('.pred/bas_poly_eval/*/.pred/bas_poly/*/poly.kwcoco.zip'))
                 assert len(bas_kwcoco_cands) == 1, 'mlops assumption violated'
                 self.bas_kwcoco = bas_kwcoco_cands[0]
 
@@ -654,6 +662,21 @@ class ConfusionAnalysis:
             site = id_to_pred_site[row['pred_site_id']]
             site.header['properties']['cache']['confusion'] = row
 
+        # TODO: need to figure out if it was correctly or incorrectly
+        # rejected, and what stage rejected it.
+        for site in id_to_pred_site.values():
+            if 'confusion' not in site.header['properties']['cache']:
+                site.header['properties']['cache']['confusion'] = {
+                    'type': 'unhandled_cfsn_' + site.header['properties']['status'],
+                    'color': 'pink',
+                }
+        for site in id_to_true_site.values():
+            if 'confusion' not in site.header['properties']['cache']:
+                site.header['properties']['cache']['confusion'] = {
+                    'type': 'unhandled_cfsn_' + site.header['properties']['status'],
+                    'color': 'pink',
+                }
+
         VALIDATE = 1
         if VALIDATE:
             all_models = SiteModelCollection(pred_sites + true_sites)
@@ -809,28 +832,33 @@ class ConfusionAnalysis:
 
         USE_KML = 1
         if USE_KML:
-            cfsn_kml_dpath = (config.out_dpath / 'confusion_kml').ensuredir()
-            for group_type, sites in type_to_sites.items():
-                cfsn_summary = type_to_summary[group_type]
-                # data = cfsn_summary
-                kml = to_styled_kml(cfsn_summary)
-                kml_fpath = cfsn_kml_dpath / (group_type + '.kml')
-                kml.save(kml_fpath)
+            try:
+                import simplekml  # NOQA
+            except ImportError:
+                print('Warning: simplekml is not installed, cannot write kml files')
+            else:
+                cfsn_kml_dpath = (config.out_dpath / 'confusion_kml').ensuredir()
+                for group_type, sites in type_to_sites.items():
+                    cfsn_summary = type_to_summary[group_type]
+                    # data = cfsn_summary
+                    kml = to_styled_kml(cfsn_summary)
+                    kml_fpath = cfsn_kml_dpath / (group_type + '.kml')
+                    kml.save(kml_fpath)
 
-            if 0:
-                # TODO: write nice images that can be used with QGIS
-                src_dset = kwcoco.CocoDataset(config.src_kwcoco)
-                coco_img = src_dset.images().coco_images[0]
+                if 0:
+                    # TODO: write nice images that can be used with QGIS
+                    src_dset = kwcoco.CocoDataset(config.src_kwcoco)
+                    coco_img = src_dset.images().coco_images[0]
 
-                fpath = coco_img.primary_image_filepath()
-                img_lpath = cfsn_kml_dpath / 'img.tiff'
-                ub.symlink(fpath, img_lpath)
-
-                salient_asset = coco_img.find_asset('salient')
-                if salient_asset is not None:
-                    fpath = ['file_name']
-                    img_lpath = cfsn_kml_dpath / 'salient_heatmap.tiff'
+                    fpath = coco_img.primary_image_filepath()
+                    img_lpath = cfsn_kml_dpath / 'img.tiff'
                     ub.symlink(fpath, img_lpath)
+
+                    salient_asset = coco_img.find_asset('salient')
+                    if salient_asset is not None:
+                        fpath = ['file_name']
+                        img_lpath = cfsn_kml_dpath / 'salient_heatmap.tiff'
+                        ub.symlink(fpath, img_lpath)
 
         # TIME_OVERLAP_SUMMARY = 0
         # if TIME_OVERLAP_SUMMARY:
@@ -879,6 +907,7 @@ class ConfusionAnalysis:
             site_models=self.enriched_sites_dpath,
             region_models=self.enriched_region_dpath,
             workers=2,
+            # ignore_system_rejected=False,
         )
         reproject_annotations.main(cmdline=0, **common_kwargs)
 
@@ -934,11 +963,13 @@ class ConfusionAnalysis:
         true_kwargs = common_kwargs | ub.udict(
             role='true_confusion',
             site_models=true_site_infos2,
+            ignore_system_rejected=False,
         )
         # kwargs = true_kwargs
         pred_kwargs = common_kwargs | ub.udict(
             role='pred_confusion',
             site_models=pred_site_infos2,
+            ignore_system_rejected=False,
         )
 
         # I don't know why this isn't in-place. Maybe it is a scriptconfig thing?
@@ -1016,7 +1047,7 @@ class ConfusionAnalysis:
         true_id_to_site = {s.site_id: s for s in type_to_sites['true']}
         pred_id_to_site = {s.site_id: s for s in type_to_sites['pred']}
 
-        rich.print(f'Dumping Casess to: [link={viz_dpath}]{viz_dpath}[/link]')
+        rich.print(f'Dumping Cases to: [link={viz_dpath}]{viz_dpath}[/link]')
 
         errors = []
         from kwutil import util_progress
@@ -1038,7 +1069,8 @@ class ConfusionAnalysis:
                 except Exception as ex:
                     rich.print(f'[red] ERRORS {len(errors)}')
                     errors.append(ex)
-                    raise
+                    if self.config.strict:
+                        raise
                     continue
                 dpath.ensuredir()
                 canvas = kwimage.ensure_uint255(canvas)
@@ -1049,7 +1081,7 @@ class ConfusionAnalysis:
             print('errors = {}'.format(ub.urepr(errors, nl=1)))
             rich.print(f'[red]There were {len(errors)} errors in viz')
 
-        rich.print(f'Dumped Casess to: [link={viz_dpath}]{viz_dpath}[/link]')
+        rich.print(f'Dumped Cases to: [link={viz_dpath}]{viz_dpath}[/link]')
 
 
 def make_pairwise_case(true_site, pred_site, true_geom, pred_geom,
@@ -1621,7 +1653,6 @@ def visualize_single_site_case(coco_dset, case, true_id_to_site, pred_id_to_site
                 heatmap_canvas = pred_dets.data['segmentations'].draw_on(
                     heatmap_canvas, alpha=0.3, edgecolor='kitware_lightgray',
                     fill=False)
-
             tostack.append(heatmap_canvas)
 
         if (coco_img.channels & BAS_CHANNELS).numel():
@@ -1630,6 +1661,11 @@ def visualize_single_site_case(coco_dset, case, true_id_to_site, pred_id_to_site
             heatmap = heatmap_imcrop.finalize().squeeze()
             heatmap_canvas = kwimage.make_heatmask(heatmap, cmap='viridis')
             heatmap_canvas = kwimage.nodata_checkerboard(heatmap_canvas, on_value=0.3)
+            if main_pred_aids:
+                # Draw main polgon in the heatmap
+                heatmap_canvas = pred_dets.data['segmentations'].draw_on(
+                    heatmap_canvas, alpha=0.3, edgecolor='kitware_lightgray',
+                    fill=False)
             tostack.append(heatmap_canvas)
 
         cell_canvas = kwimage.stack_images(tostack, axis=0, pad=5)[..., 0:3]

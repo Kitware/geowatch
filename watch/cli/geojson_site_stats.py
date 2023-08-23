@@ -3,10 +3,10 @@
 CommandLine:
     DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware='auto')
     python -m watch.cli.geojson_site_stats \
-        --site_models="$DVC_DATA_DPATH/annotations/drop6/site_models/*"
+        --site_models="$DVC_DATA_DPATH/annotations/drop6/site_models/*" \
+        --region_models="$DVC_DATA_DPATH/annotations/drop6/region_models/*"
 
-    python -m watch.cli.geojson_site_stats \
-        --site_models=<path-to-site-models>
+    geowatch geomodel_stats <paths-to-site-or-region-models>
 """
 import scriptconfig as scfg
 import ubelt as ub
@@ -17,7 +17,8 @@ class GeojsonSiteStatsConfig(scfg.DataConfig):
     Compute statistics about geojson sites.
 
     TODO:
-        Rename to geojson stats?
+        - [ ] Rename to geojson stats? Or geomodel stats?
+        - [ ] make text output more  consistent and more useful.
     """
     models = scfg.Value(None, help='site OR region models coercables (the script will attempt to distinguish them)', nargs='+', position=1)
 
@@ -26,6 +27,8 @@ class GeojsonSiteStatsConfig(scfg.DataConfig):
     region_models = scfg.Value(None, help='region model coercable', nargs='+', alias=['regions'])
 
     viz_dpath = scfg.Value(None, help='if specified will write stats visualizations and plots to this directory')
+
+    io_workers = scfg.Value('avail', help='number of workers for parallel io')
 
 
 def main(cmdline=1, **kwargs):
@@ -49,40 +52,29 @@ def main(cmdline=1, **kwargs):
     config = GeojsonSiteStatsConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
     import rich
     rich.print('config = ' + ub.repr2(config))
-    import pandas as pd
-    import numpy as np
-    from watch.utils import util_gis
-    from kwutil import util_time
     import copy
-    import matplotlib.dates as mdates
-
+    import numpy as np
+    import pandas as pd
+    from kwutil import util_time
     from watch.geoannots import geomodels
-    import xdev
-    xdev.embed()
+    from watch.utils import util_gis
+    from watch.utils import util_parallel
 
     site_models = []
     region_models = []
 
-    def coerce_model_type(model_data):
-        assert isinstance(model_data, dict)
-        assert model_data['type'] == 'FeatureCollection'
-        for feat in model_data['features']:
-            assert feat['type'] == 'Feature'
-            if feat['properties']['type'] == 'region':
-                return geomodels.RegionModel(**model_data)
-            elif feat['properties']['type'] == 'site':
-                return geomodels.SiteModel(**model_data)
-        raise AssertionError('Did not find a region or site header')
+    io_workers = util_parallel.coerce_num_workers(config['io_workers'])
+    print(f'io_workers={io_workers}')
 
     if config.models:
         if config.site_models:
             raise ValueError('the models and site_models arguments are mutex')
         if config.region_models:
             raise ValueError('the models and region_models arguments are mutex')
-        models = list(util_gis.coerce_geojson_datas(config.models, format='json'))
+        models = list(util_gis.coerce_geojson_datas(config.models, format='json', workers=io_workers))
         for model_info in models:
             model_data = model_info['data']
-            model = coerce_model_type(model_data)
+            model = geomodels.coerce_site_or_region_model(model_data)
             if isinstance(model, geomodels.SiteModel):
                 site_models.append(model)
             elif isinstance(model, geomodels.RegionModel):
@@ -90,8 +82,11 @@ def main(cmdline=1, **kwargs):
             else:
                 raise AssertionError
     else:
-        site_models = list(geomodels.SiteModel.coerce_multiple(config['site_models']))
-        region_models = list(geomodels.RegionModel.coerce_multiple(config['region_models']))
+        site_models = list(geomodels.SiteModel.coerce_multiple(config['site_models'], workers=io_workers))
+        region_models = list(geomodels.RegionModel.coerce_multiple(config['region_models'], workers=io_workers))
+
+    print(f'len(region_models) = {len(region_models)}')
+    print(f'len(site_models) = {len(site_models)}')
 
     region_to_sites = ub.ddict(list)
     region_to_regions = ub.ddict(list)
@@ -102,9 +97,6 @@ def main(cmdline=1, **kwargs):
 
     unique_region_ids = sorted(set(region_to_regions.keys()) | set(region_to_sites.keys()))
     print('unique_region_ids = {}'.format(ub.urepr(unique_region_ids, nl=1)))
-
-    obs_stats_accum = []
-    site_stat_accum = []
 
     region_to_obs_accum = {}
     region_to_site_accum = {}
@@ -225,14 +217,41 @@ def main(cmdline=1, **kwargs):
             print('Summary Stats:')
             summary_stats = pd.DataFrame(status_summaries)
             rich.print(summary_stats)
+        else:
+            # Only site models are given, show their summaries
+            import geopandas as gpd
+            summary_rows = list(site_id_to_stats.values())
+            summary_df = gpd.GeoDataFrame(summary_rows)
+            rich.print(summary_df)
+
+            if len(sites) == 1:
+                # obs_df2 = pd.concat(region_obs_accum)
+                # rich.print(obs_df2)
+                rich.print(obs_df)
+                # Show observations in this case as well
+                ...
+
+    viz_dpath = config['viz_dpath']
+    if viz_dpath is not None:
+        viz_dpath = ub.Path(viz_dpath).ensuredir()
+        viz_site_stats(unique_region_ids, region_to_obs_accum,
+                       region_to_site_accum, viz_dpath)
+
+
+def viz_site_stats(unique_region_ids, region_to_obs_accum, region_to_site_accum, viz_dpath):
+    from watch.mlops.aggregate import hash_regions
+    from watch.utils import util_kwplot
+    from watch.utils import util_pandas
+    import matplotlib.dates as mdates
+    import numpy as np
+    import pandas as pd
+    import rich
+
+    import kwplot
+    sns = kwplot.autosns()
 
     obs_stats_accum = list(ub.flatten(region_to_obs_accum.values()))
     site_stat_accum = list(ub.flatten(region_to_site_accum.values()))
-
-    viz_dpath = config['viz_dpath']
-    if viz_dpath is None:
-        viz_dpath = '_viz_sitestat'
-    viz_dpath = ub.Path(viz_dpath).ensuredir()
 
     if site_stat_accum:
         site_stats = pd.concat(site_stat_accum)
@@ -243,8 +262,6 @@ def main(cmdline=1, **kwargs):
         obs_stats = pd.concat(obs_stats_accum)
     else:
         obs_stats = None
-
-    from watch.utils import util_kwplot
 
     if obs_stats is not None:
         obs_stats['observation_date'] = util_kwplot.fix_matplotlib_dates(obs_stats['observation_date'])
@@ -258,10 +275,6 @@ def main(cmdline=1, **kwargs):
         for phase_duration_key in phase_duration_keys:
             deltas = site_stats[phase_duration_key]
             site_stats[phase_duration_key] = util_kwplot.fix_matplotlib_timedeltas(deltas)
-
-    import kwplot
-    from watch.mlops.aggregate import hash_regions
-    sns = kwplot.autosns()
 
     finalize_figure = util_kwplot.FigureFinalizer(
         size_inches=np.array([6.4, 4.8]) * 1.0,
@@ -336,8 +349,6 @@ def main(cmdline=1, **kwargs):
         phase_duration_keys = [k for k in site_stats.columns if k.startswith('duration.')]
         max_durration = site_stats[phase_duration_keys].max().max()
 
-        import rich
-        from watch.utils import util_pandas
         table = site_stats[phase_duration_keys].describe().applymap(lambda x: ''.join(str(x).partition('days')[0:2]))
         table = util_pandas.pandas_shorten_columns(table)
         rich.print(table)
