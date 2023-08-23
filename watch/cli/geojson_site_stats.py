@@ -19,10 +19,13 @@ class GeojsonSiteStatsConfig(scfg.DataConfig):
     TODO:
         Rename to geojson stats?
     """
+    models = scfg.Value(None, help='site OR region models coercables (the script will attempt to distinguish them)', nargs='+', position=1)
+
     site_models = scfg.Value(None, help='site model coercable', nargs='+', alias=['sites'])
+
     region_models = scfg.Value(None, help='region model coercable', nargs='+', alias=['regions'])
 
-    viz_dpath = None
+    viz_dpath = scfg.Value(None, help='if specified will write stats visualizations and plots to this directory')
 
 
 def main(cmdline=1, **kwargs):
@@ -54,8 +57,41 @@ def main(cmdline=1, **kwargs):
     import matplotlib.dates as mdates
 
     from watch.geoannots import geomodels
-    site_models = list(geomodels.SiteModel.coerce_multiple(config['site_models']))
-    region_models = list(geomodels.RegionModel.coerce_multiple(config['region_models']))
+    import xdev
+    xdev.embed()
+
+    site_models = []
+    region_models = []
+
+    def coerce_model_type(model_data):
+        assert isinstance(model_data, dict)
+        assert model_data['type'] == 'FeatureCollection'
+        for feat in model_data['features']:
+            assert feat['type'] == 'Feature'
+            if feat['properties']['type'] == 'region':
+                return geomodels.RegionModel(**model_data)
+            elif feat['properties']['type'] == 'site':
+                return geomodels.SiteModel(**model_data)
+        raise AssertionError('Did not find a region or site header')
+
+    if config.models:
+        if config.site_models:
+            raise ValueError('the models and site_models arguments are mutex')
+        if config.region_models:
+            raise ValueError('the models and region_models arguments are mutex')
+        models = list(util_gis.coerce_geojson_datas(config.models, format='json'))
+        for model_info in models:
+            model_data = model_info['data']
+            model = coerce_model_type(model_data)
+            if isinstance(model, geomodels.SiteModel):
+                site_models.append(model)
+            elif isinstance(model, geomodels.RegionModel):
+                region_models.append(model)
+            else:
+                raise AssertionError
+    else:
+        site_models = list(geomodels.SiteModel.coerce_multiple(config['site_models']))
+        region_models = list(geomodels.RegionModel.coerce_multiple(config['region_models']))
 
     region_to_sites = ub.ddict(list)
     region_to_regions = ub.ddict(list)

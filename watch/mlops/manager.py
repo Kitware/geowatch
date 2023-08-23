@@ -59,6 +59,8 @@ Example:
 
     # On testing machine
     python -m watch.mlops.manager "pull packages" --dataset_codes Drop6
+    python -m watch.mlops.manager "pull packages" --dataset_codes Drop7-MedianNoWinter10GSD-NoMask Drop7-MedianNoWinter10GSD --yes
+    python -m watch.mlops.manager "list packages" --dataset_codes Drop7-MedianNoWinter10GSD-NoMask Drop7-MedianNoWinter10GSD Drop7-MedianNoWinter10GSD-iMERIT --yes
     python -m watch.mlops.manager "status"
 
     # Run evals on testing machine
