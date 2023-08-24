@@ -1,5 +1,5 @@
 """
-Patches for jsonargparse version >= 4.21.0
+Patches for jsonargparse inf > version >= 4.24.0
 
 Refactor references:
     ~/.pyenv/versions/3.10.5/envs/pyenv3.10.5/lib/python3.10/site-packages/pytorch_lightning/cli.py
@@ -30,6 +30,10 @@ from jsonargparse._common import is_subclass
 from jsonargparse._signatures import iter_to_set_str
 from jsonargparse.typing import register_pydantic_type
 from jsonargparse._signatures import get_import_path
+
+from jsonargparse._jsonnet import ActionJsonnet
+
+from jsonargparse._actions import _ActionSubCommands
 
 kinds = inspect._ParameterKind
 inspect_empty = inspect._empty
@@ -378,26 +382,100 @@ class ArgumentParserPatches:
                 msg += 'does not specify a type.'
             raise ValueError(msg)
 
+    # def _apply_actions(
+    #     self,
+    #     cfg: Union[Namespace, Dict[str, Any]],
+    #     parent_key: str = '',
+    #     prev_cfg: Optional[Namespace] = None,
+    #     skip_fn: Optional[Callable[[Any], bool]] = None,
+    # ) -> Namespace:
+    #     """Runs _check_value_key on actions present in config."""
+    #     from jsonargparse._core import ActionJsonnet
+    #     from jsonargparse._core import ActionJsonnetExtVars
+    #     from jsonargparse._core import _ActionSubCommands
+    #     from jsonargparse._core import parser_context
+
+    #     if isinstance(cfg, dict):
+    #         cfg = Namespace(cfg)
+    #     if parent_key:
+    #         cfg_branch = cfg
+    #         cfg = Namespace()
+    #         cfg[parent_key] = cfg_branch
+    #         keys = [parent_key + '.' + k for k in cfg_branch.__dict__.keys()]
+    #     else:
+    #         keys = list(cfg.__dict__.keys())
+
+    #     if prev_cfg:
+    #         prev_cfg = prev_cfg.clone()
+    #     else:
+    #         prev_cfg = Namespace()
+
+    #     config_keys: Set[str] = set()
+    #     num = 0
+    #     while num < len(keys):
+    #         key = keys[num]
+    #         exclude = _ActionConfigLoad if key in config_keys else None
+    #         action, subcommand = _find_action_and_subcommand(self, key, exclude=exclude)
+
+    #         if isinstance(action, ActionJsonnet):
+    #             ext_vars_key = action._ext_vars
+    #             if ext_vars_key and ext_vars_key not in keys[:num]:
+    #                 keys = keys[:num] + [ext_vars_key] + [k for k in keys[num:] if k != ext_vars_key]
+    #                 continue
+
+    #         num += 1
+
+    #         if action is None or isinstance(action, _ActionSubCommands):
+    #             value = cfg[key]
+    #             if isinstance(value, dict):
+    #                 value = Namespace(value)
+    #             if isinstance(value, Namespace):
+    #                 new_keys = value.__dict__.keys()
+    #                 keys += [key + '.' + k for k in new_keys if key + '.' + k not in keys]
+    #             cfg[key] = value
+    #             continue
+
+    #         action_dest = action.dest if subcommand is None else subcommand + '.' + action.dest
+    #         try:
+    #             value = cfg[action_dest]
+    #         except KeyError:
+    #             # If the main key isn't in the config, check if it exists
+    #             # under an alias.
+    #             found = None
+    #             for alias in _action_aliases(action):
+    #                 if alias in cfg:
+    #                     value = cfg[alias]
+    #                     found = True
+    #                     break
+    #             if not found:
+    #                 raise
+    #         if skip_fn and skip_fn(value):
+    #             continue
+    #         with parser_context(parent_parser=self, lenient_check=True):
+    #             value = self._check_value_key(action, value, action_dest, prev_cfg)
+    #         if isinstance(action, _ActionConfigLoad):
+    #             config_keys.add(action_dest)
+    #             keys.append(action_dest)
+    #         elif getattr(action, "jsonnet_ext_vars", False):
+    #             prev_cfg[action_dest] = value
+    #         cfg[action_dest] = value
+    #     return cfg[parent_key] if parent_key else cfg
+
     def _apply_actions(
         self,
         cfg: Union[Namespace, Dict[str, Any]],
-        parent_key: str = '',
+        parent_key: str = "",
         prev_cfg: Optional[Namespace] = None,
         skip_fn: Optional[Callable[[Any], bool]] = None,
     ) -> Namespace:
         """Runs _check_value_key on actions present in config."""
-        from jsonargparse._core import ActionJsonnet
-        from jsonargparse._core import ActionJsonnetExtVars
-        from jsonargparse._core import _ActionSubCommands
-        from jsonargparse._core import parser_context
-
         if isinstance(cfg, dict):
             cfg = Namespace(cfg)
         if parent_key:
             cfg_branch = cfg
             cfg = Namespace()
             cfg[parent_key] = cfg_branch
-            keys = [parent_key + '.' + k for k in cfg_branch.__dict__.keys()]
+            keys = [parent_key + "." + k for k in cfg_branch.__dict__.keys()]
         else:
             keys = list(cfg.__dict__.keys())
 
@@ -427,32 +505,22 @@ class ArgumentParserPatches:
                     value = Namespace(value)
                 if isinstance(value, Namespace):
                     new_keys = value.__dict__.keys()
-                    keys += [key + '.' + k for k in new_keys if key + '.' + k not in keys]
+                    keys += [key + "." + k for k in new_keys if key + "." + k not in keys]
                 cfg[key] = value
                 continue
 
-            action_dest = action.dest if subcommand is None else subcommand + '.' + action.dest
-            try:
-                value = cfg[action_dest]
-            except KeyError:
-                # If the main key isn't in the config, check if it exists
-                # under an alias.
-                found = None
-                for alias in _action_aliases(action):
-                    if alias in cfg:
-                        value = cfg[alias]
-                        found = True
-                        break
-                if not found:
-                    raise
+            action_dest = action.dest if subcommand is None else subcommand + "." + action.dest
+            value = cfg[action_dest]
             if skip_fn and skip_fn(value):
                 continue
+
+            from jsonargparse._common import  parser_context
             with parser_context(parent_parser=self, lenient_check=True):
                 value = self._check_value_key(action, value, action_dest, prev_cfg)
             if isinstance(action, _ActionConfigLoad):
                 config_keys.add(action_dest)
                 keys.append(action_dest)
-            elif isinstance(action, ActionJsonnetExtVars):
+            elif getattr(action, "jsonnet_ext_vars", False):
                 prev_cfg[action_dest] = value
             cfg[action_dest] = value
         return cfg[parent_key] if parent_key else cfg

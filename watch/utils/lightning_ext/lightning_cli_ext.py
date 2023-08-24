@@ -20,12 +20,21 @@ if JSONARGPARSE_VERSION < Version('4.21.0'):
     from watch.utils.lightning_ext import _jsonargparse_ext_ge_4_xx_and_lt_4_21 as _jsonargparse_ext
 elif JSONARGPARSE_VERSION < Version('4.22.0'):
     from watch.utils.lightning_ext import _jsonargparse_ext_ge_4_21_and_lt_4_22 as _jsonargparse_ext
+elif JSONARGPARSE_VERSION < Version('4.24.0'):
+    from watch.utils.lightning_ext import _jsonargparse_ext_ge_4_22_and_lt_4_24 as _jsonargparse_ext
 else:
-    from watch.utils.lightning_ext import _jsonargparse_ext_ge_4_22_and_lt_xxx as _jsonargparse_ext
+    from watch.utils.lightning_ext import _jsonargparse_ext_ge_4_24_and_lt_4_xx as _jsonargparse_ext
 
 
 class LightningArgumentParser_Extension(_jsonargparse_ext.ArgumentParserPatches, LightningArgumentParser):
     """
+    CommandLine:
+        xdoctest -m watch.utils.lightning_ext.lightning_cli_ext LightningArgumentParser_Extension
+
+    Example:
+        >>> from watch.utils.lightning_ext.lightning_cli_ext import *  # NOQA
+        >>> LightningArgumentParser_Extension()
+
     Refactor references:
         ~/.pyenv/versions/3.10.5/envs/pyenv3.10.5/lib/python3.10/site-packages/pytorch_lightning/cli.py
         ~/.pyenv/versions/3.10.5/envs/pyenv3.10.5/lib/python3.10/site-packages/jsonargparse/core.py
