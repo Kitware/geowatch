@@ -35,6 +35,8 @@ class PrepareTimeAverages(CMDQueueConfig):
     true_site_dpath = scfg.Value(None)
     true_region_dpath = scfg.Value(None)
 
+    mask_low_quality = scfg.Value(True)
+
     skip_existing = scfg.Value(True)
     cache = scfg.Value(True)
 
@@ -124,6 +126,7 @@ def main(cmdline=1, **kwargs):
             TRUE_REGION_DPATH=config.true_region_dpath,
             CHANNELS='red|green|blue|nir|swir16|swir22|pan' + other_s2_bands,
             remove_seasons_str=None if not config.remove_seasons else ','.join(config.remove_seasons),
+            mask_low_quality=config.mask_low_quality,
         )
         fmtdict.update(config)
 
@@ -151,6 +154,7 @@ def main(cmdline=1, **kwargs):
                 --remove_seasons=$remove_seasons_str \
                 --merge_method=$merge_method \
                 --spatial_tile_size=$spatial_tile_size \
+                --mask_low_quality=$mask_low_quality \
                 --start_time=2010-03-01 \
                 --assets_dname="raw_bands" \
                 --workers=$combine_workers

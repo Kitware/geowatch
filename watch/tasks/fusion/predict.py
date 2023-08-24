@@ -405,6 +405,9 @@ def resolve_datamodule(config, method, datamodule_defaults):
 @profile
 def predict(cmdline=False, **kwargs):
     """
+    CommandLine:
+        xdoctest -m watch.tasks.fusion.predict predict:0
+
     Example:
         >>> # Train a demo model (in the future grab a pretrained demo model)
         >>> from watch.tasks.fusion.predict import *  # NOQA
@@ -437,10 +440,11 @@ def predict(cmdline=False, **kwargs):
         ...     'fit.model.init_args.global_saliency_weight': 1.0,
         ...     'fit.optimizer.class_path': 'torch.optim.SGD',
         ...     'fit.optimizer.init_args.lr': 1e-5,
-        ...     'fit.trainer.max_steps': 1,
+        ...     'fit.trainer.max_steps': 10,
         ...     'fit.trainer.accelerator': 'cpu',
         ...     'fit.trainer.devices': 1,
-        ...     'fit.trainer.max_epochs': 1,
+        ...     'fit.trainer.max_epochs': 3,
+        ...     'fit.trainer.log_every_n_steps': 1,
         ...     'fit.trainer.default_root_dir': os.fspath(root_dpath),
         ... }
         >>> from watch.tasks.fusion import fit_lightning

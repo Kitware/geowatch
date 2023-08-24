@@ -44,7 +44,7 @@ class CocoSpectraConfig(scfg.DataConfig):
         'dst': scfg.Value(None, help='if specified dump the figure to disk at this file path (e.g. with a jpg or png suffix)'),
 
         'show': scfg.Value(False, isflag=True, help='if True, do a plt.show()'),
-        'draw': scfg.Value(True, help='if False disables all visualization and just print tables'),
+        'draw': scfg.Value(True, isflag=True, help='if False disables all visualization and just print tables'),
 
         'workers': scfg.Value(0, help='number of io workers'),
         'mode': scfg.Value('process', help='type of parallelism'),
@@ -615,7 +615,11 @@ def ensure_intensity_stats(coco_img, recompute=False, include_channels=None, exc
 
 
 @profile
-def plot_intensity_histograms(full_df, config):
+def plot_intensity_histograms(full_df, config, ax=None):
+    """
+    Args:
+        ax (Axes | None): if specified, we assume only 1 plot is made
+    """
     unique_channels = full_df['channel'].unique()
     unique_sensors = full_df['sensor'].unique()
 
@@ -674,13 +678,21 @@ def plot_intensity_histograms(full_df, config):
         maybe_expose = (set(sig.parameters) - exposed_params) - probably_ignorable_params
         print('maybe_expose = {}'.format(ub.urepr(maybe_expose, nl=1)))
 
-    #  For S2 that is supposed to be divide by 10000.  For L8 it is multiply by 2.75e-5 and subtract 0.2.
+    # For S2 that is supposed to be divide by 10000.
+    # For L8 it is multiply by 2.75e-5 and subtract 0.2.
     # 1 / 2.75e-5
     print('start plot')
-    fig = kwplot.figure(fnum=1, doclf=True)
-    print('fig = {!r}'.format(fig))
-    pnum_ = kwplot.PlotNums(nSubplots=len(unique_sensors))
-    print('pnum_ = {!r}'.format(pnum_))
+
+    print(f'unique_sensors={unique_sensors}')
+    if ax is None:
+        fig = kwplot.figure(fnum=1, doclf=True)
+        print('fig = {!r}'.format(fig))
+        pnum_ = kwplot.PlotNums(nSubplots=len(unique_sensors))
+        print('pnum_ = {!r}'.format(pnum_))
+    else:
+        fig = None
+        assert len(unique_sensors) == 1
+
     for sensor_name, sensor_df in full_df.groupby('sensor'):
         print('plot sensor_name = {!r}'.format(sensor_name))
 
@@ -690,7 +702,10 @@ def plot_intensity_histograms(full_df, config):
             weightvar = hist_data_kw['weights']
             hist_data_kw_['bins'] = _weighted_auto_bins(sensor_df, xvar, weightvar)
 
-        ax = kwplot.figure(fnum=1, pnum=pnum_()).gca()
+        print(f'ax={ax}')
+        if ax is None:
+            ax = kwplot.figure(fnum=1, pnum=pnum_()).gca()
+
         # z = [tuple(a.values()) for a in sensor_df[['intensity_bin', 'channel', 'sensor']].to_dict('records')]
         # ub.find_duplicates(z)
         try:

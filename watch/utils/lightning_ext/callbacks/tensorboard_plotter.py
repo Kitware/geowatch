@@ -212,6 +212,7 @@ def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outlier
         smoothing_values = [smoothing]
 
     plot_keys = [k for k in tb_data.keys() if '/' not in k]
+    # print(f'plot_keys={plot_keys}')
     y01_measures = [
         '_acc', '_ap', '_mAP', '_auc', '_mcc', '_brier', '_mauc',
         '_f1', '_iou',
@@ -219,6 +220,7 @@ def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outlier
     y0_measures = ['error', 'loss']
 
     keys = set(tb_data.keys()).intersection(set(plot_keys))
+    # print(f'keys={keys}')
     # unused = set(tb_data.keys()) - set(keys)
 
     # no idea what hp metric is, but it doesn't seem important

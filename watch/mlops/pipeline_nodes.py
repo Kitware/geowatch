@@ -1421,18 +1421,18 @@ class ProcessNode(Node):
             >>> }, node_dpath='.')
             >>> test_cmd = self.test_is_computed_command()
             >>> print(test_cmd)
-            test -e foo.txt \
+            test -e foo.txt -a \
                  -e bar.txt -a \
                  -e baz.txt -a \
-                 -e biz.txt -a
+                 -e biz.txt
             >>> self = ProcessNode(out_paths={
             >>>     'foo': 'foo.txt',
             >>>     'bar': 'bar.txt',
             >>> }, node_dpath='.')
             >>> test_cmd = self.test_is_computed_command()
             >>> print(test_cmd)
-            test -e foo.txt \
-                 -e bar.txt -a
+            test -e foo.txt -a \
+                 -e bar.txt
             >>> self = ProcessNode(out_paths={
             >>>     'foo': 'foo.txt',
             >>> }, node_dpath='.')
@@ -1451,7 +1451,7 @@ class ProcessNode(Node):
                         for p in self.final_out_paths.values()]
         # Make the command look nicer
         tmp_paths = [f'-e {p}' for p in quoted_paths]
-        tmp_paths = tmp_paths[0:1] + [p + ' -a' for p in tmp_paths[1:]]
+        tmp_paths = [p + ' -a' for p in tmp_paths[:-1]] + tmp_paths[-1:]
         *tmp_first, tmp_last = tmp_paths
         tmp_paths = [p + ' \\' for p in tmp_first] + [tmp_last]
         test_expr = '\n     '.join(tmp_paths)

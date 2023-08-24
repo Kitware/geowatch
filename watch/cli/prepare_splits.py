@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 # PYTHON_ARGCOMPLETE_OK
 """
+TODO:
+    move to queue_cli
+
+
 CommandLine:
     xdoctest -m watch.cli.prepare_splits __doc__
 
@@ -31,6 +35,17 @@ Example:
     >>> queue = prep_splits(cmdline=False, **config)
     >>> queue.print_commands()
 
+
+CommandLine:
+
+    DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="hdd")
+    python -m watch.cli.prepare_splits \
+        --src_kwcocos="$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD-NoMask/*/imganns-*.kwcoco.zip \
+        --dst_dpath "$DVC_DATA_DPATH"/Drop7-MedianNoWinter10GSD-NoMask \
+        --suffix=rawbands \
+        --backend=tmux --tmux_workers=6 \
+        --splits=split6 \
+        --run=0
 """
 
 import scriptconfig as scfg
@@ -46,9 +61,10 @@ class PrepareSplitsConfig(scfg.DataConfig):
         base_fpath = 'imganns*.kwcoco.*'
     """
     __default__ = {
-        'base_fpath': scfg.Value(None, nargs='+', help='input kwcoco files to be joined into splits (or one base coco file to split in non-constructive mode)', position=1),
+        'src_kwcocos': scfg.Value(None, nargs='+', help='input kwcoco files to be joined into splits', position=1, alias=['base_fpath']),
 
         'dst_dpath': scfg.Value(None, help='location to write the new kwcoco files. If unspecfied uses the folder of the first input kwcoco file'),
+        'suffix': scfg.Value('', help='destination suffix for the output split filenames'),
 
         'virtualenv_cmd': scfg.Value(None, type=str, help=ub.paragraph(
             '''
@@ -65,8 +81,6 @@ class PrepareSplitsConfig(scfg.DataConfig):
 
         'verbose': scfg.Value(1, help=''),
         'workers': scfg.Value(2, help='', alias=['tmux_workers']),
-
-        'suffix': scfg.Value('', help='suffix for the output split filenames'),
 
         'splits': scfg.Value('*', help='restrict to only a specific split')
     }
@@ -104,7 +118,7 @@ VALI_REGIONS_SPLITS = {
 }
 
 IGNORE_REGIONS = {
-    'CN_C001',
+    # 'CN_C001',
 }
 
 
@@ -170,15 +184,16 @@ def _submit_constructive_split_jobs(base_fpath, dst_dpath, suffix, queue, config
                 ''')
             queue.submit(command, depends=depends, log=False)
 
-    all_parts_str = ' '.join([shlex.quote(str(p)) for p in partitioned_fpaths])
-    command = ub.codeblock(
-        fr'''
-        python -m kwcoco union \
-            --remember_parent=True \
-            --src {all_parts_str} \
-            --dst {full_fpath}
-        ''')
-    queue.submit(command, depends=depends, log=False)
+    if 0:
+        all_parts_str = ' '.join([shlex.quote(str(p)) for p in partitioned_fpaths])
+        command = ub.codeblock(
+            fr'''
+            python -m kwcoco union \
+                --remember_parent=True \
+                --src {all_parts_str} \
+                --dst {full_fpath}
+            ''')
+        queue.submit(command, depends=depends, log=False)
 
 
 def _submit_split_jobs(base_fpath, queue, depends=[]):

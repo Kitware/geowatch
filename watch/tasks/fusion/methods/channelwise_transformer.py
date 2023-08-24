@@ -814,18 +814,19 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> import kwcoco
             >>> from os.path import join
             >>> import os
-            >>> if 0:
-            >>>     '''
-            >>>     # Generate toy datasets
-            >>>     DATA_DPATH=$HOME/data/work/toy_change
-            >>>     TRAIN_FPATH=$DATA_DPATH/vidshapes_msi_train/data.kwcoco.json
-            >>>     mkdir -p "$DATA_DPATH"
-            >>>     kwcoco toydata --key=vidshapes-videos8-frames5-randgsize-speed0.2-msi-multisensor --bundle_dpath "$DATA_DPATH/vidshapes_msi_train" --verbose=5
-            >>>     '''
+            >>> if 1:
+            >>>     print('''
+            ...     # Generate toy datasets
+            ...     DATA_DPATH=$HOME/data/work/toy_change
+            ...     TRAIN_FPATH=$DATA_DPATH/vidshapes_msi_train/data.kwcoco.json
+            ...     mkdir -p "$DATA_DPATH"
+            ...     kwcoco toydata --key=vidshapes-videos8-frames5-randgsize-speed0.2-msi-multisensor --bundle_dpath "$DATA_DPATH/vidshapes_msi_train" --verbose=5
+            ...     ''')
             >>>     coco_fpath = ub.expandpath('$HOME/data/work/toy_change/vidshapes_msi_train/data.kwcoco.json')
+            >>>     coco_fpath = 'vidshapes-videos8-frames5-randgsize-speed0.2-msi-multisensor'
             >>>     coco_dset = kwcoco.CocoDataset.coerce(coco_fpath)
             >>>     channels="B11,r|g|b,B1|B8|B11"
-            >>> if 1:
+            >>> if 0:
             >>>     dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
             >>>     coco_dset = (dvc_dpath / 'Drop4-BAS') / 'data_vali.kwcoco.json'
             >>>     channels='swir16|swir22|blue|green|red|nir'
@@ -1123,6 +1124,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         if 'saliency' in batch_head_probs:
             outputs['saliency_probs'] = batch_head_probs['saliency']
 
+        # print(f'with_loss={with_loss}')
         if with_loss:
 
             total_loss = sum(
@@ -1170,8 +1172,17 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                                 val = metric(_pred, _true)
                                 item_metrics[f'{stage}_{head_key}_{metric_key}'] = val
 
+                    head_to_loss = ub.ddict(float)
+                    for row in item_losses:
+                        for head_key, v in row.items():
+                            head_to_loss[head_key] += v
+
+                    for head_key, val in head_to_loss.items():
+                        self.log(f'{stage}_{head_key}_loss', val, prog_bar=False, batch_size=batch_size)
+
                     for key, val in item_metrics.items():
-                        self.log(key, val, prog_bar=True, batch_size=batch_size)
+                        self.log(key, val, prog_bar=False, batch_size=batch_size)
+
                     self.log(f'{stage}_loss', total_loss, prog_bar=True, batch_size=batch_size)
 
                 # Detach the itemized losses
@@ -1183,6 +1194,10 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             outputs['item_losses'] = item_losses
 
         return outputs
+
+    # def log(self, key, val, *args, **kwargs):
+    #     print(f'Logging {key}={val}')
+    #     super().log(key, val, *args, **kwargs)
 
     def forward_item(self, item, with_loss=False):
         """
@@ -1692,11 +1707,13 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
     @profile
     def training_step(self, batch, batch_idx=None):
+        # print('TRAIN STEP')
         outputs = self.forward_step(batch, with_loss=True, stage='train')
         return outputs
 
     @profile
     def validation_step(self, batch, batch_idx=None):
+        # print('VALI STEP')
         outputs = self.forward_step(batch, with_loss=True, stage='val')
         return outputs
 

@@ -51,6 +51,7 @@ Now that you have that setup, pull the data
    # Run DVC pull on Drop7-Cropped2GSD to grab the cropped raw bands.
    # (in the future I may add precomputed team features here)
    dvc pull -r aws -R Drop7-Cropped2GSD
+   dvc pull -r toothbrush_ssd -R Drop7-Cropped2GSD
 
 2. Modify AC Data
 -----------------
@@ -294,6 +295,15 @@ packaged model in the grid and adjust parameters as desired.
     TRUTH_DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=auto)
     DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
 
+    kwcoco stats \
+        $HIRES_DVC_DATA_DPATH/Drop7-Cropped2GSD/KR_R001/KR_R001.kwcoco.zip \
+        $HIRES_DVC_DATA_DPATH/Drop7-Cropped2GSD/KR_R002/KR_R002.kwcoco.zip \
+        $HIRES_DVC_DATA_DPATH/Drop7-Cropped2GSD/CH_R001/CH_R001.kwcoco.zip
+
+    geowatch stats $HIRES_DVC_DATA_DPATH/Drop7-Cropped2GSD/KR_R001/KR_R001.kwcoco.zip
+    geowatch stats $HIRES_DVC_DATA_DPATH/Drop7-Cropped2GSD/KR_R002/KR_R002.kwcoco.zip
+    geowatch stats $HIRES_DVC_DATA_DPATH/Drop7-Cropped2GSD/CH_R001/CH_R001.kwcoco.zip
+
     python -m watch.mlops.schedule_evaluation --params="
         matrix:
             ########################
@@ -302,12 +312,13 @@ packaged model in the grid and adjust parameters as desired.
 
             sc_pxl.test_dataset:
               - $HIRES_DVC_DATA_DPATH/Drop7-Cropped2GSD/KR_R001/KR_R001.kwcoco.zip
-              #- $HIRES_DVC_DATA_DPATH/Drop7-Cropped2GSD/KR_R002/KR_R002.kwcoco.zip
+              - $HIRES_DVC_DATA_DPATH/Drop7-Cropped2GSD/KR_R002/KR_R002.kwcoco.zip
+              - $HIRES_DVC_DATA_DPATH/Drop7-Cropped2GSD/CH_R001/CH_R001.kwcoco.zip
 
             sc_pxl.package_fpath:
                 - $DVC_EXPT_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt
-                - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V07/Drop7-Cropped2GSD_SC_bgrn_split6_V07_epoch73_step6364.pt
-                - $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V11/Drop7-Cropped2GSD_SC_bgrn_split6_V11_epoch444_step19135.pt
+                #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V07/Drop7-Cropped2GSD_SC_bgrn_split6_V07_epoch73_step6364.pt
+                #- $DVC_EXPT_DPATH/models/fusion/Drop7-Cropped2GSD/packages/Drop7-Cropped2GSD_SC_bgrn_split6_V11/Drop7-Cropped2GSD_SC_bgrn_split6_V11_epoch444_step19135.pt
 
             sc_pxl.tta_fliprot: 0.0
             sc_pxl.tta_time: 0.0
@@ -358,6 +369,8 @@ packaged model in the grid and adjust parameters as desired.
               sc_poly.site_summary: $TRUTH_DVC_DATA_DPATH/annotations/drop6/region_models/KR_R001.geojson
             - sc_pxl.test_dataset: $HIRES_DVC_DATA_DPATH/Drop7-Cropped2GSD/KR_R002/KR_R002.kwcoco.zip
               sc_poly.site_summary: $TRUTH_DVC_DATA_DPATH/annotations/drop6/region_models/KR_R002.geojson
+            - sc_pxl.test_dataset: $HIRES_DVC_DATA_DPATH/Drop7-Cropped2GSD/CH_R001/CH_R001.kwcoco.zip
+              sc_poly.site_summary: $TRUTH_DVC_DATA_DPATH/annotations/drop6/region_models/CH_R001.geojson
         " \
         --pipeline=sc \
         --root_dpath="$DVC_EXPT_DPATH/_demo_ac_eval" \

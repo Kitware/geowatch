@@ -2118,6 +2118,7 @@ def coco_channel_stats(coco_dset):
 
     sensor_hist = ub.ddict(lambda: 0)
     chan_hist = ub.ddict(lambda: 0)
+    single_chan_hist = ub.ddict(lambda: 0)
     sensorchan_hist = ub.ddict(lambda: ub.ddict(lambda: 0))
     sensorchan_hist2 = ub.ddict(lambda: 0)
     for _gid, img in coco_dset.index.imgs.items():
@@ -2136,6 +2137,9 @@ def coco_channel_stats(coco_dset):
         sensorchan = f'{sensor}:({chan})'
         sensorchan_hist2[sensorchan] += 1
 
+        for single_chan in kwcoco.ChannelSpec(chan).unique():
+            single_chan_hist[single_chan] += 1
+
     CS = kwcoco.ChannelSpec
     FS = kwcoco.FusedChannelSpec
     osets = [CS.coerce(c).fuse().to_oset() for c in chan_hist]
@@ -2151,6 +2155,7 @@ def coco_channel_stats(coco_dset):
             for s in sensorchan_hist2.keys()]).concise()
 
     info = {
+        'single_chan_hist': single_chan_hist,
         'chan_hist': chan_hist,
         'sensor_hist': sensor_hist,
         'sensorchan_hist': sensorchan_hist,

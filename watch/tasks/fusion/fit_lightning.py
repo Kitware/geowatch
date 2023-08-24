@@ -296,7 +296,8 @@ def make_cli(config=None):
         # auto-plotters can hook into.
         import tensorboard  # NOQA
     except ImportError:
-        print('warning: tensorboard not available')
+        import rich
+        rich.print('[yellow]warning: tensorboard not available')
     else:
         # Only use tensorboard if we have it.
         default_callbacks.append(pl_ext.callbacks.TensorboardPlotter())
