@@ -1085,7 +1085,6 @@ class ConfusionAnalysis:
             true_sites = list(ub.take(true_sites_all, true_idxs))
 
             if len(true_idxs):
-                raise Exception
                 matched_status = '_'.join(sorted({s.status for s in true_sites}))
                 cfsn_status = '_some_space_overlap_' + matched_status
             else:
