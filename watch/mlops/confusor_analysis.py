@@ -1234,6 +1234,8 @@ def make_case(pred_sites, true_sites, true_geoms, pred_geoms, main_pred_idx, reg
     else:
         case['name'] = f'{main_pred_site.site_id}-vs-null'
 
+    case['type'] = type_
+
     case.update({
         # 'type': type_,
         'region_start_date': region_start_date,
