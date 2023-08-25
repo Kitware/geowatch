@@ -89,9 +89,9 @@ DATASET_CODE=ToyDataMSI
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 EXPERIMENT_NAME=ToyDataMSI_Demo_V001
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-MAX_STEPS=100
+MAX_STEPS=80000
 TARGET_LR=3e-4
-python -m watch.tasks.fusion fit --config "
+DDP_WORKAROUND=1 python -m watch.tasks.fusion fit --config "
     data:
         num_workers          : 4
         train_dataset        : $TRAIN_FPATH
@@ -128,11 +128,9 @@ python -m watch.tasks.fusion fit --config "
     trainer:
       accumulate_grad_batches: 1
       default_root_dir     : $DEFAULT_ROOT_DIR
-      #accelerator          : gpu
       accelerator          : gpu
-      devices              : 0,
-      #devices             : 0,1
-      #strategy            : ddp
+      devices              : 0,1
+      strategy             : ddp
       check_val_every_n_epoch: 1
       enable_checkpointing: true
       enable_model_summary: true

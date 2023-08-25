@@ -175,7 +175,14 @@ class SmartLightningCLI(LightningCLI_Extension):
 
         parser.add_lightning_class_args(TorchGlobals, "torch_globals")
 
-        parser.add_lightning_class_args(pl_ext.callbacks.BatchPlotter, "batch_plotter")
+        from watch.utils import util_environ
+        DDP_WORKAROUND = util_environ.envflag('DDP_WORKAROUND')
+
+        if not DDP_WORKAROUND:
+            # Fixme: disabled for multi-gpu training
+            # Force disable batch plotter when ddp is enabled,
+            parser.add_lightning_class_args(pl_ext.callbacks.BatchPlotter, "batch_plotter")
+
         # pl_ext.callbacks.BatchPlotter(  # Fixme: disabled for multi-gpu training with deepspeed
         #     num_draw=2,  # args.num_draw,
         #     draw_interval="5min",  # args.draw_interval
