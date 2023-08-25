@@ -1220,7 +1220,7 @@ def make_case(pred_sites, true_sites, true_geoms, pred_geoms, main_pred_idx, reg
         true_duration = true_dates[-1] - true_dates[0]
         pred_duration = pred_dates[-1] - pred_dates[0]
 
-        case['name'] = f'{main_pred_site.site_id}-vs-{main_true_site.site_id}',
+        case['name'] = f'{main_pred_site.site_id}-vs-{main_true_site.site_id}'
 
         case.update({
             'space_iou': space_iou,
