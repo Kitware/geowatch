@@ -1515,7 +1515,7 @@ def visualize_single_site_case(coco_dset, case, true_id_to_site, pred_id_to_site
     vidspace_hull = unary_union(all_vidspace_polys).convex_hull
 
     vidspace_poly = kwimage.MultiPolygon.from_shapely(vidspace_hull)
-    scale_factor = 3.0
+    scale_factor = 1.5
     vidspace_box = vidspace_poly.box()
 
     BE_A_SQUARE = 0
