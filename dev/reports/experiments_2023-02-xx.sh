@@ -3340,7 +3340,7 @@ geowatch schedule --params="
           sc_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/CN_C000/imgonly-CN_C000.kwcoco.zip
     " \
     --root_dpath="$DVC_EXPT_DPATH/_namek_eval15_bas_nomask" \
-    --devices="0,1" --tmux_workers=2 \
+    --devices="0,1" --tmux_workers=4 \
     --backend=tmux --queue_name "_namek_eval15_bas_nomask" \
     --pipeline=joint_bas_sv_sc \
     --skip_existing=1 \

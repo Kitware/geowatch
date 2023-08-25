@@ -595,9 +595,8 @@ class ArtistManager:
             attrs['color'] = kwimage.Color.coerce(attrs['color']).as01()
         if 'hashid' in attrs:
             attrs = attrs - {'hashid'}
-        hashid = ub.hash_data(attrs)[0:8]
-        attrs['hashid'] = hashid
-        return attrs
+        hashid = ub.hash_data(sorted(attrs.items()))[0:8]
+        return hashid, attrs
 
     def plot(self, xs, ys, **attrs):
         """
@@ -632,8 +631,7 @@ class ArtistManager:
         NOTE:
             perhaps allow adding markers based on ax.scatter?
         """
-        attrs = self._normalize_attrs(attrs)
-        hashid = attrs['hashid']
+        hashid, attrs = self._normalize_attrs(attrs)
         self.group_to_line_segments[hashid].append(points)
         self.group_to_attrs[hashid] = attrs
 
@@ -641,9 +639,8 @@ class ArtistManager:
         """
         Real ellipses in dataspace
         """
-        attrs = self._normalize_attrs(attrs)
-        hashid = attrs['hashid']
-        ell = mpl.patches.Ellipse(xy, rx, ry, angle=angle)
+        hashid, attrs = self._normalize_attrs(attrs)
+        ell = mpl.patches.Ellipse(xy, rx, ry, angle=angle, **attrs)
         self.group_to_patches[hashid]['ellipse'].append(ell)
         self.group_to_attrs[hashid] = attrs
 
@@ -651,9 +648,8 @@ class ArtistManager:
         """
         Real ellipses in dataspace
         """
-        attrs = self._normalize_attrs(attrs)
-        hashid = attrs['hashid']
-        ell = mpl.patches.Circle(xy, r)
+        hashid, attrs = self._normalize_attrs(attrs)
+        ell = mpl.patches.Circle(xy, r, **attrs)
         self.group_to_patches[hashid]['circle'].append(ell)
         self.group_to_attrs[hashid] = attrs
 
@@ -674,8 +670,7 @@ class ArtistManager:
             if 'facecolors' not in attrs:
                 attrs['facecolors'] = kwimage.Color.coerce(color).as01()
 
-        attrs = self._normalize_attrs(attrs)
-        hashid = attrs['hashid']
+        hashid, attrs = self._normalize_attrs(attrs)
         cols = self.group_to_ellipse_markers[hashid]
 
         xy = np.array(xy)
@@ -730,7 +725,6 @@ class ArtistManager:
             rx = np.concatenate(cols['rx'], axis=0)
             ry = np.concatenate(cols['ry'], axis=0)
             angles = np.concatenate(cols['angle'], axis=0)
-            print(f'ry={ry}')
             collection = mpl.collections.EllipseCollection(
                 widths=rx, heights=ry, offsets=xy, angles=angles,
                 units='points',
