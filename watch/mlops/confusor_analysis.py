@@ -974,6 +974,7 @@ class ConfusionAnalysis:
         from kwutil import util_progress
         pman = util_progress.ProgressManager()
         with pman:
+            total = 0
             for case in pman.progiter(cases, desc='dump cases', verbose=3):
                 # if 'CH_R001_0076' in case['name']:
                 #     raise Exception
@@ -981,6 +982,7 @@ class ConfusionAnalysis:
                 #     xdev.embed()
                 # else:
                 #     continue
+                total += 1
                 dpath = (viz_dpath / case['type'])
                 fpath = dpath / (case['name'] + '.jpg')
 
@@ -988,8 +990,9 @@ class ConfusionAnalysis:
                     canvas = visualize_single_site_case(
                         coco_dset, case, true_id_to_site, pred_id_to_site)
                 except Exception as ex:
-                    rich.print(f'[red] ERRORS {len(errors)}')
                     errors.append(ex)
+                    rich.print('ex = {}'.format(ub.urepr(ex, nl=1)))
+                    rich.print(f'[red] ERRORS {len(errors)} / {total}')
                     if self.config.strict:
                         raise
                     continue
@@ -1767,10 +1770,10 @@ def make_case_timeline(case):
             idxs = list(idxs)
             xs = obs_xs[idxs]
             if prev_x is not None:
-                c2 = prev_c.interpolate(c, ispace='lab', ospace='rgb')
+                c2 = prev_c.interpolate(c, ispace='hsv', ospace='rgb')
                 artman.plot([prev_x, xs[0]], yloc, color=c2)
             artman.plot(xs, yloc, color=c)
-            artman.add_ellipse_marker((xs[0], yloc), 5, 5, color=c, zorder=2)
+            artman.add_ellipse_marker((xs[0], yloc), 1, 1, color=c, zorder=2)
             prev_x = xs[-1]
             prev_c = c
 
@@ -1781,8 +1784,8 @@ def make_case_timeline(case):
 
         start_x, end_x = util_kwplot.fix_matplotlib_dates([start_date, end_date])
 
-        artman.add_ellipse_marker((start_x, yloc), 10, 10, color=bg_color, zorder=1)
-        artman.add_ellipse_marker((end_x, yloc), 10, 10, color=bg_color, zorder=1)
+        artman.add_ellipse_marker((start_x, yloc), 5, 5, color=bg_color, zorder=1)
+        artman.add_ellipse_marker((end_x, yloc), 5, 5, color=bg_color, zorder=1)
         # artman.plot((start_x, end_x), yloc, color=bg_color, zorder=-10)
         yloc += 1
 
