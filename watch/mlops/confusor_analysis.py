@@ -995,8 +995,8 @@ class ConfusionAnalysis:
                     continue
                 dpath.ensuredir()
                 canvas = kwimage.ensure_uint255(canvas)
-                import xdev
-                xdev.embed()
+                # import xdev
+                # xdev.embed()
                 print(f'fpath={fpath}')
                 print(f'canvas.shape={canvas.shape}')
                 kwimage.imwrite(fpath, canvas)
