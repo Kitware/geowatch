@@ -710,11 +710,12 @@ class ArtistManager:
         import numpy as np
         collections = []
         for hashid, segments in self.group_to_line_segments.items():
-            attrs = self.group_to_attrs[hashid] - {'hashid'}
+            attrs = self.group_to_attrs[hashid]
             collection = mpl.collections.LineCollection(segments, **attrs)
             collections.append(collection)
 
         for hashid, type_to_patches in self.group_to_patches.items():
+            attrs = self.group_to_attrs[hashid]
             for ptype, patches in type_to_patches.items():
                 collection = mpl.collections.PatchCollection(patches, **attrs)
                 collections.append(collection)
