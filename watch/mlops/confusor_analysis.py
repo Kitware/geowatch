@@ -1631,7 +1631,30 @@ def visualize_single_site_case(coco_dset, case, true_id_to_site, pred_id_to_site
             # cell_canvas = kwimage.draw_header_text(cell_canvas, '\n'.join(header_lines), fit='grow')
         cells.append(cell_canvas)
 
-    toshow = ub.udict(case) - {'pred_dates', 'true_dates'}
+    toshow = ub.udict(case) & {
+        'name',
+        'pred_coco_site_id',
+        'pred_area',
+        'te_associated',
+        'te_color_code',
+        'te_association_status',
+        'te_site_count',
+        'te_site_area',
+        'true_coco_site_id',
+        'true_area',
+        'te_spatial_overlap',
+        'te_temporal_iot',
+        'te_temporal_iop',
+        'te_score',
+        'name',
+        'space_iou',
+        'space_iot',
+        'space_iop',
+        'time_iou',
+        'time_iot',
+        'time_iop',
+        'type',
+    }
 
     case = case.copy()
 
