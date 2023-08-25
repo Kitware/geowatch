@@ -1,10 +1,10 @@
 #!/bin/bash
-__doc__="""
+__doc__="
 This tutorial expands on ~/code/watch/tutorial/toy_experiments_msi.sh and
 trains different models with varied hyperparameters. The comments in this
 tutorial will be sparse. Be sure to read the previous tutorial and compare
 these fit invocation with the default one.
-"""
+"
 
 # Define wherever you want to store results
 DVC_DATA_DPATH=$HOME/data/dvc-repos/toy_data_dvc
@@ -17,7 +17,7 @@ NUM_TOY_TEST_VIDS="${NUM_TOY_TEST_VIDS:-2}"  # If variable not set or null, use 
 # Generate toy datasets
 TRAIN_FPATH=$DVC_DATA_DPATH/vidshapes_msi_train${NUM_TOY_TRAIN_VIDS}/data.kwcoco.json
 VALI_FPATH=$DVC_DATA_DPATH/vidshapes_msi_vali${NUM_TOY_VALI_VIDS}/data.kwcoco.json
-#TEST_FPATH=$DVC_DATA_DPATH/vidshapes_msi_test${NUM_TOY_TEST_VIDS}/data.kwcoco.json 
+#TEST_FPATH=$DVC_DATA_DPATH/vidshapes_msi_test${NUM_TOY_TEST_VIDS}/data.kwcoco.json
 
 generate_data(){
     mkdir -p "$DVC_DATA_DPATH"
@@ -66,12 +66,12 @@ python -m watch.tasks.fusion fit --config "
         class_path: MultimodalTransformer
         init_args:
             name        : $EXPERIMENT_NAME
-            arch_name   : smt_it_stm_p8 
+            arch_name   : smt_it_stm_p8
             window_size : 8
             dropout     : 0.1
-            global_saliency_weight: 1.0 
-            global_class_weight:    1.0 
-            global_change_weight:   0.0 
+            global_saliency_weight: 1.0
+            global_class_weight:    1.0
+            global_change_weight:   0.0
     lr_scheduler:
       class_path: torch.optim.lr_scheduler.OneCycleLR
       init_args:
@@ -90,10 +90,10 @@ python -m watch.tasks.fusion fit --config "
     trainer:
       accumulate_grad_batches: 1
       default_root_dir     : $DEFAULT_ROOT_DIR
-      accelerator          : gpu 
+      accelerator          : gpu
       devices              : 0,
       #devices             : 0,1
-      #strategy            : ddp 
+      #strategy            : ddp
       check_val_every_n_epoch: 1
       enable_checkpointing: true
       enable_model_summary: true
@@ -126,7 +126,7 @@ References:
     https://github.com/Lightning-AI/lightning/discussions/6501#discussioncomment-553152
 
 So far we may be able to avoid this if we do some combination of the following:
-    * Disable pl_ext.callbacks.BatchPlotter 
+    * Disable pl_ext.callbacks.BatchPlotter
         - does cause the issue by itself, but seemingly only if we try to put
           in rank guards.
 
@@ -187,9 +187,9 @@ python -m watch.tasks.fusion fit --config "
     trainer:
       default_root_dir : $DEFAULT_ROOT_DIR
       max_steps        : $MAX_STEPS
-      accelerator      : gpu 
+      accelerator      : gpu
       devices          : 0,1
-      strategy        : ddp 
+      strategy        : ddp
 "
 
 
@@ -275,7 +275,7 @@ echo "
     trainer:
       accumulate_grad_batches: 1
       default_root_dir     : $DEFAULT_ROOT_DIR
-      accelerator          : gpu 
+      accelerator          : gpu
       devices              : 0,
       check_val_every_n_epoch: 1
       enable_checkpointing: true
@@ -294,10 +294,10 @@ echo "
 # And then Ctrl+C to kill it
 python -m watch.tasks.fusion fit --config "$CONFIG_FPATH"
 
-# The following command should grab the most recent checkpoint 
+# The following command should grab the most recent checkpoint
 CKPT_FPATH=$(python -c "import pathlib; print(list(pathlib.Path('$DEFAULT_ROOT_DIR/lightning_logs').glob('*/checkpoints/*.ckpt'))[0])")
 echo "CKPT_FPATH = $CKPT_FPATH"
 
 # Calling fit again, but passing in the checkpoint should restart training from
-# where it left off. 
+# where it left off.
 python -m watch.tasks.fusion fit --config "$CONFIG_FPATH" --ckpt_path="$CKPT_FPATH"

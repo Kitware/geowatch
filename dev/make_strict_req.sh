@@ -1,9 +1,9 @@
 #!/bin/bash
-__doc__="""
+__doc__="
 Make a strict version of requirements
 
 ./dev/make_strict_req.sh
-"""
+"
 # Make strict version of requirements
 #sed 's/requirements/requirements-strict/g' conda_env.yml > conda_env_strict.yml
 #sed -i 's/>=/==/g' conda_env_strict.yml

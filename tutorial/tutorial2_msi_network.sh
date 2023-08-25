@@ -1,12 +1,12 @@
 #!/bin/bash
-__doc__="""
+__doc__="
 This demonstrates an end-to-end pipeline on multispectral toydata
 
 This walks through the entire process of fit -> predict -> evaluate and the
 output if you run this should end with something like
 
 source ~/code/watch/tutorial/toy_experiments_msi.sh
-"""
+"
 
 # Define wherever you want to store results
 DVC_DATA_DPATH=$HOME/data/dvc-repos/toy_data_dvc
@@ -46,13 +46,13 @@ if [[ ! -e "$TRAIN_FPATH" ]]; then
     print_stats
 fi
 
-__doc__="""
+__doc__="
 Should look like
                                    dset  n_anns  n_imgs  n_videos  n_cats  r|g|b|disparity|gauss|B8|B11  B1|B8|B8a|B10|B11  r|g|b|flowx|flowy|distri|B10|B11
 0  vidshapes_msi_train/data.kwcoco.json      80      40         8       3                            12                 12                                16
 1   vidshapes_msi_vali/data.kwcoco.json      50      25         5       3                             9                 10                                 6
 2   vidshapes_msi_test/data.kwcoco.json      24      12         2       3                             5                  3                                 4
-"""
+"
 
 
 
