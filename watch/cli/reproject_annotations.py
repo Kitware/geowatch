@@ -241,7 +241,6 @@ def main(cmdline=False, **kwargs):
         >>> main(cmdline=cmdline, **kwargs)
     """
     config = ReprojectAnnotationsConfig.cli(data=kwargs, cmdline=cmdline)
-    import geopandas as gpd  # NOQA
     from watch.utils import util_gis
     from watch.utils import util_parallel
     from kwutil.util_yaml import Yaml
@@ -957,14 +956,14 @@ def assign_sites_to_images(coco_dset,
         Tuple[List[Dict[str, Any]], Dict[str, Any]]:
             A tuple: propogated_annotations, all_drawable_infos
     """
-    from shapely.ops import unary_union
-    import pandas as pd
-    from watch.utils import util_gis
-    from watch.utils import kwcoco_extensions
     import kwimage
-    import dateutil
     import numpy as np
+    import pandas as pd
+    from shapely.ops import unary_union
     from watch import heuristics
+    from watch.utils import kwcoco_extensions
+    from watch.utils import util_gis
+    from kwutil import util_time
     # Create a geopandas data frame that contains the CRS84 extent of all images
     img_gdf = kwcoco_extensions.covered_image_geo_regions(coco_dset)
 
@@ -1065,7 +1064,7 @@ def assign_sites_to_images(coco_dset,
             print(f'{region_ids=} {video_id=} #sites={len(region_sites)}')
         # Grab the images data frame for that video
         subimg_df = vidid_to_imgdf[video_id]
-        region_image_dates = np.array(list(map(dateutil.parser.parse, subimg_df['date_captured'])))
+        region_image_dates = np.array(list(map(util_time.coerce_datetime, subimg_df['date_captured'])))
         region_image_indexes = np.arange(len(region_image_dates))
         region_gids = subimg_df['image_id'].values
 

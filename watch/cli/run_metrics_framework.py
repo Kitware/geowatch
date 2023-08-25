@@ -515,7 +515,7 @@ def main(cmdline=True, **kwargs):
                 --true_site_dpath={true_site_dpath} \
                 --region_id={region_id} \
                 --viz_sites=True \
-                --reload=0
+                --reload=0 "$@"
             ''')
         cfsn_invoke_fpath = (main_out_dir / 'confusion_analysis.sh')
         cfsn_invoke_fpath.write_text(confusion_analysis_text)
