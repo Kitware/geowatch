@@ -652,6 +652,46 @@ class Cropping(ProcessNode):
         return command
 
 
+class SiteClustering(ProcessNode):
+    """
+    Crop to each image of every site.
+
+    CommandLine:
+        xdoctest -m watch.mlops.smart_pipeline SC_Cropping
+
+    Example:
+        >>> from watch.mlops.smart_pipeline import *  # NOQA
+        >>> node = SiteClustering()
+        >>> command = node.final_command()
+        >>> print(command)
+    """
+    executable = 'python -m watch.cli.cluster_sites'
+    group_dname = PREDICT_NAME
+
+    name = 'cluster_sites'
+    group_dname = 'crops'
+
+    algo_params = {
+        'minimum_size': '128x128@2GSD',
+        'maximum_size': '1024x1024@2GSD',
+        'crop_time': True,
+        'context_factor': 1.5,
+    }
+    perf_params = {
+        'io_workers': 4,
+        'draw_clusters': False,
+    }
+
+    in_paths = {
+        'src',
+    }
+
+    out_paths = {
+        'dst_dpath': 'clustered',
+        'dst_region_fpath': 'clustered.geojson',
+    }
+
+
 class SC_Cropping(Cropping):
     """
     Crop to each image of every site.
@@ -1067,7 +1107,7 @@ def sc_nodes():
 
 def make_smart_pipeline_nodes(with_bas=True, building_validation=False,
                               depth_validation=False, site_crops=True,
-                              with_sc=True):
+                              with_acsc=True, site_cluster=False):
     nodes = {}
 
     sc_input_region = None
@@ -1142,17 +1182,28 @@ def make_smart_pipeline_nodes(with_bas=True, building_validation=False,
             true_sites.connect(nodes['sv_poly_eval'].inputs['true_site_dpath'])
 
     if site_crops:
+
+        if site_cluster:
+            nodes['site_cluster'] = SiteClustering()
+
         nodes['sc_crop'] = SC_Cropping()
 
-        # If we predicted regions to go to SC, crop to those.
-        if sc_input_region is not None:
-            sc_input_region.connect(nodes['sc_crop'].inputs['regions'])
-            # nodes['bas_pxl'].inputs['test_dataset'].connect(sc_input_kwcoco)
+        if site_cluster:
+            # If we cluster, the AC/SC
+            assert sc_input_region is not None
+            if sc_input_region is not None:
+                sc_input_region.connect(nodes['site_cluster'].inputs['src'])
+                nodes['site_cluster'].outputs['dst_region_fpath'].connect(nodes['sc_crop'].inputs['regions'])
+        else:
+            # If we predicted regions to go to SC, crop to those.
+            if sc_input_region is not None:
+                sc_input_region.connect(nodes['sc_crop'].inputs['regions'])
+                # nodes['bas_pxl'].inputs['test_dataset'].connect(sc_input_kwcoco)
 
         # If we are site cropping, then use its outputs as SC input
         sc_input_kwcoco = nodes['sc_crop'].outputs['crop_dst_fpath']
 
-    if with_sc:
+    if with_acsc:
         nodes.update(sc_nodes())
 
         if sc_input_kwcoco is not None:
@@ -1187,6 +1238,11 @@ def make_smart_pipeline(name):
 
         >>> from watch.mlops.smart_pipeline import *  # NOQA
         >>> dag = make_smart_pipeline('joint_bas_sv_sc')
+        >>> dag.print_graphs()
+        >>> dag.inspect_configurables()
+
+        >>> from watch.mlops.smart_pipeline import *  # NOQA
+        >>> dag = make_smart_pipeline('full')
         >>> dag.print_graphs()
         >>> dag.inspect_configurables()
 
@@ -1236,6 +1292,11 @@ def make_smart_pipeline(name):
     from watch.mlops.pipeline_nodes import PipelineDAG
     from functools import partial
     node_makers = {
+        'full': partial(make_smart_pipeline_nodes, site_crops=True,
+                        building_validation=True,
+                        depth_validation=True, site_cluster=True),
+
+
         'joint_bas_sc': partial(make_smart_pipeline_nodes, site_crops=True),
 
         'joint_bas_sv_sc': partial(make_smart_pipeline_nodes, site_crops=True,
@@ -1248,15 +1309,15 @@ def make_smart_pipeline(name):
         'bas': bas_nodes,
         'bas_building_vali': partial(make_smart_pipeline_nodes, with_bas=True,
                                      building_validation=True,
-                                     site_crops=False, with_sc=False),
+                                     site_crops=False, with_acsc=False),
         'bas_depth_vali': partial(make_smart_pipeline_nodes, with_bas=True,
                                   depth_validation=True,
-                                  site_crops=False, with_sc=False),
+                                  site_crops=False, with_acsc=False),
 
         'bas_building_and_depth_vali': partial(make_smart_pipeline_nodes, with_bas=True,
                                                building_validation=True,
                                                depth_validation=True,
-                                               site_crops=False, with_sc=False),
+                                               site_crops=False, with_acsc=False),
     }
     make_nodes = node_makers[name]
     nodes = make_nodes()

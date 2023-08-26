@@ -501,6 +501,31 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
             prop = feat['properties']
             _update_propery_cache(prop)
 
+    def ensure_isodates(self):
+        """
+        Ensure that dates are provided as dates and not datetimes
+
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> region = RegionModel.random()
+            >>> region.header['properties']['start_date'] = '1970-01-01T000000'
+            >>> region.ensure_isodates()
+            >>> assert region.header['properties']['start_date'] == '1970-01-01'
+        """
+        date_keys = ['start_date', 'end_date']
+        for feat in self['features']:
+            props = feat['properties']
+            for key in date_keys:
+                if key in props:
+                    oldval = props[key]
+                    if oldval is not None:
+                        dt = util_time.coerce_datetime(oldval)
+                        try:
+                            newval = dt.date().isoformat()
+                        except Exception:
+                            print('ERROR: oldval = {}'.format(ub.urepr(oldval, nl=1)))
+                        props[key] = newval
+
 
 def _report_jsonschema_error(ex):
     import rich
@@ -681,31 +706,6 @@ class RegionModel(_Model):
         self.remove_invalid_properties()
         self.ensure_isodates()
         return self
-
-    def ensure_isodates(self):
-        """
-        Ensure that dates are provided as dates and not datetimes
-
-        Example:
-            >>> from watch.geoannots.geomodels import *  # NOQA
-            >>> region = RegionModel.random()
-            >>> region.header['properties']['start_date'] = '1970-01-01T000000'
-            >>> region.ensure_isodates()
-            >>> assert region.header['properties']['start_date'] == '1970-01-01'
-        """
-        date_keys = ['start_date', 'end_date']
-        for feat in self['features']:
-            props = feat['properties']
-            for key in date_keys:
-                if key in props:
-                    oldval = props[key]
-                    if oldval is not None:
-                        dt = util_time.coerce_datetime(oldval)
-                        try:
-                            newval = dt.date().isoformat()
-                        except Exception:
-                            print('ERROR: oldval = {}'.format(ub.urepr(oldval, nl=1)))
-                        props[key] = newval
 
     def remove_invalid_properties(self):
         """
@@ -1118,6 +1118,47 @@ class _Feature(ub.NiceRepr, geojson.Feature):
             _report_jsonschema_error(e)
             raise
 
+    def ensure_isodates(self):
+        """
+        Ensure that dates are provided as dates and not datetimes
+
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> ss = SiteSummary.random()
+            >>> ss['properties']['start_date'] = '1970-01-01T000000'
+            >>> ss.ensure_isodates()
+            >>> assert ss['properties']['start_date'] == '1970-01-01'
+        """
+        date_keys = ['start_date', 'end_date']
+        props = self['properties']
+        for key in date_keys:
+            if key in props:
+                oldval = props[key]
+                if oldval is not None:
+                    dt = util_time.coerce_datetime(oldval)
+                    try:
+                        newval = dt.date().isoformat()
+                    except Exception:
+                        print('ERROR: oldval = {}'.format(ub.urepr(oldval, nl=1)))
+                    props[key] = newval
+
+    def infer_mgrs(self):
+        """
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> ss = SiteSummary.random()
+            >>> ss.infer_mgrs()
+        """
+
+        from shapely.geometry import shape
+        import mgrs
+        _geom = shape(self.geometry)
+        lon = _geom.centroid.xy[0][0]
+        lat = _geom.centroid.xy[1][0]
+        mgrs_code = mgrs.MGRS().toMGRS(lat, lon, MGRSPrecision=0)
+        self.properties['mgrs'] = mgrs_code
+        return self
+
 
 class _SiteOrSummaryMixin:
     """
@@ -1293,16 +1334,6 @@ class RegionHeader(_Feature):
                     return cls(**RegionModel(**data).header)
         raise TypeError(data)
 
-    def infer_mgrs(self):
-        from shapely.geometry import shape
-        import mgrs
-        _geom = shape(self.geometry)
-        lon = _geom.centroid.xy[0][0]
-        lat = _geom.centroid.xy[1][0]
-        mgrs_code = mgrs.MGRS().toMGRS(lat, lon, MGRSPrecision=0)
-        self.properties['mgrs'] = mgrs_code
-        return self
-
     def ensure_isodates(self):
         date_keys = ['start_date', 'end_date', 'predicted_phase_transition_date']
         feat = self
@@ -1360,6 +1391,36 @@ class SiteSummary(_Feature, _SiteOrSummaryMixin):
         else:
             raise TypeError(type(data))
         return self
+
+    @classmethod
+    def random(cls, rng=None, region=None, site_poly=None, **kwargs):
+        """
+        Args:
+            rng (int | str | RandomState | None) :
+                seed or random number generator
+
+            region (RegionModel | None):
+                if specified generate a new site in this region model.
+                (This will overwrite some of the kwargs).
+
+            site_poly (kwimage.Polygon | shapely.geometry.Polygon | None):
+                if specified, this polygon is used as the geometry for new site
+                models. Note: all site models will get this geometry, so
+                typically this is only used when num_sites=1.
+
+            **kwargs :
+                passed to :func:`watch.demo.metrics_demo.demo_truth.random_region_model`.
+
+        Returns:
+            SiteSummary
+
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> sitesum = SiteSummary.random(rng=0)
+            >>> print('sitesum = {}'.format(ub.urepr(sitesum, nl=2)))
+        """
+        site = SiteModel.random(rng=rng, region=region, site_poly=site_poly, **kwargs)
+        return site.as_summary()
 
 
 class SiteHeader(_Feature, _SiteOrSummaryMixin):

@@ -208,7 +208,7 @@ class ScheduleEvaluationConfig(CMDQueueConfig):
 
     root_dpath = scfg.Value('auto', help=(
         'Where do dump all results. If "auto", uses <expt_dvc_dpath>/dag_runs'))
-    pipeline = scfg.Value('joint_bas_sc', help='the name of the pipeline to run')
+    pipeline = scfg.Value('joint_bas_sc', help='the name of the pipeline to run. Can also specify this in the params.')
 
     enable_links = scfg.Value(True, isflag=True, help='if true enable symlink jobs')
     cache = scfg.Value(True, isflag=True, help=(
@@ -253,10 +253,14 @@ def schedule_evaluation(config):
     First ensure that models have been copied to the DVC repo in the
     appropriate path. (as noted by model_dpath)
     """
-    import rich
-    from watch.mlops import smart_pipeline
-    from kwutil import util_progress
+    import json
     import pandas as pd
+    import rich
+    from kwutil import slugify_ext
+    from kwutil import util_progress
+    from kwutil.util_yaml import Yaml
+    from watch.mlops import smart_pipeline
+    from watch.utils.result_analysis import varied_values
     from watch.utils.util_param_grid import expand_param_grid
 
     # Dont put in post-init because it is called by the CLI!
@@ -267,8 +271,37 @@ def schedule_evaluation(config):
 
     root_dpath = ub.Path(config['root_dpath'])
 
+    if config['params'] is not None:
+        param_arg = Yaml.coerce(config['params']) or {}
+        pipeline = param_arg.pop('pipeline', config.pipeline)
+
+        # Associate BAS datasets and HighRes datasets
+        # Convinience to make it less tedious to specify datasets.
+        # Hard codes the DVC pattern to associate lowres and hires data.
+        # This is not a robust mechanism.
+        smart_highres_bundle = param_arg.pop('smart_highres_bundle', None)
+        if smart_highres_bundle is not None:
+            smart_highres_bundle = ub.Path(smart_highres_bundle)
+            assert smart_highres_bundle.exists()
+            if 'submatrices' in param_arg:
+                raise Exception('cant hack submatrices with submatrices on')
+
+            submatrices = []
+            from watch import heuristics
+            for bas_fpath in param_arg['matrix']['bas_pxl.test_dataset']:
+                region_id = heuristics.extract_region_id(ub.Path(bas_fpath).name)
+                region_dpath = (smart_highres_bundle / region_id)
+                hires_coco_fpath = region_dpath / f'imgonly-{region_id}.kwcoco.zip'
+                assert hires_coco_fpath.exists()
+                submatrices.append({
+                    'bas_pxl.test_dataset': bas_fpath,
+                    'sv_crop.crop_src_fpath': hires_coco_fpath,
+                    'sc_crop.crop_src_fpath': hires_coco_fpath,
+                })
+            param_arg['submatrices'] = submatrices
+
     # Load the requested pipeline
-    dag = smart_pipeline.make_smart_pipeline(config['pipeline'])
+    dag = smart_pipeline.make_smart_pipeline(pipeline)
     dag.print_graphs(smart_colors=1)
     dag.inspect_configurables()
 
@@ -278,17 +311,14 @@ def schedule_evaluation(config):
         # Write some metadata to help aggregate set its defaults automatically
         most_recent_fpath = mlops_meta / 'most_recent_run.json'
         data = {
-            'pipeline': str(config.pipeline),
+            'pipeline': str(pipeline),
         }
-        import json
         most_recent_fpath.write_text(json.dumps(data, indent='    '))
 
     queue = config.create_queue(gpus=config.devices)
 
     # Expand paramater search grid
     if config['params'] is not None:
-        from kwutil.util_yaml import Yaml
-        param_arg = Yaml.coerce(config['params']) or {}
         # print('param_arg = {}'.format(ub.urepr(param_arg, nl=1)))
         all_param_grid = list(expand_param_grid(
             param_arg,
@@ -328,11 +358,9 @@ def schedule_evaluation(config):
 
     if config['print_varied']:
         # Print config info
-        from watch.utils.result_analysis import varied_values
         longparams = pd.DataFrame(all_param_grid)
         varied = varied_values(longparams, min_variations=2, dropna=False)
         relevant = longparams[longparams.columns.intersection(varied)]
-        from kwutil import slugify_ext
 
         def pandas_preformat(item):
             if isinstance(item, str):
@@ -355,6 +383,8 @@ def schedule_evaluation(config):
         'with_locks': 0,
         'exclude_tags': ['boilerplate'],
     }
+
+    rich.print(f'\n\ndag.root_dpath: [link={dag.root_dpath}]{dag.root_dpath}[/link]')
     config.run_queue(queue, print_kwargs=print_kwargs)
 
     if not config.run:

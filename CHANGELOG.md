@@ -20,6 +20,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 * Confusion analysis script is given new functionality to visualize and categorize cases on a per-site basis.
+* Add `DDP_WORKAROUND` environ flag to disable batch plotting / work around issues with distributed training.
 
 ### Removed:
 * Removed `separate_region_queues` `separate_align_jobs` options from `prepare-ta2-dataset`, they are now always True.

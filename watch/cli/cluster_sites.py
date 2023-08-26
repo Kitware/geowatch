@@ -62,6 +62,8 @@ class ClusterSiteConfig(scfg.DataConfig):
 
     dst_dpath = scfg.Value(None, help='output path to store the resulting region files')
 
+    dst_region_fpath = scfg.Value(None, help='geojson output path for site summaries. Only works if there is a single input region, otherwise an error is raised')
+
     io_workers = scfg.Value(10, help='number of io workers')
 
     draw_clusters = scfg.Value(False, isflag=True, help='if True draw the clusters')
@@ -169,6 +171,9 @@ def main(cmdline=1, **kwargs):
 
     all_final_site_summaries = []
 
+    if config.dst_region_fpath is not None:
+        assert len(input_region_models) == 1, 'only 1 region when output fpath given'
+
     for input_region_model in input_region_models:
 
         input_region_model.fixup()
@@ -198,6 +203,14 @@ def main(cmdline=1, **kwargs):
 
         # Sort bbs so the largest spatial ones are first.
         keep_bbs = keep_bbs[keep_bbs.area.ravel().argsort()[::-1]]
+
+        total_box = kwimage.Box.coerce(keep_bbs.bounding_box())
+        total_geom = total_box.to_shapely()
+        total_summaries = []
+
+        from kwutil import util_time
+        total_end_date = None
+        total_start_date = None
 
         print(f'Looping over {len(keep_bbs)} clusters')
         for bb_idx, utm_box in enumerate(keep_bbs.to_shapely()):
@@ -260,6 +273,31 @@ def main(cmdline=1, **kwargs):
             if geometry is None or geometry.is_empty or not geometry.is_valid:
                 raise AssertionError
 
+            _end_date = util_time.coerce_datetime(end_date)
+            _start_date = util_time.coerce_datetime(start_date)
+            if total_start_date is None:
+                total_start_date = _start_date
+            if total_end_date is None:
+                total_end_date = _end_date
+
+            sub_region_summary = geomodels.SiteSummary(
+                properties={
+                    "type": 'site_summary',
+                    "status": "system_confirmed",
+                    "site_id": subregion_id,
+                    "version": '2.4.3',
+                    "mgrs": None,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "originator": "kit-cluster",
+                    "model_content": "annotation",
+                },
+                geometry=geometry,
+            )
+            sub_region_summary.ensure_isodates()
+            sub_region_summary.infer_mgrs()
+            total_summaries.append(sub_region_summary)
+
             sub_region_header = geomodels.RegionHeader(
                 properties={
                     "type": 'region',
@@ -289,6 +327,31 @@ def main(cmdline=1, **kwargs):
             sub_region.validate(strict=False)
 
             fpath.write_text(sub_region.dumps())
+
+        if config.dst_region_fpath is not None:
+            total_geom_df_crs84 = gpd.GeoDataFrame({'geometry': [total_geom]}, crs=utm_crs).to_crs(crs84)
+            total_geom_crs84 = total_geom_df_crs84.iloc[0]['geometry']
+            new_region_header = geomodels.RegionHeader(
+                properties={
+                    "type": 'region',
+                    "region_id": region_id,
+                    "version": '2.4.3',
+                    "mgrs": None,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "originator": "kit-cluster",
+                    "model_content": "annotation",
+                    "comments": '',
+                },
+                geometry=total_geom_crs84,
+            )
+            new_region_header.ensure_isodates()
+            new_region_header.infer_mgrs()
+            new_region = geomodels.RegionModel(features=[
+                new_region_header
+            ] + total_summaries)
+            region_fpath = ub.Path(config.dst_region_fpath)
+            region_fpath.write_text(new_region.dumps())
 
         # print('all_final_site_summaries = {}'.format(ub.urepr(all_final_site_summaries, nl=1)))
 

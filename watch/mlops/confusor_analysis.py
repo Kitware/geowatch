@@ -1330,13 +1330,13 @@ def visualize_single_site_case(coco_dset, case, true_id_to_site, pred_id_to_site
             pred_annots = coco_dset.annots(pred_aids)
             pred_annots.images.lookup('date_captured')
             all_aids.update(pred_aids)
-            shown_pred_sites = None
+            # shown_pred_sites = None
             pred_tid = pred_annots[0:1].lookup('track_id')[0]
             main_trackids.append(pred_tid)
             main_pred_aids.update(pred_aids)
 
     try:
-        shown_true_sites = case['true_sites']
+        # shown_true_sites = case['true_sites']
         true_site_id = case['true_coco_site_id']
         true_site = true_id_to_site[case['true_site_id']]
         # true_summary = true_id_to_summary[case['true_site_id']]
@@ -1358,7 +1358,7 @@ def visualize_single_site_case(coco_dset, case, true_id_to_site, pred_id_to_site
         true_annots = []
         true_aids = []
         true_site = None
-        shown_true_sites = None
+        # shown_true_sites = None
         true_site_id = None
     else:
         main_true_aids.update(true_aids)
