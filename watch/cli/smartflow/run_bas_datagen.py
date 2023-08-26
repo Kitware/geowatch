@@ -106,7 +106,8 @@ def build_combined_stac(previous_stac_input_path,
     previous_stac_items = load_input_stac_items(previous_stac_input_path, None)
     current_stac_items = load_input_stac_items(stac_input_path, None)
 
-    combined_stac_items = previous_stac_items.copy().extend(current_stac_items)
+    combined_stac_items = previous_stac_items.copy()
+    combined_stac_items.extend(current_stac_items)
 
     with open(combined_stac_output_path, 'w') as f:
         print('\n'.join((json.dumps(item)
