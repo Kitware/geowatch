@@ -302,7 +302,10 @@ def run_stac_to_cropped_kwcoco(config):
     # Overwritten if incremental mode (and not first interval)
     combined_kwcoco_path = current_interval_kwcoco_path
 
-    incremental_assets_for_egress = {}
+    # Setting 'combined_stac_input' here to ensure we have something
+    # from the first interval.  Gets overwritten if not the first
+    # interval
+    incremental_assets_for_egress = {'combined_stac_input': local_stac_path}
     previous_ingressed_assets = None
     if config.previous_interval_output is not None:
         print('* Combining previous interval time combined kwcoco with'
