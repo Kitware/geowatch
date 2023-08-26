@@ -284,7 +284,7 @@ def run_stac_to_cropped_kwcoco(config):
     # Download STAC input file locally
     local_stac_path = ingress_dir / 'input_stac.jsonl'
     input_stac_path = util_fsspec.FSPath.coerce(config.input_path)
-    input_stac_path.copy(local_stac_path)
+    input_stac_path.copy(util_fsspec.FSPath.coerce(local_stac_path))
 
     # 3. Generate KWCOCO dataset from input STAC
     current_interval_kwcoco_path = input_stac_to_kwcoco(
