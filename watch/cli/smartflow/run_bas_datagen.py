@@ -303,6 +303,7 @@ def run_stac_to_cropped_kwcoco(config):
     combined_kwcoco_path = current_interval_kwcoco_path
 
     incremental_assets_for_egress = {}
+    previous_ingressed_assets = None
     if config.previous_interval_output is not None:
         print('* Combining previous interval time combined kwcoco with'
               'current *')
@@ -471,7 +472,8 @@ def run_stac_to_cropped_kwcoco(config):
         final_interval_bas_kwcoco_path = ta1_cropped_kwcoco_path
 
     # 6.1. Combine previous interval time-combined data for BAS
-    if config.previous_interval_output is not None:
+    if(config.previous_interval_output is not None
+       and previous_ingressed_assets is not None):
         combined_timecombined_kwcoco_path =\
             ta1_cropped_dir / 'combined_timecombined_kwcoco.json'
 
