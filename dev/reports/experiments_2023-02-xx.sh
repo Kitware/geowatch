@@ -3266,18 +3266,18 @@ geowatch schedule --params="
         sv_depth_filter.threshold:
             - 0.10
 
-        #####################
-        ## SC CROP PARAMS  ##
-        #####################
+        ########################
+        ## AC/SC CROP PARAMS  ##
+        ########################
         sc_crop.target_gsd: 8GSD
         sc_crop.minimum_size: '128x128@8GSD'
         sc_crop.force_min_gsd: 8GSD
         sc_crop.context_factor: 1.5
         sc_crop.rpc_align_method: affine_warp
 
-        #####################
-        ## SC PIXEL PARAMS ##
-        #####################
+        ########################
+        ## AC/SC PIXEL PARAMS ##
+        ########################
 
         sc_pxl.package_fpath:
             - $DVC_EXPT_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt
@@ -3300,18 +3300,18 @@ geowatch schedule --params="
         #sc_pxl.batch_size: 1
         sc_pxl.write_workers: 0
 
-        #####################
-        ## SC POLY PARAMS  ##
-        #####################
+        ########################
+        ## AC/SC POLY PARAMS  ##
+        ########################
 
         sc_poly.thresh: 0.07
         sc_poly.boundaries_as: polys
         sc_poly.resolution: 8GSD
         sc_poly.min_area_square_meters: 7200
 
-        ##########################
-        ## SC POLY EVAL PARAMS  ##
-        ##########################
+        #############################
+        ## AC/SC POLY EVAL PARAMS  ##
+        #############################
 
         sc_poly_eval.true_site_dpath: $DVC_DATA_DPATH/annotations/drop7/site_models
         sc_poly_eval.true_region_dpath: $DVC_DATA_DPATH/annotations/drop7/region_models

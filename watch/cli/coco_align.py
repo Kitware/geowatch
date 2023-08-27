@@ -249,11 +249,10 @@ class ExtractConfig(ImageExtractConfig):
 
     def __post_init__(config):
         super().__post_init__()
-        if isinstance(config['target_gsd'], str):
-            from watch.utils.util_resolution import ResolvedUnit
-            resolution = ResolvedUnit.coerce(config['target_gsd'], default_unit='GSD')
-            assert resolution.unit == 'GSD'
-            config['target_gsd'] = config['target_gsd'].mag
+        from watch.utils.util_resolution import ResolvedUnit
+        resolution = ResolvedUnit.coerce(config['target_gsd'], default_unit='GSD')
+        assert resolution.unit == 'GSD'
+        config['target_gsd'] = resolution.mag
 
 
 class CocoAlignGeotiffConfig(ExtractConfig):
