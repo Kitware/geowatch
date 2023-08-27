@@ -657,7 +657,7 @@ class SiteClustering(ProcessNode):
     Crop to each image of every site.
 
     CommandLine:
-        xdoctest -m watch.mlops.smart_pipeline SC_Cropping
+        xdoctest -m watch.mlops.smart_pipeline SiteClustering
 
     Example:
         >>> from watch.mlops.smart_pipeline import *  # NOQA

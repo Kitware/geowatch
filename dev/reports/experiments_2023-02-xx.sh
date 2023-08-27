@@ -3193,6 +3193,11 @@ DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
 DVC_HDD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=hdd)
 geowatch schedule --params="
+    pipeline: joint_bas_sv_sc
+
+    # Convinience argument
+    smart_highres_bundle: $DVC_HDD_DATA_DPATH/Aligned-Drop7
+
     matrix:
         bas_pxl.package_fpath:
             - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-NoMask/packages/Drop7-MedianNoWinter10GSD_bgrn_mixed_split6_V79/Drop7-MedianNoWinter10GSD_bgrn_mixed_split6_V79_epoch10_step176.pt
@@ -3262,6 +3267,11 @@ geowatch schedule --params="
             - 0.10
 
         #####################
+        ## SC CROP PARAMS  ##
+        #####################
+        sc_crop.target_gsd 8,
+
+        #####################
         ## SC PIXEL PARAMS ##
         #####################
 
@@ -3270,9 +3280,9 @@ geowatch schedule --params="
         sc_pxl.tta_fliprot: 0.0
         sc_pxl.tta_time: 0.0
         sc_pxl.chip_overlap: 0.3
-        sc_pxl.input_space_scale: 2GSD
-        sc_pxl.window_space_scale: 2GSD
-        sc_pxl.output_space_scale: 2GSD
+        sc_pxl.input_space_scale: 8GSD
+        sc_pxl.window_space_scale: 8GSD
+        sc_pxl.output_space_scale: 8GSD
         #sc_pxl.time_span: 6m
         #sc_pxl.time_sampling: auto
         #sc_pxl.time_steps: 12
@@ -3292,7 +3302,7 @@ geowatch schedule --params="
 
         sc_poly.thresh: 0.07
         sc_poly.boundaries_as: polys
-        sc_poly.resolution: 2GSD
+        sc_poly.resolution: 8GSD
         sc_poly.min_area_square_meters: 7200
 
         ##########################
@@ -3310,39 +3320,10 @@ geowatch schedule --params="
         sc_poly.enabled: 1
         sc_poly_eval.enabled: 1
         sc_poly_viz.enabled: 0
-    submatrices:
-        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/KR_R001/imganns-KR_R001.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/KR_R001/imgonly-KR_R001.kwcoco.zip
-          sc_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/KR_R001/imgonly-KR_R001.kwcoco.zip
-        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/KR_R002/imganns-KR_R002.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/KR_R002/imgonly-KR_R002.kwcoco.zip
-          sc_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/KR_R002/imgonly-KR_R002.kwcoco.zip
-        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/AE_R001/imganns-AE_R001.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/AE_R001/imgonly-AE_R001.kwcoco.zip
-          sc_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/AE_R001/imgonly-AE_R001.kwcoco.zip
-        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/BR_R002/imganns-BR_R002.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/BR_R002/imgonly-BR_R002.kwcoco.zip
-          sc_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/BR_R002/imgonly-BR_R002.kwcoco.zip
-        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/CH_R001/imganns-CH_R001.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/CH_R001/imgonly-CH_R001.kwcoco.zip
-          sc_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/CH_R001/imgonly-CH_R001.kwcoco.zip
-        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/NZ_R001/imganns-NZ_R001.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/NZ_R001/imgonly-NZ_R001.kwcoco.zip
-          sc_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/NZ_R001/imgonly-NZ_R001.kwcoco.zip
-        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/PE_R001/imganns-PE_R001.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/PE_R001/imgonly-PE_R001.kwcoco.zip
-          sc_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/PE_R001/imgonly-PE_R001.kwcoco.zip
-        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/BR_R004/imganns-BR_R004.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/BR_R004/imgonly-BR_R004.kwcoco.zip
-          sc_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/BR_R004/imgonly-BR_R004.kwcoco.zip
-        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/CN_C000/imganns-CN_C000.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/CN_C000/imgonly-CN_C000.kwcoco.zip
-          sc_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/CN_C000/imgonly-CN_C000.kwcoco.zip
     " \
     --root_dpath="$DVC_EXPT_DPATH/_namek_eval15_bas_nomask" \
     --devices="0,1" --tmux_workers=4 \
     --backend=tmux --queue_name "_namek_eval15_bas_nomask" \
-    --pipeline=joint_bas_sv_sc \
     --skip_existing=1 \
     --run=1
 
@@ -3351,6 +3332,11 @@ DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
 DVC_HDD_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=hdd)
 geowatch schedule --params="
+    pipeline: joint_bas_sv_sc
+
+    # Convinience argument
+    smart_highres_bundle: $DVC_HDD_DATA_DPATH/Aligned-Drop7
+
     matrix:
         bas_pxl.package_fpath:
             - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-NoMask/packages/Drop7-MedianNoWinter10GSD_bgrn_mixed_split6_V79/Drop7-MedianNoWinter10GSD_bgrn_mixed_split6_V79_epoch10_step176.pt
@@ -3419,30 +3405,10 @@ geowatch schedule --params="
             - $DVC_EXPT_DPATH/models/depth_pcd/basicModel2.h5
         sv_depth_filter.threshold:
             - 0.10
-    submatrices:
-        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/imganns-KR_R001.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/KR_R001/imgonly-KR_R001.kwcoco.zip
-        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/imganns-KR_R002.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/KR_R002/imgonly-KR_R002.kwcoco.zip
-        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/imganns-AE_R001.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/AE_R001/imgonly-AE_R001.kwcoco.zip
-        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/imganns-BR_R002.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/BR_R002/imgonly-BR_R002.kwcoco.zip
-        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/imganns-CH_R001.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/CH_R001/imgonly-CH_R001.kwcoco.zip
-        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/imganns-NZ_R001.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/NZ_R001/imgonly-NZ_R001.kwcoco.zip
-        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/imganns-PE_R001.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/PE_R001/imgonly-PE_R001.kwcoco.zip
-        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD/imganns-BR_R004.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/BR_R004/imgonly-BR_R004.kwcoco.zip
-        - bas_pxl.test_dataset: $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-iMERIT/CN_C000/imganns-CN_C000.kwcoco.zip
-          sv_crop.crop_src_fpath: $DVC_HDD_DATA_DPATH/Aligned-Drop7/CN_C000/imgonly-CN_C000.kwcoco.zip
     " \
     --root_dpath="$DVC_EXPT_DPATH/_namek_eval15_bas_yesmask" \
     --devices="0,1" --tmux_workers=4 \
     --backend=tmux --queue_name "_namek_eval15_bas_yesmask" \
-    --pipeline=joint_bas_sv_sc \
     --skip_existing=1 \
     --run=1
     #--pipeline=bas_building_and_depth_vali \
@@ -3583,10 +3549,10 @@ geowatch schedule --params="
 
         bas_pxl.test_dataset:
             - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/KR_R002/imganns-KR_R002.kwcoco.zip
-            #- $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/CH_R001/imganns-CH_R001.kwcoco.zip
-            #- $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/NZ_R001/imganns-NZ_R001.kwcoco.zip
-            #- $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/KR_R001/imganns-KR_R001.kwcoco.zip
-            #- $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/CN_C000/imganns-CN_C000.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/CH_R001/imganns-CH_R001.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/NZ_R001/imganns-NZ_R001.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/KR_R001/imganns-KR_R001.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/CN_C000/imganns-CN_C000.kwcoco.zip
         bas_pxl.chip_overlap: 0.3
         bas_pxl.chip_dims: auto
         bas_pxl.time_span: auto

@@ -1062,7 +1062,7 @@ class SiteModel(_Model):
 
 class _Feature(ub.NiceRepr, geojson.Feature):
     """
-    Base class for features
+    Base class for geojson features that conform to an IARPA geomodel spec
 
     Example:
         >>> # Test the class variables for subclasses are defined correctly
