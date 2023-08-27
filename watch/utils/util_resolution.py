@@ -1,5 +1,6 @@
 import ubelt as ub
 import functools
+import numbers
 from kwcoco.util import dict_proxy2
 
 
@@ -222,8 +223,48 @@ class ResolvedUnit(Resolved, ub.NiceRepr):
             'unit': unit,
         }
 
+    def __eq__(self, other):
+        if self.unit != other.unit:
+            raise TypeError(f'incomparable units: {self.unit}, {other.unit}')
+        return self.mag == other.mag
+
     def __nice__(self):
         return (f'{self.mag} {self.unit}')
+
+    @classmethod
+    def coerce(cls, data, default_unit=None):
+        """
+        Example:
+            >>> from watch.utils.util_resolution import *  # NOQA
+            >>> self1 = ResolvedUnit.coerce(8, default_unit='GSD')
+            >>> self2 = ResolvedUnit.coerce('8', default_unit='GSD')
+            >>> self3 = ResolvedUnit.coerce('8GSD')
+            >>> assert self1 == self2
+            >>> import pytest
+            >>> with pytest.raises(ValueError):
+            >>>     ResolvedUnit.coerce(8)
+        """
+        is_string = isinstance(data, str)
+        if is_string:
+            # Allow the input to be given as a numeric string
+            try:
+                mag = _int_or_float(data)
+            except Exception:
+                ...
+            else:
+                data = mag
+                is_string = False
+
+        if isinstance(data, str):
+            self = cls.parse(data)
+        elif isinstance(data, numbers.Number):
+            if default_unit is None:
+                raise ValueError(
+                    'must provide a default unit if numberic input is given')
+            self = cls(data, default_unit)
+        else:
+            raise TypeError(type(data))
+        return self
 
 
 class ResolvedScalar(Resolved, ub.NiceRepr):

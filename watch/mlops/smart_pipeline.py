@@ -722,6 +722,8 @@ class SC_Cropping(Cropping):
         'convexify_regions': True,
         'minimum_size': '128x128@10GSD',
         'force_min_gsd': 2,
+        # 'unsigned_nodata': 256, # todo: uncomment
+        # 'site_summary': True # todo uncomment
     }
 
     out_paths = {

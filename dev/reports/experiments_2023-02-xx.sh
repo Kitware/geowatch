@@ -3269,7 +3269,11 @@ geowatch schedule --params="
         #####################
         ## SC CROP PARAMS  ##
         #####################
-        sc_crop.target_gsd 8,
+        sc_crop.target_gsd: 8GSD
+        sc_crop.minimum_size: '128x128@8GSD'
+        sc_crop.force_min_gsd: 8GSD
+        sc_crop.context_factor: 1.5
+        sc_crop.rpc_align_method: affine_warp
 
         #####################
         ## SC PIXEL PARAMS ##
