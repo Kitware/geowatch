@@ -280,7 +280,7 @@ def run_stac_to_cropped_kwcoco(config):
         # consider the "current" year to be the previous one
         current_interval_year = current_interval_end_date.year - 1
     else:
-        current_interval_year = current_interval_end_date.year - 1
+        current_interval_year = current_interval_end_date.year
 
     # Download STAC input file locally
     local_stac_path = ingress_dir / 'input_stac.jsonl'
@@ -309,7 +309,7 @@ def run_stac_to_cropped_kwcoco(config):
     incremental_assets_for_egress = {'combined_stac_input': local_stac_path}
     previous_ingressed_assets = None
     if config.previous_interval_output is not None:
-        print('* Combining previous interval time combined kwcoco with'
+        print('* Combining previous interval time combined kwcoco with '
               'current *')
         previous_ingress_dir = ub.Path('/tmp/ingress_previous')
         try:
@@ -506,7 +506,10 @@ def run_stac_to_cropped_kwcoco(config):
         # On first interval nothing will be copied down so need to
         # check that we have the input explicitly
         from watch.cli.concat_kwcoco_videos import concat_kwcoco_datasets
-        if previous_timecombined_kwcoco_path.is_file():
+        if(filtered_previous_timecombined_kwcoco_path.is_file()
+           and len(previous_timecombined_dset.images()) > 0):
+            # Don't bother to concatenate if previous (now filtered)
+            # dset is empty (has no images)
             concat_kwcoco_datasets(
                 (filtered_previous_timecombined_kwcoco_path,
                  final_interval_bas_kwcoco_path),
@@ -517,10 +520,10 @@ def run_stac_to_cropped_kwcoco(config):
                 ta1_cropped_dir / 'raw_bands',
                 dirs_exist_ok=True)
         else:
-            # Copy current bas_fusion_kwcoco_path to combined path as
-            # this is the first interval
-            shutil.copy(final_interval_bas_kwcoco_path,
-                        combined_timecombined_kwcoco_path)
+            # This is either the first interval, or previous
+            # interval(s) only contain images from the current
+            # interval year
+            combined_timecombined_kwcoco_path = final_interval_bas_kwcoco_path
     else:
         combined_timecombined_kwcoco_path = final_interval_bas_kwcoco_path
 
