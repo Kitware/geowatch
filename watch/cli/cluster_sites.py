@@ -62,13 +62,20 @@ class ClusterSiteConfig(scfg.DataConfig):
 
     dst_dpath = scfg.Value(None, help='output path to store the resulting region files')
 
-    dst_region_fpath = scfg.Value(None, help='geojson output path for site summaries. Only works if there is a single input region, otherwise an error is raised')
+    dst_region_fpath = scfg.Value(None, help=ub.paragraph(
+        '''
+        geojson output path for site summaries. Only works if there is a single
+        input region, otherwise an error is raised
+        '''))
 
     io_workers = scfg.Value(10, help='number of io workers')
 
     draw_clusters = scfg.Value(False, isflag=True, help='if True draw the clusters')
 
-    crop_time = scfg.Value(True, isflag=True, help='if True also crops temporal extent to the sites, otherwise uses the region extent')
+    crop_time = scfg.Value(True, isflag=True, help=ub.paragraph(
+        '''
+        if True also crops temporal extent to the sites, otherwise uses the region extent
+        '''))
 
     minimum_size = scfg.Value('128x128@2GSD', help='minimum size of a cluster box')
     maximum_size = scfg.Value('1024x1024@2GSD', help='minimum size of a cluster box')
@@ -82,7 +89,30 @@ def main(cmdline=1, **kwargs):
         >>> from watch.cli.cluster_sites import *  # NOQA
         >>> from watch.cli import cluster_sites
         >>> import ubelt as ub
-        >>> dpath = ub.Path.appdir('watch', 'doctests', 'cluster_sites').ensuredir()
+        >>> dpath = ub.Path.appdir('watch', 'doctests', 'cluster_sites1').ensuredir()
+        >>> src_dpath = (dpath / 'src').ensuredir()
+        >>> dst_dpath = (dpath / 'dst')
+        >>> dst_region_fpath = dst_dpath / 'cluster.geojson'
+        >>> from watch.geoannots import geomodels
+        >>> region = geomodels.RegionModel.random(num_sites=10)
+        >>> src_fpath = src_dpath / 'demo_region.geojson'
+        >>> src_fpath.write_text(region.dumps())
+        >>> kwargs = {
+        >>>     'src': src_fpath,
+        >>>     'dst_dpath': dst_dpath,
+        >>>     'dst_region_fpath': dst_region_fpath,
+        >>>     'io_workers': 0,
+        >>>     'draw_clusters': 0,
+        >>>     'crop_time': True,
+        >>> }
+        >>> cmdline = 0
+        >>> cluster_sites.main(cmdline=cmdline, **kwargs)
+
+    Example:
+        >>> from watch.cli.cluster_sites import *  # NOQA
+        >>> from watch.cli import cluster_sites
+        >>> import ubelt as ub
+        >>> dpath = ub.Path.appdir('watch', 'doctests', 'cluster_sites2').ensuredir()
         >>> src_dpath = (dpath / 'src').ensuredir()
         >>> dst_dpath = (dpath / 'dst')
         >>> from watch.geoannots import geomodels
@@ -93,7 +123,7 @@ def main(cmdline=1, **kwargs):
         >>>     'src': src_fpath,
         >>>     'dst_dpath': dst_dpath,
         >>>     'io_workers': 0,
-        >>>     'draw_clusters': True,
+        >>>     'draw_clusters': 1,
         >>>     'crop_time': True,
         >>> }
         >>> cmdline = 0
@@ -123,10 +153,17 @@ def main(cmdline=1, **kwargs):
     from watch.utils import util_kwimage
     import geopandas as gpd
     import kwimage
+    from watch.utils import process_context
     # import pandas as pd
     from watch.geoannots import geomodels
     dst_dpath = ub.Path(config.dst_dpath)
     rich.print(f'Will write to: [link={dst_dpath}]{dst_dpath}[/link]')
+
+    proc_context = process_context.ProcessContext(
+        name='watch.cli.cluster_sites', type='process',
+        config=process_context.jsonify_config(config),
+        track_emissions=False,
+    )
 
     # site_results = list(util_gis.coerce_geojson_datas(
     #     config['src'], workers=config['io_workers'],
@@ -134,6 +171,11 @@ def main(cmdline=1, **kwargs):
 
     input_region_models = list(geomodels.RegionModel.coerce_multiple(
         config.src, workers=config.io_workers))
+
+    if config.dst_region_fpath is not None:
+        assert len(input_region_models) == 1, (
+            'we assume only 1 input region when output fpath given')
+        proc_context.start()
 
     # region_id_to_geoms = ub.ddict(list)
     # region_id_to_headers = ub.ddict(list)
@@ -170,9 +212,6 @@ def main(cmdline=1, **kwargs):
     print(f'Looping over {len(input_region_models)} region')
 
     all_final_site_summaries = []
-
-    if config.dst_region_fpath is not None:
-        assert len(input_region_models) == 1, 'only 1 region when output fpath given'
 
     for input_region_model in input_region_models:
 
@@ -331,6 +370,9 @@ def main(cmdline=1, **kwargs):
         if config.dst_region_fpath is not None:
             total_geom_df_crs84 = gpd.GeoDataFrame({'geometry': [total_geom]}, crs=utm_crs).to_crs(crs84)
             total_geom_crs84 = total_geom_df_crs84.iloc[0]['geometry']
+
+            obj = proc_context.stop()
+
             new_region_header = geomodels.RegionHeader(
                 properties={
                     "type": 'region',
@@ -342,6 +384,9 @@ def main(cmdline=1, **kwargs):
                     "originator": "kit-cluster",
                     "model_content": "annotation",
                     "comments": '',
+                    "cache": {
+                        "process_context": obj,
+                    }
                 },
                 geometry=total_geom_crs84,
             )

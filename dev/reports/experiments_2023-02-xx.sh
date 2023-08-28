@@ -3200,12 +3200,12 @@ geowatch schedule --params="
 
     matrix:
         bas_pxl.package_fpath:
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-NoMask/packages/Drop7-MedianNoWinter10GSD_bgrn_mixed_split6_V79/Drop7-MedianNoWinter10GSD_bgrn_mixed_split6_V79_epoch10_step176.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V68/Drop7-MedianNoWinter10GSD_bgrn_split6_V68_epoch34_stepNone.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-NoMask/packages/Drop7-MedianNoWinter10GSD_bgrn_mixed_split6_V77/Drop7-MedianNoWinter10GSD_bgrn_mixed_split6_V77_epoch16_step2907.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-NoMask/packages/Drop7-MedianNoWinter10GSD_bgrn_mixed_split6_V78/Drop7-MedianNoWinter10GSD_bgrn_mixed_split6_V78_epoch7_step126.pt
-            - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V70/Drop7-MedianNoWinter10GSD_bgrn_split6_V70_epoch28_step2494.pt
+            #- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-NoMask/packages/Drop7-MedianNoWinter10GSD_bgrn_mixed_split6_V79/Drop7-MedianNoWinter10GSD_bgrn_mixed_split6_V79_epoch10_step176.pt
+            #- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V68/Drop7-MedianNoWinter10GSD_bgrn_split6_V68_epoch34_stepNone.pt
+            #- $DVC_EXPT_DPATH/models/fusion/Drop6-MeanYear10GSD-V2/packages/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47/Drop6_TCombo1Year_BAS_10GSD_V2_landcover_split6_V47_epoch47_step3026.pt
+            #- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-NoMask/packages/Drop7-MedianNoWinter10GSD_bgrn_mixed_split6_V77/Drop7-MedianNoWinter10GSD_bgrn_mixed_split6_V77_epoch16_step2907.pt
+            #- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD-NoMask/packages/Drop7-MedianNoWinter10GSD_bgrn_mixed_split6_V78/Drop7-MedianNoWinter10GSD_bgrn_mixed_split6_V78_epoch7_step126.pt
+            #- $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V70/Drop7-MedianNoWinter10GSD_bgrn_split6_V70_epoch28_step2494.pt
             - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V74/Drop7-MedianNoWinter10GSD_bgrn_split6_V74_epoch46_step4042.pt
 
         bas_pxl.test_dataset:
@@ -3274,6 +3274,8 @@ geowatch schedule --params="
         sc_crop.force_min_gsd: 8GSD
         sc_crop.context_factor: 1.5
         sc_crop.rpc_align_method: affine_warp
+        sc_crop.sensor_to_time_window:
+            - 'S2: 1month'
 
         ########################
         ## AC/SC PIXEL PARAMS ##
@@ -3609,9 +3611,27 @@ geowatch schedule --params="
         sv_depth_filter.threshold:
             - 0.10
 
-        #####################
-        ## SC PIXEL PARAMS ##
-        #####################
+        ##########################
+        ## Cluster Sites Params ##
+        ##########################
+        cluster_sites.context_factor: 1.5
+        cluster_sites.minimum_size: '128x128@2GSD'
+        cluster_sites.maximum_size: '1024x1024@2GSD'
+
+        ########################
+        ## AC/SC CROP PARAMS  ##
+        ########################
+        sc_crop.target_gsd: 2GSD
+        sc_crop.minimum_size: '128x128@2GSD'
+        sc_crop.force_min_gsd: 2GSD
+        sc_crop.context_factor: 1.0
+        sc_crop.rpc_align_method: affine_warp
+        sc_crop.sensor_to_time_window:
+            - 'S2: 1month'
+
+        ########################
+        ## AC/SC PIXEL PARAMS ##
+        ########################
 
         sc_pxl.package_fpath:
             - $DVC_EXPT_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt
@@ -3635,18 +3655,18 @@ geowatch schedule --params="
         #sc_pxl.batch_size: 1
         sc_pxl.write_workers: 0
 
-        #####################
-        ## SC POLY PARAMS  ##
-        #####################
+        ########################
+        ## AC/SC POLY PARAMS  ##
+        ########################
 
         sc_poly.thresh: 0.07
         sc_poly.boundaries_as: polys
         sc_poly.resolution: 2GSD
         sc_poly.min_area_square_meters: 7200
 
-        ##########################
-        ## SC POLY EVAL PARAMS  ##
-        ##########################
+        #############################
+        ## AC/SC POLY EVAL PARAMS  ##
+        #############################
 
         sc_poly_eval.true_site_dpath: $DVC_DATA_DPATH/annotations/drop7/site_models
         sc_poly_eval.true_region_dpath: $DVC_DATA_DPATH/annotations/drop7/region_models
@@ -3666,3 +3686,36 @@ geowatch schedule --params="
     --backend=tmux --queue_name "_toothbrush_eval15_bas_nomask" \
     --skip_existing=1 \
     --run=1
+
+
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+python -m watch.mlops.aggregate \
+    --pipeline=full \
+    --target "
+        - $DVC_EXPT_DPATH/_toothbrush_eval15_bas_nomask
+    " \
+    --output_dpath="$DVC_EXPT_DPATH/_namek_eval15_bas_nomask/aggregate" \
+    --resource_report=0 \
+    --eval_nodes="
+        - sc_poly_eval
+    " \
+    --plot_params="
+        enabled: 0
+        stats_ranking: 0
+        min_variations: 1
+        params_of_interest:
+            - params.sv_depth_filter.threshold
+            - params.sv_depth_score.model_fpath
+            - params.bas_poly.thresh
+    " \
+    --stdout_report="
+        top_k: 13
+        per_group: 1
+        macro_analysis: 0
+        analyze: 0
+        print_models: True
+        reference_region: final
+        concise: 1
+        show_csv: 0
+    " \
+    --rois="KR_R002"

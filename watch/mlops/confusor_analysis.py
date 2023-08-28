@@ -1391,6 +1391,42 @@ def visualize_single_site_case(coco_dset, case, true_id_to_site, pred_id_to_site
     all_annots = coco_dset.annots(all_aids)
     _all_gids = list(set(all_annots.images))
     _all_images = coco_dset.images(_all_gids)
+
+    unique_vidids = sorted(set(_all_images.lookup('video_id')))
+    if len(unique_vidids) > 1:
+        # Need to pick a single video to inspect if a track is in more than 1.
+        unique_videos = coco_dset.videos(unique_vidids)
+
+        from watch.geoannots.geomodels import RegionModel
+        from watch.utils import util_gis
+        import geopandas as gpd
+        main_summaries = RegionModel(features=[
+            s.as_summary()
+            for s in [pred_site, true_site] if s is not None
+        ])
+        summary_gdf = main_summaries.pandas_summaries()
+        summary_utm_gdf = util_gis.project_gdf_to_local_utm(summary_gdf, mode=1)
+
+        video_geoms = [kwimage.MultiPolygon.coerce(g).to_shapely()
+                       for g in unique_videos.lookup('valid_region_geos')]
+        video_gdf = gpd.GeoDataFrame(geometry=video_geoms, crs=util_gis.get_crs84())
+        video_utm_gdf = video_gdf.to_crs(summary_utm_gdf.crs)
+
+        summary_areas = summary_utm_gdf.area
+        idx_to_score = {}
+        for idx in range(len(video_utm_gdf)):
+            single_video_utm_gdf = video_utm_gdf.iloc[idx: idx + 1]
+            isect = summary_utm_gdf.intersection(single_video_utm_gdf.geometry.iloc[0])
+            isect_area = isect.area
+            ioos = isect_area / summary_areas
+            score = ioos.mean()
+            idx_to_score[idx] = score
+        chosen_idx = ub.argmax(idx_to_score)
+        chosen_vidid = unique_vidids[chosen_idx]
+
+        flags = np.array(_all_images.lookup('video_id')) == chosen_vidid
+        _all_images = _all_images.compress(flags)
+
     _sortx = ub.argsort(_all_images.lookup('frame_index'))
     all_images = _all_images.take(_sortx)
 
@@ -1728,8 +1764,11 @@ def make_case_timeline(case):
     ax.cla()
 
     # case['main_true_site']
-    main_true_sites = case['true_sites']
-    main_pred_sites = [case['main_pred_site']]
+    main_true_sites = case.get('true_sites', [])
+    if 'main_pred_site' in case:
+        main_pred_sites = [case['main_pred_site']]
+    else:
+        main_pred_sites = []
 
     artman = util_kwplot.ArtistManager()
 
