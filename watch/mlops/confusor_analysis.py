@@ -973,6 +973,9 @@ class ConfusionAnalysis:
         errors = []
         from kwutil import util_progress
         pman = util_progress.ProgressManager()
+
+        link_dpath = viz_dpath / '_flat'
+
         with pman:
             total = 0
             for case in pman.progiter(cases, desc='dump cases', verbose=3):
@@ -984,7 +987,13 @@ class ConfusionAnalysis:
                 #     continue
                 total += 1
                 dpath = (viz_dpath / case['type'])
-                fpath = dpath / (case['name'] + '.jpg')
+                fname = (case['name'] + '.jpg')
+
+                if '0032' not in case['name'] and '0031' not in case['name']:
+                    continue
+
+                fpath = dpath / fname
+                link_fpath = link_dpath / fname
 
                 try:
                     canvas = visualize_single_site_case(
@@ -1003,6 +1012,8 @@ class ConfusionAnalysis:
                 print(f'fpath={fpath}')
                 print(f'canvas.shape={canvas.shape}')
                 kwimage.imwrite(fpath, canvas)
+                link_fpath.parent.ensuredir()
+                ub.symlink(real_path=fpath, link_path=link_fpath)
 
         if errors:
             rich.print(f'[red]There were {len(errors)} errors in viz')
@@ -1600,7 +1611,7 @@ def visualize_single_site_case(coco_dset, case, true_id_to_site, pred_id_to_site
             is_main_true = [a in main_true_aids for a in dets.data['aids']]
             true_dets = rel_dets.compress(is_main_true)
             det_true_canvas = np.ones_like(tci_canvas)
-            det_true_canvas = true_dets.draw_on(det_true_canvas, alpha=1.0, color='classes')
+            det_true_canvas = true_dets.draw_on(det_true_canvas, alpha=0.9, color='classes')
             det_true_canvas = kwimage.draw_text_on_image(
                 det_true_canvas, 'true', (1, 2), valign='top', color='kitware_green')
             tostack.append(det_true_canvas)
@@ -1609,7 +1620,7 @@ def visualize_single_site_case(coco_dset, case, true_id_to_site, pred_id_to_site
             is_main_pred = [a in main_pred_aids for a in dets.data['aids']]
             pred_dets = rel_dets.compress(is_main_pred)
             det_pred_canvas = np.ones_like(tci_canvas)
-            det_pred_canvas = pred_dets.draw_on(det_pred_canvas, alpha=1.0, color='classes')
+            det_pred_canvas = pred_dets.draw_on(det_pred_canvas, alpha=0.9, color='classes')
             det_pred_canvas = kwimage.draw_text_on_image(
                 det_pred_canvas, 'pred', (1, 2), valign='top', color='kitware_blue')
             tostack.append(det_pred_canvas)
@@ -1774,11 +1785,6 @@ def make_case_timeline(case):
 
     ylabel_map = {1: '', 2: '', 0: '', 3: ''}
 
-    if 'img_dates' in case:
-        img_xs = util_kwplot.fix_matplotlib_dates(case['img_dates'])
-        for img_x in img_xs:
-            artman.plot([img_x, img_x], [0, 3], color='kitware_gray')
-
     from watch import heuristics
     import numpy as np
     import itertools as it
@@ -1793,6 +1799,9 @@ def make_case_timeline(case):
         end_date = util_time.coerce_datetime(site.end_date) or case['region_end_date']
         ylabel_map[yloc] = site_type
 
+        status = site.header['properties']['status']
+        status_color = heuristics.IARPA_STATUS_TO_INFO[status]['color']
+
         obs_gdf = site.pandas_observations()
         obs_gdf['current_phase']
 
@@ -1803,7 +1812,7 @@ def make_case_timeline(case):
         prev_c = None
         for c, idxs in it.groupby(range(len(obs_colors)), key=obs_colors.__getitem__):
             if c is None:
-                c = kwimage.Color.coerce('black')
+                c = kwimage.Color.coerce(status_color)
             else:
                 c = kwimage.Color.coerce(c)
             idxs = list(idxs)
@@ -1829,6 +1838,12 @@ def make_case_timeline(case):
         yloc += 1
 
     ylabel_map[yloc] = ''
+
+    # Add vertical lines to indicate where shown images lie on the timeline.
+    if 'img_dates' in case:
+        img_xs = util_kwplot.fix_matplotlib_dates(case['img_dates'])
+        for img_x in img_xs:
+            artman.plot([img_x, img_x], [0, yloc], color='kitware_gray')
 
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
     ax.xaxis.set_major_locator(mdates.DayLocator(interval=720))

@@ -2613,6 +2613,7 @@ def covered_video_geo_regions(coco_dset):
         >>> # video_gdf = covered_video_geo_regions(coco_dset)
     """
     import geopandas as gpd
+    from watch.utils import util_gis
 
     # TODO: build this more efficiently if possible.
 
@@ -2620,14 +2621,16 @@ def covered_video_geo_regions(coco_dset):
     # import watch
     rows = []
     for vidid, video in coco_dset.index.videos.items():
-        vidspace_poly = kwimage.Boxes(
-            [[0, 0, video['width'], video['height']]], 'xywh').to_polygons()[0]
-        if 'warp_wld_to_vid' in video:
-            vid_from_wld = kwimage.Affine.coerce(video['warp_wld_to_vid'])
-            wld_form_vid = vid_from_wld.inv()
-            crs84_poly = vidspace_poly.warp(wld_form_vid)
-        else:
-            raise NotImplementedError('We dont have a way to get the geo bounds for a video')
+        crs84_poly = kwimage.MultiPolygon.coerce(video['valid_region_geos'])
+        # vidspace_poly = kwimage.Boxes(
+        #     [[0, 0, video['width'], video['height']]], 'xywh').to_polygons()[0]
+        # if 'warp_wld_to_vid' in video:
+        #     vid_from_wld = kwimage.Affine.coerce(video['warp_wld_to_vid'])
+        #     wld_form_vid = vid_from_wld.inv()
+        #     # THIS IS NOT CRS84!
+        #     crs84_poly = vidspace_poly.warp(wld_form_vid)
+        # else:
+        #     raise NotImplementedError('We dont have a way to get the geo bounds for a video')
         gids = coco_dset.index.vidid_to_gids[vidid]
         if gids:
             start_gid = gids[0]
@@ -2648,7 +2651,6 @@ def covered_video_geo_regions(coco_dset):
         }
         rows.append(row)
 
-    from watch.utils import util_gis
     crs84 = util_gis.get_crs84()
     video_gdf = gpd.GeoDataFrame(rows, geometry='geometry', crs=crs84)
     return video_gdf

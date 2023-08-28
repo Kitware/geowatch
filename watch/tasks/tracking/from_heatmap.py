@@ -399,6 +399,8 @@ def _add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
             scores_dct = {k: grp[(k, -1)] for k in score_chan.unique()}
             scores_dct = [dict(zip(scores_dct, t))
                           for t in zip(*scores_dct.values())]
+            import xdev
+            xdev.embed()
             _add(zip(grp['gid'], grp['poly'], this_score, scores_dct), tid)
 
     # TODO: Faster to add annotations in bulk, but we need to construct the

@@ -148,14 +148,18 @@ def main(cmdline=1, **kwargs):
     import rich
     rich.print('config = {}'.format(ub.urepr(config, nl=1)))
 
-    from watch import heuristics
-    from watch.utils import util_gis
-    from watch.utils import util_kwimage
     import geopandas as gpd
     import kwimage
-    from watch.utils import process_context
-    # import pandas as pd
+    from kwutil import util_time
+
+    from watch import heuristics
     from watch.geoannots import geomodels
+    from watch.utils import process_context
+    from watch.utils import util_gis
+    from watch.utils import util_kwimage
+    from watch.utils import util_resolution
+
+    # import pandas as pd
     dst_dpath = ub.Path(config.dst_dpath)
     rich.print(f'Will write to: [link={dst_dpath}]{dst_dpath}[/link]')
 
@@ -165,10 +169,6 @@ def main(cmdline=1, **kwargs):
         track_emissions=False,
     )
 
-    # site_results = list(util_gis.coerce_geojson_datas(
-    #     config['src'], workers=config['io_workers'],
-    #     desc='load geojson site-models'))
-
     input_region_models = list(geomodels.RegionModel.coerce_multiple(
         config.src, workers=config.io_workers))
 
@@ -177,37 +177,14 @@ def main(cmdline=1, **kwargs):
             'we assume only 1 input region when output fpath given')
         proc_context.start()
 
-    # region_id_to_geoms = ub.ddict(list)
-    # region_id_to_headers = ub.ddict(list)
-    # for result in ub.ProgIter(site_results):
-    #     ss_df = result['data']
-    #     region_header_rows = ss_df[ss_df['type'] == 'region']
-    #     if len(region_header_rows):
-    #         region_id = region_header_rows.iloc[0]['region_id']
-    #         assert len(region_header_rows) == 1
-    #         region_id_to_headers[region_id].append(region_header_rows)
-    #     else:
-    #         region_id = None
-
-    #     site_summaries = ss_df[ss_df['type'] == 'site_summary']
-    #     if len(site_summaries):
-    #         sm = site_summaries.iloc[0]
-    #         if region_id is None:
-    #             region_id = sm['region_id']
-    #         region_id_to_geoms[region_id].append(site_summaries)
-
-    # scale = 1.7
-    # min_box_dim = 384
-    # max_box_dim = 384 * 4
-
-    from watch.utils import util_resolution
     scale = config.context_factor
     minimum_size = util_resolution.ResolvedWindow.coerce(config.minimum_size)
     maximum_size = util_resolution.ResolvedWindow.coerce(config.maximum_size)
 
     # Convert to meters
-    min_box_dim = minimum_size.at_resolution({'mag': 1, 'unit': 'GSD'}).window[0]
-    max_box_dim = maximum_size.at_resolution({'mag': 1, 'unit': 'GSD'}).window[0]
+    meter = util_resolution.ResolvedUnit(1, 'GSD')
+    min_box_dim = minimum_size.at_resolution(meter).window[0]
+    max_box_dim = maximum_size.at_resolution(meter).window[0]
 
     print(f'Looping over {len(input_region_models)} region')
 
@@ -247,7 +224,6 @@ def main(cmdline=1, **kwargs):
         total_geom = total_box.to_shapely()
         total_summaries = []
 
-        from kwutil import util_time
         total_end_date = None
         total_start_date = None
 
@@ -373,6 +349,7 @@ def main(cmdline=1, **kwargs):
 
             obj = proc_context.stop()
 
+            # TODO: use geomodels helper
             new_region_header = geomodels.RegionHeader(
                 properties={
                     "type": 'region',
