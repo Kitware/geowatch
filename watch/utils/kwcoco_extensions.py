@@ -1039,7 +1039,7 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
             # Project the valid region onto video space
             valid_region_crs84 = kwimage.MultiPolygon.coerce(video['valid_region_geos'])
             wld_crs = base_wld_crs_info['auth']
-            crs84 = util_gis._get_crs84()
+            crs84 = util_gis.get_crs84()
             crs84_region_gdf = gpd.GeoDataFrame({'geometry': [valid_region_crs84.to_shapely()]}, crs=crs84)
             wld_region_gdf = crs84_region_gdf.to_crs(wld_crs)
             wld_region_poly = wld_region_gdf['geometry'].iloc[0]
@@ -2286,7 +2286,7 @@ def warp_annot_segmentations_from_geos(coco_dset):
     import geopandas as gpd
     from watch.utils import util_gis
     from shapely.geometry import shape
-    crs84 = util_gis._get_crs84()
+    crs84 = util_gis.get_crs84()
 
     gdfs = []
     for gid in coco_dset.images().gids:
@@ -2371,7 +2371,7 @@ def warp_annot_segmentations_to_geos(coco_dset):
     import geopandas as gpd
     from watch.utils import util_gis
 
-    crs84 = util_gis._get_crs84()
+    crs84 = util_gis.get_crs84()
     gdfs = []
     for gid in coco_dset.images().gids:
         aids = []
@@ -2569,7 +2569,7 @@ def covered_image_geo_regions(coco_dset, merge=False):
         })
 
     from watch.utils import util_gis
-    cov_poly_crs = util_gis._get_crs84()
+    cov_poly_crs = util_gis.get_crs84()
     if merge:
         # df_input = [
         #     {'gid': gid, 'bounds': poly, 'name': coco_dset.index.imgs[gid].get('name', None),
@@ -2649,7 +2649,7 @@ def covered_video_geo_regions(coco_dset):
         rows.append(row)
 
     from watch.utils import util_gis
-    crs84 = util_gis._get_crs84()
+    crs84 = util_gis.get_crs84()
     video_gdf = gpd.GeoDataFrame(rows, geometry='geometry', crs=crs84)
     return video_gdf
 
@@ -2671,7 +2671,7 @@ def covered_annot_geo_regions(coco_dset, merge=False):
 
     # annot_crs = 'epsg:4326'
     from watch.utils import util_gis
-    annot_crs = util_gis._get_crs84()
+    annot_crs = util_gis.get_crs84()
     # annot_crs = 'crs84'
     if merge:
         gid_to_rois = {}

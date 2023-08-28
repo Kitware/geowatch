@@ -3698,6 +3698,8 @@ python -m watch.mlops.aggregate \
     --resource_report=0 \
     --eval_nodes="
         - sc_poly_eval
+        - sv_poly_eval
+        - bas_poly_eval
     " \
     --plot_params="
         enabled: 0

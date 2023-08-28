@@ -14,13 +14,11 @@ KNOWN_ENTITIES = [
     {'email': 'bane.sullivan@kitware.com', 'name': 'Bane Sullivan'},
     {'email': 'benjaminbrodie21@gmail.com', 'name': 'Benjamin Brodie'},
     {'email': 'cgarchbold@gmail.com', 'name': 'Cohen Archbold'},
-    {'email': 'connor.greenwell@kitware.com', 'name': 'Connor Greenwell'},
     {'email': 'david.joy@kitware.com', 'name': 'David Joy'},
     {'email': 'dlau@dzynetech.com', 'name': 'Dexter Lau'},
     {'email': 'jacob.derosa@kitware.com', 'name': 'Jacob DeRosa'},
     {'email': 'jacobbirge24@gmail.com', 'name': 'Jacob Birge'},
     {'email': 'ji.suh@uconn.edu', 'name': 'Ji Won Suh'},
-    {'email': 'jon.crall@kitware.com' , 'name': 'Jon Crall'},
     {'email': 'matthew.bernstein@kitware.com', 'name': 'Matthew Bernstein'},
     {'email': 'matthew.purri@rutgers.edu', 'name': 'Matthew Purri'},
     {'email': 'peri.akiva@rutgers.edu', 'name': 'Peri Akiva'},
@@ -29,6 +27,13 @@ KNOWN_ENTITIES = [
     {'email': 'skakun@umd.edu', 'name': 'Sergii Skakun'},
     {'email': 'sworkman@dzynetech.com', 'name': 'Scott Workman'},
     {'email': 'usman.rafique@kitware.com', 'name': 'Usman Rafique'},
+
+    {'email': 'connor.greenwell@kitware.com', 'name': 'Connor Greenwell'},
+    {'email': 'connor.greenwell@horologic.khq.kitware.com', 'name': 'Connor Greenwell'},
+    {'email': 'connor.greenwell@arthur.khq.kitware.com', 'name': 'Connor Greenwell'},
+
+    {'email': 'jon.crall@kitware.com' , 'name': 'Jon Crall'},
+    {'email': 'erotemic@gmail.com', 'name': 'Jon Crall'},
 ]
 
 
@@ -87,6 +92,53 @@ def main(cmdline=1, **kwargs):
     print(df)
     print(', '.join(df['name']))
     # print(ub.urepr(df.drop(['id', 'num'], axis=1).to_dict('records')))
+
+
+def author_stats(repo):
+    log_info = repo.cmd("git log --format='author: %ae' --numstat")
+    # log_info = repo.cmd("git log --since='1 year ago' --format='author: %ae' --numstat")
+    print(log_info.stdout)
+    author_stats = ub.ddict(lambda: ub.ddict(int))
+    author_files = ub.ddict(set)
+    author = None
+    for line in log_info.stdout.split('\n'):
+        line_ = line.strip()
+        if line_:
+            if line.startswith('author: '):
+                author = line.split(' ')[1]
+                author_stats[author]['commits'] += 1
+            else:
+                inserts, deletes, fpath = line.split('\t')
+                inserts = int(0 if inserts == '-' else inserts)
+                deletes = int(0 if deletes == '-' else deletes)
+                total = inserts + deletes
+                author_stats[author]['inserts'] += inserts
+                author_stats[author]['deletes'] += deletes
+                author_stats[author]['total'] += total
+                author_files[author].add(fpath)
+
+    author_stats = ub.udict(author_stats).sorted_values(lambda v: v['commits'])
+
+    author_alias = {}
+    for r in KNOWN_ENTITIES:
+        author_alias[r['email']] = r['name']
+        author_alias[r['name']] = r['name']
+
+    rows = []
+    for author, stats in author_stats.items():
+        name = author_alias.get(author, author)
+        row = {'author': author}
+        row['name'] = name
+        row.update(stats)
+        rows.append(row)
+
+    import pandas as pd
+    import rich
+    df = pd.DataFrame(rows)
+
+    final_df = df.groupby('name').sum()
+    final_df = final_df.sort_values('commits')
+    rich.print(final_df)
 
 if __name__ == '__main__':
     """

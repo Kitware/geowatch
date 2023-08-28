@@ -309,7 +309,7 @@ def load_geojson(file, default_axis_mapping='OAMS_TRADITIONAL_GIS_ORDER'):
 
     # Use a CRS that actually reflects the underlying data
     if default_axis_mapping == 'OAMS_TRADITIONAL_GIS_ORDER':
-        crs84 = _get_crs84()
+        crs84 = get_crs84()
         # this is much faster and the only reason this is ok is because the
         # input is xy-wgs84 so the transform (which is slow) would be a noop
         region_df._crs = crs84
@@ -572,7 +572,7 @@ class UTM_TransformContext:
                 something we know how to transform into a GeoSeries
         """
         from watch.utils import util_gis
-        self.crs84 = util_gis._get_crs84()
+        self.crs84 = util_gis.get_crs84()
         self.geoms_crs84 = self._coerce_geo_series(data_crs84, self.crs84)
         self.crs_utm = None
         self.gdf_utm = None
@@ -1072,7 +1072,7 @@ def _coerce_raw_geojson(item, format):
         if format == 'dataframe':
             item = gpd.GeoDataFrame.from_features(item['features'])
             # Hack in CRS-84
-            crs84 = _get_crs84()
+            crs84 = get_crs84()
             # this is much faster and the only reason this is ok is because the
             # input is xy-wgs84 so the transform (which is slow) would be a noop
             item._crs = crs84

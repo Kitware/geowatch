@@ -819,7 +819,6 @@ def add_site_summary_to_kwcoco(possible_summaries,
     site_summary_cid = coco_dset.ensure_category(watch.heuristics.SITE_SUMMARY_CNAME)
 
     print('Searching for assignment between requested site summaries and the kwcoco videos')
-
     site_idx_to_vidid = []
     unassigned_site_idxs = []
 
