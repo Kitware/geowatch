@@ -128,6 +128,10 @@ def run_sc_fusion_for_baseline(config):
 
     sc_fusion_kwcoco_path = ingress_dir / 'sc_fusion_kwcoco.json'
 
+    tracked_sc_kwcoco_path = '_tracked'.join(
+        os.path.splitext(sc_fusion_kwcoco_path))
+    cropped_region_models_bas = ingressed_assets['cropped_region_models_bas']
+
     site_models_outdir = (ingress_dir / 'sc_out_site_models').ensuredir()
     region_models_outdir = (ingress_dir / 'sc_out_region_models').ensuredir()
     site_models_manifest_outdir = (ingress_dir / 'tracking_manifests_sc').ensuredir()
@@ -194,7 +198,7 @@ def run_sc_fusion_for_baseline(config):
                 'sites_dpath': site_models_outdir,                     # Sets --out_sites_dir
                 'sites_fpath': site_models_manifest_outpath,           # Sets --out_sites_fpath
                 'poly_kwcoco_fpath': tracked_sc_kwcoco_path,           # Sets --out_kwcoco
-                'site_summary': ub.Path(input_site_summary_dpath) / '*.geojson',  # Sets --site_summary
+                'site_summary': ub.Path(cropped_region_models_bas) / '*.geojson',  # Sets --site_summary
                 'append_mode': True,
             } | sc_track_kwargs
             sc_poly = smart_pipeline.SC_PolygonPrediction(root_dpath=ingress_dir)
