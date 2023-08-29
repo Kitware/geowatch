@@ -43,7 +43,14 @@ class SCDatasetConfig(scfg.DataConfig):
             '''
             Will not recompute if output_path already exists
             '''))
-    sc_align_config = scfg.Value(None, help=ub.paragraph(
+
+    acsc_cluster_config = scfg.Value(None, help=ub.paragraph(
+        '''
+        The configuration for the site-cluster-step.
+        If None, then no site clustering is done.
+        '''))
+
+    acsc_align_config = scfg.Value(None, help=ub.paragraph(
         '''
         The configuration for the coco-align step
         '''))
@@ -108,6 +115,20 @@ def run_generate_sc_cropped_kwcoco(config):
               "from BAS *")
         input_region_path = ub.Path(ingressed_assets['cropped_region_models_bas']) / f'{region_id}.geojson'
 
+    if config.acsc_cluster_config is not None:
+        # If specified cluster sites first.
+        from watch.mlops import smart_pipeline
+        site_clustering = smart_pipeline.SiteClustering(root_dpath=ingress_dir)
+        site_cluster_config = ub.udict(Yaml.coerce(config.site_cluster_config))
+        tocrop_region_fpath = input_region_path.augment(prefix='clustered_')
+        site_cluster_config['src'] = input_region_path
+        site_cluster_config['dst_dpath'] = tocrop_region_fpath.parent
+        site_cluster_config['dst_region_fpath'] = tocrop_region_fpath
+        site_clustering.configure(site_cluster_config)
+        ub.cmd(site_clustering.command(), check=True, verbose=3, system=True)
+    else:
+        tocrop_region_fpath = input_region_path
+
     ta1_sc_kwcoco_path = ingressed_assets['kwcoco_for_sc']
 
     align_config_default = ub.udict(Yaml.coerce(ub.codeblock(
@@ -128,7 +149,7 @@ def run_generate_sc_cropped_kwcoco(config):
         asset_timeout: 10minutes
         verbose: 1
         ''')))
-    align_config = align_config_default | Yaml.coerce(config.sc_align_config)
+    align_config = align_config_default | Yaml.coerce(config.acsc_align_config)
     if align_config['aux_workers'] == 'auto':
         align_config['aux_workers'] = align_config['include_channels'].count('|') + 1
 
@@ -138,7 +159,7 @@ def run_generate_sc_cropped_kwcoco(config):
 
     align_config['src'] = ta1_sc_kwcoco_path
     align_config['dst'] = ta1_sc_cropped_kwcoco_path
-    align_config['regions'] = input_region_path
+    align_config['regions'] = tocrop_region_fpath
     # Validate align config before running anything
     align_config = coco_align.CocoAlignGeotiffConfig(**align_config)
     print('align_config = {}'.format(ub.urepr(align_config, nl=1)))

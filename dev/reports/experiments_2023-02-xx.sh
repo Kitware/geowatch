@@ -3422,6 +3422,7 @@ geowatch schedule --params="
 
 # NO MASK
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware=auto)
+echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 python -m watch.mlops.aggregate \
     --pipeline=bas_building_and_depth_vali \
     --target "

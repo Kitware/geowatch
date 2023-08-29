@@ -1656,7 +1656,9 @@ class SiteModelCollection(ModelCollection):
                 raise ValueError(f'No sites. Unable to infer {key}.')
             unique_values = {p[key] for p in site_header_properties}
             if len(unique_values) > 1:
-                raise ValueError('More than one {key} in sites: {unique_values}')
+                msg = (f'More than one key={key!r} in sites with unique_values={unique_values!r}')
+                print(msg)
+                raise ValueError(msg)
             region_props[key] = list(unique_values)[0]
 
         region_header = _infer_region_header_from_site_summaries(

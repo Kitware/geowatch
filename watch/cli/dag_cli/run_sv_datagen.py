@@ -4,7 +4,7 @@ from watch.cli.smartflow_egress import smartflow_egress
 from watch.utils.util_framework import download_region
 import ubelt as ub
 import scriptconfig as scfg
-from watch.mlops.smart_pipeline import SV_Cropping
+from watch.mlops import smart_pipeline
 from kwutil.util_yaml import Yaml
 
 
@@ -111,7 +111,7 @@ def run_generate_sv_cropped_kwcoco(input_path,
 
     sv_cropping_config = Yaml.coerce(sv_cropping_config or {})
 
-    sv_cropping = SV_Cropping(root_dpath=ingress_dir)
+    sv_cropping = smart_pipeline.SV_Cropping(root_dpath=ingress_dir)
     sv_cropping.configure({
         'crop_src_fpath': ta1_sc_kwcoco_path,
         'regions': bas_region_path,
