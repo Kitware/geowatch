@@ -284,7 +284,11 @@ class FSPath(str):
                 dst = dst.parent + '/'
 
         if isinstance(self, LocalPath):
+            if not self.exists():
+                raise IOError(f'{self} does not exist')
             if isinstance(dst, RemotePath):
+                # TODO: test if we are an empty directory and fail because
+                # generally we cant copy an empty directory to a remote.
                 return dst.fs.put(self, dst, **commonkw, callback=callback)
             elif isinstance(dst, LocalPath):
                 return self.fs.copy(self, dst, **commonkw, callback=callback)

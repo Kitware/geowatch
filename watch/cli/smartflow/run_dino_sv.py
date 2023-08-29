@@ -101,7 +101,7 @@ def run_dino_sv(config):
     # parameters passed to us from the DAG (so we can shift the order in
     # which operations are applied at the DAG level)
     input_region_dpath = ingressed_assets['depth_filtered_regions']
-    input_sites_dpath = ingressed_assets['depth_filtered_sites']
+    input_sites_dpath = ub.Path(ingressed_assets['depth_filtered_sites'])
     input_region_fpath = ub.Path(input_region_dpath) / f'{region_id}.geojson'
 
     # NOTE; we want to be using the output of SV crop, not necesarilly the the
