@@ -1654,12 +1654,7 @@ class SiteModelCollection(ModelCollection):
         if region_props[key] is None:
             if len(self) == 0:
                 raise ValueError(f'No sites. Unable to infer {key}.')
-            unique_values = {p[key] for p in site_header_properties}
-            if len(unique_values) > 1:
-                msg = (f'More than one key={key!r} in sites with unique_values={unique_values!r}')
-                print(msg)
-                raise ValueError(msg)
-            region_props[key] = list(unique_values)[0]
+            region_props[key] = _rectify_keys(key, site_header_properties)
 
         region_header = _infer_region_header_from_site_summaries(
             region_header, site_summaries)
@@ -1683,15 +1678,15 @@ def _infer_region_header_from_site_summaries(region_header, site_summaries):
 
     for key in shared_unique_properties:
         if region_props[key] is None:
-            if len(site_summaries) == 0:
-                raise ValueError(f'No sites. Unable to infer {key}.')
-            unique_values = {p[key] for p in site_summary_properties}
-            if len(unique_values) > 1:
-                msg = (f'More than one key={key!r} in sites with unique_values={unique_values!r}')
-                print(msg)
-                raise ValueError(msg)
-
-            region_props[key] = list(unique_values)[0]
+            try:
+                if len(site_summaries) == 0:
+                    raise ValueError(f'No sites. Unable to infer {key}.')
+                region_props[key] = _rectify_keys(key, site_summary_properties)
+            except ValueError:
+                # Allow MGRS to fail. We can use region geometry to get the
+                # right one.
+                if key != 'mgrs':
+                    raise
 
     if region_props['start_date'] is None:
         if len(site_summaries) == 0:
@@ -1722,6 +1717,29 @@ def _infer_region_header_from_site_summaries(region_header, site_summaries):
         RegionHeader(**region_header).infer_mgrs()
 
     return region_header
+
+
+def _rectify_keys(key, properties_list):
+    """
+    Given a key and a list of dictionaries, extract the value for that key in
+    all dictionaries and check they are all the same.
+
+    Args:
+        key (str): key of interest
+        properties_list (List[Dict[str, T]]): multiple property dictionaries
+
+    Returns:
+        T: value from properties dictionaries.
+    """
+    if len(properties_list) == 0:
+        raise ValueError(f'No sites. Unable to infer {key}.')
+    unique_values = {p[key] for p in properties_list}
+    if len(unique_values) > 1:
+        msg = (f'More than one key={key!r} in with unique_values={unique_values!r}')
+        print(msg)
+        raise ValueError(msg)
+    value = list(unique_values)[0]
+    return value
 
 
 def _update_propery_cache(prop):

@@ -3555,11 +3555,12 @@ geowatch schedule --params="
             - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V74/Drop7-MedianNoWinter10GSD_bgrn_split6_V74_epoch46_step4042.pt
 
         bas_pxl.test_dataset:
-            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/KR_R002/imganns-KR_R002.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/CH_R001/imganns-CH_R001.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/NZ_R001/imganns-NZ_R001.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/KR_R001/imganns-KR_R001.kwcoco.zip
-            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/CN_C000/imganns-CN_C000.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/BR_R002/imganns-BR_R002.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/KR_R002/imganns-KR_R002.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/CH_R001/imganns-CH_R001.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/NZ_R001/imganns-NZ_R001.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/KR_R001/imganns-KR_R001.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/CN_C000/imganns-CN_C000.kwcoco.zip
         bas_pxl.chip_overlap: 0.3
         bas_pxl.chip_dims: auto
         bas_pxl.time_span: auto
@@ -3616,15 +3617,15 @@ geowatch schedule --params="
         ## Cluster Sites Params ##
         ##########################
         cluster_sites.context_factor: 1.5
-        cluster_sites.minimum_size: '128x128@2GSD'
-        cluster_sites.maximum_size: '1024x1024@2GSD'
+        cluster_sites.minimum_size: '128x128@8GSD'
+        cluster_sites.maximum_size: '1024x1024@8GSD'
 
         ########################
         ## AC/SC CROP PARAMS  ##
         ########################
-        sc_crop.target_gsd: 2GSD
-        sc_crop.minimum_size: '128x128@2GSD'
-        sc_crop.force_min_gsd: 2GSD
+        sc_crop.target_gsd: 8GSD
+        sc_crop.minimum_size: '128x128@8GSD'
+        sc_crop.force_min_gsd: 8GSD
         sc_crop.context_factor: 1.0
         sc_crop.rpc_align_method: affine_warp
         sc_crop.sensor_to_time_window:
@@ -3639,9 +3640,9 @@ geowatch schedule --params="
         sc_pxl.tta_fliprot: 0.0
         sc_pxl.tta_time: 0.0
         sc_pxl.chip_overlap: 0.3
-        sc_pxl.input_space_scale: 2GSD
-        sc_pxl.window_space_scale: 2GSD
-        sc_pxl.output_space_scale: 2GSD
+        sc_pxl.input_space_scale: 8GSD
+        sc_pxl.window_space_scale: 8GSD
+        sc_pxl.output_space_scale: 8GSD
         sc_pxl.chip_dims: '128,128'
         #sc_pxl.time_span: 6m
         #sc_pxl.time_sampling: auto
@@ -3662,7 +3663,7 @@ geowatch schedule --params="
 
         sc_poly.thresh: 0.07
         sc_poly.boundaries_as: polys
-        sc_poly.resolution: 2GSD
+        sc_poly.resolution: 8GSD
         sc_poly.min_area_square_meters: 7200
 
         #############################
