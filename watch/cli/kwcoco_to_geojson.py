@@ -1169,12 +1169,15 @@ def main(argv=None, **kwargs):
     import geojson
     import json
     import kwcoco
+    import pandas as pd
     import safer
     import watch
+
     from kwcoco.util import util_json
-    from watch.utils import util_gis
-    from watch.utils import process_context
     from kwutil.util_yaml import Yaml
+    from watch.geoannots import geomodels
+    from watch.utils import process_context
+    from watch.utils import util_gis
 
     coco_fpath = ub.Path(args.in_file)
 
@@ -1283,11 +1286,9 @@ def main(argv=None, **kwargs):
             f'Unknown Default Track Function: {args.default_track_fn} not in {list(_KNOWN_TRACK_FUNCS.keys())}')
 
     if args.boundary_region is not None:
-        from watch.geoannots import geomodels
         region_infos = list(util_gis.coerce_geojson_datas(
             args.boundary_region, format='json', allow_raw=True,
             desc='load boundary regions'))
-        import pandas as pd
         region_parts = []
         for info in region_infos:
             # Need to deterimine which one to use
@@ -1298,7 +1299,6 @@ def main(argv=None, **kwargs):
         video_gdf = coco_video_gdf(coco_dset)
         video_region_assignments = assign_videos_to_regions(video_gdf, boundary_regions_gdf)
     else:
-        import rich
         if args.site_summary is None:
             rich.print('[yellow]Warning: No boundary regions or site summaries specified')
         else:
@@ -1344,18 +1344,16 @@ def main(argv=None, **kwargs):
         print(f'write to coco_dset.fpath={coco_dset.fpath}')
         coco_dset.dump(out_kwcoco, indent=2)
 
-    # Convert kwcoco to sites
     verbose = 1
 
-    # Also do this in BAS mode
-    all_sites = convert_kwcoco_to_iarpa(coco_dset,
-                                        default_region_id=args.region_id)
+    # Convert kwcoco to sites models
+    all_sites = convert_kwcoco_to_iarpa(
+        coco_dset, default_region_id=args.region_id)
+    print(f'{len(all_sites)=}')
 
     if args.out_sites_dir is not None:
-
-        sites_dir = ub.Path(args.out_sites_dir).ensuredir()
-        print(f'{len(all_sites)=}')
         # write sites to disk
+        sites_dir = ub.Path(args.out_sites_dir).ensuredir()
         site_fpaths = []
         for site in ub.ProgIter(all_sites, desc='writing sites', verbose=verbose):
             site_props = site['features'][0]['properties']
@@ -1374,37 +1372,34 @@ def main(argv=None, **kwargs):
         with safer.open(out_sites_fpath, 'w', temp_file=not ub.WIN32) as file:
             json.dump(site_tracking_output, file, indent='    ')
 
-    # Convert kwcoco to sites summaries
+    # Convert site models to site summaries
     if args.out_site_summaries_dir is not None:
 
-        all_site_summaries = [s.as_summary() for s in all_sites]
-
-        print(f'{len(all_site_summaries)=}')
         site_summary_dir = ub.Path(args.out_site_summaries_dir).ensuredir()
-        # write sites to region models on disk
-        groups = ub.group_items(all_site_summaries, lambda site: site['properties']['cache']['region_id'])
+        # write site summaries to region models on disk
+        groups = ub.group_items(all_sites, lambda site: site.header['properties']['region_id'])
 
         site_summary_fpaths = []
-        for region_id, site_summaries in groups.items():
+        for region_id, sites in groups.items():
 
+            # Converting sites to a region model makes them site summaries
+            sites = geomodels.SiteModelCollection(sites)
+            new_summaries = sites.as_region_model()
             region_fpath = site_summary_dir / (region_id + '.geojson')
+
             if args.append_mode and region_fpath.is_file():
-                with open(region_fpath, 'r') as f:
-                    region = geojson.load(f)
+                new_region = geomodels.RegionModel.coerce(region_fpath)
+                new_region.features.extend(list(new_summaries.site_summaries()))
                 if verbose:
                     print(f'writing to existing region {region_fpath}')
             else:
-                region = geojson.FeatureCollection(
-                    [create_region_header(region_id, site_summaries)])
+                new_region = new_summaries
                 if verbose:
                     print(f'writing to new region {region_fpath}')
-            for site_summary in site_summaries:
-                assert site_summary['properties']['type'] == 'site_summary'
-                region['features'].append(site_summary)
 
             site_summary_fpaths.append(os.fspath(region_fpath))
             with safer.open(region_fpath, 'w', temp_file=not ub.WIN32) as f:
-                geojson.dump(region, f, indent=2)
+                geojson.dump(new_region, f, indent=2)
 
     if args.out_site_summaries_fpath is not None:
         site_summary_tracking_output = tracking_output.copy()

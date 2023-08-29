@@ -665,7 +665,7 @@ class ConfusionAnalysis:
         region_id = self.region_id
         id_to_pred_site = self.id_to_pred_site
 
-        pred_region_model = pred_sites.as_region_model(region=true_region_model.header)
+        pred_region_model = pred_sites.as_region_model(true_region_model.header)
         pred_df = pred_region_model.pandas_summaries()
         true_df = true_region_model.pandas_summaries()
         idx1_to_idx2 = util_gis.geopandas_pairwise_overlaps(pred_df, true_df)

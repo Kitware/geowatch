@@ -1618,7 +1618,7 @@ class ModelCollection(list):
 
 class SiteModelCollection(ModelCollection):
 
-    def as_region_model(self, region=None):
+    def as_region_model(self, region_header=None):
         """
         Convert a set of site models to a region model
 
@@ -1641,8 +1641,8 @@ class SiteModelCollection(ModelCollection):
         site_summaries = [s.as_summary() for s in self]
         site_header_properties = [site.header['properties'] for site in self]
 
-        if region is not None:
-            region_header = RegionHeader.coerce(region)
+        if region_header is not None:
+            region_header = RegionHeader.coerce(region_header)
             region_header = copy.deepcopy(region_header)
         else:
             region_header = RegionHeader.empty()
@@ -1659,7 +1659,8 @@ class SiteModelCollection(ModelCollection):
                 raise ValueError('More than one {key} in sites: {unique_values}')
             region_props[key] = list(unique_values)[0]
 
-        region_header = _infer_region_header_from_site_summaries(region_header, site_summaries)
+        region_header = _infer_region_header_from_site_summaries(
+            region_header, site_summaries)
 
         region_features = [region_header] + site_summaries
         region_model = RegionModel(features=region_features)

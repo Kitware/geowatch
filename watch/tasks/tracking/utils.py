@@ -264,14 +264,14 @@ class NewTrackFunction(TrackFunction):
     """
 
     def __call__(self, sub_dset):
-        print(f'Enter {self.__class__} __call__ function')
-        print('Create tracks')
+        # print(f'Enter {self.__class__} __call__ function')
+        # print('Create tracks')
         tracks = self.create_tracks(sub_dset)
-        print('Add tracks to dset')
+        # print('Add tracks to dset')
         sub_dset = self.add_tracks_to_dset(sub_dset, tracks)
-        print('After tracking sub_dset.stats(): ' +
-              ub.urepr(sub_dset.basic_stats()))
-        print(f'Exit {self.__class__} __call__ function')
+        # print('After tracking sub_dset.stats(): ' +
+        #       ub.urepr(sub_dset.basic_stats()))
+        # print(f'Exit {self.__class__} __call__ function')
         return sub_dset
 
     def create_tracks(self, sub_dset):
