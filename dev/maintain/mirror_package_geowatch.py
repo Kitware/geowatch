@@ -57,7 +57,10 @@ def main():
     nx.write_network_text(g)
 
     new_modpath = repo_dpath / new_name
-    # new_modpath.delete()
+
+    from rich.prompt import Confirm
+    if Confirm.ask(f'Delete {new_modpath}?'):
+        new_modpath.delete()
 
     def extract_main_body(old_text):
         import parso
@@ -153,6 +156,9 @@ def main():
 
             new_text = '\n'.join(parts)
             new_fpath.write_text(new_text)
+
+    print('Dont forget to:')
+    print(f'git add {new_modpath}')
 
 
 if __name__ == '__main__':
