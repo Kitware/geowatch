@@ -144,6 +144,7 @@ def run_dino_sv(config):
         # Not sure if the above case is the right comment, but leaving this
         # here to guarentee the region with site summaries is passed forward
         # TODO: the dino code should just be robust to this.
+        input_sites_dpath.copy(output_sites_dpath)
         input_region_fpath.copy(output_region_fpath)
     else:
         # 3.2 Run DinoBoxDetector
@@ -200,7 +201,10 @@ def run_dino_sv(config):
     print("* Egressing KWCOCO dataset and associated STAC item *")
     ingressed_assets['sv_out_site_models'] = output_sites_dpath
     ingressed_assets['sv_out_region_models'] = output_region_dpath
-    ingressed_assets['sv_dino_boxes_kwcoco'] = dino_boxes_kwcoco_path
+
+    if dino_boxes_kwcoco_path.exists():
+        ingressed_assets['sv_dino_boxes_kwcoco'] = dino_boxes_kwcoco_path
+
     smartflow_egress(ingressed_assets,
                      local_region_path,
                      output_path,
