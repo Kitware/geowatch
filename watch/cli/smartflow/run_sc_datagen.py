@@ -118,12 +118,12 @@ def run_generate_sc_cropped_kwcoco(config):
         # If specified cluster sites first.
         from watch.mlops import smart_pipeline
         site_clustering = smart_pipeline.SiteClustering(root_dpath=ingress_dir)
-        site_cluster_config = ub.udict(Yaml.coerce(config.site_cluster_config))
+        acsc_cluster_config = ub.udict(Yaml.coerce(config.acsc_cluster_config))
         tocrop_region_fpath = input_region_path.augment(prefix='clustered_')
-        site_cluster_config['src'] = input_region_path
-        site_cluster_config['dst_dpath'] = tocrop_region_fpath.parent
-        site_cluster_config['dst_region_fpath'] = tocrop_region_fpath
-        site_clustering.configure(site_cluster_config)
+        acsc_cluster_config['src'] = input_region_path
+        acsc_cluster_config['dst_dpath'] = tocrop_region_fpath.parent
+        acsc_cluster_config['dst_region_fpath'] = tocrop_region_fpath
+        site_clustering.configure(acsc_cluster_config)
         ub.cmd(site_clustering.command(), check=True, verbose=3, system=True)
     else:
         tocrop_region_fpath = input_region_path
