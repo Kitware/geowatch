@@ -751,6 +751,54 @@ class RegionModel(_Model):
 
         props['comments'] = props.get('comments', '')
 
+    def infer_header(self, region_header=None):
+        """
+        Infer any missing header information from site summaries.
+
+        If this region model does not have a header, but it contains site
+        summaries, then use that information to infer a header value. Useful
+        when converting site summaries to full region models.
+
+        Args:
+            region_header (RegionHeader):
+                if specified, use this information when possible and then
+                infer the rest.
+
+        SeeAlso:
+
+            * :func:`SiteModelCollection.as_region_model`
+
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> # Make a region without a header
+            >>> self = RegionModel.random()
+            >>> self.features.remove(self.header)
+            >>> assert self.header is None
+            >>> # Infer the header using site summaries
+            >>> self.infer_header()
+            >>> assert self.header is not None
+        """
+        current_header = self.header
+
+        if region_header is not None:
+            if current_header is not None:
+                raise ValueError('cannot specify a region header when one already exists')
+            region_header = RegionHeader.coerce(region_header)
+            region_header = copy.deepcopy(region_header)
+        else:
+            if current_header is not None:
+                region_header = current_header
+            else:
+                region_header = RegionHeader.empty()
+
+        site_summaries = list(self.site_summaries())
+        region_header = _infer_region_header_from_site_summaries(
+            region_header, site_summaries)
+
+        if region_header is not current_header:
+            assert current_header is None
+            self.features.insert(0, region_header)
+
 
 class SiteModel(_Model):
     """
@@ -1651,7 +1699,7 @@ class SiteModelCollection(ModelCollection):
         # note: region_id does not appear in a site summary, but it does in the
         # site model.
         key = 'region_id'
-        if region_props[key] is None:
+        if region_props.get(key, None) is None:
             if len(self) == 0:
                 raise ValueError(f'No sites. Unable to infer {key}.')
             region_props[key] = _rectify_keys(key, site_header_properties)
@@ -1670,14 +1718,17 @@ def _infer_region_header_from_site_summaries(region_header, site_summaries):
     """
     if region_header is None:
         region_header = RegionHeader.empty()
-    region_props = region_header['properties']
+    region_props = region_header.get('properties', None)
+
+    if region_props.get('type', None) is None:
+        region_props['type'] = 'region'
 
     site_summary_properties = [sitesum['properties'] for sitesum in site_summaries]
 
     shared_unique_properties = ['originator', 'model_content', 'mgrs']
 
     for key in shared_unique_properties:
-        if region_props[key] is None:
+        if region_props.get(key, None) is None:
             try:
                 if len(site_summaries) == 0:
                     raise ValueError(f'No sites. Unable to infer {key}.')
@@ -1688,7 +1739,7 @@ def _infer_region_header_from_site_summaries(region_header, site_summaries):
                 if key != 'mgrs':
                     raise
 
-    if region_props['start_date'] is None:
+    if region_props.get('start_date', None) is None:
         if len(site_summaries) == 0:
             raise ValueError('No sites. Unable to infer start_date.')
         dates = [p['start_date'] for p in site_summary_properties if p['start_date'] is not None]
@@ -1696,7 +1747,7 @@ def _infer_region_header_from_site_summaries(region_header, site_summaries):
             raise ValueError('No sites with start dates')
         region_props['start_date'] = min(dates)
 
-    if region_props['end_date'] is None:
+    if region_props.get('end_date', None) is None:
         if len(site_summaries) == 0:
             raise ValueError('No sites. Unable to infer end_date.')
         dates = [p['end_date'] for p in site_summary_properties if p['end_date'] is not None]
@@ -1704,7 +1755,7 @@ def _infer_region_header_from_site_summaries(region_header, site_summaries):
             raise ValueError('No sites with end dates')
         region_props['end_date'] = max(dates)
 
-    if region_header['geometry'] is None:
+    if region_header.get('geometry', None) is None:
         if len(site_summaries) == 0:
             raise ValueError(f'No sites. Unable to infer {key}.')
         from shapely.ops import unary_union
@@ -1713,7 +1764,7 @@ def _infer_region_header_from_site_summaries(region_header, site_summaries):
                       for s in site_summaries]
         region_header['geometry'] = unary_union(site_geoms).envelope
 
-    if region_props['mgrs'] is None:
+    if region_props.get('mgrs', None) is None:
         RegionHeader(**region_header).infer_mgrs()
 
     return region_header
