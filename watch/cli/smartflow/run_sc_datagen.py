@@ -124,7 +124,7 @@ def run_generate_sc_cropped_kwcoco(config):
         acsc_cluster_config['dst_dpath'] = tocrop_region_fpath.parent
         acsc_cluster_config['dst_region_fpath'] = tocrop_region_fpath
         site_clustering.configure(acsc_cluster_config)
-        ub.cmd(site_clustering.command(), check=True, verbose=3, system=True)
+        ub.cmd(site_clustering._raw_command(), check=True, verbose=3, system=True)
     else:
         tocrop_region_fpath = input_region_path
 
