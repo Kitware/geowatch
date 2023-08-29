@@ -254,12 +254,19 @@ def run_generate_sc_cropped_kwcoco(config):
     # 5. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)
+    sc_cropped_assets_dir = ingress_dir / f'{region_id}'
+    sc_cropped_assets_dir.ensuredir()
+    # Put a dummy file in this directory so we can upload a nearly-empty folder
+    # to S3
+    (sc_cropped_assets_dir / 'dummy').write_text('dummy')
+
     print("* Egressing KWCOCO dataset and associated STAC item *")
     ingressed_assets['cropped_kwcoco_for_sc'] = ta1_sc_cropped_kwcoco_path
-    ingressed_assets['cropped_kwcoco_for_sc_assets'] = ingress_dir / f'{region_id}'
 
     if cluster_region_dpath is not None:
         ingressed_assets['clustered_region_dpath'] = cluster_region_dpath
+
+    ingressed_assets['cropped_kwcoco_for_sc_assets'] = sc_cropped_assets_dir
 
     smartflow_egress(ingressed_assets,
                      local_region_path,
