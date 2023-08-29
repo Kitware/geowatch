@@ -122,9 +122,17 @@ def run_generate_sv_cropped_kwcoco(input_path,
     # 5. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)
+
+    assets_dpath = ingress_dir / f'{region_id}'
+    assets_dpath.ensuredir()
+
+    # Ensure at least one file exists in the directory we want to upload
+    # so aws doesn't break.
+    (assets_dpath / '_empty').touch()
+
     print("* Egressing KWCOCO dataset and associated STAC item *")
     ingressed_assets['cropped_kwcoco_for_sv'] = ta1_sv_cropped_kwcoco_path
-    ingressed_assets['cropped_kwcoco_for_sv_assets'] = ingress_dir / f'{region_id}'
+    ingressed_assets['cropped_kwcoco_for_sv_assets'] = assets_dpath
     smartflow_egress(ingressed_assets,
                      local_region_path,
                      output_path,
