@@ -632,32 +632,6 @@ def coco_create_site_header(region_id, site_id, trackid, observations):
 
 
 @profile
-def create_region_header(region_id, site_summaries):
-    # TODO: use watch.geoannots.geomodels here
-    import geojson
-    geometry = _combined_geometries([
-        _single_geometry(summary['geometry'])
-        for summary in site_summaries
-    ]).envelope
-    start_date = min(summary['properties']['start_date']
-                     for summary in site_summaries)
-    end_date = max(summary['properties']['end_date']
-                   for summary in site_summaries)
-    properties = {
-        'type': 'region',
-        'region_id': region_id,
-        'version': site_summaries[0]['properties']['version'],
-        'mgrs': site_summaries[0]['properties']['mgrs'],
-        'model_content': site_summaries[0]['properties']['model_content'],
-        'start_date': start_date,
-        'end_date': end_date,
-        'originator': site_summaries[0]['properties']['originator'],
-        'comments': None
-    }
-    return geojson.Feature(geometry=geometry, properties=properties)
-
-
-@profile
 def convert_kwcoco_to_iarpa(coco_dset, default_region_id=None):
     """
     Convert a kwcoco coco_dset to the IARPA JSON format
