@@ -3555,12 +3555,12 @@ geowatch schedule --params="
             - $DVC_EXPT_DPATH/models/fusion/Drop7-MedianNoWinter10GSD/packages/Drop7-MedianNoWinter10GSD_bgrn_split6_V74/Drop7-MedianNoWinter10GSD_bgrn_split6_V74_epoch46_step4042.pt
 
         bas_pxl.test_dataset:
-            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/BR_R002/imganns-BR_R002.kwcoco.zip
-            #- $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/KR_R002/imganns-KR_R002.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/KR_R002/imganns-KR_R002.kwcoco.zip
+            - $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/CN_C000/imganns-CN_C000.kwcoco.zip
+            #- $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/BR_R002/imganns-BR_R002.kwcoco.zip
             #- $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/CH_R001/imganns-CH_R001.kwcoco.zip
             #- $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/NZ_R001/imganns-NZ_R001.kwcoco.zip
             #- $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/KR_R001/imganns-KR_R001.kwcoco.zip
-            #- $DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-NoMask/CN_C000/imganns-CN_C000.kwcoco.zip
         bas_pxl.chip_overlap: 0.3
         bas_pxl.chip_dims: auto
         bas_pxl.time_span: auto
@@ -3630,6 +3630,7 @@ geowatch schedule --params="
         sc_crop.rpc_align_method: affine_warp
         sc_crop.sensor_to_time_window:
             - 'S2: 1month'
+            - 'S2: 0.5month'
 
         ########################
         ## AC/SC PIXEL PARAMS ##
@@ -3684,7 +3685,7 @@ geowatch schedule --params="
         sc_poly_viz.enabled: 0
     " \
     --root_dpath="$DVC_EXPT_DPATH/_toothbrush_eval15_bas_nomask" \
-    --devices="0," --tmux_workers=4 \
+    --devices="0,1" --tmux_workers=4 \
     --backend=tmux --queue_name "_toothbrush_eval15_bas_nomask" \
     --skip_existing=1 \
     --run=1
@@ -3722,4 +3723,4 @@ python -m watch.mlops.aggregate \
         concise: 1
         show_csv: 0
     " \
-    --rois="KR_R002"
+    --rois="KR_R002,CN_C000"

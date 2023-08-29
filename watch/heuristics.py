@@ -197,6 +197,11 @@ HUERISTIC_STATUS_DATA = [
         'status': 'system_confirmed',
         'color': 'kitware_blue'
     },
+
+    {
+        'status': 'system_rejected',
+        'color': 'kitware_yellow'
+    },
 ]
 
 # Backwards compat

@@ -989,8 +989,8 @@ class ConfusionAnalysis:
                 dpath = (viz_dpath / case['type'])
                 fname = (case['name'] + '.jpg')
 
-                if '0032' not in case['name'] and '0031' not in case['name']:
-                    continue
+                # if '0032' not in case['name'] and '0031' not in case['name']:
+                #     continue
 
                 fpath = dpath / fname
                 link_fpath = link_dpath / fname
@@ -1151,7 +1151,7 @@ def make_case(pred_sites, true_sites, true_geoms, pred_geoms, main_pred_idx, reg
     main_pred_cache = main_pred_site.header['properties']['cache']
     main_pred_geom = pred_geoms.iloc[main_pred_idx]
     if 'confusion' in main_pred_cache:
-        main_true_site_ids = main_pred_cache['confusion']['true_site_ids']
+        main_true_site_ids = main_pred_cache['confusion'].get('true_site_ids', [])
         main_true_idxs = [true_site_ids.index(_) for _ in main_true_site_ids]
 
     has_pred = True
@@ -1768,6 +1768,7 @@ def make_pred_score_timeline(main_pred_site):
     from watch import heuristics
     import kwimage
     name_to_color = {d['name']: d['color'] for d in heuristics.CATEGORIES}
+    name_to_color['salient'] = 'black'
     palette = {k: kwimage.Color.coerce(v).as01() for k, v in name_to_color.items()}
 
     fig.set_size_inches([10, 3])
