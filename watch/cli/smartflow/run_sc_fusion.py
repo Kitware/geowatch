@@ -210,6 +210,10 @@ def run_sc_fusion_for_baseline(config):
             cwd_paths = sorted([p.resolve() for p in ingress_dir.glob('*')])
             print('cwd_paths = {}'.format(ub.urepr(cwd_paths, nl=1)))
 
+            # Add in intermediate outputs for debugging
+            ingressed_assets['sc_heatmap_kwcoco_file'] = sc_fusion_kwcoco_path
+            ingressed_assets['sc_tracked_kwcoco_file'] = tracked_sc_kwcoco_path
+
     cropped_site_models_outdir = ingress_dir / 'cropped_site_models'
     os.makedirs(cropped_site_models_outdir, exist_ok=True)
     cropped_region_models_outdir = ingress_dir / 'cropped_region_models'
