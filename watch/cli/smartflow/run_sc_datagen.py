@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-See Old Script:
-    ~/code/watch/scripts/run_generate_sc_cropped_kwcoco.py
+Handles building datasets for AC/SC
 """
 from watch.cli.smartflow_ingress import smartflow_ingress
 from watch.cli.smartflow_egress import smartflow_egress
@@ -10,7 +9,7 @@ import ubelt as ub
 import scriptconfig as scfg
 
 
-class SCDatasetConfig(scfg.DataConfig):
+class ACSCDatasetConfig(scfg.DataConfig):
     """
     Generate cropped KWCOCO dataset for SC
     """
@@ -57,7 +56,7 @@ class SCDatasetConfig(scfg.DataConfig):
 
 
 def main():
-    config = SCDatasetConfig.cli(strict=True)
+    config = ACSCDatasetConfig.cli(strict=True)
     print('config = {}'.format(ub.urepr(config, nl=1, align=':')))
     run_generate_sc_cropped_kwcoco(config)
 

@@ -17,7 +17,7 @@ class BasFusionConfig(scfg.DataConfig):
     """
     Run TA-2 BAS fusion as baseline framework component
 
-    python ~/code/watch/watch/cli/dag_cli/run_bas_fusion.py
+    python ~/code/watch/watch/cli/smartflow/run_bas_fusion.py
     """
 
     input_path = scfg.Value(None, type=str, position=1, required=True, help=ub.paragraph(

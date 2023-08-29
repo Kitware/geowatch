@@ -113,6 +113,6 @@ def main():
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/watch/cli/dag_cli/run_fixups.py
+        python ~/code/watch/watch/cli/smartflow/run_fixups.py
     """
     main()

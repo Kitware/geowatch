@@ -30,7 +30,7 @@ class DzyneParallelSiteValiConfig(scfg.DataConfig):
     """
     Run DZYNE's parallel site validation framework component
 
-    python ~/code/watch/watch/cli/dag_cli/run_dzyne_parallel_site_vali.py
+    python ~/code/watch/watch/cli/smartflow/run_dzyne_parallel_site_vali.py
     """
     input_path = scfg.Value(None, type=str, position=1, required=True, help=ub.paragraph(
             '''
