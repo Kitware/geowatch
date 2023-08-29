@@ -336,6 +336,10 @@ def gpd_compute_scores(
         resolution=None):
     """
     TODO: This needs docs and examples for the BAS and SC/AC cases.
+
+    Calls :func:`_compute_group_scores` on each dataframe row, which will
+    execute the read for the image prediction scores for polygons with
+    :func:`score_poly`.
     """
     import pandas as pd
 

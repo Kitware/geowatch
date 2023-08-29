@@ -2621,16 +2621,25 @@ def covered_video_geo_regions(coco_dset):
     # import watch
     rows = []
     for vidid, video in coco_dset.index.videos.items():
-        crs84_poly = kwimage.MultiPolygon.coerce(video['valid_region_geos'])
-        # vidspace_poly = kwimage.Boxes(
-        #     [[0, 0, video['width'], video['height']]], 'xywh').to_polygons()[0]
-        # if 'warp_wld_to_vid' in video:
-        #     vid_from_wld = kwimage.Affine.coerce(video['warp_wld_to_vid'])
-        #     wld_form_vid = vid_from_wld.inv()
-        #     # THIS IS NOT CRS84!
-        #     crs84_poly = vidspace_poly.warp(wld_form_vid)
-        # else:
-        #     raise NotImplementedError('We dont have a way to get the geo bounds for a video')
+        if 'valid_region_geos' in video:
+            crs84_poly = kwimage.MultiPolygon.coerce(video['valid_region_geos']).to_shapely()
+        else:
+            vidspace_poly = kwimage.Boxes(
+                [[0, 0, video['width'], video['height']]], 'xywh').to_polygons()[0]
+            if 'warp_wld_to_vid' in video:
+                auth = video['wld_crs_info']['auth']
+                vid_from_wld = kwimage.Affine.coerce(video['warp_wld_to_vid'])
+                wld_form_vid = vid_from_wld.inv()
+                wld_poly = vidspace_poly.warp(wld_form_vid)
+                import pyproj
+                from shapely.ops import transform
+                crs = pyproj.CRS(':'.join(auth))
+                crs84 = util_gis.get_crs84()
+                project = pyproj.Transformer.from_crs(crs, crs84, always_xy=True).transform
+                wld_poly_ = wld_poly.to_shapely()
+                crs84_poly = transform(project, wld_poly_)
+            else:
+                raise NotImplementedError('We dont have a way to get the geo bounds for a video')
         gids = coco_dset.index.vidid_to_gids[vidid]
         if gids:
             start_gid = gids[0]
@@ -2645,7 +2654,7 @@ def covered_video_geo_regions(coco_dset):
         row = {
             'video_name': video['name'],
             'video_id': video['id'],
-            'geometry': crs84_poly.to_shapely(),
+            'geometry': crs84_poly,
             'start_date': start_date,
             'end_date': end_date,
         }

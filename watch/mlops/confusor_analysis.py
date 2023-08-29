@@ -1727,10 +1727,57 @@ def visualize_single_site_case(coco_dset, case, true_id_to_site, pred_id_to_site
         timeline_canvas = kwimage.ensure_uint255(timeline_canvas)
         parts.append(timeline_canvas)
 
+        main_pred_site = case.get('main_pred_site', None)
+        if main_pred_site is not None:
+            score_canvas = make_pred_score_timeline(main_pred_site)
+            score_canvas = kwimage.ensure_float01(score_canvas)
+            score_canvas = kwimage.imresize(score_canvas, dsize=(grid_canvas.shape[1], None)).clip(0, 1)
+            score_canvas = kwimage.ensure_uint255(score_canvas)
+            parts.append(score_canvas)
+
     final = kwimage.stack_images(parts, axis=0)
     return final
 
     # kwplot.imshow(final, fnum=1)
+
+
+def make_pred_score_timeline(main_pred_site):
+    from kwutil import util_time
+    observations = list(main_pred_site.observations())
+    longform = []
+    for obs in observations:
+        class_to_scores = obs['properties']['cache']['raw_multi_scores']
+        class_to_scores = class_to_scores[0]  # hack
+
+        date = obs['properties']['observation_date']
+        for catname, score in class_to_scores.items():
+            longform.append({
+                'date': util_time.coerce_datetime(date),
+                'class': catname,
+                'score': score
+            })
+
+    import pandas as pd
+    df = pd.DataFrame(longform)
+    import kwplot
+    sns = kwplot.autosns()
+    fig = kwplot.figure(fnum=1321322)
+    ax = fig.gca()
+    ax.cla()
+
+    from watch import heuristics
+    import kwimage
+    name_to_color = {d['name']: d['color'] for d in heuristics.CATEGORIES}
+    palette = {k: kwimage.Color.coerce(v).as01() for k, v in name_to_color.items()}
+
+    fig.set_size_inches([10, 3])
+    fig.subplots_adjust(left=.1, bottom=0.3, top=.7, right=0.9)
+
+    ax = sns.lineplot(data=df, x='date', y='score', hue='class', ax=ax,
+                      palette=palette, legend=False)
+    imdata = kwplot.render_figure_to_image(ax.figure)
+    return imdata
+    # kwimage.imwrite('foo.png', imdata)
 
 
 def make_case_timeline(case):

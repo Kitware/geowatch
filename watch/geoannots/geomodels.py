@@ -608,16 +608,38 @@ class RegionModel(_Model):
         """
         Returns:
             geopandas.GeoDataFrame: the site summaries as a data frame
+
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> self = RegionModel.random()
+            >>> gdf = self.pandas_summaries()
+            >>> print(gdf)
+            >>> # Test empty pandas summary
+            >>> self = RegionModel.random(num_sites=0)
+            >>> gdf = self.pandas_summaries()
+            >>> print(gdf)
+            >>> assert len(gdf) == 0
         """
         from watch.utils import util_gis
         crs84 = util_gis.get_crs84()
-        gdf = gpd.GeoDataFrame.from_features(list(self.site_summaries()), crs=crs84)
+        site_summaries = list(self.site_summaries())
+        if len(site_summaries):
+            gdf = gpd.GeoDataFrame.from_features(site_summaries, crs=crs84)
+        else:
+            # TODO: could infer more columns here.
+            gdf = gpd.GeoDataFrame.from_features(
+                [], crs=crs84, columns=['geometry'])
         return gdf
 
     def pandas_region(self):
         """
         Returns:
             geopandas.GeoDataFrame: the region header as a data frame
+
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> self = RegionModel.random()
+            >>> print(self.pandas_region())
         """
         from watch.utils import util_gis
         crs84 = util_gis.get_crs84()
@@ -776,16 +798,37 @@ class SiteModel(_Model):
         """
         Returns:
             geopandas.GeoDataFrame: the site summaries as a data frame
+
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> self = SiteModel.random()
+            >>> gdf = self.pandas_observations()
+            >>> print(gdf)
+            >>> # Test empty pandas summary
+            >>> del self.features[1:]
+            >>> gdf = self.pandas_observations()
+            >>> print(gdf)
+            >>> assert len(gdf) == 0
         """
         from watch.utils import util_gis
         crs84 = util_gis.get_crs84()
-        gdf = gpd.GeoDataFrame.from_features(list(self.observations()), crs=crs84)
+        features = list(self.observations())
+        if len(features):
+            gdf = gpd.GeoDataFrame.from_features(features, crs=crs84)
+        else:
+            gdf = gpd.GeoDataFrame.from_features(features, crs=crs84,
+                                                 columns=['geometry'])
         return gdf
 
     def pandas_site(self):
         """
         Returns:
             geopandas.GeoDataFrame: the region header as a data frame
+
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> self = SiteModel.random()
+            >>> print(self.pandas_site())
         """
         from watch.utils import util_gis
         crs84 = util_gis.get_crs84()
@@ -1298,7 +1341,7 @@ class RegionHeader(_Feature):
         """
         Create an empty region header
         """
-        self = geojson.Feature(
+        self = cls(
             properties={
                 "type": "region",
                 "region_id": None,
@@ -1430,6 +1473,33 @@ class SiteHeader(_Feature, _SiteOrSummaryMixin):
     _model_cls = SiteModel
     _feat_type = SiteModel._header_type
 
+    @classmethod
+    def empty(cls):
+        """
+        Create an empty region header
+
+        Example:
+            from watch.geoannots.geomodels import *  # NOQA
+            self = SiteHeader.empty()
+            ...
+        """
+        self = cls(
+            properties={
+                "type": "site",
+                "version": "2.4.3",
+                "mgrs": None,
+                "status": None,
+                "model_content": None,
+                "score": None,
+                "start_date": None,
+                "end_date": None,
+                "originator": None,
+                "validated": 'False',
+            },
+            geometry=None,
+        )
+        return self
+
     def as_summary(self):
         """
         Modify and return this site header feature as a site-summary body
@@ -1472,6 +1542,10 @@ class Observation(_Feature):
         else:
             raise TypeError(type(data))
         return self
+
+    @property
+    def observation_date(self):
+        return util_time.coerce_datetime(self['properties']['observation_date'])
 
 
 # def _site_header_from_observations(observations, mgrs_code, site_id, status, summary_geom=None):
