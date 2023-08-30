@@ -141,6 +141,8 @@ def run_dino_sv(config):
         # here to guarentee the region with site summaries is passed forward
         # TODO: the dino code should just be robust to this.
         input_sites_dpath.copy(output_sites_dpath)
+
+        output_region_fpath.parent.ensuredir()
         input_region_fpath.copy(output_region_fpath)
     else:
         output_region_dpath.ensuredir()
