@@ -613,16 +613,6 @@ class ArtistManager:
         points = np.array(list(zip(xs, ys)))
         self.add_linestring(points, **attrs)
 
-    def add_circle_marker(self, xy, r, **attrs):
-        """
-        Args:
-            xy (List[Tuple[float, float]] | ndarray):
-                an Nx2 set of circle centers
-            r (List[float] | ndarray):
-                an Nx1 set of circle radii
-        """
-        self.add_ellipse_marker(xy, rx=r, ry=r, angle=0, **attrs)
-
     def add_linestring(self, points, **attrs):
         """
         Args:
@@ -706,6 +696,16 @@ class ArtistManager:
         cols['ry'].append(ry)
         cols['angle'].append(angle)
         self.group_to_attrs[hashid] = attrs
+
+    def add_circle_marker(self, xy, r, **attrs):
+        """
+        Args:
+            xy (List[Tuple[float, float]] | ndarray):
+                an Nx2 set of circle centers
+            r (List[float] | ndarray):
+                an Nx1 set of circle radii
+        """
+        self.add_ellipse_marker(xy, rx=r, ry=r, angle=0, **attrs)
 
     def build_collections(self, ax=None):
         import numpy as np

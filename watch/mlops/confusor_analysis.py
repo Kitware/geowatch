@@ -877,18 +877,18 @@ class ConfusionAnalysis:
         )
 
         # I don't know why this isn't in-place. Maybe it is a scriptconfig thing?
-        repr1 = str(dst_dset.annots())
-        print(f'repr1={repr1}')
+        # repr1 = str(dst_dset.annots())
+        # print(f'repr1={repr1}')
         dst_dset = reproject_annotations.main(cmdline=0, **true_kwargs)
-        repr2 = str(dst_dset.annots())
-        print(f'repr1={repr1}')
-        print(f'repr2={repr2}')
+        # repr2 = str(dst_dset.annots())
+        # print(f'repr1={repr1}')
+        # print(f'repr2={repr2}')
         pred_kwargs['src'] = dst_dset
         dst_dset = reproject_annotations.main(cmdline=0, **pred_kwargs)
-        repr3 = str(dst_dset.annots())
-        print(f'repr1={repr1}')
-        print(f'repr2={repr2}')
-        print(f'repr3={repr3}')
+        # repr3 = str(dst_dset.annots())
+        # print(f'repr1={repr1}')
+        # print(f'repr2={repr2}')
+        # print(f'repr3={repr3}')
 
         if config.dst_kwcoco is not None:
 
@@ -975,7 +975,7 @@ class ConfusionAnalysis:
                 link_fpath = link_dpath / fname
 
                 try:
-                    canvas = visualize_single_site_case(
+                    canvas = visualize_case(
                         coco_dset, case, true_id_to_site, pred_id_to_site)
                 except Exception as ex:
                     errors.append(ex)
@@ -1006,12 +1006,12 @@ class ConfusionAnalysis:
         Build a set of cases that inspect the predictions of a single site.
         """
         from watch.utils import util_gis
+        import numpy as np
         print('Building confusion cases')
 
         performer_id = self.config.performer_id
         type_to_summary = self.type_to_summary
         type_to_sites = self.type_to_sites
-        coco_dset = self.cfsn_coco
 
         # Ensure data structures have consistent ordering so we can used indexes
         for key in type_to_summary.keys():
@@ -1033,27 +1033,19 @@ class ConfusionAnalysis:
 
         # Time analysis of false positives that overlap with something.
         true_sites_all = type_to_sites['true']
-        true_summary = type_to_summary['true']
-        true_gdf = true_summary.pandas_summaries()
+
+        true_region = type_to_summary['true']
+        true_gdf = true_region.pandas_summaries()
         true_utm_gdf = util_gis.project_gdf_to_local_utm(true_gdf, mode=1)
 
-        region_start_date = true_summary.start_date
-        region_end_date = true_summary.end_date
+        region_start_date = true_region.start_date
+        region_end_date = true_region.end_date
 
         pred_summary = type_to_summary['pred']
         pred_sites_all = type_to_sites['pred']
         pred_gdf = pred_summary.pandas_summaries()
         pred_utm_gdf = util_gis.project_gdf_to_local_utm(pred_gdf, mode=1)
 
-        SANITY_CHECKS = 0
-        if SANITY_CHECKS:
-            annots = coco_dset.annots()
-            tid_to_aids = ub.udict(ub.group_items(annots, annots.lookup('track_id')))
-            tid_to_annots = tid_to_aids.map_values(coco_dset.annots)
-            tid_to_dups = tid_to_annots.map_values(lambda x: ub.find_duplicates(x.lookup('image_id')))
-            assert not any(map(any, tid_to_dups.values()))
-
-        import numpy as np
         all_idx1s = np.arange(len(pred_utm_gdf))
         # all_idx2s = np.arange(len(true_utm_gdf))
 
@@ -1069,7 +1061,7 @@ class ConfusionAnalysis:
         cases = []
         for idx1 in all_idx1s:
             pred_site = pred_sites_all[idx1]
-            pred_geom = pred_utm_gdf.iloc[idx1].geometry
+            # pred_geom = pred_utm_gdf.iloc[idx1].geometry
 
             assert pred_utm_gdf.iloc[idx1]['site_id'] == pred_site.site_id
             pred_confusion = pred_site.header['properties']['cache']['confusion']
@@ -1083,23 +1075,20 @@ class ConfusionAnalysis:
 
             if len(true_idxs):
                 matched_status = '_'.join(sorted({s.status for s in true_sites}))
-                cfsn_status = '_some_space_overlap_' + matched_status
+                cfsn_status = '_overlaps_' + matched_status
             else:
-                cfsn_status = '-nomatch'
+                cfsn_status = '_nomatch'
                 true_sites = []
-                # Add cases for completely wrong sites that dont overlap anything
-                case = make_single_case(pred_site, pred_geom, confusion_type + '_no_space_overlap')
-                cases.append(case)
 
-            true_geoms = true_utm_gdf.iloc[true_idxs].geometry
-            pred_geoms = pred_utm_gdf.iloc[pred_idxs].geometry
+            true_utm_geoms = true_utm_gdf.iloc[true_idxs].geometry
+            pred_utm_geoms = pred_utm_gdf.iloc[pred_idxs].geometry
             main_pred_idx = np.where(pred_idxs == idx1)[0][0]
 
             case = make_case(
                 pred_sites,
                 true_sites,
-                true_geoms,
-                pred_geoms,
+                true_utm_geoms,
+                pred_utm_geoms,
                 main_pred_idx,
                 region_start_date,
                 region_end_date,
@@ -1118,27 +1107,33 @@ class ConfusionAnalysis:
         return cases
 
 
-def make_case(pred_sites, true_sites, true_geoms, pred_geoms, main_pred_idx, region_start_date,
-              region_end_date, performer_id, type_):
+def make_case(pred_sites,
+              true_sites,
+              true_utm_geoms,
+              pred_utm_geoms,
+              main_pred_idx,
+              region_start_date,
+              region_end_date,
+              performer_id,
+              type_):
+    """
+    Build a dict with enough into to make a plot
+    """
     import pandas as pd
     from kwutil import util_time
 
     # pred_site_ids = [s.site_id for s in pred_sites]
-    true_site_ids = [s.site_id for s in true_sites]
+    # true_site_ids = [s.site_id for s in true_sites]
 
-    main_pred_site = pred_sites[main_pred_idx]
-    main_pred_cache = main_pred_site.header['properties']['cache']
-    main_pred_geom = pred_geoms.iloc[main_pred_idx]
-    if 'confusion' in main_pred_cache:
-        main_true_site_ids = main_pred_cache['confusion'].get('true_site_ids', [])
-        main_true_idxs = [true_site_ids.index(_) for _ in main_true_site_ids]
-
-    has_pred = True
-    has_true = len(main_true_idxs) > 0
+    has_pred = len(pred_sites) > 0
+    has_true = len(true_sites) > 0
 
     case = {}
 
     if has_pred:
+        main_pred_site = pred_sites[main_pred_idx]
+        main_pred_geom = pred_utm_geoms.iloc[main_pred_idx]
+
         pred_obs = main_pred_site.pandas_observations()
         pred_dates = pred_obs['observation_date'].values
         pred_dates = list(map(util_time.coerce_datetime, pred_dates))
@@ -1160,15 +1155,24 @@ def make_case(pred_sites, true_sites, true_geoms, pred_geoms, main_pred_idx, reg
             **pred_confusion,
         })
 
+    if has_pred and has_true:
+        # main_pred_cache = main_pred_site.header['properties']['cache']
+        # if 'confusion' in main_pred_cache:
+        #     main_true_site_ids = main_pred_cache['confusion'].get('true_site_ids', [])
+        #     main_true_idxs = [true_site_ids.index(_) for _ in main_true_site_ids]
+        # else:
+        isect_areas = true_utm_geoms.intersection(main_pred_geom).area
+        union_areas = true_utm_geoms.union(main_pred_geom).area
+        ious = isect_areas / union_areas
+        main_true_idx = ious.argmax()
+
     if has_true:
         # TODO generalize
-        main_true_idx = main_true_idxs[0]
-        main_true_geom = true_geoms.iloc[main_true_idx]
+        # main_true_idx = main_true_idxs[0]
+        main_true_geom = true_utm_geoms.iloc[main_true_idx]
         main_true_site = true_sites[main_true_idx]
 
         true_area = main_true_geom.area
-
-        # assert pred_site.geometry.intersection(true_site.geometry).area > 0
 
         site_start_date = main_true_site.start_date or region_start_date
         site_end_date = main_true_site.end_date or region_end_date
@@ -1283,103 +1287,68 @@ def make_single_case(site, geom, type_):
 #     ...
 
 
-def visualize_single_site_case(coco_dset, case, true_id_to_site, pred_id_to_site):
+def visualize_case(coco_dset, case, true_id_to_site, pred_id_to_site):
     """
+    Creates a visualization for a confusion case.
+
     cases = sorted(cases, key=lambda x: x['time_iou'])[::-1]
     case = cases[1]
     """
     from kwutil import util_time
     from shapely.ops import unary_union
-    import kwimage
+    from watch import heuristics
+    from watch.geoannots.geomodels import RegionModel
+    from watch.utils import util_gis
+    from watch.utils import util_kwimage
+    import geopandas as gpd
     import kwarray
+    import kwcoco
+    import kwimage
     import numpy as np
 
     all_aids = set()
-
-    main_trackids = []
+    all_sites = []
     main_pred_aids = set()
     main_true_aids = set()
 
-    try:
-        # shown_pred_sites = case['pred_sites']
-        pred_site = pred_id_to_site[case['pred_site_id']]
-        pred_site_id = case['pred_coco_site_id']
-    except KeyError:
-        pred_site = None
-        pred_annots = None
-        pred_site_id = None
-    else:
-        if pred_site_id in getattr(coco_dset.index, 'name_to_track', set()):
-            raise NotImplementedError
-            # pred_tracks = coco_dset.tracks(names=[case['pred_site_id']])
-            # pred_track = pred_tracks.objs[0]
-            # pred_tid = pred_track['id']
-            # pred_annots = pred_tracks.annots[0]
+    main_trackids = []
+
+    for site_type in ['pred_sites', 'true_sites']:
+        if site_type == 'pred_sites':
+            tag = 'kit'
         else:
-            pred_aids = list(coco_dset.index.trackid_to_aids[pred_site_id])
-            pred_annots = coco_dset.annots(pred_aids)
-            pred_annots.images.lookup('date_captured')
-            all_aids.update(pred_aids)
-            # shown_pred_sites = None
-            pred_tid = pred_annots[0:1].lookup('track_id')[0]
-            main_trackids.append(pred_tid)
-            main_pred_aids.update(pred_aids)
+            tag = 'te'
+        for site in case.get(site_type, []):
+            all_sites.append(site)
+            coco_site_id = differentiate_site_id(site.site_id, tag)
+            site.header['properties']['cache']['coco_site_id'] = coco_site_id
 
-    try:
-        # shown_true_sites = case['true_sites']
-        true_site_id = case['true_coco_site_id']
-        true_site = true_id_to_site[case['true_site_id']]
-        # true_summary = true_id_to_summary[case['true_site_id']]
-        # pred_summary = pred_id_to_summary[case['pred_site_id']]
+            if coco_site_id in getattr(coco_dset.index, 'name_to_track', set()):
+                raise NotImplementedError
+                # tracks = coco_dset.tracks(names=[coco_site_id])
+                # track = tracks.objs[0]
+                # tid = track['id']
+                # annots = tracks.annots[0]
+            else:
+                site_aids = list(coco_dset.index.trackid_to_aids[coco_site_id])
+                all_aids.update(site_aids)
+                annots = coco_dset.annots(site_aids)
+                site_trackid = annots[0:1].lookup('track_id')[0]
+                main_trackids.append(site_trackid)
+                # main_pred_aids.update(pred_aids)
+                if site_type == 'pred_sites':
+                    main_pred_aids.update(site_aids)
+                else:
+                    main_true_aids.update(site_aids)
 
-        if true_site_id in getattr(coco_dset.index, 'name_to_track', set()):
-            raise NotImplementedError
-            # true_tracks = coco_dset.tracks(names=[case['true_site_id']])
-            # true_track = true_tracks.objs[0]
-            # true_tid = true_track['id']
-            # true_annots = true_tracks.annots[0]
-        else:
-            true_aids = list(coco_dset.index.trackid_to_aids[true_site_id])
-            true_annots = coco_dset.annots(true_aids)
-        true_annots.images.lookup('date_captured')
-        true_tid = true_annots[0:1].lookup('track_id')[0]
-        main_trackids.append(true_tid)
-    except KeyError:
-        true_annots = []
-        true_aids = []
-        true_site = None
-        # shown_true_sites = None
-        true_site_id = None
-    else:
-        main_true_aids.update(true_aids)
-        all_aids.update(true_aids)
+    case['pred_sites']
+    case['true_sites']
 
-    if __debug__ and 0:
-        if pred_site is not None:
-            pred_start_date_coco = util_time.coerce_datetime(min(pred_annots.images.lookup('date_captured')))
-            pred_end_date_coco = util_time.coerce_datetime(max(pred_annots.images.lookup('date_captured')))
-            pred_start_date_geoj = util_time.coerce_datetime(pred_site.start_date)
-            pred_end_date_geoj = util_time.coerce_datetime(pred_site.end_date)
-            assert abs(pred_start_date_coco - pred_start_date_geoj) < util_time.coerce_timedelta('1 day')
-            assert abs(pred_end_date_coco - pred_end_date_geoj) < util_time.coerce_timedelta('1 day')
-
-    if true_site is not None:
-        # timelines = []
-        # timeline = {}
-        # sites = [pred_site, true_site]
-        # site = pred_site
-        # timeline['site_id'] = site.site_id
-        # timeline['start_date'] = site.start_date
-        # timeline['end_date'] = site.end_date
-        # timeline['observation_date'] = site.pandas_observations()['observation_date']
-        # true_site.pandas_observations()['observation_date']
-        # case['pred_dates']
-        # case['true_dates']
-        ...
+    case['main_pred_site']
 
     all_aids = sorted(all_aids)
-    all_annots = coco_dset.annots(all_aids)
-    _all_gids = list(set(all_annots.images))
+    _all_annots = coco_dset.annots(all_aids)
+    _all_gids = list(set(_all_annots.images))
     _all_images = coco_dset.images(_all_gids)
 
     unique_vidids = sorted(set(_all_images.lookup('video_id')))
@@ -1387,13 +1356,7 @@ def visualize_single_site_case(coco_dset, case, true_id_to_site, pred_id_to_site
         # Need to pick a single video to inspect if a track is in more than 1.
         unique_videos = coco_dset.videos(unique_vidids)
 
-        from watch.geoannots.geomodels import RegionModel
-        from watch.utils import util_gis
-        import geopandas as gpd
-        main_summaries = RegionModel(features=[
-            s.as_summary()
-            for s in [pred_site, true_site] if s is not None
-        ])
+        main_summaries = RegionModel(features=[s.as_summary() for s in all_sites ])
         summary_gdf = main_summaries.pandas_summaries()
         summary_utm_gdf = util_gis.project_gdf_to_local_utm(summary_gdf, mode=1)
 
@@ -1420,21 +1383,24 @@ def visualize_single_site_case(coco_dset, case, true_id_to_site, pred_id_to_site
     _sortx = ub.argsort(_all_images.lookup('frame_index'))
     all_images = _all_images.take(_sortx)
 
-    gid_to_weight = ub.ddict(lambda: 0)
+    unique_vidids = sorted(set(_all_images.lookup('video_id')))
+    assert len(unique_vidids) == 1
+    video_id = unique_vidids[0]
 
     # In most cases try to only use the "lo" number of images, but allow us to
     # choose up to "hi" to get as many infinite weight examples as possible.
     # but still limit the total number of shown examples.
     MAX_IMAGES_LO = 8
     MAX_IMAGES_HI = 21
-
+    gid_to_weight = ub.ddict(lambda: 0)
     if MAX_IMAGES_LO is not None:
-
         rng = kwarray.ensure_rng(0)
 
         for tid in main_trackids:
 
             track_annots = coco_dset.annots(track_id=tid)
+            flags = np.array(track_annots.images.lookup('video_id')) == video_id
+            track_annots = track_annots.compress(flags)
 
             catnames = track_annots.category_names
 
@@ -1443,7 +1409,6 @@ def visualize_single_site_case(coco_dset, case, true_id_to_site, pred_id_to_site
             # Randomly take images by default
             # track_annot_weights = np.ones(len(track_annots))
 
-            from watch import heuristics
             track_images = track_annots.images
             sensors = track_annots.images.lookup('sensor_coarse')
 
@@ -1517,8 +1482,8 @@ def visualize_single_site_case(coco_dset, case, true_id_to_site, pred_id_to_site
     all_annots = coco_dset.annots(all_aids)
     gid_to_aids = ub.group_items(all_annots, all_annots.images)
 
-    if true_site_id is not None and pred_site_id is not None:
-        assert set(all_annots.lookup('track_id')) == {true_site_id, pred_site_id}
+    # if true_site_id is not None and pred_site_id is not None:
+    #     assert set(all_annots.lookup('track_id')) == {true_site_id, pred_site_id}
 
     tci_channel_priority = [
         'red|green|blue',
@@ -1560,6 +1525,9 @@ def visualize_single_site_case(coco_dset, case, true_id_to_site, pred_id_to_site
 
     vidspace_bound = scaled_box.quantize()
 
+    BAS_CHANNELS = kwcoco.FusedChannelSpec.coerce('salient')
+    AC_CHANNELS = kwcoco.FusedChannelSpec.coerce('Site Preparation|Active Construction|Post Construction|No Activity')
+
     cells = []
     for coco_img in ub.ProgIter(all_images.coco_images, desc='building case', enabled=False):
         gid = coco_img['id']
@@ -1574,10 +1542,6 @@ def visualize_single_site_case(coco_dset, case, true_id_to_site, pred_id_to_site
 
         tci_delayed = coco_img.imdelay(channels=channels, resolution=resolution, nodata_method='float')
         tci_imcrop = tci_delayed.crop(vidspace_bound.to_slice(), wrap=False, clip=False)
-
-        import kwcoco
-        BAS_CHANNELS = kwcoco.FusedChannelSpec.coerce('salient')
-        AC_CHANNELS = kwcoco.FusedChannelSpec.coerce('Site Preparation|Active Construction|Post Construction|No Activity')
 
         tostack = []
 
@@ -1618,8 +1582,6 @@ def visualize_single_site_case(coco_dset, case, true_id_to_site, pred_id_to_site
             heatmap_delayed = coco_img.imdelay(channels=AC_CHANNELS, resolution=resolution, nodata_method='float')
             heatmap_imcrop = heatmap_delayed.crop(vidspace_bound.to_slice(), wrap=False, clip=False)
             heatmap = heatmap_imcrop.finalize()
-            from watch import heuristics
-            from watch.utils import util_kwimage
             cat_to_color = ub.udict({cat['name']: cat['color'] for cat in heuristics.CATEGORIES})
             channel_colors = list(cat_to_color.take(AC_CHANNELS.to_list()))
             heatmap_canvas = util_kwimage.perchannel_colorize(heatmap, channel_colors=channel_colors)
@@ -1810,7 +1772,7 @@ def make_case_timeline(case):
 
     artman = util_kwplot.ArtistManager()
 
-    ylabel_map = {1: '', 2: '', 0: '', 3: ''}
+    ylabel_map = {0: ''}
 
     from watch import heuristics
     import numpy as np
@@ -1845,10 +1807,11 @@ def make_case_timeline(case):
             idxs = list(idxs)
             xs = obs_xs[idxs]
             if prev_x is not None:
-                c2 = prev_c.interpolate(c, ispace='hsv', ospace='rgb')
+                # c2 = prev_c.interpolate(c, ispace='hsv', ospace='rgb')
+                c2 = prev_c
                 artman.plot([prev_x, xs[0]], yloc, color=c2)
             artman.plot(xs, yloc, color=c)
-            artman.add_ellipse_marker((xs[0], yloc), 1, 1, color=c, zorder=2)
+            artman.add_circle_marker((xs[0], yloc), 2, color=c, zorder=2)
             prev_x = xs[-1]
             prev_c = c
 
@@ -1859,8 +1822,8 @@ def make_case_timeline(case):
 
         start_x, end_x = util_kwplot.fix_matplotlib_dates([start_date, end_date])
 
-        artman.add_ellipse_marker((start_x, yloc), 5, 5, color=bg_color, zorder=1)
-        artman.add_ellipse_marker((end_x, yloc), 5, 5, color=bg_color, zorder=1)
+        artman.add_circle_marker((start_x, yloc), 5, color=bg_color, zorder=1)
+        artman.add_circle_marker((end_x, yloc), 5, color=bg_color, zorder=1)
         # artman.plot((start_x, end_x), yloc, color=bg_color, zorder=-10)
         yloc += 1
 
@@ -1870,7 +1833,11 @@ def make_case_timeline(case):
     if 'img_dates' in case:
         img_xs = util_kwplot.fix_matplotlib_dates(case['img_dates'])
         for img_x in img_xs:
-            artman.plot([img_x, img_x], [0, yloc], color='kitware_gray')
+            artman.plot([img_x, img_x], [0, yloc], color='kitware_gray', zorder=-2, linewidth=2)
+
+        img_xs = util_kwplot.fix_matplotlib_dates([case['region_start_date'], case['region_end_date']])
+        for img_x in img_xs:
+            artman.plot([img_x, img_x], [0, yloc], color='black', zorder=-1, linewidth=4)
 
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
     ax.xaxis.set_major_locator(mdates.DayLocator(interval=720))
