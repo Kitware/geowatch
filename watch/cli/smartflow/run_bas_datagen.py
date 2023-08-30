@@ -3,6 +3,8 @@
 See Old Script:
     ~/code/watch/scripts/run_stac_to_cropped_kwcoco.py
 """
+import sys
+import traceback
 import os
 import json
 import shutil
@@ -87,6 +89,11 @@ class BASDatasetConfig(scfg.DataConfig):
         enabled will disable the computation.
         '''), alias=['time_combine'])
 
+    skip_timecombine_on_fail = scfg.Value(False, help=ub.paragraph(
+            '''
+            If an error occurs during the timecombine call, output empty KWCOCO.
+            '''))
+
     def __post_init__(self):
         if self.time_combine_config in {False, None, 'False', 'None'}:
             self.time_combine_config = {'enabled': False}
@@ -170,6 +177,7 @@ def run_stac_to_cropped_kwcoco(config):
     from watch.cli import coco_time_combine
     from watch.mlops.pipeline_nodes import ProcessNode
     from watch.cli.smartflow_ingress import smartflow_ingress
+    import kwcoco
 
     if config.aws_profile is not None:
         # This should be sufficient, but it is not tested.
@@ -460,18 +468,32 @@ def run_stac_to_cropped_kwcoco(config):
 
     # 5. Do the time_combine for BAS
     if time_combine_enabled:
-        coco_time_combine.main(
-            cmdline=0,
-            **time_combine_config
-        )
-        # Add watch fields
-        print("* Adding watch fields to time combined data *")
-        coco_add_watch_fields.main(cmdline=False,
-                                   src=preproc_kwcoco_fpath,
-                                   dst=preproc_kwcoco_fpath,
-                                   target_gsd=target_gsd,
-                                   workers=config.jobs)
-        final_interval_bas_kwcoco_path = preproc_kwcoco_fpath
+        try:
+            coco_time_combine.main(
+                cmdline=0,
+                **time_combine_config
+            )
+        except Exception:
+            if config.skip_timecombine_on_fail:
+                print("WARNING: Exception occurred (printed below), generating empty KWCOCO for time-combined output")
+                traceback.print_exception(*sys.exc_info())
+
+                empty_dset_path = ta1_cropped_dir / 'empty.json'
+                empty_dset = kwcoco.CocoDataset()
+                empty_dset.dump(empty_dset_path)
+
+                final_interval_bas_kwcoco_path = empty_dset_path
+            else:
+                raise
+        else:
+            # Add watch fields
+            print("* Adding watch fields to time combined data *")
+            coco_add_watch_fields.main(cmdline=False,
+                                       src=preproc_kwcoco_fpath,
+                                       dst=preproc_kwcoco_fpath,
+                                       target_gsd=target_gsd,
+                                       workers=config.jobs)
+            final_interval_bas_kwcoco_path = preproc_kwcoco_fpath
     else:
         final_interval_bas_kwcoco_path = ta1_cropped_kwcoco_path
 
@@ -533,8 +555,10 @@ def run_stac_to_cropped_kwcoco(config):
 
     timecombined_rawband_dpath = ta1_cropped_dir / 'raw_bands'
     timecombined_teamfeat_dpath = ta1_cropped_dir / '_teamfeats'
-    # Put a dummy file in this directory so we can upload a nearly-empty folder
+    # Put a dummy file in these directories so we can upload a nearly-empty folder
     # to S3
+    timecombined_rawband_dpath.ensuredir()
+    (timecombined_rawband_dpath / 'dummy').write_text('dummy')
     timecombined_teamfeat_dpath.ensuredir()
     (timecombined_teamfeat_dpath / 'dummy').write_text('dummy')
 
