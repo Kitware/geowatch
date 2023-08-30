@@ -3566,7 +3566,10 @@ geowatch schedule --params="
         bas_pxl.time_span: auto
         bas_pxl.time_sampling: soft4
         bas_poly.thresh:
+            - 0.37
+            - 0.3875
             - 0.4
+            - 0.41
         bas_poly.inner_window_size: 1y
         bas_poly.inner_agg_fn: mean
         bas_poly.norm_ord: inf
@@ -3630,7 +3633,8 @@ geowatch schedule --params="
         sc_crop.rpc_align_method: affine_warp
         sc_crop.sensor_to_time_window:
             - 'S2: 1month'
-            - 'S2: 0.5month'
+            - 'S2: 3month'
+            #- 'S2: 0.5month'
 
         ########################
         ## AC/SC PIXEL PARAMS ##
@@ -3662,7 +3666,20 @@ geowatch schedule --params="
         ## AC/SC POLY PARAMS  ##
         ########################
 
-        sc_poly.thresh: 0.07
+        sc_poly.thresh:
+            - 0.00001
+            - 0.01
+            - 0.05
+            - 0.08
+            - 0.07
+            - 0.09
+            - 0.10
+            - 0.15
+            - 0.20
+            - 0.25
+            - 0.30
+            - 0.35
+            - 0.40
         sc_poly.boundaries_as: polys
         sc_poly.resolution: 8GSD
         sc_poly.min_area_square_meters: 7200
@@ -3701,8 +3718,8 @@ python -m watch.mlops.aggregate \
     --resource_report=0 \
     --eval_nodes="
         - sc_poly_eval
-        - sv_poly_eval
-        - bas_poly_eval
+        #- sv_poly_eval
+        #- bas_poly_eval
     " \
     --plot_params="
         enabled: 0

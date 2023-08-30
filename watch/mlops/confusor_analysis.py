@@ -11,15 +11,6 @@ python -m watch.mlops.confusor_analysis \
     --viz_sites=True --reload=0
 
 
-DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
-python -m watch.mlops.confusor_analysis \
-    --metrics_node_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_drop7_nowinter_baseline/eval/flat/bas_poly_eval/bas_poly_id_custom00/ \
-    --out_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_drop7_nowinter_baseline/eval/flat/bas_poly_eval/bas_poly_id_custom00/lores-confusion \
-    --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop7/region_models \
-    --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop7/site_models \
-    --region_id=CH_R001 --viz-site-case --reload=0
-
-
 #### TEST WITH HIGHRES KWCOCO
 
 # ON KR_R002
@@ -31,18 +22,6 @@ python -m watch.mlops.confusor_analysis \
     --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop7/site_models \
     --src_kwcoco=$DVC_DATA_DPATH/Aligned-Drop7/KR_R002/imgonly-KR_R002.kwcoco.zip \
     --viz_sites=True --reload=0
-
-
-# ON CH_R001
-
-DVC_DATA_DPATH=$(geowatch_dvc --tags='phase2_data' --hardware=hdd)
-python -m watch.mlops.confusor_analysis \
-    --metrics_node_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_drop7_nowinter_baseline/eval/flat/bas_poly_eval/bas_poly_id_custom00/ \
-    --out_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/_drop7_nowinter_baseline/eval/flat/bas_poly_eval/bas_poly_id_custom00/confusion-hires \
-    --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop7/region_models \
-    --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop7/site_models \
-    --src_kwcoco=$DVC_DATA_DPATH/Aligned-Drop7/CH_R001/imgonly-CH_R001.kwcoco.zip \
-    --region_id=CH_R001 --viz-site-case --reload=1
 
 
 #### TEST WITH AC KWCOCO
@@ -1009,8 +988,8 @@ class ConfusionAnalysis:
                 canvas = kwimage.ensure_uint255(canvas)
                 # import xdev
                 # xdev.embed()
-                print(f'fpath={fpath}')
-                print(f'canvas.shape={canvas.shape}')
+                # print(f'fpath={fpath}')
+                # print(f'canvas.shape={canvas.shape}')
                 kwimage.imwrite(fpath, canvas)
                 link_fpath.parent.ensuredir()
                 ub.symlink(real_path=fpath, link_path=link_fpath)

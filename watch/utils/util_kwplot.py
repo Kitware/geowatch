@@ -317,7 +317,7 @@ class LabelModifier:
     def relabel_yticks(self, ax=None):
         old_ytick_labels = ax.get_yticklabels()
         new_yticklabels = [self._modify_labels(label) for label in old_ytick_labels]
-        ax.set_xticks(ax.get_xticks())
+        ax.set_yticks(ax.get_yticks())
         ax.set_yticklabels(new_yticklabels)
 
     def relabel_xticks(self, ax=None):
@@ -333,7 +333,8 @@ class LabelModifier:
         # print(f'new_yticklabels={new_yticklabels}')
         old_xtick_labels = ax.get_xticklabels()
         new_xticklabels = [self._modify_labels(label) for label in old_xtick_labels]
-        ax.set_yticks(ax.get_yticks())
+
+        ax.set_xticks(ax.get_xticks())
         ax.set_xticklabels(new_xticklabels)
 
     def relabel_axes_labels(self, ax=None):
