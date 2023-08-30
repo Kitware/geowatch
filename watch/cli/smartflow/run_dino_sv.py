@@ -117,10 +117,6 @@ def run_dino_sv(config):
     output_region_fpath = output_region_dpath / f'{region_id}.geojson'
     output_site_manifest_fpath = output_site_manifest_dpath / 'site_models_manifest.json'
 
-    output_sites_dpath.ensuredir()
-    output_region_dpath.ensuredir()
-    output_site_manifest_dpath.ensuredir()
-
     ingress_dir_paths = list(ingress_dir.glob('*'))
     print('ingress_dir_paths = {}'.format(ub.urepr(ingress_dir_paths, nl=1)))
 
@@ -147,6 +143,9 @@ def run_dino_sv(config):
         input_sites_dpath.copy(output_sites_dpath)
         input_region_fpath.copy(output_region_fpath)
     else:
+        output_region_dpath.ensuredir()
+        output_site_manifest_dpath.ensuredir()
+        output_sites_dpath.ensuredir()
         # 3.2 Run DinoBoxDetector
         print("* Running Dino Detect *")
 
