@@ -4,7 +4,10 @@ This changelog follows the specifications detailed in: [Keep a Changelog](https:
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
 
-## Version 0.9.0 - Target 2023-07-xx
+## Version 0.10.0 - Released 2023-09-xx
+
+
+## Version 0.9.0 - Released 2023-08-31
 
 ### Fixed
 * The `valid_region` property computed in `coco_populate_geo_heuristics` now properly uses image space (before it was in asset space, which usually aligned, but was not guaranteed)
@@ -33,7 +36,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Removed other old code.
 
 
-## Version 0.8.2 - Target 2023-07-xx
+## Version 0.8.2 - Released 2023-07-31
 
 ### Added
 
@@ -65,7 +68,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Removed old fit script. The lightning CLI script is considered stable.
 
 
-## Version 0.7.5 - Target 2023-06-30
+## Version 0.7.5 - Released 2023-06-30
 
 ### Added
 * Add transfer-feature script to COLD task to port features to time-averaged data
@@ -93,7 +96,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Hacked tensorflow to always use CPU
 
 
-## Version 0.6.8 - Target 2023-05-22
+## Version 0.6.8 - Released 2023-05-22
 
 ### Added
 
@@ -140,7 +143,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Fixed issue where incorrect fields were expected / used in the site / region models 
 
 
-## Version 0.5.6 - Target 2023-04-30
+## Version 0.5.6 - Released 2023-04-30
 
 ### Added
 * `coco_time_combine` can now ignore seasons / handle median images with less memory
@@ -175,7 +178,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 * The old fit script will now raise an error. Use the `fit_lightning` script instead.
 
-## Version 0.4.8 - Delivered 2023-03-31
+## Version 0.4.8 - Released 2023-03-31
 
 ### Changed
 * Lightning Packager callback now saves checkpoints on errors in addition to packages.
@@ -218,7 +221,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Removed
 * Old `demo_smart_raw/aligned kwcoco` in favor of `demo_kwcoco_multisensor`.
 
-## Version 0.3.10 - Delivered 2023-02-28
+## Version 0.3.10 - Released 2023-02-28
 
 ### Added
 * `smartwatch align` new argument `--minimum_size`: to ensure all regions have enough pixels
@@ -269,7 +272,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Reworked `utils` to use `lazy_loader`.
 * New `util_kwplot` constructs
 
-## Version 0.3.9 - Delivered 2023-01-31
+## Version 0.3.9 - Released 2023-01-31
 
 ### Added
 * Add new CLI tool: `smartwatch coco_clean_geotiffs` to fix NODATA values directly in geotiffs
@@ -298,7 +301,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   `utm_corners`, and `utm_crs_info`, which are redundant with `geos_corners`.
 
 
-## Version 0.3.8 - Delivered 2022-12-31
+## Version 0.3.8 - Released 2022-12-31
 
 ### Added
 * Initial scripts for new teamfeatures
@@ -355,7 +358,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 
 
-## Version 0.3.7 - Delivered 2022-11-21
+## Version 0.3.7 - Released 2022-11-21
 
 ### Added
 * min / max world area threshold in tracker
@@ -377,7 +380,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Tracker now has better nodata handling.
 
 
-## Version 0.3.6 - Finalized 2022-11-01
+## Version 0.3.6 - Released 2022-11-01
 
 ### Fixed
 * Bug where `window_space_overlap` was always zero at predict time.
@@ -406,7 +409,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Bumped minimum required Python to 3.9
 
 
-## Version 0.3.5 - Finalized 2022-09-29
+## Version 0.3.5 - Released 2022-09-29
 
 ### Added
 * dataloader can now specify `output_space_scale` as native or in GSD. (requires ndsampler 0.7.1)
@@ -443,7 +446,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Changed main name of data loader parameter from `space_scale` to `input_space_scale`. Old alias still exists.
 
 
-## Version 0.3.4 - Finalized 2022-08-31
+## Version 0.3.4 - Released 2022-08-31
 
 ### Added
 * New "space_scale" parameter to Dataset such that a specific DATA GSD can be given on the fly
@@ -475,7 +478,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Issue where initializer was not working correctly
 
 
-## Version 0.3.3 - Unreleased
+## Version 0.3.3 - Released
 
 ### Changed
 * Updates to handle new "Drop4" datasets
@@ -489,12 +492,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Moved monkey patches to their own module.
 * Other minor fixes.
 
-## Version 0.3.2 - Unreleased
+## Version 0.3.2 - Released
 
 Many undocumented changes
 
 
-## Version 0.0.1 - Unreleased
+## Version 0.0.1 - Released
 
 
 #### Added 
@@ -535,6 +538,6 @@ Many undocumented changes
 * Transforms in `watch.gis.spatial_reference.RPCTransform` were previously not using elevation data correctly.
 
 
-## Version 0.0.0 - Unreleased
+## Version 0.0.0 - Released
 
 * Undocumented initial structure
