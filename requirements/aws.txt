@@ -1,7 +1,11 @@
-awscli>=1.20.54
+awscli>=1.29.17
 
 # The AWS CLI has stupidly strict dependencies
 # Often we just can't use it.
+
+botocore>=1.31.17
+s3transfer>=0.6.2
+s3fs>=2023.6.0
 
 # awscli>=1.29.9
 # fsspec>=2023.6.0

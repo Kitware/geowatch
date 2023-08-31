@@ -1,12 +1,12 @@
 #!/bin/bash
-__doc__="""
+__doc__="
 This demonstrates an end-to-end pipeline on multispectral toydata
 
 This walks through the entire process of fit -> predict -> evaluate and the
 output if you run this should end with something like
 
 source ~/code/watch/tutorial/toy_experiments_msi.sh
-"""
+"
 
 # Define wherever you want to store results
 DVC_DATA_DPATH=$HOME/data/dvc-repos/toy_data_dvc
@@ -46,13 +46,13 @@ if [[ ! -e "$TRAIN_FPATH" ]]; then
     print_stats
 fi
 
-__doc__="""
+__doc__="
 Should look like
                                    dset  n_anns  n_imgs  n_videos  n_cats  r|g|b|disparity|gauss|B8|B11  B1|B8|B8a|B10|B11  r|g|b|flowx|flowy|distri|B10|B11
 0  vidshapes_msi_train/data.kwcoco.json      80      40         8       3                            12                 12                                16
 1   vidshapes_msi_vali/data.kwcoco.json      50      25         5       3                             9                 10                                 6
 2   vidshapes_msi_test/data.kwcoco.json      24      12         2       3                             5                  3                                 4
-"""
+"
 
 
 
@@ -89,9 +89,9 @@ DATASET_CODE=ToyDataMSI
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 EXPERIMENT_NAME=ToyDataMSI_Demo_V001
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-MAX_STEPS=100
+MAX_STEPS=80000
 TARGET_LR=3e-4
-python -m watch.tasks.fusion fit --config "
+DDP_WORKAROUND=1 python -m watch.tasks.fusion fit --config "
     data:
         num_workers          : 4
         train_dataset        : $TRAIN_FPATH
@@ -128,11 +128,9 @@ python -m watch.tasks.fusion fit --config "
     trainer:
       accumulate_grad_batches: 1
       default_root_dir     : $DEFAULT_ROOT_DIR
-      #accelerator          : gpu
       accelerator          : gpu
-      devices              : 0,
-      #devices             : 0,1
-      #strategy            : ddp
+      devices              : 0,1
+      strategy             : ddp
       check_val_every_n_epoch: 1
       enable_checkpointing: true
       enable_model_summary: true

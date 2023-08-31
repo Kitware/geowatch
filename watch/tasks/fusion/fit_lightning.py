@@ -13,6 +13,13 @@ import yaml
 from jsonargparse import set_loader, set_dumper
 # from pytorch_lightning.utilities.rank_zero import rank_zero_only
 
+from watch.utils import util_environ
+
+
+# FIXME: we should be able to use our callbacks when ddp is enabled.
+# Not sure why we get a freeze.
+DDP_WORKAROUND = util_environ.envflag('DDP_WORKAROUND')
+
 
 # Not very safe, but needed to parse tuples e.g. datamodule.dataset_stats
 # TODO: yaml.SafeLoader + tuple parsing
@@ -175,7 +182,11 @@ class SmartLightningCLI(LightningCLI_Extension):
 
         parser.add_lightning_class_args(TorchGlobals, "torch_globals")
 
-        parser.add_lightning_class_args(pl_ext.callbacks.BatchPlotter, "batch_plotter")
+        if not DDP_WORKAROUND:
+            # Fixme: disabled for multi-gpu training
+            # Force disable batch plotter when ddp is enabled,
+            parser.add_lightning_class_args(pl_ext.callbacks.BatchPlotter, "batch_plotter")
+
         # pl_ext.callbacks.BatchPlotter(  # Fixme: disabled for multi-gpu training with deepspeed
         #     num_draw=2,  # args.num_draw,
         #     draw_interval="5min",  # args.draw_interval
@@ -291,16 +302,18 @@ def make_cli(config=None):
         # pl.callbacks.ModelCheckpoint(
         #     monitor='val_class_f1_macro', mode='max', save_top_k=4),
     ]
-    try:
-        # There has to be a tool with less dependencies the matplotlib
-        # auto-plotters can hook into.
-        import tensorboard  # NOQA
-    except ImportError:
-        import rich
-        rich.print('[yellow]warning: tensorboard not available')
-    else:
-        # Only use tensorboard if we have it.
-        default_callbacks.append(pl_ext.callbacks.TensorboardPlotter())
+
+    if not DDP_WORKAROUND:
+        try:
+            # There has to be a tool with less dependencies the matplotlib
+            # auto-plotters can hook into.
+            import tensorboard  # NOQA
+        except ImportError:
+            import rich
+            rich.print('[yellow]warning: tensorboard not available')
+        else:
+            # Only use tensorboard if we have it.
+            default_callbacks.append(pl_ext.callbacks.TensorboardPlotter())
 
     cli = SmartLightningCLI(
         model_class=pl.LightningModule,  # TODO: factor out common components of the two models and put them in base class models inherit from

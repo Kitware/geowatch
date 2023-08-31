@@ -76,7 +76,7 @@ def disk_info_of_path(path):
             else:
                 hwinfo['hwtype'] = 'ssd'
         except Exception as ex:
-            print('error in hwtype stuff: ex = {}'.format(ub.urepr(ex, nl=1)))
+            print('warning: unable to infer disk info: ex = {}'.format(ub.urepr(ex, nl=1)))
 
     try:
         import json

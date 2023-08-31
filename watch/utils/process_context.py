@@ -340,3 +340,18 @@ class ProcessContext:
 #     self.start()
 #     self.stop()
 #     _ = self.emissions_tracker._data_source.get_country_emissions_data('usa')
+
+
+def jsonify_config(config):
+    """
+    Converts an object to a jsonifiable config as best as possible
+    """
+    from kwcoco.util import util_json
+    if hasattr(config, 'asdict'):
+        config = config.asdict()
+    jsonified_config = util_json.ensure_json_serializable(config)
+    walker = ub.IndexableWalker(jsonified_config)
+    for problem in util_json.find_json_unserializable(jsonified_config):
+        bad_data = problem['data']
+        walker[problem['loc']] = str(bad_data)
+    return jsonified_config

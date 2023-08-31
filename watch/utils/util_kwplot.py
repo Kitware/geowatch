@@ -317,7 +317,7 @@ class LabelModifier:
     def relabel_yticks(self, ax=None):
         old_ytick_labels = ax.get_yticklabels()
         new_yticklabels = [self._modify_labels(label) for label in old_ytick_labels]
-        ax.set_xticks(ax.get_xticks())
+        ax.set_yticks(ax.get_yticks())
         ax.set_yticklabels(new_yticklabels)
 
     def relabel_xticks(self, ax=None):
@@ -333,7 +333,8 @@ class LabelModifier:
         # print(f'new_yticklabels={new_yticklabels}')
         old_xtick_labels = ax.get_xticklabels()
         new_xticklabels = [self._modify_labels(label) for label in old_xtick_labels]
-        ax.set_yticks(ax.get_yticks())
+
+        ax.set_xticks(ax.get_xticks())
         ax.set_xticklabels(new_xticklabels)
 
     def relabel_axes_labels(self, ax=None):
@@ -595,9 +596,8 @@ class ArtistManager:
             attrs['color'] = kwimage.Color.coerce(attrs['color']).as01()
         if 'hashid' in attrs:
             attrs = attrs - {'hashid'}
-        hashid = ub.hash_data(attrs)[0:8]
-        attrs['hashid'] = hashid
-        return attrs
+        hashid = ub.hash_data(sorted(attrs.items()))[0:8]
+        return hashid, attrs
 
     def plot(self, xs, ys, **attrs):
         """
@@ -613,16 +613,6 @@ class ArtistManager:
         points = np.array(list(zip(xs, ys)))
         self.add_linestring(points, **attrs)
 
-    def add_circle_marker(self, xy, r, **attrs):
-        """
-        Args:
-            xy (List[Tuple[float, float]] | ndarray):
-                an Nx2 set of circle centers
-            r (List[float] | ndarray):
-                an Nx1 set of circle radii
-        """
-        self.add_ellipse_marker(xy, rx=r, ry=r, angle=0, **attrs)
-
     def add_linestring(self, points, **attrs):
         """
         Args:
@@ -632,8 +622,7 @@ class ArtistManager:
         NOTE:
             perhaps allow adding markers based on ax.scatter?
         """
-        attrs = self._normalize_attrs(attrs)
-        hashid = attrs['hashid']
+        hashid, attrs = self._normalize_attrs(attrs)
         self.group_to_line_segments[hashid].append(points)
         self.group_to_attrs[hashid] = attrs
 
@@ -641,9 +630,8 @@ class ArtistManager:
         """
         Real ellipses in dataspace
         """
-        attrs = self._normalize_attrs(attrs)
-        hashid = attrs['hashid']
-        ell = mpl.patches.Ellipse(xy, rx, ry, angle=angle)
+        hashid, attrs = self._normalize_attrs(attrs)
+        ell = mpl.patches.Ellipse(xy, rx, ry, angle=angle, **attrs)
         self.group_to_patches[hashid]['ellipse'].append(ell)
         self.group_to_attrs[hashid] = attrs
 
@@ -651,9 +639,8 @@ class ArtistManager:
         """
         Real ellipses in dataspace
         """
-        attrs = self._normalize_attrs(attrs)
-        hashid = attrs['hashid']
-        ell = mpl.patches.Circle(xy, r)
+        hashid, attrs = self._normalize_attrs(attrs)
+        ell = mpl.patches.Circle(xy, r, **attrs)
         self.group_to_patches[hashid]['circle'].append(ell)
         self.group_to_attrs[hashid] = attrs
 
@@ -674,8 +661,7 @@ class ArtistManager:
             if 'facecolors' not in attrs:
                 attrs['facecolors'] = kwimage.Color.coerce(color).as01()
 
-        attrs = self._normalize_attrs(attrs)
-        hashid = attrs['hashid']
+        hashid, attrs = self._normalize_attrs(attrs)
         cols = self.group_to_ellipse_markers[hashid]
 
         xy = np.array(xy)
@@ -711,15 +697,26 @@ class ArtistManager:
         cols['angle'].append(angle)
         self.group_to_attrs[hashid] = attrs
 
+    def add_circle_marker(self, xy, r, **attrs):
+        """
+        Args:
+            xy (List[Tuple[float, float]] | ndarray):
+                an Nx2 set of circle centers
+            r (List[float] | ndarray):
+                an Nx1 set of circle radii
+        """
+        self.add_ellipse_marker(xy, rx=r, ry=r, angle=0, **attrs)
+
     def build_collections(self, ax=None):
         import numpy as np
         collections = []
         for hashid, segments in self.group_to_line_segments.items():
-            attrs = self.group_to_attrs[hashid] - {'hashid'}
+            attrs = self.group_to_attrs[hashid]
             collection = mpl.collections.LineCollection(segments, **attrs)
             collections.append(collection)
 
         for hashid, type_to_patches in self.group_to_patches.items():
+            attrs = self.group_to_attrs[hashid]
             for ptype, patches in type_to_patches.items():
                 collection = mpl.collections.PatchCollection(patches, **attrs)
                 collections.append(collection)
@@ -730,7 +727,6 @@ class ArtistManager:
             rx = np.concatenate(cols['rx'], axis=0)
             ry = np.concatenate(cols['ry'], axis=0)
             angles = np.concatenate(cols['angle'], axis=0)
-            print(f'ry={ry}')
             collection = mpl.collections.EllipseCollection(
                 widths=rx, heights=ry, offsets=xy, angles=angles,
                 units='points',

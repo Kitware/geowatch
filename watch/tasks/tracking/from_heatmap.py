@@ -323,7 +323,6 @@ def _add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
     """
     import kwcoco
     import kwimage
-    import numpy as np
     from watch.utils import kwcoco_extensions
     key, bg_key = _validate_keys(key, bg_key)
 
@@ -348,7 +347,7 @@ def _add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
             cand_keys = bg_key
         if len(cand_keys) > 1:
             # TODO ensure bg classes are scored if there are >1 of them
-            cat_name = cand_keys[np.argmax([scores_dct[k] for k in cand_keys])]
+            cat_name = ub.argmax(ub.udict.subdict(scores_dct, cand_keys))
         else:
             cat_name = cand_keys[0]
         cid = sub_dset.ensure_category(cat_name)
@@ -399,7 +398,8 @@ def _add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
             scores_dct = {k: grp[(k, -1)] for k in score_chan.unique()}
             scores_dct = [dict(zip(scores_dct, t))
                           for t in zip(*scores_dct.values())]
-            _add(zip(grp['gid'], grp['poly'], this_score, scores_dct), tid)
+            _obs_iter = zip(grp['gid'], grp['poly'], this_score, scores_dct)
+            _add(_obs_iter, tid)
 
     # TODO: Faster to add annotations in bulk, but we need to construct the
     # "ids" first

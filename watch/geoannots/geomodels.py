@@ -501,6 +501,31 @@ class _Model(ub.NiceRepr, geojson.FeatureCollection):
             prop = feat['properties']
             _update_propery_cache(prop)
 
+    def ensure_isodates(self):
+        """
+        Ensure that dates are provided as dates and not datetimes
+
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> region = RegionModel.random()
+            >>> region.header['properties']['start_date'] = '1970-01-01T000000'
+            >>> region.ensure_isodates()
+            >>> assert region.header['properties']['start_date'] == '1970-01-01'
+        """
+        date_keys = ['start_date', 'end_date']
+        for feat in self['features']:
+            props = feat['properties']
+            for key in date_keys:
+                if key in props:
+                    oldval = props[key]
+                    if oldval is not None:
+                        dt = util_time.coerce_datetime(oldval)
+                        try:
+                            newval = dt.date().isoformat()
+                        except Exception:
+                            print('ERROR: oldval = {}'.format(ub.urepr(oldval, nl=1)))
+                        props[key] = newval
+
 
 def _report_jsonschema_error(ex):
     import rich
@@ -583,16 +608,38 @@ class RegionModel(_Model):
         """
         Returns:
             geopandas.GeoDataFrame: the site summaries as a data frame
+
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> self = RegionModel.random()
+            >>> gdf = self.pandas_summaries()
+            >>> print(gdf)
+            >>> # Test empty pandas summary
+            >>> self = RegionModel.random(num_sites=0)
+            >>> gdf = self.pandas_summaries()
+            >>> print(gdf)
+            >>> assert len(gdf) == 0
         """
         from watch.utils import util_gis
         crs84 = util_gis.get_crs84()
-        gdf = gpd.GeoDataFrame.from_features(list(self.site_summaries()), crs=crs84)
+        site_summaries = list(self.site_summaries())
+        if len(site_summaries):
+            gdf = gpd.GeoDataFrame.from_features(site_summaries, crs=crs84)
+        else:
+            # TODO: could infer more columns here.
+            gdf = gpd.GeoDataFrame.from_features(
+                [], crs=crs84, columns=['geometry'])
         return gdf
 
     def pandas_region(self):
         """
         Returns:
             geopandas.GeoDataFrame: the region header as a data frame
+
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> self = RegionModel.random()
+            >>> print(self.pandas_region())
         """
         from watch.utils import util_gis
         crs84 = util_gis.get_crs84()
@@ -682,31 +729,6 @@ class RegionModel(_Model):
         self.ensure_isodates()
         return self
 
-    def ensure_isodates(self):
-        """
-        Ensure that dates are provided as dates and not datetimes
-
-        Example:
-            >>> from watch.geoannots.geomodels import *  # NOQA
-            >>> region = RegionModel.random()
-            >>> region.header['properties']['start_date'] = '1970-01-01T000000'
-            >>> region.ensure_isodates()
-            >>> assert region.header['properties']['start_date'] == '1970-01-01'
-        """
-        date_keys = ['start_date', 'end_date']
-        for feat in self['features']:
-            props = feat['properties']
-            for key in date_keys:
-                if key in props:
-                    oldval = props[key]
-                    if oldval is not None:
-                        dt = util_time.coerce_datetime(oldval)
-                        try:
-                            newval = dt.date().isoformat()
-                        except Exception:
-                            print('ERROR: oldval = {}'.format(ub.urepr(oldval, nl=1)))
-                        props[key] = newval
-
     def remove_invalid_properties(self):
         """
         Remove invalid properties from this region model
@@ -728,6 +750,54 @@ class RegionModel(_Model):
         props = self.header['properties']
 
         props['comments'] = props.get('comments', '')
+
+    def infer_header(self, region_header=None):
+        """
+        Infer any missing header information from site summaries.
+
+        If this region model does not have a header, but it contains site
+        summaries, then use that information to infer a header value. Useful
+        when converting site summaries to full region models.
+
+        Args:
+            region_header (RegionHeader):
+                if specified, use this information when possible and then
+                infer the rest.
+
+        SeeAlso:
+
+            * :func:`SiteModelCollection.as_region_model`
+
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> # Make a region without a header
+            >>> self = RegionModel.random()
+            >>> self.features.remove(self.header)
+            >>> assert self.header is None
+            >>> # Infer the header using site summaries
+            >>> self.infer_header()
+            >>> assert self.header is not None
+        """
+        current_header = self.header
+
+        if region_header is not None:
+            if current_header is not None:
+                raise ValueError('cannot specify a region header when one already exists')
+            region_header = RegionHeader.coerce(region_header)
+            region_header = copy.deepcopy(region_header)
+        else:
+            if current_header is not None:
+                region_header = current_header
+            else:
+                region_header = RegionHeader.empty()
+
+        site_summaries = list(self.site_summaries())
+        region_header = _infer_region_header_from_site_summaries(
+            region_header, site_summaries)
+
+        if region_header is not current_header:
+            assert current_header is None
+            self.features.insert(0, region_header)
 
 
 class SiteModel(_Model):
@@ -776,16 +846,37 @@ class SiteModel(_Model):
         """
         Returns:
             geopandas.GeoDataFrame: the site summaries as a data frame
+
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> self = SiteModel.random()
+            >>> gdf = self.pandas_observations()
+            >>> print(gdf)
+            >>> # Test empty pandas summary
+            >>> del self.features[1:]
+            >>> gdf = self.pandas_observations()
+            >>> print(gdf)
+            >>> assert len(gdf) == 0
         """
         from watch.utils import util_gis
         crs84 = util_gis.get_crs84()
-        gdf = gpd.GeoDataFrame.from_features(list(self.observations()), crs=crs84)
+        features = list(self.observations())
+        if len(features):
+            gdf = gpd.GeoDataFrame.from_features(features, crs=crs84)
+        else:
+            gdf = gpd.GeoDataFrame.from_features(features, crs=crs84,
+                                                 columns=['geometry'])
         return gdf
 
     def pandas_site(self):
         """
         Returns:
             geopandas.GeoDataFrame: the region header as a data frame
+
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> self = SiteModel.random()
+            >>> print(self.pandas_site())
         """
         from watch.utils import util_gis
         crs84 = util_gis.get_crs84()
@@ -1062,7 +1153,7 @@ class SiteModel(_Model):
 
 class _Feature(ub.NiceRepr, geojson.Feature):
     """
-    Base class for features
+    Base class for geojson features that conform to an IARPA geomodel spec
 
     Example:
         >>> # Test the class variables for subclasses are defined correctly
@@ -1117,6 +1208,47 @@ class _Feature(ub.NiceRepr, geojson.Feature):
         except jsonschema.ValidationError as e:
             _report_jsonschema_error(e)
             raise
+
+    def ensure_isodates(self):
+        """
+        Ensure that dates are provided as dates and not datetimes
+
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> ss = SiteSummary.random()
+            >>> ss['properties']['start_date'] = '1970-01-01T000000'
+            >>> ss.ensure_isodates()
+            >>> assert ss['properties']['start_date'] == '1970-01-01'
+        """
+        date_keys = ['start_date', 'end_date']
+        props = self['properties']
+        for key in date_keys:
+            if key in props:
+                oldval = props[key]
+                if oldval is not None:
+                    dt = util_time.coerce_datetime(oldval)
+                    try:
+                        newval = dt.date().isoformat()
+                    except Exception:
+                        print('ERROR: oldval = {}'.format(ub.urepr(oldval, nl=1)))
+                    props[key] = newval
+
+    def infer_mgrs(self):
+        """
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> ss = SiteSummary.random()
+            >>> ss.infer_mgrs()
+        """
+
+        from shapely.geometry import shape
+        import mgrs
+        _geom = shape(self.geometry)
+        lon = _geom.centroid.xy[0][0]
+        lat = _geom.centroid.xy[1][0]
+        mgrs_code = mgrs.MGRS().toMGRS(lat, lon, MGRSPrecision=0)
+        self.properties['mgrs'] = mgrs_code
+        return self
 
 
 class _SiteOrSummaryMixin:
@@ -1257,7 +1389,7 @@ class RegionHeader(_Feature):
         """
         Create an empty region header
         """
-        self = geojson.Feature(
+        self = cls(
             properties={
                 "type": "region",
                 "region_id": None,
@@ -1292,16 +1424,6 @@ class RegionHeader(_Feature):
                 elif data['type'] == 'FeatureCollection':
                     return cls(**RegionModel(**data).header)
         raise TypeError(data)
-
-    def infer_mgrs(self):
-        from shapely.geometry import shape
-        import mgrs
-        _geom = shape(self.geometry)
-        lon = _geom.centroid.xy[0][0]
-        lat = _geom.centroid.xy[1][0]
-        mgrs_code = mgrs.MGRS().toMGRS(lat, lon, MGRSPrecision=0)
-        self.properties['mgrs'] = mgrs_code
-        return self
 
     def ensure_isodates(self):
         date_keys = ['start_date', 'end_date', 'predicted_phase_transition_date']
@@ -1361,6 +1483,36 @@ class SiteSummary(_Feature, _SiteOrSummaryMixin):
             raise TypeError(type(data))
         return self
 
+    @classmethod
+    def random(cls, rng=None, region=None, site_poly=None, **kwargs):
+        """
+        Args:
+            rng (int | str | RandomState | None) :
+                seed or random number generator
+
+            region (RegionModel | None):
+                if specified generate a new site in this region model.
+                (This will overwrite some of the kwargs).
+
+            site_poly (kwimage.Polygon | shapely.geometry.Polygon | None):
+                if specified, this polygon is used as the geometry for new site
+                models. Note: all site models will get this geometry, so
+                typically this is only used when num_sites=1.
+
+            **kwargs :
+                passed to :func:`watch.demo.metrics_demo.demo_truth.random_region_model`.
+
+        Returns:
+            SiteSummary
+
+        Example:
+            >>> from watch.geoannots.geomodels import *  # NOQA
+            >>> sitesum = SiteSummary.random(rng=0)
+            >>> print('sitesum = {}'.format(ub.urepr(sitesum, nl=2)))
+        """
+        site = SiteModel.random(rng=rng, region=region, site_poly=site_poly, **kwargs)
+        return site.as_summary()
+
 
 class SiteHeader(_Feature, _SiteOrSummaryMixin):
     """
@@ -1368,6 +1520,33 @@ class SiteHeader(_Feature, _SiteOrSummaryMixin):
     """
     _model_cls = SiteModel
     _feat_type = SiteModel._header_type
+
+    @classmethod
+    def empty(cls):
+        """
+        Create an empty region header
+
+        Example:
+            from watch.geoannots.geomodels import *  # NOQA
+            self = SiteHeader.empty()
+            ...
+        """
+        self = cls(
+            properties={
+                "type": "site",
+                "version": "2.4.3",
+                "mgrs": None,
+                "status": None,
+                "model_content": None,
+                "score": None,
+                "start_date": None,
+                "end_date": None,
+                "originator": None,
+                "validated": 'False',
+            },
+            geometry=None,
+        )
+        return self
 
     def as_summary(self):
         """
@@ -1411,6 +1590,10 @@ class Observation(_Feature):
         else:
             raise TypeError(type(data))
         return self
+
+    @property
+    def observation_date(self):
+        return util_time.coerce_datetime(self['properties']['observation_date'])
 
 
 # def _site_header_from_observations(observations, mgrs_code, site_id, status, summary_geom=None):
@@ -1483,7 +1666,7 @@ class ModelCollection(list):
 
 class SiteModelCollection(ModelCollection):
 
-    def as_region_model(self, region=None):
+    def as_region_model(self, region_header=None):
         """
         Convert a set of site models to a region model
 
@@ -1506,8 +1689,8 @@ class SiteModelCollection(ModelCollection):
         site_summaries = [s.as_summary() for s in self]
         site_header_properties = [site.header['properties'] for site in self]
 
-        if region is not None:
-            region_header = RegionHeader.coerce(region)
+        if region_header is not None:
+            region_header = RegionHeader.coerce(region_header)
             region_header = copy.deepcopy(region_header)
         else:
             region_header = RegionHeader.empty()
@@ -1516,15 +1699,13 @@ class SiteModelCollection(ModelCollection):
         # note: region_id does not appear in a site summary, but it does in the
         # site model.
         key = 'region_id'
-        if region_props[key] is None:
+        if region_props.get(key, None) is None:
             if len(self) == 0:
                 raise ValueError(f'No sites. Unable to infer {key}.')
-            unique_values = {p[key] for p in site_header_properties}
-            if len(unique_values) > 1:
-                raise ValueError('More than one {key} in sites: {unique_values}')
-            region_props[key] = list(unique_values)[0]
+            region_props[key] = _rectify_keys(key, site_header_properties)
 
-        region_header = _infer_region_header_from_site_summaries(region_header, site_summaries)
+        region_header = _infer_region_header_from_site_summaries(
+            region_header, site_summaries)
 
         region_features = [region_header] + site_summaries
         region_model = RegionModel(features=region_features)
@@ -1537,22 +1718,28 @@ def _infer_region_header_from_site_summaries(region_header, site_summaries):
     """
     if region_header is None:
         region_header = RegionHeader.empty()
-    region_props = region_header['properties']
+    region_props = region_header.get('properties', None)
+
+    if region_props.get('type', None) is None:
+        region_props['type'] = 'region'
 
     site_summary_properties = [sitesum['properties'] for sitesum in site_summaries]
 
     shared_unique_properties = ['originator', 'model_content', 'mgrs']
 
     for key in shared_unique_properties:
-        if region_props[key] is None:
-            if len(site_summaries) == 0:
-                raise ValueError(f'No sites. Unable to infer {key}.')
-            unique_values = {p[key] for p in site_summary_properties}
-            if len(unique_values) > 1:
-                raise ValueError('More than one {key} in sites: {unique_values}')
-            region_props[key] = list(unique_values)[0]
+        if region_props.get(key, None) is None:
+            try:
+                if len(site_summaries) == 0:
+                    raise ValueError(f'No sites. Unable to infer {key}.')
+                region_props[key] = _rectify_keys(key, site_summary_properties)
+            except ValueError:
+                # Allow MGRS to fail. We can use region geometry to get the
+                # right one.
+                if key != 'mgrs':
+                    raise
 
-    if region_props['start_date'] is None:
+    if region_props.get('start_date', None) is None:
         if len(site_summaries) == 0:
             raise ValueError('No sites. Unable to infer start_date.')
         dates = [p['start_date'] for p in site_summary_properties if p['start_date'] is not None]
@@ -1560,7 +1747,7 @@ def _infer_region_header_from_site_summaries(region_header, site_summaries):
             raise ValueError('No sites with start dates')
         region_props['start_date'] = min(dates)
 
-    if region_props['end_date'] is None:
+    if region_props.get('end_date', None) is None:
         if len(site_summaries) == 0:
             raise ValueError('No sites. Unable to infer end_date.')
         dates = [p['end_date'] for p in site_summary_properties if p['end_date'] is not None]
@@ -1568,7 +1755,7 @@ def _infer_region_header_from_site_summaries(region_header, site_summaries):
             raise ValueError('No sites with end dates')
         region_props['end_date'] = max(dates)
 
-    if region_header['geometry'] is None:
+    if region_header.get('geometry', None) is None:
         if len(site_summaries) == 0:
             raise ValueError(f'No sites. Unable to infer {key}.')
         from shapely.ops import unary_union
@@ -1577,10 +1764,33 @@ def _infer_region_header_from_site_summaries(region_header, site_summaries):
                       for s in site_summaries]
         region_header['geometry'] = unary_union(site_geoms).envelope
 
-    if region_props['mgrs'] is None:
+    if region_props.get('mgrs', None) is None:
         RegionHeader(**region_header).infer_mgrs()
 
     return region_header
+
+
+def _rectify_keys(key, properties_list):
+    """
+    Given a key and a list of dictionaries, extract the value for that key in
+    all dictionaries and check they are all the same.
+
+    Args:
+        key (str): key of interest
+        properties_list (List[Dict[str, T]]): multiple property dictionaries
+
+    Returns:
+        T: value from properties dictionaries.
+    """
+    if len(properties_list) == 0:
+        raise ValueError(f'No sites. Unable to infer {key}.')
+    unique_values = {p[key] for p in properties_list}
+    if len(unique_values) > 1:
+        msg = (f'More than one key={key!r} in with unique_values={unique_values!r}')
+        print(msg)
+        raise ValueError(msg)
+    value = list(unique_values)[0]
+    return value
 
 
 def _update_propery_cache(prop):

@@ -18,13 +18,18 @@ def plot_geo_background():
     return ax
 
 
-def geopandas_pairwise_overlaps(gdf1, gdf2, predicate='intersects'):
+def geopandas_pairwise_overlaps(gdf1, gdf2, locator='iloc', predicate='intersects'):
     """
     Find pairwise relationships between each geometries
 
     Args:
         gdf1 (GeoDataFrame): query geo data
+
         gdf2 (GeoDataFrame): database geo data (builds spatial index)
+
+        locator (str):
+            either iloc for positional indexes or loc for pandas indexes.
+
         predicate (str, default='intersects'): a DE-9IM [1] predicate.
            (e.g. if intersection finds intersections between geometries)
 
@@ -51,7 +56,8 @@ def geopandas_pairwise_overlaps(gdf1, gdf2, predicate='intersects'):
         >>> )
         >>> gdf1 = gdf1.set_index('name')
         >>> gdf2 = gdf2.set_index('name')
-        >>> mapping = geopandas_pairwise_overlaps(gdf1, gdf2)
+        >>> idx_mapping = geopandas_pairwise_overlaps(gdf1, gdf2, locator='iloc')
+        >>> id_mapping = geopandas_pairwise_overlaps(gdf1, gdf2, locator='loc')
 
     Benchmark:
         import timerit
@@ -86,6 +92,40 @@ def geopandas_pairwise_overlaps(gdf1, gdf2, predicate='intersects'):
         idxs2 = sindex2.query(row1.geometry, predicate=predicate)
         # Record result indexes that "match" given the geometric predicate
         idx1_to_idxs2[idx1] = idxs2
+
+    if locator == 'iloc':
+        return idx1_to_idxs2
+    elif locator == 'loc':
+        _idxs1 = list(idx1_to_idxs2.keys())
+        _nest_idxs2 = list(idx1_to_idxs2.values())
+
+        id1_to_ids2 = {}
+        for idx1, idxs2 in idx1_to_idxs2.items():
+            id1 = gdf1.index[idx1]
+            ids2 = gdf2.index[idxs2]
+            id1_to_ids2[id1] = ids2
+        if 0:
+            import kwarray
+            _flat_idxs2 = np.concatenate(_nest_idxs2, axis=0)
+            _flat_ids2 = gdf2.index[_flat_idxs2]
+            indexer = kwarray.FlatIndexer.fromlist(_nest_idxs2)
+            _a = np.arange(len(indexer))
+            outer, inner = indexer.unravel(_a)
+            _ids1 = gdf1.index[_idxs1]
+            _ids2 = list(kwarray.group_items(_flat_ids2.values, outer).values())
+
+            list(map(len, _ids2))[0:10], list(map(len, _nest_idxs2))[0:10]
+            list(map(len, _ids2))[-10:], list(map(len, _nest_idxs2))[-10:]
+            list(map(len, _ids2))[0:10] == list(map(len, _nest_idxs2))[0:10]
+            list(map(len, _ids2))[-10:] == list(map(len, _nest_idxs2))[-10:]
+            np.vstack([[list(map(len, _ids2))], [list(map(len, _nest_idxs2))]])
+            list(map(len, _ids2)) == list(map(len, _nest_idxs2))
+            _id1_to_ids2 = ub.dzip(_ids1, _ids2)
+            assert _id1_to_ids2 == id1_to_ids2
+        return id1_to_ids2
+    else:
+        raise KeyError(locator)
+
     return idx1_to_idxs2
 
 
@@ -269,7 +309,7 @@ def load_geojson(file, default_axis_mapping='OAMS_TRADITIONAL_GIS_ORDER'):
 
     # Use a CRS that actually reflects the underlying data
     if default_axis_mapping == 'OAMS_TRADITIONAL_GIS_ORDER':
-        crs84 = _get_crs84()
+        crs84 = get_crs84()
         # this is much faster and the only reason this is ok is because the
         # input is xy-wgs84 so the transform (which is slow) would be a noop
         region_df._crs = crs84
@@ -532,7 +572,7 @@ class UTM_TransformContext:
                 something we know how to transform into a GeoSeries
         """
         from watch.utils import util_gis
-        self.crs84 = util_gis._get_crs84()
+        self.crs84 = util_gis.get_crs84()
         self.geoms_crs84 = self._coerce_geo_series(data_crs84, self.crs84)
         self.crs_utm = None
         self.gdf_utm = None
@@ -1032,7 +1072,7 @@ def _coerce_raw_geojson(item, format):
         if format == 'dataframe':
             item = gpd.GeoDataFrame.from_features(item['features'])
             # Hack in CRS-84
-            crs84 = _get_crs84()
+            crs84 = get_crs84()
             # this is much faster and the only reason this is ok is because the
             # input is xy-wgs84 so the transform (which is slow) would be a noop
             item._crs = crs84

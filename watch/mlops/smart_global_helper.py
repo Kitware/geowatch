@@ -366,9 +366,16 @@ class SmartGlobalHelper:
             _display_metrics_suffixes = [
                 'macro_f1_siteprep',
                 'macro_f1_active',
+                'bas_tp',
+                'bas_fp',
+                'bas_fn',
+                'bas_tpr',
+                'bas_f1',
+                'bas_ffpa',
+                'bas_faa_f1',
             ]
             _primary_metrics_suffixes = [
-                'sc_macro_f1', 'bas_faa_f1'
+                'bas_faa_f1', 'sc_macro_f1',
             ]
         elif agg.type == 'bas_pxl_eval':
             _primary_metrics_suffixes = [

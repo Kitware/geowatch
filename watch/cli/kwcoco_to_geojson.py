@@ -232,8 +232,8 @@ def _combined_geometries(geometry_list):
 
 
 def _normalize_date(date_str):
-    import dateutil.parser
-    return dateutil.parser.parse(date_str).date().isoformat()
+    from kwutil import util_time
+    return util_time.coerce_datetime(date_str).date().isoformat()
 
 
 def _join_props(parts):
@@ -251,16 +251,17 @@ def _split_props(parts):
 
 
 @profile
-def coco_create_observation(coco_dset, anns, with_properties=True):
+def coco_create_observation(coco_dset, anns):
     """
-    Group kwcoco annotations in the same track (site) and image
-    into one Feature in an IARPA site model
+    Group kwcoco annotations in the same track (site) and image into one
+    Feature in an IARPA site model
     """
-    import geojson
+    # import geojson
     import kwcoco
     import shapely
     import numpy as np
     from collections import defaultdict
+    from watch.geoannots import geomodels
 
     def single_geometry(ann):
         seg_geo = ann['segmentation_geos']
@@ -276,20 +277,21 @@ def coco_create_observation(coco_dset, anns, with_properties=True):
         # pick the image that is actually copied to the metrics framework
         # the source field is implied to be a STAC id, but overload it to
         # enable viz during scoring without referring back to the kwcoco file
-        # TODO maybe use misc_info for this instead when STAC id is
+        # TODO maybe use cache for this instead when STAC id is
         # properly passed through to TA-2?
         source = None
         img = coco_img.img
         bundle_dpath = ub.Path(coco_img.bundle_dpath)
-        chan_to_aux = {
+        chan_to_asset = {
             aux['channels']: aux
             for aux in coco_img.iter_asset_objs()
         }
-        for want_chan in {
-                'r|g|b', 'rgb', 'pan', 'panchromatic', 'green', 'blue'
-        }:
-            if want_chan in chan_to_aux:
-                aux = chan_to_aux[want_chan]
+        _candidate_source_chans = {
+            'r|g|b', 'rgb', 'pan', 'panchromatic', 'green', 'blue'
+        }
+        for want_chan in _candidate_source_chans:
+            if want_chan in chan_to_asset:
+                aux = chan_to_asset[want_chan]
                 source = bundle_dpath / aux['file_name']
                 break
 
@@ -321,20 +323,33 @@ def coco_create_observation(coco_dset, anns, with_properties=True):
 
         current_phase = coco_dset.cats[ann['category_id']]['name']
 
+        # Give each observation a total score
+        score = ann.get('score', 1.0)
+        score = max(min(score, 1.0), 0.0)
+
+        # Remember scores for each class
+        raw_multi_scores = ann.get('scores', {})
+
+        # Give each obs a status. This lets us decouple kwcoco in existing
+        # downstream logic. Might not be needed in the future.
+        status = ann.get('status', 'system_confirmed')
+
         return {
             'type': 'observation',
             'current_phase': current_phase,
             'is_site_boundary': True,  # HACK
-            'score': max(min(ann.get('score', 1.0), 1.0), 0.0),
-            'misc_info': {
-                'phase_transition_days': ann.get('phase_transition_days', None)
+            'score': score,
+            'cache': {
+                'phase_transition_days': ann.get('phase_transition_days', None),
+                'raw_multi_scores': raw_multi_scores,
+                'status': status
             },
             **image_properties_dct[ann['image_id']]
         }
 
     def combined_properties(properties_list, geometry_list):
         # list of dicts -> dict of lists for easy indexing
-        properties_list = {
+        properties_dcts = {
             k: [dct[k] for dct in properties_list]
             for k in properties_list[0]
         }
@@ -355,7 +370,7 @@ def coco_create_observation(coco_dset, anns, with_properties=True):
         # per-polygon properties
         for key in ['current_phase', 'is_occluded', 'is_site_boundary']:
             value = []
-            for prop, geom in zip(properties_list[key], geometry_list):
+            for prop, geom in zip(properties_dcts[key], geometry_list):
                 value.append(_join_props([str(prop)] * _len(geom)))
             properties[key] = _join_props(value)
 
@@ -371,13 +386,13 @@ def coco_create_observation(coco_dset, anns, with_properties=True):
 
         # identical properties
         for key in ['type', 'source', 'observation_date', 'sensor_name']:
-            values = properties_list[key]
+            values = properties_dcts[key]
             assert len(set(values)) == 1
             properties[key] = str(values[0])
 
         # take area-weighted average score
         weights = np.array([geom.area for geom in geometry_list])
-        scores = np.array([float(s) for s in properties_list['score']])
+        scores = np.array([float(s) for s in properties_dcts['score']])
         mask = np.isnan(scores)
         scores[mask] = 0
         weights[mask] = 0
@@ -386,77 +401,33 @@ def coco_create_observation(coco_dset, anns, with_properties=True):
         else:
             properties['score'] = np.average(scores, weights=weights)
 
-        properties['misc_info'] = defaultdict(list)
-        for misc_info in properties_list['misc_info']:
-            for k, v in misc_info.items():
-                properties['misc_info'][k].append(v)
+        # Make cache a list of entries for each polygon.
+        # This is for the case of more than one polygon beloning to the
+        # observation, which I'm not even sure if that makes sense.
+        properties['cache'] = defaultdict(list)
+        for cache in properties_dcts['cache']:
+            for k, v in cache.items():
+                properties['cache'][k].append(v)
 
         return properties
 
-    if with_properties:
-        image_properties_dct = {}
-        gids = {ann['image_id'] for ann in anns}
-        for gid in gids:
-            coco_img = coco_dset.coco_image(gid).detach()
-            image_properties_dct[gid] = _per_image_properties(coco_img)
+    image_properties_dct = {}
+    gids = {ann['image_id'] for ann in anns}
+    for gid in gids:
+        coco_img = coco_dset.coco_image(gid).detach()
+        image_properties_dct[gid] = _per_image_properties(coco_img)
 
     geometry_list = list(map(single_geometry, anns))
-    if with_properties:
-        properties_list = list(map(single_properties, anns))
 
-    if with_properties:
-        geometry = _ensure_multi(_combined_geometries(geometry_list))
-        properties = combined_properties(properties_list, geometry_list)
-    else:
-        geometry = _combined_geometries(geometry_list)
-        properties = {}
+    properties_list = list(map(single_properties, anns))
+    geometry = _ensure_multi(_combined_geometries(geometry_list))
+    properties = combined_properties(properties_list, geometry_list)
 
-    # from watch.geoannots import geomodels
-    # return geomodels.Observation(geometry=geometry, properties=properties)
-    return geojson.Feature(geometry=geometry, properties=properties)
+    observation = geomodels.Observation(geometry=geometry, properties=properties)
+    return observation
 
 
-@profile
-def coco_track_to_site(coco_dset, trackid, region_id, site_idx=None,
-                       as_summary=False):
-    """
-    Turn a kwcoco track into an IARPA site model or site summary
-    """
-    import geojson
-
-    # get annotations in this track sorted by frame_index
-    annots = coco_dset.annots(track_id=trackid)
-    gids, anns = annots.gids, annots.objs
-
-    features = []
-    for gid, _anns in ub.group_items(anns, gids).items():
-        feat = coco_create_observation(coco_dset, _anns, with_properties=(not as_summary))
-        features.append(feat)
-    # for i in range(len(features)):
-    #     features[i]['properties'].setdefault('misc_info', {})
-    #     features[i]['properties']['misc_info']['trackid'] = trackid
-
-    # HACK to passthrough site_summary IDs
-    import watch
-    if watch.tasks.tracking.utils.trackid_is_default(trackid):
-        if site_idx is None:
-            site_idx = trackid
-        site_id = '_'.join((region_id, str(site_idx).zfill(4)))
-    else:
-        site_id = trackid
-        # TODO make more robust
-        region_id = '_'.join(site_id.split('_')[:2])
-
-    if as_summary:
-        site = coco_create_site_header(coco_dset, region_id, site_id, trackid, gids, features, as_summary)
-    else:
-        site_header = coco_create_site_header(coco_dset, region_id, site_id, trackid, gids, features, as_summary)
-        site = geojson.FeatureCollection([site_header] + features)
-
-    return site
-
-
-def predict_phase_changes(site_id, features):
+def predict_phase_changes(site_id, observations):
     """
     Set predicted_phase_transition and predicted_phase_transition_date.
 
@@ -479,20 +450,20 @@ def predict_phase_changes(site_id, features):
         >>> from watch.geoannots import geomodels
         >>> site = geomodels.SiteModel.random(rng=0, num_observations=20)
         >>> site_id = site.site_id
-        >>> features = list(site.body_features())
-        >>> features[-1]['properties']['misc_info'] = {'phase_transition_days': [100]}
-        >>> predict_phase_changes(site_id, features)
+        >>> observations = list(site.body_features())
+        >>> observations[-1]['properties']['cache'] = {'phase_transition_days': [100]}
+        >>> predict_phase_changes(site_id, observations)
     """
     import datetime as datetime_mod
-    import dateutil.parser
+    from kwutil import util_time
 
-    feature_properties = [feat['properties'] for feat in features]
+    feature_properties = [feat['properties'] for feat in observations]
 
     # Ensure features are in temporal order
     # (they probably are already, but we are being safe)
     feature_properties = sorted(
         feature_properties,
-        key=lambda prop: dateutil.parser.parse(prop['observation_date']))
+        key=lambda prop: util_time.coerce_datetime(prop['observation_date']))
 
     feature_phases = [_split_props(prop['current_phase']) for prop in feature_properties]
 
@@ -500,13 +471,13 @@ def predict_phase_changes(site_id, features):
         for props, phases in zip(reversed(feature_properties), reversed(feature_phases)):
             if phase in phases:
                 _idx = phases.index(phase)
-                misc_info = props.get('misc_info', {})
-                obs_date = dateutil.parser.parse(props['observation_date'])
-                days = misc_info['phase_transition_days'][_idx]
+                cache = props.get('cache', {})
+                obs_date = util_time.coerce_datetime(props['observation_date'])
+                days = cache['phase_transition_days'][_idx]
                 pred_delta = datetime_mod.timedelta(days=int(days))
                 return (obs_date + pred_delta).isoformat()
         print(f'warning: {site_id=} is missing {phase=}')
-        final_date = dateutil.parser.parse(
+        final_date = util_time.coerce_datetime(
             feature_properties[-1]['observation_date'])
         tomorrow = final_date + datetime_mod.timedelta(days=1)
         return tomorrow.isoformat()
@@ -531,16 +502,60 @@ def predict_phase_changes(site_id, features):
         return {}
 
 
-def coco_create_site_header(coco_dset, region_id, site_id, trackid, gids, features, as_summary):
+def smooth_curve(ydata, beta):
+    """
+    Curve smoothing algorithm used by tensorboard
+    """
+    import pandas as pd
+    alpha = 1.0 - beta
+    if alpha <= 0:
+        return ydata
+    ydata_smooth = pd.Series(ydata).ewm(alpha=alpha).mean().values
+    return ydata_smooth
+
+
+def smooth_predictions(observations):
+    # Consolidate scores over time. Predict start / end dates.
+    obs_multi_scores = [obs['properties']['cache']['raw_multi_scores'] for obs in observations]
+    assert all(len(ms) == 1 for ms in obs_multi_scores)
+    obs_scores = [ms[0] for ms in obs_multi_scores]
+    import kwarray
+    # import numpy as np
+    score_df = kwarray.DataFrameLight.from_dict(obs_scores)
+    score_df = score_df.pandas()
+
+    smoothing = 0.5
+    smoothed = score_df.ewm(alpha=(1 - smoothing), axis=1).mean()
+    new_labels = smoothed.idxmax(axis=1).values.tolist()
+    # old_labels = [o['properties']['current_phase'] for o in observations]
+
+    new_scores = smoothed.to_dict('records')
+    for o, scores, label in zip(observations, new_scores, new_labels):
+        o['properties']['current_phase'] = label
+        o['properties']['cache']['smooth_scores'] = scores
+
+    if 0:
+        from watch.tasks.tracking import phase
+        new_labels = phase.class_label_smoothing(
+            new_labels, transition_probs='v7', emission_probs='v7')
+
+    # phase.REGISTERED_EMMISSION_PROBS['default']
+    # phase.REGISTERED_TRANSITION_PROBS['default']
+    # phase.viterbi(new_labels, )
+
+
+def coco_create_site_header(region_id, site_id, trackid, observations):
     """
     Feature containing metadata about the site
-    """
-    from mgrs import MGRS
-    import numpy as np
-    import geojson
-    import shapely
 
-    geom_list = [_single_geometry(feat['geometry']) for feat in features]
+    Returns:
+        geomodels.SiteSummary | geomodels.SiteHeader
+    """
+    import shapely
+    import watch
+    from watch.geoannots import geomodels
+
+    geom_list = [_single_geometry(feat['geometry']) for feat in observations]
     geometry = _combined_geometries(geom_list)
 
     # site and site_summary features must be polygons
@@ -548,93 +563,76 @@ def coco_create_site_header(coco_dset, region_id, site_id, trackid, gids, featur
         if len(geometry.geoms) == 1:
             geometry = geometry.geoms[0]
         else:
-            print(f'warning: {coco_dset=} {region_id=} {site_id=} {trackid=} has multi-part site geometry')
+            print(f'warning: {region_id=} {site_id=} {trackid=} has multi-part site geometry')
             geometry = geometry.convex_hull
 
-    centroid_coords = np.array(geometry.centroid.coords)
-    if centroid_coords.size == 0:
-        raise AssertionError('Empty geometry. What happened?')
-
-    centroid_latlon = centroid_coords[0][::-1]
-
     # these are strings, but sorting should be correct in isoformat
-    dates = sorted(
-        map(_normalize_date,
-            coco_dset.images(set(gids)).lookup('date_captured')))
+
+    status_set = [obs['properties']['cache'].get('status', ['system_confirmed'])
+                  for obs in observations]
+    status_set = set(ub.flatten(status_set))
 
     # https://smartgitlab.com/TE/annotations/-/wikis/Annotation-Status-Types#for-site-models-generated-by-performersalgorithms
     # system_confirmed, system_rejected, or system_proposed
     # TODO system_proposed pre val-net
-    status = set(coco_dset.annots(track_id=trackid).get('status', 'system_confirmed'))
-    assert len(status) == 1, f'inconsistent {status=} for {trackid=}'
-    status = status.pop()
+    assert len(status_set) == 1, f'inconsistent {status_set=} for {trackid=}'
+    status = status_set.pop()
+
+    if 0:
+        # Needs to be enabled via a flag.
+        smooth_predictions(observations)
+
+    dates = sorted([obs.observation_date for obs in observations])
+    start_date = dates[0].date().isoformat()
+    end_date = dates[-1].date().isoformat()
+
+    if True:
+        # HACKS FOR EVAL 15 to get things done quicky.
+        import numpy as np
+        curr_labels = [o['properties']['current_phase'] for o in observations]
+        active_labels = {'Site Preparation', 'Active Construction'}
+        flags = [lbl in active_labels for lbl in curr_labels]
+        active_idxs = np.where(flags)[0]
+        if len(active_idxs):
+            first_idx = active_idxs[0]
+            last_idx = active_idxs[-1]
+            start_date = observations[first_idx].observation_date.date().isoformat()
+            end_date = observations[last_idx].observation_date.date().isoformat()
+        else:
+            # Check to make sure we are in AC/SC. Otherwise use old logic
+            if any(c in {'No Activity', 'Post Construction'} for c in curr_labels):
+                # Throw out items with no start / end
+                status = 'system_rejected'
 
     PERFORMER_ID = 'kit'
 
-    import watch
-    properties = {
+    site_header = geomodels.SiteHeader.empty()
+    site_header['geometry'] = geometry
+    site_header['properties'].update({
         'site_id': site_id,
+        'region_id': region_id,
+
         'version': watch.__version__,  # Shouldn't this be a schema version?
-        'mgrs': MGRS().toMGRS(*centroid_latlon, MGRSPrecision=0),
+
         'status': status,
         'model_content': 'proposed',
         'score': 1.0,  # TODO does this matter?
 
-        # FIXME: determine this by using phase predictions
-        'start_date': min(dates),
-        'end_date': max(dates),
+        'start_date': start_date,
+        'end_date': end_date,
 
         'originator': PERFORMER_ID,
         'validated': 'False'
-    }
+    })
+    site_header.infer_mgrs()
 
-    if as_summary:
-        properties.update(
-            **{
-                'type': 'site_summary',
-                'region_id': region_id,  # HACK to passthrough to main
-            })
-    else:
-        properties.update(
-            **{
-                'type': 'site',
-                'region_id': region_id,
-                **predict_phase_changes(site_id, features), 'misc_info': {}
-            })
-
-    return geojson.Feature(geometry=geometry, properties=properties)
+    pred_transition = predict_phase_changes(site_id, observations)
+    site_header['properties'].update(pred_transition)
+    return site_header
 
 
 @profile
-def create_region_header(region_id, site_summaries):
-    # TODO: use watch.geoannots.geomodels here
-    import geojson
-    geometry = _combined_geometries([
-        _single_geometry(summary['geometry'])
-        for summary in site_summaries
-    ]).envelope
-    start_date = min(summary['properties']['start_date']
-                     for summary in site_summaries)
-    end_date = max(summary['properties']['end_date']
-                   for summary in site_summaries)
-    properties = {
-        'type': 'region',
-        'region_id': region_id,
-        'version': site_summaries[0]['properties']['version'],
-        'mgrs': site_summaries[0]['properties']['mgrs'],
-        'model_content': site_summaries[0]['properties']['model_content'],
-        'start_date': start_date,
-        'end_date': end_date,
-        'originator': site_summaries[0]['properties']['originator'],
-        'comments': None
-    }
-    return geojson.Feature(geometry=geometry, properties=properties)
-
-
-@profile
-def convert_kwcoco_to_iarpa(coco_dset,
-                            default_region_id=None,
-                            as_summary=False):
+def convert_kwcoco_to_iarpa(coco_dset, default_region_id=None):
     """
     Convert a kwcoco coco_dset to the IARPA JSON format
 
@@ -682,15 +680,51 @@ def convert_kwcoco_to_iarpa(coco_dset,
         sub_dset = coco_dset.subset(gids=gids)
 
         for site_idx, trackid in enumerate(sub_dset.index.trackid_to_aids):
-            site = coco_track_to_site(sub_dset, trackid, region_id, site_idx,
-                                      as_summary)
+            site = coco_track_to_site(sub_dset, trackid, region_id, site_idx)
             sites.append(site)
 
     return sites
 
 
-def _coerce_site_summaries(site_summary_or_region_model,
-                           default_region_id=None):
+@profile
+def coco_track_to_site(coco_dset, trackid, region_id, site_idx=None):
+    """
+    Turn a kwcoco track into an IARPA site model or site summary
+    """
+    # import geojson
+    from watch.geoannots.geomodels import SiteModel
+    import watch
+
+    # get annotations in this track sorted by frame_index
+    annots = coco_dset.annots(track_id=trackid)
+    gids, anns = annots.gids, annots.objs
+
+    observations = []
+    for gid, _anns in ub.group_items(anns, gids).items():
+        feat = coco_create_observation(coco_dset, _anns)
+        observations.append(feat)
+    # for i in range(len(observations)):
+    #     observations[i]['properties'].setdefault('cache', {})
+    #     observations[i]['properties']['cache']['trackid'] = trackid
+
+    # HACK to passthrough site_summary IDs
+    if watch.tasks.tracking.utils.trackid_is_default(trackid):
+        if site_idx is None:
+            site_idx = trackid
+        site_id = '_'.join((region_id, str(site_idx).zfill(4)))
+    else:
+        site_id = trackid
+        # TODO make more robust
+        region_id = '_'.join(site_id.split('_')[:2])
+
+    site_header = coco_create_site_header(region_id, site_id, trackid, observations)
+    site = SiteModel([site_header] + observations)
+
+    return site
+
+
+def _coerce_site_summary_tups(site_summary_or_region_model,
+                              default_region_id=None):
     """
     Possible input formats:
         - file path
@@ -719,7 +753,7 @@ def _coerce_site_summaries(site_summary_or_region_model,
         site_summary_or_region_model, format='json', allow_raw=True))
 
     # validate the json
-    site_summaries = []
+    site_summary_tups = []
 
     # # debug mode is for comparing against a set of known GT site models
     # DEBUG_MODE = 1
@@ -757,13 +791,12 @@ def _coerce_site_summaries(site_summary_or_region_model,
 
             _summaries = [
                 f for f in region_model.site_summaries()
-                # if f['properties']['status'] in SITE_SUMMARY_POS_STATUS
                 if f['properties']['status'] not in {'system_rejected'}
             ]
             region_id = region_model.region_id
             # TODO: handle default region-id if needed
 
-            site_summaries.extend([(region_id, s) for s in _summaries])
+            site_summary_tups.extend([(region_id, s) for s in _summaries])
 
         except jsonschema.ValidationError:
             # In this case we expect the input to be a list of site summaries.
@@ -773,9 +806,70 @@ def _coerce_site_summaries(site_summary_or_region_model,
                 'If you see this error, he is wrong and the error can be removed. '
                 'Otherwise we should remove this extra code')
             site_summary = site_summary_or_region_model
-            site_summaries.append((default_region_id, site_summary))
+            site_summary_tups.append((default_region_id, site_summary))
 
-    return site_summaries
+    return site_summary_tups
+
+
+def assign_sites_to_videos(coco_dset, site_summaries):
+    """
+    Compute assignments between which sites summaries should be projected onto
+    which videos for scoring.
+    """
+    from watch.utils import util_gis
+    from watch.geoannots.geomodels import RegionModel
+    import rich
+    from watch.utils import kwcoco_extensions
+
+    site_idx_to_vidid = []
+    unassigned_site_idxs = []
+
+    # Get a GeoDataFrame with geometry for each coco video and each site.
+    video_gdf = kwcoco_extensions.covered_video_geo_regions(coco_dset)
+
+    sitesum_model = RegionModel(features=site_summaries)
+    sitesum_gdf = sitesum_model.pandas_summaries()
+
+    # Compute which sites overlap which videos
+    site_idx_to_video_idx = util_gis.geopandas_pairwise_overlaps(sitesum_gdf, video_gdf)
+
+    # For each site, chose a single video assign to
+    assigned_idx_pairs = []
+    for site_idx, video_idxs in site_idx_to_video_idx.items():
+        if len(video_idxs) == 0:
+            unassigned_site_idxs.append(site_idx)
+        elif len(video_idxs) == 1:
+            assigned_idx_pairs.append((site_idx, video_idxs[0]))
+        else:
+            qshape = sitesum_gdf.iloc[site_idx]['geometry']
+            candidates = video_gdf.iloc[video_idxs]
+            overlaps = []
+            for dshape in candidates['geometry']:
+                iarea = qshape.intersection(dshape).area
+                uarea = qshape.area
+                iofa = iarea / uarea
+                overlaps.append(iofa)
+            idx = ub.argmax(overlaps)
+            assigned_idx_pairs.append((site_idx, video_idxs[idx]))
+
+    for site_idx, video_idx in assigned_idx_pairs:
+        video_id = video_gdf.iloc[video_idx]['video_id']
+        site_idx_to_vidid.append((site_idx, video_id))
+
+    assigned_vidids = set([t[1] for t in site_idx_to_vidid])
+    n_unassigned_sites = len(unassigned_site_idxs)
+    n_assigned_sites = len(site_idx_to_vidid)
+    n_total_sites = len(site_summaries)
+    n_assigned_vids = len(assigned_vidids)
+    n_total_vids = coco_dset.n_videos
+
+    color, punc = '', '.'
+    if unassigned_site_idxs:
+        color, punc = '[yellow]', '!'
+    rich.print(f'{color}There were {n_unassigned_sites} sites that has no video overlaps{punc}')
+    rich.print(f'There were {n_assigned_sites} / {n_total_sites} assigned site summaries')
+    rich.print(f'There were {n_assigned_vids} / {n_total_vids} assigned videos')
+    return site_idx_to_vidid
 
 
 def add_site_summary_to_kwcoco(possible_summaries,
@@ -790,6 +884,10 @@ def add_site_summary_to_kwcoco(possible_summaries,
     independently) that need SC processing. We need to associate these and
     place them in the correct videos so we can process those areas.
     """
+    import rich
+    import watch
+    from watch.utils import kwcoco_extensions
+    from kwutil import util_time
     # input validation
     print(f'possible_summaries={possible_summaries}')
     print(f'coco_dset={coco_dset}')
@@ -799,133 +897,36 @@ def add_site_summary_to_kwcoco(possible_summaries,
         default_region_id = ub.peek(coco_dset.index.name_to_video)
 
     site_summary_or_region_model = possible_summaries
-    site_summaries = _coerce_site_summaries(site_summary_or_region_model,
-                                            default_region_id)
-    print(f'found {len(site_summaries)} site summaries')
+    site_summary_tups = _coerce_site_summary_tups(
+        site_summary_or_region_model, default_region_id)
+    print(f'found {len(site_summary_tups)} site summaries')
 
-    # TODO use pyproj instead, make sure it works with kwimage.warp
-
-    # @ub.memoize
-    # def transform_wgs84_to(target_epsg_code):
-    #     wgs84 = osr.SpatialReference()
-    #     wgs84.ImportFromEPSG(4326)  # '+proj=longlat +datum=WGS84 +no_defs'
-    #     target = osr.SpatialReference()
-    #     target.ImportFromEPSG(int(target_epsg_code))
-    #     return osr.CoordinateTransformation(wgs84, target)
-    # new_trackids = watch.utils.kwcoco_extensions.TrackidGenerator(coco_dset)
-
-    # write site summaries
-    import watch
     site_summary_cid = coco_dset.ensure_category(watch.heuristics.SITE_SUMMARY_CNAME)
 
     print('Searching for assignment between requested site summaries and the kwcoco videos')
 
-    site_idx_to_vidid = []
-    unassigned_site_idxs = []
+    # TODO: Should likely refactor to unify this codepath with reproject
+    # annotations.
 
-    USE_NAME_ASSIGNMENT = 0  # off by default, for known site models
-    USE_GEO_ASSIGNMENT = 1
+    # FIXME: need to include a temporal component to this assignment.
+    # Also, should probably do this in UTM instead of CRS84
 
-    if USE_NAME_ASSIGNMENT:
-        vids = coco_dset.videos().lookup(['name', 'id'])
-        for i, (_, s) in enumerate(site_summaries):
-            sid = s['properties']['site_id']
-            for vid, vn in zip(vids['id'], vids['name']):
-                if sid in vn:
-                    site_idx_to_vidid.append((i, vid))
-
-    elif USE_GEO_ASSIGNMENT:
-        from watch.utils import kwcoco_extensions
-        from watch.utils import util_gis
-        import geopandas as gpd
-        # video_gdf = kwcoco_extensions.covered_video_geo_regions(coco_dset)
-        image_gdf = kwcoco_extensions.covered_image_geo_regions(coco_dset)
-        video_rows = []
-        for video_id, img_gdf in image_gdf.groupby('video_id'):
-            row = {
-                'video_id': video_id,
-                'geometry': img_gdf['geometry'].unary_union,
-                'start_date': img_gdf.iloc[0]['date_captured'],
-                'end_date': img_gdf.iloc[-1]['date_captured'],
-            }
-            video_rows.append(row)
-        video_gdf = gpd.GeoDataFrame(video_rows, crs=util_gis._get_crs84())
-
-        sitesum_gdf = gpd.GeoDataFrame.from_features([t[1] for t in site_summaries], crs=util_gis._get_crs84(), columns=['geometry'])
-
-        if 0:
-            import kwplot
-            kwplot.autompl()
-            fig = kwplot.figure(fnum=1, doclf=1)
-            ax = fig.gca()
-            import kwimage
-            color1 = kwimage.Color('red', alpha=0.5).as01('rgba')
-            color2 = kwimage.Color('blue', alpha=0.5).as01('rgba')
-            video_gdf.plot(ax=ax, facecolor=color2)
-            sitesum_gdf.plot(ax=ax, facecolor=color1)
-
-        site_idx_to_video_idx = util_gis.geopandas_pairwise_overlaps(sitesum_gdf, video_gdf)
-
-        assigned_idx_pairs = []
-        for site_idx, video_idxs in site_idx_to_video_idx.items():
-            if len(video_idxs) == 0:
-                unassigned_site_idxs.append(site_idx)
-            elif len(video_idxs) == 1:
-                assigned_idx_pairs.append((site_idx, video_idxs[0]))
-            else:
-                qshape = sitesum_gdf.iloc[site_idx]['geometry']
-                candidates = video_gdf.iloc[video_idxs]
-                overlaps = []
-                for dshape in candidates['geometry']:
-                    iarea = qshape.intersection(dshape).area
-                    uarea = qshape.area
-                    iofa = iarea / uarea
-                    overlaps.append(iofa)
-                idx = ub.argmax(overlaps)
-                assigned_idx_pairs.append((site_idx, video_idxs[idx]))
-
-        for site_idx, video_idx in assigned_idx_pairs:
-            video_id = video_gdf.iloc[video_idx]['video_id']
-            site_idx_to_vidid.append((site_idx, video_id, ))
-
-    else:
-
-        for region_id, site_summary in site_summaries:
-            # lookup possible places to put this site_summary
-            video_id = None
-            site_id = site_summary['properties']['site_id']
-            for _id, vid in coco_dset.index.videos.items():
-                # look for all possible places a region or site id could be
-                names = set(ub.dict_subset(vid, ['id', 'name', 'region_id', 'site_id'], None).values())
-                names |= set(ub.dict_subset(vid.get('properties', {}), ['region_id', 'site_id'], None).values())
-                if region_id in names or site_id in names:
-                    video_id = _id
-                    print(f'matched site_summary {site_id} to video {names}')
-                    site_idx_to_vidid.append((site_idx, video_id, ))
-                    break
-
-    assigned_vidids = set([t[1] for t in site_idx_to_vidid])
-    print('There were {} / {} assigned site summaries'.format(len(site_idx_to_vidid), len(site_summaries)))
-    print('There were {} / {} assigned videos'.format(len(assigned_vidids), coco_dset.n_videos))
-
-    if 0:
-        unassigned_vidids = set(coco_dset.videos()) - assigned_vidids
-        coco_dset.videos(unassigned_vidids).lookup('name')
+    # Compute Assignment between site summaries / coco videos.
+    site_summaries = [t[1] for t in site_summary_tups]
+    site_idx_to_vidid = assign_sites_to_videos(coco_dset, site_summaries)
 
     print('warping site boundaries to pxl space...')
     for site_idx, video_id in site_idx_to_vidid:
 
-        region_id, site_summary = site_summaries[site_idx]
+        region_id, site_summary = site_summary_tups[site_idx]
         site_id = site_summary['properties']['site_id']
 
-        # track_id = next(new_trackids)
         track_id = site_id
 
         # get relevant images
-        images = coco_dset.images(vidid=video_id)
+        images = coco_dset.images(video_id=video_id)
 
         # and their dates
-        from kwutil import util_time
         image_dates = [util_time.coerce_datetime(d).date()
                        for d in images.lookup('date_captured')]
         first_date = image_dates[0]
@@ -945,39 +946,23 @@ def add_site_summary_to_kwcoco(possible_summaries,
         flags = [start_date <= d <= end_date for d in image_dates]
         images = images.compress(flags)
         if track_id in images.get('track_id', None):
-            print(f'warning: site_summary {track_id} already in dset!')
+            rich.print(f'[yellow]warning: site_summary {track_id} already in dset!')
 
         # apply site boundary as polygons
         poly_crs84_geojson = site_summary['geometry']
-        # geo_poly = kwimage.MultiPolygon.from_geojson()
         for img in images.objs:
             # Add annotations in CRS84 geo-space, we will project to pixel
             # space in a later step
             coco_dset.add_annotation(
                 image_id=img['id'],
                 category_id=site_summary_cid,
-                # bbox=bbox,
-                # segmentation=img_poly,
                 segmentation_geos=poly_crs84_geojson,
                 track_id=track_id
             )
 
     print('Projecting regions to pixel coords')
-    from watch.utils import kwcoco_extensions
     kwcoco_extensions.warp_annot_segmentations_from_geos(coco_dset)
     print('Done projecting')
-
-    if 0:
-        import kwplot
-        import kwimage
-        kwplot.autompl()
-        gid = list(images)[0]
-        coco_img = coco_dset.coco_image(gid)
-        canvas = coco_img.imdelay('red|green|blue', space='image').finalize()
-        canvas = kwimage.normalize_intensity(canvas)
-        kwplot.imshow(canvas)
-        coco_dset.annots(gid=gid).detections.draw()
-
     return coco_dset
 
 
@@ -1158,12 +1143,15 @@ def main(argv=None, **kwargs):
     import geojson
     import json
     import kwcoco
+    import pandas as pd
     import safer
     import watch
+
     from kwcoco.util import util_json
-    from watch.utils import util_gis
-    from watch.utils import process_context
     from kwutil.util_yaml import Yaml
+    from watch.geoannots import geomodels
+    from watch.utils import process_context
+    from watch.utils import util_gis
 
     coco_fpath = ub.Path(args.in_file)
 
@@ -1272,11 +1260,9 @@ def main(argv=None, **kwargs):
             f'Unknown Default Track Function: {args.default_track_fn} not in {list(_KNOWN_TRACK_FUNCS.keys())}')
 
     if args.boundary_region is not None:
-        from watch.geoannots import geomodels
         region_infos = list(util_gis.coerce_geojson_datas(
             args.boundary_region, format='json', allow_raw=True,
             desc='load boundary regions'))
-        import pandas as pd
         region_parts = []
         for info in region_infos:
             # Need to deterimine which one to use
@@ -1287,7 +1273,6 @@ def main(argv=None, **kwargs):
         video_gdf = coco_video_gdf(coco_dset)
         video_region_assignments = assign_videos_to_regions(video_gdf, boundary_regions_gdf)
     else:
-        import rich
         if args.site_summary is None:
             rich.print('[yellow]Warning: No boundary regions or site summaries specified')
         else:
@@ -1333,20 +1318,18 @@ def main(argv=None, **kwargs):
         print(f'write to coco_dset.fpath={coco_dset.fpath}')
         coco_dset.dump(out_kwcoco, indent=2)
 
-    # Convert kwcoco to sites
     verbose = 1
 
-    if args.out_sites_dir is not None:
+    # Convert kwcoco to sites models
+    all_sites = convert_kwcoco_to_iarpa(
+        coco_dset, default_region_id=args.region_id)
+    print(f'{len(all_sites)=}')
 
-        sites_dir = ub.Path(args.out_sites_dir).ensuredir()
-        # Also do this in BAS mode
-        sites = convert_kwcoco_to_iarpa(coco_dset,
-                                        default_region_id=args.region_id,
-                                        as_summary=False)
-        print(f'{len(sites)=}')
+    if args.out_sites_dir is not None:
         # write sites to disk
+        sites_dir = ub.Path(args.out_sites_dir).ensuredir()
         site_fpaths = []
-        for site in ub.ProgIter(sites, desc='writing sites', verbose=verbose):
+        for site in ub.ProgIter(all_sites, desc='writing sites', verbose=verbose):
             site_props = site['features'][0]['properties']
             assert site_props['type'] == 'site'
             site_fpath = sites_dir / (site_props['site_id'] + '.geojson')
@@ -1363,37 +1346,34 @@ def main(argv=None, **kwargs):
         with safer.open(out_sites_fpath, 'w', temp_file=not ub.WIN32) as file:
             json.dump(site_tracking_output, file, indent='    ')
 
-    # Convert kwcoco to sites summaries
+    # Convert site models to site summaries
     if args.out_site_summaries_dir is not None:
-        sites = convert_kwcoco_to_iarpa(coco_dset,
-                                        default_region_id=args.region_id,
-                                        as_summary=True)
-        print(f'{len(sites)=}')
+
         site_summary_dir = ub.Path(args.out_site_summaries_dir).ensuredir()
-        # write sites to region models on disk
-        groups = ub.group_items(sites, lambda site: site['properties'].pop('region_id'))
+        # write site summaries to region models on disk
+        groups = ub.group_items(all_sites, lambda site: site.header['properties']['region_id'])
 
         site_summary_fpaths = []
-        for region_id, site_summaries in groups.items():
+        for region_id, sites in groups.items():
 
+            # Converting sites to a region model makes them site summaries
+            sites = geomodels.SiteModelCollection(sites)
+            new_summaries = sites.as_region_model()
             region_fpath = site_summary_dir / (region_id + '.geojson')
+
             if args.append_mode and region_fpath.is_file():
-                with open(region_fpath, 'r') as f:
-                    region = geojson.load(f)
+                new_region = geomodels.RegionModel.coerce(region_fpath)
+                new_region.features.extend(list(new_summaries.site_summaries()))
                 if verbose:
                     print(f'writing to existing region {region_fpath}')
             else:
-                region = geojson.FeatureCollection(
-                    [create_region_header(region_id, site_summaries)])
+                new_region = new_summaries
                 if verbose:
                     print(f'writing to new region {region_fpath}')
-            for site_summary in site_summaries:
-                assert site_summary['properties']['type'] == 'site_summary'
-                region['features'].append(site_summary)
 
             site_summary_fpaths.append(os.fspath(region_fpath))
             with safer.open(region_fpath, 'w', temp_file=not ub.WIN32) as f:
-                geojson.dump(region, f, indent=2)
+                geojson.dump(new_region, f, indent=2)
 
     if args.out_site_summaries_fpath is not None:
         site_summary_tracking_output = tracking_output.copy()
@@ -1406,6 +1386,7 @@ def main(argv=None, **kwargs):
 
 
 def coco_video_gdf(coco_dset):
+    # TODO: rectify with covered_video_geo_regions
     import pandas as pd
     from watch.utils import util_gis
     from watch.geoannots.geococo_objects import CocoGeoVideo
@@ -1421,6 +1402,9 @@ def coco_video_gdf(coco_dset):
 
 
 def assign_videos_to_regions(video_gdf, boundary_regions_gdf):
+    """
+    Assign each video to a region (usually for BAS)
+    """
     from watch.utils import util_gis
     idx1_to_idxs2 = util_gis.geopandas_pairwise_overlaps(video_gdf, boundary_regions_gdf)
     video_region_assignments = []

@@ -70,7 +70,7 @@ class Pipeline:
         >>> node_A1.inputs['src'].connect(node_C1.inputs['src1'])
         >>> # The pipeline is just a container for the nodes
         >>> nodes = [node_A1, node_A2, node_A3, node_B1, node_B2, node_B3, node_C1, node_C2]
-        >>> self = PipelineDAG(nodes=nodes)
+        >>> self = Pipeline(nodes=nodes)
         >>> self.print_graphs()
     """
 
@@ -87,6 +87,10 @@ class Pipeline:
 
         if config:
             self.configure(config, root_dpath=root_dpath)
+
+    @classmethod
+    def demo(cls):
+        return demodata_pipeline()
 
     def _ensure_clean(self):
         if self._dirty:
@@ -169,9 +173,12 @@ class Pipeline:
 
         Example:
             >>> from watch.mlops.pipeline_nodes import *  # NOQA
-            >>> self: Pipeline = demodata_pipeline()
+            >>> self = Pipeline.demo()
             >>> self.inspect_configurables()
         """
+        import pandas as pd
+        import rich
+        from kwutil import util_yaml
         # Nodes don't always have full knowledge of their entire parameter
         # space, but they should at least have some knowledge of it.
         # Find required inputs
@@ -223,8 +230,6 @@ class Pipeline:
                     'maybe_required': True,
                 })
 
-        import pandas as pd
-        import rich
         df = pd.DataFrame(rows)
         df = df.sort_values(['maybe_required', 'type', 'node', 'key'], ascending=[False, True, True, True])
         rich.print(df.to_string())
@@ -232,7 +237,6 @@ class Pipeline:
         default = {}
         for _, row in df[df['maybe_required']].iterrows():
             default[row['node'] + '.' + row['key']] = None
-        from kwutil import util_yaml
         rich.print(util_yaml.Yaml.dumps(default))
 
     @profile
@@ -242,7 +246,7 @@ class Pipeline:
 
         Example:
             >>> from watch.mlops.pipeline_nodes import *  # NOQA
-            >>> self: Pipeline = demodata_pipeline()
+            >>> self = Pipeline.demo()
             >>> self.configure()
         """
         self._ensure_clean()
@@ -469,9 +473,12 @@ class Pipeline:
                 if write_invocations:
                     # Add a job that writes a file with the command used to
                     # execute this node.
+                    # FIXME: this writes the file with a weird indentation.
+                    # The effect is cosmetic, but not sure why its doing that.
                     invoke_fpath = node.final_node_dpath / 'invoke.sh'
 
                     invoke_lines = ['#!/bin/bash']
+                    # TODO: can we topologically sort this?
                     depend_nodes = list(node.ancestor_process_nodes())
                     if depend_nodes:
                         invoke_lines.append('# See Also: ')
@@ -527,9 +534,6 @@ class Pipeline:
         return summary
 
     make_queue = submit_jobs
-
-
-PipelineDAG = Pipeline
 
 
 def glob_templated_path(template):
@@ -1259,6 +1263,14 @@ class ProcessNode(Node):
     @memoize_configured_method
     @profile
     def ancestor_process_nodes(self):
+        """
+        Example:
+            >>> from watch.mlops.pipeline_nodes import *  # NOQA
+            >>> pipe = Pipeline.demo()
+            >>> self = pipe.node_dict['node_C1']
+            >>> ancestors = self.ancestor_process_nodes()
+            >>> print('ancestors = {}'.format(ub.urepr(ancestors, nl=1)))
+        """
         # TODO: we need to ensure that this returns a consistent order
         seen = {}
         stack = [self]
@@ -1727,7 +1739,7 @@ def demodata_pipeline():
 
     # The pipeline is just a container for the nodes
     nodes = [node_A1, node_A2, node_B1, node_C1]
-    dag = PipelineDAG(nodes=nodes)
+    dag = Pipeline(nodes=nodes)
 
     # Given a dag, there will often be top level input parameters that must be
     # configured along with any other algorithm or performance parameters
@@ -1748,16 +1760,16 @@ def demodata_pipeline():
     return dag
 
 
-def demo_pipeline():
+def demo_pipeline_run():
     """
     A simple test pipeline.
 
     Example:
         >>> # Self test
         >>> from watch.mlops.pipeline_nodes import *  # NOQA
-        >>> demo_pipeline()
+        >>> demo_pipeline_run()
     """
-    dag = demodata_pipeline()
+    dag = Pipeline.demo()
 
     dag.print_graphs()
     dag.inspect_configurables()
@@ -1770,3 +1782,7 @@ def demo_pipeline():
     queue = status['queue']
     queue.print_commands(exclude_tags='boilerplate', with_locks=False)
     queue.run()
+
+
+# Backwards compat
+PipelineDAG = Pipeline

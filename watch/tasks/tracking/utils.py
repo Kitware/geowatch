@@ -264,14 +264,14 @@ class NewTrackFunction(TrackFunction):
     """
 
     def __call__(self, sub_dset):
-        print(f'Enter {self.__class__} __call__ function')
-        print('Create tracks')
+        # print(f'Enter {self.__class__} __call__ function')
+        # print('Create tracks')
         tracks = self.create_tracks(sub_dset)
-        print('Add tracks to dset')
+        # print('Add tracks to dset')
         sub_dset = self.add_tracks_to_dset(sub_dset, tracks)
-        print('After tracking sub_dset.stats(): ' +
-              ub.urepr(sub_dset.basic_stats()))
-        print(f'Exit {self.__class__} __call__ function')
+        # print('After tracking sub_dset.stats(): ' +
+        #       ub.urepr(sub_dset.basic_stats()))
+        # print(f'Exit {self.__class__} __call__ function')
         return sub_dset
 
     def create_tracks(self, sub_dset):
@@ -336,6 +336,10 @@ def gpd_compute_scores(
         resolution=None):
     """
     TODO: This needs docs and examples for the BAS and SC/AC cases.
+
+    Calls :func:`_compute_group_scores` on each dataframe row, which will
+    execute the read for the image prediction scores for polygons with
+    :func:`score_poly`.
     """
     import pandas as pd
 

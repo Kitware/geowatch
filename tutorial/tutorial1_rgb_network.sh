@@ -1,5 +1,5 @@
 #!/bin/bash
-__doc__="""
+__doc__="
 
 Basic ToyData Pipeline Tutorial
 ===============================
@@ -15,7 +15,7 @@ train a fusion model on RGB data.
 RunMe:
     export ACCELERATOR=gpu
     source ~/code/watch/tutorial/tutorial1_rgb_network.sh
-"""
+"
 export ACCELERATOR="${ACCELERATOR:-cpu}"
 
 

@@ -31,6 +31,24 @@ Be sure you have
 * `Setup smartflow <getting_started_smartflow.rst>`_
 
 
+Section 0: NOTICE OF AUTOMATION
+===============================
+
+This entire process has been scripted and lives in the `watch-smartflow-dags repo <https://gitlab.kitware.com/smart/watch-smartflow-dags>`_ repo.
+
+The
+`prepare_system.sh <https://gitlab.kitware.com/smart/watch-smartflow-dags/-/blob/main/prepare_system.sh>`_
+script is the main driver. TODO: We should document how to use that script here
+instead of these manual instructions.
+
+
+Other script of interest are:
+
+* `run_smartflow_dags.py <https://gitlab.kitware.com/smart/watch-smartflow-dags/-/blob/main/run_smartflow_dags.py>`_ - This is used by prepare_system to trigger dags and can be used as a standalone script to trigger dags that have already been uploaded.
+
+* `pull_results.py <https://gitlab.kitware.com/smart/watch-smartflow-dags/-/blob/main/pull_results.py>`_ - This pulls results down from smartflow DAG runs and can optionally sumarize metrics.
+
+
 .. _SectionBuildDocker:
 
 Section 1: The GEOWATCH Docker Image

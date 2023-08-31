@@ -1039,7 +1039,7 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
             # Project the valid region onto video space
             valid_region_crs84 = kwimage.MultiPolygon.coerce(video['valid_region_geos'])
             wld_crs = base_wld_crs_info['auth']
-            crs84 = util_gis._get_crs84()
+            crs84 = util_gis.get_crs84()
             crs84_region_gdf = gpd.GeoDataFrame({'geometry': [valid_region_crs84.to_shapely()]}, crs=crs84)
             wld_region_gdf = crs84_region_gdf.to_crs(wld_crs)
             wld_region_poly = wld_region_gdf['geometry'].iloc[0]
@@ -2286,7 +2286,7 @@ def warp_annot_segmentations_from_geos(coco_dset):
     import geopandas as gpd
     from watch.utils import util_gis
     from shapely.geometry import shape
-    crs84 = util_gis._get_crs84()
+    crs84 = util_gis.get_crs84()
 
     gdfs = []
     for gid in coco_dset.images().gids:
@@ -2371,7 +2371,7 @@ def warp_annot_segmentations_to_geos(coco_dset):
     import geopandas as gpd
     from watch.utils import util_gis
 
-    crs84 = util_gis._get_crs84()
+    crs84 = util_gis.get_crs84()
     gdfs = []
     for gid in coco_dset.images().gids:
         aids = []
@@ -2569,7 +2569,7 @@ def covered_image_geo_regions(coco_dset, merge=False):
         })
 
     from watch.utils import util_gis
-    cov_poly_crs = util_gis._get_crs84()
+    cov_poly_crs = util_gis.get_crs84()
     if merge:
         # df_input = [
         #     {'gid': gid, 'bounds': poly, 'name': coco_dset.index.imgs[gid].get('name', None),
@@ -2613,6 +2613,7 @@ def covered_video_geo_regions(coco_dset):
         >>> # video_gdf = covered_video_geo_regions(coco_dset)
     """
     import geopandas as gpd
+    from watch.utils import util_gis
 
     # TODO: build this more efficiently if possible.
 
@@ -2620,14 +2621,25 @@ def covered_video_geo_regions(coco_dset):
     # import watch
     rows = []
     for vidid, video in coco_dset.index.videos.items():
-        vidspace_poly = kwimage.Boxes(
-            [[0, 0, video['width'], video['height']]], 'xywh').to_polygons()[0]
-        if 'warp_wld_to_vid' in video:
-            vid_from_wld = kwimage.Affine.coerce(video['warp_wld_to_vid'])
-            wld_form_vid = vid_from_wld.inv()
-            crs84_poly = vidspace_poly.warp(wld_form_vid)
+        if 'valid_region_geos' in video:
+            crs84_poly = kwimage.MultiPolygon.coerce(video['valid_region_geos']).to_shapely()
         else:
-            raise NotImplementedError('We dont have a way to get the geo bounds for a video')
+            vidspace_poly = kwimage.Boxes(
+                [[0, 0, video['width'], video['height']]], 'xywh').to_polygons()[0]
+            if 'warp_wld_to_vid' in video:
+                auth = video['wld_crs_info']['auth']
+                vid_from_wld = kwimage.Affine.coerce(video['warp_wld_to_vid'])
+                wld_form_vid = vid_from_wld.inv()
+                wld_poly = vidspace_poly.warp(wld_form_vid)
+                import pyproj
+                from shapely.ops import transform
+                crs = pyproj.CRS(':'.join(auth))
+                crs84 = util_gis.get_crs84()
+                project = pyproj.Transformer.from_crs(crs, crs84, always_xy=True).transform
+                wld_poly_ = wld_poly.to_shapely()
+                crs84_poly = transform(project, wld_poly_)
+            else:
+                raise NotImplementedError('We dont have a way to get the geo bounds for a video')
         gids = coco_dset.index.vidid_to_gids[vidid]
         if gids:
             start_gid = gids[0]
@@ -2642,14 +2654,13 @@ def covered_video_geo_regions(coco_dset):
         row = {
             'video_name': video['name'],
             'video_id': video['id'],
-            'geometry': crs84_poly.to_shapely(),
+            'geometry': crs84_poly,
             'start_date': start_date,
             'end_date': end_date,
         }
         rows.append(row)
 
-    from watch.utils import util_gis
-    crs84 = util_gis._get_crs84()
+    crs84 = util_gis.get_crs84()
     video_gdf = gpd.GeoDataFrame(rows, geometry='geometry', crs=crs84)
     return video_gdf
 
@@ -2671,7 +2682,7 @@ def covered_annot_geo_regions(coco_dset, merge=False):
 
     # annot_crs = 'epsg:4326'
     from watch.utils import util_gis
-    annot_crs = util_gis._get_crs84()
+    annot_crs = util_gis.get_crs84()
     # annot_crs = 'crs84'
     if merge:
         gid_to_rois = {}

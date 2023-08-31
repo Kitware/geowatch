@@ -389,11 +389,14 @@ def load_result_resolved(node_dpath):
         flat_resolved = _generalized_process_flat_resolved(fpath, node_process_name, node_type)
 
     elif node_type in {'sc_crop'}:
-
         # TODO: parse resolved params
         node_process_name = 'coco_align'
         fpath = node_dpath / 'sitecrop.kwcoco.zip'
         flat_resolved = _generalized_process_flat_resolved(fpath, node_process_name, node_type)
+
+    elif node_type in {'cluster_sites'}:
+        # TODO: write out resolved params in cluster sites
+        flat_resolved = {}
 
     elif node_type in {'sv_dino_boxes'}:
         node_process_name = 'box.predict'

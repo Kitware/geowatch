@@ -223,7 +223,8 @@ class FSPath(str):
         return self.split(self.fs.sep)
 
     def copy(self, dst, recursive='auto', maxdepth=None, on_error=None,
-             callback=None, verbose=1, idempotent=True, **kwargs):
+             callback=None, verbose=1, idempotent=True, overwrite=False,
+             **kwargs):
         """
         Copies this file or directory to dst
 
@@ -256,6 +257,10 @@ class FSPath(str):
                 if False, use standard fsspec behavior, otherwise attempt to
                 be idempotent.
 
+            overwrite (bool):
+                if True, overwrite existing data instead of erroring. Defaults
+                to False.
+
         Note:
             There are different functions depending on if we are going from
             remote->remote (copy), local->remote (put), or remote->local (get)
@@ -275,6 +280,9 @@ class FSPath(str):
             **kwargs,
         }
 
+        if overwrite:
+            raise NotImplementedError
+
         if verbose:
             print(f'Copy {self} -> {dst}')
 
@@ -284,8 +292,16 @@ class FSPath(str):
                 dst = dst.parent + '/'
 
         if isinstance(self, LocalPath):
+            if not self.exists():
+                raise IOError(f'{self} does not exist')
             if isinstance(dst, RemotePath):
-                return dst.fs.put(self, dst, **commonkw, callback=callback)
+                # TODO: test if we are an empty directory and fail because
+                # generally we cant copy an empty directory to a remote.
+                try:
+                    return dst.fs.put(self, dst, **commonkw, callback=callback)
+                except FileExistsError:
+                    # TODO: overwrite
+                    raise
             elif isinstance(dst, LocalPath):
                 return self.fs.copy(self, dst, **commonkw, callback=callback)
             else:
@@ -548,6 +564,9 @@ class S3Path(RemotePath):
         self.ls()
 
     To work with different S3 filesystems,
+
+    Requirements:
+        s3fs>=2023.6.0
 
     References:
         .. [S3FS_Docs] https://s3fs.readthedocs.io/en/latest/?badge=latest

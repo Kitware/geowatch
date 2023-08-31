@@ -9,6 +9,7 @@ jsonschema >= 3.2.0
 # Commented out because it breaks production, but it is required for training, 
 # so we need to fix that. 
 # tensorboard >= 2.9.1
+tensorboard >= 2.14.0
 
 performer_pytorch >= 1.0.11
 reformer_pytorch >= 1.4.3

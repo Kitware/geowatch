@@ -159,9 +159,11 @@ class AssetExtractConfig(scfg.DataConfig):
             '''))
 
     def __post_init__(config):
-        if isinstance(config['force_min_gsd'], str):
-            if config['force_min_gsd'].lower().endswith('gsd'):
-                config['force_min_gsd'] = float(config['force_min_gsd'][:-3].strip())
+        from watch.utils.util_resolution import ResolvedUnit
+        if config['force_min_gsd'] is not None:
+            resolution = ResolvedUnit.coerce(config['force_min_gsd'], default_unit='GSD')
+            assert resolution.unit == 'GSD'
+            config['force_min_gsd'] = resolution.mag
 
 
 class ImageExtractConfig(AssetExtractConfig):
@@ -226,7 +228,7 @@ class ExtractConfig(ImageExtractConfig):
 
     target_gsd = scfg.Value(10, help=ub.paragraph(
             '''
-            initial **virtual** gsd to use for the output video files
+            The **virtual** GSD to use as the "video-space" for output files.
             '''))
 
     debug_valid_regions = scfg.Value(False, isflag=1, help=ub.paragraph(
@@ -249,9 +251,10 @@ class ExtractConfig(ImageExtractConfig):
 
     def __post_init__(config):
         super().__post_init__()
-        if isinstance(config['target_gsd'], str):
-            if config['target_gsd'].lower().endswith('gsd'):
-                config['target_gsd'] = int(config['target_gsd'][:-3].strip())
+        from watch.utils.util_resolution import ResolvedUnit
+        resolution = ResolvedUnit.coerce(config['target_gsd'], default_unit='GSD')
+        assert resolution.unit == 'GSD'
+        config['target_gsd'] = resolution.mag
 
 
 class CocoAlignGeotiffConfig(ExtractConfig):
@@ -280,7 +283,12 @@ class CocoAlignGeotiffConfig(ExtractConfig):
         a strategy for extracting regions, if annots, uses the convex hulls of
         clustered annotations.
         '''), group='inputs')
-    site_summary = scfg.Value(False, help='Crop to site summaries instead')
+
+    site_summary = scfg.Value(False, help=ub.paragraph(
+        '''
+        if False, crop to region geometry.
+        if True, crop to site or site-summary geometry instead.
+        '''))
 
     context_factor = scfg.Value(1.0, help=ub.paragraph(
             '''
@@ -290,7 +298,7 @@ class CocoAlignGeotiffConfig(ExtractConfig):
             '''
             Minimum (bounding-box) size of each ROI. Must be specified
             as ``<w> x <h> @ <magnitude> <resolution>``. E.g.
-            ``128x128@10GSD`` eill ensure a region polygon is at least
+            ``128x128@10GSD`` will ensure a region polygon that is at least
             1280 meters tall and wide.
             '''))
     convexify_regions = scfg.Value(False, help=ub.paragraph(

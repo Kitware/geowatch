@@ -241,7 +241,6 @@ def main(cmdline=False, **kwargs):
         >>> main(cmdline=cmdline, **kwargs)
     """
     config = ReprojectAnnotationsConfig.cli(data=kwargs, cmdline=cmdline)
-    import geopandas as gpd  # NOQA
     from watch.utils import util_gis
     from watch.utils import util_parallel
     from kwutil.util_yaml import Yaml
@@ -337,12 +336,14 @@ def main(cmdline=False, **kwargs):
     viz_dpath = config['viz_dpath']
     want_viz = bool(viz_dpath)
 
-    propogated_annotations, all_drawable_infos = assign_sites_to_images(coco_dset,
-                                                                        region_id_to_sites,
-                                                                        propogate_strategy,
-                                                                        geospace_lookup=geospace_lookup,
-                                                                        want_viz=want_viz,
-                                                                        status_to_catname=status_to_catname)
+    propogated_annotations, all_drawable_infos = assign_sites_to_images(
+        coco_dset,
+        region_id_to_sites,
+        propogate_strategy,
+        geospace_lookup=geospace_lookup,
+        want_viz=want_viz,
+        status_to_catname=status_to_catname,
+        ignore_system_rejected=config.ignore_system_rejected)
 
     if config['role'] is not None:
         _role = config['role']
@@ -937,7 +938,8 @@ def assign_sites_to_images(coco_dset,
                            propogate_strategy,
                            geospace_lookup='auto',
                            want_viz=1,
-                           status_to_catname=None):
+                           status_to_catname=None,
+                           ignore_system_rejected=True):
     """
     Given a coco dataset (with geo information) and a list of geojson sites,
     determines which images each site-annotations should go on.
@@ -954,14 +956,14 @@ def assign_sites_to_images(coco_dset,
         Tuple[List[Dict[str, Any]], Dict[str, Any]]:
             A tuple: propogated_annotations, all_drawable_infos
     """
-    from shapely.ops import unary_union
-    import pandas as pd
-    from watch.utils import util_gis
-    from watch.utils import kwcoco_extensions
     import kwimage
-    import dateutil
     import numpy as np
+    import pandas as pd
+    from shapely.ops import unary_union
     from watch import heuristics
+    from watch.utils import kwcoco_extensions
+    from watch.utils import util_gis
+    from kwutil import util_time
     # Create a geopandas data frame that contains the CRS84 extent of all images
     img_gdf = kwcoco_extensions.covered_image_geo_regions(coco_dset)
 
@@ -1024,8 +1026,8 @@ def assign_sites_to_images(coco_dset,
                     # assert site_gdf.iloc[0].region_id == region_id, 'sanity check'
                     video_ids.extend(videos_gdf.iloc[overlapping_video_indexes]['video_id'].tolist())
             video_ids = sorted(set(video_ids))
-            if len(video_ids) > 1:
-                warnings.warn('A site exists in more than one video')
+            # if len(video_ids) > 1:
+            #     warnings.warn('A site exists in more than one video')
             # assert ub.allsame(video_ids)
             if len(video_ids) == 0:
                 print('No geo-space match for region_id={}'.format(region_id))
@@ -1062,7 +1064,7 @@ def assign_sites_to_images(coco_dset,
             print(f'{region_ids=} {video_id=} #sites={len(region_sites)}')
         # Grab the images data frame for that video
         subimg_df = vidid_to_imgdf[video_id]
-        region_image_dates = np.array(list(map(dateutil.parser.parse, subimg_df['date_captured'])))
+        region_image_dates = np.array(list(map(util_time.coerce_datetime, subimg_df['date_captured'])))
         region_image_indexes = np.arange(len(region_image_dates))
         region_gids = subimg_df['image_id'].values
 
@@ -1088,16 +1090,18 @@ def assign_sites_to_images(coco_dset,
 
         # For each site in this region
         for site_gdf in region_sites:
-            site_anns, drawable_summary = propogate_site(coco_dset,
-                                                         site_gdf,
-                                                         subimg_df,
-                                                         propogate_strategy,
-                                                         region_image_dates,
-                                                         region_image_indexes,
-                                                         region_gids,
-                                                         status_to_color,
-                                                         want_viz,
-                                                         status_to_catname=status_to_catname)
+            site_anns, drawable_summary = propogate_site(
+                coco_dset,
+                site_gdf,
+                subimg_df,
+                propogate_strategy,
+                region_image_dates,
+                region_image_indexes,
+                region_gids,
+                status_to_color,
+                want_viz,
+                status_to_catname=status_to_catname,
+                ignore_system_rejected=ignore_system_rejected)
             if site_anns is None:
                 continue
             propogated_annotations.extend(site_anns)
@@ -1119,8 +1123,10 @@ def assign_sites_to_images(coco_dset,
     return propogated_annotations, all_drawable_infos
 
 
-def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_image_dates, region_image_indexes,
-                   region_gids, status_to_color, want_viz, status_to_catname):
+def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy,
+                   region_image_dates, region_image_indexes, region_gids,
+                   status_to_color, want_viz, status_to_catname,
+                   ignore_system_rejected):
     """
     Given a set of site observations determines how to propogate them onto
     potential images in the assigned region.
@@ -1173,7 +1179,7 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy, region_im
         # hack for QFabric
         status = 'positive_pending'
 
-    if status == 'system_rejected':
+    if ignore_system_rejected and status == 'system_rejected':
         return None, None
 
     if not np.all(flags):

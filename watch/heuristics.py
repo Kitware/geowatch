@@ -197,6 +197,11 @@ HUERISTIC_STATUS_DATA = [
         'status': 'system_confirmed',
         'color': 'kitware_blue'
     },
+
+    {
+        'status': 'system_rejected',
+        'color': 'kitware_yellow'
+    },
 ]
 
 # Backwards compat
@@ -973,3 +978,17 @@ def normalize_sensors(coco_dset, sensor_warnings=True, format='te'):
                     f'image has unknown sensor {sensor} in tag={coco_dset.tag}')
 
     return coco_dset
+
+
+def extract_region_id(fname):
+    """
+    Example:
+        >>> fname = 'foobar_KR_R001_otherstuff'
+        >>> extract_region_id(fname)
+    """
+    import watch
+    # Find a region pattern
+    pat = watch.utils.util_pattern.Pattern.coerce(r'([A-Z]+_[A-Z]\d+)', 'regex')
+    found = pat.search(fname)
+    name = found.groups()[0]
+    return name

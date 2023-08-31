@@ -416,17 +416,36 @@ def main(cmdline=True, **kwargs):
 
         ensure_thumbnails(image_dpath, region_id, region_sites)
 
-        if args.enable_viz:
-            viz_flags = []
+        key_to_disable_flag = {
+            'region': '--no-viz-region',  # we often want this enabled
+            'slices': '--no-viz-slices',
+            'detection_table': '--no-viz-detection-table',
+            'comparison_table': '--no-viz-comparison-table',
+            'associate_metrics': '--no-viz-associate-metrics',
+            'activity_metrics': '--no-viz-activity-metrics',
+        }
+
+        if isinstance(args.enable_viz, str):
+            # Allow the user to enable specific visualizations
+            chosen = set(args.enable_viz.split(','))
+            to_disable = set(key_to_disable_flag) - chosen
+            to_enable = chosen
+        elif args.enable_viz:
+            # Enable all visualizations (usually a bad idea)
+            warnings.warn(ub.paragraph(
+                '''
+                All IARPA visualizations were enabled.  Try setting
+                --enable_viz=regions to get only the useful visualizations
+                '''))
+            to_enable = set(key_to_disable_flag) & chosen
+            to_disable = set(key_to_disable_flag) & chosen
         else:
-            viz_flags = [
-                '--no-viz-region',  # we often want this enabled
-                '--no-viz-slices',
-                '--no-viz-detection-table',
-                '--no-viz-comparison-table',
-                '--no-viz-associate-metrics',
-                '--no-viz-activity-metrics',
-            ]
+            to_disable = list(key_to_disable_flag.keys())
+            to_enable = []
+
+        viz_flags = [key_to_disable_flag[k] for k in sorted(to_disable)]
+        viz_flags += [key_to_disable_flag[k].replace('--no-', '--')
+                      for k in sorted(to_enable)]
 
         run_eval_command = [
             'python',
@@ -515,7 +534,7 @@ def main(cmdline=True, **kwargs):
                 --true_site_dpath={true_site_dpath} \
                 --region_id={region_id} \
                 --viz_sites=True \
-                --reload=0
+                --reload=0 "$@"
             ''')
         cfsn_invoke_fpath = (main_out_dir / 'confusion_analysis.sh')
         cfsn_invoke_fpath.write_text(confusion_analysis_text)
@@ -556,10 +575,11 @@ def main(cmdline=True, **kwargs):
         print('merge_fpath = {!r}'.format(merge_fpath))
 
         # Consolodate visualizations
-        combined_viz_dpath = (merge_dpath / 'region_viz_overall').ensuredir()
+        combined_viz_dpath = (merge_dpath / 'region_viz_overall')
 
         # Write a legend to go with the BAS viz
         if config.enable_viz:
+            combined_viz_dpath.ensuredir()
             legend_img = iarpa_bas_color_legend()
             legend_fpath = (combined_viz_dpath / 'bas_legend.png')
             kwimage.imwrite(legend_fpath, legend_img)
@@ -573,11 +593,13 @@ def main(cmdline=True, **kwargs):
             viz_dpath = (overall_dpath / 'bas' / 'region').ensuredir()
 
         for viz_fpath in viz_dpath.iterdir():
+            combined_viz_dpath.ensuredir()
             viz_link = viz_fpath.augment(dpath=combined_viz_dpath)
             ub.symlink(viz_fpath, viz_link, verbose=1)
 
         # viz SC
         if config.enable_sc_viz:
+            combined_viz_dpath.ensuredir()
             from watch.tasks.metrics.viz_sc_results import viz_sc
             viz_sc(region_dpaths, true_site_dpath, true_region_dpath, combined_viz_dpath)
 

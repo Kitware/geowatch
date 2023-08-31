@@ -17,9 +17,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Upgrade to utilize 2.6.0 metrics
 * Training channelwise model now records all loss components separately
 * Generalized `cold.transfer_features` script to help project BAS predictions on high res kwcoco files.
+* The tracker now uses AC labels to set start / end dates.
+* Change the name of `dag_cli` to `smartflow`
 
 ### Added
 * Confusion analysis script is given new functionality to visualize and categorize cases on a per-site basis.
+* Add `DDP_WORKAROUND` environ flag to disable batch plotting / work around issues with distributed training.
+* Added site clustering to smartflow
 
 ### Removed:
 * Removed `separate_region_queues` `separate_align_jobs` options from `prepare-ta2-dataset`, they are now always True.

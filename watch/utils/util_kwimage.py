@@ -1208,7 +1208,8 @@ def devcheck_frame_poly_weights(poly, shape, dtype=np.uint8):
     kwplot.imshow(np.maximum(frame_poly_weights, space_weights), pnum=(1, 3, 3))
 
 
-def find_low_overlap_covering_boxes(polygons, scale, min_box_dim, max_box_dim, merge_thresh=0.001, max_iters=100):
+def find_low_overlap_covering_boxes(polygons, scale, min_box_dim, max_box_dim,
+                                    merge_thresh=0.001, max_iters=100):
     """
     Given a set of polygons we want to find a small set of boxes that
     completely cover all of those polygons.
@@ -1231,8 +1232,9 @@ def find_low_overlap_covering_boxes(polygons, scale, min_box_dim, max_box_dim, m
         https://mercantile.readthedocs.io/en/stable/api/mercantile.html#mercantile.bounding_tile
         https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.713.6709&rep=rep1&type=pdf
 
-    Ignore:
+    Example:
         >>> # Create random polygons as test data
+        >>> from watch.utils.util_kwimage import *  # NOQA
         >>> import kwimage
         >>> import kwarray
         >>> from kwarray import distributions
@@ -1251,25 +1253,16 @@ def find_low_overlap_covering_boxes(polygons, scale, min_box_dim, max_box_dim, m
         >>>     polygons.append(poly)
         >>> polygons = kwimage.PolygonList(polygons)
         >>> #
-        >>> import kwplot
-        >>> plt = kwplot.autoplt()
-        >>> kwplot.figure(doclf=1)
-        >>> plt.gca().set_xlim(0, canvas_width)
-        >>> plt.gca().set_ylim(0, canvas_width)
-        >>> _ = polygons.draw(fill=0, border=1, color='pink')
-        >>> #
         >>> scale = 1.0
         >>> min_box_dim = 240
         >>> max_box_dim = 500
         >>> #
         >>> keep_bbs, overlap_idxs = find_low_overlap_covering_boxes(polygons, scale, min_box_dim, max_box_dim)
         >>> # xdoctest: +REQUIRES(--show)
-        >>> #
         >>> import kwplot
         >>> plt = kwplot.autoplt()
         >>> kwplot.figure(fnum=1, doclf=1)
         >>> polygons.draw(color='pink')
-        >>> # candidate_bbs.draw(color='blue', setlim=1)
         >>> keep_bbs.draw(color='orange', setlim=1)
         >>> plt.gca().set_title('find_low_overlap_covering_boxes')
     """
