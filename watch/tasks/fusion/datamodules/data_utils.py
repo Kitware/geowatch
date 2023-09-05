@@ -386,8 +386,7 @@ def samecolor_nodata_mask(stream, hwc, relevant_bands, use_regions=0,
     """
     from watch.utils import util_kwimage
     stream_oset = ub.oset(stream)
-    # Only perform this test on the first relevant band
-    relevant_band_idxs = [stream_oset.index(b) for b in relevant_bands[0:1]]
+    relevant_band_idxs = [stream_oset.index(b) for b in relevant_bands]
     relevant_masks = []
     for b_sl in relevant_band_idxs:
         bands = hwc[:, :, b_sl]

@@ -2649,7 +2649,8 @@ def covered_video_geo_regions(coco_dset):
             start_date = start_img.img['date_captured']
             end_date = stop_img.img['date_captured']
         else:
-            raise Exception('video does not have any images')
+            warnings.warn('video does not have any images')
+            continue
 
         row = {
             'video_name': video['name'],
