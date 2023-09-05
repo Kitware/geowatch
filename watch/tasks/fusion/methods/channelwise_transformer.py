@@ -714,6 +714,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
         Note:
             Is this even called when using LightningCLI?
+            Nope, the LightningCLI overwrites it.
 
         References:
             https://pytorch-optimizer.readthedocs.io/en/latest/index.html
