@@ -343,12 +343,12 @@ python -m watch.mlops.confusor_analysis \
 
 
 # Compute all feature except COLD
-export CUDA_VISIBLE_DEVICES="1"
+export CUDA_VISIBLE_DEVICES="0"
 DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="ssd")
 DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
 BUNDLE_DPATH=$DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-iMERIT
 python -m watch.cli.prepare_teamfeats \
-    --inputs "$BUNDLE_DPATH"/*/imganns-*[0-9].kwcoco.zip \
+    --src_kwcocos "$BUNDLE_DPATH"/*/imganns-*[0-9].kwcoco.zip \
     --expt_dvc_dpath="$DVC_EXPT_DPATH" \
     --with_landcover=0 \
     --with_invariants2=1 \

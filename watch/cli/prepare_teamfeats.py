@@ -558,7 +558,7 @@ def _make_teamfeat_nodes(base_fpath, expt_dvc_dpath, aligned_bundle_dpath, confi
                 'patch_size': 256,
                 'patch_overlap': 0.3,
                 'do_pca': config['invariant_pca'],
-                'tasks': 'before_after pretext',
+                'tasks': ['before_after', 'pretext'],
             },
             perf_params={
                 'workers': data_workers,

@@ -448,6 +448,8 @@ class Predictor(object):
 
 def main():
     args = InvariantPredictConfig.cli()
+    import rich
+    rich.print('config = {}'.format(ub.urepr(args, nl=1)))
     Predictor(args).forward()
 
 
