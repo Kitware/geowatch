@@ -360,3 +360,5 @@ python -m watch.cli.prepare_teamfeats \
     --skip_existing=1 \
     --assets_dname=teamfeats \
     --gres=0, --tmux_workers=8 --backend=tmux --run=1
+
+dvc add -- */teamfeats

@@ -6,6 +6,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Version 0.10.0 - Released 2023-09-xx
 
+### Added 
+
+* Added a fork of torchview and loss-of-plasticity to geowatch-tpl
+
 
 ## Version 0.9.0 - Released 2023-08-31
 
