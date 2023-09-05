@@ -148,7 +148,7 @@ DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 MAX_STEPS=10000
 TARGET_LR=3e-4
 CHANNELS="(*):(disparity|gauss,X.2|Y:2:6,B1|B8a,flowx|flowy|distri)"
-python -m watch.tasks.fusion fit --config "
+DDP_WORKAROUND=1 python -m watch.tasks.fusion fit --config "
     seed_everything: 8675309
     data:
         num_workers          : 2

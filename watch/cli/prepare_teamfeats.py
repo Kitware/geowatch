@@ -138,7 +138,7 @@ class TeamFeaturePipelineConfig(CMDQueueConfig):
     base_fpath = scfg.Value(None, help=ub.paragraph(
             '''
             One or more base coco files to compute team-features on.
-            '''), nargs='+', group='inputs')
+            '''), nargs='+', alias=['src_kwcocos'], group='inputs')
     expt_dvc_dpath = scfg.Value('auto', help=ub.paragraph(
             '''
             The DVC directory where team feature model weights can be

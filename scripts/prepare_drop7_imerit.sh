@@ -339,3 +339,24 @@ python -m watch.mlops.confusor_analysis \
     --true_region_dpath="$DVC_DATA_DPATH"/annotations/drop7/region_models \
     --true_site_dpath="$DVC_DATA_DPATH"/annotations/drop7/site_models \
     --viz_site_case=True
+
+
+
+# Compute all feature except COLD
+export CUDA_VISIBLE_DEVICES="1"
+DVC_DATA_DPATH=$(geowatch_dvc --tags=phase2_data --hardware="ssd")
+DVC_EXPT_DPATH=$(geowatch_dvc --tags='phase2_expt' --hardware='auto')
+BUNDLE_DPATH=$DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-iMERIT
+python -m watch.cli.prepare_teamfeats \
+    --inputs "$BUNDLE_DPATH"/*/imganns-*[0-9].kwcoco.zip \
+    --expt_dvc_dpath="$DVC_EXPT_DPATH" \
+    --with_landcover=0 \
+    --with_invariants2=1 \
+    --with_sam=0 \
+    --with_materials=0 \
+    --with_mae=1 \
+    --with_depth=0 \
+    --with_cold=0 \
+    --skip_existing=1 \
+    --assets_dname=teamfeats \
+    --gres=0, --tmux_workers=8 --backend=tmux --run=1
