@@ -4,3 +4,6 @@
 [submodule "geowatch_tpl/submodules/loss-of-plasticity"]
 	path = geowatch_tpl/submodules/loss-of-plasticity
 	url = git@github.com:Erotemic/loss-of-plasticity.git
+[submodule "geowatch_tpl/submodules/segment-anything"]
+	path = geowatch_tpl/submodules/segment-anything
+	url = git@github.com:Erotemic/segment-anything.git

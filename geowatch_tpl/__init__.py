@@ -6,7 +6,7 @@ To regenerate static submodule:
     # Checkout submodules
 
     # Run script:
-    python ~/code/watch/geowatch_tpl/submodules/snapshot_submodules.py
+    python ~/code/watch/geowatch_tpl/snapshot_submodules.py
 """
 
 import os
@@ -23,7 +23,7 @@ MODULE_DPATH = os.path.join(os.path.dirname(__file__), 'modules')
 sys.path.append(MODULE_DPATH)
 
 
-FORCE_STATIC = 0
+FORCE_STATIC = int(os.environ.get('GEOWATCH_STATIC_TPL', '0'))
 
 
 STATIC_SUBMODULES = {
@@ -36,6 +36,13 @@ STATIC_SUBMODULES = {
         'parts': [
             'loss-of-plasticity/lop/__init__.py',
             'loss-of-plasticity/lop/algos',
+        ]
+    },
+    'segment_anything': {
+        'rel_dpath': 'segment-anything/segment_anything',
+        'parts': [
+            'segment-anything/segment_anything',
+            'segment-anything/LICENSE',
         ]
     },
 }
@@ -53,15 +60,15 @@ def import_submodule(submod_name):
         ModuleType
 
     CommandLine:
-        xdoctest -m geowatch_tpl import_submodule
+        FORCE_STATIC=1 xdoctest -m geowatch_tpl import_submodule
+        FORCE_STATIC=0 xdoctest -m geowatch_tpl import_submodule
 
     Example:
         >>> import geowatch_tpl
         >>> import ubelt as ub
-        >>> lop = geowatch_tpl.import_submodule('lop')
-        >>> print('lop = {}'.format(ub.urepr(lop, nl=1)))
-        >>> torchview = geowatch_tpl.import_submodule('torchview')
-        >>> print('torchview = {}'.format(ub.urepr(torchview, nl=1)))
+        >>> for key in geowatch_tpl.STATIC_SUBMODULES:
+        >>>     module = geowatch_tpl.import_submodule(key)
+        >>>     print('{} module = {}'.format(key, ub.urepr(module, nl=1)))
     """
     import ubelt as ub
     if submod_name in sys.modules:
