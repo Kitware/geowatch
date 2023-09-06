@@ -73,7 +73,11 @@ apt_ensure(){
     done
 
     if [ "${#MISS_PKGS}" -gt 0 ]; then
-        sudo apt install -y "${MISS_PKGS[@]}"
+        if type sudo ; then
+            sudo apt install -y "${MISS_PKGS[@]}"
+        else
+            apt install -y "${MISS_PKGS[@]}"
+        fi
     else
         echo "No missing packages"
     fi

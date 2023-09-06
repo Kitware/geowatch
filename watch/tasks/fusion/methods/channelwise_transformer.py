@@ -1820,16 +1820,10 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         # raise NotImplementedError('see forward_step instad')
 
     # function hook in LightningModule
-    def optimizer_step(
-        self,
-        epoch,
-        batch_idx,
-        optimizer,
-        optimizer_idx,
-        optimizer_closure,
-        **kwargs,
-    ):
-        ret = super().optimizer_step(epoch, batch_idx, optimizer, optimizer_idx, optimizer_closure, **kwargs)
+    def optimizer_step(self, *args, **kwargs):
+        ret = super().optimizer_step(*args, **kwargs)
+
+        optimizer = kwargs.get('optimizer')
 
         if self.hparams.continual_learning:
             if not hasattr(self.trainer, 'gnt'):
