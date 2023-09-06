@@ -255,10 +255,10 @@ fix_opencv_conflicts(){
     up the incorrect libraries and install the desired (headless) ones.
     "
     # Fix opencv issues
-    python -m pip freeze | grep "opencv-python=="
-    HAS_OPENCV_RETCODE="$?"
-    python -m pip freeze | grep "opencv-python-headless=="
-    HAS_OPENCV_HEADLESS_RETCODE="$?"
+    HAS_OPENCV_RETCODE="0"
+    HAS_OPENCV_HEADLESS_RETCODE="0"
+    python -m pip freeze | grep "opencv-python==" || HAS_OPENCV_RETCODE="$?"
+    python -m pip freeze | grep "opencv-python-headless==" || HAS_OPENCV_HEADLESS_RETCODE="$?"
 
     # VAR == 0 means we have it
     if [[ "$HAS_OPENCV_HEADLESS_RETCODE" == "0" ]]; then
