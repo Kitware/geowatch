@@ -49,24 +49,33 @@ def replace_watch_with_geowatch_in_module_and_docs_v2():
 
     module_dpath = ub.Path('/home/joncrall/temp/port/watch/geowatch')
     repo_dpath = module_dpath.parent
-    repo_dpath / 'docs'
 
-    (module_dpath / 'geowatch').delete()
+    # Reset to last working state
+    ub.cmd('git reset --hard origin/dev/0.10.0', cwd=repo_dpath, verbose=3)
+
+    # Delete the old geowatch mirror
+    (module_dpath).delete()
+
+    _ = ub.cmd('git commit -am "delete old geowatch mirror"', cwd=repo_dpath, verbose=3)
+
     ub.cmd('git mv watch geowatch', cwd=repo_dpath, verbose=3)
 
-    # Spot check that common patterns dont contain false positives
-    _ = xdev.grep(r'from \bwatch\b', dpath=module_dpath)
-    _ = xdev.grep(r'import \bwatch\b', dpath=module_dpath)
-    _ = xdev.grep(r'-m \bwatch\b', dpath=module_dpath)
-    _ = xdev.grep(r'\bwatch\.find_dvc_dpath', dpath=module_dpath)
-    _ = xdev.grep(r'\bwatch\.', dpath=module_dpath)
-    _ = xdev.grep(r'\'\bwatch\'', dpath=module_dpath)
-    _ = xdev.grep(r'\'\bwatch-msi\'', dpath=module_dpath)
+    _ = ub.cmd('git commit -am "initial move of watch -> geowatch"', cwd=repo_dpath, verbose=3)
 
-    _ = xdev.grep(r'\bwatch/tasks', dpath=module_dpath)
-    _ = xdev.grep(r'\bwatch/gis', dpath=module_dpath)
-    _ = xdev.grep(r'\bwatch/cli', dpath=module_dpath)
-    _ = xdev.grep(r'\bwatch/tests', dpath=module_dpath)
+    # Spot check that common patterns dont contain false positives
+    if 0:
+        _ = xdev.grep(r'from \bwatch\b', dpath=module_dpath)
+        _ = xdev.grep(r'import \bwatch\b', dpath=module_dpath)
+        _ = xdev.grep(r'-m \bwatch\b', dpath=module_dpath)
+        _ = xdev.grep(r'\bwatch\.find_dvc_dpath', dpath=module_dpath)
+        _ = xdev.grep(r'\bwatch\.', dpath=module_dpath)
+        _ = xdev.grep(r'\'\bwatch\'', dpath=module_dpath)
+        _ = xdev.grep(r'\'\bwatch-msi\'', dpath=module_dpath)
+
+        _ = xdev.grep(r'\bwatch/tasks', dpath=module_dpath)
+        _ = xdev.grep(r'\bwatch/gis', dpath=module_dpath)
+        _ = xdev.grep(r'\bwatch/cli', dpath=module_dpath)
+        _ = xdev.grep(r'\bwatch/tests', dpath=module_dpath)
 
     # Execute search / replace
     xdev.sed(r'from \bwatch\b', repl='from geowatch', dpath=module_dpath)
@@ -129,26 +138,27 @@ def replace_watch_with_geowatch_in_module_and_docs_v2():
     xdev.sed(r"non watch dependant", repl=r"non geowatch dependant", dpath=module_dpath, dry=0)
     xdev.sed(r"non watch dependant", repl=r"non geowatch dependant", dpath=module_dpath, dry=0)
 
-    _ = xdev.grep(r'\bwatch\b', dpath=module_dpath)
+    if 0:
+        _ = xdev.grep(r'\bwatch\b', dpath=module_dpath)
 
-    # Ignore a false positive in data paths
-    b = xdev.regex_builder.RegexBuilder.coerce('python')
+        # Ignore a false positive in data paths
+        b = xdev.regex_builder.RegexBuilder.coerce('python')
 
-    special_excludes = (
-        b.lookbehind('/SCRATCH/', positive=False) +
-        b.lookbehind('/code/', positive=False) +
-        b.lookbehind('/data/', positive=False) +
-        b.lookbehind('/projects/', positive=False) +
-        b.lookbehind('smart-', positive=False) +
-        b.lookbehind('envs/', positive=False) +
-        b.lookbehind('lib/', positive=False) +
-        b.lookbehind('smart/', positive=False) +
-        b.lookbehind('youtube.com/', positive=False) +
-        ''
-    )
-    _ = xdev.grep(special_excludes + r'\bwatch\b', dpath=module_dpath)
+        special_excludes = (
+            b.lookbehind('/SCRATCH/', positive=False) +
+            b.lookbehind('/code/', positive=False) +
+            b.lookbehind('/data/', positive=False) +
+            b.lookbehind('/projects/', positive=False) +
+            b.lookbehind('smart-', positive=False) +
+            b.lookbehind('envs/', positive=False) +
+            b.lookbehind('lib/', positive=False) +
+            b.lookbehind('smart/', positive=False) +
+            b.lookbehind('youtube.com/', positive=False) +
+            ''
+        )
+        _ = xdev.grep(special_excludes + r'\bwatch\b', dpath=module_dpath)
 
-    ub.cmd('git commit -am "Moved primary repo to geowatch"', cwd=repo_dpath, verbose=3)
+    ub.cmd('git commit -am "Search replace watch with geowatch in main module"', cwd=repo_dpath, verbose=3)
 
     import sys, ubelt  # NOQA
     sys.path.append(ubelt.expandpath('~/code/watch/dev/maintain'))

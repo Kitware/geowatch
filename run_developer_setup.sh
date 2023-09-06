@@ -31,6 +31,10 @@ if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
 	set -eo pipefail
 fi
 
+if [[ "${DEV_TRACE+x}" != "" ]]; then
+	set -x
+fi
+
 
 if [[ "$VIRTUAL_ENV" == "" && "$PIP_ROOT_USER_ACTION" != "ignore" ]]; then
     echo "NOT INSIDE OF A VIRTUALENV. This script may not run correctly"
