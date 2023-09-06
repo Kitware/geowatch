@@ -7,19 +7,22 @@ SeeAlso:
     ~/code/watch/dev/maintain/port_to_geowatch.py
 """
 
+import networkx as nx
+import ubelt as ub
+
 
 def main():
-    import networkx as nx
-    import ubelt as ub
 
-    new_name = 'geowatch'
     old_name = 'watch'
+    mirror_name = 'geowatch'
 
-    # new_name = 'NEW_MODULE'
-    # old_name = 'OLD_MODULE'
     module = ub.import_module_from_name(old_name)
-
     module_dpath = ub.Path(module.__file__).parent
+    do_mirror(module_dpath, mirror_name)
+
+
+def do_mirror(module_dpath, mirror_name):
+
     repo_dpath = module_dpath.parent
 
     g = nx.DiGraph()
@@ -56,11 +59,12 @@ def main():
 
     nx.write_network_text(g)
 
-    new_modpath = repo_dpath / new_name
+    new_modpath = repo_dpath / mirror_name
 
     from rich.prompt import Confirm
-    if Confirm.ask(f'Delete {new_modpath}?'):
-        new_modpath.delete()
+    if new_modpath.exists():
+        if Confirm.ask(f'Delete {new_modpath}?'):
+            new_modpath.delete()
 
     def extract_main_body(old_text):
         import parso
@@ -105,7 +109,7 @@ def main():
                             return main_body_code, global_names
         return None, []
 
-    for old_fpath, node_data in g.nodes(data=True):
+    for old_fpath, node_data in ub.ProgIter(g.nodes(data=True), desc='mirroring'):
         if node_data['type'] == 'file':
             relpath = old_fpath.relative_to(module_dpath)
             new_fpath = new_modpath / relpath
