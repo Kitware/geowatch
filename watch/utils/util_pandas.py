@@ -76,35 +76,35 @@ def pandas_reorder_columns(df, columns):
 
 def pandas_argmaxima(data, columns, k=1):
     """
-    Finds the top K indexes for each column.
+    Finds the top K indexes for given columns.
 
     Args:
         data : pandas data frame
-        columns : columns to maximize
-        k : number of top entries per column
+
+        columns : columns to maximize.
+            If multiple are given, then secondary columns are used as
+            tiebreakers.
+
+        k : number of top entries
 
     Returns:
         List: indexes into subset of data that are in the top k for any of the
             requested columns.
 
     Example:
-        >>> from watch.mlops.aggregate import *  # NOQA
+        >>> from watch.utils.util_pandas import *  # NOQA
         >>> import numpy as np
+        >>> import pandas as pd
         >>> data = pd.DataFrame({k: np.random.rand(10) for k in 'abcde'})
         >>> columns = ['b', 'd', 'e']
         >>> k = 1
         >>> top_indexes = pandas_argmaxima(data=data, columns=columns, k=k)
+        >>> assert len(top_indexes) == k
         >>> print(data.loc[top_indexes])
     """
-    top_indexes = None
-    for col in columns:
-        ranked_data = data[col].sort_values(ascending=False)
-        ranked_idxs = ranked_data.index
-        if top_indexes is None:
-            top_indexes = ranked_idxs[0:k]
-        else:
-            top_indexes = top_indexes.union(ranked_idxs[0:k], sort=False)
-    return top_indexes
+    ranked_data = data.sort_values(columns, ascending=False)
+    top_locs = ranked_data.index[0:k]
+    return top_locs
 
 
 def pandas_suffix_columns(data, suffixes):

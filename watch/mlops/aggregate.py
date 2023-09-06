@@ -1132,6 +1132,7 @@ class AggregatorAnalysisMixin:
         import pandas as pd
         import numpy as np
         from watch.utils import util_pandas
+
         if reference_region:
             # In every region group, restrict to only the top values for the
             # reference region. The idea is to make things comparable to the
