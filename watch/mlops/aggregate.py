@@ -214,6 +214,7 @@ def main(cmdline=True, **kwargs):
 
     config = AggregateEvluationConfig.cli(cmdline=cmdline, data=kwargs, strict=True)
     import rich
+    from kwutil.util_yaml import Yaml
     rich.print('config = {}'.format(ub.urepr(config, nl=1)))
 
     eval_type_to_aggregator = config.coerce_aggregators()
@@ -263,7 +264,6 @@ def main(cmdline=True, **kwargs):
                 agg.table.to_csv(csv_fpath, index_label=False)
 
     if config.stdout_report:
-        from kwutil.util_yaml import Yaml
         if config.stdout_report is not True:
             report_config = Yaml.coerce(config.stdout_report)
         else:
@@ -274,7 +274,8 @@ def main(cmdline=True, **kwargs):
                 if rois is not None:
                     agg.build_macro_tables(rois)
 
-                agg.report_best(**ub.compatible(report_config, agg.report_best))
+                reportkw = ub.compatible(report_config, agg.report_best)
+                agg.report_best(**reportkw)
                 if report_config.get('analyze', False):
                     agg.analyze()
                 if report_config.get('macro_analysis', False):
@@ -1129,10 +1130,8 @@ class AggregatorAnalysisMixin:
         """
         import rich
         import pandas as pd
+        import numpy as np
         from watch.utils import util_pandas
-        region_id_to_summary = {}
-        big_param_lut = {}
-        region_id_to_ntotal = {}
         if reference_region:
             # In every region group, restrict to only the top values for the
             # reference region. The idea is to make things comparable to the
@@ -1141,54 +1140,85 @@ class AggregatorAnalysisMixin:
                 reference_region = region_id = list(agg.region_to_tables.keys())[-1]
             else:
                 region_id = reference_region
+
+            # Lookup the table corresponding to the reference region
             group = agg.region_to_tables[region_id]
             if len(group) == 0:
                 region_to_len = ub.udict(agg.region_to_tables).map_values(len)
                 print('region_to_len = {}'.format(ub.urepr(region_to_len, nl=1)))
                 raise Exception(f'reference {region_id=} group is empty')
-            metric_group = group[group.columns.intersection(agg.metrics.columns)]
-            metric_group = metric_group.sort_values(agg.primary_metric_cols)
-            top_idxs = util_pandas.pandas_argmaxima(metric_group, agg.primary_metric_cols, k=top_k)
-            param_hashids = group.loc[top_idxs]['param_hashid']
-            _agg = agg.filterto(param_hashids=param_hashids)
+
+            # Rank reference region param_hashids of the primary metrics
+            metric_cols = group.columns.intersection(agg.metrics.columns)
+            metric_group = group[metric_cols]
+            top_locs = util_pandas.pandas_argmaxima(metric_group, agg.primary_metric_cols, k=top_k)
+            top_param_hashids = group.loc[top_locs]['param_hashid']
+
+            if verbose > 3:
+                print(f'Filtering to top {len(top_locs)} / {len(group)} param hashids in reference region')
+
+            # Filter the agg object to consider only the top parameters
+            _agg = agg.filterto(param_hashids=top_param_hashids)
+
             if region_id in agg.macro_key_to_regions:
                 rois = agg.macro_key_to_regions[region_id]
                 _agg.build_macro_tables(rois)
-            reference_hashids = param_hashids
+            reference_hashids = top_param_hashids
             reference_hashid_to_rank = {
                 hashid: rank for rank, hashid in enumerate(reference_hashids)
             }
+
+            if verbose > 3:
+                # Print out information on how much was filtered per region
+                for region_id in agg.region_to_tables.keys():
+                    old_table = agg.region_to_tables[region_id]
+                    new_table = _agg.region_to_tables[region_id]
+                    print(f'Filter reduces {region_id} to {len(new_table)} / {len(old_table)}')
+
         else:
+            # If no reference region is given, subsequent code will sort each
+            # region independently.
             reference_hashids = None
+            reference_hashid_to_rank = None
             _agg = agg
 
+        metric_display_cols = list(ub.oset(
+            _agg.primary_metric_cols + _agg.display_metric_cols))
+
+        # For each region determine what information will be returned / shown
+        region_id_to_summary = {}
+        big_param_lut = {}
+        region_id_to_ntotal = {}
         for region_id, group in _agg.region_to_tables.items():
             if len(group) == 0:
                 continue
-            metric_group = group[group.columns.intersection(_agg.metrics.columns)]
-            metric_group = metric_group.sort_values(_agg.primary_metric_cols)
+            index_cols = group.columns.intersection(_agg.index.columns)
 
-            top_idxs = util_pandas.pandas_argmaxima(metric_group, _agg.primary_metric_cols, k=top_k)
+            if reference_hashids is None:
+                # Rank the rows for this region by the reference rank
+                # len(reference_hashid_to_rank)
+                ranking = group['param_hashid'].apply(
+                    lambda x: reference_hashid_to_rank.get(x, np.inf))
+                ranking = ranking[np.isfinite(ranking)]
+                ranked_locs = ranking.sort_values().index
+            else:
+                # Rank the rows for this region individually
+                ranked_locs = util_pandas.pandas_argmaxima(
+                    group, _agg.primary_metric_cols, k=top_k)
 
-            final_display_cols = list(ub.oset(_agg.primary_metric_cols + _agg.display_metric_cols))
-            top_metrics = metric_group.loc[top_idxs][final_display_cols]
-            # top_metrics = top_metrics[_agg.primary_metric_cols + _agg.display_metric_cols]
-            top_indexes = group[group.columns.intersection(_agg.index.columns)].loc[top_idxs]
-            param_lut = _agg.hashid_to_params.subdict(top_indexes['param_hashid'])
+            ranked_group = group.loc[ranked_locs]
+
+            param_lut = _agg.hashid_to_params.subdict(ranked_group['param_hashid'])
             big_param_lut.update(param_lut)
-            summary_table = pd.concat([top_indexes, top_metrics], axis=1)
+
+            summary_cols = list(index_cols) + metric_display_cols
+            summary_table = ranked_group[summary_cols]
+
             if shorten:
                 summary_table = util_pandas.pandas_shorten_columns(summary_table)
 
-            if reference_hashids is not None:
-                # When a reference region is given, order all per-region rows
-                # to align with the reference region.
-                ranking = summary_table['param_hashid'].apply(lambda x: reference_hashid_to_rank.get(x, len(reference_hashid_to_rank)))
-                sortx = ranking.sort_values().index
-                summary_table = summary_table.loc[sortx]
-
             region_id_to_summary[region_id] = summary_table
-            region_id_to_ntotal[region_id] = len(metric_group)
+            region_id_to_ntotal[region_id] = len(group)
 
         # In reverse order (so they correspond with last region table)
         # get a unique list of all params reported in the top k sorted
@@ -1241,31 +1271,43 @@ class AggregatorAnalysisMixin:
                 param_table.index.name = 'param_hashid'
                 param_table = util_pandas.DataFrame(param_table)
                 param_table = param_table.reorder(varied_keys, axis=1, intersect=1)
-                print('Note, to paste into sheets, there will be an icon after you paste (that looks like a clipboard) you can click and it give you an option: Split text to columns')
+                print(ub.paragraph(
+                    '''
+                    Note, to paste into sheets, there will be an icon after you
+                    paste (that looks like a clipboard) you can click and it
+                    give you an option: Split text to columns
+                    '''))
                 print(param_table.to_csv(header=True, index=True))
 
             # Check for a common special case that we can make more concise output for
             only_one_top_item = all(len(t) == 1 for t in region_id_to_summary.values())
             only_one_source_item = all(n == 1 for n in region_id_to_ntotal.values())
 
-            if only_one_source_item and only_one_top_item:
+            if only_one_top_item:
+                # In this case there is only a single top result per-region, so
+                # we can show them all in the same table rather than having on
+                # table per-region.
                 justone = pd.concat(list(region_id_to_summary.values()), axis=0)
                 submacro = ub.udict(_agg.macro_key_to_regions) & justone['region_id'].values
-                if submacro:
-                    print('Macro Regions LUT: ' +  ub.urepr(submacro, nl=1))
-                rich.print(justone)
-            elif only_one_top_item:
-                justone = pd.concat(list(region_id_to_summary.values()), axis=0)
-                # submacro = ub.udict(_agg.macro_key_to_regions) & justone['region_id'].values
-                # if submacro:
-                #     print('Macro Regions LUT: ' +  ub.urepr(submacro, nl=1))
+
+                if only_one_source_item:
+                    # Not sure why I differentiated this case, but keeping
+                    # code consistent
+                    if submacro:
+                        print('Macro Regions LUT: ' +  ub.urepr(submacro, nl=1))
                 _justone = util_pandas.DataFrame(justone)
                 if concise:
                     _justone = _justone.safe_drop(['node'], axis=1)
                     _justone = _justone.safe_drop(['fpath'], axis=1)
                 rich.print(_justone)
-                rich.print('agg.macro_key_to_regions = {}'.format(ub.urepr(_agg.macro_key_to_regions, nl=1)))
+
+                if not only_one_source_item:
+                    # again, not sure why this is different
+                    rich.print('agg.macro_key_to_regions = {}'.format(
+                        ub.urepr(_agg.macro_key_to_regions, nl=1)))
             else:
+                # In the more common case, we have multiple results per region,
+                # so we display a table for each region separately.
                 for region_id, summary_table in region_id_to_summary.items():
                     ntotal = region_id_to_ntotal[region_id]
                     rich.print('---')
@@ -1315,47 +1357,51 @@ class AggregatorAnalysisMixin:
         if print_models:
             import itertools as it
             from kwutil.util_yaml import Yaml
-            # FIXME: handle macro regions
+
+            # FIXME: handle macro regions?
+
+            # The idea is that we get the list of models that did the best
+            # according to each region. If they were ordered by a reference,
+            # then this ordering will be wrt to the reference, otherwise it is
+            # a ranking of the models that did the best on some region.
+
             tocombine_indexes = []
             for region_id, summary in region_id_to_summary.items():
                 if not region_id.startswith('macro_'):
                     tocombine_indexes.append(list(summary.index))
 
-            top_indexes = list(ub.oset([x for x in ub.flatten(
+            top_locs = list(ub.oset([x for x in ub.flatten(
                 it.zip_longest(*tocombine_indexes)) if x is not None]))
 
             table = _agg.table.copy()
-            table.loc[top_indexes, 'rank'] = list(range(len(top_indexes)))
+            table.loc[top_locs, 'rank'] = np.arange(len(top_locs))
             table = table.sort_values('rank')
 
             model_col = agg.model_cols[0]
 
-            chosen_indexes = []
-            if 0:
-                for expt, group in table.groupby('resolved_params.bas_pxl_fit.name'):
-                    group[model_col].tolist()
-                    group = group.sort_values('rank')
-                    chosen_indexes.extend(group.index[0:2])
-                chosen_indexes = table.loc[chosen_indexes, 'rank'].sort_values().index
-            else:
-                table['_hackname'] = [ub.Path(p).parent.name for p in table[model_col].tolist()]
-                for expt, group in table.groupby('_hackname'):
-                    # group[model_col].tolist()
-                    flags = (group[_agg.primary_metric_cols] > 0).any(axis=1)
-                    group = group[flags]
-                    group = group.sort_values('rank')
-                    chosen_indexes.extend(group.index[0:per_group])
-                chosen_indexes = table.loc[chosen_indexes, 'rank'].sort_values().index
+            # HACK: we want to group models that came from the same training
+            # run so we report a more diverse set of models. We typically group
+            # models together in a folder, but this is not robust, so we Only
+            # do this grouping if the parent folder has a special name
+
+            model_paths = [ub.Path(p) for p in table[model_col].tolist()]
+            hacked_groups = [
+                p if p.parent.name.startswith('Drop') else p for p in model_paths]
+            table['_hackgroup'] = hacked_groups
+
+            chosen_locs = []
+            for expt, group in table.groupby('_hackgroup'):
+                # group[model_col].tolist()
+                # flags = (group[_agg.primary_metric_cols] > 0).any(axis=1)
+                # group = group[flags]
+                group = group.sort_values('rank')
+                chosen_locs.extend(group.index[0:per_group])
+            chosen_locs = table.loc[chosen_locs, 'rank'].sort_values().index
 
             top_k = 40
-            chosen_indexes = chosen_indexes[:top_k]
+            chosen_locs = chosen_locs[:top_k]
+            chosen_table = table.loc[chosen_locs]
 
-            chosen_table = table.loc[chosen_indexes]
-
-            # # Need to remove invariants for now
-            # flags = ~np.array(['invariants' in chan for chan in chosen_table['resolved_params.bas_pxl_fit.channels']])
-            # chosen_table = chosen_table[flags]
-            # chosen_models = list(ub.oset(chosen_table[model_col].tolist()))
             print('Model shortlist (lower rank is a better scoring model):')
             for chosen_row in ub.unique(chosen_table.to_dict('records'), key=lambda row: row[model_col]):
                 model_fpath = chosen_row[model_col]
