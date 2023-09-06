@@ -1195,16 +1195,16 @@ class AggregatorAnalysisMixin:
             index_cols = group.columns.intersection(_agg.index.columns)
 
             if reference_hashids is None:
+                # Rank the rows for this region individually
+                ranked_locs = util_pandas.pandas_argmaxima(
+                    group, _agg.primary_metric_cols, k=top_k)
+            else:
                 # Rank the rows for this region by the reference rank
                 # len(reference_hashid_to_rank)
                 ranking = group['param_hashid'].apply(
                     lambda x: reference_hashid_to_rank.get(x, np.inf))
                 ranking = ranking[np.isfinite(ranking)]
                 ranked_locs = ranking.sort_values().index
-            else:
-                # Rank the rows for this region individually
-                ranked_locs = util_pandas.pandas_argmaxima(
-                    group, _agg.primary_metric_cols, k=top_k)
 
             ranked_group = group.loc[ranked_locs]
 

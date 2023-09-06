@@ -1847,9 +1847,9 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                 # On a subsequent passes start using it.
                 assert self.training
                 gnt = self.trainer.gnt
-                print('START GEN AND TESTING')
+                # print('START GEN AND TESTING')
                 gnt.gen_and_test()
-                print('DID GEN AND TESTING')
+                # print('DID GEN AND TESTING')
 
         if self.hparams.perterb_scale > 0:
             # Add a small bit of noise to every parameter

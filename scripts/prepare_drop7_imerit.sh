@@ -350,7 +350,7 @@ BUNDLE_DPATH=$DVC_DATA_DPATH/Drop7-MedianNoWinter10GSD-iMERIT
 python -m watch.cli.prepare_teamfeats \
     --src_kwcocos "$BUNDLE_DPATH"/*/imganns-*[0-9].kwcoco.zip \
     --expt_dvc_dpath="$DVC_EXPT_DPATH" \
-    --with_landcover=0 \
+    --with_landcover=1 \
     --with_invariants2=1 \
     --with_sam=0 \
     --with_materials=0 \

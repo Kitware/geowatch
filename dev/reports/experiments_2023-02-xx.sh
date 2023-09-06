@@ -3836,13 +3836,13 @@ python -m watch.mlops.aggregate \
             - params.bas_poly.thresh
     " \
     --stdout_report="
-        top_k: 13
+        top_k: 11
         per_group: 1
         macro_analysis: 0
         analyze: 0
         print_models: True
         reference_region: final
-        concise: 0
+        concise: 1
         show_csv: 0
     " \
     --rois="KR_R002,CN_C000,KW_C001,CO_C001"
