@@ -1833,9 +1833,14 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
         if self.hparams.continual_learning:
             if not hasattr(self.trainer, 'gnt'):
-                import sys, ubelt  # NOQA
-                sys.path.append(ubelt.expandpath('~/code/loss-of-plasticity'))
-                from lop.algos.gen_and_test import GenerateAndTest  # NOQA
+                import geowatch_tpl
+                geowatch_tpl.import_submodule('torchview')
+                geowatch_tpl.import_submodule('lop')
+
+                # See:
+                # ~/code/watch/geowatch_tpl/submodules/loss-of-plasticity/lop/algos/gen_and_test.py
+                # ~/code/watch/geowatch_tpl/submodules/torchview/torchview/torchview.py
+                from lop.algos.gen_and_test import GenerateAndTest
                 print('Setup gen and test')
                 input_data = self.demo_batch(new_mode_sample=1)
                 gnt = GenerateAndTest(self, 'relu', optimizer, input_data,

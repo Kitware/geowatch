@@ -11,7 +11,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Added a fork of torchview and loss-of-plasticity to geowatch-tpl
 
 
-## Version 0.9.0 - Released 2023-08-31
+## Version 0.9.3 - Released 2023-08-31
 
 ### Fixed
 * The `valid_region` property computed in `coco_populate_geo_heuristics` now properly uses image space (before it was in asset space, which usually aligned, but was not guaranteed)

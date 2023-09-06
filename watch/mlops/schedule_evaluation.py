@@ -292,7 +292,8 @@ def schedule_evaluation(config):
                 region_id = heuristics.extract_region_id(ub.Path(bas_fpath).name)
                 region_dpath = (smart_highres_bundle / region_id)
                 hires_coco_fpath = region_dpath / f'imgonly-{region_id}.kwcoco.zip'
-                assert hires_coco_fpath.exists()
+                if not hires_coco_fpath.exists():
+                    raise Exception(f'Expected hires path does not exist: {hires_coco_fpath}')
                 submatrices.append({
                     'bas_pxl.test_dataset': bas_fpath,
                     'sv_crop.crop_src_fpath': hires_coco_fpath,
