@@ -828,7 +828,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
             >>> from watch.tasks.fusion import methods
             >>> from watch.tasks.fusion import datamodules
-            >>> from watch.utils.util_data import find_smart_dvc_dpath
+            >>> from watch.utils.util_data import find_dvc_dpath
             >>> import watch
             >>> import kwcoco
             >>> from os.path import join

@@ -234,7 +234,7 @@ def reformat_obj(obj, bundle_dpath, has_remove, has_quantize):
 def schedule_quantization():
     # Temporary job
     import watch
-    dvc_dpath = ub.Path(str(watch.find_smart_dvc_dpath()) + '-hdd')
+    dvc_dpath = ub.Path(str(watch.find_dvc_dpath()) + '-hdd')
     dvc_dpath / 'models/fusion/'
 
     pred_globpat = dvc_dpath / 'models/fusion/Drop2-Aligned-TA1-2022-02-15/*/pred_*/*/pred.kwcoco.json'

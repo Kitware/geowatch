@@ -83,8 +83,8 @@ def main(cmdline=0, **kwargs):
     Ignore:
         from watch.cli.coco_crop_tracks import *  # NOQA
         import watch
-        dvc_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
-        # dvc_dpath = watch.find_smart_dvc_dpath(hardware='ssd')
+        dvc_dpath = watch.find_dvc_dpath(hardware='hdd')
+        # dvc_dpath = watch.find_dvc_dpath(hardware='ssd')
         base_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json'
         src = base_fpath
         dst = dvc_dpath / 'Cropped-Drop3-TA1-2022-03-10/data.kwcoco.json'
@@ -97,7 +97,7 @@ def main(cmdline=0, **kwargs):
     Ignore:
         from watch.cli.coco_crop_tracks import *  # NOQA
         import watch
-        dvc_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
+        dvc_dpath = watch.find_dvc_dpath(hardware='hdd')
         base_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json'
         src = base_fpath
         dst = dvc_dpath / 'Cropped-Drop2-TA1-2022-02-15/data.kwcoco.json'

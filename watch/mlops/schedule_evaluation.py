@@ -266,7 +266,7 @@ def schedule_evaluation(config):
     # Dont put in post-init because it is called by the CLI!
     if config['root_dpath'] in {None, 'auto'}:
         import watch
-        expt_dvc_dpath = watch.find_smart_dvc_dpath(tags='phase2_expt', hardware='auto')
+        expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
         config['root_dpath'] = expt_dvc_dpath / 'dag_runs'
 
     root_dpath = ub.Path(config['root_dpath'])

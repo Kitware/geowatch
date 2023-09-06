@@ -60,7 +60,7 @@ class Evaluator(object):
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> from watch.tasks.rutgers_material_seg.predict import *  # NOQA
         >>> import watch
-        >>> dvc_dpath = watch.find_smart_dvc_dpath()
+        >>> dvc_dpath = watch.find_dvc_dpath()
         >>> checkpoint_fpath = dvc_dpath / 'models/rutgers/rutgers_peri_materials_v3/experiments_epoch_18_loss_59.014100193977356_valmF1_0.18694573888313187_valChangeF1_0.0_time_2022-02-01-01:53:20.pth'
         >>> #checkpoint_fpath = dvc_dpath / 'models/rutgers/experiments_epoch_62_loss_0.09470022770735186_valmIoU_0.5901660531463717_time_2021101T16277.pth'
         >>> #  Write out smaller version of the dataset

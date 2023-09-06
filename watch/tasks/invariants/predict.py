@@ -119,7 +119,7 @@ class Predictor(object):
         >>> from watch.tasks.invariants.predict import *  # NOQA
         >>> import kwcoco
         >>> import watch
-        >>> dvc_dpath = watch.find_smart_dvc_dpath()
+        >>> dvc_dpath = watch.find_dvc_dpath()
         >>> #  Write out smaller version of the dataset
         >>> dset = kwcoco.CocoDataset(dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data_nowv_vali.kwcoco.json')
         >>> images = dset.videos(names=['KR_R001']).images[0]

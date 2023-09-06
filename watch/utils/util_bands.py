@@ -522,10 +522,10 @@ def specialized_index_bands(bands=None, coco_img=None, symbolic=False):
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> from watch.utils.util_bands import *  # NOQA
-        >>> from watch.utils.util_data import find_smart_dvc_dpath
+        >>> from watch.utils.util_data import find_dvc_dpath
         >>> import kwcoco
         >>> import ubelt as ub
-        >>> dvc_dpath = find_smart_dvc_dpath()
+        >>> dvc_dpath = find_dvc_dpath()
         >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
         >>> dset = kwcoco.CocoDataset(coco_fpath)
         >>> from watch.utils import kwcoco_extensions
@@ -846,9 +846,9 @@ def specialized_index_bands2(delayed=None):
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> from watch.utils.util_bands import *  # NOQA
-        >>> from watch.utils.util_data import find_smart_dvc_dpath
+        >>> from watch.utils.util_data import find_dvc_dpath
         >>> import kwcoco
-        >>> dvc_dpath = find_smart_dvc_dpath()
+        >>> dvc_dpath = find_dvc_dpath()
         >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-07-28-c20-TA1-S2-L8-ACC/data_vali.kwcoco.json'
         >>> dset = kwcoco.CocoDataset(coco_fpath)
         >>> #from watch.utils import kwcoco_extensions

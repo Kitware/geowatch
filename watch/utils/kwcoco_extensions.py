@@ -128,7 +128,7 @@ def populate_watch_fields(
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> from watch.utils.kwcoco_extensions import *  # NOQA
         >>> import kwcoco
-        >>> dvc_dpath = watch.utils.util_data.find_smart_dvc_dpath()
+        >>> dvc_dpath = watch.utils.util_data.find_dvc_dpath()
         >>> fpath = dvc_dpath / 'drop0_aligned/data.kwcoco.json')
         >>> coco_dset = kwcoco.CocoDataset(fpath)
         >>> target_gsd = 5.0
@@ -209,9 +209,9 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> from watch.utils.kwcoco_extensions import *  # NOQA
-        >>> from watch.utils.util_data import find_smart_dvc_dpath
+        >>> from watch.utils.util_data import find_dvc_dpath
         >>> import kwcoco
-        >>> dvc_dpath = find_smart_dvc_dpath()
+        >>> dvc_dpath = find_dvc_dpath()
         >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
         >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
         >>> coco_populate_geo_heuristics(coco_dset, overwrite=True, workers=12,
@@ -221,9 +221,9 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> from watch.utils.kwcoco_extensions import *  # NOQA
-        >>> from watch.utils.util_data import find_smart_dvc_dpath
+        >>> from watch.utils.util_data import find_dvc_dpath
         >>> import kwcoco
-        >>> dvc_dpath = find_smart_dvc_dpath()
+        >>> dvc_dpath = find_dvc_dpath()
         >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
         >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
         >>> coco_populate_geo_heuristics(coco_dset, overwrite=True, workers=12,
@@ -828,9 +828,9 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> from watch.utils.kwcoco_extensions import *  # NOQA
-        >>> from watch.utils.util_data import find_smart_dvc_dpath
+        >>> from watch.utils.util_data import find_dvc_dpath
         >>> import kwcoco
-        >>> dvc_dpath = find_smart_dvc_dpath()
+        >>> dvc_dpath = find_dvc_dpath()
         >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json'
         >>> vidid = 2
 
@@ -1623,9 +1623,9 @@ def transfer_geo_metadata(coco_dset, gid):
     Example:
         # xdoctest: +REQUIRES(env:DVC_DPATH)
         from watch.utils.kwcoco_extensions import *  # NOQA
-        from watch.utils.util_data import find_smart_dvc_dpath
+        from watch.utils.util_data import find_dvc_dpath
         import kwcoco
-        dvc_dpath = find_smart_dvc_dpath()
+        dvc_dpath = find_dvc_dpath()
         coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/combo_data.kwcoco.json'
         coco_dset = kwcoco.CocoDataset(coco_fpath)
         gid = coco_dset.images().peek()['id']
@@ -2469,9 +2469,9 @@ def visualize_rois(coco_dset, zoom=None):
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> from watch.utils.kwcoco_extensions import *  # NOQA
-        >>> from watch.utils.util_data import find_smart_dvc_dpath
+        >>> from watch.utils.util_data import find_dvc_dpath
         >>> import kwcoco
-        >>> dvc_dpath = find_smart_dvc_dpath()
+        >>> dvc_dpath = find_dvc_dpath()
         >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/combo_data.kwcoco.json'
         >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
         >>> coco_populate_geo_heuristics(coco_dset, overwrite=True, workers=4)

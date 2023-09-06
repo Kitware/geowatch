@@ -691,8 +691,8 @@ class TimeWindowSampler(CommonSamplerMixin):
             >>> import os
             >>> import kwcoco
             >>> from watch.tasks.fusion.datamodules.temporal_sampling.sampler import *  # NOQA
-            >>> from watch.utils.util_data import find_smart_dvc_dpath
-            >>> dvc_dpath = find_smart_dvc_dpath()
+            >>> from watch.utils.util_data import find_dvc_dpath
+            >>> dvc_dpath = find_dvc_dpath()
             >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json'
             >>> dset = kwcoco.CocoDataset(coco_fpath)
             >>> vidid = dset.dataset['videos'][0]['id']
@@ -786,10 +786,10 @@ class TimeWindowSampler(CommonSamplerMixin):
             >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
             >>> import os
             >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
-            >>> from watch.utils.util_data import find_smart_dvc_dpath
+            >>> from watch.utils.util_data import find_dvc_dpath
             >>> import kwcoco
             >>> # xdoctest: +REQUIRES(--show)
-            >>> dvc_dpath = find_smart_dvc_dpath()
+            >>> dvc_dpath = find_dvc_dpath()
             >>> coco_fpath = dvc_dpath / 'Drop6/data_vali_split1.kwcoco.zip'
             >>> dset = kwcoco.CocoDataset(coco_fpath)
             >>> video_ids = list(ub.sorted_vals(dset.index.vidid_to_gids, key=len).keys())
@@ -900,8 +900,8 @@ class TimeWindowSampler(CommonSamplerMixin):
             >>> # xdoctest: +REQUIRES(env:SMART_DATA_DVC_DPATH)
             >>> import os
             >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
-            >>> from watch.utils.util_data import find_smart_dvc_dpath
-            >>> dvc_dpath = find_smart_dvc_dpath()
+            >>> from watch.utils.util_data import find_dvc_dpath
+            >>> dvc_dpath = find_dvc_dpath()
             >>> coco_fpath = dvc_dpath / 'Drop1-Aligned-L1-2022-01/data.kwcoco.json'
             >>> dset = kwcoco.CocoDataset(coco_fpath)
             >>> vidid = dset.dataset['videos'][0]['id']
