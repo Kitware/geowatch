@@ -43,6 +43,27 @@ def replace_watch_with_geowatch_in_module_and_docs_v1():
 def replace_watch_with_geowatch_in_module_and_docs_v2():
     """
     This is the real deal that changes imports and primary invocations.
+
+    Prereq:
+
+        # This is a batch script that modifies the 0.10.0 branch
+        # to make geowatch the main package and watch the mirror
+
+        mkdir -p $HOME/temp/port
+
+        # Work on a non-installed copy of the repo
+        cd $HOME/temp/port
+        git clone $HOME/code/watch/.git ./watch
+
+        cd $HOME/temp/port/watch
+
+        git remote add gitlab git@gitlab.kitware.com:smart/watch.git
+        git co -b dev/make_geowatch_primary
+
+        cd $HOME/temp/port/watch
+        git fetch
+        git reset --hard origin/dev/0.10.0
+
     """
     import ubelt as ub
     import xdev
@@ -196,25 +217,3 @@ def replace_watch_with_geowatch_in_module_and_docs_v2():
     xdev.sedfile(fpath, r"\bwatch", repl=r"geowatch", dry=0)
 
     ub.cmd('git commit -am "Updated repo files to geowatch"', cwd=repo_dpath, verbose=3)
-
-
-def make_geowatch_primary():
-    import ubelt as ub
-    ub.codeblock(
-        """
-        # This is a batch script that modifies the 0.10.0 branch
-        # to make geowatch the main package and watch the mirror
-
-        mkdir -p $HOME/temp/port
-
-        # Work on a non-installed copy of the repo
-        cd $HOME/temp/port
-        git clone $HOME/code/watch/.git ./watch
-
-        cd $HOME/temp/port/watch
-
-        git co dev/make_geowatch_primary
-    """)
-    # Then Run
-    # replace_watch_with_geowatch_in_module_and_docs_v2
-    ...
